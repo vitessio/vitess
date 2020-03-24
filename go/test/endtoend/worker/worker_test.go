@@ -94,6 +94,7 @@ var (
 )
 
 func TestReparentDuringWorkerCopy(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	_, err := initializeCluster(t, false)
 	defer localCluster.Teardown()
 	require.Nil(t, err)
@@ -102,6 +103,7 @@ func TestReparentDuringWorkerCopy(t *testing.T) {
 }
 
 func TestReparentDuringWorkerCopyMysqlDown(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	_, err := initializeCluster(t, false)
 	defer localCluster.Teardown()
 	require.Nil(t, err)
@@ -110,6 +112,7 @@ func TestReparentDuringWorkerCopyMysqlDown(t *testing.T) {
 }
 
 func TestWebInterface(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	_, err := initializeCluster(t, true)
 	require.Nil(t, err)
 	defer localCluster.Teardown()

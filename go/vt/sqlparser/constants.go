@@ -42,6 +42,7 @@ const (
 	SessionStr        = "session"
 	GlobalStr         = "global"
 	VitessMetadataStr = "vitess_metadata"
+	VariableStr       = "variable"
 	ImplicitStr       = ""
 
 	// DDL strings.

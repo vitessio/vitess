@@ -261,6 +261,60 @@ func TestInit(t *testing.T) {
 	}
 }
 
+func TestInitTimeout(t *testing.T) {
+	f := saveDBConfigs()
+	defer f()
+
+	baseConfig = mysql.ConnParams{
+		Host:             "a",
+		Port:             1,
+		Uname:            "b",
+		Pass:             "c",
+		DbName:           "d",
+		UnixSocket:       "e",
+		Charset:          "f",
+		Flags:            2,
+		Flavor:           "flavor",
+		ConnectTimeoutMs: 250,
+	}
+	dbConfigs = DBConfigs{
+		userConfigs: map[string]*userConfig{
+			App: {
+				param: mysql.ConnParams{
+					Uname: "app",
+					Pass:  "apppass",
+				},
+			},
+		},
+	}
+
+	dbc, err := Init("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := &DBConfigs{
+		userConfigs: map[string]*userConfig{
+			App: {
+				param: mysql.ConnParams{
+					Host:             "a",
+					Port:             1,
+					Uname:            "app",
+					Pass:             "apppass",
+					UnixSocket:       "e",
+					Charset:          "f",
+					Flags:            2,
+					Flavor:           "flavor",
+					ConnectTimeoutMs: 250,
+				},
+			},
+		},
+	}
+
+	if !reflect.DeepEqual(dbc.userConfigs[App].param, want.userConfigs[App].param) {
+		t.Errorf("dbc: \n%#v, want \n%#v", dbc.userConfigs[App].param, want.userConfigs[App].param)
+	}
+}
+
 func TestAccessors(t *testing.T) {
 	dbc := &DBConfigs{
 		userConfigs: map[string]*userConfig{
@@ -273,25 +327,25 @@ func TestAccessors(t *testing.T) {
 		},
 	}
 	dbc.DBName.Set("db")
-	if got, want := dbc.AppWithDB().DbName, "db"; got != want {
+	if got, want := dbc.AppWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.AppWithDB().DbName: %v, want %v", got, want)
 	}
-	if got, want := dbc.AllPrivsWithDB().DbName, "db"; got != want {
+	if got, want := dbc.AllPrivsWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.AllPrivsWithDB().DbName: %v, want %v", got, want)
 	}
-	if got, want := dbc.AppDebugWithDB().DbName, "db"; got != want {
+	if got, want := dbc.AppDebugWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.AppDebugWithDB().DbName: %v, want %v", got, want)
 	}
-	if got, want := dbc.Dba().DbName, ""; got != want {
+	if got, want := dbc.Dba().connParams.DbName, ""; got != want {
 		t.Errorf("dbc.Dba().DbName: %v, want %v", got, want)
 	}
-	if got, want := dbc.DbaWithDB().DbName, "db"; got != want {
+	if got, want := dbc.DbaWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.DbaWithDB().DbName: %v, want %v", got, want)
 	}
-	if got, want := dbc.FilteredWithDB().DbName, "db"; got != want {
+	if got, want := dbc.FilteredWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.FilteredWithDB().DbName: %v, want %v", got, want)
 	}
-	if got, want := dbc.Repl().DbName, ""; got != want {
+	if got, want := dbc.Repl().connParams.DbName, ""; got != want {
 		t.Errorf("dbc.Repl().DbName: %v, want %v", got, want)
 	}
 }

@@ -30,7 +30,6 @@ import io.vitess.client.cursor.CursorWithError;
 import io.vitess.client.cursor.SimpleCursor;
 import io.vitess.client.cursor.StreamCursor;
 import io.vitess.proto.Query;
-import io.vitess.proto.Query.SplitQueryRequest.Algorithm;
 import io.vitess.proto.Topodata.KeyRange;
 import io.vitess.proto.Topodata.SrvKeyspace;
 import io.vitess.proto.Topodata.TabletType;
@@ -55,8 +54,6 @@ import io.vitess.proto.Vtgate.ExecuteShardsRequest;
 import io.vitess.proto.Vtgate.ExecuteShardsResponse;
 import io.vitess.proto.Vtgate.GetSrvKeyspaceRequest;
 import io.vitess.proto.Vtgate.GetSrvKeyspaceResponse;
-import io.vitess.proto.Vtgate.SplitQueryRequest;
-import io.vitess.proto.Vtgate.SplitQueryResponse;
 import io.vitess.proto.Vtgate.StreamExecuteKeyRangesRequest;
 import io.vitess.proto.Vtgate.StreamExecuteKeyspaceIdsRequest;
 import io.vitess.proto.Vtgate.StreamExecuteRequest;
@@ -487,34 +484,6 @@ public final class VTGateConn implements Closeable {
               public ListenableFuture<VTGateTx> apply(BeginResponse response) throws Exception {
                 return Futures.<VTGateTx>immediateFuture(
                     new VTGateTx(client, response.getSession(), keyspace));
-              }
-            },
-            directExecutor()));
-  }
-
-  public SQLFuture<List<SplitQueryResponse.Part>> splitQuery(Context ctx, String keyspace,
-      String query, @Nullable Map<String, ?> bindVars, Iterable<String> splitColumns,
-      int splitCount, int numRowsPerQueryPart, Algorithm algorithm) throws SQLException {
-    SplitQueryRequest.Builder requestBuilder =
-        SplitQueryRequest.newBuilder()
-            .setKeyspace(checkNotNull(keyspace))
-            .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
-            .addAllSplitColumn(splitColumns)
-            .setSplitCount(splitCount)
-            .setNumRowsPerQueryPart(numRowsPerQueryPart)
-            .setAlgorithm(algorithm);
-    if (ctx.getCallerId() != null) {
-      requestBuilder.setCallerId(ctx.getCallerId());
-    }
-    return new SQLFuture<List<SplitQueryResponse.Part>>(
-        transformAsync(
-            client.splitQuery(ctx, requestBuilder.build()),
-            new AsyncFunction<SplitQueryResponse, List<SplitQueryResponse.Part>>() {
-              @Override
-              public ListenableFuture<List<SplitQueryResponse.Part>> apply(
-                  SplitQueryResponse response) throws Exception {
-                return Futures.<List<SplitQueryResponse.Part>>immediateFuture(
-                    response.getSplitsList());
               }
             },
             directExecutor()));

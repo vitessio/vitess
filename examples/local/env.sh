@@ -31,7 +31,7 @@ fi
 
 # mysqld might be in /usr/sbin which will not be in the default PATH
 PATH="/usr/sbin:$PATH"
-for binary in mysqld etcd etcdctl curl vtctlclient vttablet vtgate vtctld mysqlctl; do
+for binary in mysqld etcd etcdctl curl vtctlclient vttablet vtgate vtctld vtctl mysqlctl; do
   command -v "$binary" > /dev/null || fail "${binary} is not installed in PATH. See https://vitess.io/docs/get-started/local/ for install instructions."
 done;
 
@@ -54,12 +54,19 @@ if [ "${TOPO}" = "zk2" ]; then
     ZK_SERVER="localhost:21811,localhost:21812,localhost:21813"
     # shellcheck disable=SC2034
     TOPOLOGY_FLAGS="-topo_implementation zk2 -topo_global_server_address ${ZK_SERVER} -topo_global_root /vitess/global"
-
-    mkdir -p $VTDATAROOT/tmp
+elif [ "${TOPO}" = "k8s" ]; then
+    # Set topology environment parameters.
+    K8S_ADDR="localhost"
+    K8S_PORT="8443"
+    K8S_KUBECONFIG=$VTDATAROOT/tmp/k8s.kubeconfig
+    # shellcheck disable=SC2034
+    TOPOLOGY_FLAGS="-topo_implementation k8s -topo_k8s_kubeconfig ${K8S_KUBECONFIG} -topo_global_server_address ${K8S_ADDR}:${K8S_PORT} -topo_global_root /vitess/global"
 else
     ETCD_SERVER="localhost:2379"
     TOPOLOGY_FLAGS="-topo_implementation etcd2 -topo_global_server_address $ETCD_SERVER -topo_global_root /vitess/global"
 
-    mkdir -p "${VTDATAROOT}/tmp"
     mkdir -p "${VTDATAROOT}/etcd"
 fi
+
+# Create a tmp dir
+mkdir -p "${VTDATAROOT}/tmp"

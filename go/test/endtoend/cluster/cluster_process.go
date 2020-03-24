@@ -17,14 +17,19 @@ limitations under the License.
 package cluster
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
+	"net"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path"
 	"strconv"
+	"sync"
+	"syscall"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -79,6 +84,13 @@ type LocalProcessCluster struct {
 	VtctldExtraArgs []string
 
 	EnableSemiSync bool
+
+	// mutex added to handle the parallel teardowns
+	mx                *sync.Mutex
+	teardownCompleted bool
+
+	context.Context
+	context.CancelFunc
 }
 
 // Vttablet stores the properties needed to start a vttablet process
@@ -135,6 +147,20 @@ func (shard *Shard) Replica() *Vttablet {
 		}
 	}
 	return nil
+}
+
+// CtrlCHandler handles the teardown for the ctrl-c.
+func (cluster *LocalProcessCluster) CtrlCHandler() {
+	cluster.Context, cluster.CancelFunc = context.WithCancel(context.Background())
+
+	c := make(chan os.Signal, 2)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	select {
+	case <-c:
+		cluster.Teardown()
+		os.Exit(0)
+	case <-cluster.Done():
+	}
 }
 
 // StartTopo starts topology server
@@ -257,7 +283,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 		// wait till all mysqlctl is instantiated
 		for _, proc := range mysqlctlProcessList {
 			if err = proc.Wait(); err != nil {
-				log.Errorf("Unable to start mysql , error %v", err.Error())
+				log.Errorf("Unable to start mysql process %v, error %v", proc, err)
 				return err
 			}
 		}
@@ -401,7 +427,8 @@ func (cluster *LocalProcessCluster) GetVtgateInstance() *VtgateProcess {
 
 // NewCluster instantiates a new cluster
 func NewCluster(cell string, hostname string) *LocalProcessCluster {
-	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname}
+	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname, mx: new(sync.Mutex)}
+	go cluster.CtrlCHandler()
 	cluster.OriginalVTDATAROOT = os.Getenv("VTDATAROOT")
 	cluster.CurrentVTDATAROOT = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vtroot_%d", cluster.GetAndReservePort()))
 	_ = createDirectory(cluster.CurrentVTDATAROOT, 0700)
@@ -455,6 +482,15 @@ func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error
 
 // Teardown brings down the cluster by invoking teardown for individual processes
 func (cluster *LocalProcessCluster) Teardown() {
+	PanicHandler(nil)
+	cluster.mx.Lock()
+	defer cluster.mx.Unlock()
+	if cluster.teardownCompleted {
+		return
+	}
+	if cluster.CancelFunc != nil {
+		cluster.CancelFunc()
+	}
 	if err := cluster.VtgateProcess.TearDown(); err != nil {
 		log.Errorf("Error in vtgate teardown - %s", err.Error())
 	}
@@ -497,6 +533,7 @@ func (cluster *LocalProcessCluster) Teardown() {
 		log.Errorf("Error in topo server teardown - %s", err.Error())
 	}
 
+	cluster.teardownCompleted = true
 }
 
 // StartVtworker starts a vtworker
@@ -540,7 +577,20 @@ func (cluster *LocalProcessCluster) GetAndReservePort() int {
 	if cluster.nextPortForProcess == 0 {
 		cluster.nextPortForProcess = getPort()
 	}
-	cluster.nextPortForProcess = cluster.nextPortForProcess + 1
+	for {
+		cluster.nextPortForProcess = cluster.nextPortForProcess + 1
+		log.Errorf("Attempting to reserve port: %v", cluster.nextPortForProcess)
+		ln, err := net.Listen("tcp", fmt.Sprintf(":%v", cluster.nextPortForProcess))
+
+		if err != nil {
+			log.Errorf("Can't listen on port %v: %s, trying next port", cluster.nextPortForProcess, err)
+			continue
+		}
+
+		ln.Close()
+		log.Errorf("Port %v is available, reserving..", cluster.nextPortForProcess)
+		break
+	}
 	return cluster.nextPortForProcess
 }
 

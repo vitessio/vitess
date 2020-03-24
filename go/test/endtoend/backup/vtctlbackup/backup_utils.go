@@ -240,6 +240,8 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
 		}, //
 	}
 
+	defer cluster.PanicHandler(t)
+
 	// setup cluster for the testing
 	code, err := LaunchCluster(setupType, streamMode, stripes)
 	require.Nilf(t, err, "setup failed with status code %d", code)

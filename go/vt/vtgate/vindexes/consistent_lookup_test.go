@@ -445,6 +445,41 @@ func TestConsistentLookupNoUpdate(t *testing.T) {
 	vc.verifyLog(t, []string{})
 }
 
+func TestConsistentLookupUpdateBecauseUncomparableTypes(t *testing.T) {
+	lookup := createConsistentLookup(t, "consistent_lookup", false)
+	vc := &loggingVCursor{}
+
+	type test struct {
+		typ querypb.Type
+		val string
+	}
+
+	tests := []test{
+		{querypb.Type_TEXT, "some string"},
+		{querypb.Type_VARCHAR, "some string"},
+		{querypb.Type_CHAR, "some string"},
+		{querypb.Type_BIT, "some string"},
+		{querypb.Type_ENUM, "some string"},
+		{querypb.Type_SET, "some string"},
+		{querypb.Type_GEOMETRY, "some string"},
+		{querypb.Type_JSON, "some string"},
+	}
+
+	for _, val := range tests {
+		t.Run(val.typ.String(), func(t *testing.T) {
+			vc.AddResult(&sqltypes.Result{}, nil)
+			vc.AddResult(&sqltypes.Result{}, nil)
+			sqlVal, err := sqltypes.NewValue(val.typ, []byte(val.val))
+			require.NoError(t, err)
+
+			err = lookup.(Lookup).Update(vc, []sqltypes.Value{sqlVal, sqlVal}, []byte("test"), []sqltypes.Value{sqlVal, sqlVal})
+			require.NoError(t, err)
+			require.NotEmpty(t, vc.log)
+			vc.log = nil
+		})
+	}
+}
+
 func createConsistentLookup(t *testing.T, name string, writeOnly bool) SingleColumn {
 	t.Helper()
 	write := "false"

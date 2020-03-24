@@ -106,8 +106,14 @@ message Session {
   // post_sessions contains sessions that have to be committed last.
   repeated ShardSession post_sessions = 10;
 
- // last_insert_id keeps track of the last seen insert_id for this session
+  // last_insert_id keeps track of the last seen insert_id for this session
   uint64 last_insert_id = 11;
+
+  // found_rows keeps track of how many rows the last query returned
+  uint64 found_rows = 12;
+
+  // user_defined_variables contains all the @variables defined for this session
+  map<string, query.BindVariable> user_defined_variables = 13;
 }
 
 // ExecuteRequest is the payload to Execute.
@@ -721,137 +727,6 @@ message MessageAckKeyspaceIdsRequest {
 message ResolveTransactionResponse {
 }
 
-// SplitQueryRequest is the payload to SplitQuery.
-//
-// SplitQuery takes a "SELECT" query and generates a list of queries called
-// "query-parts". Each query-part consists of the original query with an
-// added WHERE clause that restricts the query-part to operate only on
-// rows whose values in the columns listed in the "split_column" field
-// of the request (see below) are in a particular range.
-//
-// It is guaranteed that the set of rows obtained from
-// executing each query-part on a database snapshot
-// and merging (without deduping) the results is equal to the set of rows
-// obtained from executing the original query on the same snapshot
-// with the rows containing NULL values in any of the split_column's excluded.
-//
-// This is typically called by the MapReduce master when reading from Vitess.
-// There it's desirable that the sets of rows returned by the query-parts
-// have roughly the same size.
-message SplitQueryRequest {
-  // caller_id identifies the caller. This is the effective caller ID,
-  // set by the application to further identify the caller.
-  vtrpc.CallerID caller_id = 1;
-
-  // keyspace to target the query to.
-  string keyspace = 2;
-
-  // The query and bind variables to produce splits for.
-  // The given query must be a simple query of the form
-  // SELECT <cols> FROM <table> WHERE <filter>.
-  // It must not contain subqueries nor any of the keywords
-  // JOIN, GROUP BY, ORDER BY, LIMIT, DISTINCT.
-  // Furthermore, <table> must be a single "concrete" table.
-  // It cannot be a view.
-  query.BoundQuery query = 3;
-
-  // Each generated query-part will be restricted to rows whose values
-  // in the columns listed in this field are in a particular range.
-  // The list of columns named here must be a prefix of the list of
-  // columns defining some index or primary key of the table
-  // referenced in 'query'. For many tables using the primary key columns
-  // (in order) is sufficient and this is the default if this field is omitted.
-  // See the comment on the 'algorithm' field for more restrictions and
-  // information.
-  repeated string split_column = 4;
-
-  // You can specify either an estimate of the number of query-parts to
-  // generate or an estimate of the number of rows each query-part should
-  // return.
-  // Thus, exactly one of split_count or num_rows_per_query_part
-  // should be nonzero.
-  // The non-given parameter is calculated from the given parameter
-  // using the formula: split_count * num_rows_per_query_pary = table_size,
-  // where table_size is an approximation of the number of rows in the
-  // table.
-  // Note that if "split_count" is given it is regarded as an estimate.
-  // The number of query-parts returned may differ slightly (in particular,
-  // if it's not a whole multiple of the number of vitess shards).
-  int64 split_count = 5;
-  int64 num_rows_per_query_part = 6;
-
-  // The algorithm to use to split the query. The split algorithm is performed
-  // on each database shard in parallel. The lists of query-parts generated
-  // by the shards are merged and returned to the caller.
-  // Two algorithms are supported:
-  //  EQUAL_SPLITS
-  //    If this algorithm is selected then only the first 'split_column' given
-  //    is used (or the first primary key column if the 'split_column' field is
-  //    empty). In the rest of this algorithm's description, we refer to
-  //    this column as "the split column".
-  //    The split column must have numeric type (integral or floating point).
-  //    The algorithm works by taking the interval [min, max], where min and
-  //    max are the minimum and maximum values of the split column in
-  //    the table-shard, respectively, and partitioning it into 'split_count'
-  //    sub-intervals of equal size. The added WHERE clause of each query-part
-  //    restricts that part to rows whose value in the split column belongs to
-  //    a particular sub-interval. This is fast, but requires that the
-  //    distribution of values of the split column be uniform in [min, max]
-  //    for the number of rows returned by each query part to be roughly the
-  //    same.
-  //  FULL_SCAN
-  //    If this algorithm is used then the split_column must be the primary key
-  //    columns (in order).
-  //    This algorithm performs a full-scan of the table-shard referenced
-  //    in 'query' to get "boundary" rows that are num_rows_per_query_part
-  //    apart when the table is ordered by the columns listed in
-  //    'split_column'. It then restricts each query-part to the rows
-  //    located between two successive boundary rows.
-  //    This algorithm supports multiple split_column's of any type,
-  //    but is slower than EQUAL_SPLITS.
-  query.SplitQueryRequest.Algorithm algorithm = 7;
-  // TODO(erez): This field is no longer used by the server code.
-  // Remove this field after this new server code is released to prod.
-  // We must keep it for now, so that clients can still send it to the old
-  // server code currently in production.
-  bool use_split_query_v2 = 8;
-}
-
-// SplitQueryResponse is the returned value from SplitQuery.
-message SplitQueryResponse {
-  message KeyRangePart {
-    // keyspace to target the query to.
-    string keyspace = 1;
-
-    // key ranges to target the query to.
-    repeated topodata.KeyRange key_ranges = 2;
-  }
-  message ShardPart {
-    // keyspace to target the query to.
-    string keyspace = 1;
-
-    // shards to target the query to.
-    repeated string shards = 2;
-  }
-  message Part {
-    // query is the query and bind variables to execute.
-    query.BoundQuery query = 1;
-
-    // key_range_part is set if the query should be executed by
-    // ExecuteKeyRanges.
-    KeyRangePart key_range_part = 2;
-
-    // shard_part is set if the query should be executed by ExecuteShards.
-    ShardPart shard_part = 3;
-
-    // size is the approximate number of rows this query will return.
-    int64 size = 4;
-  }
-
-  // splits contains the queries to run to fetch the entire data set.
-  repeated Part splits = 1;
-}
-
 // GetSrvKeyspaceRequest is the payload to GetSrvKeyspace.
 message GetSrvKeyspaceRequest {
   // keyspace name to fetch.
@@ -880,47 +755,4 @@ message VStreamRequest {
 // VStreamResponse is streamed by VStream.
 message VStreamResponse {
   repeated binlogdata.VEvent events = 1;
-}
-
-// UpdateStreamRequest is the payload to UpdateStream.
-message UpdateStreamRequest {
-  // caller_id identifies the caller. This is the effective caller ID,
-  // set by the application to further identify the caller.
-  vtrpc.CallerID caller_id = 1;
-
-  // keyspace to target the query to.
-  string keyspace = 2;
-
-  // shard to target the query to, for unsharded keyspaces.
-  string shard = 3;
-
-  // KeyRange to target the query to, for sharded keyspaces.
-  topodata.KeyRange key_range = 4;
-
-  // tablet_type is the type of tablets that this request is targeted to.
-  topodata.TabletType tablet_type = 5;
-
-  // timestamp is the timestamp to start the stream from.  It is
-  // unused is event is set, and we are only streaming from the shard
-  // described by event.shard.
-  int64 timestamp = 6;
-
-  // event is the event to start the stream from.
-  // Note it is only used if we are streaming from exactly the same shard
-  // as this event was coming from. Otherwise we can't use this event,
-  // and will use the timestamp as a starting point.
-  query.EventToken event = 7;
-}
-
-// UpdateStreamResponse is streamed by UpdateStream.
-message UpdateStreamResponse {
-  // event is one event from the stream.
-  query.StreamEvent event = 1;
-
-  // resume_timestamp is the timestamp to resume streaming from if the
-  // client is interrupted. If the Update Stream only goes to one
-  // shard, this is equal to event.timestamp. If the Update Stream
-  // goes to multiple shards and aggregates, this is the minimum value
-  // of the current timestamp for all shards.
-  int64 resume_timestamp = 2;
 }

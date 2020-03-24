@@ -128,7 +128,7 @@ func skipToEnd(yylex interface{}) {
 %left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <bytes> ON USING
 %token <empty> '(' ',' ')'
-%token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
+%token <bytes> ID AT_ID AT_AT_ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
 %token <bytes> NULL TRUE FALSE OFF
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
@@ -311,7 +311,7 @@ func skipToEnd(yylex interface{}) {
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
-%type <colIdent> vindex_type vindex_type_opt
+%type <colIdent> id_or_var vindex_type vindex_type_opt
 %type <bytes> alter_object_type
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 
@@ -356,6 +356,20 @@ command:
 {
   setParseTree(yylex, nil)
 }
+
+id_or_var:
+  ID
+  {
+    $$ = NewColIdentWithAt(string($1), NoAt)
+  }
+| AT_ID
+  {
+    $$ = NewColIdentWithAt(string($1), SingleAt)
+  }
+| AT_AT_ID
+  {
+    $$ = NewColIdentWithAt(string($1), DoubleAt)
+  }
 
 select_statement:
   base_select order_by_opt limit_opt lock_opt
@@ -582,7 +596,7 @@ create_statement:
     $1.OptLike = $2
     $$ = $1
   }
-| CREATE constraint_opt INDEX ID using_opt ON table_name ddl_skip_to_end
+| CREATE constraint_opt INDEX id_or_var using_opt ON table_name ddl_skip_to_end
   {
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $7}
@@ -595,13 +609,13 @@ create_statement:
   {
     $$ = &DDL{Action: CreateStr, Table: $5.ToViewName()}
   }
-| CREATE DATABASE not_exists_opt ID ddl_skip_to_end
+| CREATE DATABASE not_exists_opt id_or_var ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4.String())}
   }
-| CREATE SCHEMA not_exists_opt ID ddl_skip_to_end
+| CREATE SCHEMA not_exists_opt id_or_var ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4.String())}
   }
 
 vindex_type_opt:
@@ -614,9 +628,9 @@ vindex_type_opt:
   }
 
 vindex_type:
-  ID
+  id_or_var
   {
-    $$ = NewColIdent(string($1))
+    $$ = $1
   }
 
 vindex_params_opt:
@@ -690,7 +704,7 @@ table_column_list:
   }
 
 column_definition:
-  ID column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt
+  id_or_var column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt
   {
     $2.NotNull = $3
     $2.Default = $4
@@ -698,7 +712,7 @@ column_definition:
     $2.Autoincrement = $6
     $2.KeyOpt = $7
     $2.Comment = $8
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+    $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
 column_type:
   numeric_type unsigned_opt zero_fill_opt
@@ -1024,9 +1038,9 @@ charset_opt:
   {
     $$ = ""
   }
-| CHARACTER SET ID
+| CHARACTER SET id_or_var
   {
-    $$ = string($3)
+    $$ = string($3.String())
   }
 | CHARACTER SET BINARY
   {
@@ -1037,9 +1051,9 @@ collate_opt:
   {
     $$ = ""
   }
-| COLLATE ID
+| COLLATE id_or_var
   {
-    $$ = string($2)
+    $$ = string($2.String())
   }
 | COLLATE STRING
   {
@@ -1097,9 +1111,9 @@ index_option_list:
   }
 
 index_option:
-  USING ID
+  USING id_or_var
   {
-    $$ = &IndexOption{Name: string($1), Using: string($2)}
+    $$ = &IndexOption{Name: string($1), Using: string($2.String())}
   }
 | KEY_BLOCK_SIZE equal_opt INTEGRAL
   {
@@ -1157,9 +1171,9 @@ name_opt:
   {
     $$ = ""
   }
-| ID
+| id_or_var
   {
-    $$ = string($1)
+    $$ = string($1.String())
   }
 
 index_column_list:
@@ -1179,9 +1193,9 @@ index_column:
   }
 
 constraint_definition:
-  CONSTRAINT ID constraint_info
+  CONSTRAINT id_or_var constraint_info
   {
-    $$ = &ConstraintDefinition{Name: string($2), Details: $3}
+    $$ = &ConstraintDefinition{Name: string($2.String()), Details: $3}
   }
 |  constraint_info
   {
@@ -1315,13 +1329,13 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
   }
-| ALTER DATABASE ID ddl_skip_to_end
+| ALTER DATABASE id_or_var ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: AlterStr, DBName: string($3)}
+    $$ = &DBDDL{Action: AlterStr, DBName: string($3.String())}
   }
-| ALTER SCHEMA ID ddl_skip_to_end
+| ALTER SCHEMA id_or_var ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: AlterStr, DBName: string($3)}
+    $$ = &DBDDL{Action: AlterStr, DBName: string($3.String())}
   }
 | ALTER VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
   {
@@ -1399,6 +1413,8 @@ alter_object_type:
 | FOREIGN
 | FULLTEXT
 | ID
+| AT_ID
+| AT_AT_ID
 | INDEX
 | KEY
 | PRIMARY
@@ -1459,7 +1475,7 @@ drop_statement:
     }
     $$ = &DDL{Action: DropStr, FromTables: $4, IfExists: exists}
   }
-| DROP INDEX ID ON table_name ddl_skip_to_end
+| DROP INDEX id_or_var ON table_name ddl_skip_to_end
   {
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $5}
@@ -1472,13 +1488,13 @@ drop_statement:
         }
     $$ = &DDL{Action: DropStr, FromTables: TableNames{$4.ToViewName()}, IfExists: exists}
   }
-| DROP DATABASE exists_opt ID
+| DROP DATABASE exists_opt id_or_var
   {
-    $$ = &DBDDL{Action: DropStr, DBName: string($4)}
+    $$ = &DBDDL{Action: DropStr, DBName: string($4.String())}
   }
-| DROP SCHEMA exists_opt ID
+| DROP SCHEMA exists_opt id_or_var
   {
-    $$ = &DBDDL{Action: DropStr, DBName: string($4)}
+    $$ = &DBDDL{Action: DropStr, DBName: string($4.String())}
   }
 
 truncate_statement:
@@ -1493,13 +1509,13 @@ truncate_statement:
 analyze_statement:
   ANALYZE TABLE table_name
   {
-    $$ = &DDL{Action: AlterStr, Table: $3}
+    $$ = &OtherRead{}
   }
 
 show_statement:
-  SHOW BINARY ID ddl_skip_to_end /* SHOW BINARY LOGS */
+  SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY LOGS */
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{Type: string($2) + " " + string($3.String())}
   }
 /* SHOW CHARACTER SET and SHOW CHARSET are equivalent */
 | SHOW CHARACTER SET like_or_where_opt
@@ -1517,9 +1533,9 @@ show_statement:
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
 /* Rule to handle SHOW CREATE EVENT, SHOW CREATE FUNCTION, etc. */
-| SHOW CREATE ID ddl_skip_to_end
+| SHOW CREATE id_or_var ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{Type: string($2) + " " + string($3.String())}
   }
 | SHOW CREATE PROCEDURE ddl_skip_to_end
   {
@@ -1545,13 +1561,15 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW INDEX ddl_skip_to_end
+| SHOW INDEX FROM table_name from_database_opt like_or_where_opt
   {
-    $$ = &Show{Type: string($2)}
+    showTablesOpt := &ShowTablesOpt{DbName:$5, Filter:$6}
+    $$ = &Show{Type: string($2), ShowTablesOpt: showTablesOpt, OnTable: $4}
   }
-| SHOW KEYS ddl_skip_to_end
+| SHOW KEYS FROM table_name from_database_opt like_or_where_opt
   {
-    $$ = &Show{Type: string($2)}
+    showTablesOpt := &ShowTablesOpt{DbName:$5, Filter:$6}
+    $$ = &Show{Type: string($2), ShowTablesOpt: showTablesOpt, OnTable: $4}
   }
 | SHOW PLUGINS
   {
@@ -1629,9 +1647,9 @@ show_statement:
  *  SHOW VITESS_SHARDS
  *  SHOW VITESS_TARGET
  */
-| SHOW ID ddl_skip_to_end
+| SHOW id_or_var ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{Type: string($2.String())}
   }
 
 tables_or_processlist:
@@ -2192,9 +2210,9 @@ default_opt:
   {
     $$ = ""
   }
-| openb ID closeb
+| openb id_or_var closeb
   {
-    $$ = string($2)
+    $$ = string($2.String())
   }
 
 boolean_value:
@@ -2547,9 +2565,9 @@ function_call_keyword:
   {
   $$ = &MatchExpr{Columns: $3, Expr: $7, Option: $8}
   }
-| GROUP_CONCAT openb distinct_opt select_expression_list order_by_opt separator_opt closeb
+| GROUP_CONCAT openb distinct_opt select_expression_list order_by_opt separator_opt limit_opt closeb
   {
-    $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6}
+    $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
   }
 | CASE expression_opt when_expression_list else_expression_opt END
   {
@@ -2663,6 +2681,10 @@ function_call_conflict:
   {
     $$ = &FuncExpr{Name: NewColIdent("database"), Exprs: $3}
   }
+| SCHEMA openb select_expression_list_opt closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent("schema"), Exprs: $3}
+  }
 | MOD openb select_expression_list closeb
   {
     $$ = &FuncExpr{Name: NewColIdent("mod"), Exprs: $3}
@@ -2703,9 +2725,9 @@ match_option:
  }
 
 charset:
-  ID
+  id_or_var
 {
-    $$ = string($1)
+    $$ = string($1.String())
 }
 | STRING
 {
@@ -2721,9 +2743,9 @@ convert_type:
   {
     $$ = &ConvertType{Type: string($1), Length: $2, Charset: $3, Operator: CharacterSetStr}
   }
-| CHAR length_opt ID
+| CHAR length_opt id_or_var
   {
-    $$ = &ConvertType{Type: string($1), Length: $2, Charset: string($3)}
+    $$ = &ConvertType{Type: string($1), Length: $2, Charset: string($3.String())}
   }
 | DATE
   {
@@ -3166,7 +3188,7 @@ non_add_drop_or_rename_operation:
   { $$ = struct{}{} }
 | UNUSED
   { $$ = struct{}{} }
-| ID
+| id_or_var
   { $$ = struct{}{} }
 
 to_opt:
@@ -3195,9 +3217,9 @@ using_opt:
   { $$ = $2 }
 
 sql_id:
-  ID
+  id_or_var
   {
-    $$ = NewColIdent(string($1))
+    $$ = $1
   }
 | non_reserved_keyword
   {
@@ -3212,9 +3234,9 @@ reserved_sql_id:
   }
 
 table_id:
-  ID
+  id_or_var
   {
-    $$ = NewTableIdent(string($1))
+    $$ = NewTableIdent(string($1.String()))
   }
 | non_reserved_keyword
   {

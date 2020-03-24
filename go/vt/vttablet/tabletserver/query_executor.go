@@ -34,13 +34,12 @@ import (
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -55,6 +54,7 @@ type QueryExecutor struct {
 	ctx            context.Context
 	logStats       *tabletenv.LogStats
 	tsv            *TabletServer
+	tabletType     topodatapb.TabletType
 }
 
 var sequenceFields = []*querypb.Field{
@@ -97,18 +97,14 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	}
 
 	switch qre.plan.PlanID {
-	case planbuilder.PlanDDL:
-		return qre.execDDL()
 	case planbuilder.PlanNextval:
 		return qre.execNextval()
 	case planbuilder.PlanSelectImpossible:
+		// If the fields did not get cached, we have send the query
+		// to mysql, which you can see below.
 		if qre.plan.Fields != nil {
 			return &sqltypes.Result{
-				Fields:       qre.plan.Fields,
-				RowsAffected: 0,
-				InsertID:     0,
-				Rows:         nil,
-				Extras:       nil,
+				Fields: qre.plan.Fields,
 			}, nil
 		}
 	}
@@ -120,84 +116,102 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 			return nil, err
 		}
 		defer conn.Recycle()
-		switch qre.plan.PlanID {
-		case planbuilder.PlanPassDML:
-			if !qre.tsv.qe.allowUnsafeDMLs && (qre.tsv.qe.binlogFormat != connpool.BinlogFormatRow) {
-				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cannot identify primary key of statement")
-			}
-			return qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, "", true, true)
-		case planbuilder.PlanInsertPK:
-			return qre.execInsertPK(conn)
-		case planbuilder.PlanInsertMessage:
-			return qre.execInsertMessage(conn)
-		case planbuilder.PlanInsertSubquery:
-			return qre.execInsertSubquery(conn)
-		case planbuilder.PlanDMLPK:
-			return qre.execDMLPK(conn)
-		case planbuilder.PlanDMLSubquery:
-			return qre.execDMLSubquery(conn)
-		case planbuilder.PlanOtherRead, planbuilder.PlanOtherAdmin:
-			return qre.execSQL(conn, qre.query, true)
-		case planbuilder.PlanUpsertPK:
-			return qre.execUpsertPK(conn)
-		case planbuilder.PlanSet:
-			return qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, "", true, true)
-		case planbuilder.PlanPassSelect, planbuilder.PlanSelectLock, planbuilder.PlanSelectImpossible:
-			return qre.execDirect(conn)
-		default:
-			// handled above:
-			// planbuilder.PlanNextval
-			// planbuilder.PlanDDL
-
-			// not valid for Execute:
-			// planbuilder.PlanSelectStream
-			// planbuilder.PlanMessageStream:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
-		}
-	} else {
-		switch qre.plan.PlanID {
-		case planbuilder.PlanPassSelect, planbuilder.PlanSelectImpossible:
-			return qre.execSelect()
-		case planbuilder.PlanSelectLock:
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s disallowed outside transaction", qre.plan.PlanID.String())
-		case planbuilder.PlanSet:
-			return qre.execSet()
-		case planbuilder.PlanOtherRead:
-			conn, connErr := qre.getConn()
-			if connErr != nil {
-				return nil, connErr
-			}
-			defer conn.Recycle()
-			return qre.execSQL(conn, qre.query, true)
-
-		case planbuilder.PlanPassDML:
-			fallthrough
-		case planbuilder.PlanInsertPK:
-			fallthrough
-		case planbuilder.PlanInsertMessage:
-			fallthrough
-		case planbuilder.PlanInsertSubquery:
-			fallthrough
-		case planbuilder.PlanDMLPK:
-			fallthrough
-		case planbuilder.PlanDMLSubquery:
-			fallthrough
-		case planbuilder.PlanUpsertPK:
-			if !qre.tsv.qe.autoCommit.Get() {
-				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s disallowed outside transaction", qre.plan.PlanID.String())
-			}
-			return qre.execDmlAutoCommit()
-		default:
-			// handled above:
-			// planbuilder.PlanNextval
-			// planbuilder.PlanDDL
-
-			// not valid for Execute:
-			// planbuilder.PlanSelectStream
-			// planbuilder.PlanMessageStream:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
-		}
+		return qre.txConnExec(conn)
 	}
+
+	switch qre.plan.PlanID {
+	case planbuilder.PlanSelect, planbuilder.PlanSelectImpossible:
+		maxrows := qre.getSelectLimit()
+		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
+		qr, err := qre.execSelect()
+		if err != nil {
+			return nil, err
+		}
+		if err := qre.verifyRowCount(int64(len(qr.Rows)), maxrows); err != nil {
+			return nil, err
+		}
+		return qr, nil
+	case planbuilder.PlanSelectLock:
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s disallowed outside transaction", qre.plan.PlanID.String())
+	case planbuilder.PlanSet, planbuilder.PlanOtherRead, planbuilder.PlanOtherAdmin:
+		return qre.execOther()
+	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete, planbuilder.PlanInsertMessage, planbuilder.PlanDDL:
+		return qre.execAutocommit(qre.txConnExec)
+	case planbuilder.PlanUpdateLimit, planbuilder.PlanDeleteLimit:
+		return qre.execAsTransaction(qre.txConnExec)
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
+}
+
+func (qre *QueryExecutor) execAutocommit(f func(conn *TxConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
+	if qre.options == nil {
+		qre.options = &querypb.ExecuteOptions{}
+	}
+	qre.options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
+	conn, _, err := qre.tsv.te.txPool.LocalBegin(qre.ctx, qre.options)
+	if err != nil {
+		return nil, err
+	}
+	defer qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
+
+	return f(conn)
+}
+
+func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
+	conn, beginSQL, err := qre.tsv.te.txPool.LocalBegin(qre.ctx, qre.options)
+	if err != nil {
+		return nil, err
+	}
+	defer qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
+	qre.logStats.AddRewrittenSQL(beginSQL, time.Now())
+
+	reply, err = f(conn)
+	if err != nil {
+		// dbConn is nil, it means the transaction was aborted.
+		// If so, we should not relog the rollback.
+		// TODO(sougou): these txPool functions should take the logstats
+		// and log any statements they issue. This needs to be done as
+		// a separate refactor because it impacts lot of code.
+		if conn.dbConn != nil {
+			defer qre.logStats.AddRewrittenSQL("rollback", time.Now())
+			qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
+		}
+		return nil, err
+	}
+
+	defer qre.logStats.AddRewrittenSQL("commit", time.Now())
+	if _, err := qre.tsv.te.txPool.LocalCommit(qre.ctx, conn); err != nil {
+		return nil, err
+	}
+	return reply, nil
+}
+
+func (qre *QueryExecutor) txConnExec(conn *TxConnection) (*sqltypes.Result, error) {
+	switch qre.plan.PlanID {
+	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete:
+		return qre.txFetch(conn, true)
+	case planbuilder.PlanInsertMessage:
+		qre.bindVars["#time_now"] = sqltypes.Int64BindVariable(time.Now().UnixNano())
+		return qre.txFetch(conn, true)
+	case planbuilder.PlanUpdateLimit, planbuilder.PlanDeleteLimit:
+		return qre.execDMLLimit(conn)
+	case planbuilder.PlanSet, planbuilder.PlanOtherRead, planbuilder.PlanOtherAdmin:
+		return qre.execSQL(conn, qre.query, true)
+	case planbuilder.PlanSelect, planbuilder.PlanSelectLock, planbuilder.PlanSelectImpossible:
+		maxrows := qre.getSelectLimit()
+		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
+		qr, err := qre.txFetch(conn, false)
+		if err != nil {
+			return nil, err
+		}
+		if err := qre.verifyRowCount(int64(len(qr.Rows)), maxrows); err != nil {
+			return nil, err
+		}
+		return qr, nil
+	case planbuilder.PlanDDL:
+		return qre.execDDL(conn)
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
 }
 
 // Stream performs a streaming query execution.
@@ -222,7 +236,7 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 			return err
 		}
 		defer txConn.Recycle()
-		conn = txConn.DBConn
+		conn = txConn.dbConn
 	} else {
 		dbConn, err := qre.getStreamConn()
 		if err != nil {
@@ -236,7 +250,7 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 	qre.tsv.qe.streamQList.Add(qd)
 	defer qre.tsv.qe.streamQList.Remove(qd)
 
-	return qre.streamFetch(conn, qre.plan.FullQuery, qre.bindVars, "", callback)
+	return qre.streamFetch(conn, qre.plan.FullQuery, qre.bindVars, callback)
 }
 
 // MessageStream streams messages from a message table.
@@ -266,64 +280,6 @@ func (qre *QueryExecutor) MessageStream(callback func(*sqltypes.Result) error) e
 	}
 	<-done
 	return nil
-}
-
-func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error) {
-	return qre.execAsTransaction(func(conn *TxConnection) (reply *sqltypes.Result, err error) {
-		switch qre.plan.PlanID {
-		case planbuilder.PlanPassDML:
-			if !qre.tsv.qe.allowUnsafeDMLs && (qre.tsv.qe.binlogFormat != connpool.BinlogFormatRow) {
-				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cannot identify primary key of statement")
-			}
-			reply, err = qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, "", true, true)
-		case planbuilder.PlanInsertPK:
-			reply, err = qre.execInsertPK(conn)
-		case planbuilder.PlanInsertMessage:
-			return qre.execInsertMessage(conn)
-		case planbuilder.PlanInsertSubquery:
-			reply, err = qre.execInsertSubquery(conn)
-		case planbuilder.PlanDMLPK:
-			reply, err = qre.execDMLPK(conn)
-		case planbuilder.PlanDMLSubquery:
-			reply, err = qre.execDMLSubquery(conn)
-		case planbuilder.PlanUpsertPK:
-			reply, err = qre.execUpsertPK(conn)
-		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported query: %s", qre.query)
-		}
-		return reply, err
-	})
-}
-
-func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
-	conn, beginSQL, err := qre.tsv.te.txPool.LocalBegin(qre.ctx, qre.options)
-	if err != nil {
-		return nil, err
-	}
-	defer qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
-	if beginSQL != "" {
-		qre.logStats.AddRewrittenSQL(beginSQL, time.Now())
-	}
-
-	reply, err = f(conn)
-
-	start := time.Now()
-	if err != nil {
-		qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
-		qre.logStats.AddRewrittenSQL("rollback", start)
-		return nil, err
-	}
-	commitSQL, err := qre.tsv.te.txPool.LocalCommit(qre.ctx, conn, qre.tsv.messager)
-
-	// As above LocalCommit is a no-op for autocommmit so don't log anything.
-	if commitSQL != "" {
-		qre.logStats.AddRewrittenSQL(commitSQL, start)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-	return reply, nil
 }
 
 // checkPermissions returns an error if the query does not pass all checks
@@ -404,57 +360,26 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 	return nil
 }
 
-func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
-	sql := qre.query
-	var err error
-	if qre.plan.FullQuery != nil {
-		sql, _, err = qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars, nil, "")
-		if err != nil {
-			return nil, err
-		}
-	}
-	ddlPlan := planbuilder.DDLParse(sql)
-	if ddlPlan.Action == "" {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "DDL is not understood")
-	}
-
+func (qre *QueryExecutor) execDDL(conn *TxConnection) (*sqltypes.Result, error) {
 	defer func() {
-		err := qre.tsv.se.Reload(qre.ctx)
-		if err != nil {
+		if err := qre.tsv.se.Reload(qre.ctx); err != nil {
 			log.Errorf("failed to reload schema %v", err)
 		}
 	}()
 
-	if qre.transactionID != 0 {
-		conn, err := qre.tsv.te.txPool.Get(qre.transactionID, "DDL begin again")
-		if err != nil {
-			return nil, err
-		}
-		defer conn.Recycle()
-		result, err := qre.execSQL(conn, sql, true)
-		if err != nil {
-			return nil, err
-		}
-		err = conn.BeginAgain(qre.ctx)
-		if err != nil {
-			return nil, err
-		}
-		return result, nil
-	}
-
-	result, err := qre.execAsTransaction(func(conn *TxConnection) (*sqltypes.Result, error) {
-		return qre.execSQL(conn, sql, true)
-	})
-
+	result, err := qre.execSQL(conn, qre.query, true)
 	if err != nil {
 		return nil, err
 	}
-
+	err = conn.BeginAgain(qre.ctx)
+	if err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
 func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
-	inc, err := resolveNumber(qre.plan.PKValues[0], qre.bindVars)
+	inc, err := resolveNumber(qre.plan.NextCount, qre.bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -526,19 +451,6 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	}, nil
 }
 
-// execDirect is for reads inside transactions. Always send to MySQL.
-func (qre *QueryExecutor) execDirect(conn *TxConnection) (*sqltypes.Result, error) {
-	if qre.tsv.qe.enableQueryPlanFieldCaching && qre.plan.Fields != nil {
-		result, err := qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, "", true, false)
-		if err != nil {
-			return nil, err
-		}
-		result.Fields = qre.plan.Fields
-		return result, nil
-	}
-	return qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, "", true, false)
-}
-
 // execSelect sends a query to mysql only if another identical query is not running. Otherwise, it waits and
 // reuses the result. If the plan is missng field info, it sends the query to mysql requesting full info.
 func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
@@ -557,239 +469,45 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 		return nil, err
 	}
 	defer conn.Recycle()
-	return qre.dbConnFetch(conn, qre.plan.FullQuery, qre.bindVars, "", true)
+	return qre.dbConnFetch(conn, qre.plan.FullQuery, qre.bindVars)
 }
 
-func (qre *QueryExecutor) execInsertPK(conn *TxConnection) (*sqltypes.Result, error) {
-	pkRows, err := buildValueList(qre.plan.Table, qre.plan.PKValues, qre.bindVars)
+func (qre *QueryExecutor) execDMLLimit(conn *TxConnection) (*sqltypes.Result, error) {
+	maxrows := qre.tsv.qe.maxResultSize.Get()
+	qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
+	result, err := qre.txFetch(conn, true)
 	if err != nil {
 		return nil, err
 	}
-	return qre.execInsertPKRows(conn, nil, pkRows)
-}
-
-func (qre *QueryExecutor) execInsertMessage(conn *TxConnection) (*sqltypes.Result, error) {
-	qre.bindVars["#time_now"] = sqltypes.Int64BindVariable(time.Now().UnixNano())
-	pkRows, err := buildValueList(qre.plan.Table, qre.plan.PKValues, qre.bindVars)
-	if err != nil {
+	if err := qre.verifyRowCount(int64(result.RowsAffected), maxrows); err != nil {
+		defer qre.logStats.AddRewrittenSQL("rollback", time.Now())
+		qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
 		return nil, err
-	}
-	qr, err := qre.execInsertPKRows(conn, nil, pkRows)
-	if err != nil {
-		return nil, err
-	}
-
-	// If an auto-inc value was generated, it could be the id column.
-	// If so, we have to populate it.
-	if qr.InsertID != 0 {
-		id := int64(qr.InsertID)
-		idPKIndex := qre.plan.Table.MessageInfo.IDPKIndex
-		for _, row := range pkRows {
-			if !row[idPKIndex].IsNull() {
-				// If a value was supplied, either it was not the auto-inc column
-				// or values were partially supplied for an auto-inc column.
-				// If it's the former, there is nothing more to do.
-				// If it's the latter, we cannot predict the values for subsequent
-				// rows. So, we still break out of this loop, and will rely on
-				// the poller to eventually pick up the rows from the database.
-				break
-			}
-			row[idPKIndex] = sqltypes.NewInt64(id)
-			id++
-		}
-	}
-
-	// Re-read the inserted rows to prime the cache.
-	extras := map[string]sqlparser.Encodable{
-		"#pk": &sqlparser.TupleEqualityList{
-			Columns: qre.plan.Table.Indexes[0].Columns,
-			Rows:    pkRows,
-		},
-	}
-	tableName := qre.plan.Table.Name.String()
-	loadMessages, err := qre.tsv.messager.GenerateLoadMessagesQuery(tableName)
-	if err != nil {
-		return nil, err
-	}
-	readback, err := qre.txFetch(conn, loadMessages, qre.bindVars, extras, "", true, false)
-	if err != nil {
-		return nil, err
-	}
-
-	// Append to the list of pending rows to be sent
-	// to the cache on successful commit.
-	mrs := conn.NewMessages[tableName]
-	for _, row := range readback.Rows {
-		mr, err := messager.BuildMessageRow(row)
-		if err != nil {
-			return nil, err
-		}
-		mrs = append(mrs, mr)
-	}
-	conn.NewMessages[tableName] = mrs
-	return qr, nil
-}
-
-func (qre *QueryExecutor) execInsertSubquery(conn *TxConnection) (*sqltypes.Result, error) {
-	innerResult, err := qre.txFetch(conn, qre.plan.Subquery, qre.bindVars, nil, "", true, false)
-	if err != nil {
-		return nil, err
-	}
-	innerRows := innerResult.Rows
-	if len(innerRows) == 0 {
-		return &sqltypes.Result{RowsAffected: 0}, nil
-	}
-	if len(qre.plan.ColumnNumbers) != len(innerRows[0]) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Subquery length does not match column list")
-	}
-	pkRows := make([][]sqltypes.Value, len(innerRows))
-	for i, innerRow := range innerRows {
-		pkRows[i] = applyFilterWithPKDefaults(qre.plan.Table, qre.plan.SubqueryPKColumns, innerRow)
-	}
-	// Validating first row is sufficient
-	if err := validateRow(qre.plan.Table, qre.plan.Table.PKColumns, pkRows[0]); err != nil {
-		return nil, err
-	}
-
-	extras := map[string]sqlparser.Encodable{
-		"#values": sqlparser.InsertValues(innerRows),
-	}
-	return qre.execInsertPKRows(conn, extras, pkRows)
-}
-
-func (qre *QueryExecutor) execInsertPKRows(conn *TxConnection, extras map[string]sqlparser.Encodable, pkRows [][]sqltypes.Value) (*sqltypes.Result, error) {
-	var bsc string
-	// Build comments only if we're not in RBR mode.
-	if qre.tsv.qe.binlogFormat != connpool.BinlogFormatRow {
-		secondaryList, err := buildSecondaryList(qre.plan.Table, pkRows, qre.plan.SecondaryPKValues, qre.bindVars)
-		if err != nil {
-			return nil, err
-		}
-		bsc = buildStreamComment(qre.plan.Table, pkRows, secondaryList)
-	}
-	return qre.txFetch(conn, qre.plan.OuterQuery, qre.bindVars, extras, bsc, true, true)
-}
-
-func (qre *QueryExecutor) execUpsertPK(conn *TxConnection) (*sqltypes.Result, error) {
-	// For RBR, upserts are passed through.
-	if qre.tsv.qe.binlogFormat == connpool.BinlogFormatRow {
-		return qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, "", true, true)
-	}
-
-	// For statement or mixed mode, we have to split into two ops.
-	pkRows, err := buildValueList(qre.plan.Table, qre.plan.PKValues, qre.bindVars)
-	if err != nil {
-		return nil, err
-	}
-	// We do not need to build the secondary list for the insert part.
-	// But the part that updates will build it if it gets executed,
-	// because it's the one that can change the primary keys.
-	bsc := buildStreamComment(qre.plan.Table, pkRows, nil)
-	result, err := qre.txFetch(conn, qre.plan.OuterQuery, qre.bindVars, nil, bsc, true, true)
-	if err == nil {
-		return result, nil
-	}
-	sqlErr, ok := err.(*mysql.SQLError)
-	if !ok {
-		return result, err
-	}
-	if sqlErr.Number() != mysql.ERDupEntry {
-		return nil, err
-	}
-	// If the error didn't match pk, just return the error without updating.
-	if !strings.Contains(sqlErr.Error(), "'PRIMARY'") {
-		return nil, err
-	}
-	// At this point, we know the insert failed due to a duplicate pk row.
-	// So, we just update the row.
-	result, err = qre.execDMLPKRows(conn, qre.plan.UpsertQuery, pkRows)
-	if err != nil {
-		return nil, err
-	}
-	// Follow MySQL convention. RowsAffected must be 2 if a row was updated.
-	if result.RowsAffected == 1 {
-		result.RowsAffected = 2
-	}
-	return result, err
-}
-
-func (qre *QueryExecutor) execDMLPK(conn *TxConnection) (*sqltypes.Result, error) {
-	pkRows, err := buildValueList(qre.plan.Table, qre.plan.PKValues, qre.bindVars)
-	if err != nil {
-		return nil, err
-	}
-	return qre.execDMLPKRows(conn, qre.plan.OuterQuery, pkRows)
-}
-
-func (qre *QueryExecutor) execDMLSubquery(conn *TxConnection) (*sqltypes.Result, error) {
-	innerResult, err := qre.txFetch(conn, qre.plan.Subquery, qre.bindVars, nil, "", true, false)
-	if err != nil {
-		return nil, err
-	}
-	return qre.execDMLPKRows(conn, qre.plan.OuterQuery, innerResult.Rows)
-}
-
-func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.ParsedQuery, pkRows [][]sqltypes.Value) (*sqltypes.Result, error) {
-	if len(pkRows) == 0 {
-		return &sqltypes.Result{RowsAffected: 0}, nil
-	}
-	secondaryList, err := buildSecondaryList(qre.plan.Table, pkRows, qre.plan.SecondaryPKValues, qre.bindVars)
-	if err != nil {
-		return nil, err
-	}
-
-	result := &sqltypes.Result{}
-	maxRows := int(qre.tsv.qe.maxDMLRows.Get())
-	for i := 0; i < len(pkRows); i += maxRows {
-		end := i + maxRows
-		if end >= len(pkRows) {
-			end = len(pkRows)
-		}
-		pkRows := pkRows[i:end]
-		secondaryList := secondaryList
-		if secondaryList != nil {
-			secondaryList = secondaryList[i:end]
-		}
-		var bsc string
-		// Build comments only if we're not in RBR mode.
-		if qre.tsv.qe.binlogFormat != connpool.BinlogFormatRow {
-			bsc = buildStreamComment(qre.plan.Table, pkRows, secondaryList)
-		}
-		extras := map[string]sqlparser.Encodable{
-			"#pk": &sqlparser.TupleEqualityList{
-				Columns: qre.plan.Table.Indexes[0].Columns,
-				Rows:    pkRows,
-			},
-		}
-		r, err := qre.txFetch(conn, query, qre.bindVars, extras, bsc, true, true)
-		if err != nil {
-			return nil, err
-		}
-
-		// UPDATEs can return InsertID when LAST_INSERT_ID(expr) is used. In
-		// this case it should be the same for all rows.
-		result.InsertID = r.InsertID
-
-		// DMLs should all return RowsAffected.
-		result.RowsAffected += r.RowsAffected
-	}
-	if qre.plan.Table.Type == schema.Message {
-		ids := conn.ChangedMessages[qre.plan.Table.Name.String()]
-		for _, pkrow := range pkRows {
-			ids = append(ids, pkrow[qre.plan.Table.MessageInfo.IDPKIndex].ToString())
-		}
-		conn.ChangedMessages[qre.plan.Table.Name.String()] = ids
 	}
 	return result, nil
 }
 
-func (qre *QueryExecutor) execSet() (*sqltypes.Result, error) {
+func (qre *QueryExecutor) verifyRowCount(count, maxrows int64) error {
+	if count > maxrows {
+		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
+		return mysql.NewSQLError(mysql.ERVitessMaxRowsExceeded, mysql.SSUnknownSQLState, "caller id: %s: row count exceeded %d", callerID.Username, maxrows)
+	}
+	warnThreshold := qre.tsv.qe.warnResultSize.Get()
+	if warnThreshold > 0 && count > warnThreshold {
+		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
+		tabletenv.Warnings.Add("ResultsExceeded", 1)
+		log.Warningf("caller id: %s row count %v exceeds warning threshold %v: %q", callerID.Username, count, warnThreshold, queryAsString(qre.plan.FullQuery.Query, qre.bindVars))
+	}
+	return nil
+}
+
+func (qre *QueryExecutor) execOther() (*sqltypes.Result, error) {
 	conn, err := qre.getConn()
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Recycle()
-	return qre.dbConnFetch(conn, qre.plan.FullQuery, qre.bindVars, "", false)
+	return qre.execSQL(conn, qre.query, true)
 }
 
 func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
@@ -825,11 +543,12 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.DBConn, error) {
 }
 
 func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	sql, sqlWithoutComments, err := qre.generateFinalSQL(parsedQuery, bindVars, nil, "")
+	sql, sqlWithoutComments, err := qre.generateFinalSQL(parsedQuery, bindVars)
 	if err != nil {
 		return nil, err
 	}
-	if qre.tsv.qe.enableConsolidator {
+	// Check tablet type.
+	if qre.tsv.qe.enableConsolidator || (qre.tsv.qe.enableConsolidatorReplicas && qre.tabletType != topodatapb.TabletType_MASTER) {
 		q, original := qre.tsv.qe.consolidator.Create(string(sqlWithoutComments))
 		if original {
 			defer q.Broadcast()
@@ -865,12 +584,12 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 }
 
 // txFetch fetches from a TxConnection.
-func (qre *QueryExecutor) txFetch(conn *TxConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable, extras map[string]sqlparser.Encodable, buildStreamComment string, wantfields, record bool) (*sqltypes.Result, error) {
-	sql, _, err := qre.generateFinalSQL(parsedQuery, bindVars, extras, buildStreamComment)
+func (qre *QueryExecutor) txFetch(conn *TxConnection, record bool) (*sqltypes.Result, error) {
+	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
 	if err != nil {
 		return nil, err
 	}
-	qr, err := qre.execSQL(conn, sql, wantfields)
+	qr, err := qre.execSQL(conn, sql, true)
 	if err != nil {
 		return nil, err
 	}
@@ -882,50 +601,45 @@ func (qre *QueryExecutor) txFetch(conn *TxConnection, parsedQuery *sqlparser.Par
 }
 
 // dbConnFetch fetches from a connpool.DBConn.
-func (qre *QueryExecutor) dbConnFetch(conn *connpool.DBConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable, buildStreamComment string, wantfields bool) (*sqltypes.Result, error) {
-	sql, _, err := qre.generateFinalSQL(parsedQuery, bindVars, nil, buildStreamComment)
+func (qre *QueryExecutor) dbConnFetch(conn *connpool.DBConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	sql, _, err := qre.generateFinalSQL(parsedQuery, bindVars)
 	if err != nil {
 		return nil, err
 	}
-	return qre.execSQL(conn, sql, wantfields)
+	return qre.execSQL(conn, sql, true)
 }
 
 // streamFetch performs a streaming fetch.
-func (qre *QueryExecutor) streamFetch(conn *connpool.DBConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable, buildStreamComment string, callback func(*sqltypes.Result) error) error {
-	sql, _, err := qre.generateFinalSQL(parsedQuery, bindVars, nil, buildStreamComment)
+func (qre *QueryExecutor) streamFetch(conn *connpool.DBConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+	sql, _, err := qre.generateFinalSQL(parsedQuery, bindVars)
 	if err != nil {
 		return err
 	}
 	return qre.execStreamSQL(conn, sql, callback)
 }
 
-func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable, extras map[string]sqlparser.Encodable, buildStreamComment string) (string, string, error) {
-	bindVars["#maxLimit"] = sqltypes.Int64BindVariable(qre.getLimit(parsedQuery))
-
+func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (string, string, error) {
 	var buf strings.Builder
 	buf.WriteString(qre.marginComments.Leading)
 
-	query, err := parsedQuery.GenerateQuery(bindVars, extras)
+	query, err := parsedQuery.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)
 	}
 	buf.WriteString(query)
-	if buildStreamComment != "" {
-		buf.WriteString(buildStreamComment)
-	}
 	withoutComments := buf.String()
 	buf.WriteString(qre.marginComments.Trailing)
 	fullSQL := buf.String()
 	return fullSQL, withoutComments, nil
 }
 
-func (qre *QueryExecutor) getLimit(query *sqlparser.ParsedQuery) int64 {
+func (qre *QueryExecutor) getSelectLimit() int64 {
 	maxRows := qre.tsv.qe.maxResultSize.Get()
 	sqlLimit := qre.options.GetSqlSelectLimit()
-	if sqlLimit > 0 && sqlLimit < maxRows && strings.HasPrefix(sqlparser.StripLeadingComments(query.Query), "select") {
+	if sqlLimit > 0 && sqlLimit < maxRows {
 		return sqlLimit
 	}
-	return maxRows + 1
+	return maxRows
 }
 
 // poolConn is an abstraction for reusing code in execSQL.
@@ -938,14 +652,7 @@ func (qre *QueryExecutor) execSQL(conn poolConn, sql string, wantfields bool) (*
 	defer span.Finish()
 
 	defer qre.logStats.AddRewrittenSQL(sql, time.Now())
-	res, err := conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
-	warnThreshold := qre.tsv.qe.warnResultSize.Get()
-	if res != nil && warnThreshold > 0 && int64(len(res.Rows)) > warnThreshold {
-		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
-		tabletenv.Warnings.Add("ResultsExceeded", 1)
-		log.Warningf("CallerID: %s Results returned (%v) exceeds warning threshold (%v): %q", callerID.Username, len(res.Rows), warnThreshold, sql)
-	}
-	return res, err
+	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
 }
 
 func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callback func(*sqltypes.Result) error) error {
@@ -964,4 +671,13 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callb
 		return err
 	}
 	return nil
+}
+
+// resolveNumber extracts a number from a bind variable or sql value.
+func resolveNumber(pv sqltypes.PlanValue, bindVars map[string]*querypb.BindVariable) (int64, error) {
+	v, err := pv.ResolveValue(bindVars)
+	if err != nil {
+		return 0, err
+	}
+	return sqltypes.ToInt64(v)
 }

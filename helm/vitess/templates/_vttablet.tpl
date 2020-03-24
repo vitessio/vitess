@@ -48,6 +48,10 @@ spec:
 {{- $config := index . 8 -}}
 {{- $pmm := index . 9 -}}
 {{- $orc := index . 10 -}}
+{{- $mysqlctld := index . 11 -}}
+{{- $logrotate := index . 12 -}}
+{{- $logtail := index . 13 -}}
+{{- $vtctl := index . 14 -}}
 
 # sanitize inputs for labels
 {{- $cellClean := include "clean-label" $cell.name -}}
@@ -61,6 +65,7 @@ spec:
 
 # define images to use
 {{- $vitessTag := .vitessTag | default $defaultVttablet.vitessTag -}}
+{{- $vtctlclientImage := .vtctlclientImage | default $defaultVttablet.vtctlclientImage -}}
 {{- $image := .image | default $defaultVttablet.image -}}
 {{- $mysqlImage := .mysqlImage | default $defaultVttablet.mysqlImage -}}
 {{- $mysqlImage := .mysqlImage | default $defaultVttablet.mysqlImage }}
@@ -101,17 +106,17 @@ spec:
 {{ include "vttablet-affinity" (tuple $cellClean $keyspaceClean $shardClean $cell.region) | indent 6 }}
 
       initContainers:
-{{ include "init-mysql" (tuple $vitessTag $cellClean) | indent 8 }}
-{{ include "init-vttablet" (tuple $vitessTag $cell $cellClean $namespace) | indent 8 }}
+{{ include "init-mysql" (tuple $vitessTag $cellClean $mysqlctld) | indent 8 }}
+{{ include "init-vttablet" (tuple $vitessTag $cell $cellClean $namespace $mysqlctld $vtctl) | indent 8 }}
 
       containers:
 {{ include "cont-mysql" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $uid) | indent 8 }}
 {{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $defaultVtctlclient $vitessTag $uid $namespace $config $orc) | indent 8 }}
-{{ include "cont-logrotate" . | indent 8 }}
-{{ include "cont-mysql-generallog" . | indent 8 }}
-{{ include "cont-mysql-errorlog" . | indent 8 }}
-{{ include "cont-mysql-slowlog" . | indent 8 }}
-{{ if $pmm.enabled }}{{ include "cont-pmm-client" (tuple $pmm $namespace $keyspace) | indent 8 }}{{ end }}
+{{ include "cont-logrotate" (tuple $logrotate) | indent 8 }}
+{{ include "cont-mysql-generallog" (tuple $logrotate) | indent 8 }}
+{{ include "cont-mysql-errorlog" (tuple $logrotate) | indent 8 }}
+{{ include "cont-mysql-slowlog" (tuple $logrotate) | indent 8 }}
+{{ if $pmm.enabled }}{{ include "cont-pmm-client" (tuple $pmm $namespace $keyspace  $logtail) | indent 8 }}{{ end }}
 
       volumes:
         - name: vt
@@ -164,9 +169,13 @@ spec:
 {{ define "init-mysql" -}}
 {{- $vitessTag := index . 0 -}}
 {{- $cellClean := index . 1 }}
+{{- $mysqlctld := index . 2 }}
+
+{{- $vitessTag :=   $mysqlctld.vitessTag -}}
+{{- $mysqlctldImage :=  $mysqlctld.mysqlctldImage -}}
 
 - name: "init-mysql"
-  image: "vitess/mysqlctld:{{$vitessTag}}"
+  image: "{{$mysqlctldImage}}:{{$vitessTag}}"
   imagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
@@ -209,9 +218,11 @@ spec:
 {{- $cell := index . 1 -}}
 {{- $cellClean := index . 2 -}}
 {{- $namespace := index . 3 }}
+{{- $vtctl := index . 4 }}
+
 
 - name: init-vttablet
-  image: "vitess/vtctl:{{$vitessTag}}"
+  image: "{{$vtctl.vtctlImage}}:{{$vitessTag}}"
   imagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
@@ -275,8 +286,11 @@ spec:
 {{- $cellClean := include "clean-label" $cell.name -}}
 {{- with $tablet.vttablet }}
 
+{{- $vitessTag :=  $defaultVttablet.vitessTag -}}
+{{- $vttabletImage := $defaultVttablet.vttabletImage -}}
+
 - name: vttablet
-  image: "vitess/vttablet:{{$vitessTag}}"
+  image: "{{$vttabletImage}}:{{$vitessTag}}"
   imagePullPolicy: IfNotPresent
   readinessProbe:
     httpGet:
@@ -532,9 +546,10 @@ spec:
 # run logrotate for all log files in /vtdataroot/tabletdata
 ##########################
 {{ define "cont-logrotate" }}
+{{- $logrotate := index . 0 }}
 
 - name: logrotate
-  image: vitess/logrotate:helm-1.0.7-5
+  image: {{ $logrotate.image }}:{{ $logrotate.tag }}
   imagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
@@ -546,9 +561,10 @@ spec:
 # redirect the error log file to stdout
 ##########################
 {{ define "cont-mysql-errorlog" }}
+{{- $logtail := index . 0 -}}
 
 - name: error-log
-  image: vitess/logtail:helm-1.0.7-5
+  image: {{ $logtail.image }}:{{ $logtail.tag }}
   imagePullPolicy: IfNotPresent
 
   env:
@@ -564,9 +580,10 @@ spec:
 # redirect the slow log file to stdout
 ##########################
 {{ define "cont-mysql-slowlog" }}
+{{- $logtail := index . 0 -}}
 
 - name: slow-log
-  image: vitess/logtail:helm-1.0.7-5
+  image: {{ $logtail.image }}:{{ $logtail.tag }}
   imagePullPolicy: IfNotPresent
 
   env:
@@ -582,9 +599,10 @@ spec:
 # redirect the general log file to stdout
 ##########################
 {{ define "cont-mysql-generallog" }}
+{{- $logtail := index . 0 -}}
 
 - name: general-log
-  image: vitess/logtail:helm-1.0.7-5
+  image: {{ $logtail.image }}:{{ $logtail.tag }}
   imagePullPolicy: IfNotPresent
 
   env:

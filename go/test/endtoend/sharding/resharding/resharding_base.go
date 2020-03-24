@@ -183,6 +183,7 @@ var (
 
 // TestResharding - main test with accepts different params for various test
 func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
+	defer cluster.PanicHandler(t)
 	clusterInstance = cluster.NewCluster(cell1, hostname)
 	defer clusterInstance.Teardown()
 
@@ -973,30 +974,30 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 func insertStartupValues(t *testing.T) {
 	insertSQL := fmt.Sprintf(insertTabletTemplateKsID, "resharding1", fixedParentID, 1, "msg1", key1, key1, 1)
-	sharding.InsertToTablet(t, insertSQL, *shard0.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard0.MasterTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding1", fixedParentID, 2, "msg2", key2, key2, 2)
-	sharding.InsertToTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding1", fixedParentID, 3, "msg3", key3, key3, 3)
-	sharding.InsertToTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding3", fixedParentID, 1, "a", key1, key1, 1)
-	sharding.InsertToTablet(t, insertSQL, *shard0.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard0.MasterTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding3", fixedParentID, 2, "b", key2, key2, 2)
-	sharding.InsertToTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding3", fixedParentID, 3, "c", key3, key3, 3)
-	sharding.InsertToTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "no_pk", fixedParentID, 1, "msg1", key5, key5, 1)
-	sharding.InsertToTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
 }
 
 func insertValue(t *testing.T, tablet *cluster.Vttablet, keyspaceName string, tableName string, id int, msg string, ksID uint64) {
 	insertSQL := fmt.Sprintf(insertTabletTemplateKsID, tableName, fixedParentID, id, msg, ksID, ksID, id)
-	sharding.InsertToTablet(t, insertSQL, *tablet, keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *tablet, keyspaceName, false)
 }
 
 func execMultiShardDmls(t *testing.T, keyspaceName string) {

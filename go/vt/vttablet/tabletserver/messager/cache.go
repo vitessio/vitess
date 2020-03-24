@@ -28,10 +28,10 @@ import (
 // MessageRow represents a message row.
 // The first column in Row is always the "id".
 type MessageRow struct {
-	TimeNext    int64
-	Epoch       int64
-	TimeCreated int64
-	Row         []sqltypes.Value
+	TimeNext  int64
+	Epoch     int64
+	TimeAcked int64
+	Row       []sqltypes.Value
 
 	// defunct is set if the row was asked to be removed
 	// from cache.
@@ -100,6 +100,12 @@ func newCache(size int) *cache {
 		inFlight: make(map[string]bool),
 	}
 	return mc
+}
+
+func (mc *cache) IsEmpty() bool {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	return len(mc.sendQueue) == 0
 }
 
 // Clear clears the cache.

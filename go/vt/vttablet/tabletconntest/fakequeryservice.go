@@ -19,7 +19,6 @@ package tabletconntest
 import (
 	"errors"
 	"fmt"
-	"reflect"
 	"testing"
 
 	"golang.org/x/net/context"
@@ -49,7 +48,6 @@ type FakeQueryService struct {
 	// these fields are used to simulate and synchronize on panics
 	Panics                   bool
 	StreamExecutePanicsEarly bool
-	UpdateStreamPanicsEarly  bool
 	PanicWait                chan struct{}
 
 	// ExpectedTransactionID is what transactionID to expect for Execute
@@ -93,13 +91,7 @@ var TestVTGateCallerID = &querypb.VTGateCallerID{
 
 // TestExecuteOptions is a test execute options.
 var TestExecuteOptions = &querypb.ExecuteOptions{
-	IncludedFields:    querypb.ExecuteOptions_TYPE_ONLY,
-	IncludeEventToken: true,
-	CompareEventToken: &querypb.EventToken{
-		Timestamp: 9876,
-		Shard:     "ssss",
-		Position:  "pppp",
-	},
+	IncludedFields:  querypb.ExecuteOptions_TYPE_ONLY,
 	ClientFoundRows: true,
 }
 
@@ -387,14 +379,6 @@ var ExecuteQueryResult = sqltypes.Result{
 			sqltypes.TestValue(sqltypes.Char, "row2 value2"),
 		},
 	},
-	Extras: &querypb.ResultExtras{
-		EventToken: &querypb.EventToken{
-			Timestamp: 456321,
-			Shard:     "test_shard",
-			Position:  "test_position",
-		},
-		Fresher: true,
-	},
 }
 
 // Execute is part of the queryservice.QueryService interface
@@ -531,14 +515,6 @@ var ExecuteBatchQueryResultList = []sqltypes.Result{
 				sqltypes.TestValue(sqltypes.Int8, "2"),
 			},
 		},
-		Extras: &querypb.ResultExtras{
-			EventToken: &querypb.EventToken{
-				Timestamp: 456322,
-				Shard:     "test_shard2",
-				Position:  "test_position2",
-			},
-			Fresher: true,
-		},
 	},
 	{
 		Fields: []*querypb.Field{
@@ -585,40 +561,6 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Tar
 		f.t.Errorf("invalid ExecuteBatch.TransactionId: got %v expected %v", transactionID, f.ExpectedTransactionID)
 	}
 	return ExecuteBatchQueryResultList, nil
-}
-
-// SplitQuerySplitColumns is a test list for column splits.
-var SplitQuerySplitColumns = []string{"nice_column_to_split"}
-
-// SplitQuerySplitCount is a test split count.
-const SplitQuerySplitCount = 372
-
-// SplitQueryBoundQuery is a test query for splits.
-var SplitQueryBoundQuery = &querypb.BoundQuery{
-	Sql: "splitQuery",
-	BindVariables: map[string]*querypb.BindVariable{
-		"bind1": sqltypes.Int64BindVariable(43),
-	},
-}
-
-// SplitQueryNumRowsPerQueryPart is a test num rows for split.
-const SplitQueryNumRowsPerQueryPart = 123
-
-// SplitQueryAlgorithm is a test algorithm for splits.
-const SplitQueryAlgorithm = querypb.SplitQueryRequest_FULL_SCAN
-
-// SplitQueryQuerySplitList is a test result for splits.
-var SplitQueryQuerySplitList = []*querypb.QuerySplit{
-	{
-		Query: &querypb.BoundQuery{
-			Sql: "splitQuery",
-			BindVariables: map[string]*querypb.BindVariable{
-				"bind1":       sqltypes.Int64BindVariable(43),
-				"keyspace_id": sqltypes.Int64BindVariable(3333),
-			},
-		},
-		RowCount: 4456,
-	},
 }
 
 // BeginExecute combines Begin and Execute.
@@ -704,47 +646,6 @@ func (f *FakeQueryService) MessageAck(ctx context.Context, target *querypb.Targe
 	return 1, nil
 }
 
-// SplitQuery is part of the queryservice.QueryService interface
-func (f *FakeQueryService) SplitQuery(
-	ctx context.Context,
-	target *querypb.Target,
-	query *querypb.BoundQuery,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm,
-) ([]*querypb.QuerySplit, error) {
-
-	if f.HasError {
-		return nil, f.TabletError
-	}
-	if f.Panics {
-		panic(fmt.Errorf("test-triggered panic"))
-	}
-	f.checkTargetCallerID(ctx, "SplitQuery", target)
-	if !proto.Equal(query, SplitQueryBoundQuery) {
-		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.Query: got %v expected %v",
-			query, SplitQueryBoundQuery)
-	}
-	if !reflect.DeepEqual(splitColumns, SplitQuerySplitColumns) {
-		f.t.Errorf("invalid SplitQuery.SplitColumn: got %v expected %v",
-			splitColumns, SplitQuerySplitColumns)
-	}
-	if splitCount != SplitQuerySplitCount {
-		f.t.Errorf("invalid SplitQuery.SplitCount: got %v expected %v",
-			splitCount, SplitQuerySplitCount)
-	}
-	if numRowsPerQueryPart != SplitQueryNumRowsPerQueryPart {
-		f.t.Errorf("invalid SplitQuery.numRowsPerQueryPart: got %v expected %v",
-			numRowsPerQueryPart, SplitQueryNumRowsPerQueryPart)
-	}
-	if algorithm != SplitQueryAlgorithm {
-		f.t.Errorf("invalid SplitQuery.algorithm: got %v expected %v",
-			algorithm, SplitQueryAlgorithm)
-	}
-	return SplitQueryQuerySplitList, nil
-}
-
 // TestStreamHealthStreamHealthResponse is a test stream health response.
 var TestStreamHealthStreamHealthResponse = &querypb.StreamHealthResponse{
 	Target: &querypb.Target{
@@ -779,77 +680,6 @@ func (f *FakeQueryService) StreamHealth(ctx context.Context, callback func(*quer
 		shr = TestStreamHealthStreamHealthResponse
 	}
 	callback(shr)
-	return nil
-}
-
-const (
-	// UpdateStreamPosition is a test update stream position.
-	UpdateStreamPosition = "update stream position"
-
-	// UpdateStreamTimestamp is a test update stream timestamp.
-	UpdateStreamTimestamp = 123654
-)
-
-// UpdateStreamStreamEvent1 is a test update stream event.
-var UpdateStreamStreamEvent1 = querypb.StreamEvent{
-	Statements: []*querypb.StreamEvent_Statement{
-		{
-			Category:  querypb.StreamEvent_Statement_DML,
-			TableName: "table1",
-		},
-	},
-	EventToken: &querypb.EventToken{
-		Timestamp: 789654,
-		Shard:     "shard1",
-		Position:  "streaming position 1",
-	},
-}
-
-// UpdateStreamStreamEvent2 is a test update stream event.
-var UpdateStreamStreamEvent2 = querypb.StreamEvent{
-	Statements: []*querypb.StreamEvent_Statement{
-		{
-			Category:  querypb.StreamEvent_Statement_DML,
-			TableName: "table2",
-		},
-	},
-	EventToken: &querypb.EventToken{
-		Timestamp: 789655,
-		Shard:     "shard1",
-		Position:  "streaming position 2",
-	},
-}
-
-// UpdateStream is part of the queryservice.QueryService interface
-func (f *FakeQueryService) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
-	if f.Panics && f.UpdateStreamPanicsEarly {
-		panic(fmt.Errorf("test-triggered panic early"))
-	}
-	if position != UpdateStreamPosition {
-		f.t.Errorf("invalid UpdateStream.position: got %v expected %v", position, UpdateStreamPosition)
-	}
-	if timestamp != UpdateStreamTimestamp {
-		f.t.Errorf("invalid UpdateStream.timestamp: got %v expected %v", timestamp, UpdateStreamTimestamp)
-	}
-	f.checkTargetCallerID(ctx, "UpdateStream", target)
-	if err := callback(&UpdateStreamStreamEvent1); err != nil {
-		f.t.Errorf("callback1 failed: %v", err)
-	}
-	if f.Panics && !f.UpdateStreamPanicsEarly {
-		// wait until the client gets the response, then panics
-		<-f.PanicWait
-		panic(fmt.Errorf("test-triggered panic late"))
-	}
-	if f.HasError {
-		// wait until the client has the response, since all
-		// streaming implementation may not send previous
-		// messages if an error has been triggered.
-		<-f.ErrorWait
-		return f.TabletError
-	}
-	if err := callback(&UpdateStreamStreamEvent2); err != nil {
-		f.t.Errorf("callback2 failed: %v", err)
-	}
 	return nil
 }
 

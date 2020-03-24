@@ -25,6 +25,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -814,6 +816,10 @@ var (
 	}, {
 		input: "set tx_read_only = 0",
 	}, {
+		input: "set transaction_read_only = 1",
+	}, {
+		input: "set transaction_read_only = 0",
+	}, {
 		input: "set tx_isolation = 'repeatable read'",
 	}, {
 		input: "set tx_isolation = 'read committed'",
@@ -825,6 +831,10 @@ var (
 		input: "set sql_safe_updates = 0",
 	}, {
 		input: "set sql_safe_updates = 1",
+	}, {
+		input: "set @variable = 42",
+	}, {
+		input: "set @period.variable = 42",
 	}, {
 		input:  "alter ignore table a add foo",
 		output: "alter table a",
@@ -1122,7 +1132,7 @@ var (
 		output: "alter table a",
 	}, {
 		input:  "analyze table a",
-		output: "alter table a",
+		output: "otherread",
 	}, {
 		input:  "flush tables",
 		output: "flush",
@@ -1214,14 +1224,12 @@ var (
 		input:  "show grants for 'root@localhost'",
 		output: "show grants",
 	}, {
-		input:  "show index from table",
-		output: "show index",
+		input: "show index from t",
 	}, {
 		input:  "show indexes from table",
 		output: "show indexes",
 	}, {
-		input:  "show keys from table",
-		output: "show keys",
+		input: "show keys from t",
 	}, {
 		input:  "show master status",
 		output: "show master",
@@ -1354,6 +1362,12 @@ var (
 		input:  "use `ks:-80@master`",
 		output: "use `ks:-80@master`",
 	}, {
+		input:  "use @replica",
+		output: "use `@replica`",
+	}, {
+		input:  "use ks@replica",
+		output: "use `ks@replica`",
+	}, {
 		input:  "describe foobar",
 		output: "otherread",
 	}, {
@@ -1448,11 +1462,21 @@ var (
 	}, {
 		input: "select match(a1, a2) against ('foo' in natural language mode with query expansion) from t",
 	}, {
+		input:  "select database()",
+		output: "select database() from dual",
+	}, {
+		input:  "select schema()",
+		output: "select schema() from dual",
+	}, {
 		input: "select title from video as v where match(v.title, v.tag) against ('DEMO' in boolean mode)",
 	}, {
 		input: "select name, group_concat(score) from t group by name",
 	}, {
 		input: "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
+	}, {
+		input: "select name, group_concat(distinct id, score order by id desc separator ':' limit 1) from t group by name",
+	}, {
+		input: "select name, group_concat(distinct id, score order by id desc separator ':' limit 10, 2) from t group by name",
 	}, {
 		input: "select * from t partition (p0)",
 	}, {
@@ -1509,30 +1533,56 @@ var (
 	}, {
 		input:  "select distinctrow a.* from (select (1) from dual union all select 1 from dual) a",
 		output: "select distinct a.* from (select (1) from dual union all select 1 from dual) as a",
+	}, {
+		input: "select `weird function name`() from t",
+	}, {
+		input: "select status() from t", // should not escape function names that are keywords
+	}, {
+		input: "select * from `weird table name`",
+	}, {
+		input:  "SHOW FULL TABLES FROM `jiradb` LIKE 'AO_E8B6CC_ISSUE_MAPPING'",
+		output: "show full tables from jiradb like 'AO_E8B6CC_ISSUE_MAPPING'",
+	}, {
+		input:  "SHOW FULL COLUMNS FROM AO_E8B6CC_ISSUE_MAPPING FROM jiradb LIKE '%'",
+		output: "show full columns from AO_E8B6CC_ISSUE_MAPPING from jiradb like '%'",
+	}, {
+		input:  "SHOW KEYS FROM `AO_E8B6CC_ISSUE_MAPPING` FROM `jiradb`",
+		output: "show keys from AO_E8B6CC_ISSUE_MAPPING from jiradb",
+	}, {
+		input:  "SHOW CREATE TABLE `jiradb`.`AO_E8B6CC_ISSUE_MAPPING`",
+		output: "show create table jiradb.AO_E8B6CC_ISSUE_MAPPING",
+	}, {
+		input:  "SHOW INDEX FROM `AO_E8B6CC_ISSUE_MAPPING` FROM `jiradb`",
+		output: "show index from AO_E8B6CC_ISSUE_MAPPING from jiradb",
+	}, {
+		input:  "SHOW FULL TABLES FROM `jiradb` LIKE '%'",
+		output: "show full tables from jiradb like '%'",
+	}, {
+		input:  "SHOW INDEX FROM `AO_E8B6CC_PROJECT_MAPPING` FROM `jiradb`",
+		output: "show index from AO_E8B6CC_PROJECT_MAPPING from jiradb",
 	}}
 )
 
 func TestValid(t *testing.T) {
 	for _, tcase := range validSQL {
-		if tcase.output == "" {
-			tcase.output = tcase.input
-		}
-		tree, err := Parse(tcase.input)
-		if err != nil {
-			t.Errorf("Parse(%q) err: %v, want nil", tcase.input, err)
-			continue
-		}
-		out := String(tree)
-		if out != tcase.output {
-			t.Errorf("Parse(%q) = %q, want: %q", tcase.input, out, tcase.output)
-		}
-		// This test just exercises the tree walking functionality.
-		// There's no way automated way to verify that a node calls
-		// all its children. But we can examine code coverage and
-		// ensure that all walkSubtree functions were called.
-		Walk(func(node SQLNode) (bool, error) {
-			return true, nil
-		}, tree)
+		t.Run(tcase.input, func(t *testing.T) {
+			if tcase.output == "" {
+				tcase.output = tcase.input
+			}
+			tree, err := Parse(tcase.input)
+			require.NoError(t, err)
+			out := String(tree)
+			if out != tcase.output {
+				t.Errorf("Parse(%q) = %q, want: %q", tcase.input, out, tcase.output)
+			}
+			// This test just exercises the tree walking functionality.
+			// There's no way automated way to verify that a node calls
+			// all its children. But we can examine code coverage and
+			// ensure that all walkSubtree functions were called.
+			Walk(func(node SQLNode) (bool, error) {
+				return true, nil
+			}, tree)
+		})
 	}
 }
 
@@ -1766,8 +1816,14 @@ func TestKeywords(t *testing.T) {
 		input:  "select status from t",
 		output: "select `status` from t",
 	}, {
+		input:  "select Status from t",
+		output: "select `Status` from t",
+	}, {
 		input:  "select variables from t",
 		output: "select `variables` from t",
+	}, {
+		input:  "select Variables from t",
+		output: "select `Variables` from t",
 	}}
 
 	for _, tcase := range validSQL {

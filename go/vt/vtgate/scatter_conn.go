@@ -19,7 +19,6 @@ package vtgate
 import (
 	"flag"
 	"io"
-	"math/rand"
 	"sync"
 	"time"
 
@@ -126,6 +125,7 @@ func (stc *ScatterConn) Execute(
 	session *SafeSession,
 	notInTransaction bool,
 	options *querypb.ExecuteOptions,
+	autocommit bool,
 ) (*sqltypes.Result, error) {
 
 	// mu protects qr
@@ -140,19 +140,21 @@ func (stc *ScatterConn) Execute(
 		session,
 		notInTransaction,
 		func(rs *srvtopo.ResolvedShard, i int, shouldBegin bool, transactionID int64) (int64, error) {
-			var innerqr *sqltypes.Result
-			if shouldBegin {
-				var err error
+			var (
+				innerqr *sqltypes.Result
+				err     error
+				opts    *querypb.ExecuteOptions
+			)
+			switch {
+			case autocommit:
+				innerqr, err = stc.executeAutocommit(ctx, rs, query, bindVars, opts)
+			case shouldBegin:
 				innerqr, transactionID, err = rs.QueryService.BeginExecute(ctx, rs.Target, query, bindVars, options)
-				if err != nil {
-					return transactionID, err
-				}
-			} else {
-				var err error
+			default:
 				innerqr, err = rs.QueryService.Execute(ctx, rs.Target, query, bindVars, transactionID, options)
-				if err != nil {
-					return transactionID, err
-				}
+			}
+			if err != nil {
+				return transactionID, err
 			}
 
 			mu.Lock()
@@ -610,122 +612,6 @@ func (stc *ScatterConn) MessageAck(ctx context.Context, rss []*srvtopo.ResolvedS
 		return nil
 	})
 	return totalCount, allErrors.AggrError(vterrors.Aggregate)
-}
-
-// UpdateStream just sends the query to the ResolvedShard,
-// and sends the results back.
-func (stc *ScatterConn) UpdateStream(ctx context.Context, rs *srvtopo.ResolvedShard, timestamp int64, position string, callback func(*querypb.StreamEvent) error) error {
-	return rs.QueryService.UpdateStream(ctx, rs.Target, position, timestamp, callback)
-}
-
-// SplitQuery scatters a SplitQuery request to the shards whose names are given in 'shards'.
-// For every set of *querypb.QuerySplit's received from a shard, it applies the given
-// 'querySplitToPartFunc' function to convert each *querypb.QuerySplit into a
-// 'SplitQueryResponse_Part' message. Finally, it aggregates the obtained
-// SplitQueryResponse_Parts across all shards and returns the resulting slice.
-func (stc *ScatterConn) SplitQuery(
-	ctx context.Context,
-	sql string,
-	bindVariables map[string]*querypb.BindVariable,
-	splitColumns []string,
-	perShardSplitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm,
-	rss []*srvtopo.ResolvedShard,
-	querySplitToQueryPartFunc func(
-		querySplit *querypb.QuerySplit, rs *srvtopo.ResolvedShard) (*vtgatepb.SplitQueryResponse_Part, error)) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-
-	tabletType := topodatapb.TabletType_RDONLY
-	// allParts will collect the query-parts from all the shards. It's protected
-	// by allPartsMutex.
-	var allParts []*vtgatepb.SplitQueryResponse_Part
-	var allPartsMutex sync.Mutex
-
-	allErrors := stc.multiGo(
-		ctx,
-		"SplitQuery",
-		rss,
-		tabletType,
-		func(rs *srvtopo.ResolvedShard, i int) error {
-			// Get all splits from this shard
-			query := &querypb.BoundQuery{
-				Sql:           sql,
-				BindVariables: bindVariables,
-			}
-			querySplits, err := rs.QueryService.SplitQuery(
-				ctx,
-				rs.Target,
-				query,
-				splitColumns,
-				perShardSplitCount,
-				numRowsPerQueryPart,
-				algorithm)
-			if err != nil {
-				return err
-			}
-			parts := make([]*vtgatepb.SplitQueryResponse_Part, len(querySplits))
-			for i, querySplit := range querySplits {
-				parts[i], err = querySplitToQueryPartFunc(querySplit, rs)
-				if err != nil {
-					return err
-				}
-			}
-			// Aggregate the parts from this shard into allParts.
-			allPartsMutex.Lock()
-			defer allPartsMutex.Unlock()
-			allParts = append(allParts, parts...)
-			return nil
-		},
-	)
-
-	if allErrors.HasErrors() {
-		err := allErrors.AggrError(vterrors.Aggregate)
-		return nil, err
-	}
-	// We shuffle the query-parts here. External frameworks like MapReduce may
-	// "deal" these jobs to workers in the order they are in the list. Without
-	// shuffling workers can be very unevenly distributed among
-	// the shards they query. E.g. all workers will first query the first shard,
-	// then most of them to the second shard, etc, which results with uneven
-	// load balancing among shards.
-	shuffleQueryParts(allParts)
-	return allParts, nil
-}
-
-// randomGenerator is the randomGenerator used for the randomness
-// of 'shuffleQueryParts'. It's initialized in 'init()' below.
-type shuffleQueryPartsRandomGeneratorInterface interface {
-	Intn(n int) int
-}
-
-var shuffleQueryPartsRandomGenerator shuffleQueryPartsRandomGeneratorInterface
-
-func init() {
-	shuffleQueryPartsRandomGenerator =
-		rand.New(rand.NewSource(time.Now().UnixNano()))
-}
-
-// injectShuffleQueryParsRandomGenerator injects the given object
-// as the random generator used by shuffleQueryParts. This function
-// should only be used in tests and should not be called concurrently.
-// It returns the previous shuffleQueryPartsRandomGenerator used.
-// lint:ignore U1000 available for tests to use
-func injectShuffleQueryPartsRandomGenerator(
-	randGen shuffleQueryPartsRandomGeneratorInterface) shuffleQueryPartsRandomGeneratorInterface {
-	oldRandGen := shuffleQueryPartsRandomGenerator
-	shuffleQueryPartsRandomGenerator = randGen
-	return oldRandGen
-}
-
-// shuffleQueryParts performs an in-place shuffle of the given array.
-// The result is a pseudo-random permutation of the array chosen uniformally
-// from the space of all permutations.
-func shuffleQueryParts(splits []*vtgatepb.SplitQueryResponse_Part) {
-	for i := len(splits) - 1; i >= 1; i-- {
-		randIndex := shuffleQueryPartsRandomGenerator.Intn(i + 1)
-		// swap splits[i], splits[randIndex]
-		splits[randIndex], splits[i] = splits[i], splits[randIndex]
-	}
 }
 
 // Close closes the underlying Gateway.

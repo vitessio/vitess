@@ -1,5 +1,5 @@
 # Test cases in this file follow the code in ordered_aggregate.go.
-
+#
 # Aggregate on unsharded
 "select count(*), col from unsharded"
 {
@@ -29,7 +29,9 @@
     "Query": "select count(*), col from user where id = 1",
     "FieldQuery": "select count(*), col from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": [1],
+    "Values": [
+      1
+    ],
     "Table": "user"
   }
 }
@@ -532,7 +534,9 @@
     "Query": "select id, count(*) as c from user group by id having id = 1 and c = 10",
     "FieldQuery": "select id, count(*) as c from user where 1 != 1 group by id",
     "Vindex": "user_index",
-    "Values": [1],
+    "Values": [
+      1
+    ],
     "Table": "user"
   }
 }
@@ -1037,7 +1041,6 @@
   }
 }
 
-
 # scatter aggregate group by invalid column number
 "select col from user group by 2"
 "column number out of range: 2"
@@ -1341,19 +1344,21 @@
 # Group by with collate operator
 "select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci"
 {
-   "Original":"select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
-   "Instructions":{
-      "Opcode":"SelectEqualUnique",
-      "Keyspace":{
-         "Name":"user",
-         "Sharded":true
-      },
-      "Query":"select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
-      "FieldQuery":"select user.col1 as a from user where 1 != 1 group by a collate utf8_general_ci",
-      "Vindex":"user_index",
-      "Values":[5],
-      "Table": "user"
-   }
+  "Original": "select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
+    "FieldQuery": "select user.col1 as a from user where 1 != 1 group by a collate utf8_general_ci",
+    "Vindex": "user_index",
+    "Values": [
+      5
+    ],
+    "Table": "user"
+  }
 }
 
 # routing rules for aggregates where sharded and unsharded match. Unsharded always wins.

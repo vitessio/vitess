@@ -71,6 +71,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {
@@ -119,6 +120,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestRepeatedInitShardMaster(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	// Test that using InitShardMaster can go back and forth between 2 hosts.
 
 	// Make replica tablet as master
@@ -157,6 +159,7 @@ func TestRepeatedInitShardMaster(t *testing.T) {
 }
 
 func TestMasterRestartSetsTERTimestamp(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	// Test that TER timestamp is set when we restart the MASTER vttablet.
 	// TER = TabletExternallyReparented.
 	// See StreamHealthResponse.tablet_externally_reparented_timestamp for details.

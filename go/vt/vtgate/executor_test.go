@@ -29,12 +29,12 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"context"
 
+	"vitess.io/vitess/go/vt/topo"
+
 	"github.com/golang/protobuf/proto"
+	"github.com/google/go-cmp/cmp"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
@@ -283,281 +283,6 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	}
 }
 
-func TestExecutorSet(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
-
-	testcases := []struct {
-		in  string
-		out *vtgatepb.Session
-		err string
-	}{{
-		in:  "set autocommit = 1",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set @@autocommit = true",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set @@session.autocommit = true",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set @@session.`autocommit` = true",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set @@session.'autocommit' = true",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set @@session.\"autocommit\" = true",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set autocommit = true",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set autocommit = on",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set autocommit = ON",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set autocommit = 'on'",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set autocommit = `on`",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set autocommit = \"on\"",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set autocommit = false",
-		out: &vtgatepb.Session{},
-	}, {
-		in:  "set autocommit = off",
-		out: &vtgatepb.Session{},
-	}, {
-		in:  "set autocommit = OFF",
-		out: &vtgatepb.Session{},
-	}, {
-		in:  "set AUTOCOMMIT = 0",
-		out: &vtgatepb.Session{},
-	}, {
-		in:  "set AUTOCOMMIT = 'aa'",
-		err: "unexpected value for autocommit: aa",
-	}, {
-		in:  "set autocommit = 2",
-		err: "unexpected value for autocommit: 2",
-	}, {
-		in:  "set client_found_rows = 1",
-		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
-	}, {
-		in:  "set client_found_rows = true",
-		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
-	}, {
-		in:  "set client_found_rows = 0",
-		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
-	}, {
-		in:  "set client_found_rows = false",
-		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
-	}, {
-		in:  "set @@global.client_found_rows = 1",
-		err: "unsupported in set: global",
-	}, {
-		in:  "set global client_found_rows = 1",
-		err: "unsupported in set: global",
-	}, {
-		in:  "set global @@session.client_found_rows = 1",
-		err: "unsupported in set: mixed using of variable scope",
-	}, {
-		in:  "set client_found_rows = 'aa'",
-		err: "unexpected value type for client_found_rows: string",
-	}, {
-		in:  "set client_found_rows = 2",
-		err: "unexpected value for client_found_rows: 2",
-	}, {
-		in:  "set transaction_mode = 'unspecified'",
-		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_UNSPECIFIED},
-	}, {
-		in:  "set transaction_mode = 'single'",
-		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_SINGLE},
-	}, {
-		in:  "set transaction_mode = 'multi'",
-		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_MULTI},
-	}, {
-		in:  "set transaction_mode = 'twopc'",
-		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
-	}, {
-		in:  "set transaction_mode = twopc",
-		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
-	}, {
-		in:  "set transaction_mode = 'aa'",
-		err: "invalid transaction_mode: aa",
-	}, {
-		in:  "set transaction_mode = 1",
-		err: "unexpected value type for transaction_mode: int64",
-	}, {
-		in:  "set workload = 'unspecified'",
-		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_UNSPECIFIED}},
-	}, {
-		in:  "set workload = 'oltp'",
-		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLTP}},
-	}, {
-		in:  "set workload = 'olap'",
-		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLAP}},
-	}, {
-		in:  "set workload = 'dba'",
-		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_DBA}},
-	}, {
-		in:  "set workload = 'aa'",
-		err: "invalid workload: aa",
-	}, {
-		in:  "set workload = 1",
-		err: "unexpected value type for workload: int64",
-	}, {
-		in:  "set transaction_mode = 'twopc', autocommit=1",
-		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
-	}, {
-		in:  "set sql_select_limit = 5",
-		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SqlSelectLimit: 5}},
-	}, {
-		in:  "set sql_select_limit = DEFAULT",
-		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SqlSelectLimit: 0}},
-	}, {
-		in:  "set sql_select_limit = 'asdfasfd'",
-		err: "unexpected string value for sql_select_limit: asdfasfd",
-	}, {
-		in:  "set autocommit = 1+1",
-		err: "invalid syntax: 1 + 1",
-	}, {
-		in:  "set character_set_results=null",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set character_set_results='abcd'",
-		err: "disallowed value for character_set_results: abcd",
-	}, {
-		in:  "set foo = 1",
-		err: "unsupported construct: set foo = 1",
-	}, {
-		in:  "set names utf8",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set names ascii",
-		err: "unexpected value for charset/names: ascii",
-	}, {
-		in:  "set charset utf8",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set character set default",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set character set ascii",
-		err: "unexpected value for charset/names: ascii",
-	}, {
-		in:  "set net_write_timeout = 600",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set sql_mode = 'STRICT_ALL_TABLES'",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set net_read_timeout = 600",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set sql_quote_show_create = 1",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set foreign_key_checks = 0",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set skip_query_plan_cache = 1",
-		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SkipQueryPlanCache: true}},
-	}, {
-		in:  "set skip_query_plan_cache = 0",
-		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
-	}, {
-		in:  "set sql_auto_is_null = 0",
-		out: &vtgatepb.Session{Autocommit: true}, // no effect
-	}, {
-		in:  "set sql_auto_is_null = 1",
-		err: "sql_auto_is_null is not currently supported",
-	}, {
-		in:  "set tx_read_only = 2",
-		err: "unexpected value for tx_read_only: 2",
-	}, {
-		in:  "set tx_isolation = 'invalid'",
-		err: "unexpected value for tx_isolation: invalid",
-	}, {
-		in:  "set sql_safe_updates = 2",
-		err: "unexpected value for sql_safe_updates: 2",
-	}}
-	for _, tcase := range testcases {
-		session := NewSafeSession(&vtgatepb.Session{Autocommit: true})
-		_, err := executor.Execute(context.Background(), "TestExecute", session, tcase.in, nil)
-		if err != nil {
-			if err.Error() != tcase.err {
-				t.Errorf("%s error: %v, want %s", tcase.in, err, tcase.err)
-			}
-			continue
-		}
-		if !proto.Equal(session.Session, tcase.out) {
-			t.Errorf("%s: %v, want %s", tcase.in, session.Session, tcase.out)
-		}
-	}
-}
-
-func TestExecutorSetMetadata(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
-
-	set := "set @@vitess_metadata.app_keyspace_v1= '1'"
-	_, err := executor.Execute(context.Background(), "TestExecute", session, set, nil)
-	assert.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "expected error %v, got error: %v", vtrpcpb.Code_PERMISSION_DENIED, err)
-
-	*vschemaacl.AuthorizedDDLUsers = "%"
-	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
-	}()
-
-	executor, _, _, _ = createExecutorEnv()
-	session = NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
-
-	set = "set @@vitess_metadata.app_keyspace_v1= '1'"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, set, nil)
-	assert.NoError(t, err, "%s error: %v", set, err)
-
-	show := `show vitess_metadata variables like 'app\\_keyspace\\_v_'`
-	result, err := executor.Execute(context.Background(), "TestExecute", session, show, nil)
-	assert.NoError(t, err)
-
-	want := "1"
-	got := string(result.Rows[0][1].ToString())
-	assert.Equalf(t, want, got, "want migrations %s, result %s", want, got)
-
-	// Update metadata
-	set = "set @@vitess_metadata.app_keyspace_v2='2'"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, set, nil)
-	assert.NoError(t, err, "%s error: %v", set, err)
-
-	show = `show vitess_metadata variables like 'app\\_keyspace\\_v%'`
-	gotqr, err := executor.Execute(context.Background(), "TestExecute", session, show, nil)
-	assert.NoError(t, err)
-
-	wantqr := &sqltypes.Result{
-		Fields: buildVarCharFields("Key", "Value"),
-		Rows: [][]sqltypes.Value{
-			buildVarCharRow("app_keyspace_v1", "1"),
-			buildVarCharRow("app_keyspace_v2", "2"),
-		},
-		RowsAffected: 2,
-	}
-
-	assert.Equal(t, wantqr.Fields, gotqr.Fields)
-	assert.ElementsMatch(t, wantqr.Rows, gotqr.Rows)
-
-	show = "show vitess_metadata variables"
-	gotqr, err = executor.Execute(context.Background(), "TestExecute", session, show, nil)
-	require.NoError(t, err)
-
-	assert.Equal(t, wantqr.Fields, gotqr.Fields)
-	assert.ElementsMatch(t, wantqr.Rows, gotqr.Rows)
-}
-
 func TestExecutorDeleteMetadata(t *testing.T) {
 	*vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
@@ -603,7 +328,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession := &vtgatepb.Session{TargetString: "@master", InTransaction: true}
+	wantSession := &vtgatepb.Session{TargetString: "@master", InTransaction: true, FoundRows: 1}
 	testSession := *session.Session
 	testSession.ShardSessions = nil
 	if !proto.Equal(&testSession, wantSession) {
@@ -637,7 +362,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master"}
+	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master", FoundRows: 1}
 	if !proto.Equal(session.Session, wantSession) {
 		t.Errorf("autocommit=1: %v, want %v", session.Session, wantSession)
 	}
@@ -666,7 +391,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@master"}
+	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@master", FoundRows: 1}
 	testSession = *session.Session
 	testSession.ShardSessions = nil
 	if !proto.Equal(&testSession, wantSession) {
@@ -820,6 +545,48 @@ func TestExecutorShow(t *testing.T) {
 	}
 	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
 	wantQuery = "show create table unknown"
+	if lastQuery != wantQuery {
+		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
+	}
+
+	// SHOW KEYS with two different syntax
+	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show keys from %v.unknown", KsTestUnsharded), nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
+	wantQuery = "show keys from unknown"
+	if lastQuery != wantQuery {
+		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
+	}
+
+	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show keys from unknown from %v", KsTestUnsharded), nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
+	wantQuery = "show keys from unknown"
+	if lastQuery != wantQuery {
+		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
+	}
+
+	// SHOW INDEX with two different syntax
+	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show index from %v.unknown", KsTestUnsharded), nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
+	wantQuery = "show index from unknown"
+	if lastQuery != wantQuery {
+		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
+	}
+
+	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show index from unknown from %v", KsTestUnsharded), nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
+	wantQuery = "show index from unknown"
 	if lastQuery != wantQuery {
 		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
 	}
@@ -1230,8 +997,8 @@ func TestExecutorComment(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 
 	stmts := []string{
-		"/*! SET max_execution_time=5000*/",
-		"/*!50708 SET max_execution_time=5000*/",
+		"/*! SET autocommit=1*/",
+		"/*!50708 SET @x=5000*/",
 	}
 	wantResult := &sqltypes.Result{}
 
@@ -1249,56 +1016,78 @@ func TestExecutorComment(t *testing.T) {
 func TestExecutorOther(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
+	type cnts struct {
+		Sbc1Cnt      int64
+		Sbc2Cnt      int64
+		SbcLookupCnt int64
+	}
+
+	tcs := []struct {
+		targetStr string
+
+		hasNoKeyspaceErr       bool
+		hasDestinationShardErr bool
+		wantCnts               cnts
+	}{
+		{
+			targetStr:        "",
+			hasNoKeyspaceErr: true,
+		},
+		{
+			targetStr:              "TestExecutor[-]",
+			hasDestinationShardErr: true,
+		},
+		{
+			targetStr: KsTestUnsharded,
+			wantCnts: cnts{
+				Sbc1Cnt:      0,
+				Sbc2Cnt:      0,
+				SbcLookupCnt: 1,
+			},
+		},
+		{
+			targetStr: "TestExecutor",
+			wantCnts: cnts{
+				Sbc1Cnt:      1,
+				Sbc2Cnt:      0,
+				SbcLookupCnt: 0,
+			},
+		},
+	}
+
 	stmts := []string{
-		"show other",
-		"analyze",
-		"describe",
-		"explain",
-		"repair",
-		"optimize",
+		"show tables",
+		"analyze table t1",
+		"describe t1",
+		"explain t1",
+		"repair table t1",
+		"optimize table t1",
 	}
-	wantCount := []int64{0, 0, 0}
+
 	for _, stmt := range stmts {
-		_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), stmt, nil)
-		if err != nil {
-			t.Error(err)
-		}
-		gotCount := []int64{
-			sbc1.ExecCount.Get(),
-			sbc2.ExecCount.Get(),
-			sbclookup.ExecCount.Get(),
-		}
-		wantCount[2]++
-		if !reflect.DeepEqual(gotCount, wantCount) {
-			t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
-		}
+		for _, tc := range tcs {
+			sbc1.ExecCount.Set(0)
+			sbc2.ExecCount.Set(0)
+			sbclookup.ExecCount.Set(0)
 
-		_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}), stmt, nil)
-		if err != nil {
-			t.Error(err)
-		}
-		gotCount = []int64{
-			sbc1.ExecCount.Get(),
-			sbc2.ExecCount.Get(),
-			sbclookup.ExecCount.Get(),
-		}
-		wantCount[0]++
-		if !reflect.DeepEqual(gotCount, wantCount) {
-			t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
-		}
-	}
+			_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
+			if tc.hasNoKeyspaceErr {
+				assert.Error(t, err, errNoKeyspace)
+			} else if tc.hasDestinationShardErr {
+				assert.Errorf(t, err, "Destination can only be a single shard for statement: %s, got: DestinationExactKeyRange(-)", stmt)
+			} else {
+				assert.NoError(t, err)
+			}
 
-	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{}), "analyze", nil)
-	want := errNoKeyspace.Error()
-	if err == nil || err.Error() != want {
-		t.Errorf("show vschema tables: %v, want %v", err, want)
-	}
-
-	// Can't target a range with handle other
-	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor[-]"}), "analyze", nil)
-	want = "Destination can only be a single shard for statement: analyze, got: DestinationExactKeyRange(-)"
-	if err == nil || err.Error() != want {
-		t.Errorf("analyze: got %v, want %v", err, want)
+			diff := cmp.Diff(tc.wantCnts, cnts{
+				Sbc1Cnt:      sbc1.ExecCount.Get(),
+				Sbc2Cnt:      sbc2.ExecCount.Get(),
+				SbcLookupCnt: sbclookup.ExecCount.Get(),
+			})
+			if diff != "" {
+				t.Errorf("stmt: %s\ntc: %+v\n-want,+got:\n%s", stmt, tc, diff)
+			}
+		}
 	}
 }
 
@@ -1308,68 +1097,85 @@ func TestExecutorDDL(t *testing.T) {
 
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
+	type cnts struct {
+		Sbc1Cnt      int64
+		Sbc2Cnt      int64
+		SbcLookupCnt int64
+	}
+
+	tcs := []struct {
+		targetStr string
+
+		hasNoKeyspaceErr bool
+		shardQueryCnt    int
+		wantCnts         cnts
+	}{
+		{
+			targetStr:        "",
+			hasNoKeyspaceErr: true,
+		},
+		{
+			targetStr:     KsTestUnsharded,
+			shardQueryCnt: 1,
+			wantCnts: cnts{
+				Sbc1Cnt:      0,
+				Sbc2Cnt:      0,
+				SbcLookupCnt: 1,
+			},
+		},
+		{
+			targetStr:     "TestExecutor",
+			shardQueryCnt: 8,
+			wantCnts: cnts{
+				Sbc1Cnt:      1,
+				Sbc2Cnt:      1,
+				SbcLookupCnt: 0,
+			},
+		},
+		{
+			targetStr:     "TestExecutor/-20",
+			shardQueryCnt: 1,
+			wantCnts: cnts{
+				Sbc1Cnt:      1,
+				Sbc2Cnt:      0,
+				SbcLookupCnt: 0,
+			},
+		},
+	}
+
 	stmts := []string{
 		"create",
-		"alter",
-		"rename",
-		"drop",
-		"truncate",
+		"alter table t1 add primary key id",
+		"rename table t1 to t2",
+		"truncate table t2",
+		"drop table t2",
 	}
-	wantCount := []int64{0, 0, 0}
+
 	for _, stmt := range stmts {
-		_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), stmt, nil)
-		if err != nil {
-			t.Error(err)
-		}
-		gotCount := []int64{
-			sbc1.ExecCount.Get(),
-			sbc2.ExecCount.Get(),
-			sbclookup.ExecCount.Get(),
-		}
-		wantCount[2]++
-		if !reflect.DeepEqual(gotCount, wantCount) {
-			t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
-		}
-		testQueryLog(t, logChan, "TestExecute", "DDL", stmt, 1)
+		for _, tc := range tcs {
+			sbc1.ExecCount.Set(0)
+			sbc2.ExecCount.Set(0)
+			sbclookup.ExecCount.Set(0)
 
-		_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}), stmt, nil)
-		if err != nil {
-			t.Error(err)
-		}
-		gotCount = []int64{
-			sbc1.ExecCount.Get(),
-			sbc2.ExecCount.Get(),
-			sbclookup.ExecCount.Get(),
-		}
-		wantCount[0]++
-		wantCount[1]++
-		if !reflect.DeepEqual(gotCount, wantCount) {
-			t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
-		}
-		testQueryLog(t, logChan, "TestExecute", "DDL", stmt, 8)
+			_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
+			if tc.hasNoKeyspaceErr {
+				assert.Error(t, err, errNoKeyspace)
+			} else {
+				assert.NoError(t, err)
+			}
 
-		_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor/-20"}), stmt, nil)
-		if err != nil {
-			t.Error(err)
+			diff := cmp.Diff(tc.wantCnts, cnts{
+				Sbc1Cnt:      sbc1.ExecCount.Get(),
+				Sbc2Cnt:      sbc2.ExecCount.Get(),
+				SbcLookupCnt: sbclookup.ExecCount.Get(),
+			})
+			if diff != "" {
+				t.Errorf("stmt: %s\ntc: %+v\n-want,+got:\n%s", stmt, tc, diff)
+			}
+
+			testQueryLog(t, logChan, "TestExecute", "DDL", stmt, tc.shardQueryCnt)
 		}
-		gotCount = []int64{
-			sbc1.ExecCount.Get(),
-			sbc2.ExecCount.Get(),
-			sbclookup.ExecCount.Get(),
-		}
-		wantCount[0]++
-		if !reflect.DeepEqual(gotCount, wantCount) {
-			t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
-		}
-		testQueryLog(t, logChan, "TestExecute", "DDL", stmt, 1)
 	}
-
-	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{}), "create", nil)
-	want := errNoKeyspace.Error()
-	if err == nil || err.Error() != want {
-		t.Errorf("ddl with no keyspace: %v, want %v", err, want)
-	}
-	testQueryLog(t, logChan, "TestExecute", "DDL", "create", 0)
 }
 
 func waitForVindex(t *testing.T, ks, name string, watch chan *vschemapb.SrvVSchema, executor *Executor) (*vschemapb.SrvVSchema, *vschemapb.Vindex) {
@@ -2122,7 +1928,7 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 func TestExecutorUnrecognized(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{}), "invalid statement", nil)
-	want := "unrecognized statement: invalid statement"
+	want := "syntax error at position 8 near 'invalid'"
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema tables: %v, want %v", err, want)
 	}
@@ -2635,6 +2441,7 @@ func TestGenerateCharsetRows(t *testing.T) {
 			match := stmt.(*sqlparser.Show)
 			filter := match.ShowTablesOpt.Filter
 			actual, err := generateCharsetRows(filter, charsets)
+			require.NoError(t, err)
 			require.Equal(t, tc.expected, actual)
 		})
 	}

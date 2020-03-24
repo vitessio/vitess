@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -107,6 +106,12 @@ func (ep *TabletPlan) buildAuthorized() {
 	}
 }
 
+var (
+	// Global stats vars.
+	// TODO(sougou): unglobalize after componentizing TabletServer.
+	queryCounts, queryTimes, queryRowCounts, queryErrorCounts *stats.CountersWithMultiLabels
+)
+
 //_______________________________________________
 
 // QueryEngine implements the core functionality of tabletserver.
@@ -126,9 +131,6 @@ type QueryEngine struct {
 	plans            *cache.LRUCache
 	queryRuleSources *rules.Map
 
-	queryStatsMu sync.RWMutex
-	queryStats   map[string]*QueryStats
-
 	// Pools
 	conns       *connpool.Pool
 	streamConns *connpool.Pool
@@ -147,13 +149,9 @@ type QueryEngine struct {
 	connTimeout        sync2.AtomicDuration
 	queryPoolWaiters   sync2.AtomicInt64
 	queryPoolWaiterCap sync2.AtomicInt64
-	binlogFormat       connpool.BinlogFormat
-	autoCommit         sync2.AtomicBool
 	maxResultSize      sync2.AtomicInt64
 	warnResultSize     sync2.AtomicInt64
 	maxDMLRows         sync2.AtomicInt64
-	passthroughDMLs    sync2.AtomicBool
-	allowUnsafeDMLs    bool
 	streamBufferSize   sync2.AtomicInt64
 	// tableaclExemptCount count the number of accesses allowed
 	// based on membership in the superuser ACL
@@ -166,6 +164,7 @@ type QueryEngine struct {
 	strictTransTables bool
 
 	enableConsolidator          bool
+	enableConsolidatorReplicas  bool
 	enableQueryPlanFieldCaching bool
 
 	// Loggers
@@ -186,7 +185,6 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		plans:              cache.NewLRUCache(int64(config.QueryPlanCacheSize)),
 		queryRuleSources:   rules.NewMap(),
 		queryPoolWaiterCap: sync2.NewAtomicInt64(int64(config.QueryPoolWaiterCap)),
-		queryStats:         make(map[string]*QueryStats),
 	}
 
 	qe.conns = connpool.New(
@@ -206,6 +204,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		checker,
 	)
 	qe.enableConsolidator = config.EnableConsolidator
+	qe.enableConsolidatorReplicas = config.EnableConsolidatorReplicas
 	qe.enableQueryPlanFieldCaching = config.EnableQueryPlanFieldCaching
 	qe.consolidator = sync2.NewConsolidator()
 	qe.txSerializer = txserializer.New(config.EnableHotRowProtectionDryRun,
@@ -214,7 +213,6 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		config.HotRowProtectionConcurrentTransactions)
 	qe.streamQList = NewQueryList()
 
-	qe.autoCommit.Set(config.EnableAutoCommit)
 	qe.strictTableACL = config.StrictTableACL
 	qe.enableTableACLDryRun = config.EnableTableACLDryRun
 
@@ -238,8 +236,6 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 	qe.maxDMLRows = sync2.NewAtomicInt64(int64(config.MaxDMLRows))
 	qe.streamBufferSize = sync2.NewAtomicInt64(int64(config.StreamBufferSize))
 
-	qe.passthroughDMLs = sync2.NewAtomicBool(config.PassthroughDMLs)
-	qe.allowUnsafeDMLs = config.AllowUnsafeDMLs
 	planbuilder.PassthroughDMLs = config.PassthroughDMLs
 
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
@@ -259,10 +255,10 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		stats.Publish("QueryCacheOldest", stats.StringFunc(func() string {
 			return fmt.Sprintf("%v", qe.plans.Oldest())
 		}))
-		_ = stats.NewCountersFuncWithMultiLabels("QueryCounts", "query counts", []string{"Table", "Plan"}, qe.getQueryCount)
-		_ = stats.NewCountersFuncWithMultiLabels("QueryTimesNs", "query times in ns", []string{"Table", "Plan"}, qe.getQueryTime)
-		_ = stats.NewCountersFuncWithMultiLabels("QueryRowCounts", "query row counts", []string{"Table", "Plan"}, qe.getQueryRowCount)
-		_ = stats.NewCountersFuncWithMultiLabels("QueryErrorCounts", "query error counts", []string{"Table", "Plan"}, qe.getQueryErrorCount)
+		queryCounts = stats.NewCountersWithMultiLabels("QueryCounts", "query counts", []string{"Table", "Plan"})
+		queryTimes = stats.NewCountersWithMultiLabels("QueryTimesNs", "query times in ns", []string{"Table", "Plan"})
+		queryRowCounts = stats.NewCountersWithMultiLabels("QueryRowCounts", "query row counts", []string{"Table", "Plan"})
+		queryErrorCounts = stats.NewCountersWithMultiLabels("QueryErrorCounts", "query error counts", []string{"Table", "Plan"})
 
 		http.Handle("/debug/hotrows", qe.txSerializer)
 
@@ -295,7 +291,9 @@ func (qe *QueryEngine) Open() error {
 		qe.conns.Close()
 		return err
 	}
-	qe.binlogFormat, err = conn.VerifyMode(qe.strictTransTables)
+	err = conn.VerifyMode(qe.strictTransTables)
+	// Recycle needs to happen before error check.
+	// Otherwise, qe.conns.Close will hang.
 	conn.Recycle()
 
 	if err != nil {
@@ -433,7 +431,7 @@ func (qe *QueryEngine) ClearQueryPlanCache() {
 
 // IsMySQLReachable returns true if we can connect to MySQL.
 func (qe *QueryEngine) IsMySQLReachable() bool {
-	conn, err := dbconnpool.NewDBConnection(qe.dbconfigs.AppWithDB(), tabletenv.MySQLStats)
+	conn, err := dbconnpool.NewDBConnection(qe.dbconfigs.DbaWithDB(), tabletenv.MySQLStats)
 	if err != nil {
 		if mysql.IsConnErr(err) {
 			return false
@@ -483,91 +481,14 @@ func (qe *QueryEngine) QueryPlanCacheCap() int {
 	return int(qe.plans.Capacity())
 }
 
-// QueryStats tracks query stats for export per planName/tableName
-type QueryStats struct {
-	mu         sync.Mutex
-	queryCount int64
-	time       time.Duration
-	mysqlTime  time.Duration
-	rowCount   int64
-	errorCount int64
-}
-
 // AddStats adds the given stats for the planName.tableName
 func (qe *QueryEngine) AddStats(planName, tableName string, queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
 	// table names can contain "." characters, replace them!
-	key := strings.Replace(tableName, ".", "_", -1) + "." + planName
-
-	qe.queryStatsMu.RLock()
-	stats, ok := qe.queryStats[key]
-	qe.queryStatsMu.RUnlock()
-
-	if !ok {
-		// Check again with the write lock held and
-		// create a new record only if none exists
-		qe.queryStatsMu.Lock()
-		if stats, ok = qe.queryStats[key]; !ok {
-			stats = &QueryStats{}
-			qe.queryStats[key] = stats
-		}
-		qe.queryStatsMu.Unlock()
-	}
-
-	stats.mu.Lock()
-	stats.queryCount += queryCount
-	stats.time += duration
-	stats.mysqlTime += mysqlTime
-	stats.rowCount += rowCount
-	stats.errorCount += errorCount
-	stats.mu.Unlock()
-}
-
-func (qe *QueryEngine) getQueryCount() map[string]int64 {
-	qstats := make(map[string]int64)
-	qe.queryStatsMu.RLock()
-	defer qe.queryStatsMu.RUnlock()
-	for k, qs := range qe.queryStats {
-		qs.mu.Lock()
-		qstats[k] = qs.queryCount
-		qs.mu.Unlock()
-	}
-	return qstats
-}
-
-func (qe *QueryEngine) getQueryTime() map[string]int64 {
-	qstats := make(map[string]int64)
-	qe.queryStatsMu.RLock()
-	defer qe.queryStatsMu.RUnlock()
-	for k, qs := range qe.queryStats {
-		qs.mu.Lock()
-		qstats[k] = int64(qs.time)
-		qs.mu.Unlock()
-	}
-	return qstats
-}
-
-func (qe *QueryEngine) getQueryRowCount() map[string]int64 {
-	qstats := make(map[string]int64)
-	qe.queryStatsMu.RLock()
-	defer qe.queryStatsMu.RUnlock()
-	for k, qs := range qe.queryStats {
-		qs.mu.Lock()
-		qstats[k] = qs.rowCount
-		qs.mu.Unlock()
-	}
-	return qstats
-}
-
-func (qe *QueryEngine) getQueryErrorCount() map[string]int64 {
-	qstats := make(map[string]int64)
-	qe.queryStatsMu.RLock()
-	defer qe.queryStatsMu.RUnlock()
-	for k, qs := range qe.queryStats {
-		qs.mu.Lock()
-		qstats[k] = qs.errorCount
-		qs.mu.Unlock()
-	}
-	return qstats
+	keys := []string{tableName, planName}
+	queryCounts.Add(keys, queryCount)
+	queryTimes.Add(keys, int64(duration))
+	queryRowCounts.Add(keys, rowCount)
+	queryErrorCounts.Add(keys, errorCount)
 }
 
 type perQueryStats struct {
@@ -706,4 +627,14 @@ func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, re
 		}
 		response.Write([]byte(fmt.Sprintf("%v: %s\n", v.Count, query)))
 	}
+}
+
+// unicoded returns a valid UTF-8 string that json won't reject
+func unicoded(in string) (out string) {
+	for i, v := range in {
+		if v == 0xFFFD {
+			return in[:i]
+		}
+	}
+	return in
 }

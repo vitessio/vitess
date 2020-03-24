@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -30,11 +29,9 @@ import (
 )
 
 var (
-	// ErrTooComplex indicates given sql query is too complex.
-	ErrTooComplex = vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "Complex")
-	execLimit     = &sqlparser.Limit{Rowcount: sqlparser.NewValArg([]byte(":#maxLimit"))}
+	execLimit = &sqlparser.Limit{Rowcount: sqlparser.NewValArg([]byte(":#maxLimit"))}
 
-	// PassthroughDMLs will return PlanPassDML for all update or delete statements
+	// PassthroughDMLs will return plans that pass-through the DMLs without changing them.
 	PassthroughDMLs = false
 )
 
@@ -43,74 +40,48 @@ var (
 // PlanType indicates a query plan type.
 type PlanType int
 
+// The following are PlanType values.
 const (
-	// PlanPassSelect is pass through select statements. This is the
-	// default plan for select statements.
-	PlanPassSelect PlanType = iota
-	// PlanSelectLock is for a select that locks.
+	PlanSelect PlanType = iota
 	PlanSelectLock
-	// PlanNextval is for NEXTVAL.
 	PlanNextval
-	// PlanPassDML is pass through update & delete statements. This is
-	// the default plan for update and delete statements.
-	// If PassthroughDMLs is true, then it is used for all DML statements
-	// and is valid in all replication modes.
-	// Otherwise is only allowed in row based replication mode
-	PlanPassDML
-	// PlanDMLPK is an update or delete with an equality where clause(s)
-	// on primary key(s).
-	PlanDMLPK
-	// PlanDMLSubquery is an update or delete with a subselect statement
-	PlanDMLSubquery
-	// PlanInsertPK is insert statement where the PK value is
-	// supplied with the query.
-	PlanInsertPK
-	// PlanInsertSubquery is same as PlanDMLSubquery but for inserts.
-	PlanInsertSubquery
-	// PlanUpsertPK is for insert ... on duplicate key constructs.
-	PlanUpsertPK
-	// PlanInsertTopic is for inserting into message topics.
-	PlanInsertTopic
-	// PlanInsertMessage is for inserting into message tables.
-	PlanInsertMessage
-	// PlanSet is for SET statements.
-	PlanSet
-	// PlanDDL is for DDL statements.
-	PlanDDL
-	// PlanSelectStream is used for streaming queries.
-	PlanSelectStream
-	// PlanOtherRead is for SHOW, DESCRIBE & EXPLAIN statements.
-	PlanOtherRead
-	// PlanOtherAdmin is for REPAIR, OPTIMIZE and TRUNCATE statements.
-	PlanOtherAdmin
-	// PlanMessageStream is used for streaming messages.
-	PlanMessageStream
-	// PlanSelectImpossible is used for where or having clauses that can never be true.
 	PlanSelectImpossible
-	// NumPlans stores the total number of plans
+	PlanInsert
+	PlanInsertMessage
+	PlanUpdate
+	PlanUpdateLimit
+	PlanDelete
+	PlanDeleteLimit
+	PlanDDL
+	PlanSet
+	// PlanOtherRead is for statements like show, etc.
+	PlanOtherRead
+	// PlanOtherAdmin is for statements like repair, lock table, etc.
+	PlanOtherAdmin
+	PlanSelectStream
+	// PlanMessageStream is for "stream" statements.
+	PlanMessageStream
 	NumPlans
 )
 
 // Must exactly match order of plan constants.
 var planName = [NumPlans]string{
-	"PASS_SELECT",
-	"SELECT_LOCK",
-	"NEXTVAL",
-	"PASS_DML",
-	"DML_PK",
-	"DML_SUBQUERY",
-	"INSERT_PK",
-	"INSERT_SUBQUERY",
-	"UPSERT_PK",
-	"INSERT_TOPIC",
-	"INSERT_MESSAGE",
-	"SET",
+	"Select",
+	"SelectLock",
+	"Nextval",
+	"SelectImpossible",
+	"Insert",
+	"InsertMessage",
+	"Update",
+	"UpdateLimit",
+	"Delete",
+	"DeleteLimit",
 	"DDL",
-	"SELECT_STREAM",
-	"OTHER_READ",
-	"OTHER_ADMIN",
-	"MESSAGE_STREAM",
-	"SELECT_IMPOSSIBLE",
+	"Set",
+	"OtherRead",
+	"OtherAdmin",
+	"SelectStream",
+	"MessageStream",
 }
 
 func (pt PlanType) String() string {
@@ -132,7 +103,7 @@ func PlanByName(s string) (pt PlanType, ok bool) {
 
 // IsSelect returns true if PlanType is about a select query.
 func (pt PlanType) IsSelect() bool {
-	return pt == PlanPassSelect || pt == PlanSelectLock || pt == PlanSelectImpossible
+	return pt == PlanSelect || pt == PlanSelectLock || pt == PlanSelectImpossible
 }
 
 // MarshalJSON returns a json string for PlanType.
@@ -142,57 +113,10 @@ func (pt PlanType) MarshalJSON() ([]byte, error) {
 
 //_______________________________________________
 
-// ReasonType indicates why a query plan fails to build
-type ReasonType int
-
-// Reason codes give a hint about why a certain plan was chosen.
-const (
-	ReasonDefault ReasonType = iota
-	ReasonTable
-	ReasonTableNoIndex
-	ReasonPKChange
-	ReasonComplexExpr
-	ReasonUpsertSubquery
-	ReasonUpsertMultiRow
-	ReasonReplace
-	ReasonMultiTable
-	ReasonTopic
-	NumReasons
-)
-
-// Must exactly match order of reason constants.
-var reasonName = [NumReasons]string{
-	"DEFAULT",
-	"TABLE",
-	"TABLE_NOINDEX",
-	"PK_CHANGE",
-	"COMPLEX_EXPR",
-	"UPSERT_SUBQUERY",
-	"UPSERT_MULTI_ROW",
-	"REPLACE",
-	"MULTI_TABLE",
-	"TOPIC",
-}
-
-// String returns a string representation of a ReasonType.
-func (rt ReasonType) String() string {
-	return reasonName[rt]
-}
-
-// MarshalJSON returns a json string for ReasonType.
-func (rt ReasonType) MarshalJSON() ([]byte, error) {
-	return ([]byte)(fmt.Sprintf("\"%s\"", rt.String())), nil
-}
-
-//_______________________________________________
-
-// Plan is built for selects and DMLs.
+// Plan contains the parameters for executing a request.
 type Plan struct {
 	PlanID PlanType
-	Reason ReasonType
 	Table  *schema.Table
-	// NewName is the new name of the table. Set for DDLs which create or change the table.
-	NewName sqlparser.TableIdent
 
 	// Permissions stores the permissions for the tables accessed in the query.
 	Permissions []Permission
@@ -203,32 +127,12 @@ type Plan struct {
 	// FullQuery will be set for all plans.
 	FullQuery *sqlparser.ParsedQuery
 
-	// For PK plans, only OuterQuery is set.
-	// For SUBQUERY plans, Subquery is also set.
-	OuterQuery  *sqlparser.ParsedQuery
-	Subquery    *sqlparser.ParsedQuery
-	UpsertQuery *sqlparser.ParsedQuery
-
-	// PlanInsertSubquery: columns to be inserted.
-	ColumnNumbers []int
-
-	// PKValues is an sqltypes.Value if it's sourced
-	// from the query. If it's a bind var then it's
-	// a string including the ':' prefix(es).
-	// PlanDMLPK: where clause values.
-	// PlanInsertPK: values clause.
-	// PlanNextVal: increment.
-	PKValues []sqltypes.PlanValue
-
-	// For update: set clause if pk is changing.
-	SecondaryPKValues []sqltypes.PlanValue
+	// NextCount stores the count for "select next".
+	NextCount sqltypes.PlanValue
 
 	// WhereClause is set for DMLs. It is used by the hot row protection
 	// to serialize e.g. UPDATEs going to the same row.
 	WhereClause *sqlparser.ParsedQuery
-
-	// For PlanInsertSubquery: pk columns in the subquery result.
-	SubqueryPKColumns []int
 }
 
 // TableName returns the table name for the plan.
@@ -238,13 +142,6 @@ func (plan *Plan) TableName() sqlparser.TableIdent {
 		tableName = plan.Table.Name
 	}
 	return tableName
-}
-
-func (plan *Plan) setTable(tableName sqlparser.TableIdent, tables map[string]*schema.Table) (*schema.Table, error) {
-	if plan.Table = tables[tableName.String()]; plan.Table == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table %s not found in schema", tableName)
-	}
-	return plan.Table, nil
 }
 
 // Build builds a plan based on the schema.
@@ -259,7 +156,7 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table) (*Pla
 	switch stmt := statement.(type) {
 	case *sqlparser.Union:
 		plan, err = &Plan{
-			PlanID:     PlanPassSelect,
+			PlanID:     PlanSelect,
 			FieldQuery: GenerateFieldQuery(stmt),
 			FullQuery:  GenerateLimitQuery(stmt),
 		}, nil
@@ -274,7 +171,9 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table) (*Pla
 	case *sqlparser.Set:
 		plan, err = analyzeSet(stmt), nil
 	case *sqlparser.DDL:
-		plan, err = analyzeDDL(stmt, tables), nil
+		// DDLs and other statements below don't get fully parsed.
+		// We have to use the original query at the time of execution.
+		plan = &Plan{PlanID: PlanDDL}
 	case *sqlparser.Show:
 		plan, err = &Plan{PlanID: PlanOtherRead}, nil
 	case *sqlparser.OtherRead:
@@ -314,12 +213,7 @@ func BuildStreaming(sql string, tables map[string]*schema.Table) (*Plan, error) 
 		if stmt.Lock != "" {
 			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "select with lock not allowed for streaming")
 		}
-		if tableName := analyzeFrom(stmt.From); !tableName.IsEmpty() {
-			_, err := plan.setTable(tableName, tables)
-			if err != nil {
-				return nil, err
-			}
-		}
+		plan.Table = lookupTable(stmt.From, tables)
 	case *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Union:
 		// pass
 	default:

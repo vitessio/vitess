@@ -233,6 +233,7 @@ func TestBufferExternalReparenting(t *testing.T) {
 }
 
 func testBufferBase(t *testing.T, isExternalParent bool) {
+	defer cluster.PanicHandler(t)
 	clusterInstance, exitCode := createCluster()
 	if exitCode != 0 {
 		os.Exit(exitCode)

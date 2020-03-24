@@ -235,22 +235,6 @@ func (ws *wrappedService) MessageAck(ctx context.Context, target *querypb.Target
 	return count, err
 }
 
-func (ws *wrappedService) SplitQuery(ctx context.Context, target *querypb.Target, query *querypb.BoundQuery, splitColumns []string, splitCount int64, numRowsPerQueryPart int64, algorithm querypb.SplitQueryRequest_Algorithm) (queries []*querypb.QuerySplit, err error) {
-	err = ws.wrapper(ctx, target, ws.impl, "SplitQuery", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
-		var innerErr error
-		queries, innerErr = conn.SplitQuery(ctx, target, query, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
-		return canRetry(ctx, innerErr), innerErr
-	})
-	return queries, err
-}
-
-func (ws *wrappedService) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
-	return ws.wrapper(ctx, target, ws.impl, "UpdateStream", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
-		innerErr := conn.UpdateStream(ctx, target, position, timestamp, callback)
-		return canRetry(ctx, innerErr), innerErr
-	})
-}
-
 func (ws *wrappedService) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	return ws.wrapper(ctx, target, ws.impl, "VStream", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		innerErr := conn.VStream(ctx, target, startPos, filter, send)

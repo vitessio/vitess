@@ -36,6 +36,7 @@ import (
 )
 
 func TestMasterToSpareStateChangeImpossible(t *testing.T) {
+	defer cluster.PanicHandler(t)
 
 	args := []string{"InitTablet", "-hostname", hostname,
 		"-port", fmt.Sprintf("%d", tablet62344.HTTPPort), "-allow_update", "-parent",
@@ -65,6 +66,7 @@ func TestMasterToSpareStateChangeImpossible(t *testing.T) {
 }
 
 func TestReparentDownMaster(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
@@ -154,6 +156,7 @@ func TestReparentDownMaster(t *testing.T) {
 
 func TestReparentCrossCell(t *testing.T) {
 
+	defer cluster.PanicHandler(t)
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
 		// create database
 		err := tablet.VttabletProcess.CreateDB(keyspaceName)
@@ -207,6 +210,7 @@ func TestReparentGracefulRecovery(t *testing.T) {
 }
 
 func reparentGraceful(t *testing.T, confusedMaster bool) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
@@ -301,6 +305,7 @@ func reparentGraceful(t *testing.T, confusedMaster bool) {
 }
 
 func TestReparentSlaveOffline(t *testing.T) {
+	defer cluster.PanicHandler(t)
 
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
 		// create database
@@ -348,6 +353,7 @@ func TestReparentSlaveOffline(t *testing.T) {
 }
 
 func TestReparentAvoid(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	// Remove tablet41983 from topology as that tablet is not required for this test
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet41983.Alias)
 	require.Nil(t, err)
@@ -427,6 +433,7 @@ func TestReparentFromOutside(t *testing.T) {
 }
 
 func TestReparentFromOutsideWithNoMaster(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	reparentFromOutside(t, true)
 
 	// We will have to restart mysql to avoid hanging/locks due to external Reparent
@@ -448,6 +455,7 @@ func reparentFromOutside(t *testing.T, downMaster bool) {
 	//- one replica will be busted and dead in the water and we'll call TabletExternallyReparented.
 	//Args:
 	//downMaster: kills the old master first
+	defer cluster.PanicHandler(t)
 
 	ctx := context.Background()
 
@@ -540,6 +548,7 @@ func reparentFromOutside(t *testing.T, downMaster bool) {
 }
 
 func TestReparentWithDownSlave(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
@@ -611,6 +620,7 @@ func TestReparentWithDownSlave(t *testing.T) {
 }
 
 func TestChangeTypeSemiSync(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	// Create new names for tablets, so this test is less confusing.
@@ -699,6 +709,7 @@ func TestChangeTypeSemiSync(t *testing.T) {
 }
 
 func TestReparentDoesntHangIfMasterFails(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
 		// Create Database
 		err := tablet.VttabletProcess.CreateDB(keyspaceName)

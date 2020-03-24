@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -229,9 +231,7 @@ func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Val
 
 func (f *loggingVCursor) ExpectLog(t *testing.T, want []string) {
 	t.Helper()
-	if !reflect.DeepEqual(f.log, want) {
-		t.Errorf("vc.log:\n%v\nwant:\n%v", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
-	}
+	require.Equal(t, strings.Join(want, "\n"), strings.Join(f.log, "\n"))
 }
 
 func (f *loggingVCursor) ExpectWarnings(t *testing.T, want []*querypb.QueryWarning) {

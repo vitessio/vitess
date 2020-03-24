@@ -52,7 +52,7 @@ func TestSimpleRead(t *testing.T) {
 	if err := compareIntDiff(vend, "Queries/TotalCount", vstart, 1); err != nil {
 		t.Error(err)
 	}
-	if err := compareIntDiff(vend, "Queries/Histograms/PASS_SELECT/Count", vstart, 1); err != nil {
+	if err := compareIntDiff(vend, "Queries/Histograms/Select/Count", vstart, 1); err != nil {
 		t.Error(err)
 	}
 }
@@ -479,7 +479,7 @@ func TestQueryStats(t *testing.T) {
 	want := framework.QueryStat{
 		Query:      query,
 		Table:      "vitess_a",
-		Plan:       "PASS_SELECT",
+		Plan:       "Select",
 		QueryCount: 1,
 		RowCount:   2,
 		ErrorCount: 0,
@@ -497,7 +497,7 @@ func TestQueryStats(t *testing.T) {
 	want = framework.QueryStat{
 		Query:      query,
 		Table:      "vitess_a",
-		Plan:       "PASS_SELECT",
+		Plan:       "Select",
 		QueryCount: 1,
 		RowCount:   0,
 		ErrorCount: 1,
@@ -506,13 +506,13 @@ func TestQueryStats(t *testing.T) {
 		t.Errorf("stat: %+v, want %+v", stat, want)
 	}
 	vend := framework.DebugVars()
-	if err := compareIntDiff(vend, "QueryCounts/vitess_a.PASS_SELECT", vstart, 2); err != nil {
+	if err := compareIntDiff(vend, "QueryCounts/vitess_a.Select", vstart, 2); err != nil {
 		t.Error(err)
 	}
-	if err := compareIntDiff(vend, "QueryRowCounts/vitess_a.PASS_SELECT", vstart, 2); err != nil {
+	if err := compareIntDiff(vend, "QueryRowCounts/vitess_a.Select", vstart, 2); err != nil {
 		t.Error(err)
 	}
-	if err := compareIntDiff(vend, "QueryErrorCounts/vitess_a.PASS_SELECT", vstart, 1); err != nil {
+	if err := compareIntDiff(vend, "QueryErrorCounts/vitess_a.Select", vstart, 1); err != nil {
 		t.Error(err)
 	}
 
@@ -607,7 +607,7 @@ func TestLogTruncation(t *testing.T) {
 		"insert into vitess_test values(123, null, :data, null)",
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
-	wantLog := `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null)", BindVars: {#maxLimit: "type:INT64 value:\"10001\" "data: "type:VARCHAR value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\" "}`
+	wantLog := `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null)", BindVars: {data: "type:VARCHAR value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\" "}`
 	wantErr := wantLog
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
@@ -626,8 +626,8 @@ func TestLogTruncation(t *testing.T) {
 		"insert into vitess_test values(123, null, :data, null)",
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
-	wantLog = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess [TRUNCATED]", BindVars: {#maxLim [TRUNCATED]`
-	wantErr = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null)", BindVars: {#maxLimit: "type:INT64 value:\"10001\" "data: "type:VARCHAR value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\" "}`
+	wantLog = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess [TRUNCATED]", BindVars: {data: " [TRUNCATED]`
+	wantErr = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null)", BindVars: {data: "type:VARCHAR value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\" "}`
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
 	}
@@ -644,8 +644,8 @@ func TestLogTruncation(t *testing.T) {
 		"insert into vitess_test values(123, null, :data, null) /* KEEP ME */",
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
-	wantLog = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess [TRUNCATED] /* KEEP ME */", BindVars: {#maxLim [TRUNCATED]`
-	wantErr = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null) /* KEEP ME */", BindVars: {#maxLimit: "type:INT64 value:\"10001\" "data: "type:VARCHAR value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\" "}`
+	wantLog = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess [TRUNCATED] /* KEEP ME */", BindVars: {data: " [TRUNCATED]`
+	wantErr = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null) /* KEEP ME */", BindVars: {data: "type:VARCHAR value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\" "}`
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
 	}
