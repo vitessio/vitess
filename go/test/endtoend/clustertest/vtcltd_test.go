@@ -27,6 +27,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -73,7 +75,7 @@ func testTopoDataAPI(t *testing.T, url string) {
 
 	assert.Contains(t, resultMap, "Children")
 	children := reflect.ValueOf(resultMap["Children"])
-	childrenGot := fmt.Sprintf("%s", children)
+	childrenGot := children.String()
 	assert.Contains(t, childrenGot, "global")
 	assert.Contains(t, childrenGot, clusterInstance.Cell)
 }
@@ -102,8 +104,7 @@ func testTabletStatus(t *testing.T) {
 	respByte, err := ioutil.ReadAll(resp.Body)
 	require.Nil(t, err)
 	result := string(respByte)
-	println(result)
-	println(strings.Contains(result, "Polling health information from."))
+	log.Infof("Tablet status response: %v", result)
 	matched, err := regexp.Match(`Polling health information from.+MySQLReplicationLag`, []byte(result))
 	require.Nil(t, err)
 	assert.True(t, matched)

@@ -25,6 +25,8 @@ import (
 	"path"
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -121,7 +123,7 @@ func TestMain(m *testing.M) {
 		var mysqlCtlProcessList []*exec.Cmd
 		for _, shard := range clusterInstance.Keyspaces[0].Shards {
 			for _, tablet := range shard.Vttablets {
-				fmt.Println("Starting MySql for tablet ", tablet.Alias)
+				log.Infof("Starting MySql for tablet %v", tablet.Alias)
 				if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
 					return 1
 				} else {

@@ -88,8 +88,7 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
 
-	log.Infof("%v %v", strings.Join(topo.proc.Args, " "))
-	println("Starting topo with args " + strings.Join(topo.proc.Args, " "))
+	log.Infof("Starting etcd with command: %v", strings.Join(topo.proc.Args, " "))
 	err = topo.proc.Start()
 	if err != nil {
 		return
@@ -138,8 +137,7 @@ func (topo *TopoProcess) SetupZookeeper(cluster *LocalProcessCluster) (err error
 	topo.proc.Stderr = errFile
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
 
-	log.Infof("%v %v", strings.Join(topo.proc.Args, " "))
-	fmt.Println(strings.Join(topo.proc.Args, " "))
+	log.Infof("Starting zookeeper with args %v", strings.Join(topo.proc.Args, " "))
 	err = topo.proc.Run()
 	if err != nil {
 		return
@@ -174,8 +172,7 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
 
-	log.Infof("%v %v", strings.Join(topo.proc.Args, " "))
-	println("Starting consul with args " + strings.Join(topo.proc.Args, " "))
+	log.Infof("Starting consul with args %v", strings.Join(topo.proc.Args, " "))
 	err = topo.proc.Start()
 	if err != nil {
 		return
