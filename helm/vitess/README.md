@@ -231,6 +231,31 @@ config:
 
     # root prefix for all backup-related object names
     gcs_backup_storage_root: vtbackups
+    
+    # Specifies the implementation of the Backup Engine to use.
+    backup_engine_implementation: xtrabackup
+
+    # For the xtrabackup backup engine, directory location of the xtrabackup executable,
+    xtrabackup_root_path: /usr/bin
+
+    #For the xtrabackup backup engine, flags to pass to backup command.
+    xtrabackup_backup_flags: "df"
+
+    #For the xtrabackup backup engine, flags to pass to xbstream command during restore
+    xbstream_restore_flags: --compress
+
+    # For the xtrabackup backup engine, which mode to use if streaming, valid values are tar and xbstream. Defaults to tar
+    xtrabackup_stream_mode:  tar
+
+    # For the xtrabackup backup engine, required user that xtrabackup will use to connect to the database server
+    xtrabackup_user: ""
+
+    #For the xtrabackup backup engine, if greater than 0, use data striping across this many destination files to parallelize data transfer and decompression
+    xtrabackup_stripes: 0
+
+    # For the xtrabackup backup engine, size in bytes of each block that gets sent to a given stripe before rotating to the next stripe
+    xtrabackup_stripe_block_size:
+
 ```
 
 ### Custom requests/limits
