@@ -74,8 +74,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
 			compareCols:      []int{-1, 1},
 			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter([]int{0}),
-			targetPrimitive:  newMergeSorter([]int{0}),
+			sourcePrimitive:  newMergeSorter(nil, []int{0}),
+			targetPrimitive:  newMergeSorter(nil, []int{0}),
 		},
 	}, {
 		input: &binlogdatapb.Rule{
@@ -89,8 +89,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
 			compareCols:      []int{-1, 1},
 			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter([]int{0}),
-			targetPrimitive:  newMergeSorter([]int{0}),
+			sourcePrimitive:  newMergeSorter(nil, []int{0}),
+			targetPrimitive:  newMergeSorter(nil, []int{0}),
 		},
 	}, {
 		input: &binlogdatapb.Rule{
@@ -104,8 +104,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
 			compareCols:      []int{-1, 1},
 			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter([]int{0}),
-			targetPrimitive:  newMergeSorter([]int{0}),
+			sourcePrimitive:  newMergeSorter(nil, []int{0}),
+			targetPrimitive:  newMergeSorter(nil, []int{0}),
 		},
 	}, {
 		input: &binlogdatapb.Rule{
@@ -119,8 +119,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetExpression: "select c2, c1 from t1 order by c1 asc",
 			compareCols:      []int{0, -1},
 			comparePKs:       []int{1},
-			sourcePrimitive:  newMergeSorter([]int{1}),
-			targetPrimitive:  newMergeSorter([]int{1}),
+			sourcePrimitive:  newMergeSorter(nil, []int{1}),
+			targetPrimitive:  newMergeSorter(nil, []int{1}),
 		},
 	}, {
 		input: &binlogdatapb.Rule{
@@ -134,8 +134,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
 			compareCols:      []int{-1, 1},
 			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter([]int{0}),
-			targetPrimitive:  newMergeSorter([]int{0}),
+			sourcePrimitive:  newMergeSorter(nil, []int{0}),
+			targetPrimitive:  newMergeSorter(nil, []int{0}),
 		},
 	}, {
 		// non-pk text column.
@@ -150,8 +150,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetExpression: "select c1, textcol, weight_string(textcol) from nonpktext order by c1 asc",
 			compareCols:      []int{-1, 2},
 			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter([]int{0}),
-			targetPrimitive:  newMergeSorter([]int{0}),
+			sourcePrimitive:  newMergeSorter(nil, []int{0}),
+			targetPrimitive:  newMergeSorter(nil, []int{0}),
 		},
 	}, {
 		// non-pk text column, different order.
@@ -166,8 +166,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetExpression: "select textcol, c1, weight_string(textcol) from nonpktext order by c1 asc",
 			compareCols:      []int{2, -1},
 			comparePKs:       []int{1},
-			sourcePrimitive:  newMergeSorter([]int{1}),
-			targetPrimitive:  newMergeSorter([]int{1}),
+			sourcePrimitive:  newMergeSorter(nil, []int{1}),
+			targetPrimitive:  newMergeSorter(nil, []int{1}),
 		},
 	}, {
 		// pk text column.
@@ -182,8 +182,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetExpression: "select textcol, c2, weight_string(textcol) from pktext order by textcol asc",
 			compareCols:      []int{-1, 1},
 			comparePKs:       []int{2},
-			sourcePrimitive:  newMergeSorter([]int{2}),
-			targetPrimitive:  newMergeSorter([]int{2}),
+			sourcePrimitive:  newMergeSorter(nil, []int{2}),
+			targetPrimitive:  newMergeSorter(nil, []int{2}),
 		},
 	}, {
 		// pk text column, different order.
@@ -198,8 +198,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetExpression: "select c2, textcol, weight_string(textcol) from pktext order by textcol asc",
 			compareCols:      []int{0, -1},
 			comparePKs:       []int{2},
-			sourcePrimitive:  newMergeSorter([]int{2}),
-			targetPrimitive:  newMergeSorter([]int{2}),
+			sourcePrimitive:  newMergeSorter(nil, []int{2}),
+			targetPrimitive:  newMergeSorter(nil, []int{2}),
 		},
 	}, {
 		// text column as expression.
@@ -214,8 +214,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetExpression: "select c2, textcol, weight_string(textcol) from pktext order by textcol asc",
 			compareCols:      []int{0, -1},
 			comparePKs:       []int{2},
-			sourcePrimitive:  newMergeSorter([]int{2}),
-			targetPrimitive:  newMergeSorter([]int{2}),
+			sourcePrimitive:  newMergeSorter(nil, []int{2}),
+			targetPrimitive:  newMergeSorter(nil, []int{2}),
 		},
 	}, {
 		input: &binlogdatapb.Rule{
@@ -228,8 +228,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetExpression: "select c1, c2 from multipk order by c1 asc, c2 asc",
 			compareCols:      []int{-1, -1},
 			comparePKs:       []int{0, 1},
-			sourcePrimitive:  newMergeSorter([]int{0, 1}),
-			targetPrimitive:  newMergeSorter([]int{0, 1}),
+			sourcePrimitive:  newMergeSorter(nil, []int{0, 1}),
+			targetPrimitive:  newMergeSorter(nil, []int{0, 1}),
 		},
 	}, {
 		// in_keyrange
@@ -244,8 +244,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
 			compareCols:      []int{-1, 1},
 			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter([]int{0}),
-			targetPrimitive:  newMergeSorter([]int{0}),
+			sourcePrimitive:  newMergeSorter(nil, []int{0}),
+			targetPrimitive:  newMergeSorter(nil, []int{0}),
 		},
 	}, {
 		// in_keyrange on RHS of AND.
@@ -261,8 +261,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
 			compareCols:      []int{-1, 1},
 			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter([]int{0}),
-			targetPrimitive:  newMergeSorter([]int{0}),
+			sourcePrimitive:  newMergeSorter(nil, []int{0}),
+			targetPrimitive:  newMergeSorter(nil, []int{0}),
 		},
 	}, {
 		// in_keyrange on LHS of AND.
@@ -278,8 +278,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
 			compareCols:      []int{-1, 1},
 			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter([]int{0}),
-			targetPrimitive:  newMergeSorter([]int{0}),
+			sourcePrimitive:  newMergeSorter(nil, []int{0}),
+			targetPrimitive:  newMergeSorter(nil, []int{0}),
 		},
 	}, {
 		// in_keyrange on cascaded AND expression
@@ -295,8 +295,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
 			compareCols:      []int{-1, 1},
 			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter([]int{0}),
-			targetPrimitive:  newMergeSorter([]int{0}),
+			sourcePrimitive:  newMergeSorter(nil, []int{0}),
+			targetPrimitive:  newMergeSorter(nil, []int{0}),
 		},
 	}, {
 		// in_keyrange parenthesized
@@ -312,8 +312,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
 			compareCols:      []int{-1, 1},
 			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter([]int{0}),
-			targetPrimitive:  newMergeSorter([]int{0}),
+			sourcePrimitive:  newMergeSorter(nil, []int{0}),
+			targetPrimitive:  newMergeSorter(nil, []int{0}),
 		},
 	}, {
 		// group by
@@ -328,8 +328,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
 			compareCols:      []int{-1, 1},
 			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter([]int{0}),
-			targetPrimitive:  newMergeSorter([]int{0}),
+			sourcePrimitive:  newMergeSorter(nil, []int{0}),
+			targetPrimitive:  newMergeSorter(nil, []int{0}),
 		},
 	}, {
 		// aggregations
@@ -353,17 +353,18 @@ func TestVDiffPlanSuccess(t *testing.T) {
 					Col:    3,
 				}},
 				Keys:  []int{0},
-				Input: newMergeSorter([]int{0}),
+				Input: newMergeSorter(nil, []int{0}),
 			},
-			targetPrimitive: newMergeSorter([]int{0}),
+			targetPrimitive: newMergeSorter(nil, []int{0}),
 		},
 	}}
 	for _, tcase := range testcases {
 		filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{tcase.input}}
-		differs, err := buildVDiffPlan(context.Background(), filter, schm)
+		df := &vdiff{}
+		err := df.buildVDiffPlan(context.Background(), filter, schm)
 		require.NoError(t, err, tcase.input)
-		require.Equal(t, 1, len(differs), tcase.input)
-		assert.Equal(t, tcase.td, differs[tcase.table], tcase.input)
+		require.Equal(t, 1, len(df.differs), tcase.input)
+		assert.Equal(t, tcase.td, df.differs[tcase.table], tcase.input)
 	}
 }
 
@@ -413,7 +414,8 @@ func TestVDiffPlanFailure(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{tcase.input}}
-		_, err := buildVDiffPlan(context.Background(), filter, schm)
+		df := &vdiff{}
+		err := df.buildVDiffPlan(context.Background(), filter, schm)
 		assert.EqualError(t, err, tcase.err, tcase.input)
 	}
 }
@@ -553,7 +555,7 @@ func TestVDiffUnsharded(t *testing.T) {
 		env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, tcase.source)
 		env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetMasterPosition, tcase.target)
 
-		dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute)
+		dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
 		require.NoError(t, err)
 		assert.Equal(t, tcase.dr, dr["t1"], tcase.id)
 	}
@@ -615,7 +617,7 @@ func TestVDiffSharded(t *testing.T) {
 		),
 	)
 
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute)
+	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
 	require.NoError(t, err)
 	wantdr := &DiffReport{
 		ProcessedRows: 3,
@@ -681,7 +683,7 @@ func TestVDiffAggregates(t *testing.T) {
 		),
 	)
 
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute)
+	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
 	require.NoError(t, err)
 	wantdr := &DiffReport{
 		ProcessedRows: 5,
@@ -745,7 +747,7 @@ func TestVDiffPKWeightString(t *testing.T) {
 		),
 	)
 
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute)
+	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
 	require.NoError(t, err)
 	wantdr := &DiffReport{
 		ProcessedRows: 4,
@@ -809,7 +811,7 @@ func TestVDiffNoPKWeightString(t *testing.T) {
 		),
 	)
 
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute)
+	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
 	require.NoError(t, err)
 	wantdr := &DiffReport{
 		ProcessedRows: 4,
@@ -847,11 +849,11 @@ func TestVDiffDefaults(t *testing.T) {
 	env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, source)
 	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetMasterPosition, target)
 
-	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, "", "", "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute)
+	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, "", "", "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
 	require.NoError(t, err)
-	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, "", env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute)
+	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, "", env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
 	require.NoError(t, err)
-	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute)
+	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
 	require.NoError(t, err)
 }
 
@@ -884,6 +886,6 @@ func TestVDiffReplicationWait(t *testing.T) {
 	env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, source)
 	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetMasterPosition, target)
 
-	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 0*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute)
+	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 0*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
 	require.EqualError(t, err, "startQueryStreams(sources): WaitForPosition for tablet cell-0000000101: context deadline exceeded")
 }

@@ -22,11 +22,11 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -66,7 +66,7 @@ type Pool struct {
 	idleTimeout        time.Duration
 	dbaPool            *dbconnpool.ConnectionPool
 	checker            MySQLChecker
-	appDebugParams     *mysql.ConnParams
+	appDebugParams     dbconfigs.Connector
 }
 
 // New creates a new Pool. The name is used
@@ -110,7 +110,7 @@ func (cp *Pool) pool() (p *pools.ResourcePool) {
 }
 
 // Open must be called before starting to use the pool.
-func (cp *Pool) Open(appParams, dbaParams, appDebugParams *mysql.ConnParams) {
+func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 
@@ -122,10 +122,19 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams *mysql.ConnParams) {
 	f := func() (pools.Resource, error) {
 		return NewDBConn(cp, appParams)
 	}
-	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism)
+	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism, cp.getLogWaitCallback())
 	cp.appDebugParams = appDebugParams
 
 	cp.dbaPool.Open(dbaParams, tabletenv.MySQLStats)
+}
+
+func (cp *Pool) getLogWaitCallback() func(time.Time) {
+	if cp.name == "" {
+		return func(start time.Time) {} // no op
+	}
+	return func(start time.Time) {
+		tabletenv.WaitStats.Record(cp.name+"ResourceWaitTime", start)
+	}
 }
 
 // Close will close the pool and wait for connections to be returned before
@@ -307,9 +316,13 @@ func (cp *Pool) Exhausted() int64 {
 }
 
 func (cp *Pool) isCallerIDAppDebug(ctx context.Context) bool {
-	if cp.appDebugParams == nil || cp.appDebugParams.Uname == "" {
+	params, err := cp.appDebugParams.MysqlParams()
+	if err != nil {
+		return false
+	}
+	if params == nil || params.Uname == "" {
 		return false
 	}
 	callerID := callerid.ImmediateCallerIDFromContext(ctx)
-	return callerID != nil && callerID.Username == cp.appDebugParams.Uname
+	return callerID != nil && callerID.Username == params.Uname
 }

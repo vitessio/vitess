@@ -52,6 +52,7 @@ const (
 	StmtOther
 	StmtUnknown
 	StmtComment
+	StmtPriv
 )
 
 // Preview analyzes the beginning of the query using a simpler and faster
@@ -110,6 +111,8 @@ func Preview(sql string) StatementType {
 		return StmtUse
 	case "analyze", "describe", "desc", "explain", "repair", "optimize":
 		return StmtOther
+	case "grant", "revoke":
+		return StmtPriv
 	}
 	return StmtUnknown
 }
@@ -144,6 +147,8 @@ func (s StatementType) String() string {
 		return "USE"
 	case StmtOther:
 		return "OTHER"
+	case StmtPriv:
+		return "PRIV"
 	default:
 		return "UNKNOWN"
 	}
@@ -322,28 +327,37 @@ func ExtractSetValues(sql string) (keyValues map[SetKey]interface{}, scope strin
 	}
 	result := make(map[SetKey]interface{})
 	for _, expr := range setStmt.Exprs {
-		scope := ImplicitStr
+		var scope string
 		key := expr.Name.Lowered()
-		switch {
-		case strings.HasPrefix(key, "@@global."):
-			scope = GlobalStr
-			key = strings.TrimPrefix(key, "@@global.")
-		case strings.HasPrefix(key, "@@session."):
-			scope = SessionStr
-			key = strings.TrimPrefix(key, "@@session.")
-		case strings.HasPrefix(key, "@@vitess_metadata."):
-			scope = VitessMetadataStr
-			key = strings.TrimPrefix(key, "@@vitess_metadata.")
-		case strings.HasPrefix(key, "@@"):
-			key = strings.TrimPrefix(key, "@@")
-		}
 
-		if strings.HasPrefix(expr.Name.Lowered(), "@@") {
-			if setStmt.Scope != "" && scope != "" {
-				return nil, "", fmt.Errorf("unsupported in set: mixed using of variable scope")
+		switch expr.Name.at {
+		case NoAt:
+			scope = ImplicitStr
+		case SingleAt:
+			scope = VariableStr
+		case DoubleAt:
+			switch {
+			case strings.HasPrefix(key, "global."):
+				scope = GlobalStr
+				key = strings.TrimPrefix(key, "global.")
+			case strings.HasPrefix(key, "session."):
+				scope = SessionStr
+				key = strings.TrimPrefix(key, "session.")
+			case strings.HasPrefix(key, "vitess_metadata."):
+				scope = VitessMetadataStr
+				key = strings.TrimPrefix(key, "vitess_metadata.")
+			default:
+				scope = SessionStr
 			}
+
+			// This is what correctly allows us to handle queries such as "set @@session.`autocommit`=1"
+			// it will remove backticks and double quotes that might surround the part after the first period
 			_, out := NewStringTokenizer(key).Scan()
 			key = string(out)
+		}
+
+		if setStmt.Scope != "" && scope != "" {
+			return nil, "", fmt.Errorf("unsupported in set: mixed using of variable scope")
 		}
 
 		setKey := SetKey{
@@ -358,6 +372,12 @@ func ExtractSetValues(sql string) (keyValues map[SetKey]interface{}, scope strin
 				result[setKey] = strings.ToLower(string(expr.Val))
 			case IntVal:
 				num, err := strconv.ParseInt(string(expr.Val), 0, 64)
+				if err != nil {
+					return nil, "", err
+				}
+				result[setKey] = num
+			case FloatVal:
+				num, err := strconv.ParseFloat(string(expr.Val), 64)
 				if err != nil {
 					return nil, "", err
 				}

@@ -25,6 +25,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
@@ -47,10 +48,12 @@ func TestResolverExecuteKeyspaceIds(t *testing.T) {
 			"TestResolverExecuteKeyspaceIds",
 			topodatapb.TabletType_MASTER,
 			key.DestinationKeyspaceIDs([][]byte{{0x10}, {0x25}}),
-			nil,
+			NewSafeSession(&vtgatepb.Session{}),
 			false,
 			nil,
-			nil)
+			nil,
+			false,
+		)
 	})
 }
 
@@ -62,10 +65,12 @@ func TestResolverExecuteKeyRanges(t *testing.T) {
 			"TestResolverExecuteKeyRanges",
 			topodatapb.TabletType_MASTER,
 			key.DestinationKeyRanges([]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x25}}}),
-			nil,
+			NewSafeSession(&vtgatepb.Session{}),
 			false,
 			nil,
-			nil)
+			nil,
+			false,
+		)
 	})
 }
 
@@ -460,9 +465,7 @@ func TestResolverMessageAckSharded(t *testing.T) {
 		},
 	}
 	count, err := res.MessageAckKeyspaceIds(context.Background(), name, "user", idKeyspaceIDs)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if count != 2 {
 		t.Errorf("count: %d, want 2", count)
 	}
@@ -504,9 +507,7 @@ func TestResolverMessageAckUnsharded(t *testing.T) {
 		},
 	}
 	count, err := res.MessageAckKeyspaceIds(context.Background(), KsTestUnsharded, "user", idKeyspaceIDs)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if count != 2 {
 		t.Errorf("count: %d, want 2", count)
 	}

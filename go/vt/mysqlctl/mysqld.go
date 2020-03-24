@@ -111,7 +111,7 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 
 	// Create and open the connection pool for dba access.
 	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *dbaIdleTimeout, *poolDynamicHostnameResolution)
-	result.dbaPool.Open(dbcfgs.Dba(), dbaMysqlStats)
+	result.dbaPool.Open(dbcfgs.DbaWithDB(), dbaMysqlStats)
 
 	// Create and open the connection pool for app access.
 	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout, *poolDynamicHostnameResolution)
@@ -274,7 +274,7 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 	// privileges' right in the middle, and then subsequent
 	// commands fail if we don't use valid credentials. So let's
 	// use dba credentials.
-	params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Dba())
+	params, err := mysqld.dbcfgs.Dba().MysqlParams()
 	if err != nil {
 		return err
 	}
@@ -441,7 +441,7 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 // will use the dba credentials to try to connect. Use wait() with
 // different credentials if needed.
 func (mysqld *Mysqld) Wait(ctx context.Context, cnf *Mycnf) error {
-	params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Dba())
+	params, err := mysqld.dbcfgs.Dba().MysqlParams()
 	if err != nil {
 		return err
 	}
@@ -531,7 +531,7 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		if err != nil {
 			return err
 		}
-		params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Dba())
+		params, err := mysqld.dbcfgs.Dba().MysqlParams()
 		if err != nil {
 			return err
 		}
@@ -1059,6 +1059,7 @@ func (mysqld *Mysqld) executeMysqlScript(connParams *mysql.ConnParams, sql io.Re
 // 'defer os.Remove()' statement.
 func (mysqld *Mysqld) defaultsExtraFile(connParams *mysql.ConnParams) (string, error) {
 	var contents string
+	connParams.Pass = strings.Replace(connParams.Pass, "#", "\\#", -1)
 	if connParams.UnixSocket == "" {
 		contents = fmt.Sprintf(`
 [client]

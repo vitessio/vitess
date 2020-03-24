@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -155,10 +156,14 @@ func TestStreamRowsUnicode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	savecp := *engine.cp
+	savecp := engine.cp
 	// Rowstreamer must override this to "binary"
-	engine.cp.Charset = "latin1"
-	defer func() { engine.cp = &savecp }()
+	params, err := engine.cp.MysqlParams()
+	if err != nil {
+		t.Fatal(err)
+	}
+	params.Charset = "latin1"
+	defer func() { engine.cp = savecp }()
 	err = engine.StreamRows(context.Background(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		// Skip fields.
 		if len(rows.Rows) == 0 {
@@ -172,9 +177,7 @@ func TestStreamRowsUnicode(t *testing.T) {
 		}
 		return nil
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestStreamRowsKeyRange(t *testing.T) {

@@ -18,6 +18,9 @@
 {{- with $cell.vtctld }}
 # define image to use
 {{- $vitessTag := .vitessTag | default $defaultVtctlclient.vitessTag }}
+{{- $vtctlclientImage := .vtctlclientImage | default $defaultVtctlclient.vtctlclientImage }}
+
+
 ---
 ###################################
 # InitShardMaster Job
@@ -42,7 +45,7 @@ spec:
       restartPolicy: OnFailure
       containers:
       - name: init-shard-master
-        image: "vitess/vtctlclient:{{$vitessTag}}"
+        image: "{{$vtctlclientImage}}:{{$vitessTag}}"
         volumeMounts:
 {{ include "user-secret-volumeMounts" $defaultVtctlclient.secrets | indent 10 }}
 
@@ -145,7 +148,7 @@ spec:
       restartPolicy: OnFailure
       containers:
       - name: copy-schema
-        image: "vitess/vtctlclient:{{$vitessTag}}"
+        image: "{{$vtctlclientImage}}/:{{$vitessTag}}"
         volumeMounts:
 {{ include "user-secret-volumeMounts" $defaultVtctlclient.secrets | indent 10 }}
 

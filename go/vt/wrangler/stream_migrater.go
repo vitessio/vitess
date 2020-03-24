@@ -18,13 +18,12 @@ package wrangler
 
 import (
 	"fmt"
+	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
 	"sort"
 	"strings"
 	"sync"
 	"text/template"
-
-	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -172,6 +171,44 @@ func (sm *streamMigrater) stopStreams(ctx context.Context) ([]string, error) {
 	return sm.verifyStreamPositions(ctx, positions)
 }
 
+// blsIsReference is partially copied from streamMigrater.templatize.
+// It reuses the constants from that function also.
+func (sm *streamMigrater) blsIsReference(bls *binlogdatapb.BinlogSource) (bool, error) {
+	streamType := unknown
+	for _, rule := range bls.Filter.Rules {
+		typ, err := sm.identifyRuleType(rule)
+		if err != nil {
+			return false, err
+		}
+		switch typ {
+		case sharded:
+			if streamType == reference {
+				return false, fmt.Errorf("cannot reshard streams with a mix of reference and sharded tables: %v", bls)
+			}
+			streamType = sharded
+		case reference:
+			if streamType == sharded {
+				return false, fmt.Errorf("cannot reshard streams with a mix of reference and sharded tables: %v", bls)
+			}
+			streamType = reference
+		}
+	}
+	return streamType == reference, nil
+}
+
+func (sm *streamMigrater) identifyRuleType(rule *binlogdatapb.Rule) (int, error) {
+	vtable, ok := sm.mi.sourceKSSchema.Tables[rule.Match]
+	if !ok {
+		return 0, fmt.Errorf("table %v not found in vschema", rule.Match)
+	}
+	if vtable.Type == vindexes.TypeReference {
+		return reference, nil
+	}
+	// In this case, 'sharded' means that it's not a reference
+	// table. We don't care about any other subtleties.
+	return sharded, nil
+}
+
 func (sm *streamMigrater) readTabletStreams(ctx context.Context, ti *topo.TabletInfo, constraint string) ([]*vrStream, error) {
 	var query string
 	if constraint == "" {
@@ -201,6 +238,14 @@ func (sm *streamMigrater) readTabletStreams(ctx context.Context, ti *topo.Tablet
 		var bls binlogdatapb.BinlogSource
 		if err := proto.UnmarshalText(row[2].ToString(), &bls); err != nil {
 			return nil, err
+		}
+		isReference, err := sm.blsIsReference(&bls)
+		if err != nil {
+			return nil, vterrors.Wrap(err, "blsIsReference")
+		}
+		if isReference {
+			sm.mi.wr.Logger().Infof("readTabletStreams: ignoring reference table %+v", bls)
+			continue
 		}
 		pos, err := mysql.DecodePosition(row[3].ToString())
 		if err != nil {
@@ -252,6 +297,7 @@ func (sm *streamMigrater) syncSourceStreams(ctx context.Context) (map[string]mys
 			key := fmt.Sprintf("%s:%s", vrs.bls.Keyspace, vrs.bls.Shard)
 			pos, ok := stopPositions[key]
 			if !ok || vrs.pos.AtLeast(pos) {
+				sm.mi.wr.Logger().Infof("syncSourceStreams setting stopPositions +%s %+v %d", key, vrs.pos, vrs.id)
 				stopPositions[key] = vrs.pos
 			}
 		}
@@ -262,13 +308,16 @@ func (sm *streamMigrater) syncSourceStreams(ctx context.Context) (map[string]mys
 		for _, vrs := range tabletStreams {
 			key := fmt.Sprintf("%s:%s", vrs.bls.Keyspace, vrs.bls.Shard)
 			pos := stopPositions[key]
+			sm.mi.wr.Logger().Infof("syncSourceStreams before go func +%s %+v %d", key, pos, vrs.id)
 			if vrs.pos.Equal(pos) {
 				continue
 			}
 			wg.Add(1)
-			go func(vrs *vrStream, shard string) {
+			go func(vrs *vrStream, shard string, pos mysql.Position) {
 				defer wg.Done()
-				si, err := sm.mi.wr.ts.GetShard(ctx, sm.mi.sourceKeyspace, vrs.bls.Shard)
+				sm.mi.wr.Logger().Infof("syncSourceStreams beginning of go func %s %s %+v %d", shard, vrs.bls.Shard, pos, vrs.id)
+
+				si, err := sm.mi.wr.ts.GetShard(ctx, sm.mi.sourceKeyspace, shard)
 				if err != nil {
 					allErrors.RecordError(err)
 					return
@@ -283,13 +332,13 @@ func (sm *streamMigrater) syncSourceStreams(ctx context.Context) (map[string]mys
 					allErrors.RecordError(err)
 					return
 				}
-				sm.mi.wr.Logger().Infof("waiting for keyspace:shard: %v:%v, position %v", sm.mi.sourceKeyspace, shard, pos)
+				sm.mi.wr.Logger().Infof("Waiting for keyspace:shard: %v:%v, position %v", sm.mi.sourceKeyspace, shard, pos)
 				if err := sm.mi.wr.tmc.VReplicationWaitForPos(ctx, master.Tablet, int(vrs.id), mysql.EncodePosition(pos)); err != nil {
 					allErrors.RecordError(err)
 					return
 				}
-				sm.mi.wr.Logger().Infof("position for keyspace:shard: %v:%v reached", sm.mi.sourceKeyspace, shard)
-			}(vrs, shard)
+				sm.mi.wr.Logger().Infof("Position for keyspace:shard: %v:%v reached", sm.mi.sourceKeyspace, shard)
+			}(vrs, shard, pos)
 		}
 	}
 	wg.Wait()
@@ -482,6 +531,7 @@ func (sm *streamMigrater) templatizeKeyRange(ctx context.Context, rule *binlogda
 }
 
 func (sm *streamMigrater) createTargetStreams(ctx context.Context, tmpl []*vrStream) error {
+
 	if len(tmpl) == 0 {
 		return nil
 	}

@@ -24,8 +24,11 @@ import (
 	"net/http"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -33,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/topodata"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -67,11 +71,11 @@ func CheckSrvKeyspace(t *testing.T, cell string, ksname string, shardingCol stri
 // GetSrvKeyspace return the Srv Keyspace structure
 func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci cluster.LocalProcessCluster) *topodata.SrvKeyspace {
 	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	var srvKeyspace topodata.SrvKeyspace
 
 	err = json2.Unmarshal([]byte(output), &srvKeyspace)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	return &srvKeyspace
 }
 
@@ -79,7 +83,7 @@ func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci cluster.LocalPr
 func VerifyTabletHealth(t *testing.T, vttablet cluster.Vttablet, hostname string) {
 	tabletURL := fmt.Sprintf("http://%s:%d/healthz", hostname, vttablet.HTTPPort)
 	resp, err := http.Get(tabletURL)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	assert.Equal(t, resp.StatusCode, 200)
 }
 
@@ -87,13 +91,13 @@ func VerifyTabletHealth(t *testing.T, vttablet cluster.Vttablet, hostname string
 func VerifyReconciliationCounters(t *testing.T, vtworkerURL string, availabilityType string, table string,
 	inserts int, updates int, deletes int, equals int) {
 	resp, err := http.Get(vtworkerURL)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	assert.Equal(t, resp.StatusCode, 200)
 
 	resultMap := make(map[string]interface{})
 	respByte, _ := ioutil.ReadAll(resp.Body)
 	err = json2.Unmarshal(respByte, &resultMap)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	value := getValueFromJSON(resultMap, "Worker"+availabilityType+"InsertsCounters", table)
 	if inserts == 0 {
@@ -144,7 +148,7 @@ func CheckValues(t *testing.T, vttablet cluster.Vttablet, id uint64, msg string,
 	}
 
 	result, err := vttablet.VttabletProcess.QueryTablet(query, ks, true)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	isFound := false
 	if exists && len(result.Rows) > 0 {
 		if keyType == querypb.Type_VARBINARY {
@@ -183,16 +187,16 @@ func CheckBinlogPlayerVars(t *testing.T, vttablet cluster.Vttablet, sourceShards
 	replicationSourceObj := reflect.ValueOf(tabletVars["VReplicationSource"])
 	replicationSourceValue := []string{}
 
-	assert.Equal(t,
-		fmt.Sprintf("%v", replicationSourceObj.MapKeys()),
-		fmt.Sprintf("%v", reflect.ValueOf(tabletVars["VReplicationSourceTablet"]).MapKeys()))
+	assert.Equal(t, len(replicationSourceObj.MapKeys()), len(reflect.ValueOf(tabletVars["VReplicationSourceTablet"]).MapKeys()))
 
 	for _, key := range replicationSourceObj.MapKeys() {
 		replicationSourceValue = append(replicationSourceValue,
 			fmt.Sprintf("%v", replicationSourceObj.MapIndex(key)))
 	}
 
-	assert.True(t, reflect.DeepEqual(replicationSourceValue, sourceShards))
+	for _, shard := range sourceShards {
+		assert.Containsf(t, replicationSourceValue, shard, "Source shard is not matched with vReplication shard value")
+	}
 
 	if secondBehindMaster != 0 {
 		secondBehindMaserMaxStr := fmt.Sprintf("%v", reflect.ValueOf(tabletVars["VReplicationSecondsBehindMasterMax"]))
@@ -224,11 +228,11 @@ func checkStreamHealthEqualsBinlogPlayerVars(t *testing.T, vttablet cluster.Vtta
 	// tablets may not be started with it, or may not run it in time.
 	_ = ci.VtctlclientProcess.ExecuteCommand("RunHealthCheck", vttablet.Alias)
 	streamHealth, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", vttablet.Alias)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	var streamHealthResponse querypb.StreamHealthResponse
 	err = json2.Unmarshal([]byte(streamHealth), &streamHealthResponse)
-	assert.Nil(t, err, "error should be Nil")
+	require.Nil(t, err, "error should be Nil")
 	assert.Equal(t, streamHealthResponse.Serving, false)
 	assert.NotNil(t, streamHealthResponse.RealtimeStats)
 	assert.Equal(t, streamHealthResponse.RealtimeStats.HealthError, "")
@@ -269,19 +273,20 @@ func InsertLots(t *testing.T, count uint64, vttablet cluster.Vttablet, table str
 		query1 = fmt.Sprintf(InsertTabletTemplateKsID, table, lotRange1+i, fmt.Sprintf("msg-range1-%d", 10000+i), lotRange1+i)
 		query2 = fmt.Sprintf(InsertTabletTemplateKsID, table, lotRange2+i, fmt.Sprintf("msg-range2-%d", 20000+i), lotRange2+i)
 
-		InsertToTablet(t, query1, vttablet, ks, false)
-		InsertToTablet(t, query2, vttablet, ks, false)
+		ExecuteOnTablet(t, query1, vttablet, ks, false)
+		ExecuteOnTablet(t, query2, vttablet, ks, false)
 	}
 }
 
-// InsertToTablet inserts a single row to vttablet
-func InsertToTablet(t *testing.T, query string, vttablet cluster.Vttablet, ks string, expectFail bool) {
+// ExecuteOnTablet executes a write query on specified vttablet
+// It should always be called with a master tablet for the keyspace/shard
+func ExecuteOnTablet(t *testing.T, query string, vttablet cluster.Vttablet, ks string, expectFail bool) {
 	_, _ = vttablet.VttabletProcess.QueryTablet("begin", ks, true)
 	_, err := vttablet.VttabletProcess.QueryTablet(query, ks, true)
 	if expectFail {
-		assert.NotNil(t, err)
+		require.Error(t, err)
 	} else {
-		assert.Nil(t, err)
+		require.Nil(t, err)
 	}
 	_, _ = vttablet.VttabletProcess.QueryTablet("commit", ks, true)
 }
@@ -307,7 +312,7 @@ func InsertMultiValues(t *testing.T, tablet cluster.Vttablet, keyspaceName strin
 	queryStr += valueSQL
 	queryStr += fmt.Sprintf(" /* vtgate:: keyspace_id:%s */", keyspaceIds)
 	queryStr += fmt.Sprintf(" /* id:%s */", valueIds)
-	InsertToTablet(t, queryStr, tablet, keyspaceName, false)
+	ExecuteOnTablet(t, queryStr, tablet, keyspaceName, false)
 }
 
 // CheckLotsTimeout waits till all values are inserted
@@ -321,7 +326,7 @@ func CheckLotsTimeout(t *testing.T, vttablet cluster.Vttablet, count uint64, tab
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
-	println(fmt.Sprintf("expected pct %d, got pct %f", pctFound, percentFound))
+	log.Infof("expected pct %d, got pct %f", pctFound, percentFound)
 	return false
 }
 
@@ -355,7 +360,7 @@ func checkLots(t *testing.T, vttablet cluster.Vttablet, count uint64, table stri
 			totalFound++
 		}
 	}
-	println(fmt.Sprintf("Total found %d", totalFound))
+	log.Infof("Total found %d", totalFound)
 	return float64(float64(totalFound) * 100 / float64(count) / 2)
 }
 
@@ -433,10 +438,10 @@ func CheckShardQueryService(t *testing.T, ci cluster.LocalProcessCluster, cell s
 // GetShardInfo return the Shard information
 func GetShardInfo(t *testing.T, shard1Ks string, ci cluster.LocalProcessCluster) *topodata.Shard {
 	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("GetShard", shard1Ks)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	var shard topodata.Shard
 	err = json2.Unmarshal([]byte(output), &shard)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	return &shard
 }
 
@@ -444,9 +449,18 @@ func GetShardInfo(t *testing.T, shard1Ks string, ci cluster.LocalProcessCluster)
 func checkThrottlerServiceMaxRates(t *testing.T, server string, names []string, rate int, ci cluster.LocalProcessCluster) {
 	// Avoid flakes by waiting for all throttlers. (Necessary because filtered
 	// replication on vttablet will register the throttler asynchronously.)
-	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerMaxRates", "--server", server)
-	assert.Nil(t, err)
+	var output string
+	var err error
+	startTime := time.Now()
 	msg := fmt.Sprintf("%d active throttler(s)", len(names))
+	for {
+		output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerMaxRates", "--server", server)
+		require.Nil(t, err)
+		if strings.Contains(output, msg) || (time.Now().After(startTime.Add(2 * time.Minute))) {
+			break
+		}
+		time.Sleep(2 * time.Second)
+	}
 	assert.Contains(t, output, msg)
 
 	for _, name := range names {
@@ -457,11 +471,11 @@ func checkThrottlerServiceMaxRates(t *testing.T, server string, names []string, 
 	// Check that it's possible to change the max rate on the throttler.
 	newRate := "unlimited"
 	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerSetMaxRate", "--server", server, newRate)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	assert.Contains(t, output, msg)
 
 	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerMaxRates", "--server", server)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	for _, name := range names {
 		str := fmt.Sprintf("| %s | %s |", name, newRate)
 		assert.Contains(t, output, str)
@@ -488,12 +502,12 @@ func checkThrottlerServiceConfiguration(t *testing.T, server string, names []str
 			"bad_rate_increase:0.13 "+
 			"max_rate_approach_threshold: 0.9 ",
 	)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	msg := fmt.Sprintf("%d active throttler(s)", len(names))
 	assert.Contains(t, output, msg)
 
 	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("GetThrottlerConfiguration", "--server", server)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	for _, name := range names {
 		str := fmt.Sprintf("| %s | target_replication_lag_sec:12345 ", name)
 		assert.Contains(t, output, str)
@@ -503,12 +517,12 @@ func checkThrottlerServiceConfiguration(t *testing.T, server string, names []str
 
 	// Reset clears our configuration values.
 	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ResetThrottlerConfiguration", "--server", server)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	assert.Contains(t, output, msg)
 
 	// Check that the reset configuration no longer has our values.
 	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("GetThrottlerConfiguration", "--server", server)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	assert.NotContains(t, output, "target_replication_lag_sec:12345")
 	assert.Contains(t, output, msg)
 

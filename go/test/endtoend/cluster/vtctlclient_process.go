@@ -62,27 +62,34 @@ func (vtctlclient *VtctlClientProcess) ApplyVSchema(Keyspace string, JSON string
 
 // ExecuteCommand executes any vtctlclient command
 func (vtctlclient *VtctlClientProcess) ExecuteCommand(args ...string) (err error) {
-	args = append([]string{"-server", vtctlclient.Server}, args...)
+	pArgs := []string{"-server", vtctlclient.Server}
+
+	if *isCoverage {
+		pArgs = append(pArgs, "-test.coverprofile="+getCoveragePath("vtctlclient-"+args[0]+".out"), "-test.v")
+	}
+	pArgs = append(pArgs, args...)
 	tmpProcess := exec.Command(
 		vtctlclient.Binary,
-		args...,
+		pArgs...,
 	)
-	println(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
-	log.Info(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	log.Infof("Executing vtctlclient with command: %v", strings.Join(tmpProcess.Args, " "))
 	return tmpProcess.Run()
 }
 
 // ExecuteCommandWithOutput executes any vtctlclient command and returns output
 func (vtctlclient *VtctlClientProcess) ExecuteCommandWithOutput(args ...string) (result string, err error) {
-	args = append([]string{"-server", vtctlclient.Server}, args...)
+	pArgs := []string{"-server", vtctlclient.Server}
+	if *isCoverage {
+		pArgs = append(pArgs, "-test.coverprofile="+getCoveragePath("vtctlclient-"+args[0]+".out"), "-test.v")
+	}
+	pArgs = append(pArgs, args...)
 	tmpProcess := exec.Command(
 		vtctlclient.Binary,
-		args...,
+		pArgs...,
 	)
-	println(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
-	log.Info(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	log.Infof("Executing vtctlclient with command: %v", strings.Join(tmpProcess.Args, " "))
 	resultByte, err := tmpProcess.CombinedOutput()
-	return string(resultByte), err
+	return filterResultWhenRunsForCoverage(string(resultByte)), err
 }
 
 // VtctlClientProcessInstance returns a VtctlProcess handle for vtctlclient process

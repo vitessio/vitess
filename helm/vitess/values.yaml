@@ -181,6 +181,7 @@ etcd:
 vtctld:
   serviceType: ClusterIP
   vitessTag: helm-1.0.7-5
+  vtcldImage: vitess/vtctld
   resources:
     # requests:
     #   cpu: 100m
@@ -192,6 +193,7 @@ vtctld:
 vtgate:
   serviceType: ClusterIP
   vitessTag: helm-1.0.7-5
+  vtgateImage: vitess/vtgate
   resources:
     # requests:
     #   cpu: 500m
@@ -211,12 +213,14 @@ vtgate:
 # Default values for vtctlclient resources defined in 'topology'
 vtctlclient:
   vitessTag: helm-1.0.7-5
+  vtctlclientImage: vitess/vtctlclient
   extraFlags: {}
   secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
 
 # Default values for vtworker resources defined in 'jobs'
 vtworker:
   vitessTag: helm-1.0.7-5
+  vtworkerImage: vitess/vtworker
   extraFlags: {}
   resources:
     # requests:
@@ -228,7 +232,7 @@ vtworker:
 # Default values for vttablet resources defined in 'topology'
 vttablet:
   vitessTag: helm-1.0.7-5
-
+  vttabletImage: vitess/vttablet
   # valid values are
   # - mysql56 (for MySQL 8.0)
   # - mysql56 (for MySQL/Percona 5.6 or 5.7)
@@ -321,10 +325,20 @@ vttablet:
       requests:
         storage: 10Gi
 
+# Default values for mysqlctld resources defined in 'topology'
+mysqlctld:
+  vitessTag: helm-1.0.7-5
+  mysqlctldImage: vitess/mysqlctld
+
+vtctl:
+  vitessTag: helm-1.0.7-5
+  vtctlImage: vitess/vtctl
+
 # Default values for pmm
 pmm:
   enabled: false
   pmmTag: 1.17.0
+  image : percona/pmm-server
   client:
     resources:
       requests:
@@ -385,3 +399,7 @@ orchestrator:
     requests:
       cpu: 50m
       memory: 350Mi
+
+logrotate:
+  vitessTag: 3.1.1
+  image: vitess/orchestrator

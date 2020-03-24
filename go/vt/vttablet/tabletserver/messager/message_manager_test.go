@@ -18,22 +18,23 @@ package messager
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"reflect"
 	"runtime"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -42,14 +43,21 @@ var (
 		Name: "id",
 		Type: sqltypes.VarBinary,
 	}, {
-		Name: "time_scheduled",
-		Type: sqltypes.Int64,
-	}, {
 		Name: "message",
 		Type: sqltypes.VarBinary,
 	}}
 
-	mmTable = &schema.Table{
+	testDBFields = []*querypb.Field{
+		{Type: sqltypes.Int64},
+		{Type: sqltypes.Int64},
+		{Type: sqltypes.Int64},
+		{Type: sqltypes.Int64},
+		{Type: sqltypes.VarBinary},
+	}
+)
+
+func newMMTable() *schema.Table {
+	return &schema.Table{
 		Name: sqlparser.NewTableIdent("foo"),
 		Type: schema.Message,
 		MessageInfo: &schema.MessageInfo{
@@ -61,14 +69,16 @@ var (
 			PollInterval:       1 * time.Second,
 		},
 	}
-)
+}
 
-// newMMTable is not a true copy, but enough to massage what we need.
-func newMMTable() *schema.Table {
-	ti := *mmTable
-	msg := *ti.MessageInfo
-	ti.MessageInfo = &msg
-	return &ti
+func newMMRow(id int64) *querypb.Row {
+	return sqltypes.RowToProto3([]sqltypes.Value{
+		sqltypes.NewInt64(1),
+		sqltypes.NewInt64(0),
+		sqltypes.NULL,
+		sqltypes.NewInt64(id),
+		sqltypes.NewVarBinary(fmt.Sprintf("%v", id)),
+	})
 }
 
 type testReceiver struct {
@@ -100,34 +110,29 @@ func (tr *testReceiver) WaitForCount(n int) {
 }
 
 func TestReceiverCancel(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	mm := newMessageManager(newFakeTabletServer(), mmTable, newMMConnPool(db), sync2.NewSemaphore(1, 0))
+	mm := newMessageManager(newFakeTabletServer(), newFakeVStreamer(), newMMTable(), sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
+
 	r1 := newTestReceiver(0)
 	ctx, cancel := context.WithCancel(context.Background())
+	go cancel()
 	_ = mm.Subscribe(ctx, r1.rcv)
-	cancel()
+
 	// r1 should eventually be unsubscribed.
 	for i := 0; i < 10; i++ {
 		runtime.Gosched()
 		time.Sleep(10 * time.Millisecond)
-		mm.mu.Lock()
-		if len(mm.receivers) != 0 {
-			mm.mu.Unlock()
+		if mm.receiverCount() != 0 {
 			continue
 		}
-		mm.mu.Unlock()
 		return
 	}
 	t.Errorf("receivers were not cleared: %d", len(mm.receivers))
 }
 
 func TestMessageManagerState(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	mm := newMessageManager(newFakeTabletServer(), mmTable, newMMConnPool(db), sync2.NewSemaphore(1, 0))
+	mm := newMessageManager(newFakeTabletServer(), newFakeVStreamer(), newMMTable(), sync2.NewSemaphore(1, 0))
 	// Do it twice
 	for i := 0; i < 2; i++ {
 		mm.Open()
@@ -140,23 +145,12 @@ func TestMessageManagerState(t *testing.T) {
 		// Idempotence.
 		mm.Close()
 	}
-
-	for i := 0; i < 2; i++ {
-		mm.Open()
-		r1 := newTestReceiver(1)
-		mm.Subscribe(context.Background(), r1.rcv)
-		// This time the wait is in a different code path.
-		runtime.Gosched()
-		mm.Close()
-	}
 }
 
 func TestMessageManagerAdd(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
 	ti := newMMTable()
 	ti.MessageInfo.CacheSize = 1
-	mm := newMessageManager(newFakeTabletServer(), ti, newMMConnPool(db), sync2.NewSemaphore(1, 0))
+	mm := newMessageManager(newFakeTabletServer(), newFakeVStreamer(), ti, sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
 
@@ -168,8 +162,9 @@ func TestMessageManagerAdd(t *testing.T) {
 	}
 
 	r1 := newTestReceiver(0)
+	go func() { <-r1.ch }()
 	mm.Subscribe(context.Background(), r1.rcv)
-	<-r1.ch
+
 	if !mm.Add(row1) {
 		t.Error("Add(1 receiver): false, want true")
 	}
@@ -185,14 +180,14 @@ func TestMessageManagerAdd(t *testing.T) {
 }
 
 func TestMessageManagerSend(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
 	tsv := newFakeTabletServer()
-	mm := newMessageManager(tsv, mmTable, newMMConnPool(db), sync2.NewSemaphore(1, 0))
+	mm := newMessageManager(tsv, newFakeVStreamer(), newMMTable(), sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
+
 	r1 := newTestReceiver(1)
 	mm.Subscribe(context.Background(), r1.rcv)
+
 	want := &sqltypes.Result{
 		Fields: testFields,
 	}
@@ -221,20 +216,34 @@ func TestMessageManagerSend(t *testing.T) {
 
 	// Verify item has been removed from cache.
 	// Need to obtain lock to prevent data race.
-	mm.cache.mu.Lock()
-	if _, ok := mm.cache.inQueue["1"]; ok {
-		t.Error("Message 1 is still present in inQueue cache")
+	// It may take some time for this to happen.
+	inQueue := true
+	inFlight := true
+	for i := 0; i < 10; i++ {
+		mm.cache.mu.Lock()
+		if _, ok := mm.cache.inQueue["1"]; !ok {
+			inQueue = false
+		}
+		if _, ok := mm.cache.inFlight["1"]; !ok {
+			inFlight = false
+		}
+		mm.cache.mu.Unlock()
+		if inQueue || inFlight {
+			runtime.Gosched()
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		break
 	}
-	if _, ok := mm.cache.inFlight["1"]; ok {
-		t.Error("Message 1 is still present in inFlight cache")
-	}
-	mm.cache.mu.Unlock()
+	assert.False(t, inQueue)
+	assert.False(t, inFlight)
 
 	// Test that mm stops sending to a canceled receiver.
 	r2 := newTestReceiver(1)
 	ctx, cancel := context.WithCancel(context.Background())
 	mm.Subscribe(ctx, r2.rcv)
 	<-r2.ch
+
 	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("2")}})
 	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("3")}})
 	// Send should be round-robin.
@@ -265,12 +274,11 @@ func TestMessageManagerSend(t *testing.T) {
 }
 
 func TestMessageManagerPostponeThrottle(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
 	tsv := newFakeTabletServer()
-	mm := newMessageManager(tsv, mmTable, newMMConnPool(db), sync2.NewSemaphore(1, 0))
+	mm := newMessageManager(tsv, newFakeVStreamer(), newMMTable(), sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
+
 	r1 := newTestReceiver(1)
 	mm.Subscribe(context.Background(), r1.rcv)
 	<-r1.ch
@@ -313,74 +321,15 @@ func TestMessageManagerPostponeThrottle(t *testing.T) {
 	<-ch
 }
 
-func TestMessageManagerSendEOF(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	db.AddQueryPattern(
-		"select time_next, epoch, time_created, id, time_scheduled, message from foo.*",
-		&sqltypes.Result{
-			Fields: []*querypb.Field{
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.VarBinary},
-			},
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewInt64(1),
-				sqltypes.NewInt64(0),
-				sqltypes.NewInt64(2),
-				sqltypes.NewInt64(10),
-				sqltypes.NewVarBinary("a"),
-			}},
-		},
-	)
-	// Set a large polling interval.
-	ti := newMMTable()
-	ti.MessageInfo.CacheSize = 2
-	ti.MessageInfo.PollInterval = 30 * time.Second
-	mm := newMessageManager(newFakeTabletServer(), ti, newMMConnPool(db), sync2.NewSemaphore(1, 0))
-	mm.Open()
-	defer mm.Close()
-	r1 := newTestReceiver(0)
-	ctx, cancel := context.WithCancel(context.Background())
-	mm.Subscribe(ctx, r1.rcv)
-	// Pull field info.
-	<-r1.ch
-
-	r2 := newTestReceiver(0)
-	mm.Subscribe(context.Background(), r2.rcv)
-	// Pull field info.
-	<-r2.ch
-
-	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NULL}})
-	// Wait for send to enqueue.
-	// After this is enquened, runSend will go into a wait state because
-	// there's nothing more to send.
-	r1.WaitForCount(2)
-
-	// Now cancel, which will send an EOF to the sender.
-	cancel()
-
-	// The EOF should immediately trigger the poller, which will result
-	// in a message being sent on r2. Verify that this happened in a timely fashion.
-	start := time.Now()
-	<-r2.ch
-	if d := time.Since(start); d > 15*time.Second {
-		t.Errorf("pending work trigger did not happen. Duration: %v", d)
-	}
-}
-
 func TestMessageManagerSendError(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
 	tsv := newFakeTabletServer()
-	mm := newMessageManager(tsv, mmTable, newMMConnPool(db), sync2.NewSemaphore(1, 0))
+	mm := newMessageManager(tsv, newFakeVStreamer(), newMMTable(), sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
 	ctx := context.Background()
 
 	ch := make(chan *sqltypes.Result)
+	go func() { <-ch }()
 	fieldSent := false
 	mm.Subscribe(ctx, func(qr *sqltypes.Result) error {
 		ch <- qr
@@ -388,10 +337,8 @@ func TestMessageManagerSendError(t *testing.T) {
 			fieldSent = true
 			return nil
 		}
-		return errors.New("non-eof")
+		return errors.New("intentional error")
 	})
-	// Pull field info.
-	<-ch
 
 	postponech := make(chan string, 20)
 	tsv.SetChannel(postponech)
@@ -405,21 +352,17 @@ func TestMessageManagerSendError(t *testing.T) {
 }
 
 func TestMessageManagerFieldSendError(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	tsv := newFakeTabletServer()
-	mm := newMessageManager(tsv, mmTable, newMMConnPool(db), sync2.NewSemaphore(1, 0))
+	mm := newMessageManager(newFakeTabletServer(), newFakeVStreamer(), newMMTable(), sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
 	ctx := context.Background()
 
 	ch := make(chan *sqltypes.Result)
+	go func() { <-ch }()
 	done := mm.Subscribe(ctx, func(qr *sqltypes.Result) error {
 		ch <- qr
 		return errors.New("non-eof")
 	})
-	// Pull field info.
-	<-ch
 
 	// This should not hang because a field send error must terminate
 	// subscription.
@@ -427,16 +370,16 @@ func TestMessageManagerFieldSendError(t *testing.T) {
 }
 
 func TestMessageManagerBatchSend(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
 	ti := newMMTable()
 	ti.MessageInfo.BatchSize = 2
-	mm := newMessageManager(newFakeTabletServer(), ti, newMMConnPool(db), sync2.NewSemaphore(1, 0))
+	mm := newMessageManager(newFakeTabletServer(), newFakeVStreamer(), ti, sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
+
 	r1 := newTestReceiver(1)
 	mm.Subscribe(context.Background(), r1.rcv)
 	<-r1.ch
+
 	row1 := &MessageRow{
 		Row: []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NULL},
 	}
@@ -469,67 +412,178 @@ func TestMessageManagerBatchSend(t *testing.T) {
 	}
 }
 
-func TestMessageManagerPoller(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	db.AddQueryPattern(
-		"select time_next, epoch, time_created, id, time_scheduled, message from foo.*",
-		&sqltypes.Result{
-			Fields: []*querypb.Field{
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.VarBinary},
-			},
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewInt64(1),
-				sqltypes.NewInt64(0),
-				sqltypes.NewInt64(0),
-				sqltypes.NewInt64(1),
-				sqltypes.NewInt64(10),
-				sqltypes.NewVarBinary("01"),
-			}, {
-				sqltypes.NewInt64(2),
-				sqltypes.NewInt64(0),
-				sqltypes.NewInt64(1),
-				sqltypes.NewInt64(2),
-				sqltypes.NewInt64(20),
-				sqltypes.NewVarBinary("02"),
-			}, {
-				sqltypes.NewInt64(1),
-				sqltypes.NewInt64(1),
-				sqltypes.NewInt64(0),
-				sqltypes.NewInt64(3),
-				sqltypes.NewInt64(30),
-				sqltypes.NewVarBinary("11"),
+func TestMessageManagerStreamerSimple(t *testing.T) {
+	fvs := newFakeVStreamer()
+	fvs.setStreamerResponse([][]*binlogdatapb.VEvent{{{
+		// Event set 1.
+		Type: binlogdatapb.VEventType_GTID,
+		Gtid: "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+	}, {
+		Type: binlogdatapb.VEventType_OTHER,
+	}}, {{
+		// Event set 2.
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: "foo",
+			Fields:    testDBFields,
+		},
+	}}, {{
+		// Event set 3.
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName: "foo",
+			RowChanges: []*binlogdatapb.RowChange{{
+				After: newMMRow(1),
 			}},
 		},
-	)
+	}, {
+		Type: binlogdatapb.VEventType_GTID,
+		Gtid: "MySQL56/33333333-3333-3333-3333-333333333333:1-101",
+	}, {
+		Type: binlogdatapb.VEventType_COMMIT,
+	}}})
+	mm := newMessageManager(newFakeTabletServer(), fvs, newMMTable(), sync2.NewSemaphore(1, 0))
+	mm.Open()
+	defer mm.Close()
+
+	r1 := newTestReceiver(1)
+	mm.Subscribe(context.Background(), r1.rcv)
+	<-r1.ch
+
+	want := &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(1),
+			sqltypes.NewVarBinary("1"),
+		}},
+	}
+	if got := <-r1.ch; !reflect.DeepEqual(got, want) {
+		t.Errorf("Received: %v, want %v", got, want)
+	}
+}
+
+func TestMessageManagerStreamerAndPoller(t *testing.T) {
+	fvs := newFakeVStreamer()
+	fvs.setPollerResponse([]*binlogdatapb.VStreamResultsResponse{{
+		Fields: testDBFields,
+		Gtid:   "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+	}})
+	mm := newMessageManager(newFakeTabletServer(), fvs, newMMTable(), sync2.NewSemaphore(1, 0))
+	mm.Open()
+	defer mm.Close()
+
+	r1 := newTestReceiver(1)
+	mm.Subscribe(context.Background(), r1.rcv)
+	<-r1.ch
+
+	for {
+		runtime.Gosched()
+		time.Sleep(10 * time.Millisecond)
+		mm.streamMu.Lock()
+		pos := mm.lastPollPosition
+		mm.streamMu.Unlock()
+		if pos != nil {
+			break
+		}
+	}
+
+	fvs.setStreamerResponse([][]*binlogdatapb.VEvent{{{
+		// Event set 1: field info.
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: "foo",
+			Fields:    testDBFields,
+		},
+	}}, {{
+		// Event set 2: GTID won't be known till the first GTID event.
+		// Row will not be added.
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName: "foo",
+			RowChanges: []*binlogdatapb.RowChange{{
+				After: newMMRow(1),
+			}},
+		},
+	}, {
+		Type: binlogdatapb.VEventType_GTID,
+		Gtid: "MySQL56/33333333-3333-3333-3333-333333333333:1-99",
+	}, {
+		Type: binlogdatapb.VEventType_COMMIT,
+	}}, {{
+		// Event set 3: GTID will be known, but <= last poll.
+		// Row will not be added.
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName: "foo",
+			RowChanges: []*binlogdatapb.RowChange{{
+				After: newMMRow(2),
+			}},
+		},
+	}, {
+		Type: binlogdatapb.VEventType_GTID,
+		Gtid: "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+	}, {
+		Type: binlogdatapb.VEventType_COMMIT,
+	}}, {{
+		// Event set 3: GTID will be > last poll.
+		// Row will be added.
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName: "foo",
+			RowChanges: []*binlogdatapb.RowChange{{
+				After: newMMRow(3),
+			}},
+		},
+	}, {
+		Type: binlogdatapb.VEventType_GTID,
+		Gtid: "MySQL56/33333333-3333-3333-3333-333333333333:1-101",
+	}, {
+		Type: binlogdatapb.VEventType_COMMIT,
+	}}})
+
+	want := &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(3),
+			sqltypes.NewVarBinary("3"),
+		}},
+	}
+	if got := <-r1.ch; !reflect.DeepEqual(got, want) {
+		t.Errorf("Received: %v, want %v", got, want)
+	}
+}
+
+func TestMessageManagerPoller(t *testing.T) {
 	ti := newMMTable()
 	ti.MessageInfo.BatchSize = 2
 	ti.MessageInfo.PollInterval = 20 * time.Second
-	mm := newMessageManager(newFakeTabletServer(), ti, newMMConnPool(db), sync2.NewSemaphore(1, 0))
+	fvs := newFakeVStreamer()
+	fvs.setPollerResponse([]*binlogdatapb.VStreamResultsResponse{{
+		Fields: testDBFields,
+		Gtid:   "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+	}, {
+		Rows: []*querypb.Row{
+			newMMRow(1),
+			newMMRow(2),
+			newMMRow(3),
+		},
+	}})
+	mm := newMessageManager(newFakeTabletServer(), fvs, ti, sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
-	r1 := newTestReceiver(1)
+
 	ctx, cancel := context.WithCancel(context.Background())
+	r1 := newTestReceiver(1)
 	mm.Subscribe(ctx, r1.rcv)
 	<-r1.ch
-	mm.pollerTicks.Trigger()
+
 	want := [][]sqltypes.Value{{
-		sqltypes.NewInt64(2),
-		sqltypes.NewInt64(20),
-		sqltypes.NewVarBinary("02"),
-	}, {
 		sqltypes.NewInt64(1),
-		sqltypes.NewInt64(10),
-		sqltypes.NewVarBinary("01"),
+		sqltypes.NewVarBinary("1"),
+	}, {
+		sqltypes.NewInt64(2),
+		sqltypes.NewVarBinary("2"),
 	}, {
 		sqltypes.NewInt64(3),
-		sqltypes.NewInt64(30),
-		sqltypes.NewVarBinary("11"),
+		sqltypes.NewVarBinary("3"),
 	}}
 	var got [][]sqltypes.Value
 	// We should get it in 2 iterations.
@@ -537,13 +591,21 @@ func TestMessageManagerPoller(t *testing.T) {
 		qr := <-r1.ch
 		got = append(got, qr.Rows...)
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("rows:\n%+v, want\n%+v", got, want)
+	for _, gotrow := range got {
+		found := false
+		for _, wantrow := range want {
+			if reflect.DeepEqual(gotrow, wantrow) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("row: %v not found in %v", gotrow, want)
+		}
 	}
 
 	// If there are no receivers, nothing should fire.
 	cancel()
-	mm.pollerTicks.Trigger()
 	runtime.Gosched()
 	select {
 	case row := <-r1.ch:
@@ -555,58 +617,34 @@ func TestMessageManagerPoller(t *testing.T) {
 // TestMessagesPending1 tests for the case where you can't
 // add items because the cache is full.
 func TestMessagesPending1(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	db.AddQueryPattern(
-		"select time_next, epoch, time_created, id, time_scheduled, message from foo.*",
-		&sqltypes.Result{
-			Fields: []*querypb.Field{
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.VarBinary},
-			},
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewInt64(1),
-				sqltypes.NewInt64(0),
-				sqltypes.NewInt64(2),
-				sqltypes.NewInt64(10),
-				sqltypes.NewVarBinary("a"),
-			}},
-		},
-	)
 	// Set a large polling interval.
 	ti := newMMTable()
 	ti.MessageInfo.CacheSize = 2
 	ti.MessageInfo.PollInterval = 30 * time.Second
-	mm := newMessageManager(newFakeTabletServer(), ti, newMMConnPool(db), sync2.NewSemaphore(1, 0))
+	fvs := newFakeVStreamer()
+	mm := newMessageManager(newFakeTabletServer(), fvs, ti, sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
+
 	r1 := newTestReceiver(0)
+	go func() { <-r1.ch }()
 	mm.Subscribe(context.Background(), r1.rcv)
-	<-r1.ch
 
 	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("1")}})
 	// Make sure the first message is enqueued.
 	r1.WaitForCount(2)
 	// This will fill up the cache.
-	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("2")}})
-	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("3")}})
+	assert.True(t, mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("2")}}))
+	assert.True(t, mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("3")}}))
+	// This will fail and messagesPending will be set to true.
+	assert.False(t, mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("4")}}))
 
-	// Trigger the poller. It should do nothing.
-	mm.pollerTicks.Trigger()
-
-	// Wait for pending flag to be turned on.
-	for {
-		runtime.Gosched()
-		mm.mu.Lock()
-		if mm.messagesPending {
-			mm.mu.Unlock()
-			break
-		}
-		mm.mu.Unlock()
-	}
+	fvs.setPollerResponse([]*binlogdatapb.VStreamResultsResponse{{
+		Fields: testDBFields,
+		Gtid:   "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+	}, {
+		Rows: []*querypb.Row{newMMRow(1)},
+	}})
 
 	// Now, let's pull more than 3 items. It should
 	// trigger the poller, and there should be no wait.
@@ -622,40 +660,24 @@ func TestMessagesPending1(t *testing.T) {
 // TestMessagesPending2 tests for the case where
 // there are more pending items than the cache size.
 func TestMessagesPending2(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	db.AddQueryPattern(
-		"select time_next, epoch, time_created, id, time_scheduled, message from foo.*",
-		&sqltypes.Result{
-			Fields: []*querypb.Field{
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.VarBinary},
-			},
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewInt64(1),
-				sqltypes.NewInt64(0),
-				sqltypes.NewInt64(2),
-				sqltypes.NewInt64(10),
-				sqltypes.NewVarBinary("a"),
-			}},
-		},
-	)
 	// Set a large polling interval.
 	ti := newMMTable()
 	ti.MessageInfo.CacheSize = 1
 	ti.MessageInfo.PollInterval = 30 * time.Second
-	mm := newMessageManager(newFakeTabletServer(), ti, newMMConnPool(db), sync2.NewSemaphore(1, 0))
+	fvs := newFakeVStreamer()
+	fvs.setPollerResponse([]*binlogdatapb.VStreamResultsResponse{{
+		Fields: testDBFields,
+		Gtid:   "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+	}, {
+		Rows: []*querypb.Row{newMMRow(1)},
+	}})
+	mm := newMessageManager(newFakeTabletServer(), fvs, ti, sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
-	r1 := newTestReceiver(0)
-	mm.Subscribe(context.Background(), r1.rcv)
-	<-r1.ch
 
-	// Trigger the poller.
-	mm.pollerTicks.Trigger()
+	r1 := newTestReceiver(0)
+	go func() { <-r1.ch }()
+	mm.Subscribe(context.Background(), r1.rcv)
 
 	// Now, let's pull more than 1 item. It should
 	// trigger the poller every time cache gets empty.
@@ -669,8 +691,6 @@ func TestMessagesPending2(t *testing.T) {
 }
 
 func TestMessageManagerPurge(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
 	tsv := newFakeTabletServer()
 
 	// Make a buffered channel so the thread doesn't block on repeated calls.
@@ -679,7 +699,7 @@ func TestMessageManagerPurge(t *testing.T) {
 
 	ti := newMMTable()
 	ti.MessageInfo.PollInterval = 1 * time.Millisecond
-	mm := newMessageManager(tsv, ti, newMMConnPool(db), sync2.NewSemaphore(1, 0))
+	mm := newMessageManager(tsv, newFakeVStreamer(), ti, sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
 	// Ensure Purge got called.
@@ -689,9 +709,7 @@ func TestMessageManagerPurge(t *testing.T) {
 }
 
 func TestMMGenerate(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	mm := newMessageManager(newFakeTabletServer(), mmTable, newMMConnPool(db), sync2.NewSemaphore(1, 0))
+	mm := newMessageManager(newFakeTabletServer(), newFakeVStreamer(), newMMTable(), sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
 	query, bv := mm.GenerateAckQuery([]string{"1", "2"})
@@ -712,7 +730,7 @@ func TestMMGenerate(t *testing.T) {
 	}
 
 	query, bv = mm.GeneratePostponeQuery([]string{"1", "2"})
-	wantQuery = "update foo set time_next = :time_now+(:wait_time<<epoch), epoch = epoch+1 where id in ::ids and time_acked is null"
+	wantQuery = "update foo set time_next = :time_now+(:wait_time<<ifnull(epoch, 0)), epoch = ifnull(epoch, 0)+1 where id in ::ids and time_acked is null"
 	if query != wantQuery {
 		t.Errorf("GeneratePostponeQuery query: %s, want %s", query, wantQuery)
 	}
@@ -731,12 +749,12 @@ func TestMMGenerate(t *testing.T) {
 	}
 
 	query, bv = mm.GeneratePurgeQuery(3)
-	wantQuery = "delete from foo where time_scheduled < :time_scheduled and time_acked is not null limit 500"
+	wantQuery = "delete from foo where time_acked < :time_acked limit 500"
 	if query != wantQuery {
 		t.Errorf("GeneratePurgeQuery query: %s, want %s", query, wantQuery)
 	}
 	wantbv = map[string]*querypb.BindVariable{
-		"time_scheduled": sqltypes.Int64BindVariable(3),
+		"time_acked": sqltypes.Int64BindVariable(3),
 	}
 	if !reflect.DeepEqual(bv, wantbv) {
 		t.Errorf("gotid: %v, want %v", bv, wantbv)
@@ -783,9 +801,56 @@ func (fts *fakeTabletServer) PurgeMessages(ctx context.Context, target *querypb.
 	return 0, nil
 }
 
-func newMMConnPool(db *fakesqldb.DB) *connpool.Pool {
-	pool := connpool.New("", 20, 0, time.Duration(10*time.Minute), newFakeTabletServer())
-	dbconfigs := dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
-	pool.Open(dbconfigs.AppWithDB(), dbconfigs.DbaWithDB(), dbconfigs.AppDebugWithDB())
-	return pool
+type fakeVStreamer struct {
+	streamInvocations sync2.AtomicInt64
+	mu                sync.Mutex
+	streamerResponse  [][]*binlogdatapb.VEvent
+	pollerResponse    []*binlogdatapb.VStreamResultsResponse
+}
+
+func newFakeVStreamer() *fakeVStreamer { return &fakeVStreamer{} }
+
+func (fv *fakeVStreamer) setStreamerResponse(sr [][]*binlogdatapb.VEvent) {
+	fv.mu.Lock()
+	defer fv.mu.Unlock()
+	fv.streamerResponse = sr
+}
+
+func (fv *fakeVStreamer) setPollerResponse(pr []*binlogdatapb.VStreamResultsResponse) {
+	fv.mu.Lock()
+	defer fv.mu.Unlock()
+	fv.pollerResponse = pr
+}
+
+func (fv *fakeVStreamer) Stream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	fv.streamInvocations.Add(1)
+	for {
+		fv.mu.Lock()
+		sr := fv.streamerResponse
+		fv.streamerResponse = nil
+		fv.mu.Unlock()
+		for _, r := range sr {
+			if err := send(r); err != nil {
+				return err
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return io.EOF
+		default:
+		}
+		runtime.Gosched()
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func (fv *fakeVStreamer) StreamResults(ctx context.Context, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
+	fv.mu.Lock()
+	defer fv.mu.Unlock()
+	for _, r := range fv.pollerResponse {
+		if err := send(r); err != nil {
+			return err
+		}
+	}
+	return nil
 }

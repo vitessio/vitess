@@ -638,6 +638,7 @@ type (
 		Exprs     SelectExprs
 		OrderBy   OrderBy
 		Separator string
+		Limit     *Limit
 	}
 
 	// ValuesFuncExpr represents a function call.
@@ -801,6 +802,7 @@ type ColIdent struct {
 	// last field in the struct.
 	_            [0]struct{ _ []byte }
 	val, lowered string
+	at           atCount
 }
 
 // TableIdent is a case sensitive SQL identifier. It will be escaped with
@@ -1168,10 +1170,11 @@ func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
-	if (node.Type == "tables" || node.Type == "columns" || node.Type == "fields") && node.ShowTablesOpt != nil {
+	nodeType := strings.ToLower(node.Type)
+	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys") && node.ShowTablesOpt != nil {
 		opt := node.ShowTablesOpt
-		buf.Myprintf("show %s%s", opt.Full, node.Type)
-		if (node.Type == "columns" || node.Type == "fields") && node.HasOnTable() {
+		buf.Myprintf("show %s%s", opt.Full, nodeType)
+		if (nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys") && node.HasOnTable() {
 			buf.Myprintf(" from %v", node.OnTable)
 		}
 		if opt.DbName != "" {
@@ -1181,15 +1184,18 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		return
 	}
 	if node.Scope == "" {
-		buf.Myprintf("show %s", node.Type)
+		buf.Myprintf("show %s", nodeType)
 	} else {
-		buf.Myprintf("show %s %s", node.Scope, node.Type)
+		buf.Myprintf("show %s %s", node.Scope, nodeType)
 	}
 	if node.HasOnTable() {
 		buf.Myprintf(" on %v", node.OnTable)
 	}
-	if node.Type == "collation" && node.ShowCollationFilterOpt != nil {
+	if nodeType == "collation" && node.ShowCollationFilterOpt != nil {
 		buf.Myprintf(" where %v", *node.ShowCollationFilterOpt)
+	}
+	if nodeType == "charset" && node.ShowTablesOpt != nil {
+		buf.Myprintf("%v", node.ShowTablesOpt.Filter)
 	}
 	if node.HasTable() {
 		buf.Myprintf(" %v", node.Table)
@@ -1369,12 +1375,16 @@ func (node *JoinTableExpr) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *IndexHints) Format(buf *TrackedBuffer) {
 	buf.Myprintf(" %sindex ", node.Type)
-	prefix := "("
-	for _, n := range node.Indexes {
-		buf.Myprintf("%s%v", prefix, n)
-		prefix = ", "
+	if len(node.Indexes) == 0 {
+		buf.Myprintf("()")
+	} else {
+		prefix := "("
+		for _, n := range node.Indexes {
+			buf.Myprintf("%s%v", prefix, n)
+			prefix = ", "
+		}
+		buf.Myprintf(")")
 	}
-	buf.Myprintf(")")
 }
 
 // Format formats the node.
@@ -1536,14 +1546,20 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 		buf.Myprintf("%v.", node.Qualifier)
 	}
 	// Function names should not be back-quoted even
-	// if they match a reserved word. So, print the
-	// name as is.
-	buf.Myprintf("%s(%s%v)", node.Name.String(), distinct, node.Exprs)
+	// if they match a reserved word, only if they contain illegal characters
+	funcName := node.Name.String()
+
+	if containEscapableChars(funcName, NoAt) {
+		writeEscapedString(buf, funcName)
+	} else {
+		buf.WriteString(funcName)
+	}
+	buf.Myprintf("(%s%v)", distinct, node.Exprs)
 }
 
 // Format formats the node
 func (node *GroupConcatExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("group_concat(%s%v%v%s)", node.Distinct, node.Exprs, node.OrderBy, node.Separator)
+	buf.Myprintf("group_concat(%s%v%v%s%v)", node.Distinct, node.Exprs, node.OrderBy, node.Separator, node.Limit)
 }
 
 // Format formats the node.
@@ -1712,7 +1728,7 @@ func (node *SetExpr) Format(buf *TrackedBuffer) {
 		sqlVal := node.Expr.(*SQLVal)
 		buf.Myprintf("%s %s", node.Name.String(), strings.ToLower(string(sqlVal.Val)))
 	} else {
-		buf.Myprintf("%s = %v", node.Name.String(), node.Expr)
+		buf.Myprintf("%v = %v", node.Name, node.Expr)
 	}
 }
 
@@ -1726,10 +1742,13 @@ func (node OnDup) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node ColIdent) Format(buf *TrackedBuffer) {
-	formatID(buf, node.val, node.Lowered())
+	for i := NoAt; i < node.at; i++ {
+		buf.WriteByte('@')
+	}
+	formatID(buf, node.val, node.Lowered(), node.at)
 }
 
 // Format formats the node.
 func (node TableIdent) Format(buf *TrackedBuffer) {
-	formatID(buf, node.v, strings.ToLower(node.v))
+	formatID(buf, node.v, strings.ToLower(node.v), NoAt)
 }

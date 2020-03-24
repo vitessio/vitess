@@ -25,7 +25,9 @@ import (
 	"path"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/vt/log"
+
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -53,18 +55,19 @@ var (
 	primary key (id)
 	) Engine=InnoDB
 	`
-	// Tablets for for shard0
+	// Tablets for shard0
 	tablet62344 *cluster.Vttablet
 	tablet62044 *cluster.Vttablet
 	tablet41983 *cluster.Vttablet
 	tablet31981 *cluster.Vttablet
 
-	// Tablets for for shard1
+	// Tablets for shard1
 	masterTablet  *cluster.Vttablet
 	replicaTablet *cluster.Vttablet
 )
 
 func TestMain(m *testing.M) {
+	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {
@@ -120,7 +123,7 @@ func TestMain(m *testing.M) {
 		var mysqlCtlProcessList []*exec.Cmd
 		for _, shard := range clusterInstance.Keyspaces[0].Shards {
 			for _, tablet := range shard.Vttablets {
-				fmt.Println("Starting MySql for tablet ", tablet.Alias)
+				log.Infof("Starting MySql for tablet %v", tablet.Alias)
 				if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
 					return 1
 				} else {
@@ -160,7 +163,7 @@ func runSQL(ctx context.Context, t *testing.T, sql string, tablet *cluster.Vttab
 	// Get Connection
 	tabletParams := getMysqlConnParam(tablet)
 	conn, err := mysql.Connect(ctx, &tabletParams)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	defer conn.Close()
 
 	// runSQL
@@ -170,6 +173,6 @@ func runSQL(ctx context.Context, t *testing.T, sql string, tablet *cluster.Vttab
 func execute(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	return qr
 }

@@ -23,9 +23,9 @@ import (
 	"os/exec"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/vt/log"
 
-	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -40,10 +40,11 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = &cluster.LocalProcessCluster{Cell: cell, Hostname: hostname}
+		clusterInstance = cluster.NewCluster(cell, hostname)
 		defer clusterInstance.Teardown()
 
 		// Start topo server
@@ -58,7 +59,7 @@ func TestMain(m *testing.M) {
 
 		initCluster([]string{"0"}, 2)
 
-		// Collect table paths and ports
+		// Collect tablet paths and ports
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 		for _, tablet := range tablets {
 			if tablet.Type == "master" {
@@ -97,11 +98,11 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 			}
 			// Start Mysqlctl process
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			if err != nil {
 				return
-			} else {
-				mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 			}
+			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 
 			// start vttablet process
 			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
@@ -140,27 +141,29 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 }
 
 func TestRestart(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	err := masterTablet.MysqlctlProcess.Stop()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	masterTablet.MysqlctlProcess.CleanupFiles(masterTablet.TabletUID)
 	err = masterTablet.MysqlctlProcess.Start()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 }
 
 func TestAutoDetect(t *testing.T) {
+	defer cluster.PanicHandler(t)
 
 	// Start up tablets with an empty MYSQL_FLAVOR, which means auto-detect
 	sqlFlavor := os.Getenv("MYSQL_FLAVOR")
 	os.Setenv("MYSQL_FLAVOR", "")
 
 	err := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.Setup()
-	assert.Nil(t, err, "error should be nil")
+	require.Nil(t, err, "error should be nil")
 	err = clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].VttabletProcess.Setup()
-	assert.Nil(t, err, "error should be nil")
+	require.Nil(t, err, "error should be nil")
 
 	// Reparent tablets, which requires flavor detection
 	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, masterTablet.TabletUID)
-	assert.Nil(t, err, "error should be nil")
+	require.Nil(t, err, "error should be nil")
 
 	//Reset flavor
 	os.Setenv("MYSQL_FLAVOR", sqlFlavor)

@@ -26,6 +26,7 @@ import (
 )
 
 var lastID, count sync2.AtomicInt64
+var waitStarts []time.Time
 
 type TestResource struct {
 	num    int64
@@ -37,6 +38,10 @@ func (tr *TestResource) Close() {
 		count.Add(-1)
 		tr.closed = true
 	}
+}
+
+func logWait(start time.Time) {
+	waitStarts = append(waitStarts, start)
 }
 
 func PoolFactory() (Resource, error) {
@@ -57,7 +62,9 @@ func TestOpen(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 6, 6, time.Second, 0)
+	waitStarts = waitStarts[:0]
+
+	p := NewResourcePool(PoolFactory, 6, 6, time.Second, 0, logWait)
 	p.SetCapacity(5)
 	var resources [10]Resource
 
@@ -73,6 +80,9 @@ func TestOpen(t *testing.T) {
 		}
 		if p.WaitCount() != 0 {
 			t.Errorf("expecting 0, received %d", p.WaitCount())
+		}
+		if len(waitStarts) != 0 {
+			t.Errorf("expecting 0, received %d", len(waitStarts))
 		}
 		if p.WaitTime() != 0 {
 			t.Errorf("expecting 0, received %d", p.WaitTime())
@@ -108,6 +118,15 @@ func TestOpen(t *testing.T) {
 	<-ch
 	if p.WaitCount() != 5 {
 		t.Errorf("Expecting 5, received %d", p.WaitCount())
+	}
+	if int64(len(waitStarts)) != p.WaitCount() {
+		t.Errorf("expecting %d, received %d", p.WaitCount(), len(waitStarts))
+	}
+	// verify start times are monotonic increasing
+	for i := 1; i < len(waitStarts); i++ {
+		if waitStarts[i].Before(waitStarts[i-1]) {
+			t.Errorf("Expecting monotonic increasing start times")
+		}
 	}
 	if p.WaitTime() == 0 {
 		t.Errorf("Expecting non-zero")
@@ -198,12 +217,12 @@ func TestOpen(t *testing.T) {
 func TestPrefill(t *testing.T) {
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 1)
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 1, logWait)
 	defer p.Close()
 	if p.Active() != 5 {
 		t.Errorf("p.Active(): %d, want 5", p.Active())
 	}
-	p = NewResourcePool(FailFactory, 5, 5, time.Second, 1)
+	p = NewResourcePool(FailFactory, 5, 5, time.Second, 1, logWait)
 	defer p.Close()
 	if p.Active() != 0 {
 		t.Errorf("p.Active(): %d, want 0", p.Active())
@@ -218,7 +237,7 @@ func TestPrefillTimeout(t *testing.T) {
 	defer func() { prefillTimeout = saveTimeout }()
 
 	start := time.Now()
-	p := NewResourcePool(SlowFailFactory, 5, 5, time.Second, 1)
+	p := NewResourcePool(SlowFailFactory, 5, 5, time.Second, 1, logWait)
 	defer p.Close()
 	if elapsed := time.Since(start); elapsed > 20*time.Millisecond {
 		t.Errorf("elapsed: %v, should be around 10ms", elapsed)
@@ -232,7 +251,9 @@ func TestShrinking(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0)
+	waitStarts = waitStarts[:0]
+
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0, logWait)
 	var resources [10]Resource
 	// Leave one empty slot in the pool
 	for i := 0; i < 4; i++ {
@@ -315,6 +336,9 @@ func TestShrinking(t *testing.T) {
 	if p.WaitCount() != 1 {
 		t.Errorf("Expecting 1, received %d", p.WaitCount())
 	}
+	if int64(len(waitStarts)) != p.WaitCount() {
+		t.Errorf("Expecting %d, received %d", p.WaitCount(), len(waitStarts))
+	}
 	if count.Get() != 2 {
 		t.Errorf("Expecting 2, received %d", count.Get())
 	}
@@ -371,7 +395,7 @@ func TestClosing(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0)
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0, logWait)
 	var resources [10]Resource
 	for i := 0; i < 5; i++ {
 		r, err := p.Get(ctx)
@@ -425,7 +449,7 @@ func TestIdleTimeout(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond, 0)
+	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond, 0, logWait)
 	defer p.Close()
 
 	r, err := p.Get(ctx)
@@ -536,7 +560,7 @@ func TestIdleTimeoutCreateFail(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond, 0)
+	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond, 0, logWait)
 	defer p.Close()
 	r, err := p.Get(ctx)
 	if err != nil {
@@ -557,7 +581,7 @@ func TestCreateFail(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(FailFactory, 5, 5, time.Second, 0)
+	p := NewResourcePool(FailFactory, 5, 5, time.Second, 0, logWait)
 	defer p.Close()
 	if _, err := p.Get(ctx); err.Error() != "Failed" {
 		t.Errorf("Expecting Failed, received %v", err)
@@ -573,7 +597,7 @@ func TestCreateFailOnPut(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0)
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0, logWait)
 	defer p.Close()
 	_, err := p.Get(ctx)
 	if err != nil {
@@ -590,7 +614,7 @@ func TestSlowCreateFail(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(SlowFailFactory, 2, 2, time.Second, 0)
+	p := NewResourcePool(SlowFailFactory, 2, 2, time.Second, 0, logWait)
 	defer p.Close()
 	ch := make(chan bool)
 	// The third Get should not wait indefinitely
@@ -612,7 +636,7 @@ func TestTimeout(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 1, 1, time.Second, 0)
+	p := NewResourcePool(PoolFactory, 1, 1, time.Second, 0, logWait)
 	defer p.Close()
 	r, err := p.Get(ctx)
 	if err != nil {
@@ -631,7 +655,7 @@ func TestTimeout(t *testing.T) {
 func TestExpired(t *testing.T) {
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 1, 1, time.Second, 0)
+	p := NewResourcePool(PoolFactory, 1, 1, time.Second, 0, logWait)
 	defer p.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
 	r, err := p.Get(ctx)

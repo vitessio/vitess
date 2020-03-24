@@ -85,22 +85,10 @@ var (
 	callerID     = callerid.NewEffectiveCallerID("test_principal", "test_component", "test_subcomponent")
 	callerIDEcho = "principal:\"test_principal\" component:\"test_component\" subcomponent:\"test_subcomponent\" "
 
-	eventToken = &querypb.EventToken{
-		Timestamp: 876543,
-		Shard:     shards[0],
-		Position:  "test_position",
-	}
-	eventTokenEcho = "timestamp:876543 shard:\"-80\" position:\"test_position\" "
-
 	options = &querypb.ExecuteOptions{
-		IncludedFields:    querypb.ExecuteOptions_TYPE_ONLY,
-		IncludeEventToken: true,
-		CompareEventToken: eventToken,
+		IncludedFields: querypb.ExecuteOptions_TYPE_ONLY,
 	}
-	optionsEcho = "include_event_token:true compare_event_token:<" + eventTokenEcho + "> included_fields:TYPE_ONLY "
-	extrasEcho  = "event_token:<" + eventTokenEcho + "> fresher:true "
-
-	updateStreamEcho = "map[callerId:" + callerIDEcho + " event:" + eventTokenEcho + " keyRange:" + keyRangeZeroEcho + " keyspace:conn_ks shard:echo://" + query + " tabletType:REPLICA timestamp:0]"
+	optionsEcho = "included_fields:TYPE_ONLY "
 )
 
 // testEcho exercises the test cases provided by the "echo" service.
@@ -108,8 +96,6 @@ func testEcho(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgateconn.VTG
 	testEchoExecute(t, conn, session)
 	testEchoStreamExecute(t, conn, session)
 	testEchoTransactionExecute(t, conn)
-	testEchoSplitQuery(t, conn)
-	testEchoUpdateStream(t, conn)
 }
 
 func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgateconn.VTGateSession) {
@@ -134,7 +120,6 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgatec
 		"bindVars":   bindVarsEcho,
 		"tabletType": tabletTypeEcho,
 		"options":    optionsEcho,
-		"extras":     extrasEcho,
 	})
 
 	qr, err = conn.ExecuteKeyspaceIds(ctx, echoPrefix+query, keyspace, keyspaceIDs, bindVars, tabletType, options)
@@ -146,7 +131,6 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgatec
 		"bindVars":    bindVarsEcho,
 		"tabletType":  tabletTypeEcho,
 		"options":     optionsEcho,
-		"extras":      extrasEcho,
 	})
 
 	qr, err = conn.ExecuteKeyRanges(ctx, echoPrefix+query, keyspace, keyRanges, bindVars, tabletType, options)
@@ -158,7 +142,6 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgatec
 		"bindVars":   bindVarsEcho,
 		"tabletType": tabletTypeEcho,
 		"options":    optionsEcho,
-		"extras":     extrasEcho,
 	})
 
 	qr, err = conn.ExecuteEntityIds(ctx, echoPrefix+query, keyspace, "column1", entityKeyspaceIDs, bindVars, tabletType, options)
@@ -171,7 +154,6 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgatec
 		"bindVars":         bindVarsEcho,
 		"tabletType":       tabletTypeEcho,
 		"options":          optionsEcho,
-		"extras":           extrasEcho,
 	})
 
 	var qrs []sqltypes.Result
@@ -402,45 +384,6 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 	})
 }
 
-func testEchoSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
-	want := &vtgatepb.SplitQueryResponse_Part{
-		Query: &querypb.BoundQuery{
-			Sql:           echoPrefix + query + ":[split_column1,split_column2]:123:1000:FULL_SCAN",
-			BindVariables: bindVars,
-		},
-		KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{Keyspace: keyspace},
-	}
-	got, err := conn.SplitQuery(context.Background(), keyspace, echoPrefix+query, bindVars, []string{"split_column1,split_column2"}, 123, 1000, querypb.SplitQueryRequest_FULL_SCAN)
-	if err != nil {
-		t.Fatalf("SplitQuery error: %v", err)
-	}
-	// For some reason, proto.Equal() is calling them unequal even though no diffs
-	// are found.
-	gotstr, wantstr := got[0].String(), want.String()
-	if gotstr != wantstr {
-		t.Errorf("SplitQuery() = %v, want %v", gotstr, wantstr)
-	}
-}
-
-func testEchoUpdateStream(t *testing.T, conn *vtgateconn.VTGateConn) {
-	var stream vtgateconn.UpdateStreamReader
-	var err error
-
-	ctx := callerid.NewContext(context.Background(), callerID, nil)
-
-	stream, err = conn.UpdateStream(ctx, "conn_ks", echoPrefix+query, keyRanges[0], tabletType, 0, eventToken)
-	if err != nil {
-		t.Fatal(err)
-	}
-	se, _, err := stream.Recv()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if se.EventToken.Position != updateStreamEcho {
-		t.Errorf("UpdateStream(0) =\n%v, want\n%v", se.EventToken.Position, updateStreamEcho)
-	}
-}
-
 // getEcho extracts the echoed field values from a query result.
 func getEcho(qr *sqltypes.Result) map[string]sqltypes.Value {
 	values := map[string]sqltypes.Value{}
@@ -461,13 +404,6 @@ func checkEcho(t *testing.T, name string, qr *sqltypes.Result, err error, want m
 	}
 	got := getEcho(qr)
 	for k, v := range want {
-		if k == "extras" {
-			gotExtras := qr.Extras.String()
-			if gotExtras != v {
-				t.Errorf("%v: extras = \n%q, want \n%q", name, gotExtras, v)
-			}
-			continue
-		}
 		if got[k].ToString() != v {
 			t.Errorf("%v: %v = \n%q, want \n%q", name, k, got[k], v)
 		}

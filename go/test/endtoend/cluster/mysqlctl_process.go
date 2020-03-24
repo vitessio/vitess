@@ -43,14 +43,17 @@ type MysqlctlProcess struct {
 
 // InitDb executes mysqlctl command to add cell info
 func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
-	tmpProcess := exec.Command(
-		mysqlctl.Binary,
-		"-log_dir", mysqlctl.LogDirectory,
+	args := []string{"-log_dir", mysqlctl.LogDirectory,
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 		"-mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
 		"init",
-		"-init_db_sql_file", mysqlctl.InitDBFile,
-	)
+		"-init_db_sql_file", mysqlctl.InitDBFile}
+	if *isCoverage {
+		args = append([]string{"-test.coverprofile=" + getCoveragePath("mysql-initdb.out"), "-test.v"}, args...)
+	}
+	tmpProcess := exec.Command(
+		mysqlctl.Binary,
+		args...)
 	return tmpProcess.Run()
 }
 
@@ -71,6 +74,9 @@ func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 		"-mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
 	)
+	if *isCoverage {
+		tmpProcess.Args = append(tmpProcess.Args, []string{"-test.coverprofile=" + getCoveragePath("mysql-start.out")}...)
+	}
 
 	if len(mysqlctl.ExtraArgs) > 0 {
 		tmpProcess.Args = append(tmpProcess.Args, mysqlctl.ExtraArgs...)
@@ -91,7 +97,6 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 		return err
 	}
 	return tmpProcess.Wait()
-
 }
 
 // StopProcess executes mysqlctl command to stop mysql instance and returns process reference
@@ -100,6 +105,9 @@ func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
 		mysqlctl.Binary,
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 	)
+	if *isCoverage {
+		tmpProcess.Args = append(tmpProcess.Args, []string{"-test.coverprofile=" + getCoveragePath("mysql-stop.out")}...)
+	}
 	if len(mysqlctl.ExtraArgs) > 0 {
 		tmpProcess.Args = append(tmpProcess.Args, mysqlctl.ExtraArgs...)
 	}
@@ -134,11 +142,7 @@ func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) 
 // StartMySQL starts mysqlctl process
 func StartMySQL(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) error {
 	tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
-	err := tablet.MysqlctlProcess.Start()
-	if err != nil {
-		return err
-	}
-	return nil
+	return tablet.MysqlctlProcess.Start()
 }
 
 // StartMySQLAndGetConnection create a connection to tablet mysql
@@ -153,8 +157,7 @@ func StartMySQLAndGetConnection(ctx context.Context, tablet *Vttablet, username 
 		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tablet.TabletUID), "/mysql.sock"),
 	}
 
-	conn, err := mysql.Connect(ctx, &params)
-	return conn, err
+	return mysql.Connect(ctx, &params)
 }
 
 // ExecuteCommandWithOutput executes any mysqlctl command and returns output

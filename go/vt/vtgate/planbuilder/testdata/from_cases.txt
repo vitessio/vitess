@@ -715,7 +715,9 @@
     "Query": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id",
     "FieldQuery": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id where 1 != 1",
     "Vindex": "user_index",
-    "Values": [5],
+    "Values": [
+      5
+    ],
     "Table": "user"
   }
 }
@@ -770,7 +772,9 @@
       "Query": "select user.col from user where user.id = 5",
       "FieldQuery": "select user.col from user where 1 != 1",
       "Vindex": "user_index",
-      "Values": [5],
+      "Values": [
+        5
+      ],
       "Table": "user"
     },
     "Right": {
@@ -804,7 +808,9 @@
       "Query": "select user.col from user where user.id = 5",
       "FieldQuery": "select user.col from user where 1 != 1",
       "Vindex": "user_index",
-      "Values": [5],
+      "Values": [
+        5
+      ],
       "Table": "user"
     },
     "Right": {
@@ -883,7 +889,9 @@
       "Query": "select user.col from user where user.name = :user_extra_user_id",
       "FieldQuery": "select user.col from user where 1 != 1",
       "Vindex": "name_user_map",
-      "Values": [":user_extra_user_id"],
+      "Values": [
+        ":user_extra_user_id"
+      ],
       "Table": "user"
     },
     "Cols": [
@@ -1004,7 +1012,9 @@
     "Query": "select id from (select id, col from user where id = 5) as t",
     "FieldQuery": "select id from (select id, col from user where 1 != 1) as t where 1 != 1",
     "Vindex": "user_index",
-    "Values": [5],
+    "Values": [
+      5
+    ],
     "Table": "user"
   }
 }
@@ -1022,7 +1032,9 @@
     "Query": "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.user_id",
     "FieldQuery": "select t.id from (select id from user where 1 != 1) as t join user_extra on t.id = user_extra.user_id where 1 != 1",
     "Vindex": "user_index",
-    "Values": [5],
+    "Values": [
+      5
+    ],
     "Table": "user"
   }
 }
@@ -1040,7 +1052,9 @@
     "Query": "select t.id from (select user.id from user where user.id = 5) as t join user_extra on t.id = user_extra.user_id",
     "FieldQuery": "select t.id from (select user.id from user where 1 != 1) as t join user_extra on t.id = user_extra.user_id where 1 != 1",
     "Vindex": "user_index",
-    "Values": [5],
+    "Values": [
+      5
+    ],
     "Table": "user"
   }
 }
@@ -1080,7 +1094,9 @@
       "Query": "select t.id from (select id from user where id = 5) as t",
       "FieldQuery": "select t.id from (select id from user where 1 != 1) as t where 1 != 1",
       "Vindex": "user_index",
-      "Values": [5],
+      "Values": [
+        5
+      ],
       "Table": "user"
     },
     "Right": {
@@ -1115,7 +1131,9 @@
     "Query": "select id from (select id, col from user as route1 where id = 5) as t",
     "FieldQuery": "select id from (select id, col from user as route1 where 1 != 1) as t where 1 != 1",
     "Vindex": "user_index",
-    "Values": [5],
+    "Values": [
+      5
+    ],
     "Table": "user"
   }
 }
@@ -1173,7 +1191,9 @@
     "Query": "select u.col, e.col from (select col from user where id = 5) as u join (select col from user_extra where user_id = 5) as e",
     "FieldQuery": "select u.col, e.col from (select col from user where 1 != 1) as u join (select col from user_extra where 1 != 1) as e where 1 != 1",
     "Vindex": "user_index",
-    "Values": [5],
+    "Values": [
+      5
+    ],
     "Table": "user"
   }
 }
@@ -1369,7 +1389,6 @@
     }
   }
 }
-
 
 # Join with cross-shard subquery on rhs
 "select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t"
@@ -1747,7 +1766,7 @@
 
 # subquery with join primitive (FROM)
 "select id, t.id from (select user.id from user join user_extra) as t"
-{ 
+{
   "Original": "select id, t.id from (select user.id from user join user_extra) as t",
   "Instructions": {
     "Cols": [

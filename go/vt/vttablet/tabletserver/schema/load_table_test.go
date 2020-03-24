@@ -17,15 +17,14 @@ limitations under the License.
 package schema
 
 import (
-	"errors"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -33,8 +32,6 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
-
-var errRejected = errors.New("rejected")
 
 func TestLoadTable(t *testing.T) {
 	db := fakesqldb.New(t)
@@ -46,59 +43,20 @@ func TestLoadTable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(table.PKColumns) != 1 {
-		t.Fatalf("table should have one PK column although the cardinality is invalid")
+	want := &Table{
+		Name: sqlparser.NewTableIdent("test_table"),
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "name",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "addr",
+			Type: sqltypes.Int32,
+		}},
 	}
-	if len(table.Indexes) != 3 {
-		t.Fatalf("table should have three indexes")
-	}
-	if count := table.UniqueIndexes(); count != 2 {
-		t.Errorf("table.UniqueIndexes(): %d expected 2", count)
-	}
-	if idx := table.Indexes[0].FindColumn(sqlparser.NewColIdent("pk")); idx != 0 {
-		t.Errorf("table.Indexes[0].FindColumn(pk): %d, want 0", idx)
-	}
-	if idx := table.Indexes[0].FindColumn(sqlparser.NewColIdent("none")); idx != -1 {
-		t.Errorf("table.Indexes[0].FindColumn(none): %d, want 0", idx)
-	}
-	if name := table.GetPKColumn(0).Name.String(); name != "pk" {
-		t.Errorf("table.GetPKColumn(0): %s, want pk", name)
-	}
-	if unique := table.Indexes[0].Unique; unique != true {
-		t.Errorf("table.Indexes[0].Unique: expected true")
-	}
-	if idx := table.Indexes[1].FindColumn(sqlparser.NewColIdent("pk")); idx != 0 {
-		t.Errorf("table.Indexes[1].FindColumn(pk): %d, want 0", idx)
-	}
-	if idx := table.Indexes[1].FindColumn(sqlparser.NewColIdent("name")); idx != 1 {
-		t.Errorf("table.Indexes[1].FindColumn(name): %d, want 1", idx)
-	}
-	if idx := table.Indexes[1].FindColumn(sqlparser.NewColIdent("addr")); idx != -1 {
-		t.Errorf("table.Indexes[1].FindColumn(pk): %d, want -1", idx)
-	}
-	if unique := table.Indexes[1].Unique; unique != true {
-		t.Errorf("table.Indexes[1].Unique: expected true")
-	}
-	if idx := table.Indexes[2].FindColumn(sqlparser.NewColIdent("addr")); idx != 0 {
-		t.Errorf("table.Indexes[1].FindColumn(addr): %d, want 0", idx)
-	}
-	if unique := table.Indexes[2].Unique; unique != false {
-		t.Errorf("table.Indexes[2].Unique: expected false")
-	}
-}
-
-func TestLoadTableFailBecauseUnableToRetrieveTableIndex(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range getTestLoadTableQueries() {
-		db.AddQuery(query, result)
-	}
-	db.AddRejectedQuery("show index from test_table", errRejected)
-	_, err := newTestLoadTable("USER_TABLE", "test table", db)
-	want := "rejected"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("LoadTable: %v, must contain %s", err, want)
-	}
+	assert.Equal(t, want, table)
 }
 
 func TestLoadTableSequence(t *testing.T) {
@@ -116,8 +74,7 @@ func TestLoadTableSequence(t *testing.T) {
 		Type:         Sequence,
 		SequenceInfo: &SequenceInfo{},
 	}
-	table.Columns = nil
-	table.Indexes = nil
+	table.Fields = nil
 	table.PKColumns = nil
 	if !reflect.DeepEqual(table, want) {
 		t.Errorf("Table:\n%#v, want\n%#v", table, want)
@@ -137,13 +94,25 @@ func TestLoadTableMessage(t *testing.T) {
 	want := &Table{
 		Name: sqlparser.NewTableIdent("test_table"),
 		Type: Message,
+		Fields: []*querypb.Field{{
+			Name: "id",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "time_next",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "epoch",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "time_acked",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "message",
+			Type: sqltypes.VarBinary,
+		}},
 		MessageInfo: &MessageInfo{
-			IDPKIndex: 1,
 			Fields: []*querypb.Field{{
 				Name: "id",
-				Type: sqltypes.Int64,
-			}, {
-				Name: "time_scheduled",
 				Type: sqltypes.Int64,
 			}, {
 				Name: "message",
@@ -156,13 +125,7 @@ func TestLoadTableMessage(t *testing.T) {
 			PollInterval:       30 * time.Second,
 		},
 	}
-	table.Columns = nil
-	table.Indexes = nil
-	table.PKColumns = nil
-	if !reflect.DeepEqual(table, want) {
-		t.Errorf("Table:\n%+v, want\n%+v", table, want)
-		t.Errorf("Table:\n%+v, want\n%+v", table.MessageInfo, want.MessageInfo)
-	}
+	assert.Equal(t, want, table)
 
 	// Missing property
 	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_ack_wait=30", db)
@@ -171,25 +134,6 @@ func TestLoadTableMessage(t *testing.T) {
 		t.Errorf("newTestLoadTable: %v, want %s", err, wanterr)
 	}
 
-	// id column must be part of primary key.
-	for query, result := range getMessageTableQueries() {
-		db.AddQuery(query, result)
-	}
-	db.AddQuery(
-		"show index from test_table",
-		&sqltypes.Result{
-			Fields:       mysql.ShowIndexFromTableFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "time_scheduled", false),
-			},
-		})
-	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
-	wanterr = "id column is not part of the primary key for message table: test_table"
-	if err == nil || err.Error() != wanterr {
-		t.Errorf("newTestLoadTable: %v, want %s", err, wanterr)
-	}
-
 	for query, result := range getTestLoadTableQueries() {
 		db.AddQuery(query, result)
 	}
@@ -197,99 +141,6 @@ func TestLoadTableMessage(t *testing.T) {
 	wanterr = "missing from message table: test_table"
 	if err == nil || !strings.Contains(err.Error(), wanterr) {
 		t.Errorf("newTestLoadTable: %v, must contain %s", err, wanterr)
-	}
-}
-
-func TestLoadTableMessageTopic(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range getMessageTableQueries() {
-		db.AddQuery(query, result)
-	}
-	table, err := newTestLoadTable("USER_TABLE", "vitess_message,vt_topic=test_topic,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := &Table{
-		Name: sqlparser.NewTableIdent("test_table"),
-		Type: Message,
-		MessageInfo: &MessageInfo{
-			IDPKIndex: 1,
-			Fields: []*querypb.Field{{
-				Name: "id",
-				Type: sqltypes.Int64,
-			}, {
-				Name: "time_scheduled",
-				Type: sqltypes.Int64,
-			}, {
-				Name: "message",
-				Type: sqltypes.VarBinary,
-			}},
-			AckWaitDuration:    30 * time.Second,
-			PurgeAfterDuration: 120 * time.Second,
-			BatchSize:          1,
-			CacheSize:          10,
-			PollInterval:       30 * time.Second,
-			Topic:              "test_topic",
-		},
-	}
-	table.Columns = nil
-	table.Indexes = nil
-	table.PKColumns = nil
-	if !reflect.DeepEqual(table, want) {
-		t.Errorf("Table:\n%+v, want\n%+v", table, want)
-		t.Errorf("Table:\n%+v, want\n%+v", table.MessageInfo, want.MessageInfo)
-	}
-
-	// Missing property
-	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_topic=test_topic,vt_ack_wait=30", db)
-	wanterr := "not specified for message table"
-	if err == nil || !strings.Contains(err.Error(), wanterr) {
-		t.Errorf("newTestLoadTable: %v, want %s", err, wanterr)
-	}
-
-	// id column must be part of primary key.
-	for query, result := range getMessageTableQueries() {
-		db.AddQuery(query, result)
-	}
-	db.AddQuery(
-		"show index from test_table",
-		&sqltypes.Result{
-			Fields:       mysql.ShowIndexFromTableFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "time_scheduled", false),
-			},
-		})
-	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_topic=test_topic,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
-	wanterr = "id column is not part of the primary key for message table: test_table"
-	if err == nil || err.Error() != wanterr {
-		t.Errorf("newTestLoadTable: %v, want %s", err, wanterr)
-	}
-
-	for query, result := range getTestLoadTableQueries() {
-		db.AddQuery(query, result)
-	}
-	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_topic=test_topic,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
-	wanterr = "missing from message table: test_table"
-	if err == nil || !strings.Contains(err.Error(), wanterr) {
-		t.Errorf("newTestLoadTable: %v, must contain %s", err, wanterr)
-	}
-}
-
-func TestLoadTableWithBitColumn(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range getTestLoadTableWithBitColumnQueries() {
-		db.AddQuery(query, result)
-	}
-	table, err := newTestLoadTable("USER_TABLE", "test table", db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantValue := sqltypes.MakeTrusted(sqltypes.Bit, []byte{1, 0, 1})
-	if got, want := table.Columns[1].Default, wantValue; !reflect.DeepEqual(got, want) {
-		t.Errorf("Default bit value: %v, want %v", got, want)
 	}
 }
 
@@ -323,25 +174,6 @@ func getTestLoadTableQueries() map[string]*sqltypes.Result {
 				Type: sqltypes.Int32,
 			}},
 		},
-		"describe test_table": {
-			Fields:       mysql.DescribeTableFields,
-			RowsAffected: 3,
-			Rows: [][]sqltypes.Value{
-				mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
-				mysql.DescribeTableRow("name", "int(11)", false, "", "0"),
-				mysql.DescribeTableRow("addr", "int(11)", false, "", "0"),
-			},
-		},
-		"show index from test_table": {
-			Fields:       mysql.ShowIndexFromTableFields,
-			RowsAffected: 3,
-			Rows: [][]sqltypes.Value{
-				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false),
-				mysql.ShowIndexFromTableRow("test_table", true, "index", 1, "pk", false),
-				mysql.ShowIndexFromTableRow("test_table", true, "index", 2, "name", false),
-				mysql.ShowIndexFromTableRow("test_table", false, "index2", 1, "addr", false),
-			},
-		},
 	}
 }
 
@@ -351,7 +183,7 @@ func getMessageTableQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		"select * from test_table where 1 != 1": {
 			Fields: []*querypb.Field{{
-				Name: "time_scheduled",
+				Name: "id",
 				Type: sqltypes.Int64,
 			}, {
 				Name: "time_next",
@@ -360,75 +192,12 @@ func getMessageTableQueries() map[string]*sqltypes.Result {
 				Name: "epoch",
 				Type: sqltypes.Int64,
 			}, {
-				Name: "time_created",
-				Type: sqltypes.Int64,
-			}, {
 				Name: "time_acked",
 				Type: sqltypes.Int64,
 			}, {
 				Name: "message",
 				Type: sqltypes.VarBinary,
-			}, {
-				Name: "id",
-				Type: sqltypes.Int64,
 			}},
-		},
-		"describe test_table": {
-			Fields:       mysql.DescribeTableFields,
-			RowsAffected: 7,
-			Rows: [][]sqltypes.Value{
-				mysql.DescribeTableRow("time_scheduled", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("time_next", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("epoch", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("time_created", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("time_acked", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("message", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("id", "bigint(20)", false, "PRI", "0"),
-			},
-		},
-		"show index from test_table": {
-			Fields:       mysql.ShowIndexFromTableFields,
-			RowsAffected: 2,
-			Rows: [][]sqltypes.Value{
-				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "time_scheduled", false),
-				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 2, "id", false),
-			},
-		},
-	}
-}
-
-func getTestLoadTableWithBitColumnQueries() map[string]*sqltypes.Result {
-	return map[string]*sqltypes.Result{
-		"select * from test_table where 1 != 1": {
-			Fields: []*querypb.Field{{
-				Name: "pk",
-				Type: sqltypes.Int32,
-			}, {
-				Name: "flags",
-				Type: sqltypes.Bit,
-			}},
-		},
-		"describe test_table": {
-			Fields:       mysql.DescribeTableFields,
-			RowsAffected: 2,
-			Rows: [][]sqltypes.Value{
-				mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
-				mysql.DescribeTableRow("flags", "int(11)", false, "", "b'101'"),
-			},
-		},
-		"show index from test_table": {
-			Fields:       mysql.ShowIndexFromTableFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false),
-			},
-		},
-		"select b'101'": {
-			Fields:       sqltypes.MakeTestFields("", "varbinary"),
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				{sqltypes.MakeTrusted(sqltypes.VarBinary, []byte{1, 0, 1})},
-			},
 		},
 	}
 }

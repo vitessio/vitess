@@ -80,8 +80,6 @@ install: build
 	# also symlink config files in the old location
 	ln -sf src/vitess.io/vitess/config "$${PREFIX}/config"
 	# vtctld web UI files
-	mkdir -p "$${PREFIX}/src/vitess.io/vitess/web"
-	cp -R web/vtctld "$${PREFIX}/src/vitess.io/vitess/web/"
 	mkdir -p "$${PREFIX}/src/vitess.io/vitess/web/vtctld2"
 	cp -R web/vtctld2/app "$${PREFIX}/src/vitess.io/vitess/web/vtctld2/"
 
@@ -89,16 +87,13 @@ parser:
 	make -C go/vt/sqlparser
 
 visitor:
-	go build -o visitorgen go/visitorgen/main/main.go
-	./visitorgen -input=go/vt/sqlparser/ast.go -output=$(REWRITER)
-	rm ./visitorgen
+	go generate go/vt/sqlparser/rewriter.go
 
 # To pass extra flags, run test.go manually.
 # For example: go run test.go -docker=false -- --extra-flag
 # For more info see: go run test.go -help
-test: build dependency_check
-	echo $$(date): Running unit tests
-	tools/unit_test_runner.sh
+test:
+	go run test.go -docker=false
 
 site_test: unit_test site_integration_test
 
@@ -115,6 +110,10 @@ cleanall: clean
 	rm -rf bin dist lib pkg
 	# Remind people to run bootstrap.sh again
 	echo "Please run 'make tools' again to setup your environment"
+
+unit_test: build dependency_check
+	echo $$(date): Running unit tests
+	tools/unit_test_runner.sh
 
 e2e_test: build
 	echo $$(date): Running endtoend tests
@@ -166,11 +165,10 @@ endif
 
 PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
-PROTO_PY_OUTS = $(foreach name, $(PROTO_SRC_NAMES), py/vtproto/$(name)_pb2.py)
 PROTO_GO_OUTS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/proto/$(name)/$(name).pb.go)
 
 # This rule rebuilds all the go and python files from the proto definitions for gRPC.
-proto: proto_banner $(PROTO_GO_OUTS) $(PROTO_PY_OUTS)
+proto: proto_banner $(PROTO_GO_OUTS)
 
 proto_banner:
 ifeq (,$(PROTOC_COMMAND))
@@ -180,9 +178,6 @@ endif
 ifndef NOBANNER
 	echo $$(date): Compiling proto definitions
 endif
-
-$(PROTO_PY_OUTS): py/vtproto/%_pb2.py: proto/%.proto
-	$(PROTOC_COMMAND) -Iproto $< --python_out=py/vtproto --grpc_python_out=py/vtproto
 
 # TODO(sougou): find a better way around this temp hack.
 VTTOP=$(VTROOT)/../../..
@@ -285,9 +280,6 @@ docker_lite_alpine:
 	chmod -R o=g *
 	docker build -f docker/lite/Dockerfile.alpine -t vitess/lite:alpine .
 
-docker_guestbook:
-	cd examples/kubernetes/guestbook && ./build.sh
-
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.
 # Example: $ make docker_test flavor=mariadb
@@ -328,11 +320,33 @@ packages: docker_base
 
 tools:
 	echo $$(date): Installing dependencies
-	BUILD_PYTHON=0 ./bootstrap.sh
+	./bootstrap.sh
 
 minimaltools:
 	echo $$(date): Installing minimal dependencies
-	BUILD_PYTHON=0 BUILD_JAVA=0 BUILD_CONSUL=0 ./bootstrap.sh
+	BUILD_JAVA=0 BUILD_CONSUL=0 ./bootstrap.sh
 
 dependency_check:
 	./tools/dependency_check.sh
+
+GEN_BASE_DIR ?= ./go/vt/topo/k8stopo
+
+client_go_gen:
+	echo $$(date): Regenerating client-go code
+	# Delete and re-generate the deepcopy types
+	find $(GEN_BASE_DIR)/apis/topo/v1beta1 -type f -name 'zz_generated*' -exec rm '{}' \;
+	deepcopy-gen -i $(GEN_BASE_DIR)/apis/topo/v1beta1 -O zz_generated.deepcopy -o ./ --bounding-dirs $(GEN_BASE_DIR)/apis --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
+
+	# Delete, generate, and move the client libraries
+	rm -rf go/vt/topo/k8stopo/client
+
+	# There is no way to get client-gen to automatically put files in the right place and still have the right import path so we generate and move them
+
+	# Generate client, informers, and listers
+	client-gen -o ./ --input 'topo/v1beta1' --clientset-name versioned --input-base 'vitess.io/vitess/go/vt/topo/k8stopo/apis/' -i vitess.io/vitess --output-package vitess.io/vitess/go/vt/topo/k8stopo/client/clientset --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
+	lister-gen -o ./ --input-dirs  vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1 --output-package vitess.io/vitess/go/vt/topo/k8stopo/client/listers --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
+	informer-gen -o ./ --input-dirs  vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1 --versioned-clientset-package vitess.io/vitess/go/vt/topo/k8stopo/client/clientset/versioned --listers-package vitess.io/vitess/go/vt/topo/k8stopo/client/listers --output-package vitess.io/vitess/go/vt/topo/k8stopo/client/informers --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
+
+	# Move and cleanup
+	mv vitess.io/vitess/go/vt/topo/k8stopo/client go/vt/topo/k8stopo/
+	rmdir -p vitess.io/vitess/go/vt/topo/k8stopo/

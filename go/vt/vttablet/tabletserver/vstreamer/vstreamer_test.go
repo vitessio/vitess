@@ -18,6 +18,7 @@ package vstreamer
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -116,14 +117,18 @@ func TestStatements(t *testing.T) {
 	runCases(t, nil, testcases, "current")
 
 	// Test FilePos flavor
-	engine.cp.Flavor = "FilePos"
-	defer func() { engine.cp.Flavor = "" }()
+	params, err := engine.cp.MysqlParams()
+	if err != nil {
+		t.Fatal(err)
+	}
+	params.Flavor = "FilePos"
+	defer func() { params.Flavor = "" }()
 	runCases(t, nil, testcases, "current")
 }
 
-// TestOther tests "other" statements. These statements produce
-// very different events depending on the version of mysql or mariadb
-// So, we just show that vreplication transmits "OTHER" events
+// TestOther tests "other" and "priv" statements. These statements can
+// produce very different events depending on the version of mysql or
+// mariadb. So, we just show that vreplication transmits "OTHER" events
 // if the binlog is affected by the statement.
 func TestOther(t *testing.T) {
 	if testing.Short() {
@@ -148,6 +153,8 @@ func TestOther(t *testing.T) {
 		"set @val=1",
 		"show tables",
 		"describe stream1",
+		"grant select on stream1 to current_user()",
+		"revoke select on stream1 from current_user()",
 	}
 
 	// customRun is a modified version of runCases.
@@ -180,8 +187,13 @@ func TestOther(t *testing.T) {
 	customRun("gtid")
 
 	// Test FilePos flavor
-	engine.cp.Flavor = "FilePos"
-	defer func() { engine.cp.Flavor = "" }()
+	params, err := engine.cp.MysqlParams()
+	if err != nil {
+		t.Fatal(err)
+	}
+	params.Flavor = "FilePos"
+
+	defer func() { params.Flavor = "" }()
 	customRun("filePos")
 }
 
@@ -1083,6 +1095,46 @@ func TestHeartbeat(t *testing.T) {
 	assert.Equal(t, binlogdatapb.VEventType_HEARTBEAT, evs[0].Type)
 }
 
+func TestNoFutureGTID(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	// Execute something to make sure we have ranges in GTIDs.
+	execStatements(t, []string{
+		"create table stream1(id int, val varbinary(128), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table stream1",
+	})
+	engine.se.Reload(context.Background())
+
+	pos := masterPosition(t)
+	t.Logf("current position: %v", pos)
+	// Both mysql and mariadb have '-' in their gtids.
+	// Invent a GTID in the future.
+	index := strings.LastIndexByte(pos, '-')
+	num, err := strconv.Atoi(pos[index+1:])
+	require.NoError(t, err)
+	future := pos[:index+1] + fmt.Sprintf("%d", num+1)
+	t.Logf("future position: %v", future)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := make(chan []*binlogdatapb.VEvent)
+	go func() {
+		for range ch {
+		}
+	}()
+	defer close(ch)
+	err = vstream(ctx, t, future, nil, ch)
+	want := "is ahead of current position"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, must contain %s", err, want)
+	}
+}
+
 func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1092,7 +1144,7 @@ func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, p
 	// If position is 'current', we wait for a heartbeat to be
 	// sure the vstreamer has started.
 	if position == "current" {
-		<-ch
+		expectLog(ctx, t, "current pos", ch, [][]string{{`gtid`, `type:OTHER `}})
 	}
 
 	for _, tcase := range testcases {
@@ -1160,9 +1212,6 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 					t.Fatalf("%v (%d): event: %v, want commit", input, i, evs[i])
 				}
 			default:
-				if evs[i].Timestamp == 0 {
-					t.Fatalf("evs[%d].Timestamp: 0, want non-zero", i)
-				}
 				evs[i].Timestamp = 0
 				if got := fmt.Sprintf("%v", evs[i]); got != want {
 					t.Fatalf("%v (%d): event:\n%q, want\n%q", input, i, got, want)
@@ -1223,7 +1272,11 @@ func masterPosition(t *testing.T) string {
 	// We use the engine's cp because there is one test that overrides
 	// the flavor to FilePos. If so, we have to obtain the position
 	// in that flavor format.
-	conn, err := mysql.Connect(context.Background(), engine.cp)
+	connParam, err := engine.cp.MysqlParams()
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := mysql.Connect(context.Background(), connParam)
 	if err != nil {
 		t.Fatal(err)
 	}

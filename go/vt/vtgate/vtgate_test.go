@@ -20,7 +20,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math"
 	"reflect"
 	"strings"
 	"testing"
@@ -29,9 +28,9 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 
@@ -95,9 +94,7 @@ func TestVTGateBegin(t *testing.T) {
 
 	rpcVTGate.txConn.mode = vtgatepb.TransactionMode_SINGLE
 	got, err := rpcVTGate.Begin(context.Background(), true)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantSession := &vtgatepb.Session{
 		InTransaction: true,
 		SingleDb:      true,
@@ -114,9 +111,7 @@ func TestVTGateBegin(t *testing.T) {
 
 	rpcVTGate.txConn.mode = vtgatepb.TransactionMode_MULTI
 	got, err = rpcVTGate.Begin(context.Background(), true)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{
 		InTransaction: true,
 		SingleDb:      true,
@@ -126,9 +121,7 @@ func TestVTGateBegin(t *testing.T) {
 	}
 
 	got, err = rpcVTGate.Begin(context.Background(), false)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{
 		InTransaction: true,
 	}
@@ -138,9 +131,7 @@ func TestVTGateBegin(t *testing.T) {
 
 	rpcVTGate.txConn.mode = vtgatepb.TransactionMode_TWOPC
 	got, err = rpcVTGate.Begin(context.Background(), true)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{
 		InTransaction: true,
 		SingleDb:      true,
@@ -150,9 +141,7 @@ func TestVTGateBegin(t *testing.T) {
 	}
 
 	got, err = rpcVTGate.Begin(context.Background(), false)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{
 		InTransaction: true,
 	}
@@ -182,9 +171,7 @@ func TestVTGateCommit(t *testing.T) {
 		InTransaction: true,
 	}
 	err = rpcVTGate.Commit(context.Background(), false, session)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	rpcVTGate.txConn.mode = vtgatepb.TransactionMode_MULTI
 	session = &vtgatepb.Session{
@@ -199,33 +186,25 @@ func TestVTGateCommit(t *testing.T) {
 		InTransaction: true,
 	}
 	err = rpcVTGate.Commit(context.Background(), false, session)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	rpcVTGate.txConn.mode = vtgatepb.TransactionMode_TWOPC
 	session = &vtgatepb.Session{
 		InTransaction: true,
 	}
 	err = rpcVTGate.Commit(context.Background(), true, session)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	session = &vtgatepb.Session{
 		InTransaction: true,
 	}
 	err = rpcVTGate.Commit(context.Background(), false, session)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestVTGateRollbackNil(t *testing.T) {
 	err := rpcVTGate.Rollback(context.Background(), nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestVTGateExecute(t *testing.T) {
@@ -253,9 +232,7 @@ func TestVTGateExecute(t *testing.T) {
 	}
 
 	session, err := rpcVTGate.Begin(context.Background(), false)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !session.InTransaction {
 		t.Errorf("want true, got false")
 	}
@@ -275,6 +252,7 @@ func TestVTGateExecute(t *testing.T) {
 			},
 			TransactionId: 1,
 		}},
+		FoundRows: 1,
 	}
 	if !proto.Equal(wantSession, session) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
@@ -1133,89 +1111,6 @@ func TestVTGateStreamExecuteShards(t *testing.T) {
 	}
 }
 
-func TestVTGateSplitQuerySharded(t *testing.T) {
-	keyspace := "TestVTGateSplitQuery"
-	keyranges, err := key.ParseShardingSpec(DefaultShardSpec)
-	if err != nil {
-		t.Fatalf("got: %v, want: nil", err)
-	}
-	createSandbox(keyspace)
-	hcVTGateTest.Reset()
-	port := int32(1001)
-	for _, kr := range keyranges {
-		hcVTGateTest.AddTestTablet("aa", "1.1.1.1", port, keyspace, key.KeyRangeString(kr), topodatapb.TabletType_RDONLY, true, 1, nil)
-		port++
-	}
-	sql := "select col1, col2 from table"
-	bindVars := map[string]*querypb.BindVariable{}
-	splitColumns := []string{"sc1", "sc2"}
-	algorithm := querypb.SplitQueryRequest_FULL_SCAN
-	type testCaseType struct {
-		splitCount          int64
-		numRowsPerQueryPart int64
-	}
-	testCases := []testCaseType{
-		{splitCount: 100, numRowsPerQueryPart: 0},
-		{splitCount: 0, numRowsPerQueryPart: 123},
-	}
-	for _, testCase := range testCases {
-		splits, err := rpcVTGate.SplitQuery(
-			context.Background(),
-			keyspace,
-			sql,
-			bindVars,
-			splitColumns,
-			testCase.splitCount,
-			testCase.numRowsPerQueryPart,
-			algorithm)
-		if err != nil {
-			t.Errorf("got %v, want: nil. testCase: %+v", err, testCase)
-		}
-		// Total number of splits should be number of shards as our sandbox returns a single split
-		// for its fake implementation of SplitQuery.
-		if len(keyranges) != len(splits) {
-			t.Errorf("wrong number of splits, got %+v, want %+v. testCase:\n%+v",
-				len(splits), len(keyranges), testCase)
-		}
-		actualSqlsByKeyRange := map[string][]string{}
-		for _, split := range splits {
-			if split.KeyRangePart.Keyspace != keyspace {
-				t.Errorf("wrong keyspace, got \n%+v, want \n%+v. testCase:\n%+v",
-					keyspace, split.KeyRangePart.Keyspace, testCase)
-			}
-			if len(split.KeyRangePart.KeyRanges) != 1 {
-				t.Errorf("wrong number of keyranges, got \n%+v, want \n%+v. testCase:\n%+v",
-					1, len(split.KeyRangePart.KeyRanges), testCase)
-			}
-			kr := key.KeyRangeString(split.KeyRangePart.KeyRanges[0])
-			actualSqlsByKeyRange[kr] = append(actualSqlsByKeyRange[kr], split.Query.Sql)
-		}
-		expectedSqlsByKeyRange := map[string][]string{}
-		for _, kr := range keyranges {
-			perShardSplitCount := int64(math.Ceil(float64(testCase.splitCount) / float64(len(keyranges))))
-			shard := key.KeyRangeString(kr)
-			expectedSqlsByKeyRange[shard] = []string{
-				fmt.Sprintf(
-					"query:%v, splitColumns:%v, splitCount:%v,"+
-						" numRowsPerQueryPart:%v, algorithm:%v, shard:%v",
-					&querypb.BoundQuery{Sql: sql, BindVariables: map[string]*querypb.BindVariable{}},
-					splitColumns,
-					perShardSplitCount,
-					testCase.numRowsPerQueryPart,
-					algorithm,
-					shard,
-				),
-			}
-		}
-		if !reflect.DeepEqual(actualSqlsByKeyRange, expectedSqlsByKeyRange) {
-			t.Errorf(
-				"splits contain the wrong sqls and/or keyranges, "+
-					"got:\n%+v\n, want:\n%+v\n. testCase:\n%+v",
-				actualSqlsByKeyRange, expectedSqlsByKeyRange, testCase)
-		}
-	}
-}
-
 func TestVTGateMessageStreamSharded(t *testing.T) {
 	ks := "TestVTGateMessageStreamSharded"
 	createSandbox(ks)
@@ -1438,9 +1333,7 @@ func TestVTGateMessageAck(t *testing.T) {
 		Value: []byte("2"),
 	}}
 	count, err := rpcVTGate.MessageAck(context.Background(), ks, "msg", ids)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if count != 2 {
 		t.Errorf("MessageAck: %d, want 2", count)
 	}
@@ -1469,9 +1362,7 @@ func TestVTGateMessageAckKeyspaceIds(t *testing.T) {
 		},
 	}
 	count, err := rpcVTGate.MessageAckKeyspaceIds(context.Background(), ks, "msg", idKeyspaceIDs)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if count != 2 {
 		t.Errorf("MessageAck: %d, want 2", count)
 	}
@@ -1484,74 +1375,6 @@ func TestVTGateMessageAckKeyspaceIds(t *testing.T) {
 	}}
 	if !sqltypes.Proto3ValuesEqual(sbc.MessageIDs, wantids) {
 		t.Errorf("sbc1.MessageIDs: %v, want %v", sbc.MessageIDs, wantids)
-	}
-}
-
-func TestVTGateSplitQueryUnsharded(t *testing.T) {
-	keyspace := KsTestUnsharded
-	createSandbox(keyspace)
-	hcVTGateTest.Reset()
-	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, keyspace, "0", topodatapb.TabletType_RDONLY, true, 1, nil)
-	sql := "select col1, col2 from table"
-	bindVars := map[string]*querypb.BindVariable{}
-	splitColumns := []string{"sc1", "sc2"}
-	algorithm := querypb.SplitQueryRequest_FULL_SCAN
-	type testCaseType struct {
-		splitCount          int64
-		numRowsPerQueryPart int64
-	}
-	testCases := []testCaseType{
-		{splitCount: 100, numRowsPerQueryPart: 0},
-		{splitCount: 0, numRowsPerQueryPart: 123},
-	}
-	for _, testCase := range testCases {
-		splits, err := rpcVTGate.SplitQuery(
-			context.Background(),
-			keyspace,
-			sql,
-			bindVars,
-			splitColumns,
-			testCase.splitCount,
-			testCase.numRowsPerQueryPart,
-			algorithm)
-		if err != nil {
-			t.Errorf("got %v, want: nil. testCase: %+v", err, testCase)
-		}
-		// Total number of splits should be number of shards (1) as our sandbox returns a single split
-		// for its fake implementation of SplitQuery.
-		if len(splits) != 1 {
-			t.Errorf("wrong number of splits, got %+v, want %+v. testCase:\n%+v",
-				len(splits), 1, testCase)
-			continue
-		}
-		split := splits[0]
-		if split.KeyRangePart != nil {
-			t.Errorf("KeyRangePart should not be populated. Got:\n%+v\n, testCase:\n%+v\n",
-				keyspace, split.KeyRangePart)
-		}
-		if split.ShardPart.Keyspace != keyspace {
-			t.Errorf("wrong keyspace, got \n%+v, want \n%+v. testCase:\n%+v",
-				keyspace, split.ShardPart.Keyspace, testCase)
-		}
-		if len(split.ShardPart.Shards) != 1 {
-			t.Errorf("wrong number of shards, got \n%+v, want \n%+v. testCase:\n%+v",
-				1, len(split.ShardPart.Shards), testCase)
-		}
-		expectedShard := "0"
-		expectedSQL := fmt.Sprintf(
-			"query:%v, splitColumns:%v, splitCount:%v,"+
-				" numRowsPerQueryPart:%v, algorithm:%v, shard:%v",
-			&querypb.BoundQuery{Sql: sql, BindVariables: map[string]*querypb.BindVariable{}},
-			splitColumns,
-			testCase.splitCount,
-			testCase.numRowsPerQueryPart,
-			algorithm,
-			expectedShard,
-		)
-		if split.Query.Sql != expectedSQL {
-			t.Errorf("got:\n%v\n, want:\n%v\n, testCase:\n%+v",
-				split.Query.Sql, expectedSQL, testCase)
-		}
 	}
 }
 
@@ -1651,12 +1474,6 @@ func TestVTGateBindVarError(t *testing.T) {
 		name: "StreamExecuteShards",
 		f: func() error {
 			return rpcVTGate.StreamExecuteShards(ctx, "", bindVars, "", []string{}, topodatapb.TabletType_MASTER, nil, func(_ *sqltypes.Result) error { return nil })
-		},
-	}, {
-		name: "SplitQuery",
-		f: func() error {
-			_, err := rpcVTGate.SplitQuery(ctx, "", "", bindVars, []string{}, 0, 0, querypb.SplitQueryRequest_FULL_SCAN)
-			return err
 		},
 	}}
 	for _, tcase := range tcases {
@@ -2378,36 +2195,12 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	}
 
 	// Rollback is skipped, it doesn't forward errors.
-
-	// SplitQuery
-	for _, sbc := range sbcs {
-		before(sbc)
-	}
-	_, err = rpcVTGate.SplitQuery(context.Background(),
-		KsTestUnsharded,
-		"select col1, col2 from table",
-		nil,
-		[]string{"sc1", "sc2"},
-		100,
-		0,
-		querypb.SplitQueryRequest_FULL_SCAN)
-	if err == nil {
-		t.Errorf("error %v not propagated for SplitQuery", expected)
-	} else {
-		ec := vterrors.Code(err)
-		if ec != expected {
-			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
-		}
-	}
-	for _, sbc := range sbcs {
-		after(sbc)
-	}
 }
 
 // TestErrorPropagation tests an error returned by sandboxconn is
 // properly propagated through vtgate layers.  We need both a master
 // tablet and a rdonly tablet because we don't control the routing of
-// Commit nor SplitQuery{,V2}.
+// Commit.
 func TestErrorPropagation(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()

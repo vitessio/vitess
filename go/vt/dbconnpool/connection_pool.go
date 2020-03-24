@@ -29,9 +29,9 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -56,7 +56,7 @@ type ConnectionPool struct {
 	resolutionFrequency time.Duration
 
 	// info and mysqlStats are set at Open() time
-	info      *mysql.ConnParams
+	info      dbconfigs.Connector
 	addresses []net.IP
 
 	ticker      *time.Ticker
@@ -65,12 +65,13 @@ type ConnectionPool struct {
 	hostIsNotIP bool
 
 	mysqlStats *stats.Timings
+	name       string
 }
 
 // NewConnectionPool creates a new ConnectionPool. The name is used
 // to publish stats only.
 func NewConnectionPool(name string, capacity int, idleTimeout time.Duration, dnsResolutionFrequency time.Duration) *ConnectionPool {
-	cp := &ConnectionPool{capacity: capacity, idleTimeout: idleTimeout, resolutionFrequency: dnsResolutionFrequency}
+	cp := &ConnectionPool{name: name, capacity: capacity, idleTimeout: idleTimeout, resolutionFrequency: dnsResolutionFrequency}
 	if name == "" || usedNames[name] {
 		return cp
 	}
@@ -97,7 +98,7 @@ func (cp *ConnectionPool) pool() (p *pools.ResourcePool) {
 
 func (cp *ConnectionPool) refreshdns() {
 	cp.mu.Lock()
-	host := cp.info.Host
+	host := cp.info.Host()
 	cp.mu.Unlock()
 
 	addrs, err := net.LookupHost(host)
@@ -141,14 +142,14 @@ func (cp *ConnectionPool) validAddress(addr net.IP) bool {
 // ...
 // conn, err := pool.Get()
 // ...
-func (cp *ConnectionPool) Open(info *mysql.ConnParams, mysqlStats *stats.Timings) {
+func (cp *ConnectionPool) Open(info dbconfigs.Connector, mysqlStats *stats.Timings) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	cp.info = info
 	cp.mysqlStats = mysqlStats
-	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 0)
+	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 0, cp.getLogWaitCallback())
 	// Check if we need to resolve a hostname (The Host is not just an IP  address).
-	if cp.resolutionFrequency > 0 && net.ParseIP(info.Host) == nil {
+	if cp.resolutionFrequency > 0 && net.ParseIP(info.Host()) == nil {
 		cp.hostIsNotIP = true
 		cp.ticker = time.NewTicker(cp.resolutionFrequency)
 		cp.stop = make(chan struct{})
@@ -165,6 +166,15 @@ func (cp *ConnectionPool) Open(info *mysql.ConnParams, mysqlStats *stats.Timings
 			}
 
 		}()
+	}
+}
+
+func (cp *ConnectionPool) getLogWaitCallback() func(time.Time) {
+	if cp.name == "" {
+		return func(start time.Time) {} // no op
+	}
+	return func(start time.Time) {
+		cp.mysqlStats.Record(cp.name+"ResourceWaitTime", start)
 	}
 }
 
