@@ -637,7 +637,6 @@ func (vs *vstreamer) buildTableColumns(id uint64, tm *mysql.TableMap) ([]*queryp
 		if !sqltypes.AreTypesEquivalent(fields[i].Type, st.Fields[i].Type) {
 			return fields, nil
 		}
-		cols[i].Type = st.Columns[i].Type
 	}
 
 	// Columns should be truncated to match those in tm.
