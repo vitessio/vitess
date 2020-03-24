@@ -17,8 +17,6 @@ limitations under the License.
 package k8stopo
 
 import (
-	"encoding/base64"
-
 	"golang.org/x/net/context"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/tools/cache"
@@ -55,9 +53,17 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 	// Create a signal channel for non-interrupt shutdowns
 	gracefulShutdown := make(chan struct{})
 
+	resource, err := s.buildFileResource(filePath, []byte{})
+	if err != nil {
+		// Per the topo.Conn interface:
+		// current.Err is set, and 'changes'/'cancel' are nil
+		current.Err = err
+		return current, nil, nil
+	}
+
 	// Create the informer / indexer to watch the single resource
 	restClient := s.vtKubeClient.TopoV1beta1().RESTClient()
-	listwatch := cache.NewListWatchFromClient(restClient, "vitesstoponodes", s.namespace, fields.OneTermEqualSelector("metadata.name", s.buildFileResource(filePath, []byte{}).Name))
+	listwatch := cache.NewListWatchFromClient(restClient, "vitesstoponodes", s.namespace, fields.OneTermEqualSelector("metadata.name", resource.Name))
 
 	// set up index funcs
 	indexers := cache.Indexers{}
@@ -67,7 +73,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				vtn := obj.(*vtv1beta1.VitessTopoNode)
-				out, err := base64.StdEncoding.DecodeString(vtn.Data.Value)
+				out, err := unpackValue([]byte(vtn.Data.Value))
 				if err != nil {
 					changes <- &topo.WatchData{Err: err}
 					close(gracefulShutdown)
@@ -80,7 +86,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
 				vtn := newObj.(*vtv1beta1.VitessTopoNode)
-				out, err := base64.StdEncoding.DecodeString(vtn.Data.Value)
+				out, err := unpackValue([]byte(vtn.Data.Value))
 				if err != nil {
 					changes <- &topo.WatchData{Err: err}
 					close(gracefulShutdown)
