@@ -52,8 +52,7 @@ func (vtctl *VtctlProcess) AddCellInfo(Cell string) (err error) {
 		"-root", vtctl.TopoRootPath+Cell,
 		"-server_address", vtctl.TopoServerAddress,
 		Cell)
-	log.Info(fmt.Sprintf("Adding Cell into Keyspace with arguments %v", strings.Join(tmpProcess.Args, " ")))
-	fmt.Println(fmt.Sprintf("Adding Cell into Keyspace with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	log.Infof("Adding CellInfo for cell %v with command: %v", Cell, strings.Join(tmpProcess.Args, " "))
 	return tmpProcess.Run()
 }
 
@@ -70,7 +69,7 @@ func (vtctl *VtctlProcess) CreateKeyspace(keyspace string) (err error) {
 	}
 	tmpProcess.Args = append(tmpProcess.Args,
 		"CreateKeyspace", keyspace)
-	log.Info(fmt.Sprintf("Starting CreateKeyspace with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	log.Infof("Running CreateKeyspace with command: %v", strings.Join(tmpProcess.Args, " "))
 	return tmpProcess.Run()
 }
 

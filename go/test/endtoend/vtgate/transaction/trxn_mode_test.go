@@ -178,7 +178,7 @@ func TestTransactionModes(t *testing.T) {
 	// Enable TWOPC transaction mode
 	clusterInstance.VtGateExtraArgs = []string{"-transaction_mode", "TWOPC"}
 	// Restart VtGate
-	if err = clusterInstance.ReStartVtgate(); err != nil {
+	if err = clusterInstance.RestartVtgate(); err != nil {
 		t.Errorf("Fail to re-start vtgate with new config:  %v", err)
 	}
 

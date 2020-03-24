@@ -166,7 +166,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
-			fmt.Println("Starting MySql for tablet ", tablet.Alias)
+			log.Infof("Starting MySql for tablet %v", tablet.Alias)
 			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
 				t.Fatal(err)
 			} else {

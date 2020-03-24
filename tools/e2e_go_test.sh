@@ -1,4 +1,4 @@
 #!/bin/bash
 source build.env
-echo "running tests for $@ "
-go test -v $@ -count=1
+echo "running tests for " "$@"
+go test -v "$@" -alsologtostderr -count=1
