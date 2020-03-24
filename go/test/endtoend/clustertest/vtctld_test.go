@@ -75,7 +75,7 @@ func testTopoDataAPI(t *testing.T, url string) {
 
 	assert.Contains(t, resultMap, "Children")
 	children := reflect.ValueOf(resultMap["Children"])
-	childrenGot := children.String()
+	childrenGot := fmt.Sprintf("%s", children)
 	assert.Contains(t, childrenGot, "global")
 	assert.Contains(t, childrenGot, clusterInstance.Cell)
 }
