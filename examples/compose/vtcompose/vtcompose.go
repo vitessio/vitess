@@ -34,21 +34,30 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
+const (
+	// TODO: Make these ints insteads of strings.
+	DEFAULT_WEB_PORT         = "8080"
+	DEFAULT_GRPC_PORT        = "15999"
+	DEFAULT_MYSQL_PORT       = "15306"
+	DEFAULT_KEYSPACE_DATA    = "test_keyspace:2:1:create_messages.sql,create_tokens.sql;unsharded_keyspace:0:0:create_dinosaurs.sql,create_eggs.sql"
+	DEFAULT_CELL             = "test"
+	DEFAULT_EXTERNAL_DB_DATA = ""
+	DEFAULT_TOPOLOGY_FLAGS   = "-topo_implementation consul -topo_global_server_address consul1:8500 -topo_global_root vitess/global"
+)
+
 var (
 	tabletsUsed           = 0
 	tablesPath            = "tables/"
 	baseDockerComposeFile = flag.String("base_yaml", "vtcompose/docker-compose.base.yml", "Starting docker-compose yaml")
 	baseVschemaFile       = flag.String("base_vschema", "vtcompose/base_vschema.json", "Starting vschema json")
 
-	topologyFlags = flag.String("topologyFlags",
-		"-topo_implementation consul -topo_global_server_address consul1:8500 -topo_global_root vitess/global",
-		"Vitess Topology Flags config")
-	webPort        = flag.String("webPort", "8080", "Web port to be used")
-	gRpcPort       = flag.String("gRpcPort", "15999", "gRPC port to be used")
-	mySqlPort      = flag.String("mySqlPort", "15306", "mySql port to be used")
-	cell           = flag.String("cell", "test", "Vitess Cell name")
-	keyspaceData   = flag.String("keyspaceData", "test_keyspace:2:1:create_messages.sql,create_tokens.sql;unsharded_keyspace:0:0:create_dinosaurs.sql,create_eggs.sql", "List of keyspace_name/external_db_name:num_of_shards:num_of_replica_tablets:schema_files:<optional>lookup_keyspace_name separated by ';'")
-	externalDbData = flag.String("externalDbData", "", "List of Data corresponding to external DBs. List of <external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET> separated by ';'")
+	topologyFlags  = flag.String("topologyFlags", DEFAULT_TOPOLOGY_FLAGS, "Vitess Topology Flags config")
+	webPort        = flag.String("webPort", DEFAULT_WEB_PORT, "Web port to be used")
+	gRpcPort       = flag.String("gRpcPort", DEFAULT_GRPC_PORT, "gRPC port to be used")
+	mySqlPort      = flag.String("mySqlPort", DEFAULT_MYSQL_PORT, "mySql port to be used")
+	cell           = flag.String("cell", DEFAULT_CELL, "Vitess Cell name")
+	keyspaceData   = flag.String("keyspaceData", DEFAULT_KEYSPACE_DATA, "List of keyspace_name/external_db_name:num_of_shards:num_of_replica_tablets:schema_files:<optional>lookup_keyspace_name separated by ';'")
+	externalDbData = flag.String("externalDbData", DEFAULT_EXTERNAL_DB_DATA, "List of Data corresponding to external DBs. List of <external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET> separated by ';'")
 )
 
 type keyspaceInfo struct {
@@ -82,17 +91,10 @@ func newKeyspaceInfo(keyspace string, shards int, replicaTablets int, schemaFile
 	return k
 }
 
-func newExternalDbInfo(dbName, dbHost, dbPort, dbUser, dbPass, dbCharset string) externalDbInfo {
-	d := externalDbInfo{dbName: dbName, dbHost: dbHost, dbPort: dbPort, dbUser: dbUser, dbPass: dbPass, dbCharset: dbCharset}
-	return d
-}
-
-func main() {
-	flag.Parse()
+func parseKeyspaceInfo(keyspaceData string) map[string]keyspaceInfo {
 	keyspaceInfoMap := make(map[string]keyspaceInfo)
-	externalDbInfoMap := make(map[string]externalDbInfo)
 
-	for _, v := range strings.Split(*keyspaceData, ";") {
+	for _, v := range strings.Split(keyspaceData, ";") {
 		tokens := strings.Split(v, ":")
 		shards, _ := strconv.Atoi(tokens[1])
 		replicaTablets, _ := strconv.Atoi(tokens[2])
@@ -106,13 +108,31 @@ func main() {
 		}
 	}
 
-	for _, v := range strings.Split(*externalDbData, ";") {
+	return keyspaceInfoMap
+}
+
+func newExternalDbInfo(dbName, dbHost, dbPort, dbUser, dbPass, dbCharset string) externalDbInfo {
+	return externalDbInfo{dbName: dbName, dbHost: dbHost, dbPort: dbPort, dbUser: dbUser, dbPass: dbPass, dbCharset: dbCharset}
+}
+
+func parseExternalDbData(externalDbData string) map[string]externalDbInfo {
+	externalDbInfoMap := make(map[string]externalDbInfo)
+	for _, v := range strings.Split(externalDbData, ";") {
 		tokens := strings.Split(v, ":")
 		if len(tokens) > 1 {
 			externalDbInfoMap[tokens[0]] = newExternalDbInfo(tokens[0], tokens[1], tokens[2], tokens[3], tokens[4], tokens[5])
 		}
 	}
 
+	return externalDbInfoMap
+}
+
+func main() {
+	flag.Parse()
+	keyspaceInfoMap := parseKeyspaceInfo(*keyspaceData)
+	externalDbInfoMap := parseExternalDbData(*externalDbData)
+
+	// Write schemaFile.
 	for k, v := range keyspaceInfoMap {
 		if _, ok := externalDbInfoMap[k]; !ok {
 			v.schemaFile = createFile(fmt.Sprintf("%s%s_schema_file.sql", tablesPath, v.keyspace))
@@ -453,9 +473,18 @@ func generateDefaultTablet(tabAlias, shard, role, keyspace string, dbInfo extern
 	return data
 }
 
-// Generate Vtctld
-func generateVtctld() string {
-	data := fmt.Sprintf(`
+type vtctldOptions struct {
+	webPort       int
+	gRpcPort      int
+	topologyFlags string
+	cell          string
+}
+
+func generateVtctld2(opts vtctldOptions) string {
+	webPort := strconv.Itoa(opts.webPort)
+	gRpcPort := strconv.Itoa(opts.gRpcPort)
+
+	return fmt.Sprintf(`
 - op: add
   path: /services/vtctld
   value:
@@ -482,9 +511,20 @@ func generateVtctld() string {
       - consul1
       - consul2
       - consul3
-`, *webPort, *gRpcPort, *topologyFlags, *cell)
+`, webPort, gRpcPort, topologyFlags, cell)
+}
 
-	return data
+// Generate Vtctld
+// Deprecated: Replaced by generateVtctld2.
+func generateVtctld() string {
+	webPort2, _ := strconv.Atoi(*webPort)
+	gRpcPort2, _ := strconv.Atoi(*gRpcPort)
+	return generateVtctld2(vtctldOptions{
+		webPort:       webPort2,
+		gRpcPort:      gRpcPort2,
+		topologyFlags: *topologyFlags,
+		cell:          *cell,
+	})
 }
 
 // Generate Vtgate
