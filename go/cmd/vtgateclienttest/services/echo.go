@@ -110,6 +110,19 @@ func (c *echoClient) Execute(ctx context.Context, session *vtgatepb.Session, sql
 	return c.fallbackClient.Execute(ctx, session, sql, bindVariables)
 }
 
+func (c *echoClient) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+	if strings.HasPrefix(sql, EchoPrefix) {
+		callback(echoQueryResult(map[string]interface{}{
+			"callerId": callerid.EffectiveCallerIDFromContext(ctx),
+			"query":    sql,
+			"bindVars": bindVariables,
+			"session":  session,
+		}))
+		return nil
+	}
+	return c.fallbackClient.StreamExecute(ctx, session, sql, bindVariables, callback)
+}
+
 func (c *echoClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
 	if len(sqlList) > 0 && strings.HasPrefix(sqlList[0], EchoPrefix) {
 		var queryResponse []sqltypes.QueryResponse
