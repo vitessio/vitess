@@ -328,7 +328,7 @@ func executeQuery(dbParams mysql.ConnParams, query string) (*sqltypes.Result, er
 		return nil, err
 	}
 	defer dbConn.Close()
-	qr, err := dbConn.ExecuteFetch(query, 1000, true)
+	qr, err := dbConn.ExecuteFetch(query, 10000, true)
 	return qr, err
 }
 
