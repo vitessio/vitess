@@ -37,6 +37,17 @@ import (
 )
 
 var _ engine.VCursor = (*vcursorImpl)(nil)
+var _ iExecute = (*Executor)(nil)
+
+// vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
+type iExecute interface {
+	Execute(ctx context.Context, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
+	ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, tabletType topodatapb.TabletType, session *SafeSession, notInTransaction bool, autocommit bool) (qr *sqltypes.Result, errs []error)
+	StreamExecuteMulti(ctx context.Context, s string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error
+
+	// TODO: remove when resolver is gone
+	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
+}
 
 // vcursorImpl implements the VCursor functionality used by dependent
 // packages to call back into VTGate.
@@ -46,19 +57,21 @@ type vcursorImpl struct {
 	keyspace       string
 	tabletType     topodatapb.TabletType
 	marginComments sqlparser.MarginComments
-	executor       *Executor
+	executor       iExecute
+	resolver       *srvtopo.Resolver
 	logStats       *LogStats
 	// hasPartialDML is set to true if any DML was successfully
 	// executed. If there was a subsequent failure, the transaction
 	// must be forced to rollback.
 	hasPartialDML bool
+	vschema       *vindexes.VSchema
 }
 
 // newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any marginComments that came with
 // the query and supply it here. Trailing comments are typically sent by the application for various reasons,
 // including as identifying markers. So, they have to be added back to all queries that are executed
 // on behalf of the original query.
-func newVCursorImpl(ctx context.Context, safeSession *SafeSession, keyspace string, tabletType topodatapb.TabletType, marginComments sqlparser.MarginComments, executor *Executor, logStats *LogStats) *vcursorImpl {
+func newVCursorImpl(ctx context.Context, safeSession *SafeSession, keyspace string, tabletType topodatapb.TabletType, marginComments sqlparser.MarginComments, executor *Executor, logStats *LogStats, vschema *vindexes.VSchema, resolver *srvtopo.Resolver) *vcursorImpl {
 	return &vcursorImpl{
 		ctx:            ctx,
 		safeSession:    safeSession,
@@ -67,6 +80,8 @@ func newVCursorImpl(ctx context.Context, safeSession *SafeSession, keyspace stri
 		marginComments: marginComments,
 		executor:       executor,
 		logStats:       logStats,
+		vschema:        vschema,
+		resolver:       resolver,
 	}
 }
 
@@ -102,7 +117,7 @@ func (vc *vcursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, str
 	if destKeyspace == "" {
 		destKeyspace = vc.keyspace
 	}
-	table, err := vc.executor.VSchema().FindTable(destKeyspace, name.Name.String())
+	table, err := vc.vschema.FindTable(destKeyspace, name.Name.String())
 	if err != nil {
 		return nil, "", destTabletType, nil, err
 	}
@@ -118,7 +133,7 @@ func (vc *vcursorImpl) FindTablesOrVindex(name sqlparser.TableName) ([]*vindexes
 	if destKeyspace == "" {
 		destKeyspace = vc.keyspace
 	}
-	tables, vindex, err := vc.executor.VSchema().FindTablesOrVindex(destKeyspace, name.Name.String(), vc.tabletType)
+	tables, vindex, err := vc.vschema.FindTablesOrVindex(destKeyspace, name.Name.String(), vc.tabletType)
 	if err != nil {
 		return nil, nil, "", destTabletType, nil, err
 	}
@@ -132,7 +147,7 @@ func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
 	if vc.keyspace == "" {
 		return nil, errNoKeyspace
 	}
-	ks, ok := vc.executor.VSchema().Keyspaces[vc.keyspace]
+	ks, ok := vc.vschema.Keyspaces[vc.keyspace]
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace %s not found in vschema", vc.keyspace)
 	}
@@ -165,7 +180,7 @@ func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]
 // ExecuteMultiShard is part of the engine.VCursor interface.
 func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, autocommit bool) (*sqltypes.Result, []error) {
 	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(queries)))
-	qr, errs := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.tabletType, vc.safeSession, false, autocommit)
+	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.tabletType, vc.safeSession, false, autocommit)
 
 	if errs == nil && isDML {
 		vc.hasPartialDML = true
@@ -189,14 +204,14 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 	}
 	// The autocommit flag is always set to false because we currently don't
 	// execute DMLs through ExecuteStandalone.
-	qr, errs := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, rss, bqs, vc.tabletType, NewAutocommitSession(vc.safeSession.Session), false, false /* autocommit */)
+	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, bqs, vc.tabletType, NewAutocommitSession(vc.safeSession.Session), false, false /* autocommit */)
 	return qr, vterrors.Aggregate(errs)
 }
 
 // StreamExeculteMulti is the streaming version of ExecuteMultiShard.
 func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
 	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(rss)))
-	return vc.executor.scatterConn.StreamExecuteMulti(vc.ctx, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.tabletType, vc.safeSession.Options, callback)
+	return vc.executor.StreamExecuteMulti(vc.ctx, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.tabletType, vc.safeSession.Options, callback)
 }
 
 // ExecuteKeyspaceID is part of the engine.VCursor interface.
@@ -222,7 +237,7 @@ func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query str
 }
 
 func (vc *vcursorImpl) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
-	return vc.executor.resolver.resolver.ResolveDestinations(vc.ctx, keyspace, vc.tabletType, ids, destinations)
+	return vc.resolver.ResolveDestinations(vc.ctx, keyspace, vc.tabletType, ids, destinations)
 }
 
 func commentedShardQueries(shardQueries []*querypb.BoundQuery, marginComments sqlparser.MarginComments) []*querypb.BoundQuery {
