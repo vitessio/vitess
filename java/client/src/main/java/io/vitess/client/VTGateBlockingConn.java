@@ -19,11 +19,7 @@ package io.vitess.client;
 import io.vitess.client.cursor.Cursor;
 import io.vitess.client.cursor.CursorWithError;
 import io.vitess.proto.Query;
-import io.vitess.proto.Topodata.KeyRange;
-import io.vitess.proto.Topodata.SrvKeyspace;
 import io.vitess.proto.Topodata.TabletType;
-import io.vitess.proto.Vtgate.BoundKeyspaceIdQuery;
-import io.vitess.proto.Vtgate.BoundShardQuery;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -75,39 +71,6 @@ public class VTGateBlockingConn implements Closeable {
     return conn.execute(ctx, query, bindVars, tabletType, includedFields).checkedGet();
   }
 
-  public Cursor executeShards(Context ctx, String query, String keyspace, Iterable<String> shards,
-      Map<String, ?> bindVars, TabletType tabletType,
-      Query.ExecuteOptions.IncludedFields includedFields) throws SQLException {
-    return conn.executeShards(ctx, query, keyspace, shards, bindVars, tabletType, includedFields)
-        .checkedGet();
-  }
-
-  public Cursor executeKeyspaceIds(Context ctx, String query, String keyspace,
-      Iterable<byte[]> keyspaceIds, Map<String, ?> bindVars, TabletType tabletType,
-      Query.ExecuteOptions.IncludedFields includedFields)
-      throws SQLException {
-    return conn
-        .executeKeyspaceIds(ctx, query, keyspace, keyspaceIds, bindVars, tabletType, includedFields)
-        .checkedGet();
-  }
-
-  public Cursor executeKeyRanges(Context ctx, String query, String keyspace,
-      Iterable<? extends KeyRange> keyRanges, Map<String, ?> bindVars, TabletType tabletType,
-      Query.ExecuteOptions.IncludedFields includedFields)
-      throws SQLException {
-    return conn
-        .executeKeyRanges(ctx, query, keyspace, keyRanges, bindVars, tabletType, includedFields)
-        .checkedGet();
-  }
-
-  public Cursor executeEntityIds(Context ctx, String query, String keyspace,
-      String entityColumnName, Map<byte[], ?> entityKeyspaceIds, Map<String, ?> bindVars,
-      TabletType tabletType, Query.ExecuteOptions.IncludedFields includedFields)
-      throws SQLException {
-    return conn.executeEntityIds(ctx, query, keyspace, entityColumnName, entityKeyspaceIds,
-        bindVars, tabletType, includedFields).checkedGet();
-  }
-
   public List<CursorWithError> executeBatch(Context ctx, ArrayList<String> queryList,
       @Nullable ArrayList<Map<String, ?>> bindVarsList, TabletType tabletType,
       Query.ExecuteOptions.IncludedFields includedFields) throws SQLException {
@@ -123,74 +86,10 @@ public class VTGateBlockingConn implements Closeable {
         .checkedGet();
   }
 
-  /**
-   * Execute multiple keyspace ID queries as a batch.
-   *
-   * @param asTransaction If true, automatically create a transaction (per shard) that encloses
-   *     all the batch queries.
-   */
-  public List<Cursor> executeBatchShards(Context ctx, Iterable<? extends BoundShardQuery> queries,
-      TabletType tabletType, boolean asTransaction,
-      Query.ExecuteOptions.IncludedFields includedFields)
-      throws SQLException {
-    return conn.executeBatchShards(ctx, queries, tabletType, asTransaction, includedFields)
-        .checkedGet();
-  }
-
-  /**
-   * Execute multiple keyspace ID queries as a batch.
-   *
-   * @param asTransaction If true, automatically create a transaction (per shard) that encloses
-   *     all the batch queries.
-   */
-  public List<Cursor> executeBatchKeyspaceIds(Context ctx,
-      Iterable<? extends BoundKeyspaceIdQuery> queries, TabletType tabletType,
-      boolean asTransaction, Query.ExecuteOptions.IncludedFields includedFields)
-      throws SQLException {
-    return conn.executeBatchKeyspaceIds(ctx, queries, tabletType, asTransaction, includedFields)
-        .checkedGet();
-  }
-
   public Cursor streamExecute(Context ctx, String query, Map<String, ?> bindVars,
       TabletType tabletType, Query.ExecuteOptions.IncludedFields includedFields)
       throws SQLException {
     return conn.streamExecute(ctx, query, bindVars, tabletType, includedFields);
-  }
-
-  public Cursor streamExecuteShards(Context ctx, String query, String keyspace,
-      Iterable<String> shards, Map<String, ?> bindVars, TabletType tabletType,
-      Query.ExecuteOptions.IncludedFields includedFields)
-      throws SQLException {
-    return conn
-        .streamExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType, includedFields);
-  }
-
-  public Cursor streamExecuteKeyspaceIds(Context ctx, String query, String keyspace,
-      Iterable<byte[]> keyspaceIds, Map<String, ?> bindVars, TabletType tabletType,
-      Query.ExecuteOptions.IncludedFields includedFields)
-      throws SQLException {
-    return conn.streamExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIds, bindVars, tabletType,
-        includedFields);
-  }
-
-  public Cursor streamExecuteKeyRanges(Context ctx, String query, String keyspace,
-      Iterable<? extends KeyRange> keyRanges, Map<String, ?> bindVars, TabletType tabletType,
-      Query.ExecuteOptions.IncludedFields includedFields)
-      throws SQLException {
-    return conn.streamExecuteKeyRanges(ctx, query, keyspace, keyRanges, bindVars, tabletType,
-        includedFields);
-  }
-
-  public VTGateBlockingTx begin(Context ctx) throws SQLException {
-    return begin(ctx, false);
-  }
-
-  public VTGateBlockingTx begin(Context ctx, boolean singleDB) throws SQLException {
-    return new VTGateBlockingTx(conn.begin(ctx, singleDB).checkedGet());
-  }
-
-  public SrvKeyspace getSrvKeyspace(Context ctx, String keyspace) throws SQLException {
-    return conn.getSrvKeyspace(ctx, keyspace).checkedGet();
   }
 
   @Override

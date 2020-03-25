@@ -31,11 +31,6 @@ import io.vitess.client.cursor.Cursor;
 import io.vitess.client.cursor.Row;
 import io.vitess.proto.Query;
 import io.vitess.proto.Query.Field;
-import io.vitess.proto.Topodata.KeyRange;
-import io.vitess.proto.Topodata.KeyspaceIdType;
-import io.vitess.proto.Topodata.ShardReference;
-import io.vitess.proto.Topodata.SrvKeyspace;
-import io.vitess.proto.Topodata.SrvKeyspace.KeyspacePartition;
 import io.vitess.proto.Topodata.TabletType;
 import io.vitess.proto.Vtgate.VStreamRequest;
 import io.vitess.proto.Vtgate.VStreamResponse;
@@ -116,28 +111,6 @@ public abstract class RpcClientTest {
   private static final String QUERY = "test query with unicode: \u6211\u80fd\u541e\u4e0b\u73bb\u7483\u800c\u4e0d\u50b7\u8eab\u9ad4";
   private static final String KEYSPACE = "test_keyspace";
 
-  private static final List<String> SHARDS = Arrays.asList("-80", "80-");
-  private static final String SHARDS_ECHO = "[-80 80-]";
-
-  private static final List<byte[]> KEYSPACE_IDS =
-      Arrays.asList(new byte[]{1, 2, 3, 4}, new byte[]{5, 6, 7, 8});
-  private static final String KEYSPACE_IDS_ECHO = "[[1 2 3 4] [5 6 7 8]]";
-
-  private static final List<KeyRange> KEY_RANGES =
-      Arrays.asList(KeyRange.newBuilder().setStart(ByteString.copyFrom(new byte[]{1, 2, 3, 4}))
-          .setEnd(ByteString.copyFrom(new byte[]{5, 6, 7, 8})).build());
-  private static final String KEY_RANGES_ECHO =
-      "[start:\"\\001\\002\\003\\004\" end:\"\\005\\006\\007\\010\" ]";
-
-  private static final ImmutableMap<byte[], Object> ENTITY_KEYSPACE_IDS =
-      new ImmutableMap.Builder<byte[], Object>()
-          .put(new byte[]{1, 2, 3}, 123)
-          .put(new byte[]{4, 5, 6}, 2.5)
-          .put(new byte[]{7, 8, 9}, new byte[]{1, 2, 3})
-          .build();
-  private static final String ENTITY_KEYSPACE_IDS_ECHO =
-      "[type:INT64 value:\"123\" keyspace_id:\"\\001\\002\\003\"  type:FLOAT64 value:\"2.5\" keyspace_id:\"\\004\\005\\006\"  type:VARBINARY value:\"\\001\\002\\003\" keyspace_id:\"\\007\\010\\t\" ]";
-
   private static final TabletType TABLET_TYPE = TabletType.REPLICA;
   private static final String TABLET_TYPE_ECHO = TABLET_TYPE.toString();
   private static final Query.ExecuteOptions.IncludedFields ALL_FIELDS = Query.ExecuteOptions.IncludedFields.ALL;
@@ -152,11 +125,7 @@ public abstract class RpcClientTest {
   private static final String BIND_VARS_ECHO =
       "map[bytes:type:VARBINARY value:\"\\001\\002\\003\"  float:type:FLOAT64 value:\"2.5\"  int:type:INT64 value:\"123\" ]";
 
-  private static final String SESSION_ECHO = "in_transaction:true ";
-
   private static final String NONTX_V3_SESSION_ECHO = "autocommit:true target_string:\"test_keyspace@replica\" options:<included_fields:ALL > ";
-
-  private static final String V3_SESSION_ECHO = "in_transaction:true target_string:\"test_keyspace@replica\" options:<included_fields:ALL > ";
 
   private static final CallerID CALLER_ID = CallerID.newBuilder().setPrincipal("test_principal")
       .setComponent("test_component").setSubcomponent("test_subcomponent").build();
@@ -210,7 +179,7 @@ public abstract class RpcClientTest {
     while (DateTime.now().isBefore(deadline)) {
       try {
         ctx = Context.getDefault().withDeadlineAfter(Duration.standardSeconds(30));
-        conn.getSrvKeyspace(ctx, "small");
+        conn.execute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE, ALL_FIELDS);
         // RPC succeeded. Stop testing.
         break;
       } catch (SQLTransientException e) {
@@ -245,73 +214,6 @@ public abstract class RpcClientTest {
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(NONTX_V3_SESSION_ECHO, echo.get("session"));
-
-    echo = getEcho(
-        conn.executeShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE,
-            ALL_FIELDS));
-    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
-    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
-    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
-    Assert.assertEquals(SHARDS_ECHO, echo.get("shards"));
-    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
-    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
-    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
-
-    echo = getEcho(conn.executeKeyspaceIds(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEYSPACE_IDS,
-        BIND_VARS, TABLET_TYPE, ALL_FIELDS));
-    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
-    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
-    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
-    Assert.assertEquals(KEYSPACE_IDS_ECHO, echo.get("keyspaceIds"));
-    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
-    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
-    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
-
-    echo = getEcho(conn.executeKeyRanges(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEY_RANGES, BIND_VARS,
-        TABLET_TYPE, ALL_FIELDS));
-    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
-    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
-    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
-    Assert.assertEquals(KEY_RANGES_ECHO, echo.get("keyRanges"));
-    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
-    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
-    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
-
-    echo = getEcho(conn.executeEntityIds(ctx, ECHO_PREFIX + QUERY, KEYSPACE, "column1",
-        ENTITY_KEYSPACE_IDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
-    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
-    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
-    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
-    Assert.assertEquals("column1", echo.get("entityColumnName"));
-    Assert.assertEquals(ENTITY_KEYSPACE_IDS_ECHO, echo.get("entityIds"));
-    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
-    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
-    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
-
-    echo = getEcho(conn.executeBatchShards(ctx,
-        Arrays.asList(Proto.bindShardQuery(KEYSPACE, SHARDS, ECHO_PREFIX + QUERY, BIND_VARS)),
-        TABLET_TYPE, true, ALL_FIELDS).get(0));
-    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
-    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
-    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
-    Assert.assertEquals(SHARDS_ECHO, echo.get("shards"));
-    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
-    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
-    Assert.assertEquals("true", echo.get("asTransaction"));
-    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
-
-    echo = getEcho(conn.executeBatchKeyspaceIds(ctx,
-        Arrays.asList(
-            Proto.bindKeyspaceIdQuery(KEYSPACE, KEYSPACE_IDS, ECHO_PREFIX + QUERY, BIND_VARS)),
-        TABLET_TYPE, true, ALL_FIELDS).get(0));
-    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
-    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
-    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
-    Assert.assertEquals(KEYSPACE_IDS_ECHO, echo.get("keyspaceIds"));
-    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
-    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
-    Assert.assertEquals("true", echo.get("asTransaction"));
-    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
   }
 
   @Test
@@ -324,154 +226,6 @@ public abstract class RpcClientTest {
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(NONTX_V3_SESSION_ECHO, echo.get("session"));
-
-    echo = getEcho(conn.streamExecuteShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS,
-        TABLET_TYPE, ALL_FIELDS));
-    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
-    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
-    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
-    Assert.assertEquals(SHARDS_ECHO, echo.get("shards"));
-    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
-    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
-    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
-
-    echo = getEcho(conn.streamExecuteKeyspaceIds(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEYSPACE_IDS,
-        BIND_VARS, TABLET_TYPE, ALL_FIELDS));
-    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
-    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
-    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
-    Assert.assertEquals(KEYSPACE_IDS_ECHO, echo.get("keyspaceIds"));
-    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
-    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
-    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
-
-    echo = getEcho(conn.streamExecuteKeyRanges(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEY_RANGES,
-        BIND_VARS, TABLET_TYPE, ALL_FIELDS));
-    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
-    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
-    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
-    Assert.assertEquals(KEY_RANGES_ECHO, echo.get("keyRanges"));
-    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
-    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
-    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
-  }
-
-  @Test
-  public void testEchoTransactionExecute() throws Exception {
-    Map<String, String> echo;
-
-    VTGateBlockingTx tx = conn.begin(ctx);
-
-    echo = getEcho(tx.execute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
-    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
-    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
-    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
-    Assert.assertEquals(V3_SESSION_ECHO, echo.get("session"));
-
-    // V3 returns additional session artifacts that V2
-    // doesn't care about. So, start with a new session
-    // before testing V2 functionality.
-    tx.rollback(ctx);
-    tx = conn.begin(ctx);
-
-    echo = getEcho(
-        tx.executeShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE,
-            ALL_FIELDS));
-    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
-    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
-    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
-    Assert.assertEquals(SHARDS_ECHO, echo.get("shards"));
-    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
-    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
-    Assert.assertEquals(SESSION_ECHO, echo.get("session"));
-    Assert.assertEquals("false", echo.get("notInTransaction"));
-    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
-
-    echo = getEcho(tx.executeKeyspaceIds(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEYSPACE_IDS,
-        BIND_VARS, TABLET_TYPE, ALL_FIELDS));
-    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
-    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
-    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
-    Assert.assertEquals(KEYSPACE_IDS_ECHO, echo.get("keyspaceIds"));
-    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
-    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
-    Assert.assertEquals(SESSION_ECHO, echo.get("session"));
-    Assert.assertEquals("false", echo.get("notInTransaction"));
-    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
-
-    echo = getEcho(tx.executeKeyRanges(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEY_RANGES, BIND_VARS,
-        TABLET_TYPE, ALL_FIELDS));
-    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
-    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
-    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
-    Assert.assertEquals(KEY_RANGES_ECHO, echo.get("keyRanges"));
-    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
-    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
-    Assert.assertEquals(SESSION_ECHO, echo.get("session"));
-    Assert.assertEquals("false", echo.get("notInTransaction"));
-    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
-
-    echo = getEcho(tx.executeEntityIds(ctx, ECHO_PREFIX + QUERY, KEYSPACE, "column1",
-        ENTITY_KEYSPACE_IDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
-    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
-    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
-    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
-    Assert.assertEquals("column1", echo.get("entityColumnName"));
-    Assert.assertEquals(ENTITY_KEYSPACE_IDS_ECHO, echo.get("entityIds"));
-    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
-    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
-    Assert.assertEquals(SESSION_ECHO, echo.get("session"));
-    Assert.assertEquals("false", echo.get("notInTransaction"));
-    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
-
-    tx.rollback(ctx);
-    tx = conn.begin(ctx);
-
-    echo = getEcho(tx.executeBatchShards(ctx,
-        Arrays.asList(Proto.bindShardQuery(KEYSPACE, SHARDS, ECHO_PREFIX + QUERY, BIND_VARS)),
-        TABLET_TYPE, ALL_FIELDS).get(0));
-    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
-    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
-    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
-    Assert.assertEquals(SHARDS_ECHO, echo.get("shards"));
-    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
-    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
-    Assert.assertEquals(SESSION_ECHO, echo.get("session"));
-    Assert.assertEquals("false", echo.get("asTransaction"));
-    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
-
-    echo = getEcho(tx.executeBatchKeyspaceIds(ctx,
-        Arrays.asList(
-            Proto.bindKeyspaceIdQuery(KEYSPACE, KEYSPACE_IDS, ECHO_PREFIX + QUERY, BIND_VARS)),
-        TABLET_TYPE, ALL_FIELDS).get(0));
-    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
-    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
-    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
-    Assert.assertEquals(KEYSPACE_IDS_ECHO, echo.get("keyspaceIds"));
-    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
-    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
-    Assert.assertEquals(SESSION_ECHO, echo.get("session"));
-    Assert.assertEquals("false", echo.get("asTransaction"));
-    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
-
-    tx.commit(ctx);
-  }
-
-  @Test
-  public void testGetSrvKeyspace() throws Exception {
-    SrvKeyspace expected = SrvKeyspace.newBuilder()
-        .addPartitions(KeyspacePartition.newBuilder().setServedType(TabletType.REPLICA)
-            .addShardReferences(ShardReference.newBuilder().setName("shard0").setKeyRange(KeyRange
-                .newBuilder().setStart(ByteString.copyFrom(new byte[]{0x40, 0, 0, 0, 0, 0, 0, 0}))
-                .setEnd(ByteString.copyFrom(new byte[]{(byte) 0x80, 0, 0, 0, 0, 0, 0, 0})).build())
-                .build())
-            .build())
-        .setShardingColumnName("sharding_column_name")
-        .setShardingColumnType(KeyspaceIdType.UINT64).addServedFrom(SrvKeyspace.ServedFrom
-            .newBuilder().setTabletType(TabletType.MASTER).setKeyspace("other_keyspace").build())
-        .build();
-    SrvKeyspace actual = conn.getSrvKeyspace(ctx, "big");
-    Assert.assertEquals(expected, actual);
   }
 
   abstract static class Executable {
@@ -512,120 +266,12 @@ public abstract class RpcClientTest {
     checkExecuteErrors(exe, false);
   }
 
-  abstract static class TransactionExecutable {
-
-    abstract void execute(VTGateBlockingTx tx, String query) throws Exception;
-  }
-
-  void checkTransactionExecuteErrors(TransactionExecutable exe) throws Exception {
-    for (String error : EXECUTE_ERRORS.keySet()) {
-      Class<?> cls = EXECUTE_ERRORS.get(error);
-
-      try {
-        VTGateBlockingTx tx = conn.begin(ctx);
-        String query = ERROR_PREFIX + error;
-        exe.execute(tx, query);
-        Assert.fail("no exception thrown for " + query);
-      } catch (Exception e) {
-        Assert.assertEquals(cls, e.getClass());
-
-        if (error.equals("integrity error")) {
-          // The mock test server sends back errno:1062 sqlstate:23000 for this case.
-          // Make sure these values get properly extracted by the client.
-          SQLException sqlException = (SQLException) e;
-          Assert.assertEquals(1062, sqlException.getErrorCode());
-          Assert.assertEquals("23000", sqlException.getSQLState());
-        }
-      }
-
-      // Don't close the transaction on partial error.
-      VTGateBlockingTx tx = conn.begin(ctx);
-      try {
-        String query = PARTIAL_ERROR_PREFIX + error;
-        exe.execute(tx, query);
-        Assert.fail("no exception thrown for " + query);
-      } catch (Exception e) {
-        Assert.assertEquals(cls, e.getClass());
-
-        if (error.equals("integrity error")) {
-          // The mock test server sends back errno:1062 sqlstate:23000 for this case.
-          // Make sure these values get properly extracted by the client.
-          SQLException sqlException = (SQLException) e;
-          Assert.assertEquals(1062, sqlException.getErrorCode());
-          Assert.assertEquals("23000", sqlException.getSQLState());
-        }
-      }
-      // The transaction should still be usable now.
-      tx.rollback(ctx);
-
-      // Close the transaction on partial error.
-      tx = conn.begin(ctx);
-      try {
-        String query = PARTIAL_ERROR_PREFIX + error + "/close transaction";
-        exe.execute(tx, query);
-        Assert.fail("no exception thrown for " + query);
-      } catch (Exception e) {
-        Assert.assertEquals(cls, e.getClass());
-      }
-      // The transaction should be unusable now.
-      try {
-        tx.rollback(ctx);
-        Assert.fail("no exception thrown for rollback() after closed transaction");
-      } catch (Exception e) {
-        Assert.assertEquals(SQLDataException.class, e.getClass());
-        Assert.assertEquals(true, e.getMessage().contains("not in transaction"));
-      }
-    }
-  }
-
   @Test
   public void testExecuteErrors() throws Exception {
     checkExecuteErrors(new Executable() {
       @Override
       void execute(String query) throws Exception {
         conn.execute(ctx, query, BIND_VARS, TABLET_TYPE, ALL_FIELDS);
-      }
-    });
-    checkExecuteErrors(new Executable() {
-      @Override
-      void execute(String query) throws Exception {
-        conn.executeShards(ctx, query, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS);
-      }
-    });
-    checkExecuteErrors(new Executable() {
-      @Override
-      void execute(String query) throws Exception {
-        conn.executeKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE,
-            ALL_FIELDS);
-      }
-    });
-    checkExecuteErrors(new Executable() {
-      @Override
-      void execute(String query) throws Exception {
-        conn.executeKeyRanges(ctx, query, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE, ALL_FIELDS);
-      }
-    });
-    checkExecuteErrors(new Executable() {
-      @Override
-      void execute(String query) throws Exception {
-        conn.executeEntityIds(ctx, query, KEYSPACE, "column1", ENTITY_KEYSPACE_IDS, BIND_VARS,
-            TABLET_TYPE, ALL_FIELDS);
-      }
-    });
-    checkExecuteErrors(new Executable() {
-      @Override
-      void execute(String query) throws Exception {
-        conn.executeBatchShards(ctx,
-            Arrays.asList(Proto.bindShardQuery(KEYSPACE, SHARDS, query, BIND_VARS)), TABLET_TYPE,
-            true, ALL_FIELDS);
-      }
-    });
-    checkExecuteErrors(new Executable() {
-      @Override
-      void execute(String query) throws Exception {
-        conn.executeBatchKeyspaceIds(ctx,
-            Arrays.asList(Proto.bindKeyspaceIdQuery(KEYSPACE, KEYSPACE_IDS, query, BIND_VARS)),
-            TABLET_TYPE, true, ALL_FIELDS);
       }
     });
   }
@@ -636,81 +282,6 @@ public abstract class RpcClientTest {
       @Override
       void execute(String query) throws Exception {
         conn.streamExecute(ctx, query, BIND_VARS, TABLET_TYPE, ALL_FIELDS).next();
-      }
-    });
-    checkStreamExecuteErrors(new Executable() {
-      @Override
-      void execute(String query) throws Exception {
-        conn.streamExecuteShards(ctx, query, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS)
-            .next();
-      }
-    });
-    checkStreamExecuteErrors(new Executable() {
-      @Override
-      void execute(String query) throws Exception {
-        conn.streamExecuteKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE,
-            ALL_FIELDS)
-            .next();
-      }
-    });
-    checkStreamExecuteErrors(new Executable() {
-      @Override
-      void execute(String query) throws Exception {
-        conn.streamExecuteKeyRanges(ctx, query, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE,
-            ALL_FIELDS)
-            .next();
-      }
-    });
-  }
-
-  @Test
-  public void testTransactionExecuteErrors() throws Exception {
-    checkTransactionExecuteErrors(new TransactionExecutable() {
-      @Override
-      void execute(VTGateBlockingTx tx, String query) throws Exception {
-        tx.execute(ctx, query, BIND_VARS, TABLET_TYPE, ALL_FIELDS);
-      }
-    });
-    checkTransactionExecuteErrors(new TransactionExecutable() {
-      @Override
-      void execute(VTGateBlockingTx tx, String query) throws Exception {
-        tx.executeShards(ctx, query, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS);
-      }
-    });
-    checkTransactionExecuteErrors(new TransactionExecutable() {
-      @Override
-      void execute(VTGateBlockingTx tx, String query) throws Exception {
-        tx.executeKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE,
-            ALL_FIELDS);
-      }
-    });
-    checkTransactionExecuteErrors(new TransactionExecutable() {
-      @Override
-      void execute(VTGateBlockingTx tx, String query) throws Exception {
-        tx.executeKeyRanges(ctx, query, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE, ALL_FIELDS);
-      }
-    });
-    checkTransactionExecuteErrors(new TransactionExecutable() {
-      @Override
-      void execute(VTGateBlockingTx tx, String query) throws Exception {
-        tx.executeEntityIds(ctx, query, KEYSPACE, "column1", ENTITY_KEYSPACE_IDS, BIND_VARS,
-            TABLET_TYPE, ALL_FIELDS);
-      }
-    });
-    checkTransactionExecuteErrors(new TransactionExecutable() {
-      @Override
-      void execute(VTGateBlockingTx tx, String query) throws Exception {
-        tx.executeBatchShards(ctx,
-            Arrays.asList(Proto.bindShardQuery(KEYSPACE, SHARDS, query, BIND_VARS)), TABLET_TYPE,
-            ALL_FIELDS);
-      }
-    });
-    checkTransactionExecuteErrors(new TransactionExecutable() {
-      @Override
-      void execute(VTGateBlockingTx tx, String query) throws Exception {
-        tx.executeBatchKeyspaceIds(ctx,
-            Arrays.asList(Proto.bindKeyspaceIdQuery(KEYSPACE, KEYSPACE_IDS, query, BIND_VARS)),
-            TABLET_TYPE, ALL_FIELDS);
       }
     });
   }
