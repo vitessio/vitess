@@ -38,7 +38,7 @@ func (m *MockReshardingWrangler) EXPECT() *MockReshardingWranglerMockRecorder {
 
 // CopySchemaShardFromShard mocks base method
 func (m *MockReshardingWrangler) CopySchemaShardFromShard(ctx context.Context, tables, excludeTables []string, includeViews bool, sourceKeyspace, sourceShard, destKeyspace, destShard string, waitSlaveTimeout time.Duration, skipVerify bool) error {
-	ret := m.ctrl.Call(m, "CopySchemaShardFromShard", ctx, tables, excludeTables, includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, waitSlaveTimeout)
+	ret := m.ctrl.Call(m, "CopySchemaShardFromShard", ctx, tables, excludeTables, includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, waitSlaveTimeout, false)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
