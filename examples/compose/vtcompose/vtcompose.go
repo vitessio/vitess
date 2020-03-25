@@ -78,6 +78,14 @@ type externalDbInfo struct {
 	dbCharset string
 }
 
+type vtOptions struct {
+	webPort       int
+	gRpcPort      int
+	mySqlPort     int
+	topologyFlags string
+	cell          string
+}
+
 func newKeyspaceInfo(keyspace string, shards int, replicaTablets int, schemaFiles []string, lookupKeyspace string) keyspaceInfo {
 	k := keyspaceInfo{keyspace: keyspace, shards: shards, replicaTablets: replicaTablets, schemaFileNames: schemaFiles, lookupKeyspace: lookupKeyspace}
 	if len(strings.TrimSpace(lookupKeyspace)) == 0 {
@@ -130,6 +138,13 @@ func main() {
 	flag.Parse()
 	keyspaceInfoMap := parseKeyspaceInfo(*keyspaceData)
 	externalDbInfoMap := parseExternalDbData(*externalDbData)
+	vtOpts := vtOptions{
+		webPort:       *webPort,
+		gRpcPort:      *gRpcPort,
+		mySqlPort:     *mySqlPort,
+		topologyFlags: *topologyFlags,
+		cell:          *cell,
+	}
 
 	// Write schemaFile.
 	for k, v := range keyspaceInfoMap {
@@ -167,7 +182,7 @@ func main() {
 
 	// Docker Compose File Patches
 	dockerComposeFile := readFile(*baseDockerComposeFile)
-	dockerComposeFile = applyDockerComposePatches(dockerComposeFile, keyspaceInfoMap, externalDbInfoMap)
+	dockerComposeFile = applyDockerComposePatches2(dockerComposeFile, keyspaceInfoMap, externalDbInfoMap, vtOpts)
 	writeFile(dockerComposeFile, "docker-compose.yml")
 }
 
@@ -354,7 +369,7 @@ func writeFile(file []byte, fileName string) {
 	}
 }
 
-func applyKeyspaceDependentPatches(dockerComposeFile []byte, keyspaceData keyspaceInfo, externalDbInfoMap map[string]externalDbInfo) []byte {
+func applyKeyspaceDependentPatches2(dockerComposeFile []byte, keyspaceData keyspaceInfo, externalDbInfoMap map[string]externalDbInfo, opts vtOptions) []byte {
 	var externalDbInfo externalDbInfo
 	if val, ok := externalDbInfoMap[keyspaceData.keyspace]; ok {
 		externalDbInfo = val
@@ -373,7 +388,8 @@ func applyKeyspaceDependentPatches(dockerComposeFile []byte, keyspaceData keyspa
 		masterTablets = append(masterTablets, strconv.Itoa((i+1)*100+1))
 	}
 
-	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateSchemaload(masterTablets, "", keyspaceData.keyspace, externalDbInfo))
+	schemaLoad := generateSchemaload2(masterTablets, "", keyspaceData.keyspace, externalDbInfo, opts)
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, schemaLoad)
 
 	// Append Master and Replica Tablets
 	if keyspaceData.shards < 2 {
@@ -398,13 +414,46 @@ func applyKeyspaceDependentPatches(dockerComposeFile []byte, keyspaceData keyspa
 	return dockerComposeFile
 }
 
+// Deprecated: Replaced by applyKeyspaceDependentPatches2.
+func applyKeyspaceDependentPatches(dockerComposeFile []byte, keyspaceData keyspaceInfo, externalDbInfoMap map[string]externalDbInfo) []byte {
+	return applyKeyspaceDependentPatches2(dockerComposeFile, keyspaceData, externalDbInfoMap, vtOptions{
+		webPort:       *webPort,
+		gRpcPort:      *gRpcPort,
+		mySqlPort:     *mySqlPort,
+		topologyFlags: *topologyFlags,
+		cell:          *cell,
+	})
+}
+
+// Deprecated: Replaced by applyDefaultDockerPatches2.
 func applyDefaultDockerPatches(dockerComposeFile []byte) []byte {
-	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtctld())
-	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtgate())
-	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtwork())
+	return applyDefaultDockerPatches2(dockerComposeFile, vtOptions{
+		webPort:       *webPort,
+		gRpcPort:      *gRpcPort,
+		mySqlPort:     *mySqlPort,
+		topologyFlags: *topologyFlags,
+		cell:          *cell,
+	})
+}
+
+func applyDefaultDockerPatches2(dockerComposeFile []byte, opts vtOptions) []byte {
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtctld2(opts))
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtgate2(opts))
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtwork2(opts))
 	return dockerComposeFile
 }
 
+func applyDockerComposePatches2(dockerComposeFile []byte, keyspaceInfoMap map[string]keyspaceInfo, externalDbInfoMap map[string]externalDbInfo, vtOpts vtOptions) []byte {
+	// Vtctld, vtgate, vtwork patches.
+	dockerComposeFile = applyDefaultDockerPatches2(dockerComposeFile, vtOpts)
+	for _, keyspaceData := range keyspaceInfoMap {
+		dockerComposeFile = applyKeyspaceDependentPatches2(dockerComposeFile, keyspaceData, externalDbInfoMap, vtOpts)
+	}
+
+	return dockerComposeFile
+}
+
+// Deprecated: Replaced by applyDockerComposePatches2.
 func applyDockerComposePatches(dockerComposeFile []byte, keyspaceInfoMap map[string]keyspaceInfo, externalDbInfoMap map[string]externalDbInfo) []byte {
 	// Vtctld, vtgate, vtwork patches.
 	dockerComposeFile = applyDefaultDockerPatches(dockerComposeFile)
@@ -482,14 +531,6 @@ func generateDefaultTablet(tabAlias, shard, role, keyspace string, dbInfo extern
 		topologyFlags: *topologyFlags,
 		cell:          *cell,
 	})
-}
-
-type vtOptions struct {
-	webPort       int
-	gRpcPort      int
-	mySqlPort     int
-	topologyFlags string
-	cell          string
 }
 
 func generateVtctld2(opts vtOptions) string {
