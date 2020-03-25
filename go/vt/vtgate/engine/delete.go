@@ -23,7 +23,6 @@ import (
 	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/sqlannotation"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -167,8 +166,7 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 			return nil, vterrors.Wrap(err, "execDeleteEqual")
 		}
 	}
-	rewritten := sqlannotation.AddKeyspaceIDs(del.Query, [][]byte{ksid}, "")
-	return execShard(vcursor, rewritten, bindVars, rs, true /* isDML */, true /* canAutocommit */)
+	return execShard(vcursor, del.Query, bindVars, rs, true /* isDML */, true /* canAutocommit */)
 }
 
 // deleteVindexEntries performs an delete if table owns vindex.
@@ -220,10 +218,9 @@ func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]
 	}
 
 	queries := make([]*querypb.BoundQuery, len(rss))
-	sql := sqlannotation.AnnotateIfDML(del.Query, nil)
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{
-			Sql:           sql,
+			Sql:           del.Query,
 			BindVariables: bindVars,
 		}
 	}
