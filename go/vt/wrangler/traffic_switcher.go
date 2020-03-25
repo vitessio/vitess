@@ -100,8 +100,8 @@ type miSource struct {
 	journaled bool
 }
 
-// MigrateReads is a generic way of migrating read traffic for a resharding workflow.
-func (wr *Wrangler) MigrateReads(ctx context.Context, targetKeyspace, workflow string, servedType topodatapb.TabletType, cells []string, direction MigrateDirection) error {
+// SwitchReads is a generic way of migrating read traffic for a resharding workflow.
+func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow string, servedType topodatapb.TabletType, cells []string, direction MigrateDirection) error {
 	if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
 		return fmt.Errorf("tablet type must be REPLICA or RDONLY: %v", servedType)
 	}
@@ -111,7 +111,7 @@ func (wr *Wrangler) MigrateReads(ctx context.Context, targetKeyspace, workflow s
 		return err
 	}
 	if mi.frozen {
-		return fmt.Errorf("cannot migrate reads while MigrateWrites is in progress")
+		return fmt.Errorf("cannot migrate reads while SwitchWrites is in progress")
 	}
 	if err := mi.validate(ctx, false /* isWrite */); err != nil {
 		mi.wr.Logger().Errorf("validate failed: %v", err)
@@ -119,7 +119,7 @@ func (wr *Wrangler) MigrateReads(ctx context.Context, targetKeyspace, workflow s
 	}
 
 	// For reads, locking the source keyspace is sufficient.
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, mi.sourceKeyspace, "MigrateReads")
+	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, mi.sourceKeyspace, "SwitchReads")
 	if lockErr != nil {
 		mi.wr.Logger().Errorf("LockKeyspace failed: %v", lockErr)
 		return lockErr
@@ -140,8 +140,8 @@ func (wr *Wrangler) MigrateReads(ctx context.Context, targetKeyspace, workflow s
 	return nil
 }
 
-// MigrateWrites is a generic way of migrating write traffic for a resharding workflow.
-func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow string, filteredReplicationWaitTime time.Duration, cancelMigrate, reverseReplication bool) (journalID int64, err error) {
+// SwitchWrites is a generic way of migrating write traffic for a resharding workflow.
+func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow string, filteredReplicationWaitTime time.Duration, cancelMigrate, reverseReplication bool) (journalID int64, err error) {
 	mi, err := wr.buildMigrater(ctx, targetKeyspace, workflow)
 	if err != nil {
 		wr.Logger().Errorf("buildMigrater failed: %v", err)
@@ -163,14 +163,14 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 	}
 
 	// Need to lock both source and target keyspaces.
-	ctx, sourceUnlock, lockErr := wr.ts.LockKeyspace(ctx, mi.sourceKeyspace, "MigrateWrites")
+	ctx, sourceUnlock, lockErr := wr.ts.LockKeyspace(ctx, mi.sourceKeyspace, "SwitchWrites")
 	if lockErr != nil {
 		mi.wr.Logger().Errorf("LockKeyspace failed: %v", lockErr)
 		return 0, lockErr
 	}
 	defer sourceUnlock(&err)
 	if mi.targetKeyspace != mi.sourceKeyspace {
-		tctx, targetUnlock, lockErr := wr.ts.LockKeyspace(ctx, mi.targetKeyspace, "MigrateWrites")
+		tctx, targetUnlock, lockErr := wr.ts.LockKeyspace(ctx, mi.targetKeyspace, "SwitchWrites")
 		if lockErr != nil {
 			mi.wr.Logger().Errorf("LockKeyspace failed: %v", lockErr)
 			return 0, lockErr
@@ -854,7 +854,7 @@ func (mi *migrater) changeTableRouting(ctx context.Context) error {
 	// We assume that the following rules were setup when the targets were created:
 	// table -> sourceKeyspace.table
 	// targetKeyspace.table -> sourceKeyspace.table
-	// Additionally, MigrateReads would have added rules like this:
+	// Additionally, SwitchReads would have added rules like this:
 	// table@replica -> targetKeyspace.table
 	// targetKeyspace.table@replica -> targetKeyspace.table
 	// After this step, only the following rules will be left:
@@ -913,7 +913,7 @@ func (mi *migrater) startReverseVReplication(ctx context.Context) error {
 }
 
 func (mi *migrater) deleteTargetVReplication(ctx context.Context) error {
-	// Mark target streams as frozen before deleting. If MigrateWrites gets
+	// Mark target streams as frozen before deleting. If SwitchWrites gets
 	// re-invoked after a freeze, it will skip all the previous steps and
 	// jump directly here for the final cleanup.
 	err := mi.forAllTargets(func(target *miTarget) error {
