@@ -70,7 +70,7 @@ func (hw *horizontalReshardingWorkflow) runCopySchema(ctx context.Context, t *wo
 	destShard := t.Attributes["destination_shard"]
 	excludeTables := strings.Split(t.Attributes["exclude_tables"], ",")
 	return hw.wr.CopySchemaShardFromShard(ctx, nil /* tableArray*/, excludeTables /* excludeTableArray */, true, /*includeViews*/
-		keyspace, sourceShard, keyspace, destShard, wrangler.DefaultWaitSlaveTimeout)
+		keyspace, sourceShard, keyspace, destShard, wrangler.DefaultWaitSlaveTimeout, false)
 }
 
 func (hw *horizontalReshardingWorkflow) runSplitClone(ctx context.Context, t *workflowpb.Task) error {
