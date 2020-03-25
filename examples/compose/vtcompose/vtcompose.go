@@ -42,6 +42,14 @@ const (
 	DefaultCell           = "test"
 	DefaultExternalDbData = ""
 	DefaultTopologyFlags  = "-topo_implementation consul -topo_global_server_address consul1:8500 -topo_global_root vitess/global"
+
+	topologyFlagsUsage  = "Vitess Topology Flags config"
+	webPortUsage        = "Web port to be used"
+	gRpcPortUsage       = "gRPC port to be used"
+	mySqlPortUsage      = "mySql port to be used"
+	cellUsage           = "Vitess Cell name"
+	keyspaceDataUsage   = "List of keyspace_name/external_db_name:num_of_shards:num_of_replica_tablets:schema_files:<optional>lookup_keyspace_name separated by ';'"
+	externalDbDataUsage = "List of Data corresponding to external DBs. List of <external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET> separated by ';'"
 )
 
 var (
@@ -50,13 +58,13 @@ var (
 	baseDockerComposeFile = flag.String("base_yaml", "vtcompose/docker-compose.base.yml", "Starting docker-compose yaml")
 	baseVschemaFile       = flag.String("base_vschema", "vtcompose/base_vschema.json", "Starting vschema json")
 
-	topologyFlags  = flag.String("topologyFlags", DefaultTopologyFlags, "Vitess Topology Flags config")
-	webPort        = flag.Int("webPort", DefaultWebPort, "Web port to be used")
-	gRpcPort       = flag.Int("gRpcPort", DefaultGrpcPort, "gRPC port to be used")
-	mySqlPort      = flag.Int("mySqlPort", DefaultMysqlPort, "mySql port to be used")
-	cell           = flag.String("cell", DefaultCell, "Vitess Cell name")
-	keyspaceData   = flag.String("keyspaceData", DefaultKeyspaceData, "List of keyspace_name/external_db_name:num_of_shards:num_of_replica_tablets:schema_files:<optional>lookup_keyspace_name separated by ';'")
-	externalDbData = flag.String("externalDbData", DefaultExternalDbData, "List of Data corresponding to external DBs. List of <external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET> separated by ';'")
+	topologyFlags  = flag.String("topologyFlags", DefaultTopologyFlags, topologyFlagsUsage)
+	webPort        = flag.Int("webPort", DefaultWebPort, webPortUsage)
+	gRpcPort       = flag.Int("gRpcPort", DefaultGrpcPort, gRpcPortUsage)
+	mySqlPort      = flag.Int("mySqlPort", DefaultMysqlPort, mySqlPortUsage)
+	cell           = flag.String("cell", DefaultCell, cellUsage)
+	keyspaceData   = flag.String("keyspaceData", DefaultKeyspaceData, keyspaceDataUsage)
+	externalDbData = flag.String("externalDbData", DefaultExternalDbData, externalDbDataUsage)
 )
 
 type keyspaceInfo struct {
@@ -86,8 +94,20 @@ type vtOptions struct {
 	cell          string
 }
 
-func newKeyspaceInfo(keyspace string, shards int, replicaTablets int, schemaFiles []string, lookupKeyspace string) keyspaceInfo {
-	k := keyspaceInfo{keyspace: keyspace, shards: shards, replicaTablets: replicaTablets, schemaFileNames: schemaFiles, lookupKeyspace: lookupKeyspace}
+func newKeyspaceInfo(
+	keyspace string,
+	shards int,
+	replicaTablets int,
+	schemaFiles []string,
+	lookupKeyspace string,
+) keyspaceInfo {
+	k := keyspaceInfo{
+		keyspace:        keyspace,
+		shards:          shards,
+		replicaTablets:  replicaTablets,
+		schemaFileNames: schemaFiles,
+		lookupKeyspace:  lookupKeyspace,
+	}
 	if len(strings.TrimSpace(lookupKeyspace)) == 0 {
 		k.useLookups = false
 	} else {
@@ -326,7 +346,12 @@ func addTablesVschemaPatch(vSchemaFile []byte, schemaFileNames []string) ([]byte
 	return vSchemaFile, primaryTableColumns
 }
 
-func addLookupDataToVschema(vSchemaFile []byte, schemaFileNames []string, primaryTableColumns map[string]string, keyspace string) []byte {
+func addLookupDataToVschema(
+	vSchemaFile []byte,
+	schemaFileNames []string,
+	primaryTableColumns map[string]string,
+	keyspace string,
+) []byte {
 	for _, fileName := range schemaFileNames {
 		tableName := fileName[7 : len(fileName)-4]
 		lookupTableOwner := ""
@@ -369,7 +394,12 @@ func writeFile(file []byte, fileName string) {
 	}
 }
 
-func applyKeyspaceDependentPatches(dockerComposeFile []byte, keyspaceData keyspaceInfo, externalDbInfoMap map[string]externalDbInfo, opts vtOptions) []byte {
+func applyKeyspaceDependentPatches(
+	dockerComposeFile []byte,
+	keyspaceData keyspaceInfo,
+	externalDbInfoMap map[string]externalDbInfo,
+	opts vtOptions,
+) []byte {
 	var externalDbInfo externalDbInfo
 	if val, ok := externalDbInfoMap[keyspaceData.keyspace]; ok {
 		externalDbInfo = val
@@ -421,7 +451,12 @@ func applyDefaultDockerPatches(dockerComposeFile []byte, opts vtOptions) []byte 
 	return dockerComposeFile
 }
 
-func applyDockerComposePatches(dockerComposeFile []byte, keyspaceInfoMap map[string]keyspaceInfo, externalDbInfoMap map[string]externalDbInfo, vtOpts vtOptions) []byte {
+func applyDockerComposePatches(
+	dockerComposeFile []byte,
+	keyspaceInfoMap map[string]keyspaceInfo,
+	externalDbInfoMap map[string]externalDbInfo,
+	vtOpts vtOptions,
+) []byte {
 	// Vtctld, vtgate, vtwork patches.
 	dockerComposeFile = applyDefaultDockerPatches(dockerComposeFile, vtOpts)
 	for _, keyspaceData := range keyspaceInfoMap {
@@ -431,7 +466,14 @@ func applyDockerComposePatches(dockerComposeFile []byte, keyspaceInfoMap map[str
 	return dockerComposeFile
 }
 
-func applyTabletPatches(dockerComposeFile []byte, tabAlias int, shard string, keyspaceData keyspaceInfo, externalDbInfoMap map[string]externalDbInfo, opts vtOptions) []byte {
+func applyTabletPatches(
+	dockerComposeFile []byte,
+	tabAlias int,
+	shard string,
+	keyspaceData keyspaceInfo,
+	externalDbInfoMap map[string]externalDbInfo,
+	opts vtOptions,
+) []byte {
 	var dbInfo externalDbInfo
 	if val, ok := externalDbInfoMap[keyspaceData.keyspace]; ok {
 		dbInfo = val
@@ -575,11 +617,16 @@ func generateVtwork(opts vtOptions) string {
         "]
     depends_on:
       - vtctld
-`,
-		opts.webPort, opts.gRpcPort, opts.topologyFlags, opts.cell)
+`, opts.webPort, opts.gRpcPort, opts.topologyFlags, opts.cell)
 }
 
-func generateSchemaload(tabletAliases []string, postLoadFile string, keyspace string, dbInfo externalDbInfo, opts vtOptions) string {
+func generateSchemaload(
+	tabletAliases []string,
+	postLoadFile string,
+	keyspace string,
+	dbInfo externalDbInfo,
+	opts vtOptions,
+) string {
 	targetTab := tabletAliases[0]
 	schemaFileName := fmt.Sprintf("%s_schema_file.sql", keyspace)
 	externalDb := "0"
