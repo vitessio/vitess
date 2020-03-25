@@ -58,6 +58,7 @@ func fetchColumns(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
 
 func loadMessageInfo(ta *Table, comment string) error {
 	hiddenCols := map[string]struct{}{
+		"priority":   {},
 		"time_next":  {},
 		"epoch":      {},
 		"time_acked": {},
@@ -65,6 +66,7 @@ func loadMessageInfo(ta *Table, comment string) error {
 
 	requiredCols := []string{
 		"id",
+		"priority",
 		"time_next",
 		"epoch",
 		"time_acked",

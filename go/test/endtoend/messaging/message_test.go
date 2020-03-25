@@ -31,12 +31,13 @@ import (
 
 var createMessage = `create table vitess_message(
 	id bigint,
+	priority bigint default 0,
 	time_next bigint default 0,
 	epoch bigint,
 	time_acked bigint,
 	message varchar(128),
 	primary key(id),
-	index next_idx(time_next, epoch),
+	index next_idx(priority, time_next),
 	index ack_idx(time_acked))
 comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
 
@@ -141,13 +142,14 @@ func TestMessage(t *testing.T) {
 
 var createThreeColMessage = `create table vitess_message3(
 	id bigint,
+	priority bigint default 0,
 	time_next bigint default 0,
 	epoch bigint,
 	time_acked bigint,
 	msg1 varchar(128),
 	msg2 bigint,
 	primary key(id),
-	index next_idx(time_next, epoch),
+	index next_idx(priority, time_next),
 	index ack_idx(time_acked))
 comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
 
