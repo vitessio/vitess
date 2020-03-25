@@ -52,6 +52,7 @@ var (
 		{Type: sqltypes.Int64},
 		{Type: sqltypes.Int64},
 		{Type: sqltypes.Int64},
+		{Type: sqltypes.Int64},
 		{Type: sqltypes.VarBinary},
 	}
 )
