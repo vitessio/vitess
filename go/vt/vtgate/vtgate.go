@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -75,8 +76,10 @@ func getTxMode() vtgatepb.TransactionMode {
 		log.Infof("Transaction mode: '%s'", *transactionMode)
 		return vtgatepb.TransactionMode_TWOPC
 	default:
-		log.Warningf("Unrecognized transactionMode '%s'. Continuing with default 'MULTI'", *transactionMode)
-		return vtgatepb.TransactionMode_MULTI
+		fmt.Printf("Invalid option: %v\n", *transactionMode)
+		fmt.Println("Usage: -transaction_mode {SINGLE | MULTI | TWOPC}")
+		os.Exit(1)
+		return -1
 	}
 }
 
