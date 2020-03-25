@@ -266,7 +266,7 @@ func TestBackupTransformImpl(t *testing.T) {
 
 }
 
-// TestBackupTransformError validate backup with test_backup_error
+// TestBackupTransformErrorImpl validate backup with test_backup_error
 // backup_storage_hook, which should fail.
 func TestBackupTransformErrorImpl(t *testing.T) {
 	// restart the replica with transform hook parameter
@@ -309,13 +309,13 @@ func validateManifestFile(t *testing.T, backupLocation string) {
 	require.Nilf(t, err, "error while parsing MANIFEST %v", err)
 
 	// validate manifest
-	transformHook, _ := manifest["TransformHook"]
+	transformHook := manifest["TransformHook"]
 	require.Equalf(t, "test_backup_transform", transformHook, "invalid transformHook in MANIFEST")
-	skipCompress, _ := manifest["SkipCompress"]
+	skipCompress := manifest["SkipCompress"]
 	assert.Equalf(t, skipCompress, true, "invalid value of skipCompress")
 
 	// validate backup files
-	fielEntries, _ := manifest["FileEntries"]
+	fielEntries := manifest["FileEntries"]
 	fileArr, ok := fielEntries.([]interface{})
 	require.True(t, ok)
 	for i := range fileArr {
