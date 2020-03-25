@@ -473,14 +473,15 @@ func generateDefaultTablet(tabAlias, shard, role, keyspace string, dbInfo extern
 	return data
 }
 
-type vtctldOptions struct {
+type vtOptions struct {
 	webPort       int
 	gRpcPort      int
+	mySqlPort     int
 	topologyFlags string
 	cell          string
 }
 
-func generateVtctld2(opts vtctldOptions) string {
+func generateVtctld2(opts vtOptions) string {
 	webPort := strconv.Itoa(opts.webPort)
 	gRpcPort := strconv.Itoa(opts.gRpcPort)
 
@@ -511,7 +512,7 @@ func generateVtctld2(opts vtctldOptions) string {
       - consul1
       - consul2
       - consul3
-`, webPort, gRpcPort, topologyFlags, cell)
+`, webPort, gRpcPort, opts.topologyFlags, opts.cell)
 }
 
 // Generate Vtctld
@@ -519,7 +520,7 @@ func generateVtctld2(opts vtctldOptions) string {
 func generateVtctld() string {
 	webPort2, _ := strconv.Atoi(*webPort)
 	gRpcPort2, _ := strconv.Atoi(*gRpcPort)
-	return generateVtctld2(vtctldOptions{
+	return generateVtctld2(vtOptions{
 		webPort:       webPort2,
 		gRpcPort:      gRpcPort2,
 		topologyFlags: *topologyFlags,
@@ -527,9 +528,12 @@ func generateVtctld() string {
 	})
 }
 
-// Generate Vtgate
-func generateVtgate() string {
-	data := fmt.Sprintf(`
+func generateVtgate2(opts vtOptions) string {
+	webPort := strconv.Itoa(opts.webPort)
+	gRpcPort := strconv.Itoa(opts.gRpcPort)
+	mySqlPort := strconv.Itoa(opts.mySqlPort)
+
+	return fmt.Sprintf(`
 - op: add
   path: /services/vtgate
   value:
@@ -557,9 +561,22 @@ func generateVtgate() string {
       - .:/script
     depends_on:
       - vtctld
-`, *webPort, *gRpcPort, *mySqlPort, *topologyFlags, *cell)
+`, webPort, gRpcPort, mySqlPort, opts.topologyFlags, opts.cell)
+}
 
-	return data
+// Generate Vtgate
+// Deprecated: Replaced by generateVtgate2.
+func generateVtgate() string {
+	webPort2, _ := strconv.Atoi(*webPort)
+	gRpcPort2, _ := strconv.Atoi(*gRpcPort)
+	mySqlPort2, _ := strconv.Atoi(*mySqlPort)
+	return generateVtgate2(vtOptions{
+		webPort:       webPort2,
+		gRpcPort:      gRpcPort2,
+		mySqlPort:     mySqlPort2,
+		topologyFlags: *topologyFlags,
+		cell:          *cell,
+	})
 }
 
 func generateVtwork() string {
