@@ -36,9 +36,10 @@ type IDPool struct {
 }
 
 // NewIDPool creates and initializes an IDPool.
-func NewIDPool() *IDPool {
+func NewIDPool(initialValue uint32) *IDPool {
 	return &IDPool{
-		used: make(map[uint32]bool),
+		used:    make(map[uint32]bool),
+		maxUsed: initialValue,
 	}
 }
 
@@ -54,7 +55,7 @@ func (pool *IDPool) Get() (id uint32) {
 	}
 
 	// No recycled IDs are available, so increase the pool size.
-	pool.maxUsed += 1
+	pool.maxUsed++
 	return pool.maxUsed
 }
 

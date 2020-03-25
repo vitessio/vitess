@@ -18,6 +18,7 @@ package binlog
 
 import (
 	"fmt"
+	"math/rand"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -85,7 +86,9 @@ func connectForReplication(cp dbconfigs.Connector) (*mysql.Conn, error) {
 }
 
 // slaveIDPool is the IDPool for server IDs used to connect as a slave.
-var slaveIDPool = pools.NewIDPool()
+//   We use a randomized value, because RDS doesn't like clients re-using
+//   values among themselves.
+var slaveIDPool = pools.NewIDPool(uint32(rand.Intn(100000000)))
 
 // StartBinlogDumpFromCurrent requests a replication binlog dump from
 // the current position.
