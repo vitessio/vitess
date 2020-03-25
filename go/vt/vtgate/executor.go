@@ -39,7 +39,6 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlannotation"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -282,7 +281,6 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		}
 
 		execStart := time.Now()
-		sql = sqlannotation.AnnotateIfDML(sql, nil)
 		if e.normalize {
 			query, comments := sqlparser.SplitMarginComments(sql)
 			stmt, err := sqlparser.Parse(query)

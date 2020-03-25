@@ -19,12 +19,6 @@ package binlog
 import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlannotation"
-
-	"errors"
-	"fmt"
-
-	"vitess.io/vitess/go/vt/sqlparser"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -51,54 +45,14 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, callback func(*binlogdata
 				binlogdatapb.BinlogTransaction_Statement_BL_DELETE:
 				// Handle RBR case first.
 				if statement.KeyspaceID != nil {
-					if !key.KeyRangeContains(keyrange, statement.KeyspaceID) {
-						// Skip keyspace ids that don't belong to the destination shard.
-						continue
-					}
-					filtered = append(filtered, statement.Statement)
-					matched = true
+					updateStreamErrors.Add("KeyRangeStream", 1)
+					log.Errorf("SBR mode unsupported for streaming: %s", statement.Statement.Sql)
+				}
+				if !key.KeyRangeContains(keyrange, statement.KeyspaceID) {
+					// Skip keyspace ids that don't belong to the destination shard.
 					continue
 				}
-
-				// SBR case.
-				keyspaceIDS, err := sqlannotation.ExtractKeyspaceIDS(string(statement.Statement.Sql))
-				if err != nil {
-					if statement.Statement.Category == binlogdatapb.BinlogTransaction_Statement_BL_INSERT {
-						// TODO(erez): Stop filtered-replication here, and alert.
-						logExtractKeySpaceIDError(err)
-						continue
-					}
-					// If no keyspace IDs are found, we replicate to all targets.
-					// This is safe for UPDATE and DELETE because vttablet rewrites queries to
-					// include the primary key and the query will only affect the shards that
-					// have the rows.
-					filtered = append(filtered, statement.Statement)
-					matched = true
-					continue
-				}
-				if len(keyspaceIDS) == 1 {
-					if !key.KeyRangeContains(keyrange, keyspaceIDS[0]) {
-						// Skip keyspace ids that don't belong to the destination shard.
-						continue
-					}
-					filtered = append(filtered, statement.Statement)
-					matched = true
-					continue
-				}
-				query, err := getValidRangeQuery(string(statement.Statement.Sql), keyspaceIDS, keyrange)
-				if err != nil {
-					log.Errorf("Error parsing statement (%s). Got %v", string(statement.Statement.Sql), err)
-					continue
-				}
-				if query == "" {
-					continue
-				}
-				splitStatement := &binlogdatapb.BinlogTransaction_Statement{
-					Category: statement.Statement.Category,
-					Charset:  statement.Statement.Charset,
-					Sql:      []byte(query),
-				}
-				filtered = append(filtered, splitStatement)
+				filtered = append(filtered, statement.Statement)
 				matched = true
 			case binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
 				updateStreamErrors.Add("KeyRangeStream", 1)
@@ -113,74 +67,5 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, callback func(*binlogdata
 			trans.Statements = filtered
 		}
 		return callback(trans)
-	}
-}
-
-func getValidRangeQuery(sql string, keyspaceIDs [][]byte, keyrange *topodatapb.KeyRange) (query string, err error) {
-	statement, err := sqlparser.Parse(sql)
-	_, marginComments := sqlparser.SplitMarginComments(sql)
-	if err != nil {
-		return "", err
-	}
-
-	switch statement := statement.(type) {
-	case *sqlparser.Insert:
-		query, err := generateSingleInsertQuery(statement, keyspaceIDs, marginComments, keyrange)
-		if err != nil {
-			return "", err
-		}
-		return query, nil
-	default:
-		return "", errors.New("unsupported construct ")
-	}
-}
-
-func generateSingleInsertQuery(ins *sqlparser.Insert, keyspaceIDs [][]byte, marginComments sqlparser.MarginComments, keyrange *topodatapb.KeyRange) (query string, err error) {
-	switch rows := ins.Rows.(type) {
-	case *sqlparser.Select, *sqlparser.Union:
-		return "", errors.New("unsupported: insert into select")
-	case sqlparser.Values:
-		var values sqlparser.Values
-		if len(rows) != len(keyspaceIDs) {
-			return "", fmt.Errorf("length of values tuples %v doesn't match with length of keyspaceids %v", len(values), len(keyspaceIDs))
-		}
-		queryBuf := sqlparser.NewTrackedBuffer(nil)
-		queryBuf.WriteString(marginComments.Leading)
-		for rowNum, val := range rows {
-			if key.KeyRangeContains(keyrange, keyspaceIDs[rowNum]) {
-				values = append(values, val)
-			}
-		}
-		if len(values) == 0 {
-			return "", nil
-		}
-		ins.Rows = values
-		ins.Format(queryBuf)
-		queryBuf.WriteString(marginComments.Trailing)
-		return queryBuf.String(), nil
-
-	default:
-		return "", errors.New("unexpected construct in insert")
-	}
-}
-
-func logExtractKeySpaceIDError(err error) {
-	extractErr, ok := err.(*sqlannotation.ExtractKeySpaceIDError)
-	if !ok {
-		log.Fatalf("Expected sqlannotation.ExtractKeySpaceIDError. Got: %v", err)
-	}
-	switch extractErr.Kind {
-	case sqlannotation.ExtractKeySpaceIDParseError:
-		log.Errorf(
-			"Error parsing keyspace id annotation. Skipping statement. (%s)", extractErr.Message)
-		updateStreamErrors.Add("ExtractKeySpaceIDParseError", 1)
-	case sqlannotation.ExtractKeySpaceIDReplicationUnfriendlyError:
-		log.Errorf(
-			"Found replication unfriendly statement. (%s). "+
-				"Filtered replication should abort, but we're currently just skipping the statement.",
-			extractErr.Message)
-		updateStreamErrors.Add("ExtractKeySpaceIDReplicationUnfriendlyError", 1)
-	default:
-		log.Fatalf("Unexpected extractErr.Kind. (%v)", extractErr)
 	}
 }
