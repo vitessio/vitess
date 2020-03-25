@@ -35,14 +35,13 @@ import (
 )
 
 const (
-	// TODO: Make these ints insteads of strings.
-	DEFAULT_WEB_PORT         = "8080"
-	DEFAULT_GRPC_PORT        = "15999"
-	DEFAULT_MYSQL_PORT       = "15306"
-	DEFAULT_KEYSPACE_DATA    = "test_keyspace:2:1:create_messages.sql,create_tokens.sql;unsharded_keyspace:0:0:create_dinosaurs.sql,create_eggs.sql"
-	DEFAULT_CELL             = "test"
-	DEFAULT_EXTERNAL_DB_DATA = ""
-	DEFAULT_TOPOLOGY_FLAGS   = "-topo_implementation consul -topo_global_server_address consul1:8500 -topo_global_root vitess/global"
+	DefaultWebPort        = 8080
+	DefaultGrpcPort       = 15999
+	DefaultMysqlPort      = 15306
+	DefaultKeyspaceData   = "test_keyspace:2:1:create_messages.sql,create_tokens.sql;unsharded_keyspace:0:0:create_dinosaurs.sql,create_eggs.sql"
+	DefaultCell           = "test"
+	DefaultExternalDbData = ""
+	DefaultTopologyFlags  = "-topo_implementation consul -topo_global_server_address consul1:8500 -topo_global_root vitess/global"
 )
 
 var (
@@ -51,13 +50,13 @@ var (
 	baseDockerComposeFile = flag.String("base_yaml", "vtcompose/docker-compose.base.yml", "Starting docker-compose yaml")
 	baseVschemaFile       = flag.String("base_vschema", "vtcompose/base_vschema.json", "Starting vschema json")
 
-	topologyFlags  = flag.String("topologyFlags", DEFAULT_TOPOLOGY_FLAGS, "Vitess Topology Flags config")
-	webPort        = flag.String("webPort", DEFAULT_WEB_PORT, "Web port to be used")
-	gRpcPort       = flag.String("gRpcPort", DEFAULT_GRPC_PORT, "gRPC port to be used")
-	mySqlPort      = flag.String("mySqlPort", DEFAULT_MYSQL_PORT, "mySql port to be used")
-	cell           = flag.String("cell", DEFAULT_CELL, "Vitess Cell name")
-	keyspaceData   = flag.String("keyspaceData", DEFAULT_KEYSPACE_DATA, "List of keyspace_name/external_db_name:num_of_shards:num_of_replica_tablets:schema_files:<optional>lookup_keyspace_name separated by ';'")
-	externalDbData = flag.String("externalDbData", DEFAULT_EXTERNAL_DB_DATA, "List of Data corresponding to external DBs. List of <external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET> separated by ';'")
+	topologyFlags  = flag.String("topologyFlags", DefaultTopologyFlags, "Vitess Topology Flags config")
+	webPort        = flag.Int("webPort", DefaultWebPort, "Web port to be used")
+	gRpcPort       = flag.Int("gRpcPort", DefaultGrpcPort, "gRPC port to be used")
+	mySqlPort      = flag.Int("mySqlPort", DefaultMysqlPort, "mySql port to be used")
+	cell           = flag.String("cell", DefaultCell, "Vitess Cell name")
+	keyspaceData   = flag.String("keyspaceData", DefaultKeyspaceData, "List of keyspace_name/external_db_name:num_of_shards:num_of_replica_tablets:schema_files:<optional>lookup_keyspace_name separated by ';'")
+	externalDbData = flag.String("externalDbData", DefaultExternalDbData, "List of Data corresponding to external DBs. List of <external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET> separated by ';'")
 )
 
 type keyspaceInfo struct {
@@ -407,7 +406,7 @@ func applyDefaultDockerPatches(dockerComposeFile []byte) []byte {
 }
 
 func applyDockerComposePatches(dockerComposeFile []byte, keyspaceInfoMap map[string]keyspaceInfo, externalDbInfoMap map[string]externalDbInfo) []byte {
-	//Vtctld, vtgate, vtwork patches
+	// Vtctld, vtgate, vtwork patches.
 	dockerComposeFile = applyDefaultDockerPatches(dockerComposeFile)
 	for _, keyspaceData := range keyspaceInfoMap {
 		dockerComposeFile = applyKeyspaceDependentPatches(dockerComposeFile, keyspaceData, externalDbInfoMap)
@@ -428,49 +427,61 @@ func applyTabletPatches(dockerComposeFile []byte, tabAlias int, shard string, ke
 	return dockerComposeFile
 }
 
-// Default Tablet
-func generateDefaultTablet(tabAlias, shard, role, keyspace string, dbInfo externalDbInfo) string {
+func generateDefaultTablet2(tabAlias int, shard, role, keyspace string, dbInfo externalDbInfo, opts vtOptions) string {
 	externalDb := "0"
 	if dbInfo.dbName != "" {
 		externalDb = "1"
 	}
-	data := fmt.Sprintf(`
+
+	return fmt.Sprintf(`
 - op: add
-  path: /services/vttablet%[1]s
+  path: /services/vttablet%[1]d
   value:
     image: vitess/base
     ports:
-    - "15%[1]s:%[4]s"
-    - "%[5]s"
+    - "15%[1]d:%[4]d"
+    - "%[5]d"
     - "3306"
     volumes:
     - ".:/script"
     environment:
     - TOPOLOGY_FLAGS=%[7]s
-    - WEB_PORT=%[4]s
-    - GRPC_PORT=%[5]s
+    - WEB_PORT=%[4]d
+    - GRPC_PORT=%[5]d
     - CELL=%[8]s
     - KEYSPACE=%[6]s
     - SHARD=%[2]s
     - ROLE=%[3]s
-    - VTHOST=vttablet%[1]s
+    - VTHOST=vttablet%[1]d
     - EXTERNAL_DB=%[9]s
     - DB_PORT=%[10]s
     - DB_HOST=%[11]s
     - DB_USER=%[12]s
     - DB_PASS=%[13]s
     - DB_CHARSET=%[14]s
-    command: ["sh", "-c", "/script/vttablet-up.sh %[1]s"]
+    command: ["sh", "-c", "/script/vttablet-up.sh %[1]d"]
     depends_on:
       - vtctld
     healthcheck:
-        test: ["CMD-SHELL","curl localhost:%[4]s/debug/health"]
+        test: ["CMD-SHELL","curl localhost:%[4]d/debug/health"]
         interval: 30s
         timeout: 10s
         retries: 15
-`, tabAlias, shard, role, *webPort, *gRpcPort, keyspace, *topologyFlags, *cell, externalDb, dbInfo.dbPort, dbInfo.dbHost, dbInfo.dbUser, dbInfo.dbPass, dbInfo.dbCharset)
+`,
+		tabAlias, shard, role, opts.webPort, opts.gRpcPort, keyspace, opts.topologyFlags, opts.cell, externalDb,
+		dbInfo.dbPort, dbInfo.dbHost, dbInfo.dbUser, dbInfo.dbPass, dbInfo.dbCharset)
+}
 
-	return data
+// Default Tablet
+// Deprecated: Replaced by generateDefaultTablet2.
+func generateDefaultTablet(tabAlias, shard, role, keyspace string, dbInfo externalDbInfo) string {
+	tabAlias2, _ := strconv.Atoi(tabAlias)
+	return generateDefaultTablet2(tabAlias2, shard, role, keyspace, dbInfo, vtOptions{
+		webPort:       *webPort,
+		gRpcPort:      *gRpcPort,
+		topologyFlags: *topologyFlags,
+		cell:          *cell,
+	})
 }
 
 type vtOptions struct {
@@ -518,36 +529,30 @@ func generateVtctld2(opts vtOptions) string {
 // Generate Vtctld
 // Deprecated: Replaced by generateVtctld2.
 func generateVtctld() string {
-	webPort2, _ := strconv.Atoi(*webPort)
-	gRpcPort2, _ := strconv.Atoi(*gRpcPort)
 	return generateVtctld2(vtOptions{
-		webPort:       webPort2,
-		gRpcPort:      gRpcPort2,
+		webPort:       *webPort,
+		gRpcPort:      *gRpcPort,
 		topologyFlags: *topologyFlags,
 		cell:          *cell,
 	})
 }
 
 func generateVtgate2(opts vtOptions) string {
-	webPort := strconv.Itoa(opts.webPort)
-	gRpcPort := strconv.Itoa(opts.gRpcPort)
-	mySqlPort := strconv.Itoa(opts.mySqlPort)
-
 	return fmt.Sprintf(`
 - op: add
   path: /services/vtgate
   value:
     image: vitess/base
     ports:
-      - "15099:%[1]s"
-      - "%[2]s"
-      - "15306:%[3]s"
+      - "15099:%[1]d"
+      - "%[2]d"
+      - "15306:%[3]d"
     command: ["sh", "-c", "/script/run-forever.sh $$VTROOT/bin/vtgate \
         %[4]s \
         -logtostderr=true \
-        -port %[1]s \
-        -grpc_port %[2]s \
-        -mysql_server_port %[3]s \
+        -port %[1]d \
+        -grpc_port %[2]d \
+        -mysql_server_port %[3]d \
         -mysql_auth_server_impl none \
         -cell %[5]s \
         -cells_to_watch %[5]s \
@@ -561,51 +566,57 @@ func generateVtgate2(opts vtOptions) string {
       - .:/script
     depends_on:
       - vtctld
-`, webPort, gRpcPort, mySqlPort, opts.topologyFlags, opts.cell)
+`, opts.webPort, opts.gRpcPort, opts.mySqlPort, opts.topologyFlags, opts.cell)
 }
 
 // Generate Vtgate
 // Deprecated: Replaced by generateVtgate2.
 func generateVtgate() string {
-	webPort2, _ := strconv.Atoi(*webPort)
-	gRpcPort2, _ := strconv.Atoi(*gRpcPort)
-	mySqlPort2, _ := strconv.Atoi(*mySqlPort)
 	return generateVtgate2(vtOptions{
-		webPort:       webPort2,
-		gRpcPort:      gRpcPort2,
-		mySqlPort:     mySqlPort2,
+		webPort:       *webPort,
+		gRpcPort:      *gRpcPort,
+		mySqlPort:     *mySqlPort,
 		topologyFlags: *topologyFlags,
 		cell:          *cell,
 	})
 }
 
-func generateVtwork() string {
-	data := fmt.Sprintf(`
+func generateVtwork2(opts vtOptions) string {
+	return fmt.Sprintf(`
 - op: add
   path: /services/vtwork
   value:
     image: vitess/base
     ports:
-      - "15100:%[1]s"
-      - "%[2]s"
+      - "15100:%[1]d"
+      - "%[2]d"
     command: ["sh", "-c", "$$VTROOT/bin/vtworker \
         %[3]s \
         -cell %[4]s \
         -logtostderr=true \
         -service_map 'grpc-vtworker' \
-        -port %[1]s \
-        -grpc_port %[2]s \
+        -port %[1]d \
+        -grpc_port %[2]d \
         -use_v3_resharding_mode=true \
         -pid_file $$VTDATAROOT/tmp/vtwork.pid \
         "]
     depends_on:
       - vtctld
-`, *webPort, *gRpcPort, *topologyFlags, *cell)
-
-	return data
+`,
+		opts.webPort, opts.gRpcPort, opts.topologyFlags, opts.cell)
 }
 
-func generateSchemaload(tabletAliases []string, postLoadFile string, keyspace string, dbInfo externalDbInfo) string {
+// Deprecated: Replaced by generateVtwork2.
+func generateVtwork() string {
+	return generateVtwork2(vtOptions{
+		webPort:       *webPort,
+		gRpcPort:      *gRpcPort,
+		topologyFlags: *topologyFlags,
+		cell:          *cell,
+	})
+}
+
+func generateSchemaload2(tabletAliases []string, postLoadFile string, keyspace string, dbInfo externalDbInfo, opts vtOptions) string {
 	targetTab := tabletAliases[0]
 	schemaFileName := fmt.Sprintf("%s_schema_file.sql", keyspace)
 	externalDb := "0"
@@ -617,10 +628,8 @@ func generateSchemaload(tabletAliases []string, postLoadFile string, keyspace st
 
 	// Formatting for list in yaml
 	for i, tabletId := range tabletAliases {
-		//tabletAliases[i] = "\"vttablet" + tabletId + "\""
 		tabletAliases[i] = "vttablet" + tabletId + ": " + "{condition : service_healthy}"
 	}
-	//dependsOn := "[" + strings.Join(tabletAliases, ", ") + "]"
 	dependsOn := "depends_on: {" + strings.Join(tabletAliases, ", ") + "}"
 
 	data := fmt.Sprintf(`
@@ -632,8 +641,8 @@ func generateSchemaload(tabletAliases []string, postLoadFile string, keyspace st
       - ".:/script"
     environment:
       - TOPOLOGY_FLAGS=%[3]s
-      - WEB_PORT=%[4]s
-      - GRPC_PORT=%[5]s
+      - WEB_PORT=%[4]d
+      - GRPC_PORT=%[5]d
       - CELL=%[6]s
       - KEYSPACE=%[7]s
       - TARGETTAB=%[6]s-0000000%[2]s
@@ -644,12 +653,22 @@ func generateSchemaload(tabletAliases []string, postLoadFile string, keyspace st
       - EXTERNAL_DB=%[10]s
     command: ["sh", "-c", "/script/schemaload.sh"]
     %[1]s
-`, dependsOn, targetTab, *topologyFlags, *webPort, *gRpcPort, *cell, keyspace, postLoadFile, schemaFileName, externalDb)
+`, dependsOn, targetTab, opts.topologyFlags, opts.webPort, opts.gRpcPort, opts.cell, keyspace, postLoadFile, schemaFileName, externalDb)
 
 	return data
 }
 
-func generatePrimaryVIndex(tableName, column string, name string) string {
+// Deprecated: Replaced by generateSchemaload2.
+func generateSchemaload(tabletAliases []string, postLoadFile string, keyspace string, dbInfo externalDbInfo) string {
+	return generateSchemaload2(tabletAliases, postLoadFile, keyspace, dbInfo, vtOptions{
+		webPort:       *webPort,
+		gRpcPort:      *gRpcPort,
+		topologyFlags: *topologyFlags,
+		cell:          *cell,
+	})
+}
+
+func generatePrimaryVIndex(tableName, column, name string) string {
 	data := fmt.Sprintf(`
 [{"op": "add",
 "path": "/tables/%[1]s",
