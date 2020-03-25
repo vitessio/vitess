@@ -67,6 +67,14 @@ var (
 	externalDbData = flag.String("externalDbData", DefaultExternalDbData, externalDbDataUsage)
 )
 
+type vtOptions struct {
+	webPort       int
+	gRpcPort      int
+	mySqlPort     int
+	topologyFlags string
+	cell          string
+}
+
 type keyspaceInfo struct {
 	keyspace        string
 	shards          int
@@ -84,14 +92,6 @@ type externalDbInfo struct {
 	dbUser    string
 	dbPass    string
 	dbCharset string
-}
-
-type vtOptions struct {
-	webPort       int
-	gRpcPort      int
-	mySqlPort     int
-	topologyFlags string
-	cell          string
 }
 
 func newKeyspaceInfo(
@@ -118,6 +118,10 @@ func newKeyspaceInfo(
 	return k
 }
 
+func newExternalDbInfo(dbName, dbHost, dbPort, dbUser, dbPass, dbCharset string) externalDbInfo {
+	return externalDbInfo{dbName: dbName, dbHost: dbHost, dbPort: dbPort, dbUser: dbUser, dbPass: dbPass, dbCharset: dbCharset}
+}
+
 func parseKeyspaceInfo(keyspaceData string) map[string]keyspaceInfo {
 	keyspaceInfoMap := make(map[string]keyspaceInfo)
 
@@ -136,10 +140,6 @@ func parseKeyspaceInfo(keyspaceData string) map[string]keyspaceInfo {
 	}
 
 	return keyspaceInfoMap
-}
-
-func newExternalDbInfo(dbName, dbHost, dbPort, dbUser, dbPass, dbCharset string) externalDbInfo {
-	return externalDbInfo{dbName: dbName, dbHost: dbHost, dbPort: dbPort, dbUser: dbUser, dbPass: dbPass, dbCharset: dbCharset}
 }
 
 func parseExternalDbData(externalDbData string) map[string]externalDbInfo {
