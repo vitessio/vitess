@@ -130,7 +130,6 @@ func parseKeyspaceInfo(keyspaceData string) map[string]keyspaceInfo {
 		shards, _ := strconv.Atoi(tokens[1])
 		replicaTablets, _ := strconv.Atoi(tokens[2])
 		schemaFileNames := strings.Split(tokens[3], ",")
-		print(shards)
 
 		if len(tokens) > 4 {
 			keyspaceInfoMap[tokens[0]] = newKeyspaceInfo(tokens[0], shards, replicaTablets, schemaFileNames, tokens[4])
@@ -327,7 +326,6 @@ func getKeyColumns(sqlFile string) string {
 
 	r, _ := regexp.Compile("[^PRIMARY] (KEY|UNIQUE KEY) .*\\((.*)\\).*")
 	rs := r.FindStringSubmatch(string(sqlFileData))
-	print(rs[2])
 	// replace all ` from column names if exists
 	return strings.ReplaceAll(rs[2], "`", "")
 }
@@ -370,8 +368,8 @@ func addLookupDataToVschema(
 		vSchemaFile = applyJsonInMemoryPatch(vSchemaFile, addToColumnVIndexes(lookupTableOwner, firstColumnName, tableName))
 
 		// Generate Vschema lookup hash types
-		vSchemaFile = applyJsonInMemoryPatch(vSchemaFile,
-			generateVschemaLookupHash(tableName, keyspace, firstColumnName, primaryTableColumns[lookupTableOwner], lookupTableOwner))
+		lookupHash := generateVschemaLookupHash(tableName, keyspace, firstColumnName, primaryTableColumns[lookupTableOwner], lookupTableOwner)
+		vSchemaFile = applyJsonInMemoryPatch(vSchemaFile, lookupHash)
 	}
 
 	return vSchemaFile
@@ -525,9 +523,7 @@ func generateDefaultTablet(tabAlias int, shard, role, keyspace string, dbInfo ex
         interval: 30s
         timeout: 10s
         retries: 15
-`,
-		tabAlias, shard, role, opts.webPort, opts.gRpcPort, keyspace, opts.topologyFlags, opts.cell, externalDb,
-		dbInfo.dbPort, dbInfo.dbHost, dbInfo.dbUser, dbInfo.dbPass, dbInfo.dbCharset)
+`, tabAlias, shard, role, opts.webPort, opts.gRpcPort, keyspace, opts.topologyFlags, opts.cell, externalDb, dbInfo.dbPort, dbInfo.dbHost, dbInfo.dbUser, dbInfo.dbPass, dbInfo.dbCharset)
 }
 
 func generateVtctld(opts vtOptions) string {
