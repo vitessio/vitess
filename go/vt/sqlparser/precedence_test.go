@@ -18,7 +18,6 @@ package sqlparser
 
 import (
 	"fmt"
-	"math/rand"
 	"testing"
 	"time"
 
@@ -140,6 +139,7 @@ func TestParens(t *testing.T) {
 		{in: "(a) between (5) and (7)", expected: "a between 5 and 7"},
 		{in: "(a | b) between (5) and (7)", expected: "a | b between 5 and 7"},
 		{in: "(a and b) between (5) and (7)", expected: "(a and b) between 5 and 7"},
+		{in: "(true is true) is null", expected: "(true is true) is null"},
 	}
 
 	for _, tc := range tests {
@@ -157,11 +157,8 @@ func TestRandom(t *testing.T) {
 	// The idea is to generate random queries, and pass them through the parser and then the unparser, and one more time. The result of the first unparse should be the same as the second result.
 	seed := time.Now().UnixNano()
 	fmt.Println(fmt.Sprintf("seed is %d", seed))
-	g := generator{
-		seed: seed,
-		r:    rand.New(rand.NewSource(seed)),
-	}
-	endBy := time.Now().Add(5 * time.Second)
+	g := newGenerator(seed, 5)
+	endBy := time.Now().Add(1 * time.Second)
 
 	for {
 		if time.Now().After(endBy) {
@@ -173,7 +170,7 @@ func TestRandom(t *testing.T) {
 
 		// When it's parsed and unparsed
 		parsedInput, err := Parse(inputQ)
-		require.NoError(t, err)
+		require.NoError(t, err, inputQ)
 
 		// Then the unparsing should be the same as the input query
 		outputOfParseResult := String(parsedInput)
