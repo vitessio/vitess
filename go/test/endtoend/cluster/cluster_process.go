@@ -344,7 +344,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 // the required services (ex topo, vtgate, mysql and vttablet)
 func (cluster *LocalProcessCluster) LaunchCluster(keyspace *Keyspace, shards []Shard) (err error) {
 
-	log.Infof("Starting keyspace : %v", keyspace.Name)
+	log.Infof("Starting keyspace: %v", keyspace.Name)
 
 	// Create Keyspace
 	err = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
@@ -577,6 +577,7 @@ func (cluster *LocalProcessCluster) GetAndReservePort() int {
 	}
 	for {
 		cluster.nextPortForProcess = cluster.nextPortForProcess + 1
+		log.Infof("Attempting to reserve port: %v", cluster.nextPortForProcess)
 		ln, err := net.Listen("tcp", fmt.Sprintf(":%v", cluster.nextPortForProcess))
 
 		if err != nil {
@@ -584,6 +585,7 @@ func (cluster *LocalProcessCluster) GetAndReservePort() int {
 			continue
 		}
 
+		log.Infof("Port %v is available, reserving..", cluster.nextPortForProcess)
 		ln.Close()
 		break
 	}
