@@ -20,13 +20,10 @@ limitations under the License.
 package fakerpcvtgateconn
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"math/rand"
 	"reflect"
-	"sort"
-	"strings"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
@@ -45,22 +42,10 @@ type queryExecute struct {
 	Session       *vtgatepb.Session
 }
 
-// queryExecuteShards contains all the fields we use to test ExecuteShards
-type queryExecuteShards struct {
-	SQL              string
-	BindVariables    map[string]*querypb.BindVariable
-	Keyspace         string
-	Shards           []string
-	TabletType       topodatapb.TabletType
-	Session          *vtgatepb.Session
-	NotInTransaction bool
-}
-
 type queryResponse struct {
-	execQuery  *queryExecute
-	shardQuery *queryExecuteShards
-	reply      *sqltypes.Result
-	err        error
+	execQuery *queryExecute
+	reply     *sqltypes.Result
+	err       error
 }
 
 // FakeVTGateConn provides a fake implementation of vtgateconn.Impl
@@ -93,30 +78,6 @@ func (conn *FakeVTGateConn) AddQuery(
 			SQL:           sql,
 			BindVariables: bindVariables,
 			Session:       session,
-		},
-		reply: expectedResult,
-	}
-}
-
-// AddShardQuery adds a shard query and expected result.
-func (conn *FakeVTGateConn) AddShardQuery(
-	sql string,
-	bindVariables map[string]*querypb.BindVariable,
-	keyspace string,
-	shards []string,
-	tabletType topodatapb.TabletType,
-	session *vtgatepb.Session,
-	notInTransaction bool,
-	expectedResult *sqltypes.Result) {
-	conn.execMap[getShardQueryKey(sql, shards)] = &queryResponse{
-		shardQuery: &queryExecuteShards{
-			SQL:              sql,
-			BindVariables:    bindVariables,
-			Keyspace:         keyspace,
-			Shards:           shards,
-			TabletType:       tabletType,
-			Session:          session,
-			NotInTransaction: notInTransaction,
 		},
 		reply: expectedResult,
 	}
@@ -184,60 +145,6 @@ func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, session *vtgatepb
 	return &streamExecuteAdapter{resultChan}, nil
 }
 
-// ExecuteShards please see vtgateconn.Impl.ExecuteShard
-func (conn *FakeVTGateConn) ExecuteShards(ctx context.Context, sql string, keyspace string, shards []string, bindVars map[string]*querypb.BindVariable, tabletType topodatapb.TabletType, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, *sqltypes.Result, error) {
-	var s *vtgatepb.Session
-	if session != nil {
-		s = session
-	}
-	response, ok := conn.execMap[getShardQueryKey(sql, shards)]
-	if !ok {
-		return nil, nil, fmt.Errorf("no match for: %s", sql)
-	}
-	query := &queryExecuteShards{
-		SQL:           sql,
-		BindVariables: bindVars,
-		TabletType:    tabletType,
-		Keyspace:      keyspace,
-		Shards:        shards,
-		Session:       s,
-	}
-	if !reflect.DeepEqual(query, response.shardQuery) {
-		return nil, nil, fmt.Errorf(
-			"ExecuteShards: %+v, want %+v", query, response.shardQuery)
-	}
-	reply := *response.reply
-	if s != nil {
-		s = newSession(true, keyspace, shards, tabletType)
-	}
-	return s, &reply, nil
-}
-
-// ExecuteKeyspaceIds please see vtgateconn.Impl.ExecuteKeyspaceIds
-func (conn *FakeVTGateConn) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]*querypb.BindVariable, tabletType topodatapb.TabletType, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, *sqltypes.Result, error) {
-	panic("not implemented")
-}
-
-// ExecuteKeyRanges please see vtgateconn.Impl.ExecuteKeyRanges
-func (conn *FakeVTGateConn) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*topodatapb.KeyRange, bindVars map[string]*querypb.BindVariable, tabletType topodatapb.TabletType, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, *sqltypes.Result, error) {
-	panic("not implemented")
-}
-
-// ExecuteEntityIds please see vtgateconn.Impl.ExecuteEntityIds
-func (conn *FakeVTGateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*vtgatepb.ExecuteEntityIdsRequest_EntityId, bindVars map[string]*querypb.BindVariable, tabletType topodatapb.TabletType, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, *sqltypes.Result, error) {
-	panic("not implemented")
-}
-
-// ExecuteBatchShards please see vtgateconn.Impl.ExecuteBatchShards
-func (conn *FakeVTGateConn) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, []sqltypes.Result, error) {
-	panic("not implemented")
-}
-
-// ExecuteBatchKeyspaceIds please see vtgateconn.Impl.ExecuteBatchKeyspaceIds
-func (conn *FakeVTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, []sqltypes.Result, error) {
-	panic("not implemented")
-}
-
 type streamExecuteAdapter struct {
 	c chan *sqltypes.Result
 }
@@ -250,65 +157,9 @@ func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
 	return r, nil
 }
 
-// StreamExecuteShards please see vtgateconn.Impl.StreamExecuteShards
-func (conn *FakeVTGateConn) StreamExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]*querypb.BindVariable, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error) {
-	panic("not implemented")
-}
-
-// StreamExecuteKeyRanges please see vtgateconn.Impl.StreamExecuteKeyRanges
-func (conn *FakeVTGateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*topodatapb.KeyRange, bindVars map[string]*querypb.BindVariable, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error) {
-	panic("not implemented")
-}
-
-// StreamExecuteKeyspaceIds please see vtgateconn.Impl.StreamExecuteKeyspaceIds
-func (conn *FakeVTGateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]*querypb.BindVariable, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error) {
-	panic("not implemented")
-}
-
-// Begin please see vtgateconn.Impl.Begin
-func (conn *FakeVTGateConn) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
-	return &vtgatepb.Session{
-		InTransaction: true,
-		SingleDb:      singledb,
-	}, nil
-}
-
-// Commit please see vtgateconn.Impl.Commit
-func (conn *FakeVTGateConn) Commit(ctx context.Context, session *vtgatepb.Session, twopc bool) error {
-	if session == nil {
-		return errors.New("commit: not in transaction")
-	}
-	return nil
-}
-
-// Rollback please see vtgateconn.Impl.Rollback
-func (conn *FakeVTGateConn) Rollback(ctx context.Context, session *vtgatepb.Session) error {
-	return nil
-}
-
 // ResolveTransaction please see vtgateconn.Impl.ResolveTransaction
 func (conn *FakeVTGateConn) ResolveTransaction(ctx context.Context, dtid string) error {
 	return nil
-}
-
-// MessageStream is part of the vtgate service API.
-func (conn *FakeVTGateConn) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error {
-	panic("not implemented")
-}
-
-// MessageAck is part of the vtgate service API.
-func (conn *FakeVTGateConn) MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error) {
-	panic("not implemented")
-}
-
-// MessageAckKeyspaceIds is part of the vtgate service API.
-func (conn *FakeVTGateConn) MessageAckKeyspaceIds(ctx context.Context, keyspace string, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error) {
-	panic("not implemented")
-}
-
-// GetSrvKeyspace please see vtgateconn.Impl.GetSrvKeyspace
-func (conn *FakeVTGateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {
-	return nil, fmt.Errorf("NYI")
 }
 
 // VStream streams binlog events.
@@ -318,11 +169,6 @@ func (conn *FakeVTGateConn) VStream(ctx context.Context, tabletType topodatapb.T
 
 // Close please see vtgateconn.Impl.Close
 func (conn *FakeVTGateConn) Close() {
-}
-
-func getShardQueryKey(sql string, shards []string) string {
-	sort.Strings(shards)
-	return fmt.Sprintf("%s-%s", sql, strings.Join(shards, ":"))
 }
 
 func newSession(
