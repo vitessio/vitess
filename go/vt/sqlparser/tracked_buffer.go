@@ -154,9 +154,26 @@ func (buf *TrackedBuffer) formatter(node SQLNode) {
 }
 
 func needParens(op, val Expr) bool {
+	if areBothISExpr(op, val) {
+		return true
+	}
+
 	opBinding := precedenceFor(op)
 	valBinding := precedenceFor(val)
+
 	return !(opBinding == Syntactic || valBinding == Syntactic) && valBinding > opBinding
+}
+
+func areBothISExpr(op Expr, val Expr) bool {
+	_, isOpIS := op.(*IsExpr)
+	if isOpIS {
+		_, isValIS := val.(*IsExpr)
+		if isValIS {
+			// when using IS on an IS op, we need special handling
+			return true
+		}
+	}
+	return false
 }
 
 // WriteArg writes a value argument into the buffer along with
