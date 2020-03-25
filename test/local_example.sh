@@ -40,11 +40,11 @@ for shard in "customer/0"; do
  done;
 done;
 
-./202_migrate_tables.sh
+./202_move_tables.sh
 
-./203_migrate_replicas.sh
+./203_switch_reads.sh
 
-./204_migrate_master.sh
+./204_switch_writes.sh
 
 mysql -h 127.0.0.1 -P 15306 --table < ../common/select_customer0_data.sql
 # Expected to fail!
@@ -68,8 +68,8 @@ done;
 
 ./303_reshard.sh
 
-./304_migrate_replicas.sh
-./305_migrate_master.sh
+./304_switch_reads.sh
+./305_switch_writes.sh
 
 mysql -h 127.0.0.1 -P 15306 --table < ../common/select_customer-80_data.sql
 mysql -h 127.0.0.1 -P 15306 --table < ../common/select_customer80-_data.sql

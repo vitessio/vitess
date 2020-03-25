@@ -21,5 +21,5 @@ vtctlclient \
  -server localhost:15999 \
  -log_dir "$VTDATAROOT"/tmp \
  -alsologtostderr \
- MigrateWrites \
+ SwitchWrites \
  customer.commerce2customer

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 202- The Vitess Authors.
+# Copyright 2020 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,23 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this script migrates traffic for the new customer keyspace to the new
-# tablets of types rdonly and replica
-
+# this script migrates traffic for the rdonly and replica tablets
 
 vtctlclient \
  -server localhost:15999 \
  -log_dir "$VTDATAROOT"/tmp \
  -alsologtostderr \
- MigrateReads \
+ SwitchReads \
  -tablet_type=rdonly \
- customer.commerce2customer
+ customer.cust2cust
 
 vtctlclient \
  -server localhost:15999 \
  -log_dir "$VTDATAROOT"/tmp \
  -alsologtostderr \
- MigrateReads \
+ SwitchReads \
  -tablet_type=replica \
- customer.commerce2customer
-
+ customer.cust2cust
