@@ -17,7 +17,9 @@
 package main
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/assert"
+	"strconv"
 	"testing"
 )
 
@@ -35,11 +37,41 @@ var (
 	referenceFile         string
 )
 
-func TestGeneratesCorrectFileWithDefaultOpts(t *testing.T) {
+func TestGenerateCorrectFileWithDefaultOpts(t *testing.T) {
 	baseFile := testComposeFile
 	finalFile := applyDockerComposePatches(baseFile, testKeyspaceInfoMap, testExternalDbInfoMap, testVtOpts)
 
-	assert.YAMLEq(t, referenceFile, string(finalFile))
+	yamlString := string(finalFile)
+	assert.YAMLEq(t, referenceFile, yamlString)
+}
+
+func TestOptsAppliedThroughoutGeneratedFile(t *testing.T) {
+	baseFile := testComposeFile
+	options := vtOptions{
+		webPort:       55_555,
+		gRpcPort:      66_666,
+		mySqlPort:     77_777,
+		topologyFlags: "-custom -flags",
+		cell:          "custom cell",
+	}
+	finalFile := applyDockerComposePatches(baseFile, testKeyspaceInfoMap, testExternalDbInfoMap, options)
+	yamlString := string(finalFile)
+
+	// These asserts are not exhaustive, but should cover most cases.
+	assert.NotContains(t, yamlString, strconv.Itoa(DefaultWebPort))
+	assert.Contains(t, yamlString, strconv.Itoa(options.webPort))
+
+	assert.NotContains(t, yamlString, strconv.Itoa(DefaultGrpcPort))
+	assert.Contains(t, yamlString, strconv.Itoa(options.gRpcPort))
+
+	assert.NotContains(t, yamlString, ":"+strconv.Itoa(DefaultMysqlPort))
+	assert.Contains(t, yamlString, ":"+strconv.Itoa(options.webPort))
+
+	assert.NotContains(t, yamlString, fmt.Sprintf("-cell %s", DefaultCell))
+	assert.Contains(t, yamlString, fmt.Sprintf("-cell %s", options.cell))
+
+	assert.Contains(t, yamlString, fmt.Sprintf("- TOPOLOGY_FLAGS=%s", options.topologyFlags))
+	assert.NotContains(t, yamlString, DefaultTopologyFlags)
 }
 
 func init() {
