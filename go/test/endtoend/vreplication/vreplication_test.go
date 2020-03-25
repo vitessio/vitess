@@ -97,7 +97,7 @@ func insertMoreCustomers(t *testing.T, numCustomers int) {
 	sql := "insert into customer (name) values "
 	i := 0
 	for i < numCustomers {
-		i += 1
+		i++
 		sql += fmt.Sprintf("('customer%d')", i)
 		if i != numCustomers {
 			sql += ","
@@ -271,7 +271,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 	tablets := vc.getVttabletsInKeyspace(t, cell, ksName, "master")
 	targetShards = "," + targetShards + ","
 	for _, tab := range tablets {
-		if strings.Index(targetShards, ","+tab.Shard+",") >= 0 {
+		if strings.Contains(targetShards, ","+tab.Shard+",") {
 			fmt.Printf("Waiting for vrepl to catch up on %s since it IS a target shard\n", tab.Shard)
 			if vc.WaitForVReplicationToCatchup(tab, workflow, "vt_"+ksName, 3*time.Second) != nil {
 				t.Fatal("Reshard timed out")
@@ -291,13 +291,11 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", ksWorkflow); err != nil {
 		t.Fatalf("SwitchWrites error: %s\n", output)
 	}
-	if counts != nil {
-		for tabletName, count := range counts {
-			if tablets[tabletName] == nil {
-				continue
-			}
-			assert.Empty(t, validateCountInTablet(t, tablets[tabletName], ksName, tableName, count))
+	for tabletName, count := range counts {
+		if tablets[tabletName] == nil {
+			continue
 		}
+		assert.Empty(t, validateCountInTablet(t, tablets[tabletName], ksName, tableName, count))
 	}
 }
 
@@ -394,7 +392,7 @@ func vdiff(t *testing.T, workflow string) {
 	assert.True(t, len(diffReports) > 0)
 	for key, diffReport := range diffReports {
 		if diffReport.ProcessedRows != diffReport.MatchingRows {
-			fmt.Errorf("vdiff error for %d : %#v\n", key, diffReport)
+			t.Errorf("vdiff error for %d : %#v\n", key, diffReport)
 		}
 	}
 }

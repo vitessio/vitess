@@ -110,10 +110,7 @@ func validateThatQueryExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *c
 	qr := execVtgateQuery(t, conn, ksName, query)
 	assert.NotNil(t, qr)
 	newCount := getQueryCount(tablet.QueryzURL, matchQuery)
-	if newCount == count+1 {
-		return true
-	}
-	return false
+	return newCount == count+1
 }
 
 func getQueryCount(url string, query string) int {
@@ -173,9 +170,7 @@ func getQueryCount(url string, query string) int {
 		foundQuery := re.ReplaceAllLiteralString(row[queryIndex], "")
 		cleanQuery := re.ReplaceAllLiteralString(query, "")
 		if foundQuery == cleanQuery {
-			count, err = strconv.Atoi(row[countIndex])
-		} else {
-			//fmt.Printf(">> %s %s %d %d\n", foundQuery, cleanQuery, len(foundQuery), len(cleanQuery))
+			count, _ = strconv.Atoi(row[countIndex])
 		}
 	}
 	return count
