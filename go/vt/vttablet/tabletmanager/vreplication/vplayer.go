@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strings"
 	"time"
 
 	"golang.org/x/net/context"
@@ -419,15 +420,18 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		stats.Send(fmt.Sprintf("%v", event.FieldEvent))
 
 	case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE, binlogdatapb.VEventType_REPLACE:
-		// This is a player using stament based replication
-		if err := vp.vr.dbClient.Begin(); err != nil {
-			return err
-		}
+		// If the event is for one of the AWS RDS "special" tables, we skip
+		if !strings.Contains(event.Dml, " mysql.rds_") {
+			// This is a player using stament based replication
+			if err := vp.vr.dbClient.Begin(); err != nil {
+				return err
+			}
 
-		if err := vp.applyStmtEvent(ctx, event); err != nil {
-			return err
+			if err := vp.applyStmtEvent(ctx, event); err != nil {
+				return err
+			}
+			stats.Send(fmt.Sprintf(event.Dml))
 		}
-		stats.Send(fmt.Sprintf(event.Dml))
 	case binlogdatapb.VEventType_ROW:
 		// This player is configured for row based replication
 		if err := vp.vr.dbClient.Begin(); err != nil {
