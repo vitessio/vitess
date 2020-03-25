@@ -531,17 +531,14 @@ func generateDefaultTablet(tabAlias int, shard, role, keyspace string, dbInfo ex
 }
 
 func generateVtctld(opts vtOptions) string {
-	webPort := strconv.Itoa(opts.webPort)
-	gRpcPort := strconv.Itoa(opts.gRpcPort)
-
 	return fmt.Sprintf(`
 - op: add
   path: /services/vtctld
   value:
     image: vitess/base
     ports:
-      - "15000:%[1]s"
-      - "%[2]s"
+      - "15000:%[1]d"
+      - "%[2]d"
     command: ["sh", "-c", " $$VTROOT/bin/vtctld \
         %[3]s \
         -cell %[4]s \
@@ -551,8 +548,8 @@ func generateVtctld(opts vtOptions) string {
         -backup_storage_implementation file \
         -file_backup_storage_root $$VTDATAROOT/backups \
         -logtostderr=true \
-        -port %[1]s \
-        -grpc_port %[2]s \
+        -port %[1]d \
+        -grpc_port %[2]d \
         -pid_file $$VTDATAROOT/tmp/vtctld.pid
         "]
     volumes:
@@ -561,7 +558,7 @@ func generateVtctld(opts vtOptions) string {
       - consul1
       - consul2
       - consul3
-`, webPort, gRpcPort, opts.topologyFlags, opts.cell)
+`, opts.webPort, opts.gRpcPort, opts.topologyFlags, opts.cell)
 }
 
 func generateVtgate(opts vtOptions) string {
@@ -642,7 +639,7 @@ func generateSchemaload(
 	}
 	dependsOn := "depends_on: {" + strings.Join(tabletAliases, ", ") + "}"
 
-	data := fmt.Sprintf(`
+	return fmt.Sprintf(`
 - op: add
   path: /services/schemaload_%[7]s
   value:
@@ -664,12 +661,10 @@ func generateSchemaload(
     command: ["sh", "-c", "/script/schemaload.sh"]
     %[1]s
 `, dependsOn, targetTab, opts.topologyFlags, opts.webPort, opts.gRpcPort, opts.cell, keyspace, postLoadFile, schemaFileName, externalDb)
-
-	return data
 }
 
 func generatePrimaryVIndex(tableName, column, name string) string {
-	data := fmt.Sprintf(`
+	return fmt.Sprintf(`
 [{"op": "add",
 "path": "/tables/%[1]s",
 "value": 
@@ -681,12 +676,10 @@ func generatePrimaryVIndex(tableName, column, name string) string {
   ]}
 }]
 `, tableName, column, name)
-
-	return data
 }
 
 func generateVschemaLookupHash(tableName, tableKeyspace, from, to, owner string) string {
-	data := fmt.Sprintf(`
+	return fmt.Sprintf(`
 [{"op": "add",
 "path": "/vindexes/%[1]s",
 "value":
@@ -701,12 +694,10 @@ func generateVschemaLookupHash(tableName, tableKeyspace, from, to, owner string)
   }
 }]
 `, tableName, tableKeyspace, from, to, owner)
-
-	return data
 }
 
 func addToColumnVIndexes(tableName, column, referenceName string) string {
-	data := fmt.Sprintf(`
+	return fmt.Sprintf(`
 [{"op": "add",
 "path": "/tables/%[1]s/column_vindexes/-",
 "value":
@@ -716,6 +707,4 @@ func addToColumnVIndexes(tableName, column, referenceName string) string {
     }
 }]
 `, tableName, column, referenceName)
-
-	return data
 }
