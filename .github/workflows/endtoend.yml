@@ -34,5 +34,6 @@ jobs:
         make build
 
     - name: endtoend
+      timeout-minutes: 30
       run: |
         tools/e2e_test_runner.sh
