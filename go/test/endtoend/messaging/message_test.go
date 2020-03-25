@@ -37,7 +37,7 @@ var createMessage = `create table vitess_message(
 	time_acked bigint,
 	message varchar(128),
 	primary key(id),
-	index next_idx(priority, time_next),
+	index next_idx(priority, time_next desc),
 	index ack_idx(time_acked))
 comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
 
@@ -149,7 +149,7 @@ var createThreeColMessage = `create table vitess_message3(
 	msg1 varchar(128),
 	msg2 bigint,
 	primary key(id),
-	index next_idx(priority, time_next),
+	index next_idx(priority, time_next desc),
 	index ack_idx(time_acked))
 comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
 
