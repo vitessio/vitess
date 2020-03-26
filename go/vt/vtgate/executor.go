@@ -312,7 +312,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 
 	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor := newVCursorImpl(ctx, safeSession, destKeyspace, destTabletType, comments, e, logStats, e.VSchema(), e.resolver.resolver)
+	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.VSchema(), e.resolver.resolver)
 	plan, err := e.getPlan(
 		vcursor,
 		query,
@@ -1217,7 +1217,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		bindVars = make(map[string]*querypb.BindVariable)
 	}
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor := newVCursorImpl(ctx, safeSession, target.Keyspace, target.TabletType, comments, e, logStats, e.VSchema(), e.resolver.resolver)
+	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.VSchema(), e.resolver.resolver)
 
 	// check if this is a stream statement for messaging
 	// TODO: support keyRange syntax
@@ -1667,7 +1667,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) ([]*querypb.Field, error) {
 	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor := newVCursorImpl(ctx, safeSession, destKeyspace, destTabletType, comments, e, logStats, e.VSchema(), e.resolver.resolver)
+	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.VSchema(), e.resolver.resolver)
 	plan, err := e.getPlan(
 		vcursor,
 		query,
