@@ -169,6 +169,34 @@ func TestOne(t *testing.T) {
 	testFile(t, "onecase.txt", "", vschema)
 }
 
+func TestBypassPlanning(t *testing.T) {
+	query := "select * from ks.t1"
+	stmt, err := sqlparser.Parse(query)
+	require.NoError(t, err)
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json"),
+		keyspace: &vindexes.Keyspace{
+			Name:    "main",
+			Sharded: false,
+		},
+		tabletType: topodatapb.TabletType_MASTER,
+		dest:       key.DestinationShard("-80"),
+	}
+	plan, err := BuildFromStmt(query, stmt, vschema, sqlparser.BindVarNeeds{})
+	require.NoError(t, err)
+	expected := &engine.Send{Query: query,
+		Keyspace: &vindexes.Keyspace{
+			Name:    "main",
+			Sharded: false,
+		},
+		TargetTabletType:  topodatapb.TabletType_MASTER,
+		TargetDestination: key.DestinationShard("-80"),
+	}
+	if diff := cmp.Diff(expected, plan.Instructions); diff != "" {
+		t.Errorf("-want,+actual\n%s", diff)
+	}
+}
+
 func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
 	formal, err := vindexes.LoadFormal(locateFile(filename))
 	if err != nil {
@@ -189,11 +217,18 @@ func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
 var _ ContextVSchema = (*vschemaWrapper)(nil)
 
 type vschemaWrapper struct {
-	v *vindexes.VSchema
+	v          *vindexes.VSchema
+	keyspace   *vindexes.Keyspace
+	tabletType topodatapb.TabletType
+	dest       key.Destination
+}
+
+func (vw *vschemaWrapper) TabletType() topodatapb.TabletType {
+	return vw.tabletType
 }
 
 func (vw *vschemaWrapper) Destination() key.Destination {
-	panic("implement me")
+	return vw.dest
 }
 
 func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {

@@ -78,6 +78,9 @@ type vcursorImpl struct {
 // on behalf of the original query.
 func newVCursorImpl(ctx context.Context, safeSession *SafeSession, marginComments sqlparser.MarginComments, executor *Executor, logStats *LogStats, vschema *vindexes.VSchema, resolver *srvtopo.Resolver) (*vcursorImpl, error) {
 	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema)
+	// ks
+	// select b from ts.a
+	// select b from ps.a
 	if err != nil {
 		return nil, err
 	}
@@ -253,6 +256,11 @@ func (vc *vcursorImpl) ResolveDestinations(keyspace string, ids []*querypb.Value
 // Destination implements the ContextVSchema interface
 func (vc *vcursorImpl) Destination() key.Destination {
 	return vc.destination
+}
+
+// TabletType implements the ContextVSchema interface
+func (vc *vcursorImpl) TabletType() topodatapb.TabletType {
+	return vc.tabletType
 }
 
 func commentedShardQueries(shardQueries []*querypb.BoundQuery, marginComments sqlparser.MarginComments) []*querypb.BoundQuery {
