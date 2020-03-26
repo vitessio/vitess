@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package gateway
+package vtgate
 
 import (
 	"bytes"
@@ -22,7 +22,6 @@ import (
 	"reflect"
 	"testing"
 	"time"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
