@@ -173,7 +173,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	if err != nil {
 		return nil, err
 	}
-
+	// ks@replica , :-80-> ks:-80, -80@replica, ks:-80@replica
 	if safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", destTabletType)
 	}

@@ -123,6 +123,7 @@ type ContextVSchema interface {
 	DefaultKeyspace() (*vindexes.Keyspace, error)
 	TargetString() string
 	Destination() key.Destination
+	TabletType() topodatapb.TabletType
 }
 
 //-------------------------------------------------------------------------
@@ -274,37 +275,42 @@ func Build(query string, vschema ContextVSchema) (*engine.Plan, error) {
 func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema, bindVarNeeds sqlparser.BindVarNeeds) (*engine.Plan, error) {
 	var err error
 	var instruction engine.Primitive
-	switch stmt := stmt.(type) {
-	case *sqlparser.Select:
-		instruction, err = buildSelectPlan(stmt, vschema)
-	case *sqlparser.Insert:
-		instruction, err = buildInsertPlan(stmt, vschema)
-	case *sqlparser.Update:
-		instruction, err = buildUpdatePlan(stmt, vschema)
-	case *sqlparser.Delete:
-		instruction, err = buildDeletePlan(stmt, vschema)
-	case *sqlparser.Union:
-		instruction, err = buildUnionPlan(stmt, vschema)
-	case *sqlparser.Set:
-		return nil, errors.New("unsupported construct: set")
-	case *sqlparser.Show:
-		return nil, errors.New("unsupported construct: show")
-	case *sqlparser.DDL:
-		return nil, errors.New("unsupported construct: ddl")
-	case *sqlparser.DBDDL:
-		return nil, errors.New("unsupported construct: ddl on database")
-	case *sqlparser.OtherRead:
-		return nil, errors.New("unsupported construct: other read")
-	case *sqlparser.OtherAdmin:
-		return nil, errors.New("unsupported construct: other admin")
-	case *sqlparser.Begin:
-		return nil, errors.New("unsupported construct: begin")
-	case *sqlparser.Commit:
-		return nil, errors.New("unsupported construct: commit")
-	case *sqlparser.Rollback:
-		return nil, errors.New("unsupported construct: rollback")
-	default:
-		return nil, fmt.Errorf("BUG: unexpected statement type: %T", stmt)
+
+	if vschema.Destination() != nil {
+		instruction, err = buildPlanForBypass(stmt, vschema)
+	} else {
+		switch stmt := stmt.(type) {
+		case *sqlparser.Select:
+			instruction, err = buildSelectPlan(stmt, vschema)
+		case *sqlparser.Insert:
+			instruction, err = buildInsertPlan(stmt, vschema)
+		case *sqlparser.Update:
+			instruction, err = buildUpdatePlan(stmt, vschema)
+		case *sqlparser.Delete:
+			instruction, err = buildDeletePlan(stmt, vschema)
+		case *sqlparser.Union:
+			instruction, err = buildUnionPlan(stmt, vschema)
+		case *sqlparser.Set:
+			return nil, errors.New("unsupported construct: set")
+		case *sqlparser.Show:
+			return nil, errors.New("unsupported construct: show")
+		case *sqlparser.DDL:
+			return nil, errors.New("unsupported construct: ddl")
+		case *sqlparser.DBDDL:
+			return nil, errors.New("unsupported construct: ddl on database")
+		case *sqlparser.OtherRead:
+			return nil, errors.New("unsupported construct: other read")
+		case *sqlparser.OtherAdmin:
+			return nil, errors.New("unsupported construct: other admin")
+		case *sqlparser.Begin:
+			return nil, errors.New("unsupported construct: begin")
+		case *sqlparser.Commit:
+			return nil, errors.New("unsupported construct: commit")
+		case *sqlparser.Rollback:
+			return nil, errors.New("unsupported construct: rollback")
+		default:
+			return nil, fmt.Errorf("BUG: unexpected statement type: %T", stmt)
+		}
 	}
 	if err != nil {
 		return nil, err
