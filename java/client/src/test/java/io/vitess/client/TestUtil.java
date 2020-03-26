@@ -115,11 +115,10 @@ public class TestUtil {
     }
   }
 
-  public static VTGateBlockingConn getBlockingConn(TestEnv testEnv) {
+  public static VTGateBlockingConnection getBlockingConn(TestEnv testEnv) {
     // Dial timeout
     Context ctx = Context.getDefault().withDeadlineAfter(Duration.millis(5000));
-    return new VTGateBlockingConn(
-        getRpcClientFactory().create(ctx, "localhost:" + testEnv.getPort()),
-        testEnv.getKeyspace());
+    return new VTGateBlockingConnection(
+        getRpcClientFactory().create(ctx, "localhost:" + testEnv.getPort()));
   }
 }
