@@ -186,8 +186,14 @@ func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
 	return vschema
 }
 
+var _ ContextVSchema = (*vschemaWrapper)(nil)
+
 type vschemaWrapper struct {
 	v *vindexes.VSchema
+}
+
+func (vw *vschemaWrapper) Destination() key.Destination {
+	panic("implement me")
 }
 
 func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {

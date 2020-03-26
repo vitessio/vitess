@@ -20,6 +20,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -38,6 +40,7 @@ import (
 )
 
 var _ engine.VCursor = (*vcursorImpl)(nil)
+var _ planbuilder.ContextVSchema = (*vcursorImpl)(nil)
 var _ iExecute = (*Executor)(nil)
 
 // vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
@@ -245,6 +248,11 @@ func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query str
 
 func (vc *vcursorImpl) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	return vc.resolver.ResolveDestinations(vc.ctx, keyspace, vc.tabletType, ids, destinations)
+}
+
+// Destination implements the ContextVSchema interface
+func (vc *vcursorImpl) Destination() key.Destination {
+	return vc.destination
 }
 
 func commentedShardQueries(shardQueries []*querypb.BoundQuery, marginComments sqlparser.MarginComments) []*querypb.BoundQuery {
