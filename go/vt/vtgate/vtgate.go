@@ -159,7 +159,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	vsm := newVStreamManager(srvResolver, serv, cell)
 
 	rpcVTGate = &VTGate{
-		executor: NewExecutor(ctx, serv, cell, "VTGateExecutor", resolver, *normalizeQueries, *streamBufferSize, *queryPlanCacheSize),
+		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *streamBufferSize, *queryPlanCacheSize),
 		resolver: resolver,
 		vsm:      vsm,
 		txConn:   tc,
