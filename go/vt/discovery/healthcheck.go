@@ -44,7 +44,6 @@ import (
 	"hash/crc32"
 	"html/template"
 	"net/http"
-	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -493,7 +492,7 @@ func (hc *HealthCheckImpl) finalizeConn(hcc *healthCheckConn) {
 	// safe to simply get Err() value here and assign to LastError.
 	hcc.tabletStats.LastError = hcc.ctx.Err()
 	hc.updateHealth(hcc.tabletStats.Copy(), nil)
-	if hcc.conn != nil && !reflect.ValueOf(hcc.conn).IsNil() {
+	if hcc.conn != nil {
 		// Don't use hcc.ctx because it's already closed.
 		// Use a separate context, and add a timeout to prevent unbounded waits.
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -611,7 +610,7 @@ func (hcc *healthCheckConn) setServingState(serving bool, reason string) {
 
 // stream streams healthcheck responses to callback.
 func (hcc *healthCheckConn) stream(ctx context.Context, hc *HealthCheckImpl, callback func(*querypb.StreamHealthResponse) error) {
-	if hcc.conn == nil || reflect.ValueOf(hcc.conn).IsNil() {
+	if hcc.conn == nil {
 		conn, err := tabletconn.GetDialer()(hcc.tabletStats.Tablet, grpcclient.FailFast(true))
 		if err != nil {
 			hcc.tabletStats.LastError = err
