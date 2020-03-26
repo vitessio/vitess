@@ -44,7 +44,7 @@ import (
 )
 
 var (
-	_       = flag.String("gateway_implementation", "discoverygateway", "Deprecated")
+	_                    = flag.String("gateway_implementation", "", "Deprecated")
 	initialTabletTimeout = flag.Duration("gateway_initial_tablet_timeout", 30*time.Second, "At startup, the gateway will wait up to that duration to get one tablet per keyspace/shard/tablettype")
 	// KeyspacesToWatch - if provided this specifies which keyspaces should be
 	// visible to a vtgate. By default the vtgate will allow access to any
@@ -54,18 +54,19 @@ var (
 	refreshKnownTablets = flag.Bool("tablet_refresh_known_tablets", true, "tablet refresh reloads the tablet address/port map from topo in case it changes")
 	topoReadConcurrency = flag.Int("topo_read_concurrency", 32, "concurrent topo reads")
 
-	allowedTabletTypes  []topodatapb.TabletType
+	allowedTabletTypes []topodatapb.TabletType
 
-	tabletFilters       flagutil.StringListValue
+	tabletFilters    flagutil.StringListValue
 	KeyspacesToWatch flagutil.StringListValue
 )
+
 func init() {
 	flag.Var(&KeyspacesToWatch, "keyspaces_to_watch", "Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema")
 	flag.Var(&tabletFilters, "tablet_filters", "Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch")
 	topoproto.TabletTypeListVar(&allowedTabletTypes, "allowed_tablet_types", "Specifies the tablet types this vtgate is allowed to route queries to")
 }
 
-type DiscoveryGateway struct {
+type tabletGateway struct {
 	queryservice.QueryService
 	hc            discovery.HealthCheck
 	tsc           *discovery.TabletStatsCache
@@ -87,7 +88,7 @@ type DiscoveryGateway struct {
 	buffer *buffer.Buffer
 }
 
-func New(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cell string, retryCount int) *DiscoveryGateway {
+func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cell string, retryCount int) *tabletGateway {
 	var topoServer *topo.Server
 	if serv != nil {
 		var err error
@@ -97,7 +98,7 @@ func New(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cel
 		}
 	}
 
-	dg := &DiscoveryGateway{
+	dg := &tabletGateway{
 		hc:                hc,
 		tsc:               discovery.NewTabletStatsCacheDoNotSetListener(topoServer, cell),
 		srvTopoServer:     serv,
@@ -141,7 +142,7 @@ func New(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cel
 
 // RegisterStats registers the stats to export the lag since the last refresh
 // and the checksum of the topology
-func (dg *DiscoveryGateway) RegisterStats() {
+func (dg *tabletGateway) RegisterStats() {
 	stats.NewGaugeDurationFunc(
 		"TopologyWatcherMaxRefreshLag",
 		"maximum time since the topology watcher refreshed a cell",
@@ -157,7 +158,7 @@ func (dg *DiscoveryGateway) RegisterStats() {
 
 // topologyWatcherMaxRefreshLag returns the maximum lag since the watched
 // cells were refreshed from the topo server
-func (dg *DiscoveryGateway) topologyWatcherMaxRefreshLag() time.Duration {
+func (dg *tabletGateway) topologyWatcherMaxRefreshLag() time.Duration {
 	var lag time.Duration
 	for _, tw := range dg.tabletsWatchers {
 		cellLag := tw.RefreshLag()
@@ -169,7 +170,7 @@ func (dg *DiscoveryGateway) topologyWatcherMaxRefreshLag() time.Duration {
 }
 
 // topologyWatcherChecksum returns a checksum of the topology watcher state
-func (dg *DiscoveryGateway) topologyWatcherChecksum() int64 {
+func (dg *tabletGateway) topologyWatcherChecksum() int64 {
 	var checksum int64
 	for _, tw := range dg.tabletsWatchers {
 		checksum = checksum ^ int64(tw.TopoChecksum())
@@ -179,7 +180,7 @@ func (dg *DiscoveryGateway) topologyWatcherChecksum() int64 {
 
 // StatsUpdate forwards HealthCheck updates to TabletStatsCache and MasterBuffer.
 // It is part of the discovery.HealthCheckStatsListener interface.
-func (dg *DiscoveryGateway) StatsUpdate(ts *discovery.TabletStats) {
+func (dg *tabletGateway) StatsUpdate(ts *discovery.TabletStats) {
 	dg.tsc.StatsUpdate(ts)
 
 	if ts.Target.TabletType == topodatapb.TabletType_MASTER {
@@ -188,7 +189,7 @@ func (dg *DiscoveryGateway) StatsUpdate(ts *discovery.TabletStats) {
 }
 
 // WaitForTablets is part of the gateway.Gateway interface.
-func (dg *DiscoveryGateway) WaitForTablets(ctx context.Context, tabletTypesToWait []topodatapb.TabletType) error {
+func (dg *tabletGateway) WaitForTablets(ctx context.Context, tabletTypesToWait []topodatapb.TabletType) error {
 	// Skip waiting for tablets if we are not told to do so.
 	if len(tabletTypesToWait) == 0 {
 		return nil
@@ -205,7 +206,7 @@ func (dg *DiscoveryGateway) WaitForTablets(ctx context.Context, tabletTypesToWai
 
 // Close shuts down underlying connections.
 // This function hides the inner implementation.
-func (dg *DiscoveryGateway) Close(ctx context.Context) error {
+func (dg *tabletGateway) Close(ctx context.Context) error {
 	dg.buffer.Shutdown()
 	for _, ctw := range dg.tabletsWatchers {
 		ctw.Stop()
@@ -215,7 +216,7 @@ func (dg *DiscoveryGateway) Close(ctx context.Context) error {
 
 // CacheStatus returns a list of TabletCacheStatus per
 // keyspace/shard/tablet_type.
-func (dg *DiscoveryGateway) CacheStatus() TabletCacheStatusList {
+func (dg *tabletGateway) CacheStatus() TabletCacheStatusList {
 	dg.mu.RLock()
 	res := make(TabletCacheStatusList, 0, len(dg.statusAggregators))
 	for _, aggr := range dg.statusAggregators {
@@ -231,7 +232,7 @@ func (dg *DiscoveryGateway) CacheStatus() TabletCacheStatusList {
 // the middle of a transaction. While returning the error check if it maybe a result of
 // a resharding event, and set the re-resolve bit and let the upper layers
 // re-resolve and retry.
-func (dg *DiscoveryGateway) withRetry(ctx context.Context, target *querypb.Target, unused queryservice.QueryService, name string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
+func (dg *tabletGateway) withRetry(ctx context.Context, target *querypb.Target, unused queryservice.QueryService, name string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
 	var tabletLastUsed *topodatapb.Tablet
 	var err error
 	invalidTablets := make(map[string]bool)
@@ -370,13 +371,13 @@ func nextTablet(cell string, tablets []discovery.TabletStats, offset, length int
 	return -1
 }
 
-func (dg *DiscoveryGateway) updateStats(target *querypb.Target, startTime time.Time, err error) {
+func (dg *tabletGateway) updateStats(target *querypb.Target, startTime time.Time, err error) {
 	elapsed := time.Since(startTime)
 	aggr := dg.getStatsAggregator(target)
 	aggr.UpdateQueryInfo("", target.TabletType, elapsed, err != nil)
 }
 
-func (dg *DiscoveryGateway) getStatsAggregator(target *querypb.Target) *TabletStatusAggregator {
+func (dg *tabletGateway) getStatsAggregator(target *querypb.Target) *TabletStatusAggregator {
 	key := fmt.Sprintf("%v/%v/%v", target.Keyspace, target.Shard, target.TabletType.String())
 
 	// get existing aggregator
@@ -400,9 +401,9 @@ func (dg *DiscoveryGateway) getStatsAggregator(target *querypb.Target) *TabletSt
 
 // WaitForTablets is a helper method to wait for the provided tablets,
 // up until the *initialTabletTimeout. It will log what it is doing.
-// Note it has the same name as the DiscoveryGateway's method, as it
+// Note it has the same name as the tabletGateway's method, as it
 // just calls it.
-func WaitForTablets(gw *DiscoveryGateway, tabletTypesToWait []topodatapb.TabletType) error {
+func WaitForTablets(gw *tabletGateway, tabletTypesToWait []topodatapb.TabletType) error {
 	log.Infof("Gateway waiting for serving tablets of types %v ...", tabletTypesToWait)
 	ctx, cancel := context.WithTimeout(context.Background(), *initialTabletTimeout)
 	defer cancel()

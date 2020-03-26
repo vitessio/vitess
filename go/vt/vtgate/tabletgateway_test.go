@@ -18,9 +18,9 @@ package vtgate
 
 import (
 	"fmt"
+	"golang.org/x/net/context"
 	"strings"
 	"testing"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
@@ -36,23 +36,23 @@ import (
 )
 
 func TestDiscoveryGatewayExecute(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
+	testDiscoveryGatewayGeneric(t, func(dg *tabletGateway, target *querypb.Target) error {
 		_, err := dg.Execute(context.Background(), target, "query", nil, 0, nil)
 		return err
 	})
-	testDiscoveryGatewayTransact(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
+	testDiscoveryGatewayTransact(t, func(dg *tabletGateway, target *querypb.Target) error {
 		_, err := dg.Execute(context.Background(), target, "query", nil, 1, nil)
 		return err
 	})
 }
 
 func TestDiscoveryGatewayExecuteBatch(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
+	testDiscoveryGatewayGeneric(t, func(dg *tabletGateway, target *querypb.Target) error {
 		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
 		_, err := dg.ExecuteBatch(context.Background(), target, queries, false, 0, nil)
 		return err
 	})
-	testDiscoveryGatewayTransact(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
+	testDiscoveryGatewayTransact(t, func(dg *tabletGateway, target *querypb.Target) error {
 		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
 		_, err := dg.ExecuteBatch(context.Background(), target, queries, false, 1, nil)
 		return err
@@ -60,7 +60,7 @@ func TestDiscoveryGatewayExecuteBatch(t *testing.T) {
 }
 
 func TestDiscoveryGatewayExecuteStream(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
+	testDiscoveryGatewayGeneric(t, func(dg *tabletGateway, target *querypb.Target) error {
 		err := dg.StreamExecute(context.Background(), target, "query", nil, 0, nil, func(qr *sqltypes.Result) error {
 			return nil
 		})
@@ -69,33 +69,33 @@ func TestDiscoveryGatewayExecuteStream(t *testing.T) {
 }
 
 func TestDiscoveryGatewayBegin(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
+	testDiscoveryGatewayGeneric(t, func(dg *tabletGateway, target *querypb.Target) error {
 		_, err := dg.Begin(context.Background(), target, nil)
 		return err
 	})
 }
 
 func TestDiscoveryGatewayCommit(t *testing.T) {
-	testDiscoveryGatewayTransact(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
+	testDiscoveryGatewayTransact(t, func(dg *tabletGateway, target *querypb.Target) error {
 		return dg.Commit(context.Background(), target, 1)
 	})
 }
 
 func TestDiscoveryGatewayRollback(t *testing.T) {
-	testDiscoveryGatewayTransact(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
+	testDiscoveryGatewayTransact(t, func(dg *tabletGateway, target *querypb.Target) error {
 		return dg.Rollback(context.Background(), target, 1)
 	})
 }
 
 func TestDiscoveryGatewayBeginExecute(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
+	testDiscoveryGatewayGeneric(t, func(dg *tabletGateway, target *querypb.Target) error {
 		_, _, err := dg.BeginExecute(context.Background(), target, "query", nil, nil)
 		return err
 	})
 }
 
 func TestDiscoveryGatewayBeginExecuteBatch(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
+	testDiscoveryGatewayGeneric(t, func(dg *tabletGateway, target *querypb.Target) error {
 		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
 		_, _, err := dg.BeginExecuteBatch(context.Background(), target, queries, false, nil)
 		return err
@@ -106,7 +106,7 @@ func TestDiscoveryGatewayGetTablets(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"
 	hc := discovery.NewFakeHealthCheck()
-	dg := New(context.Background(), hc, nil, "local", 2)
+	dg := NewTabletGateway(context.Background(), hc, nil, "local", 2)
 
 	// replica should only use local ones
 	hc.Reset()
@@ -214,7 +214,7 @@ func TestDiscoveryGatewayGetTabletsInRegion(t *testing.T) {
 		Cells: []string{"local-west", "local-east"},
 	}
 
-	dg := New(context.Background(), hc, srvTopo, "local-west", 2)
+	dg := NewTabletGateway(context.Background(), hc, srvTopo, "local-west", 2)
 
 	ts.CreateCellsAlias(context.Background(), "local", cellsAlias)
 
@@ -244,7 +244,7 @@ func TestDiscoveryGatewayGetTabletsWithRegion(t *testing.T) {
 		Cells: []string{"local-west", "local-east"},
 	}
 
-	dg := New(context.Background(), hc, srvTopo, "local", 2)
+	dg := NewTabletGateway(context.Background(), hc, srvTopo, "local", 2)
 
 	ts.CreateCellsAlias(context.Background(), "local", cellsAlias)
 
@@ -263,7 +263,7 @@ func TestDiscoveryGatewayGetTabletsWithRegion(t *testing.T) {
 	}
 }
 
-func testDiscoveryGatewayGeneric(t *testing.T, f func(dg *DiscoveryGateway, target *querypb.Target) error) {
+func testDiscoveryGatewayGeneric(t *testing.T, f func(dg *tabletGateway, target *querypb.Target) error) {
 	keyspace := "ks"
 	shard := "0"
 	tabletType := topodatapb.TabletType_REPLICA
@@ -273,7 +273,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, f func(dg *DiscoveryGateway, targ
 		TabletType: tabletType,
 	}
 	hc := discovery.NewFakeHealthCheck()
-	dg := New(context.Background(), hc, nil, "cell", 2)
+	dg := NewTabletGateway(context.Background(), hc, nil, "cell", 2)
 
 	// no tablet
 	hc.Reset()
@@ -346,7 +346,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, f func(dg *DiscoveryGateway, targ
 	}
 }
 
-func testDiscoveryGatewayTransact(t *testing.T, f func(dg *DiscoveryGateway, target *querypb.Target) error) {
+func testDiscoveryGatewayTransact(t *testing.T, f func(dg *tabletGateway, target *querypb.Target) error) {
 	keyspace := "ks"
 	shard := "0"
 	tabletType := topodatapb.TabletType_REPLICA
@@ -356,7 +356,7 @@ func testDiscoveryGatewayTransact(t *testing.T, f func(dg *DiscoveryGateway, tar
 		TabletType: tabletType,
 	}
 	hc := discovery.NewFakeHealthCheck()
-	dg := New(context.Background(), hc, nil, "cell", 2)
+	dg := NewTabletGateway(context.Background(), hc, nil, "cell", 2)
 
 	// retry error - no retry
 	hc.Reset()
