@@ -22,6 +22,8 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"golang.org/x/net/context"
@@ -62,19 +64,21 @@ var (
 )
 
 func getTxMode() vtgatepb.TransactionMode {
-	switch *transactionMode {
-	case "SINGLE":
+	switch strings.ToLower(*transactionMode) {
+	case "single":
 		log.Infof("Transaction mode: '%s'", *transactionMode)
 		return vtgatepb.TransactionMode_SINGLE
-	case "MULTI":
+	case "multi":
 		log.Infof("Transaction mode: '%s'", *transactionMode)
 		return vtgatepb.TransactionMode_MULTI
-	case "TWOPC":
+	case "twopc":
 		log.Infof("Transaction mode: '%s'", *transactionMode)
 		return vtgatepb.TransactionMode_TWOPC
 	default:
-		log.Warningf("Unrecognized transactionMode '%s'. Continuing with default 'MULTI'", *transactionMode)
-		return vtgatepb.TransactionMode_MULTI
+		fmt.Printf("Invalid option: %v\n", *transactionMode)
+		fmt.Println("Usage: -transaction_mode {SINGLE | MULTI | TWOPC}")
+		os.Exit(1)
+		return -1
 	}
 }
 
