@@ -697,7 +697,10 @@ func createFixedHealthConn(tablet *topodatapb.Tablet, fixedResult *querypb.Strea
 
 func discoveryDialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 	key := TabletToMapKey(tablet)
-	return connMap[key], nil
+	if qs, ok := connMap[key]; ok {
+		return qs, nil
+	}
+	return nil, fmt.Errorf("tablet %v not found", key)
 }
 
 // StreamHealth implements queryservice.QueryService.
