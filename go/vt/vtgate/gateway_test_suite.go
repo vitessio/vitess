@@ -22,12 +22,10 @@ limitations under the License.
 // - the error type returned: it's not a TabletError any more, but a ShardError.
 //   We still check the error code is correct though which is really all we care
 //   about.
-package gatewaytest
+package vtgate
 
 import (
 	"testing"
-
-	"vitess.io/vitess/go/vt/vtgate"
 
 	"golang.org/x/net/context"
 
@@ -81,7 +79,7 @@ func CreateFakeServers(t *testing.T) (*tabletconntest.FakeQueryService, *topo.Se
 // gatewayAdapter implements the TabletConn interface, but sends the
 // queries to the Gateway.
 type gatewayAdapter struct {
-	*vtgate.DiscoveryGateway
+	*tabletGateway
 }
 
 // Close should be overridden to make sure we don't close the underlying Gateway.
@@ -93,12 +91,12 @@ func (ga *gatewayAdapter) Close(ctx context.Context) error {
 // gateway needs to be configured with one established connection for
 // tabletconntest.TestTarget.{Keyspace, Shard, TabletType} to the
 // provided tabletconntest.FakeQueryService.
-func TestSuite(t *testing.T, name string, g *vtgate.DiscoveryGateway, f *tabletconntest.FakeQueryService) {
+func TestSuite(t *testing.T, name string, g *tabletGateway, f *tabletconntest.FakeQueryService) {
 
 	protocolName := "gateway-test-" + name
 
 	tabletconn.RegisterDialer(protocolName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
-		return &gatewayAdapter{DiscoveryGateway: g}, nil
+		return &gatewayAdapter{tabletGateway: g}, nil
 	})
 
 	tabletconntest.TestSuite(t, protocolName, &topodatapb.Tablet{

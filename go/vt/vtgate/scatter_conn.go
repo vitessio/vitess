@@ -47,7 +47,7 @@ type ScatterConn struct {
 	timings              *stats.MultiTimings
 	tabletCallErrorCount *stats.CountersWithMultiLabels
 	txConn               *TxConn
-	gateway              *DiscoveryGateway
+	gateway              *tabletGateway
 	healthCheck          discovery.HealthCheck
 }
 
@@ -69,7 +69,7 @@ type shardActionFunc func(rs *srvtopo.ResolvedShard, i int) error
 type shardActionTransactionFunc func(rs *srvtopo.ResolvedShard, i int, shouldBegin bool, transactionID int64) (int64, error)
 
 // NewScatterConn creates a new ScatterConn.
-func NewScatterConn(statsName string, txConn *TxConn, gw *DiscoveryGateway, hc discovery.HealthCheck) *ScatterConn {
+func NewScatterConn(statsName string, txConn *TxConn, gw *tabletGateway, hc discovery.HealthCheck) *ScatterConn {
 	tabletCallErrorCountStatsName := ""
 	if statsName != "" {
 		tabletCallErrorCountStatsName = statsName + "ErrorCount"

@@ -14,17 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package gatewaytest
+package vtgate
 
 import (
 	"flag"
+	"golang.org/x/net/context"
 	"net"
 	"testing"
 	"time"
-
-	"vitess.io/vitess/go/vt/vtgate"
-
-	"golang.org/x/net/context"
 
 	"google.golang.org/grpc"
 
@@ -66,7 +63,7 @@ func TestGRPCDiscovery(t *testing.T) {
 	// Wait for the right tablets to be present.
 	hc := discovery.NewHealthCheck(10*time.Second, 2*time.Minute)
 	rs := srvtopo.NewResilientServer(ts, "TestGRPCDiscovery")
-	dg := vtgate.New(context.Background(), hc, rs, cell, 2)
+	dg := NewTabletGateway(context.Background(), hc, rs, cell, 2)
 	hc.AddTablet(&topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: cell,
@@ -80,7 +77,7 @@ func TestGRPCDiscovery(t *testing.T) {
 			"grpc": int32(port),
 		},
 	}, "test_tablet")
-	err = vtgate.WaitForTablets(dg, []topodatapb.TabletType{tabletconntest.TestTarget.TabletType})
+	err = WaitForTablets(dg, []topodatapb.TabletType{tabletconntest.TestTarget.TabletType})
 	if err != nil {
 		t.Fatalf("WaitForTablets failed: %v", err)
 	}
