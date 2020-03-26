@@ -34,6 +34,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 var _ engine.VCursor = (*vcursorImpl)(nil)
@@ -56,6 +57,7 @@ type vcursorImpl struct {
 	safeSession    *SafeSession
 	keyspace       string
 	tabletType     topodatapb.TabletType
+	destination    key.Destination
 	marginComments sqlparser.MarginComments
 	executor       iExecute
 	resolver       *srvtopo.Resolver
@@ -71,18 +73,23 @@ type vcursorImpl struct {
 // the query and supply it here. Trailing comments are typically sent by the application for various reasons,
 // including as identifying markers. So, they have to be added back to all queries that are executed
 // on behalf of the original query.
-func newVCursorImpl(ctx context.Context, safeSession *SafeSession, keyspace string, tabletType topodatapb.TabletType, marginComments sqlparser.MarginComments, executor *Executor, logStats *LogStats, vschema *vindexes.VSchema, resolver *srvtopo.Resolver) *vcursorImpl {
+func newVCursorImpl(ctx context.Context, safeSession *SafeSession, marginComments sqlparser.MarginComments, executor *Executor, logStats *LogStats, vschema *vindexes.VSchema, resolver *srvtopo.Resolver) (*vcursorImpl, error) {
+	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema)
+	if err != nil {
+		return nil, err
+	}
 	return &vcursorImpl{
 		ctx:            ctx,
 		safeSession:    safeSession,
 		keyspace:       keyspace,
 		tabletType:     tabletType,
+		destination:    destination,
 		marginComments: marginComments,
 		executor:       executor,
 		logStats:       logStats,
 		vschema:        vschema,
 		resolver:       resolver,
-	}
+	}, nil
 }
 
 // Context returns the current Context.
@@ -252,4 +259,32 @@ func commentedShardQueries(shardQueries []*querypb.BoundQuery, marginComments sq
 		}
 	}
 	return newQueries
+}
+
+// TargetDestination implements the ContextVSchema interface
+func (vc *vcursorImpl) TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error) {
+	keyspaceName := vc.keyspace
+	if vc.destination == nil && qualifier != "" {
+		keyspaceName = qualifier
+	}
+	if keyspaceName == "" {
+		return nil, nil, 0, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace not specified")
+	}
+	keyspace := vc.vschema.Keyspaces[keyspaceName]
+	if keyspace == nil {
+		return nil, nil, 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no keyspace with name [%s] found", keyspaceName)
+	}
+	return vc.destination, keyspace.Keyspace, vc.tabletType, nil
+}
+
+// ParseDestinationTarget parses destination target string and sets default keyspace if possible.
+func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.Destination, error) {
+	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, defaultTabletType)
+	// Set default keyspace
+	if destKeyspace == "" && len(vschema.Keyspaces) == 1 {
+		for k := range vschema.Keyspaces {
+			destKeyspace = k
+		}
+	}
+	return destKeyspace, destTabletType, dest, err
 }
