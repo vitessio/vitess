@@ -152,7 +152,6 @@ func TestHealthCheck(t *testing.T) {
 	require.Nil(t, err)
 	scanner := bufio.NewScanner(strings.NewReader(result))
 	for scanner.Scan() {
-		// fmt.Println() // Println will add back the final '\n'
 		verifyStreamHealth(t, scanner.Text())
 	}
 

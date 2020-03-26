@@ -94,7 +94,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 
 	vtgate.proc.Env = append(vtgate.proc.Env, os.Environ()...)
 
-	log.Infof("%v %v", strings.Join(vtgate.proc.Args, " "))
+	log.Infof("Running vtgate with command: %v", strings.Join(vtgate.proc.Args, " "))
 
 	err = vtgate.proc.Start()
 	if err != nil {

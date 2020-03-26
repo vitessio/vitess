@@ -275,7 +275,7 @@ func TestBackupTransformImpl(t *testing.T) {
 
 }
 
-// TestBackupTransformError validate backup with test_backup_error
+// TestBackupTransformErrorImpl validate backup with test_backup_error
 // backup_storage_hook, which should fail.
 func TestBackupTransformErrorImpl(t *testing.T) {
 	// restart the replica with transform hook parameter

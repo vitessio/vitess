@@ -86,7 +86,7 @@ func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 			"-init_db_sql_file", mysqlctl.InitDBFile)
 	}
 	tmpProcess.Args = append(tmpProcess.Args, "start")
-
+	log.Infof("Starting mysqlctl with command: %v", tmpProcess.Args)
 	return tmpProcess, tmpProcess.Start()
 }
 

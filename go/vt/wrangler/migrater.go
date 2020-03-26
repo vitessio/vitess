@@ -26,6 +26,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
@@ -39,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
 
 const (
@@ -197,6 +200,11 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 		sourceWorkflows, err = sm.stopStreams(ctx)
 		if err != nil {
 			mi.wr.Logger().Errorf("stopStreams failed: %v", err)
+			for key, streams := range sm.streams {
+				for _, stream := range streams {
+					mi.wr.Logger().Errorf("stream in stopStreams: key %s shard %s stream %+v", key, stream.bls.Shard, stream.bls)
+				}
+			}
 			mi.cancelMigration(ctx, sm)
 			return 0, err
 		}
@@ -720,6 +728,10 @@ func (mi *migrater) createReverseVReplication(ctx context.Context) error {
 			OnDdl:      bls.OnDdl,
 		}
 		for _, rule := range bls.Filter.Rules {
+			if rule.Filter == "exclude" {
+				reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, rule)
+				continue
+			}
 			var filter string
 			if strings.HasPrefix(rule.Match, "/") {
 				if mi.sourceKSSchema.Keyspace.Sharded {
@@ -759,17 +771,13 @@ func (mi *migrater) deleteReverseVReplication(ctx context.Context) error {
 }
 
 func (mi *migrater) createJournals(ctx context.Context, sourceWorkflows []string) error {
-	var participants []*binlogdatapb.KeyspaceShard
-	for sourceShard := range mi.sources {
-		participants = append(participants, &binlogdatapb.KeyspaceShard{
-			Keyspace: mi.sourceKeyspace,
-			Shard:    sourceShard,
-		})
-	}
+	log.Infof("In createJournals for source workflows %+v", sourceWorkflows)
 	return mi.forAllSources(func(source *miSource) error {
 		if source.journaled {
 			return nil
 		}
+		participants := make([]*binlogdatapb.KeyspaceShard, 0)
+		participantMap := make(map[string]bool)
 		journal := &binlogdatapb.Journal{
 			Id:              mi.id,
 			MigrationType:   mi.migrationType,
@@ -779,15 +787,8 @@ func (mi *migrater) createJournals(ctx context.Context, sourceWorkflows []string
 			SourceWorkflows: sourceWorkflows,
 		}
 		for targetShard, target := range mi.targets {
-			found := false
 			for _, tsource := range target.sources {
-				if source.si.ShardName() == tsource.Shard {
-					found = true
-					break
-				}
-			}
-			if !found {
-				continue
+				participantMap[tsource.Shard] = true
 			}
 			journal.ShardGtids = append(journal.ShardGtids, &binlogdatapb.ShardGtid{
 				Keyspace: mi.targetKeyspace,
@@ -795,6 +796,19 @@ func (mi *migrater) createJournals(ctx context.Context, sourceWorkflows []string
 				Gtid:     target.position,
 			})
 		}
+		shards := make([]string, 0)
+		for shard := range participantMap {
+			shards = append(shards, shard)
+		}
+		sort.Sort(vreplication.ShardSorter(shards))
+		for _, shard := range shards {
+			journal.Participants = append(journal.Participants, &binlogdatapb.KeyspaceShard{
+				Keyspace: source.si.Keyspace(),
+				Shard:    shard,
+			})
+
+		}
+		log.Infof("Creating journal %v", journal)
 		mi.wr.Logger().Infof("Creating journal: %v", journal)
 		statement := fmt.Sprintf("insert into _vt.resharding_journal "+
 			"(id, db_name, val) "+

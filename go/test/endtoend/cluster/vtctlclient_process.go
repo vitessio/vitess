@@ -72,8 +72,7 @@ func (vtctlclient *VtctlClientProcess) ExecuteCommand(args ...string) (err error
 		vtctlclient.Binary,
 		pArgs...,
 	)
-	println(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
-	log.Info(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	log.Infof("Executing vtctlclient with command: %v", strings.Join(tmpProcess.Args, " "))
 	return tmpProcess.Run()
 }
 
@@ -88,8 +87,7 @@ func (vtctlclient *VtctlClientProcess) ExecuteCommandWithOutput(args ...string) 
 		vtctlclient.Binary,
 		pArgs...,
 	)
-	println(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
-	log.Info(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	log.Infof("Executing vtctlclient with command: %v", strings.Join(tmpProcess.Args, " "))
 	resultByte, err := tmpProcess.CombinedOutput()
 	return filterResultWhenRunsForCoverage(string(resultByte)), err
 }

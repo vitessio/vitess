@@ -74,29 +74,6 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 	})
 }
 
-func TestScatterConnExecuteBatch(t *testing.T) {
-	testScatterConnGeneric(t, "TestScatterConnExecuteBatch", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
-		queries := []*vtgatepb.BoundShardQuery{{
-			Query: &querypb.BoundQuery{
-				Sql:           "query",
-				BindVariables: nil,
-			},
-			Keyspace: "TestScatterConnExecuteBatch",
-			Shards:   shards,
-		}}
-		res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-		scatterRequest, err := boundShardQueriesToScatterBatchRequest(context.Background(), res, queries, topodatapb.TabletType_REPLICA)
-		if err != nil {
-			return nil, err
-		}
-		qrs, err := sc.ExecuteBatch(context.Background(), scatterRequest, topodatapb.TabletType_REPLICA, false, NewSafeSession(nil), nil)
-		if err != nil {
-			return nil, err
-		}
-		return &qrs[0], err
-	})
-}
-
 func TestScatterConnStreamExecute(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnStreamExecute", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
 		res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")

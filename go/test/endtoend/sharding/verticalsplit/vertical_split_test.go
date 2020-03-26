@@ -407,7 +407,7 @@ func TestVerticalSplit(t *testing.T) {
 
 	// then serve master from the destination shards
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "destination_keyspace/0", "master")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "", *clusterInstance)
 	checkBlacklistedTables(t, sourceMasterTablet, sourceKeyspace, []string{"/moving/", "view1"})
 	checkBlacklistedTables(t, sourceReplicaTablet, sourceKeyspace, []string{"/moving/", "view1"})
@@ -461,8 +461,10 @@ func verifyVtctlSetShardTabletControl(t *testing.T) {
 	require.Nil(t, err)
 
 	shardJSON, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShard", "source_keyspace/0")
+	require.NoError(t, err)
 	var shardJSONData topodata.Shard
 	err = json2.Unmarshal([]byte(shardJSON), &shardJSONData)
+	require.NoError(t, err)
 	assert.Empty(t, shardJSONData.TabletControls)
 
 }
@@ -485,11 +487,11 @@ func checkStats(t *testing.T) {
 	resultMap, err := clusterInstance.VtgateProcess.GetVars()
 	require.Nil(t, err)
 	resultVtTabletCall := resultMap["VttabletCall"]
-	resultVtTabletCallMap, _ := resultVtTabletCall.(map[string]interface{})
+	resultVtTabletCallMap := resultVtTabletCall.(map[string]interface{})
 	resultHistograms := resultVtTabletCallMap["Histograms"]
-	resultHistogramsMap, _ := resultHistograms.(map[string]interface{})
+	resultHistogramsMap := resultHistograms.(map[string]interface{})
 	resultTablet := resultHistogramsMap["Execute.source_keyspace.0.replica"]
-	resultTableMap, _ := resultTablet.(map[string]interface{})
+	resultTableMap := resultTablet.(map[string]interface{})
 	resultCountStr := fmt.Sprintf("%v", reflect.ValueOf(resultTableMap["Count"]))
 	assert.Equal(t, "2", resultCountStr, fmt.Sprintf("unexpected value for VttabletCall(Execute.source_keyspace.0.replica) inside %s", resultCountStr))
 
@@ -501,7 +503,7 @@ func checkStats(t *testing.T) {
 	resultTabletDestination := resultAPIHistogramsMap["ExecuteKeyRanges.destination_keyspace.master"]
 	resultTabletDestinationMap, _ := resultTabletDestination.(map[string]interface{})
 	resultCountStrDestination := fmt.Sprintf("%v", reflect.ValueOf(resultTabletDestinationMap["Count"]))
-	assert.Equal(t, "6", resultCountStrDestination, fmt.Sprintf("unexpected value for VtgateApi(ExecuteKeyRanges.destination_keyspace.master) inside %s)", resultCountStrDestination))
+	assert.Equal(t, "6", resultCountStrDestination, fmt.Sprintf("unexpected value for VtgateApi(Execute.destination_keyspace.master) inside %s)", resultCountStrDestination))
 
 	assert.Empty(t, resultMap["VtgateApiErrorCounts"])
 
@@ -528,15 +530,11 @@ func insertInitialValues(t *testing.T, conn *mysql.Conn, sourceMasterTablet clus
 }
 
 func checkClientConnRedirectionExecuteKeyrange(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateConn, keyspace string, servedFromDbTypes []topodata.TabletType, movedTables []string) {
-	var testKeyRange = &topodata.KeyRange{
-		Start: []byte{},
-		End:   []byte{},
-	}
-	keyRanges := []*topodata.KeyRange{testKeyRange}
 	// check that the ServedFrom indirection worked correctly.
-	for _, tableType := range servedFromDbTypes {
+	for _, tabletType := range servedFromDbTypes {
+		session := conn.Session(fmt.Sprintf("%s@%v", keyspace, tabletType), nil)
 		for _, table := range movedTables {
-			_, err := conn.ExecuteKeyRanges(ctx, fmt.Sprintf("select * from %s", table), keyspace, keyRanges, nil, tableType, nil)
+			_, err := session.Execute(ctx, fmt.Sprintf("select * from %s", table), nil)
 			require.Nil(t, err)
 		}
 	}
@@ -668,7 +666,7 @@ func initializeCluster() (int, error) {
 		for i := 0; i < 4; i++ {
 			// instantiate vttablet object with reserved ports
 			tabletUID := clusterInstance.GetAndReserveTabletUID()
-			var tablet *cluster.Vttablet = nil
+			var tablet *cluster.Vttablet
 			if i == 0 {
 				tablet = clusterInstance.GetVttabletInstance("replica", tabletUID, cellj)
 			} else if i == 1 {
@@ -678,11 +676,11 @@ func initializeCluster() (int, error) {
 			}
 			// Start Mysqlctl process
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			if err != nil {
 				return 1, err
-			} else {
-				mysqlProcesses = append(mysqlProcesses, proc)
 			}
+			mysqlProcesses = append(mysqlProcesses, proc)
 			// start vttablet process
 			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
 				tablet.GrpcPort,

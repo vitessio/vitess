@@ -183,7 +183,6 @@ func TestSecureTransport(t *testing.T) {
 
 	qr, err := vc.Execute(ctx, request)
 	require.Nil(t, err)
-
 	err = vterrors.FromVTRPC(qr.Error)
 	require.Nil(t, err)
 
@@ -204,7 +203,7 @@ func TestSecureTransport(t *testing.T) {
 	// into immediate caller id.
 	clusterInstance.VtGateExtraArgs = []string{"-grpc_use_effective_callerid"}
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, tabletConnExtraArgs("vttablet-client-1")...)
-	err = clusterInstance.ReStartVtgate()
+	err = clusterInstance.RestartVtgate()
 	require.Nil(t, err)
 
 	grpcAddress = fmt.Sprintf("%s:%d", "localhost", clusterInstance.VtgateProcess.GrpcPort)

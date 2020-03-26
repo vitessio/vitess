@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/sqlannotation"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -453,17 +452,14 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {
-		var ksids [][]byte
 		var mids []string
 		for _, indexValue := range indexesPerRss[i] {
 			index, _ := strconv.ParseInt(string(indexValue.Value), 0, 64)
 			if keyspaceIDs[index] != nil {
-				ksids = append(ksids, keyspaceIDs[index])
 				mids = append(mids, ins.Mid[index])
 			}
 		}
 		rewritten := ins.Prefix + strings.Join(mids, ",") + ins.Suffix
-		rewritten = sqlannotation.AddKeyspaceIDs(rewritten, ksids, "")
 		queries[i] = &querypb.BoundQuery{
 			Sql:           rewritten,
 			BindVariables: bindVars,

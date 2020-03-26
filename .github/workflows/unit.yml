@@ -85,5 +85,6 @@ jobs:
         make tools
 
     - name: unit
+      timeout-minutes: 30
       run: |
         eatmydata -- make unit_test

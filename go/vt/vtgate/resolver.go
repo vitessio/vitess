@@ -17,12 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"bytes"
-	"fmt"
-	"reflect"
-	"sort"
-	"strings"
-
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -32,15 +26,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-)
-
-var (
-	sqlListIdentifier = []byte("::")
-	inOperator        = []byte(" in ")
-	kwAnd             = []byte(" and ")
-	kwWhere           = []byte(" where ")
 )
 
 // Resolver is the layer to resolve KeyspaceIds and KeyRanges
@@ -125,119 +111,6 @@ func (res *Resolver) Execute(
 	}
 }
 
-// ExecuteEntityIds executes a non-streaming query based on given KeyspaceId map.
-// It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteEntityIds(
-	ctx context.Context,
-	sql string,
-	bindVariables map[string]*querypb.BindVariable,
-	keyspace string,
-	entityColumnName string,
-	entityKeyspaceIDs []*vtgatepb.ExecuteEntityIdsRequest_EntityId,
-	tabletType topodatapb.TabletType,
-	session *vtgatepb.Session,
-	notInTransaction bool,
-	options *querypb.ExecuteOptions,
-) (*sqltypes.Result, error) {
-	// Unpack the entityKeyspaceIDs into []ids and []Destination
-	ids := make([]*querypb.Value, len(entityKeyspaceIDs))
-	destinations := make([]key.Destination, len(entityKeyspaceIDs))
-	for i, eki := range entityKeyspaceIDs {
-		ids[i] = &querypb.Value{
-			Type:  eki.Type,
-			Value: eki.Value,
-		}
-		destinations[i] = key.DestinationKeyspaceID(eki.KeyspaceId)
-	}
-
-	rss, values, err := res.resolver.ResolveDestinations(
-		ctx,
-		keyspace,
-		tabletType,
-		ids,
-		destinations)
-	if err != nil {
-		return nil, err
-	}
-	for {
-		sqls, bindVars := buildEntityIds(values, sql, entityColumnName, bindVariables)
-		qr, err := res.scatterConn.ExecuteEntityIds(
-			ctx,
-			rss,
-			sqls,
-			bindVars,
-			tabletType,
-			NewSafeSession(session),
-			notInTransaction,
-			options)
-		if isRetryableError(err) {
-			newRss, newValues, err := res.resolver.ResolveDestinations(
-				ctx,
-				keyspace,
-				tabletType,
-				ids,
-				destinations)
-			if err != nil {
-				return nil, err
-			}
-			if !srvtopo.ResolvedShardsEqual(rss, newRss) || !srvtopo.ValuesEqual(values, newValues) {
-				// Retry if resharding happened.
-				rss = newRss
-				values = newValues
-				continue
-			}
-		}
-		if err != nil {
-			return nil, err
-		}
-		return qr, err
-	}
-}
-
-// ExecuteBatch executes a group of queries based on shards resolved by given func.
-// It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteBatch(
-	ctx context.Context,
-	tabletType topodatapb.TabletType,
-	asTransaction bool,
-	session *vtgatepb.Session,
-	options *querypb.ExecuteOptions,
-	buildBatchRequest func() (*scatterBatchRequest, error),
-) ([]sqltypes.Result, error) {
-	batchRequest, err := buildBatchRequest()
-	if err != nil {
-		return nil, err
-	}
-	for {
-		qrs, err := res.scatterConn.ExecuteBatch(
-			ctx,
-			batchRequest,
-			tabletType,
-			asTransaction,
-			NewSafeSession(session),
-			options)
-		// Don't retry transactional requests.
-		if asTransaction {
-			return qrs, err
-		}
-		// If lower level retries failed, check if there was a resharding event
-		// and retry again if needed.
-		if isRetryableError(err) {
-			newBatchRequest, buildErr := buildBatchRequest()
-			if buildErr != nil {
-				return nil, buildErr
-			}
-			// Use reflect to see if the request has changed.
-			if reflect.DeepEqual(*batchRequest, *newBatchRequest) {
-				return qrs, err
-			}
-			batchRequest = newBatchRequest
-			continue
-		}
-		return qrs, err
-	}
-}
-
 // StreamExecute executes a streaming query on shards resolved by given func.
 // This function currently temporarily enforces the restriction of executing on
 // one shard since it cannot merge-sort the results to guarantee ordering of
@@ -289,95 +162,7 @@ func (res *Resolver) MessageStream(ctx context.Context, keyspace string, shard s
 	return res.scatterConn.MessageStream(ctx, rss, name, callback)
 }
 
-// MessageAckKeyspaceIds routes message acks based on the associated keyspace ids.
-func (res *Resolver) MessageAckKeyspaceIds(ctx context.Context, keyspace, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error) {
-	ids := make([]*querypb.Value, len(idKeyspaceIDs))
-	ksids := make([]key.Destination, len(idKeyspaceIDs))
-	for i, iki := range idKeyspaceIDs {
-		ids[i] = iki.Id
-		ksids[i] = key.DestinationKeyspaceID(iki.KeyspaceId)
-	}
-
-	rss, values, err := res.resolver.ResolveDestinations(ctx, keyspace, topodatapb.TabletType_MASTER, ids, ksids)
-	if err != nil {
-		return 0, err
-	}
-
-	return res.scatterConn.MessageAck(ctx, rss, values, name)
-}
-
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
 func (res *Resolver) GetGatewayCacheStatus() gateway.TabletCacheStatusList {
 	return res.scatterConn.GetGatewayCacheStatus()
-}
-
-// StrsEquals compares contents of two string slices.
-func StrsEquals(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	sort.Strings(a)
-	sort.Strings(b)
-	for i, v := range a {
-		if v != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
-// buildEntityIds populates SQL and BindVariables.
-func buildEntityIds(values [][]*querypb.Value, qSQL, entityColName string, qBindVars map[string]*querypb.BindVariable) ([]string, []map[string]*querypb.BindVariable) {
-	sqls := make([]string, len(values))
-	bindVars := make([]map[string]*querypb.BindVariable, len(values))
-	for i, val := range values {
-		var b bytes.Buffer
-		b.Write([]byte(entityColName))
-		bindVariables := make(map[string]*querypb.BindVariable)
-		for k, v := range qBindVars {
-			bindVariables[k] = v
-		}
-		bvName := fmt.Sprintf("%v_entity_ids", entityColName)
-		bindVariables[bvName] = &querypb.BindVariable{
-			Type:   querypb.Type_TUPLE,
-			Values: val,
-		}
-		b.Write(inOperator)
-		b.Write(sqlListIdentifier)
-		b.Write([]byte(bvName))
-		sqls[i] = insertSQLClause(qSQL, b.String())
-		bindVars[i] = bindVariables
-	}
-	return sqls, bindVars
-}
-
-func insertSQLClause(querySQL, clause string) string {
-	// get first index of any additional clause: group by, order by, limit, for update, sql end if nothing
-	// insert clause into the index position
-	sql := strings.ToLower(querySQL)
-	idxExtra := len(sql)
-	if idxGroupBy := strings.Index(sql, " group by"); idxGroupBy > 0 && idxGroupBy < idxExtra {
-		idxExtra = idxGroupBy
-	}
-	if idxOrderBy := strings.Index(sql, " order by"); idxOrderBy > 0 && idxOrderBy < idxExtra {
-		idxExtra = idxOrderBy
-	}
-	if idxLimit := strings.Index(sql, " limit"); idxLimit > 0 && idxLimit < idxExtra {
-		idxExtra = idxLimit
-	}
-	if idxForUpdate := strings.Index(sql, " for update"); idxForUpdate > 0 && idxForUpdate < idxExtra {
-		idxExtra = idxForUpdate
-	}
-	var b bytes.Buffer
-	b.Write([]byte(querySQL[:idxExtra]))
-	if strings.Contains(sql, "where") {
-		b.Write(kwAnd)
-	} else {
-		b.Write(kwWhere)
-	}
-	b.Write([]byte(clause))
-	if idxExtra < len(sql) {
-		b.Write([]byte(querySQL[idxExtra:]))
-	}
-	return b.String()
 }

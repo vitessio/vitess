@@ -1906,8 +1906,9 @@ func commandVerticalSplitClone(ctx context.Context, wr *wrangler.Wrangler, subFl
 func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	sourceCell := subFlags.String("source_cell", "", "The source cell to compare from")
 	targetCell := subFlags.String("target_cell", "", "The target cell to compare with")
-	tabletTypes := subFlags.String("tablet_types", "", "Tablet types for source and target")
+	tabletTypes := subFlags.String("tablet_types", "master,replica,rdonly", "Tablet types for source and target")
 	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations. The migration will be aborted on timeout.")
+	format := subFlags.String("format", "", "Format of report") //"json" or ""
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1921,7 +1922,7 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	}
 
 	_, err = wr.VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypes, *filteredReplicationWaitTime,
-		*HealthCheckTopologyRefresh, *HealthcheckRetryDelay, *HealthCheckTimeout)
+		*HealthCheckTopologyRefresh, *HealthcheckRetryDelay, *HealthCheckTimeout, *format)
 	return err
 }
 
@@ -2555,7 +2556,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 
 	if _, err := wr.TopoServer().GetKeyspace(ctx, keyspace); err != nil {
 		if strings.Contains(err.Error(), "node doesn't exist") {
-			return fmt.Errorf("keyspace(%s) doesn't exist, check if the keyspace is initialized.\n", keyspace)
+			return fmt.Errorf("keyspace(%s) doesn't exist, check if the keyspace is initialized", keyspace)
 		}
 		return err
 	}

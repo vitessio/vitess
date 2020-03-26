@@ -39,6 +39,8 @@ package multi
 import (
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	sharding "vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -52,11 +54,11 @@ func TestInitialShardingMulti(t *testing.T) {
 	}
 	sharding.AssignMysqlPortFromKs1ToKs2()
 	sharding.TestInitialSharding(t, &sharding.ClusterInstance.Keyspaces[0], querypb.Type_UINT64, true, false)
-	println("-----------------------------")
-	println("Done with 1st keyspace test")
-	println("-----------------------------")
+	log.Info("-----------------------------")
+	log.Info("Done with 1st keyspace test")
+	log.Info("-----------------------------")
 	sharding.TestInitialSharding(t, &sharding.ClusterInstance.Keyspaces[1], querypb.Type_UINT64, true, true)
-	println("----------Done with 2nd keyspace test----------")
+	log.Info("----------Done with 2nd keyspace test----------")
 	sharding.KillVtgateInstances()
 	sharding.KillTabletsInKeyspace(&sharding.ClusterInstance.Keyspaces[0])
 	sharding.KillTabletsInKeyspace(&sharding.ClusterInstance.Keyspaces[1])
