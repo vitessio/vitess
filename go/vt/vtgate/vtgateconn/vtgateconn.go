@@ -36,10 +36,8 @@ var (
 )
 
 // VTGateConn is the client API object to talk to vtgate.
-// It is constructed using the Dial method. It supports
-// legacy V2 APIs. It can be used concurrently. To access
-// V3 functionality, use the Session function to create a
-// VTGateSession objects.
+// It can support concurrent sessions.
+// It is constructed using the Dial method.
 type VTGateConn struct {
 	impl Impl
 }

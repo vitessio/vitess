@@ -23,7 +23,6 @@ import (
 	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/sqlannotation"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -174,8 +173,7 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 			return nil, vterrors.Wrap(err, "execUpdateEqual")
 		}
 	}
-	rewritten := sqlannotation.AddKeyspaceIDs(upd.Query, [][]byte{ksid}, "")
-	return execShard(vcursor, rewritten, bindVars, rs, true /* isDML */, true /* canAutocommit */)
+	return execShard(vcursor, upd.Query, bindVars, rs, true /* isDML */, true /* canAutocommit */)
 }
 
 // updateVindexEntries performs an update when a vindex is being modified
@@ -247,10 +245,9 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 	}
 
 	queries := make([]*querypb.BoundQuery, len(rss))
-	sql := sqlannotation.AnnotateIfDML(upd.Query, nil)
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{
-			Sql:           sql,
+			Sql:           upd.Query,
 			BindVariables: bindVars,
 		}
 	}

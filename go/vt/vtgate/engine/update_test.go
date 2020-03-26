@@ -79,7 +79,7 @@ func TestUpdateEqual(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		`ExecuteMultiShard ks.-20: dummy_update /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {} true true`,
+		`ExecuteMultiShard ks.-20: dummy_update {} true true`,
 	})
 
 	// Failure case
@@ -241,7 +241,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: type:INT64 value:"3" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// Finally, the actual update, which is also sent to -20, same route as the subquery.
-		`ExecuteMultiShard sharded.-20: dummy_update /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {} true true`,
+		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
 	})
 
 	// No rows changing
@@ -256,7 +256,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
 		// Subquery returns no rows. So, no vindexes are updated. We still pass-through the original update.
-		`ExecuteMultiShard sharded.-20: dummy_update /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {} true true`,
+		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
 	})
 
 	// Failure case: multiple rows changing.
@@ -291,7 +291,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"9" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: type:INT64 value:"3" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// Finally, the actual update, which is also sent to -20, same route as the subquery.
-		`ExecuteMultiShard sharded.-20: dummy_update /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {} true true`,
+		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
 	})
 
 }
