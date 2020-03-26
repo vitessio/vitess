@@ -91,16 +91,9 @@ var (
 
 // VTGate is the rpc interface to vtgate. Only one instance
 // can be created. It implements vtgateservice.VTGateService
-// VTGate exposes multiple generations of interfaces. The V3
-// interface is the latest one, which is capable of processing
-// queries with no additional hints. V2 functions require
-// the keyspace id or keyrange to be specified. V1 functions
-// require shard info. V0 functions are informational that
-// return topo information. Often, 'V2' or 'legacy' is used
-// to refer to all legacy versions of the API (V2, V1 and V0).
+// VTGate exposes multiple generations of interfaces.
 type VTGate struct {
 	// Dependency: executor->resolver->scatterConn->txConn->gateway.
-	// VTGate still needs resolver and txConn to support legacy functions.
 	executor *Executor
 	resolver *Resolver
 	vsm      *vstreamManager
