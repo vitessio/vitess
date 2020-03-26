@@ -17,9 +17,7 @@
 package io.vitess.client;
 
 import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.protobuf.ByteString;
 
 import binlogdata.Binlogdata.FieldEvent;
 import binlogdata.Binlogdata.RowEvent;
@@ -37,7 +35,6 @@ import io.vitess.proto.Vtgate.VStreamResponse;
 import io.vitess.proto.Vtrpc.CallerID;
 
 import java.nio.charset.StandardCharsets;
-import java.sql.SQLDataException;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.sql.SQLInvalidAuthorizationSpecException;
@@ -46,7 +43,6 @@ import java.sql.SQLRecoverableException;
 import java.sql.SQLSyntaxErrorException;
 import java.sql.SQLTimeoutException;
 import java.sql.SQLTransientException;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,7 +69,8 @@ public abstract class RpcClientTest {
   private static boolean ready;
 
   private Context ctx;
-  private VTGateBlockingConn conn;
+  private VTGateBlockingConnection conn;
+  private VTSession session;
 
   @BeforeClass
   public static void resetReady() throws Exception {
@@ -82,8 +79,9 @@ public abstract class RpcClientTest {
 
   @Before
   public void setUp() throws SQLException, InterruptedException {
-    // Test VTGateConn via the synchronous VTGateBlockingConn wrapper.
-    conn = new VTGateBlockingConn(client, KEYSPACE);
+    // Test VTGateConnection via the synchronous VTGateBlockingConnection wrapper.
+    conn = new VTGateBlockingConnection(client);
+    session = new VTSession(KEYSPACE+"@"+TABLET_TYPE, Query.ExecuteOptions.newBuilder().setIncludedFields(ALL_FIELDS).build());
 
     waitForVtgateclienttest();
 
@@ -125,7 +123,7 @@ public abstract class RpcClientTest {
   private static final String BIND_VARS_ECHO =
       "map[bytes:type:VARBINARY value:\"\\001\\002\\003\"  float:type:FLOAT64 value:\"2.5\"  int:type:INT64 value:\"123\" ]";
 
-  private static final String NONTX_V3_SESSION_ECHO = "autocommit:true target_string:\"test_keyspace@replica\" options:<included_fields:ALL > ";
+  private static final String NONTX_V3_SESSION_ECHO = "autocommit:true target_string:\"test_keyspace@REPLICA\" options:<included_fields:ALL > ";
 
   private static final CallerID CALLER_ID = CallerID.newBuilder().setPrincipal("test_principal")
       .setComponent("test_component").setSubcomponent("test_subcomponent").build();
@@ -179,7 +177,7 @@ public abstract class RpcClientTest {
     while (DateTime.now().isBefore(deadline)) {
       try {
         ctx = Context.getDefault().withDeadlineAfter(Duration.standardSeconds(30));
-        conn.execute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE, ALL_FIELDS);
+        conn.execute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, session);
         // RPC succeeded. Stop testing.
         break;
       } catch (SQLTransientException e) {
@@ -208,8 +206,7 @@ public abstract class RpcClientTest {
   @Test
   public void testEchoExecute() throws Exception {
     Map<String, String> echo;
-
-    echo = getEcho(conn.execute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
+    echo = getEcho(conn.execute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, session));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
@@ -219,9 +216,8 @@ public abstract class RpcClientTest {
   @Test
   public void testEchoStreamExecute() throws Exception {
     Map<String, String> echo;
-
     echo = getEcho(
-        conn.streamExecute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
+        conn.streamExecute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, session));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
@@ -271,7 +267,7 @@ public abstract class RpcClientTest {
     checkExecuteErrors(new Executable() {
       @Override
       void execute(String query) throws Exception {
-        conn.execute(ctx, query, BIND_VARS, TABLET_TYPE, ALL_FIELDS);
+        conn.execute(ctx, query, BIND_VARS, session);
       }
     });
   }
@@ -281,7 +277,7 @@ public abstract class RpcClientTest {
     checkStreamExecuteErrors(new Executable() {
       @Override
       void execute(String query) throws Exception {
-        conn.streamExecute(ctx, query, BIND_VARS, TABLET_TYPE, ALL_FIELDS).next();
+        conn.streamExecute(ctx, query, BIND_VARS, session).next();
       }
     });
   }
