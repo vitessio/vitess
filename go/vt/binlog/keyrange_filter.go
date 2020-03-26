@@ -43,13 +43,11 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, callback func(*binlogdata
 			case binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 				binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
 				binlogdatapb.BinlogTransaction_Statement_BL_DELETE:
-				// Handle RBR case first.
 				if statement.KeyspaceID != nil {
 					updateStreamErrors.Add("KeyRangeStream", 1)
 					log.Errorf("SBR mode unsupported for streaming: %s", statement.Statement.Sql)
 				}
 				if !key.KeyRangeContains(keyrange, statement.KeyspaceID) {
-					// Skip keyspace ids that don't belong to the destination shard.
 					continue
 				}
 				filtered = append(filtered, statement.Statement)
