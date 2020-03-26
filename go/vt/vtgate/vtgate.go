@@ -42,7 +42,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"vitess.io/vitess/go/vt/vtgate/gateway"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -102,7 +101,7 @@ type VTGate struct {
 	resolver *Resolver
 	vsm      *vstreamManager
 	txConn   *TxConn
-	gw       gateway.Gateway
+	gw       *DiscoveryGateway
 
 	// stats objects.
 	// TODO(sougou): This needs to be cleaned up. There
@@ -134,18 +133,18 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
 	// we can't go on much further, so we log.Fatal out.
-	gw := gateway.GetCreator()(ctx, hc, serv, cell, retryCount)
+	gw := New(ctx, hc, serv, cell, retryCount)
 	gw.RegisterStats()
-	if err := gateway.WaitForTablets(gw, tabletTypesToWait); err != nil {
+	if err := WaitForTablets(gw, tabletTypesToWait); err != nil {
 		log.Fatalf("gateway.WaitForTablets failed: %v", err)
 	}
 
 	// If we want to filter keyspaces replace the srvtopo.Server with a
 	// filtering server
-	if len(gateway.KeyspacesToWatch) > 0 {
-		log.Infof("Keyspace filtering enabled, selecting %v", gateway.KeyspacesToWatch)
+	if len(KeyspacesToWatch) > 0 {
+		log.Infof("Keyspace filtering enabled, selecting %v", KeyspacesToWatch)
 		var err error
-		serv, err = srvtopo.NewKeyspaceFilteringServer(serv, gateway.KeyspacesToWatch)
+		serv, err = srvtopo.NewKeyspaceFilteringServer(serv, KeyspacesToWatch)
 		if err != nil {
 			log.Fatalf("Unable to construct SrvTopo server: %v", err.Error())
 		}
@@ -228,7 +227,7 @@ func (vtg *VTGate) IsHealthy() error {
 }
 
 // Gateway returns the current gateway implementation. Mostly used for tests.
-func (vtg *VTGate) Gateway() gateway.Gateway {
+func (vtg *VTGate) Gateway() *DiscoveryGateway {
 	return vtg.gw
 }
 
@@ -386,7 +385,7 @@ func (vtg *VTGate) VStream(ctx context.Context, tabletType topodatapb.TabletType
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
-func (vtg *VTGate) GetGatewayCacheStatus() gateway.TabletCacheStatusList {
+func (vtg *VTGate) GetGatewayCacheStatus() TabletCacheStatusList {
 	return vtg.resolver.GetGatewayCacheStatus()
 }
 
