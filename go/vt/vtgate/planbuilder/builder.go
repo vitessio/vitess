@@ -122,6 +122,7 @@ type ContextVSchema interface {
 	FindTablesOrVindex(tablename sqlparser.TableName) ([]*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 	DefaultKeyspace() (*vindexes.Keyspace, error)
 	TargetString() string
+	Destination() key.Destination
 }
 
 //-------------------------------------------------------------------------
