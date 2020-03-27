@@ -704,14 +704,8 @@ func (node *Select) SetLimit(limit *Limit) {
 }
 
 // AddWhere adds the boolean expression to the
-// WHERE clause as an AND condition. If the expression
-// is an OR clause, it parenthesizes it. Currently,
-// the OR operator is the only one that's lower precedence
-// than AND.
+// WHERE clause as an AND condition.
 func (node *Select) AddWhere(expr Expr) {
-	if _, ok := expr.(*OrExpr); ok {
-		expr = &ParenExpr{Expr: expr}
-	}
 	if node.Where == nil {
 		node.Where = &Where{
 			Type: WhereStr,
@@ -726,14 +720,8 @@ func (node *Select) AddWhere(expr Expr) {
 }
 
 // AddHaving adds the boolean expression to the
-// HAVING clause as an AND condition. If the expression
-// is an OR clause, it parenthesizes it. Currently,
-// the OR operator is the only one that's lower precedence
-// than AND.
+// HAVING clause as an AND condition.
 func (node *Select) AddHaving(expr Expr) {
-	if _, ok := expr.(*OrExpr); ok {
-		expr = &ParenExpr{Expr: expr}
-	}
 	if node.Having == nil {
 		node.Having = &Where{
 			Type: HavingStr,
