@@ -194,6 +194,7 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	}
 }
 
+//TODO - what about these?
 func TestDirectTargetRewrites(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	executor.normalize = true
@@ -205,13 +206,12 @@ func TestDirectTargetRewrites(t *testing.T) {
 	}
 	sql := "select database()"
 
-	if _, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{}); err != nil {
-		t.Error(err)
-	}
-	testQueries(t, "sbclookup", sbclookup, []*querypb.BoundQuery{{
+	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	testBatchQuery(t, "sbclookup", sbclookup, &querypb.BoundQuery{
 		Sql:           "select :__vtdbname as `database()` from dual",
 		BindVariables: map[string]*querypb.BindVariable{"__vtdbname": sqltypes.StringBindVariable("TestUnsharded")},
-	}})
+	})
 }
 
 func TestExecutorTransactionsAutoCommit(t *testing.T) {

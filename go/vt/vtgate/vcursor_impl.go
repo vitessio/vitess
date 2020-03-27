@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -303,4 +304,11 @@ func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (str
 		}
 	}
 	return destKeyspace, destTabletType, dest, err
+}
+
+func (vc *vcursorImpl) planPrefixKey() string {
+	if vc.destination != nil {
+		return fmt.Sprintf("%s%s%s", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType], vc.destination.String())
+	}
+	return fmt.Sprintf("%s%s", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType])
 }

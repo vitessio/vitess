@@ -21,6 +21,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/stretchr/testify/require"
 
 	"golang.org/x/net/context"
@@ -314,12 +317,8 @@ func TestUpdateNormalize(t *testing.T) {
 			"vtg2": sqltypes.TestBindVariable(int64(1)),
 		},
 	}}
-	if sbc1.Queries != nil {
-		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
-	}
-	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
-		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
-	}
+	assert.Empty(t, sbc1.BatchQueries)
+	utils.MustMatch(t, sbc2.BatchQueries[0], wantQueries, "didn't get expected queries")
 	sbc2.Queries = nil
 	masterSession.TargetString = ""
 }
@@ -1524,186 +1523,102 @@ func TestInsertBadAutoInc(t *testing.T) {
 }
 
 func TestKeyDestRangeQuery(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
-	// it works in a single shard key range
-	masterSession.TargetString = "TestExecutor[40-60]"
 
-	_, err := executorExec(executor, "DELETE FROM sharded_user_msgs LIMIT 1000", nil)
-	require.NoError(t, err)
-	sql := "DELETE FROM sharded_user_msgs LIMIT 1000"
-	wantQueries := []*querypb.BoundQuery{{
-		Sql:           sql,
-		BindVariables: map[string]*querypb.BindVariable{},
-	}}
-
-	if len(sbc1.Queries) != 0 {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, []*querypb.BoundQuery{})
+	type testCase struct {
+		inputQuery, targetString string
+		expectedSbc1Query        string
+		expectedSbc2Query        string
 	}
-	testQueries(t, "sbc2", sbc2, wantQueries)
+	deleteInput := "DELETE FROM sharded_user_msgs LIMIT 1000"
+	deleteOutput := "delete from sharded_user_msgs limit 1000"
 
-	sbc1.Queries = nil
-	sbc2.Queries = nil
+	selectInput := "SELECT * FROM sharded_user_msgs LIMIT 1"
+	selectOutput := "select * from sharded_user_msgs limit 1"
+	updateInput := "UPDATE sharded_user_msgs set message='test' LIMIT 1"
+	updateOutput := "update sharded_user_msgs set message = 'test' limit 1"
+	insertInput := "INSERT INTO sharded_user_msgs(message) VALUES('test')"
+	insertOutput := "insert into sharded_user_msgs(message) values ('test')"
+	tests := []testCase{
+		{
+			inputQuery:        deleteInput,
+			targetString:      "TestExecutor[-60]",
+			expectedSbc1Query: deleteOutput,
+			expectedSbc2Query: deleteOutput,
+		},
+		{
+			inputQuery:        deleteInput,
+			targetString:      "TestExecutor[40-60]",
+			expectedSbc2Query: deleteOutput,
+		},
+		{
+			inputQuery:        deleteInput,
+			targetString:      "TestExecutor[-]",
+			expectedSbc1Query: deleteOutput,
+			expectedSbc2Query: deleteOutput,
+		},
+		{
+			inputQuery:        selectInput,
+			targetString:      "TestExecutor[-]",
+			expectedSbc1Query: selectOutput,
+			expectedSbc2Query: selectOutput,
+		},
+		{
+			inputQuery:        updateInput,
+			targetString:      "TestExecutor[-]",
+			expectedSbc1Query: updateOutput,
+			expectedSbc2Query: updateOutput,
+		},
+		{
+			inputQuery:        insertInput,
+			targetString:      "TestExecutor:40-60",
+			expectedSbc2Query: insertOutput,
+		},
+		{
+			inputQuery:        insertInput,
+			targetString:      "TestExecutor:-20",
+			expectedSbc1Query: insertOutput,
+		},
+	}
 
-	// it works with keyrange spanning two shards
-	masterSession.TargetString = "TestExecutor[-60]"
+	for _, tc := range tests {
+		t.Run(tc.targetString+" - "+tc.inputQuery, func(t *testing.T) {
+			executor, sbc1, sbc2, _ := createExecutorEnv()
 
-	_, err = executorExec(executor, sql, nil)
-	require.NoError(t, err)
-	testQueries(t, "sbc1", sbc1, wantQueries)
-	testQueries(t, "sbc1", sbc2, wantQueries)
+			masterSession.TargetString = tc.targetString
+			_, err := executorExec(executor, tc.inputQuery, nil)
+			require.NoError(t, err)
 
-	sbc1.Queries = nil
-	sbc2.Queries = nil
+			if tc.expectedSbc1Query == "" {
+				require.Empty(t, sbc1.BatchQueries, "sbc1")
+			} else {
+				assertBatchQueriesContain(t, tc.expectedSbc1Query, "sbc1", sbc1)
+			}
 
-	// it works with open ended key range
-	masterSession.TargetString = "TestExecutor[-]"
-
-	_, err = executorExec(executor, sql, nil)
-	require.NoError(t, err)
-
-	testQueries(t, "sbc1", sbc1, wantQueries)
-	testQueries(t, "sbc2", sbc2, wantQueries)
-
-	sbc1.Queries = nil
-	sbc2.Queries = nil
-
-	// it works for select
-	sql = "SELECT * FROM sharded_user_msgs LIMIT 1"
-	wantQueries = []*querypb.BoundQuery{{
-		Sql:           sql,
-		BindVariables: map[string]*querypb.BindVariable{},
-	}}
-
-	_, err = executorExec(executor, sql, nil)
-	require.NoError(t, err)
-
-	testQueries(t, "sbc1", sbc1, wantQueries)
-	testQueries(t, "sbc2", sbc2, wantQueries)
-
-	sbc1.Queries = nil
-	sbc2.Queries = nil
-
-	// it works for updates
-	sql = "UPDATE sharded_user_msgs set message='test' LIMIT 1"
-
-	wantQueries = []*querypb.BoundQuery{{
-		Sql:           sql,
-		BindVariables: map[string]*querypb.BindVariable{},
-	}}
-
-	_, err = executorExec(executor, sql, nil)
-	require.NoError(t, err)
-
-	testQueries(t, "sbc1", sbc1, wantQueries)
-	testQueries(t, "sbc2", sbc2, wantQueries)
-
-	sbc1.Queries = nil
-	sbc2.Queries = nil
+			if tc.expectedSbc2Query == "" {
+				require.Empty(t, sbc2.BatchQueries)
+			} else {
+				assertBatchQueriesContain(t, tc.expectedSbc2Query, "sbc2", sbc2)
+			}
+		})
+	}
 
 	// it does not work for inserts
-	_, err = executorExec(executor, "INSERT INTO sharded_user_msgs(message) VALUES('test')", nil)
+	executor, _, _, _ := createExecutorEnv()
+	masterSession.TargetString = "TestExecutor[-]"
+	_, err := executorExec(executor, insertInput, nil)
 
-	want := "range queries not supported for inserts: TestExecutor[-]"
-	if err == nil || err.Error() != want {
-		t.Errorf("got: %v, want %s", err, want)
-	}
+	require.EqualError(t, err, "range queries not supported for inserts: TestExecutor[-]")
 
-	sbc1.Queries = nil
-	sbc2.Queries = nil
 	masterSession.TargetString = ""
 }
 
-func TestKeyShardDestQuery(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
-	// it works in a single shard key range
-	masterSession.TargetString = "TestExecutor:40-60"
-
-	_, err := executorExec(executor, "DELETE FROM sharded_user_msgs LIMIT 1000", nil)
-	require.NoError(t, err)
-	sql := "DELETE FROM sharded_user_msgs LIMIT 1000"
-	wantQueries := []*querypb.BoundQuery{{
+func assertBatchQueriesContain(t *testing.T, sql, sbcName string, sbc *sandboxconn.SandboxConn) {
+	t.Helper()
+	expectedQuery := &querypb.BoundQuery{
 		Sql:           sql,
 		BindVariables: map[string]*querypb.BindVariable{},
-	}}
-
-	if len(sbc1.Queries) != 0 {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, []*querypb.BoundQuery{})
 	}
-	testQueries(t, "sbc2", sbc2, wantQueries)
-
-	sbc1.Queries = nil
-	sbc2.Queries = nil
-
-	masterSession.TargetString = "TestExecutor:40-60"
-
-	_, err = executorExec(executor, sql, nil)
-	require.NoError(t, err)
-
-	testQueries(t, "sbc2", sbc2, wantQueries)
-
-	sbc1.Queries = nil
-	sbc2.Queries = nil
-
-	// it works for select
-	sql = "SELECT * FROM sharded_user_msgs LIMIT 1"
-	wantQueries = []*querypb.BoundQuery{{
-		Sql:           sql,
-		BindVariables: map[string]*querypb.BindVariable{},
-	}}
-
-	_, err = executorExec(executor, sql, nil)
-	require.NoError(t, err)
-
-	if len(sbc1.Queries) != 0 {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, []*querypb.BoundQuery{})
-	}
-
-	testQueries(t, "sbc2", sbc2, wantQueries)
-
-	sbc1.Queries = nil
-	sbc2.Queries = nil
-
-	// it works for updates
-	sql = "UPDATE sharded_user_msgs set message='test' LIMIT 1"
-
-	wantQueries = []*querypb.BoundQuery{{
-		Sql:           sql,
-		BindVariables: map[string]*querypb.BindVariable{},
-	}}
-
-	_, err = executorExec(executor, sql, nil)
-
-	require.NoError(t, err)
-
-	if len(sbc1.Queries) != 0 {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, []*querypb.BoundQuery{})
-	}
-
-	testQueries(t, "sbc2", sbc2, wantQueries)
-
-	sbc1.Queries = nil
-	sbc2.Queries = nil
-
-	// it works for inserts
-
-	sql = "INSERT INTO sharded_user_msgs(message) VALUES('test')"
-	_, err = executorExec(executor, sql, nil)
-
-	wantQueries = []*querypb.BoundQuery{{
-		Sql:           sql,
-		BindVariables: map[string]*querypb.BindVariable{},
-	}}
-	require.NoError(t, err)
-
-	if len(sbc1.Queries) != 0 {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, []*querypb.BoundQuery{})
-	}
-
-	testQueries(t, "sbc2", sbc2, wantQueries)
-
-	sbc1.Queries = nil
-	sbc2.Queries = nil
-	masterSession.TargetString = ""
+	testBatchQuery(t, sbcName, sbc, expectedQuery)
 }
 
 // Prepared statement tests

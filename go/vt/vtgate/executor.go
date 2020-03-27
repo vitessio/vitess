@@ -266,49 +266,6 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 }
 
 func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destKeyspace string, destTabletType topodatapb.TabletType, dest key.Destination, logStats *LogStats, stmtType sqlparser.StatementType) (*sqltypes.Result, error) {
-	if dest != nil {
-		if destKeyspace == "" {
-			return nil, errNoKeyspace
-		}
-
-		switch dest.(type) {
-		case key.DestinationExactKeyRange:
-			stmtType := sqlparser.Preview(sql)
-			if stmtType == sqlparser.StmtInsert {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "range queries not supported for inserts: %s", safeSession.TargetString)
-			}
-
-		}
-
-		execStart := time.Now()
-		if e.normalize {
-			query, comments := sqlparser.SplitMarginComments(sql)
-			stmt, err := sqlparser.Parse(query)
-			if err != nil {
-				return nil, err
-			}
-			rewriteResult, err := sqlparser.PrepareAST(stmt, bindVars, "vtg")
-			if err != nil {
-				return nil, err
-			}
-			normalized := sqlparser.String(rewriteResult.AST)
-			sql = comments.Leading + normalized + comments.Trailing
-			neededBindVariables, err := e.createNeededBindVariables(rewriteResult.BindVarNeeds, safeSession)
-			if err != nil {
-				return nil, err
-			}
-			for k, v := range neededBindVariables {
-				bindVars[k] = v
-			}
-		}
-		logStats.PlanTime = execStart.Sub(logStats.StartTime)
-		logStats.SQL = sql
-		logStats.BindVariables = bindVars
-		result, err := e.resolver.Execute(ctx, sql, bindVars, destKeyspace, destTabletType, dest, safeSession, false /* notInTransaction */, safeSession.Options, logStats, true /* canAutocommit */)
-		logStats.ExecuteTime = time.Since(execStart)
-		e.updateQueryCounts("ShardDirect", "", "", int64(logStats.ShardQueries))
-		return result, err
-	}
 
 	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
@@ -1376,8 +1333,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	if e.VSchema() == nil {
 		return nil, errors.New("vschema not initialized")
 	}
-	keyspace := vcursor.keyspace
-	planKey := keyspace + vindexes.TabletTypeSuffix[vcursor.tabletType] + ":" + sql
+	planKey := vcursor.planPrefixKey() + ":" + sql
 	if plan, ok := e.plans.Get(planKey); ok {
 		return plan.(*engine.Plan), nil
 	}
@@ -1409,7 +1365,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		logStats.BindVariables = bindVars
 	}
 
-	planKey = keyspace + vindexes.TabletTypeSuffix[vcursor.tabletType] + ":" + normalized
+	planKey = vcursor.planPrefixKey() + ":" + normalized
 	if plan, ok := e.plans.Get(planKey); ok {
 		return plan.(*engine.Plan), nil
 	}
