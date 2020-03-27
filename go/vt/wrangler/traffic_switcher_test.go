@@ -105,7 +105,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 	// Other cell REPLICA migration.
 	// The global routing already contains redirections for rdonly.
 	// So, adding routes for replica and deploying to cell2 will also cause
-	// cell2 to migrate rdonly. This is a quirk that can be fixed later if necessary.
+	// cell2 to switch rdonly. This is a quirk that can be fixed later if necessary.
 	// TODO(sougou): check if it's worth fixing, or clearly document the quirk.
 	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, []string{"cell2"}, DirectionForward)
 	if err != nil {
@@ -164,7 +164,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
-	// Migrate all REPLICA.
+	// Switch all REPLICA.
 	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
 	if err != nil {
 		t.Fatal(err)
@@ -224,7 +224,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
-	// Can't migrate master with SwitchReads.
+	// Can't switch master with SwitchReads.
 	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_MASTER, nil, DirectionForward)
 	want := "tablet type must be REPLICA or RDONLY: MASTER"
 	if err == nil || err.Error() != want {
@@ -233,9 +233,9 @@ func TestTableMigrateMainflow(t *testing.T) {
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
-	// Can't migrate writes if REPLICA and RDONLY have not fully migrated yet.
+	// Can't switch writes if REPLICA and RDONLY have not fully switched yet.
 	_, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
-	want = "missing tablet type specific routing, read-only traffic must be migrated before migrating writes"
+	want = "missing tablet type specific routing, read-only traffic must be switched before switching writes"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchWrites err: %v, want %v", err, want)
 	}
@@ -244,7 +244,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 	//-------------------------------------------------------------------------------------------------------------------
 	// Test SwitchWrites cancelation on failure.
 
-	// Migrate all the reads first.
+	// Switch all the reads first.
 	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
 	if err != nil {
 		t.Fatal(err)
@@ -499,7 +499,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
-	// Migrate all RDONLY.
+	// Switch all RDONLY.
 	// This is an extra step that does not exist in the tables test.
 	// The per-cell migration mechanism is different for tables. So, this
 	// extra step is needed to bring things in sync.
@@ -514,7 +514,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
-	// Migrate all REPLICA.
+	// Switch all REPLICA.
 	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
 	if err != nil {
 		t.Fatal(err)
@@ -538,7 +538,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
-	// Can't migrate master with SwitchReads.
+	// Can't switch master with SwitchReads.
 	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_MASTER, nil, DirectionForward)
 	want := "tablet type must be REPLICA or RDONLY: MASTER"
 	if err == nil || err.Error() != want {
@@ -547,9 +547,9 @@ func TestShardMigrateMainflow(t *testing.T) {
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
-	// Can't migrate writes if REPLICA and RDONLY have not fully migrated yet.
+	// Can't switch writes if REPLICA and RDONLY have not fully switched yet.
 	_, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
-	want = "cannot migrate MASTER away"
+	want = "cannot switch MASTER away"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchWrites err: %v, want %v", err, want)
 	}
@@ -558,7 +558,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 	//-------------------------------------------------------------------------------------------------------------------
 	// Test SwitchWrites cancelation on failure.
 
-	// Migrate all the reads first.
+	// Switch all the reads first.
 	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
 	if err != nil {
 		t.Fatal(err)
@@ -1318,7 +1318,7 @@ func TestMigrateFrozen(t *testing.T) {
 	tme.dbTargetClients[1].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
 
 	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
-	want := "cannot migrate reads while SwitchWrites is in progress"
+	want := "cannot switch reads while SwitchWrites is in progress"
 	if err == nil || err.Error() != want {
 		t.Errorf("SwitchReads(frozen) err: %v, want %v", err, want)
 	}

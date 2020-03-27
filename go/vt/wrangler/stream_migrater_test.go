@@ -1675,11 +1675,11 @@ func TestTemplatize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mi := &migrater{
+	ts := &trafficSwitcher{
 		sourceKSSchema: ksschema,
 	}
 	for _, tt := range tests {
-		sm := &streamMigrater{mi: mi}
+		sm := &streamMigrater{ts: ts}
 		out, err := sm.templatize(context.Background(), tt.in)
 		var gotErr string
 		if err != nil {
