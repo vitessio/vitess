@@ -24,25 +24,30 @@ type Send struct {
 
 	// Query specifies the query to be executed.
 	Query string
+
+	// OpCode specifies the route type
+	OpCode string
+
+	noInputs
 }
 
 // RouteType implements Primitive interface
-func (s Send) RouteType() string {
-	panic("implement me")
+func (s *Send) RouteType() string {
+	return s.OpCode
 }
 
 // GetKeyspaceName implements Primitive interface
-func (s Send) GetKeyspaceName() string {
-	panic("implement me")
+func (s *Send) GetKeyspaceName() string {
+	return s.Keyspace.Name
 }
 
 // GetTableName implements Primitive interface
-func (s Send) GetTableName() string {
-	panic("implement me")
+func (s *Send) GetTableName() string {
+	return ""
 }
 
 // Execute implements Primitive interface
-func (s Send) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (s *Send) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, _ bool) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
 	if err != nil {
 		return nil, vterrors.Wrap(err, "sendExecute")
@@ -69,16 +74,11 @@ func (s Send) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, 
 }
 
 // StreamExecute implements Primitive interface
-func (s Send) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
-	panic("implement me")
+func (s *Send) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable") // TODO: systay - this should work
 }
 
 // GetFields implements Primitive interface
-func (s Send) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
-	panic("implement me")
-}
-
-// Inputs implements Primitive interface
-func (s Send) Inputs() []Primitive {
-	panic("implement me")
+func (s *Send) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable") // TODO: systay - @sugu, is this correct?
 }

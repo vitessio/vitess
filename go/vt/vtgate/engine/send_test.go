@@ -4,6 +4,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -21,9 +23,7 @@ func TestSendUnsharded(t *testing.T) {
 
 	vc := &loggingVCursor{shards: []string{"0"}}
 	_, err := send.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: dummy_query {} false true`,
@@ -51,9 +51,7 @@ func TestSendSharded(t *testing.T) {
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
 	_, err := send.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
 		`ExecuteMultiShard ks.DestinationShard(20-): dummy_query {} false true`,
