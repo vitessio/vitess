@@ -52,6 +52,7 @@ var (
 		{Type: sqltypes.Int64},
 		{Type: sqltypes.Int64},
 		{Type: sqltypes.Int64},
+		{Type: sqltypes.Int64},
 		{Type: sqltypes.VarBinary},
 	}
 )
@@ -73,6 +74,7 @@ func newMMTable() *schema.Table {
 
 func newMMRow(id int64) *querypb.Row {
 	return sqltypes.RowToProto3([]sqltypes.Value{
+		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(0),
 		sqltypes.NULL,

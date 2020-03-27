@@ -203,11 +203,11 @@ type messageManager struct {
 	// The goroutine must in turn defer on Done.
 	wg sync.WaitGroup
 
-	vsFilter       *binlogdatapb.Filter
-	readByTimeNext *sqlparser.ParsedQuery
-	ackQuery       *sqlparser.ParsedQuery
-	postponeQuery  *sqlparser.ParsedQuery
-	purgeQuery     *sqlparser.ParsedQuery
+	vsFilter                  *binlogdatapb.Filter
+	readByPriorityAndTimeNext *sqlparser.ParsedQuery
+	ackQuery                  *sqlparser.ParsedQuery
+	postponeQuery             *sqlparser.ParsedQuery
+	purgeQuery                *sqlparser.ParsedQuery
 }
 
 // newMessageManager creates a new message manager.
@@ -233,15 +233,15 @@ func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, pos
 	mm.cond.L = &mm.mu
 
 	columnList := buildSelectColumnList(table)
-	vsQuery := fmt.Sprintf("select time_next, epoch, time_acked, %s from %v", columnList, mm.name)
+	vsQuery := fmt.Sprintf("select priority, time_next, epoch, time_acked, %s from %v", columnList, mm.name)
 	mm.vsFilter = &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  table.Name.String(),
 			Filter: vsQuery,
 		}},
 	}
-	mm.readByTimeNext = sqlparser.BuildParsedQuery(
-		"select time_next, epoch, time_acked, %s from %v where time_next < %a order by time_next desc limit %a",
+	mm.readByPriorityAndTimeNext = sqlparser.BuildParsedQuery(
+		"select priority, time_next, epoch, time_acked, %s from %v where time_next < %a order by priority, time_next desc limit %a",
 		columnList, mm.name, ":time_next", ":max")
 	mm.ackQuery = sqlparser.BuildParsedQuery(
 		"update %v set time_acked = %a, time_next = null where id in %a and time_acked is null",
@@ -808,22 +808,29 @@ func (mm *messageManager) GeneratePurgeQuery(timeCutoff int64) (string, map[stri
 
 // BuildMessageRow builds a MessageRow for a db row.
 func BuildMessageRow(row []sqltypes.Value) (*MessageRow, error) {
-	mr := &MessageRow{Row: row[3:]}
+	mr := &MessageRow{Row: row[4:]}
 	if !row[0].IsNull() {
+		v, err := sqltypes.ToInt64(row[0])
+		if err != nil {
+			return nil, err
+		}
+		mr.Priority = v
+	}
+	if !row[1].IsNull() {
 		v, err := sqltypes.ToInt64(row[0])
 		if err != nil {
 			return nil, err
 		}
 		mr.TimeNext = v
 	}
-	if !row[1].IsNull() {
+	if !row[2].IsNull() {
 		v, err := sqltypes.ToInt64(row[1])
 		if err != nil {
 			return nil, err
 		}
 		mr.Epoch = v
 	}
-	if !row[2].IsNull() {
+	if !row[3].IsNull() {
 		v, err := sqltypes.ToInt64(row[2])
 		if err != nil {
 			return nil, err
@@ -840,7 +847,7 @@ func (mm *messageManager) receiverCount() int {
 }
 
 func (mm *messageManager) readPending(ctx context.Context, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	query, err := mm.readByTimeNext.GenerateQuery(bindVars, nil)
+	query, err := mm.readByPriorityAndTimeNext.GenerateQuery(bindVars, nil)
 	if err != nil {
 		tabletenv.InternalErrors.Add("Messages", 1)
 		log.Errorf("Error reading rows from message table: %v", err)

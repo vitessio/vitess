@@ -46,8 +46,8 @@ func TestUnsharded(t *testing.T) {
 	testMessaging(t, "unsharded_message", lookupKeyspace)
 }
 
-// TestRepareting checks the client connection count after reparenting.
-func TestRepareting(t *testing.T) {
+// TestReparenting checks the client connection count after reparenting.
+func TestReparenting(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	name := "sharded_message"
 
