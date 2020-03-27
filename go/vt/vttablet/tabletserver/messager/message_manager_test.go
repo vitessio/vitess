@@ -65,6 +65,24 @@ func newMMTable() *schema.Table {
 			Fields:             testFields,
 			AckWaitDuration:    1 * time.Second,
 			PurgeAfterDuration: 3 * time.Second,
+			MinBackoff:         1 * time.Second,
+			BatchSize:          1,
+			CacheSize:          10,
+			PollInterval:       1 * time.Second,
+		},
+	}
+}
+
+func newMMTableWithBackoff() *schema.Table {
+	return &schema.Table{
+		Name: sqlparser.NewTableIdent("foo"),
+		Type: schema.Message,
+		MessageInfo: &schema.MessageInfo{
+			Fields:             testFields,
+			AckWaitDuration:    10 * time.Second,
+			PurgeAfterDuration: 3 * time.Second,
+			MinBackoff:         1 * time.Second,
+			MaxBackoff:         4 * time.Second,
 			BatchSize:          1,
 			CacheSize:          10,
 			PollInterval:       1 * time.Second,
@@ -732,7 +750,7 @@ func TestMMGenerate(t *testing.T) {
 	}
 
 	query, bv = mm.GeneratePostponeQuery([]string{"1", "2"})
-	wantQuery = "update foo set time_next = :time_now+(:wait_time<<ifnull(epoch, 0)), epoch = ifnull(epoch, 0)+1 where id in ::ids and time_acked is null"
+	wantQuery = "update foo set time_next = :time_now+(:min_backoff<<ifnull(epoch, 0)), epoch = ifnull(epoch, 0)+1 where id in ::ids and time_acked is null"
 	if query != wantQuery {
 		t.Errorf("GeneratePostponeQuery query: %s, want %s", query, wantQuery)
 	}
@@ -743,8 +761,8 @@ func TestMMGenerate(t *testing.T) {
 		delete(bv, "time_now")
 	}
 	wantbv := map[string]*querypb.BindVariable{
-		"wait_time": sqltypes.Int64BindVariable(1e9),
-		"ids":       wantids,
+		"min_backoff": sqltypes.Int64BindVariable(1e9),
+		"ids":         wantids,
 	}
 	if !reflect.DeepEqual(bv, wantbv) {
 		t.Errorf("gotid: %v, want %v", bv, wantbv)
@@ -757,6 +775,34 @@ func TestMMGenerate(t *testing.T) {
 	}
 	wantbv = map[string]*querypb.BindVariable{
 		"time_acked": sqltypes.Int64BindVariable(3),
+	}
+	if !reflect.DeepEqual(bv, wantbv) {
+		t.Errorf("gotid: %v, want %v", bv, wantbv)
+	}
+}
+
+func TestMMGenerateWithBackoff(t *testing.T) {
+	mm := newMessageManager(newFakeTabletServer(), newFakeVStreamer(), newMMTableWithBackoff(), sync2.NewSemaphore(1, 0))
+	mm.Open()
+	defer mm.Close()
+
+	wantids := sqltypes.TestBindVariable([]interface{}{"1", "2"})
+
+	query, bv := mm.GeneratePostponeQuery([]string{"1", "2"})
+	wantQuery := "update foo set time_next = :time_now+if(:min_backoff<<ifnull(epoch, 0) > :max_backoff, :max_backoff, :min_backoff<<ifnull(epoch, 0)), epoch = ifnull(epoch, 0)+1 where id in ::ids and time_acked is null"
+	if query != wantQuery {
+		t.Errorf("GeneratePostponeQuery query: %s, want %s", query, wantQuery)
+	}
+	if _, ok := bv["time_now"]; !ok {
+		t.Errorf("time_now is absent in %v", bv)
+	} else {
+		// time_now cannot be compared.
+		delete(bv, "time_now")
+	}
+	wantbv := map[string]*querypb.BindVariable{
+		"min_backoff": sqltypes.Int64BindVariable(1e9),
+		"max_backoff": sqltypes.Int64BindVariable(4e9),
+		"ids":         wantids,
 	}
 	if !reflect.DeepEqual(bv, wantbv) {
 		t.Errorf("gotid: %v, want %v", bv, wantbv)

@@ -92,6 +92,14 @@ type MessageInfo struct {
 	// PollInterval specifies the polling frequency to
 	// look for messages to be sent.
 	PollInterval time.Duration
+
+	// MinBackoff specifies the shortest duration message manager
+	// should wait before rescheduling a message
+	MinBackoff time.Duration
+
+	// MaxBackoff specifies the longest duration message manager
+	// should wait before rescheduling a message
+	MaxBackoff time.Duration
 }
 
 // NewTable creates a new Table.
