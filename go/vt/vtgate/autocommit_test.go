@@ -424,17 +424,17 @@ func TestAutocommitDirectRangeTarget(t *testing.T) {
 		Autocommit:      true,
 		TransactionMode: vtgatepb.TransactionMode_MULTI,
 	}
-	sql := "DELETE FROM sharded_user_msgs LIMIT 1000"
+	sql := "delete from sharded_user_msgs limit 1000"
 
 	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 
-	testQueries(t, "sbc1", sbc1, []*querypb.BoundQuery{{
+	testBatchQuery(t, "sbc1", sbc1, &querypb.BoundQuery{
 		Sql:           sql,
 		BindVariables: map[string]*querypb.BindVariable{},
-	}})
-	testAsTransactionCount(t, "sbc1", sbc1, 0)
-	testCommitCount(t, "sbc1", sbc1, 1)
+	})
+	testAsTransactionCount(t, "sbc1", sbc1, 1)
+	testCommitCount(t, "sbc1", sbc1, 0)
 }
 
 func autocommitExec(executor *Executor, sql string) (*sqltypes.Result, error) {
