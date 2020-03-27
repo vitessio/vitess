@@ -178,12 +178,28 @@ func StripComments(sql string) string {
 		if end <= 1 {
 			break
 		}
+		if start > end {
+			start, end = end, start
+		}
+		if containsQuotations(sql, start, end) {
+			break
+		}
 		sql = sql[:start] + sql[end+2:]
 	}
 
 	sql = strings.TrimFunc(sql, unicode.IsSpace)
 
 	return sql
+}
+
+func containsQuotations(sql string, start, end int) bool {
+	indexBefore, indexAfter := start-1, end+2
+	// Check Boundaries
+	if indexBefore < 0 || indexAfter >= len(sql) {
+		return false
+	}
+	// Check if the character the index before comments start and end substring is a single or double quotation
+	return (sql[indexBefore] == '\'' && sql[indexAfter] == '\'') || (sql[indexBefore] == '"' && sql[indexAfter] == '"')
 }
 
 // ExtractMysqlComment extracts the version and SQL from a comment-only query
