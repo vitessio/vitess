@@ -26,8 +26,6 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
@@ -144,7 +142,10 @@ func init() {
 }
 
 func TestPlan(t *testing.T) {
-	vschema := loadSchema(t, "schema_test.json")
+	vschemaWrapper := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json"),
+	}
+
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
 	// You will notice that some tests expect user.Id instead of user.id.
@@ -153,35 +154,29 @@ func TestPlan(t *testing.T) {
 	// the column is named as Id. This is to make sure that
 	// column names are case-preserved, but treated as
 	// case-insensitive even if they come from the vschema.
-	testFile(t, "aggr_cases.txt", testOutputTempDir, vschema)
-	testFile(t, "dml_cases.txt", testOutputTempDir, vschema)
-	testFile(t, "from_cases.txt", testOutputTempDir, vschema)
-	testFile(t, "filter_cases.txt", testOutputTempDir, vschema)
-	testFile(t, "postprocess_cases.txt", testOutputTempDir, vschema)
-	testFile(t, "select_cases.txt", testOutputTempDir, vschema)
-	testFile(t, "symtab_cases.txt", testOutputTempDir, vschema)
-	testFile(t, "unsupported_cases.txt", testOutputTempDir, vschema)
-	testFile(t, "vindex_func_cases.txt", testOutputTempDir, vschema)
-	testFile(t, "wireup_cases.txt", testOutputTempDir, vschema)
-	testFile(t, "memory_sort_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "aggr_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "dml_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "from_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "filter_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "postprocess_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "select_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "symtab_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "unsupported_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "vindex_func_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "wireup_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "memory_sort_cases.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func TestOne(t *testing.T) {
-	vschema := loadSchema(t, "schema_test.json")
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json"),
+	}
+
 	testFile(t, "onecase.txt", "", vschema)
 }
 
-var mustMatch = utils.MustMatchFn(
-	[]interface{}{ // types with unexported fields
-		engine.Send{},
-	},
-	[]string{ // ignored fields
-	},
-)
-
-func TestBypassPlanning(t *testing.T) {
-	query := "select * from ks.t1"
-	stmt, err := sqlparser.Parse(query)
+func TestBypassPlanningFromFile(t *testing.T) {
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "schema_test.json"),
@@ -192,17 +187,8 @@ func TestBypassPlanning(t *testing.T) {
 		tabletType: topodatapb.TabletType_MASTER,
 		dest:       key.DestinationShard("-80"),
 	}
-	plan, err := BuildFromStmt(query, stmt, vschema, sqlparser.BindVarNeeds{})
-	require.NoError(t, err)
-	expected := &engine.Send{Query: query,
-		Keyspace: &vindexes.Keyspace{
-			Name:    "main",
-			Sharded: false,
-		},
-		TargetDestination: key.DestinationShard("-80"),
-		OpCode:            ByPassOpCode,
-	}
-	mustMatch(t, expected, plan.Instructions, "plan output not what we expected")
+
+	testFile(t, "bypass_cases.txt", testOutputTempDir, vschema)
 }
 
 func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
@@ -278,21 +264,19 @@ type testPlan struct {
 	Instructions engine.Primitive `json:",omitempty"`
 }
 
-func testFile(t *testing.T, filename, tempDir string, vschema *vindexes.VSchema) {
+func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 	t.Run(filename, func(t *testing.T) {
 		expected := &strings.Builder{}
 		fail := false
 		for tcase := range iterateExecFile(filename) {
 			t.Run(tcase.comments, func(t *testing.T) {
-				plan, err := Build(tcase.input, &vschemaWrapper{
-					v: vschema,
-				})
+				plan, err := Build(tcase.input, vschema)
 
 				out := getPlanOrErrorOutput(err, plan)
 
 				if out != tcase.output {
 					fail = true
-					t.Errorf("File: %s, Line: %v\n %s", filename, tcase.lineno, cmp.Diff(tcase.output, out))
+					t.Errorf("File: %s, Line: %v\n %s\n%s", filename, tcase.lineno, cmp.Diff(tcase.output, out), out)
 				}
 
 				if err != nil {
