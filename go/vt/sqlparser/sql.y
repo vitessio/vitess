@@ -135,6 +135,7 @@ func skipToEnd(yylex interface{}) {
 // Some of these operators don't conflict in our situation. Nevertheless,
 // it's better to have these listed in the correct order. Also, we don't
 // support all operators yet.
+// * NOTE: If you change anything here, update precedence.go as well *
 %left <bytes> OR
 %left <bytes> AND
 %right <bytes> NOT '!'
@@ -3078,7 +3079,7 @@ tuple_expression:
   row_tuple
   {
     if len($1) == 1 {
-      $$ = &ParenExpr{$1[0]}
+      $$ = $1[0]
     } else {
       $$ = $1
     }

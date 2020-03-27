@@ -185,7 +185,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "update user set val = 1 where (id = 1)",
+    "Query": "update user set val = 1 where id = 1",
     "Vindex": "user_index",
     "Values": [
       1
@@ -204,7 +204,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "update user set val = 1 where (name = 'foo' and id = 1)",
+    "Query": "update user set val = 1 where name = 'foo' and id = 1",
     "Vindex": "user_index",
     "Values": [
       1
@@ -1950,7 +1950,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "update user_extra set val = 1 where (name = 'foo' or id = 1)",
+    "Query": "update user_extra set val = 1 where name = 'foo' or id = 1",
     "Table": "user_extra"
   }
 }
