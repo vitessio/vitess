@@ -25,22 +25,20 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dtids"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/gateway"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // TxConn is used for executing transactional requests.
 type TxConn struct {
-	gateway gateway.Gateway
+	gateway *tabletGateway
 	mode    vtgatepb.TransactionMode
 }
 
 // NewTxConn builds a new TxConn.
-func NewTxConn(gw gateway.Gateway, txMode vtgatepb.TransactionMode) *TxConn {
+func NewTxConn(gw *tabletGateway, txMode vtgatepb.TransactionMode) *TxConn {
 	return &TxConn{
 		gateway: gw,
 		mode:    txMode,

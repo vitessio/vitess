@@ -20,13 +20,11 @@ import (
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/gateway"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // Resolver is the layer to resolve KeyspaceIds and KeyRanges
@@ -163,6 +161,6 @@ func (res *Resolver) MessageStream(ctx context.Context, keyspace string, shard s
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
-func (res *Resolver) GetGatewayCacheStatus() gateway.TabletCacheStatusList {
+func (res *Resolver) GetGatewayCacheStatus() TabletCacheStatusList {
 	return res.scatterConn.GetGatewayCacheStatus()
 }
