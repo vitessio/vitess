@@ -123,11 +123,18 @@ func TestLoadTableMessage(t *testing.T) {
 			}},
 			AckWaitDuration:    30 * time.Second,
 			PurgeAfterDuration: 120 * time.Second,
+			MinBackoff:         30 * time.Second,
 			BatchSize:          1,
 			CacheSize:          10,
 			PollInterval:       30 * time.Second,
 		},
 	}
+	assert.Equal(t, want, table)
+
+	// Test loading min/max backoff
+	table, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30,vt_min_backoff=10,vt_max_backoff=100", db)
+	want.MessageInfo.MinBackoff = 10 * time.Second
+	want.MessageInfo.MaxBackoff = 100 * time.Second
 	assert.Equal(t, want, table)
 
 	// Missing property
