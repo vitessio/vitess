@@ -17,11 +17,21 @@ limitations under the License.
 package planbuilder
 
 import (
+	"vitess.io/vitess/go/vt/key"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
 func buildPlanForBypass(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+	switch vschema.Destination().(type) {
+	case key.DestinationExactKeyRange:
+		if _, ok := stmt.(*sqlparser.Insert); ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "range queries not supported for inserts: %s", vschema.TargetString())
+		}
+	}
+
 	keyspace, err := vschema.DefaultKeyspace()
 	if err != nil {
 		return nil, err
@@ -29,7 +39,6 @@ func buildPlanForBypass(stmt sqlparser.Statement, vschema ContextVSchema) (engin
 	return &engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: vschema.Destination(),
-		TargetTabletType:  vschema.TabletType(),
 		Query:             sqlparser.String(stmt),
 	}, nil
 }
