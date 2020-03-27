@@ -202,6 +202,8 @@ func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Val
 			shards = f.shards[:1]
 		case key.DestinationNone:
 			// Nothing to do here.
+		case key.DestinationShard:
+			shards = []string{destination.String()}
 		default:
 			return nil, nil, fmt.Errorf("unsupported destination: %v", destination)
 		}

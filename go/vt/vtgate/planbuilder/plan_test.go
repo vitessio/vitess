@@ -189,7 +189,6 @@ func TestBypassPlanning(t *testing.T) {
 			Name:    "main",
 			Sharded: false,
 		},
-		TargetTabletType:  topodatapb.TabletType_MASTER,
 		TargetDestination: key.DestinationShard("-80"),
 	}
 	if diff := cmp.Diff(expected, plan.Instructions); diff != "" {
