@@ -26,6 +26,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
@@ -169,6 +171,14 @@ func TestOne(t *testing.T) {
 	testFile(t, "onecase.txt", "", vschema)
 }
 
+var mustMatch = utils.MustMatchFn(
+	[]interface{}{ // types with unexported fields
+		engine.Send{},
+	},
+	[]string{ // ignored fields
+	},
+)
+
 func TestBypassPlanning(t *testing.T) {
 	query := "select * from ks.t1"
 	stmt, err := sqlparser.Parse(query)
@@ -190,10 +200,9 @@ func TestBypassPlanning(t *testing.T) {
 			Sharded: false,
 		},
 		TargetDestination: key.DestinationShard("-80"),
+		OpCode:            ByPassOpCode,
 	}
-	if diff := cmp.Diff(expected, plan.Instructions); diff != "" {
-		t.Errorf("-want,+actual\n%s", diff)
-	}
+	mustMatch(t, expected, plan.Instructions, "plan output not what we expected")
 }
 
 func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
