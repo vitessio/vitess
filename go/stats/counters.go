@@ -137,9 +137,6 @@ func (c *CountersWithSingleLabel) Label() string {
 
 // Add adds a value to a named counter.
 func (c *CountersWithSingleLabel) Add(name string, value int64) {
-	if value < 0 {
-		logCounterNegative.Warningf("Adding a negative value to a counter, %v should be a gauge instead", c)
-	}
 	if c.labelCombined {
 		name = StatsAllStr
 	}
@@ -198,9 +195,6 @@ func (mc *CountersWithMultiLabels) Labels() []string {
 func (mc *CountersWithMultiLabels) Add(names []string, value int64) {
 	if len(names) != len(mc.labels) {
 		panic("CountersWithMultiLabels: wrong number of values in Add")
-	}
-	if value < 0 {
-		logCounterNegative.Warningf("Adding a negative value to a counter, %v should be a gauge instead", mc)
 	}
 	mc.counters.add(safeJoinLabels(names, mc.combinedLabels), value)
 }
