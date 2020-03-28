@@ -418,7 +418,7 @@ func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName
 	tablets := make(map[string]*cluster.VttabletProcess)
 	for _, shard := range keyspace.Shards {
 		for _, tablet := range shard.Tablets {
-			if tablet.Vttablet.GetTabletStatus() == "SERVING" && strings.ToLower(tablet.Vttablet.VreplicationTabletType) == strings.ToLower(tabletType) {
+			if tablet.Vttablet.GetTabletStatus() == "SERVING" && strings.EqualFold(tablet.Vttablet.VreplicationTabletType, tabletType) {
 				fmt.Printf("Serving status of tablet %s is %s, %s\n", tablet.Name, tablet.Vttablet.ServingStatus, tablet.Vttablet.GetTabletStatus())
 				tablets[tablet.Name] = tablet.Vttablet
 			}
