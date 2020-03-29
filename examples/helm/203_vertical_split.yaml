@@ -1,8 +1,6 @@
 topology:
   cells:
     - name: "zone1"
-      etcd:
-        replicas: 1
       vtctld:
         replicas: 1
       vtgate:
@@ -37,10 +35,6 @@ jobs:
     kind: "vtworker"
     cell: "zone1"
     command: "VerticalSplitClone -min_healthy_tablets=1 -tables=customer,corder customer/0"
-
-etcd:
-  replicas: 1
-  resources:
 
 vtctld:
   serviceType: "NodePort"
