@@ -1,8 +1,6 @@
 topology:
   cells:
     - name: "zone1"
-      etcd:
-        replicas: 1
       vtctld:
         replicas: 1
       vtgate:
@@ -36,10 +34,6 @@ jobs:
   - name: "msf3"
     kind: "vtctlclient"
     command: "MigrateServedFrom customer/0 master"
-
-etcd:
-  replicas: 1
-  resources:
 
 vtctld:
   serviceType: "NodePort"

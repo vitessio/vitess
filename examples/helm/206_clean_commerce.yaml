@@ -1,8 +1,6 @@
 topology:
   cells:
     - name: "zone1"
-      etcd:
-        replicas: 1
       vtctld:
         replicas: 1
       vtgate:
@@ -46,10 +44,6 @@ jobs:
   - name: "vclean3"
     kind: "vtctlclient"
     command: "SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 master"
-
-etcd:
-  replicas: 1
-  resources:
 
 vtctld:
   serviceType: "NodePort"

@@ -1,8 +1,6 @@
 topology:
   cells:
     - name: "zone1"
-      etcd:
-        replicas: 1
       vtctld:
         replicas: 1
       vtgate:
@@ -51,10 +49,6 @@ topology:
                     replicas: 1
               copySchema:
                 source: "customer/0"
-
-etcd:
-  replicas: 1
-  resources:
 
 vtctld:
   serviceType: "NodePort"
