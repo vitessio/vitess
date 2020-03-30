@@ -14,7 +14,6 @@ import (
 )
 
 func TestDestinationKeyspace(t *testing.T) {
-
 	ks1 := &vindexes.Keyspace{
 		Name:    "ks1",
 		Sharded: false,
