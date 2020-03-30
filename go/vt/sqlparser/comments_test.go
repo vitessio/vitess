@@ -292,10 +292,13 @@ a`,
 		outSQL: "select * from customer where name like '*/%/*'",
 	}, {
 		input:  "insert into customer values(1, '*//*')",
-		outSQL: "insert into customer values(1, '*//*')",
+		outSQL: "insert into customer values (1, '*//*')",
 	}, {
 		input:  "insert into t5 (col) values('/**/')",
-		outSQL: "insert into t5 (col) values('/**/')",
+		outSQL: "insert into t5(col) values ('/**/')",
+	}, {
+		input:  "select * from customer where name like 'abc*/la/*xyz'",
+		outSQL: "select * from customer where name like 'abc*/la/*xyz'",
 	}}
 	for _, testCase := range testCases {
 		gotSQL := StripComments(testCase.input)
