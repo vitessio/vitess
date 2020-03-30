@@ -207,7 +207,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 
 	switch specStmt := stmt.(type) {
 	case *sqlparser.Select, *sqlparser.Union:
-		return e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats, stmtType)
+		return e.handleExec(ctx, safeSession, sql, bindVars, logStats, stmtType)
 	case *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete:
 		safeSession := safeSession
 
@@ -232,7 +232,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		// at the beginning, but never after.
 		safeSession.SetAutocommittable(mustCommit)
 
-		qr, err := e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats, stmtType)
+		qr, err := e.handleExec(ctx, safeSession, sql, bindVars, logStats, stmtType)
 		if err != nil {
 			return nil, err
 		}
@@ -265,7 +265,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
 
-func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destKeyspace string, destTabletType topodatapb.TabletType, dest key.Destination, logStats *LogStats, stmtType sqlparser.StatementType) (*sqltypes.Result, error) {
+func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats, stmtType sqlparser.StatementType) (*sqltypes.Result, error) {
 
 	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
