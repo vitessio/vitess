@@ -25,15 +25,19 @@ type Send struct {
 	// Query specifies the query to be executed.
 	Query string
 
-	// OpCode specifies the route type
-	OpCode string
+	// NoAutoCommit specifies if we need to check autocommit behaviour
+	NoAutoCommit bool
 
 	noInputs
 }
 
 // RouteType implements Primitive interface
 func (s *Send) RouteType() string {
-	return s.OpCode
+	if s.NoAutoCommit {
+		return "SendNoAutoCommit"
+	}
+
+	return "Send"
 }
 
 // GetKeyspaceName implements Primitive interface
@@ -65,7 +69,11 @@ func (s *Send) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable,
 		}
 	}
 
-	canAutocommit := len(rss) == 1 && vcursor.AutocommitApproval()
+	canAutocommit := false
+	if !s.NoAutoCommit {
+		canAutocommit = len(rss) == 1 && vcursor.AutocommitApproval()
+	}
+
 	result, errs := vcursor.ExecuteMultiShard(rss, queries, true, canAutocommit)
 	err = vterrors.Aggregate(errs)
 	if err != nil {

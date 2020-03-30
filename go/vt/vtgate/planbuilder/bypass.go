@@ -40,9 +40,6 @@ func buildPlanForBypass(stmt sqlparser.Statement, vschema ContextVSchema) (engin
 		Keyspace:          keyspace,
 		TargetDestination: vschema.Destination(),
 		Query:             sqlparser.String(stmt),
-		OpCode:            ByPassOpCode,
+		NoAutoCommit:      !sqlparser.IsDMLStatement(stmt),
 	}, nil
 }
-
-//ByPassOpCode is the opcode
-const ByPassOpCode = "ByPass"
