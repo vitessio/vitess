@@ -137,24 +137,24 @@ func TestCountersFuncWithMultiLabels(t *testing.T) {
 	ebd.NewCountersFuncWithMultiLabels("", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 3} })
 
 	ebd.NewCountersFuncWithMultiLabels("lcfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 4} })
-	if got, want := expvar.Get("labellcfwml").String(), `{"i1.a": 4}`; got != want {
+	if got, want := expvar.Get("lcfwml").String(), `{"i1.a": 4}`; got != want {
 		t.Errorf("CountersFuncWithMultiLabels get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
 	ebd.NewCountersFuncWithMultiLabels("lcfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 5} })
-	if got, want := expvar.Get("labellcfwml").String(), `{"i1.a": 5}`; got != want {
+	if got, want := expvar.Get("lcfwml").String(), `{"i1.a": 5}`; got != want {
 		t.Errorf("CountersFuncWithMultiLabels get: %s, want %s", got, want)
 	}
 
 	ebd = NewExporter("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
-	if got, want := expvar.Get("labellcfwml").String(), "{}"; got != want {
+	if got, want := expvar.Get("lcfwml").String(), "{}"; got != want {
 		t.Errorf("CountersFuncWithMultiLabels get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
 	ebd.NewCountersFuncWithMultiLabels("lcfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 6} })
-	if got, want := expvar.Get("labellcfwml").String(), `{"i1.a": 6}`; got != want {
+	if got, want := expvar.Get("lcfwml").String(), `{"i1.a": 6}`; got != want {
 		t.Errorf("CountersFuncWithMultiLabels get: %s, want %s", got, want)
 	}
 
@@ -162,7 +162,7 @@ func TestCountersFuncWithMultiLabels(t *testing.T) {
 	ebd.NewCountersFuncWithMultiLabels("lcfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 7} })
 	want1 := `{"i1.a": 6, "i2.a": 7}`
 	want2 := `{"i2.a": 7, "i1.a": 6}`
-	if got := expvar.Get("labellcfwml").String(); got != want1 && got != want2 {
+	if got := expvar.Get("lcfwml").String(); got != want1 && got != want2 {
 		t.Errorf("GaugeDuration get: %s, want %s or %s", got, want1, want2)
 	}
 }
@@ -181,24 +181,24 @@ func TestGaugesFuncWithMultiLabels(t *testing.T) {
 	ebd.NewGaugesFuncWithMultiLabels("", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 3} })
 
 	ebd.NewGaugesFuncWithMultiLabels("lgfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 4} })
-	if got, want := expvar.Get("labellgfwml").String(), `{"i1.a": 4}`; got != want {
+	if got, want := expvar.Get("lgfwml").String(), `{"i1.a": 4}`; got != want {
 		t.Errorf("GaugesFuncWithMultiLabels get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
 	ebd.NewGaugesFuncWithMultiLabels("lgfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 5} })
-	if got, want := expvar.Get("labellgfwml").String(), `{"i1.a": 5}`; got != want {
+	if got, want := expvar.Get("lgfwml").String(), `{"i1.a": 5}`; got != want {
 		t.Errorf("GaugesFuncWithMultiLabels get: %s, want %s", got, want)
 	}
 
 	ebd = NewExporter("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
-	if got, want := expvar.Get("labellgfwml").String(), "{}"; got != want {
+	if got, want := expvar.Get("lgfwml").String(), "{}"; got != want {
 		t.Errorf("GaugesFuncWithMultiLabels get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
 	ebd.NewGaugesFuncWithMultiLabels("lgfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 6} })
-	if got, want := expvar.Get("labellgfwml").String(), `{"i1.a": 6}`; got != want {
+	if got, want := expvar.Get("lgfwml").String(), `{"i1.a": 6}`; got != want {
 		t.Errorf("GaugesFuncWithMultiLabels get: %s, want %s", got, want)
 	}
 
@@ -206,7 +206,7 @@ func TestGaugesFuncWithMultiLabels(t *testing.T) {
 	ebd.NewGaugesFuncWithMultiLabels("lgfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 7} })
 	want1 := `{"i1.a": 6, "i2.a": 7}`
 	want2 := `{"i2.a": 7, "i1.a": 6}`
-	if got := expvar.Get("labellgfwml").String(); got != want1 && got != want2 {
+	if got := expvar.Get("lgfwml").String(); got != want1 && got != want2 {
 		t.Errorf("GaugeDuration get: %s, want %s or %s", got, want1, want2)
 	}
 }
@@ -227,26 +227,26 @@ func TestCounter(t *testing.T) {
 
 	c = ebd.NewCounter("lcounter", "")
 	c.Add(4)
-	if got, want := expvar.Get("labellcounter").String(), `{"i1": 4}`; got != want {
+	if got, want := expvar.Get("lcounter").String(), `{"i1": 4}`; got != want {
 		t.Errorf("Counter get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
 	c = ebd.NewCounter("lcounter", "")
 	c.Add(5)
-	if got, want := expvar.Get("labellcounter").String(), `{"i1": 5}`; got != want {
+	if got, want := expvar.Get("lcounter").String(), `{"i1": 5}`; got != want {
 		t.Errorf("Counter get: %s, want %s", got, want)
 	}
 
 	ebd = NewExporter("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
-	if got, want := expvar.Get("labellcounter").String(), "{}"; got != want {
+	if got, want := expvar.Get("lcounter").String(), "{}"; got != want {
 		t.Errorf("Counter get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
 	c = ebd.NewCounter("lcounter", "")
 	c.Add(5)
-	if got, want := expvar.Get("labellcounter").String(), `{"i1": 5}`; got != want {
+	if got, want := expvar.Get("lcounter").String(), `{"i1": 5}`; got != want {
 		t.Errorf("Counter get: %s, want %s", got, want)
 	}
 
@@ -255,7 +255,7 @@ func TestCounter(t *testing.T) {
 	c.Add(6)
 	want1 := `{"i1": 5, "i2": 6}`
 	want2 := `{"i2": 6, "i1": 5}`
-	if got := expvar.Get("labellcounter").String(); got != want1 && got != want2 {
+	if got := expvar.Get("lcounter").String(); got != want1 && got != want2 {
 		t.Errorf("Counter get: %s, want %s or %s", got, want1, want2)
 	}
 }
@@ -276,26 +276,26 @@ func TestGauge(t *testing.T) {
 
 	c = ebd.NewGauge("lgauge", "")
 	c.Set(4)
-	if got, want := expvar.Get("labellgauge").String(), `{"i1": 4}`; got != want {
+	if got, want := expvar.Get("lgauge").String(), `{"i1": 4}`; got != want {
 		t.Errorf("Gauge get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
 	c = ebd.NewGauge("lgauge", "")
 	c.Set(5)
-	if got, want := expvar.Get("labellgauge").String(), `{"i1": 5}`; got != want {
+	if got, want := expvar.Get("lgauge").String(), `{"i1": 5}`; got != want {
 		t.Errorf("Gauge get: %s, want %s", got, want)
 	}
 
 	ebd = NewExporter("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
-	if got, want := expvar.Get("labellgauge").String(), "{}"; got != want {
+	if got, want := expvar.Get("lgauge").String(), "{}"; got != want {
 		t.Errorf("Gauge get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
 	c = ebd.NewGauge("lgauge", "")
 	c.Set(5)
-	if got, want := expvar.Get("labellgauge").String(), `{"i1": 5}`; got != want {
+	if got, want := expvar.Get("lgauge").String(), `{"i1": 5}`; got != want {
 		t.Errorf("Gauge get: %s, want %s", got, want)
 	}
 
@@ -304,7 +304,7 @@ func TestGauge(t *testing.T) {
 	c.Set(6)
 	want1 := `{"i1": 5, "i2": 6}`
 	want2 := `{"i2": 6, "i1": 5}`
-	if got := expvar.Get("labellgauge").String(); got != want1 && got != want2 {
+	if got := expvar.Get("lgauge").String(); got != want1 && got != want2 {
 		t.Errorf("Gauge get: %s, want %s or %s", got, want1, want2)
 	}
 }
@@ -323,24 +323,24 @@ func TestCounterFunc(t *testing.T) {
 	ebd.NewCounterFunc("", "", func() int64 { return 3 })
 
 	ebd.NewCounterFunc("lcf", "", func() int64 { return 4 })
-	if got, want := expvar.Get("labellcf").String(), `{"i1": 4}`; got != want {
+	if got, want := expvar.Get("lcf").String(), `{"i1": 4}`; got != want {
 		t.Errorf("Counter get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
 	ebd.NewCounterFunc("lcf", "", func() int64 { return 5 })
-	if got, want := expvar.Get("labellcf").String(), `{"i1": 5}`; got != want {
+	if got, want := expvar.Get("lcf").String(), `{"i1": 5}`; got != want {
 		t.Errorf("Counter get: %s, want %s", got, want)
 	}
 
 	ebd = NewExporter("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
-	if got, want := expvar.Get("labellcf").String(), "{}"; got != want {
+	if got, want := expvar.Get("lcf").String(), "{}"; got != want {
 		t.Errorf("Counter get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
 	ebd.NewCounterFunc("lcf", "", func() int64 { return 5 })
-	if got, want := expvar.Get("labellcf").String(), `{"i1": 5}`; got != want {
+	if got, want := expvar.Get("lcf").String(), `{"i1": 5}`; got != want {
 		t.Errorf("Counter get: %s, want %s", got, want)
 	}
 
@@ -348,7 +348,7 @@ func TestCounterFunc(t *testing.T) {
 	ebd.NewCounterFunc("lcf", "", func() int64 { return 6 })
 	want1 := `{"i1": 5, "i2": 6}`
 	want2 := `{"i2": 6, "i1": 5}`
-	if got := expvar.Get("labellcf").String(); got != want1 && got != want2 {
+	if got := expvar.Get("lcf").String(); got != want1 && got != want2 {
 		t.Errorf("Counter get: %s, want %s or %s", got, want1, want2)
 	}
 }
@@ -367,24 +367,24 @@ func TestGaugeFunc(t *testing.T) {
 	ebd.NewGaugeFunc("", "", func() int64 { return 3 })
 
 	ebd.NewGaugeFunc("lgf", "", func() int64 { return 4 })
-	if got, want := expvar.Get("labellgf").String(), `{"i1": 4}`; got != want {
+	if got, want := expvar.Get("lgf").String(), `{"i1": 4}`; got != want {
 		t.Errorf("Gauge get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
 	ebd.NewGaugeFunc("lgf", "", func() int64 { return 5 })
-	if got, want := expvar.Get("labellgf").String(), `{"i1": 5}`; got != want {
+	if got, want := expvar.Get("lgf").String(), `{"i1": 5}`; got != want {
 		t.Errorf("Gauge get: %s, want %s", got, want)
 	}
 
 	ebd = NewExporter("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
-	if got, want := expvar.Get("labellgf").String(), "{}"; got != want {
+	if got, want := expvar.Get("lgf").String(), "{}"; got != want {
 		t.Errorf("Gauge get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
 	ebd.NewGaugeFunc("lgf", "", func() int64 { return 5 })
-	if got, want := expvar.Get("labellgf").String(), `{"i1": 5}`; got != want {
+	if got, want := expvar.Get("lgf").String(), `{"i1": 5}`; got != want {
 		t.Errorf("Gauge get: %s, want %s", got, want)
 	}
 
@@ -392,7 +392,7 @@ func TestGaugeFunc(t *testing.T) {
 	ebd.NewGaugeFunc("lgf", "", func() int64 { return 6 })
 	want1 := `{"i1": 5, "i2": 6}`
 	want2 := `{"i2": 6, "i1": 5}`
-	if got := expvar.Get("labellgf").String(); got != want1 && got != want2 {
+	if got := expvar.Get("lgf").String(); got != want1 && got != want2 {
 		t.Errorf("Gauge get: %s, want %s or %s", got, want1, want2)
 	}
 }
@@ -411,24 +411,24 @@ func TestCounterDurationFunc(t *testing.T) {
 	ebd.NewCounterDurationFunc("", "", func() time.Duration { return 3 })
 
 	ebd.NewCounterDurationFunc("lcduration", "", func() time.Duration { return 4 })
-	if got, want := expvar.Get("labellcduration").String(), `{"i1": 4}`; got != want {
+	if got, want := expvar.Get("lcduration").String(), `{"i1": 4}`; got != want {
 		t.Errorf("CounterDuration get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
 	ebd.NewCounterDurationFunc("lcduration", "", func() time.Duration { return 5 })
-	if got, want := expvar.Get("labellcduration").String(), `{"i1": 5}`; got != want {
+	if got, want := expvar.Get("lcduration").String(), `{"i1": 5}`; got != want {
 		t.Errorf("CounterDuration get: %s, want %s", got, want)
 	}
 
 	ebd = NewExporter("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
-	if got, want := expvar.Get("labellcduration").String(), "{}"; got != want {
+	if got, want := expvar.Get("lcduration").String(), "{}"; got != want {
 		t.Errorf("CounterDuration get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
 	ebd.NewCounterDurationFunc("lcduration", "", func() time.Duration { return 5 })
-	if got, want := expvar.Get("labellcduration").String(), `{"i1": 5}`; got != want {
+	if got, want := expvar.Get("lcduration").String(), `{"i1": 5}`; got != want {
 		t.Errorf("CounterDuration get: %s, want %s", got, want)
 	}
 
@@ -436,7 +436,7 @@ func TestCounterDurationFunc(t *testing.T) {
 	ebd.NewCounterDurationFunc("lcduration", "", func() time.Duration { return 6 })
 	want1 := `{"i1": 5, "i2": 6}`
 	want2 := `{"i2": 6, "i1": 5}`
-	if got := expvar.Get("labellcduration").String(); got != want1 && got != want2 {
+	if got := expvar.Get("lcduration").String(); got != want1 && got != want2 {
 		t.Errorf("CounterDuration get: %s, want %s or %s", got, want1, want2)
 	}
 }
@@ -455,24 +455,24 @@ func TestGaugeDurationFunc(t *testing.T) {
 	ebd.NewGaugeDurationFunc("", "", func() time.Duration { return 3 })
 
 	ebd.NewGaugeDurationFunc("lgduration", "", func() time.Duration { return 4 })
-	if got, want := expvar.Get("labellgduration").String(), `{"i1": 4}`; got != want {
+	if got, want := expvar.Get("lgduration").String(), `{"i1": 4}`; got != want {
 		t.Errorf("GaugeDuration get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
 	ebd.NewGaugeDurationFunc("lgduration", "", func() time.Duration { return 5 })
-	if got, want := expvar.Get("labellgduration").String(), `{"i1": 5}`; got != want {
+	if got, want := expvar.Get("lgduration").String(), `{"i1": 5}`; got != want {
 		t.Errorf("GaugeDuration get: %s, want %s", got, want)
 	}
 
 	ebd = NewExporter("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
-	if got, want := expvar.Get("labellgduration").String(), "{}"; got != want {
+	if got, want := expvar.Get("lgduration").String(), "{}"; got != want {
 		t.Errorf("GaugeDuration get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
 	ebd.NewGaugeDurationFunc("lgduration", "", func() time.Duration { return 6 })
-	if got, want := expvar.Get("labellgduration").String(), `{"i1": 6}`; got != want {
+	if got, want := expvar.Get("lgduration").String(), `{"i1": 6}`; got != want {
 		t.Errorf("GaugeDuration get: %s, want %s", got, want)
 	}
 
@@ -480,7 +480,7 @@ func TestGaugeDurationFunc(t *testing.T) {
 	ebd.NewGaugeDurationFunc("lgduration", "", func() time.Duration { return 7 })
 	want1 := `{"i1": 6, "i2": 7}`
 	want2 := `{"i2": 7, "i1": 6}`
-	if got := expvar.Get("labellgduration").String(); got != want1 && got != want2 {
+	if got := expvar.Get("lgduration").String(); got != want1 && got != want2 {
 		t.Errorf("GaugeDuration get: %s, want %s or %s", got, want1, want2)
 	}
 }
@@ -501,26 +501,26 @@ func TestCountersWithSingleLabel(t *testing.T) {
 
 	g = ebd.NewCountersWithSingleLabel("lcwsl", "", "l")
 	g.Add("a", 4)
-	if got, want := expvar.Get("labellcwsl").String(), `{"i1.a": 4}`; got != want {
+	if got, want := expvar.Get("lcwsl").String(), `{"i1.a": 4}`; got != want {
 		t.Errorf("CountersWithSingleLabel get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
 	g = ebd.NewCountersWithSingleLabel("lcwsl", "", "l")
 	g.Add("a", 5)
-	if got, want := expvar.Get("labellcwsl").String(), `{"i1.a": 5}`; got != want {
+	if got, want := expvar.Get("lcwsl").String(), `{"i1.a": 5}`; got != want {
 		t.Errorf("CountersWithSingleLabel get: %s, want %s", got, want)
 	}
 
 	ebd = NewExporter("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
-	if got, want := expvar.Get("labellcwsl").String(), "{}"; got != want {
+	if got, want := expvar.Get("lcwsl").String(), "{}"; got != want {
 		t.Errorf("CountersWithSingleLabel get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
 	g = ebd.NewCountersWithSingleLabel("lcwsl", "", "l")
 	g.Add("a", 6)
-	if got, want := expvar.Get("labellcwsl").String(), `{"i1.a": 6}`; got != want {
+	if got, want := expvar.Get("lcwsl").String(), `{"i1.a": 6}`; got != want {
 		t.Errorf("CountersWithSingleLabel get: %s, want %s", got, want)
 	}
 
@@ -529,7 +529,7 @@ func TestCountersWithSingleLabel(t *testing.T) {
 	g.Add("a", 7)
 	want1 := `{"i1.a": 6, "i2.a": 7}`
 	want2 := `{"i2.a": 7, "i1.a": 6}`
-	if got := expvar.Get("labellcwsl").String(); got != want1 && got != want2 {
+	if got := expvar.Get("lcwsl").String(); got != want1 && got != want2 {
 		t.Errorf("CountersWithSingleLabel get: %s, want %s or %s", got, want1, want2)
 	}
 }
@@ -550,26 +550,26 @@ func TestGaugesWithSingleLabel(t *testing.T) {
 
 	g = ebd.NewGaugesWithSingleLabel("lgwsl", "", "l")
 	g.Set("a", 4)
-	if got, want := expvar.Get("labellgwsl").String(), `{"i1.a": 4}`; got != want {
+	if got, want := expvar.Get("lgwsl").String(), `{"i1.a": 4}`; got != want {
 		t.Errorf("GaugesWithSingleLabel get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
 	g = ebd.NewGaugesWithSingleLabel("lgwsl", "", "l")
 	g.Set("a", 5)
-	if got, want := expvar.Get("labellgwsl").String(), `{"i1.a": 5}`; got != want {
+	if got, want := expvar.Get("lgwsl").String(), `{"i1.a": 5}`; got != want {
 		t.Errorf("GaugesWithSingleLabel get: %s, want %s", got, want)
 	}
 
 	ebd = NewExporter("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
-	if got, want := expvar.Get("labellgwsl").String(), "{}"; got != want {
+	if got, want := expvar.Get("lgwsl").String(), "{}"; got != want {
 		t.Errorf("GaugesWithSingleLabel get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
 	g = ebd.NewGaugesWithSingleLabel("lgwsl", "", "l")
 	g.Set("a", 6)
-	if got, want := expvar.Get("labellgwsl").String(), `{"i1.a": 6}`; got != want {
+	if got, want := expvar.Get("lgwsl").String(), `{"i1.a": 6}`; got != want {
 		t.Errorf("GaugesWithSingleLabel get: %s, want %s", got, want)
 	}
 
@@ -578,7 +578,7 @@ func TestGaugesWithSingleLabel(t *testing.T) {
 	g.Set("a", 7)
 	want1 := `{"i1.a": 6, "i2.a": 7}`
 	want2 := `{"i2.a": 7, "i1.a": 6}`
-	if got := expvar.Get("labellgwsl").String(); got != want1 && got != want2 {
+	if got := expvar.Get("lgwsl").String(); got != want1 && got != want2 {
 		t.Errorf("GaugesWithSingleLabel get: %s, want %s or %s", got, want1, want2)
 	}
 }
@@ -599,26 +599,26 @@ func TestCountersWithMultiLabels(t *testing.T) {
 
 	g = ebd.NewCountersWithMultiLabels("lcwml", "", []string{"l"})
 	g.Add([]string{"a"}, 4)
-	if got, want := expvar.Get("labellcwml").String(), `{"i1.a": 4}`; got != want {
+	if got, want := expvar.Get("lcwml").String(), `{"i1.a": 4}`; got != want {
 		t.Errorf("CountersWithMultiLabels get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
 	g = ebd.NewCountersWithMultiLabels("lcwml", "", []string{"l"})
 	g.Add([]string{"a"}, 5)
-	if got, want := expvar.Get("labellcwml").String(), `{"i1.a": 5}`; got != want {
+	if got, want := expvar.Get("lcwml").String(), `{"i1.a": 5}`; got != want {
 		t.Errorf("CountersWithMultiLabels get: %s, want %s", got, want)
 	}
 
 	ebd = NewExporter("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
-	if got, want := expvar.Get("labellcwml").String(), "{}"; got != want {
+	if got, want := expvar.Get("lcwml").String(), "{}"; got != want {
 		t.Errorf("CountersWithMultiLabels get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
 	g = ebd.NewCountersWithMultiLabels("lcwml", "", []string{"l"})
 	g.Add([]string{"a"}, 6)
-	if got, want := expvar.Get("labellcwml").String(), `{"i1.a": 6}`; got != want {
+	if got, want := expvar.Get("lcwml").String(), `{"i1.a": 6}`; got != want {
 		t.Errorf("CountersWithMultiLabels get: %s, want %s", got, want)
 	}
 
@@ -627,7 +627,7 @@ func TestCountersWithMultiLabels(t *testing.T) {
 	g.Add([]string{"a"}, 7)
 	want1 := `{"i1.a": 6, "i2.a": 7}`
 	want2 := `{"i2.a": 7, "i1.a": 6}`
-	if got := expvar.Get("labellcwml").String(); got != want1 && got != want2 {
+	if got := expvar.Get("lcwml").String(); got != want1 && got != want2 {
 		t.Errorf("CountersWithMultiLabels get: %s, want %s or %s", got, want1, want2)
 	}
 }
@@ -648,26 +648,26 @@ func TestGaugesWithMultiLabels(t *testing.T) {
 
 	g = ebd.NewGaugesWithMultiLabels("lgwml", "", []string{"l"})
 	g.Set([]string{"a"}, 4)
-	if got, want := expvar.Get("labellgwml").String(), `{"i1.a": 4}`; got != want {
+	if got, want := expvar.Get("lgwml").String(), `{"i1.a": 4}`; got != want {
 		t.Errorf("GaugesWithMultiLabels get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
 	g = ebd.NewGaugesWithMultiLabels("lgwml", "", []string{"l"})
 	g.Set([]string{"a"}, 5)
-	if got, want := expvar.Get("labellgwml").String(), `{"i1.a": 5}`; got != want {
+	if got, want := expvar.Get("lgwml").String(), `{"i1.a": 5}`; got != want {
 		t.Errorf("GaugesWithMultiLabels get: %s, want %s", got, want)
 	}
 
 	ebd = NewExporter("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
-	if got, want := expvar.Get("labellgwml").String(), "{}"; got != want {
+	if got, want := expvar.Get("lgwml").String(), "{}"; got != want {
 		t.Errorf("GaugesWithMultiLabels get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
 	g = ebd.NewGaugesWithMultiLabels("lgwml", "", []string{"l"})
 	g.Set([]string{"a"}, 6)
-	if got, want := expvar.Get("labellgwml").String(), `{"i1.a": 6}`; got != want {
+	if got, want := expvar.Get("lgwml").String(), `{"i1.a": 6}`; got != want {
 		t.Errorf("GaugesWithMultiLabels get: %s, want %s", got, want)
 	}
 
@@ -676,7 +676,7 @@ func TestGaugesWithMultiLabels(t *testing.T) {
 	g.Set([]string{"a"}, 7)
 	want1 := `{"i1.a": 6, "i2.a": 7}`
 	want2 := `{"i2.a": 7, "i1.a": 6}`
-	if got := expvar.Get("labellgwml").String(); got != want1 && got != want2 {
+	if got := expvar.Get("lgwml").String(); got != want1 && got != want2 {
 		t.Errorf("GaugeDuration get: %s, want %s or %s", got, want1, want2)
 	}
 }
