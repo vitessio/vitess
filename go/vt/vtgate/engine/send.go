@@ -74,7 +74,8 @@ func (s *Send) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable,
 		canAutocommit = len(rss) == 1 && vcursor.AutocommitApproval()
 	}
 
-	result, errs := vcursor.ExecuteMultiShard(rss, queries, true, canAutocommit)
+	rollbackOnError := !s.NoAutoCommit // for non-dml queries, there's no need to do a rollback
+	result, errs := vcursor.ExecuteMultiShard(rss, queries, rollbackOnError, canAutocommit)
 	err = vterrors.Aggregate(errs)
 	if err != nil {
 		return nil, err

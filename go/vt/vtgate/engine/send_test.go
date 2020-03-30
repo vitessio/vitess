@@ -31,7 +31,7 @@ func TestSendTable(t *testing.T) {
 			destination: key.DestinationAllShards{},
 			expectedQueryLog: []string{
 				`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-				`ExecuteMultiShard ks.0: dummy_query {} true true`,
+				`ExecuteMultiShard ks.0: dummy_query {} false false`,
 			},
 			noAutoCommit: true,
 		},
@@ -42,7 +42,7 @@ func TestSendTable(t *testing.T) {
 			destination: key.DestinationShard("20-"),
 			expectedQueryLog: []string{
 				`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
-				`ExecuteMultiShard ks.DestinationShard(20-): dummy_query {} true true`,
+				`ExecuteMultiShard ks.DestinationShard(20-): dummy_query {} false false`,
 			},
 			noAutoCommit: true,
 		},
@@ -90,7 +90,7 @@ func TestSendTable(t *testing.T) {
 				},
 				Query:             "dummy_query",
 				TargetDestination: tc.destination,
-				NoAutoCommit:      false,
+				NoAutoCommit:      tc.noAutoCommit,
 			}
 			vc := &loggingVCursor{shards: tc.shards}
 			_, err := send.Execute(vc, map[string]*querypb.BindVariable{}, false)
