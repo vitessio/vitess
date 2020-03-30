@@ -634,8 +634,8 @@ func TestSelectNormalize(t *testing.T) {
 			"vtg1": sqltypes.TestBindVariable(int64(1)),
 		},
 	}}
-	require.Empty(t, sbc1.BatchQueries)
-	utils.MustMatch(t, sbc2.BatchQueries[0], wantQueries, "sbc2.Queries")
+	require.Empty(t, sbc1.Queries)
+	utils.MustMatch(t, sbc2.Queries, wantQueries, "sbc2.Queries")
 	sbc2.Queries = nil
 	masterSession.TargetString = ""
 }

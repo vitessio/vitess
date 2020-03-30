@@ -208,10 +208,10 @@ func TestDirectTargetRewrites(t *testing.T) {
 
 	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
-	testBatchQuery(t, "sbclookup", sbclookup, &querypb.BoundQuery{
+	testQueries(t, "sbclookup", sbclookup, []*querypb.BoundQuery{{
 		Sql:           "select :__vtdbname as `database()` from dual",
 		BindVariables: map[string]*querypb.BindVariable{"__vtdbname": sqltypes.StringBindVariable("TestUnsharded")},
-	})
+	}})
 }
 
 func TestExecutorTransactionsAutoCommit(t *testing.T) {

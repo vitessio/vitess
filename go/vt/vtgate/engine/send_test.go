@@ -26,7 +26,7 @@ func TestSendUnsharded(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.0: dummy_query {} false true`,
+		`ExecuteMultiShard ks.0: dummy_query {} true true`,
 	})
 
 	// Failure cases
@@ -54,7 +54,7 @@ func TestSendSharded(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
-		`ExecuteMultiShard ks.DestinationShard(20-): dummy_query {} false true`,
+		`ExecuteMultiShard ks.DestinationShard(20-): dummy_query {} true true`,
 	})
 
 	// Failure cases

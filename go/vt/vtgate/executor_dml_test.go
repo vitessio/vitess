@@ -317,8 +317,8 @@ func TestUpdateNormalize(t *testing.T) {
 			"vtg2": sqltypes.TestBindVariable(int64(1)),
 		},
 	}}
-	assert.Empty(t, sbc1.BatchQueries)
-	utils.MustMatch(t, sbc2.BatchQueries[0], wantQueries, "didn't get expected queries")
+	assert.Empty(t, sbc1.Queries)
+	utils.MustMatch(t, sbc2.Queries, wantQueries, "didn't get expected queries")
 	sbc2.Queries = nil
 	masterSession.TargetString = ""
 }
@@ -1591,13 +1591,13 @@ func TestKeyDestRangeQuery(t *testing.T) {
 			if tc.expectedSbc1Query == "" {
 				require.Empty(t, sbc1.BatchQueries, "sbc1")
 			} else {
-				assertBatchQueriesContain(t, tc.expectedSbc1Query, "sbc1", sbc1)
+				assertQueriesContain(t, tc.expectedSbc1Query, "sbc1", sbc1)
 			}
 
 			if tc.expectedSbc2Query == "" {
 				require.Empty(t, sbc2.BatchQueries)
 			} else {
-				assertBatchQueriesContain(t, tc.expectedSbc2Query, "sbc2", sbc2)
+				assertQueriesContain(t, tc.expectedSbc2Query, "sbc2", sbc2)
 			}
 		})
 	}
@@ -1612,13 +1612,13 @@ func TestKeyDestRangeQuery(t *testing.T) {
 	masterSession.TargetString = ""
 }
 
-func assertBatchQueriesContain(t *testing.T, sql, sbcName string, sbc *sandboxconn.SandboxConn) {
+func assertQueriesContain(t *testing.T, sql, sbcName string, sbc *sandboxconn.SandboxConn) {
 	t.Helper()
-	expectedQuery := &querypb.BoundQuery{
+	expectedQuery := []*querypb.BoundQuery{{
 		Sql:           sql,
 		BindVariables: map[string]*querypb.BindVariable{},
-	}
-	testBatchQuery(t, sbcName, sbc, expectedQuery)
+	}}
+	testQueries(t, sbcName, sbc, expectedQuery)
 }
 
 // Prepared statement tests
