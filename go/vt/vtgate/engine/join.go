@@ -254,3 +254,7 @@ func combineVars(bv1, bv2 map[string]*querypb.BindVariable) map[string]*querypb.
 	}
 	return out
 }
+
+func (jn *Join) description() PlanDescription {
+	return PlanDescription{OperatorType: "join - not implemented"}
+}

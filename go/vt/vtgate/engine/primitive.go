@@ -166,6 +166,10 @@ type Primitive interface {
 
 	// The inputs to this Primitive
 	Inputs() []Primitive
+
+	// description is the description, sans the inputs, of this Primitive.
+	// to get the plan description with all children, use PrimitiveToPlanDescription()
+	description() PlanDescription
 }
 
 type noInputs struct{}

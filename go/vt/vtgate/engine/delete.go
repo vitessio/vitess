@@ -234,3 +234,7 @@ func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]
 	res, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
 	return res, vterrors.Aggregate(errs)
 }
+
+func (del *Delete) description() PlanDescription {
+	return PlanDescription{OperatorType: "delete not implemented"}
+}

@@ -16,34 +16,25 @@ limitations under the License.
 
 package engine
 
-import (
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-)
-
 // PlanDescription is used to create a serializable representation of the Primitive tree
 type PlanDescription struct {
 	OperatorType string
-	OpCode       string
-	Keyspace     string
-	Destination  string
-	TabletType   topodatapb.TabletType
+	Variant      string
 	Other        map[string]string
 	Inputs       []PlanDescription
 }
 
 //PrimitiveToPlanDescription transforms a primitive tree into a corresponding PlanDescription tree
 func PrimitiveToPlanDescription(in Primitive) PlanDescription {
-	var this PlanDescription
+	this := in.description()
 
-	switch p := in.(type) {
-	case *Route:
-		this = PlanDescription{
-			OperatorType: "Route",
-			OpCode:       p.RouteType(),
-			Keyspace:     p.Keyspace.Name,
-			Destination:  p.TargetDestination.String(),
-			TabletType:   p.TargetTabletType,
-		}
+	for _, input := range in.Inputs() {
+		this.Inputs = append(this.Inputs, PrimitiveToPlanDescription(input))
 	}
+
+	if len(in.Inputs()) == 0 {
+		this.Inputs = []PlanDescription{}
+	}
+
 	return this
 }

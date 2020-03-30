@@ -299,6 +299,11 @@ func getPlanOrErrorOutput(err error, plan *engine.Plan) string {
 	if err != nil {
 		return err.Error()
 	}
+
+	descr := engine.PrimitiveToPlanDescription(plan.Instructions)
+	sss, _ := json.MarshalIndent(descr, "", "  ")
+	fmt.Println(string(sss))
+
 	bout, _ := json.MarshalIndent(testPlan{
 		Original:     plan.Original,
 		Instructions: plan.Instructions,

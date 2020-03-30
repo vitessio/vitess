@@ -200,3 +200,25 @@ func (l *Limit) fetchOffset(bindVars map[string]*querypb.BindVariable) (int, err
 	}
 	return offset, nil
 }
+
+func (l *Limit) description() PlanDescription {
+	// TODO: There's got to be a better way
+	count, err := l.Count.MarshalJSON()
+	if err != nil {
+		count = []byte("?")
+	}
+	offset, err := l.Offset.MarshalJSON()
+	if err != nil {
+		offset = []byte("?")
+	}
+
+	other := map[string]string{
+		"Count":  string(count),
+		"Offset": string(offset),
+	}
+
+	return PlanDescription{
+		OperatorType: "Limit",
+		Other:        other,
+	}
+}

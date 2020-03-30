@@ -555,3 +555,20 @@ func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) 
 	}
 	return shardVars
 }
+
+func (route *Route) description() PlanDescription {
+	other := map[string]string{
+		"Query":      route.Query,
+		"TableName":  route.TableName,
+		"Keyspace":   route.Keyspace.Name,
+		"TabletType": route.TargetTabletType.String(),
+	}
+	if route.TargetDestination != nil {
+		other["Destination"] = route.TargetDestination.String()
+	}
+	return PlanDescription{
+		OperatorType: "Route",
+		Variant:      routeName[route.Opcode],
+		Other:        other,
+	}
+}
