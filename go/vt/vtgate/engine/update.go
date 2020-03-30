@@ -173,7 +173,7 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 			return nil, vterrors.Wrap(err, "execUpdateEqual")
 		}
 	}
-	return execShard(vcursor, upd.Query, bindVars, rs, true /* isDML */, true /* canAutocommit */)
+	return execShard(vcursor, upd.Query, bindVars, rs, true /* rollbackOnError */, true /* canAutocommit */)
 }
 
 // updateVindexEntries performs an update when a vindex is being modified
@@ -260,6 +260,6 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 	}
 
 	autocommit := (len(rss) == 1 || upd.MultiShardAutocommit) && vcursor.AutocommitApproval()
-	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
+	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
 	return result, vterrors.Aggregate(errs)
 }

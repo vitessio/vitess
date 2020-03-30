@@ -66,11 +66,11 @@ type vcursorImpl struct {
 	executor       iExecute
 	resolver       *srvtopo.Resolver
 	logStats       *LogStats
-	// hasPartialDML is set to true if any DML was successfully
+	// rollbackOnPartialExec is set to true if any DML was successfully
 	// executed. If there was a subsequent failure, the transaction
 	// must be forced to rollback.
-	hasPartialDML bool
-	vschema       *vindexes.VSchema
+	rollbackOnPartialExec bool
+	vschema               *vindexes.VSchema
 }
 
 // newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any marginComments that came with
@@ -174,7 +174,7 @@ func (vc *vcursorImpl) TargetString() string {
 }
 
 // Execute is part of the engine.VCursor interface.
-func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	session := vc.safeSession
 	if co == vtgatepb.CommitOrder_AUTOCOMMIT {
 		// For autocommit, we have to create an independent session.
@@ -185,19 +185,19 @@ func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]
 	}
 
 	qr, err := vc.executor.Execute(vc.ctx, method, session, vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars)
-	if err == nil && isDML {
-		vc.hasPartialDML = true
+	if err == nil && rollbackOnError {
+		vc.rollbackOnPartialExec = true
 	}
 	return qr, err
 }
 
 // ExecuteMultiShard is part of the engine.VCursor interface.
-func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, autocommit bool) (*sqltypes.Result, []error) {
+func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, autocommit bool) (*sqltypes.Result, []error) {
 	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(queries)))
 	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.tabletType, vc.safeSession, false, autocommit)
 
-	if errs == nil && isDML {
-		vc.hasPartialDML = true
+	if errs == nil && rollbackOnError {
+		vc.rollbackOnPartialExec = true
 	}
 	return qr, errs
 }
@@ -229,7 +229,7 @@ func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedS
 }
 
 // ExecuteKeyspaceID is part of the engine.VCursor interface.
-func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, isDML, autocommit bool) (*sqltypes.Result, error) {
+func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error) {
 	atomic.AddUint32(&vc.logStats.ShardQueries, 1)
 	rss, _, err := vc.ResolveDestinations(keyspace, nil, []key.Destination{key.DestinationKeyspaceID(ksid)})
 	if err != nil {
@@ -239,11 +239,11 @@ func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query str
 		Sql:           query,
 		BindVariables: bindVars,
 	}}
-	qr, errs := vc.ExecuteMultiShard(rss, queries, isDML, autocommit)
+	qr, errs := vc.ExecuteMultiShard(rss, queries, rollbackOnError, autocommit)
 
 	if len(errs) == 0 {
-		if isDML {
-			vc.hasPartialDML = true
+		if rollbackOnError {
+			vc.rollbackOnPartialExec = true
 		}
 		return qr, nil
 	}
