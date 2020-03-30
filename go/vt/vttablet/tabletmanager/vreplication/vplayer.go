@@ -290,6 +290,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	// TODO(sougou): if we also stored the time of the last event, we
 	// can estimate this value more accurately.
 	defer vp.vr.stats.SecondsBehindMaster.Set(math.MaxInt64)
+	var sbm int64 = -1
 	for {
 		items, err := relay.Fetch()
 		if err != nil {
@@ -322,7 +323,8 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 				if event.Timestamp != 0 {
 					vp.lastTimestampNs = event.Timestamp * 1e9
 					vp.timeOffsetNs = time.Now().UnixNano() - event.CurrentTime
-					vp.vr.stats.SecondsBehindMaster.Set(event.CurrentTime/1e9 - event.Timestamp)
+					//vp.vr.stats.SecondsBehindMaster.Set(event.CurrentTime/1e9 - event.Timestamp)
+					sbm = event.CurrentTime/1e9 - event.Timestamp
 				}
 				mustSave := false
 				switch event.Type {
@@ -348,6 +350,10 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 				}
 			}
 		}
+		if sbm >= 0 {
+			vp.vr.stats.SecondsBehindMaster.Set(sbm)
+		}
+
 	}
 }
 
