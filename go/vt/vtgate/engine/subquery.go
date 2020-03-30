@@ -102,3 +102,7 @@ func (sq *Subquery) buildFields(inner *sqltypes.Result) []*querypb.Field {
 	}
 	return fields
 }
+
+func (sq *Subquery) description() PlanDescription {
+	return PlanDescription{OperatorType: "subquery - not implemented"}
+}

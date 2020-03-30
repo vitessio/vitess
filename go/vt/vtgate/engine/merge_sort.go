@@ -155,6 +155,10 @@ func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 	return nil
 }
 
+func (ms *MergeSort) description() PlanDescription {
+	return PlanDescription{OperatorType: "mergesort - not implemented"}
+}
+
 // streamHandle is the rendez-vous point between each stream and the merge-sorter.
 // The fields channel is used by the stream to transmit the field info, which
 // is the first packet. Following this, the stream sends each row to the row

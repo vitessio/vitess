@@ -393,3 +393,10 @@ func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
 	}
 	return sqltypes.NULL, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown aggregation %v", opcode)
 }
+
+func (oa *OrderedAggregate) description() PlanDescription {
+	return PlanDescription{
+		OperatorType: "OrderedAggregation not implemented",
+		Other:        nil,
+	}
+}

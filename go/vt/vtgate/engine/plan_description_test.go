@@ -17,20 +17,47 @@ limitations under the License.
 package engine
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
 
 	"github.com/google/go-cmp/cmp"
-	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-func TestCreatePlanDescription(t *testing.T) {
-	del := &Route{
+func TestCreateRoutePlanDescription(t *testing.T) {
+	route := createRoute()
+
+	planDescription := PrimitiveToPlanDescription(route)
+
+	expected := PlanDescription{
+		OperatorType: "Route",
+		Variant:      "SelectScatter",
+		Other: map[string]string{
+			"Query":       route.Query,
+			"TableName":   route.TableName,
+			"Keyspace":    "ks",
+			"Destination": "DestinationAllShards()",
+			"TabletType":  topodatapb.TabletType_MASTER.String(),
+		},
+		Inputs: []PlanDescription{},
+	}
+
+	if diff := cmp.Diff(planDescription, expected); diff != "" {
+		t.Errorf(diff)
+		bytes, _ := json.MarshalIndent(expected, "", "  ")
+		fmt.Println(string(bytes))
+		fmt.Printf("%v\n", expected)
+	}
+
+}
+
+func createRoute() *Route {
+	return &Route{
 		Opcode:            SelectScatter,
 		Keyspace:          &vindexes.Keyspace{Name: "ks"},
 		TargetDestination: key.DestinationAllShards{},
@@ -42,22 +69,49 @@ func TestCreatePlanDescription(t *testing.T) {
 		Values:            []sqltypes.PlanValue{},
 		OrderBy:           []OrderbyParams{},
 	}
+}
 
-	planDescription := PrimitiveToPlanDescription(del)
+func TestPlanDescriptionWithInputs(t *testing.T) {
+	route := createRoute()
+	routeDescr := getDescriptionFor(route)
+	limit := &Limit{
+		Count:  int64PlanValue(12),
+		Offset: int64PlanValue(4),
+		Input:  route,
+	}
+
+	planDescription := PrimitiveToPlanDescription(limit)
 
 	expected := PlanDescription{
-		OperatorType: "Route",
-		OpCode:       "SelectScatter",
-		Keyspace:     "ks",
-		Destination:  "DestinationAllShards()",
-		TabletType:   topodatapb.TabletType_MASTER,
+		OperatorType: "Limit",
+		Other: map[string]string{
+			"Count":  "12",
+			"Offset": "4",
+		},
+		Inputs: []PlanDescription{routeDescr},
 	}
 
 	if diff := cmp.Diff(planDescription, expected); diff != "" {
 		t.Errorf(diff)
-		bytes, _ := jsonutil.MarshalNoEscape(expected)
+		bytes, _ := json.MarshalIndent(expected, "", "  ")
 		fmt.Println(string(bytes))
-		fmt.Printf("%v\n", expected)
+		bytes, _ = json.MarshalIndent(planDescription, "", "  ")
+		fmt.Println(string(bytes))
 	}
 
+}
+
+func getDescriptionFor(route *Route) PlanDescription {
+	return PlanDescription{
+		OperatorType: "Route",
+		Variant:      routeName[route.Opcode],
+		Other: map[string]string{
+			"Query":       route.Query,
+			"TableName":   route.TableName,
+			"Keyspace":    "ks",
+			"Destination": "DestinationAllShards()",
+			"TabletType":  topodatapb.TabletType_MASTER.String(),
+		},
+		Inputs: []PlanDescription{},
+	}
 }

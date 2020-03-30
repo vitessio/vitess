@@ -184,6 +184,10 @@ func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int
 	return count, nil
 }
 
+func (ms *MemorySort) description() PlanDescription {
+	return PlanDescription{OperatorType: "memorysort - not implemented"}
+}
+
 // sortHeap is sorted based on the orderBy params.
 // Implementation is similar to scatterHeap
 type sortHeap struct {

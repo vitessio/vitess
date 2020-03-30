@@ -607,3 +607,7 @@ func (ins *Insert) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltype
 func insertVarName(col sqlparser.ColIdent, rowNum int) string {
 	return "_" + col.CompliantName() + strconv.Itoa(rowNum)
 }
+
+func (ins *Insert) description() PlanDescription {
+	return PlanDescription{OperatorType: "insert - not implemented"}
+}

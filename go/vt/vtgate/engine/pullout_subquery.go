@@ -153,6 +153,10 @@ func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*qu
 	return combinedVars, nil
 }
 
+func (ps *PulloutSubquery) description() PlanDescription {
+	return PlanDescription{OperatorType: "pullout subquery not implemented"}
+}
+
 // PulloutOpcode is a number representing the opcode
 // for the PulloutSubquery primitive.
 type PulloutOpcode int

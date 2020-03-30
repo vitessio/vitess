@@ -263,3 +263,7 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
 	return result, vterrors.Aggregate(errs)
 }
+
+func (upd *Update) description() PlanDescription {
+	return PlanDescription{OperatorType: "update - not implemented"}
+}
