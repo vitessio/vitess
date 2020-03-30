@@ -76,7 +76,7 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sql
 		if lkp.Autocommit {
 			co = vtgatepb.CommitOrder_AUTOCOMMIT
 		}
-		result, err = vcursor.Execute("VindexLookup", lkp.sel, bindVars, false /* isDML */, co)
+		result, err = vcursor.Execute("VindexLookup", lkp.sel, bindVars, false /* rollbackOnError */, co)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
@@ -101,7 +101,7 @@ func (lkp *lookupInternal) VerifyCustom(vcursor VCursor, ids, values []sqltypes.
 			lkp.FromColumns[0]: sqltypes.ValueBindVariable(id),
 			lkp.To:             sqltypes.ValueBindVariable(values[i]),
 		}
-		result, err := vcursor.Execute("VindexVerify", lkp.ver, bindVars, false /* isDML */, co)
+		result, err := vcursor.Execute("VindexVerify", lkp.ver, bindVars, false /* rollbackOnError */, co)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Verify: %v", err)
 		}
@@ -206,7 +206,7 @@ func (lkp *lookupInternal) createCustom(vcursor VCursor, rowsColValues [][]sqlty
 		fmt.Fprintf(buf, "%s=values(%s)", lkp.To, lkp.To)
 	}
 
-	if _, err := vcursor.Execute("VindexCreate", buf.String(), bindVars, true /* isDML */, co); err != nil {
+	if _, err := vcursor.Execute("VindexCreate", buf.String(), bindVars, true /* rollbackOnError */, co); err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
 	}
 	return nil
@@ -247,7 +247,7 @@ func (lkp *lookupInternal) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Va
 			bindVars[lkp.FromColumns[colIdx]] = sqltypes.ValueBindVariable(columnValue)
 		}
 		bindVars[lkp.To] = sqltypes.ValueBindVariable(value)
-		_, err := vcursor.Execute("VindexDelete", lkp.del, bindVars, true /* isDML */, co)
+		_, err := vcursor.Execute("VindexDelete", lkp.del, bindVars, true /* rollbackOnError */, co)
 		if err != nil {
 			return fmt.Errorf("lookup.Delete: %v", err)
 		}

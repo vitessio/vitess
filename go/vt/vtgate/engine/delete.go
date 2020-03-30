@@ -166,7 +166,7 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 			return nil, vterrors.Wrap(err, "execDeleteEqual")
 		}
 	}
-	return execShard(vcursor, del.Query, bindVars, rs, true /* isDML */, true /* canAutocommit */)
+	return execShard(vcursor, del.Query, bindVars, rs, true /* rollbackOnError */, true /* canAutocommit */)
 }
 
 // deleteVindexEntries performs an delete if table owns vindex.
@@ -231,6 +231,6 @@ func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]
 		}
 	}
 	autocommit := (len(rss) == 1 || del.MultiShardAutocommit) && vcursor.AutocommitApproval()
-	res, errs := vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
+	res, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
 	return res, vterrors.Aggregate(errs)
 }

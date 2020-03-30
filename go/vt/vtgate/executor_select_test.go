@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -632,12 +634,8 @@ func TestSelectNormalize(t *testing.T) {
 			"vtg1": sqltypes.TestBindVariable(int64(1)),
 		},
 	}}
-	if sbc1.Queries != nil {
-		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
-	}
-	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
-		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
-	}
+	require.Empty(t, sbc1.Queries)
+	utils.MustMatch(t, sbc2.Queries, wantQueries, "sbc2.Queries")
 	sbc2.Queries = nil
 	masterSession.TargetString = ""
 }

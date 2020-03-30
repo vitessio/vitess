@@ -45,7 +45,7 @@ type vcursor struct {
 	pre, post   int
 }
 
-func (vc *vcursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+func (vc *vcursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	switch co {
 	case vtgatepb.CommitOrder_PRE:
 		vc.pre++
@@ -54,14 +54,14 @@ func (vc *vcursor) Execute(method string, query string, bindvars map[string]*que
 	case vtgatepb.CommitOrder_AUTOCOMMIT:
 		vc.autocommits++
 	}
-	return vc.execute(method, query, bindvars, isDML)
+	return vc.execute(method, query, bindvars, rollbackOnError)
 }
 
-func (vc *vcursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, isDML, autocommit bool) (*sqltypes.Result, error) {
-	return vc.execute("ExecuteKeyspaceID", query, bindVars, isDML)
+func (vc *vcursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error) {
+	return vc.execute("ExecuteKeyspaceID", query, bindVars, rollbackOnError)
 }
 
-func (vc *vcursor) execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+func (vc *vcursor) execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool) (*sqltypes.Result, error) {
 	vc.queries = append(vc.queries, &querypb.BoundQuery{
 		Sql:           query,
 		BindVariables: bindvars,
