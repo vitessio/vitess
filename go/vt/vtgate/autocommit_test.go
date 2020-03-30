@@ -429,12 +429,12 @@ func TestAutocommitDirectRangeTarget(t *testing.T) {
 	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 
-	testBatchQuery(t, "sbc1", sbc1, &querypb.BoundQuery{
+	testQueries(t, "sbc1", sbc1, []*querypb.BoundQuery{{
 		Sql:           sql,
 		BindVariables: map[string]*querypb.BindVariable{},
-	})
-	testAsTransactionCount(t, "sbc1", sbc1, 1)
-	testCommitCount(t, "sbc1", sbc1, 0)
+	}})
+	testAsTransactionCount(t, "sbc1", sbc1, 0)
+	testCommitCount(t, "sbc1", sbc1, 1)
 }
 
 func autocommitExec(executor *Executor, sql string) (*sqltypes.Result, error) {

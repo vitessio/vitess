@@ -65,7 +65,8 @@ func (s *Send) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable,
 		}
 	}
 
-	result, errs := vcursor.ExecuteMultiShard(rss, queries, false, true)
+	canAutocommit := len(rss) == 1 && vcursor.AutocommitApproval()
+	result, errs := vcursor.ExecuteMultiShard(rss, queries, true, canAutocommit)
 	err = vterrors.Aggregate(errs)
 	if err != nil {
 		return nil, err
