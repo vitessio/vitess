@@ -169,37 +169,34 @@ func hasCommentPrefix(sql string) bool {
 func StripComments(sql string) string {
 	sql = StripLeadingComments(sql) // handle -- or /* ... */ at the beginning
 
-	for {
-		start := strings.Index(sql, "/*")
-		if start == -1 {
-			break
-		}
-		end := strings.Index(sql, "*/")
-		if end <= 1 {
-			break
-		}
-		if start > end {
-			start, end = end, start
-		}
-		if containsQuotations(sql, start, end) {
-			break
-		}
-		sql = sql[:start] + sql[end+2:]
+	// Weird case that breaks the parser
+	if sql == "/*!*/" {
+		return ""
 	}
 
+	stmt, err := Parse(sql)
+	// Errors would be syntax errors or empty statements at this point.
+	if err != nil {
+		for {
+			start := strings.Index(sql, "/*")
+			if start == -1 {
+				break
+			}
+			end := strings.Index(sql, "*/")
+			if end <= 1 {
+				break
+			}
+			if start > end {
+				start, end = end, start
+			}
+			sql = sql[:start] + sql[end+2:]
+		}
+	} else {
+		sql = String(stmt)
+	}
 	sql = strings.TrimFunc(sql, unicode.IsSpace)
 
 	return sql
-}
-
-func containsQuotations(sql string, start, end int) bool {
-	indexBefore, indexAfter := start-1, end+2
-	// Check Boundaries
-	if indexBefore < 0 || indexAfter >= len(sql) {
-		return false
-	}
-	// Check if the character the index before comments start and end substring is a single or double quotation
-	return (sql[indexBefore] == '\'' && sql[indexAfter] == '\'') || (sql[indexBefore] == '"' && sql[indexAfter] == '"')
 }
 
 // ExtractMysqlComment extracts the version and SQL from a comment-only query
