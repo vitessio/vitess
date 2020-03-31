@@ -278,31 +278,32 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 	var instruction engine.Primitive
 
 	if vschema.Destination() != nil {
+		planType = engine.PlanBYPASS
 		instruction, err = buildPlanForBypass(stmt, vschema)
 	} else {
 		switch stmt := stmt.(type) {
 		case *sqlparser.Select:
 			planType = engine.PlanSELECT
-		instruction, err = buildSelectPlan(stmt, vschema)
-	case *sqlparser.Insert:
-		planType = engine.PlanINSERT
-		instruction, err = buildInsertPlan(stmt, vschema)
-	case *sqlparser.Update:
-		planType = engine.PlanUPDATE
-		instruction, err = buildUpdatePlan(stmt, vschema)
-	case *sqlparser.Delete:
-		planType = engine.PlanDELETE
-		instruction, err = buildDeletePlan(stmt, vschema)
-	case *sqlparser.Union:
-		planType = engine.PlanSELECT
-		instruction, err = buildUnionPlan(stmt, vschema)
-	case *sqlparser.Set:
-		return nil, errors.New("unsupported construct: set")
-	case *sqlparser.Show:
-		return nil, errors.New("unsupported construct: show")
-	case *sqlparser.DDL:
-		planType = engine.PlanDDL
-		instruction, err = buildDDLPlan(stmt, vschema)
+			instruction, err = buildSelectPlan(stmt, vschema)
+		case *sqlparser.Insert:
+			planType = engine.PlanINSERT
+			instruction, err = buildInsertPlan(stmt, vschema)
+		case *sqlparser.Update:
+			planType = engine.PlanUPDATE
+			instruction, err = buildUpdatePlan(stmt, vschema)
+		case *sqlparser.Delete:
+			planType = engine.PlanDELETE
+			instruction, err = buildDeletePlan(stmt, vschema)
+		case *sqlparser.Union:
+			planType = engine.PlanSELECT
+			instruction, err = buildUnionPlan(stmt, vschema)
+		case *sqlparser.Set:
+			return nil, errors.New("unsupported construct: set")
+		case *sqlparser.Show:
+			return nil, errors.New("unsupported construct: show")
+		case *sqlparser.DDL:
+			planType = engine.PlanDDL
+			instruction, err = buildDDLPlan(stmt, vschema)
 		case *sqlparser.DBDDL:
 			return nil, errors.New("unsupported construct: ddl on database")
 		case *sqlparser.OtherRead:
