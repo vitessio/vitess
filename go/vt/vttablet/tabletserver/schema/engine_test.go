@@ -402,6 +402,7 @@ func initialSchema() map[string]*Table {
 				}},
 				AckWaitDuration:    30 * time.Second,
 				PurgeAfterDuration: 120 * time.Second,
+				MinBackoff:         30 * time.Second,
 				BatchSize:          1,
 				CacheSize:          10,
 				PollInterval:       30 * time.Second,

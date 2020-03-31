@@ -165,6 +165,8 @@ type messageManager struct {
 	fieldResult  *sqltypes.Result
 	ackWaitTime  time.Duration
 	purgeAfter   time.Duration
+	minBackoff   time.Duration
+	maxBackoff   time.Duration
 	batchSize    int
 	pollerTicks  *timer.Timer
 	purgeTicks   *timer.Timer
@@ -223,6 +225,8 @@ func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, pos
 		},
 		ackWaitTime:     table.MessageInfo.AckWaitDuration,
 		purgeAfter:      table.MessageInfo.PurgeAfterDuration,
+		minBackoff:      table.MessageInfo.MinBackoff,
+		maxBackoff:      table.MessageInfo.MaxBackoff,
 		batchSize:       table.MessageInfo.BatchSize,
 		cache:           newCache(table.MessageInfo.CacheSize),
 		pollerTicks:     timer.NewTimer(table.MessageInfo.PollInterval),
@@ -246,11 +250,19 @@ func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, pos
 	mm.ackQuery = sqlparser.BuildParsedQuery(
 		"update %v set time_acked = %a, time_next = null where id in %a and time_acked is null",
 		mm.name, ":time_acked", "::ids")
-	mm.postponeQuery = sqlparser.BuildParsedQuery(
-		"update %v set time_next = %a+(%a<<ifnull(epoch, 0)), epoch = ifnull(epoch, 0)+1 where id in %a and time_acked is null",
-		mm.name, ":time_now", ":wait_time", "::ids")
 	mm.purgeQuery = sqlparser.BuildParsedQuery(
 		"delete from %v where time_acked < %a limit 500", mm.name, ":time_acked")
+
+	// if a maxBackoff is set, incorporate it into the update statement
+	if mm.maxBackoff > 0 {
+		mm.postponeQuery = sqlparser.BuildParsedQuery(
+			"update %v set time_next = %a+if(%a<<ifnull(epoch, 0) > %a, %a, %a<<ifnull(epoch, 0)), epoch = ifnull(epoch, 0)+1 where id in %a and time_acked is null",
+			mm.name, ":time_now", ":min_backoff", ":max_backoff", ":max_backoff", ":min_backoff", "::ids")
+	} else {
+		mm.postponeQuery = sqlparser.BuildParsedQuery(
+			"update %v set time_next = %a+(%a<<ifnull(epoch, 0)), epoch = ifnull(epoch, 0)+1 where id in %a and time_acked is null",
+			mm.name, ":time_now", ":min_backoff", "::ids")
+	}
 	return mm
 }
 
@@ -792,11 +804,18 @@ func (mm *messageManager) GeneratePostponeQuery(ids []string) (string, map[strin
 			Value: []byte(id),
 		})
 	}
-	return mm.postponeQuery.Query, map[string]*querypb.BindVariable{
-		"time_now":  sqltypes.Int64BindVariable(time.Now().UnixNano()),
-		"wait_time": sqltypes.Int64BindVariable(int64(mm.ackWaitTime)),
-		"ids":       idbvs,
+
+	bvs := map[string]*querypb.BindVariable{
+		"time_now":    sqltypes.Int64BindVariable(time.Now().UnixNano()),
+		"min_backoff": sqltypes.Int64BindVariable(int64(mm.minBackoff)),
+		"ids":         idbvs,
 	}
+
+	if mm.maxBackoff > 0 {
+		bvs["max_backoff"] = sqltypes.Int64BindVariable(int64(mm.maxBackoff))
+	}
+
+	return mm.postponeQuery.Query, bvs
 }
 
 // GeneratePurgeQuery returns the query and bind vars for purging messages.
