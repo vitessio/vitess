@@ -26,6 +26,9 @@ import (
 	"strings"
 	"testing"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
@@ -216,6 +219,22 @@ type vschemaWrapper struct {
 	keyspace   *vindexes.Keyspace
 	tabletType topodatapb.TabletType
 	dest       key.Destination
+}
+
+func (vw *vschemaWrapper) TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error) {
+	keyspaceName := vw.keyspace.Name
+	if vw.dest == nil && qualifier != "" {
+		keyspaceName = qualifier
+	}
+	if keyspaceName == "" {
+		return nil, nil, 0, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace not specified")
+	}
+	keyspace := vw.v.Keyspaces[keyspaceName]
+	if keyspace == nil {
+		return nil, nil, 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no keyspace with name [%s] found", keyspaceName)
+	}
+	return vw.dest, keyspace.Keyspace, vw.tabletType, nil
+
 }
 
 func (vw *vschemaWrapper) TabletType() topodatapb.TabletType {
