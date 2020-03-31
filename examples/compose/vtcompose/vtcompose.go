@@ -36,20 +36,19 @@ import (
 
 const (
 	DefaultWebPort        = 8080
+	webPortUsage          = "Web port to be used"
 	DefaultGrpcPort       = 15999
+	gRpcPortUsage         = "gRPC port to be used"
 	DefaultMysqlPort      = 15306
+	mySqlPortUsage        = "mySql port to be used"
 	DefaultKeyspaceData   = "test_keyspace:2:1:create_messages.sql,create_tokens.sql;unsharded_keyspace:0:0:create_dinosaurs.sql,create_eggs.sql"
+	keyspaceDataUsage     = "List of keyspace_name/external_db_name:num_of_shards:num_of_replica_tablets:schema_files:<optional>lookup_keyspace_name separated by ';'"
 	DefaultCell           = "test"
+	cellUsage             = "Vitess Cell name"
 	DefaultExternalDbData = ""
+	externalDbDataUsage   = "List of Data corresponding to external DBs. List of <external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET> separated by ';'"
 	DefaultTopologyFlags  = "-topo_implementation consul -topo_global_server_address consul1:8500 -topo_global_root vitess/global"
-
-	topologyFlagsUsage  = "Vitess Topology Flags config"
-	webPortUsage        = "Web port to be used"
-	gRpcPortUsage       = "gRPC port to be used"
-	mySqlPortUsage      = "mySql port to be used"
-	cellUsage           = "Vitess Cell name"
-	keyspaceDataUsage   = "List of keyspace_name/external_db_name:num_of_shards:num_of_replica_tablets:schema_files:<optional>lookup_keyspace_name separated by ';'"
-	externalDbDataUsage = "List of Data corresponding to external DBs. List of <external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET> separated by ';'"
+	topologyFlagsUsage    = "Vitess Topology Flags config"
 )
 
 var (
@@ -119,7 +118,14 @@ func newKeyspaceInfo(
 }
 
 func newExternalDbInfo(dbName, dbHost, dbPort, dbUser, dbPass, dbCharset string) externalDbInfo {
-	return externalDbInfo{dbName: dbName, dbHost: dbHost, dbPort: dbPort, dbUser: dbUser, dbPass: dbPass, dbCharset: dbCharset}
+	return externalDbInfo{
+		dbName:    dbName,
+		dbHost:    dbHost,
+		dbPort:    dbPort,
+		dbUser:    dbUser,
+		dbPass:    dbPass,
+		dbCharset: dbCharset,
+	}
 }
 
 func parseKeyspaceInfo(keyspaceData string) map[string]keyspaceInfo {
@@ -146,7 +152,8 @@ func parseExternalDbData(externalDbData string) map[string]externalDbInfo {
 	for _, v := range strings.Split(externalDbData, ";") {
 		tokens := strings.Split(v, ":")
 		if len(tokens) > 1 {
-			externalDbInfoMap[tokens[0]] = newExternalDbInfo(tokens[0], tokens[1], tokens[2], tokens[3], tokens[4], tokens[5])
+			externalDbInfoMap[tokens[0]] =
+				newExternalDbInfo(tokens[0], tokens[1], tokens[2], tokens[3], tokens[4], tokens[5])
 		}
 	}
 
@@ -169,7 +176,7 @@ func main() {
 	for k, v := range keyspaceInfoMap {
 		if _, ok := externalDbInfoMap[k]; !ok {
 			v.schemaFile = createFile(fmt.Sprintf("%s%s_schema_file.sql", tablesPath, v.keyspace))
-			appendtoSqlFile(v.schemaFileNames, v.schemaFile)
+			appendToSqlFile(v.schemaFileNames, v.schemaFile)
 			closeFile(v.schemaFile)
 		}
 	}
@@ -191,8 +198,8 @@ func main() {
 			vSchemaFile, primaryTableColumns = addTablesVschemaPatch(vSchemaFile, keyspaceData.schemaFileNames)
 
 			if keyspaceData.useLookups {
-				lookupKeyspace := keyspaceInfoMap[keyspaceData.lookupKeyspace]
-				vSchemaFile = addLookupDataToVschema(vSchemaFile, lookupKeyspace.schemaFileNames, primaryTableColumns, lookupKeyspace.keyspace)
+				lookup := keyspaceInfoMap[keyspaceData.lookupKeyspace]
+				vSchemaFile = addLookupDataToVschema(vSchemaFile, lookup.schemaFileNames, primaryTableColumns, lookup.keyspace)
 			}
 		}
 
@@ -280,7 +287,7 @@ func handleError(err error) {
 	}
 }
 
-func appendtoSqlFile(schemaFileNames []string, f *os.File) {
+func appendToSqlFile(schemaFileNames []string, f *os.File) {
 	for _, file := range schemaFileNames {
 		data, err := ioutil.ReadFile(tablesPath + file)
 		_, err = f.Write(data)
