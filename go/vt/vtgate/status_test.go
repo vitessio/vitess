@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 

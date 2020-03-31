@@ -33,12 +33,12 @@ import (
 
 // TxConn is used for executing transactional requests.
 type TxConn struct {
-	gateway *tabletGateway
+	gateway Gateway
 	mode    vtgatepb.TransactionMode
 }
 
 // NewTxConn builds a new TxConn.
-func NewTxConn(gw *tabletGateway, txMode vtgatepb.TransactionMode) *TxConn {
+func NewTxConn(gw Gateway, txMode vtgatepb.TransactionMode) *TxConn {
 	return &TxConn{
 		gateway: gw,
 		mode:    txMode,

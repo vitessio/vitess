@@ -18,10 +18,11 @@ package vtgate
 
 import (
 	"flag"
-	"golang.org/x/net/context"
 	"net"
 	"testing"
 	"time"
+
+	"golang.org/x/net/context"
 
 	"google.golang.org/grpc"
 
@@ -63,7 +64,7 @@ func TestGRPCDiscovery(t *testing.T) {
 	// Wait for the right tablets to be present.
 	hc := discovery.NewHealthCheck(10*time.Second, 2*time.Minute)
 	rs := srvtopo.NewResilientServer(ts, "TestGRPCDiscovery")
-	dg := NewTabletGateway(context.Background(), hc, rs, cell, 2)
+	dg := NewDiscoveryGateway(context.Background(), hc, rs, cell, 2)
 	hc.AddTablet(&topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: cell,
