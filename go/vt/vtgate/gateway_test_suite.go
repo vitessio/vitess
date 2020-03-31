@@ -14,7 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package gatewaytest contains a test suite to run against a Gateway object.
+package vtgate
+
+// This file contains a test suite to run against a Gateway object.
 // We re-use the tabletconn test suite, as it tests all queries and parameters
 // go through. There are two exceptions:
 // - the health check: we just make that one work, so the gateway knows the
@@ -22,7 +24,6 @@ limitations under the License.
 // - the error type returned: it's not a TabletError any more, but a ShardError.
 //   We still check the error code is correct though which is really all we care
 //   about.
-package vtgate
 
 import (
 	"testing"
@@ -79,7 +80,7 @@ func CreateFakeServers(t *testing.T) (*tabletconntest.FakeQueryService, *topo.Se
 // gatewayAdapter implements the TabletConn interface, but sends the
 // queries to the Gateway.
 type gatewayAdapter struct {
-	*tabletGateway
+	Gateway
 }
 
 // Close should be overridden to make sure we don't close the underlying Gateway.
@@ -91,12 +92,12 @@ func (ga *gatewayAdapter) Close(ctx context.Context) error {
 // gateway needs to be configured with one established connection for
 // tabletconntest.TestTarget.{Keyspace, Shard, TabletType} to the
 // provided tabletconntest.FakeQueryService.
-func TestSuite(t *testing.T, name string, g *tabletGateway, f *tabletconntest.FakeQueryService) {
+func TestSuite(t *testing.T, name string, g Gateway, f *tabletconntest.FakeQueryService) {
 
 	protocolName := "gateway-test-" + name
 
 	tabletconn.RegisterDialer(protocolName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
-		return &gatewayAdapter{tabletGateway: g}, nil
+		return &gatewayAdapter{Gateway: g}, nil
 	})
 
 	tabletconntest.TestSuite(t, protocolName, &topodatapb.Tablet{
