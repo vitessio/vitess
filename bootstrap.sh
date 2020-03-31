@@ -25,6 +25,7 @@ source ./dev.env
 
 BUILD_JAVA=${BUILD_JAVA:-1}
 BUILD_CONSUL=${BUILD_CONSUL:-1}
+BUILD_CHROME=${BUILD_CHROME:-1}
 
 #
 # 0. Initialization and helper methods.
@@ -216,6 +217,35 @@ function install_consul() {
 
 if [ "$BUILD_CONSUL" == 1 ] ; then
   install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
+fi
+
+# Download chromedriver
+function install_chromedriver() {
+  local version="$1"
+  local dist="$2"
+
+  if [ "$(arch)" == "aarch64" ] ; then
+      os=$(cat /etc/*release | grep "^ID=" | cut -d '=' -f 2)
+      case $os in
+          ubuntu|debian)
+              sudo apt-get update -y && sudo apt install -y --no-install-recommends unzip libglib2.0-0 libnss3 libx11-6
+	      ;;
+	  centos|fedora)
+	      sudo yum update -y && yum install -y libX11 unzip wget
+	      ;;
+      esac
+      echo "For Arm64, using prebuilt binary from electron (https://github.com/electron/electron/) of version 76.0.3809.126"
+      wget https://github.com/electron/electron/releases/download/v6.0.3/chromedriver-v6.0.3-linux-arm64.zip
+      unzip -o -q chromedriver-v6.0.3-linux-arm64.zip -d "$dist"
+      rm chromedriver-v6.0.3-linux-arm64.zip
+  else
+      curl -sL "https://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip" > chromedriver_linux64.zip
+      unzip -o -q chromedriver_linux64.zip -d "$dist"
+      rm chromedriver_linux64.zip
+  fi
+}
+if [ "$BUILD_CHROME" == 1 ] ; then
+	install_dep "chromedriver" "73.0.3683.20" "$VTROOT/dist/chromedriver" install_chromedriver
 fi
 
 echo
