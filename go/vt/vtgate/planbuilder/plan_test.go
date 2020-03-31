@@ -168,7 +168,6 @@ func TestPlan(t *testing.T) {
 	testFile(t, "vindex_func_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "wireup_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "memory_sort_cases.txt", testOutputTempDir, vschemaWrapper)
-	testFile(t, "ddl_cases.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func TestOne(t *testing.T) {
@@ -193,6 +192,21 @@ func TestBypassPlanningFromFile(t *testing.T) {
 	}
 
 	testFile(t, "bypass_cases.txt", testOutputTempDir, vschema)
+}
+
+func TestDDLPlanningFromFile(t *testing.T) {
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	require.NoError(t, err)
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json"),
+		keyspace: &vindexes.Keyspace{
+			Name:    "main",
+			Sharded: false,
+		},
+		tabletType: topodatapb.TabletType_MASTER,
+	}
+
+	testFile(t, "ddl_cases.txt", testOutputTempDir, vschema)
 }
 
 func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
