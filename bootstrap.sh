@@ -173,13 +173,13 @@ function install_k3s() {
 
   case $(uname) in
     Linux)  local platform=linux;;
-    *)   echo "ERROR: unsupported platform. K3s only supports running on Linux"; exit 1;;
+    *)   echo "WARNING: unsupported platform. K3s only supports running on Linux, the k8s topology will not be available for local examples."; return;;
   esac
 
   case $(get_arch) in
       aarch64)  local target="-arm64";;
       x86_64)  local target="";;
-      *)   echo "ERROR: unsupported architecture"; exit 1;;
+      *)   echo "WARNING: unsupported architecture, the k8s topology will not be available for local examples."; return;;
   esac
 
   download_url=https://github.com/rancher/k3s/releases/download
@@ -191,7 +191,6 @@ function install_k3s() {
   ln -snf  $dest "$VTROOT/bin/k3s"
 }
 command -v  k3s || install_dep "k3s" "v1.0.0" "$VTROOT/dist/k3s" install_k3s
-
 
 # Download and install consul, link consul binary into our root.
 function install_consul() {
@@ -224,6 +223,11 @@ function install_chromedriver() {
   local version="$1"
   local dist="$2"
 
+  case $(uname) in
+    Linux)  local platform=linux;;
+    *)   echo "Platform not supported for vtctl-web tests. Skipping chromedriver install."; return;;
+  esac
+
   if [ "$(arch)" == "aarch64" ] ; then
       os=$(cat /etc/*release | grep "^ID=" | cut -d '=' -f 2)
       case $os in
@@ -244,6 +248,7 @@ function install_chromedriver() {
       rm chromedriver_linux64.zip
   fi
 }
+
 if [ "$BUILD_CHROME" == 1 ] ; then
 	install_dep "chromedriver" "73.0.3683.20" "$VTROOT/dist/chromedriver" install_chromedriver
 fi
