@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -236,5 +238,15 @@ func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]
 }
 
 func (del *Delete) description() PlanDescription {
-	return PlanDescription{OperatorType: "delete not implemented"}
+	other := map[string]string{
+		"Query":     del.Query,
+		"TableName": del.GetTableName(),
+	}
+	return PlanDescription{
+		OperatorType:     "Delete",
+		Keyspace:         del.Keyspace,
+		Variant:          del.Opcode.String(),
+		TargetTabletType: topodatapb.TabletType_MASTER,
+		Other:            other,
+	}
 }

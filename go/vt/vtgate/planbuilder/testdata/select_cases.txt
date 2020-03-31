@@ -841,7 +841,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select user0_.col as col0_ from user as user0_ where id = 1 order by user0_.col desc limit 2",
+    "Query": "select user0_.col as col0_ from user as user0_ where id = 1
+     user0_.col desc limit 2",
     "FieldQuery": "select user0_.col as col0_ from user as user0_ where 1 != 1",
     "Vindex": "user_index",
     "Values": [

@@ -20,6 +20,8 @@ import (
 	"container/heap"
 	"io"
 
+	"vitess.io/vitess/go/vt/key"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -156,7 +158,16 @@ func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 }
 
 func (ms *MergeSort) description() PlanDescription {
-	return PlanDescription{OperatorType: "mergesort - not implemented"}
+	orderByIndexes := GenericJoin(ms.OrderBy, orderByParamsToString)
+	other := map[string]string{
+		"OrderBy": orderByIndexes,
+	}
+	return PlanDescription{
+		OperatorType:      "Sort",
+		Variant:           "Merge",
+		TargetDestination: key.DestinationVtGate{},
+		Other:             other,
+	}
 }
 
 // streamHandle is the rendez-vous point between each stream and the merge-sorter.

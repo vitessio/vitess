@@ -16,12 +16,25 @@ limitations under the License.
 
 package engine
 
+import (
+	"vitess.io/vitess/go/vt/key"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+)
+
 // PlanDescription is used to create a serializable representation of the Primitive tree
 type PlanDescription struct {
 	OperatorType string
 	Variant      string
-	Other        map[string]string
-	Inputs       []PlanDescription
+	// Keyspace specifies the keyspace to send the query to.
+	Keyspace *vindexes.Keyspace
+	// TargetDestination specifies an explicit target destination to send the query to.
+	TargetDestination key.Destination
+	// TargetTabletType specifies an explicit target destination tablet type
+	// this is only used in conjunction with TargetDestination
+	TargetTabletType topodatapb.TabletType
+	Other            map[string]string
+	Inputs           []PlanDescription
 }
 
 //PrimitiveToPlanDescription transforms a primitive tree into a corresponding PlanDescription tree

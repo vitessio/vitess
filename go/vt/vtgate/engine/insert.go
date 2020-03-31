@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -184,6 +186,11 @@ var insName = map[InsertOpcode]string{
 	InsertUnsharded:     "InsertUnsharded",
 	InsertSharded:       "InsertSharded",
 	InsertShardedIgnore: "InsertShardedIgnore",
+}
+
+// String returns the opcode
+func (code InsertOpcode) String() string {
+	return strings.ReplaceAll(insName[code], "Insert", "")
 }
 
 // MarshalJSON serializes the InsertOpcode as a JSON string.
@@ -609,5 +616,17 @@ func insertVarName(col sqlparser.ColIdent, rowNum int) string {
 }
 
 func (ins *Insert) description() PlanDescription {
-	return PlanDescription{OperatorType: "insert - not implemented"}
+	other := map[string]string{
+		"Query":                ins.Query,
+		"TableName":            ins.GetTableName(),
+		"MultiShardAutocommit": strconv.FormatBool(ins.MultiShardAutocommit),
+		"QueryTimeout":         strconv.Itoa(ins.QueryTimeout),
+	}
+	return PlanDescription{
+		OperatorType:     "Insert",
+		Keyspace:         ins.Keyspace,
+		Variant:          ins.Opcode.String(),
+		TargetTabletType: topodatapb.TabletType_MASTER,
+		Other:            other,
+	}
 }

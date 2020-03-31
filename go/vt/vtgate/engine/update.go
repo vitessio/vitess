@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -265,5 +267,23 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 }
 
 func (upd *Update) description() PlanDescription {
-	return PlanDescription{OperatorType: "update - not implemented"}
+	changedVindexes := ""
+	for vindex := range upd.ChangedVindexValues {
+		if len(changedVindexes) != 0 {
+			changedVindexes += ","
+		}
+		changedVindexes += vindex
+	}
+	other := map[string]string{
+		"Query":     upd.Query,
+		"TableName": upd.GetTableName(),
+		"Vindexes":  changedVindexes,
+	}
+	return PlanDescription{
+		OperatorType:     "Update",
+		Keyspace:         upd.Keyspace,
+		Variant:          upd.Opcode.String(),
+		TargetTabletType: topodatapb.TabletType_MASTER,
+		Other:            other,
+	}
 }

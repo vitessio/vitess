@@ -35,14 +35,14 @@ func TestCreateRoutePlanDescription(t *testing.T) {
 	planDescription := PrimitiveToPlanDescription(route)
 
 	expected := PlanDescription{
-		OperatorType: "Route",
-		Variant:      "SelectScatter",
+		OperatorType:      "Route",
+		Variant:           "SelectScatter",
+		Keyspace:          &vindexes.Keyspace{Name: "ks"},
+		TargetDestination: key.DestinationAllShards{},
+		TargetTabletType:  topodatapb.TabletType_MASTER,
 		Other: map[string]string{
-			"Query":       route.Query,
-			"TableName":   route.TableName,
-			"Keyspace":    "ks",
-			"Destination": "DestinationAllShards()",
-			"TabletType":  topodatapb.TabletType_MASTER.String(),
+			"Query":     route.Query,
+			"TableName": route.TableName,
 		},
 		Inputs: []PlanDescription{},
 	}
@@ -103,14 +103,14 @@ func TestPlanDescriptionWithInputs(t *testing.T) {
 
 func getDescriptionFor(route *Route) PlanDescription {
 	return PlanDescription{
-		OperatorType: "Route",
-		Variant:      routeName[route.Opcode],
+		OperatorType:      "Route",
+		Variant:           routeName[route.Opcode],
+		Keyspace:          &vindexes.Keyspace{Name: "ks"},
+		TargetDestination: key.DestinationAllShards{},
+		TargetTabletType:  topodatapb.TabletType_MASTER,
 		Other: map[string]string{
-			"Query":       route.Query,
-			"TableName":   route.TableName,
-			"Keyspace":    "ks",
-			"Destination": "DestinationAllShards()",
-			"TabletType":  topodatapb.TabletType_MASTER.String(),
+			"Query":     route.Query,
+			"TableName": route.TableName,
 		},
 		Inputs: []PlanDescription{},
 	}
