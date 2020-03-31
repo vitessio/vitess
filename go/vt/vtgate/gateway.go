@@ -83,8 +83,8 @@ func RegisterGatewayCreator(name string, gc Creator) {
 	creators[name] = gc
 }
 
-// GetGatewayCreator returns the Creator specified by the gateway_implementation flag.
-func GetGatewayCreator() Creator {
+// GatewayCreator returns the Creator specified by the gateway_implementation flag.
+func GatewayCreator() Creator {
 	gc, ok := creators[*implementation]
 	if !ok {
 		log.Exitf("No gateway registered as %s", *implementation)
