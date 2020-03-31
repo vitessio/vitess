@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"encoding/json"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/query"
@@ -29,6 +31,26 @@ type Send struct {
 	NoAutoCommit bool
 
 	noInputs
+}
+
+// MarshalJSON serializes the Send into a JSON representation.
+// It's used for testing and diagnostics.
+func (s *Send) MarshalJSON() ([]byte, error) {
+	marshalSend := struct {
+		Opcode            string
+		Keyspace          *vindexes.Keyspace
+		TargetDestination key.Destination
+		Query             string
+		NoAutoCommit      bool
+	}{
+		Opcode:            "Send",
+		Keyspace:          s.Keyspace,
+		TargetDestination: s.TargetDestination,
+		NoAutoCommit:      s.NoAutoCommit,
+		Query:             s.Query,
+	}
+
+	return json.Marshal(marshalSend)
 }
 
 // RouteType implements Primitive interface
@@ -90,5 +112,5 @@ func (s *Send) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVar
 
 // GetFields implements Primitive interface
 func (s *Send) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable") // TODO: systay - @sugu, is this correct?
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable")
 }
