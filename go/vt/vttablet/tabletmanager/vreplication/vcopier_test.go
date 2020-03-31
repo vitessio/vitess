@@ -187,6 +187,7 @@ func TestPlayerCopyBigTable(t *testing.T) {
 		if _, err := playerEngine.Exec(query); err != nil {
 			t.Fatal(err)
 		}
+		expectDeleteQueries(t)
 	}()
 
 	expectNontxQueries(t, []string{
@@ -208,6 +209,9 @@ func TestPlayerCopyBigTable(t *testing.T) {
 		// Copy is done. Go into running state.
 		// All tables copied. Final catch up followed by Running state.
 	})
+	expectDBClientQueries(t,[]string{
+		"/update _vt.vreplication set state='Running'",
+	} )
 	expectData(t, "dst", [][]string{
 		{"1", "aaa"},
 		{"2", "bbb"},
@@ -295,6 +299,7 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 		if _, err := playerEngine.Exec(query); err != nil {
 			t.Fatal(err)
 		}
+		expectDeleteQueries(t)
 	}()
 
 	expectNontxQueries(t, []string{
@@ -316,6 +321,9 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 		// Copy is done. Go into running state.
 		// All tables copied. Final catch up followed by Running state.
 	})
+	expectDBClientQueries(t,[]string{
+		"/update _vt.vreplication set state='Running'",
+	} )
 	expectData(t, "src", [][]string{
 		{"1", "aaa"},
 		{"2", "bbb"},
