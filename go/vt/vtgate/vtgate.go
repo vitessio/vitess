@@ -120,91 +120,6 @@ type RegisterVTGate func(vtgateservice.VTGateService)
 // RegisterVTGates stores register funcs for VTGate server.
 var RegisterVTGates []RegisterVTGate
 
-// Init initializes VTGate server.
-func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *VTGate {
-	if rpcVTGate != nil {
-		log.Fatalf("VTGate already initialized")
-	}
-
-	// vschemaCounters needs to be initialized before planner to
-	// catch the initial load stats.
-	vschemaCounters = stats.NewCountersWithSingleLabel("VtgateVSchemaCounts", "Vtgate vschema counts", "changes")
-
-	// Build objects from low to high level.
-	// Start with the gateway. If we can't reach the topology service,
-	// we can't go on much further, so we log.Fatal out.
-	gw := GatewayCreator()(ctx, hc, serv, cell, retryCount)
-	gw.RegisterStats()
-	if err := WaitForTablets(gw, tabletTypesToWait); err != nil {
-		log.Fatalf("gateway.WaitForTablets failed: %v", err)
-	}
-
-	// If we want to filter keyspaces replace the srvtopo.Server with a
-	// filtering server
-	if len(KeyspacesToWatch) > 0 {
-		log.Infof("Keyspace filtering enabled, selecting %v", KeyspacesToWatch)
-		var err error
-		serv, err = srvtopo.NewKeyspaceFilteringServer(serv, KeyspacesToWatch)
-		if err != nil {
-			log.Fatalf("Unable to construct SrvTopo server: %v", err.Error())
-		}
-	}
-
-	tc := NewTxConn(gw, getTxMode())
-	// ScatterConn depends on TxConn to perform forced rollbacks.
-	sc := NewScatterConn("VttabletCall", tc, gw, hc)
-	srvResolver := srvtopo.NewResolver(serv, gw, cell)
-	resolver := NewResolver(srvResolver, serv, cell, sc)
-	vsm := newVStreamManager(srvResolver, serv, cell)
-
-	rpcVTGate = &VTGate{
-		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *streamBufferSize, *queryPlanCacheSize),
-		resolver: resolver,
-		vsm:      vsm,
-		txConn:   tc,
-		gw:       gw,
-		timings: stats.NewMultiTimings(
-			"VtgateApi",
-			"VtgateApi timings",
-			[]string{"Operation", "Keyspace", "DbType"}),
-		rowsReturned: stats.NewCountersWithMultiLabels(
-			"VtgateApiRowsReturned",
-			"Rows returned through the VTgate API",
-			[]string{"Operation", "Keyspace", "DbType"}),
-
-		logExecute:       logutil.NewThrottledLogger("Execute", 5*time.Second),
-		logStreamExecute: logutil.NewThrottledLogger("StreamExecute", 5*time.Second),
-	}
-
-	errorCounts = stats.NewCountersWithMultiLabels("VtgateApiErrorCounts", "Vtgate API error counts per error type", []string{"Operation", "Keyspace", "DbType", "Code"})
-
-	_ = stats.NewRates("QPSByOperation", stats.CounterForDimension(rpcVTGate.timings, "Operation"), 15, 1*time.Minute)
-	_ = stats.NewRates("QPSByKeyspace", stats.CounterForDimension(rpcVTGate.timings, "Keyspace"), 15, 1*time.Minute)
-	_ = stats.NewRates("QPSByDbType", stats.CounterForDimension(rpcVTGate.timings, "DbType"), 15*60/5, 5*time.Second)
-
-	_ = stats.NewRates("ErrorsByOperation", stats.CounterForDimension(errorCounts, "Operation"), 15, 1*time.Minute)
-	_ = stats.NewRates("ErrorsByKeyspace", stats.CounterForDimension(errorCounts, "Keyspace"), 15, 1*time.Minute)
-	_ = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(errorCounts, "DbType"), 15, 1*time.Minute)
-	_ = stats.NewRates("ErrorsByCode", stats.CounterForDimension(errorCounts, "Code"), 15, 1*time.Minute)
-
-	warnings = stats.NewCountersWithSingleLabel("VtGateWarnings", "Vtgate warnings", "type", "IgnoredSet", "ResultsExceeded")
-
-	servenv.OnRun(func() {
-		for _, f := range RegisterVTGates {
-			f(rpcVTGate)
-		}
-	})
-	rpcVTGate.registerDebugHealthHandler()
-	err := initQueryLogger(rpcVTGate)
-	if err != nil {
-		log.Fatalf("error initializing query logger: %v", err)
-	}
-
-	initAPI(ctx, hc)
-
-	return rpcVTGate
-}
-
 func (vtg *VTGate) registerDebugHealthHandler() {
 	http.HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
@@ -450,4 +365,89 @@ func (vtg *VTGate) HandlePanic(err *error) {
 		*err = fmt.Errorf("uncaught panic: %v, vtgate: %v", x, servenv.ListeningURL.String())
 		errorCounts.Add([]string{"Panic", "Unknown", "Unknown", vtrpcpb.Code_INTERNAL.String()}, 1)
 	}
+}
+
+// LegacyInit initializes VTGate server with LegacyHealthCheck
+func LegacyInit(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *VTGate {
+	if rpcVTGate != nil {
+		log.Fatalf("VTGate already initialized")
+	}
+
+	// vschemaCounters needs to be initialized before planner to
+	// catch the initial load stats.
+	vschemaCounters = stats.NewCountersWithSingleLabel("VtgateVSchemaCounts", "Vtgate vschema counts", "changes")
+
+	// Build objects from low to high level.
+	// Start with the gateway. If we can't reach the topology service,
+	// we can't go on much further, so we log.Fatal out.
+	gw := GatewayCreator()(ctx, hc, serv, cell, retryCount)
+	gw.RegisterStats()
+	if err := WaitForTablets(gw, tabletTypesToWait); err != nil {
+		log.Fatalf("gateway.WaitForTablets failed: %v", err)
+	}
+
+	// If we want to filter keyspaces replace the srvtopo.Server with a
+	// filtering server
+	if len(KeyspacesToWatch) > 0 {
+		log.Infof("Keyspace filtering enabled, selecting %v", KeyspacesToWatch)
+		var err error
+		serv, err = srvtopo.NewKeyspaceFilteringServer(serv, KeyspacesToWatch)
+		if err != nil {
+			log.Fatalf("Unable to construct SrvTopo server: %v", err.Error())
+		}
+	}
+
+	tc := NewTxConn(gw, getTxMode())
+	// ScatterConn depends on TxConn to perform forced rollbacks.
+	sc := LegacyNewScatterConn("VttabletCall", tc, gw, hc)
+	srvResolver := srvtopo.NewResolver(serv, gw, cell)
+	resolver := NewResolver(srvResolver, serv, cell, sc)
+	vsm := newVStreamManager(srvResolver, serv, cell)
+
+	rpcVTGate = &VTGate{
+		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *streamBufferSize, *queryPlanCacheSize),
+		resolver: resolver,
+		vsm:      vsm,
+		txConn:   tc,
+		gw:       gw,
+		timings: stats.NewMultiTimings(
+			"VtgateApi",
+			"VtgateApi timings",
+			[]string{"Operation", "Keyspace", "DbType"}),
+		rowsReturned: stats.NewCountersWithMultiLabels(
+			"VtgateApiRowsReturned",
+			"Rows returned through the VTgate API",
+			[]string{"Operation", "Keyspace", "DbType"}),
+
+		logExecute:       logutil.NewThrottledLogger("Execute", 5*time.Second),
+		logStreamExecute: logutil.NewThrottledLogger("StreamExecute", 5*time.Second),
+	}
+
+	errorCounts = stats.NewCountersWithMultiLabels("VtgateApiErrorCounts", "Vtgate API error counts per error type", []string{"Operation", "Keyspace", "DbType", "Code"})
+
+	_ = stats.NewRates("QPSByOperation", stats.CounterForDimension(rpcVTGate.timings, "Operation"), 15, 1*time.Minute)
+	_ = stats.NewRates("QPSByKeyspace", stats.CounterForDimension(rpcVTGate.timings, "Keyspace"), 15, 1*time.Minute)
+	_ = stats.NewRates("QPSByDbType", stats.CounterForDimension(rpcVTGate.timings, "DbType"), 15*60/5, 5*time.Second)
+
+	_ = stats.NewRates("ErrorsByOperation", stats.CounterForDimension(errorCounts, "Operation"), 15, 1*time.Minute)
+	_ = stats.NewRates("ErrorsByKeyspace", stats.CounterForDimension(errorCounts, "Keyspace"), 15, 1*time.Minute)
+	_ = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(errorCounts, "DbType"), 15, 1*time.Minute)
+	_ = stats.NewRates("ErrorsByCode", stats.CounterForDimension(errorCounts, "Code"), 15, 1*time.Minute)
+
+	warnings = stats.NewCountersWithSingleLabel("VtGateWarnings", "Vtgate warnings", "type", "IgnoredSet", "ResultsExceeded")
+
+	servenv.OnRun(func() {
+		for _, f := range RegisterVTGates {
+			f(rpcVTGate)
+		}
+	})
+	rpcVTGate.registerDebugHealthHandler()
+	err := initQueryLogger(rpcVTGate)
+	if err != nil {
+		log.Fatalf("error initializing query logger: %v", err)
+	}
+
+	initAPI(ctx, hc)
+
+	return rpcVTGate
 }

@@ -841,7 +841,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		}, nil
 	case "vitess_tablets":
 		var rows [][]sqltypes.Value
-		stats := e.scatterConn.healthCheck.CacheStatus()
+		stats := e.scatterConn.GetHealthCheckCacheStatus()
 		for _, s := range stats {
 			for _, ts := range s.TabletsStats {
 				state := "SERVING"

@@ -3629,7 +3629,7 @@ type StreamHealthResponse struct {
 	// realtime_stats contains information about the tablet status.
 	// It is only filled in if the information is about a tablet.
 	RealtimeStats *RealtimeStats `protobuf:"bytes,4,opt,name=realtime_stats,json=realtimeStats,proto3" json:"realtime_stats,omitempty"`
-	// tablet_alias is the alias of the sending tablet. The discovery/healthcheck.go
+	// tablet_alias is the alias of the sending tablet. The discovery/legacy_healthcheck.go
 	// code uses it to verify that it's talking to the correct tablet and that it
 	// hasn't changed in the meantime e.g. due to tablet restarts where ports or
 	// ips have been reused but assigned differently.

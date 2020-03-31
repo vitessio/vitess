@@ -36,9 +36,9 @@ type TabletPicker struct {
 	shard       string
 	tabletTypes []topodatapb.TabletType
 
-	healthCheck HealthCheck
+	healthCheck LegacyHealthCheck
 	watcher     *TopologyWatcher
-	statsCache  *TabletStatsCache
+	statsCache  *LegacyTabletStatsCache
 }
 
 // NewTabletPicker returns a TabletPicker.
@@ -49,8 +49,8 @@ func NewTabletPicker(ctx context.Context, ts *topo.Server, cell, keyspace, shard
 	}
 
 	// These have to be initialized in the following sequence (watcher must be last).
-	healthCheck := NewHealthCheck(healthcheckRetryDelay, healthcheckTimeout)
-	statsCache := NewTabletStatsCache(healthCheck, ts, cell)
+	healthCheck := NewLegacyHealthCheck(healthcheckRetryDelay, healthcheckTimeout)
+	statsCache := NewLegacyTabletStatsCache(healthCheck, ts, cell)
 	watcher := NewShardReplicationWatcher(ctx, ts, healthCheck, cell, keyspace, shard, healthcheckTopologyRefresh, DefaultTopoReadConcurrency)
 
 	return &TabletPicker{
@@ -73,7 +73,7 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 	}
 
 	// Refilter the tablets list based on the same criteria.
-	var addrs []TabletStats
+	var addrs []LegacyTabletStats
 	for _, tabletType := range tp.tabletTypes {
 		list := RemoveUnhealthyTablets(tp.statsCache.GetTabletStats(tp.keyspace, tp.shard, tabletType))
 		addrs = append(addrs, list...)

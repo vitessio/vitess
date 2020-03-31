@@ -989,9 +989,9 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout, initialWait time.Duration) error {
 
 	// Create the healthheck module, with a cache.
-	hc := discovery.NewHealthCheck(healthcheckRetryDelay, healthCheckTimeout)
+	hc := discovery.NewLegacyHealthCheck(healthcheckRetryDelay, healthCheckTimeout)
 	defer hc.Close()
-	tsc := discovery.NewTabletStatsCache(hc, wr.TopoServer(), cell)
+	tsc := discovery.NewLegacyTabletStatsCache(hc, wr.TopoServer(), cell)
 
 	// Create a tablet watcher.
 	watcher := discovery.NewShardReplicationWatcher(ctx, wr.TopoServer(), hc, cell, keyspace, shard, healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
@@ -1016,8 +1016,8 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	startTime := time.Now()
 	for {
 		// map key: tablet uid
-		drainedHealthyTablets := make(map[uint32]*discovery.TabletStats)
-		notDrainedHealtyTablets := make(map[uint32]*discovery.TabletStats)
+		drainedHealthyTablets := make(map[uint32]*discovery.LegacyTabletStats)
+		notDrainedHealtyTablets := make(map[uint32]*discovery.LegacyTabletStats)
 
 		healthyTablets := tsc.GetHealthyTabletStats(keyspace, shard, servedType)
 		for _, ts := range healthyTablets {
@@ -1060,7 +1060,7 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	return nil
 }
 
-func formatTabletStats(ts *discovery.TabletStats) string {
+func formatTabletStats(ts *discovery.LegacyTabletStats) string {
 	webURL := "unknown http port"
 	if webPort, ok := ts.Tablet.PortMap["vt"]; ok {
 		webURL = fmt.Sprintf("http://%v:%d/", ts.Tablet.Hostname, webPort)

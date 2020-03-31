@@ -48,7 +48,7 @@ type ScatterConn struct {
 	tabletCallErrorCount *stats.CountersWithMultiLabels
 	txConn               *TxConn
 	gateway              Gateway
-	healthCheck          discovery.HealthCheck
+	legacyHealthCheck    discovery.LegacyHealthCheck
 }
 
 // shardActionFunc defines the contract for a shard action
@@ -68,8 +68,8 @@ type shardActionFunc func(rs *srvtopo.ResolvedShard, i int) error
 // the results and errors for the caller.
 type shardActionTransactionFunc func(rs *srvtopo.ResolvedShard, i int, shouldBegin bool, transactionID int64) (int64, error)
 
-// NewScatterConn creates a new ScatterConn.
-func NewScatterConn(statsName string, txConn *TxConn, gw Gateway, hc discovery.HealthCheck) *ScatterConn {
+// LegacyNewScatterConn creates a new ScatterConn.
+func LegacyNewScatterConn(statsName string, txConn *TxConn, gw Gateway, hc discovery.LegacyHealthCheck) *ScatterConn {
 	tabletCallErrorCountStatsName := ""
 	if statsName != "" {
 		tabletCallErrorCountStatsName = statsName + "ErrorCount"
@@ -83,9 +83,9 @@ func NewScatterConn(statsName string, txConn *TxConn, gw Gateway, hc discovery.H
 			tabletCallErrorCountStatsName,
 			"Error count from tablet calls in scatter conns",
 			[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
-		txConn:      txConn,
-		gateway:     gw,
-		healthCheck: hc,
+		txConn:            txConn,
+		gateway:           gw,
+		legacyHealthCheck: hc,
 	}
 }
 
@@ -417,6 +417,11 @@ func (stc *ScatterConn) Close() error {
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
 func (stc *ScatterConn) GetGatewayCacheStatus() TabletCacheStatusList {
 	return stc.gateway.CacheStatus()
+}
+
+// GetHealthCheckCacheStatus returns a displayable version of the HealthCheck cache.
+func (stc *ScatterConn) GetHealthCheckCacheStatus() discovery.LegacyTabletsCacheStatusList {
+	return stc.legacyHealthCheck.CacheStatus()
 }
 
 // multiGo performs the requested 'action' on the specified

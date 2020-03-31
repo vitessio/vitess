@@ -223,7 +223,7 @@ func TestMaxReplicationLagModule_ReplicaUnderTest_LastErrorOrNotUp(t *testing.T)
 
 	// r2 @  75s, 0s lag, LastError set
 	rError := lagRecord(sinceZero(75*time.Second), r2, 0)
-	rError.LastError = errors.New("HealthCheck reporting broken")
+	rError.LastError = errors.New("LegacyHealthCheck reporting broken")
 	tf.m.replicaLagCache.add(rError)
 
 	// r1 @ 110s, 0s lag
@@ -945,13 +945,13 @@ func TestMaxReplicationLagModule_NoIncreaseIfMaxRateWasNotApproached(t *testing.
 	}
 }
 
-// lagRecord creates a fake record using a fake TabletStats object.
+// lagRecord creates a fake record using a fake LegacyTabletStats object.
 func lagRecord(t time.Time, uid, lag uint32) replicationLagRecord {
 	return replicationLagRecord{t, tabletStats(uid, lag)}
 }
 
 // tabletStats creates fake tablet health data.
-func tabletStats(uid, lag uint32) discovery.TabletStats {
+func tabletStats(uid, lag uint32) discovery.LegacyTabletStats {
 	typ := topodatapb.TabletType_REPLICA
 	if uid == rdonly1 || uid == rdonly2 {
 		typ = topodatapb.TabletType_RDONLY
@@ -963,7 +963,7 @@ func tabletStats(uid, lag uint32) discovery.TabletStats {
 		Type:     typ,
 		PortMap:  map[string]int32{"vt": int32(uid)},
 	}
-	return discovery.TabletStats{
+	return discovery.LegacyTabletStats{
 		Tablet: tablet,
 		Key:    discovery.TabletToMapKey(tablet),
 		Target: &querypb.Target{

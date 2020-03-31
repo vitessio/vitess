@@ -27,25 +27,25 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var ts1 = discovery.TabletStats{
+var ts1 = discovery.LegacyTabletStats{
 	Tablet: topo.NewTablet(10, "cell", "host1"),
 	Target: &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 }
-var ts2 = discovery.TabletStats{
+var ts2 = discovery.LegacyTabletStats{
 	Tablet: topo.NewTablet(20, "cell", "host1"),
 	Target: &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 }
-var allTs = []discovery.TabletStats{ts1, ts2}
+var allTs = []discovery.LegacyTabletStats{ts1, ts2}
 
 func TestTabletsInUse(t *testing.T) {
 	tt := NewTabletTracker()
 
-	tt.Track([]discovery.TabletStats{ts1})
+	tt.Track([]discovery.LegacyTabletStats{ts1})
 	if got, want := tt.TabletsInUse(), "cell-0000000010"; got != want {
 		t.Fatalf("TabletsInUse() = %v, want = %v", got, want)
 	}
 
-	tt.Track([]discovery.TabletStats{ts2})
+	tt.Track([]discovery.LegacyTabletStats{ts2})
 	if got, want := tt.TabletsInUse(), "cell-0000000010 cell-0000000020"; got != want {
 		t.Fatalf("TabletsInUse() = %v, want = %v", got, want)
 	}

@@ -16,14 +16,22 @@ limitations under the License.
 
 package discovery
 
+import (
+	"sort"
+	"strings"
+
+	"vitess.io/vitess/go/netutil"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+)
+
 // This file contains helper filter methods to process the unfiltered list of
-// tablets returned by HealthCheck.GetTabletStatsFrom*.
+// tablets returned by LegacyHealthCheck.GetTabletStatsFrom*.
 // See also replicationlag.go for a more sophisicated filter used by vtgate.
 
 // RemoveUnhealthyTablets filters all unhealthy tablets out.
 // NOTE: Non-serving tablets are considered healthy.
-func RemoveUnhealthyTablets(tabletStatsList []TabletStats) []TabletStats {
-	result := make([]TabletStats, 0, len(tabletStatsList))
+func RemoveUnhealthyTablets(tabletStatsList []LegacyTabletStats) []LegacyTabletStats {
+	result := make([]LegacyTabletStats, 0, len(tabletStatsList))
 	for _, ts := range tabletStatsList {
 		// Note we do not check the 'Serving' flag here.
 		// This is mainly to avoid the case where we run a vtworker Diff between a
@@ -36,4 +44,16 @@ func RemoveUnhealthyTablets(tabletStatsList []TabletStats) []TabletStats {
 		result = append(result, ts)
 	}
 	return result
+}
+
+// TabletToMapKey creates a key to the map from tablet's host and ports.
+// It should only be used in discovery and related module.
+func TabletToMapKey(tablet *topodatapb.Tablet) string {
+	parts := make([]string, 0, 1)
+	for name, port := range tablet.PortMap {
+		parts = append(parts, netutil.JoinHostPort(name, port))
+	}
+	sort.Strings(parts)
+	parts = append([]string{tablet.Hostname}, parts...)
+	return strings.Join(parts, ",")
 }

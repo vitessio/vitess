@@ -33,7 +33,7 @@ import (
 )
 
 // This file contains the definitions for a FakeHealthCheck class to
-// simulate a HealthCheck module. Note it is not in a sub-package because
+// simulate a LegacyHealthCheck module. Note it is not in a sub-package because
 // otherwise it couldn't be used in this package's tests because of
 // circular dependencies.
 
@@ -44,9 +44,9 @@ func NewFakeHealthCheck() *FakeHealthCheck {
 	}
 }
 
-// FakeHealthCheck implements discovery.HealthCheck.
+// FakeHealthCheck implements discovery.LegacyHealthCheck.
 type FakeHealthCheck struct {
-	listener HealthCheckStatsListener
+	listener LegacyHealthCheckStatsListener
 
 	// mu protects the items map
 	mu    sync.RWMutex
@@ -54,12 +54,12 @@ type FakeHealthCheck struct {
 }
 
 type fhcItem struct {
-	ts   *TabletStats
+	ts   *LegacyTabletStats
 	conn queryservice.QueryService
 }
 
 //
-// discovery.HealthCheck interface methods
+// discovery.LegacyHealthCheck interface methods
 //
 
 // RegisterStats is not implemented.
@@ -67,7 +67,7 @@ func (fhc *FakeHealthCheck) RegisterStats() {
 }
 
 // SetListener is not implemented.
-func (fhc *FakeHealthCheck) SetListener(listener HealthCheckStatsListener, sendDownEvents bool) {
+func (fhc *FakeHealthCheck) SetListener(listener LegacyHealthCheckStatsListener, sendDownEvents bool) {
 	fhc.listener = listener
 }
 
@@ -79,7 +79,7 @@ func (fhc *FakeHealthCheck) WaitForInitialStatsUpdates() {
 func (fhc *FakeHealthCheck) AddTablet(tablet *topodatapb.Tablet, name string) {
 	key := TabletToMapKey(tablet)
 	item := &fhcItem{
-		ts: &TabletStats{
+		ts: &LegacyTabletStats{
 			Key:    key,
 			Tablet: tablet,
 			Target: &querypb.Target{
@@ -139,16 +139,16 @@ func (fhc *FakeHealthCheck) GetConnection(key string) queryservice.QueryService 
 }
 
 // CacheStatus returns the status for each tablet
-func (fhc *FakeHealthCheck) CacheStatus() TabletsCacheStatusList {
+func (fhc *FakeHealthCheck) CacheStatus() LegacyTabletsCacheStatusList {
 	fhc.mu.Lock()
 	defer fhc.mu.Unlock()
 
-	stats := make(TabletsCacheStatusList, 0, len(fhc.items))
+	stats := make(LegacyTabletsCacheStatusList, 0, len(fhc.items))
 	for _, item := range fhc.items {
-		stats = append(stats, &TabletsCacheStatus{
+		stats = append(stats, &LegacyTabletsCacheStatus{
 			Cell:         "FakeCell",
 			Target:       item.ts.Target,
-			TabletsStats: TabletStatsList{item.ts},
+			TabletsStats: LegacyTabletStatsList{item.ts},
 		})
 	}
 	sort.Sort(stats)
@@ -191,7 +191,7 @@ func (fhc *FakeHealthCheck) AddFakeTablet(cell, host string, port int32, keyspac
 	item := fhc.items[key]
 	if item == nil {
 		item = &fhcItem{
-			ts: &TabletStats{
+			ts: &LegacyTabletStats{
 				Key:    key,
 				Tablet: t,
 				Up:     true,

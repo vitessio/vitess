@@ -136,7 +136,7 @@ type shardSchemaSwap struct {
 	numTabletsSwapped int
 
 	// tabletHealthCheck watches after the healthiness of all tablets in the shard.
-	tabletHealthCheck discovery.HealthCheck
+	tabletHealthCheck discovery.LegacyHealthCheck
 	// tabletWatchers contains list of topology watchers monitoring changes in the shard
 	// topology. There are several of them because the watchers are per-cell.
 	tabletWatchers []*discovery.TopologyWatcher
@@ -146,7 +146,7 @@ type shardSchemaSwap struct {
 	allTabletsLock sync.RWMutex
 	// allTablets is the list of all tablets on the shard mapped by the key provided
 	// by discovery. The contents of the map is guarded by allTabletsLock.
-	allTablets map[string]*discovery.TabletStats
+	allTablets map[string]*discovery.LegacyTabletStats
 	// healthWaitingTablet is a key (the same key as used in allTablets) of a tablet that
 	// is currently being waited on to become healthy and to catch up with replication.
 	// The variable is guarded by allTabletsLock.
@@ -686,9 +686,9 @@ func (shardSwap *shardSchemaSwap) writeFinishedSwap() error {
 // all tablets on the shard. Function should be called before the start of the schema
 // swap process.
 func (shardSwap *shardSchemaSwap) startHealthWatchers(ctx context.Context) error {
-	shardSwap.allTablets = make(map[string]*discovery.TabletStats)
+	shardSwap.allTablets = make(map[string]*discovery.LegacyTabletStats)
 
-	shardSwap.tabletHealthCheck = discovery.NewHealthCheck(*vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
+	shardSwap.tabletHealthCheck = discovery.NewLegacyHealthCheck(*vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
 	shardSwap.tabletHealthCheck.SetListener(shardSwap, true /* sendDownEvents */)
 
 	topoServer := shardSwap.parent.topoServer
@@ -748,9 +748,9 @@ func (shardSwap *shardSchemaSwap) stopHealthWatchers() {
 	}
 }
 
-// isTabletHealthy verifies that the given TabletStats represents a healthy tablet that is
+// isTabletHealthy verifies that the given LegacyTabletStats represents a healthy tablet that is
 // caught up with replication to a serving level.
-func isTabletHealthy(tabletStats *discovery.TabletStats) bool {
+func isTabletHealthy(tabletStats *discovery.LegacyTabletStats) bool {
 	return tabletStats.Stats.HealthError == "" && !discovery.IsReplicationLagHigh(tabletStats)
 }
 
@@ -778,11 +778,11 @@ func (shardSwap *shardSchemaSwap) startWaitingOnUnhealthyTablet(tablet *topodata
 	return shardSwap.healthWaitingChannel, nil
 }
 
-// checkWaitingTabletHealthiness verifies whether the provided TabletStats represent the
+// checkWaitingTabletHealthiness verifies whether the provided LegacyTabletStats represent the
 // tablet that is being waited to become healthy, and notifies the waiting go routine if
 // it is the tablet and if it is healthy now.
 // The function should be called with shardSwap.allTabletsLock mutex locked.
-func (shardSwap *shardSchemaSwap) checkWaitingTabletHealthiness(tabletStats *discovery.TabletStats) {
+func (shardSwap *shardSchemaSwap) checkWaitingTabletHealthiness(tabletStats *discovery.LegacyTabletStats) {
 	if shardSwap.healthWaitingTablet == tabletStats.Key && isTabletHealthy(tabletStats) {
 		close(*shardSwap.healthWaitingChannel)
 		shardSwap.healthWaitingChannel = nil
@@ -790,11 +790,11 @@ func (shardSwap *shardSchemaSwap) checkWaitingTabletHealthiness(tabletStats *dis
 	}
 }
 
-// StatsUpdate is the part of discovery.HealthCheckStatsListener interface. It makes sure
+// StatsUpdate is the part of discovery.LegacyHealthCheckStatsListener interface. It makes sure
 // that when a change of tablet health happens it's recorded in allTablets list, and if
 // this is the tablet that is being waited for after restore, the function wakes up the
 // waiting go routine.
-func (shardSwap *shardSchemaSwap) StatsUpdate(newTabletStats *discovery.TabletStats) {
+func (shardSwap *shardSchemaSwap) StatsUpdate(newTabletStats *discovery.LegacyTabletStats) {
 	shardSwap.allTabletsLock.Lock()
 	defer shardSwap.allTabletsLock.Unlock()
 
@@ -813,21 +813,21 @@ func (shardSwap *shardSchemaSwap) StatsUpdate(newTabletStats *discovery.TabletSt
 
 // getTabletList returns the list of all known tablets in the shard so that the caller
 // could operate with it without holding the allTabletsLock.
-func (shardSwap *shardSchemaSwap) getTabletList() []discovery.TabletStats {
+func (shardSwap *shardSchemaSwap) getTabletList() []discovery.LegacyTabletStats {
 	shardSwap.allTabletsLock.RLock()
 	defer shardSwap.allTabletsLock.RUnlock()
 
-	tabletList := make([]discovery.TabletStats, 0, len(shardSwap.allTablets))
+	tabletList := make([]discovery.LegacyTabletStats, 0, len(shardSwap.allTablets))
 	for _, tabletStats := range shardSwap.allTablets {
 		tabletList = append(tabletList, *tabletStats)
 	}
 	return tabletList
 }
 
-// orderTabletsForSwap is an alias for the slice of TabletStats. It implements
+// orderTabletsForSwap is an alias for the slice of LegacyTabletStats. It implements
 // sort.Interface interface so that it's possible to sort the array in the order
 // in which schema swap will propagate.
-type orderTabletsForSwap []discovery.TabletStats
+type orderTabletsForSwap []discovery.LegacyTabletStats
 
 // Len is part of sort.Interface interface.
 func (array orderTabletsForSwap) Len() int {
@@ -839,11 +839,11 @@ func (array orderTabletsForSwap) Swap(i, j int) {
 	array[i], array[j] = array[j], array[i]
 }
 
-// getTabletTypeFromStats returns the tablet type saved in the TabletStats object. If there is Target
-// data in the TabletStats object then the function returns TabletType from it because it will be more
+// getTabletTypeFromStats returns the tablet type saved in the LegacyTabletStats object. If there is Target
+// data in the LegacyTabletStats object then the function returns TabletType from it because it will be more
 // up-to-date. But if that's not available then it returns Tablet.Type which will contain data read
 // from the topology during initialization of health watchers.
-func getTabletTypeFromStats(tabletStats *discovery.TabletStats) topodatapb.TabletType {
+func getTabletTypeFromStats(tabletStats *discovery.LegacyTabletStats) topodatapb.TabletType {
 	if tabletStats.Target == nil || tabletStats.Target.TabletType == topodatapb.TabletType_UNKNOWN {
 		return tabletStats.Tablet.Type
 	}
@@ -857,7 +857,7 @@ func getTabletTypeFromStats(tabletStats *discovery.TabletStats) topodatapb.Table
 // then will go 'replica' tablets, and the first will be 'rdonly' and all other
 // non-replica and non-master types. The sorting order within each of those 5 buckets
 // doesn't matter.
-func tabletSortIndex(tabletStats *discovery.TabletStats) int {
+func tabletSortIndex(tabletStats *discovery.LegacyTabletStats) int {
 	tabletType := getTabletTypeFromStats(tabletStats)
 	switch {
 	case tabletType == topodatapb.TabletType_MASTER:
