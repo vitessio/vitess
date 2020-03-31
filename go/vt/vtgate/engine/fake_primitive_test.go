@@ -139,5 +139,5 @@ func wrapStreamExecute(prim Primitive, vcursor VCursor, bindVars map[string]*que
 }
 
 func (f *fakePrimitive) description() PlanDescription {
-	return PlanDescription{OperatorType: "fake - not implemented"}
+	return PlanDescription{OperatorType: "fake"}
 }

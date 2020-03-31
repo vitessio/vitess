@@ -18,6 +18,9 @@ package engine
 
 import (
 	"fmt"
+	"strconv"
+
+	"vitess.io/vitess/go/vt/key"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -65,6 +68,14 @@ type AggregateParams struct {
 
 func (ap AggregateParams) isDistinct() bool {
 	return ap.Opcode == AggregateCountDistinct || ap.Opcode == AggregateSumDistinct
+}
+
+func (ap AggregateParams) String() string {
+	if ap.Alias != "" {
+		return fmt.Sprintf("%s(%d) AS %s", ap.Opcode.String(), ap.Col, ap.Alias)
+	}
+
+	return fmt.Sprintf("%s(%d)", ap.Opcode.String(), ap.Col)
 }
 
 // AggregateOpcode is the aggregation Opcode.
@@ -394,9 +405,26 @@ func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
 	return sqltypes.NULL, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown aggregation %v", opcode)
 }
 
+func aggregateParamsToString(in interface{}) string {
+	return in.(AggregateParams).String()
+}
+
+func intToString(i interface{}) string {
+	return strconv.Itoa(i.(int))
+}
+
 func (oa *OrderedAggregate) description() PlanDescription {
+	orderByIndexes := GenericJoin(oa.Aggregates, aggregateParamsToString)
+	groupBy := GenericJoin(oa.Keys, intToString)
+	other := map[string]string{
+		"OrderBy":  orderByIndexes,
+		"GroupBy":  groupBy,
+		"Distinct": strconv.FormatBool(oa.HasDistinct),
+	}
 	return PlanDescription{
-		OperatorType: "OrderedAggregation not implemented",
-		Other:        nil,
+		OperatorType:      "Aggregate",
+		Variant:           "Ordered",
+		TargetDestination: key.DestinationVtGate{},
+		Other:             other,
 	}
 }
