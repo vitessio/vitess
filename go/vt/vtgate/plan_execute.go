@@ -67,11 +67,11 @@ func (e *planExecute) execute(ctx context.Context, safeSession *SafeSession, sql
 		skipQueryPlanCache(safeSession),
 		logStats,
 	)
+	execStart := e.logPlanningFinished(logStats, sql)
 
 	if err != nil {
 		return nil, err
 	}
-	execStart := e.logPlanningFinished(logStats, sql)
 
 	// We need to explicitly handle errors, and begin/commit/rollback, since these control transactions. Everything else
 	// will fall through and be handled through planning
@@ -85,11 +85,6 @@ func (e *planExecute) execute(ctx context.Context, safeSession *SafeSession, sql
 	case engine.PlanROLLBACK:
 		return e.e.handleRollback(ctx, safeSession, logStats)
 	}
-
-	//if err != nil {
-	//	logStats.Error = err
-	//	return nil, err
-	//}
 
 	// 3: Prepare for execution
 	err = e.e.addNeededBindVars(plan.BindVarNeeds, bindVars, safeSession)
