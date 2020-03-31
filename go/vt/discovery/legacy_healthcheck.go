@@ -16,23 +16,23 @@ limitations under the License.
 
 // Package discovery provides a way to discover all tablets e.g. within a
 // specific shard and monitor their current health.
+// Deprecated
+// Use the LegacyHealthCheck object to query for tablets and their health.
 //
-// Use the HealthCheck object to query for tablets and their health.
+// For an example how to use the LegacyHealthCheck object, see worker/topo_utils.go.
 //
-// For an example how to use the HealthCheck object, see worker/topo_utils.go.
-//
-// Tablets have to be manually added to the HealthCheck using AddTablet().
+// Tablets have to be manually added to the LegacyHealthCheck using AddTablet().
 // Alternatively, use a Watcher implementation which will constantly watch
 // a source (e.g. the topology) and add and remove tablets as they are
 // added or removed from the source.
 // For a Watcher example have a look at NewShardReplicationWatcher().
 //
-// Each HealthCheck has a HealthCheckStatsListener that will receive
+// Each LegacyHealthCheck has a LegacyHealthCheckStatsListener that will receive
 // notification of when tablets go up and down.
-// TabletStatsCache is one implementation, that caches the known tablets
+// LegacyTabletStatsCache is one implementation, that caches the known tablets
 // and the healthy ones per keyspace/shard/tabletType.
 //
-// Internally, the HealthCheck module is connected to each tablet and has a
+// Internally, the LegacyHealthCheck module is connected to each tablet and has a
 // streaming RPC (StreamHealth) open to receive periodic health infos.
 package discovery
 
@@ -76,7 +76,7 @@ var (
 	tabletURLTemplate       *template.Template
 )
 
-// See the documentation for NewHealthCheck below for an explanation of these parameters.
+// See the documentation for NewLegacyHealthCheck below for an explanation of these parameters.
 const (
 	DefaultHealthCheckRetryDelay = 5 * time.Second
 	DefaultHealthCheckTimeout    = 1 * time.Minute
@@ -136,10 +136,10 @@ func ParseTabletURLTemplateFromFlag() {
 	}
 }
 
-// HealthCheckStatsListener is the listener to receive health check stats update.
-type HealthCheckStatsListener interface {
+// LegacyHealthCheckStatsListener is the listener to receive health check stats update.
+type LegacyHealthCheckStatsListener interface {
 	// StatsUpdate is called when:
-	// - a new tablet is known to the HealthCheck, and its first
+	// - a new tablet is known to the LegacyHealthCheck, and its first
 	//   streaming healthcheck is returned. (then ts.Up is true).
 	// - a tablet is removed from the list of tablets we watch
 	//   (then ts.Up is false).
@@ -148,18 +148,18 @@ type HealthCheckStatsListener interface {
 	//   (ts.Up false on the old type, ts.Up true on the new type).
 	//   If it is false, only one event is sent (ts.Up true on the new
 	//   type).
-	StatsUpdate(*TabletStats)
+	StatsUpdate(*LegacyTabletStats)
 }
 
-// TabletStats is returned when getting the set of tablets.
-type TabletStats struct {
+// LegacyTabletStats is returned when getting the set of tablets.
+type LegacyTabletStats struct {
 	// Key uniquely identifies that serving tablet. It is computed
 	// from the Tablet's record Hostname and PortMap. If a tablet
 	// is restarted on different ports, its Key will be different.
 	// Key is computed using the TabletToMapKey method below.
 	// key can be used in GetConnection().
 	Key string
-	// Tablet is the tablet object that was sent to HealthCheck.AddTablet.
+	// Tablet is the tablet object that was sent to LegacyHealthCheck.AddTablet.
 	Tablet *topodatapb.Tablet
 	// Name is an optional tag (e.g. alternative address) for the
 	// tablet.  It is supposed to represent the tablet as a task,
@@ -186,14 +186,14 @@ type TabletStats struct {
 	LastError error
 }
 
-// String is defined because we want to print a []*TabletStats array nicely.
-func (e *TabletStats) String() string {
+// String is defined because we want to print a []*LegacyTabletStats array nicely.
+func (e *LegacyTabletStats) String() string {
 	return fmt.Sprint(*e)
 }
 
-// DeepEqual compares two TabletStats. Since we include protos, we
+// DeepEqual compares two LegacyTabletStats. Since we include protos, we
 // need to use proto.Equal on these.
-func (e *TabletStats) DeepEqual(f *TabletStats) bool {
+func (e *LegacyTabletStats) DeepEqual(f *LegacyTabletStats) bool {
 	return e.Key == f.Key &&
 		proto.Equal(e.Tablet, f.Tablet) &&
 		e.Name == f.Name &&
@@ -206,21 +206,21 @@ func (e *TabletStats) DeepEqual(f *TabletStats) bool {
 			(e.LastError != nil && f.LastError != nil && e.LastError.Error() == f.LastError.Error()))
 }
 
-// Copy produces a copy of TabletStats.
-func (e *TabletStats) Copy() *TabletStats {
+// Copy produces a copy of LegacyTabletStats.
+func (e *LegacyTabletStats) Copy() *LegacyTabletStats {
 	ts := *e
 	return &ts
 }
 
 // GetTabletHostPort formats a tablet host port address.
-func (e TabletStats) GetTabletHostPort() string {
+func (e LegacyTabletStats) GetTabletHostPort() string {
 	vtPort := e.Tablet.PortMap["vt"]
 	return netutil.JoinHostPort(e.Tablet.Hostname, vtPort)
 }
 
 // GetHostNameLevel returns the specified hostname level. If the level does not exist it will pick the closest level.
 // This seems unused but can be utilized by certain url formatting templates. See getTabletDebugURL for more details.
-func (e TabletStats) GetHostNameLevel(level int) string {
+func (e LegacyTabletStats) GetHostNameLevel(level int) string {
 	chunkedHostname := strings.Split(e.Tablet.Hostname, ".")
 
 	if level < 0 {
@@ -233,15 +233,15 @@ func (e TabletStats) GetHostNameLevel(level int) string {
 }
 
 // NamedStatusURL returns the URL for the case where a tablet server is named.
-func (e TabletStats) NamedStatusURL() string {
+func (e LegacyTabletStats) NamedStatusURL() string {
 	return "/" + topoproto.TabletAliasString(e.Tablet.Alias) + servenv.StatusURLPath()
 }
 
 // getTabletDebugURL formats a debug url to the tablet.
 // It uses a format string that can be passed into the app to format
 // the debug URL to accommodate different network setups. It applies
-// the html/template string defined to a TabletStats object. The
-// format string can refer to members and functions of TabletStats
+// the html/template string defined to a LegacyTabletStats object. The
+// format string can refer to members and functions of LegacyTabletStats
 // like a regular html/template string.
 //
 // For instance given a tablet with hostname:port of host.dc.domain:22
@@ -250,13 +250,13 @@ func (e TabletStats) NamedStatusURL() string {
 // https://{{.Tablet.Hostname}} -> https://host.dc.domain
 // https://{{.GetHostNameLevel 0}}.bastion.corp -> https://host.bastion.corp
 // {{.NamedStatusURL}} -> test-0000000001/debug/status
-func (e TabletStats) getTabletDebugURL() string {
+func (e LegacyTabletStats) getTabletDebugURL() string {
 	var buffer bytes.Buffer
 	tabletURLTemplate.Execute(&buffer, e)
 	return buffer.String()
 }
 
-// HealthCheck defines the interface of health checking module.
+// LegacyHealthCheck defines the interface of health checking module.
 // The goal of this object is to maintain a StreamHealth RPC
 // to a lot of tablets. Tablets are added / removed by calling the
 // AddTablet / RemoveTablet methods (other discovery module objects
@@ -266,8 +266,8 @@ func (e TabletStats) getTabletDebugURL() string {
 // registering a listener. To get the underlying "TabletConn" object
 // which is used for each tablet, use the "GetConnection()" method
 // below and pass in the Key string which is also sent to the
-// listener in each update (as it is part of TabletStats).
-type HealthCheck interface {
+// listener in each update (as it is part of LegacyTabletStats).
+type LegacyHealthCheck interface {
 	// TabletRecorder interface adds AddTablet and RemoveTablet methods.
 	// AddTablet adds the tablet, and starts health check on it.
 	// RemoveTablet removes the tablet, and stops its StreamHealth RPC.
@@ -285,7 +285,7 @@ type HealthCheck interface {
 	//
 	// Note that the default implementation requires to set the
 	// listener before any tablets are added to the healthcheck.
-	SetListener(listener HealthCheckStatsListener, sendDownEvents bool)
+	SetListener(listener LegacyHealthCheckStatsListener, sendDownEvents bool)
 	// WaitForInitialStatsUpdates waits until all tablets added via
 	// AddTablet() call were propagated to the listener via corresponding
 	// StatsUpdate() calls. Note that code path from AddTablet() to
@@ -298,21 +298,21 @@ type HealthCheck interface {
 	// GetConnection returns the TabletConn of the given tablet.
 	GetConnection(key string) queryservice.QueryService
 	// CacheStatus returns a displayable version of the cache.
-	CacheStatus() TabletsCacheStatusList
+	CacheStatus() LegacyTabletsCacheStatusList
 	// Close stops the healthcheck.
 	Close() error
 }
 
-// HealthCheckImpl performs health checking and notifies downstream components about any changes.
-// It contains a map of tabletHealth objects, each of which stores the health information for
-// a tablet. A checkConn goroutine is spawned for each tabletHealth, which is responsible for
-// keeping that tabletHealth up-to-date. This is done through callbacks to updateHealth.
-// If checkConn terminates for any reason, it updates tabletHealth.Up as false. If a tabletHealth
+// LegacyHealthCheckImpl performs health checking and notifies downstream components about any changes.
+// It contains a map of legacyTabletHealth objects, each of which stores the health information for
+// a tablet. A checkConn goroutine is spawned for each legacyTabletHealth, which is responsible for
+// keeping that legacyTabletHealth up-to-date. This is done through callbacks to updateHealth.
+// If checkConn terminates for any reason, it updates legacyTabletHealth.Up as false. If a legacyTabletHealth
 // gets removed from the map, its cancelFunc gets called, which ensures that the associated
 // checkConn goroutine eventually terminates.
-type HealthCheckImpl struct {
+type LegacyHealthCheckImpl struct {
 	// Immutable fields set at construction time.
-	listener           HealthCheckStatsListener
+	listener           LegacyHealthCheckStatsListener
 	sendDownEvents     bool
 	retryDelay         time.Duration
 	healthCheckTimeout time.Duration
@@ -322,45 +322,45 @@ type HealthCheckImpl struct {
 	// mu protects all the following fields.
 	mu sync.Mutex
 
-	// addrToHealth maps from address to tabletHealth.
-	addrToHealth map[string]*tabletHealth
+	// addrToHealth maps from address to legacyTabletHealth.
+	addrToHealth map[string]*legacyTabletHealth
 
 	// Wait group that's used to wait until all initial StatsUpdate() calls are made after the AddTablet() calls.
 	initialUpdatesWG sync.WaitGroup
 }
 
-// healthCheckConn is a structure that lives within the scope of
+// legacyHealthCheckConn is a structure that lives within the scope of
 // the checkConn goroutine to maintain its internal state. Therefore,
 // it does not require synchronization. Changes that are relevant to
-// healthcheck are transmitted through calls to HealthCheckImpl.updateHealth.
+// healthcheck are transmitted through calls to LegacyHealthCheckImpl.updateHealth.
 // TODO(sougou): move this and associated functions to a separate file.
-type healthCheckConn struct {
+type legacyHealthCheckConn struct {
 	ctx context.Context
 
 	conn                  queryservice.QueryService
-	tabletStats           TabletStats
+	tabletStats           LegacyTabletStats
 	loggedServingState    bool
 	lastResponseTimestamp time.Time // timestamp of the last healthcheck response
 }
 
-// tabletHealth maintains the health status of a tablet. A map of this
-// structure is maintained in HealthCheckImpl.
-type tabletHealth struct {
-	// cancelFunc must be called before discarding tabletHealth.
+// legacyTabletHealth maintains the health status of a tablet. A map of this
+// structure is maintained in LegacyHealthCheckImpl.
+type legacyTabletHealth struct {
+	// cancelFunc must be called before discarding legacyTabletHealth.
 	// This will ensure that the associated checkConn goroutine will terminate.
 	cancelFunc context.CancelFunc
 	// conn is the connection associated with the tablet.
 	conn queryservice.QueryService
 	// latestTabletStats stores the latest health stats of the tablet.
-	latestTabletStats TabletStats
+	latestTabletStats LegacyTabletStats
 }
 
-// NewDefaultHealthCheck creates a new HealthCheck object with a default configuration.
-func NewDefaultHealthCheck() HealthCheck {
-	return NewHealthCheck(DefaultHealthCheckRetryDelay, DefaultHealthCheckTimeout)
+// NewLegacyDefaultHealthCheck creates a new LegacyHealthCheck object with a default configuration.
+func NewLegacyDefaultHealthCheck() LegacyHealthCheck {
+	return NewLegacyHealthCheck(DefaultHealthCheckRetryDelay, DefaultHealthCheckTimeout)
 }
 
-// NewHealthCheck creates a new HealthCheck object.
+// NewLegacyHealthCheck creates a new LegacyHealthCheck object.
 // Parameters:
 // retryDelay.
 //   The duration to wait before retrying to connect (e.g. after a failed connection
@@ -369,9 +369,9 @@ func NewDefaultHealthCheck() HealthCheck {
 //   The duration for which we consider a health check response to be 'fresh'. If we don't get
 //   a health check response from a tablet for more than this duration, we consider the tablet
 //   not healthy.
-func NewHealthCheck(retryDelay, healthCheckTimeout time.Duration) HealthCheck {
-	hc := &HealthCheckImpl{
-		addrToHealth:       make(map[string]*tabletHealth),
+func NewLegacyHealthCheck(retryDelay, healthCheckTimeout time.Duration) LegacyHealthCheck {
+	hc := &LegacyHealthCheckImpl{
+		addrToHealth:       make(map[string]*legacyTabletHealth),
 		retryDelay:         retryDelay,
 		healthCheckTimeout: healthCheckTimeout,
 	}
@@ -384,7 +384,7 @@ func NewHealthCheck(retryDelay, healthCheckTimeout time.Duration) HealthCheck {
 }
 
 // RegisterStats registers the connection counts stats
-func (hc *HealthCheckImpl) RegisterStats() {
+func (hc *LegacyHealthCheckImpl) RegisterStats() {
 	stats.NewGaugesFuncWithMultiLabels(
 		"HealthcheckConnections",
 		"the number of healthcheck connections registered",
@@ -398,7 +398,7 @@ func (hc *HealthCheckImpl) RegisterStats() {
 }
 
 // ServeHTTP is part of the http.Handler interface. It renders the current state of the discovery gateway tablet cache into json.
-func (hc *HealthCheckImpl) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+func (hc *LegacyHealthCheckImpl) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	status := hc.cacheStatusMap()
 	b, err := json.MarshalIndent(status, "", " ")
@@ -413,7 +413,7 @@ func (hc *HealthCheckImpl) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 }
 
 // servingConnStats returns the number of serving tablets per keyspace/shard/tablet type.
-func (hc *HealthCheckImpl) servingConnStats() map[string]int64 {
+func (hc *LegacyHealthCheckImpl) servingConnStats() map[string]int64 {
 	res := make(map[string]int64)
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
@@ -428,7 +428,7 @@ func (hc *HealthCheckImpl) servingConnStats() map[string]int64 {
 }
 
 // stateChecksum returns a crc32 checksum of the healthcheck state
-func (hc *HealthCheckImpl) stateChecksum() int64 {
+func (hc *LegacyHealthCheckImpl) stateChecksum() int64 {
 	// CacheStatus is sorted so this should be stable across vtgates
 	cacheStatus := hc.CacheStatus()
 	var buf bytes.Buffer
@@ -449,9 +449,9 @@ func (hc *HealthCheckImpl) stateChecksum() int64 {
 	return int64(crc32.ChecksumIEEE(buf.Bytes()))
 }
 
-// updateHealth updates the tabletHealth record and transmits the tablet stats
+// updateHealth updates the legacyTabletHealth record and transmits the tablet stats
 // to the listener.
-func (hc *HealthCheckImpl) updateHealth(ts *TabletStats, conn queryservice.QueryService) {
+func (hc *LegacyHealthCheckImpl) updateHealth(ts *LegacyTabletStats, conn queryservice.QueryService) {
 	// Unconditionally send the received update at the end.
 	defer func() {
 		if hc.listener != nil {
@@ -463,7 +463,7 @@ func (hc *HealthCheckImpl) updateHealth(ts *TabletStats, conn queryservice.Query
 	th, ok := hc.addrToHealth[ts.Key]
 	if !ok {
 		// This can happen on delete because the entry is removed first,
-		// or if HealthCheckImpl has been closed.
+		// or if LegacyHealthCheckImpl has been closed.
 		hc.mu.Unlock()
 		return
 	}
@@ -494,7 +494,7 @@ func (hc *HealthCheckImpl) updateHealth(ts *TabletStats, conn queryservice.Query
 // finalizeConn closes the health checking connection and sends the final
 // notification about the tablet to downstream. To be called only on exit from
 // checkConn().
-func (hc *HealthCheckImpl) finalizeConn(hcc *healthCheckConn) {
+func (hc *LegacyHealthCheckImpl) finalizeConn(hcc *legacyHealthCheckConn) {
 	hcc.tabletStats.Up = false
 	hcc.setServingState(false, "finalizeConn closing connection")
 	// Note: checkConn() exits only when hcc.ctx.Done() is closed. Thus it's
@@ -512,7 +512,7 @@ func (hc *HealthCheckImpl) finalizeConn(hcc *healthCheckConn) {
 }
 
 // checkConn performs health checking on the given tablet.
-func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
+func (hc *LegacyHealthCheckImpl) checkConn(hcc *legacyHealthCheckConn, name string) {
 	defer hc.connsWG.Done()
 	defer hc.finalizeConn(hcc)
 
@@ -598,7 +598,7 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 // but don't continue to log if the connection stays down.
 //
 // hcc.mu must be locked before calling this function
-func (hcc *healthCheckConn) setServingState(serving bool, reason string) {
+func (hcc *legacyHealthCheckConn) setServingState(serving bool, reason string) {
 	if !hcc.loggedServingState || (serving != hcc.tabletStats.Serving) {
 		// Emit the log from a separate goroutine to avoid holding
 		// the hcc lock while logging is happening
@@ -618,7 +618,7 @@ func (hcc *healthCheckConn) setServingState(serving bool, reason string) {
 }
 
 // stream streams healthcheck responses to callback.
-func (hcc *healthCheckConn) stream(ctx context.Context, hc *HealthCheckImpl, callback func(*querypb.StreamHealthResponse) error) {
+func (hcc *legacyHealthCheckConn) stream(ctx context.Context, hc *LegacyHealthCheckImpl, callback func(*querypb.StreamHealthResponse) error) {
 	if hcc.conn == nil {
 		conn, err := tabletconn.GetDialer()(hcc.tabletStats.Tablet, grpcclient.FailFast(true))
 		if err != nil {
@@ -640,8 +640,8 @@ func (hcc *healthCheckConn) stream(ctx context.Context, hc *HealthCheckImpl, cal
 	}
 }
 
-// processResponse reads one health check response, and notifies HealthCheckStatsListener.
-func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, shr *querypb.StreamHealthResponse) error {
+// processResponse reads one health check response, and notifies LegacyHealthCheckStatsListener.
+func (hcc *legacyHealthCheckConn) processResponse(hc *LegacyHealthCheckImpl, shr *querypb.StreamHealthResponse) error {
 	select {
 	case <-hcc.ctx.Done():
 		return hcc.ctx.Err()
@@ -661,7 +661,7 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, shr *querypb.St
 		serving = false
 	}
 
-	// hcc.TabletStats.Tablet.Alias.Uid may be 0 because the youtube internal mechanism uses a different
+	// hcc.LegacyTabletStats.Tablet.Alias.Uid may be 0 because the youtube internal mechanism uses a different
 	// code path to initialize this value. If so, we should skip this check.
 	if shr.TabletAlias != nil && hcc.tabletStats.Tablet.Alias.Uid != 0 && !proto.Equal(shr.TabletAlias, hcc.tabletStats.Tablet.Alias) {
 		return fmt.Errorf("health stats mismatch, tablet %+v alias does not match response alias %v", hcc.tabletStats.Tablet, shr.TabletAlias)
@@ -689,7 +689,7 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, shr *querypb.St
 	return nil
 }
 
-func (hc *HealthCheckImpl) deleteConn(tablet *topodatapb.Tablet) {
+func (hc *LegacyHealthCheckImpl) deleteConn(tablet *topodatapb.Tablet) {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
@@ -708,16 +708,16 @@ func (hc *HealthCheckImpl) deleteConn(tablet *topodatapb.Tablet) {
 	hc.deleteConnLocked(key, th)
 }
 
-func (hc *HealthCheckImpl) deleteConnLocked(key string, th *tabletHealth) {
+func (hc *LegacyHealthCheckImpl) deleteConnLocked(key string, th *legacyTabletHealth) {
 	th.latestTabletStats.Up = false
 	th.cancelFunc()
 	delete(hc.addrToHealth, key)
 }
 
 // SetListener sets the listener for healthcheck updates.
-// It must be called after NewHealthCheck and before any tablets are added
+// It must be called after NewLegacyHealthCheck and before any tablets are added
 // (either through AddTablet or through a Watcher).
-func (hc *HealthCheckImpl) SetListener(listener HealthCheckStatsListener, sendDownEvents bool) {
+func (hc *LegacyHealthCheckImpl) SetListener(listener LegacyHealthCheckStatsListener, sendDownEvents bool) {
 	if hc.listener != nil {
 		panic("must not call SetListener twice")
 	}
@@ -735,12 +735,12 @@ func (hc *HealthCheckImpl) SetListener(listener HealthCheckStatsListener, sendDo
 // AddTablet adds the tablet, and starts health check.
 // It does not block on making connection.
 // name is an optional tag for the tablet, e.g. an alternative address.
-func (hc *HealthCheckImpl) AddTablet(tablet *topodatapb.Tablet, name string) {
+func (hc *LegacyHealthCheckImpl) AddTablet(tablet *topodatapb.Tablet, name string) {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	key := TabletToMapKey(tablet)
-	hcc := &healthCheckConn{
+	hcc := &legacyHealthCheckConn{
 		ctx: ctx,
-		tabletStats: TabletStats{
+		tabletStats: LegacyTabletStats{
 			Key:    key,
 			Tablet: tablet,
 			Name:   name,
@@ -767,7 +767,7 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodatapb.Tablet, name string) {
 		// Remove the old tablet to clear the way.
 		hc.deleteConnLocked(key, th)
 	}
-	hc.addrToHealth[key] = &tabletHealth{
+	hc.addrToHealth[key] = &legacyTabletHealth{
 		cancelFunc:        cancelFunc,
 		latestTabletStats: hcc.tabletStats,
 	}
@@ -780,24 +780,24 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodatapb.Tablet, name string) {
 
 // RemoveTablet removes the tablet, and stops the health check.
 // It does not block.
-func (hc *HealthCheckImpl) RemoveTablet(tablet *topodatapb.Tablet) {
+func (hc *LegacyHealthCheckImpl) RemoveTablet(tablet *topodatapb.Tablet) {
 	hc.deleteConn(tablet)
 }
 
 // ReplaceTablet removes the old tablet and adds the new tablet.
-func (hc *HealthCheckImpl) ReplaceTablet(old, new *topodatapb.Tablet, name string) {
+func (hc *LegacyHealthCheckImpl) ReplaceTablet(old, new *topodatapb.Tablet, name string) {
 	hc.deleteConn(old)
 	hc.AddTablet(new, name)
 }
 
 // WaitForInitialStatsUpdates waits until all tablets added via AddTablet() call
 // were propagated to downstream via corresponding StatsUpdate() calls.
-func (hc *HealthCheckImpl) WaitForInitialStatsUpdates() {
+func (hc *LegacyHealthCheckImpl) WaitForInitialStatsUpdates() {
 	hc.initialUpdatesWG.Wait()
 }
 
 // GetConnection returns the TabletConn of the given tablet.
-func (hc *HealthCheckImpl) GetConnection(key string) queryservice.QueryService {
+func (hc *LegacyHealthCheckImpl) GetConnection(key string) queryservice.QueryService {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
@@ -808,23 +808,23 @@ func (hc *HealthCheckImpl) GetConnection(key string) queryservice.QueryService {
 	return th.conn
 }
 
-// TabletsCacheStatus is the current tablets for a cell/target.
-type TabletsCacheStatus struct {
+// LegacyTabletsCacheStatus is the current tablets for a cell/target.
+type LegacyTabletsCacheStatus struct {
 	Cell         string
 	Target       *querypb.Target
-	TabletsStats TabletStatsList
+	TabletsStats LegacyTabletStatsList
 }
 
-// TabletStatsList is used for sorting.
-type TabletStatsList []*TabletStats
+// LegacyTabletStatsList is used for sorting.
+type LegacyTabletStatsList []*LegacyTabletStats
 
 // Len is part of sort.Interface.
-func (tsl TabletStatsList) Len() int {
+func (tsl LegacyTabletStatsList) Len() int {
 	return len(tsl)
 }
 
 // Less is part of sort.Interface
-func (tsl TabletStatsList) Less(i, j int) bool {
+func (tsl LegacyTabletStatsList) Less(i, j int) bool {
 	name1 := tsl[i].Name
 	if name1 == "" {
 		name1 = tsl[i].Key
@@ -837,12 +837,12 @@ func (tsl TabletStatsList) Less(i, j int) bool {
 }
 
 // Swap is part of sort.Interface
-func (tsl TabletStatsList) Swap(i, j int) {
+func (tsl LegacyTabletStatsList) Swap(i, j int) {
 	tsl[i], tsl[j] = tsl[j], tsl[i]
 }
 
 // StatusAsHTML returns an HTML version of the status.
-func (tcs *TabletsCacheStatus) StatusAsHTML() template.HTML {
+func (tcs *LegacyTabletsCacheStatus) StatusAsHTML() template.HTML {
 	tLinks := make([]string, 0, 1)
 	if tcs.TabletsStats != nil {
 		sort.Sort(tcs.TabletsStats)
@@ -873,29 +873,29 @@ func (tcs *TabletsCacheStatus) StatusAsHTML() template.HTML {
 	return template.HTML(strings.Join(tLinks, "<br>"))
 }
 
-// TabletsCacheStatusList is used for sorting.
-type TabletsCacheStatusList []*TabletsCacheStatus
+// LegacyTabletsCacheStatusList is used for sorting.
+type LegacyTabletsCacheStatusList []*LegacyTabletsCacheStatus
 
 // Len is part of sort.Interface.
-func (tcsl TabletsCacheStatusList) Len() int {
+func (tcsl LegacyTabletsCacheStatusList) Len() int {
 	return len(tcsl)
 }
 
 // Less is part of sort.Interface
-func (tcsl TabletsCacheStatusList) Less(i, j int) bool {
+func (tcsl LegacyTabletsCacheStatusList) Less(i, j int) bool {
 	return tcsl[i].Cell+"."+tcsl[i].Target.Keyspace+"."+tcsl[i].Target.Shard+"."+string(tcsl[i].Target.TabletType) <
 		tcsl[j].Cell+"."+tcsl[j].Target.Keyspace+"."+tcsl[j].Target.Shard+"."+string(tcsl[j].Target.TabletType)
 }
 
 // Swap is part of sort.Interface
-func (tcsl TabletsCacheStatusList) Swap(i, j int) {
+func (tcsl LegacyTabletsCacheStatusList) Swap(i, j int) {
 	tcsl[i], tcsl[j] = tcsl[j], tcsl[i]
 }
 
 // CacheStatus returns a displayable version of the cache.
-func (hc *HealthCheckImpl) CacheStatus() TabletsCacheStatusList {
+func (hc *LegacyHealthCheckImpl) CacheStatus() LegacyTabletsCacheStatusList {
 	tcsMap := hc.cacheStatusMap()
-	tcsl := make(TabletsCacheStatusList, 0, len(tcsMap))
+	tcsl := make(LegacyTabletsCacheStatusList, 0, len(tcsMap))
 	for _, tcs := range tcsMap {
 		tcsl = append(tcsl, tcs)
 	}
@@ -903,16 +903,16 @@ func (hc *HealthCheckImpl) CacheStatus() TabletsCacheStatusList {
 	return tcsl
 }
 
-func (hc *HealthCheckImpl) cacheStatusMap() map[string]*TabletsCacheStatus {
-	tcsMap := make(map[string]*TabletsCacheStatus)
+func (hc *LegacyHealthCheckImpl) cacheStatusMap() map[string]*LegacyTabletsCacheStatus {
+	tcsMap := make(map[string]*LegacyTabletsCacheStatus)
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 	for _, th := range hc.addrToHealth {
 		key := fmt.Sprintf("%v.%v.%v.%v", th.latestTabletStats.Tablet.Alias.Cell, th.latestTabletStats.Target.Keyspace, th.latestTabletStats.Target.Shard, th.latestTabletStats.Target.TabletType.String())
-		var tcs *TabletsCacheStatus
+		var tcs *LegacyTabletsCacheStatus
 		var ok bool
 		if tcs, ok = tcsMap[key]; !ok {
-			tcs = &TabletsCacheStatus{
+			tcs = &LegacyTabletsCacheStatus{
 				Cell:   th.latestTabletStats.Tablet.Alias.Cell,
 				Target: th.latestTabletStats.Target,
 			}
@@ -927,7 +927,7 @@ func (hc *HealthCheckImpl) cacheStatusMap() map[string]*TabletsCacheStatus {
 // Close stops the healthcheck.
 // After Close() returned, it's guaranteed that the listener isn't
 // currently executing and won't be called again.
-func (hc *HealthCheckImpl) Close() error {
+func (hc *LegacyHealthCheckImpl) Close() error {
 	hc.mu.Lock()
 	for _, th := range hc.addrToHealth {
 		th.cancelFunc()
@@ -942,16 +942,4 @@ func (hc *HealthCheckImpl) Close() error {
 	hc.connsWG.Wait()
 
 	return nil
-}
-
-// TabletToMapKey creates a key to the map from tablet's host and ports.
-// It should only be used in discovery and related module.
-func TabletToMapKey(tablet *topodatapb.Tablet) string {
-	parts := make([]string, 0, 1)
-	for name, port := range tablet.PortMap {
-		parts = append(parts, netutil.JoinHostPort(name, port))
-	}
-	sort.Strings(parts)
-	parts = append([]string{tablet.Hostname}, parts...)
-	return strings.Join(parts, ",")
 }

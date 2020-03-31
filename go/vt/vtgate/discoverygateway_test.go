@@ -131,7 +131,7 @@ func TestDiscoveryGatewayGetTablets(t *testing.T) {
 }
 
 func TestShuffleTablets(t *testing.T) {
-	ts1 := discovery.TabletStats{
+	ts1 := discovery.LegacyTabletStats{
 		Key:     "t1",
 		Tablet:  topo.NewTablet(10, "cell1", "host1"),
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -140,7 +140,7 @@ func TestShuffleTablets(t *testing.T) {
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 
-	ts2 := discovery.TabletStats{
+	ts2 := discovery.LegacyTabletStats{
 		Key:     "t2",
 		Tablet:  topo.NewTablet(10, "cell1", "host2"),
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -149,7 +149,7 @@ func TestShuffleTablets(t *testing.T) {
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 
-	ts3 := discovery.TabletStats{
+	ts3 := discovery.LegacyTabletStats{
 		Key:     "t3",
 		Tablet:  topo.NewTablet(10, "cell2", "host3"),
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -158,7 +158,7 @@ func TestShuffleTablets(t *testing.T) {
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 
-	ts4 := discovery.TabletStats{
+	ts4 := discovery.LegacyTabletStats{
 		Key:     "t4",
 		Tablet:  topo.NewTablet(10, "cell2", "host4"),
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -167,9 +167,9 @@ func TestShuffleTablets(t *testing.T) {
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 
-	sameCellTablets := []discovery.TabletStats{ts1, ts2}
-	diffCellTablets := []discovery.TabletStats{ts3, ts4}
-	mixedTablets := []discovery.TabletStats{ts1, ts2, ts3, ts4}
+	sameCellTablets := []discovery.LegacyTabletStats{ts1, ts2}
+	diffCellTablets := []discovery.LegacyTabletStats{ts3, ts4}
+	mixedTablets := []discovery.LegacyTabletStats{ts1, ts2, ts3, ts4}
 	// repeat shuffling 10 times and every time the same cell tablets should be in the front
 	for i := 0; i < 10; i++ {
 		shuffleTablets("cell1", sameCellTablets)

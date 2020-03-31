@@ -648,11 +648,11 @@ func TestAppendResult(t *testing.T) {
 	}
 }
 
-func newTestScatterConn(hc discovery.HealthCheck, serv srvtopo.Server, cell string) *ScatterConn {
+func newTestScatterConn(hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string) *ScatterConn {
 	// The topo.Server is used to start watching the cells described
 	// in '-cells_to_watch' command line parameter, which is
 	// empty by default. So it's unused in this test, set to nil.
 	gw := GatewayCreator()(context.Background(), hc, serv, cell, 3)
 	tc := NewTxConn(gw, vtgatepb.TransactionMode_TWOPC)
-	return NewScatterConn("", tc, gw, hc)
+	return LegacyNewScatterConn("", tc, gw, hc)
 }

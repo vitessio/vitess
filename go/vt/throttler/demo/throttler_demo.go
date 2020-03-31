@@ -213,7 +213,7 @@ func (r *replica) stop() {
 type client struct {
 	master *master
 
-	healthCheck discovery.HealthCheck
+	healthCheck discovery.LegacyHealthCheck
 	throttler   *throttler.Throttler
 
 	stopChan chan struct{}
@@ -226,7 +226,7 @@ func newClient(master *master, replica *replica) *client {
 		log.Fatal(err)
 	}
 
-	healthCheck := discovery.NewHealthCheck(5*time.Second, 1*time.Minute)
+	healthCheck := discovery.NewLegacyHealthCheck(5*time.Second, 1*time.Minute)
 	c := &client{
 		master:      master,
 		healthCheck: healthCheck,
@@ -273,10 +273,10 @@ func (c *client) stop() {
 	c.throttler.Close()
 }
 
-// StatsUpdate implements discovery.HealthCheckStatsListener.
+// StatsUpdate implements discovery.LegacyHealthCheckStatsListener.
 // It gets called by the healthCheck instance every time a tablet broadcasts
 // a health update.
-func (c *client) StatsUpdate(ts *discovery.TabletStats) {
+func (c *client) StatsUpdate(ts *discovery.LegacyTabletStats) {
 	// Ignore unless REPLICA or RDONLY.
 	if ts.Target.TabletType != topodatapb.TabletType_REPLICA && ts.Target.TabletType != topodatapb.TabletType_RDONLY {
 		return

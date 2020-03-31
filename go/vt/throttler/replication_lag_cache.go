@@ -27,11 +27,11 @@ import (
 // replicationlagRecord entries.
 type replicationLagCache struct {
 	// entries maps from the replica to its history.
-	// The map key is replicationLagRecord.TabletStats.Key.
+	// The map key is replicationLagRecord.LegacyTabletStats.Key.
 	entries map[string]*replicationLagHistory
 
 	// slowReplicas is a set of slow replicas.
-	// The map key is replicationLagRecord.TabletStats.Key.
+	// The map key is replicationLagRecord.LegacyTabletStats.Key.
 	// This map will always be recomputed by sortByLag() and must not be modified
 	// from other methods.
 	slowReplicas map[string]bool
@@ -43,7 +43,7 @@ type replicationLagCache struct {
 	// becomes the new slowest replica. This set is used to detect such a chain.
 	// The set will be cleared if ignoreSlowReplica() returns false.
 	//
-	// The map key is replicationLagRecord.TabletStats.Key.
+	// The map key is replicationLagRecord.LegacyTabletStats.Key.
 	// If an entry is deleted from "entries", it must be deleted here as well.
 	ignoredSlowReplicasInARow map[string]bool
 
@@ -76,7 +76,7 @@ func (c *replicationLagCache) add(r replicationLagRecord) {
 	entry.add(r)
 }
 
-// latest returns the current lag record for the given TabletStats.Key string.
+// latest returns the current lag record for the given LegacyTabletStats.Key string.
 // A zero record is returned if there is no latest entry.
 func (c *replicationLagCache) latest(key string) replicationLagRecord {
 	entry, ok := c.entries[key]
@@ -114,7 +114,7 @@ func (c *replicationLagCache) sortByLag(ignoreNSlowestReplicas int, minimumRepli
 	for _, v := range c.entries {
 		record := v.latest()
 		if int64(record.Stats.SecondsBehindMaster) >= minimumReplicationLag {
-			list = append(list, record.TabletStats)
+			list = append(list, record.LegacyTabletStats)
 			i++
 		}
 	}
@@ -126,9 +126,9 @@ func (c *replicationLagCache) sortByLag(ignoreNSlowestReplicas int, minimumRepli
 	}
 }
 
-// byLagAndTabletUID is a slice of discovery.TabletStats elements that
+// byLagAndTabletUID is a slice of discovery.LegacyTabletStats elements that
 // implements sort.Interface to sort by replication lag and tablet Uid.
-type byLagAndTabletUID []discovery.TabletStats
+type byLagAndTabletUID []discovery.LegacyTabletStats
 
 func (a byLagAndTabletUID) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a byLagAndTabletUID) Len() int      { return len(a) }
@@ -140,7 +140,7 @@ func (a byLagAndTabletUID) Less(i, j int) bool {
 
 // ignoreSlowReplica returns true if the MaxReplicationLagModule should ignore
 // this slow replica.
-// "key" refers to ReplicationLagRecord.TabletStats.Key.
+// "key" refers to ReplicationLagRecord.LegacyTabletStats.Key.
 func (c *replicationLagCache) ignoreSlowReplica(key string) bool {
 	if len(c.slowReplicas) == 0 {
 		// No slow replicas at all.
@@ -169,7 +169,7 @@ func (c *replicationLagCache) ignoreSlowReplica(key string) bool {
 }
 
 // isIgnored returns true if the given replica is a slow, ignored replica.
-// "key" refers to ReplicationLagRecord.TabletStats.Key.
+// "key" refers to ReplicationLagRecord.LegacyTabletStats.Key.
 // Note: Unlike ignoreSlowReplica(key), this method does not update the count
 // how many replicas in a row have been ignored. Instead, it's meant to find out
 // when a replica is ignored and therefore the module should not wait for it.

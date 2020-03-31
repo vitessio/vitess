@@ -17,7 +17,7 @@ limitations under the License.
 package txthrottler
 
 // Commands to generate the mocks for this test.
-//go:generate mockgen -destination mock_healthcheck_test.go -package txthrottler vitess.io/vitess/go/vt/discovery HealthCheck
+//go:generate mockgen -destination mock_healthcheck_test.go -package txthrottler vitess.io/vitess/go/vt/discovery LegacyHealthCheck
 //go:generate mockgen -destination mock_throttler_test.go -package txthrottler vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler ThrottlerInterface
 //go:generate mockgen -destination mock_topology_watcher_test.go -package txthrottler vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler TopologyWatcherInterface
 
@@ -56,15 +56,15 @@ func TestEnabledThrottler(t *testing.T) {
 	ts := memorytopo.NewServer("cell1", "cell2")
 
 	mockHealthCheck := NewMockHealthCheck(mockCtrl)
-	var hcListener discovery.HealthCheckStatsListener
+	var hcListener discovery.LegacyHealthCheckStatsListener
 	hcCall1 := mockHealthCheck.EXPECT().SetListener(gomock.Any(), false /* sendDownEvents */)
-	hcCall1.Do(func(listener discovery.HealthCheckStatsListener, sendDownEvents bool) {
+	hcCall1.Do(func(listener discovery.LegacyHealthCheckStatsListener, sendDownEvents bool) {
 		// Record the listener we're given.
 		hcListener = listener
 	})
 	hcCall2 := mockHealthCheck.EXPECT().Close()
 	hcCall2.After(hcCall1)
-	healthCheckFactory = func() discovery.HealthCheck { return mockHealthCheck }
+	healthCheckFactory = func() discovery.LegacyHealthCheck { return mockHealthCheck }
 
 	topologyWatcherFactory = func(topoServer *topo.Server, tr discovery.TabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
 		if ts != topoServer {
@@ -95,7 +95,7 @@ func TestEnabledThrottler(t *testing.T) {
 	call0 := mockThrottler.EXPECT().UpdateConfiguration(gomock.Any(), true /* copyZeroValues */)
 	call1 := mockThrottler.EXPECT().Throttle(0)
 	call1.Return(0 * time.Second)
-	tabletStats := &discovery.TabletStats{
+	tabletStats := &discovery.LegacyTabletStats{
 		Target: &querypb.Target{
 			TabletType: topodatapb.TabletType_REPLICA,
 		},
@@ -124,7 +124,7 @@ func TestEnabledThrottler(t *testing.T) {
 		t.Errorf("want: false, got: %v", result)
 	}
 	hcListener.StatsUpdate(tabletStats)
-	rdonlyTabletStats := &discovery.TabletStats{
+	rdonlyTabletStats := &discovery.LegacyTabletStats{
 		Target: &querypb.Target{
 			TabletType: topodatapb.TabletType_RDONLY,
 		},

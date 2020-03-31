@@ -33,7 +33,7 @@ var (
 // WaitForTablets waits for at least one tablet in the given
 // keyspace / shard / tablet type before returning. The tablets do not
 // have to be healthy.  It will return ctx.Err() if the context is canceled.
-func (tc *TabletStatsCache) WaitForTablets(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType) error {
+func (tc *LegacyTabletStatsCache) WaitForTablets(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType) error {
 	targets := []*querypb.Target{
 		{
 			Keyspace:   keyspace,
@@ -48,12 +48,12 @@ func (tc *TabletStatsCache) WaitForTablets(ctx context.Context, keyspace, shard 
 // each given target before returning.
 // It will return ctx.Err() if the context is canceled.
 // It will return an error if it can't read the necessary topology records.
-func (tc *TabletStatsCache) WaitForAllServingTablets(ctx context.Context, targets []*querypb.Target) error {
+func (tc *LegacyTabletStatsCache) WaitForAllServingTablets(ctx context.Context, targets []*querypb.Target) error {
 	return tc.waitForTablets(ctx, targets, true)
 }
 
 // waitForTablets is the internal method that polls for tablets.
-func (tc *TabletStatsCache) waitForTablets(ctx context.Context, targets []*querypb.Target, requireServing bool) error {
+func (tc *LegacyTabletStatsCache) waitForTablets(ctx context.Context, targets []*querypb.Target, requireServing bool) error {
 	for {
 		// We nil targets as we find them.
 		allPresent := true
@@ -62,7 +62,7 @@ func (tc *TabletStatsCache) waitForTablets(ctx context.Context, targets []*query
 				continue
 			}
 
-			var stats []TabletStats
+			var stats []LegacyTabletStats
 			if requireServing {
 				stats = tc.GetHealthyTabletStats(target.Keyspace, target.Shard, target.TabletType)
 			} else {
@@ -92,7 +92,7 @@ func (tc *TabletStatsCache) waitForTablets(ctx context.Context, targets []*query
 }
 
 // WaitByFilter waits for at least one tablet based on the filter function.
-func (tc *TabletStatsCache) WaitByFilter(ctx context.Context, keyspace, shard string, tabletTypes []topodatapb.TabletType, filter func([]TabletStats) []TabletStats) error {
+func (tc *LegacyTabletStatsCache) WaitByFilter(ctx context.Context, keyspace, shard string, tabletTypes []topodatapb.TabletType, filter func([]LegacyTabletStats) []LegacyTabletStats) error {
 	for {
 		for _, tt := range tabletTypes {
 			stats := tc.GetTabletStats(keyspace, shard, tt)

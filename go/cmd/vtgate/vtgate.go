@@ -45,7 +45,7 @@ var (
 )
 
 var resilientServer *srvtopo.ResilientServer
-var healthCheck discovery.HealthCheck
+var legacyHealthCheck discovery.LegacyHealthCheck
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -63,9 +63,6 @@ func main() {
 
 	resilientServer = srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer")
 
-	healthCheck = discovery.NewHealthCheck(*healthCheckRetryDelay, *healthCheckTimeout)
-	healthCheck.RegisterStats()
-
 	tabletTypes := make([]topodatapb.TabletType, 0, 1)
 	if len(*tabletTypesToWait) != 0 {
 		for _, ttStr := range strings.Split(*tabletTypesToWait, ",") {
@@ -78,7 +75,10 @@ func main() {
 		}
 	}
 
-	vtg := vtgate.Init(context.Background(), healthCheck, resilientServer, *cell, *retryCount, tabletTypes)
+	legacyHealthCheck = discovery.NewLegacyHealthCheck(*healthCheckRetryDelay, *healthCheckTimeout)
+	legacyHealthCheck.RegisterStats()
+
+	vtg := vtgate.LegacyInit(context.Background(), legacyHealthCheck, resilientServer, *cell, *retryCount, tabletTypes)
 
 	servenv.OnRun(func() {
 		// Flags are parsed now. Parse the template using the actual flag value and overwrite the current template.

@@ -67,8 +67,8 @@ func init() {
 
 type discoveryGateway struct {
 	queryservice.QueryService
-	hc            discovery.HealthCheck
-	tsc           *discovery.TabletStatsCache
+	hc            discovery.LegacyHealthCheck
+	tsc           *discovery.LegacyTabletStatsCache
 	srvTopoServer srvtopo.Server
 	localCell     string
 	retryCount    int
@@ -87,11 +87,15 @@ type discoveryGateway struct {
 	buffer *buffer.Buffer
 }
 
-func createDiscoveryGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cell string, retryCount int) Gateway {
+func createDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string, retryCount int) Gateway {
 	return NewDiscoveryGateway(ctx, hc, serv, cell, retryCount)
 }
 
-func NewDiscoveryGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cell string, retryCount int) *discoveryGateway {
+// NewDiscoveryGateway creates a new discoveryGateway using the provided healthcheck and toposerver.
+// cell is the cell where the gateway is located a.k.a localCell.
+// This gateway can route to MASTER in any cell provided by the cells_to_watch command line argument.
+// Other tablet type requests (REPLICA/RDONLY) are only routed to tablets in the same cell.
+func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string, retryCount int) *discoveryGateway {
 	var topoServer *topo.Server
 	if serv != nil {
 		var err error
@@ -112,8 +116,8 @@ func NewDiscoveryGateway(ctx context.Context, hc discovery.HealthCheck, serv srv
 		buffer:            buffer.New(),
 	}
 
-	// Set listener which will update TabletStatsCache and MasterBuffer.
-	// We set sendDownEvents=true because it's required by TabletStatsCache.
+	// Set listener which will update LegacyTabletStatsCache and MasterBuffer.
+	// We set sendDownEvents=true because it's required by LegacyTabletStatsCache.
 	hc.SetListener(dg, true /* sendDownEvents */)
 
 	log.Infof("loading tablets for cells: %v", *cellsToWatch)
@@ -181,9 +185,9 @@ func (dg *discoveryGateway) topologyWatcherChecksum() int64 {
 	return checksum
 }
 
-// StatsUpdate forwards HealthCheck updates to TabletStatsCache and MasterBuffer.
-// It is part of the discovery.HealthCheckStatsListener interface.
-func (dg *discoveryGateway) StatsUpdate(ts *discovery.TabletStats) {
+// StatsUpdate forwards LegacyHealthCheck updates to LegacyTabletStatsCache and MasterBuffer.
+// It is part of the discovery.LegacyHealthCheckStatsListener interface.
+func (dg *discoveryGateway) StatsUpdate(ts *discovery.LegacyTabletStats) {
 	dg.tsc.StatsUpdate(ts)
 
 	if ts.Target.TabletType == topodatapb.TabletType_MASTER {
@@ -290,7 +294,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 		shuffleTablets(dg.localCell, tablets)
 
 		// skip tablets we tried before
-		var ts *discovery.TabletStats
+		var ts *discovery.LegacyTabletStats
 		for _, t := range tablets {
 			if _, ok := invalidTablets[t.Key]; !ok {
 				ts = &t
@@ -327,7 +331,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 	return NewShardError(err, target, tabletLastUsed)
 }
 
-func shuffleTablets(cell string, tablets []discovery.TabletStats) {
+func shuffleTablets(cell string, tablets []discovery.LegacyTabletStats) {
 	sameCell, diffCell, sameCellMax := 0, 0, -1
 	length := len(tablets)
 
@@ -365,7 +369,7 @@ func shuffleTablets(cell string, tablets []discovery.TabletStats) {
 	}
 }
 
-func nextTablet(cell string, tablets []discovery.TabletStats, offset, length int, sameCell bool) int {
+func nextTablet(cell string, tablets []discovery.LegacyTabletStats, offset, length int, sameCell bool) int {
 	for ; offset < length; offset++ {
 		if (tablets[offset].Tablet.Alias.Cell == cell) == sameCell {
 			return offset

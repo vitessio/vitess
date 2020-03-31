@@ -88,7 +88,7 @@ func getItemPath(url string) string {
 	return parts[1]
 }
 
-func initAPI(ctx context.Context, hc discovery.HealthCheck) {
+func initAPI(ctx context.Context, hc discovery.LegacyHealthCheck) {
 	// Healthcheck real time status per (cell, keyspace, tablet type, metric).
 	handleCollection("health-check", func(r *http.Request) (interface{}, error) {
 		cacheStatus := hc.CacheStatus()
@@ -110,7 +110,7 @@ func initAPI(ctx context.Context, hc discovery.HealthCheck) {
 		switch collectionFilter {
 		case "cell":
 			{
-				filteredStatus := make(discovery.TabletsCacheStatusList, 0)
+				filteredStatus := make(discovery.LegacyTabletsCacheStatusList, 0)
 				for _, tabletCacheStatus := range cacheStatus {
 					if tabletCacheStatus.Cell == value {
 						filteredStatus = append(filteredStatus, tabletCacheStatus)
@@ -120,7 +120,7 @@ func initAPI(ctx context.Context, hc discovery.HealthCheck) {
 			}
 		case "keyspace":
 			{
-				filteredStatus := make(discovery.TabletsCacheStatusList, 0)
+				filteredStatus := make(discovery.LegacyTabletsCacheStatusList, 0)
 				for _, tabletCacheStatus := range cacheStatus {
 					if tabletCacheStatus.Target.Keyspace == value {
 						filteredStatus = append(filteredStatus, tabletCacheStatus)

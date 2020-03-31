@@ -52,7 +52,7 @@ var (
 		"Operation", topologyWatcherOpListTablets, topologyWatcherOpGetTablet)
 )
 
-// TabletRecorder is the part of the HealthCheck interface that can
+// TabletRecorder is the part of the LegacyHealthCheck interface that can
 // add or remove tablets. We define it as a sub-interface here so we
 // can add filters on tablets if needed.
 type TabletRecorder interface {

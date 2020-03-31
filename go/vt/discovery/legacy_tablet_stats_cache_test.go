@@ -27,7 +27,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// TestTabletStatsCache tests the functionality of the TabletStatsCache class.
+// TestTabletStatsCache tests the functionality of the LegacyTabletStatsCache class.
 func TestTabletStatsCache(t *testing.T) {
 	ts := memorytopo.NewServer("cell", "cell1", "cell2")
 
@@ -47,13 +47,13 @@ func TestTabletStatsCache(t *testing.T) {
 
 	defer ts.DeleteCellsAlias(context.Background(), "region2")
 
-	// We want to unit test TabletStatsCache without a full-blown
-	// HealthCheck object, so we can't call NewTabletStatsCache.
+	// We want to unit test LegacyTabletStatsCache without a full-blown
+	// LegacyHealthCheck object, so we can't call NewLegacyTabletStatsCache.
 	// So we just construct this object here.
-	tsc := &TabletStatsCache{
+	tsc := &LegacyTabletStatsCache{
 		cell:        "cell",
 		ts:          ts,
-		entries:     make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry),
+		entries:     make(map[string]map[string]map[topodatapb.TabletType]*legacyTabletStatsCacheEntry),
 		cellAliases: make(map[string]string),
 	}
 
@@ -65,7 +65,7 @@ func TestTabletStatsCache(t *testing.T) {
 
 	// add a tablet
 	tablet1 := topo.NewTablet(10, "cell", "host1")
-	ts1 := &TabletStats{
+	ts1 := &LegacyTabletStats{
 		Key:     "t1",
 		Tablet:  tablet1,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -86,7 +86,7 @@ func TestTabletStatsCache(t *testing.T) {
 	}
 
 	// update stats with a change that won't change health array
-	stillHealthyTs1 := &TabletStats{
+	stillHealthyTs1 := &LegacyTabletStats{
 		Key:     "t1",
 		Tablet:  tablet1,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -107,7 +107,7 @@ func TestTabletStatsCache(t *testing.T) {
 	}
 
 	// update stats with a change that will change arrays
-	notHealthyTs1 := &TabletStats{
+	notHealthyTs1 := &LegacyTabletStats{
 		Key:     "t1",
 		Tablet:  tablet1,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -129,7 +129,7 @@ func TestTabletStatsCache(t *testing.T) {
 
 	// add a second tablet
 	tablet2 := topo.NewTablet(11, "cell", "host2")
-	ts2 := &TabletStats{
+	ts2 := &LegacyTabletStats{
 		Key:     "t2",
 		Tablet:  tablet2,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -232,7 +232,7 @@ func TestTabletStatsCache(t *testing.T) {
 
 	// add a third tablet as slave in diff cell, same region
 	tablet3 := topo.NewTablet(12, "cell1", "host3")
-	ts3 := &TabletStats{
+	ts3 := &LegacyTabletStats{
 		Key:     "t3",
 		Tablet:  tablet3,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -253,7 +253,7 @@ func TestTabletStatsCache(t *testing.T) {
 
 	// add a 4th slave tablet in a diff cell, diff region
 	tablet4 := topo.NewTablet(13, "cell2", "host4")
-	ts4 := &TabletStats{
+	ts4 := &LegacyTabletStats{
 		Key:     "t4",
 		Tablet:  tablet4,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},

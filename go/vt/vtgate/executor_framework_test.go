@@ -576,7 +576,7 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 	return logStats
 }
 
-func newTestResolver(hc discovery.HealthCheck, serv srvtopo.Server, cell string) *Resolver {
+func newTestResolver(hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string) *Resolver {
 	sc := newTestScatterConn(hc, serv, cell)
 	srvResolver := srvtopo.NewResolver(serv, sc.gateway, cell)
 	return NewResolver(srvResolver, serv, cell, sc)

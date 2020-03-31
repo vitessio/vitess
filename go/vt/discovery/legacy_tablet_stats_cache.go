@@ -28,8 +28,8 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
-// TabletStatsCache is a HealthCheckStatsListener that keeps both the
-// current list of available TabletStats, and a serving list:
+// LegacyTabletStatsCache is a LegacyHealthCheckStatsListener that keeps both the
+// current list of available LegacyTabletStats, and a serving list:
 // - for master tablets, only the current master is kept.
 // - for non-master tablets, we filter the list using FilterByReplicationLag.
 // It keeps entries for all tablets in the cell(s) it's configured to serve for,
@@ -39,7 +39,7 @@ import (
 // Also note the cache may not have the last entry received by the tablet.
 // For instance, if a tablet was healthy, and is still healthy, we do not
 // keep its new update.
-type TabletStatsCache struct {
+type LegacyTabletStatsCache struct {
 	// cell is the cell we are keeping all tablets for.
 	// Note we keep track of all master tablets in all cells.
 	cell string
@@ -49,26 +49,26 @@ type TabletStatsCache struct {
 	// entries in the entries map.
 	mu sync.RWMutex
 	// entries maps from keyspace/shard/tabletType to our cache.
-	entries map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry
+	entries map[string]map[string]map[topodatapb.TabletType]*legacyTabletStatsCacheEntry
 	// tsm is a helper to broadcast aggregate stats.
 	tsm srvtopo.TargetStatsMultiplexer
 	// cellAliases is a cache of cell aliases
 	cellAliases map[string]string
 }
 
-// tabletStatsCacheEntry is the per keyspace/shard/tabletType
-// entry of the in-memory map for TabletStatsCache.
-type tabletStatsCacheEntry struct {
+// legacyTabletStatsCacheEntry is the per keyspace/shard/tabletType
+// entry of the in-memory map for LegacyTabletStatsCache.
+type legacyTabletStatsCacheEntry struct {
 	// mu protects the rest of this structure.
 	mu sync.RWMutex
 	// all has the valid tablets, indexed by TabletToMapKey(ts.Tablet),
-	// as it is the index used by HealthCheck.
-	all map[string]*TabletStats
+	// as it is the index used by LegacyHealthCheck.
+	all map[string]*LegacyTabletStats
 	// healthy only has the healthy ones.
-	healthy []*TabletStats
+	healthy []*LegacyTabletStats
 }
 
-func (e *tabletStatsCacheEntry) updateHealthyMapForMaster(ts *TabletStats) {
+func (e *legacyTabletStatsCacheEntry) updateHealthyMapForMaster(ts *LegacyTabletStats) {
 	if ts.Up {
 		// We have an Up master.
 		if len(e.healthy) == 0 {
@@ -103,31 +103,31 @@ func (e *tabletStatsCacheEntry) updateHealthyMapForMaster(ts *TabletStats) {
 	}
 }
 
-// NewTabletStatsCache creates a TabletStatsCache, and registers
-// it as HealthCheckStatsListener of the provided healthcheck.
+// NewLegacyTabletStatsCache creates a LegacyTabletStatsCache, and registers
+// it as LegacyHealthCheckStatsListener of the provided healthcheck.
 // Note we do the registration in this code to guarantee we call
 // SetListener with sendDownEvents=true, as we need these events
 // to maintain the integrity of our cache.
-func NewTabletStatsCache(hc HealthCheck, ts *topo.Server, cell string) *TabletStatsCache {
-	return newTabletStatsCache(hc, ts, cell, true /* setListener */)
+func NewLegacyTabletStatsCache(hc LegacyHealthCheck, ts *topo.Server, cell string) *LegacyTabletStatsCache {
+	return newLegacyTabletStatsCache(hc, ts, cell, true /* setListener */)
 }
 
-// NewTabletStatsCacheDoNotSetListener is identical to NewTabletStatsCache
+// NewTabletStatsCacheDoNotSetListener is identical to NewLegacyTabletStatsCache
 // but does not automatically set the returned object as listener for "hc".
-// Instead, it's up to the caller to ensure that TabletStatsCache.StatsUpdate()
+// Instead, it's up to the caller to ensure that LegacyTabletStatsCache.StatsUpdate()
 // gets called properly. This is useful for chaining multiple listeners.
 // When the caller sets its own listener on "hc", they must make sure that they
 // set the parameter  "sendDownEvents" to "true" or this cache won't properly
 // remove tablets whose tablet type changes.
-func NewTabletStatsCacheDoNotSetListener(ts *topo.Server, cell string) *TabletStatsCache {
-	return newTabletStatsCache(nil, ts, cell, false /* setListener */)
+func NewTabletStatsCacheDoNotSetListener(ts *topo.Server, cell string) *LegacyTabletStatsCache {
+	return newLegacyTabletStatsCache(nil, ts, cell, false /* setListener */)
 }
 
-func newTabletStatsCache(hc HealthCheck, ts *topo.Server, cell string, setListener bool) *TabletStatsCache {
-	tc := &TabletStatsCache{
+func newLegacyTabletStatsCache(hc LegacyHealthCheck, ts *topo.Server, cell string, setListener bool) *LegacyTabletStatsCache {
+	tc := &LegacyTabletStatsCache{
 		cell:        cell,
 		ts:          ts,
-		entries:     make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry),
+		entries:     make(map[string]map[string]map[topodatapb.TabletType]*legacyTabletStatsCacheEntry),
 		tsm:         srvtopo.NewTargetStatsMultiplexer(),
 		cellAliases: make(map[string]string),
 	}
@@ -140,9 +140,9 @@ func newTabletStatsCache(hc HealthCheck, ts *topo.Server, cell string, setListen
 	return tc
 }
 
-// getEntry returns an existing tabletStatsCacheEntry in the cache, or nil
+// getEntry returns an existing legacyTabletStatsCacheEntry in the cache, or nil
 // if the entry does not exist. It only takes a Read lock on mu.
-func (tc *TabletStatsCache) getEntry(keyspace, shard string, tabletType topodatapb.TabletType) *tabletStatsCacheEntry {
+func (tc *LegacyTabletStatsCache) getEntry(keyspace, shard string, tabletType topodatapb.TabletType) *legacyTabletStatsCacheEntry {
 	tc.mu.RLock()
 	defer tc.mu.RUnlock()
 
@@ -156,9 +156,9 @@ func (tc *TabletStatsCache) getEntry(keyspace, shard string, tabletType topodata
 	return nil
 }
 
-// getOrCreateEntry returns an existing tabletStatsCacheEntry from the cache,
+// getOrCreateEntry returns an existing legacyTabletStatsCacheEntry from the cache,
 // or creates it if it doesn't exist.
-func (tc *TabletStatsCache) getOrCreateEntry(target *querypb.Target) *tabletStatsCacheEntry {
+func (tc *LegacyTabletStatsCache) getOrCreateEntry(target *querypb.Target) *legacyTabletStatsCacheEntry {
 	// Fast path (most common path too): Read-lock, return the entry.
 	if e := tc.getEntry(target.Keyspace, target.Shard, target.TabletType); e != nil {
 		return e
@@ -170,25 +170,25 @@ func (tc *TabletStatsCache) getOrCreateEntry(target *querypb.Target) *tabletStat
 
 	s, ok := tc.entries[target.Keyspace]
 	if !ok {
-		s = make(map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry)
+		s = make(map[string]map[topodatapb.TabletType]*legacyTabletStatsCacheEntry)
 		tc.entries[target.Keyspace] = s
 	}
 	t, ok := s[target.Shard]
 	if !ok {
-		t = make(map[topodatapb.TabletType]*tabletStatsCacheEntry)
+		t = make(map[topodatapb.TabletType]*legacyTabletStatsCacheEntry)
 		s[target.Shard] = t
 	}
 	e, ok := t[target.TabletType]
 	if !ok {
-		e = &tabletStatsCacheEntry{
-			all: make(map[string]*TabletStats),
+		e = &legacyTabletStatsCacheEntry{
+			all: make(map[string]*LegacyTabletStats),
 		}
 		t[target.TabletType] = e
 	}
 	return e
 }
 
-func (tc *TabletStatsCache) getAliasByCell(cell string) string {
+func (tc *LegacyTabletStatsCache) getAliasByCell(cell string) string {
 	tc.mu.Lock()
 	defer tc.mu.Unlock()
 
@@ -202,8 +202,8 @@ func (tc *TabletStatsCache) getAliasByCell(cell string) string {
 	return alias
 }
 
-// StatsUpdate is part of the HealthCheckStatsListener interface.
-func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
+// StatsUpdate is part of the LegacyHealthCheckStatsListener interface.
+func (tc *LegacyTabletStatsCache) StatsUpdate(ts *LegacyTabletStats) {
 	if ts.Target.TabletType != topodatapb.TabletType_MASTER &&
 		ts.Tablet.Alias.Cell != tc.cell &&
 		tc.getAliasByCell(ts.Tablet.Alias.Cell) != tc.getAliasByCell(tc.cell) {
@@ -245,7 +245,7 @@ func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 	}
 
 	// Update our healthy list.
-	var allArray []*TabletStats
+	var allArray []*LegacyTabletStats
 	if ts.Target.TabletType == topodatapb.TabletType_MASTER {
 		// The healthy list is different for TabletType_MASTER: we
 		// only keep the most recent one.
@@ -259,7 +259,7 @@ func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 		}
 
 		// Now we need to do some work. Recompute our healthy list.
-		allArray = make([]*TabletStats, 0, len(e.all))
+		allArray = make([]*LegacyTabletStats, 0, len(e.all))
 		for _, s := range e.all {
 			allArray = append(allArray, s)
 		}
@@ -269,7 +269,7 @@ func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 
 // GetTabletStats returns the full list of available targets.
 // The returned array is owned by the caller.
-func (tc *TabletStatsCache) GetTabletStats(keyspace, shard string, tabletType topodatapb.TabletType) []TabletStats {
+func (tc *LegacyTabletStatsCache) GetTabletStats(keyspace, shard string, tabletType topodatapb.TabletType) []LegacyTabletStats {
 	e := tc.getEntry(keyspace, shard, tabletType)
 	if e == nil {
 		return nil
@@ -277,7 +277,7 @@ func (tc *TabletStatsCache) GetTabletStats(keyspace, shard string, tabletType to
 
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	result := make([]TabletStats, 0, len(e.all))
+	result := make([]LegacyTabletStats, 0, len(e.all))
 	for _, s := range e.all {
 		result = append(result, *s)
 	}
@@ -288,7 +288,7 @@ func (tc *TabletStatsCache) GetTabletStats(keyspace, shard string, tabletType to
 // The returned array is owned by the caller.
 // For TabletType_MASTER, this will only return at most one entry,
 // the most recent tablet of type master.
-func (tc *TabletStatsCache) GetHealthyTabletStats(keyspace, shard string, tabletType topodatapb.TabletType) []TabletStats {
+func (tc *LegacyTabletStatsCache) GetHealthyTabletStats(keyspace, shard string, tabletType topodatapb.TabletType) []LegacyTabletStats {
 	e := tc.getEntry(keyspace, shard, tabletType)
 	if e == nil {
 		return nil
@@ -296,7 +296,7 @@ func (tc *TabletStatsCache) GetHealthyTabletStats(keyspace, shard string, tablet
 
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	result := make([]TabletStats, len(e.healthy))
+	result := make([]LegacyTabletStats, len(e.healthy))
 	for i, ts := range e.healthy {
 		result[i] = *ts
 	}
@@ -304,12 +304,12 @@ func (tc *TabletStatsCache) GetHealthyTabletStats(keyspace, shard string, tablet
 }
 
 // ResetForTesting is for use in tests only.
-func (tc *TabletStatsCache) ResetForTesting() {
+func (tc *LegacyTabletStatsCache) ResetForTesting() {
 	tc.mu.Lock()
 	defer tc.mu.Unlock()
 
-	tc.entries = make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry)
+	tc.entries = make(map[string]map[string]map[topodatapb.TabletType]*legacyTabletStatsCacheEntry)
 }
 
 // Compile-time interface check.
-var _ HealthCheckStatsListener = (*TabletStatsCache)(nil)
+var _ LegacyHealthCheckStatsListener = (*LegacyTabletStatsCache)(nil)

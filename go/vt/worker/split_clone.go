@@ -97,8 +97,8 @@ type SplitCloneWorker struct {
 	// MASTER tablet, b) get the list of healthy RDONLY tablets and c) track the
 	// replication lag of all REPLICA tablets.
 	// It must be closed at the end of the command.
-	healthCheck discovery.HealthCheck
-	tsc         *discovery.TabletStatsCache
+	healthCheck discovery.LegacyHealthCheck
+	tsc         *discovery.LegacyTabletStatsCache
 
 	// populated during WorkerStateFindTargets, read-only after that
 	sourceTablets []*topodatapb.Tablet
@@ -420,7 +420,7 @@ func (scw *SplitCloneWorker) Run(ctx context.Context) error {
 		// After Close returned, we can be sure that it won't call our listener
 		// implementation (method StatsUpdate) anymore.
 		if err := scw.healthCheck.Close(); err != nil {
-			scw.wr.Logger().Errorf2(err, "HealthCheck.Close() failed")
+			scw.wr.Logger().Errorf2(err, "LegacyHealthCheck.Close() failed")
 		}
 	}
 
@@ -558,9 +558,9 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 	}
 
 	// Initialize healthcheck and add destination shards to it.
-	scw.healthCheck = discovery.NewHealthCheck(*healthcheckRetryDelay, *healthCheckTimeout)
+	scw.healthCheck = discovery.NewLegacyHealthCheck(*healthcheckRetryDelay, *healthCheckTimeout)
 	scw.tsc = discovery.NewTabletStatsCacheDoNotSetListener(scw.wr.TopoServer(), scw.cell)
-	// We set sendDownEvents=true because it's required by TabletStatsCache.
+	// We set sendDownEvents=true because it's required by LegacyTabletStatsCache.
 	scw.healthCheck.SetListener(scw, true /* sendDownEvents */)
 
 	// Start watchers to get tablets added automatically to healthCheck.
@@ -851,7 +851,7 @@ func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
 		}
 		masters := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER)
 		if len(masters) == 0 {
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot find MASTER tablet for destination shard for %v/%v (in cell: %v) in HealthCheck: empty TabletStats list", si.Keyspace(), si.ShardName(), scw.cell)
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot find MASTER tablet for destination shard for %v/%v (in cell: %v) in LegacyHealthCheck: empty LegacyTabletStats list", si.Keyspace(), si.ShardName(), scw.cell)
 		}
 		master := masters[0]
 
@@ -861,7 +861,7 @@ func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
 
 		scw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Tablet.Alias), si.Keyspace(), si.ShardName())
 	}
-	scw.wr.Logger().Infof("NOTE: The used master of a destination shard might change over the course of the copy e.g. due to a reparent. The HealthCheck module will track and log master changes and any error message will always refer the actually used master address.")
+	scw.wr.Logger().Infof("NOTE: The used master of a destination shard might change over the course of the copy e.g. due to a reparent. The LegacyHealthCheck module will track and log master changes and any error message will always refer the actually used master address.")
 
 	return nil
 }
@@ -1355,9 +1355,9 @@ func (scw *SplitCloneWorker) createKeyResolver(td *tabletmanagerdatapb.TableDefi
 
 // StatsUpdate receives replication lag updates for each destination master
 // and forwards them to the respective throttler instance.
-// It also forwards any update to the TabletStatsCache to keep it up to date.
-// It is part of the discovery.HealthCheckStatsListener interface.
-func (scw *SplitCloneWorker) StatsUpdate(ts *discovery.TabletStats) {
+// It also forwards any update to the LegacyTabletStatsCache to keep it up to date.
+// It is part of the discovery.LegacyHealthCheckStatsListener interface.
+func (scw *SplitCloneWorker) StatsUpdate(ts *discovery.LegacyTabletStats) {
 	scw.tsc.StatsUpdate(ts)
 
 	// Ignore unless REPLICA or RDONLY.
