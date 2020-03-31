@@ -51,7 +51,7 @@ type SlaveConnection struct {
 // We use a random slaveid deprecating IDPool which was causing problems with RDS
 // either because it was using ids in the same range that we generate or because
 // the pool reuses ids.
-func getSlaveId() uint32 {
+func getSlaveID() uint32 {
 	fmt.Printf("In getSlaveId\n")
 	max := big.NewInt(math.MaxInt32)
 	id, err := crand.Int(crand.Reader, max)
@@ -74,7 +74,7 @@ func NewSlaveConnection(cp dbconfigs.Connector) (*SlaveConnection, error) {
 	sc := &SlaveConnection{
 		Conn:    conn,
 		cp:      cp,
-		slaveID: getSlaveId(),
+		slaveID: getSlaveID(),
 	}
 	log.Infof("new slave connection: slaveID=%d", sc.slaveID)
 	return sc, nil
