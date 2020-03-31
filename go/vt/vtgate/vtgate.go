@@ -101,7 +101,7 @@ type VTGate struct {
 	resolver *Resolver
 	vsm      *vstreamManager
 	txConn   *TxConn
-	gw       *tabletGateway
+	gw       Gateway
 
 	// stats objects.
 	// TODO(sougou): This needs to be cleaned up. There
@@ -133,7 +133,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
 	// we can't go on much further, so we log.Fatal out.
-	gw := NewTabletGateway(ctx, hc, serv, cell, retryCount)
+	gw := GetGatewayCreator()(ctx, hc, serv, cell, retryCount)
 	gw.RegisterStats()
 	if err := WaitForTablets(gw, tabletTypesToWait); err != nil {
 		log.Fatalf("gateway.WaitForTablets failed: %v", err)
@@ -227,7 +227,7 @@ func (vtg *VTGate) IsHealthy() error {
 }
 
 // Gateway returns the current gateway implementation. Mostly used for tests.
-func (vtg *VTGate) Gateway() *tabletGateway {
+func (vtg *VTGate) Gateway() Gateway {
 	return vtg.gw
 }
 
