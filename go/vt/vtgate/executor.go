@@ -266,8 +266,6 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 }
 
 func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats, stmtType sqlparser.StatementType) (*sqltypes.Result, error) {
-
-	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.VSchema(), e.resolver.resolver)
 	plan, err := e.getPlan(
