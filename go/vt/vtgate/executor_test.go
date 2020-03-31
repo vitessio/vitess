@@ -194,7 +194,6 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	}
 }
 
-//TODO - what about these?
 func TestDirectTargetRewrites(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	executor.normalize = true
