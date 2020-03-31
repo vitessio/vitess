@@ -37,8 +37,8 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-func TestUpdateEqual(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+func TestPlanUpdateEqual(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup := createExecutorEnvUsing(planAllTheThings)
 
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -147,7 +147,7 @@ func TestUpdateEqual(t *testing.T) {
 	}
 }
 
-func TestUpdateMultiOwned(t *testing.T) {
+func TestPlanUpdateMultiOwned(t *testing.T) {
 	vschema := `
 {
 	"sharded": true,
@@ -268,7 +268,7 @@ func TestUpdateMultiOwned(t *testing.T) {
 	}
 }
 
-func TestUpdateComments(t *testing.T) {
+func TestPlanUpdateComments(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 
 	_, err := executorExec(executor, "update user set a=2 where id = 1 /* trailing */", nil)
@@ -285,7 +285,7 @@ func TestUpdateComments(t *testing.T) {
 	}
 }
 
-func TestUpdateNormalize(t *testing.T) {
+func TestPlanUpdateNormalize(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 
 	executor.normalize = true
@@ -323,7 +323,7 @@ func TestUpdateNormalize(t *testing.T) {
 	masterSession.TargetString = ""
 }
 
-func TestDeleteEqual(t *testing.T) {
+func TestPlanDeleteEqual(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
 
 	sbc.SetResults([]*sqltypes.Result{{
@@ -454,7 +454,7 @@ func TestDeleteEqual(t *testing.T) {
 	}
 }
 
-func TestUpdateScatter(t *testing.T) {
+func TestPlanUpdateScatter(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	_, err := executorExec(executor, "update user_extra set col = 2", nil)
 	require.NoError(t, err)
@@ -471,7 +471,7 @@ func TestUpdateScatter(t *testing.T) {
 	}
 }
 
-func TestDeleteScatter(t *testing.T) {
+func TestPlanDeleteScatter(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	_, err := executorExec(executor, "delete from user_extra", nil)
 	require.NoError(t, err)
@@ -488,7 +488,7 @@ func TestDeleteScatter(t *testing.T) {
 	}
 }
 
-func TestDeleteByDestination(t *testing.T) {
+func TestPlanDeleteByDestination(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	// This query is not supported in v3, so we know for sure is taking the DeleteByDestination route
 	_, err := executorExec(executor, "delete from `TestExecutor[-]`.user_extra limit 10", nil)
@@ -506,7 +506,7 @@ func TestDeleteByDestination(t *testing.T) {
 	}
 }
 
-func TestDeleteComments(t *testing.T) {
+func TestPlanDeleteComments(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
 
 	sbc.SetResults([]*sqltypes.Result{{
@@ -546,7 +546,7 @@ func TestDeleteComments(t *testing.T) {
 	}
 }
 
-func TestInsertSharded(t *testing.T) {
+func TestPlanInsertSharded(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
 	logChan := QueryLogger.Subscribe("Test")
@@ -627,7 +627,7 @@ func TestInsertSharded(t *testing.T) {
 	}
 }
 
-func TestInsertShardedKeyrange(t *testing.T) {
+func TestPlanInsertShardedKeyrange(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 
 	// If a unique vindex returns a keyrange, we fail the insert
@@ -638,7 +638,7 @@ func TestInsertShardedKeyrange(t *testing.T) {
 	}
 }
 
-func TestInsertShardedAutocommitLookup(t *testing.T) {
+func TestPlanInsertShardedAutocommitLookup(t *testing.T) {
 
 	vschema := `
 {
@@ -715,7 +715,7 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 	}
 }
 
-func TestInsertShardedIgnore(t *testing.T) {
+func TestPlanInsertShardedIgnore(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
 	// Build the sequence of responses for sbclookup. This should
@@ -899,7 +899,7 @@ func TestInsertShardedIgnore(t *testing.T) {
 	}
 }
 
-func TestInsertOnDupKey(t *testing.T) {
+func TestPlanInsertOnDupKey(t *testing.T) {
 	// This test just sanity checks that the statement is getting passed through
 	// correctly. The full set of use cases are covered by TestInsertShardedIgnore.
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
@@ -943,7 +943,7 @@ func TestInsertOnDupKey(t *testing.T) {
 	}
 }
 
-func TestInsertComments(t *testing.T) {
+func TestPlanInsertComments(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
 	_, err := executorExec(executor, "insert into user(id, v, name) values (1, 2, 'myname') /* trailing */", nil)
@@ -974,7 +974,7 @@ func TestInsertComments(t *testing.T) {
 	}
 }
 
-func TestInsertGeneratorSharded(t *testing.T) {
+func TestPlanInsertGeneratorSharded(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
 
 	sbclookup.SetResults([]*sqltypes.Result{{
@@ -1017,7 +1017,7 @@ func TestInsertGeneratorSharded(t *testing.T) {
 	}
 }
 
-func TestInsertAutoincSharded(t *testing.T) {
+func TestPlanInsertAutoincSharded(t *testing.T) {
 	router, sbc, _, _ := createExecutorEnv()
 
 	// Fake a mysql auto-inc response.
@@ -1045,7 +1045,7 @@ func TestInsertAutoincSharded(t *testing.T) {
 	}
 }
 
-func TestInsertGeneratorUnsharded(t *testing.T) {
+func TestPlanInsertGeneratorUnsharded(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	result, err := executorExec(executor, "insert into main1(id, name) values (null, 'myname')", nil)
 	require.NoError(t, err)
@@ -1068,7 +1068,7 @@ func TestInsertGeneratorUnsharded(t *testing.T) {
 	}
 }
 
-func TestInsertAutoincUnsharded(t *testing.T) {
+func TestPlanInsertAutoincUnsharded(t *testing.T) {
 	router, _, _, sbclookup := createExecutorEnv()
 
 	// Fake a mysql auto-inc response.
@@ -1096,7 +1096,7 @@ func TestInsertAutoincUnsharded(t *testing.T) {
 	}
 }
 
-func TestInsertLookupOwned(t *testing.T) {
+func TestPlanInsertLookupOwned(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
 
 	_, err := executorExec(executor, "insert into music(user_id, id) values (2, 3)", nil)
@@ -1124,7 +1124,7 @@ func TestInsertLookupOwned(t *testing.T) {
 	}
 }
 
-func TestInsertLookupOwnedGenerator(t *testing.T) {
+func TestPlanInsertLookupOwnedGenerator(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
 
 	sbclookup.SetResults([]*sqltypes.Result{{
@@ -1167,7 +1167,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 	}
 }
 
-func TestInsertLookupUnowned(t *testing.T) {
+func TestPlanInsertLookupUnowned(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
 
 	_, err := executorExec(executor, "insert into music_extra(user_id, music_id) values (2, 3)", nil)
@@ -1194,7 +1194,7 @@ func TestInsertLookupUnowned(t *testing.T) {
 	}
 }
 
-func TestInsertLookupUnownedUnsupplied(t *testing.T) {
+func TestPlanInsertLookupUnownedUnsupplied(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
 
 	_, err := executorExec(executor, "insert into music_extra_reversed(music_id) values (3)", nil)
@@ -1222,7 +1222,7 @@ func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 
 // If a statement gets broken up into two, and the first one fails,
 // then an error should be returned normally.
-func TestInsertPartialFail1(t *testing.T) {
+func TestPlanInsertPartialFail1(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 
 	// Make the first DML fail, there should be no rollback.
@@ -1244,7 +1244,7 @@ func TestInsertPartialFail1(t *testing.T) {
 // If a statement gets broken up into two, and the second one fails
 // after successful execution of the first, then the transaction must
 // be rolled back due to partial execution.
-func TestInsertPartialFail2(t *testing.T) {
+func TestPlanInsertPartialFail2(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 
 	// Make the second DML fail, it should result in a rollback.
@@ -1263,7 +1263,7 @@ func TestInsertPartialFail2(t *testing.T) {
 	}
 }
 
-func TestMultiInsertSharded(t *testing.T) {
+func TestPlanMultiInsertSharded(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
 	_, err := executorExec(executor, "insert into user(id, v, name) values (1, 1, 'myname1'),(3, 3, 'myname3')", nil)
@@ -1384,7 +1384,7 @@ func TestMultiInsertSharded(t *testing.T) {
 	}
 }
 
-func TestMultiInsertGenerator(t *testing.T) {
+func TestPlanMultiInsertGenerator(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
 
 	sbclookup.SetResults([]*sqltypes.Result{{
@@ -1433,7 +1433,7 @@ func TestMultiInsertGenerator(t *testing.T) {
 	}
 }
 
-func TestMultiInsertGeneratorSparse(t *testing.T) {
+func TestPlanMultiInsertGeneratorSparse(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
 
 	sbclookup.SetResults([]*sqltypes.Result{{
@@ -1487,7 +1487,7 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 	}
 }
 
-func TestInsertBadAutoInc(t *testing.T) {
+func TestPlanInsertBadAutoInc(t *testing.T) {
 	vschema := `
 {
 	"sharded": true,
@@ -1522,7 +1522,7 @@ func TestInsertBadAutoInc(t *testing.T) {
 	}
 }
 
-func TestKeyDestRangeQuery(t *testing.T) {
+func TestPlanKeyDestRangeQuery(t *testing.T) {
 
 	type testCase struct {
 		inputQuery, targetString string
@@ -1612,8 +1612,17 @@ func TestKeyDestRangeQuery(t *testing.T) {
 	masterSession.TargetString = ""
 }
 
+func assertQueriesContain(t *testing.T, sql, sbcName string, sbc *sandboxconn.SandboxConn) {
+	t.Helper()
+	expectedQuery := []*querypb.BoundQuery{{
+		Sql:           sql,
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	testQueries(t, sbcName, sbc, expectedQuery)
+}
+
 // Prepared statement tests
-func TestUpdateEqualWithPrepare(t *testing.T) {
+func TestPlanUpdateEqualWithPrepare(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
 	logChan := QueryLogger.Subscribe("Test")
@@ -1637,7 +1646,7 @@ func TestUpdateEqualWithPrepare(t *testing.T) {
 		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
 	}
 }
-func TestInsertShardedWithPrepare(t *testing.T) {
+func TestPlanInsertShardedWithPrepare(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
 	logChan := QueryLogger.Subscribe("Test")
@@ -1664,7 +1673,7 @@ func TestInsertShardedWithPrepare(t *testing.T) {
 	}
 }
 
-func TestDeleteEqualWithPrepare(t *testing.T) {
+func TestPlanDeleteEqualWithPrepare(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
 	_, err := executorPrepare(executor, "delete from user where id = :id0", map[string]*querypb.BindVariable{
 		"id0": sqltypes.Int64BindVariable(1),
@@ -1682,7 +1691,7 @@ func TestDeleteEqualWithPrepare(t *testing.T) {
 	}
 }
 
-func TestUpdateLastInsertID(t *testing.T) {
+func TestPlanUpdateLastInsertID(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true
 
