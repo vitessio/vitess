@@ -17,13 +17,15 @@ limitations under the License.
 package binlog
 
 import (
+	crand "crypto/rand"
 	"fmt"
+	"math"
+	"math/big"
 	"sync"
 
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -46,13 +48,23 @@ type SlaveConnection struct {
 	wg      sync.WaitGroup
 }
 
+// We use a random slaveid deprecating IDPool which was causing problems with RDS
+// either because it was using ids in the same range that we generate or because
+// the pool reuses ids.
+func getSlaveId() uint32 {
+	fmt.Printf("In getSlaveId\n")
+	max := big.NewInt(math.MaxInt32)
+	id, err := crand.Int(crand.Reader, max)
+	if err != nil {
+		fmt.Printf("Error in getting slaveid %v\n", err)
+
+		panic(fmt.Sprintf("Could not allocate slave id"))
+	}
+	fmt.Printf("getSlaveId returning %d\n", uint32(id.Int64()))
+	return uint32(id.Int64())
+}
+
 // NewSlaveConnection creates a new slave connection to the mysqld instance.
-// It uses a pools.IDPool to ensure that the server IDs used to connect are
-// unique within this process. This is done with the assumptions that:
-//
-// 1) No other processes are making fake slave connections to our mysqld.
-// 2) No real slave servers will have IDs in the range 1-N where N is the peak
-//    number of concurrent fake slave connections we will ever make.
 func NewSlaveConnection(cp dbconfigs.Connector) (*SlaveConnection, error) {
 	conn, err := connectForReplication(cp)
 	if err != nil {
@@ -62,7 +74,7 @@ func NewSlaveConnection(cp dbconfigs.Connector) (*SlaveConnection, error) {
 	sc := &SlaveConnection{
 		Conn:    conn,
 		cp:      cp,
-		slaveID: slaveIDPool.Get(),
+		slaveID: getSlaveId(),
 	}
 	log.Infof("new slave connection: slaveID=%d", sc.slaveID)
 	return sc, nil
@@ -83,9 +95,6 @@ func connectForReplication(cp dbconfigs.Connector) (*mysql.Conn, error) {
 
 	return conn, nil
 }
-
-// slaveIDPool is the IDPool for server IDs used to connect as a slave.
-var slaveIDPool = pools.NewIDPool()
 
 // StartBinlogDumpFromCurrent requests a replication binlog dump from
 // the current position.
@@ -280,8 +289,7 @@ func (sc *SlaveConnection) Close() {
 			sc.cancel = nil
 		}
 
-		log.Infof("closing slave MySQL client, recycling slaveID %v", sc.slaveID)
+		log.Infof("closing slave MySQL client with slaveID %v", sc.slaveID)
 		sc.Conn = nil
-		slaveIDPool.Put(sc.slaveID)
 	}
 }
