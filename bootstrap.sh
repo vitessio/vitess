@@ -172,13 +172,13 @@ function install_k3s() {
 
   case $(uname) in
     Linux)  local platform=linux;;
-    *)   echo "ERROR: unsupported platform. K3s only supports running on Linux"; exit 1;;
+    *)   echo "WARNING: unsupported platform. K3s only supports running on Linux, the k8s topology will not be available for local examples."; return;;
   esac
 
   case $(get_arch) in
       aarch64)  local target="-arm64";;
       x86_64)  local target="";;
-      *)   echo "ERROR: unsupported architecture"; exit 1;;
+      *)   echo "WARNING: unsupported architecture, the k8s topology will not be available for local examples."; return;;
   esac
 
   download_url=https://github.com/rancher/k3s/releases/download
@@ -190,7 +190,6 @@ function install_k3s() {
   ln -snf  $dest "$VTROOT/bin/k3s"
 }
 command -v  k3s || install_dep "k3s" "v1.0.0" "$VTROOT/dist/k3s" install_k3s
-
 
 # Download and install consul, link consul binary into our root.
 function install_consul() {
