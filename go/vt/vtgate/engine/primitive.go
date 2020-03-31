@@ -87,6 +87,7 @@ const (
 	PlanUPDATE
 	PlanDELETE
 	PlanDDL
+	PlanBYPASS
 )
 
 // Plan represents the execution strategy for a given query.

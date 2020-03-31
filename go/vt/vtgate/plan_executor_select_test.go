@@ -605,7 +605,6 @@ func TestPlanSelectComments(t *testing.T) {
 }
 
 func TestPlanSelectNormalize(t *testing.T) {
-	t.Skip("not implemented - TODO")
 	executor, sbc1, sbc2, _ := createExecutorEnvUsing(planAllTheThings)
 	executor.normalize = true
 
@@ -646,7 +645,6 @@ func TestPlanSelectNormalize(t *testing.T) {
 }
 
 func TestPlanSelectCaseSensitivity(t *testing.T) {
-	t.Skip("not implemented - TODO")
 	executor, sbc1, sbc2, _ := createExecutorEnvUsing(planAllTheThings)
 
 	_, err := executorExec(executor, "select Id from user where iD = 1", nil)
@@ -677,7 +675,6 @@ func TestPlanStreamSelectEqual(t *testing.T) {
 }
 
 func TestPlanSelectKeyRange(t *testing.T) {
-	t.Skip("not implemented - TODO")
 	executor, sbc1, sbc2, _ := createExecutorEnvUsing(planAllTheThings)
 
 	_, err := executorExec(executor, "select krcol_unique, krcol from keyrange_table where krcol = 1", nil)
@@ -696,7 +693,6 @@ func TestPlanSelectKeyRange(t *testing.T) {
 }
 
 func TestPlanSelectKeyRangeUnique(t *testing.T) {
-	t.Skip("not implemented - TODO")
 	executor, sbc1, sbc2, _ := createExecutorEnvUsing(planAllTheThings)
 
 	_, err := executorExec(executor, "select krcol_unique, krcol from keyrange_table where krcol_unique = 1", nil)
@@ -715,7 +711,6 @@ func TestPlanSelectKeyRangeUnique(t *testing.T) {
 }
 
 func TestPlanSelectIN(t *testing.T) {
-	t.Skip("not implemented - TODO")
 	executor, sbc1, sbc2, sbclookup := createExecutorEnvUsing(planAllTheThings)
 
 	// Constant in IN clause is just a number, not a bind variable.
@@ -812,7 +807,6 @@ func TestPlanSelectIN(t *testing.T) {
 }
 
 func TestPlanStreamSelectIN(t *testing.T) {
-	t.Skip("not implemented - TODO")
 	executor, _, _, sbclookup := createExecutorEnvUsing(planAllTheThings)
 
 	sql := "select id from user where id in (1)"
@@ -891,7 +885,6 @@ func TestPlanSelectScatter(t *testing.T) {
 }
 
 func TestPlanSelectScatterPartial(t *testing.T) {
-	t.Skip("not implemented - TODO")
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck()
@@ -989,7 +982,6 @@ func TestPlanStreamSelectScatter(t *testing.T) {
 
 // TestSelectScatterOrderBy will run an ORDER BY query that will scatter out to 8 shards and return the 8 rows (one per shard) sorted.
 func TestPlanSelectScatterOrderBy(t *testing.T) {
-	t.Skip("not implemented - TODO")
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck()
@@ -1060,7 +1052,6 @@ func TestPlanSelectScatterOrderBy(t *testing.T) {
 
 // TestSelectScatterOrderByVarChar will run an ORDER BY query that will scatter out to 8 shards and return the 8 rows (one per shard) sorted.
 func TestPlanSelectScatterOrderByVarChar(t *testing.T) {
-	t.Skip("not implemented - TODO")
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck()
@@ -1255,7 +1246,6 @@ func TestPlanStreamSelectScatterOrderByVarChar(t *testing.T) {
 
 // TestSelectScatterAggregate will run an aggregate query that will scatter out to 8 shards and return 4 aggregated rows.
 func TestPlanSelectScatterAggregate(t *testing.T) {
-	t.Skip("not implemented - TODO")
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck()
@@ -1382,7 +1372,6 @@ func TestPlanStreamSelectScatterAggregate(t *testing.T) {
 // TestSelectScatterLimit will run a limit query (ordered for consistency) against
 // a scatter route and verify that the limit primitive works as intended.
 func TestPlanSelectScatterLimit(t *testing.T) {
-	t.Skip("not implemented - TODO")
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck()
@@ -1525,7 +1514,6 @@ func TestPlanStreamSelectScatterLimit(t *testing.T) {
 // TODO(sougou): stream and non-stream testing are very similar.
 // Could reuse code,
 func TestPlanSimpleJoin(t *testing.T) {
-	t.Skip("not implemented - TODO")
 	executor, sbc1, sbc2, _ := createExecutorEnvUsing(planAllTheThings)
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -1568,7 +1556,6 @@ func TestPlanSimpleJoin(t *testing.T) {
 }
 
 func TestPlanJoinComments(t *testing.T) {
-	t.Skip("not implemented - TODO")
 	executor, sbc1, sbc2, _ := createExecutorEnvUsing(planAllTheThings)
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -1637,7 +1624,6 @@ func TestPlanSimpleJoinStream(t *testing.T) {
 }
 
 func TestPlanVarJoin(t *testing.T) {
-	t.Skip("not implemented - TODO")
 	executor, sbc1, sbc2, _ := createExecutorEnvUsing(planAllTheThings)
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -1714,7 +1700,6 @@ func TestPlanVarJoinStream(t *testing.T) {
 }
 
 func TestPlanLeftJoin(t *testing.T) {
-	t.Skip("not implemented - TODO")
 	executor, sbc1, sbc2, _ := createExecutorEnvUsing(planAllTheThings)
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -1803,7 +1788,6 @@ func TestPlanLeftJoinStream(t *testing.T) {
 }
 
 func TestPlanEmptyJoin(t *testing.T) {
-	t.Skip("not implemented - TODO")
 	executor, sbc1, _, _ := createExecutorEnvUsing(planAllTheThings)
 	// Empty result requires a field query for the second part of join,
 	// which is sent to shard 0.
@@ -1880,7 +1864,6 @@ func TestPlanEmptyJoinStream(t *testing.T) {
 }
 
 func TestPlanEmptyJoinRecursive(t *testing.T) {
-	t.Skip("not implemented - TODO")
 	executor, sbc1, _, _ := createExecutorEnvUsing(planAllTheThings)
 	// Make sure it also works recursively.
 	sbc1.SetResults([]*sqltypes.Result{{

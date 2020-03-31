@@ -207,21 +207,6 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 	return result, err
 }
 
-func (e *Executor) parseDestinationTarget(safeSession *SafeSession) (string, topodatapb.TabletType, error) {
-	destKeyspace, destTabletType, dest, err := e.ParseDestinationTarget(safeSession.TargetString)
-	if err != nil {
-		return "", 0, err
-	}
-	if dest != nil {
-		return "", 0, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "todo - what todo?")
-	}
-
-	if safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
-		return "", 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", destTabletType)
-	}
-	return destKeyspace, destTabletType, nil
-}
-
 func (e *Executor) startTxIfNecessary(ctx context.Context, safeSession *SafeSession) error {
 	if !safeSession.Autocommit && !safeSession.InTransaction() {
 		if err := e.txConn.Begin(ctx, safeSession); err != nil {
