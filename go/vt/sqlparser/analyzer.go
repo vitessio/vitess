@@ -163,6 +163,16 @@ func IsDML(sql string) bool {
 	return false
 }
 
+//IsDMLStatement returns true if the query is an INSERT, UPDATE or DELETE statement.
+func IsDMLStatement(stmt Statement) bool {
+	switch stmt.(type) {
+	case *Insert, *Update, *Delete:
+		return true
+	}
+
+	return false
+}
+
 // SplitAndExpression breaks up the Expr into AND-separated conditions
 // and appends them to filters. Outer parenthesis are removed. Precedence
 // should be taken into account if expressions are recombined.
@@ -174,8 +184,6 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 	case *AndExpr:
 		filters = SplitAndExpression(filters, node.Left)
 		return SplitAndExpression(filters, node.Right)
-	case *ParenExpr:
-		return SplitAndExpression(filters, node.Expr)
 	}
 	return append(filters, node)
 }

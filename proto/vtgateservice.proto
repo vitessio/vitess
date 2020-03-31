@@ -25,7 +25,6 @@ option java_package="io.vitess.proto.grpc";
 package vtgateservice;
 
 import "vtgate.proto";
-import "query.proto";
 
 // Vitess is the main service to access a Vitess cluster. It is the API that vtgate
 // exposes to serve all queries.
@@ -49,80 +48,9 @@ service Vitess {
   // API group: v3
   rpc StreamExecute(vtgate.StreamExecuteRequest) returns (stream vtgate.StreamExecuteResponse) {};
 
-  // ExecuteShards executes the query on the specified shards.
-  // API group: Custom Sharding
-  rpc ExecuteShards(vtgate.ExecuteShardsRequest) returns (vtgate.ExecuteShardsResponse) {};
-
-  // ExecuteKeyspaceIds executes the query based on the specified keyspace ids.
-  // API group: Range-based Sharding
-  rpc ExecuteKeyspaceIds(vtgate.ExecuteKeyspaceIdsRequest) returns (vtgate.ExecuteKeyspaceIdsResponse) {};
-
-  // ExecuteKeyRanges executes the query based on the specified key ranges.
-  // API group: Range-based Sharding
-  rpc ExecuteKeyRanges(vtgate.ExecuteKeyRangesRequest) returns (vtgate.ExecuteKeyRangesResponse) {};
-
-  // ExecuteEntityIds executes the query based on the specified external id to keyspace id map.
-  // API group: Range-based Sharding
-  rpc ExecuteEntityIds(vtgate.ExecuteEntityIdsRequest) returns (vtgate.ExecuteEntityIdsResponse) {};
-
-  // ExecuteBatchShards executes the list of queries on the specified shards.
-  // API group: Custom Sharding
-  rpc ExecuteBatchShards(vtgate.ExecuteBatchShardsRequest) returns (vtgate.ExecuteBatchShardsResponse) {};
-
-  // ExecuteBatchKeyspaceIds executes the list of queries based on the specified keyspace ids.
-  // API group: Range-based Sharding
-  rpc ExecuteBatchKeyspaceIds(vtgate.ExecuteBatchKeyspaceIdsRequest) returns (vtgate.ExecuteBatchKeyspaceIdsResponse) {};
-
-  // StreamExecuteShards executes a streaming query based on shards.
-  // Use this method if the query returns a large number of rows.
-  // API group: Custom Sharding
-  rpc StreamExecuteShards(vtgate.StreamExecuteShardsRequest) returns (stream vtgate.StreamExecuteShardsResponse) {};
-
-  // StreamExecuteKeyspaceIds executes a streaming query based on keyspace ids.
-  // Use this method if the query returns a large number of rows.
-  // API group: Range-based Sharding
-  rpc StreamExecuteKeyspaceIds(vtgate.StreamExecuteKeyspaceIdsRequest) returns (stream vtgate.StreamExecuteKeyspaceIdsResponse) {};
-
-  // StreamExecuteKeyRanges executes a streaming query based on key ranges.
-  // Use this method if the query returns a large number of rows.
-  // API group: Range-based Sharding
-  rpc StreamExecuteKeyRanges(vtgate.StreamExecuteKeyRangesRequest) returns (stream vtgate.StreamExecuteKeyRangesResponse) {};
-
-  // Begin a transaction.
-  // API group: Transactions
-  rpc Begin(vtgate.BeginRequest) returns (vtgate.BeginResponse) {};
-
-  // Commit a transaction.
-  // API group: Transactions
-  rpc Commit(vtgate.CommitRequest) returns (vtgate.CommitResponse) {};
-
-  // Rollback a transaction.
-  // API group: Transactions
-  rpc Rollback(vtgate.RollbackRequest) returns (vtgate.RollbackResponse) {};
-
   // ResolveTransaction resolves a transaction.
   // API group: Transactions
   rpc ResolveTransaction(vtgate.ResolveTransactionRequest) returns (vtgate.ResolveTransactionResponse) {};
-
-  // MessageStream streams messages from a message table.
-  rpc MessageStream(vtgate.MessageStreamRequest) returns (stream query.MessageStreamResponse) {};
-
-  // MessageAck acks messages for a table.
-  rpc MessageAck(vtgate.MessageAckRequest) returns (query.MessageAckResponse) {};
-
-  // MessageAckKeyspaceIds routes Message Acks using the associated
-  // keyspace ids.
-  rpc MessageAckKeyspaceIds(vtgate.MessageAckKeyspaceIdsRequest) returns (query.MessageAckResponse) {};
-
-  // GetSrvKeyspace returns a SrvKeyspace object (as seen by this vtgate).
-  // This method is provided as a convenient way for clients to take a
-  // look at the sharding configuration for a Keyspace. Looking at the
-  // sharding information should not be used for routing queries (as the
-  // information may change, use the Execute calls for that).
-  // It is convenient for monitoring applications for instance, or if
-  // using custom sharding.
-  // API group: Topology
-  rpc GetSrvKeyspace(vtgate.GetSrvKeyspaceRequest) returns (vtgate.GetSrvKeyspaceResponse) {};
 
   // VStream streams binlog events from the requested sources.
   rpc VStream(vtgate.VStreamRequest) returns (stream vtgate.VStreamResponse) {};

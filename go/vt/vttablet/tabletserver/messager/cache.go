@@ -28,6 +28,7 @@ import (
 // MessageRow represents a message row.
 // The first column in Row is always the "id".
 type MessageRow struct {
+	Priority  int64
 	TimeNext  int64
 	Epoch     int64
 	TimeAcked int64
@@ -47,8 +48,8 @@ func (mh messageHeap) Len() int {
 func (mh messageHeap) Less(i, j int) bool {
 	// Lower epoch is more important.
 	// If epochs match, newer messages are more important.
-	return mh[i].Epoch < mh[j].Epoch ||
-		(mh[i].Epoch == mh[j].Epoch && mh[i].TimeNext > mh[j].TimeNext)
+	return mh[i].Priority < mh[j].Priority ||
+		(mh[i].Priority == mh[j].Priority && mh[i].TimeNext > mh[j].TimeNext)
 }
 
 func (mh messageHeap) Swap(i, j int) {

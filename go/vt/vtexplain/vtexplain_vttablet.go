@@ -569,8 +569,6 @@ func inferColTypeFromExpr(node sqlparser.Expr, colTypeMap map[string]querypb.Typ
 		default:
 			log.Errorf("vtexplain: unsupported sql value %s", sqlparser.String(node))
 		}
-	case *sqlparser.ParenExpr:
-		colNames, colTypes = inferColTypeFromExpr(node.Expr, colTypeMap, colNames, colTypes)
 	case *sqlparser.CaseExpr:
 		colNames, colTypes = inferColTypeFromExpr(node.Whens[0].Val, colTypeMap, colNames, colTypes)
 	case *sqlparser.NullVal:

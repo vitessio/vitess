@@ -2,14 +2,14 @@
 delete from music_extra where id=1
 
 1 ks_sharded/-40: begin
-1 ks_sharded/-40: delete from music_extra where id = 1 limit 10001 /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+1 ks_sharded/-40: delete from music_extra where id = 1 limit 10001
 1 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
 delete from music_extra where id=1 and extra='abc'
 
 1 ks_sharded/-40: begin
-1 ks_sharded/-40: delete from music_extra where id = 1 and extra = 'abc' limit 10001 /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+1 ks_sharded/-40: delete from music_extra where id = 1 and extra = 'abc' limit 10001
 1 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
@@ -18,8 +18,8 @@ delete from user where id=1
 1 ks_sharded/-40: begin
 1 ks_sharded/-40: select id, name from user where id = 1 limit 10001 for update
 2 ks_sharded/40-80: begin
-2 ks_sharded/40-80: delete from name_user_map where name = 'name_val_2' and user_id = 1 limit 10001 /* vtgate:: keyspace_id:73004f940e97faf0a1b54ec5586a090e */
-3 ks_sharded/-40: delete from user where id = 1 limit 10001 /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+2 ks_sharded/40-80: delete from name_user_map where name = 'name_val_2' and user_id = 1 limit 10001
+3 ks_sharded/-40: delete from user where id = 1 limit 10001
 4 ks_sharded/-40: commit
 5 ks_sharded/40-80: commit
 
@@ -31,8 +31,8 @@ delete from user where name='billy'
 2 ks_sharded/-40: begin
 2 ks_sharded/-40: select id, name from user where name = 'billy' limit 10001 for update
 3 ks_sharded/40-80: begin
-3 ks_sharded/40-80: delete from name_user_map where name = 'name_val_2' and user_id = 1 limit 10001 /* vtgate:: keyspace_id:73004f940e97faf0a1b54ec5586a090e */
-4 ks_sharded/-40: delete from user where name = 'billy' limit 10001 /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+3 ks_sharded/40-80: delete from name_user_map where name = 'name_val_2' and user_id = 1 limit 10001
+4 ks_sharded/-40: delete from user where name = 'billy' limit 10001
 5 ks_sharded/c0-: commit
 6 ks_sharded/-40: commit
 7 ks_sharded/40-80: commit
@@ -41,32 +41,32 @@ delete from user where name='billy'
 delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where extra='abc'
 
 1 ks_sharded/-40: begin
-1 ks_sharded/-40: delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where extra = 'abc' limit 10001/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/-40: delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where extra = 'abc' limit 10001
 1 ks_sharded/-40: commit
 1 ks_sharded/40-80: begin
-1 ks_sharded/40-80: delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where extra = 'abc' limit 10001/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/40-80: delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where extra = 'abc' limit 10001
 1 ks_sharded/40-80: commit
 1 ks_sharded/80-c0: begin
-1 ks_sharded/80-c0: delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where extra = 'abc' limit 10001/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/80-c0: delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where extra = 'abc' limit 10001
 1 ks_sharded/80-c0: commit
 1 ks_sharded/c0-: begin
-1 ks_sharded/c0-: delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where extra = 'abc' limit 10001/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/c0-: delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where extra = 'abc' limit 10001
 1 ks_sharded/c0-: commit
 
 ----------------------------------------------------------------------
 delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from `ks_sharded[-]`.music_extra where extra='abc' LIMIT 10
 
 1 ks_sharded/-40: begin
-1 ks_sharded/-40: delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where extra = 'abc' limit 10/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/-40: delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where extra = 'abc' limit 10
 1 ks_sharded/-40: commit
 1 ks_sharded/40-80: begin
-1 ks_sharded/40-80: delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where extra = 'abc' limit 10/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/40-80: delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where extra = 'abc' limit 10
 1 ks_sharded/40-80: commit
 1 ks_sharded/80-c0: begin
-1 ks_sharded/80-c0: delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where extra = 'abc' limit 10/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/80-c0: delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where extra = 'abc' limit 10
 1 ks_sharded/80-c0: commit
 1 ks_sharded/c0-: begin
-1 ks_sharded/c0-: delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where extra = 'abc' limit 10/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/c0-: delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from music_extra where extra = 'abc' limit 10
 1 ks_sharded/c0-: commit
 
 ----------------------------------------------------------------------

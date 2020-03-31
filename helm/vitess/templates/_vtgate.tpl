@@ -12,7 +12,6 @@
 
 # define image to use
 {{- $vitessTag := .vitessTag | default $defaultVtgate.vitessTag -}}
-{{- $vtgateImage := .vtgateImage | default $defaultVtgate.vtgateImage -}}
 {{- $cellClean := include "clean-label" $cell.name }}
 
 ###################################
@@ -69,13 +68,13 @@ spec:
 {{ if $cell.mysqlProtocol.enabled }}
 {{ if eq $cell.mysqlProtocol.authType "secret" }}
       initContainers:
-{{ include "init-mysql-creds" (tuple $vitessTag $vtgateImage $cell) | indent 8 }}
+{{ include "init-mysql-creds" (tuple $vitessTag $cell) | indent 8 }}
 {{ end }}
 {{ end }}
 
       containers:
         - name: vtgate
-          image: {{$vtgateImage}}:{{$vitessTag}}
+          image: vitess/vtgate:{{$vitessTag}}
           imagePullPolicy: IfNotPresent
           readinessProbe:
             httpGet:
@@ -219,13 +218,12 @@ affinity:
 ###################################
 {{ define "init-mysql-creds" -}}
 {{- $vitessTag := index . 0 -}}
-{{- $vtgateImage := index . 1 -}}
-{{- $cell := index . 2 -}}
+{{- $cell := index . 1 -}}
 
 {{- with $cell.mysqlProtocol }}
 
 - name: init-mysql-creds
-  image: "{{$vtgateImage}}:{{$vitessTag}}"
+  image: "vitess/vtgate:{{$vitessTag}}"
   imagePullPolicy: IfNotPresent
   volumeMounts:
     - name: creds

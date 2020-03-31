@@ -404,26 +404,12 @@ func TestNewPlanValue(t *testing.T) {
 		},
 	}, {
 		in: ValTuple{
-			&ParenExpr{Expr: &SQLVal{
-				Type: ValArg,
-				Val:  []byte(":valarg"),
-			}},
-		},
-		err: "expression is too complex",
-	}, {
-		in: ValTuple{
 			ListArg("::list"),
 		},
 		err: "unsupported: nested lists",
 	}, {
 		in:  &NullVal{},
 		out: sqltypes.PlanValue{},
-	}, {
-		in: &ParenExpr{Expr: &SQLVal{
-			Type: ValArg,
-			Val:  []byte(":valarg"),
-		}},
-		err: "expression is too complex",
 	}}
 	for _, tc := range tcases {
 		got, err := NewPlanValue(tc.in)

@@ -376,6 +376,9 @@ func initialSchema() map[string]*Table {
 				Name: "id",
 				Type: sqltypes.Int64,
 			}, {
+				Name: "priority",
+				Type: sqltypes.Int64,
+			}, {
 				Name: "time_next",
 				Type: sqltypes.Int64,
 			}, {

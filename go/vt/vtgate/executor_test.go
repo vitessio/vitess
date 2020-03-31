@@ -205,9 +205,8 @@ func TestDirectTargetRewrites(t *testing.T) {
 	}
 	sql := "select database()"
 
-	if _, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{}); err != nil {
-		t.Error(err)
-	}
+	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
 	testQueries(t, "sbclookup", sbclookup, []*querypb.BoundQuery{{
 		Sql:           "select :__vtdbname as `database()` from dual",
 		BindVariables: map[string]*querypb.BindVariable{"__vtdbname": sqltypes.StringBindVariable("TestUnsharded")},
@@ -1934,58 +1933,6 @@ func TestExecutorUnrecognized(t *testing.T) {
 	}
 }
 
-func TestExecutorMessageAckSharded(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
-
-	// Constant in IN clause is just a number, not a bind variable.
-	ids := []*querypb.Value{{
-		Type:  sqltypes.VarChar,
-		Value: []byte("1"),
-	}}
-	count, err := executor.MessageAck(context.Background(), "", "user", ids)
-	require.NoError(t, err)
-	if count != 1 {
-		t.Errorf("count: %d, want 1", count)
-	}
-	if !reflect.DeepEqual(sbc1.MessageIDs, ids) {
-		t.Errorf("sbc1.MessageIDs: %v, want %v", sbc1.MessageIDs, ids)
-	}
-	if sbc2.MessageIDs != nil {
-		t.Errorf("sbc2.MessageIDs: %+v, want nil\n", sbc2.MessageIDs)
-	}
-
-	// Constants in IN clause are just numbers, not bind variables.
-	// They result in two different MessageIDs on two shards.
-	sbc1.MessageIDs = nil
-	sbc2.MessageIDs = nil
-	ids = []*querypb.Value{{
-		Type:  sqltypes.VarChar,
-		Value: []byte("1"),
-	}, {
-		Type:  sqltypes.VarChar,
-		Value: []byte("3"),
-	}}
-	count, err = executor.MessageAck(context.Background(), "", "user", ids)
-	require.NoError(t, err)
-	if count != 2 {
-		t.Errorf("count: %d, want 2", count)
-	}
-	wantids := []*querypb.Value{{
-		Type:  sqltypes.VarChar,
-		Value: []byte("1"),
-	}}
-	if !reflect.DeepEqual(sbc1.MessageIDs, wantids) {
-		t.Errorf("sbc1.MessageIDs: %+v, want %+v\n", sbc1.MessageIDs, wantids)
-	}
-	wantids = []*querypb.Value{{
-		Type:  sqltypes.VarChar,
-		Value: []byte("3"),
-	}}
-	if !reflect.DeepEqual(sbc2.MessageIDs, wantids) {
-		t.Errorf("sbc2.MessageIDs: %+v, want %+v\n", sbc2.MessageIDs, wantids)
-	}
-}
-
 // TestVSchemaStats makes sure the building and displaying of the
 // VSchemaStats works.
 func TestVSchemaStats(t *testing.T) {
@@ -2011,8 +1958,8 @@ func TestVSchemaStats(t *testing.T) {
 
 func TestGetPlanUnnormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
-	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, makeComments(""), r, nil)
-	unshardedvc := newVCursorImpl(context.Background(), nil, KsTestUnsharded, 0, makeComments(""), r, nil)
+	emptyvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.VSchema(), r.resolver.resolver)
+	unshardedvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.VSchema(), r.resolver.resolver)
 
 	logStats1 := NewLogStats(context.Background(), "Test", "", nil)
 	query1 := "select * from music_user_map where id = 1"
@@ -2057,9 +2004,12 @@ func TestGetPlanUnnormalized(t *testing.T) {
 		KsTestUnsharded + "@unknown:" + query1,
 		"@unknown:" + query1,
 	}
-	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
-		t.Errorf("Plan keys: %s, want %s", keys, want)
+	if diff := cmp.Diff(want, r.plans.Keys()); diff != "" {
+		t.Errorf("\n-want,+got:\n%s", diff)
 	}
+	//if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
+	//	t.Errorf("Plan keys: %s, want %s", keys, want)
+	//}
 	if logStats4.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats4.SQL)
 	}
@@ -2067,7 +2017,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 
 func TestGetPlanCacheUnnormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
-	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, makeComments(""), r, nil)
+	emptyvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.VSchema(), r.resolver.resolver)
 	query1 := "select * from music_user_map where id = 1"
 	logStats1 := NewLogStats(context.Background(), "Test", "", nil)
 	_, err := r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
@@ -2092,7 +2042,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 
 	// Skip cache using directive
 	r, _, _, _ = createExecutorEnv()
-	unshardedvc := newVCursorImpl(context.Background(), nil, KsTestUnsharded, 0, makeComments(""), r, nil)
+	unshardedvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.VSchema(), r.resolver.resolver)
 
 	query1 = "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
 	logStats1 = NewLogStats(context.Background(), "Test", "", nil)
@@ -2113,7 +2063,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 func TestGetPlanCacheNormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
 	r.normalize = true
-	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, makeComments(""), r, nil)
+	emptyvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.VSchema(), r.resolver.resolver)
 	query1 := "select * from music_user_map where id = 1"
 	logStats1 := NewLogStats(context.Background(), "Test", "", nil)
 	_, err := r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
@@ -2138,7 +2088,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	// Skip cache using directive
 	r, _, _, _ = createExecutorEnv()
 	r.normalize = true
-	unshardedvc := newVCursorImpl(context.Background(), nil, KsTestUnsharded, 0, makeComments(""), r, nil)
+	unshardedvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.VSchema(), r.resolver.resolver)
 
 	query1 = "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
 	logStats1 = NewLogStats(context.Background(), "Test", "", nil)
@@ -2159,8 +2109,8 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 func TestGetPlanNormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
 	r.normalize = true
-	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, makeComments(""), r, nil)
-	unshardedvc := newVCursorImpl(context.Background(), nil, KsTestUnsharded, 0, makeComments(""), r, nil)
+	emptyvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.VSchema(), r.resolver.resolver)
+	unshardedvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.VSchema(), r.resolver.resolver)
 
 	query1 := "select * from music_user_map where id = 1"
 	query2 := "select * from music_user_map where id = 2"

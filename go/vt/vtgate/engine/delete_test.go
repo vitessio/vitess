@@ -80,7 +80,7 @@ func TestDeleteEqual(t *testing.T) {
 	}
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		`ExecuteMultiShard ks.-20: dummy_delete /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {} true true`,
+		`ExecuteMultiShard ks.-20: dummy_delete {} true true`,
 	})
 
 	// Failure case
@@ -184,7 +184,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// Finally, the actual delete, which is also sent to -20, same route as the subquery.
-		`ExecuteMultiShard sharded.-20: dummy_delete /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {} true true`,
+		`ExecuteMultiShard sharded.-20: dummy_delete {} true true`,
 	})
 
 	// No rows changing
@@ -201,7 +201,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
 		// Subquery returns no rows. So, no vindexes are deleted. We still pass-through the original delete.
-		`ExecuteMultiShard sharded.-20: dummy_delete /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {} true true`,
+		`ExecuteMultiShard sharded.-20: dummy_delete {} true true`,
 	})
 
 	// Delete can affect multiple rows
@@ -233,7 +233,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"7" from2: type:INT64 value:"8" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"9" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// Send the DML.
-		`ExecuteMultiShard sharded.-20: dummy_delete /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {} true true`,
+		`ExecuteMultiShard sharded.-20: dummy_delete {} true true`,
 	})
 }
 

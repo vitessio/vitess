@@ -311,9 +311,9 @@ var commands = []commandGroup{
 			{"Reshard", commandReshard,
 				"[-skip_schema_copy] <keyspace.workflow> <source_shards> <target_shards>",
 				"Start a Resharding process. Example: Reshard ks.workflow001 '0' '-80,80-'"},
-			{"Migrate", commandMigrate,
+			{"MoveTables", commandMoveTables,
 				"[-cell=<cell>] [-tablet_types=<source_tablet_types>] -workflow=<workflow> <source_keyspace> <target_keyspace> <table_specs>",
-				`Start a table(s) migration, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{""column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{""column": "id2", "name": "hash"}]}}`},
+				`Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{""column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{""column": "id2", "name": "hash"}]}}`},
 			{"CreateLookupVindex", commandCreateLookupVindex,
 				"[-cell=<cell>] [-tablet_types=<source_tablet_types>] <keyspace> <json_spec>",
 				`Create and backfill a lookup vindex. the json_spec must contain the vindex and colvindex specs for the new lookup.`},
@@ -338,12 +338,12 @@ var commands = []commandGroup{
 			{"MigrateServedFrom", commandMigrateServedFrom,
 				"[-cells=c1,c2,...] [-reverse] <destination keyspace/shard> <served tablet type>",
 				"Makes the <destination keyspace/shard> serve the given type. This command also rebuilds the serving graph."},
-			{"MigrateReads", commandMigrateReads,
+			{"SwitchReads", commandSwitchReads,
 				"[-cells=c1,c2,...] [-reverse] -tablet_type={replica|rdonly} <keyspace.workflow>",
-				"Migrate read traffic for the specified workflow."},
-			{"MigrateWrites", commandMigrateWrites,
+				"Switch read traffic for the specified workflow."},
+			{"SwitchWrites", commandSwitchWrites,
 				"[-filtered_replication_wait_time=30s] [-cancel] [-reverse_replication=false] <keyspace.workflow>",
-				"Migrate write traffic for the specified workflow."},
+				"Switch write traffic for the specified workflow."},
 			{"CancelResharding", commandCancelResharding,
 				"<keyspace/shard>",
 				"Permanently cancels a resharding in progress. All resharding related metadata will be deleted."},
@@ -1817,7 +1817,7 @@ func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 	return wr.Reshard(ctx, keyspace, workflow, source, target, *skipSchemaCopy)
 }
 
-func commandMigrate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	workflow := subFlags.String("workflow", "", "Workflow name. Will be used to later migrate traffic.")
 	cell := subFlags.String("cell", "", "Cell to replicate from.")
 	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from.")
@@ -1833,7 +1833,7 @@ func commandMigrate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 	source := subFlags.Arg(0)
 	target := subFlags.Arg(1)
 	tableSpecs := subFlags.Arg(2)
-	return wr.Migrate(ctx, *workflow, source, target, tableSpecs, *cell, *tabletTypes)
+	return wr.MoveTables(ctx, *workflow, source, target, tableSpecs, *cell, *tabletTypes)
 }
 
 func commandCreateLookupVindex(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1991,7 +1991,7 @@ func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFla
 	return wr.MigrateServedFrom(ctx, keyspace, shard, servedType, cells, *reverse, *filteredReplicationWaitTime)
 }
 
-func commandMigrateReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandSwitchReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward.")
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
 	tabletType := subFlags.String("tablet_type", "", "Tablet type (replica or rdonly)")
@@ -2022,10 +2022,10 @@ func commandMigrateReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 
-	return wr.MigrateReads(ctx, keyspace, workflow, servedType, cells, direction)
+	return wr.SwitchReads(ctx, keyspace, workflow, servedType, cells, direction)
 }
 
-func commandMigrateWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandSwitchWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations. The migration will be aborted on timeout.")
 	reverseReplication := subFlags.Bool("reverse_replication", true, "Also reverse the replication")
 	cancelMigrate := subFlags.Bool("cancel", false, "Cancel the failed migration and serve from source")
@@ -2041,7 +2041,7 @@ func commandMigrateWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 		return err
 	}
 
-	journalID, err := wr.MigrateWrites(ctx, keyspace, workflow, *filteredReplicationWaitTime, *cancelMigrate, *reverseReplication)
+	journalID, err := wr.SwitchWrites(ctx, keyspace, workflow, *filteredReplicationWaitTime, *cancelMigrate, *reverseReplication)
 	if err != nil {
 		return err
 	}
@@ -2556,7 +2556,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 
 	if _, err := wr.TopoServer().GetKeyspace(ctx, keyspace); err != nil {
 		if strings.Contains(err.Error(), "node doesn't exist") {
-			return fmt.Errorf("keyspace(%s) doesn't exist, check if the keyspace is initialized.\n", keyspace)
+			return fmt.Errorf("keyspace(%s) doesn't exist, check if the keyspace is initialized", keyspace)
 		}
 		return err
 	}
