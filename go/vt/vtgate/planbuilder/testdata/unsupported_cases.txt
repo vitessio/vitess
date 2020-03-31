@@ -10,12 +10,6 @@
 "show create database"
 "unsupported construct: show"
 
-"alter table a ADD id int"
-"unable to generate plan for: alter table a"
-
-"alter table a.b ADD id int"
-"unable to generate plan for: alter table b"
-
 # DBA statements
 "explain select * from user"
 "unsupported construct: other read"

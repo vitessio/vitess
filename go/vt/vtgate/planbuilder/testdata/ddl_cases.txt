@@ -3,21 +3,30 @@
 {
   "Original": "create table t1(id bigint, primary key(id))",
   "Instructions": {
-    "Type": "DDL",
-    "Keyspace": "targetString",
-    "TargetDestination": "DestinationAllShards()",
-    "Query": "create table t1 (\n\tid bigint,\n\tprimary key (id)\n)"
+    "Opcode": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": {},
+    "Query": "create table t1 (\n\tid bigint,\n\tprimary key (id)\n)",
+    "IsDML": false
   }
 }
+
 # simple create table with keyspace
 "create table user.t1(id bigint, primary key(id))"
 {
   "Original": "create table user.t1(id bigint, primary key(id))",
   "Instructions": {
-    "Type": "DDL",
-    "Keyspace": "user",
-    "TargetDestination": "DestinationAllShards()",
-    "Query": "create table t1 (\n\tid bigint,\n\tprimary key (id)\n)"
+    "Opcode": "Send",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetDestination": {},
+    "Query": "create table t1 (\n\tid bigint,\n\tprimary key (id)\n)",
+    "IsDML": false
   }
 }
 
@@ -26,20 +35,54 @@
 {
   "Original": "create table a(id int)",
   "Instructions": {
-    "Type": "DDL",
-    "Keyspace": "targetString",
-    "TargetDestination": "DestinationAllShards()",
-    "Query": "create table a (\n\tid int\n)"
+    "Opcode": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": {},
+    "Query": "create table a (\n\tid int\n)",
+    "IsDML": false
   }
 }
 
+# simple create table with table qualifier that does not exists
 "create table a.b(id int)"
+"no keyspace with name [a] found"
+
+#Alter table
+"alter table a ADD id int"
 {
-  "Original": "create table a.b(id int)",
+  "Original": "alter table a ADD id int",
   "Instructions": {
-    "Type": "DDL",
-    "Keyspace": "a",
-    "TargetDestination": "DestinationAllShards()",
-    "Query": "create table b (\n\tid int\n)"
+    "Opcode": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": {},
+    "Query": "alter table a",
+    "IsDML": false
   }
 }
+
+#Alter table with qualifier
+"alter table user.b ADD id int"
+{
+  "Original": "alter table user.b ADD id int",
+  "Instructions": {
+    "Opcode": "Send",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetDestination": {},
+    "Query": "alter table b",
+    "IsDML": false
+  }
+}
+
+#Alter table with unknown qualifier
+"alter table a.b ADD id int"
+"no keyspace with name [a] found"
+

@@ -173,6 +173,15 @@ func IsDMLStatement(stmt Statement) bool {
 	return false
 }
 
+//IsVschemaDDL returns true if the query is an Vschema alter ddl.
+func IsVschemaDDL(ddl *DDL) bool {
+	switch ddl.Action {
+	case CreateVindexStr, AddVschemaTableStr, DropVschemaTableStr, AddColVindexStr, DropColVindexStr, AddSequenceStr, AddAutoIncStr:
+		return true
+	}
+	return false
+}
+
 // SplitAndExpression breaks up the Expr into AND-separated conditions
 // and appends them to filters. Outer parenthesis are removed. Precedence
 // should be taken into account if expressions are recombined.
