@@ -52,15 +52,8 @@ type SlaveConnection struct {
 // either because it was using ids in the same range that we generate or because
 // the pool reuses ids.
 func getSlaveID() uint32 {
-	fmt.Printf("In getSlaveId\n")
 	max := big.NewInt(math.MaxInt32)
-	id, err := crand.Int(crand.Reader, max)
-	if err != nil {
-		fmt.Printf("Error in getting slaveid %v\n", err)
-
-		panic(fmt.Sprintf("Could not allocate slave id"))
-	}
-	fmt.Printf("getSlaveId returning %d\n", uint32(id.Int64()))
+	id, _ := crand.Int(crand.Reader, max)
 	return uint32(id.Int64())
 }
 
