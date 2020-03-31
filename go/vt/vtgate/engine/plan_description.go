@@ -17,6 +17,8 @@ limitations under the License.
 package engine
 
 import (
+	"encoding/json"
+
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -25,16 +27,42 @@ import (
 // PlanDescription is used to create a serializable representation of the Primitive tree
 type PlanDescription struct {
 	OperatorType string
-	Variant      string
+	Variant      string `json:",omitempty"`
 	// Keyspace specifies the keyspace to send the query to.
-	Keyspace *vindexes.Keyspace
+	Keyspace *vindexes.Keyspace `json:",omitempty"`
 	// TargetDestination specifies an explicit target destination to send the query to.
-	TargetDestination key.Destination
+	TargetDestination key.Destination `json:",omitempty"`
 	// TargetTabletType specifies an explicit target destination tablet type
 	// this is only used in conjunction with TargetDestination
-	TargetTabletType topodatapb.TabletType
-	Other            map[string]string
-	Inputs           []PlanDescription
+	TargetTabletType topodatapb.TabletType `json:",omitempty"`
+	Other            map[string]string     `json:",omitempty"`
+	Inputs           []PlanDescription     `json:",omitempty"`
+}
+
+// MarshalJSON serializes the PlanDescription into a JSON representation.
+func (pd *PlanDescription) MarshalJSON() ([]byte, error) {
+	var dest string
+	if pd.TargetDestination != nil {
+		dest = pd.TargetDestination.String()
+	}
+	out := struct {
+		OperatorType      string
+		Variant           string             `json:",omitempty"`
+		Keyspace          *vindexes.Keyspace `json:",omitempty"`
+		TargetDestination string             `json:",omitempty"`
+		TargetTabletType  string             `json:",omitempty"`
+		Other             map[string]string  `json:",omitempty"`
+		Inputs            []PlanDescription  `json:",omitempty"`
+	}{
+		OperatorType:      pd.OperatorType,
+		Variant:           pd.Variant,
+		Keyspace:          pd.Keyspace,
+		TargetDestination: dest,
+		TargetTabletType:  pd.TargetTabletType.String(),
+		Other:             pd.Other,
+		Inputs:            pd.Inputs,
+	}
+	return json.Marshal(out)
 }
 
 //PrimitiveToPlanDescription transforms a primitive tree into a corresponding PlanDescription tree

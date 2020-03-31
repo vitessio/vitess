@@ -23,6 +23,7 @@ import (
 	"math"
 	"reflect"
 	"sort"
+	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -201,20 +202,27 @@ func (ms *MemorySort) description() PlanDescription {
 }
 
 func orderByParamsToString(i interface{}) string {
-	ob := i.(OrderbyParams)
-	return ob.String()
+	return i.(OrderbyParams).String()
 }
 
+//GenericJoin will iterate over arrays, slices or maps, and executes the f function to get a
+//string representation of each element, and then uses strings.Join() join all the strings into a single one
 func GenericJoin(input interface{}, f func(interface{}) string) string {
 	sl := reflect.ValueOf(input)
-	str := ""
-	for i := 0; i < sl.Len(); i++ {
-		if len(str) != 0 {
-			str += ","
+	var keys []string
+	switch sl.Kind() {
+	case reflect.Slice:
+		for i := 0; i < sl.Len(); i++ {
+			keys = append(keys, f(sl.Index(i).Interface()))
 		}
-		str += f(sl.Index(i).Interface())
+	case reflect.Map:
+		for _, k := range sl.MapKeys() {
+			keys = append(keys, f(k.Interface()))
+		}
+	default:
+		panic("GenericJoin doesn't know how to deal with " + sl.Kind().String())
 	}
-	return str
+	return strings.Join(keys, ", ")
 }
 
 // sortHeap is sorted based on the orderBy params.

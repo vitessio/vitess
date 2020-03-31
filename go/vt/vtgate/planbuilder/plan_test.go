@@ -301,13 +301,9 @@ func getPlanOrErrorOutput(err error, plan *engine.Plan) string {
 	}
 
 	descr := engine.PrimitiveToPlanDescription(plan.Instructions)
-	sss, _ := json.MarshalIndent(descr, "", "  ")
-	fmt.Println(string(sss))
 
-	bout, _ := json.MarshalIndent(testPlan{
-		Original:     plan.Original,
-		Instructions: plan.Instructions,
-	}, "", "  ")
+	bout, _ := json.MarshalIndent(descr, "  ", "  ")
+	fmt.Println(string(bout))
 	return string(bout)
 }
 

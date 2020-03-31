@@ -19,6 +19,8 @@ package engine
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/key"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -31,11 +33,14 @@ var _ Primitive = (*PulloutSubquery)(nil)
 // PulloutSubquery executes a "pulled out" subquery and stores
 // the results in a bind variable.
 type PulloutSubquery struct {
-	Opcode         PulloutOpcode
+	Opcode PulloutOpcode
+
+	// SubqueryResult and HasValues are used to send in the bindvar used in the query to the underlying primitive
 	SubqueryResult string
 	HasValues      string
-	Subquery       Primitive
-	Underlying     Primitive
+
+	Subquery   Primitive
+	Underlying Primitive
 }
 
 // Inputs returns the input primitives for this join
@@ -154,7 +159,11 @@ func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*qu
 }
 
 func (ps *PulloutSubquery) description() PlanDescription {
-	return PlanDescription{OperatorType: "pullout subquery not implemented"}
+	return PlanDescription{
+		OperatorType:      "Subquery",
+		Variant:           ps.Opcode.String(),
+		TargetDestination: key.DestinationVtGate{},
+	}
 }
 
 // PulloutOpcode is a number representing the opcode
