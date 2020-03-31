@@ -444,6 +444,29 @@ func (d DestinationAllShards) String() string {
 }
 
 //
+// DestinationVtGate
+//
+
+// DestinationVtGate implies primitive executes entirely on vtgate
+// It implements the Destination interface.
+type DestinationVtGate struct{}
+
+// IsUnique is part of the Destination interface.
+func (d DestinationVtGate) IsUnique() bool {
+	return true
+}
+
+// Resolve is part of the Destination interface.
+func (d DestinationVtGate) Resolve(allShards []*topodatapb.ShardReference, addShard func(shard string) error) error {
+	return nil
+}
+
+// String is part of the Destination interface.
+func (d DestinationVtGate) String() string {
+	return "DestinationVtGate()"
+}
+
+//
 // DestinationNone
 //
 

@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"io"
 
+	"vitess.io/vitess/go/vt/key"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -218,7 +220,8 @@ func (l *Limit) description() PlanDescription {
 	}
 
 	return PlanDescription{
-		OperatorType: "Limit",
-		Other:        other,
+		OperatorType:      "Limit",
+		Other:             other,
+		TargetDestination: key.DestinationVtGate{},
 	}
 }

@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	"vitess.io/vitess/go/jsonutil"
@@ -114,6 +115,16 @@ type OrderbyParams struct {
 	Desc bool
 }
 
+func (obp OrderbyParams) String() string {
+	val := strconv.Itoa(obp.Col)
+	if obp.Desc {
+		val += " DESC"
+	} else {
+		val += " ASC"
+	}
+	return val
+}
+
 // MarshalJSON serializes the Route into a JSON representation.
 // It's used for testing and diagnostics.
 func (route *Route) MarshalJSON() ([]byte, error) {
@@ -144,7 +155,7 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		TruncateColumnCount:     route.TruncateColumnCount,
 		QueryTimeout:            route.QueryTimeout,
 		ScatterErrorsAsWarnings: route.ScatterErrorsAsWarnings,
-		Table:                   route.TableName,
+		Table: route.TableName,
 	}
 	return jsonutil.MarshalNoEscape(marshalRoute)
 }
@@ -558,17 +569,15 @@ func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) 
 
 func (route *Route) description() PlanDescription {
 	other := map[string]string{
-		"Query":      route.Query,
-		"TableName":  route.TableName,
-		"Keyspace":   route.Keyspace.Name,
-		"TabletType": route.TargetTabletType.String(),
-	}
-	if route.TargetDestination != nil {
-		other["Destination"] = route.TargetDestination.String()
+		"Query":     route.Query,
+		"TableName": route.TableName,
 	}
 	return PlanDescription{
-		OperatorType: "Route",
-		Variant:      routeName[route.Opcode],
-		Other:        other,
+		OperatorType:      "Route",
+		Variant:           routeName[route.Opcode],
+		Keyspace:          route.Keyspace,
+		TargetDestination: route.TargetDestination,
+		TargetTabletType:  route.TargetTabletType,
+		Other:             other,
 	}
 }

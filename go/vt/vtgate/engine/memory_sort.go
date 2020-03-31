@@ -21,9 +21,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
 	"sort"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -185,7 +187,34 @@ func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int
 }
 
 func (ms *MemorySort) description() PlanDescription {
-	return PlanDescription{OperatorType: "memorysort - not implemented"}
+	orderByIndexes := GenericJoin(ms.OrderBy, orderByParamsToString)
+	other := map[string]string{
+		"UpperLimit": ms.UpperLimit.Value.String(),
+		"OrderBy":    orderByIndexes,
+	}
+	return PlanDescription{
+		OperatorType:      "Sort",
+		Variant:           "Memory",
+		TargetDestination: key.DestinationVtGate{},
+		Other:             other,
+	}
+}
+
+func orderByParamsToString(i interface{}) string {
+	ob := i.(OrderbyParams)
+	return ob.String()
+}
+
+func GenericJoin(input interface{}, f func(interface{}) string) string {
+	sl := reflect.ValueOf(input)
+	str := ""
+	for i := 0; i < sl.Len(); i++ {
+		if len(str) != 0 {
+			str += ","
+		}
+		str += f(sl.Index(i).Interface())
+	}
+	return str
 }
 
 // sortHeap is sorted based on the orderBy params.
