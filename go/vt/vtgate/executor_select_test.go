@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -632,12 +634,8 @@ func TestSelectNormalize(t *testing.T) {
 			"vtg1": sqltypes.TestBindVariable(int64(1)),
 		},
 	}}
-	if sbc1.Queries != nil {
-		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
-	}
-	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
-		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
-	}
+	require.Empty(t, sbc1.Queries)
+	utils.MustMatch(t, sbc2.Queries, wantQueries, "sbc2.Queries")
 	sbc2.Queries = nil
 	masterSession.TargetString = ""
 }
@@ -864,7 +862,7 @@ func TestSelectScatter(t *testing.T) {
 		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -898,7 +896,7 @@ func TestSelectScatterPartial(t *testing.T) {
 		conns = append(conns, sbc)
 	}
 
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -955,7 +953,7 @@ func TestStreamSelectScatter(t *testing.T) {
 	for _, shard := range shards {
 		_ = hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 
 	sql := "select id from user"
 	result, err := executorStream(executor, sql)
@@ -1009,7 +1007,7 @@ func TestSelectScatterOrderBy(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 
 	query := "select col1, col2 from user order by col2 desc"
 	gotResult, err := executorExec(executor, query, nil)
@@ -1080,7 +1078,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 
 	query := "select col1, textcol from user order by textcol desc"
 	gotResult, err := executorExec(executor, query, nil)
@@ -1146,7 +1144,7 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 
 	query := "select id, col from user order by col desc"
 	gotResult, err := executorStream(executor, query)
@@ -1208,7 +1206,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 
 	query := "select id, textcol from user order by textcol desc"
 	gotResult, err := executorStream(executor, query)
@@ -1270,7 +1268,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 
 	query := "select col, sum(foo) from user group by col"
 	gotResult, err := executorExec(executor, query, nil)
@@ -1333,7 +1331,7 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 
 	query := "select col, sum(foo) from user group by col"
 	gotResult, err := executorStream(executor, query)
@@ -1396,7 +1394,7 @@ func TestSelectScatterLimit(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 
 	query := "select col1, col2 from user order by col2 desc limit 3"
 	gotResult, err := executorExec(executor, query, nil)
@@ -1468,7 +1466,7 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 
 	query := "select col1, col2 from user order by col2 desc limit 3"
 	gotResult, err := executorStream(executor, query)

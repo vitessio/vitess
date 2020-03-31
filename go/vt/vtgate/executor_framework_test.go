@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 
@@ -360,7 +361,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	executor = NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	return executor, sbc1, sbc2, sbclookup
 }
@@ -379,7 +380,7 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	executor = NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 	return executor, sbc1, sbc2, sbclookup
 }
 
@@ -554,4 +555,10 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 	}
 
 	return logStats
+}
+
+func newTestResolver(hc discovery.HealthCheck, serv srvtopo.Server, cell string) *Resolver {
+	sc := newTestScatterConn(hc, serv, cell)
+	srvResolver := srvtopo.NewResolver(serv, sc.gateway, cell)
+	return NewResolver(srvResolver, serv, cell, sc)
 }

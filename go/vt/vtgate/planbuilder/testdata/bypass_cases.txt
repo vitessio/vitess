@@ -1,0 +1,63 @@
+# select bypass
+"select count(*), col from unsharded"
+{
+  "Original": "select count(*), col from unsharded",
+  "Instructions": {
+    "Opcode": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "-80",
+    "Query": "select count(*), col from unsharded",
+    "NoAutoCommit": true
+  }
+}
+
+# update bypass
+"update user set val = 1 where id = 18446744073709551616 and id = 1"
+{
+  "Original": "update user set val = 1 where id = 18446744073709551616 and id = 1",
+  "Instructions": {
+    "Opcode": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "-80",
+    "Query": "update user set val = 1 where id = 18446744073709551616 and id = 1",
+    "NoAutoCommit": false
+  }
+}
+
+# delete bypass
+"DELETE FROM USER WHERE ID = 42"
+{
+  "Original": "DELETE FROM USER WHERE ID = 42",
+  "Instructions": {
+    "Opcode": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "-80",
+    "Query": "delete from USER where ID = 42",
+    "NoAutoCommit": false
+  }
+}
+
+# insert bypass
+"INSERT INTO USER (ID, NAME) VALUES (42, 'ms X')"
+{
+  "Original": "INSERT INTO USER (ID, NAME) VALUES (42, 'ms X')",
+  "Instructions": {
+    "Opcode": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "-80",
+    "Query": "insert into USER(ID, NAME) values (42, 'ms X')",
+    "NoAutoCommit": false
+  }
+}

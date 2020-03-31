@@ -22,7 +22,6 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	_ "vitess.io/vitess/go/vt/status"
 	"vitess.io/vitess/go/vt/vtgate"
-	"vitess.io/vitess/go/vt/vtgate/gateway"
 )
 
 // For use by plugins which wish to avoid racing when registering status page parts.
@@ -39,7 +38,7 @@ func addStatusParts(vtg *vtgate.VTGate) {
 	servenv.AddStatusPart("Topology Cache", srvtopo.TopoTemplate, func() interface{} {
 		return resilientServer.CacheStatus()
 	})
-	servenv.AddStatusPart("Gateway Status", gateway.StatusTemplate, func() interface{} {
+	servenv.AddStatusPart("Gateway Status", vtgate.StatusTemplate, func() interface{} {
 		return vtg.GetGatewayCacheStatus()
 	})
 	servenv.AddStatusPart("Health Check Cache", discovery.HealthCheckTemplate, func() interface{} {

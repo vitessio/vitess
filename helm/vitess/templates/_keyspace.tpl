@@ -15,7 +15,6 @@
 
 # define image to use
 {{- $vitessTag := .vitessTag | default $defaultVtctlclient.vitessTag -}}
-{{- $vtctlclientImage := .vtctlclientImage | default $defaultVtctlclient.vtctlclientImage -}}
 {{- $secrets := .secrets | default $defaultVtctlclient.secrets -}}
 
 {{- range $name, $schema := $keyspace.schema }}
@@ -34,7 +33,7 @@ spec:
       restartPolicy: OnFailure
       containers:
       - name: apply-schema
-        image: "{{$vtctlclientImage}}:{{$vitessTag}}"
+        image: "vitess/vtctlclient:{{$vitessTag}}"
         volumeMounts:
 {{ include "user-secret-volumeMounts" $defaultVtctlclient.secrets | indent 10 }}
 
@@ -101,7 +100,7 @@ spec:
       restartPolicy: OnFailure
       containers:
       - name: apply-vschema
-        image: "{{$vtctlclientImage}}:{{$vitessTag}}"
+        image: "vitess/vtctlclient:{{$vitessTag}}"
         volumeMounts:
 {{ include "user-secret-volumeMounts" $defaultVtctlclient.secrets | indent 10 }}
 

@@ -13,7 +13,6 @@
 
 # define image to use
 {{- $vitessTag := .vitessTag | default $defaultVtctld.vitessTag -}}
-{{- $vtcldImage := .vtcldImage | default $defaultVtctld.vtcldImage -}}
 {{- $cellClean := include "clean-label" $cell.name }}
 
 ###################################
@@ -60,7 +59,7 @@ spec:
 {{ include "vtctld-affinity" (tuple $cellClean $cell.region) | indent 6 }}
       containers:
         - name: vtctld
-          image: {{$vtcldImage}}:{{$vitessTag}}
+          image: vitess/vtctld:{{$vitessTag}}
           imagePullPolicy: IfNotPresent
           readinessProbe:
             httpGet:

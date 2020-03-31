@@ -47,7 +47,7 @@ const (
 	appPrefix = "/app/"
 )
 
-// InitVtctld initializes all the vtctld functionnality.
+// InitVtctld initializes all the vtctld functionality.
 func InitVtctld(ts *topo.Server) {
 	actionRepo := NewActionRepository(ts)
 

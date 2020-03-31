@@ -32,8 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/gateway"
-
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -67,14 +65,14 @@ func initVtgateExecutor(vSchemaStr string, opts *Options) error {
 
 	streamSize := 10
 	queryPlanCacheSize := int64(10)
-	vtgateExecutor = vtgate.NewExecutor(context.Background(), explainTopo, vtexplainCell, "", resolver, opts.Normalize, streamSize, queryPlanCacheSize)
+	vtgateExecutor = vtgate.NewExecutor(context.Background(), explainTopo, vtexplainCell, resolver, opts.Normalize, streamSize, queryPlanCacheSize)
 
 	return nil
 }
 
 func newFakeResolver(opts *Options, hc discovery.HealthCheck, serv srvtopo.Server, cell string) *vtgate.Resolver {
 	ctx := context.Background()
-	gw := gateway.GetCreator()(ctx, hc, serv, cell, 3)
+	gw := vtgate.NewTabletGateway(ctx, hc, serv, cell, 3)
 	gw.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
 
 	txMode := vtgatepb.TransactionMode_MULTI

@@ -29,14 +29,12 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/gateway"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // This file uses the sandbox_test framework.
@@ -71,29 +69,6 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 
 		qr, errs := sc.ExecuteMultiShard(context.Background(), rss, queries, topodatapb.TabletType_REPLICA, NewSafeSession(nil), false, false)
 		return qr, vterrors.Aggregate(errs)
-	})
-}
-
-func TestScatterConnExecuteBatch(t *testing.T) {
-	testScatterConnGeneric(t, "TestScatterConnExecuteBatch", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
-		queries := []*vtgatepb.BoundShardQuery{{
-			Query: &querypb.BoundQuery{
-				Sql:           "query",
-				BindVariables: nil,
-			},
-			Keyspace: "TestScatterConnExecuteBatch",
-			Shards:   shards,
-		}}
-		res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-		scatterRequest, err := boundShardQueriesToScatterBatchRequest(context.Background(), res, queries, topodatapb.TabletType_REPLICA)
-		if err != nil {
-			return nil, err
-		}
-		qrs, err := sc.ExecuteBatch(context.Background(), scatterRequest, topodatapb.TabletType_REPLICA, false, NewSafeSession(nil), nil)
-		if err != nil {
-			return nil, err
-		}
-		return &qrs[0], err
 	})
 }
 
@@ -677,7 +652,7 @@ func newTestScatterConn(hc discovery.HealthCheck, serv srvtopo.Server, cell stri
 	// The topo.Server is used to start watching the cells described
 	// in '-cells_to_watch' command line parameter, which is
 	// empty by default. So it's unused in this test, set to nil.
-	gw := gateway.GetCreator()(context.Background(), hc, serv, cell, 3)
+	gw := NewTabletGateway(context.Background(), hc, serv, cell, 3)
 	tc := NewTxConn(gw, vtgatepb.TransactionMode_TWOPC)
 	return NewScatterConn("", tc, gw, hc)
 }

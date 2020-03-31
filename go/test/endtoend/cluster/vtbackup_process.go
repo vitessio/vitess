@@ -47,8 +47,6 @@ type VtbackupProcess struct {
 	ExtraArgs     []string
 	initialBackup bool
 	initDBfile    string
-	dbPassword    string
-	dbName        string
 
 	proc *exec.Cmd
 	exit chan error

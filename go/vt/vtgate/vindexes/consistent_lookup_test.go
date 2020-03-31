@@ -522,7 +522,7 @@ func (vc *loggingVCursor) AddResult(qr *sqltypes.Result, err error) {
 	vc.errors = append(vc.errors, err)
 }
 
-func (vc *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+func (vc *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	name := "Unknown"
 	switch co {
 	case vtgatepb.CommitOrder_NORMAL:
@@ -534,14 +534,14 @@ func (vc *loggingVCursor) Execute(method string, query string, bindvars map[stri
 	case vtgatepb.CommitOrder_AUTOCOMMIT:
 		name = "ExecuteAutocommit"
 	}
-	return vc.execute(name, query, bindvars, isDML)
+	return vc.execute(name, query, bindvars, rollbackOnError)
 }
 
-func (vc *loggingVCursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, isDML, autocommit bool) (*sqltypes.Result, error) {
-	return vc.execute("ExecuteKeyspaceID", query, bindVars, isDML)
+func (vc *loggingVCursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error) {
+	return vc.execute("ExecuteKeyspaceID", query, bindVars, rollbackOnError)
 }
 
-func (vc *loggingVCursor) execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+func (vc *loggingVCursor) execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool) (*sqltypes.Result, error) {
 	if vc.index >= len(vc.results) {
 		return nil, fmt.Errorf("ran out of results to return: %s", query)
 	}
@@ -550,7 +550,7 @@ func (vc *loggingVCursor) execute(method string, query string, bindvars map[stri
 		bvl = append(bvl, bv{Name: k, Bv: string(v.Value)})
 	}
 	sort.Slice(bvl, func(i, j int) bool { return bvl[i].Name < bvl[j].Name })
-	vc.log = append(vc.log, fmt.Sprintf("%s %s %v %v", method, query, bvl, isDML))
+	vc.log = append(vc.log, fmt.Sprintf("%s %s %v %v", method, query, bvl, rollbackOnError))
 	idx := vc.index
 	vc.index++
 	if vc.errors[idx] != nil {

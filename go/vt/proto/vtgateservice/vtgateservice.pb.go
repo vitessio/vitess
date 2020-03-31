@@ -12,7 +12,6 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
-	query "vitess.io/vitess/go/vt/proto/query"
 	vtgate "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
@@ -30,42 +29,23 @@ const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 func init() { proto.RegisterFile("vtgateservice.proto", fileDescriptor_601ae27c95081e0f) }
 
 var fileDescriptor_601ae27c95081e0f = []byte{
-	// 556 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x95, 0xdb, 0x6b, 0x13, 0x41,
-	0x14, 0xc6, 0xf5, 0xc1, 0x54, 0x8e, 0x8d, 0xc8, 0xb4, 0x4d, 0xda, 0x78, 0x6d, 0xd4, 0x56, 0x7c,
-	0x48, 0x44, 0x41, 0x10, 0x44, 0x49, 0xb4, 0x88, 0x14, 0x6f, 0x89, 0x44, 0x28, 0xf8, 0x30, 0xd9,
-	0x1e, 0xb6, 0x4b, 0x92, 0x9d, 0x64, 0x67, 0xb2, 0x98, 0xff, 0xda, 0x3f, 0x41, 0xdc, 0xb9, 0xec,
-	0xcc, 0xec, 0x24, 0x79, 0xcb, 0x7c, 0xdf, 0x77, 0x7e, 0x3b, 0x73, 0x72, 0x98, 0x81, 0xbd, 0x5c,
-	0xc4, 0x54, 0x20, 0xc7, 0x2c, 0x4f, 0x22, 0xec, 0xcc, 0x33, 0x26, 0x18, 0xa9, 0x3b, 0x62, 0x6b,
-	0x57, 0x2e, 0xa5, 0xd9, 0xba, 0xb5, 0x58, 0x62, 0xb6, 0x92, 0x8b, 0x97, 0x7f, 0xeb, 0x50, 0x1b,
-	0x25, 0x02, 0x39, 0x27, 0x6f, 0x61, 0xe7, 0xec, 0x0f, 0x46, 0x4b, 0x81, 0xa4, 0xd1, 0x51, 0x15,
-	0x4a, 0x18, 0xe0, 0x62, 0x89, 0x5c, 0xb4, 0x9a, 0x15, 0x9d, 0xcf, 0x59, 0xca, 0xb1, 0x7d, 0x8d,
-	0x9c, 0xc3, 0xae, 0x12, 0xfb, 0x54, 0x44, 0x57, 0xe4, 0xae, 0x17, 0x2d, 0x54, 0xcd, 0xb9, 0x17,
-	0x36, 0x0d, 0xec, 0x3b, 0xd4, 0x87, 0x22, 0x43, 0x3a, 0xd3, 0x1b, 0x32, 0x05, 0x8e, 0xac, 0x71,
-	0xf7, 0xd7, 0xb8, 0x9a, 0xf7, 0xe2, 0x3a, 0xf9, 0x0a, 0x75, 0x25, 0x0f, 0xaf, 0x68, 0x76, 0xc9,
-	0x89, 0xbf, 0x05, 0x29, 0x57, 0x88, 0x9e, 0x6b, 0x76, 0xf8, 0x1b, 0x88, 0xb2, 0xce, 0x71, 0xc5,
-	0xe7, 0x34, 0xc2, 0xcf, 0x97, 0x9c, 0x1c, 0x7b, 0x65, 0x96, 0xa7, 0xc9, 0xed, 0x4d, 0x11, 0x83,
-	0xff, 0x05, 0x77, 0x4a, 0x7f, 0x40, 0xd3, 0x18, 0x39, 0x79, 0x58, 0xad, 0x94, 0x8e, 0x46, 0x3f,
-	0x5a, 0x1f, 0x08, 0x80, 0xcf, 0x52, 0x91, 0x88, 0xd5, 0xff, 0x5d, 0xfb, 0x60, 0xe3, 0xac, 0x03,
-	0x5b, 0x81, 0x40, 0x43, 0x8a, 0x3f, 0x53, 0x75, 0xf9, 0x38, 0xf4, 0x47, 0xbb, 0xad, 0x6e, 0x6f,
-	0x8a, 0x18, 0xfc, 0x14, 0x9a, 0xb6, 0x6f, 0x37, 0xfd, 0x24, 0x04, 0x08, 0x74, 0xfe, 0x74, 0x6b,
-	0xce, 0x7c, 0x6d, 0x0c, 0x7b, 0xce, 0x28, 0xa9, 0xd3, 0xb4, 0x83, 0x73, 0xe6, 0x1e, 0xe7, 0xf1,
-	0xc6, 0x8c, 0x35, 0x91, 0x0b, 0x38, 0x74, 0x22, 0xf6, 0x91, 0x4e, 0x83, 0x90, 0xc0, 0x99, 0x9e,
-	0x6d, 0x0f, 0x5a, 0x9f, 0x9c, 0x40, 0xc3, 0xcf, 0xa9, 0xd9, 0x7a, 0xba, 0x8e, 0xe3, 0x4e, 0xd8,
-	0xc9, 0xb6, 0x98, 0xf5, 0xb1, 0xd7, 0x70, 0xa3, 0x8f, 0x71, 0x92, 0x92, 0x7d, 0x5d, 0x54, 0x2c,
-	0x35, 0xea, 0xc0, 0x53, 0x4d, 0xef, 0xdf, 0x40, 0xed, 0x03, 0x9b, 0xcd, 0x12, 0x41, 0x4c, 0x44,
-	0xae, 0x75, 0x65, 0xc3, 0x97, 0x4d, 0xe9, 0x7b, 0xb8, 0x39, 0x60, 0xd3, 0xe9, 0x98, 0x46, 0x13,
-	0x62, 0xae, 0x2a, 0xad, 0xe8, 0xf2, 0xc3, 0xaa, 0x61, 0x0f, 0xf1, 0x00, 0x39, 0x9b, 0xe6, 0xf8,
-	0x33, 0xa3, 0x29, 0xa7, 0x91, 0x48, 0x58, 0x5a, 0x0e, 0x71, 0xd5, 0xab, 0x0c, 0x71, 0x28, 0x62,
-	0xf0, 0xdf, 0xa0, 0xfe, 0x05, 0x39, 0xa7, 0x31, 0xca, 0xfe, 0x95, 0x97, 0x90, 0x23, 0x97, 0xb7,
-	0xa4, 0xbc, 0xa9, 0x3d, 0xd3, 0xea, 0xf1, 0x47, 0x00, 0x65, 0xf6, 0xa2, 0x09, 0x39, 0xf2, 0x68,
-	0xbd, 0xf2, 0xd0, 0x47, 0x2e, 0xaa, 0xe7, 0x9c, 0xfa, 0x02, 0x0e, 0x4a, 0xdd, 0x1e, 0xc3, 0x27,
-	0x55, 0x60, 0x60, 0x06, 0x37, 0xb2, 0x7f, 0xc0, 0xed, 0x4f, 0x28, 0x86, 0x59, 0xae, 0x0b, 0x89,
-	0xb9, 0x5a, 0x5d, 0x5d, 0xd3, 0x1e, 0xac, 0xb3, 0x0d, 0xf2, 0x1d, 0xec, 0x8c, 0x54, 0xff, 0xcc,
-	0x28, 0x8c, 0xdc, 0xce, 0x35, 0x2b, 0x7a, 0xd9, 0xb4, 0x7e, 0x1f, 0xf6, 0x13, 0xd6, 0xc9, 0x8b,
-	0x47, 0x4f, 0xbe, 0x82, 0x9d, 0x38, 0x9b, 0x47, 0x17, 0xcf, 0x95, 0x94, 0xb0, 0xae, 0xfc, 0xd5,
-	0x8d, 0x59, 0x37, 0x17, 0xdd, 0x22, 0xd2, 0x75, 0x5e, 0xd4, 0x71, 0xad, 0x10, 0x5f, 0xfd, 0x0b,
-	0x00, 0x00, 0xff, 0xff, 0x96, 0x13, 0x38, 0x44, 0x7e, 0x07, 0x00, 0x00,
+	// 247 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x91, 0x3f, 0x4b, 0x03, 0x41,
+	0x10, 0xc5, 0x15, 0x21, 0x81, 0x25, 0x69, 0x46, 0x51, 0x88, 0x5a, 0x98, 0xd2, 0xe2, 0x56, 0xb4,
+	0x15, 0x8b, 0x03, 0x2b, 0x1b, 0x89, 0x92, 0x42, 0xb0, 0x58, 0x97, 0xe1, 0x5c, 0xd0, 0x9b, 0x73,
+	0x67, 0xb2, 0xf8, 0x01, 0xfc, 0xe0, 0xc2, 0xed, 0x9f, 0x70, 0x9e, 0xda, 0xdd, 0xfd, 0xde, 0x9b,
+	0xb7, 0xc3, 0x3c, 0xb5, 0x1f, 0xa4, 0x31, 0x82, 0x8c, 0x3e, 0x38, 0x8b, 0x55, 0xe7, 0x49, 0x08,
+	0xe6, 0x03, 0xb8, 0x98, 0xc5, 0xdf, 0x28, 0x5e, 0x7e, 0xed, 0xa9, 0xc9, 0xda, 0x09, 0x32, 0xc3,
+	0xb5, 0x9a, 0xde, 0x7e, 0xa2, 0xdd, 0x08, 0xc2, 0x61, 0x95, 0x4c, 0x09, 0xac, 0xf0, 0x63, 0x83,
+	0x2c, 0x8b, 0xa3, 0x11, 0xe7, 0x8e, 0x5a, 0xc6, 0xe5, 0x0e, 0xdc, 0xa9, 0x59, 0x82, 0xb5, 0x11,
+	0xfb, 0x0a, 0xc7, 0x3f, 0xac, 0x3d, 0xcd, 0x39, 0x27, 0xbf, 0x8b, 0x25, 0xec, 0x5e, 0xcd, 0x1f,
+	0xc4, 0xa3, 0x79, 0xcf, 0x0b, 0x95, 0x81, 0x01, 0xce, 0x71, 0xa7, 0x7f, 0xa8, 0x39, 0xef, 0x62,
+	0x17, 0x9e, 0x15, 0xac, 0x90, 0xe9, 0x2d, 0xe0, 0xa3, 0x37, 0x2d, 0x1b, 0x2b, 0x8e, 0x5a, 0x38,
+	0xcb, 0x83, 0x63, 0x2d, 0x67, 0x2f, 0xff, 0xb3, 0x94, 0x85, 0x6f, 0xd4, 0x74, 0x1d, 0x1f, 0xdf,
+	0xde, 0x2e, 0x81, 0xd1, 0xed, 0x0a, 0xdf, 0xae, 0x57, 0xd7, 0xea, 0xc0, 0x51, 0x15, 0xfa, 0x22,
+	0x62, 0x33, 0x55, 0xe3, 0x3b, 0xfb, 0x74, 0x9e, 0x90, 0x23, 0x1d, 0xbf, 0x74, 0x43, 0x3a, 0x88,
+	0xee, 0x2d, 0x7a, 0x50, 0xec, 0xcb, 0xa4, 0x87, 0x57, 0xdf, 0x01, 0x00, 0x00, 0xff, 0xff, 0xd5,
+	0x14, 0x87, 0x30, 0x05, 0x02, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -96,64 +76,9 @@ type VitessClient interface {
 	// Use this method if the query returns a large number of rows.
 	// API group: v3
 	StreamExecute(ctx context.Context, in *vtgate.StreamExecuteRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteClient, error)
-	// ExecuteShards executes the query on the specified shards.
-	// API group: Custom Sharding
-	ExecuteShards(ctx context.Context, in *vtgate.ExecuteShardsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteShardsResponse, error)
-	// ExecuteKeyspaceIds executes the query based on the specified keyspace ids.
-	// API group: Range-based Sharding
-	ExecuteKeyspaceIds(ctx context.Context, in *vtgate.ExecuteKeyspaceIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteKeyspaceIdsResponse, error)
-	// ExecuteKeyRanges executes the query based on the specified key ranges.
-	// API group: Range-based Sharding
-	ExecuteKeyRanges(ctx context.Context, in *vtgate.ExecuteKeyRangesRequest, opts ...grpc.CallOption) (*vtgate.ExecuteKeyRangesResponse, error)
-	// ExecuteEntityIds executes the query based on the specified external id to keyspace id map.
-	// API group: Range-based Sharding
-	ExecuteEntityIds(ctx context.Context, in *vtgate.ExecuteEntityIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteEntityIdsResponse, error)
-	// ExecuteBatchShards executes the list of queries on the specified shards.
-	// API group: Custom Sharding
-	ExecuteBatchShards(ctx context.Context, in *vtgate.ExecuteBatchShardsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteBatchShardsResponse, error)
-	// ExecuteBatchKeyspaceIds executes the list of queries based on the specified keyspace ids.
-	// API group: Range-based Sharding
-	ExecuteBatchKeyspaceIds(ctx context.Context, in *vtgate.ExecuteBatchKeyspaceIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteBatchKeyspaceIdsResponse, error)
-	// StreamExecuteShards executes a streaming query based on shards.
-	// Use this method if the query returns a large number of rows.
-	// API group: Custom Sharding
-	StreamExecuteShards(ctx context.Context, in *vtgate.StreamExecuteShardsRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteShardsClient, error)
-	// StreamExecuteKeyspaceIds executes a streaming query based on keyspace ids.
-	// Use this method if the query returns a large number of rows.
-	// API group: Range-based Sharding
-	StreamExecuteKeyspaceIds(ctx context.Context, in *vtgate.StreamExecuteKeyspaceIdsRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteKeyspaceIdsClient, error)
-	// StreamExecuteKeyRanges executes a streaming query based on key ranges.
-	// Use this method if the query returns a large number of rows.
-	// API group: Range-based Sharding
-	StreamExecuteKeyRanges(ctx context.Context, in *vtgate.StreamExecuteKeyRangesRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteKeyRangesClient, error)
-	// Begin a transaction.
-	// API group: Transactions
-	Begin(ctx context.Context, in *vtgate.BeginRequest, opts ...grpc.CallOption) (*vtgate.BeginResponse, error)
-	// Commit a transaction.
-	// API group: Transactions
-	Commit(ctx context.Context, in *vtgate.CommitRequest, opts ...grpc.CallOption) (*vtgate.CommitResponse, error)
-	// Rollback a transaction.
-	// API group: Transactions
-	Rollback(ctx context.Context, in *vtgate.RollbackRequest, opts ...grpc.CallOption) (*vtgate.RollbackResponse, error)
 	// ResolveTransaction resolves a transaction.
 	// API group: Transactions
 	ResolveTransaction(ctx context.Context, in *vtgate.ResolveTransactionRequest, opts ...grpc.CallOption) (*vtgate.ResolveTransactionResponse, error)
-	// MessageStream streams messages from a message table.
-	MessageStream(ctx context.Context, in *vtgate.MessageStreamRequest, opts ...grpc.CallOption) (Vitess_MessageStreamClient, error)
-	// MessageAck acks messages for a table.
-	MessageAck(ctx context.Context, in *vtgate.MessageAckRequest, opts ...grpc.CallOption) (*query.MessageAckResponse, error)
-	// MessageAckKeyspaceIds routes Message Acks using the associated
-	// keyspace ids.
-	MessageAckKeyspaceIds(ctx context.Context, in *vtgate.MessageAckKeyspaceIdsRequest, opts ...grpc.CallOption) (*query.MessageAckResponse, error)
-	// GetSrvKeyspace returns a SrvKeyspace object (as seen by this vtgate).
-	// This method is provided as a convenient way for clients to take a
-	// look at the sharding configuration for a Keyspace. Looking at the
-	// sharding information should not be used for routing queries (as the
-	// information may change, use the Execute calls for that).
-	// It is convenient for monitoring applications for instance, or if
-	// using custom sharding.
-	// API group: Topology
-	GetSrvKeyspace(ctx context.Context, in *vtgate.GetSrvKeyspaceRequest, opts ...grpc.CallOption) (*vtgate.GetSrvKeyspaceResponse, error)
 	// VStream streams binlog events from the requested sources.
 	VStream(ctx context.Context, in *vtgate.VStreamRequest, opts ...grpc.CallOption) (Vitess_VStreamClient, error)
 }
@@ -216,183 +141,6 @@ func (x *vitessStreamExecuteClient) Recv() (*vtgate.StreamExecuteResponse, error
 	return m, nil
 }
 
-func (c *vitessClient) ExecuteShards(ctx context.Context, in *vtgate.ExecuteShardsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteShardsResponse, error) {
-	out := new(vtgate.ExecuteShardsResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteShards", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vitessClient) ExecuteKeyspaceIds(ctx context.Context, in *vtgate.ExecuteKeyspaceIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteKeyspaceIdsResponse, error) {
-	out := new(vtgate.ExecuteKeyspaceIdsResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteKeyspaceIds", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vitessClient) ExecuteKeyRanges(ctx context.Context, in *vtgate.ExecuteKeyRangesRequest, opts ...grpc.CallOption) (*vtgate.ExecuteKeyRangesResponse, error) {
-	out := new(vtgate.ExecuteKeyRangesResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteKeyRanges", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vitessClient) ExecuteEntityIds(ctx context.Context, in *vtgate.ExecuteEntityIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteEntityIdsResponse, error) {
-	out := new(vtgate.ExecuteEntityIdsResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteEntityIds", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vitessClient) ExecuteBatchShards(ctx context.Context, in *vtgate.ExecuteBatchShardsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteBatchShardsResponse, error) {
-	out := new(vtgate.ExecuteBatchShardsResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteBatchShards", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vitessClient) ExecuteBatchKeyspaceIds(ctx context.Context, in *vtgate.ExecuteBatchKeyspaceIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteBatchKeyspaceIdsResponse, error) {
-	out := new(vtgate.ExecuteBatchKeyspaceIdsResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteBatchKeyspaceIds", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vitessClient) StreamExecuteShards(ctx context.Context, in *vtgate.StreamExecuteShardsRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteShardsClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Vitess_serviceDesc.Streams[1], "/vtgateservice.Vitess/StreamExecuteShards", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &vitessStreamExecuteShardsClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type Vitess_StreamExecuteShardsClient interface {
-	Recv() (*vtgate.StreamExecuteShardsResponse, error)
-	grpc.ClientStream
-}
-
-type vitessStreamExecuteShardsClient struct {
-	grpc.ClientStream
-}
-
-func (x *vitessStreamExecuteShardsClient) Recv() (*vtgate.StreamExecuteShardsResponse, error) {
-	m := new(vtgate.StreamExecuteShardsResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *vitessClient) StreamExecuteKeyspaceIds(ctx context.Context, in *vtgate.StreamExecuteKeyspaceIdsRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteKeyspaceIdsClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Vitess_serviceDesc.Streams[2], "/vtgateservice.Vitess/StreamExecuteKeyspaceIds", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &vitessStreamExecuteKeyspaceIdsClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type Vitess_StreamExecuteKeyspaceIdsClient interface {
-	Recv() (*vtgate.StreamExecuteKeyspaceIdsResponse, error)
-	grpc.ClientStream
-}
-
-type vitessStreamExecuteKeyspaceIdsClient struct {
-	grpc.ClientStream
-}
-
-func (x *vitessStreamExecuteKeyspaceIdsClient) Recv() (*vtgate.StreamExecuteKeyspaceIdsResponse, error) {
-	m := new(vtgate.StreamExecuteKeyspaceIdsResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *vitessClient) StreamExecuteKeyRanges(ctx context.Context, in *vtgate.StreamExecuteKeyRangesRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteKeyRangesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Vitess_serviceDesc.Streams[3], "/vtgateservice.Vitess/StreamExecuteKeyRanges", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &vitessStreamExecuteKeyRangesClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type Vitess_StreamExecuteKeyRangesClient interface {
-	Recv() (*vtgate.StreamExecuteKeyRangesResponse, error)
-	grpc.ClientStream
-}
-
-type vitessStreamExecuteKeyRangesClient struct {
-	grpc.ClientStream
-}
-
-func (x *vitessStreamExecuteKeyRangesClient) Recv() (*vtgate.StreamExecuteKeyRangesResponse, error) {
-	m := new(vtgate.StreamExecuteKeyRangesResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *vitessClient) Begin(ctx context.Context, in *vtgate.BeginRequest, opts ...grpc.CallOption) (*vtgate.BeginResponse, error) {
-	out := new(vtgate.BeginResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/Begin", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vitessClient) Commit(ctx context.Context, in *vtgate.CommitRequest, opts ...grpc.CallOption) (*vtgate.CommitResponse, error) {
-	out := new(vtgate.CommitResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/Commit", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vitessClient) Rollback(ctx context.Context, in *vtgate.RollbackRequest, opts ...grpc.CallOption) (*vtgate.RollbackResponse, error) {
-	out := new(vtgate.RollbackResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/Rollback", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *vitessClient) ResolveTransaction(ctx context.Context, in *vtgate.ResolveTransactionRequest, opts ...grpc.CallOption) (*vtgate.ResolveTransactionResponse, error) {
 	out := new(vtgate.ResolveTransactionResponse)
 	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/ResolveTransaction", in, out, opts...)
@@ -402,67 +150,8 @@ func (c *vitessClient) ResolveTransaction(ctx context.Context, in *vtgate.Resolv
 	return out, nil
 }
 
-func (c *vitessClient) MessageStream(ctx context.Context, in *vtgate.MessageStreamRequest, opts ...grpc.CallOption) (Vitess_MessageStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Vitess_serviceDesc.Streams[4], "/vtgateservice.Vitess/MessageStream", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &vitessMessageStreamClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type Vitess_MessageStreamClient interface {
-	Recv() (*query.MessageStreamResponse, error)
-	grpc.ClientStream
-}
-
-type vitessMessageStreamClient struct {
-	grpc.ClientStream
-}
-
-func (x *vitessMessageStreamClient) Recv() (*query.MessageStreamResponse, error) {
-	m := new(query.MessageStreamResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *vitessClient) MessageAck(ctx context.Context, in *vtgate.MessageAckRequest, opts ...grpc.CallOption) (*query.MessageAckResponse, error) {
-	out := new(query.MessageAckResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/MessageAck", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vitessClient) MessageAckKeyspaceIds(ctx context.Context, in *vtgate.MessageAckKeyspaceIdsRequest, opts ...grpc.CallOption) (*query.MessageAckResponse, error) {
-	out := new(query.MessageAckResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/MessageAckKeyspaceIds", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vitessClient) GetSrvKeyspace(ctx context.Context, in *vtgate.GetSrvKeyspaceRequest, opts ...grpc.CallOption) (*vtgate.GetSrvKeyspaceResponse, error) {
-	out := new(vtgate.GetSrvKeyspaceResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/GetSrvKeyspace", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *vitessClient) VStream(ctx context.Context, in *vtgate.VStreamRequest, opts ...grpc.CallOption) (Vitess_VStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Vitess_serviceDesc.Streams[5], "/vtgateservice.Vitess/VStream", opts...)
+	stream, err := c.cc.NewStream(ctx, &_Vitess_serviceDesc.Streams[1], "/vtgateservice.Vitess/VStream", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -511,64 +200,9 @@ type VitessServer interface {
 	// Use this method if the query returns a large number of rows.
 	// API group: v3
 	StreamExecute(*vtgate.StreamExecuteRequest, Vitess_StreamExecuteServer) error
-	// ExecuteShards executes the query on the specified shards.
-	// API group: Custom Sharding
-	ExecuteShards(context.Context, *vtgate.ExecuteShardsRequest) (*vtgate.ExecuteShardsResponse, error)
-	// ExecuteKeyspaceIds executes the query based on the specified keyspace ids.
-	// API group: Range-based Sharding
-	ExecuteKeyspaceIds(context.Context, *vtgate.ExecuteKeyspaceIdsRequest) (*vtgate.ExecuteKeyspaceIdsResponse, error)
-	// ExecuteKeyRanges executes the query based on the specified key ranges.
-	// API group: Range-based Sharding
-	ExecuteKeyRanges(context.Context, *vtgate.ExecuteKeyRangesRequest) (*vtgate.ExecuteKeyRangesResponse, error)
-	// ExecuteEntityIds executes the query based on the specified external id to keyspace id map.
-	// API group: Range-based Sharding
-	ExecuteEntityIds(context.Context, *vtgate.ExecuteEntityIdsRequest) (*vtgate.ExecuteEntityIdsResponse, error)
-	// ExecuteBatchShards executes the list of queries on the specified shards.
-	// API group: Custom Sharding
-	ExecuteBatchShards(context.Context, *vtgate.ExecuteBatchShardsRequest) (*vtgate.ExecuteBatchShardsResponse, error)
-	// ExecuteBatchKeyspaceIds executes the list of queries based on the specified keyspace ids.
-	// API group: Range-based Sharding
-	ExecuteBatchKeyspaceIds(context.Context, *vtgate.ExecuteBatchKeyspaceIdsRequest) (*vtgate.ExecuteBatchKeyspaceIdsResponse, error)
-	// StreamExecuteShards executes a streaming query based on shards.
-	// Use this method if the query returns a large number of rows.
-	// API group: Custom Sharding
-	StreamExecuteShards(*vtgate.StreamExecuteShardsRequest, Vitess_StreamExecuteShardsServer) error
-	// StreamExecuteKeyspaceIds executes a streaming query based on keyspace ids.
-	// Use this method if the query returns a large number of rows.
-	// API group: Range-based Sharding
-	StreamExecuteKeyspaceIds(*vtgate.StreamExecuteKeyspaceIdsRequest, Vitess_StreamExecuteKeyspaceIdsServer) error
-	// StreamExecuteKeyRanges executes a streaming query based on key ranges.
-	// Use this method if the query returns a large number of rows.
-	// API group: Range-based Sharding
-	StreamExecuteKeyRanges(*vtgate.StreamExecuteKeyRangesRequest, Vitess_StreamExecuteKeyRangesServer) error
-	// Begin a transaction.
-	// API group: Transactions
-	Begin(context.Context, *vtgate.BeginRequest) (*vtgate.BeginResponse, error)
-	// Commit a transaction.
-	// API group: Transactions
-	Commit(context.Context, *vtgate.CommitRequest) (*vtgate.CommitResponse, error)
-	// Rollback a transaction.
-	// API group: Transactions
-	Rollback(context.Context, *vtgate.RollbackRequest) (*vtgate.RollbackResponse, error)
 	// ResolveTransaction resolves a transaction.
 	// API group: Transactions
 	ResolveTransaction(context.Context, *vtgate.ResolveTransactionRequest) (*vtgate.ResolveTransactionResponse, error)
-	// MessageStream streams messages from a message table.
-	MessageStream(*vtgate.MessageStreamRequest, Vitess_MessageStreamServer) error
-	// MessageAck acks messages for a table.
-	MessageAck(context.Context, *vtgate.MessageAckRequest) (*query.MessageAckResponse, error)
-	// MessageAckKeyspaceIds routes Message Acks using the associated
-	// keyspace ids.
-	MessageAckKeyspaceIds(context.Context, *vtgate.MessageAckKeyspaceIdsRequest) (*query.MessageAckResponse, error)
-	// GetSrvKeyspace returns a SrvKeyspace object (as seen by this vtgate).
-	// This method is provided as a convenient way for clients to take a
-	// look at the sharding configuration for a Keyspace. Looking at the
-	// sharding information should not be used for routing queries (as the
-	// information may change, use the Execute calls for that).
-	// It is convenient for monitoring applications for instance, or if
-	// using custom sharding.
-	// API group: Topology
-	GetSrvKeyspace(context.Context, *vtgate.GetSrvKeyspaceRequest) (*vtgate.GetSrvKeyspaceResponse, error)
 	// VStream streams binlog events from the requested sources.
 	VStream(*vtgate.VStreamRequest, Vitess_VStreamServer) error
 }
@@ -586,56 +220,8 @@ func (*UnimplementedVitessServer) ExecuteBatch(ctx context.Context, req *vtgate.
 func (*UnimplementedVitessServer) StreamExecute(req *vtgate.StreamExecuteRequest, srv Vitess_StreamExecuteServer) error {
 	return status.Errorf(codes.Unimplemented, "method StreamExecute not implemented")
 }
-func (*UnimplementedVitessServer) ExecuteShards(ctx context.Context, req *vtgate.ExecuteShardsRequest) (*vtgate.ExecuteShardsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ExecuteShards not implemented")
-}
-func (*UnimplementedVitessServer) ExecuteKeyspaceIds(ctx context.Context, req *vtgate.ExecuteKeyspaceIdsRequest) (*vtgate.ExecuteKeyspaceIdsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ExecuteKeyspaceIds not implemented")
-}
-func (*UnimplementedVitessServer) ExecuteKeyRanges(ctx context.Context, req *vtgate.ExecuteKeyRangesRequest) (*vtgate.ExecuteKeyRangesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ExecuteKeyRanges not implemented")
-}
-func (*UnimplementedVitessServer) ExecuteEntityIds(ctx context.Context, req *vtgate.ExecuteEntityIdsRequest) (*vtgate.ExecuteEntityIdsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ExecuteEntityIds not implemented")
-}
-func (*UnimplementedVitessServer) ExecuteBatchShards(ctx context.Context, req *vtgate.ExecuteBatchShardsRequest) (*vtgate.ExecuteBatchShardsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ExecuteBatchShards not implemented")
-}
-func (*UnimplementedVitessServer) ExecuteBatchKeyspaceIds(ctx context.Context, req *vtgate.ExecuteBatchKeyspaceIdsRequest) (*vtgate.ExecuteBatchKeyspaceIdsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ExecuteBatchKeyspaceIds not implemented")
-}
-func (*UnimplementedVitessServer) StreamExecuteShards(req *vtgate.StreamExecuteShardsRequest, srv Vitess_StreamExecuteShardsServer) error {
-	return status.Errorf(codes.Unimplemented, "method StreamExecuteShards not implemented")
-}
-func (*UnimplementedVitessServer) StreamExecuteKeyspaceIds(req *vtgate.StreamExecuteKeyspaceIdsRequest, srv Vitess_StreamExecuteKeyspaceIdsServer) error {
-	return status.Errorf(codes.Unimplemented, "method StreamExecuteKeyspaceIds not implemented")
-}
-func (*UnimplementedVitessServer) StreamExecuteKeyRanges(req *vtgate.StreamExecuteKeyRangesRequest, srv Vitess_StreamExecuteKeyRangesServer) error {
-	return status.Errorf(codes.Unimplemented, "method StreamExecuteKeyRanges not implemented")
-}
-func (*UnimplementedVitessServer) Begin(ctx context.Context, req *vtgate.BeginRequest) (*vtgate.BeginResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Begin not implemented")
-}
-func (*UnimplementedVitessServer) Commit(ctx context.Context, req *vtgate.CommitRequest) (*vtgate.CommitResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Commit not implemented")
-}
-func (*UnimplementedVitessServer) Rollback(ctx context.Context, req *vtgate.RollbackRequest) (*vtgate.RollbackResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Rollback not implemented")
-}
 func (*UnimplementedVitessServer) ResolveTransaction(ctx context.Context, req *vtgate.ResolveTransactionRequest) (*vtgate.ResolveTransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ResolveTransaction not implemented")
-}
-func (*UnimplementedVitessServer) MessageStream(req *vtgate.MessageStreamRequest, srv Vitess_MessageStreamServer) error {
-	return status.Errorf(codes.Unimplemented, "method MessageStream not implemented")
-}
-func (*UnimplementedVitessServer) MessageAck(ctx context.Context, req *vtgate.MessageAckRequest) (*query.MessageAckResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method MessageAck not implemented")
-}
-func (*UnimplementedVitessServer) MessageAckKeyspaceIds(ctx context.Context, req *vtgate.MessageAckKeyspaceIdsRequest) (*query.MessageAckResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method MessageAckKeyspaceIds not implemented")
-}
-func (*UnimplementedVitessServer) GetSrvKeyspace(ctx context.Context, req *vtgate.GetSrvKeyspaceRequest) (*vtgate.GetSrvKeyspaceResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetSrvKeyspace not implemented")
 }
 func (*UnimplementedVitessServer) VStream(req *vtgate.VStreamRequest, srv Vitess_VStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method VStream not implemented")
@@ -702,231 +288,6 @@ func (x *vitessStreamExecuteServer) Send(m *vtgate.StreamExecuteResponse) error 
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Vitess_ExecuteShards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtgate.ExecuteShardsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VitessServer).ExecuteShards(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/vtgateservice.Vitess/ExecuteShards",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VitessServer).ExecuteShards(ctx, req.(*vtgate.ExecuteShardsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Vitess_ExecuteKeyspaceIds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtgate.ExecuteKeyspaceIdsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VitessServer).ExecuteKeyspaceIds(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/vtgateservice.Vitess/ExecuteKeyspaceIds",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VitessServer).ExecuteKeyspaceIds(ctx, req.(*vtgate.ExecuteKeyspaceIdsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Vitess_ExecuteKeyRanges_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtgate.ExecuteKeyRangesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VitessServer).ExecuteKeyRanges(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/vtgateservice.Vitess/ExecuteKeyRanges",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VitessServer).ExecuteKeyRanges(ctx, req.(*vtgate.ExecuteKeyRangesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Vitess_ExecuteEntityIds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtgate.ExecuteEntityIdsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VitessServer).ExecuteEntityIds(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/vtgateservice.Vitess/ExecuteEntityIds",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VitessServer).ExecuteEntityIds(ctx, req.(*vtgate.ExecuteEntityIdsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Vitess_ExecuteBatchShards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtgate.ExecuteBatchShardsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VitessServer).ExecuteBatchShards(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/vtgateservice.Vitess/ExecuteBatchShards",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VitessServer).ExecuteBatchShards(ctx, req.(*vtgate.ExecuteBatchShardsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Vitess_ExecuteBatchKeyspaceIds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtgate.ExecuteBatchKeyspaceIdsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VitessServer).ExecuteBatchKeyspaceIds(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/vtgateservice.Vitess/ExecuteBatchKeyspaceIds",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VitessServer).ExecuteBatchKeyspaceIds(ctx, req.(*vtgate.ExecuteBatchKeyspaceIdsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Vitess_StreamExecuteShards_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(vtgate.StreamExecuteShardsRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(VitessServer).StreamExecuteShards(m, &vitessStreamExecuteShardsServer{stream})
-}
-
-type Vitess_StreamExecuteShardsServer interface {
-	Send(*vtgate.StreamExecuteShardsResponse) error
-	grpc.ServerStream
-}
-
-type vitessStreamExecuteShardsServer struct {
-	grpc.ServerStream
-}
-
-func (x *vitessStreamExecuteShardsServer) Send(m *vtgate.StreamExecuteShardsResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _Vitess_StreamExecuteKeyspaceIds_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(vtgate.StreamExecuteKeyspaceIdsRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(VitessServer).StreamExecuteKeyspaceIds(m, &vitessStreamExecuteKeyspaceIdsServer{stream})
-}
-
-type Vitess_StreamExecuteKeyspaceIdsServer interface {
-	Send(*vtgate.StreamExecuteKeyspaceIdsResponse) error
-	grpc.ServerStream
-}
-
-type vitessStreamExecuteKeyspaceIdsServer struct {
-	grpc.ServerStream
-}
-
-func (x *vitessStreamExecuteKeyspaceIdsServer) Send(m *vtgate.StreamExecuteKeyspaceIdsResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _Vitess_StreamExecuteKeyRanges_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(vtgate.StreamExecuteKeyRangesRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(VitessServer).StreamExecuteKeyRanges(m, &vitessStreamExecuteKeyRangesServer{stream})
-}
-
-type Vitess_StreamExecuteKeyRangesServer interface {
-	Send(*vtgate.StreamExecuteKeyRangesResponse) error
-	grpc.ServerStream
-}
-
-type vitessStreamExecuteKeyRangesServer struct {
-	grpc.ServerStream
-}
-
-func (x *vitessStreamExecuteKeyRangesServer) Send(m *vtgate.StreamExecuteKeyRangesResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _Vitess_Begin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtgate.BeginRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VitessServer).Begin(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/vtgateservice.Vitess/Begin",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VitessServer).Begin(ctx, req.(*vtgate.BeginRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Vitess_Commit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtgate.CommitRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VitessServer).Commit(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/vtgateservice.Vitess/Commit",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VitessServer).Commit(ctx, req.(*vtgate.CommitRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Vitess_Rollback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtgate.RollbackRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VitessServer).Rollback(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/vtgateservice.Vitess/Rollback",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VitessServer).Rollback(ctx, req.(*vtgate.RollbackRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _Vitess_ResolveTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtgate.ResolveTransactionRequest)
 	if err := dec(in); err != nil {
@@ -941,81 +302,6 @@ func _Vitess_ResolveTransaction_Handler(srv interface{}, ctx context.Context, de
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VitessServer).ResolveTransaction(ctx, req.(*vtgate.ResolveTransactionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Vitess_MessageStream_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(vtgate.MessageStreamRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(VitessServer).MessageStream(m, &vitessMessageStreamServer{stream})
-}
-
-type Vitess_MessageStreamServer interface {
-	Send(*query.MessageStreamResponse) error
-	grpc.ServerStream
-}
-
-type vitessMessageStreamServer struct {
-	grpc.ServerStream
-}
-
-func (x *vitessMessageStreamServer) Send(m *query.MessageStreamResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _Vitess_MessageAck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtgate.MessageAckRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VitessServer).MessageAck(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/vtgateservice.Vitess/MessageAck",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VitessServer).MessageAck(ctx, req.(*vtgate.MessageAckRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Vitess_MessageAckKeyspaceIds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtgate.MessageAckKeyspaceIdsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VitessServer).MessageAckKeyspaceIds(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/vtgateservice.Vitess/MessageAckKeyspaceIds",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VitessServer).MessageAckKeyspaceIds(ctx, req.(*vtgate.MessageAckKeyspaceIdsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Vitess_GetSrvKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtgate.GetSrvKeyspaceRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VitessServer).GetSrvKeyspace(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/vtgateservice.Vitess/GetSrvKeyspace",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VitessServer).GetSrvKeyspace(ctx, req.(*vtgate.GetSrvKeyspaceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1054,82 +340,14 @@ var _Vitess_serviceDesc = grpc.ServiceDesc{
 			Handler:    _Vitess_ExecuteBatch_Handler,
 		},
 		{
-			MethodName: "ExecuteShards",
-			Handler:    _Vitess_ExecuteShards_Handler,
-		},
-		{
-			MethodName: "ExecuteKeyspaceIds",
-			Handler:    _Vitess_ExecuteKeyspaceIds_Handler,
-		},
-		{
-			MethodName: "ExecuteKeyRanges",
-			Handler:    _Vitess_ExecuteKeyRanges_Handler,
-		},
-		{
-			MethodName: "ExecuteEntityIds",
-			Handler:    _Vitess_ExecuteEntityIds_Handler,
-		},
-		{
-			MethodName: "ExecuteBatchShards",
-			Handler:    _Vitess_ExecuteBatchShards_Handler,
-		},
-		{
-			MethodName: "ExecuteBatchKeyspaceIds",
-			Handler:    _Vitess_ExecuteBatchKeyspaceIds_Handler,
-		},
-		{
-			MethodName: "Begin",
-			Handler:    _Vitess_Begin_Handler,
-		},
-		{
-			MethodName: "Commit",
-			Handler:    _Vitess_Commit_Handler,
-		},
-		{
-			MethodName: "Rollback",
-			Handler:    _Vitess_Rollback_Handler,
-		},
-		{
 			MethodName: "ResolveTransaction",
 			Handler:    _Vitess_ResolveTransaction_Handler,
-		},
-		{
-			MethodName: "MessageAck",
-			Handler:    _Vitess_MessageAck_Handler,
-		},
-		{
-			MethodName: "MessageAckKeyspaceIds",
-			Handler:    _Vitess_MessageAckKeyspaceIds_Handler,
-		},
-		{
-			MethodName: "GetSrvKeyspace",
-			Handler:    _Vitess_GetSrvKeyspace_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "StreamExecute",
 			Handler:       _Vitess_StreamExecute_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "StreamExecuteShards",
-			Handler:       _Vitess_StreamExecuteShards_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "StreamExecuteKeyspaceIds",
-			Handler:       _Vitess_StreamExecuteKeyspaceIds_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "StreamExecuteKeyRanges",
-			Handler:       _Vitess_StreamExecuteKeyRanges_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "MessageStream",
-			Handler:       _Vitess_MessageStream_Handler,
 			ServerStreams: true,
 		},
 		{

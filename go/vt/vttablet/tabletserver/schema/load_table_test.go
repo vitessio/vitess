@@ -98,6 +98,9 @@ func TestLoadTableMessage(t *testing.T) {
 			Name: "id",
 			Type: sqltypes.Int64,
 		}, {
+			Name: "priority",
+			Type: sqltypes.Int64,
+		}, {
 			Name: "time_next",
 			Type: sqltypes.Int64,
 		}, {
@@ -178,12 +181,13 @@ func getTestLoadTableQueries() map[string]*sqltypes.Result {
 }
 
 func getMessageTableQueries() map[string]*sqltypes.Result {
-	// id is intentionally after the message column to ensure that the
-	// loader still makes it the first one.
 	return map[string]*sqltypes.Result{
 		"select * from test_table where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "id",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "priority",
 				Type: sqltypes.Int64,
 			}, {
 				Name: "time_next",
