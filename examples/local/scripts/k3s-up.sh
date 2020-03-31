@@ -25,6 +25,17 @@ script_root=$(dirname "${BASH_SOURCE[0]}")
 # shellcheck disable=SC1091
 source ./env.sh
 
+case $(uname) in
+  Linux) ;;
+  *) echo "WARNING: unsupported platform. K3s only supports running on Linux, the k8s topology is available for local examples."; exit 1;;
+esac
+
+case $(uname -m) in
+    aarch64) ;;
+    x86_64) ;;
+    *) echo "ERROR: unsupported architecture, the k8s topology is not available for local examples."; exit 1;;
+esac
+
 k3s server --disable-agent --data-dir "${VTDATAROOT}/k3s/" --https-listen-port "${K8S_PORT}" --write-kubeconfig "${K8S_KUBECONFIG}" > "${VTDATAROOT}"/tmp/k3s.out 2>&1 &
 PID=$!
 echo $PID > "${VTDATAROOT}/tmp/k3s.pid"
