@@ -25,8 +25,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // StreamExecutor is a subset of Primitive that MergeSort
@@ -34,8 +32,6 @@ import (
 type StreamExecutor interface {
 	StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
 }
-
-var _ Primitive = (*MergeSort)(nil)
 
 // MergeSort performs a merge-sort of rows returned by each Input. This should
 // only be used for StreamExecute. One row from each stream is added to the
@@ -50,25 +46,6 @@ type MergeSort struct {
 	Primitives []StreamExecutor
 	OrderBy    []OrderbyParams
 	noInputs
-}
-
-// RouteType satisfies Primitive.
-func (ms *MergeSort) RouteType() string { return "MergeSort" }
-
-// GetKeyspaceName satisfies Primitive.
-func (ms *MergeSort) GetKeyspaceName() string { return "" }
-
-// GetTableName satisfies Primitive.
-func (ms *MergeSort) GetTableName() string { return "" }
-
-// Execute is not supported.
-func (ms *MergeSort) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Execute is not supported")
-}
-
-// GetFields is not supported.
-func (ms *MergeSort) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "GetFields is not supported")
 }
 
 // StreamExecute performs a streaming exec.
