@@ -353,17 +353,8 @@ func (e *Exporter) NewRates(name string, countTracker stats.CountTracker, sample
 	if e.name == "" || name == "" {
 		return stats.NewRates(name, countTracker, samples, interval)
 	}
-
-	exporterMu.Lock()
-	defer exporterMu.Unlock()
-
-	ov, ok := otherStatsVars[name]
-	if !ok {
-		ov = expvar.NewMap(name)
-		otherStatsVars[name] = ov
-	}
 	rates := stats.NewRates("", countTracker, samples, interval)
-	ov.Set(e.name, rates)
+	e.addToOtherVars(name, rates)
 	return rates
 }
 
@@ -373,17 +364,8 @@ func (e *Exporter) NewHistogram(name, help string, cutoffs []int64) *stats.Histo
 	if e.name == "" || name == "" {
 		return stats.NewHistogram(name, help, cutoffs)
 	}
-
-	exporterMu.Lock()
-	defer exporterMu.Unlock()
-
-	ov, ok := otherStatsVars[name]
-	if !ok {
-		ov = expvar.NewMap(name)
-		otherStatsVars[name] = ov
-	}
 	hist := stats.NewHistogram("", help, cutoffs)
-	ov.Set(e.name, hist)
+	e.addToOtherVars(name, hist)
 	return hist
 }
 
@@ -394,7 +376,10 @@ func (e *Exporter) Publish(name string, v expvar.Var) {
 		stats.Publish(name, v)
 		return
 	}
+	e.addToOtherVars(name, v)
+}
 
+func (e *Exporter) addToOtherVars(name string, v expvar.Var) {
 	exporterMu.Lock()
 	defer exporterMu.Unlock()
 

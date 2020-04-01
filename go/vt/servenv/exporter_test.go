@@ -546,9 +546,7 @@ func TestTimings(t *testing.T) {
 	ebd := NewExporter("", "")
 	g := ebd.NewTimings("gtimings", "", "l")
 	g.Add("a", 1)
-	if got, want := expvar.Get("gtimings").String(), "TotalCount"; !strings.Contains(got, want) {
-		t.Errorf("CountersFuncWithLabels get: %s, must contain %s", got, want)
-	}
+	assert.Contains(t, expvar.Get("gtimings").String(), "TotalCount")
 
 	ebd = NewExporter("i1", "label")
 
@@ -556,9 +554,24 @@ func TestTimings(t *testing.T) {
 	ebd.NewTimings("", "", "l")
 	ebd.NewTimings("", "", "l")
 
-	// Ensure non-anonymous vars also don't cause panics
-	ebd.NewTimings("ltimings", "", "l")
-	ebd.NewTimings("ltimings", "", "l")
+	g = ebd.NewTimings("ltimings", "", "l")
+	g.Add("a", 1)
+	g.Add("a", 1)
+	assert.Contains(t, expvar.Get("ltimings").String(), `i1.a`)
+	assert.Contains(t, expvar.Get("ltimings").String(), `"TotalCount":2`)
+
+	// Unlike other cases, var cannot be replaced. It gets reused.
+	g = ebd.NewTimings("ltimings", "", "l")
+	g.Add("a", 1)
+	assert.Contains(t, expvar.Get("ltimings").String(), `i1.a`)
+	assert.Contains(t, expvar.Get("ltimings").String(), `"TotalCount":3`)
+
+	ebd = NewExporter("i2", "label")
+	g = ebd.NewTimings("ltimings", "", "l")
+	g.Add("a", 1)
+	assert.Contains(t, expvar.Get("ltimings").String(), `i1.a`)
+	assert.Contains(t, expvar.Get("ltimings").String(), `i2.a`)
+	assert.Contains(t, expvar.Get("ltimings").String(), `"TotalCount":4`)
 }
 
 func TestMultiTimings(t *testing.T) {
@@ -575,9 +588,24 @@ func TestMultiTimings(t *testing.T) {
 	ebd.NewMultiTimings("", "", []string{"l"})
 	ebd.NewMultiTimings("", "", []string{"l"})
 
-	// Ensure non-anonymous vars also don't cause panics
-	ebd.NewMultiTimings("lmtimings", "", []string{"l"})
-	ebd.NewMultiTimings("lmtimings", "", []string{"l"})
+	g = ebd.NewMultiTimings("lmtimings", "", []string{"l"})
+	g.Add([]string{"a"}, 1)
+	g.Add([]string{"a"}, 1)
+	assert.Contains(t, expvar.Get("lmtimings").String(), `i1.a`)
+	assert.Contains(t, expvar.Get("lmtimings").String(), `"TotalCount":2`)
+
+	// Unlike other cases, var cannot be replaced. It gets reused.
+	g = ebd.NewMultiTimings("lmtimings", "", []string{"l"})
+	g.Add([]string{"a"}, 1)
+	assert.Contains(t, expvar.Get("lmtimings").String(), `i1.a`)
+	assert.Contains(t, expvar.Get("lmtimings").String(), `"TotalCount":3`)
+
+	ebd = NewExporter("i2", "label")
+	g = ebd.NewMultiTimings("lmtimings", "", []string{"l"})
+	g.Add([]string{"a"}, 1)
+	assert.Contains(t, expvar.Get("lmtimings").String(), `i1.a`)
+	assert.Contains(t, expvar.Get("lmtimings").String(), `i2.a`)
+	assert.Contains(t, expvar.Get("lmtimings").String(), `"TotalCount":4`)
 }
 
 func TestRates(t *testing.T) {
@@ -601,11 +629,9 @@ func TestRates(t *testing.T) {
 
 func TestHistogram(t *testing.T) {
 	ebd := NewExporter("", "")
-	g := ebd.NewHistogram("ghebdogram", "", []int64{10})
+	g := ebd.NewHistogram("ghistogram", "", []int64{10})
 	g.Add(1)
-	if got, want := expvar.Get("ghebdogram").String(), `{"10": 1, "inf": 1, "Count": 1, "Total": 1}`; !strings.Contains(got, want) {
-		t.Errorf("CountersFuncWithMultiLabels get: %s, must contain %s", got, want)
-	}
+	assert.Contains(t, expvar.Get("ghistogram").String(), `{"10": 1, "inf": 1, "Count": 1, "Total": 1}`)
 
 	ebd = NewExporter("i1", "label")
 
@@ -613,9 +639,17 @@ func TestHistogram(t *testing.T) {
 	ebd.NewHistogram("", "", []int64{10})
 	ebd.NewHistogram("", "", []int64{10})
 
-	// Ensure non-anonymous vars also don't cause panics
-	ebd.NewHistogram("lhebdogram", "", []int64{10})
-	ebd.NewHistogram("lhebdogram", "", []int64{10})
+	g = ebd.NewHistogram("lhistogram", "", []int64{10})
+	g.Add(1)
+	g.Add(1)
+	assert.Contains(t, expvar.Get("lmtimings").String(), `i1`)
+	assert.Contains(t, expvar.Get("lhistogram").String(), `{"10": 2, "inf": 2, "Count": 2, "Total": 2}`)
+
+	// Ensure var gets replaced.
+	g = ebd.NewHistogram("lhistogram", "", []int64{10})
+	g.Add(1)
+	assert.Contains(t, expvar.Get("lmtimings").String(), `i1`)
+	assert.Contains(t, expvar.Get("lhistogram").String(), `{"10": 1, "inf": 1, "Count": 1, "Total": 1}`)
 }
 
 func TestPublish(t *testing.T) {
