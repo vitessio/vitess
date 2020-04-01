@@ -2,7 +2,7 @@ name: sonar_analysis
 on:
   push:
     branches:
-      - 'master'
+      - 'sonartest'
 jobs:
 
   build:
