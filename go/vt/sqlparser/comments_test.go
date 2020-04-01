@@ -119,20 +119,32 @@ func TestSplitComments(t *testing.T) {
 		outSQL:              "foo",
 		outLeadingComments:  "",
 		outTrailingComments: "",
+	}, {
+		input:               "select 1 from t where col = '*//*'",
+		outSQL:              "select 1 from t where col = '*//*'",
+		outLeadingComments:  "",
+		outTrailingComments: "",
+	}, {
+		input:               "/*! select 1 */",
+		outSQL:              "/*! select 1 */",
+		outLeadingComments:  "",
+		outTrailingComments: "",
 	}}
 	for _, testCase := range testCases {
-		gotSQL, gotComments := SplitMarginComments(testCase.input)
-		gotLeadingComments, gotTrailingComments := gotComments.Leading, gotComments.Trailing
+		t.Run(testCase.input, func(t *testing.T) {
+			gotSQL, gotComments := SplitMarginComments(testCase.input)
+			gotLeadingComments, gotTrailingComments := gotComments.Leading, gotComments.Trailing
 
-		if gotSQL != testCase.outSQL {
-			t.Errorf("test input: '%s', got SQL\n%+v, want\n%+v", testCase.input, gotSQL, testCase.outSQL)
-		}
-		if gotLeadingComments != testCase.outLeadingComments {
-			t.Errorf("test input: '%s', got LeadingComments\n%+v, want\n%+v", testCase.input, gotLeadingComments, testCase.outLeadingComments)
-		}
-		if gotTrailingComments != testCase.outTrailingComments {
-			t.Errorf("test input: '%s', got TrailingComments\n%+v, want\n%+v", testCase.input, gotTrailingComments, testCase.outTrailingComments)
-		}
+			if gotSQL != testCase.outSQL {
+				t.Errorf("test input: '%s', got SQL\n%+v, want\n%+v", testCase.input, gotSQL, testCase.outSQL)
+			}
+			if gotLeadingComments != testCase.outLeadingComments {
+				t.Errorf("test input: '%s', got LeadingComments\n%+v, want\n%+v", testCase.input, gotLeadingComments, testCase.outLeadingComments)
+			}
+			if gotTrailingComments != testCase.outTrailingComments {
+				t.Errorf("test input: '%s', got TrailingComments\n%+v, want\n%+v", testCase.input, gotTrailingComments, testCase.outTrailingComments)
+			}
+		})
 	}
 }
 
@@ -205,103 +217,6 @@ a`,
 	}}
 	for _, testCase := range testCases {
 		gotSQL := StripLeadingComments(testCase.input)
-
-		if gotSQL != testCase.outSQL {
-			t.Errorf("test input: '%s', got SQL\n%+v, want\n%+v", testCase.input, gotSQL, testCase.outSQL)
-		}
-	}
-}
-
-func TestRemoveComments(t *testing.T) {
-	var testCases = []struct {
-		input, outSQL string
-	}{{
-		input:  "/",
-		outSQL: "/",
-	}, {
-		input:  "*/",
-		outSQL: "*/",
-	}, {
-		input:  "/*/",
-		outSQL: "/*/",
-	}, {
-		input:  "/*a",
-		outSQL: "/*a",
-	}, {
-		input:  "/*a*",
-		outSQL: "/*a*",
-	}, {
-		input:  "/*a**",
-		outSQL: "/*a**",
-	}, {
-		input:  "/*b**a*/",
-		outSQL: "",
-	}, {
-		input:  "/*a*/",
-		outSQL: "",
-	}, {
-		input:  "/**/",
-		outSQL: "",
-	}, {
-		input:  "/*!*/",
-		outSQL: "",
-	}, {
-		input:  "/*!a*/",
-		outSQL: "",
-	}, {
-		input:  "/*b*/ /*a*/",
-		outSQL: "",
-	}, {
-		input: `/*b*/ --foo
-bar`,
-		outSQL: "bar",
-	}, {
-		input:  "foo /* bar */",
-		outSQL: "foo",
-	}, {
-		input:  "foo /* bar */ baz",
-		outSQL: "foo  baz",
-	}, {
-		input:  "/* foo */ bar",
-		outSQL: "bar",
-	}, {
-		input:  "-- /* foo */ bar",
-		outSQL: "",
-	}, {
-		input:  "foo -- bar */",
-		outSQL: "foo -- bar */",
-	}, {
-		input: `/*
-foo */ bar`,
-		outSQL: "bar",
-	}, {
-		input: `-- foo bar
-a`,
-		outSQL: "a",
-	}, {
-		input:  `-- foo bar`,
-		outSQL: "",
-	}, {
-		input:  "select * from customer where name like '*//*'",
-		outSQL: "select * from customer where name like '*//*'",
-	}, {
-		input:  "select * from customer where name like '*/%/*'",
-		outSQL: "select * from customer where name like '*/%/*'",
-	}, {
-		input:  "select * from customer where name like '*/%/*'",
-		outSQL: "select * from customer where name like '*/%/*'",
-	}, {
-		input:  "insert into customer values(1, '*//*')",
-		outSQL: "insert into customer values (1, '*//*')",
-	}, {
-		input:  "insert into t5 (col) values('/**/')",
-		outSQL: "insert into t5(col) values ('/**/')",
-	}, {
-		input:  "select * from customer where name like 'abc*/la/*xyz'",
-		outSQL: "select * from customer where name like 'abc*/la/*xyz'",
-	}}
-	for _, testCase := range testCases {
-		gotSQL := StripComments(testCase.input)
 
 		if gotSQL != testCase.outSQL {
 			t.Errorf("test input: '%s', got SQL\n%+v, want\n%+v", testCase.input, gotSQL, testCase.outSQL)
