@@ -323,7 +323,6 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 				if event.Timestamp != 0 {
 					vp.lastTimestampNs = event.Timestamp * 1e9
 					vp.timeOffsetNs = time.Now().UnixNano() - event.CurrentTime
-					//vp.vr.stats.SecondsBehindMaster.Set(event.CurrentTime/1e9 - event.Timestamp)
 					sbm = event.CurrentTime/1e9 - event.Timestamp
 				}
 				mustSave := false
