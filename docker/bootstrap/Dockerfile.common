@@ -14,12 +14,6 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     libtool \
     make \
     openjdk-8-jdk \
-    python-crypto \
-    python-dev \
-    python-mysqldb \
-    python-pip \
-    ruby \
-    ruby-dev \
     software-properties-common \
     virtualenv \
     unzip \
@@ -46,9 +40,7 @@ ENV USER vitess
 # Copy files needed for bootstrap
 COPY bootstrap.sh dev.env build.env go.mod go.sum /vt/src/vitess.io/vitess/
 COPY config /vt/src/vitess.io/vitess/config
-COPY third_party /vt/src/vitess.io/vitess/third_party
 COPY tools /vt/src/vitess.io/vitess/tools
-COPY travis /vt/src/vitess.io/vitess/travis
 
 # Create vitess user
 RUN groupadd -r vitess && useradd -r -g vitess vitess && \
