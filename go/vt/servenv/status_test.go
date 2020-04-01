@@ -24,6 +24,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func init() {
@@ -45,16 +47,12 @@ func TestStatus(t *testing.T) {
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + StatusURLPath())
-	if err != nil {
-		t.Fatalf("http.Get: %v", err)
-	}
+	require.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("ioutil.ReadAll: %v", err)
-	}
+	require.NoError(t, err)
 
 	cases := []string{
 		`h1.*test_part.*/h1`,
@@ -88,16 +86,12 @@ func TestNamedStatus(t *testing.T) {
 	})
 
 	resp, err := http.Get(server.URL + "/" + name + StatusURLPath())
-	if err != nil {
-		t.Fatalf("http.Get: %v", err)
-	}
+	require.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("ioutil.ReadAll: %v", err)
-	}
+	require.NoError(t, err)
 
 	cases := []string{
 		`h1.*test_part.*/h1`,
