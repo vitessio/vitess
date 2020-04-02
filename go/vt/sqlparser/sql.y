@@ -160,7 +160,7 @@ func skipToEnd(yylex interface{}) {
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH
-%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK
+%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
@@ -184,7 +184,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> COLLATION DATABASES TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
+%token <bytes> COLLATION DATABASES TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -269,7 +269,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
-%type <str> full_opt from_database_opt tables_or_processlist columns_or_fields
+%type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <byt> exists_opt
 %type <empty> not_exists_opt non_add_drop_or_rename_operation to_opt index_opt constraint_opt
@@ -1562,15 +1562,20 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW INDEX FROM table_name from_database_opt like_or_where_opt
+| SHOW extended_opt INDEX FROM table_name from_database_opt like_or_where_opt
   {
-    showTablesOpt := &ShowTablesOpt{DbName:$5, Filter:$6}
-    $$ = &Show{Type: string($2), ShowTablesOpt: showTablesOpt, OnTable: $4}
+    showTablesOpt := &ShowTablesOpt{DbName:$6, Filter:$7}
+    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
   }
-| SHOW KEYS FROM table_name from_database_opt like_or_where_opt
+| SHOW extended_opt INDEXES FROM table_name from_database_opt like_or_where_opt
   {
-    showTablesOpt := &ShowTablesOpt{DbName:$5, Filter:$6}
-    $$ = &Show{Type: string($2), ShowTablesOpt: showTablesOpt, OnTable: $4}
+    showTablesOpt := &ShowTablesOpt{DbName:$6, Filter:$7}
+    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
+  }
+| SHOW extended_opt KEYS FROM table_name from_database_opt like_or_where_opt
+  {
+    showTablesOpt := &ShowTablesOpt{DbName:$6, Filter:$7}
+    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
   }
 | SHOW PLUGINS
   {
@@ -1662,6 +1667,16 @@ tables_or_processlist:
   {
     $$ = string($1)
   }
+
+  extended_opt:
+    /* empty */
+    {
+      $$ = ""
+    }
+  | EXTENDED
+    {
+      $$ = "extended "
+    }
 
 full_opt:
   /* empty */
@@ -3423,6 +3438,7 @@ non_reserved_keyword:
 | ENUM
 | EXCLUDE
 | EXPANSION
+| EXTENDED
 | FLOAT_TYPE
 | FIELDS
 | FLUSH
@@ -3440,6 +3456,7 @@ non_reserved_keyword:
 | INT
 | INTEGER
 | INVISIBLE
+| INDEXES
 | ISOLATION
 | JSON
 | KEY_BLOCK_SIZE
