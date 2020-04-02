@@ -206,8 +206,8 @@ func RunDefault() {
 func ParseFlags(cmd string) {
 	flag.Parse()
 
-	AppVersion.Print()
 	if *Version {
+		AppVersion.Print()
 		os.Exit(0)
 	}
 
