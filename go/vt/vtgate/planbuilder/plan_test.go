@@ -168,6 +168,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "vindex_func_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "wireup_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "memory_sort_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "use_cases.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func TestOne(t *testing.T) {

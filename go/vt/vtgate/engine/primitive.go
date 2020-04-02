@@ -71,6 +71,7 @@ type VCursor interface {
 	// Resolver methods, from key.Destination to srvtopo.ResolvedShard.
 	// Will replace all of the Topo functions.
 	ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error)
+	SetTarget(target string) error
 }
 
 // PlanType indicates type of the plan generated
@@ -88,6 +89,7 @@ const (
 	PlanDELETE
 	PlanDDL
 	PlanBYPASS
+	PlanUSE
 )
 
 // Plan represents the execution strategy for a given query.

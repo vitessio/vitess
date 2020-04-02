@@ -79,12 +79,15 @@ type vcursorImpl struct {
 // on behalf of the original query.
 func newVCursorImpl(ctx context.Context, safeSession *SafeSession, marginComments sqlparser.MarginComments, executor *Executor, logStats *LogStats, vschema *vindexes.VSchema, resolver *srvtopo.Resolver) (*vcursorImpl, error) {
 	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema)
-	// ks
-	// select b from ts.a
-	// select b from ps.a
 	if err != nil {
 		return nil, err
 	}
+
+	// Check for transaction to be only application in master.
+	if safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", tabletType)
+	}
+
 	return &vcursorImpl{
 		ctx:            ctx,
 		safeSession:    safeSession,
@@ -252,6 +255,22 @@ func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query str
 
 func (vc *vcursorImpl) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	return vc.resolver.ResolveDestinations(vc.ctx, keyspace, vc.tabletType, ids, destinations)
+}
+
+func (vc *vcursorImpl) SetTarget(target string) error {
+	keyspace, tabletType, _, err := parseDestinationTarget(target, vc.vschema)
+	if err != nil {
+		return err
+	}
+	if _, ok := vc.vschema.Keyspaces[keyspace]; keyspace != "" && !ok {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace provided: %s", keyspace)
+	}
+
+	if vc.safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot change to a non-master type in the middle of a transaction: %v", tabletType)
+	}
+	vc.safeSession.SetTargetString(target)
+	return nil
 }
 
 // Destination implements the ContextVSchema interface
