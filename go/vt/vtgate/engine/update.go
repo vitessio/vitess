@@ -18,6 +18,8 @@ package engine
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -267,17 +269,15 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 }
 
 func (upd *Update) description() PrimitiveDescription {
-	changedVindexes := ""
+	var changedVindexes []string
 	for vindex := range upd.ChangedVindexValues {
-		if len(changedVindexes) != 0 {
-			changedVindexes += ","
-		}
-		changedVindexes += vindex
+		changedVindexes = append(changedVindexes, vindex)
 	}
+	sort.Strings(changedVindexes)
 	other := map[string]string{
 		"Query":     upd.Query,
 		"TableName": upd.GetTableName(),
-		"Vindexes":  changedVindexes,
+		"Vindexes":  strings.Join(changedVindexes, ", "),
 	}
 	return PrimitiveDescription{
 		OperatorType:     "Update",

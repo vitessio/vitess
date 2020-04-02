@@ -569,8 +569,8 @@ func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) 
 
 func (route *Route) description() PrimitiveDescription {
 	other := map[string]string{
-		"Query":     route.Query,
-		"TableName": route.TableName,
+		"Query": route.Query,
+		"Table": route.TableName,
 	}
 	return PrimitiveDescription{
 		OperatorType:      "Route",

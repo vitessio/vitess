@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
 
@@ -79,25 +80,16 @@ type VCursor interface {
 // each node does its part by combining the results of the
 // sub-nodes.
 type Plan struct {
-	// Original is the original query.
-	Original string `json:",omitempty"`
-	// Instructions contains the instructions needed to
-	// fulfil the query.
-	Instructions Primitive `json:",omitempty"`
-	// Mutex to protect the stats
-	mu sync.Mutex
-	// Count of times this plan was executed
-	ExecCount uint64 `json:",omitempty"`
-	// Total execution time
-	ExecTime time.Duration `json:",omitempty"`
-	// Total number of shard queries
-	ShardQueries uint64 `json:",omitempty"`
-	// Total number of rows
-	Rows uint64 `json:",omitempty"`
-	// Total number of errors
-	Errors uint64 `json:",omitempty"`
-	// Stores BindVars needed to be provided as part of expression rewriting
-	sqlparser.BindVarNeeds `json:"-"`
+	Original               string    // Original is the original query.
+	Instructions           Primitive // Instructions contains the instructions needed to fulfil the query.
+	sqlparser.BindVarNeeds           // Stores BindVars needed to be provided as part of expression rewriting
+
+	mu           sync.Mutex    // Mutex to protect the fields below
+	ExecCount    uint64        // Count of times this plan was executed
+	ExecTime     time.Duration // Total execution time
+	ShardQueries uint64        // Total number of shard queries
+	Rows         uint64        // Total number of rows
+	Errors       uint64        // Total number of errors
 }
 
 // AddStats updates the plan execution statistics
@@ -150,6 +142,34 @@ func Exists(m Match, p Primitive) bool {
 // in turn requires its objects to define a Size function.
 func (p *Plan) Size() int {
 	return 1
+}
+
+//MarshalJSON serializes the plan into a JSON representation.
+func (p *Plan) MarshalJSON() ([]byte, error) {
+	var instructions *PrimitiveDescription
+	if p.Instructions != nil {
+		description := PrimitiveToPlanDescription(p.Instructions)
+		instructions = &description
+	}
+
+	marshalPlan := struct {
+		Original     string                `json:",omitempty"`
+		Instructions *PrimitiveDescription `json:",omitempty"`
+		ExecCount    uint64                `json:",omitempty"`
+		ExecTime     time.Duration         `json:",omitempty"`
+		ShardQueries uint64                `json:",omitempty"`
+		Rows         uint64                `json:",omitempty"`
+		Errors       uint64                `json:",omitempty"`
+	}{
+		Original:     p.Original,
+		Instructions: instructions,
+		ExecCount:    p.ExecCount,
+		ExecTime:     p.ExecTime,
+		ShardQueries: p.ShardQueries,
+		Rows:         p.Rows,
+		Errors:       p.Errors,
+	}
+	return json.Marshal(marshalPlan)
 }
 
 // Primitive is the building block of the engine execution plan. They form a tree structure, where the leaves typically

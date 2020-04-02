@@ -19,6 +19,7 @@ package engine
 import (
 	"bytes"
 	"encoding/json"
+	"sort"
 
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -71,10 +72,9 @@ func (pd PrimitiveDescription) MarshalJSON() ([]byte, error) {
 			return nil, err
 		}
 	}
-	for k, v := range pd.Other {
-		if err := marshalAdd(",", buf, k, v); err != nil {
-			return nil, err
-		}
+	err := addMap(pd.Other, buf)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(pd.Inputs) > 0 {
@@ -85,10 +85,24 @@ func (pd PrimitiveDescription) MarshalJSON() ([]byte, error) {
 
 	buf.WriteString("}")
 
-	var out bytes.Buffer
-	json.Indent(&out, buf.Bytes(), "  ", "  ")
+	return buf.Bytes(), nil
+}
 
-	return out.Bytes(), nil
+func addMap(input map[string]string, buf *bytes.Buffer) error {
+	mk := make([]string, len(input))
+	i := 0
+	for k := range input {
+		mk[i] = k
+		i++
+	}
+	sort.Strings(mk)
+	for _, k := range mk {
+		v := input[k]
+		if err := marshalAdd(",", buf, k, v); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func marshalAdd(prepend string, buf *bytes.Buffer, name string, obj interface{}) error {

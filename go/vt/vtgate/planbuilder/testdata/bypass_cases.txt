@@ -3,14 +3,15 @@
 {
   "Original": "select count(*), col from unsharded",
   "Instructions": {
-    "Opcode": "Send",
+    "OperatorType": "Send",
+    "Variant": "",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "TargetDestination": "-80",
+    "TargetDestination": "Shard(-80)",
     "Query": "select count(*), col from unsharded",
-    "NoAutoCommit": true
+    "Table": ""
   }
 }
 
@@ -19,14 +20,15 @@
 {
   "Original": "update user set val = 1 where id = 18446744073709551616 and id = 1",
   "Instructions": {
-    "Opcode": "Send",
+    "OperatorType": "Send",
+    "Variant": "",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "TargetDestination": "-80",
+    "TargetDestination": "Shard(-80)",
     "Query": "update user set val = 1 where id = 18446744073709551616 and id = 1",
-    "NoAutoCommit": false
+    "Table": ""
   }
 }
 
@@ -35,14 +37,15 @@
 {
   "Original": "DELETE FROM USER WHERE ID = 42",
   "Instructions": {
-    "Opcode": "Send",
+    "OperatorType": "Send",
+    "Variant": "",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "TargetDestination": "-80",
+    "TargetDestination": "Shard(-80)",
     "Query": "delete from USER where ID = 42",
-    "NoAutoCommit": false
+    "Table": ""
   }
 }
 
@@ -51,13 +54,14 @@
 {
   "Original": "INSERT INTO USER (ID, NAME) VALUES (42, 'ms X')",
   "Instructions": {
-    "Opcode": "Send",
+    "OperatorType": "Send",
+    "Variant": "",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "TargetDestination": "-80",
+    "TargetDestination": "Shard(-80)",
     "Query": "insert into USER(ID, NAME) values (42, 'ms X')",
-    "NoAutoCommit": false
+    "Table": ""
   }
 }

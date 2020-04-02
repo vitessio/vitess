@@ -3,13 +3,14 @@
 {
   "Original": "select col from user",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select col from user",
-    "FieldQuery": "select col from user where 1 != 1",
     "Table": "user"
   }
 }
@@ -19,13 +20,13 @@
 {
   "Original": "select col from unsharded",
   "Instructions": {
-    "Opcode": "SelectUnsharded",
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "Query": "select col from unsharded",
-    "FieldQuery": "select col from unsharded where 1 != 1",
     "Table": "unsharded"
   }
 }
@@ -35,13 +36,13 @@
 {
   "Original": "select next 2 values from seq",
   "Instructions": {
-    "Opcode": "SelectNext",
+    "OperatorType": "Route",
+    "Variant": "SelectNext",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "Query": "select next 2 values from seq",
-    "FieldQuery": "select next 2 values from seq where 1 != 1",
     "Table": "seq"
   }
 }
@@ -51,13 +52,13 @@
 {
   "Original": "select * from ref",
   "Instructions": {
-    "Opcode": "SelectReference",
+    "OperatorType": "Route",
+    "Variant": "SelectReference",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "Query": "select * from ref",
-    "FieldQuery": "select * from ref where 1 != 1",
     "Table": "ref"
   }
 }
@@ -67,13 +68,14 @@
 {
   "Original": "select col from information_schema.foo",
   "Instructions": {
-    "Opcode": "SelectDBA",
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "Query": "select col from information_schema.foo",
-    "FieldQuery": "select col from information_schema.foo where 1 != 1"
+    "Table": ""
   }
 }
 
@@ -82,13 +84,13 @@
 {
   "Original": "select m1.col from unsharded as m1 join unsharded as m2",
   "Instructions": {
-    "Opcode": "SelectUnsharded",
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "Query": "select m1.col from unsharded as m1 join unsharded as m2",
-    "FieldQuery": "select m1.col from unsharded as m1 join unsharded as m2 where 1 != 1",
     "Table": "unsharded"
   }
 }
@@ -98,29 +100,34 @@
 {
   "Original": "select music.col from user join music",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "1",
+    "TableName": "user_music",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select 1 from user",
+        "Table": "user"
       },
-      "Query": "select 1 from user",
-      "FieldQuery": "select 1 from user where 1 != 1",
-      "Table": "user"
-    },
-    "Right": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select music.col from music",
-      "FieldQuery": "select music.col from music where 1 != 1",
-      "Table": "music"
-    },
-    "Cols": [
-      1
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select music.col from music",
+        "Table": "music"
+      }
     ]
   }
 }
@@ -130,13 +137,14 @@
 {
   "Original": "select * from second_user.user",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select * from user",
-    "FieldQuery": "select * from user where 1 != 1",
     "Table": "user"
   }
 }
@@ -146,13 +154,14 @@
 {
   "Original": "select * from second_user.user as a",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select * from user as a",
-    "FieldQuery": "select * from user as a where 1 != 1",
     "Table": "user"
   }
 }
@@ -162,13 +171,14 @@
 {
   "Original": "select * from route1",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select * from user as route1",
-    "FieldQuery": "select * from user as route1 where 1 != 1",
     "Table": "user"
   }
 }
@@ -178,13 +188,14 @@
 {
   "Original": "select * from route1 as a",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select * from user as a",
-    "FieldQuery": "select * from user as a where 1 != 1",
     "Table": "user"
   }
 }
@@ -194,13 +205,14 @@
 {
   "Original": "select * from master_redirect",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select * from user as master_redirect",
-    "FieldQuery": "select * from user as master_redirect where 1 != 1",
     "Table": "user"
   }
 }
@@ -218,29 +230,34 @@
 {
   "Original": "select music.col from user, music",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "1",
+    "TableName": "user_music",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select 1 from user",
+        "Table": "user"
       },
-      "Query": "select 1 from user",
-      "FieldQuery": "select 1 from user where 1 != 1",
-      "Table": "user"
-    },
-    "Right": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select music.col from music",
-      "FieldQuery": "select music.col from music where 1 != 1",
-      "Table": "music"
-    },
-    "Cols": [
-      1
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select music.col from music",
+        "Table": "music"
+      }
     ]
   }
 }
@@ -250,13 +267,13 @@
 {
   "Original": "select u1.a, u2.a from unsharded u1, unsharded u2",
   "Instructions": {
-    "Opcode": "SelectUnsharded",
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "Query": "select u1.a, u2.a from unsharded as u1, unsharded as u2",
-    "FieldQuery": "select u1.a, u2.a from unsharded as u1, unsharded as u2 where 1 != 1",
     "Table": "unsharded"
   }
 }
@@ -266,13 +283,14 @@
 {
   "Original": "select * from information_schema.a, information_schema.b",
   "Instructions": {
-    "Opcode": "SelectDBA",
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "Query": "select * from information_schema.a, information_schema.b",
-    "FieldQuery": "select * from information_schema.a, information_schema.b where 1 != 1"
+    "Table": ""
   }
 }
 
@@ -281,13 +299,13 @@
 {
   "Original": "select u1.a, u2.a from unsharded u1, unsharded u2, unsharded u3",
   "Instructions": {
-    "Opcode": "SelectUnsharded",
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "Query": "select u1.a, u2.a from unsharded as u1, unsharded as u2, unsharded as u3",
-    "FieldQuery": "select u1.a, u2.a from unsharded as u1, unsharded as u2, unsharded as u3 where 1 != 1",
     "Table": "unsharded"
   }
 }
@@ -297,13 +315,13 @@
 {
   "Original": "select m1.col from unsharded as m1 left join unsharded as m2 on m1.a=m2.b",
   "Instructions": {
-    "Opcode": "SelectUnsharded",
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "Query": "select m1.col from unsharded as m1 left join unsharded as m2 on m1.a = m2.b",
-    "FieldQuery": "select m1.col from unsharded as m1 left join unsharded as m2 on m1.a = m2.b where 1 != 1",
     "Table": "unsharded"
   }
 }
@@ -313,33 +331,34 @@
 {
   "Original": "select u.col from user u left join unsharded m on u.a = m.b",
   "Instructions": {
-    "Opcode": "LeftJoin",
-    "Left": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Join",
+    "Variant": "LeftJoin",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "-1",
+    "TableName": "user_unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select u.col, u.a from user as u",
+        "Table": "user"
       },
-      "Query": "select u.col, u.a from user as u",
-      "FieldQuery": "select u.col, u.a from user as u where 1 != 1",
-      "Table": "user"
-    },
-    "Right": {
-      "Opcode": "SelectUnsharded",
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select 1 from unsharded as m where m.b = :u_a",
-      "FieldQuery": "select 1 from unsharded as m where 1 != 1",
-      "Table": "unsharded"
-    },
-    "Cols": [
-      -1
-    ],
-    "Vars": {
-      "u_a": 1
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select 1 from unsharded as m where m.b = :u_a",
+        "Table": "unsharded"
+      }
+    ]
   }
 }
 
@@ -348,53 +367,53 @@
 {
   "Original": "select user.col from user left join unsharded as m1 on user.col = m1.co left join unsharded as m2 on m1.col = m2.col",
   "Instructions": {
-    "Opcode": "LeftJoin",
-    "Left": {
-      "Opcode": "LeftJoin",
-      "Left": {
-        "Opcode": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "select user.col from user",
-        "FieldQuery": "select user.col from user where 1 != 1",
-        "Table": "user"
+    "OperatorType": "Join",
+    "Variant": "LeftJoin",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "-1",
+    "TableName": "user_unsharded_unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "TargetDestination": "VtGate()",
+        "JoinColumnIndexes": "-1,1",
+        "TableName": "user_unsharded",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "MASTER",
+            "Query": "select user.col from user",
+            "Table": "user"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectUnsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "Query": "select m1.col from unsharded as m1 where m1.co = :user_col",
+            "Table": "unsharded"
+          }
+        ]
       },
-      "Right": {
-        "Opcode": "SelectUnsharded",
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
         },
-        "Query": "select m1.col from unsharded as m1 where m1.co = :user_col",
-        "FieldQuery": "select m1.col from unsharded as m1 where 1 != 1",
+        "Query": "select 1 from unsharded as m2 where m2.col = :m1_col",
         "Table": "unsharded"
-      },
-      "Cols": [
-        -1,
-        1
-      ],
-      "Vars": {
-        "user_col": 0
       }
-    },
-    "Right": {
-      "Opcode": "SelectUnsharded",
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select 1 from unsharded as m2 where m2.col = :m1_col",
-      "FieldQuery": "select 1 from unsharded as m2 where 1 != 1",
-      "Table": "unsharded"
-    },
-    "Cols": [
-      -1
-    ],
-    "Vars": {
-      "m1_col": 1
-    }
+    ]
   }
 }
 
@@ -403,49 +422,54 @@
 {
   "Original": "select user.col from user left join user_extra as e left join unsharded as m1 on m1.col = e.col on user.col = e.col",
   "Instructions": {
-    "Opcode": "LeftJoin",
-    "Left": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select user.col from user",
-      "FieldQuery": "select user.col from user where 1 != 1",
-      "Table": "user"
-    },
-    "Right": {
-      "Opcode": "LeftJoin",
-      "Left": {
-        "Opcode": "SelectScatter",
+    "OperatorType": "Join",
+    "Variant": "LeftJoin",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "-1",
+    "TableName": "user_user_extra_unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
-        "Query": "select e.col from user_extra as e where e.col = :user_col",
-        "FieldQuery": "select e.col from user_extra as e where 1 != 1",
-        "Table": "user_extra"
+        "TargetTabletType": "MASTER",
+        "Query": "select user.col from user",
+        "Table": "user"
       },
-      "Right": {
-        "Opcode": "SelectUnsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "Query": "select 1 from unsharded as m1 where m1.col = :e_col",
-        "FieldQuery": "select 1 from unsharded as m1 where 1 != 1",
-        "Table": "unsharded"
-      },
-      "Vars": {
-        "e_col": 0
+      {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "TargetDestination": "VtGate()",
+        "JoinColumnIndexes": "",
+        "TableName": "user_extra_unsharded",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "MASTER",
+            "Query": "select e.col from user_extra as e where e.col = :user_col",
+            "Table": "user_extra"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectUnsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "Query": "select 1 from unsharded as m1 where m1.col = :e_col",
+            "Table": "unsharded"
+          }
+        ]
       }
-    },
-    "Cols": [
-      -1
-    ],
-    "Vars": {
-      "user_col": 0
-    }
+    ]
   }
 }
 
@@ -454,13 +478,13 @@
 {
   "Original": "select m1.col from unsharded as m1 right join unsharded as m2 on m1.a=m2.b",
   "Instructions": {
-    "Opcode": "SelectUnsharded",
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "Query": "select m1.col from unsharded as m2 left join unsharded as m1 on m1.a = m2.b",
-    "FieldQuery": "select m1.col from unsharded as m2 left join unsharded as m1 on m1.a = m2.b where 1 != 1",
     "Table": "unsharded"
   }
 }
@@ -470,13 +494,13 @@
 {
   "Original": "select m1.col from unsharded as m1 join unsharded as m2 right join unsharded as m3 on m1.a=m2.b",
   "Instructions": {
-    "Opcode": "SelectUnsharded",
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "Query": "select m1.col from unsharded as m3 left join (unsharded as m1 join unsharded as m2) on m1.a = m2.b",
-    "FieldQuery": "select m1.col from unsharded as m3 left join (unsharded as m1 join unsharded as m2) on m1.a = m2.b where 1 != 1",
     "Table": "unsharded"
   }
 }
@@ -486,13 +510,13 @@
 {
   "Original": "select m1.col from unsharded as m1 straight_join unsharded as m2",
   "Instructions": {
-    "Opcode": "SelectUnsharded",
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "Query": "select m1.col from unsharded as m1 straight_join unsharded as m2",
-    "FieldQuery": "select m1.col from unsharded as m1 straight_join unsharded as m2 where 1 != 1",
     "Table": "unsharded"
   }
 }
@@ -502,45 +526,52 @@
 {
   "Original": "select user.col from user join unsharded as m1 join unsharded as m2",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "Join",
-      "Left": {
-        "Opcode": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "select user.col from user",
-        "FieldQuery": "select user.col from user where 1 != 1",
-        "Table": "user"
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "-1",
+    "TableName": "user_unsharded_unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "TargetDestination": "VtGate()",
+        "JoinColumnIndexes": "-1",
+        "TableName": "user_unsharded",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "MASTER",
+            "Query": "select user.col from user",
+            "Table": "user"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectUnsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "Query": "select 1 from unsharded as m1",
+            "Table": "unsharded"
+          }
+        ]
       },
-      "Right": {
-        "Opcode": "SelectUnsharded",
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
         },
-        "Query": "select 1 from unsharded as m1",
-        "FieldQuery": "select 1 from unsharded as m1 where 1 != 1",
+        "Query": "select 1 from unsharded as m2",
         "Table": "unsharded"
-      },
-      "Cols": [
-        -1
-      ]
-    },
-    "Right": {
-      "Opcode": "SelectUnsharded",
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select 1 from unsharded as m2",
-      "FieldQuery": "select 1 from unsharded as m2 where 1 != 1",
-      "Table": "unsharded"
-    },
-    "Cols": [
-      -1
+      }
     ]
   }
 }
@@ -550,29 +581,33 @@
 {
   "Original": "select user.col from user join (unsharded as m1 join unsharded as m2)",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "-1",
+    "TableName": "user_unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select user.col from user",
+        "Table": "user"
       },
-      "Query": "select user.col from user",
-      "FieldQuery": "select user.col from user where 1 != 1",
-      "Table": "user"
-    },
-    "Right": {
-      "Opcode": "SelectUnsharded",
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select 1 from (unsharded as m1 join unsharded as m2)",
-      "FieldQuery": "select 1 from (unsharded as m1 join unsharded as m2) where 1 != 1",
-      "Table": "unsharded"
-    },
-    "Cols": [
-      -1
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select 1 from (unsharded as m1 join unsharded as m2)",
+        "Table": "unsharded"
+      }
     ]
   }
 }
@@ -582,42 +617,53 @@
 {
   "Original": "select user.col from user join (user as u1 join unsharded)",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select user.col from user",
-      "FieldQuery": "select user.col from user where 1 != 1",
-      "Table": "user"
-    },
-    "Right": {
-      "Opcode": "Join",
-      "Left": {
-        "Opcode": "SelectScatter",
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "-1",
+    "TableName": "user_user_unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
-        "Query": "select 1 from user as u1",
-        "FieldQuery": "select 1 from user as u1 where 1 != 1",
+        "TargetTabletType": "MASTER",
+        "Query": "select user.col from user",
         "Table": "user"
       },
-      "Right": {
-        "Opcode": "SelectUnsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "Query": "select 1 from unsharded",
-        "FieldQuery": "select 1 from unsharded where 1 != 1",
-        "Table": "unsharded"
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "TargetDestination": "VtGate()",
+        "JoinColumnIndexes": "",
+        "TableName": "user_unsharded",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "MASTER",
+            "Query": "select 1 from user as u1",
+            "Table": "user"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectUnsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "Query": "select 1 from unsharded",
+            "Table": "unsharded"
+          }
+        ]
       }
-    },
-    "Cols": [
-      -1
     ]
   }
 }
@@ -627,13 +673,14 @@
 {
   "Original": "select user.col from user use index(a)",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select user.col from user use index (a)",
-    "FieldQuery": "select user.col from user use index (a) where 1 != 1",
     "Table": "user"
   }
 }
@@ -643,13 +690,14 @@
 {
   "Original": "select user.col from user join user_extra on user.id = user_extra.user_id",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select user.col from user join user_extra on user.id = user_extra.user_id",
-    "FieldQuery": "select user.col from user join user_extra on user.id = user_extra.user_id where 1 != 1",
     "Table": "user"
   }
 }
@@ -659,13 +707,14 @@
 {
   "Original": "select user.col from user join user_extra on (user.id = user_extra.user_id)",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select user.col from user join user_extra on user.id = user_extra.user_id",
-    "FieldQuery": "select user.col from user join user_extra on user.id = user_extra.user_id where 1 != 1",
     "Table": "user"
   }
 }
@@ -675,13 +724,14 @@
 {
   "Original": "select user.col from user join user_extra on user.col between 1 and 2 and user.id = user_extra.user_id",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select user.col from user join user_extra on user.col between 1 and 2 and user.id = user_extra.user_id",
-    "FieldQuery": "select user.col from user join user_extra on user.col between 1 and 2 and user.id = user_extra.user_id where 1 != 1",
     "Table": "user"
   }
 }
@@ -691,13 +741,14 @@
 {
   "Original": "select user.col from user join user_extra on user_extra.user_id = user.id",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select user.col from user join user_extra on user_extra.user_id = user.id",
-    "FieldQuery": "select user.col from user join user_extra on user_extra.user_id = user.id where 1 != 1",
     "Table": "user"
   }
 }
@@ -707,17 +758,14 @@
 {
   "Original": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id",
-    "FieldQuery": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id where 1 != 1",
-    "Vindex": "user_index",
-    "Values": [
-      5
-    ],
     "Table": "user"
   }
 }
@@ -727,33 +775,35 @@
 {
   "Original": "select user.col from user join user_extra on user.id \u003c user_extra.user_id",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "-1",
+    "TableName": "user_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select user.col, user.id from user",
+        "Table": "user"
       },
-      "Query": "select user.col, user.id from user",
-      "FieldQuery": "select user.col, user.id from user where 1 != 1",
-      "Table": "user"
-    },
-    "Right": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select 1 from user_extra where :user_id \u003c user_extra.user_id",
-      "FieldQuery": "select 1 from user_extra where 1 != 1",
-      "Table": "user_extra"
-    },
-    "Cols": [
-      -1
-    ],
-    "Vars": {
-      "user_id": 1
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select 1 from user_extra where :user_id \u003c user_extra.user_id",
+        "Table": "user_extra"
+      }
+    ]
   }
 }
 
@@ -762,33 +812,34 @@
 {
   "Original": "select user.col from user join user_extra on user.id = 5",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectEqualUnique",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "-1",
+    "TableName": "user_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select user.col from user where user.id = 5",
+        "Table": "user"
       },
-      "Query": "select user.col from user where user.id = 5",
-      "FieldQuery": "select user.col from user where 1 != 1",
-      "Vindex": "user_index",
-      "Values": [
-        5
-      ],
-      "Table": "user"
-    },
-    "Right": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select 1 from user_extra",
-      "FieldQuery": "select 1 from user_extra where 1 != 1",
-      "Table": "user_extra"
-    },
-    "Cols": [
-      -1
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select 1 from user_extra",
+        "Table": "user_extra"
+      }
     ]
   }
 }
@@ -798,33 +849,34 @@
 {
   "Original": "select user.col from user join user_extra on 5 = user.id",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectEqualUnique",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "-1",
+    "TableName": "user_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select user.col from user where user.id = 5",
+        "Table": "user"
       },
-      "Query": "select user.col from user where user.id = 5",
-      "FieldQuery": "select user.col from user where 1 != 1",
-      "Vindex": "user_index",
-      "Values": [
-        5
-      ],
-      "Table": "user"
-    },
-    "Right": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select 1 from user_extra",
-      "FieldQuery": "select 1 from user_extra where 1 != 1",
-      "Table": "user_extra"
-    },
-    "Cols": [
-      -1
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select 1 from user_extra",
+        "Table": "user_extra"
+      }
     ]
   }
 }
@@ -834,33 +886,35 @@
 {
   "Original": "select user.col from user join user_extra on user.id = user_extra.col",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "-1",
+    "TableName": "user_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select user.col, user.id from user",
+        "Table": "user"
       },
-      "Query": "select user.col, user.id from user",
-      "FieldQuery": "select user.col, user.id from user where 1 != 1",
-      "Table": "user"
-    },
-    "Right": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select 1 from user_extra where user_extra.col = :user_id",
-      "FieldQuery": "select 1 from user_extra where 1 != 1",
-      "Table": "user_extra"
-    },
-    "Cols": [
-      -1
-    ],
-    "Vars": {
-      "user_id": 1
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select 1 from user_extra where user_extra.col = :user_id",
+        "Table": "user_extra"
+      }
+    ]
   }
 }
 
@@ -869,37 +923,35 @@
 {
   "Original": "select user.col from user_extra join user on user_extra.user_id = user.name",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "1",
+    "TableName": "user_extra_user",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select user_extra.user_id from user_extra",
+        "Table": "user_extra"
       },
-      "Query": "select user_extra.user_id from user_extra",
-      "FieldQuery": "select user_extra.user_id from user_extra where 1 != 1",
-      "Table": "user_extra"
-    },
-    "Right": {
-      "Opcode": "SelectEqual",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select user.col from user where user.name = :user_extra_user_id",
-      "FieldQuery": "select user.col from user where 1 != 1",
-      "Vindex": "name_user_map",
-      "Values": [
-        ":user_extra_user_id"
-      ],
-      "Table": "user"
-    },
-    "Cols": [
-      1
-    ],
-    "Vars": {
-      "user_extra_user_id": 0
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqual",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select user.col from user where user.name = :user_extra_user_id",
+        "Table": "user"
+      }
+    ]
   }
 }
 
@@ -908,13 +960,14 @@
 {
   "Original": "select user.col from user join ref",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select user.col from user join ref",
-    "FieldQuery": "select user.col from user join ref where 1 != 1",
     "Table": "user"
   }
 }
@@ -924,13 +977,13 @@
 {
   "Original": "select r1.col from ref r1 join ref",
   "Instructions": {
-    "Opcode": "SelectReference",
+    "OperatorType": "Route",
+    "Variant": "SelectReference",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "Query": "select r1.col from ref as r1 join ref",
-    "FieldQuery": "select r1.col from ref as r1 join ref where 1 != 1",
     "Table": "ref"
   }
 }
@@ -940,13 +993,14 @@
 {
   "Original": "select ref.col from ref join user",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select ref.col from ref join user",
-    "FieldQuery": "select ref.col from ref join user where 1 != 1",
     "Table": "user"
   }
 }
@@ -956,13 +1010,14 @@
 {
   "Original": "select route2.col from route2 join user_extra on route2.id = user_extra.user_id",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select route2.col from user as route2 join user_extra on route2.id = user_extra.user_id",
-    "FieldQuery": "select route2.col from user as route2 join user_extra on route2.id = user_extra.user_id where 1 != 1",
     "Table": "user"
   }
 }
@@ -972,29 +1027,33 @@
 {
   "Original": "select route2.col from route2 join user_extra",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectUnsharded",
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "-1",
+    "TableName": "unsharded_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select route2.col from unsharded as route2",
+        "Table": "unsharded"
       },
-      "Query": "select route2.col from unsharded as route2",
-      "FieldQuery": "select route2.col from unsharded as route2 where 1 != 1",
-      "Table": "unsharded"
-    },
-    "Right": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select 1 from user_extra",
-      "FieldQuery": "select 1 from user_extra where 1 != 1",
-      "Table": "user_extra"
-    },
-    "Cols": [
-      -1
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select 1 from user_extra",
+        "Table": "user_extra"
+      }
     ]
   }
 }
@@ -1004,17 +1063,14 @@
 {
   "Original": "select id from (select id, col from user where id = 5) as t",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select id from (select id, col from user where id = 5) as t",
-    "FieldQuery": "select id from (select id, col from user where 1 != 1) as t where 1 != 1",
-    "Vindex": "user_index",
-    "Values": [
-      5
-    ],
     "Table": "user"
   }
 }
@@ -1024,17 +1080,14 @@
 {
   "Original": "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.user_id",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.user_id",
-    "FieldQuery": "select t.id from (select id from user where 1 != 1) as t join user_extra on t.id = user_extra.user_id where 1 != 1",
-    "Vindex": "user_index",
-    "Values": [
-      5
-    ],
     "Table": "user"
   }
 }
@@ -1044,17 +1097,14 @@
 {
   "Original": "select t.id from (select user.id from user where user.id = 5) as t join user_extra on t.id = user_extra.user_id",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select t.id from (select user.id from user where user.id = 5) as t join user_extra on t.id = user_extra.user_id",
-    "FieldQuery": "select t.id from (select user.id from user where 1 != 1) as t join user_extra on t.id = user_extra.user_id where 1 != 1",
-    "Vindex": "user_index",
-    "Values": [
-      5
-    ],
     "Table": "user"
   }
 }
@@ -1068,13 +1118,14 @@
 {
   "Original": "select t.id from user_extra join (select id from user where id = 5) as t on t.id = user_extra.user_id",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select t.id from user_extra join (select id from user where id = 5) as t on t.id = user_extra.user_id",
-    "FieldQuery": "select t.id from user_extra join (select id from user where 1 != 1) as t on t.id = user_extra.user_id where 1 != 1",
     "Table": "user_extra"
   }
 }
@@ -1084,37 +1135,35 @@
 {
   "Original": "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.col",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectEqualUnique",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "-1",
+    "TableName": "user_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select t.id from (select id from user where id = 5) as t",
+        "Table": "user"
       },
-      "Query": "select t.id from (select id from user where id = 5) as t",
-      "FieldQuery": "select t.id from (select id from user where 1 != 1) as t where 1 != 1",
-      "Vindex": "user_index",
-      "Values": [
-        5
-      ],
-      "Table": "user"
-    },
-    "Right": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select 1 from user_extra where user_extra.col = :t_id",
-      "FieldQuery": "select 1 from user_extra where 1 != 1",
-      "Table": "user_extra"
-    },
-    "Cols": [
-      -1
-    ],
-    "Vars": {
-      "t_id": 0
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select 1 from user_extra where user_extra.col = :t_id",
+        "Table": "user_extra"
+      }
+    ]
   }
 }
 
@@ -1123,17 +1172,14 @@
 {
   "Original": "select id from (select id, col from route1 where id = 5) as t",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select id from (select id, col from user as route1 where id = 5) as t",
-    "FieldQuery": "select id from (select id, col from user as route1 where 1 != 1) as t where 1 != 1",
-    "Vindex": "user_index",
-    "Values": [
-      5
-    ],
     "Table": "user"
   }
 }
@@ -1143,17 +1189,14 @@
 {
   "Original": "select id from (select id, col from route1 where email = 'aaa') as t",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select id from (select id, col from user_metadata as route1 where email = 'aaa') as t",
-    "FieldQuery": "select id from (select id, col from user_metadata as route1 where 1 != 1) as t where 1 != 1",
-    "Vindex": "email_user_map",
-    "Values": [
-      "aaa"
-    ],
     "Table": "user_metadata"
   }
 }
@@ -1163,17 +1206,14 @@
 {
   "Original": "select id from (select id, col from route1) as t where id = 5",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select id from (select id, col from user as route1) as t where id = 5",
-    "FieldQuery": "select id from (select id, col from user as route1 where 1 != 1) as t where 1 != 1",
-    "Vindex": "user_index",
-    "Values": [
-      5
-    ],
     "Table": "user"
   }
 }
@@ -1183,17 +1223,14 @@
 {
   "Original": "select u.col, e.col from (select col from user where id = 5) as u join (select col from user_extra where user_id = 5) as e",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select u.col, e.col from (select col from user where id = 5) as u join (select col from user_extra where user_id = 5) as e",
-    "FieldQuery": "select u.col, e.col from (select col from user where 1 != 1) as u join (select col from user_extra where 1 != 1) as e where 1 != 1",
-    "Vindex": "user_index",
-    "Values": [
-      5
-    ],
     "Table": "user"
   }
 }
@@ -1203,13 +1240,14 @@
 {
   "Original": "select * from information_schema.a where b=10",
   "Instructions": {
-    "Opcode": "SelectDBA",
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "Query": "select * from information_schema.a where b = 10",
-    "FieldQuery": "select * from information_schema.a where 1 != 1"
+    "Table": ""
   }
 }
 
@@ -1218,13 +1256,14 @@
 {
   "Original": "select * from information_schema.a where information_schema.a.b=10",
   "Instructions": {
-    "Opcode": "SelectDBA",
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "Query": "select * from information_schema.a where information_schema.a.b = 10",
-    "FieldQuery": "select * from information_schema.a where 1 != 1"
+    "Table": ""
   }
 }
 
@@ -1233,28 +1272,32 @@
 {
   "Original": "select unsharded.foo from information_schema.a join unsharded",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectDBA",
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "1",
+    "TableName": "_unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select 1 from information_schema.a",
+        "Table": ""
       },
-      "Query": "select 1 from information_schema.a",
-      "FieldQuery": "select 1 from information_schema.a where 1 != 1"
-    },
-    "Right": {
-      "Opcode": "SelectUnsharded",
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select unsharded.foo from unsharded",
-      "FieldQuery": "select unsharded.foo from unsharded where 1 != 1",
-      "Table": "unsharded"
-    },
-    "Cols": [
-      1
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select unsharded.foo from unsharded",
+        "Table": "unsharded"
+      }
     ]
   }
 }
@@ -1264,28 +1307,32 @@
 {
   "Original": "select unsharded.foo from unsharded join information_schema.a",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectUnsharded",
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "-1",
+    "TableName": "unsharded_",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select unsharded.foo from unsharded",
+        "Table": "unsharded"
       },
-      "Query": "select unsharded.foo from unsharded",
-      "FieldQuery": "select unsharded.foo from unsharded where 1 != 1",
-      "Table": "unsharded"
-    },
-    "Right": {
-      "Opcode": "SelectDBA",
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select 1 from information_schema.a",
-      "FieldQuery": "select 1 from information_schema.a where 1 != 1"
-    },
-    "Cols": [
-      -1
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select 1 from information_schema.a",
+        "Table": ""
+      }
     ]
   }
 }
@@ -1295,57 +1342,62 @@
 {
   "Original": "select t.col1 from (select user.id, user.col1 from user join user_extra) as t join unsharded on unsharded.col1 = t.col1 and unsharded.id = t.id",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Cols": [
-        1,
-        0
-      ],
-      "Subquery": {
-        "Opcode": "Join",
-        "Left": {
-          "Opcode": "SelectScatter",
-          "Keyspace": {
-            "Name": "user",
-            "Sharded": true
-          },
-          "Query": "select user.id, user.col1 from user",
-          "FieldQuery": "select user.id, user.col1 from user where 1 != 1",
-          "Table": "user"
-        },
-        "Right": {
-          "Opcode": "SelectScatter",
-          "Keyspace": {
-            "Name": "user",
-            "Sharded": true
-          },
-          "Query": "select 1 from user_extra",
-          "FieldQuery": "select 1 from user_extra where 1 != 1",
-          "Table": "user_extra"
-        },
-        "Cols": [
-          -1,
-          -2
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "-1",
+    "TableName": "user_user_extra_unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Subquery",
+        "Variant": "",
+        "TargetDestination": "VtGate()",
+        "Columns": "1, 0",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "TargetDestination": "VtGate()",
+            "JoinColumnIndexes": "-1,-2",
+            "TableName": "user_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "TargetTabletType": "MASTER",
+                "Query": "select user.id, user.col1 from user",
+                "Table": "user"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "TargetTabletType": "MASTER",
+                "Query": "select 1 from user_extra",
+                "Table": "user_extra"
+              }
+            ]
+          }
         ]
-      }
-    },
-    "Right": {
-      "Opcode": "SelectUnsharded",
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
       },
-      "Query": "select 1 from unsharded where unsharded.col1 = :t_col1 and unsharded.id = :t_id",
-      "FieldQuery": "select 1 from unsharded where 1 != 1",
-      "Table": "unsharded"
-    },
-    "Cols": [
-      -1
-    ],
-    "Vars": {
-      "t_col1": 0,
-      "t_id": 1
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select 1 from unsharded where unsharded.col1 = :t_col1 and unsharded.id = :t_id",
+        "Table": "unsharded"
+      }
+    ]
   }
 }
 
@@ -1354,39 +1406,43 @@
 {
   "Original": "select t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t",
   "Instructions": {
-    "Cols": [
-      0
-    ],
-    "Subquery": {
-      "Opcode": "Join",
-      "Left": {
-        "Opcode": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "select user.id, user.col1, user.col from user",
-        "FieldQuery": "select user.id, user.col1, user.col from user where 1 != 1",
-        "Table": "user"
-      },
-      "Right": {
-        "Opcode": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "select 1 from user_extra where user_extra.col = :user_col",
-        "FieldQuery": "select 1 from user_extra where 1 != 1",
-        "Table": "user_extra"
-      },
-      "Cols": [
-        -1,
-        -2
-      ],
-      "Vars": {
-        "user_col": 2
+    "OperatorType": "Subquery",
+    "Variant": "",
+    "TargetDestination": "VtGate()",
+    "Columns": "0",
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "TargetDestination": "VtGate()",
+        "JoinColumnIndexes": "-1,-2",
+        "TableName": "user_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "MASTER",
+            "Query": "select user.id, user.col1, user.col from user",
+            "Table": "user"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "MASTER",
+            "Query": "select 1 from user_extra where user_extra.col = :user_col",
+            "Table": "user_extra"
+          }
+        ]
       }
-    }
+    ]
   }
 }
 
@@ -1395,51 +1451,61 @@
 {
   "Original": "select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectUnsharded",
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "1",
+    "TableName": "unsharded_a_user_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select 1 from unsharded_a as ua",
+        "Table": "unsharded_a"
       },
-      "Query": "select 1 from unsharded_a as ua",
-      "FieldQuery": "select 1 from unsharded_a as ua where 1 != 1",
-      "Table": "unsharded_a"
-    },
-    "Right": {
-      "Cols": [
-        1
-      ],
-      "Subquery": {
-        "Opcode": "Join",
-        "Left": {
-          "Opcode": "SelectScatter",
-          "Keyspace": {
-            "Name": "user",
-            "Sharded": true
-          },
-          "Query": "select user.id, user.col1 from user",
-          "FieldQuery": "select user.id, user.col1 from user where 1 != 1",
-          "Table": "user"
-        },
-        "Right": {
-          "Opcode": "SelectScatter",
-          "Keyspace": {
-            "Name": "user",
-            "Sharded": true
-          },
-          "Query": "select 1 from user_extra",
-          "FieldQuery": "select 1 from user_extra where 1 != 1",
-          "Table": "user_extra"
-        },
-        "Cols": [
-          -1,
-          -2
+      {
+        "OperatorType": "Subquery",
+        "Variant": "",
+        "TargetDestination": "VtGate()",
+        "Columns": "1",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "TargetDestination": "VtGate()",
+            "JoinColumnIndexes": "-1,-2",
+            "TableName": "user_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "TargetTabletType": "MASTER",
+                "Query": "select user.id, user.col1 from user",
+                "Table": "user"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "TargetTabletType": "MASTER",
+                "Query": "select 1 from user_extra",
+                "Table": "user_extra"
+              }
+            ]
+          }
         ]
       }
-    },
-    "Cols": [
-      1
     ]
   }
 }
@@ -1449,29 +1515,32 @@
 {
   "Original": "select unsharded_a.col from unsharded_a join unsharded_b on (select col from user)",
   "Instructions": {
-    "Opcode": "PulloutValue",
-    "SubqueryResult": "__sq1",
-    "HasValues": "__sq_has_values1",
-    "Subquery": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Subquery",
+    "Variant": "PulloutValue",
+    "TargetDestination": "VtGate()",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select col from user",
+        "Table": "user"
       },
-      "Query": "select col from user",
-      "FieldQuery": "select col from user where 1 != 1",
-      "Table": "user"
-    },
-    "Underlying": {
-      "Opcode": "SelectUnsharded",
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select unsharded_a.col from unsharded_a join unsharded_b on :__sq1",
-      "FieldQuery": "select unsharded_a.col from unsharded_a join unsharded_b on :__sq1 where 1 != 1",
-      "Table": "unsharded_a"
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select unsharded_a.col from unsharded_a join unsharded_b on :__sq1",
+        "Table": "unsharded_a"
+      }
+    ]
   }
 }
 
@@ -1480,29 +1549,32 @@
 {
   "Original": "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col+(select col from user)",
   "Instructions": {
-    "Opcode": "PulloutValue",
-    "SubqueryResult": "__sq1",
-    "HasValues": "__sq_has_values1",
-    "Subquery": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Subquery",
+    "Variant": "PulloutValue",
+    "TargetDestination": "VtGate()",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select col from user",
+        "Table": "user"
       },
-      "Query": "select col from user",
-      "FieldQuery": "select col from user where 1 != 1",
-      "Table": "user"
-    },
-    "Underlying": {
-      "Opcode": "SelectUnsharded",
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col + :__sq1",
-      "FieldQuery": "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col + :__sq1 where 1 != 1",
-      "Table": "unsharded_a"
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col + :__sq1",
+        "Table": "unsharded_a"
+      }
+    ]
   }
 }
 
@@ -1511,29 +1583,32 @@
 {
   "Original": "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col in (select col from user)",
   "Instructions": {
-    "Opcode": "PulloutIn",
-    "SubqueryResult": "__sq1",
-    "HasValues": "__sq_has_values1",
-    "Subquery": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "TargetDestination": "VtGate()",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select col from user",
+        "Table": "user"
       },
-      "Query": "select col from user",
-      "FieldQuery": "select col from user where 1 != 1",
-      "Table": "user"
-    },
-    "Underlying": {
-      "Opcode": "SelectUnsharded",
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select unsharded_a.col from unsharded_a join unsharded_b on :__sq_has_values1 = 1 and unsharded_a.col in ::__sq1",
-      "FieldQuery": "select unsharded_a.col from unsharded_a join unsharded_b on :__sq_has_values1 = 1 and unsharded_a.col in ::__sq1 where 1 != 1",
-      "Table": "unsharded_a"
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select unsharded_a.col from unsharded_a join unsharded_b on :__sq_has_values1 = 1 and unsharded_a.col in ::__sq1",
+        "Table": "unsharded_a"
+      }
+    ]
   }
 }
 
@@ -1542,45 +1617,52 @@
 {
   "Original": "select unsharded.col from unsharded join user on user.col in (select col from user)",
   "Instructions": {
-    "Opcode": "PulloutIn",
-    "SubqueryResult": "__sq1",
-    "HasValues": "__sq_has_values1",
-    "Subquery": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select col from user",
-      "FieldQuery": "select col from user where 1 != 1",
-      "Table": "user"
-    },
-    "Underlying": {
-      "Opcode": "Join",
-      "Left": {
-        "Opcode": "SelectUnsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "Query": "select unsharded.col from unsharded",
-        "FieldQuery": "select unsharded.col from unsharded where 1 != 1",
-        "Table": "unsharded"
-      },
-      "Right": {
-        "Opcode": "SelectScatter",
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "TargetDestination": "VtGate()",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
-        "Query": "select 1 from user where :__sq_has_values1 = 1 and user.col in ::__sq1",
-        "FieldQuery": "select 1 from user where 1 != 1",
+        "TargetTabletType": "MASTER",
+        "Query": "select col from user",
         "Table": "user"
       },
-      "Cols": [
-        -1
-      ]
-    }
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "TargetDestination": "VtGate()",
+        "JoinColumnIndexes": "-1",
+        "TableName": "unsharded_user",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectUnsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "Query": "select unsharded.col from unsharded",
+            "Table": "unsharded"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "MASTER",
+            "Query": "select 1 from user where :__sq_has_values1 = 1 and user.col in ::__sq1",
+            "Table": "user"
+          }
+        ]
+      }
+    ]
   }
 }
 
@@ -1590,44 +1672,51 @@
 {
   "Original": "select unsharded.col from unsharded left join user on user.col in (select col from user)",
   "Instructions": {
-    "Opcode": "LeftJoin",
-    "Left": {
-      "Opcode": "SelectUnsharded",
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select unsharded.col from unsharded",
-      "FieldQuery": "select unsharded.col from unsharded where 1 != 1",
-      "Table": "unsharded"
-    },
-    "Right": {
-      "Opcode": "PulloutIn",
-      "SubqueryResult": "__sq1",
-      "HasValues": "__sq_has_values1",
-      "Subquery": {
-        "Opcode": "SelectScatter",
+    "OperatorType": "Join",
+    "Variant": "LeftJoin",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "-1",
+    "TableName": "unsharded_user",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
         "Keyspace": {
-          "Name": "user",
-          "Sharded": true
+          "Name": "main",
+          "Sharded": false
         },
-        "Query": "select col from user",
-        "FieldQuery": "select col from user where 1 != 1",
-        "Table": "user"
+        "Query": "select unsharded.col from unsharded",
+        "Table": "unsharded"
       },
-      "Underlying": {
-        "Opcode": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "select 1 from user where :__sq_has_values1 = 1 and user.col in ::__sq1",
-        "FieldQuery": "select 1 from user where 1 != 1",
-        "Table": "user"
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutIn",
+        "TargetDestination": "VtGate()",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "MASTER",
+            "Query": "select col from user",
+            "Table": "user"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "MASTER",
+            "Query": "select 1 from user where :__sq_has_values1 = 1 and user.col in ::__sq1",
+            "Table": "user"
+          }
+        ]
       }
-    },
-    "Cols": [
-      -1
     ]
   }
 }
@@ -1638,60 +1727,70 @@
 {
   "Original": "select unsharded.col from unsharded join user on user.col in (select col from user) join unsharded_a",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "PulloutIn",
-      "SubqueryResult": "__sq1",
-      "HasValues": "__sq_has_values1",
-      "Subquery": {
-        "Opcode": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "select col from user",
-        "FieldQuery": "select col from user where 1 != 1",
-        "Table": "user"
-      },
-      "Underlying": {
-        "Opcode": "Join",
-        "Left": {
-          "Opcode": "SelectUnsharded",
-          "Keyspace": {
-            "Name": "main",
-            "Sharded": false
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "-1",
+    "TableName": "unsharded_user_unsharded_a",
+    "Inputs": [
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutIn",
+        "TargetDestination": "VtGate()",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "MASTER",
+            "Query": "select col from user",
+            "Table": "user"
           },
-          "Query": "select unsharded.col from unsharded",
-          "FieldQuery": "select unsharded.col from unsharded where 1 != 1",
-          "Table": "unsharded"
-        },
-        "Right": {
-          "Opcode": "SelectScatter",
-          "Keyspace": {
-            "Name": "user",
-            "Sharded": true
-          },
-          "Query": "select 1 from user where :__sq_has_values1 = 1 and user.col in ::__sq1",
-          "FieldQuery": "select 1 from user where 1 != 1",
-          "Table": "user"
-        },
-        "Cols": [
-          -1
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "TargetDestination": "VtGate()",
+            "JoinColumnIndexes": "-1",
+            "TableName": "unsharded_user",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectUnsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "Query": "select unsharded.col from unsharded",
+                "Table": "unsharded"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "TargetTabletType": "MASTER",
+                "Query": "select 1 from user where :__sq_has_values1 = 1 and user.col in ::__sq1",
+                "Table": "user"
+              }
+            ]
+          }
         ]
-      }
-    },
-    "Right": {
-      "Opcode": "SelectUnsharded",
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
       },
-      "Query": "select 1 from unsharded_a",
-      "FieldQuery": "select 1 from unsharded_a where 1 != 1",
-      "Table": "unsharded_a"
-    },
-    "Cols": [
-      -1
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select 1 from unsharded_a",
+        "Table": "unsharded_a"
+      }
     ]
   }
 }
@@ -1701,34 +1800,34 @@
 {
   "Original": "select user.user.col1, main.unsharded.col1 from user.user join main.unsharded where main.unsharded.col2 = user.user.col2",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "TargetDestination": "VtGate()",
+    "JoinColumnIndexes": "-1,1",
+    "TableName": "user_unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "MASTER",
+        "Query": "select user.col1, user.col2 from user",
+        "Table": "user"
       },
-      "Query": "select user.col1, user.col2 from user",
-      "FieldQuery": "select user.col1, user.col2 from user where 1 != 1",
-      "Table": "user"
-    },
-    "Right": {
-      "Opcode": "SelectUnsharded",
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select unsharded.col1 from unsharded where unsharded.col2 = :user_col2",
-      "FieldQuery": "select unsharded.col1 from unsharded where 1 != 1",
-      "Table": "unsharded"
-    },
-    "Cols": [
-      -1,
-      1
-    ],
-    "Vars": {
-      "user_col2": 1
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select unsharded.col1 from unsharded where unsharded.col2 = :user_col2",
+        "Table": "unsharded"
+      }
+    ]
   }
 }
 
@@ -1737,13 +1836,13 @@
 {
   "Original": "select main.foo.col from main.foo",
   "Instructions": {
-    "Opcode": "SelectUnsharded",
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "Query": "select foo.col from foo",
-    "FieldQuery": "select foo.col from foo where 1 != 1",
     "Table": "foo"
   }
 }
@@ -1753,13 +1852,14 @@
 {
   "Original": "select user.col from user join user_extra on user.ID = user_extra.User_Id",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select user.col from user join user_extra on user.ID = user_extra.User_Id",
-    "FieldQuery": "select user.col from user join user_extra on user.ID = user_extra.User_Id where 1 != 1",
     "Table": "user"
   }
 }
@@ -1769,36 +1869,43 @@
 {
   "Original": "select id, t.id from (select user.id from user join user_extra) as t",
   "Instructions": {
-    "Cols": [
-      0,
-      0
-    ],
-    "Subquery": {
-      "Opcode": "Join",
-      "Left": {
-        "Opcode": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "select user.id from user",
-        "FieldQuery": "select user.id from user where 1 != 1",
-        "Table": "user"
-      },
-      "Right": {
-        "Opcode": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "select 1 from user_extra",
-        "FieldQuery": "select 1 from user_extra where 1 != 1",
-        "Table": "user_extra"
-      },
-      "Cols": [
-        -1
-      ]
-    }
+    "OperatorType": "Subquery",
+    "Variant": "",
+    "TargetDestination": "VtGate()",
+    "Columns": "0, 0",
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "TargetDestination": "VtGate()",
+        "JoinColumnIndexes": "-1",
+        "TableName": "user_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "MASTER",
+            "Query": "select user.id from user",
+            "Table": "user"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "MASTER",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
   }
 }
 
@@ -1808,13 +1915,13 @@
 {
   "Original": "select u1.a from unsharded u1 join unsharded u2 on database()",
   "Instructions": {
-    "Opcode": "SelectUnsharded",
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "Query": "select u1.a from unsharded as u1 join unsharded as u2 on database()",
-    "FieldQuery": "select u1.a from unsharded as u1 join unsharded as u2 on database() where 1 != 1",
     "Table": "unsharded"
   }
 }
@@ -1824,13 +1931,13 @@
 {
   "Original": "select last_insert_id()",
   "Instructions": {
-    "Opcode": "SelectReference",
+    "OperatorType": "Route",
+    "Variant": "SelectReference",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "Query": "select :__lastInsertId as `last_insert_id()` from dual",
-    "FieldQuery": "select :__lastInsertId as `last_insert_id()` from dual where 1 != 1",
     "Table": "dual"
   }
 }
@@ -1840,13 +1947,14 @@
 {
   "Original": "select last_insert_id() from user",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "select :__lastInsertId as `last_insert_id()` from user",
-    "FieldQuery": "select :__lastInsertId as `last_insert_id()` from user where 1 != 1",
     "Table": "user"
   }
 }
@@ -1856,13 +1964,13 @@
 {
   "Original": "select last_insert_id() from main.unsharded",
   "Instructions": {
-    "Opcode": "SelectUnsharded",
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
     "Query": "select :__lastInsertId as `last_insert_id()` from unsharded",
-    "FieldQuery": "select :__lastInsertId as `last_insert_id()` from unsharded where 1 != 1",
     "Table": "unsharded"
   }
 }

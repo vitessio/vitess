@@ -414,12 +414,12 @@ func intToString(i interface{}) string {
 }
 
 func (oa *OrderedAggregate) description() PrimitiveDescription {
-	orderByIndexes := GenericJoin(oa.Aggregates, aggregateParamsToString)
+	aggregates := GenericJoin(oa.Aggregates, aggregateParamsToString)
 	groupBy := GenericJoin(oa.Keys, intToString)
 	other := map[string]string{
-		"OrderBy":  orderByIndexes,
-		"GroupBy":  groupBy,
-		"Distinct": strconv.FormatBool(oa.HasDistinct),
+		"Aggregates": aggregates,
+		"GroupBy":    groupBy,
+		"Distinct":   strconv.FormatBool(oa.HasDistinct),
 	}
 	return PrimitiveDescription{
 		OperatorType:      "Aggregate",

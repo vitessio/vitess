@@ -11,12 +11,16 @@
 {
   "Original": "update main.m1 set val = 1",
   "Instructions": {
-    "Opcode": "UpdateUnsharded",
+    "OperatorType": "Update",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "update m1 set val = 1"
+    "TargetTabletType": "MASTER",
+    "Query": "update m1 set val = 1",
+    "TableName": "",
+    "Vindexes": ""
   }
 }
 
@@ -25,12 +29,16 @@
 {
   "Original": "update unsharded set val = 1",
   "Instructions": {
-    "Opcode": "UpdateUnsharded",
+    "OperatorType": "Update",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "update unsharded set val = 1"
+    "TargetTabletType": "MASTER",
+    "Query": "update unsharded set val = 1",
+    "TableName": "",
+    "Vindexes": ""
   }
 }
 
@@ -39,12 +47,16 @@
 {
   "Original": "update unsharded set col = (select col from unsharded limit 1)",
   "Instructions": {
-    "Opcode": "UpdateUnsharded",
+    "OperatorType": "Update",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "update unsharded set col = (select col from unsharded limit 1)"
+    "TargetTabletType": "MASTER",
+    "Query": "update unsharded set col = (select col from unsharded limit 1)",
+    "TableName": "",
+    "Vindexes": ""
   }
 }
 
@@ -53,12 +65,16 @@
 {
   "Original": "update unsharded set col = (select id from unsharded union select id from unsharded)",
   "Instructions": {
-    "Opcode": "UpdateUnsharded",
+    "OperatorType": "Update",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "update unsharded set col = (select id from unsharded union select id from unsharded)"
+    "TargetTabletType": "MASTER",
+    "Query": "update unsharded set col = (select id from unsharded union select id from unsharded)",
+    "TableName": "",
+    "Vindexes": ""
   }
 }
 
@@ -67,12 +83,16 @@
 {
   "Original": "update unsharded set col = (select id from unsharded a join unsharded b on a.id = b.id)",
   "Instructions": {
-    "Opcode": "UpdateUnsharded",
+    "OperatorType": "Update",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "update unsharded set col = (select id from unsharded as a join unsharded as b on a.id = b.id)"
+    "TargetTabletType": "MASTER",
+    "Query": "update unsharded set col = (select id from unsharded as a join unsharded as b on a.id = b.id)",
+    "TableName": "",
+    "Vindexes": ""
   }
 }
 
@@ -81,12 +101,16 @@
 {
   "Original": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col \u003c 1000",
   "Instructions": {
-    "Opcode": "UpdateUnsharded",
+    "OperatorType": "Update",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col \u003c 1000"
+    "TargetTabletType": "MASTER",
+    "Query": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col \u003c 1000",
+    "TableName": "",
+    "Vindexes": ""
   }
 }
 
@@ -95,17 +119,16 @@
 {
   "Original": "update route1 set a=1 where id=1",
   "Instructions": {
-    "Opcode": "UpdateEqual",
+    "OperatorType": "Update",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user as route1 set a = 1 where id = 1",
-    "Vindex": "user_index",
-    "Values": [
-      1
-    ],
-    "Table": "user"
+    "TableName": "user",
+    "Vindexes": ""
   }
 }
 
@@ -114,12 +137,16 @@
 {
   "Original": "update unsharded_a set a=(select a from route2)",
   "Instructions": {
-    "Opcode": "UpdateUnsharded",
+    "OperatorType": "Update",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "update unsharded_a set a = (select a from unsharded as route2)"
+    "TargetTabletType": "MASTER",
+    "Query": "update unsharded_a set a = (select a from unsharded as route2)",
+    "TableName": "",
+    "Vindexes": ""
   }
 }
 
@@ -128,12 +155,15 @@
 {
   "Original": "delete from unsharded",
   "Instructions": {
-    "Opcode": "DeleteUnsharded",
+    "OperatorType": "Delete",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "delete from unsharded"
+    "TargetTabletType": "MASTER",
+    "Query": "delete from unsharded",
+    "TableName": ""
   }
 }
 
@@ -142,17 +172,16 @@
 {
   "Original": "update user set val = 1 where id = 1",
   "Instructions": {
-    "Opcode": "UpdateEqual",
+    "OperatorType": "Update",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user set val = 1 where id = 1",
-    "Vindex": "user_index",
-    "Values": [
-      1
-    ],
-    "Table": "user"
+    "TableName": "user",
+    "Vindexes": ""
   }
 }
 
@@ -161,17 +190,16 @@
 {
   "Original": "update user as user_alias set val = 1 where user_alias.id = 1",
   "Instructions": {
-    "Opcode": "UpdateEqual",
+    "OperatorType": "Update",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user as user_alias set val = 1 where user_alias.id = 1",
-    "Vindex": "user_index",
-    "Values": [
-      1
-    ],
-    "Table": "user"
+    "TableName": "user",
+    "Vindexes": ""
   }
 }
 
@@ -180,17 +208,16 @@
 {
   "Original": "update user set val = 1 where (id = 1)",
   "Instructions": {
-    "Opcode": "UpdateEqual",
+    "OperatorType": "Update",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user set val = 1 where id = 1",
-    "Vindex": "user_index",
-    "Values": [
-      1
-    ],
-    "Table": "user"
+    "TableName": "user",
+    "Vindexes": ""
   }
 }
 
@@ -199,17 +226,16 @@
 {
   "Original": "update user set val = 1 where (name = 'foo' and id = 1)",
   "Instructions": {
-    "Opcode": "UpdateEqual",
+    "OperatorType": "Update",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user set val = 1 where name = 'foo' and id = 1",
-    "Vindex": "user_index",
-    "Values": [
-      1
-    ],
-    "Table": "user"
+    "TableName": "user",
+    "Vindexes": ""
   }
 }
 
@@ -218,24 +244,16 @@
 {
   "Original": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
   "Instructions": {
-    "Opcode": "UpdateEqual",
+    "OperatorType": "Update",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
-    "Vindex": "user_index",
-    "Values": [
-      1
-    ],
-    "ChangedVindexValues": {
-      "email_user_map": {
-        "email": "juan@vitess.io"
-      }
-    },
-    "Table": "user_metadata",
-    "OwnedVindexQuery": "select user_id, email, address from user_metadata where user_id = 1 for update",
-    "KsidVindex": "user_index"
+    "TableName": "user_metadata",
+    "Vindexes": "email_user_map"
   }
 }
 
@@ -248,27 +266,16 @@
 {
   "Original": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
   "Instructions": {
-    "Opcode": "UpdateEqual",
+    "OperatorType": "Update",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
-    "Vindex": "user_index",
-    "Values": [
-      1
-    ],
-    "ChangedVindexValues": {
-      "address_user_map": {
-        "address": "155 5th street"
-      },
-      "email_user_map": {
-        "email": "juan@vitess.io"
-      }
-    },
-    "Table": "user_metadata",
-    "OwnedVindexQuery": "select user_id, email, address from user_metadata where user_id = 1 for update",
-    "KsidVindex": "user_index"
+    "TableName": "user_metadata",
+    "Vindexes": "address_user_map, email_user_map"
   }
 }
 
@@ -277,24 +284,16 @@
 {
   "Original": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
   "Instructions": {
-    "Opcode": "UpdateEqual",
+    "OperatorType": "Update",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
-    "Vindex": "user_index",
-    "Values": [
-      1
-    ],
-    "ChangedVindexValues": {
-      "email_user_map": {
-        "email": "juan@vitess.io"
-      }
-    },
-    "Table": "user_metadata",
-    "OwnedVindexQuery": "select user_id, email, address from user_metadata where user_id = 1 order by user_id asc limit 10 for update",
-    "KsidVindex": "user_index"
+    "TableName": "user_metadata",
+    "Vindexes": "email_user_map"
   }
 }
 
@@ -303,17 +302,16 @@
 {
   "Original": "update user set val = 1 where id = id2 and id = 1",
   "Instructions": {
-    "Opcode": "UpdateEqual",
+    "OperatorType": "Update",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user set val = 1 where id = id2 and id = 1",
-    "Vindex": "user_index",
-    "Values": [
-      1
-    ],
-    "Table": "user"
+    "TableName": "user",
+    "Vindexes": ""
   }
 }
 
@@ -322,17 +320,16 @@
 {
   "Original": "update user set val = 1 where id = 18446744073709551616 and id = 1",
   "Instructions": {
-    "Opcode": "UpdateEqual",
+    "OperatorType": "Update",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user set val = 1 where id = 18446744073709551616 and id = 1",
-    "Vindex": "user_index",
-    "Values": [
-      1
-    ],
-    "Table": "user"
+    "TableName": "user",
+    "Vindexes": ""
   }
 }
 
@@ -341,19 +338,15 @@
 {
   "Original": "delete from user where id = 1",
   "Instructions": {
-    "Opcode": "DeleteEqual",
+    "OperatorType": "Delete",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "delete from user where id = 1",
-    "Vindex": "user_index",
-    "Values": [
-      1
-    ],
-    "Table": "user",
-    "OwnedVindexQuery": "select Id, Name, Costly from user where id = 1 for update",
-    "KsidVindex": "user_index"
+    "TableName": "user"
   }
 }
 
@@ -362,12 +355,15 @@
 {
   "Original": "delete a from unsharded_a a, unsharded_b b where a.id = b.id and b.val = 1",
   "Instructions": {
-    "Opcode": "DeleteUnsharded",
+    "OperatorType": "Delete",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "delete a from unsharded_a as a, unsharded_b as b where a.id = b.id and b.val = 1"
+    "TargetTabletType": "MASTER",
+    "Query": "delete a from unsharded_a as a, unsharded_b as b where a.id = b.id and b.val = 1",
+    "TableName": ""
   }
 }
 
@@ -376,12 +372,15 @@
 {
   "Original": "delete a from unsharded_a a join unsharded_b b on a.id = b.id where b.val = 1",
   "Instructions": {
-    "Opcode": "DeleteUnsharded",
+    "OperatorType": "Delete",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "delete a from unsharded_a as a join unsharded_b as b on a.id = b.id where b.val = 1"
+    "TargetTabletType": "MASTER",
+    "Query": "delete a from unsharded_a as a join unsharded_b as b on a.id = b.id where b.val = 1",
+    "TableName": ""
   }
 }
 
@@ -390,12 +389,15 @@
 {
   "Original": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000",
   "Instructions": {
-    "Opcode": "DeleteUnsharded",
+    "OperatorType": "Delete",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000"
+    "TargetTabletType": "MASTER",
+    "Query": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000",
+    "TableName": ""
   }
 }
 
@@ -404,19 +406,15 @@
 {
   "Original": "delete from route1 where id = 1",
   "Instructions": {
-    "Opcode": "DeleteEqual",
+    "OperatorType": "Delete",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "delete from user as route1 where id = 1",
-    "Vindex": "user_index",
-    "Values": [
-      1
-    ],
-    "Table": "user",
-    "OwnedVindexQuery": "select Id, Name, Costly from user where id = 1 for update",
-    "KsidVindex": "user_index"
+    "TableName": "user"
   }
 }
 
@@ -425,12 +423,15 @@
 {
   "Original": "delete from  unsharded_a where a=(select a from route2)",
   "Instructions": {
-    "Opcode": "DeleteUnsharded",
+    "OperatorType": "Delete",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "delete from unsharded_a where a = (select a from unsharded as route2)"
+    "TargetTabletType": "MASTER",
+    "Query": "delete from unsharded_a where a = (select a from unsharded as route2)",
+    "TableName": ""
   }
 }
 
@@ -439,17 +440,16 @@
 {
   "Original": "update music set val = 1 where id = 1",
   "Instructions": {
-    "Opcode": "UpdateEqual",
+    "OperatorType": "Update",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update music set val = 1 where id = 1",
-    "Vindex": "music_user_map",
-    "Values": [
-      1
-    ],
-    "Table": "music"
+    "TableName": "music",
+    "Vindexes": ""
   }
 }
 
@@ -458,12 +458,16 @@
 {
   "Original": "update unsharded_a a join unsharded_b b on a.id = b.id set a.val = 'foo' where b.val = 1",
   "Instructions": {
-    "Opcode": "UpdateUnsharded",
+    "OperatorType": "Update",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "update unsharded_a as a join unsharded_b as b on a.id = b.id set a.val = 'foo' where b.val = 1"
+    "TargetTabletType": "MASTER",
+    "Query": "update unsharded_a as a join unsharded_b as b on a.id = b.id set a.val = 'foo' where b.val = 1",
+    "TableName": "",
+    "Vindexes": ""
   }
 }
 
@@ -472,12 +476,16 @@
 {
   "Original": "update unsharded_a a, unsharded_b b set a.val = 'foo' where a.id = b.id and b.val = 1",
   "Instructions": {
-    "Opcode": "UpdateUnsharded",
+    "OperatorType": "Update",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "update unsharded_a as a, unsharded_b as b set a.val = 'foo' where a.id = b.id and b.val = 1"
+    "TargetTabletType": "MASTER",
+    "Query": "update unsharded_a as a, unsharded_b as b set a.val = 'foo' where a.id = b.id and b.val = 1",
+    "TableName": "",
+    "Vindexes": ""
   }
 }
 
@@ -486,19 +494,15 @@
 {
   "Original": "delete from music where id = 1",
   "Instructions": {
-    "Opcode": "DeleteEqual",
+    "OperatorType": "Delete",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "delete from music where id = 1",
-    "Vindex": "music_user_map",
-    "Values": [
-      1
-    ],
-    "Table": "music",
-    "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
-    "KsidVindex": "user_index"
+    "TableName": "music"
   }
 }
 
@@ -507,17 +511,15 @@
 {
   "Original": "delete from music_extra where user_id = 1",
   "Instructions": {
-    "Opcode": "DeleteEqual",
+    "OperatorType": "Delete",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "delete from music_extra where user_id = 1",
-    "Vindex": "user_index",
-    "Values": [
-      1
-    ],
-    "Table": "music_extra"
+    "TableName": "music_extra"
   }
 }
 
@@ -526,13 +528,17 @@
 {
   "Original": "insert into unsharded values()",
   "Instructions": {
-    "Opcode": "InsertUnsharded",
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into unsharded values ()",
-    "Table": "unsharded"
+    "QueryTimeout": "0",
+    "TableName": "unsharded"
   }
 }
 
@@ -541,13 +547,17 @@
 {
   "Original": "insert into unsharded values(1, 2)",
   "Instructions": {
-    "Opcode": "InsertUnsharded",
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into unsharded values (1, 2)",
-    "Table": "unsharded"
+    "QueryTimeout": "0",
+    "TableName": "unsharded"
   }
 }
 
@@ -556,13 +566,17 @@
 {
   "Original": "insert into unsharded values(1, 2) on duplicate key update x = 3",
   "Instructions": {
-    "Opcode": "InsertUnsharded",
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into unsharded values (1, 2) on duplicate key update x = 3",
-    "Table": "unsharded"
+    "QueryTimeout": "0",
+    "TableName": "unsharded"
   }
 }
 
@@ -571,23 +585,17 @@
 {
   "Original": "insert into unsharded_authoritative values(1,1)",
   "Instructions": {
-    "Opcode": "InsertUnsharded",
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into unsharded_authoritative(col1, col2) values (:__seq0, 1)",
-    "Table": "unsharded_authoritative",
-    "Generate": {
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select next :n values from seq",
-      "Values": [
-        1
-      ]
-    }
+    "QueryTimeout": "0",
+    "TableName": "unsharded_authoritative"
   }
 }
 
@@ -596,30 +604,17 @@
 {
   "Original": "insert into music(user_id, id) values(1, 2) on duplicate key update user_id = values(user_id)",
   "Instructions": {
-    "Opcode": "InsertShardedIgnore",
+    "OperatorType": "Insert",
+    "Variant": "ShardedIgnore",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into music(user_id, id) values (:_user_id0, :_id0) on duplicate key update user_id = values(user_id)",
-    "Values": [
-      [
-        [
-          1
-        ]
-      ],
-      [
-        [
-          2
-        ]
-      ]
-    ],
-    "Table": "music",
-    "Prefix": "insert into music(user_id, id) values ",
-    "Mid": [
-      "(:_user_id0, :_id0)"
-    ],
-    "Suffix": " on duplicate key update user_id = values(user_id)"
+    "QueryTimeout": "0",
+    "TableName": "music"
   }
 }
 
@@ -628,33 +623,17 @@
 {
   "Original": "insert into music(user_id, id) values (1, 2), (3,4) on duplicate key update user_id = values(user_id)",
   "Instructions": {
-    "Opcode": "InsertShardedIgnore",
+    "OperatorType": "Insert",
+    "Variant": "ShardedIgnore",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into music(user_id, id) values (:_user_id0, :_id0), (:_user_id1, :_id1) on duplicate key update user_id = values(user_id)",
-    "Values": [
-      [
-        [
-          1,
-          3
-        ]
-      ],
-      [
-        [
-          2,
-          4
-        ]
-      ]
-    ],
-    "Table": "music",
-    "Prefix": "insert into music(user_id, id) values ",
-    "Mid": [
-      "(:_user_id0, :_id0)",
-      "(:_user_id1, :_id1)"
-    ],
-    "Suffix": " on duplicate key update user_id = values(user_id)"
+    "QueryTimeout": "0",
+    "TableName": "music"
   }
 }
 
@@ -663,13 +642,17 @@
 {
   "Original": "insert into unsharded select id from unsharded_auto",
   "Instructions": {
-    "Opcode": "InsertUnsharded",
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into unsharded select id from unsharded_auto",
-    "Table": "unsharded"
+    "QueryTimeout": "0",
+    "TableName": "unsharded"
   }
 }
 
@@ -678,13 +661,17 @@
 {
   "Original": "insert into unsharded select id from unsharded join unsharded_auto",
   "Instructions": {
-    "Opcode": "InsertUnsharded",
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into unsharded select id from unsharded join unsharded_auto",
-    "Table": "unsharded"
+    "QueryTimeout": "0",
+    "TableName": "unsharded"
   }
 }
 
@@ -697,23 +684,17 @@
 {
   "Original": "insert into unsharded_auto(id, val) values(1, 'aa')",
   "Instructions": {
-    "Opcode": "InsertUnsharded",
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')",
-    "Table": "unsharded_auto",
-    "Generate": {
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select next :n values from seq",
-      "Values": [
-        1
-      ]
-    }
+    "QueryTimeout": "0",
+    "TableName": "unsharded_auto"
   }
 }
 
@@ -722,23 +703,17 @@
 {
   "Original": "insert into unsharded_auto(val) values('aa')",
   "Instructions": {
-    "Opcode": "InsertUnsharded",
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into unsharded_auto(val, id) values ('aa', :__seq0)",
-    "Table": "unsharded_auto",
-    "Generate": {
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select next :n values from seq",
-      "Values": [
-        null
-      ]
-    }
+    "QueryTimeout": "0",
+    "TableName": "unsharded_auto"
   }
 }
 
@@ -747,23 +722,17 @@
 {
   "Original": "insert into unsharded_auto(val) values(false)",
   "Instructions": {
-    "Opcode": "InsertUnsharded",
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into unsharded_auto(val, id) values (false, :__seq0)",
-    "Table": "unsharded_auto",
-    "Generate": {
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select next :n values from seq",
-      "Values": [
-        null
-      ]
-    }
+    "QueryTimeout": "0",
+    "TableName": "unsharded_auto"
   }
 }
 
@@ -772,24 +741,17 @@
 {
   "Original": "insert into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')",
   "Instructions": {
-    "Opcode": "InsertUnsharded",
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
-    "Table": "unsharded_auto",
-    "Generate": {
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select next :n values from seq",
-      "Values": [
-        1,
-        null
-      ]
-    }
+    "QueryTimeout": "0",
+    "TableName": "unsharded_auto"
   }
 }
 
@@ -798,13 +760,17 @@
 {
   "Original": "insert into unsharded values((select 1 from dual), 1)",
   "Instructions": {
-    "Opcode": "InsertUnsharded",
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into unsharded values ((select 1 from dual), 1)",
-    "Table": "unsharded"
+    "QueryTimeout": "0",
+    "TableName": "unsharded"
   }
 }
 
@@ -813,44 +779,17 @@
 {
   "Original": "insert into route1(id) values (1)",
   "Instructions": {
-    "Opcode": "InsertSharded",
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
-    "Values": [
-      [
-        [
-          ":__seq0"
-        ]
-      ],
-      [
-        [
-          null
-        ]
-      ],
-      [
-        [
-          null
-        ]
-      ]
-    ],
-    "Table": "user",
-    "Generate": {
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select next :n values from seq",
-      "Values": [
-        1
-      ]
-    },
-    "Prefix": "insert into user(id, Name, Costly) values ",
-    "Mid": [
-      "(:_Id0, :_Name0, :_Costly0)"
-    ]
+    "QueryTimeout": "0",
+    "TableName": "user"
   }
 }
 
@@ -863,24 +802,17 @@
 {
   "Original": "insert into authoritative values(1, 2, 3)",
   "Instructions": {
-    "Opcode": "InsertSharded",
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id0, 2, 3)",
-    "Values": [
-      [
-        [
-          1
-        ]
-      ]
-    ],
-    "Table": "authoritative",
-    "Prefix": "insert into authoritative(user_id, col1, col2) values ",
-    "Mid": [
-      "(:_user_id0, 2, 3)"
-    ]
+    "QueryTimeout": "0",
+    "TableName": "authoritative"
   }
 }
 
@@ -893,44 +825,17 @@
 {
   "Original": "insert into user(id) values (1)",
   "Instructions": {
-    "Opcode": "InsertSharded",
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
-    "Values": [
-      [
-        [
-          ":__seq0"
-        ]
-      ],
-      [
-        [
-          null
-        ]
-      ],
-      [
-        [
-          null
-        ]
-      ]
-    ],
-    "Table": "user",
-    "Generate": {
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select next :n values from seq",
-      "Values": [
-        1
-      ]
-    },
-    "Prefix": "insert into user(id, Name, Costly) values ",
-    "Mid": [
-      "(:_Id0, :_Name0, :_Costly0)"
-    ]
+    "QueryTimeout": "0",
+    "TableName": "user"
   }
 }
 
@@ -939,44 +844,17 @@
 {
   "Original": "insert ignore into user(id) values (1)",
   "Instructions": {
-    "Opcode": "InsertShardedIgnore",
+    "OperatorType": "Insert",
+    "Variant": "ShardedIgnore",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert ignore into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
-    "Values": [
-      [
-        [
-          ":__seq0"
-        ]
-      ],
-      [
-        [
-          null
-        ]
-      ],
-      [
-        [
-          null
-        ]
-      ]
-    ],
-    "Table": "user",
-    "Generate": {
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select next :n values from seq",
-      "Values": [
-        1
-      ]
-    },
-    "Prefix": "insert ignore into user(id, Name, Costly) values ",
-    "Mid": [
-      "(:_Id0, :_Name0, :_Costly0)"
-    ]
+    "QueryTimeout": "0",
+    "TableName": "user"
   }
 }
 
@@ -985,45 +863,17 @@
 {
   "Original": "insert into user(id) values(1) on duplicate key update col = 2",
   "Instructions": {
-    "Opcode": "InsertShardedIgnore",
+    "OperatorType": "Insert",
+    "Variant": "ShardedIgnore",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0) on duplicate key update col = 2",
-    "Values": [
-      [
-        [
-          ":__seq0"
-        ]
-      ],
-      [
-        [
-          null
-        ]
-      ],
-      [
-        [
-          null
-        ]
-      ]
-    ],
-    "Table": "user",
-    "Generate": {
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select next :n values from seq",
-      "Values": [
-        1
-      ]
-    },
-    "Prefix": "insert into user(id, Name, Costly) values ",
-    "Mid": [
-      "(:_Id0, :_Name0, :_Costly0)"
-    ],
-    "Suffix": " on duplicate key update col = 2"
+    "QueryTimeout": "0",
+    "TableName": "user"
   }
 }
 
@@ -1032,44 +882,17 @@
 {
   "Original": "insert into user(id) values (:aa)",
   "Instructions": {
-    "Opcode": "InsertSharded",
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
-    "Values": [
-      [
-        [
-          ":__seq0"
-        ]
-      ],
-      [
-        [
-          null
-        ]
-      ],
-      [
-        [
-          null
-        ]
-      ]
-    ],
-    "Table": "user",
-    "Generate": {
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select next :n values from seq",
-      "Values": [
-        ":aa"
-      ]
-    },
-    "Prefix": "insert into user(id, Name, Costly) values ",
-    "Mid": [
-      "(:_Id0, :_Name0, :_Costly0)"
-    ]
+    "QueryTimeout": "0",
+    "TableName": "user"
   }
 }
 
@@ -1078,44 +901,17 @@
 {
   "Original": "insert into user(nonid) values (2)",
   "Instructions": {
-    "Opcode": "InsertSharded",
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into user(nonid, id, Name, Costly) values (2, :_Id0, :_Name0, :_Costly0)",
-    "Values": [
-      [
-        [
-          ":__seq0"
-        ]
-      ],
-      [
-        [
-          null
-        ]
-      ],
-      [
-        [
-          null
-        ]
-      ]
-    ],
-    "Table": "user",
-    "Generate": {
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select next :n values from seq",
-      "Values": [
-        null
-      ]
-    },
-    "Prefix": "insert into user(nonid, id, Name, Costly) values ",
-    "Mid": [
-      "(2, :_Id0, :_Name0, :_Costly0)"
-    ]
+    "QueryTimeout": "0",
+    "TableName": "user"
   }
 }
 
@@ -1124,44 +920,17 @@
 {
   "Original": "insert into user(id, nonid) values (default, 2)",
   "Instructions": {
-    "Opcode": "InsertSharded",
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into user(id, nonid, Name, Costly) values (:_Id0, 2, :_Name0, :_Costly0)",
-    "Values": [
-      [
-        [
-          ":__seq0"
-        ]
-      ],
-      [
-        [
-          null
-        ]
-      ],
-      [
-        [
-          null
-        ]
-      ]
-    ],
-    "Table": "user",
-    "Generate": {
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select next :n values from seq",
-      "Values": [
-        null
-      ]
-    },
-    "Prefix": "insert into user(id, nonid, Name, Costly) values ",
-    "Mid": [
-      "(:_Id0, 2, :_Name0, :_Costly0)"
-    ]
+    "QueryTimeout": "0",
+    "TableName": "user"
   }
 }
 
@@ -1170,44 +939,17 @@
 {
   "Original": "insert into user(nonid) values (true)",
   "Instructions": {
-    "Opcode": "InsertSharded",
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into user(nonid, id, Name, Costly) values (true, :_Id0, :_Name0, :_Costly0)",
-    "Values": [
-      [
-        [
-          ":__seq0"
-        ]
-      ],
-      [
-        [
-          null
-        ]
-      ],
-      [
-        [
-          null
-        ]
-      ]
-    ],
-    "Table": "user",
-    "Generate": {
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select next :n values from seq",
-      "Values": [
-        null
-      ]
-    },
-    "Prefix": "insert into user(nonid, id, Name, Costly) values ",
-    "Mid": [
-      "(true, :_Id0, :_Name0, :_Costly0)"
-    ]
+    "QueryTimeout": "0",
+    "TableName": "user"
   }
 }
 
@@ -1216,44 +958,17 @@
 {
   "Original": "insert into user(nonid, name, id) values (2, 'foo', 1)",
   "Instructions": {
-    "Opcode": "InsertSharded",
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into user(nonid, name, id, Costly) values (2, :_Name0, :_Id0, :_Costly0)",
-    "Values": [
-      [
-        [
-          ":__seq0"
-        ]
-      ],
-      [
-        [
-          "foo"
-        ]
-      ],
-      [
-        [
-          null
-        ]
-      ]
-    ],
-    "Table": "user",
-    "Generate": {
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select next :n values from seq",
-      "Values": [
-        1
-      ]
-    },
-    "Prefix": "insert into user(nonid, name, id, Costly) values ",
-    "Mid": [
-      "(2, :_Name0, :_Id0, :_Costly0)"
-    ]
+    "QueryTimeout": "0",
+    "TableName": "user"
   }
 }
 
@@ -1262,34 +977,17 @@
 {
   "Original": "insert into user_extra(nonid) values (2)",
   "Instructions": {
-    "Opcode": "InsertSharded",
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into user_extra(nonid, extra_id, user_id) values (2, :__seq0, :_user_id0)",
-    "Values": [
-      [
-        [
-          null
-        ]
-      ]
-    ],
-    "Table": "user_extra",
-    "Generate": {
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select next :n values from seq",
-      "Values": [
-        null
-      ]
-    },
-    "Prefix": "insert into user_extra(nonid, extra_id, user_id) values ",
-    "Mid": [
-      "(2, :__seq0, :_user_id0)"
-    ]
+    "QueryTimeout": "0",
+    "TableName": "user_extra"
   }
 }
 
@@ -1298,24 +996,17 @@
 {
   "Original": "insert into `weird``name`(`a``b*c`, `b*c`) values(1, 2)",
   "Instructions": {
-    "Opcode": "InsertSharded",
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into `weird``name`(`a``b*c`, `b*c`) values (:_a_b_c0, 2)",
-    "Values": [
-      [
-        [
-          1
-        ]
-      ]
-    ],
-    "Table": "weird`name",
-    "Prefix": "insert into `weird``name`(`a``b*c`, `b*c`) values ",
-    "Mid": [
-      "(:_a_b_c0, 2)"
-    ]
+    "QueryTimeout": "0",
+    "TableName": "weird`name"
   }
 }
 
@@ -1324,13 +1015,17 @@
 {
   "Original": "insert into unsharded select 1 from dual union select 1 from dual",
   "Instructions": {
-    "Opcode": "InsertUnsharded",
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into unsharded select 1 from dual union select 1 from dual",
-    "Table": "unsharded"
+    "QueryTimeout": "0",
+    "TableName": "unsharded"
   }
 }
 
@@ -1355,49 +1050,17 @@
 {
   "Original": "insert into user(id) values (1), (2)",
   "Instructions": {
-    "Opcode": "InsertSharded",
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0), (:_Id1, :_Name1, :_Costly1)",
-    "Values": [
-      [
-        [
-          ":__seq0",
-          ":__seq1"
-        ]
-      ],
-      [
-        [
-          null,
-          null
-        ]
-      ],
-      [
-        [
-          null,
-          null
-        ]
-      ]
-    ],
-    "Table": "user",
-    "Generate": {
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select next :n values from seq",
-      "Values": [
-        1,
-        2
-      ]
-    },
-    "Prefix": "insert into user(id, Name, Costly) values ",
-    "Mid": [
-      "(:_Id0, :_Name0, :_Costly0)",
-      "(:_Id1, :_Name1, :_Costly1)"
-    ]
+    "QueryTimeout": "0",
+    "TableName": "user"
   }
 }
 
@@ -1406,50 +1069,17 @@
 {
   "Original": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id) values (1), (2)",
   "Instructions": {
-    "Opcode": "InsertSharded",
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0), (:_Id1, :_Name1, :_Costly1)",
-    "Values": [
-      [
-        [
-          ":__seq0",
-          ":__seq1"
-        ]
-      ],
-      [
-        [
-          null,
-          null
-        ]
-      ],
-      [
-        [
-          null,
-          null
-        ]
-      ]
-    ],
-    "Table": "user",
-    "Generate": {
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select next :n values from seq",
-      "Values": [
-        1,
-        2
-      ]
-    },
-    "Prefix": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id, Name, Costly) values ",
-    "Mid": [
-      "(:_Id0, :_Name0, :_Costly0)",
-      "(:_Id1, :_Name1, :_Costly1)"
-    ],
-    "QueryTimeout": 1
+    "QueryTimeout": "1",
+    "TableName": "user"
   }
 }
 
@@ -1458,50 +1088,17 @@
 {
   "Original": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id) values (1), (2)",
   "Instructions": {
-    "Opcode": "InsertSharded",
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "true",
     "Query": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0), (:_Id1, :_Name1, :_Costly1)",
-    "Values": [
-      [
-        [
-          ":__seq0",
-          ":__seq1"
-        ]
-      ],
-      [
-        [
-          null,
-          null
-        ]
-      ],
-      [
-        [
-          null,
-          null
-        ]
-      ]
-    ],
-    "Table": "user",
-    "Generate": {
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select next :n values from seq",
-      "Values": [
-        1,
-        2
-      ]
-    },
-    "Prefix": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id, Name, Costly) values ",
-    "Mid": [
-      "(:_Id0, :_Name0, :_Costly0)",
-      "(:_Id1, :_Name1, :_Costly1)"
-    ],
-    "MultiShardAutocommit": true
+    "QueryTimeout": "0",
+    "TableName": "user"
   }
 }
 
@@ -1514,13 +1111,17 @@
 {
   "Original": "replace into unsharded values(1, 2)",
   "Instructions": {
-    "Opcode": "InsertUnsharded",
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "replace into unsharded values (1, 2)",
-    "Table": "unsharded"
+    "QueryTimeout": "0",
+    "TableName": "unsharded"
   }
 }
 
@@ -1529,13 +1130,17 @@
 {
   "Original": "replace into unsharded select id from unsharded_auto",
   "Instructions": {
-    "Opcode": "InsertUnsharded",
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "replace into unsharded select id from unsharded_auto",
-    "Table": "unsharded"
+    "QueryTimeout": "0",
+    "TableName": "unsharded"
   }
 }
 
@@ -1548,23 +1153,17 @@
 {
   "Original": "replace into unsharded_auto(id, val) values(1, 'aa')",
   "Instructions": {
-    "Opcode": "InsertUnsharded",
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')",
-    "Table": "unsharded_auto",
-    "Generate": {
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select next :n values from seq",
-      "Values": [
-        1
-      ]
-    }
+    "QueryTimeout": "0",
+    "TableName": "unsharded_auto"
   }
 }
 
@@ -1573,23 +1172,17 @@
 {
   "Original": "replace into unsharded_auto(val) values('aa')",
   "Instructions": {
-    "Opcode": "InsertUnsharded",
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "replace into unsharded_auto(val, id) values ('aa', :__seq0)",
-    "Table": "unsharded_auto",
-    "Generate": {
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select next :n values from seq",
-      "Values": [
-        null
-      ]
-    }
+    "QueryTimeout": "0",
+    "TableName": "unsharded_auto"
   }
 }
 
@@ -1598,24 +1191,17 @@
 {
   "Original": "replace into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')",
   "Instructions": {
-    "Opcode": "InsertUnsharded",
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
-    "Table": "unsharded_auto",
-    "Generate": {
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select next :n values from seq",
-      "Values": [
-        1,
-        null
-      ]
-    }
+    "QueryTimeout": "0",
+    "TableName": "unsharded_auto"
   }
 }
 
@@ -1628,37 +1214,17 @@
 {
   "Original": "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4)",
   "Instructions": {
-    "Opcode": "InsertSharded",
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a0, :_column_b0, :_column_c0, :_kid0)",
-    "Values": [
-      [
-        [
-          4
-        ]
-      ],
-      [
-        [
-          1
-        ]
-      ],
-      [
-        [
-          2
-        ],
-        [
-          3
-        ]
-      ]
-    ],
-    "Table": "multicolvin",
-    "Prefix": "insert into multicolvin(column_a, column_b, column_c, kid) values ",
-    "Mid": [
-      "(:_column_a0, :_column_b0, :_column_c0, :_kid0)"
-    ]
+    "QueryTimeout": "0",
+    "TableName": "multicolvin"
   }
 }
 
@@ -1667,32 +1233,17 @@
 {
   "Original": "insert overlap_vindex (kid, column_a, column_b) VALUES (1,2,3)",
   "Instructions": {
-    "Opcode": "InsertSharded",
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into overlap_vindex(kid, column_a, column_b) values (:_kid0, :_column_a0, 3)",
-    "Values": [
-      [
-        [
-          1
-        ]
-      ],
-      [
-        [
-          2
-        ],
-        [
-          1
-        ]
-      ]
-    ],
-    "Table": "overlap_vindex",
-    "Prefix": "insert into overlap_vindex(kid, column_a, column_b) values ",
-    "Mid": [
-      "(:_kid0, :_column_a0, 3)"
-    ]
+    "QueryTimeout": "0",
+    "TableName": "overlap_vindex"
   }
 }
 
@@ -1701,42 +1252,17 @@
 {
   "Original": "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4), (5,6,7,8)",
   "Instructions": {
-    "Opcode": "InsertSharded",
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a0, :_column_b0, :_column_c0, :_kid0), (:_column_a1, :_column_b1, :_column_c1, :_kid1)",
-    "Values": [
-      [
-        [
-          4,
-          8
-        ]
-      ],
-      [
-        [
-          1,
-          5
-        ]
-      ],
-      [
-        [
-          2,
-          6
-        ],
-        [
-          3,
-          7
-        ]
-      ]
-    ],
-    "Table": "multicolvin",
-    "Prefix": "insert into multicolvin(column_a, column_b, column_c, kid) values ",
-    "Mid": [
-      "(:_column_a0, :_column_b0, :_column_c0, :_kid0)",
-      "(:_column_a1, :_column_b1, :_column_c1, :_kid1)"
-    ]
+    "QueryTimeout": "0",
+    "TableName": "multicolvin"
   }
 }
 
@@ -1745,19 +1271,15 @@
 {
   "Original": "delete from multicolvin where kid=1",
   "Instructions": {
-    "Opcode": "DeleteEqual",
+    "OperatorType": "Delete",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "delete from multicolvin where kid = 1",
-    "Vindex": "kid_index",
-    "Values": [
-      1
-    ],
-    "Table": "multicolvin",
-    "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
-    "KsidVindex": "kid_index"
+    "TableName": "multicolvin"
   }
 }
 
@@ -1766,25 +1288,16 @@
 {
   "Original": "update multicolvin set column_b = 1, column_c = 2 where kid = 1",
   "Instructions": {
-    "Opcode": "UpdateEqual",
+    "OperatorType": "Update",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update multicolvin set column_b = 1, column_c = 2 where kid = 1",
-    "Vindex": "kid_index",
-    "Values": [
-      1
-    ],
-    "ChangedVindexValues": {
-      "colb_colc_map": {
-        "column_b": 1,
-        "column_c": 2
-      }
-    },
-    "Table": "multicolvin",
-    "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
-    "KsidVindex": "kid_index"
+    "TableName": "multicolvin",
+    "Vindexes": "colb_colc_map"
   }
 }
 
@@ -1793,28 +1306,16 @@
 {
   "Original": "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1",
   "Instructions": {
-    "Opcode": "UpdateEqual",
+    "OperatorType": "Update",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1",
-    "Vindex": "kid_index",
-    "Values": [
-      1
-    ],
-    "ChangedVindexValues": {
-      "cola_map": {
-        "column_a": 0
-      },
-      "colb_colc_map": {
-        "column_b": 1,
-        "column_c": 2
-      }
-    },
-    "Table": "multicolvin",
-    "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
-    "KsidVindex": "kid_index"
+    "TableName": "multicolvin",
+    "Vindexes": "cola_map, colb_colc_map"
   }
 }
 
@@ -1823,13 +1324,16 @@
 {
   "Original": "update user_extra set val = 1",
   "Instructions": {
-    "Opcode": "UpdateScatter",
+    "OperatorType": "Update",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user_extra set val = 1",
-    "Table": "user_extra"
+    "TableName": "user_extra",
+    "Vindexes": ""
   }
 }
 
@@ -1838,13 +1342,16 @@
 {
   "Original": "update `user[-]`.user_extra set val = 1",
   "Instructions": {
-    "Opcode": "UpdateByDestination",
+    "OperatorType": "Update",
+    "Variant": "ByDestination",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user_extra set val = 1",
-    "Table": "user_extra"
+    "TableName": "user_extra",
+    "Vindexes": ""
   }
 }
 
@@ -1853,14 +1360,16 @@
 {
   "Original": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */  user_extra set val = 1",
   "Instructions": {
-    "Opcode": "UpdateScatter",
+    "OperatorType": "Update",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ user_extra set val = 1",
-    "Table": "user_extra",
-    "MultiShardAutocommit": true
+    "TableName": "user_extra",
+    "Vindexes": ""
   }
 }
 
@@ -1869,14 +1378,16 @@
 {
   "Original": "update /*vt+ QUERY_TIMEOUT_MS=1 */  user_extra set val = 1",
   "Instructions": {
-    "Opcode": "UpdateScatter",
+    "OperatorType": "Update",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ user_extra set val = 1",
-    "Table": "user_extra",
-    "QueryTimeout": 1
+    "TableName": "user_extra",
+    "Vindexes": ""
   }
 }
 
@@ -1885,13 +1396,16 @@
 {
   "Original": "update user_extra set val = 1 where id between 1 and 2",
   "Instructions": {
-    "Opcode": "UpdateScatter",
+    "OperatorType": "Update",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user_extra set val = 1 where id between 1 and 2",
-    "Table": "user_extra"
+    "TableName": "user_extra",
+    "Vindexes": ""
   }
 }
 
@@ -1900,13 +1414,16 @@
 {
   "Original": "update user_extra set val = 1 where user_id in (1, 2)",
   "Instructions": {
-    "Opcode": "UpdateScatter",
+    "OperatorType": "Update",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user_extra set val = 1 where user_id in (1, 2)",
-    "Table": "user_extra"
+    "TableName": "user_extra",
+    "Vindexes": ""
   }
 }
 
@@ -1915,13 +1432,16 @@
 {
   "Original": "update user_extra set val = 1 where name = 'foo'",
   "Instructions": {
-    "Opcode": "UpdateScatter",
+    "OperatorType": "Update",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user_extra set val = 1 where name = 'foo'",
-    "Table": "user_extra"
+    "TableName": "user_extra",
+    "Vindexes": ""
   }
 }
 
@@ -1930,13 +1450,16 @@
 {
   "Original": "update user_extra set val = 1 where id in (1, 2)",
   "Instructions": {
-    "Opcode": "UpdateScatter",
+    "OperatorType": "Update",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user_extra set val = 1 where id in (1, 2)",
-    "Table": "user_extra"
+    "TableName": "user_extra",
+    "Vindexes": ""
   }
 }
 
@@ -1945,13 +1468,16 @@
 {
   "Original": "update user_extra set val = 1 where (name = 'foo' or id = 1)",
   "Instructions": {
-    "Opcode": "UpdateScatter",
+    "OperatorType": "Update",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user_extra set val = 1 where name = 'foo' or id = 1",
-    "Table": "user_extra"
+    "TableName": "user_extra",
+    "Vindexes": ""
   }
 }
 
@@ -1960,13 +1486,15 @@
 {
   "Original": "delete from user_extra",
   "Instructions": {
-    "Opcode": "DeleteScatter",
+    "OperatorType": "Delete",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "delete from user_extra",
-    "Table": "user_extra"
+    "TableName": "user_extra"
   }
 }
 
@@ -1975,13 +1503,15 @@
 {
   "Original": "delete from `user[-]`.user_extra",
   "Instructions": {
-    "Opcode": "DeleteByDestination",
+    "OperatorType": "Delete",
+    "Variant": "ByDestination",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "delete from user_extra",
-    "Table": "user_extra"
+    "TableName": "user_extra"
   }
 }
 
@@ -1990,13 +1520,15 @@
 {
   "Original": "delete from user_extra where user_id between 1 and 2",
   "Instructions": {
-    "Opcode": "DeleteScatter",
+    "OperatorType": "Delete",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "delete from user_extra where user_id between 1 and 2",
-    "Table": "user_extra"
+    "TableName": "user_extra"
   }
 }
 
@@ -2005,13 +1537,15 @@
 {
   "Original": "delete from user_extra where name = 'jose'",
   "Instructions": {
-    "Opcode": "DeleteScatter",
+    "OperatorType": "Delete",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "delete from user_extra where name = 'jose'",
-    "Table": "user_extra"
+    "TableName": "user_extra"
   }
 }
 
@@ -2020,14 +1554,15 @@
 {
   "Original": "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where name = 'jose'",
   "Instructions": {
-    "Opcode": "DeleteScatter",
+    "OperatorType": "Delete",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where name = 'jose'",
-    "Table": "user_extra",
-    "MultiShardAutocommit": true
+    "TableName": "user_extra"
   }
 }
 
@@ -2036,14 +1571,15 @@
 {
   "Original": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where name = 'jose'",
   "Instructions": {
-    "Opcode": "DeleteScatter",
+    "OperatorType": "Delete",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where name = 'jose'",
-    "Table": "user_extra",
-    "QueryTimeout": 1
+    "TableName": "user_extra"
   }
 }
 
@@ -2052,13 +1588,15 @@
 {
   "Original": "delete from user_extra where user_id in (1, 2)",
   "Instructions": {
-    "Opcode": "DeleteScatter",
+    "OperatorType": "Delete",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "delete from user_extra where user_id in (1, 2)",
-    "Table": "user_extra"
+    "TableName": "user_extra"
   }
 }
 
@@ -2067,12 +1605,16 @@
 {
   "Original": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)",
   "Instructions": {
-    "Opcode": "UpdateUnsharded",
+    "OperatorType": "Update",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)"
+    "TargetTabletType": "MASTER",
+    "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)",
+    "TableName": "",
+    "Vindexes": ""
   }
 }
 
@@ -2081,12 +1623,15 @@
 {
   "Original": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)",
   "Instructions": {
-    "Opcode": "DeleteUnsharded",
+    "OperatorType": "Delete",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)"
+    "TargetTabletType": "MASTER",
+    "Query": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)",
+    "TableName": ""
   }
 }
 
@@ -2095,24 +1640,16 @@
 {
   "Original": "update user set name = null where id = 1",
   "Instructions": {
-    "Opcode": "UpdateEqual",
+    "OperatorType": "Update",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user set name = null where id = 1",
-    "Vindex": "user_index",
-    "Values": [
-      1
-    ],
-    "ChangedVindexValues": {
-      "name_user_map": {
-        "Name": null
-      }
-    },
-    "Table": "user",
-    "OwnedVindexQuery": "select Id, Name, Costly from user where id = 1 for update",
-    "KsidVindex": "user_index"
+    "TableName": "user",
+    "Vindexes": "name_user_map"
   }
 }
 
@@ -2121,13 +1658,17 @@
 {
   "Original": "insert into unsharded values(last_insert_id(), 2)",
   "Instructions": {
-    "Opcode": "InsertUnsharded",
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": "false",
     "Query": "insert into unsharded values (:__lastInsertId, 2)",
-    "Table": "unsharded"
+    "QueryTimeout": "0",
+    "TableName": "unsharded"
   }
 }
 
@@ -2136,20 +1677,16 @@
 {
   "Original": "update user set name = null where id in (1, 2, 3)",
   "Instructions": {
-    "Opcode": "UpdateScatter",
+    "OperatorType": "Update",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user set name = null where id in (1, 2, 3)",
-    "ChangedVindexValues": {
-      "name_user_map": {
-        "Name": null
-      }
-    },
-    "Table": "user",
-    "OwnedVindexQuery": "select Id, Name, Costly from user where id in (1, 2, 3) for update",
-    "KsidVindex": "user_index"
+    "TableName": "user",
+    "Vindexes": "name_user_map"
   }
 }
 
@@ -2158,20 +1695,16 @@
 {
   "Original": "update user set name = null",
   "Instructions": {
-    "Opcode": "UpdateScatter",
+    "OperatorType": "Update",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user set name = null",
-    "ChangedVindexValues": {
-      "name_user_map": {
-        "Name": null
-      }
-    },
-    "Table": "user",
-    "OwnedVindexQuery": "select Id, Name, Costly from user for update",
-    "KsidVindex": "user_index"
+    "TableName": "user",
+    "Vindexes": "name_user_map"
   }
 }
 
@@ -2180,20 +1713,16 @@
 {
   "Original": "update user set name = null where id + 1 = 2",
   "Instructions": {
-    "Opcode": "UpdateScatter",
+    "OperatorType": "Update",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user set name = null where id + 1 = 2",
-    "ChangedVindexValues": {
-      "name_user_map": {
-        "Name": null
-      }
-    },
-    "Table": "user",
-    "OwnedVindexQuery": "select Id, Name, Costly from user where id + 1 = 2 for update",
-    "KsidVindex": "user_index"
+    "TableName": "user",
+    "Vindexes": "name_user_map"
   }
 }
 
@@ -2202,15 +1731,15 @@
 {
   "Original": "delete from user where id in (1, 2, 3)",
   "Instructions": {
-    "Opcode": "DeleteScatter",
+    "OperatorType": "Delete",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "delete from user where id in (1, 2, 3)",
-    "Table": "user",
-    "OwnedVindexQuery": "select Id, Name, Costly from user where id in (1, 2, 3) for update",
-    "KsidVindex": "user_index"
+    "TableName": "user"
   }
 }
 
@@ -2219,15 +1748,15 @@
 {
   "Original": "delete from user where id + 1 = 2",
   "Instructions": {
-    "Opcode": "DeleteScatter",
+    "OperatorType": "Delete",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "delete from user where id + 1 = 2",
-    "Table": "user",
-    "OwnedVindexQuery": "select Id, Name, Costly from user where id + 1 = 2 for update",
-    "KsidVindex": "user_index"
+    "TableName": "user"
   }
 }
 
@@ -2236,15 +1765,15 @@
 {
   "Original": "delete from user",
   "Instructions": {
-    "Opcode": "DeleteScatter",
+    "OperatorType": "Delete",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "delete from user",
-    "Table": "user",
-    "OwnedVindexQuery": "select Id, Name, Costly from user for update",
-    "KsidVindex": "user_index"
+    "TableName": "user"
   }
 }
 
@@ -2253,19 +1782,15 @@
 {
   "Original": "delete music from music where id = 1",
   "Instructions": {
-    "Opcode": "DeleteEqual",
+    "OperatorType": "Delete",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "delete music from music where id = 1",
-    "Vindex": "music_user_map",
-    "Values": [
-      1
-    ],
-    "Table": "music",
-    "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
-    "KsidVindex": "user_index"
+    "TableName": "music"
   }
 }
 
@@ -2274,13 +1799,16 @@
 {
   "Original": "update user set val = 1",
   "Instructions": {
-    "Opcode": "UpdateScatter",
+    "OperatorType": "Update",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update user set val = 1",
-    "Table": "user"
+    "TableName": "user",
+    "Vindexes": ""
   }
 }
 
@@ -2289,15 +1817,15 @@
 {
   "Original": "delete from user",
   "Instructions": {
-    "Opcode": "DeleteScatter",
+    "OperatorType": "Delete",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "delete from user",
-    "Table": "user",
-    "OwnedVindexQuery": "select Id, Name, Costly from user for update",
-    "KsidVindex": "user_index"
+    "TableName": "user"
   }
 }
 
@@ -2306,23 +1834,15 @@
 {
   "Original": "update multicolvin set column_c = 2 where kid = 1",
   "Instructions": {
-    "Opcode": "UpdateEqual",
+    "OperatorType": "Update",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "TargetTabletType": "MASTER",
     "Query": "update multicolvin set column_c = 2 where kid = 1",
-    "Vindex": "kid_index",
-    "Values": [
-      1
-    ],
-    "ChangedVindexValues": {
-      "colb_colc_map": {
-        "column_c": 2
-      }
-    },
-    "Table": "multicolvin",
-    "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
-    "KsidVindex": "kid_index"
+    "TableName": "multicolvin",
+    "Vindexes": "colb_colc_map"
   }
 }
