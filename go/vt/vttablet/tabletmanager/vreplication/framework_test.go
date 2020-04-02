@@ -497,7 +497,7 @@ func expectNontxQueries(t *testing.T, queries []string) {
 	retry:
 		select {
 		case got = <-globalDBQueries:
-			if got == "begin" || got == "commit" || strings.Contains(got, "_vt.vreplication") {
+			if got == "begin" || got == "commit" ||  got == "rollback" ||strings.Contains(got, "_vt.vreplication") {
 				goto retry
 			}
 			var match bool
