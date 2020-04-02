@@ -204,19 +204,13 @@ func (l *Limit) fetchOffset(bindVars map[string]*querypb.BindVariable) (int, err
 }
 
 func (l *Limit) description() PrimitiveDescription {
-	// TODO: There's got to be a better way
-	count, err := l.Count.MarshalJSON()
-	if err != nil {
-		count = []byte("?")
-	}
-	offset, err := l.Offset.MarshalJSON()
-	if err != nil {
-		offset = []byte("?")
-	}
+	other := map[string]string{}
 
-	other := map[string]string{
-		"Count":  string(count),
-		"Offset": string(offset),
+	if !l.Count.IsNull() {
+		other["Count"] = l.Count.Value.String()
+	}
+	if !l.Offset.IsNull() {
+		other["Offset"] = l.Offset.Value.String()
 	}
 
 	return PrimitiveDescription{
