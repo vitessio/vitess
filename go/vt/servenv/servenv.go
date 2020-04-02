@@ -77,6 +77,9 @@ var (
 func Init() {
 	mu.Lock()
 	defer mu.Unlock()
+
+	// Add version tag to every info log
+	log.Infof(AppVersion.String())
 	if inited {
 		log.Fatal("servenv.Init called second time")
 	}
@@ -206,8 +209,8 @@ func RunDefault() {
 func ParseFlags(cmd string) {
 	flag.Parse()
 
-	AppVersion.Print()
 	if *Version {
+		AppVersion.Print()
 		os.Exit(0)
 	}
 
