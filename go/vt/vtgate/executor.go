@@ -207,15 +207,6 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 	return result, err
 }
 
-func (e *Executor) startTxIfNecessary(ctx context.Context, safeSession *SafeSession) error {
-	if !safeSession.Autocommit && !safeSession.InTransaction() {
-		if err := e.txConn.Begin(ctx, safeSession); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (*sqltypes.Result, error) {
 	//Start an implicit transaction if necessary.
 	if !safeSession.Autocommit && !safeSession.InTransaction() {
@@ -228,7 +219,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	if err != nil {
 		return nil, err
 	}
-	// ks@replica , :-80-> ks:-80, -80@replica, ks:-80@replica
+
 	if safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", destTabletType)
 	}

@@ -43,7 +43,7 @@ func (e *planExecute) execute(ctx context.Context, safeSession *SafeSession, sql
 	// 1: Prepare before planning and execution
 
 	// Start an implicit transaction if necessary.
-	err := e.e.startTxIfNecessary(ctx, safeSession)
+	err := e.startTxIfNecessary(ctx, safeSession)
 	if err != nil {
 		return nil, err
 	}
@@ -99,6 +99,15 @@ func (e *planExecute) execute(ctx context.Context, safeSession *SafeSession, sql
 	}
 
 	return e.executePlan(ctx, plan, vcursor, bindVars, execStart)(logStats, safeSession)
+}
+
+func (e *planExecute) startTxIfNecessary(ctx context.Context, safeSession *SafeSession) error {
+	if !safeSession.Autocommit && !safeSession.InTransaction() {
+		if err := e.e.txConn.Begin(ctx, safeSession); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (e *planExecute) insideTransaction(ctx context.Context, safeSession *SafeSession, logStats *LogStats, f currFunc) (*sqltypes.Result, error) {

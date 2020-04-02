@@ -1,0 +1,49 @@
+# use db
+"use ks"
+{
+  "Original": "use ks",
+  "Instructions": {
+    "Opcode": "UpdateTarget",
+    "Target": "ks"
+  }
+}
+
+# use db tablet
+"use ks@replica"
+{
+  "Original": "use ks@replica",
+  "Instructions": {
+    "Opcode": "UpdateTarget",
+    "Target": "ks@replica"
+  }
+}
+
+# use db target with :
+"use `ks:-80@replica`"
+{
+  "Original": "use `ks:-80@replica`",
+  "Instructions": {
+    "Opcode": "UpdateTarget",
+    "Target": "ks:-80@replica"
+  }
+}
+
+# use db target with /
+"use `ks/80-@replica`"
+{
+  "Original": "use `ks/80-@replica`",
+  "Instructions": {
+    "Opcode": "UpdateTarget",
+    "Target": "ks/80-@replica"
+  }
+}
+
+# reset db
+"use"
+{
+  "Original": "use",
+  "Instructions": {
+    "Opcode": "UpdateTarget",
+    "Target": ""
+  }
+}

@@ -310,6 +310,9 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 			instruction, err = buildDDLPlan(stmt, vschema)
 		case *sqlparser.DBDDL:
 			return nil, errors.New("unsupported construct: ddl on database")
+		case *sqlparser.Use:
+			planType = engine.PlanUSE
+			instruction, err = buildUsePlan(stmt, vschema)
 		case *sqlparser.OtherRead:
 			return nil, errors.New("unsupported construct: other read")
 		case *sqlparser.OtherAdmin:
