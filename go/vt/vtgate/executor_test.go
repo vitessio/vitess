@@ -590,6 +590,27 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
 	}
 
+	// SHOW INDEXES with two different syntax
+	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show indexes from %v.unknown", KsTestUnsharded), nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
+	wantQuery = "show indexes from unknown"
+	if lastQuery != wantQuery {
+		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
+	}
+
+	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show indexes from unknown from %v", KsTestUnsharded), nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
+	wantQuery = "show indexes from unknown"
+	if lastQuery != wantQuery {
+		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
+	}
+
 	// Set desitation keyspace in session
 	session.TargetString = KsTestUnsharded
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "show create table unknown", nil)
