@@ -189,9 +189,10 @@ func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int
 
 func (ms *MemorySort) description() PrimitiveDescription {
 	orderByIndexes := GenericJoin(ms.OrderBy, orderByParamsToString)
-	other := map[string]string{
-		"UpperLimit": ms.UpperLimit.Value.String(),
-		"OrderBy":    orderByIndexes,
+	value := ms.UpperLimit.Value
+	other := map[string]string{"OrderBy": orderByIndexes}
+	if !value.IsNull() {
+		other["UpperLimit"] = value.String()
 	}
 	return PrimitiveDescription{
 		OperatorType:      "Sort",
