@@ -22,7 +22,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -31,12 +30,8 @@ import (
 )
 
 func TestURLPrefix(t *testing.T) {
-	if got, want := NewExporter("", "").URLPrefix(), ""; got != want {
-		t.Errorf("URLPrefix(''): %v, want %v", got, want)
-	}
-	if got, want := NewExporter("a", "").URLPrefix(), "/a"; got != want {
-		t.Errorf("URLPrefix('a'): %v, want %v", got, want)
-	}
+	assert.Equal(t, "", NewExporter("", "").URLPrefix())
+	assert.Equal(t, "/a", NewExporter("a", "").URLPrefix())
 }
 
 func TestHandleFunc(t *testing.T) {
@@ -105,9 +100,7 @@ func httpGet(t *testing.T, url string) string {
 func TestCountersFuncWithMultiLabels(t *testing.T) {
 	ebd := NewExporter("", "")
 	ebd.NewCountersFuncWithMultiLabels("gcfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 1} })
-	if got, want := expvar.Get("gcfwml").String(), `{"a": 1}`; got != want {
-		t.Errorf("CountersFuncWithMultiLabels get: %s, want %s", got, want)
-	}
+	assert.Equal(t, `{"a": 1}`, expvar.Get("gcfwml").String())
 
 	ebd = NewExporter("i1", "label")
 
@@ -122,20 +115,10 @@ func TestCountersFuncWithMultiLabels(t *testing.T) {
 	ebd.NewCountersFuncWithMultiLabels("lcfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 5} })
 	assert.Equal(t, `{"i1.a": 5}`, expvar.Get("lcfwml").String())
 
-	ebd = NewExporter("i1", "label")
-	// Ensure gauge gets reset on re-instantiation.
-	assert.Equal(t, "{}", expvar.Get("lcfwml").String())
-	// Ensure new value is returned after var gets added.
-	ebd.NewCountersFuncWithMultiLabels("lcfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 6} })
-	assert.Equal(t, `{"i1.a": 6}`, expvar.Get("lcfwml").String())
-
 	ebd = NewExporter("i2", "label")
-	ebd.NewCountersFuncWithMultiLabels("lcfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 7} })
-	want1 := `{"i1.a": 6, "i2.a": 7}`
-	want2 := `{"i2.a": 7, "i1.a": 6}`
-	if got := expvar.Get("lcfwml").String(); got != want1 && got != want2 {
-		t.Errorf("GaugeDuration get: %s, want %s or %s", got, want1, want2)
-	}
+	ebd.NewCountersFuncWithMultiLabels("lcfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 6} })
+	assert.Contains(t, expvar.Get("lcfwml").String(), `"i1.a": 5`)
+	assert.Contains(t, expvar.Get("lcfwml").String(), `"i2.a": 6`)
 }
 
 func TestGaugesFuncWithMultiLabels(t *testing.T) {
@@ -156,20 +139,10 @@ func TestGaugesFuncWithMultiLabels(t *testing.T) {
 	ebd.NewGaugesFuncWithMultiLabels("lgfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 5} })
 	assert.Equal(t, `{"i1.a": 5}`, expvar.Get("lgfwml").String())
 
-	ebd = NewExporter("i1", "label")
-	// Ensure gauge gets reset on re-instantiation.
-	assert.Equal(t, "{}", expvar.Get("lgfwml").String())
-	// Ensure new value is returned after var gets added.
-	ebd.NewGaugesFuncWithMultiLabels("lgfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 6} })
-	assert.Equal(t, `{"i1.a": 6}`, expvar.Get("lgfwml").String())
-
 	ebd = NewExporter("i2", "label")
-	ebd.NewGaugesFuncWithMultiLabels("lgfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 7} })
-	want1 := `{"i1.a": 6, "i2.a": 7}`
-	want2 := `{"i2.a": 7, "i1.a": 6}`
-	if got := expvar.Get("lgfwml").String(); got != want1 && got != want2 {
-		t.Errorf("GaugeDuration get: %s, want %s or %s", got, want1, want2)
-	}
+	ebd.NewGaugesFuncWithMultiLabels("lgfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 6} })
+	assert.Contains(t, expvar.Get("lgfwml").String(), `"i1.a": 5`)
+	assert.Contains(t, expvar.Get("lgfwml").String(), `"i2.a": 6`)
 }
 
 func TestCounter(t *testing.T) {
@@ -188,27 +161,16 @@ func TestCounter(t *testing.T) {
 	c.Add(4)
 	assert.Equal(t, `{"i1": 4}`, expvar.Get("lcounter").String())
 
-	// Ensure var gets replaced.
+	// Ensure var gets reused.
 	c = ebd.NewCounter("lcounter", "")
 	c.Add(5)
-	assert.Equal(t, `{"i1": 5}`, expvar.Get("lcounter").String())
-
-	ebd = NewExporter("i1", "label")
-	// Ensure gauge gets reset on re-instantiation.
-	assert.Equal(t, "{}", expvar.Get("lcounter").String())
-	// Ensure new value is returned after var gets added.
-	c = ebd.NewCounter("lcounter", "")
-	c.Add(5)
-	assert.Equal(t, `{"i1": 5}`, expvar.Get("lcounter").String())
+	assert.Equal(t, `{"i1": 9}`, expvar.Get("lcounter").String())
 
 	ebd = NewExporter("i2", "label")
 	c = ebd.NewCounter("lcounter", "")
 	c.Add(6)
-	want1 := `{"i1": 5, "i2": 6}`
-	want2 := `{"i2": 6, "i1": 5}`
-	if got := expvar.Get("lcounter").String(); got != want1 && got != want2 {
-		t.Errorf("Counter get: %s, want %s or %s", got, want1, want2)
-	}
+	assert.Contains(t, expvar.Get("lcounter").String(), `"i1": 9`)
+	assert.Contains(t, expvar.Get("lcounter").String(), `"i2": 6`)
 }
 
 func TestGauge(t *testing.T) {
@@ -227,27 +189,17 @@ func TestGauge(t *testing.T) {
 	c.Set(4)
 	assert.Equal(t, `{"i1": 4}`, expvar.Get("lgauge").String())
 
-	// Ensure var gets replaced.
+	// Ensure var gets reused.
 	c = ebd.NewGauge("lgauge", "")
-	c.Set(5)
-	assert.Equal(t, `{"i1": 5}`, expvar.Get("lgauge").String())
-
-	ebd = NewExporter("i1", "label")
-	// Ensure gauge gets reset on re-instantiation.
-	assert.Equal(t, "{}", expvar.Get("lgauge").String())
-	// Ensure new value is returned after var gets added.
-	c = ebd.NewGauge("lgauge", "")
+	assert.Equal(t, `{"i1": 4}`, expvar.Get("lgauge").String())
 	c.Set(5)
 	assert.Equal(t, `{"i1": 5}`, expvar.Get("lgauge").String())
 
 	ebd = NewExporter("i2", "label")
 	c = ebd.NewGauge("lgauge", "")
 	c.Set(6)
-	want1 := `{"i1": 5, "i2": 6}`
-	want2 := `{"i2": 6, "i1": 5}`
-	if got := expvar.Get("lgauge").String(); got != want1 && got != want2 {
-		t.Errorf("Gauge get: %s, want %s or %s", got, want1, want2)
-	}
+	assert.Contains(t, expvar.Get("lgauge").String(), `"i1": 5`)
+	assert.Contains(t, expvar.Get("lgauge").String(), `"i2": 6`)
 }
 
 func TestCounterFunc(t *testing.T) {
@@ -268,20 +220,10 @@ func TestCounterFunc(t *testing.T) {
 	ebd.NewCounterFunc("lcf", "", func() int64 { return 5 })
 	assert.Equal(t, `{"i1": 5}`, expvar.Get("lcf").String())
 
-	ebd = NewExporter("i1", "label")
-	// Ensure gauge gets reset on re-instantiation.
-	assert.Equal(t, "{}", expvar.Get("lcf").String())
-	// Ensure new value is returned after var gets added.
-	ebd.NewCounterFunc("lcf", "", func() int64 { return 5 })
-	assert.Equal(t, `{"i1": 5}`, expvar.Get("lcf").String())
-
 	ebd = NewExporter("i2", "label")
 	ebd.NewCounterFunc("lcf", "", func() int64 { return 6 })
-	want1 := `{"i1": 5, "i2": 6}`
-	want2 := `{"i2": 6, "i1": 5}`
-	if got := expvar.Get("lcf").String(); got != want1 && got != want2 {
-		t.Errorf("Counter get: %s, want %s or %s", got, want1, want2)
-	}
+	assert.Contains(t, expvar.Get("lcf").String(), `"i1": 5`)
+	assert.Contains(t, expvar.Get("lcf").String(), `"i2": 6`)
 }
 
 func TestGaugeFunc(t *testing.T) {
@@ -302,20 +244,10 @@ func TestGaugeFunc(t *testing.T) {
 	ebd.NewGaugeFunc("lgf", "", func() int64 { return 5 })
 	assert.Equal(t, `{"i1": 5}`, expvar.Get("lgf").String())
 
-	ebd = NewExporter("i1", "label")
-	// Ensure gauge gets reset on re-instantiation.
-	assert.Equal(t, "{}", expvar.Get("lgf").String())
-	// Ensure new value is returned after var gets added.
-	ebd.NewGaugeFunc("lgf", "", func() int64 { return 5 })
-	assert.Equal(t, `{"i1": 5}`, expvar.Get("lgf").String())
-
 	ebd = NewExporter("i2", "label")
 	ebd.NewGaugeFunc("lgf", "", func() int64 { return 6 })
-	want1 := `{"i1": 5, "i2": 6}`
-	want2 := `{"i2": 6, "i1": 5}`
-	if got := expvar.Get("lgf").String(); got != want1 && got != want2 {
-		t.Errorf("Gauge get: %s, want %s or %s", got, want1, want2)
-	}
+	assert.Contains(t, expvar.Get("lgf").String(), `"i1": 5`)
+	assert.Contains(t, expvar.Get("lgf").String(), `"i2": 6`)
 }
 
 func TestCounterDurationFunc(t *testing.T) {
@@ -336,20 +268,10 @@ func TestCounterDurationFunc(t *testing.T) {
 	ebd.NewCounterDurationFunc("lcduration", "", func() time.Duration { return 5 })
 	assert.Equal(t, `{"i1": 5}`, expvar.Get("lcduration").String())
 
-	ebd = NewExporter("i1", "label")
-	// Ensure gauge gets reset on re-instantiation.
-	assert.Equal(t, "{}", expvar.Get("lcduration").String())
-	// Ensure new value is returned after var gets added.
-	ebd.NewCounterDurationFunc("lcduration", "", func() time.Duration { return 5 })
-	assert.Equal(t, `{"i1": 5}`, expvar.Get("lcduration").String())
-
 	ebd = NewExporter("i2", "label")
 	ebd.NewCounterDurationFunc("lcduration", "", func() time.Duration { return 6 })
-	want1 := `{"i1": 5, "i2": 6}`
-	want2 := `{"i2": 6, "i1": 5}`
-	if got := expvar.Get("lcduration").String(); got != want1 && got != want2 {
-		t.Errorf("CounterDuration get: %s, want %s or %s", got, want1, want2)
-	}
+	assert.Contains(t, expvar.Get("lcduration").String(), `"i1": 5`)
+	assert.Contains(t, expvar.Get("lcduration").String(), `"i2": 6`)
 }
 
 func TestGaugeDurationFunc(t *testing.T) {
@@ -370,20 +292,10 @@ func TestGaugeDurationFunc(t *testing.T) {
 	ebd.NewGaugeDurationFunc("lgduration", "", func() time.Duration { return 5 })
 	assert.Equal(t, `{"i1": 5}`, expvar.Get("lgduration").String())
 
-	ebd = NewExporter("i1", "label")
-	// Ensure gauge gets reset on re-instantiation.
-	assert.Equal(t, "{}", expvar.Get("lgduration").String())
-	// Ensure new value is returned after var gets added.
-	ebd.NewGaugeDurationFunc("lgduration", "", func() time.Duration { return 6 })
-	assert.Equal(t, `{"i1": 6}`, expvar.Get("lgduration").String())
-
 	ebd = NewExporter("i2", "label")
-	ebd.NewGaugeDurationFunc("lgduration", "", func() time.Duration { return 7 })
-	want1 := `{"i1": 6, "i2": 7}`
-	want2 := `{"i2": 7, "i1": 6}`
-	if got := expvar.Get("lgduration").String(); got != want1 && got != want2 {
-		t.Errorf("GaugeDuration get: %s, want %s or %s", got, want1, want2)
-	}
+	ebd.NewGaugeDurationFunc("lgduration", "", func() time.Duration { return 6 })
+	assert.Contains(t, expvar.Get("lgduration").String(), `"i1": 5`)
+	assert.Contains(t, expvar.Get("lgduration").String(), `"i2": 6`)
 }
 
 func TestCountersWithSingleLabel(t *testing.T) {
@@ -402,27 +314,16 @@ func TestCountersWithSingleLabel(t *testing.T) {
 	g.Add("a", 4)
 	assert.Equal(t, `{"i1.a": 4}`, expvar.Get("lcwsl").String())
 
-	// Ensure var gets replaced.
+	// Ensure var gets reused.
 	g = ebd.NewCountersWithSingleLabel("lcwsl", "", "l")
 	g.Add("a", 5)
-	assert.Equal(t, `{"i1.a": 5}`, expvar.Get("lcwsl").String())
-
-	ebd = NewExporter("i1", "label")
-	// Ensure gauge gets reset on re-instantiation.
-	assert.Equal(t, "{}", expvar.Get("lcwsl").String())
-	// Ensure new value is returned after var gets added.
-	g = ebd.NewCountersWithSingleLabel("lcwsl", "", "l")
-	g.Add("a", 6)
-	assert.Equal(t, `{"i1.a": 6}`, expvar.Get("lcwsl").String())
+	assert.Equal(t, `{"i1.a": 9}`, expvar.Get("lcwsl").String())
 
 	ebd = NewExporter("i2", "label")
 	g = ebd.NewCountersWithSingleLabel("lcwsl", "", "l")
-	g.Add("a", 7)
-	want1 := `{"i1.a": 6, "i2.a": 7}`
-	want2 := `{"i2.a": 7, "i1.a": 6}`
-	if got := expvar.Get("lcwsl").String(); got != want1 && got != want2 {
-		t.Errorf("CountersWithSingleLabel get: %s, want %s or %s", got, want1, want2)
-	}
+	g.Add("a", 6)
+	assert.Contains(t, expvar.Get("lcwsl").String(), `"i1.a": 9`)
+	assert.Contains(t, expvar.Get("lcwsl").String(), `"i2.a": 6`)
 }
 
 func TestGaugesWithSingleLabel(t *testing.T) {
@@ -441,27 +342,17 @@ func TestGaugesWithSingleLabel(t *testing.T) {
 	g.Set("a", 4)
 	assert.Equal(t, `{"i1.a": 4}`, expvar.Get("lgwsl").String())
 
-	// Ensure var gets replaced.
+	// Ensure var gets reused.
 	g = ebd.NewGaugesWithSingleLabel("lgwsl", "", "l")
+	assert.Equal(t, `{"i1.a": 4}`, expvar.Get("lgwsl").String())
 	g.Set("a", 5)
 	assert.Equal(t, `{"i1.a": 5}`, expvar.Get("lgwsl").String())
 
-	ebd = NewExporter("i1", "label")
-	// Ensure gauge gets reset on re-instantiation.
-	assert.Equal(t, "{}", expvar.Get("lgwsl").String())
-	// Ensure new value is returned after var gets added.
-	g = ebd.NewGaugesWithSingleLabel("lgwsl", "", "l")
-	g.Set("a", 6)
-	assert.Equal(t, `{"i1.a": 6}`, expvar.Get("lgwsl").String())
-
 	ebd = NewExporter("i2", "label")
 	g = ebd.NewGaugesWithSingleLabel("lgwsl", "", "l")
-	g.Set("a", 7)
-	want1 := `{"i1.a": 6, "i2.a": 7}`
-	want2 := `{"i2.a": 7, "i1.a": 6}`
-	if got := expvar.Get("lgwsl").String(); got != want1 && got != want2 {
-		t.Errorf("GaugesWithSingleLabel get: %s, want %s or %s", got, want1, want2)
-	}
+	g.Set("a", 6)
+	assert.Contains(t, expvar.Get("lgwsl").String(), `"i1.a": 5`)
+	assert.Contains(t, expvar.Get("lgwsl").String(), `"i2.a": 6`)
 }
 
 func TestCountersWithMultiLabels(t *testing.T) {
@@ -480,27 +371,16 @@ func TestCountersWithMultiLabels(t *testing.T) {
 	g.Add([]string{"a"}, 4)
 	assert.Equal(t, `{"i1.a": 4}`, expvar.Get("lcwml").String())
 
-	// Ensure var gets replaced.
+	// Ensure var gets reused.
 	g = ebd.NewCountersWithMultiLabels("lcwml", "", []string{"l"})
 	g.Add([]string{"a"}, 5)
-	assert.Equal(t, `{"i1.a": 5}`, expvar.Get("lcwml").String())
-
-	ebd = NewExporter("i1", "label")
-	// Ensure gauge gets reset on re-instantiation.
-	assert.Equal(t, "{}", expvar.Get("lcwml").String())
-	// Ensure new value is returned after var gets added.
-	g = ebd.NewCountersWithMultiLabels("lcwml", "", []string{"l"})
-	g.Add([]string{"a"}, 6)
-	assert.Equal(t, `{"i1.a": 6}`, expvar.Get("lcwml").String())
+	assert.Equal(t, `{"i1.a": 9}`, expvar.Get("lcwml").String())
 
 	ebd = NewExporter("i2", "label")
 	g = ebd.NewCountersWithMultiLabels("lcwml", "", []string{"l"})
-	g.Add([]string{"a"}, 7)
-	want1 := `{"i1.a": 6, "i2.a": 7}`
-	want2 := `{"i2.a": 7, "i1.a": 6}`
-	if got := expvar.Get("lcwml").String(); got != want1 && got != want2 {
-		t.Errorf("CountersWithMultiLabels get: %s, want %s or %s", got, want1, want2)
-	}
+	g.Add([]string{"a"}, 6)
+	assert.Contains(t, expvar.Get("lcwml").String(), `"i1.a": 9`)
+	assert.Contains(t, expvar.Get("lcwml").String(), `"i2.a": 6`)
 }
 
 func TestGaugesWithMultiLabels(t *testing.T) {
@@ -519,34 +399,26 @@ func TestGaugesWithMultiLabels(t *testing.T) {
 	g.Set([]string{"a"}, 4)
 	assert.Equal(t, `{"i1.a": 4}`, expvar.Get("lgwml").String())
 
-	// Ensure var gets replaced.
+	// Ensure var gets reused.
 	g = ebd.NewGaugesWithMultiLabels("lgwml", "", []string{"l"})
+	assert.Equal(t, `{"i1.a": 4}`, expvar.Get("lgwml").String())
 	g.Set([]string{"a"}, 5)
 	assert.Equal(t, `{"i1.a": 5}`, expvar.Get("lgwml").String())
 
-	ebd = NewExporter("i1", "label")
-	// Ensure gauge gets reset on re-instantiation.
-	assert.Equal(t, "{}", expvar.Get("lgwml").String())
-	// Ensure new value is returned after var gets added.
-	g = ebd.NewGaugesWithMultiLabels("lgwml", "", []string{"l"})
-	g.Set([]string{"a"}, 6)
-	assert.Equal(t, `{"i1.a": 6}`, expvar.Get("lgwml").String())
-
 	ebd = NewExporter("i2", "label")
 	g = ebd.NewGaugesWithMultiLabels("lgwml", "", []string{"l"})
-	g.Set([]string{"a"}, 7)
-	want1 := `{"i1.a": 6, "i2.a": 7}`
-	want2 := `{"i2.a": 7, "i1.a": 6}`
-	if got := expvar.Get("lgwml").String(); got != want1 && got != want2 {
-		t.Errorf("GaugeDuration get: %s, want %s or %s", got, want1, want2)
-	}
+	g.Set([]string{"a"}, 6)
+	assert.Contains(t, expvar.Get("lgwml").String(), `"i1.a": 5`)
+	assert.Contains(t, expvar.Get("lgwml").String(), `"i2.a": 6`)
 }
 
 func TestTimings(t *testing.T) {
 	ebd := NewExporter("", "")
 	g := ebd.NewTimings("gtimings", "", "l")
 	g.Add("a", 1)
-	assert.Contains(t, expvar.Get("gtimings").String(), "TotalCount")
+	assert.Contains(t, expvar.Get("gtimings").String(), `"TotalCount":1`)
+	g.Record("a", time.Now())
+	assert.Contains(t, expvar.Get("gtimings").String(), `"TotalCount":2`)
 
 	ebd = NewExporter("i1", "label")
 
@@ -560,27 +432,36 @@ func TestTimings(t *testing.T) {
 	assert.Contains(t, expvar.Get("ltimings").String(), `i1.a`)
 	assert.Contains(t, expvar.Get("ltimings").String(), `"TotalCount":2`)
 
-	// Unlike other cases, var cannot be replaced. It gets reused.
+	// Ensure var gets reused.
 	g = ebd.NewTimings("ltimings", "", "l")
 	g.Add("a", 1)
 	assert.Contains(t, expvar.Get("ltimings").String(), `i1.a`)
 	assert.Contains(t, expvar.Get("ltimings").String(), `"TotalCount":3`)
+	g.Record("a", time.Now())
+	assert.Contains(t, expvar.Get("ltimings").String(), `"TotalCount":4`)
 
 	ebd = NewExporter("i2", "label")
 	g = ebd.NewTimings("ltimings", "", "l")
 	g.Add("a", 1)
 	assert.Contains(t, expvar.Get("ltimings").String(), `i1.a`)
 	assert.Contains(t, expvar.Get("ltimings").String(), `i2.a`)
-	assert.Contains(t, expvar.Get("ltimings").String(), `"TotalCount":4`)
+	assert.Contains(t, expvar.Get("ltimings").String(), `"TotalCount":5`)
+
+	want := map[string]int64{
+		"All":  5,
+		"i1.a": 4,
+		"i2.a": 1,
+	}
+	assert.Equal(t, want, g.Counts())
 }
 
 func TestMultiTimings(t *testing.T) {
 	ebd := NewExporter("", "")
 	g := ebd.NewMultiTimings("gmtimings", "", []string{"l"})
 	g.Add([]string{"a"}, 1)
-	if got, want := expvar.Get("gmtimings").String(), "TotalCount"; !strings.Contains(got, want) {
-		t.Errorf("CountersFuncWithMultiLabels get: %s, must contain %s", got, want)
-	}
+	assert.Contains(t, expvar.Get("gmtimings").String(), `"TotalCount":1`)
+	g.Record([]string{"a"}, time.Now())
+	assert.Contains(t, expvar.Get("gmtimings").String(), `"TotalCount":2`)
 
 	ebd = NewExporter("i1", "label")
 
@@ -593,28 +474,35 @@ func TestMultiTimings(t *testing.T) {
 	g.Add([]string{"a"}, 1)
 	assert.Contains(t, expvar.Get("lmtimings").String(), `i1.a`)
 	assert.Contains(t, expvar.Get("lmtimings").String(), `"TotalCount":2`)
+	g.Record([]string{"a"}, time.Now())
+	assert.Contains(t, expvar.Get("lmtimings").String(), `"TotalCount":3`)
 
-	// Unlike other cases, var cannot be replaced. It gets reused.
+	// Ensure var gets reused.
 	g = ebd.NewMultiTimings("lmtimings", "", []string{"l"})
 	g.Add([]string{"a"}, 1)
 	assert.Contains(t, expvar.Get("lmtimings").String(), `i1.a`)
-	assert.Contains(t, expvar.Get("lmtimings").String(), `"TotalCount":3`)
+	assert.Contains(t, expvar.Get("lmtimings").String(), `"TotalCount":4`)
 
 	ebd = NewExporter("i2", "label")
 	g = ebd.NewMultiTimings("lmtimings", "", []string{"l"})
 	g.Add([]string{"a"}, 1)
 	assert.Contains(t, expvar.Get("lmtimings").String(), `i1.a`)
 	assert.Contains(t, expvar.Get("lmtimings").String(), `i2.a`)
-	assert.Contains(t, expvar.Get("lmtimings").String(), `"TotalCount":4`)
+	assert.Contains(t, expvar.Get("lmtimings").String(), `"TotalCount":5`)
+
+	want := map[string]int64{
+		"All":  5,
+		"i1.a": 4,
+		"i2.a": 1,
+	}
+	assert.Equal(t, want, g.Counts())
 }
 
 func TestRates(t *testing.T) {
 	ebd := NewExporter("", "")
 	tm := ebd.NewMultiTimings("gratetimings", "", []string{"l"})
 	ebd.NewRates("grates", tm, 15*60/5, 5*time.Second)
-	if got, want := expvar.Get("grates").String(), "{}"; got != want {
-		t.Errorf("CountersFuncWithMultiLabels get: %s, want %s", got, want)
-	}
+	assert.Equal(t, "{}", expvar.Get("grates").String())
 
 	ebd = NewExporter("i1", "label")
 
@@ -622,9 +510,14 @@ func TestRates(t *testing.T) {
 	ebd.NewRates("", tm, 15*60/5, 5*time.Second)
 	ebd.NewRates("", tm, 15*60/5, 5*time.Second)
 
-	// Ensure non-anonymous vars also don't cause panics
-	ebd.NewRates("lrates", tm, 15*60/5, 5*time.Second)
-	ebd.NewRates("lrates", tm, 15*60/5, 5*time.Second)
+	// Ensure var gets reused.
+	rates1 := ebd.NewRates("lrates", tm, 15*60/5, 5*time.Second)
+	rates2 := ebd.NewRates("lrates", tm, 15*60/5, 5*time.Second)
+	assert.Equal(t, rates2, rates1)
+
+	ebd = NewExporter("i2", "label")
+	rates3 := ebd.NewRates("lrates", tm, 15*60/5, 5*time.Second)
+	assert.NotEqual(t, rates3, rates1)
 }
 
 func TestHistogram(t *testing.T) {
@@ -657,12 +550,14 @@ func TestPublish(t *testing.T) {
 	s := stats.NewString("")
 	ebd.Publish("gpub", s)
 	s.Set("1")
-	if got, want := expvar.Get("gpub").String(), `"1"`; got != want {
-		t.Errorf("Publish get: %s, want %s", got, want)
-	}
+	assert.Equal(t, `"1"`, expvar.Get("gpub").String())
 
-	// This should not crash.
 	ebd = NewExporter("i1", "label")
 	ebd.Publish("lpub", s)
+	assert.Equal(t, `{"i1": "1"}`, expvar.Get("lpub").String())
+
+	ebd = NewExporter("i2", "label")
 	ebd.Publish("lpub", s)
+	assert.Contains(t, expvar.Get("lpub").String(), `"i1": "1"`)
+	assert.Contains(t, expvar.Get("lpub").String(), `"i2": "1"`)
 }
