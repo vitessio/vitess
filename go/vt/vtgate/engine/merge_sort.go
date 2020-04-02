@@ -157,12 +157,12 @@ func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 	return nil
 }
 
-func (ms *MergeSort) description() PlanDescription {
+func (ms *MergeSort) description() PrimitiveDescription {
 	orderByIndexes := GenericJoin(ms.OrderBy, orderByParamsToString)
 	other := map[string]string{
 		"OrderBy": orderByIndexes,
 	}
-	return PlanDescription{
+	return PrimitiveDescription{
 		OperatorType:      "Sort",
 		Variant:           "Merge",
 		TargetDestination: key.DestinationVtGate{},

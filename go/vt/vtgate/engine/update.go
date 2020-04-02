@@ -266,7 +266,7 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 	return result, vterrors.Aggregate(errs)
 }
 
-func (upd *Update) description() PlanDescription {
+func (upd *Update) description() PrimitiveDescription {
 	changedVindexes := ""
 	for vindex := range upd.ChangedVindexValues {
 		if len(changedVindexes) != 0 {
@@ -279,7 +279,7 @@ func (upd *Update) description() PlanDescription {
 		"TableName": upd.GetTableName(),
 		"Vindexes":  changedVindexes,
 	}
-	return PlanDescription{
+	return PrimitiveDescription{
 		OperatorType:     "Update",
 		Keyspace:         upd.Keyspace,
 		Variant:          upd.Opcode.String(),

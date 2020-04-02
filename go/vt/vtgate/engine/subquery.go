@@ -104,11 +104,11 @@ func (sq *Subquery) buildFields(inner *sqltypes.Result) []*querypb.Field {
 	return fields
 }
 
-func (sq *Subquery) description() PlanDescription {
+func (sq *Subquery) description() PrimitiveDescription {
 	other := map[string]string{
 		"Columns": GenericJoin(sq.Cols, intToString),
 	}
-	return PlanDescription{
+	return PrimitiveDescription{
 		OperatorType:      "Subquery",
 		TargetDestination: key.DestinationVtGate{},
 		Other:             other,

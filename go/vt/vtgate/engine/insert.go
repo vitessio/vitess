@@ -615,14 +615,14 @@ func insertVarName(col sqlparser.ColIdent, rowNum int) string {
 	return "_" + col.CompliantName() + strconv.Itoa(rowNum)
 }
 
-func (ins *Insert) description() PlanDescription {
+func (ins *Insert) description() PrimitiveDescription {
 	other := map[string]string{
 		"Query":                ins.Query,
 		"TableName":            ins.GetTableName(),
 		"MultiShardAutocommit": strconv.FormatBool(ins.MultiShardAutocommit),
 		"QueryTimeout":         strconv.Itoa(ins.QueryTimeout),
 	}
-	return PlanDescription{
+	return PrimitiveDescription{
 		OperatorType:     "Insert",
 		Keyspace:         ins.Keyspace,
 		Variant:          ins.Opcode.String(),

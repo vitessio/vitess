@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"bytes"
 	"encoding/json"
 
 	"vitess.io/vitess/go/vt/key"
@@ -24,49 +25,84 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-// PlanDescription is used to create a serializable representation of the Primitive tree
-type PlanDescription struct {
+// PrimitiveDescription is used to create a serializable representation of the Primitive tree
+type PrimitiveDescription struct {
 	OperatorType string
-	Variant      string `json:",omitempty"`
+	Variant      string
 	// Keyspace specifies the keyspace to send the query to.
-	Keyspace *vindexes.Keyspace `json:",omitempty"`
+	Keyspace *vindexes.Keyspace
 	// TargetDestination specifies an explicit target destination to send the query to.
-	TargetDestination key.Destination `json:",omitempty"`
+	TargetDestination key.Destination
 	// TargetTabletType specifies an explicit target destination tablet type
 	// this is only used in conjunction with TargetDestination
-	TargetTabletType topodatapb.TabletType `json:",omitempty"`
-	Other            map[string]string     `json:",omitempty"`
-	Inputs           []PlanDescription     `json:",omitempty"`
+	TargetTabletType topodatapb.TabletType
+	Other            map[string]string
+	Inputs           []PrimitiveDescription
 }
 
 // MarshalJSON serializes the PlanDescription into a JSON representation.
-func (pd *PlanDescription) MarshalJSON() ([]byte, error) {
-	var dest string
+// We do this rather manual thing here so the `other` map looks like
+//fields belonging to pd and not a map in a field.
+func (pd PrimitiveDescription) MarshalJSON() ([]byte, error) {
+	buf := &bytes.Buffer{}
+	buf.WriteString("{")
+
+	if err := marshalAdd("", buf, "OperatorType", pd.OperatorType); err != nil {
+		return nil, err
+	}
+	if err := marshalAdd(",", buf, "Variant", pd.Variant); err != nil {
+		return nil, err
+	}
+	if pd.Keyspace != nil {
+		if err := marshalAdd(",", buf, "Keyspace", pd.Keyspace); err != nil {
+			return nil, err
+		}
+	}
 	if pd.TargetDestination != nil {
-		dest = pd.TargetDestination.String()
+		s := pd.TargetDestination.String()
+		dest := s[11:] // TODO: All these start with Destination. We should fix that instead if trimming it out here
+
+		if err := marshalAdd(",", buf, "TargetDestination", dest); err != nil {
+			return nil, err
+		}
 	}
-	out := struct {
-		OperatorType      string
-		Variant           string             `json:",omitempty"`
-		Keyspace          *vindexes.Keyspace `json:",omitempty"`
-		TargetDestination string             `json:",omitempty"`
-		TargetTabletType  string             `json:",omitempty"`
-		Other             map[string]string  `json:",omitempty"`
-		Inputs            []PlanDescription  `json:",omitempty"`
-	}{
-		OperatorType:      pd.OperatorType,
-		Variant:           pd.Variant,
-		Keyspace:          pd.Keyspace,
-		TargetDestination: dest,
-		TargetTabletType:  pd.TargetTabletType.String(),
-		Other:             pd.Other,
-		Inputs:            pd.Inputs,
+	if pd.TargetTabletType != topodatapb.TabletType_UNKNOWN {
+		if err := marshalAdd(",", buf, "TargetTabletType", pd.TargetTabletType.String()); err != nil {
+			return nil, err
+		}
 	}
-	return json.Marshal(out)
+	for k, v := range pd.Other {
+		if err := marshalAdd(",", buf, k, v); err != nil {
+			return nil, err
+		}
+	}
+
+	if len(pd.Inputs) > 0 {
+		if err := marshalAdd(",", buf, "Inputs", pd.Inputs); err != nil {
+			return nil, err
+		}
+	}
+
+	buf.WriteString("}")
+
+	var out bytes.Buffer
+	json.Indent(&out, buf.Bytes(), "  ", "  ")
+
+	return out.Bytes(), nil
+}
+
+func marshalAdd(prepend string, buf *bytes.Buffer, name string, obj interface{}) error {
+	buf.WriteString(prepend + `"` + name + `":`)
+	b, err := json.Marshal(obj)
+	if err != nil {
+		return err
+	}
+	buf.Write(b)
+	return nil
 }
 
 //PrimitiveToPlanDescription transforms a primitive tree into a corresponding PlanDescription tree
-func PrimitiveToPlanDescription(in Primitive) PlanDescription {
+func PrimitiveToPlanDescription(in Primitive) PrimitiveDescription {
 	this := in.description()
 
 	for _, input := range in.Inputs() {
@@ -74,7 +110,7 @@ func PrimitiveToPlanDescription(in Primitive) PlanDescription {
 	}
 
 	if len(in.Inputs()) == 0 {
-		this.Inputs = []PlanDescription{}
+		this.Inputs = []PrimitiveDescription{}
 	}
 
 	return this

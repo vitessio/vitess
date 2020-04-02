@@ -34,7 +34,7 @@ func TestCreateRoutePlanDescription(t *testing.T) {
 
 	planDescription := PrimitiveToPlanDescription(route)
 
-	expected := PlanDescription{
+	expected := PrimitiveDescription{
 		OperatorType:      "Route",
 		Variant:           "SelectScatter",
 		Keyspace:          &vindexes.Keyspace{Name: "ks"},
@@ -44,7 +44,7 @@ func TestCreateRoutePlanDescription(t *testing.T) {
 			"Query":     route.Query,
 			"TableName": route.TableName,
 		},
-		Inputs: []PlanDescription{},
+		Inputs: []PrimitiveDescription{},
 	}
 
 	if diff := cmp.Diff(planDescription, expected); diff != "" {
@@ -82,13 +82,13 @@ func TestPlanDescriptionWithInputs(t *testing.T) {
 
 	planDescription := PrimitiveToPlanDescription(limit)
 
-	expected := PlanDescription{
+	expected := PrimitiveDescription{
 		OperatorType: "Limit",
 		Other: map[string]string{
 			"Count":  "12",
 			"Offset": "4",
 		},
-		Inputs: []PlanDescription{routeDescr},
+		Inputs: []PrimitiveDescription{routeDescr},
 	}
 
 	if diff := cmp.Diff(planDescription, expected); diff != "" {
@@ -101,8 +101,8 @@ func TestPlanDescriptionWithInputs(t *testing.T) {
 
 }
 
-func getDescriptionFor(route *Route) PlanDescription {
-	return PlanDescription{
+func getDescriptionFor(route *Route) PrimitiveDescription {
+	return PrimitiveDescription{
 		OperatorType:      "Route",
 		Variant:           routeName[route.Opcode],
 		Keyspace:          &vindexes.Keyspace{Name: "ks"},
@@ -112,6 +112,6 @@ func getDescriptionFor(route *Route) PlanDescription {
 			"Query":     route.Query,
 			"TableName": route.TableName,
 		},
-		Inputs: []PlanDescription{},
+		Inputs: []PrimitiveDescription{},
 	}
 }
