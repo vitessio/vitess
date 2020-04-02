@@ -187,13 +187,13 @@ func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int
 	return count, nil
 }
 
-func (ms *MemorySort) description() PlanDescription {
+func (ms *MemorySort) description() PrimitiveDescription {
 	orderByIndexes := GenericJoin(ms.OrderBy, orderByParamsToString)
 	other := map[string]string{
 		"UpperLimit": ms.UpperLimit.Value.String(),
 		"OrderBy":    orderByIndexes,
 	}
-	return PlanDescription{
+	return PrimitiveDescription{
 		OperatorType:      "Sort",
 		Variant:           "Memory",
 		TargetDestination: key.DestinationVtGate{},

@@ -237,12 +237,12 @@ func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]
 	return res, vterrors.Aggregate(errs)
 }
 
-func (del *Delete) description() PlanDescription {
+func (del *Delete) description() PrimitiveDescription {
 	other := map[string]string{
 		"Query":     del.Query,
 		"TableName": del.GetTableName(),
 	}
-	return PlanDescription{
+	return PrimitiveDescription{
 		OperatorType:     "Delete",
 		Keyspace:         del.Keyspace,
 		Variant:          del.Opcode.String(),

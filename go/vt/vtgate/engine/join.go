@@ -257,12 +257,12 @@ func combineVars(bv1, bv2 map[string]*querypb.BindVariable) map[string]*querypb.
 	return out
 }
 
-func (jn *Join) description() PlanDescription {
+func (jn *Join) description() PrimitiveDescription {
 	other := map[string]string{
 		"TableName":         jn.GetTableName(),
 		"JoinColumnIndexes": strings.Trim(strings.Join(strings.Fields(fmt.Sprint(jn.Cols)), ","), "[]"),
 	}
-	return PlanDescription{
+	return PrimitiveDescription{
 		OperatorType:      "Join",
 		Variant:           jn.Opcode.String(),
 		TargetDestination: key.DestinationVtGate{},

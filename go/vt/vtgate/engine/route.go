@@ -155,7 +155,7 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		TruncateColumnCount:     route.TruncateColumnCount,
 		QueryTimeout:            route.QueryTimeout,
 		ScatterErrorsAsWarnings: route.ScatterErrorsAsWarnings,
-		Table: route.TableName,
+		Table:                   route.TableName,
 	}
 	return jsonutil.MarshalNoEscape(marshalRoute)
 }
@@ -567,12 +567,12 @@ func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) 
 	return shardVars
 }
 
-func (route *Route) description() PlanDescription {
+func (route *Route) description() PrimitiveDescription {
 	other := map[string]string{
 		"Query":     route.Query,
 		"TableName": route.TableName,
 	}
-	return PlanDescription{
+	return PrimitiveDescription{
 		OperatorType:      "Route",
 		Variant:           routeName[route.Opcode],
 		Keyspace:          route.Keyspace,

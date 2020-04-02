@@ -413,7 +413,7 @@ func intToString(i interface{}) string {
 	return strconv.Itoa(i.(int))
 }
 
-func (oa *OrderedAggregate) description() PlanDescription {
+func (oa *OrderedAggregate) description() PrimitiveDescription {
 	orderByIndexes := GenericJoin(oa.Aggregates, aggregateParamsToString)
 	groupBy := GenericJoin(oa.Keys, intToString)
 	other := map[string]string{
@@ -421,7 +421,7 @@ func (oa *OrderedAggregate) description() PlanDescription {
 		"GroupBy":  groupBy,
 		"Distinct": strconv.FormatBool(oa.HasDistinct),
 	}
-	return PlanDescription{
+	return PrimitiveDescription{
 		OperatorType:      "Aggregate",
 		Variant:           "Ordered",
 		TargetDestination: key.DestinationVtGate{},

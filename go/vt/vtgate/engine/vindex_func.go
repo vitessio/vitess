@@ -194,6 +194,6 @@ func (vf *VindexFunc) buildRow(id sqltypes.Value, ksid []byte, kr *topodatapb.Ke
 	return row
 }
 
-func (vf *VindexFunc) description() PlanDescription {
-	return PlanDescription{OperatorType: "vindexfunc - not implemented"}
+func (vf *VindexFunc) description() PrimitiveDescription {
+	return PrimitiveDescription{OperatorType: "vindexfunc - not implemented"}
 }
