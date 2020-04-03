@@ -18,6 +18,7 @@
       "Sharded": false
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update m1 set val = 1"
   }
 }
@@ -34,6 +35,7 @@
       "Sharded": false
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update unsharded set val = 1"
   }
 }
@@ -50,6 +52,7 @@
       "Sharded": false
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update unsharded set col = (select col from unsharded limit 1)"
   }
 }
@@ -66,6 +69,7 @@
       "Sharded": false
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update unsharded set col = (select id from unsharded union select id from unsharded)"
   }
 }
@@ -82,6 +86,7 @@
       "Sharded": false
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update unsharded set col = (select id from unsharded as a join unsharded as b on a.id = b.id)"
   }
 }
@@ -98,6 +103,7 @@
       "Sharded": false
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col \u003c 1000"
   }
 }
@@ -114,8 +120,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update user as route1 set a = 1 where id = 1",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -131,6 +142,7 @@
       "Sharded": false
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update unsharded_a set a = (select a from unsharded as route2)"
   }
 }
@@ -147,6 +159,7 @@
       "Sharded": false
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "delete from unsharded"
   }
 }
@@ -163,8 +176,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update user set val = 1 where id = 1",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -180,8 +198,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update user as user_alias set val = 1 where user_alias.id = 1",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -197,8 +220,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update user set val = 1 where id = 1",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -214,8 +242,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update user set val = 1 where name = 'foo' and id = 1",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -231,11 +264,18 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "ChangedVindexValues": [
+      "email_user_map"
+    ],
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select user_id, email, address from user_metadata where user_id = 1 for update",
     "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
     "Table": "user_metadata",
-    "Vindex": [
-      "email_user_map"
-    ]
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -255,12 +295,19 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
-    "Query": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
-    "Table": "user_metadata",
-    "Vindex": [
+    "ChangedVindexValues": [
       "address_user_map",
       "email_user_map"
-    ]
+    ],
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select user_id, email, address from user_metadata where user_id = 1 for update",
+    "Query": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
+    "Table": "user_metadata",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -276,11 +323,18 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "ChangedVindexValues": [
+      "email_user_map"
+    ],
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select user_id, email, address from user_metadata where user_id = 1 order by user_id asc limit 10 for update",
     "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
     "Table": "user_metadata",
-    "Vindex": [
-      "email_user_map"
-    ]
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -296,8 +350,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update user set val = 1 where id = id2 and id = 1",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -313,8 +372,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update user set val = 1 where id = 18446744073709551616 and id = 1",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -330,9 +394,14 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
-    "KsidVindexName": "user_index",
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, Name, Costly from user where id = 1 for update",
     "Query": "delete from user where id = 1",
-    "TableName": "user",
+    "Table": "user",
+    "Values": [
+      1
+    ],
     "Vindex": "user_index"
   }
 }
@@ -349,6 +418,7 @@
       "Sharded": false
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "delete a from unsharded_a as a, unsharded_b as b where a.id = b.id and b.val = 1"
   }
 }
@@ -365,6 +435,7 @@
       "Sharded": false
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "delete a from unsharded_a as a join unsharded_b as b on a.id = b.id where b.val = 1"
   }
 }
@@ -381,6 +452,7 @@
       "Sharded": false
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000"
   }
 }
@@ -397,9 +469,14 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
-    "KsidVindexName": "user_index",
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, Name, Costly from user where id = 1 for update",
     "Query": "delete from user as route1 where id = 1",
-    "TableName": "user",
+    "Table": "user",
+    "Values": [
+      1
+    ],
     "Vindex": "user_index"
   }
 }
@@ -416,6 +493,7 @@
       "Sharded": false
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "delete from unsharded_a where a = (select a from unsharded as route2)"
   }
 }
@@ -432,8 +510,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update music set val = 1 where id = 1",
-    "Table": "music"
+    "Table": "music",
+    "Values": [
+      1
+    ],
+    "Vindex": "music_user_map"
   }
 }
 
@@ -449,6 +532,7 @@
       "Sharded": false
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update unsharded_a as a join unsharded_b as b on a.id = b.id set a.val = 'foo' where b.val = 1"
   }
 }
@@ -465,6 +549,7 @@
       "Sharded": false
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update unsharded_a as a, unsharded_b as b set a.val = 'foo' where a.id = b.id and b.val = 1"
   }
 }
@@ -481,9 +566,14 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
-    "KsidVindexName": "user_index",
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
     "Query": "delete from music where id = 1",
-    "TableName": "music",
+    "Table": "music",
+    "Values": [
+      1
+    ],
     "Vindex": "music_user_map"
   }
 }
@@ -500,8 +590,12 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "delete from music_extra where user_id = 1",
-    "TableName": "music_extra",
+    "Table": "music_extra",
+    "Values": [
+      1
+    ],
     "Vindex": "user_index"
   }
 }
@@ -520,7 +614,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded values ()",
-    "QueryTimeout": 0,
     "TableName": "unsharded"
   }
 }
@@ -539,7 +632,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded values (1, 2)",
-    "QueryTimeout": 0,
     "TableName": "unsharded"
   }
 }
@@ -558,7 +650,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded values (1, 2) on duplicate key update x = 3",
-    "QueryTimeout": 0,
     "TableName": "unsharded"
   }
 }
@@ -577,7 +668,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded_authoritative(col1, col2) values (:__seq0, 1)",
-    "QueryTimeout": 0,
     "TableName": "unsharded_authoritative"
   }
 }
@@ -596,7 +686,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into music(user_id, id) values (:_user_id0, :_id0) on duplicate key update user_id = values(user_id)",
-    "QueryTimeout": 0,
     "TableName": "music"
   }
 }
@@ -615,7 +704,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into music(user_id, id) values (:_user_id0, :_id0), (:_user_id1, :_id1) on duplicate key update user_id = values(user_id)",
-    "QueryTimeout": 0,
     "TableName": "music"
   }
 }
@@ -634,7 +722,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded select id from unsharded_auto",
-    "QueryTimeout": 0,
     "TableName": "unsharded"
   }
 }
@@ -653,7 +740,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded select id from unsharded join unsharded_auto",
-    "QueryTimeout": 0,
     "TableName": "unsharded"
   }
 }
@@ -676,7 +762,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')",
-    "QueryTimeout": 0,
     "TableName": "unsharded_auto"
   }
 }
@@ -695,7 +780,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded_auto(val, id) values ('aa', :__seq0)",
-    "QueryTimeout": 0,
     "TableName": "unsharded_auto"
   }
 }
@@ -714,7 +798,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded_auto(val, id) values (false, :__seq0)",
-    "QueryTimeout": 0,
     "TableName": "unsharded_auto"
   }
 }
@@ -733,7 +816,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
-    "QueryTimeout": 0,
     "TableName": "unsharded_auto"
   }
 }
@@ -752,7 +834,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded values ((select 1 from dual), 1)",
-    "QueryTimeout": 0,
     "TableName": "unsharded"
   }
 }
@@ -771,7 +852,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
-    "QueryTimeout": 0,
     "TableName": "user"
   }
 }
@@ -794,7 +874,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id0, 2, 3)",
-    "QueryTimeout": 0,
     "TableName": "authoritative"
   }
 }
@@ -817,7 +896,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
-    "QueryTimeout": 0,
     "TableName": "user"
   }
 }
@@ -836,7 +914,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert ignore into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
-    "QueryTimeout": 0,
     "TableName": "user"
   }
 }
@@ -855,7 +932,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0) on duplicate key update col = 2",
-    "QueryTimeout": 0,
     "TableName": "user"
   }
 }
@@ -874,7 +950,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
-    "QueryTimeout": 0,
     "TableName": "user"
   }
 }
@@ -893,7 +968,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into user(nonid, id, Name, Costly) values (2, :_Id0, :_Name0, :_Costly0)",
-    "QueryTimeout": 0,
     "TableName": "user"
   }
 }
@@ -912,7 +986,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into user(id, nonid, Name, Costly) values (:_Id0, 2, :_Name0, :_Costly0)",
-    "QueryTimeout": 0,
     "TableName": "user"
   }
 }
@@ -931,7 +1004,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into user(nonid, id, Name, Costly) values (true, :_Id0, :_Name0, :_Costly0)",
-    "QueryTimeout": 0,
     "TableName": "user"
   }
 }
@@ -950,7 +1022,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into user(nonid, name, id, Costly) values (2, :_Name0, :_Id0, :_Costly0)",
-    "QueryTimeout": 0,
     "TableName": "user"
   }
 }
@@ -969,7 +1040,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into user_extra(nonid, extra_id, user_id) values (2, :__seq0, :_user_id0)",
-    "QueryTimeout": 0,
     "TableName": "user_extra"
   }
 }
@@ -988,7 +1058,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into `weird``name`(`a``b*c`, `b*c`) values (:_a_b_c0, 2)",
-    "QueryTimeout": 0,
     "TableName": "weird`name"
   }
 }
@@ -1007,7 +1076,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded select 1 from dual union select 1 from dual",
-    "QueryTimeout": 0,
     "TableName": "unsharded"
   }
 }
@@ -1042,7 +1110,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0), (:_Id1, :_Name1, :_Costly1)",
-    "QueryTimeout": 0,
     "TableName": "user"
   }
 }
@@ -1080,7 +1147,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": true,
     "Query": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0), (:_Id1, :_Name1, :_Costly1)",
-    "QueryTimeout": 0,
     "TableName": "user"
   }
 }
@@ -1103,7 +1169,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "replace into unsharded values (1, 2)",
-    "QueryTimeout": 0,
     "TableName": "unsharded"
   }
 }
@@ -1122,7 +1187,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "replace into unsharded select id from unsharded_auto",
-    "QueryTimeout": 0,
     "TableName": "unsharded"
   }
 }
@@ -1145,7 +1209,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')",
-    "QueryTimeout": 0,
     "TableName": "unsharded_auto"
   }
 }
@@ -1164,7 +1227,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "replace into unsharded_auto(val, id) values ('aa', :__seq0)",
-    "QueryTimeout": 0,
     "TableName": "unsharded_auto"
   }
 }
@@ -1183,7 +1245,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
-    "QueryTimeout": 0,
     "TableName": "unsharded_auto"
   }
 }
@@ -1206,7 +1267,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a0, :_column_b0, :_column_c0, :_kid0)",
-    "QueryTimeout": 0,
     "TableName": "multicolvin"
   }
 }
@@ -1225,7 +1285,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into overlap_vindex(kid, column_a, column_b) values (:_kid0, :_column_a0, 3)",
-    "QueryTimeout": 0,
     "TableName": "overlap_vindex"
   }
 }
@@ -1244,7 +1303,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a0, :_column_b0, :_column_c0, :_kid0), (:_column_a1, :_column_b1, :_column_c1, :_kid1)",
-    "QueryTimeout": 0,
     "TableName": "multicolvin"
   }
 }
@@ -1261,9 +1319,14 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
-    "KsidVindexName": "kid_index",
+    "KsidVindex": "kid_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
     "Query": "delete from multicolvin where kid = 1",
-    "TableName": "multicolvin",
+    "Table": "multicolvin",
+    "Values": [
+      1
+    ],
     "Vindex": "kid_index"
   }
 }
@@ -1280,11 +1343,18 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "ChangedVindexValues": [
+      "colb_colc_map"
+    ],
+    "KsidVindex": "kid_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
     "Query": "update multicolvin set column_b = 1, column_c = 2 where kid = 1",
     "Table": "multicolvin",
-    "Vindex": [
-      "colb_colc_map"
-    ]
+    "Values": [
+      1
+    ],
+    "Vindex": "kid_index"
   }
 }
 
@@ -1300,12 +1370,19 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
-    "Query": "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1",
-    "Table": "multicolvin",
-    "Vindex": [
+    "ChangedVindexValues": [
       "cola_map",
       "colb_colc_map"
-    ]
+    ],
+    "KsidVindex": "kid_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
+    "Query": "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1",
+    "Table": "multicolvin",
+    "Values": [
+      1
+    ],
+    "Vindex": "kid_index"
   }
 }
 
@@ -1321,6 +1398,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1",
     "Table": "user_extra"
   }
@@ -1338,6 +1416,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1",
     "Table": "user_extra"
   }
@@ -1355,6 +1434,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": true,
     "Query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ user_extra set val = 1",
     "Table": "user_extra"
   }
@@ -1372,7 +1452,9 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ user_extra set val = 1",
+    "QueryTimeout": 1,
     "Table": "user_extra"
   }
 }
@@ -1389,6 +1471,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1 where id between 1 and 2",
     "Table": "user_extra"
   }
@@ -1406,6 +1489,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1 where user_id in (1, 2)",
     "Table": "user_extra"
   }
@@ -1423,6 +1507,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1 where name = 'foo'",
     "Table": "user_extra"
   }
@@ -1440,6 +1525,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1 where id in (1, 2)",
     "Table": "user_extra"
   }
@@ -1457,6 +1543,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1 where name = 'foo' or id = 1",
     "Table": "user_extra"
   }
@@ -1474,8 +1561,9 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "delete from user_extra",
-    "TableName": "user_extra"
+    "Table": "user_extra"
   }
 }
 
@@ -1491,8 +1579,9 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "delete from user_extra",
-    "TableName": "user_extra"
+    "Table": "user_extra"
   }
 }
 
@@ -1508,8 +1597,9 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "delete from user_extra where user_id between 1 and 2",
-    "TableName": "user_extra"
+    "Table": "user_extra"
   }
 }
 
@@ -1525,8 +1615,9 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "delete from user_extra where name = 'jose'",
-    "TableName": "user_extra"
+    "Table": "user_extra"
   }
 }
 
@@ -1542,8 +1633,9 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": true,
     "Query": "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where name = 'jose'",
-    "TableName": "user_extra"
+    "Table": "user_extra"
   }
 }
 
@@ -1559,8 +1651,10 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where name = 'jose'",
-    "TableName": "user_extra"
+    "QueryTimeout": 1,
+    "Table": "user_extra"
   }
 }
 
@@ -1576,8 +1670,9 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "delete from user_extra where user_id in (1, 2)",
-    "TableName": "user_extra"
+    "Table": "user_extra"
   }
 }
 
@@ -1593,6 +1688,7 @@
       "Sharded": false
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)"
   }
 }
@@ -1609,6 +1705,7 @@
       "Sharded": false
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)"
   }
 }
@@ -1625,11 +1722,18 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "ChangedVindexValues": [
+      "name_user_map"
+    ],
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, Name, Costly from user where id = 1 for update",
     "Query": "update user set name = null where id = 1",
     "Table": "user",
-    "Vindex": [
-      "name_user_map"
-    ]
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -1647,7 +1751,6 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded values (:__lastInsertId, 2)",
-    "QueryTimeout": 0,
     "TableName": "unsharded"
   }
 }
@@ -1664,11 +1767,14 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
-    "Query": "update user set name = null where id in (1, 2, 3)",
-    "Table": "user",
-    "Vindex": [
+    "ChangedVindexValues": [
       "name_user_map"
-    ]
+    ],
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, Name, Costly from user where id in (1, 2, 3) for update",
+    "Query": "update user set name = null where id in (1, 2, 3)",
+    "Table": "user"
   }
 }
 
@@ -1684,11 +1790,14 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
-    "Query": "update user set name = null",
-    "Table": "user",
-    "Vindex": [
+    "ChangedVindexValues": [
       "name_user_map"
-    ]
+    ],
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, Name, Costly from user for update",
+    "Query": "update user set name = null",
+    "Table": "user"
   }
 }
 
@@ -1704,11 +1813,14 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
-    "Query": "update user set name = null where id + 1 = 2",
-    "Table": "user",
-    "Vindex": [
+    "ChangedVindexValues": [
       "name_user_map"
-    ]
+    ],
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, Name, Costly from user where id + 1 = 2 for update",
+    "Query": "update user set name = null where id + 1 = 2",
+    "Table": "user"
   }
 }
 
@@ -1724,9 +1836,11 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
-    "KsidVindexName": "user_index",
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, Name, Costly from user where id in (1, 2, 3) for update",
     "Query": "delete from user where id in (1, 2, 3)",
-    "TableName": "user"
+    "Table": "user"
   }
 }
 
@@ -1742,9 +1856,11 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
-    "KsidVindexName": "user_index",
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, Name, Costly from user where id + 1 = 2 for update",
     "Query": "delete from user where id + 1 = 2",
-    "TableName": "user"
+    "Table": "user"
   }
 }
 
@@ -1760,9 +1876,11 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
-    "KsidVindexName": "user_index",
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, Name, Costly from user for update",
     "Query": "delete from user",
-    "TableName": "user"
+    "Table": "user"
   }
 }
 
@@ -1778,9 +1896,14 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
-    "KsidVindexName": "user_index",
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
     "Query": "delete music from music where id = 1",
-    "TableName": "music",
+    "Table": "music",
+    "Values": [
+      1
+    ],
     "Vindex": "music_user_map"
   }
 }
@@ -1797,6 +1920,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
     "Query": "update user set val = 1",
     "Table": "user"
   }
@@ -1814,9 +1938,11 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
-    "KsidVindexName": "user_index",
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, Name, Costly from user for update",
     "Query": "delete from user",
-    "TableName": "user"
+    "Table": "user"
   }
 }
 
@@ -1832,10 +1958,17 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "ChangedVindexValues": [
+      "colb_colc_map"
+    ],
+    "KsidVindex": "kid_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
     "Query": "update multicolvin set column_c = 2 where kid = 1",
     "Table": "multicolvin",
-    "Vindex": [
-      "colb_colc_map"
-    ]
+    "Values": [
+      1
+    ],
+    "Vindex": "kid_index"
   }
 }

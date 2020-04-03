@@ -24,7 +24,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/key"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -38,7 +37,6 @@ func TestCreateRoutePlanDescription(t *testing.T) {
 		Variant:           "SelectScatter",
 		Keyspace:          &vindexes.Keyspace{Name: "ks"},
 		TargetDestination: key.DestinationAllShards{},
-		TargetTabletType:  topodatapb.TabletType_MASTER,
 		Other: map[string]interface{}{
 			"Query":      route.Query,
 			"Table":      route.TableName,
@@ -57,7 +55,6 @@ func createRoute() *Route {
 		Opcode:            SelectScatter,
 		Keyspace:          &vindexes.Keyspace{Name: "ks"},
 		TargetDestination: key.DestinationAllShards{},
-		TargetTabletType:  topodatapb.TabletType_MASTER,
 		Query:             "select all the things",
 		TableName:         "tableName",
 		FieldQuery:        "more query",
@@ -105,7 +102,6 @@ func getDescriptionFor(route *Route) PrimitiveDescription {
 		Variant:           routeName[route.Opcode],
 		Keyspace:          &vindexes.Keyspace{Name: "ks"},
 		TargetDestination: key.DestinationAllShards{},
-		TargetTabletType:  topodatapb.TabletType_MASTER,
 		Other: map[string]interface{}{
 			"Query":      route.Query,
 			"Table":      route.TableName,

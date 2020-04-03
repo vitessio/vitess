@@ -200,7 +200,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select col from samecolvin where 1 != 1",
     "Query": "select col from samecolvin where col = :col",
     "Table": "samecolvin",
