@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -133,6 +134,7 @@ func TestLoadTableMessage(t *testing.T) {
 
 	// Test loading min/max backoff
 	table, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30,vt_min_backoff=10,vt_max_backoff=100", db)
+	require.NoError(t, err)
 	want.MessageInfo.MinBackoff = 10 * time.Second
 	want.MessageInfo.MaxBackoff = 100 * time.Second
 	assert.Equal(t, want, table)
