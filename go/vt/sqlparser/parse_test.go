@@ -1564,10 +1564,10 @@ var (
 		output: "show full tables from jiradb like '%'",
 	}, {
 		input:  "SHOW EXTENDED INDEX FROM `AO_E8B6CC_PROJECT_MAPPING` FROM `jiradb`",
-		output: "show index from AO_E8B6CC_PROJECT_MAPPING from jiradb",
+		output: "show extended index from AO_E8B6CC_PROJECT_MAPPING from jiradb",
 	}, {
 		input:  "SHOW EXTENDED KEYS FROM `AO_E8B6CC_ISSUE_MAPPING` FROM `jiradb`",
-		output: "show keys from AO_E8B6CC_ISSUE_MAPPING from jiradb",
+		output: "show extended keys from AO_E8B6CC_ISSUE_MAPPING from jiradb",
 	}, {
 		input:  "SHOW CREATE TABLE `jiradb`.`AO_E8B6CC_ISSUE_MAPPING`",
 		output: "show create table jiradb.AO_E8B6CC_ISSUE_MAPPING",
@@ -1579,7 +1579,10 @@ var (
 		output: "show full tables from jiradb like '%'",
 	}, {
 		input:  "SHOW EXTENDED INDEXES FROM `AO_E8B6CC_PROJECT_MAPPING` FROM `jiradb`",
-		output: "show indexes from AO_E8B6CC_PROJECT_MAPPING from jiradb",
+		output: "show extended indexes from AO_E8B6CC_PROJECT_MAPPING from jiradb",
+	}, {
+		input:  "SHOW EXTENDED INDEXES IN `AO_E8B6CC_PROJECT_MAPPING` IN `jiradb`",
+		output: "show extended indexes from AO_E8B6CC_PROJECT_MAPPING from jiradb",
 	}}
 )
 
