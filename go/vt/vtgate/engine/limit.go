@@ -17,11 +17,8 @@ limitations under the License.
 package engine
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
-
-	"vitess.io/vitess/go/vt/key"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -35,23 +32,6 @@ type Limit struct {
 	Count  sqltypes.PlanValue
 	Offset sqltypes.PlanValue
 	Input  Primitive
-}
-
-// MarshalJSON serializes the Limit into a JSON representation.
-// It's used for testing and diagnostics.
-func (l *Limit) MarshalJSON() ([]byte, error) {
-	marshalLimit := struct {
-		Opcode string
-		Count  sqltypes.PlanValue
-		Offset sqltypes.PlanValue
-		Input  Primitive
-	}{
-		Opcode: "Limit",
-		Count:  l.Count,
-		Offset: l.Offset,
-		Input:  l.Input,
-	}
-	return json.Marshal(marshalLimit)
 }
 
 // RouteType returns a description of the query routing type used by the primitive
@@ -204,18 +184,17 @@ func (l *Limit) fetchOffset(bindVars map[string]*querypb.BindVariable) (int, err
 }
 
 func (l *Limit) description() PrimitiveDescription {
-	other := map[string]string{}
+	other := map[string]interface{}{}
 
 	if !l.Count.IsNull() {
-		other["Count"] = l.Count.Value.String()
+		other["Count"] = l.Count.Value
 	}
 	if !l.Offset.IsNull() {
-		other["Offset"] = l.Offset.Value.String()
+		other["Offset"] = l.Offset.Value
 	}
 
 	return PrimitiveDescription{
-		OperatorType:      "Limit",
-		Other:             other,
-		TargetDestination: key.DestinationVtGate{},
+		OperatorType: "Limit",
+		Other:        other,
 	}
 }

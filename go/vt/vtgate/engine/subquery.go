@@ -18,7 +18,6 @@ package engine
 
 import (
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -105,12 +104,11 @@ func (sq *Subquery) buildFields(inner *sqltypes.Result) []*querypb.Field {
 }
 
 func (sq *Subquery) description() PrimitiveDescription {
-	other := map[string]string{
-		"Columns": GenericJoin(sq.Cols, intToString),
+	other := map[string]interface{}{
+		"Columns": sq.Cols,
 	}
 	return PrimitiveDescription{
-		OperatorType:      "Subquery",
-		TargetDestination: key.DestinationVtGate{},
-		Other:             other,
+		OperatorType: "Subquery",
+		Other:        other,
 	}
 }

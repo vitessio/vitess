@@ -37,7 +37,7 @@ type PrimitiveDescription struct {
 	// TargetTabletType specifies an explicit target destination tablet type
 	// this is only used in conjunction with TargetDestination
 	TargetTabletType topodatapb.TabletType
-	Other            map[string]string
+	Other            map[string]interface{}
 	Inputs           []PrimitiveDescription
 }
 
@@ -88,12 +88,13 @@ func (pd PrimitiveDescription) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func addMap(input map[string]string, buf *bytes.Buffer) error {
-	mk := make([]string, len(input))
-	i := 0
-	for k := range input {
-		mk[i] = k
-		i++
+func addMap(input map[string]interface{}, buf *bytes.Buffer) error {
+	var mk []string
+	for k, v := range input {
+		if v == "" || v == nil {
+			continue
+		}
+		mk = append(mk, k)
 	}
 	sort.Strings(mk)
 	for _, k := range mk {

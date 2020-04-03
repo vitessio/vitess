@@ -49,7 +49,6 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "-1,1",
     "TableName": "_unsharded",
     "Inputs": [
@@ -64,6 +63,7 @@
           "Name": "main",
           "Sharded": false
         },
+        "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
         "Query": "select unsharded.id from unsharded",
         "Table": "unsharded"
       }
@@ -78,7 +78,6 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "1,-1",
     "TableName": "unsharded_",
     "Inputs": [
@@ -89,6 +88,7 @@
           "Name": "main",
           "Sharded": false
         },
+        "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
         "Query": "select unsharded.id from unsharded",
         "Table": "unsharded"
       },
@@ -107,7 +107,6 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "-1,-2,1",
     "TableName": "_unsharded",
     "Inputs": [
@@ -122,6 +121,7 @@
           "Name": "main",
           "Sharded": false
         },
+        "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
         "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id",
         "Table": "unsharded"
       }
@@ -136,7 +136,6 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "-1,1",
     "TableName": "_unsharded",
     "Inputs": [
@@ -151,6 +150,7 @@
           "Name": "main",
           "Sharded": false
         },
+        "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
         "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id",
         "Table": "unsharded"
       }
@@ -165,7 +165,6 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "-1,1",
     "TableName": "_unsharded",
     "Inputs": [
@@ -180,6 +179,7 @@
           "Name": "main",
           "Sharded": false
         },
+        "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
         "Query": "select unsharded.id from unsharded where unsharded.id = :ui_id",
         "Table": "unsharded"
       }
@@ -201,7 +201,12 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select col from samecolvin where 1 != 1",
     "Query": "select col from samecolvin where col = :col",
-    "Table": "samecolvin"
+    "Table": "samecolvin",
+    "Values": [
+      ":col"
+    ],
+    "Vindex": "vindex1"
   }
 }

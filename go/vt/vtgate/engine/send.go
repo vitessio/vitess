@@ -115,7 +115,7 @@ func (s *Send) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariabl
 }
 
 func (s *Send) description() PrimitiveDescription {
-	other := map[string]string{
+	other := map[string]interface{}{
 		"Query": s.Query,
 		"Table": s.GetTableName(),
 	}

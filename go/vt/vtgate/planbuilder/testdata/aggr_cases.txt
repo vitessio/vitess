@@ -11,6 +11,7 @@
       "Name": "main",
       "Sharded": false
     },
+    "FieldQuery": "select count(*), col from unsharded where 1 != 1",
     "Query": "select count(*), col from unsharded",
     "Table": "unsharded"
   }
@@ -28,8 +29,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select count(*), col from user where 1 != 1",
     "Query": "select count(*), col from user where id = 1",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -45,6 +51,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select fun(1), col from user where 1 != 1",
     "Query": "select fun(1), col from user",
     "Table": "user"
   }
@@ -62,6 +69,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select col1, id from user where 1 != 1",
     "Query": "select distinct col1, id from user",
     "Table": "user"
   }
@@ -79,6 +87,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select col1, id from user where 1 != 1 group by col1",
     "Query": "select distinct col1, id from user group by col1",
     "Table": "user"
   }
@@ -91,7 +100,6 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "count(0)",
     "Distinct": "false",
     "GroupBy": "1, 4, 3",
@@ -104,6 +112,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select count(*), a, textcol1, b, weight_string(textcol1) from user where 1 != 1 group by a, textcol1, b",
         "Query": "select count(*), a, textcol1, b, weight_string(textcol1) from user group by a, textcol1, b order by a asc, textcol1 asc, b asc",
         "Table": "user"
       }
@@ -118,13 +127,11 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "TargetDestination": "VtGate()",
     "OrderBy": "0 ASC, 4 ASC",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "TargetDestination": "VtGate()",
         "Aggregates": "count(0)",
         "Distinct": "false",
         "GroupBy": "1, 4, 3",
@@ -137,6 +144,7 @@
               "Sharded": true
             },
             "TargetTabletType": "MASTER",
+            "FieldQuery": "select count(*) as k, a, textcol1, b, weight_string(textcol1) from user where 1 != 1 group by a, textcol1, b",
             "Query": "select count(*) as k, a, textcol1, b, weight_string(textcol1) from user group by a, textcol1, b order by textcol1 asc, a asc, b asc",
             "Table": "user"
           }
@@ -153,10 +161,8 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "count(0)",
     "Distinct": "false",
-    "GroupBy": "",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -166,6 +172,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select count(*) from user where 1 != 1",
         "Query": "select count(*) from user",
         "Table": "user"
       }
@@ -180,10 +187,8 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "sum(0)",
     "Distinct": "false",
-    "GroupBy": "",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -193,6 +198,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select sum(col) from user where 1 != 1",
         "Query": "select sum(col) from user",
         "Table": "user"
       }
@@ -207,10 +213,8 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "min(0)",
     "Distinct": "false",
-    "GroupBy": "",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -220,6 +224,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select min(col) from user where 1 != 1",
         "Query": "select min(col) from user",
         "Table": "user"
       }
@@ -234,10 +239,8 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "max(0)",
     "Distinct": "false",
-    "GroupBy": "",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -247,6 +250,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select max(col) from user where 1 != 1",
         "Query": "select max(col) from user",
         "Table": "user"
       }
@@ -261,8 +265,6 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
-    "Aggregates": "",
     "Distinct": "false",
     "GroupBy": "0, 1, 0",
     "Inputs": [
@@ -274,6 +276,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1",
         "Query": "select distinct col1, col2 from user group by col1 order by col1 asc, col2 asc, col1 asc",
         "Table": "user"
       }
@@ -288,7 +291,6 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "-1,1",
     "TableName": "user_unsharded",
     "Inputs": [
@@ -300,6 +302,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select user.a from user where 1 != 1",
         "Query": "select user.a from user",
         "Table": "user"
       },
@@ -310,6 +313,7 @@
           "Name": "main",
           "Sharded": false
         },
+        "FieldQuery": "select t.b from (select count(*) as b from unsharded where 1 != 1) as t where 1 != 1",
         "Query": "select t.b from (select count(*) as b from unsharded) as t",
         "Table": "unsharded"
       }
@@ -329,6 +333,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select id, count(*) from user where 1 != 1 group by id",
     "Query": "select id, count(*) from user group by id",
     "Table": "user"
   }
@@ -346,6 +351,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select id, col, count(*) from user where 1 != 1 group by id, col",
     "Query": "select id, col, count(*) from user group by id, col",
     "Table": "user"
   }
@@ -358,7 +364,6 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "count(1)",
     "Distinct": "false",
     "GroupBy": "0",
@@ -371,6 +376,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select col, count(*) from user where 1 != 1 group by col",
         "Query": "select col, count(*) from user group by col order by col asc",
         "Table": "user"
       }
@@ -385,7 +391,6 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "count(1)",
     "Distinct": "false",
     "GroupBy": "0",
@@ -398,6 +403,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select name, count(*) from user where 1 != 1 group by name",
         "Query": "select name, count(*) from user group by name order by name asc",
         "Table": "user"
       }
@@ -417,6 +423,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select id, 1 + count(*) from user where 1 != 1 group by id",
     "Query": "select id, 1 + count(*) from user group by id",
     "Table": "user"
   }
@@ -434,6 +441,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select id as val, 1 + count(*) from user where 1 != 1 group by val",
     "Query": "select id as val, 1 + count(*) from user group by val",
     "Table": "user"
   }
@@ -451,6 +459,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select val as id, 1 + count(*) from user where 1 != 1 group by user.id",
     "Query": "select val as id, 1 + count(*) from user group by user.id",
     "Table": "user"
   }
@@ -468,6 +477,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select *, id, 1 + count(*) from user where 1 != 1 group by id",
     "Query": "select *, id, 1 + count(*) from user group by id",
     "Table": "user"
   }
@@ -485,8 +495,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select id, count(*) as c from user where 1 != 1 group by id",
     "Query": "select id, count(*) as c from user group by id having id = 1 and c = 10",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -497,16 +512,15 @@
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "",
-    "TargetDestination": "VtGate()",
-    "Columns": "0",
+    "Columns": [
+      0
+    ],
     "Inputs": [
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "TargetDestination": "VtGate()",
         "Aggregates": "count(0)",
         "Distinct": "false",
-        "GroupBy": "",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -516,6 +530,7 @@
               "Sharded": true
             },
             "TargetTabletType": "MASTER",
+            "FieldQuery": "select count(*) as a from user where 1 != 1",
             "Query": "select count(*) as a from user",
             "Table": "user"
           }
@@ -532,10 +547,8 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "count(1)",
     "Distinct": "false",
-    "GroupBy": "",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -545,6 +558,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select id, count(*) from user where 1 != 1",
         "Query": "select id, count(*) from user",
         "Table": "user"
       }
@@ -559,8 +573,6 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
-    "Aggregates": "",
     "Distinct": "false",
     "GroupBy": "0",
     "Inputs": [
@@ -572,6 +584,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select col from user where 1 != 1",
         "Query": "select distinct col from user order by col asc",
         "Table": "user"
       }
@@ -586,8 +599,6 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
-    "Aggregates": "",
     "Distinct": "false",
     "GroupBy": "0",
     "Inputs": [
@@ -599,6 +610,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select col from user where 1 != 1 group by col",
         "Query": "select col from user group by col order by col asc",
         "Table": "user"
       }
@@ -618,6 +630,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select id, count(distinct col) from user where 1 != 1 group by id",
     "Query": "select id, count(distinct col) from user group by id",
     "Table": "user"
   }
@@ -630,7 +643,6 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "count(1)",
     "Distinct": "false",
     "GroupBy": "0",
@@ -643,6 +655,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select col, count(distinct id) from user where 1 != 1 group by col",
         "Query": "select col, count(distinct id) from user group by col order by col asc",
         "Table": "user"
       }
@@ -657,7 +670,6 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "count_distinct(1) AS count(distinct col2)",
     "Distinct": "true",
     "GroupBy": "0",
@@ -670,6 +682,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1, col2",
         "Query": "select col1, col2 from user group by col1, col2 order by col1 asc, col2 asc",
         "Table": "user"
       }
@@ -684,10 +697,8 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "count_distinct(0) AS count(distinct col2)",
     "Distinct": "true",
-    "GroupBy": "",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -697,6 +708,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select col2 from user where 1 != 1 group by col2",
         "Query": "select col2 from user group by col2 order by col2 asc",
         "Table": "user"
       }
@@ -711,7 +723,6 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "count_distinct(1) AS c2",
     "Distinct": "true",
     "GroupBy": "0",
@@ -724,6 +735,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1, col2",
         "Query": "select col1, col2 from user group by col1, col2 order by col1 asc, col2 asc",
         "Table": "user"
       }
@@ -738,7 +750,6 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "sum_distinct(1) AS sum(distinct col2)",
     "Distinct": "true",
     "GroupBy": "0",
@@ -751,6 +762,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1, col2",
         "Query": "select col1, col2 from user group by col1, col2 order by col1 asc, col2 asc",
         "Table": "user"
       }
@@ -765,7 +777,6 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "min(1)",
     "Distinct": "false",
     "GroupBy": "0",
@@ -778,6 +789,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select col1, min(distinct col2) from user where 1 != 1 group by col1",
         "Query": "select col1, min(distinct col2) from user group by col1 order by col1 asc",
         "Table": "user"
       }
@@ -792,13 +804,11 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "TargetDestination": "VtGate()",
     "OrderBy": "1 ASC",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "TargetDestination": "VtGate()",
         "Aggregates": "count_distinct(1) AS k",
         "Distinct": "true",
         "GroupBy": "0",
@@ -811,6 +821,7 @@
               "Sharded": true
             },
             "TargetTabletType": "MASTER",
+            "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1, col2",
             "Query": "select col1, col2 from user group by col1, col2 order by col1 asc, col2 asc",
             "Table": "user"
           }
@@ -831,7 +842,6 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "count(2)",
     "Distinct": "false",
     "GroupBy": "1, 0",
@@ -844,6 +854,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select a, b, count(*) from user where 1 != 1 group by b, a",
         "Query": "select a, b, count(*) from user group by b, a order by b asc, a asc",
         "Table": "user"
       }
@@ -858,7 +869,6 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "count(2)",
     "Distinct": "false",
     "GroupBy": "1, 0",
@@ -871,6 +881,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select a, b, count(*) from user where 1 != 1 group by 2, 1",
         "Query": "select a, b, count(*) from user group by 2, 1 order by b asc, a asc",
         "Table": "user"
       }
@@ -885,8 +896,6 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
-    "Aggregates": "",
     "Distinct": "false",
     "GroupBy": "0",
     "Inputs": [
@@ -898,6 +907,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select col from user where 1 != 1 group by 1",
         "Query": "select col from user group by 1 order by col asc",
         "Table": "user"
       }
@@ -916,10 +926,8 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "count(0)",
     "Distinct": "false",
-    "GroupBy": "",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -929,6 +937,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select count(*) from user where 1 != 1",
         "Query": "select count(*) from user",
         "Table": "user"
       }
@@ -947,7 +956,6 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "count(4)",
     "Distinct": "false",
     "GroupBy": "0, 1, 2",
@@ -960,6 +968,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select a, b, c, d, count(*) from user where 1 != 1 group by 1, 2, 3",
         "Query": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1 asc, 2 asc, 3 asc",
         "Table": "user"
       }
@@ -974,7 +983,6 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "count(4)",
     "Distinct": "false",
     "GroupBy": "0, 1, 2",
@@ -987,6 +995,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select a, b, c, d, count(*) from user where 1 != 1 group by 1, 2, 3",
         "Query": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by a asc, b asc, c asc",
         "Table": "user"
       }
@@ -1001,7 +1010,6 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "count(4)",
     "Distinct": "false",
     "GroupBy": "0, 1, 2, 3",
@@ -1014,6 +1022,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select a, b, c, d, count(*) from user where 1 != 1 group by 1, 2, 3, 4",
         "Query": "select a, b, c, d, count(*) from user group by 1, 2, 3, 4 order by d asc, b asc, a asc, c asc",
         "Table": "user"
       }
@@ -1028,7 +1037,6 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "count(4)",
     "Distinct": "false",
     "GroupBy": "2, 1, 0, 3",
@@ -1041,6 +1049,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select a, b, c, d, count(*) from user where 1 != 1 group by 3, 2, 1, 4",
         "Query": "select a, b, c, d, count(*) from user group by 3, 2, 1, 4 order by d asc, b asc, a asc, c asc",
         "Table": "user"
       }
@@ -1055,7 +1064,6 @@
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "TargetDestination": "VtGate()",
     "Aggregates": "count(3)",
     "Distinct": "false",
     "GroupBy": "2, 1, 0",
@@ -1068,6 +1076,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select a, b, c, count(*) from user where 1 != 1 group by 3, 2, 1",
         "Query": "select a, b, c, count(*) from user group by 3, 2, 1 order by 1 desc, 3 desc, b asc",
         "Table": "user"
       }
@@ -1086,13 +1095,11 @@
   "Instructions": {
     "OperatorType": "Limit",
     "Variant": "",
-    "TargetDestination": "VtGate()",
-    "Count": "INT64(10)",
+    "Count": 10,
     "Inputs": [
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "TargetDestination": "VtGate()",
         "Aggregates": "count(1)",
         "Distinct": "false",
         "GroupBy": "0",
@@ -1105,6 +1112,7 @@
               "Sharded": true
             },
             "TargetTabletType": "MASTER",
+            "FieldQuery": "select col, count(*) from user where 1 != 1 group by col",
             "Query": "select col, count(*) from user group by col order by col asc limit :__upper_limit",
             "Table": "user"
           }
@@ -1126,8 +1134,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select user.col1 as a from user where 1 != 1 group by a collate utf8_general_ci",
     "Query": "select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -1142,6 +1155,7 @@
       "Name": "main",
       "Sharded": false
     },
+    "FieldQuery": "select id, count(*) from unsharded as route2 where 1 != 1 group by id",
     "Query": "select id, count(*) from unsharded as route2 group by id",
     "Table": "unsharded"
   }
@@ -1158,6 +1172,7 @@
       "Name": "main",
       "Sharded": false
     },
+    "FieldQuery": "select id, a from unsharded as route2 where 1 != 1",
     "Query": "select distinct id, a from unsharded as route2",
     "Table": "unsharded"
   }
@@ -1174,6 +1189,7 @@
       "Name": "user",
       "Sharded": true
     },
+    "FieldQuery": "select col from ref where 1 != 1",
     "Query": "select col from ref order by col asc",
     "Table": "ref"
   }

@@ -10,6 +10,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select user.col1 from user where 1 != 1",
     "Query": "select user.col1 from user having col2 = 2",
     "Table": "user"
   }
@@ -26,7 +27,6 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "-1,1",
     "TableName": "user_user_extra",
     "Inputs": [
@@ -38,6 +38,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select user.col1 from user where 1 != 1",
         "Query": "select user.col1 from user",
         "Table": "user"
       },
@@ -49,6 +50,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select user_extra.col1 from user_extra where 1 != 1",
         "Query": "select user_extra.col1 from user_extra having user_extra.col1 = 2",
         "Table": "user_extra"
       }
@@ -63,7 +65,6 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "-1,-2,1",
     "TableName": "user_user_extra",
     "Inputs": [
@@ -75,6 +76,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select user.col1 as a, user.col2 from user where 1 != 1",
         "Query": "select user.col1 as a, user.col2 from user having 1 = 1 and a = 1 and a = user.col2",
         "Table": "user"
       },
@@ -86,6 +88,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select user_extra.col3 from user_extra where 1 != 1",
         "Query": "select user_extra.col3 from user_extra having user_extra.col3 = 1",
         "Table": "user_extra"
       }
@@ -100,7 +103,6 @@
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
-    "TargetDestination": "VtGate()",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -110,6 +112,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select col from user where 1 != 1",
         "Query": "select col from user",
         "Table": "user"
       },
@@ -121,8 +124,13 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select id from user where 1 != 1",
         "Query": "select id from user having :__sq_has_values1 = 1 and id in ::__vals",
-        "Table": "user"
+        "Table": "user",
+        "Values": [
+          "::__sq1"
+        ],
+        "Vindex": "user_index"
       }
     ]
   }
@@ -140,8 +148,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select col from user where 1 != 1",
     "Query": "select col from user where id = 5 order by aa asc",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -157,8 +170,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select col from user where 1 != 1",
     "Query": "select col from user where id = 1 order by 1 asc",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -174,6 +192,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select col from user where 1 != 1",
     "Query": "select col from user order by col asc",
     "Table": "user"
   }
@@ -191,6 +210,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select user_id, col1, col2 from authoritative where 1 != 1",
     "Query": "select user_id, col1, col2 from authoritative order by user_id asc",
     "Table": "authoritative"
   }
@@ -208,6 +228,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select user_id, col1, col2, weight_string(col1) from authoritative where 1 != 1",
     "Query": "select user_id, col1, col2, weight_string(col1) from authoritative order by col1 asc",
     "Table": "authoritative"
   }
@@ -225,6 +246,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select a, textcol1, b, weight_string(textcol1) from user where 1 != 1",
     "Query": "select a, textcol1, b, weight_string(textcol1) from user order by a asc, textcol1 asc, b asc",
     "Table": "user"
   }
@@ -242,6 +264,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select a, user.textcol1, b, weight_string(user.textcol1) from user where 1 != 1",
     "Query": "select a, user.textcol1, b, weight_string(user.textcol1) from user order by a asc, textcol1 asc, b asc",
     "Table": "user"
   }
@@ -259,6 +282,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select a, textcol1, b, textcol2, weight_string(textcol1), weight_string(textcol2) from user where 1 != 1",
     "Query": "select a, textcol1, b, textcol2, weight_string(textcol1), weight_string(textcol2) from user order by a asc, textcol1 asc, b asc, textcol2 asc",
     "Table": "user"
   }
@@ -280,6 +304,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select col from user where 1 != 1",
     "Query": "select col from user order by null",
     "Table": "user"
   }
@@ -292,7 +317,6 @@
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
-    "TargetDestination": "VtGate()",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -302,6 +326,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select col2 from user where 1 != 1",
         "Query": "select col2 from user",
         "Table": "user"
       },
@@ -313,6 +338,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select col from user where 1 != 1",
         "Query": "select col from user where :__sq_has_values1 = 1 and col in ::__sq1 order by col asc",
         "Table": "user"
       }
@@ -327,7 +353,6 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "-1,-2,1",
     "TableName": "user_music",
     "Inputs": [
@@ -339,8 +364,13 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
         "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by null",
-        "Table": "user"
+        "Table": "user",
+        "Values": [
+          1
+        ],
+        "Vindex": "user_index"
       },
       {
         "OperatorType": "Route",
@@ -350,8 +380,13 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select music.col3 from music where 1 != 1",
         "Query": "select music.col3 from music where music.id = :user_id order by null",
-        "Table": "music"
+        "Table": "music",
+        "Values": [
+          ":user_id"
+        ],
+        "Vindex": "music_user_map"
       }
     ]
   }
@@ -364,7 +399,6 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "-1,-2,1",
     "TableName": "user_music",
     "Inputs": [
@@ -376,8 +410,13 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
         "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by a asc",
-        "Table": "user"
+        "Table": "user",
+        "Values": [
+          1
+        ],
+        "Vindex": "user_index"
       },
       {
         "OperatorType": "Route",
@@ -387,8 +426,13 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select music.col3 from music where 1 != 1",
         "Query": "select music.col3 from music where music.id = :user_id",
-        "Table": "music"
+        "Table": "music",
+        "Values": [
+          ":user_id"
+        ],
+        "Vindex": "music_user_map"
       }
     ]
   }
@@ -401,7 +445,6 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "-1,-2,1",
     "TableName": "user_music",
     "Inputs": [
@@ -413,8 +456,13 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
         "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by a asc",
-        "Table": "user"
+        "Table": "user",
+        "Values": [
+          1
+        ],
+        "Vindex": "user_index"
       },
       {
         "OperatorType": "Route",
@@ -424,8 +472,13 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select music.col3 from music where 1 != 1",
         "Query": "select music.col3 from music where music.id = :user_id",
-        "Table": "music"
+        "Table": "music",
+        "Values": [
+          ":user_id"
+        ],
+        "Vindex": "music_user_map"
       }
     ]
   }
@@ -438,7 +491,6 @@
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
-    "TargetDestination": "VtGate()",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -448,6 +500,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select col2 from user where 1 != 1",
         "Query": "select col2 from user",
         "Table": "user"
       },
@@ -459,6 +512,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select col from user where 1 != 1",
         "Query": "select col from user where :__sq_has_values1 = 1 and col in ::__sq1 order by null",
         "Table": "user"
       }
@@ -478,6 +532,7 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select col from user where 1 != 1",
     "Query": "select col from user order by RAND()",
     "Table": "user"
   }
@@ -490,7 +545,6 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "-1,-2,1",
     "TableName": "user_music",
     "Inputs": [
@@ -502,8 +556,13 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
         "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by RAND()",
-        "Table": "user"
+        "Table": "user",
+        "Values": [
+          1
+        ],
+        "Vindex": "user_index"
       },
       {
         "OperatorType": "Route",
@@ -513,8 +572,13 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select music.col3 from music where 1 != 1",
         "Query": "select music.col3 from music where music.id = :user_id order by RAND()",
-        "Table": "music"
+        "Table": "music",
+        "Values": [
+          ":user_id"
+        ],
+        "Vindex": "music_user_map"
       }
     ]
   }
@@ -527,7 +591,6 @@
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
-    "TargetDestination": "VtGate()",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -537,6 +600,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select col2 from user where 1 != 1",
         "Query": "select col2 from user",
         "Table": "user"
       },
@@ -548,6 +612,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select col from user where 1 != 1",
         "Query": "select col from user where :__sq_has_values1 = 1 and col in ::__sq1 order by rand()",
         "Table": "user"
       }
@@ -567,8 +632,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select * from user where 1 != 1",
     "Query": "select * from user where id = 5 order by col asc",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -584,8 +654,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select user.* from user where 1 != 1",
     "Query": "select user.* from user where id = 5 order by user.col asc",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -601,8 +676,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select * from user where 1 != 1",
     "Query": "select * from user where id = 5 order by user.col asc",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -613,7 +693,6 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "-1,1",
     "TableName": "user_user_extra",
     "Inputs": [
@@ -625,6 +704,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select u.id, u.col from user as u where 1 != 1",
         "Query": "select u.id, u.col from user as u where u.col in (select * from user where user.id = u.id order by col asc)",
         "Table": "user"
       },
@@ -636,6 +716,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select e.id from user_extra as e where 1 != 1",
         "Query": "select e.id from user_extra as e where e.col = :u_col",
         "Table": "user_extra"
       }
@@ -671,8 +752,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select * from user where 1 != 1",
     "Query": "select * from user where id = 5 order by user.col collate utf8_general_ci asc",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -688,8 +774,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select * from user where 1 != 1",
     "Query": "select * from user where id = 5 order by -col1 asc",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -705,8 +796,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select * from user where 1 != 1",
     "Query": "select * from user where id = 5 order by concat(col, col1) collate utf8_general_ci desc",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -722,8 +818,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select * from user where 1 != 1",
     "Query": "select * from user where id = 5 order by id + col collate utf8_general_ci desc",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -739,8 +840,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select * from user as u join (select user_id from user_extra where 1 != 1) as eu on u.id = eu.user_id where 1 != 1",
     "Query": "select * from user as u join (select user_id from user_extra where user_id = 5) as eu on u.id = eu.user_id where u.id = 5 order by eu.user_id asc",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -756,8 +862,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select col from user as route1 where 1 != 1",
     "Query": "select col from user as route1 where id = 1 order by col asc",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -773,8 +884,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select col from user_metadata as route1 where 1 != 1",
     "Query": "select col from user_metadata as route1 where email = 'aaa' order by col asc",
-    "Table": "user_metadata"
+    "Table": "user_metadata",
+    "Values": [
+      "aaa"
+    ],
+    "Vindex": "email_user_map"
   }
 }
 
@@ -790,8 +906,13 @@
       "Sharded": true
     },
     "TargetTabletType": "MASTER",
+    "FieldQuery": "select col1 from user where 1 != 1",
     "Query": "select col1 from user where id = 1 limit 1",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -803,13 +924,11 @@
   "Instructions": {
     "OperatorType": "Limit",
     "Variant": "",
-    "TargetDestination": "VtGate()",
-    "Count": "INT64(1)",
+    "Count": 1,
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "TargetDestination": "VtGate()",
         "JoinColumnIndexes": "-1",
         "TableName": "user_user_extra",
         "Inputs": [
@@ -821,6 +940,7 @@
               "Sharded": true
             },
             "TargetTabletType": "MASTER",
+            "FieldQuery": "select user.col from user where 1 != 1",
             "Query": "select user.col from user",
             "Table": "user"
           },
@@ -832,6 +952,7 @@
               "Sharded": true
             },
             "TargetTabletType": "MASTER",
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
             "Query": "select 1 from user_extra",
             "Table": "user_extra"
           }
@@ -848,8 +969,7 @@
   "Instructions": {
     "OperatorType": "Limit",
     "Variant": "",
-    "TargetDestination": "VtGate()",
-    "Count": "INT64(1)",
+    "Count": 1,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -859,6 +979,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select col from user where 1 != 1",
         "Query": "select col from user limit :__upper_limit",
         "Table": "user"
       }
@@ -873,8 +994,7 @@
   "Instructions": {
     "OperatorType": "Limit",
     "Variant": "",
-    "TargetDestination": "VtGate()",
-    "Count": "NULL",
+    "Count": null,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -884,6 +1004,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select col from user where 1 != 1",
         "Query": "select col from user limit :__upper_limit",
         "Table": "user"
       }
@@ -898,8 +1019,7 @@
   "Instructions": {
     "OperatorType": "Limit",
     "Variant": "",
-    "TargetDestination": "VtGate()",
-    "Count": "INT64(5)",
+    "Count": 5,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -909,6 +1029,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select * from user where 1 != 1",
         "Query": "select * from user where id1 = 4 and name1 = 'abc' limit :__upper_limit",
         "Table": "user"
       }
@@ -923,13 +1044,11 @@
   "Instructions": {
     "OperatorType": "Limit",
     "Variant": "",
-    "TargetDestination": "VtGate()",
-    "Count": "INT64(1)",
+    "Count": 1,
     "Inputs": [
       {
         "OperatorType": "Subquery",
         "Variant": "PulloutIn",
-        "TargetDestination": "VtGate()",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -939,6 +1058,7 @@
               "Sharded": true
             },
             "TargetTabletType": "MASTER",
+            "FieldQuery": "select col1 from user where 1 != 1",
             "Query": "select col1 from user",
             "Table": "user"
           },
@@ -950,6 +1070,7 @@
               "Sharded": true
             },
             "TargetTabletType": "MASTER",
+            "FieldQuery": "select col from user where 1 != 1",
             "Query": "select col from user where :__sq_has_values1 = 1 and col in ::__sq1 limit :__upper_limit",
             "Table": "user"
           }
@@ -970,6 +1091,7 @@
       "Name": "user",
       "Sharded": true
     },
+    "FieldQuery": "select col from ref where 1 != 1",
     "Query": "select col from ref limit 1",
     "Table": "ref"
   }

@@ -18,7 +18,6 @@ package engine
 
 import (
 	"container/heap"
-	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
@@ -26,7 +25,6 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -42,23 +40,6 @@ type MemorySort struct {
 	// in the final result. Rest of the columns are truncated
 	// from the result received. If 0, no truncation happens.
 	TruncateColumnCount int `json:",omitempty"`
-}
-
-// MarshalJSON serializes the MemorySort into a JSON representation.
-// It's used for testing and diagnostics.
-func (ms *MemorySort) MarshalJSON() ([]byte, error) {
-	marshalMemorySort := struct {
-		Opcode  string
-		MaxRows sqltypes.PlanValue
-		OrderBy []OrderbyParams
-		Input   Primitive
-	}{
-		Opcode:  "MemorySort",
-		MaxRows: ms.UpperLimit,
-		OrderBy: ms.OrderBy,
-		Input:   ms.Input,
-	}
-	return json.Marshal(marshalMemorySort)
 }
 
 // RouteType returns a description of the query routing type used by the primitive.
@@ -190,15 +171,14 @@ func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int
 func (ms *MemorySort) description() PrimitiveDescription {
 	orderByIndexes := GenericJoin(ms.OrderBy, orderByParamsToString)
 	value := ms.UpperLimit.Value
-	other := map[string]string{"OrderBy": orderByIndexes}
+	other := map[string]interface{}{"OrderBy": orderByIndexes}
 	if !value.IsNull() {
 		other["UpperLimit"] = value.String()
 	}
 	return PrimitiveDescription{
-		OperatorType:      "Sort",
-		Variant:           "Memory",
-		TargetDestination: key.DestinationVtGate{},
-		Other:             other,
+		OperatorType: "Sort",
+		Variant:      "Memory",
+		Other:        other,
 	}
 }
 

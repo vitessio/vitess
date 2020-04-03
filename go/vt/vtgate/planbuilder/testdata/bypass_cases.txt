@@ -10,8 +10,7 @@
       "Sharded": false
     },
     "TargetDestination": "Shard(-80)",
-    "Query": "select count(*), col from unsharded",
-    "Table": ""
+    "Query": "select count(*), col from unsharded"
   }
 }
 
@@ -27,8 +26,7 @@
       "Sharded": false
     },
     "TargetDestination": "Shard(-80)",
-    "Query": "update user set val = 1 where id = 18446744073709551616 and id = 1",
-    "Table": ""
+    "Query": "update user set val = 1 where id = 18446744073709551616 and id = 1"
   }
 }
 
@@ -44,8 +42,7 @@
       "Sharded": false
     },
     "TargetDestination": "Shard(-80)",
-    "Query": "delete from USER where ID = 42",
-    "Table": ""
+    "Query": "delete from USER where ID = 42"
   }
 }
 
@@ -61,7 +58,6 @@
       "Sharded": false
     },
     "TargetDestination": "Shard(-80)",
-    "Query": "insert into USER(ID, NAME) values (42, 'ms X')",
-    "Table": ""
+    "Query": "insert into USER(ID, NAME) values (42, 'ms X')"
   }
 }

@@ -25,7 +25,6 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
-	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -115,41 +114,6 @@ func NewInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, vindexValues []
 		Mid:          mid,
 		Suffix:       suffix,
 	}
-}
-
-// MarshalJSON serializes the Insert into a JSON representation.
-// It's used for testing and diagnostics.
-func (ins *Insert) MarshalJSON() ([]byte, error) {
-	var tname string
-	if ins.Table != nil {
-		tname = ins.Table.Name.String()
-	}
-	marshalInsert := struct {
-		Opcode               InsertOpcode
-		Keyspace             *vindexes.Keyspace   `json:",omitempty"`
-		Query                string               `json:",omitempty"`
-		Values               []sqltypes.PlanValue `json:",omitempty"`
-		Table                string               `json:",omitempty"`
-		Generate             *Generate            `json:",omitempty"`
-		Prefix               string               `json:",omitempty"`
-		Mid                  []string             `json:",omitempty"`
-		Suffix               string               `json:",omitempty"`
-		MultiShardAutocommit bool                 `json:",omitempty"`
-		QueryTimeout         int                  `json:",omitempty"`
-	}{
-		Opcode:               ins.Opcode,
-		Keyspace:             ins.Keyspace,
-		Query:                ins.Query,
-		Values:               ins.VindexValues,
-		Table:                tname,
-		Generate:             ins.Generate,
-		Prefix:               ins.Prefix,
-		Mid:                  ins.Mid,
-		Suffix:               ins.Suffix,
-		MultiShardAutocommit: ins.MultiShardAutocommit,
-		QueryTimeout:         ins.QueryTimeout,
-	}
-	return jsonutil.MarshalNoEscape(marshalInsert)
 }
 
 // Generate represents the instruction to generate
@@ -616,11 +580,11 @@ func insertVarName(col sqlparser.ColIdent, rowNum int) string {
 }
 
 func (ins *Insert) description() PrimitiveDescription {
-	other := map[string]string{
+	other := map[string]interface{}{
 		"Query":                ins.Query,
 		"TableName":            ins.GetTableName(),
-		"MultiShardAutocommit": strconv.FormatBool(ins.MultiShardAutocommit),
-		"QueryTimeout":         strconv.Itoa(ins.QueryTimeout),
+		"MultiShardAutocommit": ins.MultiShardAutocommit,
+		"QueryTimeout":         ins.QueryTimeout,
 	}
 	return PrimitiveDescription{
 		OperatorType:     "Insert",

@@ -19,7 +19,6 @@ package engine
 import (
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -274,10 +273,13 @@ func (upd *Update) description() PrimitiveDescription {
 		changedVindexes = append(changedVindexes, vindex)
 	}
 	sort.Strings(changedVindexes)
-	other := map[string]string{
-		"Query":     upd.Query,
-		"TableName": upd.GetTableName(),
-		"Vindexes":  strings.Join(changedVindexes, ", "),
+	other := map[string]interface{}{
+		"Query": upd.Query,
+		"Table": upd.GetTableName(),
+	}
+
+	if len(changedVindexes) > 0 {
+		other["Vindex"] = changedVindexes
 	}
 	return PrimitiveDescription{
 		OperatorType:     "Update",
