@@ -295,7 +295,7 @@ func skipToEnd(yylex interface{}) {
 %type <columnDefinition> column_definition
 %type <indexDefinition> index_definition
 %type <constraintDefinition> constraint_definition
-%type <str> index_or_key
+%type <str> index_or_key index_symbols from_or_in
 %type <str> name_opt
 %type <str> equal_opt
 %type <TableSpec> table_spec table_column_list
@@ -1158,6 +1158,31 @@ index_info:
     $$ = &IndexInfo{Type: string($1), Name: NewColIdent($2), Unique: false}
   }
 
+index_symbols:
+  INDEX
+  {
+    $$ = string($1)
+  }
+| KEYS
+  {
+    $$ = string($1)
+  }
+| INDEXES
+  {
+    $$ = string($1)
+  }
+
+
+from_or_in:
+  FROM
+  {
+    $$ = string($1)
+  }
+| IN
+  {
+    $$ = string($1)
+  }
+
 index_or_key:
     INDEX
   {
@@ -1562,21 +1587,12 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW extended_opt INDEX FROM table_name from_database_opt like_or_where_opt
+| SHOW extended_opt index_symbols from_or_in table_name from_database_opt like_or_where_opt
   {
     showTablesOpt := &ShowTablesOpt{DbName:$6, Filter:$7}
-    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
+    $$ = &Show{Extended: string($2), Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
   }
-| SHOW extended_opt INDEXES FROM table_name from_database_opt like_or_where_opt
-  {
-    showTablesOpt := &ShowTablesOpt{DbName:$6, Filter:$7}
-    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
-  }
-| SHOW extended_opt KEYS FROM table_name from_database_opt like_or_where_opt
-  {
-    showTablesOpt := &ShowTablesOpt{DbName:$6, Filter:$7}
-    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
-  }
+
 | SHOW PLUGINS
   {
     $$ = &Show{Type: string($2)}
