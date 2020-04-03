@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	"vitess.io/vitess/go/jsonutil"
@@ -112,6 +113,16 @@ func NewRoute(opcode RouteOpcode, keyspace *vindexes.Keyspace, query, fieldQuery
 type OrderbyParams struct {
 	Col  int
 	Desc bool
+}
+
+func (obp OrderbyParams) String() string {
+	val := strconv.Itoa(obp.Col)
+	if obp.Desc {
+		val += " DESC"
+	} else {
+		val += " ASC"
+	}
+	return val
 }
 
 // MarshalJSON serializes the Route into a JSON representation.
@@ -554,4 +565,26 @@ func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) 
 		shardVars[i] = newbv
 	}
 	return shardVars
+}
+
+func (route *Route) description() PrimitiveDescription {
+	other := map[string]interface{}{
+		"Query":      route.Query,
+		"Table":      route.TableName,
+		"FieldQuery": route.FieldQuery,
+	}
+	if route.Vindex != nil {
+		other["Vindex"] = route.Vindex.String()
+	}
+	if len(route.Values) > 0 {
+		other["Values"] = route.Values
+	}
+
+	return PrimitiveDescription{
+		OperatorType:      "Route",
+		Variant:           routeName[route.Opcode],
+		Keyspace:          route.Keyspace,
+		TargetDestination: route.TargetDestination,
+		Other:             other,
+	}
 }

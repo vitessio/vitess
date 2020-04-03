@@ -155,6 +155,17 @@ func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 	return nil
 }
 
+func (ms *MergeSort) description() PrimitiveDescription {
+	other := map[string]interface{}{
+		"OrderBy": ms.OrderBy,
+	}
+	return PrimitiveDescription{
+		OperatorType: "Sort",
+		Variant:      "Merge",
+		Other:        other,
+	}
+}
+
 // streamHandle is the rendez-vous point between each stream and the merge-sorter.
 // The fields channel is used by the stream to transmit the field info, which
 // is the first packet. Following this, the stream sends each row to the row

@@ -21,7 +21,6 @@ type Send struct {
 	Keyspace *vindexes.Keyspace
 
 	// TargetDestination specifies an explicit target destination to send the query to.
-	// This bypases the core of the v3 engine.
 	TargetDestination key.Destination
 
 	// Query specifies the query to be executed.
@@ -113,4 +112,18 @@ func (s *Send) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVar
 // GetFields implements Primitive interface
 func (s *Send) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable")
+}
+
+func (s *Send) description() PrimitiveDescription {
+	other := map[string]interface{}{
+		"Query":        s.Query,
+		"Table":        s.GetTableName(),
+		"NoAutoCommit": s.NoAutoCommit,
+	}
+	return PrimitiveDescription{
+		OperatorType:      "Send",
+		Keyspace:          s.Keyspace,
+		TargetDestination: s.TargetDestination,
+		Other:             other,
+	}
 }
