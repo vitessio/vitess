@@ -100,7 +100,7 @@ type Exporter struct {
 }
 
 // NewExporter creates a new Exporter with name as namespace.
-// label is the name of the additonial dimension for the stats vars.
+// label is the name of the additional dimension for the stats vars.
 func NewExporter(name, label string) *Exporter {
 	if name == "" {
 		return &Exporter{}
