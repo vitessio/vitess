@@ -513,11 +513,11 @@ func TestRates(t *testing.T) {
 	// Ensure var gets reused.
 	rates1 := ebd.NewRates("lrates", tm, 15*60/5, 5*time.Second)
 	rates2 := ebd.NewRates("lrates", tm, 15*60/5, 5*time.Second)
-	assert.Equal(t, rates2, rates1)
+	assert.True(t, rates2 == rates1)
 
 	ebd = NewExporter("i2", "label")
 	rates3 := ebd.NewRates("lrates", tm, 15*60/5, 5*time.Second)
-	assert.NotEqual(t, rates3, rates1)
+	assert.True(t, rates3 != rates1)
 }
 
 func TestHistogram(t *testing.T) {
