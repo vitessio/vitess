@@ -20,7 +20,8 @@ import (
 	"fmt"
 	"time"
 
-	"vitess.io/vitess/go/jsonutil"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -39,45 +40,6 @@ type Delete struct {
 
 	// Delete does not take inputs
 	noInputs
-}
-
-// MarshalJSON serializes the Delete into a JSON representation.
-// It's used for testing and diagnostics.
-func (del *Delete) MarshalJSON() ([]byte, error) {
-	var tname, vindexName, ksidVindexName string
-	if del.Table != nil {
-		tname = del.Table.Name.String()
-	}
-	if del.Vindex != nil {
-		vindexName = del.Vindex.String()
-	}
-	if del.KsidVindex != nil {
-		ksidVindexName = del.KsidVindex.String()
-	}
-	marshalDelete := struct {
-		Opcode               string
-		Keyspace             *vindexes.Keyspace   `json:",omitempty"`
-		Query                string               `json:",omitempty"`
-		Vindex               string               `json:",omitempty"`
-		Values               []sqltypes.PlanValue `json:",omitempty"`
-		Table                string               `json:",omitempty"`
-		OwnedVindexQuery     string               `json:",omitempty"`
-		KsidVindex           string               `json:",omitempty"`
-		MultiShardAutocommit bool                 `json:",omitempty"`
-		QueryTimeout         int                  `json:",omitempty"`
-	}{
-		Opcode:               del.RouteType(),
-		Keyspace:             del.Keyspace,
-		Query:                del.Query,
-		Vindex:               vindexName,
-		Values:               del.Values,
-		Table:                tname,
-		OwnedVindexQuery:     del.OwnedVindexQuery,
-		KsidVindex:           ksidVindexName,
-		MultiShardAutocommit: del.MultiShardAutocommit,
-		QueryTimeout:         del.QueryTimeout,
-	}
-	return jsonutil.MarshalNoEscape(marshalDelete)
 }
 
 var delName = map[DMLOpcode]string{
@@ -233,4 +195,36 @@ func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]
 	autocommit := (len(rss) == 1 || del.MultiShardAutocommit) && vcursor.AutocommitApproval()
 	res, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
 	return res, vterrors.Aggregate(errs)
+}
+
+func (del *Delete) description() PrimitiveDescription {
+	other := map[string]interface{}{
+		"Query":                del.Query,
+		"Table":                del.GetTableName(),
+		"OwnedVindexQuery":     del.OwnedVindexQuery,
+		"MultiShardAutocommit": del.MultiShardAutocommit,
+		"QueryTimeout":         del.QueryTimeout,
+	}
+
+	addFieldsIfNotEmpty(del.DML, other)
+
+	return PrimitiveDescription{
+		OperatorType:     "Delete",
+		Keyspace:         del.Keyspace,
+		Variant:          del.Opcode.String(),
+		TargetTabletType: topodatapb.TabletType_MASTER,
+		Other:            other,
+	}
+}
+
+func addFieldsIfNotEmpty(dml DML, other map[string]interface{}) {
+	if dml.Vindex != nil {
+		other["Vindex"] = dml.Vindex.String()
+	}
+	if dml.KsidVindex != nil {
+		other["KsidVindex"] = dml.KsidVindex.String()
+	}
+	if len(dml.Values) > 0 {
+		other["Values"] = dml.Values
+	}
 }

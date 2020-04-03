@@ -18,9 +18,11 @@ package engine
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
-	"vitess.io/vitess/go/jsonutil"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -45,47 +47,6 @@ type Update struct {
 
 	// Update does not take inputs
 	noInputs
-}
-
-// MarshalJSON serializes the Update into a JSON representation.
-// It's used for testing and diagnostics.
-func (upd *Update) MarshalJSON() ([]byte, error) {
-	var tname, vindexName, ksidVindexName string
-	if upd.Table != nil {
-		tname = upd.Table.Name.String()
-	}
-	if upd.Vindex != nil {
-		vindexName = upd.Vindex.String()
-	}
-	if upd.KsidVindex != nil {
-		ksidVindexName = upd.KsidVindex.String()
-	}
-	marshalUpdate := struct {
-		Opcode               string
-		Keyspace             *vindexes.Keyspace      `json:",omitempty"`
-		Query                string                  `json:",omitempty"`
-		Vindex               string                  `json:",omitempty"`
-		Values               []sqltypes.PlanValue    `json:",omitempty"`
-		ChangedVindexValues  map[string]VindexValues `json:",omitempty"`
-		Table                string                  `json:",omitempty"`
-		OwnedVindexQuery     string                  `json:",omitempty"`
-		KsidVindex           string                  `json:",omitempty"`
-		MultiShardAutocommit bool                    `json:",omitempty"`
-		QueryTimeout         int                     `json:",omitempty"`
-	}{
-		Opcode:               upd.RouteType(),
-		Keyspace:             upd.Keyspace,
-		Query:                upd.Query,
-		Vindex:               vindexName,
-		Values:               upd.Values,
-		ChangedVindexValues:  upd.ChangedVindexValues,
-		Table:                tname,
-		OwnedVindexQuery:     upd.OwnedVindexQuery,
-		KsidVindex:           ksidVindexName,
-		MultiShardAutocommit: upd.MultiShardAutocommit,
-		QueryTimeout:         upd.QueryTimeout,
-	}
-	return jsonutil.MarshalNoEscape(marshalUpdate)
 }
 
 var updName = map[DMLOpcode]string{
@@ -262,4 +223,33 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 	autocommit := (len(rss) == 1 || upd.MultiShardAutocommit) && vcursor.AutocommitApproval()
 	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
 	return result, vterrors.Aggregate(errs)
+}
+
+func (upd *Update) description() PrimitiveDescription {
+	other := map[string]interface{}{
+		"Query":                upd.Query,
+		"Table":                upd.GetTableName(),
+		"OwnedVindexQuery":     upd.OwnedVindexQuery,
+		"MultiShardAutocommit": upd.MultiShardAutocommit,
+		"QueryTimeout":         upd.QueryTimeout,
+	}
+
+	addFieldsIfNotEmpty(upd.DML, other)
+
+	var changedVindexes []string
+	for vindex := range upd.ChangedVindexValues {
+		changedVindexes = append(changedVindexes, vindex)
+	}
+	sort.Strings(changedVindexes) // We sort these so random changes in the map order does not affect output
+	if len(changedVindexes) > 0 {
+		other["ChangedVindexValues"] = changedVindexes
+	}
+
+	return PrimitiveDescription{
+		OperatorType:     "Update",
+		Keyspace:         upd.Keyspace,
+		Variant:          upd.Opcode.String(),
+		TargetTabletType: topodatapb.TabletType_MASTER,
+		Other:            other,
+	}
 }
