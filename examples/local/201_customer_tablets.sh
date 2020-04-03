@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2019 The Vitess Authors.
+# Copyright 2020 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ for i in 200 201 202; do
 done
 
 vtctlclient -server localhost:15999 InitShardMaster -force customer/0 zone1-200
-vtctlclient -server localhost:15999 CopySchemaShard -tables customer,corder commerce/0 customer/0
-vtctlclient -server localhost:15999 ApplyVSchema -vschema_file vschema_commerce_vsplit.json commerce
-vtctlclient -server localhost:15999 ApplyVSchema -vschema_file vschema_customer_vsplit.json customer
+vtctlclient -server localhost:15999 ApplyVSchema -vschema '{ "tables": { "product": {} } }' commerce
+vtctlclient -server localhost:15999 ApplyVSchema -vschema '{ "tables": { "customer": {}, "corder": {} } }' customer
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2019 The Vitess Authors.
+# Copyright 2020 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,8 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this script migrates traffic for the master tablet
+# this script migrates traffic for the rdonly and replica tablets
 
-vtctlclient -server localhost:15999 MigrateServedTypes customer/0 master
-# data has been copied over to shards, and databases for the new shards are now available
+vtctlclient \
+ -server localhost:15999 \
+ -log_dir "$VTDATAROOT"/tmp \
+ -alsologtostderr \
+ SwitchReads \
+ -tablet_type=rdonly \
+ customer.cust2cust
 
+vtctlclient \
+ -server localhost:15999 \
+ -log_dir "$VTDATAROOT"/tmp \
+ -alsologtostderr \
+ SwitchReads \
+ -tablet_type=replica \
+ customer.cust2cust

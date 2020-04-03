@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2019 The Vitess Authors.
+# Copyright 2020 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,15 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this script copies the data from customer/0 to customer/-80 and customer/80-
-# each row will be copied to exactly one shard based on the vindex value
+# this script copies over all the data from commerce keyspace to
+# customer keyspace for the customer and corder tables
 
 source ./env.sh
 
-vtworker \
- $TOPOLOGY_FLAGS \
- -cell zone1 \
- -log_dir "$VTDATAROOT"/tmp \
- -alsologtostderr \
- -use_v3_resharding_mode \
- SplitClone -min_healthy_rdonly_tablets=1 customer/0
+vtctlclient \
+    -server localhost:15999 \
+    -log_dir "$VTDATAROOT"/tmp \
+    -alsologtostderr \
+    MoveTables \
+    -workflow=commerce2customer \
+    commerce customer customer,corder
+
+sleep 2
