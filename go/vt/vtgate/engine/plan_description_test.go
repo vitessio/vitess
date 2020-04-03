@@ -17,13 +17,12 @@ limitations under the License.
 package engine
 
 import (
-	"encoding/json"
-	"fmt"
 	"testing"
+
+	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/sqltypes"
 
-	"github.com/google/go-cmp/cmp"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -41,22 +40,19 @@ func TestCreateRoutePlanDescription(t *testing.T) {
 		TargetDestination: key.DestinationAllShards{},
 		TargetTabletType:  topodatapb.TabletType_MASTER,
 		Other: map[string]interface{}{
-			"Query": route.Query,
-			"Table": route.TableName,
+			"Query":      route.Query,
+			"Table":      route.TableName,
+			"FieldQuery": route.FieldQuery,
+			"Vindex":     route.Vindex.String(),
 		},
 		Inputs: []PrimitiveDescription{},
 	}
 
-	if diff := cmp.Diff(planDescription, expected); diff != "" {
-		t.Errorf(diff)
-		bytes, _ := json.MarshalIndent(expected, "", "  ")
-		fmt.Println(string(bytes))
-		fmt.Printf("%v\n", expected)
-	}
-
+	utils.MustMatch(t, expected, planDescription, "descriptions did not match")
 }
 
 func createRoute() *Route {
+	hash, _ := vindexes.NewHash("vindex name", nil)
 	return &Route{
 		Opcode:            SelectScatter,
 		Keyspace:          &vindexes.Keyspace{Name: "ks"},
@@ -65,7 +61,7 @@ func createRoute() *Route {
 		Query:             "select all the things",
 		TableName:         "tableName",
 		FieldQuery:        "more query",
-		Vindex:            &vindexes.Null{},
+		Vindex:            hash.(*vindexes.Hash),
 		Values:            []sqltypes.PlanValue{},
 		OrderBy:           []OrderbyParams{},
 	}
@@ -74,9 +70,11 @@ func createRoute() *Route {
 func TestPlanDescriptionWithInputs(t *testing.T) {
 	route := createRoute()
 	routeDescr := getDescriptionFor(route)
+	count := int64PlanValue(12)
+	offset := int64PlanValue(4)
 	limit := &Limit{
-		Count:  int64PlanValue(12),
-		Offset: int64PlanValue(4),
+		Count:  count,
+		Offset: offset,
 		Input:  route,
 	}
 
@@ -85,21 +83,21 @@ func TestPlanDescriptionWithInputs(t *testing.T) {
 	expected := PrimitiveDescription{
 		OperatorType: "Limit",
 		Other: map[string]interface{}{
-			"Count":  "12",
-			"Offset": "4",
+			"Count":  count.Value,
+			"Offset": offset.Value,
 		},
 		Inputs: []PrimitiveDescription{routeDescr},
 	}
 
-	if diff := cmp.Diff(planDescription, expected); diff != "" {
-		t.Errorf(diff)
-		bytes, _ := json.MarshalIndent(expected, "", "  ")
-		fmt.Println(string(bytes))
-		bytes, _ = json.MarshalIndent(planDescription, "", "  ")
-		fmt.Println(string(bytes))
-	}
-
+	mustMatch(t, expected, planDescription, "descriptions did not match")
 }
+
+var mustMatch = utils.MustMatchFn(
+	[]interface{}{ // types with unexported fields
+		sqltypes.Value{},
+	},
+	[]string{}, // ignored fields
+)
 
 func getDescriptionFor(route *Route) PrimitiveDescription {
 	return PrimitiveDescription{
@@ -109,8 +107,10 @@ func getDescriptionFor(route *Route) PrimitiveDescription {
 		TargetDestination: key.DestinationAllShards{},
 		TargetTabletType:  topodatapb.TabletType_MASTER,
 		Other: map[string]interface{}{
-			"Query":     route.Query,
-			"TableName": route.TableName,
+			"Query":      route.Query,
+			"Table":      route.TableName,
+			"FieldQuery": route.FieldQuery,
+			"Vindex":     route.Vindex.String(),
 		},
 		Inputs: []PrimitiveDescription{},
 	}
