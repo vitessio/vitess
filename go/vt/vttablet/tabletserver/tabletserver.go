@@ -47,6 +47,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/tableacl"
@@ -133,6 +134,8 @@ func stateInfo(state int64) string {
 // Open and Close can be called repeatedly during the lifetime of
 // a subcomponent. These should also be idempotent.
 type TabletServer struct {
+	exporter               *servenv.Exporter
+	config                 *tabletenv.TabletConfig
 	QueryTimeout           sync2.AtomicDuration
 	TerseErrors            bool
 	enableHotRowProtection bool
@@ -208,6 +211,7 @@ var srvTopoServer srvtopo.Server
 // instance of TabletServer will expose its state variables.
 func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
 	tsv := &TabletServer{
+		config:                 &config,
 		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
 		TerseErrors:            config.TerseErrors,
 		enableHotRowProtection: config.EnableHotRowProtection || config.EnableHotRowProtectionDryRun,
@@ -217,7 +221,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 		topoServer:             topoServer,
 		alias:                  alias,
 	}
-	tsv.se = schema.NewEngine(tsv, config)
+	tsv.se = schema.NewEngine(tsv)
 	tsv.qe = NewQueryEngine(tsv, tsv.se, config)
 	tsv.te = NewTxEngine(tsv, config)
 	tsv.hw = heartbeat.NewWriter(tsv, alias, config)
@@ -261,6 +265,21 @@ func (tsv *TabletServer) Register() {
 	tsv.registerQueryzHandler()
 	tsv.registerStreamQueryzHandlers()
 	tsv.registerTwopczHandler()
+}
+
+// Exporter satisfies tabletenv.Env.
+func (tsv *TabletServer) Exporter() *servenv.Exporter {
+	return tsv.exporter
+}
+
+// Config satisfies tabletenv.Env.
+func (tsv *TabletServer) Config() *tabletenv.TabletConfig {
+	return tsv.config
+}
+
+// DBConfigs satisfies tabletenv.Env.
+func (tsv *TabletServer) DBConfigs() *dbconfigs.DBConfigs {
+	return tsv.dbconfigs
 }
 
 // RegisterQueryRuleSource registers ruleSource for setting query rules.
@@ -649,6 +668,7 @@ func (tsv *TabletServer) IsHealthy() error {
 // CheckMySQL initiates a check to see if MySQL is reachable.
 // If not, it shuts down the query service. The check is rate-limited
 // to no more than once per second.
+// The function satisfies tabletenv.Env.
 func (tsv *TabletServer) CheckMySQL() {
 	if !tsv.checkMySQLThrottler.TryAcquire() {
 		return

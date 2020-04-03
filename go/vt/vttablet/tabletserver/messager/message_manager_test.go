@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -810,6 +811,7 @@ func TestMMGenerateWithBackoff(t *testing.T) {
 }
 
 type fakeTabletServer struct {
+	tabletenv.Env
 	postponeCount sync2.AtomicInt64
 	purgeCount    sync2.AtomicInt64
 
@@ -817,7 +819,12 @@ type fakeTabletServer struct {
 	ch chan string
 }
 
-func newFakeTabletServer() *fakeTabletServer { return &fakeTabletServer{} }
+func newFakeTabletServer() *fakeTabletServer {
+	config := tabletenv.DefaultQsConfig
+	return &fakeTabletServer{
+		Env: tabletenv.NewTestEnv(&config, nil, nil),
+	}
+}
 
 func (fts *fakeTabletServer) CheckMySQL() {}
 
