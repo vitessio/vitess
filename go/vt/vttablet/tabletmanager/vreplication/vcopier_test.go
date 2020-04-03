@@ -190,42 +190,27 @@ func TestPlayerCopyBigTable(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectDBClientQueries(t, []string{
-		"/insert into _vt.vreplication",
+	expectNontxQueries(t, []string{
 		// Create the list of tables to copy and transition to Copying state.
-		"begin",
 		"/insert into _vt.copy_state",
-		"/update _vt.vreplication set state='Copying'",
-		"commit",
 		// The first fast-forward has no starting point. So, it just saves the current position.
-		"/update _vt.vreplication set pos=",
-		"begin",
 		"insert into dst(id,val) values (1,'aaa')",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"1\\" > ' where vrepl_id=.*`,
-		"commit",
 		// The next catchup executes the new row insert, but will be a no-op.
-		"begin",
 		"insert into dst(id,val) select 3, 'ccc' from dual where (3) <= (1)",
-		"/update _vt.vreplication set pos=",
-		"commit",
 		// fastForward has nothing to add. Just saves position.
-		"begin",
-		"/update _vt.vreplication set pos=",
-		"commit",
 		// Second row gets copied.
-		"begin",
 		"insert into dst(id,val) values (2,'bbb')",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
-		"commit",
 		// Third row copied without going back to catchup state.
-		"begin",
 		"insert into dst(id,val) values (3,'ccc')",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"3\\" > ' where vrepl_id=.*`,
-		"commit",
 		"/delete from _vt.copy_state.*dst",
 		// Copy is done. Go into running state.
-		"/update _vt.vreplication set state='Running'",
 		// All tables copied. Final catch up followed by Running state.
+	})
+	expectDBClientQueries(t, []string{
+		"/update _vt.vreplication set state='Running'",
 	})
 	expectData(t, "dst", [][]string{
 		{"1", "aaa"},
@@ -317,42 +302,27 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectDBClientQueries(t, []string{
-		"/insert into _vt.vreplication",
+	expectNontxQueries(t, []string{
 		// Create the list of tables to copy and transition to Copying state.
-		"begin",
 		"/insert into _vt.copy_state",
-		"/update _vt.vreplication set state='Copying'",
-		"commit",
 		// The first fast-forward has no starting point. So, it just saves the current position.
-		"/update _vt.vreplication set pos=",
-		"begin",
 		"insert into src(id,val) values (1,'aaa')",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"1\\" > ' where vrepl_id=.*`,
-		"commit",
 		// The next catchup executes the new row insert, but will be a no-op.
-		"begin",
 		"insert into src(id,val) select 3, 'ccc' from dual where (3) <= (1)",
-		"/update _vt.vreplication set pos=",
-		"commit",
 		// fastForward has nothing to add. Just saves position.
-		"begin",
-		"/update _vt.vreplication set pos=",
-		"commit",
 		// Second row gets copied.
-		"begin",
 		"insert into src(id,val) values (2,'bbb')",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
-		"commit",
 		// Third row copied without going back to catchup state.
-		"begin",
 		"insert into src(id,val) values (3,'ccc')",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"3\\" > ' where vrepl_id=.*`,
-		"commit",
 		"/delete from _vt.copy_state.*src",
 		// Copy is done. Go into running state.
-		"/update _vt.vreplication set state='Running'",
 		// All tables copied. Final catch up followed by Running state.
+	})
+	expectDBClientQueries(t, []string{
+		"/update _vt.vreplication set state='Running'",
 	})
 	expectData(t, "src", [][]string{
 		{"1", "aaa"},
