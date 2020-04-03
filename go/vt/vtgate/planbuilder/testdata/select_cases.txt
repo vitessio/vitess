@@ -9,7 +9,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select 1 from user where 1 != 1",
     "Query": "select 1 from user",
     "Table": "user"
@@ -27,7 +26,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select user.* from user where 1 != 1",
     "Query": "select user.* from user",
     "Table": "user"
@@ -45,7 +43,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select * from user where 1 != 1",
     "Query": "select * from user",
     "Table": "user"
@@ -63,7 +60,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select * from user where 1 != 1",
     "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user",
     "Table": "user"
@@ -87,7 +83,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select count(*) from user where 1 != 1",
         "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from user",
         "Table": "user"
@@ -112,7 +107,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select * from user where 1 != 1",
         "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user limit :__upper_limit",
         "Table": "user"
@@ -132,7 +126,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select * from user where 1 != 1",
     "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user",
     "Table": "user"
@@ -156,7 +149,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select count(*) from user where 1 != 1",
         "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
         "Table": "user"
@@ -182,7 +174,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select count(*) from user where 1 != 1",
         "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
         "Table": "user"
@@ -207,7 +198,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select * from user where 1 != 1",
         "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit :__upper_limit",
         "Table": "user"
@@ -227,7 +217,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select user.* from user where 1 != 1",
     "Query": "select user.* from user",
     "Table": "user"
@@ -245,7 +234,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select user.* from user where 1 != 1",
     "Query": "select user.* from user",
     "Table": "user"
@@ -263,7 +251,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select user_id, col1, col2 from authoritative where 1 != 1",
     "Query": "select user_id, col1, col2 from authoritative",
     "Table": "authoritative"
@@ -281,7 +268,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a join authoritative as b on a.user_id = b.user_id where 1 != 1",
     "Query": "select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a join authoritative as b on a.user_id = b.user_id",
     "Table": "authoritative"
@@ -303,7 +289,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select a.user_id, a.col1, a.col2 from authoritative as a where 1 != 1",
     "Query": "select a.user_id, a.col1, a.col2 from authoritative as a",
     "Table": "authoritative"
@@ -321,7 +306,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select * from authoritative join user on authoritative.user_id = user.id where 1 != 1",
     "Query": "select * from authoritative join user on authoritative.user_id = user.id",
     "Table": "authoritative"
@@ -339,7 +323,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select user.id, a.user_id, a.col1, a.col2, user.col1 from authoritative as a join user on a.user_id = user.id where 1 != 1",
     "Query": "select user.id, a.user_id, a.col1, a.col2, user.col1 from authoritative as a join user on a.user_id = user.id",
     "Table": "authoritative"
@@ -357,7 +340,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select col from user join user_extra on user.id = user_extra.user_id where 1 != 1",
     "Query": "select col from user join user_extra on user.id = user_extra.user_id",
     "Table": "user"
@@ -385,7 +367,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select id from user where 1 != 1",
         "Query": "select id from user",
         "Table": "user"
@@ -397,7 +378,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select user_id from user_extra where 1 != 1",
         "Query": "select user_id from user_extra",
         "Table": "user_extra"
@@ -516,7 +496,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select 1 from user where 1 != 1",
         "Query": "select 1 from user",
         "Table": "user"
@@ -528,7 +507,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
         "Query": "select user_extra.id from user_extra",
         "Table": "user_extra"
@@ -554,7 +532,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select user.col from user where 1 != 1",
         "Query": "select user.col from user",
         "Table": "user"
@@ -566,7 +543,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
         "Query": "select user_extra.id from user_extra",
         "Table": "user_extra"
@@ -592,7 +568,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select user.col from user where 1 != 1",
         "Query": "select user.col from user",
         "Table": "user"
@@ -604,7 +579,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select user_extra.id + user_extra.col from user_extra where 1 != 1",
         "Query": "select user_extra.id + user_extra.col from user_extra",
         "Table": "user_extra"
@@ -630,7 +604,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select user.col, user.col2 from user where 1 != 1",
         "Query": "select user.col, user.col2 from user",
         "Table": "user"
@@ -642,7 +615,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
         "Query": "select user_extra.id from user_extra",
         "Table": "user_extra"
@@ -668,7 +640,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select user.col from user where 1 != 1",
         "Query": "select /* comment */ user.col from user",
         "Table": "user"
@@ -680,7 +651,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select 1 from user_extra where 1 != 1",
         "Query": "select /* comment */ 1 from user_extra",
         "Table": "user_extra"
@@ -706,7 +676,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select user.col from user where 1 != 1",
         "Query": "select user.col from user for update",
         "Table": "user"
@@ -718,7 +687,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select 1 from user_extra where 1 != 1",
         "Query": "select 1 from user_extra for update",
         "Table": "user_extra"
@@ -744,7 +712,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select user.id from user where 1 != 1",
         "Query": "select user.id from user",
         "Table": "user"
@@ -781,7 +748,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select user.Col from user where 1 != 1",
         "Query": "select user.Col from user",
         "Table": "user"
@@ -793,7 +759,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select user_extra.Id from user_extra where 1 != 1",
         "Query": "select user_extra.Id from user_extra",
         "Table": "user_extra"
@@ -817,7 +782,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select * from user where 1 != 1",
     "Query": "select * from user where id = 0x04",
     "Table": "user"
@@ -841,7 +805,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select user_id from music where 1 != 1",
         "Query": "select user_id from music order by user_id asc limit :__upper_limit",
         "Table": "music"
@@ -861,7 +824,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select * from user where 1 != 1",
     "Query": "select * from user where name = 'abc' and id = 4 limit 5",
     "Table": "user",
@@ -883,7 +845,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select * from user where 1 != 1",
     "Query": "select * from user where id = 4 and name = 'abc' limit 5",
     "Table": "user",
@@ -905,7 +866,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select * from user where 1 != 1",
     "Query": "select * from user where id = 4 and name = 'abc' limit 5",
     "Table": "user",
@@ -927,7 +887,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select user0_.col as col0_ from user as user0_ where 1 != 1",
     "Query": "select user0_.col as col0_ from user as user0_ where id = 1 order by user0_.col desc limit 2",
     "Table": "user",
@@ -949,7 +908,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select user0_.col as col0_ from user as user0_ where 1 != 1",
     "Query": "select user0_.col as col0_ from user as user0_ where id = 1 order by col0_ desc limit 3",
     "Table": "user",
@@ -971,7 +929,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select * from user where 1 != 1",
     "Query": "select * from user where id = 1 and name = true limit 5",
     "Table": "user",
@@ -993,7 +950,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select * from user where 1 != 1",
     "Query": "select * from user where id = 1 and name limit 5",
     "Table": "user",
@@ -1015,7 +971,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select * from user where 1 != 1",
     "Query": "select * from user where id = 5 and name = true limit 5",
     "Table": "user",
@@ -1041,7 +996,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select col from user where 1 != 1",
         "Query": "select col from user",
         "Table": "user"
@@ -1076,7 +1030,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select col from user where 1 != 1",
         "Query": "select col from user",
         "Table": "user"
@@ -1121,7 +1074,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "MASTER",
             "FieldQuery": "select user.id as id1 from user where 1 != 1",
             "Query": "select user.id as id1 from user",
             "Table": "user"
@@ -1133,7 +1085,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "MASTER",
             "FieldQuery": "select user_extra.id as id2 from user_extra where 1 != 1",
             "Query": "select user_extra.id as id2 from user_extra",
             "Table": "user_extra"
@@ -1179,7 +1130,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select * from music where 1 != 1 union select * from user where 1 != 1",
     "Query": "select * from music where user_id = 1 union select * from user where id = 1",
     "Table": "music",
@@ -1201,7 +1151,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select *, :__lastInsertId as `last_insert_id()` from music where 1 != 1 union select * from user where 1 != 1",
     "Query": "select *, :__lastInsertId as `last_insert_id()` from music where user_id = 1 union select * from user where id = 1",
     "Table": "music",
@@ -1319,7 +1268,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
     "FieldQuery": "select a from user_metadata as route1 where 1 != 1 union select b from user_metadata as route1 where 1 != 1",
     "Query": "select a from user_metadata as route1 where email = 'aaa' union select b from user_metadata as route1 where email = 'aaa'",
     "Table": "user_metadata",

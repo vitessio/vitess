@@ -10,6 +10,7 @@
       "Sharded": false
     },
     "TargetDestination": "Shard(-80)",
+    "NoAutoCommit": true,
     "Query": "select count(*), col from unsharded"
   }
 }
@@ -26,6 +27,7 @@
       "Sharded": false
     },
     "TargetDestination": "Shard(-80)",
+    "NoAutoCommit": false,
     "Query": "update user set val = 1 where id = 18446744073709551616 and id = 1"
   }
 }
@@ -42,6 +44,7 @@
       "Sharded": false
     },
     "TargetDestination": "Shard(-80)",
+    "NoAutoCommit": false,
     "Query": "delete from USER where ID = 42"
   }
 }
@@ -58,6 +61,7 @@
       "Sharded": false
     },
     "TargetDestination": "Shard(-80)",
+    "NoAutoCommit": false,
     "Query": "insert into USER(ID, NAME) values (42, 'ms X')"
   }
 }

@@ -27,6 +27,7 @@ import (
 )
 
 // PrimitiveDescription is used to create a serializable representation of the Primitive tree
+// Using this structure, all primitives can share json marshalling code, which gives us an uniform output
 type PrimitiveDescription struct {
 	OperatorType string
 	Variant      string
@@ -91,7 +92,7 @@ func (pd PrimitiveDescription) MarshalJSON() ([]byte, error) {
 func addMap(input map[string]interface{}, buf *bytes.Buffer) error {
 	var mk []string
 	for k, v := range input {
-		if v == "" || v == nil {
+		if v == "" || v == nil || v == 0 {
 			continue
 		}
 		mk = append(mk, k)

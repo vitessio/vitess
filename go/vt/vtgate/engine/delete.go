@@ -199,15 +199,14 @@ func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]
 
 func (del *Delete) description() PrimitiveDescription {
 	other := map[string]interface{}{
-		"Query":     del.Query,
-		"TableName": del.GetTableName(),
+		"Query":                del.Query,
+		"Table":                del.GetTableName(),
+		"OwnedVindexQuery":     del.OwnedVindexQuery,
+		"MultiShardAutocommit": del.MultiShardAutocommit,
+		"QueryTimeout":         del.QueryTimeout,
 	}
-	if del.Vindex != nil {
-		other["Vindex"] = del.Vindex.String()
-	}
-	if del.KsidVindex != nil {
-		other["KsidVindexName"] = del.KsidVindex.String()
-	}
+
+	addFieldsIfNotEmpty(del.DML, other)
 
 	return PrimitiveDescription{
 		OperatorType:     "Delete",
@@ -215,5 +214,17 @@ func (del *Delete) description() PrimitiveDescription {
 		Variant:          del.Opcode.String(),
 		TargetTabletType: topodatapb.TabletType_MASTER,
 		Other:            other,
+	}
+}
+
+func addFieldsIfNotEmpty(dml DML, other map[string]interface{}) {
+	if dml.Vindex != nil {
+		other["Vindex"] = dml.Vindex.String()
+	}
+	if dml.KsidVindex != nil {
+		other["KsidVindex"] = dml.KsidVindex.String()
+	}
+	if len(dml.Values) > 0 {
+		other["Values"] = dml.Values
 	}
 }

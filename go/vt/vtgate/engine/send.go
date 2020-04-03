@@ -116,8 +116,9 @@ func (s *Send) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariabl
 
 func (s *Send) description() PrimitiveDescription {
 	other := map[string]interface{}{
-		"Query": s.Query,
-		"Table": s.GetTableName(),
+		"Query":        s.Query,
+		"Table":        s.GetTableName(),
+		"NoAutoCommit": s.NoAutoCommit,
 	}
 	return PrimitiveDescription{
 		OperatorType:      "Send",

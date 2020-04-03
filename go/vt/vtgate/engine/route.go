@@ -568,7 +568,6 @@ func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) 
 }
 
 func (route *Route) description() PrimitiveDescription {
-
 	other := map[string]interface{}{
 		"Query":      route.Query,
 		"Table":      route.TableName,
@@ -586,7 +585,6 @@ func (route *Route) description() PrimitiveDescription {
 		Variant:           routeName[route.Opcode],
 		Keyspace:          route.Keyspace,
 		TargetDestination: route.TargetDestination,
-		TargetTabletType:  route.TargetTabletType,
 		Other:             other,
 	}
 }

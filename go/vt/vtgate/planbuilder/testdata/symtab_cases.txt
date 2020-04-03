@@ -17,7 +17,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "MASTER",
         "FieldQuery": "select predef2 from user where 1 != 1",
         "Query": "select predef2 from user",
         "Table": "user"
