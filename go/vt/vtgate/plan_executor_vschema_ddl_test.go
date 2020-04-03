@@ -128,7 +128,7 @@ func waitForColVindexes(t *testing.T, ks, table string, names []string, executor
 }
 
 func TestPlanExecutorAlterVSchemaKeyspace(t *testing.T) {
-	t.Skip("not yet planned")
+	//t.Skip("not yet planned")
 	*vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
 		*vschemaacl.AuthorizedDDLUsers = ""
@@ -156,7 +156,6 @@ func TestPlanExecutorAlterVSchemaKeyspace(t *testing.T) {
 }
 
 func TestPlanExecutorCreateVindexDDL(t *testing.T) {
-	t.Skip("not yet planned")
 	*vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
 		*vschemaacl.AuthorizedDDLUsers = ""
@@ -196,6 +195,8 @@ func TestPlanExecutorCreateVindexDDL(t *testing.T) {
 	default:
 	}
 
+	t.Skip("not yet planned")
+
 	// Create a new vschema keyspace implicitly by creating a vindex with a different
 	// target in the session
 	ksNew := "test_new_keyspace"
@@ -228,7 +229,6 @@ func TestPlanExecutorCreateVindexDDL(t *testing.T) {
 }
 
 func TestPlanExecutorAddDropVschemaTableDDL(t *testing.T) {
-	t.Skip("not yet planned")
 	*vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
 		*vschemaacl.AuthorizedDDLUsers = ""
@@ -285,7 +285,6 @@ func TestPlanExecutorAddDropVschemaTableDDL(t *testing.T) {
 }
 
 func TestPlanExecutorAddSequenceDDL(t *testing.T) {
-	t.Skip("not yet planned")
 	*vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
 		*vschemaacl.AuthorizedDDLUsers = ""
@@ -678,7 +677,6 @@ func TestPlanExecutorAddDropVindexDDL(t *testing.T) {
 }
 
 func TestPlanExecutorVindexDDLNewKeyspace(t *testing.T) {
-	t.Skip("not yet planned")
 	*vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
 		*vschemaacl.AuthorizedDDLUsers = ""
@@ -691,6 +689,8 @@ func TestPlanExecutorVindexDDLNewKeyspace(t *testing.T) {
 	if ok || ks != nil {
 		t.Fatalf("keyspace should not exist before test")
 	}
+
+	t.Skip("not yet planned")
 
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ksName})
 	stmt := "alter vschema create vindex test_hash using hash"
@@ -740,7 +740,7 @@ func TestPlanExecutorVindexDDLNewKeyspace(t *testing.T) {
 }
 
 func TestPlanExecutorVindexDDLACL(t *testing.T) {
-	t.Skip("not yet planned")
+	//t.Skip("not yet planned")
 	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
 	ks := "TestExecutor"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})

@@ -1121,8 +1121,8 @@ func TestPlanVSchemaStats(t *testing.T) {
 
 func TestPlanGetPlanUnnormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnvUsing(planAllTheThings)
-	emptyvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.VSchema(), r.resolver.resolver)
-	unshardedvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.VSchema(), r.resolver.resolver)
+	emptyvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.resolver.resolver)
+	unshardedvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.resolver.resolver)
 
 	logStats1 := NewLogStats(context.Background(), "Test", "", nil)
 	query1 := "select * from music_user_map where id = 1"
@@ -1180,7 +1180,7 @@ func TestPlanGetPlanUnnormalized(t *testing.T) {
 
 func TestPlanGetPlanCacheUnnormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnvUsing(planAllTheThings)
-	emptyvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.VSchema(), r.resolver.resolver)
+	emptyvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.resolver.resolver)
 	query1 := "select * from music_user_map where id = 1"
 	logStats1 := NewLogStats(context.Background(), "Test", "", nil)
 	_, err := r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
@@ -1205,7 +1205,7 @@ func TestPlanGetPlanCacheUnnormalized(t *testing.T) {
 
 	// Skip cache using directive
 	r, _, _, _ = createExecutorEnvUsing(planAllTheThings)
-	unshardedvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.VSchema(), r.resolver.resolver)
+	unshardedvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.resolver.resolver)
 
 	query1 = "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
 	logStats1 = NewLogStats(context.Background(), "Test", "", nil)
@@ -1226,7 +1226,7 @@ func TestPlanGetPlanCacheUnnormalized(t *testing.T) {
 func TestPlanGetPlanCacheNormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnvUsing(planAllTheThings)
 	r.normalize = true
-	emptyvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.VSchema(), r.resolver.resolver)
+	emptyvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.resolver.resolver)
 	query1 := "select * from music_user_map where id = 1"
 	logStats1 := NewLogStats(context.Background(), "Test", "", nil)
 	_, err := r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
@@ -1251,7 +1251,7 @@ func TestPlanGetPlanCacheNormalized(t *testing.T) {
 	// Skip cache using directive
 	r, _, _, _ = createExecutorEnvUsing(planAllTheThings)
 	r.normalize = true
-	unshardedvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.VSchema(), r.resolver.resolver)
+	unshardedvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.resolver.resolver)
 
 	query1 = "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
 	logStats1 = NewLogStats(context.Background(), "Test", "", nil)
@@ -1272,8 +1272,8 @@ func TestPlanGetPlanCacheNormalized(t *testing.T) {
 func TestPlanGetPlanNormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnvUsing(planAllTheThings)
 	r.normalize = true
-	emptyvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.VSchema(), r.resolver.resolver)
-	unshardedvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.VSchema(), r.resolver.resolver)
+	emptyvc, _ := createVcursorImpl(r, "@unknown")
+	unshardedvc, _ := createVcursorImpl(r, KsTestUnsharded+"@unknown")
 
 	query1 := "select * from music_user_map where id = 1"
 	query2 := "select * from music_user_map where id = 2"
@@ -1360,6 +1360,10 @@ func TestPlanGetPlanNormalized(t *testing.T) {
 	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
 		t.Errorf("Plan keys: %s, want %s", keys, want)
 	}
+}
+
+func createVcursorImpl(r *Executor, targetString string) (*vcursorImpl, error) {
+	return newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: targetString}), makeComments(""), r, nil, &fakeVSchemaOperator{vschema: r.VSchema()}, r.resolver.resolver)
 }
 
 func TestPlanParseEmptyTargetSingleKeyspace(t *testing.T) {

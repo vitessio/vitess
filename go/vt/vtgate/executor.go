@@ -98,7 +98,7 @@ type Executor struct {
 	// and run in production with an entierly different one
 	exec executeMethod
 
-	vm VSchemaManager
+	vm *VSchemaManager
 }
 
 // this interface is here to allow us to have two different implementations of the same method,
@@ -129,7 +129,7 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 	e.exec = e
 
 	vschemaacl.Init()
-	e.vm = VSchemaManager{e: e}
+	e.vm = &VSchemaManager{e: e}
 	e.vm.watchSrvVSchema(ctx, cell)
 
 	executorOnce.Do(func() {
@@ -163,7 +163,7 @@ func NewTestExecutor(ctx context.Context, strat func(executor *Executor) execute
 	e.exec = strat(e)
 
 	vschemaacl.Init()
-	e.vm = VSchemaManager{e: e}
+	e.vm = &VSchemaManager{e: e}
 	e.vm.watchSrvVSchema(ctx, cell)
 
 	executorOnce.Do(func() {
@@ -305,7 +305,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 
 func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats, stmtType sqlparser.StatementType) (*sqltypes.Result, error) {
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.VSchema(), e.resolver.resolver)
+	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.resolver.resolver)
 	plan, err := e.getPlan(
 		vcursor,
 		query,
@@ -1220,7 +1220,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		bindVars = make(map[string]*querypb.BindVariable)
 	}
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.VSchema(), e.resolver.resolver)
+	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.resolver.resolver)
 
 	// check if this is a stream statement for messaging
 	// TODO: support keyRange syntax
@@ -1671,7 +1671,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) ([]*querypb.Field, error) {
 	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.VSchema(), e.resolver.resolver)
+	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.resolver.resolver)
 	plan, err := e.getPlan(
 		vcursor,
 		query,

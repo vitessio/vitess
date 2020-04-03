@@ -24,3 +24,14 @@ func buildDDLPlan(stmt *sqlparser.DDL, vschema ContextVSchema) (engine.Primitive
 		IsDML:             false,
 	}, nil
 }
+
+func buildVSchemaDDLPlan(stmt *sqlparser.DDL, vschema ContextVSchema) (engine.Primitive, error) {
+	_, keyspace, _, err := vschema.TargetDestination(stmt.Table.Qualifier.String())
+	if err != nil {
+		return nil, err
+	}
+	return &engine.AlterVSchema{
+		Keyspace: keyspace,
+		DDL:      stmt,
+	}, nil
+}

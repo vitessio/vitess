@@ -305,9 +305,10 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 		case *sqlparser.DDL:
 			planType = engine.PlanDDL
 			if sqlparser.IsVschemaDDL(stmt) {
-				return nil, errors.New("unsupported construct: vschema ddl")
+				instruction, err = buildVSchemaDDLPlan(stmt, vschema)
+			} else {
+				instruction, err = buildDDLPlan(stmt, vschema)
 			}
-			instruction, err = buildDDLPlan(stmt, vschema)
 		case *sqlparser.DBDDL:
 			return nil, errors.New("unsupported construct: ddl on database")
 		case *sqlparser.Use:
