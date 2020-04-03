@@ -53,7 +53,7 @@ func (e *planExecute) execute(ctx context.Context, safeSession *SafeSession, sql
 	}
 
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, err := newVCursorImpl(ctx, safeSession, comments, e.e, logStats, e.e.VSchema(), e.e.resolver.resolver)
+	vcursor, err := newVCursorImpl(ctx, safeSession, comments, e.e, logStats, e.e.vm, e.e.resolver.resolver)
 	if err != nil {
 		return nil, err
 	}

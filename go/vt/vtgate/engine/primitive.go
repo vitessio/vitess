@@ -72,6 +72,7 @@ type VCursor interface {
 	// Will replace all of the Topo functions.
 	ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error)
 	SetTarget(target string) error
+	ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error
 }
 
 // PlanType indicates type of the plan generated

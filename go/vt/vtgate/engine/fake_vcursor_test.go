@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"github.com/stretchr/testify/require"
 
 	"golang.org/x/net/context"
@@ -43,6 +45,10 @@ var _ VCursor = (*noopVCursor)(nil)
 
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
+}
+
+func (t noopVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
+	panic("implement me")
 }
 
 func (t noopVCursor) SetTarget(target string) error {
@@ -115,6 +121,10 @@ type loggingVCursor struct {
 	multiShardErrs []error
 
 	log []string
+}
+
+func (f *loggingVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
+	panic("implement me")
 }
 
 func (f *loggingVCursor) SetTarget(target string) error {
