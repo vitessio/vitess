@@ -19,8 +19,6 @@ package engine
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/vt/key"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -160,9 +158,8 @@ func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*qu
 
 func (ps *PulloutSubquery) description() PrimitiveDescription {
 	return PrimitiveDescription{
-		OperatorType:      "Subquery",
-		Variant:           ps.Opcode.String(),
-		TargetDestination: key.DestinationVtGate{},
+		OperatorType: "Subquery",
+		Variant:      ps.Opcode.String(),
 	}
 }
 

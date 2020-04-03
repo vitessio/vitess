@@ -5,7 +5,6 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "1,-1,2",
     "TableName": "user_user_extra",
     "Inputs": [
@@ -17,6 +16,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select u.id as uid from user as u where 1 != 1",
         "Query": "select u.id as uid from user as u",
         "Table": "user"
       },
@@ -28,6 +28,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select e.col, e.id as eid from user_extra as e where 1 != 1",
         "Query": "select e.col, e.id as eid from user_extra as e having eid = :uid",
         "Table": "user_extra"
       }
@@ -42,7 +43,6 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "1,-1,2",
     "TableName": "user_user_extra",
     "Inputs": [
@@ -54,6 +54,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select u.id as uid from user as u where 1 != 1",
         "Query": "select u.id as uid from user as u",
         "Table": "user"
       },
@@ -65,6 +66,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select e.col, e.id as eid from user_extra as e where 1 != 1",
         "Query": "select e.col, e.id as eid from user_extra as e having eid = :uid1 and e.col = :uid",
         "Table": "user_extra"
       }
@@ -79,14 +81,12 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "-1",
     "TableName": "user_user_user",
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "TargetDestination": "VtGate()",
         "JoinColumnIndexes": "-1,-2",
         "TableName": "user_user",
         "Inputs": [
@@ -98,6 +98,7 @@
               "Sharded": true
             },
             "TargetTabletType": "MASTER",
+            "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1",
             "Query": "select u1.id, u1.col from user as u1",
             "Table": "user"
           },
@@ -109,6 +110,7 @@
               "Sharded": true
             },
             "TargetTabletType": "MASTER",
+            "FieldQuery": "select 1 from user as u2 where 1 != 1",
             "Query": "select 1 from user as u2",
             "Table": "user"
           }
@@ -122,6 +124,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select 1 from user as u3 where 1 != 1",
         "Query": "select 1 from user as u3 where u3.col = :u1_col",
         "Table": "user"
       }
@@ -136,14 +139,12 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "-1",
     "TableName": "user_user_user",
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "TargetDestination": "VtGate()",
         "JoinColumnIndexes": "-1,1",
         "TableName": "user_user",
         "Inputs": [
@@ -155,6 +156,7 @@
               "Sharded": true
             },
             "TargetTabletType": "MASTER",
+            "FieldQuery": "select u1.id from user as u1 where 1 != 1",
             "Query": "select u1.id from user as u1",
             "Table": "user"
           },
@@ -166,6 +168,7 @@
               "Sharded": true
             },
             "TargetTabletType": "MASTER",
+            "FieldQuery": "select u2.col from user as u2 where 1 != 1",
             "Query": "select u2.col from user as u2",
             "Table": "user"
           }
@@ -179,6 +182,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select 1 from user as u3 where 1 != 1",
         "Query": "select 1 from user as u3 where u3.col = :u2_col",
         "Table": "user"
       }
@@ -193,14 +197,12 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "-1",
     "TableName": "user_user_user",
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "TargetDestination": "VtGate()",
         "JoinColumnIndexes": "-1,-2",
         "TableName": "user_user",
         "Inputs": [
@@ -212,6 +214,7 @@
               "Sharded": true
             },
             "TargetTabletType": "MASTER",
+            "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1",
             "Query": "select u1.id, u1.col from user as u1",
             "Table": "user"
           },
@@ -223,6 +226,7 @@
               "Sharded": true
             },
             "TargetTabletType": "MASTER",
+            "FieldQuery": "select 1 from user as u2 where 1 != 1",
             "Query": "select 1 from user as u2 where u2.col = :u1_col",
             "Table": "user"
           }
@@ -236,6 +240,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select 1 from user as u3 where 1 != 1",
         "Query": "select 1 from user as u3 where u3.col = :u1_col",
         "Table": "user"
       }
@@ -253,21 +258,18 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "-1",
     "TableName": "user_user_user_user",
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "TargetDestination": "VtGate()",
         "JoinColumnIndexes": "-1,-2",
         "TableName": "user_user_user",
         "Inputs": [
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "TargetDestination": "VtGate()",
             "JoinColumnIndexes": "-1,-2",
             "TableName": "user_user",
             "Inputs": [
@@ -279,6 +281,7 @@
                   "Sharded": true
                 },
                 "TargetTabletType": "MASTER",
+                "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1",
                 "Query": "select u1.id, u1.col from user as u1",
                 "Table": "user"
               },
@@ -290,6 +293,7 @@
                   "Sharded": true
                 },
                 "TargetTabletType": "MASTER",
+                "FieldQuery": "select 1 from user as u2 where 1 != 1",
                 "Query": "select 1 from user as u2",
                 "Table": "user"
               }
@@ -303,8 +307,13 @@
               "Sharded": true
             },
             "TargetTabletType": "MASTER",
+            "FieldQuery": "select 1 from user as u3 where 1 != 1",
             "Query": "select 1 from user as u3 where u3.id = :u1_col",
-            "Table": "user"
+            "Table": "user",
+            "Values": [
+              ":u1_col"
+            ],
+            "Vindex": "user_index"
           }
         ]
       },
@@ -316,6 +325,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select 1 from user as u4 where 1 != 1",
         "Query": "select 1 from user as u4 where u4.col = :u1_col",
         "Table": "user"
       }
@@ -330,7 +340,6 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "-1",
     "TableName": "user_user_user",
     "Inputs": [
@@ -342,14 +351,13 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1",
         "Query": "select u1.id, u1.col from user as u1",
         "Table": "user"
       },
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "TargetDestination": "VtGate()",
-        "JoinColumnIndexes": "",
         "TableName": "user_user",
         "Inputs": [
           {
@@ -360,8 +368,13 @@
               "Sharded": true
             },
             "TargetTabletType": "MASTER",
+            "FieldQuery": "select 1 from user as u2 where 1 != 1",
             "Query": "select 1 from user as u2 where u2.id = :u1_col",
-            "Table": "user"
+            "Table": "user",
+            "Values": [
+              ":u1_col"
+            ],
+            "Vindex": "user_index"
           },
           {
             "OperatorType": "Route",
@@ -371,8 +384,13 @@
               "Sharded": true
             },
             "TargetTabletType": "MASTER",
+            "FieldQuery": "select 1 from user as u3 where 1 != 1",
             "Query": "select 1 from user as u3 where u3.id = :u1_col",
-            "Table": "user"
+            "Table": "user",
+            "Values": [
+              ":u1_col"
+            ],
+            "Vindex": "user_index"
           }
         ]
       }
@@ -387,7 +405,6 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "-1,1",
     "TableName": "weird`name_unsharded",
     "Inputs": [
@@ -399,6 +416,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select `weird``name`.a, `weird``name`.`a``b*c` from `weird``name` where 1 != 1",
         "Query": "select `weird``name`.a, `weird``name`.`a``b*c` from `weird``name`",
         "Table": "weird`name"
       },
@@ -409,6 +427,7 @@
           "Name": "main",
           "Sharded": false
         },
+        "FieldQuery": "select unsharded.b from unsharded where 1 != 1",
         "Query": "select unsharded.b from unsharded where unsharded.id = :weird_name_a_b_c",
         "Table": "unsharded"
       }
@@ -423,7 +442,6 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "TargetDestination": "VtGate()",
     "JoinColumnIndexes": "1",
     "TableName": "weird`name_unsharded",
     "Inputs": [
@@ -435,6 +453,7 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select `weird``name`.`a``b*c` from `weird``name` where 1 != 1",
         "Query": "select `weird``name`.`a``b*c` from `weird``name`",
         "Table": "weird`name"
       },
@@ -445,6 +464,7 @@
           "Name": "main",
           "Sharded": false
         },
+        "FieldQuery": "select unsharded.b from unsharded where 1 != 1",
         "Query": "select unsharded.b from unsharded where unsharded.id = :weird_name_a_b_c",
         "Table": "unsharded"
       }
@@ -459,13 +479,11 @@
   "Instructions": {
     "OperatorType": "Limit",
     "Variant": "",
-    "TargetDestination": "VtGate()",
-    "Count": "INT64(10)",
+    "Count": 10,
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "TargetDestination": "VtGate()",
         "JoinColumnIndexes": "-1,1",
         "TableName": "user_user_extra",
         "Inputs": [
@@ -477,6 +495,7 @@
               "Sharded": true
             },
             "TargetTabletType": "MASTER",
+            "FieldQuery": "select u.id, u.col from user as u where 1 != 1",
             "Query": "select u.id, u.col from user as u",
             "Table": "user"
           },
@@ -488,6 +507,7 @@
               "Sharded": true
             },
             "TargetTabletType": "MASTER",
+            "FieldQuery": "select e.id from user_extra as e where 1 != 1",
             "Query": "select e.id from user_extra as e where e.id = :u_col",
             "Table": "user_extra"
           }
@@ -504,18 +524,15 @@
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
-    "TargetDestination": "VtGate()",
     "Inputs": [
       {
         "OperatorType": "Limit",
         "Variant": "",
-        "TargetDestination": "VtGate()",
-        "Count": "INT64(10)",
+        "Count": 10,
         "Inputs": [
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "TargetDestination": "VtGate()",
             "JoinColumnIndexes": "-1,1",
             "TableName": "user_user_extra",
             "Inputs": [
@@ -527,6 +544,7 @@
                   "Sharded": true
                 },
                 "TargetTabletType": "MASTER",
+                "FieldQuery": "select u.id, u.col from user as u where 1 != 1",
                 "Query": "select u.id, u.col from user as u",
                 "Table": "user"
               },
@@ -538,6 +556,7 @@
                   "Sharded": true
                 },
                 "TargetTabletType": "MASTER",
+                "FieldQuery": "select e.id from user_extra as e where 1 != 1",
                 "Query": "select e.id from user_extra as e where e.id = :u_col",
                 "Table": "user_extra"
               }
@@ -553,8 +572,13 @@
           "Sharded": true
         },
         "TargetTabletType": "MASTER",
+        "FieldQuery": "select 1 from user where 1 != 1",
         "Query": "select 1 from user where :__sq_has_values1 = 1 and id in ::__vals",
-        "Table": "user"
+        "Table": "user",
+        "Values": [
+          "::__sq1"
+        ],
+        "Vindex": "user_index"
       }
     ]
   }
@@ -567,13 +591,11 @@
   "Instructions": {
     "OperatorType": "Limit",
     "Variant": "",
-    "TargetDestination": "VtGate()",
-    "Count": "INT64(10)",
+    "Count": 10,
     "Inputs": [
       {
         "OperatorType": "Subquery",
         "Variant": "PulloutValue",
-        "TargetDestination": "VtGate()",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -583,13 +605,13 @@
               "Sharded": true
             },
             "TargetTabletType": "MASTER",
+            "FieldQuery": "select col from user where 1 != 1",
             "Query": "select col from user",
             "Table": "user"
           },
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "TargetDestination": "VtGate()",
             "JoinColumnIndexes": "-1,1,-2",
             "TableName": "user_user_extra",
             "Inputs": [
@@ -601,6 +623,7 @@
                   "Sharded": true
                 },
                 "TargetTabletType": "MASTER",
+                "FieldQuery": "select u.id, :__sq1, u.col from user as u where 1 != 1",
                 "Query": "select u.id, :__sq1, u.col from user as u",
                 "Table": "user"
               },
@@ -612,6 +635,7 @@
                   "Sharded": true
                 },
                 "TargetTabletType": "MASTER",
+                "FieldQuery": "select e.id from user_extra as e where 1 != 1",
                 "Query": "select e.id from user_extra as e where e.id = :u_col",
                 "Table": "user_extra"
               }

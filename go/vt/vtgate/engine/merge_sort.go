@@ -20,8 +20,6 @@ import (
 	"container/heap"
 	"io"
 
-	"vitess.io/vitess/go/vt/key"
-
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -158,15 +156,13 @@ func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 }
 
 func (ms *MergeSort) description() PrimitiveDescription {
-	orderByIndexes := GenericJoin(ms.OrderBy, orderByParamsToString)
-	other := map[string]string{
-		"OrderBy": orderByIndexes,
+	other := map[string]interface{}{
+		"OrderBy": ms.OrderBy,
 	}
 	return PrimitiveDescription{
-		OperatorType:      "Sort",
-		Variant:           "Merge",
-		TargetDestination: key.DestinationVtGate{},
-		Other:             other,
+		OperatorType: "Sort",
+		Variant:      "Merge",
+		Other:        other,
 	}
 }
 

@@ -22,7 +22,6 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
-	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -41,45 +40,6 @@ type Delete struct {
 
 	// Delete does not take inputs
 	noInputs
-}
-
-// MarshalJSON serializes the Delete into a JSON representation.
-// It's used for testing and diagnostics.
-func (del *Delete) MarshalJSON() ([]byte, error) {
-	var tname, vindexName, ksidVindexName string
-	if del.Table != nil {
-		tname = del.Table.Name.String()
-	}
-	if del.Vindex != nil {
-		vindexName = del.Vindex.String()
-	}
-	if del.KsidVindex != nil {
-		ksidVindexName = del.KsidVindex.String()
-	}
-	marshalDelete := struct {
-		Opcode               string
-		Keyspace             *vindexes.Keyspace   `json:",omitempty"`
-		Query                string               `json:",omitempty"`
-		Vindex               string               `json:",omitempty"`
-		Values               []sqltypes.PlanValue `json:",omitempty"`
-		Table                string               `json:",omitempty"`
-		OwnedVindexQuery     string               `json:",omitempty"`
-		KsidVindex           string               `json:",omitempty"`
-		MultiShardAutocommit bool                 `json:",omitempty"`
-		QueryTimeout         int                  `json:",omitempty"`
-	}{
-		Opcode:               del.RouteType(),
-		Keyspace:             del.Keyspace,
-		Query:                del.Query,
-		Vindex:               vindexName,
-		Values:               del.Values,
-		Table:                tname,
-		OwnedVindexQuery:     del.OwnedVindexQuery,
-		KsidVindex:           ksidVindexName,
-		MultiShardAutocommit: del.MultiShardAutocommit,
-		QueryTimeout:         del.QueryTimeout,
-	}
-	return jsonutil.MarshalNoEscape(marshalDelete)
 }
 
 var delName = map[DMLOpcode]string{
@@ -238,10 +198,17 @@ func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]
 }
 
 func (del *Delete) description() PrimitiveDescription {
-	other := map[string]string{
+	other := map[string]interface{}{
 		"Query":     del.Query,
 		"TableName": del.GetTableName(),
 	}
+	if del.Vindex != nil {
+		other["Vindex"] = del.Vindex.String()
+	}
+	if del.KsidVindex != nil {
+		other["KsidVindexName"] = del.KsidVindex.String()
+	}
+
 	return PrimitiveDescription{
 		OperatorType:     "Delete",
 		Keyspace:         del.Keyspace,

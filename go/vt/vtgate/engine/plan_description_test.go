@@ -40,9 +40,9 @@ func TestCreateRoutePlanDescription(t *testing.T) {
 		Keyspace:          &vindexes.Keyspace{Name: "ks"},
 		TargetDestination: key.DestinationAllShards{},
 		TargetTabletType:  topodatapb.TabletType_MASTER,
-		Other: map[string]string{
-			"Query":     route.Query,
-			"TableName": route.TableName,
+		Other: map[string]interface{}{
+			"Query": route.Query,
+			"Table": route.TableName,
 		},
 		Inputs: []PrimitiveDescription{},
 	}
@@ -84,7 +84,7 @@ func TestPlanDescriptionWithInputs(t *testing.T) {
 
 	expected := PrimitiveDescription{
 		OperatorType: "Limit",
-		Other: map[string]string{
+		Other: map[string]interface{}{
 			"Count":  "12",
 			"Offset": "4",
 		},
@@ -108,7 +108,7 @@ func getDescriptionFor(route *Route) PrimitiveDescription {
 		Keyspace:          &vindexes.Keyspace{Name: "ks"},
 		TargetDestination: key.DestinationAllShards{},
 		TargetTabletType:  topodatapb.TabletType_MASTER,
-		Other: map[string]string{
+		Other: map[string]interface{}{
 			"Query":     route.Query,
 			"TableName": route.TableName,
 		},

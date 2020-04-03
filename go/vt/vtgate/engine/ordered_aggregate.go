@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"vitess.io/vitess/go/vt/key"
-
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -416,15 +414,14 @@ func intToString(i interface{}) string {
 func (oa *OrderedAggregate) description() PrimitiveDescription {
 	aggregates := GenericJoin(oa.Aggregates, aggregateParamsToString)
 	groupBy := GenericJoin(oa.Keys, intToString)
-	other := map[string]string{
+	other := map[string]interface{}{
 		"Aggregates": aggregates,
 		"GroupBy":    groupBy,
 		"Distinct":   strconv.FormatBool(oa.HasDistinct),
 	}
 	return PrimitiveDescription{
-		OperatorType:      "Aggregate",
-		Variant:           "Ordered",
-		TargetDestination: key.DestinationVtGate{},
-		Other:             other,
+		OperatorType: "Aggregate",
+		Variant:      "Ordered",
+		Other:        other,
 	}
 }
