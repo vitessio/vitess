@@ -247,7 +247,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 	})
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se)
 	tsv.watcher = NewReplicationWatcher(tsv.vstreamer, config)
-	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer, config)
+	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 	return tsv
 }
 
