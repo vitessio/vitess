@@ -222,7 +222,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 		alias:                  alias,
 	}
 	tsv.se = schema.NewEngine(tsv)
-	tsv.qe = NewQueryEngine(tsv, tsv.se, config)
+	tsv.qe = NewQueryEngine(tsv, tsv.se)
 	tsv.te = NewTxEngine(tsv, config)
 	tsv.hw = heartbeat.NewWriter(tsv, alias, config)
 	tsv.hr = heartbeat.NewReader(tsv, config)
@@ -349,7 +349,6 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.dbconfigs = dbcfgs
 
 	tsv.se.InitDBConfig(tsv.dbconfigs.DbaWithDB())
-	tsv.qe.InitDBConfig(tsv.dbconfigs)
 	tsv.te.InitDBConfig(tsv.dbconfigs)
 	tsv.hw.InitDBConfig(tsv.dbconfigs)
 	tsv.hr.InitDBConfig(tsv.dbconfigs)
