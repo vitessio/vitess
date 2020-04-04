@@ -51,7 +51,7 @@ func TestStrictMode(t *testing.T) {
 
 	// Test default behavior.
 	config := tabletenv.DefaultQsConfig
-	env := tabletenv.NewTestEnv(&config, dbcfgs, nil)
+	env := tabletenv.NewTestEnv(&config, dbcfgs)
 	se := schema.NewEngine(env)
 	qe := NewQueryEngine(env, se)
 	qe.se.InitDBConfig(dbcfgs.DbaWithDB())
@@ -294,7 +294,7 @@ func newTestQueryEngine(queryPlanCacheSize int, idleTimeout time.Duration, stric
 	config := tabletenv.DefaultQsConfig
 	config.QueryPlanCacheSize = queryPlanCacheSize
 	config.IdleTimeout = float64(idleTimeout) / 1e9
-	env := tabletenv.NewTestEnv(&config, dbcfgs, nil)
+	env := tabletenv.NewTestEnv(&config, dbcfgs)
 	se := schema.NewEngine(env)
 	qe := NewQueryEngine(env, se)
 	se.InitDBConfig(dbcfgs.DbaWithDB())

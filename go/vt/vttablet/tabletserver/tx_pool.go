@@ -76,6 +76,7 @@ var (
 
 // TxPool is the transaction pool for the query service.
 type TxPool struct {
+	env tabletenv.Env
 	// conns is the 'regular' pool. By default, connections
 	// are pulled from here for starting transactions.
 	conns *connpool.Pool
@@ -89,7 +90,6 @@ type TxPool struct {
 	transactionTimeout     sync2.AtomicDuration
 	transactionPoolTimeout sync2.AtomicDuration
 	ticks                  *timer.Timer
-	checker                connpool.MySQLChecker
 	limiter                txlimiter.TxLimiter
 	// Tracking culprits that cause tx pool full errors.
 	logMu     sync.Mutex
@@ -99,28 +99,21 @@ type TxPool struct {
 }
 
 // NewTxPool creates a new TxPool. It's not operational until it's Open'd.
-func NewTxPool(
-	prefix string,
-	capacity int,
-	foundRowsCapacity int,
-	prefillParallelism int,
-	transactionTimeout time.Duration,
-	transactionPoolTimeout time.Duration,
-	idleTimeout time.Duration,
-	waiterCap int,
-	checker connpool.MySQLChecker,
-	limiter txlimiter.TxLimiter) *TxPool {
+func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
+	config := env.Config()
+	prefix := config.PoolNamePrefix
+	transactionTimeout := time.Duration(config.TransactionTimeout * 1e9)
 	axp := &TxPool{
-		conns:                  connpool.New(prefix+"TransactionPool", capacity, prefillParallelism, idleTimeout, checker),
-		foundRowsPool:          connpool.New(prefix+"FoundRowsPool", foundRowsCapacity, prefillParallelism, idleTimeout, checker),
+		env:                    env,
+		conns:                  connpool.New(prefix+"TransactionPool", config.TransactionCap, config.TxPoolPrefillParallelism, time.Duration(config.IdleTimeout*1e9), env),
+		foundRowsPool:          connpool.New(prefix+"FoundRowsPool", config.FoundRowsPoolSize, config.TxPoolPrefillParallelism, time.Duration(config.IdleTimeout*1e9), env),
 		activePool:             pools.NewNumbered(),
 		lastID:                 sync2.NewAtomicInt64(time.Now().UnixNano()),
 		transactionTimeout:     sync2.NewAtomicDuration(transactionTimeout),
-		transactionPoolTimeout: sync2.NewAtomicDuration(transactionPoolTimeout),
-		waiterCap:              sync2.NewAtomicInt64(int64(waiterCap)),
+		transactionPoolTimeout: sync2.NewAtomicDuration(time.Duration(config.TxPoolTimeout * 1e9)),
+		waiterCap:              sync2.NewAtomicInt64(int64(config.TxPoolWaiterCap)),
 		waiters:                sync2.NewAtomicInt64(0),
 		ticks:                  timer.NewTimer(transactionTimeout / 10),
-		checker:                checker,
 		limiter:                limiter,
 	}
 	txOnce.Do(func() {
@@ -463,7 +456,7 @@ func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wa
 				// If the context is done, the query was killed.
 				// So, don't trigger a mysql check.
 			default:
-				txc.pool.checker.CheckMySQL()
+				txc.pool.env.CheckMySQL()
 			}
 		}
 		return nil, err

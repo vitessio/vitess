@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -50,19 +51,20 @@ type TxLimiter interface {
 // byXXX: whether given field from immediate/effective caller id should be taken
 // into account when deciding "user" identity for purposes of transaction
 // limiting.
-func New(slotCount int, maxPerUser float64, enabled, dryRun, byUsername, byPrincipal, byComponent, bySubcomponent bool) TxLimiter {
-	if !enabled && !dryRun {
+func New(env tabletenv.Env) TxLimiter {
+	config := env.Config()
+	if !config.EnableTransactionLimit && !config.EnableTransactionLimitDryRun {
 		return &TxAllowAll{}
 	}
 
 	return &Impl{
-		maxPerUser:      int64(float64(slotCount) * maxPerUser),
-		dryRun:          dryRun,
-		byUsername:      byUsername,
-		byPrincipal:     byPrincipal,
-		byComponent:     byComponent,
-		bySubcomponent:  bySubcomponent,
-		byEffectiveUser: byPrincipal || byComponent || bySubcomponent,
+		maxPerUser:      int64(float64(config.TransactionCap) * config.TransactionLimitPerUser),
+		dryRun:          config.EnableTransactionLimitDryRun,
+		byUsername:      config.TransactionLimitByUsername,
+		byPrincipal:     config.TransactionLimitByPrincipal,
+		byComponent:     config.TransactionLimitByComponent,
+		bySubcomponent:  config.TransactionLimitBySubcomponent,
+		byEffectiveUser: config.TransactionLimitByPrincipal || config.TransactionLimitByComponent || config.TransactionLimitBySubcomponent,
 		usageMap:        make(map[string]int64),
 	}
 }
