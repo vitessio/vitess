@@ -2740,6 +2740,10 @@ function_call_keyword:
   {
     $$ = &FuncExpr{Name: NewColIdent("right"), Exprs: $3}
   }
+| SCHEMA openb closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent("schema")}
+  }
 | CONVERT openb expression ',' convert_type closeb
   {
     $$ = &ConvertExpr{Expr: $3, Type: $5}
