@@ -87,8 +87,7 @@ func TestMain(m *testing.M) {
 
 		// engines cannot be initialized in testenv because it introduces
 		// circular dependencies.
-		streamerEngine = vstreamer.NewEngine(env.SrvTopo, env.SchemaEngine)
-		streamerEngine.InitDBConfig(env.Dbcfgs.DbaWithDB())
+		streamerEngine = vstreamer.NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine)
 		streamerEngine.Open(env.KeyspaceName, env.Cells[0])
 		defer streamerEngine.Close()
 
