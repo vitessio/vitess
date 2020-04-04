@@ -51,10 +51,9 @@ func TestStrictMode(t *testing.T) {
 
 	// Test default behavior.
 	config := tabletenv.DefaultQsConfig
-	// config.EnforceStrictTransTable is true by default.
-	se := schema.NewEngine(tabletenv.NewTestEnv(&config, nil, nil))
-	qe := NewQueryEngine(DummyChecker, se, config)
-	qe.InitDBConfig(dbcfgs)
+	env := tabletenv.NewTestEnv(&config, dbcfgs, nil)
+	se := schema.NewEngine(env)
+	qe := NewQueryEngine(env, se)
 	qe.se.InitDBConfig(dbcfgs.DbaWithDB())
 	qe.se.Open()
 	if err := qe.Open(); err != nil {
@@ -70,8 +69,7 @@ func TestStrictMode(t *testing.T) {
 			Rows:   [][]sqltypes.Value{{sqltypes.NewVarBinary("")}},
 		},
 	)
-	qe = NewQueryEngine(DummyChecker, se, config)
-	qe.InitDBConfig(dbcfgs)
+	qe = NewQueryEngine(env, se)
 	err := qe.Open()
 	wantErr := "require sql_mode to be STRICT_TRANS_TABLES or STRICT_ALL_TABLES: got ''"
 	if err == nil || err.Error() != wantErr {
@@ -81,8 +79,7 @@ func TestStrictMode(t *testing.T) {
 
 	// Test that we succeed if the enforcement flag is off.
 	config.EnforceStrictTransTables = false
-	qe = NewQueryEngine(DummyChecker, se, config)
-	qe.InitDBConfig(dbcfgs)
+	qe = NewQueryEngine(env, se)
 	if err := qe.Open(); err != nil {
 		t.Fatal(err)
 	}
@@ -297,10 +294,10 @@ func newTestQueryEngine(queryPlanCacheSize int, idleTimeout time.Duration, stric
 	config := tabletenv.DefaultQsConfig
 	config.QueryPlanCacheSize = queryPlanCacheSize
 	config.IdleTimeout = float64(idleTimeout) / 1e9
-	se := schema.NewEngine(tabletenv.NewTestEnv(&config, nil, nil))
-	qe := NewQueryEngine(DummyChecker, se, config)
+	env := tabletenv.NewTestEnv(&config, dbcfgs, nil)
+	se := schema.NewEngine(env)
+	qe := NewQueryEngine(env, se)
 	se.InitDBConfig(dbcfgs.DbaWithDB())
-	qe.InitDBConfig(dbcfgs)
 	return qe
 }
 
