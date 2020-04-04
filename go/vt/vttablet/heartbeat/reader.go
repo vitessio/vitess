@@ -69,7 +69,8 @@ type Reader struct {
 }
 
 // NewReader returns a new heartbeat reader.
-func NewReader(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *Reader {
+func NewReader(env tabletenv.Env) *Reader {
+	config := env.Config()
 	if !config.HeartbeatEnable {
 		return &Reader{}
 	}
@@ -80,7 +81,7 @@ func NewReader(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *Re
 		interval: config.HeartbeatInterval,
 		ticks:    timer.NewTimer(config.HeartbeatInterval),
 		errorLog: logutil.NewThrottledLogger("HeartbeatReporter", 60*time.Second),
-		pool:     connpool.New(config.PoolNamePrefix+"HeartbeatReadPool", 1, 0, time.Duration(config.IdleTimeout*1e9), checker),
+		pool:     connpool.New(config.PoolNamePrefix+"HeartbeatReadPool", 1, 0, time.Duration(config.IdleTimeout*1e9), env),
 	}
 }
 

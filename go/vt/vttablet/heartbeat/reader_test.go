@@ -110,7 +110,7 @@ func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
-	tr := NewReader(&fakeMysqlChecker{}, config)
+	tr := NewReader(tabletenv.NewTestEnv(&config, nil))
 	tr.dbName = sqlescape.EscapeID(dbc.SidecarDBName.Get())
 	tr.keyspaceShard = "test:0"
 	tr.now = nowFunc
