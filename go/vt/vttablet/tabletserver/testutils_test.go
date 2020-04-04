@@ -28,13 +28,6 @@ import (
 
 var errRejected = errors.New("rejected")
 
-type dummyChecker struct {
-}
-
-func (dummyChecker) CheckMySQL() {}
-
-var DummyChecker = dummyChecker{}
-
 type testUtils struct{}
 
 func newTestUtils() *testUtils {

@@ -104,7 +104,7 @@ func Init() (*Env, error) {
 	te.Dbcfgs = dbconfigs.NewTestDBConfigs(te.cluster.MySQLConnParams(), te.cluster.MySQLAppDebugConnParams(), te.cluster.DbName())
 	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
 	config := tabletenv.DefaultQsConfig
-	te.SchemaEngine = schema.NewEngine(tabletenv.NewTestEnv(&config, nil, nil))
+	te.SchemaEngine = schema.NewEngine(tabletenv.NewTestEnv(&config, nil))
 	te.SchemaEngine.InitDBConfig(te.Dbcfgs.DbaWithDB())
 
 	// The first vschema should not be empty. Leads to Node not found error.

@@ -159,7 +159,7 @@ func (vsClient *MySQLVStreamerClient) Open(ctx context.Context) (err error) {
 	// Let's create all the required components by vstreamer
 
 	config := tabletenv.DefaultQsConfig
-	vsClient.sourceSe = schema.NewEngine(tabletenv.NewTestEnv(&config, nil, nil))
+	vsClient.sourceSe = schema.NewEngine(tabletenv.NewTestEnv(&config, nil))
 	vsClient.sourceSe.InitDBConfig(vsClient.sourceConnParams)
 	err = vsClient.sourceSe.Open()
 	if err != nil {
