@@ -227,9 +227,6 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 	tsv.hw = heartbeat.NewWriter(tsv, alias)
 	tsv.hr = heartbeat.NewReader(tsv)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
-	// FIXME(alainjobart) could we move this to the Register method below?
-	// So that vtcombo doesn't even call it once, on the first tablet.
-	// And we can remove the tsOnce variable.
 	tsOnce.Do(func() {
 		srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo")
 		stats.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
@@ -248,8 +245,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 		stats.NewGaugeDurationFunc("QueryTimeout", "Tablet server query timeout", tsv.QueryTimeout.Get)
 		stats.NewGaugeDurationFunc("QueryPoolTimeout", "Tablet server timeout to get a connection from the query pool", tsv.qe.connTimeout.Get)
 	})
-	// TODO(sougou): move this up once the stats naming problem is fixed.
-	tsv.vstreamer = vstreamer.NewEngine(srvTopoServer, tsv.se)
+	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se)
 	tsv.watcher = NewReplicationWatcher(tsv.vstreamer, config)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer, config)
 	return tsv
@@ -349,9 +345,6 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.dbconfigs = dbcfgs
 
 	tsv.se.InitDBConfig(tsv.dbconfigs.DbaWithDB())
-	tsv.hw.InitDBConfig(tsv.dbconfigs)
-	tsv.hr.InitDBConfig(tsv.dbconfigs)
-	tsv.vstreamer.InitDBConfig(tsv.dbconfigs.DbaWithDB())
 	return nil
 }
 

@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -49,7 +48,7 @@ const (
 // table against the current time at read time. This value is reported in metrics and
 // also to the healthchecks.
 type Reader struct {
-	dbconfigs *dbconfigs.DBConfigs
+	env tabletenv.Env
 
 	enabled       bool
 	interval      time.Duration
@@ -76,6 +75,7 @@ func NewReader(env tabletenv.Env) *Reader {
 	}
 
 	return &Reader{
+		env:      env,
 		enabled:  true,
 		now:      time.Now,
 		interval: config.HeartbeatInterval,
@@ -85,18 +85,13 @@ func NewReader(env tabletenv.Env) *Reader {
 	}
 }
 
-// InitDBConfig must be called before Init.
-func (r *Reader) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	r.dbconfigs = dbcfgs
-}
-
 // Init does last minute initialization of db settings, such as dbName
 // and keyspaceShard
 func (r *Reader) Init(target querypb.Target) {
 	if !r.enabled {
 		return
 	}
-	r.dbName = sqlescape.EscapeID(r.dbconfigs.SidecarDBName.Get())
+	r.dbName = sqlescape.EscapeID(r.env.DBConfigs().SidecarDBName.Get())
 	r.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
 }
 
@@ -113,7 +108,7 @@ func (r *Reader) Open() {
 	}
 
 	log.Info("Beginning heartbeat reads")
-	r.pool.Open(r.dbconfigs.AppWithDB(), r.dbconfigs.DbaWithDB(), r.dbconfigs.AppDebugWithDB())
+	r.pool.Open(r.env.DBConfigs().AppWithDB(), r.env.DBConfigs().DbaWithDB(), r.env.DBConfigs().AppDebugWithDB())
 	r.ticks.Start(func() { r.readHeartbeat() })
 	r.isOpen = true
 }

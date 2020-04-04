@@ -46,6 +46,7 @@ type Env struct {
 	ShardName    string
 	Cells        []string
 
+	TabletEnv    tabletenv.Env
 	TopoServ     *topo.Server
 	SrvTopo      srvtopo.Server
 	Dbcfgs       *dbconfigs.DBConfigs
@@ -102,9 +103,10 @@ func Init() (*Env, error) {
 	}
 
 	te.Dbcfgs = dbconfigs.NewTestDBConfigs(te.cluster.MySQLConnParams(), te.cluster.MySQLAppDebugConnParams(), te.cluster.DbName())
-	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
 	config := tabletenv.DefaultQsConfig
-	te.SchemaEngine = schema.NewEngine(tabletenv.NewTestEnv(&config, nil))
+	te.TabletEnv = tabletenv.NewTestEnv(&config, te.Dbcfgs)
+	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
+	te.SchemaEngine = schema.NewEngine(te.TabletEnv)
 	te.SchemaEngine.InitDBConfig(te.Dbcfgs.DbaWithDB())
 
 	// The first vschema should not be empty. Leads to Node not found error.

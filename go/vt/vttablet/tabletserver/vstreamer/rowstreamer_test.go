@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -139,7 +140,15 @@ func TestStreamRowsUnicode(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.se.Reload(context.Background())
+
+	// Use an engine with latin1 charset.
+	savedEngine := engine
+	defer func() { engine = savedEngine }()
+	engine = customEngine(t, func(in mysql.ConnParams) mysql.ConnParams {
+		in.Charset = "latin1"
+		return in
+	})
+	defer engine.Close()
 
 	// We need a latin1 connection.
 	conn, err := env.Mysqld.GetDbaConnection()
@@ -156,14 +165,6 @@ func TestStreamRowsUnicode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	savecp := engine.cp
-	// Rowstreamer must override this to "binary"
-	params, err := engine.cp.MysqlParams()
-	if err != nil {
-		t.Fatal(err)
-	}
-	params.Charset = "latin1"
-	defer func() { engine.cp = savecp }()
 	err = engine.StreamRows(context.Background(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		// Skip fields.
 		if len(rows.Rows) == 0 {
