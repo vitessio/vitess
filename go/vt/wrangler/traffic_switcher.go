@@ -146,31 +146,20 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 
 // SwitchWrites is a generic way of migrating write traffic for a resharding workflow.
 func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow string, filteredReplicationWaitTime time.Duration, cancelMigrate, reverseReplication bool, dryRun bool) (journalID int64, dryRunResults []string, err error) {
-	dryRunResults = make([]string, 0)
-	drLog := func(msg string) {
-		dryRunResults = append(dryRunResults, msg)
-		//fmt.Printf("DR: %s\n", msg)  //TODO for debugging, remove before commit
-	}
+	drLog := NewLogRecorder()
+
 	drLogLock := func(ts *trafficSwitcher, lock bool) {
-		sLock := ""
-		if lock {
-			sLock = "lock"
-		} else {
+		sLock := "lock"
+		if !lock {
 			sLock = "unlock"
 		}
 		if ts.targetKeyspace != ts.sourceKeyspace {
-			drLog(fmt.Sprintf("Will %s source keyspace %s and target keyspace %s", sLock, ts.sourceKeyspace, ts.targetKeyspace))
+			drLog.Log(fmt.Sprintf("Will %s source keyspace %s and target keyspace %s", sLock, ts.sourceKeyspace, ts.targetKeyspace))
 		} else {
-			drLog(fmt.Sprintf("Will %s keyspace %s", sLock, ts.sourceKeyspace))
+			drLog.Log(fmt.Sprintf("Will %s keyspace %s", sLock, ts.sourceKeyspace))
 		}
+	}
 
-	}
-	drLogArray := func(logs []string) {
-		sort.Strings(logs)
-		for _, log := range logs {
-			drLog(log)
-		}
-	}
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
 	if err != nil {
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
@@ -178,8 +167,8 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 	}
 	if ts.frozen {
 		if dryRun {
-			drLog("Replication has been frozen already. Left-over streams will be deleted")
-			return 0, dryRunResults, nil
+			drLog.Log("Replication has been frozen already. Left-over streams will be deleted")
+			return 0, drLog.GetLogs(), nil
 		}
 		ts.wr.Logger().Infof("Replication has been frozen already. Deleting left-over streams")
 		if err := ts.deleteTargetVReplication(ctx); err != nil {
@@ -238,16 +227,16 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 				ts.cancelMigration(ctx, sm)
 				return 0, nil, nil
 			}
-			drLog("Stream migrations will be cancelled as requested")
+			drLog.Log("Stream migrations will be cancelled as requested")
 			drLogLock(ts, false)
-			return 0, dryRunResults, nil
+			return 0, drLog.GetLogs(), nil
 		}
 		if dryRun {
 			if len(sm.streams) > 0 {
-				drLog(fmt.Sprintf("Following streams will be stopped on keyspace %s", ts.sourceKeyspace))
+				drLog.Log(fmt.Sprintf("Following streams will be stopped on keyspace %s", ts.sourceKeyspace))
 				for key, streams := range sm.streams {
 					for _, stream := range streams {
-						drLog(fmt.Sprintf("\tkey %s shard %s stream %+v", key, stream.bls.Shard, stream.bls))
+						drLog.Log(fmt.Sprintf("\tkey %s shard %s stream %+v", key, stream.bls.Shard, stream.bls))
 					}
 				}
 			}
@@ -265,7 +254,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 			}
 		}
 		if dryRun {
-			drLog(fmt.Sprintf("Writes will be stopped in keyspace %s, tables %s", ts.sourceKeyspace, strings.Join(ts.tables, ",")))
+			drLog.Log(fmt.Sprintf("Writes will be stopped in keyspace %s, tables %s", ts.sourceKeyspace, strings.Join(ts.tables, ",")))
 		} else {
 			if err := ts.stopSourceWrites(ctx); err != nil {
 				ts.wr.Logger().Errorf("stopSourceWrites failed: %v", err)
@@ -275,9 +264,9 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 		}
 
 		if dryRun {
-			drLog(fmt.Sprintf("Will wait for VReplication on all streams to catchup for upto %v", filteredReplicationWaitTime))
-			drLog(fmt.Sprintf("Streams will be migrated to %s", ts.targetKeyspace))
-			drLog(fmt.Sprintf("Reverse replication workflow %s will be created ", ts.reverseWorkflow))
+			drLog.Log(fmt.Sprintf("Will wait for VReplication on all streams to catchup for upto %v", filteredReplicationWaitTime))
+			drLog.Log(fmt.Sprintf("Streams will be migrated to %s", ts.targetKeyspace))
+			drLog.Log(fmt.Sprintf("Reverse replication workflow %s will be created ", ts.reverseWorkflow))
 		} else {
 			if err := ts.waitForCatchup(ctx, filteredReplicationWaitTime); err != nil {
 				ts.wr.Logger().Errorf("waitForCatchup failed: %v", err)
@@ -298,7 +287,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 		}
 	} else {
 		if dryRun {
-			drLog(fmt.Sprintf("Previous journals were found. If journals are pending, positions will be gathered for the missing ones"))
+			drLog.Log(fmt.Sprintf("Previous journals were found. If journals are pending, positions will be gathered for the missing ones"))
 		} else {
 			if cancelMigrate {
 				err := fmt.Errorf("traffic switching has reached the point of no return, cannot cancel")
@@ -314,26 +303,26 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 		}
 	}
 	if dryRun {
-		drLog("Binlog entries will be created on source databases, SwitchWrites will have reached a point of no return")
-		drLog(fmt.Sprintf("Writes will be enabled on keyspace %s tables %s", ts.targetKeyspace, strings.Join(ts.tables, ",")))
-		drLog(fmt.Sprintf("Routing will be switched from keyspace %s to keyspace %s", ts.sourceKeyspace, ts.targetKeyspace))
+		drLog.Log("Binlog entries will be created on source databases, SwitchWrites will have reached a point of no return")
+		drLog.Log(fmt.Sprintf("Writes will be enabled on keyspace %s tables %s", ts.targetKeyspace, strings.Join(ts.tables, ",")))
+		drLog.Log(fmt.Sprintf("Routing will be switched from keyspace %s to keyspace %s", ts.sourceKeyspace, ts.targetKeyspace))
 		if reverseReplication {
-			drLog("Reverse replication streams will be started on:\n")
+			drLog.Log("Reverse replication streams will be started on:\n")
 			logs := make([]string, 0)
 			for _, t := range ts.sources {
 				logs = append(logs, fmt.Sprintf("\ttablet %s", t.master.Alias))
 			}
-			drLogArray(logs)
+			drLog.LogSlice(logs)
 		}
-		drLog("SwitchWrites completed, migration streams will be frozen and then deleted on:")
+		drLog.Log("SwitchWrites completed, migration streams will be frozen and then deleted on:")
 		logs := make([]string, 0)
 		for _, t := range ts.targets {
 			logs = append(logs, fmt.Sprintf("\ttablet %s", t.master.Alias))
 		}
-		drLogArray(logs)
+		drLog.LogSlice(logs)
 		drLogLock(ts, false)
 
-		return ts.id, dryRunResults, nil
+		return ts.id, drLog.GetLogs(), nil
 	}
 	// This is the point of no return. Once a journal is created,
 	// traffic can be redirected to target shards.
@@ -364,7 +353,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 		return 0, nil, err
 	}
 	drLogLock(ts, false)
-	return ts.id, dryRunResults, nil
+	return ts.id, drLog.GetLogs(), nil
 }
 
 func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workflow string) (*trafficSwitcher, error) {
