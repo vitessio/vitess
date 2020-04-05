@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"flag"
@@ -27,6 +28,7 @@ import (
 	"path"
 	"strings"
 	"syscall"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -36,28 +38,25 @@ import (
 )
 
 var cluster *vttest.LocalCluster
+var querylog <-chan string
 
 func main() {
 	flag.Parse()
 
-	var err error
-	cluster, err = runCluster()
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		cluster.TearDown()
-		os.Exit(1)
-	}
-	defer cluster.TearDown()
+	runCluster()
+	querylog, _ = streamQuerylog(cluster.Env.PortForProtocol("vtcombo", ""))
 
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.Dir("./")))
 	mux.HandleFunc("/exec", exec)
 	go http.ListenAndServe(":8000", mux)
+
 	wait()
+	cluster.TearDown()
 }
 
-func runCluster() (*vttest.LocalCluster, error) {
-	localCluster := &vttest.LocalCluster{
+func runCluster() {
+	cluster = &vttest.LocalCluster{
 		Config: vttest.Config{
 			Topology: &vttestpb.VTTestTopology{
 				Keyspaces: []*vttestpb.Keyspace{{
@@ -80,11 +79,14 @@ func runCluster() (*vttest.LocalCluster, error) {
 	}
 	env, err := vttest.NewLocalTestEnv("", 12345)
 	if err != nil {
-		return localCluster, err
+		log.Exitf("Error: %v", err)
 	}
-	localCluster.Env = env
-	err = localCluster.Setup()
-	return localCluster, err
+	cluster.Env = env
+	err = cluster.Setup()
+	if err != nil {
+		cluster.TearDown()
+		log.Exitf("Error: %v", err)
+	}
 }
 
 func wait() {
@@ -112,8 +114,31 @@ func exec(w http.ResponseWriter, req *http.Request) {
 	defer conn.Close()
 	query := req.FormValue("query")
 	response := make(map[string]interface{})
-	response["queries"] = []string{}
+
+	var queries []string
+	// Clear existing log.
+	for {
+		select {
+		case <-querylog:
+			continue
+		default:
+		}
+		break
+	}
 	execQuery(conn, "result", query, "", "", response)
+	// Collect
+	time.Sleep(250 * time.Millisecond)
+	for {
+		select {
+		case val := <-querylog:
+			queries = append(queries, val)
+			continue
+		default:
+		}
+		break
+	}
+	response["queries"] = queries
+
 	execQuery(conn, "user0", "select * from user", "user", "-80", response)
 	execQuery(conn, "user1", "select * from user", "user", "80-", response)
 	execQuery(conn, "user_extra0", "select * from user_extra", "user", "-80", response)
@@ -185,4 +210,47 @@ func resultToMap(title string, qr *sqltypes.Result) map[string]interface{} {
 		"rowsaffected": int64(qr.RowsAffected),
 		"insertid":     int64(qr.InsertID),
 	}
+}
+
+func streamQuerylog(port int) (<-chan string, error) {
+	request := fmt.Sprintf("http://localhost:%d/debug/querylog", port)
+	resp, err := http.Get(request)
+	if err != nil {
+		log.Errorf("Error reading stream: %v: %v", request, err)
+		return nil, err
+	}
+	ch := make(chan string, 100)
+	go func() {
+		buffered := bufio.NewReader(resp.Body)
+		for {
+			str, err := buffered.ReadString('\n')
+			if err != nil {
+				log.Errorf("Error reading stream: %v: %v", request, err)
+				close(ch)
+				resp.Body.Close()
+				return
+			}
+			splits := strings.Split(str, "\t")
+			if len(splits) < 13 {
+				continue
+			}
+			trimmed := strings.Trim(splits[12], `"`)
+			if trimmed == "" {
+				continue
+			}
+			splitQueries := strings.Split(trimmed, ";")
+			var final []string
+			for _, query := range splitQueries {
+				if strings.Contains(query, "1 != 1") {
+					continue
+				}
+				final = append(final, query)
+			}
+			select {
+			case ch <- strings.Join(final, "; "):
+			default:
+			}
+		}
+	}()
+	return ch, nil
 }
