@@ -295,7 +295,7 @@ func TestStatsURL(t *testing.T) {
 
 	request, _ := http.NewRequest("GET", "/debug/schema", nil)
 	response := httptest.NewRecorder()
-	se.ServeHTTP(response, request)
+	se.handleDebugSchema(response, request)
 }
 
 func newEngine(queryPlanCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, strict bool, db *fakesqldb.DB) *Engine {
