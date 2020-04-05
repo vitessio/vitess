@@ -706,5 +706,5 @@ func newTxPool() *TxPool {
 	config.TxPoolWaiterCap = 500000
 	config.IdleTimeout = 30
 	limiter := &txlimiter.TxAllowAll{}
-	return NewTxPool(tabletenv.NewTestEnv(&config, nil), limiter)
+	return NewTxPool(tabletenv.NewTestEnv(&config, nil, "TabletServerTest"), limiter)
 }

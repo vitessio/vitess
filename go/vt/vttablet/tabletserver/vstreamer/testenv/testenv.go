@@ -97,7 +97,7 @@ func Init() (*Env, error) {
 
 	te.Dbcfgs = dbconfigs.NewTestDBConfigs(te.cluster.MySQLConnParams(), te.cluster.MySQLAppDebugConnParams(), te.cluster.DbName())
 	config := tabletenv.DefaultQsConfig
-	te.TabletEnv = tabletenv.NewTestEnv(&config, te.Dbcfgs)
+	te.TabletEnv = tabletenv.NewTestEnv(&config, te.Dbcfgs, "VStreamerTest")
 	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
 	te.SchemaEngine = schema.NewEngine(te.TabletEnv)
 	te.SchemaEngine.InitDBConfig(te.Dbcfgs.DbaWithDB())
