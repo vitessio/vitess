@@ -339,7 +339,7 @@ var commands = []commandGroup{
 				"[-cells=c1,c2,...] [-reverse] <destination keyspace/shard> <served tablet type>",
 				"Makes the <destination keyspace/shard> serve the given type. This command also rebuilds the serving graph."},
 			{"SwitchReads", commandSwitchReads,
-				"[-cells=c1,c2,...] [-reverse] -tablet_type={replica|rdonly} <keyspace.workflow>",
+				"[-cells=c1,c2,...] [-reverse] -tablet_type={replica|rdonly} [-dry-run] <keyspace.workflow>",
 				"Switch read traffic for the specified workflow."},
 			{"SwitchWrites", commandSwitchWrites,
 				"[-filtered_replication_wait_time=30s] [-cancel] [-reverse_replication=false] [-dry-run] <keyspace.workflow>",
@@ -2000,6 +2000,7 @@ func commandSwitchReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward.")
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
 	tabletType := subFlags.String("tablet_type", "", "Tablet type (replica or rdonly)")
+	dryRun := subFlags.Bool("dryrun", false, "Does a dry run of SwitchReads and only reports the actions to be taken")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2027,7 +2028,17 @@ func commandSwitchReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 
-	return wr.SwitchReads(ctx, keyspace, workflow, servedType, cells, direction)
+	dryRunResults, err := wr.SwitchReads(ctx, keyspace, workflow, servedType, cells, direction, *dryRun)
+	if err != nil {
+		return err
+	}
+	if *dryRun {
+		fmt.Printf("Dry Run results for SwitchReads run at %s\nParameters: %s\n\n", time.RFC822, strings.Join(args, " "))
+		for _, msg := range dryRunResults {
+			fmt.Println(msg)
+		}
+	}
+	return nil
 }
 
 func commandSwitchWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2048,14 +2059,14 @@ func commandSwitchWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	}
 
 	journalID, dryRunResults, err := wr.SwitchWrites(ctx, keyspace, workflow, *filteredReplicationWaitTime, *cancelMigrate, *reverseReplication, *dryRun)
+	if err != nil {
+		return err
+	}
 	if *dryRun {
-		fmt.Printf("Dry Run results for SwitchRights run at %s\nParameters: %s\n\n", time.RFC822, strings.Join(args, " "))
+		fmt.Printf("Dry Run results for SwitchWrites run at %s\nParameters: %s\n\n", time.RFC822, strings.Join(args, " "))
 		for _, msg := range dryRunResults {
 			fmt.Println(msg)
 		}
-	}
-	if err != nil {
-		return err
 	}
 	wr.Logger().Infof("Migration Journal ID: %v", journalID)
 	return nil

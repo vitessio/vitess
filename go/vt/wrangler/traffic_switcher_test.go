@@ -92,7 +92,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Single cell RDONLY migration.
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, []string{"cell1"}, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, []string{"cell1"}, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 	// So, adding routes for replica and deploying to cell2 will also cause
 	// cell2 to switch rdonly. This is a quirk that can be fixed later if necessary.
 	// TODO(sougou): check if it's worth fixing, or clearly document the quirk.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, []string{"cell2"}, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, []string{"cell2"}, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Single cell backward REPLICA migration.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, []string{"cell2"}, DirectionBackward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, []string{"cell2"}, DirectionBackward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Switch all REPLICA.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// All cells RDONLY backward migration.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionBackward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionBackward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +226,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// All cells RDONLY backward migration.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionBackward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionBackward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +240,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Can't switch master with SwitchReads.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_MASTER, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_MASTER, nil, DirectionForward, false)
 	want := "tablet type must be REPLICA or RDONLY: MASTER"
 	if err == nil || err.Error() != want {
 		t.Errorf("SwitchReads(master) err: %v, want %v", err, want)
@@ -260,11 +260,11 @@ func TestTableMigrateMainflow(t *testing.T) {
 	// Test SwitchWrites cancelation on failure.
 
 	// Switch all the reads first.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -467,7 +467,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Single cell RDONLY migration.
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, []string{"cell1"}, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, []string{"cell1"}, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -483,7 +483,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Other cell REPLICA migration.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, []string{"cell2"}, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, []string{"cell2"}, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -499,7 +499,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Single cell backward REPLICA migration.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, []string{"cell2"}, DirectionBackward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, []string{"cell2"}, DirectionBackward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -518,7 +518,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 	// This is an extra step that does not exist in the tables test.
 	// The per-cell migration mechanism is different for tables. So, this
 	// extra step is needed to bring things in sync.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -530,7 +530,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Switch all REPLICA.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -542,7 +542,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// All cells RDONLY backward migration.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionBackward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionBackward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -554,7 +554,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Can't switch master with SwitchReads.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_MASTER, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_MASTER, nil, DirectionForward, false)
 	want := "tablet type must be REPLICA or RDONLY: MASTER"
 	if err == nil || err.Error() != want {
 		t.Errorf("SwitchReads(master) err: %v, want %v", err, want)
@@ -574,7 +574,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 	// Test SwitchWrites cancelation on failure.
 
 	// Switch all the reads first.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -748,11 +748,11 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	tme := newTestTableMigraterCustom(ctx, t, []string{"0"}, []string{"-80", "80-"}, "select * %s")
 	defer tme.stopTablets(t)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -827,11 +827,18 @@ func TestTableMigrateOneToMany(t *testing.T) {
 }
 
 func TestTableMigrateOneToManyDryRun(t *testing.T) {
+	var err error
 	ctx := context.Background()
 	tme := newTestTableMigraterCustom(ctx, t, []string{"0"}, []string{"-80", "80-"}, "select * %s")
 	defer tme.stopTablets(t)
 
-	want := []string{
+	wantdryRunReads := []string{
+		"Will lock keyspace ks1",
+		"Will switch reads for tables t1,t2 to keyspace ks2",
+		"Will switch reads from keyspace ks1 to keyspace ks2 for shards 0 to shards -80,80-",
+		"Will unlock keyspace ks1",
+	}
+	wantdryRunWrites := []string{
 		"Will lock source keyspace ks1 and target keyspace ks2",
 		"Writes will be stopped in keyspace ks1, tables t1,t2",
 		"Will wait for VReplication on all streams to catchup for upto 1s",
@@ -845,12 +852,17 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 		"\ttablet cell:\"cell1\" uid:30",
 		"Will unlock source keyspace ks1 and target keyspace ks2",
 	}
-
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	dryRunResults, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	validateDryRunResults(t, wantdryRunReads, dryRunResults)
+
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -917,11 +929,11 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 	}
 	deleteTargetVReplication()
 
-	_, dryRunResults, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true)
+	_, dryRunResults, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	validateDryRunResults(t, want, dryRunResults)
+	validateDryRunResults(t, wantdryRunWrites, dryRunResults)
 }
 
 // TestMigrateFailJournal tests that cancel doesn't get called after point of no return.
@@ -931,11 +943,11 @@ func TestMigrateFailJournal(t *testing.T) {
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1027,11 +1039,11 @@ func TestTableMigrateJournalExists(t *testing.T) {
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1098,11 +1110,11 @@ func TestShardMigrateJournalExists(t *testing.T) {
 	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1164,11 +1176,11 @@ func TestTableMigrateCancel(t *testing.T) {
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1219,11 +1231,11 @@ func TestTableMigrateCancelDryRun(t *testing.T) {
 		"Will unlock source keyspace ks1 and target keyspace ks2",
 	}
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1268,11 +1280,11 @@ func TestTableMigrateNoReverse(t *testing.T) {
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1373,12 +1385,12 @@ func TestMigrateFrozen(t *testing.T) {
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1400,7 +1412,7 @@ func TestMigrateFrozen(t *testing.T) {
 	), nil)
 	tme.dbTargetClients[1].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
 
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	want := "cannot switch reads while SwitchWrites is in progress"
 	if err == nil || err.Error() != want {
 		t.Errorf("SwitchReads(frozen) err: %v, want %v", err, want)
@@ -1439,7 +1451,7 @@ func TestMigrateNoStreamsFound(t *testing.T) {
 	tme.dbTargetClients[0].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
 	tme.dbTargetClients[1].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	want := "no streams found in keyspace ks2 for: test"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchReads: %v, must contain %v", err, want)
@@ -1470,7 +1482,7 @@ func TestMigrateDistinctSources(t *testing.T) {
 		fmt.Sprintf("1|%v|", bls),
 	), nil)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	want := "source keyspaces are mismatched across streams"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchReads: %v, must contain %v", err, want)
@@ -1499,7 +1511,7 @@ func TestMigrateMismatchedTables(t *testing.T) {
 		nil,
 	)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	want := "table lists are mismatched across streams"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchReads: %v, must contain %v", err, want)
@@ -1513,7 +1525,7 @@ func TestTableMigrateAllShardsNotPresent(t *testing.T) {
 
 	tme.dbTargetClients[0].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	want := "mismatched shards for keyspace"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchReads: %v, must contain %v", err, want)
@@ -1567,7 +1579,7 @@ func TestMigrateNoTableWildcards(t *testing.T) {
 		fmt.Sprintf("1|%v|", bls3),
 	), nil)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	want := "cannot migrate streams with wild card table names"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchReads: %v, must contain %v", err, want)

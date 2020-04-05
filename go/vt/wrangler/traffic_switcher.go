@@ -103,46 +103,85 @@ type tsSource struct {
 }
 
 // SwitchReads is a generic way of switching read traffic for a resharding workflow.
-func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow string, servedType topodatapb.TabletType, cells []string, direction TrafficSwitchDirection) error {
+func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow string, servedType topodatapb.TabletType, cells []string, direction TrafficSwitchDirection, dryRun bool) ([]string, error) {
+	drLog := NewLogRecorder()
+
 	if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
-		return fmt.Errorf("tablet type must be REPLICA or RDONLY: %v", servedType)
+		return nil, fmt.Errorf("tablet type must be REPLICA or RDONLY: %v", servedType)
 	}
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
 	if err != nil {
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
-		return err
+		return nil, err
 	}
 	if ts.frozen {
-		return fmt.Errorf("cannot switch reads while SwitchWrites is in progress")
+		return nil, fmt.Errorf("cannot switch reads while SwitchWrites is in progress")
 	}
 	if err := ts.validate(ctx, false /* isWrite */); err != nil {
 		ts.wr.Logger().Errorf("validate failed: %v", err)
-		return err
+		return nil, err
 	}
+
+	var unlock func(*error)
+	var lockErr error
 
 	// For reads, locking the source keyspace is sufficient.
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, ts.sourceKeyspace, "SwitchReads")
-	if lockErr != nil {
-		ts.wr.Logger().Errorf("LockKeyspace failed: %v", lockErr)
-		return lockErr
-	}
-	defer unlock(&err)
-
-	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
-		if err := ts.switchTableReads(ctx, cells, servedType, direction); err != nil {
-			ts.wr.Logger().Errorf("switchTableReads failed: %v", err)
-			return err
+	if dryRun {
+		drLog.Log(fmt.Sprintf("Will lock keyspace %s", ts.sourceKeyspace))
+	} else {
+		ctx, unlock, lockErr = wr.ts.LockKeyspace(ctx, ts.sourceKeyspace, "SwitchReads")
+		if lockErr != nil {
+			ts.wr.Logger().Errorf("LockKeyspace failed: %v", lockErr)
+			return nil, lockErr
 		}
-		return nil
+		defer unlock(&err)
 	}
-	if err := ts.switchShardReads(ctx, cells, servedType, direction); err != nil {
-		ts.wr.Logger().Errorf("switchShardReads failed: %v", err)
-		return err
+	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
+		if dryRun {
+			ks := ts.targetKeyspace
+			if direction == DirectionBackward {
+				ks = ts.sourceKeyspace
+			}
+			drLog.Log(fmt.Sprintf("Will switch reads for tables %s to keyspace %s", strings.Join(ts.tables, ","), ks))
+		} else {
+			if err := ts.switchTableReads(ctx, cells, servedType, direction); err != nil {
+				ts.wr.Logger().Errorf("switchTableReads failed: %v", err)
+				return nil, err
+			}
+			return nil, nil
+		}
 	}
-	return nil
-}
+	if dryRun {
+		sourceShards := make([]string, 0)
+		targetShards := make([]string, 0)
+		for _, source := range ts.sources {
+			sourceShards = append(sourceShards, source.si.ShardName())
+		}
+		for _, target := range ts.targets {
+			targetShards = append(targetShards, target.si.ShardName())
+		}
+		sort.Strings(sourceShards)
+		sort.Strings(targetShards)
+		if direction == DirectionForward {
+			drLog.Log(fmt.Sprintf("Will switch reads from keyspace %s to keyspace %s for shards %s to shards %s",
+				ts.sourceKeyspace, ts.targetKeyspace, strings.Join(sourceShards, ","), strings.Join(targetShards, ",")))
+		} else {
+			drLog.Log(fmt.Sprintf("Will switch reads from keyspace %s to keyspace %s for shards %s to shards %s",
+				ts.targetKeyspace, ts.sourceKeyspace, strings.Join(targetShards, ","), strings.Join(sourceShards, ",")))
+		}
 
-// Error approach ok?
+	} else {
+		if err := ts.switchShardReads(ctx, cells, servedType, direction); err != nil {
+			ts.wr.Logger().Errorf("switchShardReads failed: %v", err)
+			return nil, err
+		}
+	}
+	if dryRun {
+		drLog.Log(fmt.Sprintf("Will unlock keyspace %s", ts.sourceKeyspace))
+		return drLog.GetLogs(), nil
+	}
+	return nil, nil
+}
 
 // SwitchWrites is a generic way of migrating write traffic for a resharding workflow.
 func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow string, filteredReplicationWaitTime time.Duration, cancelMigrate, reverseReplication bool, dryRun bool) (journalID int64, dryRunResults []string, err error) {
