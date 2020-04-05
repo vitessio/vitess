@@ -200,8 +200,8 @@ type TabletServer struct {
 var RegisterFunctions []func(Controller)
 
 // NewServer creates a new TabletServer based on the command line flags.
-func NewServer(topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
-	return NewTabletServer(tabletenv.Config, topoServer, alias)
+func NewServer(name string, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
+	return NewTabletServer(name, tabletenv.Config, topoServer, alias)
 }
 
 var tsOnce sync.Once
@@ -209,8 +209,9 @@ var srvTopoServer srvtopo.Server
 
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
-func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
+func NewTabletServer(name string, config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
 	tsv := &TabletServer{
+		exporter:               servenv.NewExporter(name, "Tablet"),
 		config:                 &config,
 		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
 		TerseErrors:            config.TerseErrors,
