@@ -68,7 +68,7 @@ func BenchmarkExecuteVarBinary(b *testing.B) {
 	}
 
 	config := testUtils.newQueryServiceConfig()
-	tsv := NewTabletServer(config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	if err := tsv.StartService(target, dbconfigs); err != nil {
@@ -100,7 +100,7 @@ func BenchmarkExecuteExpression(b *testing.B) {
 	}
 
 	config := testUtils.newQueryServiceConfig()
-	tsv := NewTabletServer(config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	if err := tsv.StartService(target, dbconfigs); err != nil {
