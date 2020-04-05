@@ -96,6 +96,7 @@ func wait() {
 }
 
 func exec(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(true)
 

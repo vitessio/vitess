@@ -275,19 +275,15 @@ func TestStatsURL(t *testing.T) {
 
 	request, _ := http.NewRequest("GET", "/debug/tablet_plans", nil)
 	response := httptest.NewRecorder()
-	qe.ServeHTTP(response, request)
+	qe.handleHTTPQueryPlans(response, request)
 
 	request, _ = http.NewRequest("GET", "/debug/query_stats", nil)
 	response = httptest.NewRecorder()
-	qe.ServeHTTP(response, request)
+	qe.handleHTTPQueryStats(response, request)
 
 	request, _ = http.NewRequest("GET", "/debug/query_rules", nil)
 	response = httptest.NewRecorder()
-	qe.ServeHTTP(response, request)
-
-	request, _ = http.NewRequest("GET", "/debug/unknown", nil)
-	response = httptest.NewRecorder()
-	qe.ServeHTTP(response, request)
+	qe.handleHTTPQueryRules(response, request)
 }
 
 func newTestQueryEngine(queryPlanCacheSize int, idleTimeout time.Duration, strict bool, dbcfgs *dbconfigs.DBConfigs) *QueryEngine {
@@ -343,7 +339,7 @@ func TestConsolidationsUIRedaction(t *testing.T) {
 	unRedactedResponse := httptest.NewRecorder()
 	qe := runConsolidatedQuery(t, sql)
 
-	qe.ServeHTTP(unRedactedResponse, request)
+	qe.handleHTTPConsolidations(unRedactedResponse, request)
 	if !strings.Contains(unRedactedResponse.Body.String(), sql) {
 		t.Fatalf("Response is missing the consolidated query: %v %v", sql, unRedactedResponse.Body.String())
 	}
@@ -351,7 +347,7 @@ func TestConsolidationsUIRedaction(t *testing.T) {
 	// Now with the redaction on
 	*streamlog.RedactDebugUIQueries = true
 	redactedResponse := httptest.NewRecorder()
-	qe.ServeHTTP(redactedResponse, request)
+	qe.handleHTTPConsolidations(redactedResponse, request)
 
 	if strings.Contains(redactedResponse.Body.String(), "secret") {
 		t.Fatalf("Response contains unredacted consolidated query: %v %v", sql, redactedResponse.Body.String())
