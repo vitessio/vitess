@@ -176,7 +176,7 @@ func newTestEngine(db *fakesqldb.DB) *Engine {
 	config := tabletenv.DefaultQsConfig
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 	tsv := &fakeTabletServer{
-		Env: tabletenv.NewTestEnv(&config, nil),
+		Env: tabletenv.NewTestEnv(&config, nil, "MessagerTest"),
 	}
 	se := schema.NewEngine(tsv)
 	te := NewEngine(tsv, se, newFakeVStreamer())

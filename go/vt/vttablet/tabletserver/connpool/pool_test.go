@@ -223,7 +223,7 @@ func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
 
 func newPool() *Pool {
 	return New(
-		tabletenv.NewTestEnv(nil, nil),
+		tabletenv.NewTestEnv(nil, nil, "PoolTest"),
 		fmt.Sprintf("TestPool%d", rand.Int63()),
 		100,
 		0,

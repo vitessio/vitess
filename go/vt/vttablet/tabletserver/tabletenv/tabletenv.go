@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -126,25 +127,29 @@ type Env interface {
 	CheckMySQL()
 	Config() *TabletConfig
 	DBConfigs() *dbconfigs.DBConfigs
+	Exporter() *servenv.Exporter
 }
 
 type testEnv struct {
 	config    *TabletConfig
 	dbconfigs *dbconfigs.DBConfigs
+	exporter  *servenv.Exporter
 }
 
 // NewTestEnv creates an Env that can be used for tests.
 // CheckMySQL is a no-op.
-func NewTestEnv(config *TabletConfig, dbconfigs *dbconfigs.DBConfigs) Env {
+func NewTestEnv(config *TabletConfig, dbconfigs *dbconfigs.DBConfigs, exporterName string) Env {
 	return &testEnv{
 		config:    config,
 		dbconfigs: dbconfigs,
+		exporter:  servenv.NewExporter(exporterName, "Tablet"),
 	}
 }
 
 func (*testEnv) CheckMySQL()                        {}
 func (te *testEnv) Config() *TabletConfig           { return te.config }
 func (te *testEnv) DBConfigs() *dbconfigs.DBConfigs { return te.dbconfigs }
+func (te *testEnv) Exporter() *servenv.Exporter     { return te.exporter }
 
 // RecordUserQuery records the query data against the user.
 func RecordUserQuery(ctx context.Context, tableName sqlparser.TableIdent, queryType string, duration int64) {
