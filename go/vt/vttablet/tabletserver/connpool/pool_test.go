@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	"golang.org/x/net/context"
 )
@@ -220,19 +221,12 @@ func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
 	}
 }
 
-type dummyChecker struct {
-}
-
-func (dummyChecker) CheckMySQL() {}
-
-var checker = dummyChecker{}
-
 func newPool() *Pool {
 	return New(
+		tabletenv.NewTestEnv(nil, nil),
 		fmt.Sprintf("TestPool%d", rand.Int63()),
 		100,
 		0,
 		10*time.Second,
-		checker,
 	)
 }

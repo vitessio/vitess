@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
@@ -211,9 +210,3 @@ func (vsClient *MySQLVStreamerClient) VStreamRows(ctx context.Context, query str
 func InitVStreamerClient(cfg *dbconfigs.DBConfigs) {
 	dbcfgs = cfg
 }
-
-type checker struct{}
-
-var _ = connpool.MySQLChecker(checker{})
-
-func (checker) CheckMySQL() {}

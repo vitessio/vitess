@@ -75,7 +75,7 @@ func NewEngine(env tabletenv.Env) *Engine {
 		env: env,
 		// We need only one connection because the reloader is
 		// the only one that needs this.
-		conns:      connpool.New("", 1, 0, idleTimeout, env),
+		conns:      connpool.New(env, "", 1, 0, idleTimeout),
 		ticks:      timer.NewTimer(reloadTime),
 		reloadTime: reloadTime,
 	}

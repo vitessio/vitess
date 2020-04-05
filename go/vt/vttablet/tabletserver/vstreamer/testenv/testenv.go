@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttest"
@@ -53,12 +52,6 @@ type Env struct {
 	Mysqld       *mysqlctl.Mysqld
 	SchemaEngine *schema.Engine
 }
-
-type checker struct{}
-
-var _ = connpool.MySQLChecker(checker{})
-
-func (checker) CheckMySQL() {}
 
 // Init initializes an Env.
 func Init() (*Env, error) {
