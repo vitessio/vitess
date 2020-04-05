@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"strings"
 	"syscall"
 
 	"vitess.io/vitess/go/mysql"
@@ -131,30 +132,37 @@ func exec(w http.ResponseWriter, req *http.Request) {
 	enc.Encode(response)
 }
 
-func execQuery(conn *mysql.Conn, title, query, keyspace, shard string, response map[string]interface{}) {
+func execQuery(conn *mysql.Conn, key, query, keyspace, shard string, response map[string]interface{}) {
 	if query == "" || query == "undefined" {
 		return
 	}
 	if keyspace != "" {
 		_, err := conn.ExecuteFetch(fmt.Sprintf("use `%v:%v`", keyspace, shard), 10000, true)
 		if err != nil {
-			response[title] = map[string]interface{}{
-				"title": title,
+			response[key] = map[string]interface{}{
+				"title": key,
 				"error": err.Error(),
 			}
 			return
 		}
 	}
+	title := key
+	switch {
+	case strings.HasSuffix(key, "0"):
+		title = key[:len(key)-1] + ":-80"
+	case strings.HasSuffix(key, "1"):
+		title = key[:len(key)-1] + ":80-"
+	}
 	qr, err := conn.ExecuteFetch(query, 10000, true)
 	if err != nil {
-		response[title] = map[string]interface{}{
+		response[key] = map[string]interface{}{
 			"title": title,
 			"error": err.Error(),
 		}
 		log.Errorf("error: %v", err)
 		return
 	}
-	response[title] = resultToMap(title, qr)
+	response[key] = resultToMap(title, qr)
 }
 
 func resultToMap(title string, qr *sqltypes.Result) map[string]interface{} {
