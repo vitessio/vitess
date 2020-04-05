@@ -20,7 +20,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"strconv"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -28,32 +30,32 @@ import (
 )
 
 var (
-	_ MultiColumn = (*RegionJson)(nil)
+	_ MultiColumn = (*RegionJSON)(nil)
 )
 
 func init() {
-	Register("region_json", NewRegionJson)
+	Register("region_json", NewRegionJSON)
 }
 
 // RegionMap is used to store mapping of country to region
 type RegionMap map[string]uint64
 
-// RegionJson is a multi-column unique vindex
+// RegionJSON is a multi-column unique vindex
 // The first column is used to lookup the prefix part of the keyspace id, the second column is hashed,
 // and the two values are combined to produce the keyspace id.
 // RegionJson can be used for geo-partitioning because the first column can denote a region,
 // and it will dictate the shard range for that region.
-type RegionJson struct {
+type RegionJSON struct {
 	name        string
 	regionMap   RegionMap
 	regionBytes int
 }
 
-// NewRegionJson creates a RegionJson vindex.
+// NewRegionJSON creates a RegionJson vindex.
 // The supplied map requires all the fields of "RegionExperimental".
 // Additionally, it requires a region_map argument representing the path to a json file
 // containing a map of country to region.
-func NewRegionJson(name string, m map[string]string) (Vindex, error) {
+func NewRegionJSON(name string, m map[string]string) (Vindex, error) {
 	rmPath := m["region_map"]
 	rmap := make(map[string]uint64)
 	data, err := ioutil.ReadFile(rmPath)
@@ -65,30 +67,40 @@ func NewRegionJson(name string, m map[string]string) (Vindex, error) {
 	if err != nil {
 		return nil, err
 	}
+	rb, err := strconv.Atoi(m["region_bytes"])
+	if err != nil {
+		return nil, err
+	}
+	switch rb {
+	case 1, 2:
+	default:
+		return nil, fmt.Errorf("region_bytes must be 1 or 2: %v", rb)
+	}
 
-	return &RegionJson{
-		name:      name,
-		regionMap: rmap,
+	return &RegionJSON{
+		name:        name,
+		regionMap:   rmap,
+		regionBytes: rb,
 	}, nil
 }
 
 // String returns the name of the vindex.
-func (rv *RegionJson) String() string {
+func (rv *RegionJSON) String() string {
 	return rv.name
 }
 
 // Cost returns the cost of this index as 1.
-func (rv *RegionJson) Cost() int {
+func (rv *RegionJSON) Cost() int {
 	return 1
 }
 
 // IsUnique returns true since the Vindex is unique.
-func (rv *RegionJson) IsUnique() bool {
+func (rv *RegionJSON) IsUnique() bool {
 	return true
 }
 
 // Map satisfies MultiColumn.
-func (rv *RegionJson) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+func (rv *RegionJSON) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
 	destinations := make([]key.Destination, 0, len(rowsColValues))
 	for _, row := range rowsColValues {
 		if len(row) != 2 {
@@ -122,7 +134,7 @@ func (rv *RegionJson) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]
 }
 
 // Verify satisfies MultiColumn
-func (rv *RegionJson) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (rv *RegionJSON) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	result := make([]bool, len(rowsColValues))
 	destinations, _ := rv.Map(vcursor, rowsColValues)
 	for i, dest := range destinations {
@@ -135,7 +147,7 @@ func (rv *RegionJson) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, 
 	return result, nil
 }
 
-// NeedVCursor satisfies the Vindex interface.
-func (rv *RegionJson) NeedsVCursor() bool {
+// NeedsVCursor satisfies the Vindex interface.
+func (rv *RegionJSON) NeedsVCursor() bool {
 	return false
 }
