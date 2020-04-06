@@ -156,6 +156,7 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 	}
 
 	marshalPlan := struct {
+		QueryType    string
 		Original     string                `json:",omitempty"`
 		Instructions *PrimitiveDescription `json:",omitempty"`
 		ExecCount    uint64                `json:",omitempty"`
@@ -164,6 +165,7 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 		Rows         uint64                `json:",omitempty"`
 		Errors       uint64                `json:",omitempty"`
 	}{
+		QueryType:    p.Type.String(),
 		Original:     p.Original,
 		Instructions: instructions,
 		ExecCount:    p.ExecCount,

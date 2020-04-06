@@ -196,6 +196,7 @@ func TestBypassPlanningFromFile(t *testing.T) {
 }
 
 func TestDDLPlanningFromFile(t *testing.T) {
+	// We are testing this separately so we can set a default keyspace
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
 	vschema := &vschemaWrapper{

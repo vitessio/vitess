@@ -1,6 +1,7 @@
 # select bypass
 "select count(*), col from unsharded"
 {
+  "QueryType": "SELECT",
   "Original": "select count(*), col from unsharded",
   "Instructions": {
     "OperatorType": "Send",
@@ -18,6 +19,7 @@
 # update bypass
 "update user set val = 1 where id = 18446744073709551616 and id = 1"
 {
+  "QueryType": "UPDATE",
   "Original": "update user set val = 1 where id = 18446744073709551616 and id = 1",
   "Instructions": {
     "OperatorType": "Send",
@@ -35,6 +37,7 @@
 # delete bypass
 "DELETE FROM USER WHERE ID = 42"
 {
+  "QueryType": "DELETE",
   "Original": "DELETE FROM USER WHERE ID = 42",
   "Instructions": {
     "OperatorType": "Send",
@@ -52,6 +55,7 @@
 # insert bypass
 "INSERT INTO USER (ID, NAME) VALUES (42, 'ms X')"
 {
+  "QueryType": "INSERT",
   "Original": "INSERT INTO USER (ID, NAME) VALUES (42, 'ms X')",
   "Instructions": {
     "OperatorType": "Send",

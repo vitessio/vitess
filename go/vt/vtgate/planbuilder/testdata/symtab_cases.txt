@@ -3,6 +3,7 @@
 # Column names need not be qualified if they are predefined in vschema and unambiguous.
 "select predef2, predef3 from user join unsharded on predef2 = predef3"
 {
+  "QueryType": "SELECT",
   "Original": "select predef2, predef3 from user join unsharded on predef2 = predef3",
   "Instructions": {
     "OperatorType": "Join",

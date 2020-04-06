@@ -1,6 +1,7 @@
 # use db
 "use ks"
 {
+  "QueryType": "USE",
   "Original": "use ks",
   "Instructions": {
     "OperatorType": "UpdateTarget",
@@ -12,6 +13,7 @@
 # use db tablet
 "use ks@replica"
 {
+  "QueryType": "USE",
   "Original": "use ks@replica",
   "Instructions": {
     "OperatorType": "UpdateTarget",
@@ -23,6 +25,7 @@
 # use db target with :
 "use `ks:-80@replica`"
 {
+  "QueryType": "USE",
   "Original": "use `ks:-80@replica`",
   "Instructions": {
     "OperatorType": "UpdateTarget",
@@ -34,6 +37,7 @@
 # use db target with /
 "use `ks/80-@replica`"
 {
+  "QueryType": "USE",
   "Original": "use `ks/80-@replica`",
   "Instructions": {
     "OperatorType": "UpdateTarget",
@@ -45,6 +49,7 @@
 # reset db
 "use"
 {
+  "QueryType": "USE",
   "Original": "use",
   "Instructions": {
     "OperatorType": "UpdateTarget",
