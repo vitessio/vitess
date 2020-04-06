@@ -6,7 +6,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildDDLPlan(stmt *sqlparser.DDL, vschema ContextVSchema) (engine.Primitive, error) {
+func buildDDLPlan(in sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+	stmt := in.(*sqlparser.DDL)
 	query := generateQuery(stmt)
 	destination, keyspace, _, err := vschema.TargetDestination(stmt.Table.Qualifier.String())
 	if err != nil {
