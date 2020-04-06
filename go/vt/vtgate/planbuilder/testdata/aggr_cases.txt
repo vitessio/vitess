@@ -3,6 +3,7 @@
 # Aggregate on unsharded
 "select count(*), col from unsharded"
 {
+  "QueryType": "SELECT",
   "Original": "select count(*), col from unsharded",
   "Instructions": {
     "OperatorType": "Route",
@@ -20,6 +21,7 @@
 # Aggregate on unique sharded
 "select count(*), col from user where id = 1"
 {
+  "QueryType": "SELECT",
   "Original": "select count(*), col from user where id = 1",
   "Instructions": {
     "OperatorType": "Route",
@@ -41,6 +43,7 @@
 # Aggregate detection (non-aggregate function)
 "select fun(1), col from user"
 {
+  "QueryType": "SELECT",
   "Original": "select fun(1), col from user",
   "Instructions": {
     "OperatorType": "Route",
@@ -58,6 +61,7 @@
 # select distinct with unique vindex for scatter route.
 "select distinct col1, id from user"
 {
+  "QueryType": "SELECT",
   "Original": "select distinct col1, id from user",
   "Instructions": {
     "OperatorType": "Route",
@@ -75,6 +79,7 @@
 # distinct and group by together for single route.
 "select distinct col1, id from user group by col1"
 {
+  "QueryType": "SELECT",
   "Original": "select distinct col1, id from user group by col1",
   "Instructions": {
     "OperatorType": "Route",
@@ -92,6 +97,7 @@
 # scatter group by a text column
 "select count(*), a, textcol1, b from user group by a, textcol1, b"
 {
+  "QueryType": "SELECT",
   "Original": "select count(*), a, textcol1, b from user group by a, textcol1, b",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -118,6 +124,7 @@
 # scatter group by a text column, reuse existing weight_string
 "select count(*) k, a, textcol1, b from user group by a, textcol1, b order by k, textcol1"
 {
+  "QueryType": "SELECT",
   "Original": "select count(*) k, a, textcol1, b from user group by a, textcol1, b order by k, textcol1",
   "Instructions": {
     "OperatorType": "Sort",
@@ -151,6 +158,7 @@
 # count aggregate
 "select count(*) from user"
 {
+  "QueryType": "SELECT",
   "Original": "select count(*) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -176,6 +184,7 @@
 # sum aggregate
 "select sum(col) from user"
 {
+  "QueryType": "SELECT",
   "Original": "select sum(col) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -201,6 +210,7 @@
 # min aggregate
 "select min(col) from user"
 {
+  "QueryType": "SELECT",
   "Original": "select min(col) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -226,6 +236,7 @@
 # max aggregate
 "select max(col) from user"
 {
+  "QueryType": "SELECT",
   "Original": "select max(col) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -251,6 +262,7 @@
 # distinct and group by together for scatter route
 "select distinct col1, col2 from user group by col1"
 {
+  "QueryType": "SELECT",
   "Original": "select distinct col1, col2 from user group by col1",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -276,6 +288,7 @@
 # aggregate on RHS subquery (tests symbol table merge)
 "select user.a, t.b from user join (select count(*) b from unsharded) as t"
 {
+  "QueryType": "SELECT",
   "Original": "select user.a, t.b from user join (select count(*) b from unsharded) as t",
   "Instructions": {
     "OperatorType": "Join",
@@ -312,6 +325,7 @@
 # group by a unique vindex should use a simple route
 "select id, count(*) from user group by id"
 {
+  "QueryType": "SELECT",
   "Original": "select id, count(*) from user group by id",
   "Instructions": {
     "OperatorType": "Route",
@@ -329,6 +343,7 @@
 # group by a unique vindex and other column should use a simple route
 "select id, col, count(*) from user group by id, col"
 {
+  "QueryType": "SELECT",
   "Original": "select id, col, count(*) from user group by id, col",
   "Instructions": {
     "OperatorType": "Route",
@@ -346,6 +361,7 @@
 # group by a non-vindex column should use an OrderdAggregate primitive
 "select col, count(*) from user group by col"
 {
+  "QueryType": "SELECT",
   "Original": "select col, count(*) from user group by col",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -372,6 +388,7 @@
 # group by a non-unique vindex column should use an OrderdAggregate primitive
 "select name, count(*) from user group by name"
 {
+  "QueryType": "SELECT",
   "Original": "select name, count(*) from user group by name",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -398,6 +415,7 @@
 # group by a unique vindex should use a simple route, even if aggr is complex
 "select id, 1+count(*) from user group by id"
 {
+  "QueryType": "SELECT",
   "Original": "select id, 1+count(*) from user group by id",
   "Instructions": {
     "OperatorType": "Route",
@@ -415,6 +433,7 @@
 # group by a unique vindex where alias from select list is used
 "select id as val, 1+count(*) from user group by val"
 {
+  "QueryType": "SELECT",
   "Original": "select id as val, 1+count(*) from user group by val",
   "Instructions": {
     "OperatorType": "Route",
@@ -432,6 +451,7 @@
 # group by a unique vindex where expression is qualified (alias should be ignored)
 "select val as id, 1+count(*) from user group by user.id"
 {
+  "QueryType": "SELECT",
   "Original": "select val as id, 1+count(*) from user group by user.id",
   "Instructions": {
     "OperatorType": "Route",
@@ -449,6 +469,7 @@
 # group by a unique vindex where it should skip non-aliased expressions.
 "select *, id, 1+count(*) from user group by id"
 {
+  "QueryType": "SELECT",
   "Original": "select *, id, 1+count(*) from user group by id",
   "Instructions": {
     "OperatorType": "Route",
@@ -466,6 +487,7 @@
 # group by a unique vindex should revert to simple route, and having clause should find the correct symbols.
 "select id, count(*) c from user group by id having id=1 and c=10"
 {
+  "QueryType": "SELECT",
   "Original": "select id, count(*) c from user group by id having id=1 and c=10",
   "Instructions": {
     "OperatorType": "Route",
@@ -487,6 +509,7 @@
 # scatter aggregate in a subquery
 "select a from (select count(*) as a from user) t"
 {
+  "QueryType": "SELECT",
   "Original": "select a from (select count(*) as a from user) t",
   "Instructions": {
     "OperatorType": "Subquery",
@@ -521,6 +544,7 @@
 # scatter aggregate with non-aggregate expressions.
 "select id, count(*) from user"
 {
+  "QueryType": "SELECT",
   "Original": "select id, count(*) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -546,6 +570,7 @@
 # scatter aggregate using distinct
 "select distinct col from user"
 {
+  "QueryType": "SELECT",
   "Original": "select distinct col from user",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -571,6 +596,7 @@
 # scatter aggregate group by select col
 "select col from user group by col"
 {
+  "QueryType": "SELECT",
   "Original": "select col from user group by col",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -596,6 +622,7 @@
 # count with distinct group by unique vindex
 "select id, count(distinct col) from user group by id"
 {
+  "QueryType": "SELECT",
   "Original": "select id, count(distinct col) from user group by id",
   "Instructions": {
     "OperatorType": "Route",
@@ -613,6 +640,7 @@
 # count with distinct unique vindex
 "select col, count(distinct id) from user group by col"
 {
+  "QueryType": "SELECT",
   "Original": "select col, count(distinct id) from user group by col",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -639,6 +667,7 @@
 # count with distinct no unique vindex
 "select col1, count(distinct col2) from user group by col1"
 {
+  "QueryType": "SELECT",
   "Original": "select col1, count(distinct col2) from user group by col1",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -665,6 +694,7 @@
 # count with distinct no unique vindex and no group by
 "select count(distinct col2) from user"
 {
+  "QueryType": "SELECT",
   "Original": "select count(distinct col2) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -690,6 +720,7 @@
 # count with distinct no unique vindex, count expression aliased
 "select col1, count(distinct col2) c2 from user group by col1"
 {
+  "QueryType": "SELECT",
   "Original": "select col1, count(distinct col2) c2 from user group by col1",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -716,6 +747,7 @@
 # sum with distinct no unique vindex
 "select col1, sum(distinct col2) from user group by col1"
 {
+  "QueryType": "SELECT",
   "Original": "select col1, sum(distinct col2) from user group by col1",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -742,6 +774,7 @@
 # min with distinct no unique vindex. distinct is ignored.
 "select col1, min(distinct col2) from user group by col1"
 {
+  "QueryType": "SELECT",
   "Original": "select col1, min(distinct col2) from user group by col1",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -768,6 +801,7 @@
 # order by count distinct
 "select col1, count(distinct col2) k from user group by col1 order by k"
 {
+  "QueryType": "SELECT",
   "Original": "select col1, count(distinct col2) k from user group by col1 order by k",
   "Instructions": {
     "OperatorType": "Sort",
@@ -805,6 +839,7 @@
 # scatter aggregate multiple group by (columns)
 "select a, b, count(*) from user group by b, a"
 {
+  "QueryType": "SELECT",
   "Original": "select a, b, count(*) from user group by b, a",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -831,6 +866,7 @@
 # scatter aggregate multiple group by (numbers)
 "select a, b, count(*) from user group by 2, 1"
 {
+  "QueryType": "SELECT",
   "Original": "select a, b, count(*) from user group by 2, 1",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -857,6 +893,7 @@
 # scatter aggregate group by column number
 "select col from user group by 1"
 {
+  "QueryType": "SELECT",
   "Original": "select col from user group by 1",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -886,6 +923,7 @@
 # scatter aggregate order by null
 "select count(*) from user order by null"
 {
+  "QueryType": "SELECT",
   "Original": "select count(*) from user order by null",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -915,6 +953,7 @@
 # scatter aggregate with numbered order by columns
 "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1, 2, 3"
 {
+  "QueryType": "SELECT",
   "Original": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1, 2, 3",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -941,6 +980,7 @@
 # scatter aggregate with named order by columns
 "select a, b, c, d, count(*) from user group by 1, 2, 3 order by a, b, c"
 {
+  "QueryType": "SELECT",
   "Original": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by a, b, c",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -967,6 +1007,7 @@
 # scatter aggregate with jumbled order by columns
 "select a, b, c, d, count(*) from user group by 1, 2, 3, 4 order by d, b, a, c"
 {
+  "QueryType": "SELECT",
   "Original": "select a, b, c, d, count(*) from user group by 1, 2, 3, 4 order by d, b, a, c",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -993,6 +1034,7 @@
 # scatter aggregate with jumbled group by and order by columns
 "select a, b, c, d, count(*) from user group by 3, 2, 1, 4 order by d, b, a, c"
 {
+  "QueryType": "SELECT",
   "Original": "select a, b, c, d, count(*) from user group by 3, 2, 1, 4 order by d, b, a, c",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -1019,6 +1061,7 @@
 # scatter aggregate with some descending order by cols
 "select a, b, c, count(*) from user group by 3, 2, 1 order by 1 desc, 3 desc, b"
 {
+  "QueryType": "SELECT",
   "Original": "select a, b, c, count(*) from user group by 3, 2, 1 order by 1 desc, 3 desc, b",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -1049,6 +1092,7 @@
 # aggregate with limit
 "select col, count(*) from user group by col limit 10"
 {
+  "QueryType": "SELECT",
   "Original": "select col, count(*) from user group by col limit 10",
   "Instructions": {
     "OperatorType": "Limit",
@@ -1082,6 +1126,7 @@
 # Group by with collate operator
 "select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
   "Instructions": {
     "OperatorType": "Route",
@@ -1103,6 +1148,7 @@
 # routing rules for aggregates where sharded and unsharded match. Unsharded always wins.
 "select id, count(*) from route2 group by id"
 {
+  "QueryType": "SELECT",
   "Original": "select id, count(*) from route2 group by id",
   "Instructions": {
     "OperatorType": "Route",
@@ -1120,6 +1166,7 @@
 # routing rules for select distinct where sharded and unsharded match. Unsharded always wins.
 "select distinct id, a from route2"
 {
+  "QueryType": "SELECT",
   "Original": "select distinct id, a from route2",
   "Instructions": {
     "OperatorType": "Route",
@@ -1137,6 +1184,7 @@
 # oreder by on a reference table
 "select col from ref order by col"
 {
+  "QueryType": "SELECT",
   "Original": "select col from ref order by col",
   "Instructions": {
     "OperatorType": "Route",
