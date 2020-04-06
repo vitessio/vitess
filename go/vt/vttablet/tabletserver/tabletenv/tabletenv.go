@@ -19,8 +19,6 @@ limitations under the License.
 package tabletenv
 
 import (
-	"time"
-
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/stats"
@@ -35,10 +33,6 @@ import (
 )
 
 var (
-	// QueryStats shows the time histogram for each type of queries.
-	QueryStats = stats.NewTimings("Queries1", "MySQL query timings", "plan_type")
-	// QPSRates shows the qps of QueryStats. Sample every 5 seconds and keep samples for up to 15 mins.
-	QPSRates = stats.NewRates("QPS1", QueryStats, 15*60/5, 5*time.Second)
 	// WaitStats shows the time histogram for wait operations
 	WaitStats = stats.NewTimings("Waits1", "Wait operations", "type")
 	// KillStats shows number of connections being killed.

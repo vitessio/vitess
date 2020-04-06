@@ -39,7 +39,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/events"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 var (
@@ -112,7 +111,7 @@ func (agent *ActionAgent) broadcastHealth() {
 		SecondsBehindMaster: uint32(replicationDelay.Seconds()),
 	}
 	stats.SecondsBehindMasterFilteredReplication, stats.BinlogPlayersCount = vreplication.StatusSummary()
-	stats.Qps = tabletenv.QPSRates.TotalRate()
+	stats.Qps = agent.QueryServiceControl.Stats().QPSRates.TotalRate()
 	if healthError != nil {
 		stats.HealthError = healthError.Error()
 	} else {

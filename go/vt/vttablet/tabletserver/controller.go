@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	"time"
 
@@ -37,6 +38,9 @@ type Controller interface {
 	Register()
 	// AddStatusPart adds the status part to the status page
 	AddStatusPart()
+
+	// Stats returns stats vars.
+	Stats() *tabletenv.Stats
 
 	// InitDBConfig sets up the db config vars.
 	InitDBConfig(querypb.Target, *dbconfigs.DBConfigs) error

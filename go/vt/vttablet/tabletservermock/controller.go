@@ -25,10 +25,12 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -58,6 +60,8 @@ type StateChange struct {
 
 // Controller is a mock tabletserver.Controller
 type Controller struct {
+	stats *tabletenv.Stats
+
 	// BroadcastData is a channel where we send BroadcastHealth data.
 	// Set at construction time.
 	BroadcastData chan *BroadcastData
@@ -93,11 +97,17 @@ type Controller struct {
 // NewController returns a mock of tabletserver.Controller
 func NewController() *Controller {
 	return &Controller{
+		stats:               tabletenv.NewStats(servenv.NewExporter("MockController", "Tablet")),
 		queryServiceEnabled: false,
 		BroadcastData:       make(chan *BroadcastData, 10),
 		StateChanges:        make(chan *StateChange, 10),
 		queryRulesMap:       make(map[string]*rules.Rules),
 	}
+}
+
+// Stats is part of the tabletserver.Controller interface
+func (tqsc *Controller) Stats() *tabletenv.Stats {
+	return tqsc.stats
 }
 
 // Register is part of the tabletserver.Controller interface
