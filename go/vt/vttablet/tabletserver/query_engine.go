@@ -189,10 +189,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	qe.enableConsolidatorReplicas = config.EnableConsolidatorReplicas
 	qe.enableQueryPlanFieldCaching = config.EnableQueryPlanFieldCaching
 	qe.consolidator = sync2.NewConsolidator()
-	qe.txSerializer = txserializer.New(config.EnableHotRowProtectionDryRun,
-		config.HotRowProtectionMaxQueueSize,
-		config.HotRowProtectionMaxGlobalQueueSize,
-		config.HotRowProtectionConcurrentTransactions)
+	qe.txSerializer = txserializer.New(env)
 	qe.streamQList = NewQueryList()
 
 	qe.strictTableACL = config.StrictTableACL
