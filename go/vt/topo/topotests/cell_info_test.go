@@ -99,11 +99,28 @@ func TestCellInfo(t *testing.T) {
 		t.Fatalf("unexpected CellInfo: %v", ci)
 	}
 
-	// Might as well test DeleteCellInfo.
-	if err := ts.DeleteCellInfo(ctx, newCell); err != nil {
-		t.Fatalf("DeleteCellInfo failed: %v", err)
+	// Add a record that should block CellInfo deletion for safety reasons.
+	if err := ts.UpdateSrvKeyspace(ctx, cell, "keyspace", &topodatapb.SrvKeyspace{}); err != nil {
+		t.Fatalf("UpdateSrvKeyspace failed: %v", err)
 	}
-	if _, err := ts.GetCellInfo(ctx, newCell, true /*strongRead*/); !topo.IsErrType(err, topo.NoNode) {
+	srvKeyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
+	if err != nil {
+		t.Fatalf("GetSrvKeyspaceNames failed: %v", err)
+	}
+	if len(srvKeyspaces) == 0 {
+		t.Fatalf("UpdateSrvKeyspace did not add SrvKeyspace.")
+	}
+
+	// Try to delete without force; it should fail.
+	if err := ts.DeleteCellInfo(ctx, cell, false); err == nil {
+		t.Fatalf("DeleteCellInfo should have failed without -force")
+	}
+
+	// Use the force.
+	if err := ts.DeleteCellInfo(ctx, cell, true); err != nil {
+		t.Fatalf("DeleteCellInfo failed even with -force: %v", err)
+	}
+	if _, err := ts.GetCellInfo(ctx, cell, true /*strongRead*/); !topo.IsErrType(err, topo.NoNode) {
 		t.Fatalf("GetCellInfo(non-existing cell) failed: %v", err)
 	}
 }
