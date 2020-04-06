@@ -176,7 +176,7 @@ func (axp *TxPool) transactionKiller() {
 	for _, v := range axp.activePool.GetOutdated(time.Duration(axp.Timeout()), "for tx killer rollback") {
 		conn := v.(*TxConnection)
 		log.Warningf("killing transaction (exceeded timeout: %v): %s", axp.Timeout(), conn.Format(nil))
-		tabletenv.KillStats.Add("Transactions", 1)
+		axp.env.Stats().KillCounters.Add("Transactions", 1)
 		conn.Close()
 		conn.conclude(TxKill, fmt.Sprintf("exceeded timeout: %v", axp.Timeout()))
 	}

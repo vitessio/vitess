@@ -26,29 +26,35 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 )
 
-// StatsTimings specifies the interface needed for DBConnection to record Timings.
-type StatsTimings interface {
-	Add(name string, elapsed time.Duration)
-	Record(name string, startTime time.Time)
-}
-
 // DBConnection re-exposes mysql.Conn with some wrapping to implement
 // most of PoolConnection interface, except Recycle. That way it can be used
 // by itself. (Recycle needs to know about the Pool).
 type DBConnection struct {
 	*mysql.Conn
-	MySQLTimings StatsTimings
 }
 
-func (dbc *DBConnection) handleError(err error) {
-	if mysql.IsConnErr(err) {
-		dbc.Close()
+// NewDBConnection returns a new DBConnection based on the ConnParams
+// and will use the provided stats to collect timing.
+func NewDBConnection(info dbconfigs.Connector) (*DBConnection, error) {
+	ctx := context.Background()
+	params, err := info.MysqlParams()
+	if err != nil {
+		return nil, err
 	}
+	if params.ConnectTimeoutMs != 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(params.ConnectTimeoutMs)*time.Millisecond)
+		defer cancel()
+	}
+	c, err := info.Connect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &DBConnection{Conn: c}, nil
 }
 
 // ExecuteFetch overwrites mysql.Conn.ExecuteFetch.
 func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-	defer dbc.MySQLTimings.Record("Exec", time.Now())
 	mqr, err := dbc.Conn.ExecuteFetch(query, maxrows, wantfields)
 	if err != nil {
 		dbc.handleError(err)
@@ -59,7 +65,6 @@ func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool
 
 // ExecuteStreamFetch overwrites mysql.Conn.ExecuteStreamFetch.
 func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
-	defer dbc.MySQLTimings.Record("ExecStream", time.Now())
 
 	err := dbc.Conn.ExecuteStreamFetch(query)
 	if err != nil {
@@ -118,25 +123,8 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 	return nil
 }
 
-// NewDBConnection returns a new DBConnection based on the ConnParams
-// and will use the provided stats to collect timing.
-func NewDBConnection(info dbconfigs.Connector, mysqlStats StatsTimings) (*DBConnection, error) {
-	start := time.Now()
-	defer mysqlStats.Record("Connect", start)
-
-	ctx := context.Background()
-	params, err := info.MysqlParams()
-	if err != nil {
-		return nil, err
+func (dbc *DBConnection) handleError(err error) {
+	if mysql.IsConnErr(err) {
+		dbc.Close()
 	}
-	if params.ConnectTimeoutMs != 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(params.ConnectTimeoutMs)*time.Millisecond)
-		defer cancel()
-	}
-	c, err := info.Connect(ctx)
-	if err != nil {
-		mysqlStats.Record("ConnectError", start)
-	}
-	return &DBConnection{c, mysqlStats}, err
 }

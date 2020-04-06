@@ -507,7 +507,7 @@ func (tsv *TabletServer) decideAction(tabletType topodatapb.TabletType, serving 
 }
 
 func (tsv *TabletServer) fullStart() (err error) {
-	c, err := dbconnpool.NewDBConnection(tsv.dbconfigs.AppWithDB(), tsv.stats.MySQLTimings)
+	c, err := dbconnpool.NewDBConnection(tsv.dbconfigs.AppWithDB())
 	if err != nil {
 		log.Errorf("error creating db app connection: %v", err)
 		return err

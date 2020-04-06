@@ -157,7 +157,7 @@ func TestTxPoolTransactionKillerEnforceTimeoutEnabled(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
-	killCount := tabletenv.KillStats.Counts()["Transactions"]
+	killCount := txPool.env.Stats().KillCounters.Counts()["Transactions"]
 
 	txWithoutTimeout, err := addQuery(ctx, sqlWithoutTimeout, txPool, querypb.ExecuteOptions_DBA)
 	if err != nil {
@@ -176,13 +176,14 @@ func TestTxPoolTransactionKillerEnforceTimeoutEnabled(t *testing.T) {
 
 	// transaction killer should kill the query the second query
 	for {
-		killCountDiff = tabletenv.KillStats.Counts()["Transactions"] - killCount
+		killCountDiff = txPool.env.Stats().KillCounters.Counts()["Transactions"] - killCount
 		if killCountDiff >= expectedKills {
 			break
 		}
 
 		select {
 		case <-timeoutCh:
+			txPool.Rollback(ctx, txWithoutTimeout)
 			t.Fatal("waited too long for timed transaction to be killed by transaction killer")
 		default:
 		}
