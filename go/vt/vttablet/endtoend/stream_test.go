@@ -116,8 +116,8 @@ func TestStreamTerminate(t *testing.T) {
 			return nil
 		},
 	)
-	if code := vterrors.Code(err); code != vtrpcpb.Code_DEADLINE_EXCEEDED {
-		t.Errorf("Errorcode: %v, want %v", code, vtrpcpb.Code_DEADLINE_EXCEEDED)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_CANCELED {
+		t.Errorf("Errorcode: %v, want %v", code, vtrpcpb.Code_CANCELED)
 	}
 }
 
