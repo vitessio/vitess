@@ -27,7 +27,6 @@ import (
 
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -153,7 +152,7 @@ func (w *Writer) Close() {
 // and we also execute them with an isolated connection that turns off the binlog and
 // is closed at the end.
 func (w *Writer) initializeTables(cp dbconfigs.Connector) error {
-	conn, err := dbconnpool.NewDBConnection(cp, stats.NewTimings("", "", ""))
+	conn, err := dbconnpool.NewDBConnection(cp)
 	if err != nil {
 		return vterrors.Wrap(err, "Failed to create connection for heartbeat")
 	}

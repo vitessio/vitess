@@ -105,7 +105,7 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism, cp.getLogWaitCallback())
 	cp.appDebugParams = appDebugParams
 
-	cp.dbaPool.Open(dbaParams, cp.env.Stats().MySQLTimings)
+	cp.dbaPool.Open(dbaParams)
 }
 
 func (cp *Pool) getLogWaitCallback() func(time.Time) {

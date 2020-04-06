@@ -81,7 +81,6 @@ func TestDBConnExec(t *testing.T) {
 		t.Errorf("Exec: %v, want %v", expectedResult, result)
 	}
 
-	compareTimingCounts(t, "PoolTest.Connect", 1, startCounts, mysqlTimings.Counts())
 	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
 
 	startCounts = mysqlTimings.Counts()
@@ -99,7 +98,6 @@ func TestDBConnExec(t *testing.T) {
 	}
 
 	// The client side error triggers a retry in exec.
-	compareTimingCounts(t, "PoolTest.Connect", 1, startCounts, mysqlTimings.Counts())
 	compareTimingCounts(t, "PoolTest.Exec", 2, startCounts, mysqlTimings.Counts())
 
 	startCounts = mysqlTimings.Counts()
@@ -114,8 +112,6 @@ func TestDBConnExec(t *testing.T) {
 	}
 	db.DisableConnFail()
 
-	compareTimingCounts(t, "PoolTest.Connect", 1, startCounts, mysqlTimings.Counts())
-	compareTimingCounts(t, "PoolTest.ConnectError", 1, startCounts, mysqlTimings.Counts())
 	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
 }
 
@@ -158,8 +154,6 @@ func TestDBConnDeadline(t *testing.T) {
 		t.Errorf("Exec: %v, want %s", err, want)
 	}
 
-	compareTimingCounts(t, "PoolTest.Connect", 1, startCounts, mysqlTimings.Counts())
-	compareTimingCounts(t, "PoolTest.ConnectError", 0, startCounts, mysqlTimings.Counts())
 	compareTimingCounts(t, "PoolTest.Exec", 0, startCounts, mysqlTimings.Counts())
 
 	startCounts = mysqlTimings.Counts()
@@ -176,8 +170,6 @@ func TestDBConnDeadline(t *testing.T) {
 		t.Errorf("Exec: %v, want %v", expectedResult, result)
 	}
 
-	compareTimingCounts(t, "PoolTest.Connect", 0, startCounts, mysqlTimings.Counts())
-	compareTimingCounts(t, "PoolTest.ConnectError", 0, startCounts, mysqlTimings.Counts())
 	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
 
 	startCounts = mysqlTimings.Counts()
@@ -192,8 +184,6 @@ func TestDBConnDeadline(t *testing.T) {
 		t.Errorf("Exec: %v, want %v", expectedResult, result)
 	}
 
-	compareTimingCounts(t, "PoolTest.Connect", 0, startCounts, mysqlTimings.Counts())
-	compareTimingCounts(t, "PoolTest.ConnectError", 0, startCounts, mysqlTimings.Counts())
 	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
 }
 

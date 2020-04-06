@@ -55,7 +55,7 @@ type ConnectionPool struct {
 	idleTimeout         time.Duration
 	resolutionFrequency time.Duration
 
-	// info and mysqlStats are set at Open() time
+	// info is set at Open() time
 	info      dbconfigs.Connector
 	addresses []net.IP
 
@@ -64,8 +64,7 @@ type ConnectionPool struct {
 	wg          sync.WaitGroup
 	hostIsNotIP bool
 
-	mysqlStats StatsTimings
-	name       string
+	name string
 }
 
 // NewConnectionPool creates a new ConnectionPool. The name is used
@@ -133,21 +132,19 @@ func (cp *ConnectionPool) validAddress(addr net.IP) bool {
 	return false
 }
 
-// Open must be call before starting to use the pool.
+// Open must be called before starting to use the pool.
 //
 // For instance:
-// mysqlStats := stats.NewTimings("Mysql")
 // pool := dbconnpool.NewConnectionPool("name", 10, 30*time.Second)
-// pool.Open(info, mysqlStats)
+// pool.Open(info)
 // ...
 // conn, err := pool.Get()
 // ...
-func (cp *ConnectionPool) Open(info dbconfigs.Connector, mysqlStats StatsTimings) {
+func (cp *ConnectionPool) Open(info dbconfigs.Connector) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	cp.info = info
-	cp.mysqlStats = mysqlStats
-	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 0, cp.getLogWaitCallback())
+	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 0, nil)
 	// Check if we need to resolve a hostname (The Host is not just an IP  address).
 	if cp.resolutionFrequency > 0 && net.ParseIP(info.Host()) == nil {
 		cp.hostIsNotIP = true
@@ -169,18 +166,9 @@ func (cp *ConnectionPool) Open(info dbconfigs.Connector, mysqlStats StatsTimings
 	}
 }
 
-func (cp *ConnectionPool) getLogWaitCallback() func(time.Time) {
-	if cp.name == "" {
-		return func(start time.Time) {} // no op
-	}
-	return func(start time.Time) {
-		cp.mysqlStats.Record(cp.name+"ResourceWaitTime", start)
-	}
-}
-
 // connect is used by the resource pool to create a new Resource.
 func (cp *ConnectionPool) connect() (pools.Resource, error) {
-	c, err := NewDBConnection(cp.info, cp.mysqlStats)
+	c, err := NewDBConnection(cp.info)
 	if err != nil {
 		return nil, err
 	}

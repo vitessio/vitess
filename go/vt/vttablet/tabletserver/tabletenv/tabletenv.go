@@ -33,8 +33,6 @@ import (
 )
 
 var (
-	// KillStats shows number of connections being killed.
-	KillStats = stats.NewCountersWithSingleLabel("Kills1", "Number of connections being killed", "query_type", "Transactions", "Queries")
 	// ErrorStats shows number of critial errors happened.
 	ErrorStats = stats.NewCountersWithSingleLabel(
 		"Errors1",
