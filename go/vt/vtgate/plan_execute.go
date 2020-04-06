@@ -198,7 +198,7 @@ func (e *planExecute) executePlan(ctx context.Context, plan *engine.Plan, vcurso
 	return func(logStats *LogStats, safeSession *SafeSession) (*sqltypes.Result, error) {
 		// 4: Execute!
 		qr, err := plan.Instructions.Execute(vcursor, bindVars, true)
-		if err != nil && qr != nil && qr.InsertID > 0 {
+		if err == nil && qr != nil && qr.InsertID > 0 {
 			safeSession.LastInsertId = qr.InsertID
 		}
 

@@ -1043,6 +1043,7 @@ func TestInsertAutoincSharded(t *testing.T) {
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
+	assert.Equal(t, masterSession.LastInsertId, uint64(2))
 }
 
 func TestInsertGeneratorUnsharded(t *testing.T) {

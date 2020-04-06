@@ -367,14 +367,16 @@ func createExecutorEnvUsing(t executorType) (executor *Executor, sbc1, sbc2, sbc
 	bad.VSchema = badVSchema
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	executeMethodPicker := func(executor *Executor) executeMethod {
-		if t == legacy {
-			return executor
+	switch t {
+	case legacy:
+		executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	case planAllTheThings:
+		f := func(executor *Executor) executeMethod {
+			return &planExecute{e: executor}
 		}
-
-		return &planExecute{executor}
+		executor = NewTestExecutor(context.Background(), f, serv, cell, resolver, false, testBufferSize, testCacheSize)
 	}
-	executor = NewTestExecutor(context.Background(), executeMethodPicker, serv, cell, resolver, false, testBufferSize, testCacheSize)
+
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	return executor, sbc1, sbc2, sbclookup
 }
