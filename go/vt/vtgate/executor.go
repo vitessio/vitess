@@ -126,41 +126,10 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 		normalize:   normalize,
 		streamSize:  streamSize,
 	}
-	e.exec = e
-
-	vschemaacl.Init()
-	e.vm = &VSchemaManager{e: e}
-	e.vm.watchSrvVSchema(ctx, cell)
-
-	executorOnce.Do(func() {
-		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", e.plans.Length)
-		stats.NewGaugeFunc("QueryPlanCacheSize", "Query plan cache size", e.plans.Size)
-		stats.NewGaugeFunc("QueryPlanCacheCapacity", "Query plan cache capacity", e.plans.Capacity)
-		stats.NewCounterFunc("QueryPlanCacheEvictions", "Query plan cache evictions", e.plans.Evictions)
-		stats.Publish("QueryPlanCacheOldest", stats.StringFunc(func() string {
-			return fmt.Sprintf("%v", e.plans.Oldest())
-		}))
-		http.Handle(pathQueryPlans, e)
-		http.Handle(pathScatterStats, e)
-		http.Handle(pathVSchema, e)
-	})
-	return e
-}
-
-// NewTestExecutor is only meant to be used from tests. It allows test code to inject wich `execute()` method to use
-func NewTestExecutor(ctx context.Context, strat func(executor *Executor) executeMethod, serv srvtopo.Server, cell string, resolver *Resolver, normalize bool, streamSize int, queryPlanCacheSize int64) *Executor {
-	e := &Executor{
-		serv:        serv,
-		cell:        cell,
-		resolver:    resolver,
-		scatterConn: resolver.scatterConn,
-		txConn:      resolver.scatterConn.txConn,
-		plans:       cache.NewLRUCache(queryPlanCacheSize),
-		normalize:   normalize,
-		streamSize:  streamSize,
+	e.exec = &fallbackExecutor{
+		exA: &planExecute{e: e},
+		exB: e,
 	}
-
-	e.exec = strat(e)
 
 	vschemaacl.Init()
 	e.vm = &VSchemaManager{e: e}
