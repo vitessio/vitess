@@ -76,34 +76,16 @@ type VCursor interface {
 	ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error
 }
 
-// PlanType indicates type of the plan generated
-type PlanType int
-
-// This contains all the plan types
-const (
-	PlanERROR PlanType = iota
-	PlanBEGIN
-	PlanCOMMIT
-	PlanROLLBACK
-	PlanSELECT
-	PlanINSERT
-	PlanUPDATE
-	PlanDELETE
-	PlanDDL
-	PlanBYPASS
-	PlanUSE
-)
-
 // Plan represents the execution strategy for a given query.
 // For now it's a simple wrapper around the real instructions.
 // An instruction (aka Primitive) is typically a tree where
 // each node does its part by combining the results of the
 // sub-nodes.
 type Plan struct {
-	Type                   PlanType  // The type of query we have
-	Original               string    // Original is the original query.
-	Instructions           Primitive // Instructions contains the instructions needed to fulfil the query.
-	sqlparser.BindVarNeeds           // Stores BindVars needed to be provided as part of expression rewriting
+	Type                   sqlparser.StatementType // The type of query we have
+	Original               string                  // Original is the original query.
+	Instructions           Primitive               // Instructions contains the instructions needed to fulfil the query.
+	sqlparser.BindVarNeeds                         // Stores BindVars needed to be provided as part of expression rewriting
 
 	mu           sync.Mutex    // Mutex to protect the fields below
 	ExecCount    uint64        // Count of times this plan was executed

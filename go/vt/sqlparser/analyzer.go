@@ -55,6 +55,38 @@ const (
 	StmtPriv
 )
 
+//ASTToStatementType returns a StatementType from an AST stmt
+func ASTToStatementType(stmt Statement) StatementType {
+	switch stmt.(type) {
+	case *Select, *Union:
+		return StmtSelect
+	case *Insert:
+		return StmtInsert
+	case *Update:
+		return StmtUpdate
+	case *Delete:
+		return StmtDelete
+	case *Set:
+		return StmtSet
+	case *Show:
+		return StmtShow
+	case *DDL, *DBDDL:
+		return StmtDDL
+	case *Use:
+		return StmtUse
+	case *OtherRead, *OtherAdmin:
+		return StmtOther
+	case *Begin:
+		return StmtBegin
+	case *Commit:
+		return StmtCommit
+	case *Rollback:
+		return StmtRollback
+	default:
+		return StmtUnknown
+	}
+}
+
 // Preview analyzes the beginning of the query using a simpler and faster
 // textual comparison to identify the statement type.
 func Preview(sql string) StatementType {
