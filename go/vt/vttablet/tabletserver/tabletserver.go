@@ -758,7 +758,7 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, opti
 			// handlePanicAndSendLogStats doesn't log the no-op.
 			logStats.OriginalSQL = beginSQL
 			if beginSQL != "" {
-				tabletenv.QueryStats.Record("BEGIN", startTime)
+				tsv.stats.QueryTimings.Record("BEGIN", startTime)
 			} else {
 				logStats.Method = ""
 			}
@@ -785,7 +785,7 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 			// the tablet metrics, and clear out the logStats Method so that
 			// handlePanicAndSendLogStats doesn't log the no-op.
 			if commitSQL != "" {
-				tabletenv.QueryStats.Record("COMMIT", startTime)
+				tsv.stats.QueryTimings.Record("COMMIT", startTime)
 			} else {
 				logStats.Method = ""
 			}
@@ -801,7 +801,7 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, t
 		"Rollback", "rollback", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			defer tabletenv.QueryStats.Record("ROLLBACK", time.Now())
+			defer tsv.stats.QueryTimings.Record("ROLLBACK", time.Now())
 			logStats.TransactionID = transactionID
 			return tsv.te.Rollback(ctx, transactionID)
 		},

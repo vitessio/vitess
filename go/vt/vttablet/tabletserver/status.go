@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 // This file contains the status web page export for tabletserver
@@ -133,7 +132,7 @@ func (tsv *TabletServer) AddStatusPart() {
 			State:   tsv.GetState(),
 			History: tsv.history.Records(),
 		}
-		rates := tabletenv.QPSRates.Get()
+		rates := tsv.stats.QPSRates.Get()
 		if qps, ok := rates["All"]; ok && len(qps) > 0 {
 			status.CurrentQPS = qps[0]
 		}

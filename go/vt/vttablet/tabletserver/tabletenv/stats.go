@@ -47,10 +47,9 @@ type Stats struct {
 
 // NewStats instantiates a new set of stats scoped by exporter.
 func NewStats(exporter *servenv.Exporter) *Stats {
-	return &Stats{
+	stats := &Stats{
 		MySQLTimings: exporter.NewTimings("Mysql", "MySQl query time", "operation"),
 		QueryTimings: exporter.NewTimings("Queries", "MySQL query timings", "plan_type"),
-		QPSRates:     exporter.NewRates("QPS", QueryStats, 15*60/5, 5*time.Second),
 		WaitTimings:  exporter.NewTimings("Waits", "Wait operations", "type"),
 		KillCounters: exporter.NewCountersWithSingleLabel("Kills", "Number of connections being killed", "query_type", "Transactions", "Queries"),
 		ErrorCounters: exporter.NewCountersWithSingleLabel(
@@ -87,4 +86,6 @@ func NewStats(exporter *servenv.Exporter) *Stats {
 		TableaclDenied:         exporter.NewCountersWithMultiLabels("TableACLDenied", "ACL denials", []string{"TableName", "TableGroup", "PlanID", "Username"}),
 		TableaclPseudoDenied:   exporter.NewCountersWithMultiLabels("TableACLPseudoDenied", "ACL pseudodenials", []string{"TableName", "TableGroup", "PlanID", "Username"}),
 	}
+	stats.QPSRates = exporter.NewRates("QPS", stats.QueryTimings, 15*60/5, 5*time.Second)
+	return stats
 }

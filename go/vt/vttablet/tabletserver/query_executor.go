@@ -71,7 +71,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	qre.logStats.PlanType = planName
 	defer func(start time.Time) {
 		duration := time.Since(start)
-		tabletenv.QueryStats.Add(planName, duration)
+		qre.tsv.stats.QueryTimings.Add(planName, duration)
 		tabletenv.RecordUserQuery(qre.ctx, qre.plan.TableName(), "Execute", int64(duration))
 
 		mysqlTime := qre.logStats.MysqlResponseTime
@@ -220,7 +220,7 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 	qre.logStats.PlanType = qre.plan.PlanID.String()
 
 	defer func(start time.Time) {
-		tabletenv.QueryStats.Record(qre.plan.PlanID.String(), start)
+		qre.tsv.stats.QueryTimings.Record(qre.plan.PlanID.String(), start)
 		tabletenv.RecordUserQuery(qre.ctx, qre.plan.TableName(), "Stream", int64(time.Since(start)))
 	}(time.Now())
 
@@ -259,7 +259,7 @@ func (qre *QueryExecutor) MessageStream(callback func(*sqltypes.Result) error) e
 	qre.logStats.PlanType = qre.plan.PlanID.String()
 
 	defer func(start time.Time) {
-		tabletenv.QueryStats.Record(qre.plan.PlanID.String(), start)
+		qre.tsv.stats.QueryTimings.Record(qre.plan.PlanID.String(), start)
 		tabletenv.RecordUserQuery(qre.ctx, qre.plan.TableName(), "MessageStream", int64(time.Since(start)))
 	}(time.Now())
 
