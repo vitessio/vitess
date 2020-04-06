@@ -76,13 +76,11 @@ func (e *planExecute) execute(ctx context.Context, safeSession *SafeSession, sql
 	// We need to explicitly handle errors, and begin/commit/rollback, since these control transactions. Everything else
 	// will fall through and be handled through planning
 	switch plan.Type {
-	case engine.PlanERROR:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "plan type not set: %s", sql)
-	case engine.PlanBEGIN:
+	case sqlparser.StmtBegin:
 		return e.e.handleBegin(ctx, safeSession, vcursor.tabletType, logStats)
-	case engine.PlanCOMMIT:
+	case sqlparser.StmtCommit:
 		return e.e.handleCommit(ctx, safeSession, logStats)
-	case engine.PlanROLLBACK:
+	case sqlparser.StmtRollback:
 		return e.e.handleRollback(ctx, safeSession, logStats)
 	}
 

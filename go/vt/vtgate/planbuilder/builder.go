@@ -18,7 +18,9 @@ package planbuilder
 
 import (
 	"errors"
-	"fmt"
+
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -275,35 +277,27 @@ func Build(query string, vschema ContextVSchema) (*engine.Plan, error) {
 // and engine.Plan can be built by the caller.
 func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema, bindVarNeeds sqlparser.BindVarNeeds) (*engine.Plan, error) {
 	var err error
-	var planType engine.PlanType
 	var instruction engine.Primitive
 
 	if vschema.Destination() != nil {
-		planType = engine.PlanBYPASS
 		instruction, err = buildPlanForBypass(stmt, vschema)
 	} else {
 		switch stmt := stmt.(type) {
 		case *sqlparser.Select:
-			planType = engine.PlanSELECT
 			instruction, err = buildSelectPlan(stmt, vschema)
 		case *sqlparser.Insert:
-			planType = engine.PlanINSERT
 			instruction, err = buildInsertPlan(stmt, vschema)
 		case *sqlparser.Update:
-			planType = engine.PlanUPDATE
 			instruction, err = buildUpdatePlan(stmt, vschema)
 		case *sqlparser.Delete:
-			planType = engine.PlanDELETE
 			instruction, err = buildDeletePlan(stmt, vschema)
 		case *sqlparser.Union:
-			planType = engine.PlanSELECT
 			instruction, err = buildUnionPlan(stmt, vschema)
 		case *sqlparser.Set:
 			return nil, errors.New("unsupported construct: set")
 		case *sqlparser.Show:
 			return nil, errors.New("unsupported construct: show")
 		case *sqlparser.DDL:
-			planType = engine.PlanDDL
 			if sqlparser.IsVschemaDDL(stmt) {
 				instruction, err = buildVSchemaDDLPlan(stmt, vschema)
 			} else {
@@ -312,27 +306,22 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 		case *sqlparser.DBDDL:
 			return nil, errors.New("unsupported construct: ddl on database")
 		case *sqlparser.Use:
-			planType = engine.PlanUSE
 			instruction, err = buildUsePlan(stmt, vschema)
 		case *sqlparser.OtherRead:
 			return nil, errors.New("unsupported construct: other read")
 		case *sqlparser.OtherAdmin:
 			return nil, errors.New("unsupported construct: other admin")
-		case *sqlparser.Begin:
-			planType = engine.PlanBEGIN
-		case *sqlparser.Commit:
-			planType = engine.PlanCOMMIT
-		case *sqlparser.Rollback:
-			planType = engine.PlanROLLBACK
+		case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback:
+			// Empty by design. Not executed by a plan
 		default:
-			return nil, fmt.Errorf("BUG: unexpected statement type: %T", stmt)
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
 		}
 	}
 	if err != nil {
 		return nil, err
 	}
 	plan := &engine.Plan{
-		Type:         planType,
+		Type:         sqlparser.ASTToStatementType(stmt),
 		Original:     query,
 		Instructions: instruction,
 		BindVarNeeds: bindVarNeeds,
