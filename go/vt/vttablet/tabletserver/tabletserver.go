@@ -136,6 +136,7 @@ func stateInfo(state int64) string {
 type TabletServer struct {
 	exporter               *servenv.Exporter
 	config                 *tabletenv.TabletConfig
+	stats                  *tabletenv.Stats
 	QueryTimeout           sync2.AtomicDuration
 	TerseErrors            bool
 	enableHotRowProtection bool
@@ -204,14 +205,18 @@ func NewServer(name string, topoServer *topo.Server, alias topodatapb.TabletAlia
 	return NewTabletServer(name, tabletenv.Config, topoServer, alias)
 }
 
-var tsOnce sync.Once
-var srvTopoServer srvtopo.Server
+var (
+	tsOnce        sync.Once
+	srvTopoServer srvtopo.Server
+)
 
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
 func NewTabletServer(name string, config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
+	exporter := servenv.NewExporter(name, "Tablet")
 	tsv := &TabletServer{
-		exporter:               servenv.NewExporter(name, "Tablet"),
+		exporter:               exporter,
+		stats:                  tabletenv.NewStats(exporter),
 		config:                 &config,
 		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
 		TerseErrors:            config.TerseErrors,
@@ -276,6 +281,11 @@ func (tsv *TabletServer) Config() *tabletenv.TabletConfig {
 // DBConfigs satisfies tabletenv.Env.
 func (tsv *TabletServer) DBConfigs() *dbconfigs.DBConfigs {
 	return tsv.dbconfigs
+}
+
+// Stats satisfies tabletenv.Env.
+func (tsv *TabletServer) Stats() *tabletenv.Stats {
+	return tsv.stats
 }
 
 // RegisterQueryRuleSource registers ruleSource for setting query rules.
@@ -497,7 +507,7 @@ func (tsv *TabletServer) decideAction(tabletType topodatapb.TabletType, serving 
 }
 
 func (tsv *TabletServer) fullStart() (err error) {
-	c, err := dbconnpool.NewDBConnection(tsv.dbconfigs.AppWithDB(), tabletenv.MySQLStats)
+	c, err := dbconnpool.NewDBConnection(tsv.dbconfigs.AppWithDB(), tsv.stats.MySQLTimings)
 	if err != nil {
 		log.Errorf("error creating db app connection: %v", err)
 		return err
