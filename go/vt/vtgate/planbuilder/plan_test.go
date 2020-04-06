@@ -292,13 +292,6 @@ func (vw *vschemaWrapper) TargetString() string {
 	return "targetString"
 }
 
-// For the purposes of this set of tests, just compare the actual plan
-// and ignore all the metrics.
-type testPlan struct {
-	Original     string           `json:",omitempty"`
-	Instructions engine.Primitive `json:",omitempty"`
-}
-
 func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 	t.Run(filename, func(t *testing.T) {
 		expected := &strings.Builder{}
@@ -334,10 +327,7 @@ func getPlanOrErrorOutput(err error, plan *engine.Plan) string {
 	if err != nil {
 		return err.Error()
 	}
-	bout, _ := json.MarshalIndent(testPlan{
-		Original:     plan.Original,
-		Instructions: plan.Instructions,
-	}, "", "  ")
+	bout, _ := json.MarshalIndent(plan, "", "  ")
 	return string(bout)
 }
 

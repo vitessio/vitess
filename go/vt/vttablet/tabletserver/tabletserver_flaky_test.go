@@ -1420,6 +1420,29 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	}
 }
 
+func TestDMLQueryWithoutWhereClause(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.EnableHotRowProtection = true
+	config.HotRowProtectionConcurrentTransactions = 1
+
+	config.TransactionCap = 2
+	tsv := NewTabletServer(config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	require.NoError(t, err)
+	defer tsv.StopService()
+	q := "delete from test_table"
+
+	db.AddQuery(q+" limit 10001", &sqltypes.Result{})
+
+	_, _, err = tsv.BeginExecute(context.Background(), &target, q, nil, nil)
+	require.NoError(t, err)
+}
+
 // TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction tests the same as
 // TestSerializeTransactionsSameRow but for the ExecuteBatch method with
 // asTransaction=true (i.e. vttablet wraps the query in a BEGIN/Query/COMMIT

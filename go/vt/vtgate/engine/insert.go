@@ -23,7 +23,8 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/jsonutil"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -118,41 +119,6 @@ func NewInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, vindexValues []
 	}
 }
 
-// MarshalJSON serializes the Insert into a JSON representation.
-// It's used for testing and diagnostics.
-func (ins *Insert) MarshalJSON() ([]byte, error) {
-	var tname string
-	if ins.Table != nil {
-		tname = ins.Table.Name.String()
-	}
-	marshalInsert := struct {
-		Opcode               InsertOpcode
-		Keyspace             *vindexes.Keyspace   `json:",omitempty"`
-		Query                string               `json:",omitempty"`
-		Values               []sqltypes.PlanValue `json:",omitempty"`
-		Table                string               `json:",omitempty"`
-		Generate             *Generate            `json:",omitempty"`
-		Prefix               string               `json:",omitempty"`
-		Mid                  []string             `json:",omitempty"`
-		Suffix               string               `json:",omitempty"`
-		MultiShardAutocommit bool                 `json:",omitempty"`
-		QueryTimeout         int                  `json:",omitempty"`
-	}{
-		Opcode:               ins.Opcode,
-		Keyspace:             ins.Keyspace,
-		Query:                ins.Query,
-		Values:               ins.VindexValues,
-		Table:                tname,
-		Generate:             ins.Generate,
-		Prefix:               ins.Prefix,
-		Mid:                  ins.Mid,
-		Suffix:               ins.Suffix,
-		MultiShardAutocommit: ins.MultiShardAutocommit,
-		QueryTimeout:         ins.QueryTimeout,
-	}
-	return jsonutil.MarshalNoEscape(marshalInsert)
-}
-
 // Generate represents the instruction to generate
 // a value from a sequence.
 type Generate struct {
@@ -187,6 +153,11 @@ var insName = map[InsertOpcode]string{
 	InsertUnsharded:     "InsertUnsharded",
 	InsertSharded:       "InsertSharded",
 	InsertShardedIgnore: "InsertShardedIgnore",
+}
+
+// String returns the opcode
+func (code InsertOpcode) String() string {
+	return strings.ReplaceAll(insName[code], "Insert", "")
 }
 
 // MarshalJSON serializes the InsertOpcode as a JSON string.
@@ -609,4 +580,20 @@ func (ins *Insert) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltype
 
 func insertVarName(col sqlparser.ColIdent, rowNum int) string {
 	return "_" + col.CompliantName() + strconv.Itoa(rowNum)
+}
+
+func (ins *Insert) description() PrimitiveDescription {
+	other := map[string]interface{}{
+		"Query":                ins.Query,
+		"TableName":            ins.GetTableName(),
+		"MultiShardAutocommit": ins.MultiShardAutocommit,
+		"QueryTimeout":         ins.QueryTimeout,
+	}
+	return PrimitiveDescription{
+		OperatorType:     "Insert",
+		Keyspace:         ins.Keyspace,
+		Variant:          ins.Opcode.String(),
+		TargetTabletType: topodatapb.TabletType_MASTER,
+		Other:            other,
+	}
 }

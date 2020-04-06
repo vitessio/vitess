@@ -1176,8 +1176,8 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 	}
 
 	tableName := plan.TableName()
-	if tableName.IsEmpty() {
-		// Do not serialize any queries without a table name.
+	if tableName.IsEmpty() || plan.WhereClause == nil {
+		// Do not serialize any queries without table name or where clause
 		return "", ""
 	}
 

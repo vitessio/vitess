@@ -180,6 +180,7 @@ type (
 
 	// Show represents a show statement.
 	Show struct {
+		Extended               string
 		Type                   string
 		OnTable                TableName
 		Table                  TableName
@@ -1165,10 +1166,17 @@ func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
 	nodeType := strings.ToLower(node.Type)
-	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys") && node.ShowTablesOpt != nil {
+	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys" || nodeType == "indexes") && node.ShowTablesOpt != nil {
 		opt := node.ShowTablesOpt
-		buf.astPrintf(node, "show %s%s", opt.Full, nodeType)
-		if (nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys") && node.HasOnTable() {
+		if node.Extended != "" {
+			buf.astPrintf(node, "show %s%s", node.Extended, nodeType)
+		} else {
+			buf.astPrintf(node, "show %s%s", opt.Full, nodeType)
+		}
+		if (nodeType == "columns" || nodeType == "fields") && node.HasOnTable() {
+			buf.astPrintf(node, " from %v", node.OnTable)
+		}
+		if (nodeType == "index" || nodeType == "keys" || nodeType == "indexes") && node.HasOnTable() {
 			buf.astPrintf(node, " from %v", node.OnTable)
 		}
 		if opt.DbName != "" {

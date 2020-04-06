@@ -106,3 +106,13 @@ func (sq *Subquery) buildFields(inner *sqltypes.Result) []*querypb.Field {
 	}
 	return fields
 }
+
+func (sq *Subquery) description() PrimitiveDescription {
+	other := map[string]interface{}{
+		"Columns": sq.Cols,
+	}
+	return PrimitiveDescription{
+		OperatorType: "Subquery",
+		Other:        other,
+	}
+}

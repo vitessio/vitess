@@ -35,6 +35,13 @@ type UpdateTarget struct {
 	noTxNeeded
 }
 
+func (updTarget *UpdateTarget) description() PrimitiveDescription {
+	return PrimitiveDescription{
+		OperatorType: "UpdateTarget",
+		Other:        map[string]interface{}{"target": updTarget.Target},
+	}
+}
+
 // MarshalJSON serializes the UpdateTarget into a JSON representation.
 // It's used for testing and diagnostics.
 func (updTarget *UpdateTarget) MarshalJSON() ([]byte, error) {
