@@ -326,28 +326,33 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 // GetOrCreateShard will return the shard object, or create one if it doesn't
 // already exist. Note the shard creation is protected by a keyspace Lock.
 func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) (si *ShardInfo, err error) {
+	log.Info("GetShard %s/%s", keyspace, shard)
 	si, err = ts.GetShard(ctx, keyspace, shard)
 	if !IsErrType(err, NoNode) {
 		return
 	}
 
 	// create the keyspace, maybe it already exists
+	log.Info("CreateKeyspace %s/%s", keyspace, shard)
 	if err = ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil && !IsErrType(err, NodeExists) {
 		return nil, vterrors.Wrapf(err, "CreateKeyspace(%v) failed", keyspace)
 	}
 
 	// make sure a valid vschema has been loaded
+	log.Info("EnsureVSchema %s/%s", keyspace, shard)
 	if err = ts.EnsureVSchema(ctx, keyspace); err != nil {
 		return nil, vterrors.Wrapf(err, "EnsureVSchema(%v) failed", keyspace)
 	}
 
 	// now try to create with the lock, may already exist
+	log.Info("CreateShard %s/%s", keyspace, shard)
 	if err = ts.CreateShard(ctx, keyspace, shard); err != nil && !IsErrType(err, NodeExists) {
 		return nil, vterrors.Wrapf(err, "CreateShard(%v/%v) failed", keyspace, shard)
 	}
 
 	// try to read the shard again, maybe someone created it
 	// in between the original GetShard and the LockKeyspace
+	log.Info("GetShard %s/%s", keyspace, shard)
 	return ts.GetShard(ctx, keyspace, shard)
 }
 

@@ -38,23 +38,33 @@ type AlterVSchema struct {
 	noInputs
 }
 
+func (v *AlterVSchema) description() PrimitiveDescription {
+	return PrimitiveDescription{
+		OperatorType: "AlterVSchema",
+		Keyspace:     v.Keyspace,
+		Other: map[string]interface{}{
+			"query": sqlparser.String(v.DDL),
+		},
+	}
+}
+
 //RouteType implements the Primitive interface
-func (v AlterVSchema) RouteType() string {
+func (v *AlterVSchema) RouteType() string {
 	return "AlterVSchema"
 }
 
 //GetKeyspaceName implements the Primitive interface
-func (v AlterVSchema) GetKeyspaceName() string {
+func (v *AlterVSchema) GetKeyspaceName() string {
 	return v.Keyspace.Name
 }
 
 //GetTableName implements the Primitive interface
-func (v AlterVSchema) GetTableName() string {
+func (v *AlterVSchema) GetTableName() string {
 	return v.DDL.Table.Name.String()
 }
 
 //Execute implements the Primitive interface
-func (v AlterVSchema) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (v *AlterVSchema) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	err := vcursor.ExecuteVSchema(v.Keyspace.Name, v.DDL)
 	if err != nil {
 		return nil, err
@@ -63,11 +73,11 @@ func (v AlterVSchema) Execute(vcursor VCursor, bindVars map[string]*query.BindVa
 }
 
 //StreamExecute implements the Primitive interface
-func (v AlterVSchema) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
+func (v *AlterVSchema) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable") // TODO: systay - this should work
 }
 
 //GetFields implements the Primitive interface
-func (v AlterVSchema) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
+func (v *AlterVSchema) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable") // TODO: systay - this should work
 }

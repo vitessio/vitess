@@ -55,7 +55,7 @@ func leadingCommentEnd(text string) (end int) {
 
 		// Found visible characters. Look for '/*' at the beginning
 		// and '*/' somewhere after that.
-		if len(remainingText) < 4 || remainingText[:2] != "/*" {
+		if len(remainingText) < 4 || remainingText[:2] != "/*" || remainingText[2] == '!' {
 			break
 		}
 		commentLength := 4 + strings.Index(remainingText[2:], "*/")
@@ -93,8 +93,8 @@ func trailingCommentStart(text string) (start int) {
 
 		// Find the beginning of the comment
 		startCommentPos := strings.LastIndex(text[:reducedLen-2], "/*")
-		if startCommentPos < 0 {
-			// Badly formatted sql :/
+		if startCommentPos < 0 || text[startCommentPos+2] == '!' {
+			// Badly formatted sql, or a special /*! comment
 			break
 		}
 
@@ -162,28 +162,6 @@ func StripLeadingComments(sql string) string {
 
 func hasCommentPrefix(sql string) bool {
 	return len(sql) > 1 && ((sql[0] == '/' && sql[1] == '*') || (sql[0] == '-' && sql[1] == '-'))
-}
-
-// StripComments removes all comments from the string regardless
-// of where they occur
-func StripComments(sql string) string {
-	sql = StripLeadingComments(sql) // handle -- or /* ... */ at the beginning
-
-	for {
-		start := strings.Index(sql, "/*")
-		if start == -1 {
-			break
-		}
-		end := strings.Index(sql, "*/")
-		if end <= 1 {
-			break
-		}
-		sql = sql[:start] + sql[end+2:]
-	}
-
-	sql = strings.TrimFunc(sql, unicode.IsSpace)
-
-	return sql
 }
 
 // ExtractMysqlComment extracts the version and SQL from a comment-only query

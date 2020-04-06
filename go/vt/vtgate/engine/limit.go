@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 
@@ -33,23 +32,6 @@ type Limit struct {
 	Count  sqltypes.PlanValue
 	Offset sqltypes.PlanValue
 	Input  Primitive
-}
-
-// MarshalJSON serializes the Limit into a JSON representation.
-// It's used for testing and diagnostics.
-func (l *Limit) MarshalJSON() ([]byte, error) {
-	marshalLimit := struct {
-		Opcode string
-		Count  sqltypes.PlanValue
-		Offset sqltypes.PlanValue
-		Input  Primitive
-	}{
-		Opcode: "Limit",
-		Count:  l.Count,
-		Offset: l.Offset,
-		Input:  l.Input,
-	}
-	return json.Marshal(marshalLimit)
 }
 
 // RouteType returns a description of the query routing type used by the primitive
@@ -203,4 +185,20 @@ func (l *Limit) fetchOffset(bindVars map[string]*querypb.BindVariable) (int, err
 		return 0, fmt.Errorf("requested limit is out of range: %v", num)
 	}
 	return offset, nil
+}
+
+func (l *Limit) description() PrimitiveDescription {
+	other := map[string]interface{}{}
+
+	if !l.Count.IsNull() {
+		other["Count"] = l.Count.Value
+	}
+	if !l.Offset.IsNull() {
+		other["Offset"] = l.Offset.Value
+	}
+
+	return PrimitiveDescription{
+		OperatorType: "Limit",
+		Other:        other,
+	}
 }

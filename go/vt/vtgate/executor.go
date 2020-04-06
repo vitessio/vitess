@@ -916,13 +916,15 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			break
 		}
 		sql = sqlparser.String(show)
-	case sqlparser.KeywordString(sqlparser.INDEX), sqlparser.KeywordString(sqlparser.KEYS):
+	case sqlparser.KeywordString(sqlparser.INDEX), sqlparser.KeywordString(sqlparser.KEYS), sqlparser.KeywordString(sqlparser.INDEXES):
 		if !show.OnTable.Qualifier.IsEmpty() {
 			destKeyspace = show.OnTable.Qualifier.String()
 			show.OnTable.Qualifier = sqlparser.NewTableIdent("")
 		} else if show.ShowTablesOpt != nil {
-			destKeyspace = show.ShowTablesOpt.DbName
-			show.ShowTablesOpt.DbName = ""
+			if show.ShowTablesOpt.DbName != "" {
+				destKeyspace = show.ShowTablesOpt.DbName
+				show.ShowTablesOpt.DbName = ""
+			}
 		} else {
 			break
 		}

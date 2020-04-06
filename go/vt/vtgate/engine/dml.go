@@ -84,3 +84,14 @@ const (
 	// e.g: UPDATE `keyspace[-]`.x1 SET foo=1
 	ByDestination
 )
+
+var opcodeName = map[DMLOpcode]string{
+	Unsharded:     "Unsharded",
+	Equal:         "Equal",
+	Scatter:       "Scatter",
+	ByDestination: "ByDestination",
+}
+
+func (op DMLOpcode) String() string {
+	return opcodeName[op]
+}

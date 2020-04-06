@@ -18,9 +18,9 @@ package engine
 
 import (
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -257,4 +257,16 @@ func combineVars(bv1, bv2 map[string]*querypb.BindVariable) map[string]*querypb.
 		out[k] = v
 	}
 	return out
+}
+
+func (jn *Join) description() PrimitiveDescription {
+	other := map[string]interface{}{
+		"TableName":         jn.GetTableName(),
+		"JoinColumnIndexes": strings.Trim(strings.Join(strings.Fields(fmt.Sprint(jn.Cols)), ","), "[]"),
+	}
+	return PrimitiveDescription{
+		OperatorType: "Join",
+		Variant:      jn.Opcode.String(),
+		Other:        other,
+	}
 }
