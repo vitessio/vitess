@@ -151,7 +151,7 @@ func TestUpdateVSchema(t *testing.T) {
 
 func expectUpdateCount(t *testing.T, wantCount int64) int64 {
 	for i := 0; i < 10; i++ {
-		gotCount := vschemaUpdates.Get()
+		gotCount := engine.vschemaUpdates.Get()
 		if gotCount >= wantCount {
 			return gotCount
 		}

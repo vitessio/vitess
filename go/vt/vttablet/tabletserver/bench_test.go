@@ -28,6 +28,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 // Benchmark run on 6/27/17, with optimized byte-level operations
@@ -58,7 +59,6 @@ func init() {
 func BenchmarkExecuteVarBinary(b *testing.B) {
 	db := setUpTabletServerTest(nil)
 	defer db.Close()
-	testUtils := newTestUtils()
 	// sql that will be executed in this test
 	bv := map[string]*querypb.BindVariable{
 		"vtg1": sqltypes.Int64BindVariable(1),
@@ -67,11 +67,10 @@ func BenchmarkExecuteVarBinary(b *testing.B) {
 		bv[fmt.Sprintf("vtg%d", i)] = sqltypes.BytesBindVariable(benchVarValue)
 	}
 
-	config := testUtils.newQueryServiceConfig()
+	config := tabletenv.DefaultQsConfig
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
-	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	if err := tsv.StartService(target, dbconfigs); err != nil {
+	if err := tsv.StartService(target, newDBConfigs(db)); err != nil {
 		panic(err)
 	}
 	defer tsv.StopService()
@@ -87,7 +86,6 @@ func BenchmarkExecuteVarBinary(b *testing.B) {
 func BenchmarkExecuteExpression(b *testing.B) {
 	db := setUpTabletServerTest(nil)
 	defer db.Close()
-	testUtils := newTestUtils()
 	// sql that will be executed in this test
 	bv := map[string]*querypb.BindVariable{
 		"vtg1": sqltypes.Int64BindVariable(1),
@@ -99,11 +97,10 @@ func BenchmarkExecuteExpression(b *testing.B) {
 		}
 	}
 
-	config := testUtils.newQueryServiceConfig()
+	config := tabletenv.DefaultQsConfig
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
-	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	if err := tsv.StartService(target, dbconfigs); err != nil {
+	if err := tsv.StartService(target, newDBConfigs(db)); err != nil {
 		panic(err)
 	}
 	defer tsv.StopService()
