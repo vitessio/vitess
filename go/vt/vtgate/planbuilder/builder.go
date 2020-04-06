@@ -271,6 +271,9 @@ func Build(query string, vschema ContextVSchema) (*engine.Plan, error) {
 	return BuildFromStmt(query, result.AST, vschema, result.BindVarNeeds)
 }
 
+// ErrPlanNotSupported is an error for plan building not supported
+var ErrPlanNotSupported = errors.New("plan building not supported")
+
 // BuildFromStmt builds a plan based on the AST provided.
 // TODO(sougou): The query input is trusted as the source
 // of the AST. Maybe this function just returns instructions
@@ -293,24 +296,16 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 			instruction, err = buildDeletePlan(stmt, vschema)
 		case *sqlparser.Union:
 			instruction, err = buildUnionPlan(stmt, vschema)
-		case *sqlparser.Set:
-			return nil, errors.New("unsupported construct: set")
-		case *sqlparser.Show:
-			return nil, errors.New("unsupported construct: show")
 		case *sqlparser.DDL:
 			if sqlparser.IsVschemaDDL(stmt) {
 				instruction, err = buildVSchemaDDLPlan(stmt, vschema)
 			} else {
 				instruction, err = buildDDLPlan(stmt, vschema)
 			}
-		case *sqlparser.DBDDL:
-			return nil, errors.New("unsupported construct: ddl on database")
 		case *sqlparser.Use:
 			instruction, err = buildUsePlan(stmt, vschema)
-		case *sqlparser.OtherRead:
-			return nil, errors.New("unsupported construct: other read")
-		case *sqlparser.OtherAdmin:
-			return nil, errors.New("unsupported construct: other admin")
+		case *sqlparser.Set, *sqlparser.Show, *sqlparser.DBDDL, *sqlparser.OtherRead, *sqlparser.OtherAdmin:
+			return nil, ErrPlanNotSupported
 		case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback:
 			// Empty by design. Not executed by a plan
 		default:

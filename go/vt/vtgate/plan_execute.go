@@ -18,7 +18,15 @@ package vtgate
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"time"
+
+	"vitess.io/vitess/go/cache"
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
+	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -37,6 +45,40 @@ var _ executeMethod = (*planExecute)(nil)
 
 type planExecute struct {
 	e *Executor
+}
+
+// NewTestExecutor is only meant to be used from tests. It allows test code to inject wich `execute()` method to use
+func NewTestExecutor(ctx context.Context, strat func(executor *Executor) executeMethod, serv srvtopo.Server, cell string, resolver *Resolver, normalize bool, streamSize int, queryPlanCacheSize int64) *Executor {
+	e := &Executor{
+		serv:        serv,
+		cell:        cell,
+		resolver:    resolver,
+		scatterConn: resolver.scatterConn,
+		txConn:      resolver.scatterConn.txConn,
+		plans:       cache.NewLRUCache(queryPlanCacheSize),
+		normalize:   normalize,
+		streamSize:  streamSize,
+	}
+
+	e.exec = strat(e)
+
+	vschemaacl.Init()
+	e.vm = &VSchemaManager{e: e}
+	e.vm.watchSrvVSchema(ctx, cell)
+
+	executorOnce.Do(func() {
+		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", e.plans.Length)
+		stats.NewGaugeFunc("QueryPlanCacheSize", "Query plan cache size", e.plans.Size)
+		stats.NewGaugeFunc("QueryPlanCacheCapacity", "Query plan cache capacity", e.plans.Capacity)
+		stats.NewCounterFunc("QueryPlanCacheEvictions", "Query plan cache evictions", e.plans.Evictions)
+		stats.Publish("QueryPlanCacheOldest", stats.StringFunc(func() string {
+			return fmt.Sprintf("%v", e.plans.Oldest())
+		}))
+		http.Handle(pathQueryPlans, e)
+		http.Handle(pathScatterStats, e)
+		http.Handle(pathVSchema, e)
+	})
+	return e
 }
 
 func (e *planExecute) execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (*sqltypes.Result, error) {
@@ -67,6 +109,9 @@ func (e *planExecute) execute(ctx context.Context, safeSession *SafeSession, sql
 		skipQueryPlanCache(safeSession),
 		logStats,
 	)
+	if err == planbuilder.ErrPlanNotSupported {
+		return nil, err
+	}
 	execStart := e.logPlanningFinished(logStats, sql)
 
 	if err != nil {
