@@ -99,6 +99,11 @@ func (cf CounterFunc) Help() string {
 	return cf.help
 }
 
+// Get returns the value.
+func (cf CounterFunc) Get() int64 {
+	return cf.F()
+}
+
 // String implements expvar.Var.
 func (cf CounterFunc) String() string {
 	return strconv.FormatInt(cf.F(), 10)
