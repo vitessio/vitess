@@ -39,7 +39,7 @@ func TestStartSnapshot(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	conn, err := snapshotConnect(ctx, engine.cp)
+	conn, err := snapshotConnect(ctx, env.TabletEnv.DBConfigs().AppWithDB())
 	require.NoError(t, err)
 	defer conn.Close()
 

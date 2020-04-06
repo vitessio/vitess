@@ -45,12 +45,6 @@ var ErrConnPoolClosed = vterrors.New(vtrpcpb.Code_INTERNAL, "internal error: une
 // through non-test code.
 var usedNames = make(map[string]bool)
 
-// MySQLChecker defines the CheckMySQL interface that lower
-// level objects can use to call back into TabletServer.
-type MySQLChecker interface {
-	CheckMySQL()
-}
-
 // Pool implements a custom connection pool for tabletserver.
 // It's similar to dbconnpool.ConnPool, but the connections it creates
 // come with built-in ability to kill in-flight queries. These connections
@@ -58,6 +52,7 @@ type MySQLChecker interface {
 // Other than the connection type, ConnPool maintains an additional
 // pool of dba connections that are used to kill connections.
 type Pool struct {
+	env                tabletenv.Env
 	name               string
 	mu                 sync.Mutex
 	connections        *pools.ResourcePool
@@ -65,25 +60,19 @@ type Pool struct {
 	prefillParallelism int
 	idleTimeout        time.Duration
 	dbaPool            *dbconnpool.ConnectionPool
-	checker            MySQLChecker
 	appDebugParams     dbconfigs.Connector
 }
 
 // New creates a new Pool. The name is used
 // to publish stats only.
-func New(
-	name string,
-	capacity int,
-	prefillParallelism int,
-	idleTimeout time.Duration,
-	checker MySQLChecker) *Pool {
+func New(env tabletenv.Env, name string, capacity int, prefillParallelism int, idleTimeout time.Duration) *Pool {
 	cp := &Pool{
+		env:                env,
 		name:               name,
 		capacity:           capacity,
 		prefillParallelism: prefillParallelism,
 		idleTimeout:        idleTimeout,
 		dbaPool:            dbconnpool.NewConnectionPool("", 1, idleTimeout, 0),
-		checker:            checker,
 	}
 	if name == "" || usedNames[name] {
 		return cp

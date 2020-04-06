@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -122,8 +121,8 @@ var (
 // Close: There should be no more pending queries when this
 // function is called.
 type QueryEngine struct {
-	se        *schema.Engine
-	dbconfigs *dbconfigs.DBConfigs
+	env tabletenv.Env
+	se  *schema.Engine
 
 	// mu protects the following fields.
 	mu               sync.RWMutex
@@ -178,8 +177,10 @@ var (
 // NewQueryEngine creates a new QueryEngine.
 // This is a singleton class.
 // You must call this only once.
-func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tabletenv.TabletConfig) *QueryEngine {
+func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
+	config := env.Config()
 	qe := &QueryEngine{
+		env:                env,
 		se:                 se,
 		tables:             make(map[string]*schema.Table),
 		plans:              cache.NewLRUCache(int64(config.QueryPlanCacheSize)),
@@ -187,22 +188,10 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		queryPoolWaiterCap: sync2.NewAtomicInt64(int64(config.QueryPoolWaiterCap)),
 	}
 
-	qe.conns = connpool.New(
-		config.PoolNamePrefix+"ConnPool",
-		config.PoolSize,
-		config.PoolPrefillParallelism,
-		time.Duration(config.IdleTimeout*1e9),
-		checker,
-	)
+	qe.conns = connpool.New(env, config.PoolNamePrefix+"ConnPool", config.PoolSize, config.PoolPrefillParallelism, time.Duration(config.IdleTimeout*1e9))
 	qe.connTimeout.Set(time.Duration(config.QueryPoolTimeout * 1e9))
 
-	qe.streamConns = connpool.New(
-		config.PoolNamePrefix+"StreamConnPool",
-		config.StreamPoolSize,
-		config.StreamPoolPrefillParallelism,
-		time.Duration(config.IdleTimeout*1e9),
-		checker,
-	)
+	qe.streamConns = connpool.New(env, config.PoolNamePrefix+"StreamConnPool", config.StreamPoolSize, config.StreamPoolPrefillParallelism, time.Duration(config.IdleTimeout*1e9))
 	qe.enableConsolidator = config.EnableConsolidator
 	qe.enableConsolidatorReplicas = config.EnableConsolidatorReplicas
 	qe.enableQueryPlanFieldCaching = config.EnableQueryPlanFieldCaching
@@ -277,14 +266,9 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 	return qe
 }
 
-// InitDBConfig must be called before Open.
-func (qe *QueryEngine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	qe.dbconfigs = dbcfgs
-}
-
 // Open must be called before sending requests to QueryEngine.
 func (qe *QueryEngine) Open() error {
-	qe.conns.Open(qe.dbconfigs.AppWithDB(), qe.dbconfigs.DbaWithDB(), qe.dbconfigs.AppDebugWithDB())
+	qe.conns.Open(qe.env.DBConfigs().AppWithDB(), qe.env.DBConfigs().DbaWithDB(), qe.env.DBConfigs().AppDebugWithDB())
 
 	conn, err := qe.conns.Get(tabletenv.LocalContext())
 	if err != nil {
@@ -301,7 +285,7 @@ func (qe *QueryEngine) Open() error {
 		return err
 	}
 
-	qe.streamConns.Open(qe.dbconfigs.AppWithDB(), qe.dbconfigs.DbaWithDB(), qe.dbconfigs.AppDebugWithDB())
+	qe.streamConns.Open(qe.env.DBConfigs().AppWithDB(), qe.env.DBConfigs().DbaWithDB(), qe.env.DBConfigs().AppDebugWithDB())
 	qe.se.RegisterNotifier("qe", qe.schemaChanged)
 	return nil
 }
@@ -431,7 +415,7 @@ func (qe *QueryEngine) ClearQueryPlanCache() {
 
 // IsMySQLReachable returns true if we can connect to MySQL.
 func (qe *QueryEngine) IsMySQLReachable() bool {
-	conn, err := dbconnpool.NewDBConnection(qe.dbconfigs.DbaWithDB(), tabletenv.MySQLStats)
+	conn, err := dbconnpool.NewDBConnection(qe.env.DBConfigs().DbaWithDB(), tabletenv.MySQLStats)
 	if err != nil {
 		if mysql.IsConnErr(err) {
 			return false

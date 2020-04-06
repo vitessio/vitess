@@ -223,12 +223,13 @@ func TestStatements(t *testing.T) {
 	runCases(t, nil, testcases, "current")
 
 	// Test FilePos flavor
-	params, err := engine.cp.MysqlParams()
-	if err != nil {
-		t.Fatal(err)
-	}
-	params.Flavor = "FilePos"
-	defer func() { params.Flavor = "" }()
+	savedEngine := engine
+	defer func() { engine = savedEngine }()
+	engine = customEngine(t, func(in mysql.ConnParams) mysql.ConnParams {
+		in.Flavor = "FilePos"
+		return in
+	})
+	defer engine.Close()
 	runCases(t, nil, testcases, "current")
 }
 
@@ -293,13 +294,13 @@ func TestOther(t *testing.T) {
 	customRun("gtid")
 
 	// Test FilePos flavor
-	params, err := engine.cp.MysqlParams()
-	if err != nil {
-		t.Fatal(err)
-	}
-	params.Flavor = "FilePos"
-
-	defer func() { params.Flavor = "" }()
+	savedEngine := engine
+	defer func() { engine = savedEngine }()
+	engine = customEngine(t, func(in mysql.ConnParams) mysql.ConnParams {
+		in.Flavor = "FilePos"
+		return in
+	})
+	defer engine.Close()
 	customRun("filePos")
 }
 
@@ -1424,7 +1425,7 @@ func masterPosition(t *testing.T) string {
 	// We use the engine's cp because there is one test that overrides
 	// the flavor to FilePos. If so, we have to obtain the position
 	// in that flavor format.
-	connParam, err := engine.cp.MysqlParams()
+	connParam, err := engine.env.DBConfigs().DbaWithDB().MysqlParams()
 	if err != nil {
 		t.Fatal(err)
 	}

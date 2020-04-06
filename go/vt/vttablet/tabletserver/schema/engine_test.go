@@ -298,19 +298,12 @@ func TestStatsURL(t *testing.T) {
 	se.ServeHTTP(response, request)
 }
 
-type dummyChecker struct {
-}
-
-func (dummyChecker) CheckMySQL() {}
-
-var DummyChecker = dummyChecker{}
-
 func newEngine(queryPlanCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, strict bool, db *fakesqldb.DB) *Engine {
 	config := tabletenv.DefaultQsConfig
 	config.QueryPlanCacheSize = queryPlanCacheSize
 	config.SchemaReloadTime = float64(reloadTime) / 1e9
 	config.IdleTimeout = float64(idleTimeout) / 1e9
-	se := NewEngine(DummyChecker, config)
+	se := NewEngine(tabletenv.NewTestEnv(&config, nil))
 	se.InitDBConfig(newDBConfigs(db).DbaWithDB())
 	return se
 }

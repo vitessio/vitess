@@ -697,24 +697,14 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 }
 
 func newTxPool() *TxPool {
+	config := tabletenv.DefaultQsConfig
 	randID := rand.Int63()
-	poolName := fmt.Sprintf("TestTransactionPool-%d", randID)
-	transactionCap := 300
-	transactionTimeout := time.Duration(30 * time.Second)
-	transactionPoolTimeout := time.Duration(40 * time.Second)
-	waiterCap := 500000
-	idleTimeout := time.Duration(30 * time.Second)
+	config.PoolNamePrefix = fmt.Sprintf("TestTransactionPool-%d", randID)
+	config.TransactionCap = 300
+	config.TransactionTimeout = 30
+	config.TxPoolTimeout = 40
+	config.TxPoolWaiterCap = 500000
+	config.IdleTimeout = 30
 	limiter := &txlimiter.TxAllowAll{}
-	return NewTxPool(
-		poolName,
-		transactionCap,
-		transactionCap,
-		0,
-		transactionTimeout,
-		transactionPoolTimeout,
-		idleTimeout,
-		waiterCap,
-		DummyChecker,
-		limiter,
-	)
+	return NewTxPool(tabletenv.NewTestEnv(&config, nil), limiter)
 }
