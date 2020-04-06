@@ -23,12 +23,14 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -133,6 +135,7 @@ func TestLoadTableMessage(t *testing.T) {
 
 	// Test loading min/max backoff
 	table, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30,vt_min_backoff=10,vt_max_backoff=100", db)
+	require.NoError(t, err)
 	want.MessageInfo.MinBackoff = 10 * time.Second
 	want.MessageInfo.MaxBackoff = 100 * time.Second
 	assert.Equal(t, want, table)
@@ -159,7 +162,7 @@ func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 	appParams := db.ConnParams()
 	dbaParams := db.ConnParams()
 	connPoolIdleTimeout := 10 * time.Second
-	connPool := connpool.New("", 2, 0, connPoolIdleTimeout, DummyChecker)
+	connPool := connpool.New(tabletenv.NewTestEnv(nil, nil), "", 2, 0, connPoolIdleTimeout)
 	connPool.Open(appParams, dbaParams, appParams)
 	conn, err := connPool.Get(ctx)
 	if err != nil {

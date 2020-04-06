@@ -1439,7 +1439,10 @@ func TestDMLQueryWithoutWhereClause(t *testing.T) {
 
 	db.AddQuery(q+" limit 10001", &sqltypes.Result{})
 
-	_, _, err = tsv.BeginExecute(context.Background(), &target, q, nil, nil)
+	ctx := context.Background()
+	_, txid, err := tsv.BeginExecute(ctx, &target, q, nil, nil)
+	require.NoError(t, err)
+	err = tsv.Commit(ctx, &target, txid)
 	require.NoError(t, err)
 }
 

@@ -36,6 +36,7 @@ import (
 // TabletService defines the functions of TabletServer
 // that the messager needs for callback.
 type TabletService interface {
+	tabletenv.Env
 	PostponeMessages(ctx context.Context, target *querypb.Target, name string, ids []string) (count int64, err error)
 	PurgeMessages(ctx context.Context, target *querypb.Target, name string, timeCutoff int64) (count int64, err error)
 }
@@ -60,12 +61,12 @@ type Engine struct {
 }
 
 // NewEngine creates a new Engine.
-func NewEngine(tsv TabletService, se *schema.Engine, vs VStreamer, config tabletenv.TabletConfig) *Engine {
+func NewEngine(tsv TabletService, se *schema.Engine, vs VStreamer) *Engine {
 	return &Engine{
 		tsv:          tsv,
 		se:           se,
 		vs:           vs,
-		postponeSema: sync2.NewSemaphore(config.MessagePostponeCap, 0),
+		postponeSema: sync2.NewSemaphore(tsv.Config().MessagePostponeCap, 0),
 		managers:     make(map[string]*messageManager),
 	}
 }

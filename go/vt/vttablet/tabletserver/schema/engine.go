@@ -48,7 +48,8 @@ type notifier func(full map[string]*Table, created, altered, dropped []string)
 // Engine stores the schema info and performs operations that
 // keep itself up-to-date.
 type Engine struct {
-	cp dbconfigs.Connector
+	env tabletenv.Env
+	cp  dbconfigs.Connector
 
 	// mu protects the following fields.
 	mu         sync.Mutex
@@ -67,13 +68,14 @@ type Engine struct {
 var schemaOnce sync.Once
 
 // NewEngine creates a new Engine.
-func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *Engine {
-	reloadTime := time.Duration(config.SchemaReloadTime * 1e9)
-	idleTimeout := time.Duration(config.IdleTimeout * 1e9)
+func NewEngine(env tabletenv.Env) *Engine {
+	reloadTime := time.Duration(env.Config().SchemaReloadTime * 1e9)
+	idleTimeout := time.Duration(env.Config().IdleTimeout * 1e9)
 	se := &Engine{
+		env: env,
 		// We need only one connection because the reloader is
 		// the only one that needs this.
-		conns:      connpool.New("", 1, 0, idleTimeout, checker),
+		conns:      connpool.New(env, "", 1, 0, idleTimeout),
 		ticks:      timer.NewTimer(reloadTime),
 		reloadTime: reloadTime,
 	}

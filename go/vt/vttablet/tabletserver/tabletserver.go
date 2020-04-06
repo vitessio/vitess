@@ -47,6 +47,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/tableacl"
@@ -133,6 +134,8 @@ func stateInfo(state int64) string {
 // Open and Close can be called repeatedly during the lifetime of
 // a subcomponent. These should also be idempotent.
 type TabletServer struct {
+	exporter               *servenv.Exporter
+	config                 *tabletenv.TabletConfig
 	QueryTimeout           sync2.AtomicDuration
 	TerseErrors            bool
 	enableHotRowProtection bool
@@ -208,6 +211,7 @@ var srvTopoServer srvtopo.Server
 // instance of TabletServer will expose its state variables.
 func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
 	tsv := &TabletServer{
+		config:                 &config,
 		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
 		TerseErrors:            config.TerseErrors,
 		enableHotRowProtection: config.EnableHotRowProtection || config.EnableHotRowProtectionDryRun,
@@ -217,15 +221,12 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 		topoServer:             topoServer,
 		alias:                  alias,
 	}
-	tsv.se = schema.NewEngine(tsv, config)
-	tsv.qe = NewQueryEngine(tsv, tsv.se, config)
-	tsv.te = NewTxEngine(tsv, config)
-	tsv.hw = heartbeat.NewWriter(tsv, alias, config)
-	tsv.hr = heartbeat.NewReader(tsv, config)
+	tsv.se = schema.NewEngine(tsv)
+	tsv.qe = NewQueryEngine(tsv, tsv.se)
+	tsv.te = NewTxEngine(tsv)
+	tsv.hw = heartbeat.NewWriter(tsv, alias)
+	tsv.hr = heartbeat.NewReader(tsv)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
-	// FIXME(alainjobart) could we move this to the Register method below?
-	// So that vtcombo doesn't even call it once, on the first tablet.
-	// And we can remove the tsOnce variable.
 	tsOnce.Do(func() {
 		srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo")
 		stats.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
@@ -244,10 +245,9 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 		stats.NewGaugeDurationFunc("QueryTimeout", "Tablet server query timeout", tsv.QueryTimeout.Get)
 		stats.NewGaugeDurationFunc("QueryPoolTimeout", "Tablet server timeout to get a connection from the query pool", tsv.qe.connTimeout.Get)
 	})
-	// TODO(sougou): move this up once the stats naming problem is fixed.
-	tsv.vstreamer = vstreamer.NewEngine(srvTopoServer, tsv.se)
+	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se)
 	tsv.watcher = NewReplicationWatcher(tsv.vstreamer, config)
-	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer, config)
+	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 	return tsv
 }
 
@@ -261,6 +261,21 @@ func (tsv *TabletServer) Register() {
 	tsv.registerQueryzHandler()
 	tsv.registerStreamQueryzHandlers()
 	tsv.registerTwopczHandler()
+}
+
+// Exporter satisfies tabletenv.Env.
+func (tsv *TabletServer) Exporter() *servenv.Exporter {
+	return tsv.exporter
+}
+
+// Config satisfies tabletenv.Env.
+func (tsv *TabletServer) Config() *tabletenv.TabletConfig {
+	return tsv.config
+}
+
+// DBConfigs satisfies tabletenv.Env.
+func (tsv *TabletServer) DBConfigs() *dbconfigs.DBConfigs {
+	return tsv.dbconfigs
 }
 
 // RegisterQueryRuleSource registers ruleSource for setting query rules.
@@ -330,11 +345,6 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.dbconfigs = dbcfgs
 
 	tsv.se.InitDBConfig(tsv.dbconfigs.DbaWithDB())
-	tsv.qe.InitDBConfig(tsv.dbconfigs)
-	tsv.te.InitDBConfig(tsv.dbconfigs)
-	tsv.hw.InitDBConfig(tsv.dbconfigs)
-	tsv.hr.InitDBConfig(tsv.dbconfigs)
-	tsv.vstreamer.InitDBConfig(tsv.dbconfigs.DbaWithDB())
 	return nil
 }
 
@@ -649,6 +659,7 @@ func (tsv *TabletServer) IsHealthy() error {
 // CheckMySQL initiates a check to see if MySQL is reachable.
 // If not, it shuts down the query service. The check is rate-limited
 // to no more than once per second.
+// The function satisfies tabletenv.Env.
 func (tsv *TabletServer) CheckMySQL() {
 	if !tsv.checkMySQLThrottler.TryAcquire() {
 		return
