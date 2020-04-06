@@ -1166,7 +1166,7 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 			done, waited, waitErr := tsv.qe.txSerializer.Wait(ctx, k, table)
 			txDone = done
 			if waited {
-				tabletenv.WaitStats.Record("TxSerializer", startTime)
+				tsv.stats.WaitTimings.Record("TxSerializer", startTime)
 			}
 
 			return waitErr
