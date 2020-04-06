@@ -113,7 +113,7 @@ func (cp *Pool) getLogWaitCallback() func(time.Time) {
 		return func(start time.Time) {} // no op
 	}
 	return func(start time.Time) {
-		tabletenv.WaitStats.Record(cp.name+"ResourceWaitTime", start)
+		cp.env.Stats().WaitTimings.Record(cp.name+"ResourceWaitTime", start)
 	}
 }
 

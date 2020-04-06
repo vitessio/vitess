@@ -1299,7 +1299,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	countStart := tabletenv.WaitStats.Counts()["TxSerializer"]
+	countStart := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 
 	// Fake data.
 	q1 := "update test_table set name_string = 'tx1' where pk = :pk and name = :name"
@@ -1388,7 +1388,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 
 	wg.Wait()
 
-	got, ok := tabletenv.WaitStats.Counts()["TxSerializer"]
+	got, ok := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 	want := countStart + 1
 	if !ok || got != want {
 		t.Fatalf("only tx2 should have been serialized: ok? %v got: %v want: %v", ok, got, want)
@@ -1450,7 +1450,7 @@ func TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	countStart := tabletenv.WaitStats.Counts()["TxSerializer"]
+	countStart := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 
 	// Fake data.
 	q1 := "update test_table set name_string = 'tx1' where pk = :pk and name = :name"
@@ -1540,7 +1540,7 @@ func TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction(t *testing.T) {
 
 	wg.Wait()
 
-	got, ok := tabletenv.WaitStats.Counts()["TxSerializer"]
+	got, ok := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 	want := countStart + 1
 	if !ok || got != want {
 		t.Fatalf("only tx2 should have been serialized: ok? %v got: %v want: %v", ok, got, want)
@@ -1567,7 +1567,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	countStart := tabletenv.WaitStats.Counts()["TxSerializer"]
+	countStart := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 
 	// Fake data.
 	q1 := "update test_table set name_string = 'tx1' where pk = :pk and name = :name"
@@ -1666,7 +1666,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 
 	wg.Wait()
 
-	got, ok := tabletenv.WaitStats.Counts()["TxSerializer"]
+	got, ok := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 	want := countStart + 1
 	if !ok || got != want {
 		t.Fatalf("One out of the three transactions must have waited: ok? %v got: %v want: %v", ok, got, want)
@@ -1707,7 +1707,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	countStart := tabletenv.WaitStats.Counts()["TxSerializer"]
+	countStart := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 
 	// Fake data.
 	q1 := "update test_table set name_string = 'tx1' where pk = :pk and name = :name"
@@ -1767,7 +1767,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 
 	wg.Wait()
 
-	got := tabletenv.WaitStats.Counts()["TxSerializer"]
+	got := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 	want := countStart + 0
 	if got != want {
 		t.Fatalf("tx2 should have failed early and not tracked as serialized: got: %v want: %v", got, want)
@@ -1795,7 +1795,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests_ExecuteBatchAsTrans
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	countStart := tabletenv.WaitStats.Counts()["TxSerializer"]
+	countStart := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 
 	// Fake data.
 	q1 := "update test_table set name_string = 'tx1' where pk = :pk and name = :name"
@@ -1860,7 +1860,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests_ExecuteBatchAsTrans
 
 	wg.Wait()
 
-	got := tabletenv.WaitStats.Counts()["TxSerializer"]
+	got := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 	want := countStart + 0
 	if got != want {
 		t.Fatalf("tx2 should have failed early and not tracked as serialized: got: %v want: %v", got, want)
@@ -1886,7 +1886,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	countStart := tabletenv.WaitStats.Counts()["TxSerializer"]
+	countStart := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 
 	// Fake data.
 	q1 := "update test_table set name_string = 'tx1' where pk = :pk and name = :name"
@@ -1983,7 +1983,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 
 	wg.Wait()
 
-	got, ok := tabletenv.WaitStats.Counts()["TxSerializer"]
+	got, ok := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 	want := countStart + 2
 	if got != want {
 		t.Fatalf("tx2 and tx3 should have been serialized: ok? %v got: %v want: %v", ok, got, want)

@@ -564,7 +564,7 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 			logStats.QuerySources |= tabletenv.QuerySourceConsolidator
 			startTime := time.Now()
 			q.Wait()
-			tabletenv.WaitStats.Record("Consolidations", startTime)
+			qre.tsv.stats.WaitTimings.Record("Consolidations", startTime)
 		}
 		if q.Err != nil {
 			return nil, q.Err

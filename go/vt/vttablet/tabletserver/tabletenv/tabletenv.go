@@ -33,8 +33,6 @@ import (
 )
 
 var (
-	// WaitStats shows the time histogram for wait operations
-	WaitStats = stats.NewTimings("Waits1", "Wait operations", "type")
 	// KillStats shows number of connections being killed.
 	KillStats = stats.NewCountersWithSingleLabel("Kills1", "Number of connections being killed", "query_type", "Transactions", "Queries")
 	// ErrorStats shows number of critial errors happened.
