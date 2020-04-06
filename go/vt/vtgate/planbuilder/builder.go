@@ -282,36 +282,33 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 	var err error
 	var instruction engine.Primitive
 
-	if vschema.Destination() != nil {
-		instruction, err = buildPlanForBypass(stmt, vschema)
-	} else {
-		switch stmt := stmt.(type) {
-		case *sqlparser.Select:
-			instruction, err = buildSelectPlan(stmt, vschema)
-		case *sqlparser.Insert:
-			instruction, err = buildInsertPlan(stmt, vschema)
-		case *sqlparser.Update:
-			instruction, err = buildUpdatePlan(stmt, vschema)
-		case *sqlparser.Delete:
-			instruction, err = buildDeletePlan(stmt, vschema)
-		case *sqlparser.Union:
-			instruction, err = buildUnionPlan(stmt, vschema)
-		case *sqlparser.DDL:
-			if sqlparser.IsVschemaDDL(stmt) {
-				instruction, err = buildVSchemaDDLPlan(stmt, vschema)
-			} else {
-				instruction, err = buildDDLPlan(stmt, vschema)
-			}
-		case *sqlparser.Use:
-			instruction, err = buildUsePlan(stmt, vschema)
-		case *sqlparser.Set, *sqlparser.Show, *sqlparser.DBDDL, *sqlparser.OtherRead, *sqlparser.OtherAdmin:
-			return nil, ErrPlanNotSupported
-		case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback:
-			// Empty by design. Not executed by a plan
-		default:
-			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
+	switch stmt := stmt.(type) {
+	case *sqlparser.Select:
+		instruction, err = buildRoutePlan(stmt, vschema, buildSelectPlan)
+	case *sqlparser.Insert:
+		instruction, err = buildRoutePlan(stmt, vschema, buildInsertPlan)
+	case *sqlparser.Update:
+		instruction, err = buildRoutePlan(stmt, vschema, buildUpdatePlan)
+	case *sqlparser.Delete:
+		instruction, err = buildRoutePlan(stmt, vschema, buildDeletePlan)
+	case *sqlparser.Union:
+		instruction, err = buildRoutePlan(stmt, vschema, buildUnionPlan)
+	case *sqlparser.DDL:
+		if sqlparser.IsVschemaDDL(stmt) {
+			instruction, err = buildVSchemaDDLPlan(stmt, vschema)
+		} else {
+			instruction, err = buildRoutePlan(stmt, vschema, buildDDLPlan)
 		}
+	case *sqlparser.Use:
+		instruction, err = buildUsePlan(stmt, vschema)
+	case *sqlparser.Set, *sqlparser.Show, *sqlparser.DBDDL, *sqlparser.OtherRead, *sqlparser.OtherAdmin:
+		return nil, ErrPlanNotSupported
+	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback:
+		// Empty by design. Not executed by a plan
+	default:
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
 	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -322,4 +319,11 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 		BindVarNeeds: bindVarNeeds,
 	}
 	return plan, nil
+}
+
+func buildRoutePlan(stmt sqlparser.Statement, vschema ContextVSchema, f func(statement sqlparser.Statement, schema ContextVSchema) (engine.Primitive, error)) (engine.Primitive, error) {
+	if vschema.Destination() != nil {
+		return buildPlanForBypass(stmt, vschema)
+	}
+	return f(stmt, vschema)
 }

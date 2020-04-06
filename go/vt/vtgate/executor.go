@@ -252,12 +252,6 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		return qr, nil
 	case sqlparser.StmtDDL:
 		return e.handleDDL(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
-	case sqlparser.StmtBegin:
-		return e.handleBegin(ctx, safeSession, destTabletType, logStats)
-	case sqlparser.StmtCommit:
-		return e.handleCommit(ctx, safeSession, logStats)
-	case sqlparser.StmtRollback:
-		return e.handleRollback(ctx, safeSession, logStats)
 	case sqlparser.StmtSet:
 		return e.handleSet(ctx, safeSession, sql, logStats)
 	case sqlparser.StmtShow:
@@ -268,6 +262,8 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		return e.handleOther(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
 	case sqlparser.StmtComment:
 		return e.handleComment(sql)
+	case sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback:
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "should be handled by plan_execute")
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
