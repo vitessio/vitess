@@ -305,7 +305,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 		if dryRun {
 			drLog.Log(fmt.Sprintf("Will wait for VReplication on all streams to catchup for upto %v", filteredReplicationWaitTime))
 			drLog.Log(fmt.Sprintf("Streams will be migrated to %s", ts.targetKeyspace))
-			drLog.Log(fmt.Sprintf("Reverse replication workflow %s will be created ", ts.reverseWorkflow))
+			drLog.Log(fmt.Sprintf("Reverse replication workflow %s will be created", ts.reverseWorkflow))
 		} else {
 			if err := ts.waitForCatchup(ctx, filteredReplicationWaitTime); err != nil {
 				ts.wr.Logger().Errorf("waitForCatchup failed: %v", err)
@@ -346,7 +346,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 		drLog.Log(fmt.Sprintf("Writes will be enabled on keyspace %s tables %s", ts.targetKeyspace, strings.Join(ts.tables, ",")))
 		drLog.Log(fmt.Sprintf("Routing will be switched from keyspace %s to keyspace %s", ts.sourceKeyspace, ts.targetKeyspace))
 		if reverseReplication {
-			drLog.Log("Reverse replication streams will be started on:\n")
+			drLog.Log("Reverse replication streams will be started on:")
 			logs := make([]string, 0)
 			for _, t := range ts.sources {
 				logs = append(logs, fmt.Sprintf("\ttablet %s", t.master.Alias))

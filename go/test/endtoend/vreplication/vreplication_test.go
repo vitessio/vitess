@@ -29,7 +29,6 @@ func init() {
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
-
 	cellName := "zone1"
 
 	vc = InitCluster(t, cellName)
@@ -106,6 +105,14 @@ func insertMoreCustomers(t *testing.T, numCustomers int) {
 	execVtgateQuery(t, vtgateConn, "customer", sql)
 }
 
+func validateDryRunResults(t *testing.T, output string, want []string) {
+	assert.NotEmpty(t, output)
+	gotDryRun := strings.Split(output, "\n")
+	assert.True(t, len(gotDryRun) > 3)
+	gotDryRun = gotDryRun[3 : len(gotDryRun)-1]
+	assert.Equal(t, strings.Join(want, "\n"), strings.Join(gotDryRun, "\n"))
+}
+
 func shardCustomer(t *testing.T, testReverse bool) {
 	if _, err := vc.AddKeyspace(t, cell, "customer", "-80,80-", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200); err != nil {
 		t.Fatal(err)
@@ -141,15 +148,49 @@ func shardCustomer(t *testing.T, testReverse bool) {
 	matchInsertQuery1 := "insert into customer(cid, name) values (:vtg1, :vtg2)"
 	assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
 	vdiff(t, "customer.p2c")
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+cell.Name, "-tablet_type=rdonly", "customer.p2c"); err != nil {
+	var output string
+	var err error
+
+	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+cell.Name, "-tablet_type=rdonly", "customer.p2c"); err != nil {
 		t.Fatalf("SwitchReads error: %s\n", output)
 	}
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+cell.Name, "-tablet_type=replica", "customer.p2c"); err != nil {
+	want := []string{
+		"Will lock keyspace product",
+		"Will switch reads for tables customer to keyspace customer",
+		"Will switch reads from keyspace product to keyspace customer for shards 0 to shards -80,80-",
+		"Will unlock keyspace product",
+	}
+	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+cell.Name, "-tablet_type=replica", "-dry_run", "customer.p2c"); err != nil {
+		t.Fatalf("SwitchReads Dry Run error: %s\n", output)
+	}
+	validateDryRunResults(t, output, want)
+	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+cell.Name, "-tablet_type=replica", "customer.p2c"); err != nil {
 		t.Fatalf("SwitchReads error: %s\n", output)
 	}
 
 	assert.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTabReplica, "customer", query, query))
 	assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", query, query))
+	want = []string{
+		"Will lock source keyspace product and target keyspace customer",
+		"Writes will be stopped in keyspace product, tables customer",
+		"Will wait for VReplication on all streams to catchup for upto 30s",
+		"Streams will be migrated to customer",
+		"Reverse replication workflow p2c_reverse will be created",
+		"Binlog entries will be created on source databases, SwitchWrites will have reached a point of no return",
+		"Writes will be enabled on keyspace customer tables customer",
+		"Routing will be switched from keyspace product to keyspace customer",
+		"Reverse replication streams will be started on:",
+		"\ttablet cell:\"zone1\" uid:100 ",
+		"SwitchWrites completed, migration streams will be frozen and then deleted on:",
+		"\ttablet cell:\"zone1\" uid:200 ",
+		"\ttablet cell:\"zone1\" uid:300 ",
+		"Will unlock source keyspace product and target keyspace customer",
+	}
+	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "-dry_run", "customer.p2c"); err != nil {
+		t.Fatalf("SwitchWrites error: %s\n", output)
+	}
+	validateDryRunResults(t, output, want)
+
 	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "customer.p2c"); err != nil {
 		t.Fatalf("SwitchWrites error: %s\n", output)
 	}
