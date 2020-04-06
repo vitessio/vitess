@@ -1556,7 +1556,7 @@ func convertErrorCode(err error) vtrpcpb.Code {
 		mysql.ERTooLongString, mysql.ERDelayedInsertTableLocked, mysql.ERDupUnique, mysql.ERRequiresPrimaryKey, mysql.ERCantDoThisDuringAnTransaction, mysql.ERReadOnlyTransaction,
 		mysql.ERCannotAddForeign, mysql.ERNoReferencedRow, mysql.ERRowIsReferenced, mysql.ERCantUpdateWithReadLock, mysql.ERNoDefault, mysql.EROperandColumns,
 		mysql.ERSubqueryNo1Row, mysql.ERNonUpdateableTable, mysql.ERFeatureDisabled, mysql.ERDuplicatedValueInType, mysql.ERRowIsReferenced2,
-		mysql.ErNoReferencedRow2:
+		mysql.ErNoReferencedRow2, mysql.ERWarnDataOutOfRange:
 		errCode = vtrpcpb.Code_FAILED_PRECONDITION
 	case mysql.EROptionPreventsStatement:
 		// Special-case this error code. It's probably because
@@ -1596,7 +1596,7 @@ func convertErrorCode(err error) vtrpcpb.Code {
 		}
 	case mysql.CRServerLost:
 		// Query was killed.
-		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
+		errCode = vtrpcpb.Code_CANCELED
 	}
 
 	return errCode
