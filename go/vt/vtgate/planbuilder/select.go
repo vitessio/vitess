@@ -73,6 +73,16 @@ func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 // pushed into a route, then a primitive is created on top of any
 // of the above trees to make it discard unwanted rows.
 func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) error {
+	if checkForDual(sel) && outer == nil {
+		exprs := make([]*sqlparser.AliasedExpr, len(sel.SelectExprs))
+		for i, e := range sel.SelectExprs {
+			exprs[i] = e.(*sqlparser.AliasedExpr)
+		}
+		pb.bldr = &vtgateExecution{
+			exprs,
+		}
+		return nil
+	}
 	if err := pb.processTableExprs(sel.From); err != nil {
 		return err
 	}
@@ -119,6 +129,28 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 	}
 	pb.bldr.PushMisc(sel)
 	return nil
+}
+
+func checkForDual(sel *sqlparser.Select) bool {
+	if len(sel.From) == 1 {
+		if from, ok := sel.From[0].(*sqlparser.AliasedTableExpr); ok {
+			if tableName, ok := from.Expr.(sqlparser.TableName); ok {
+				if tableName.Name.String() == "dual" && tableName.Qualifier.IsEmpty() {
+					for _, expr := range sel.SelectExprs {
+						e, ok := expr.(*sqlparser.AliasedExpr)
+						if !ok {
+							return false
+						}
+						if _, ok := e.Expr.(*sqlparser.SQLVal); !ok {
+							return false
+						}
+					}
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // pushFilter identifies the target route for the specified bool expr,

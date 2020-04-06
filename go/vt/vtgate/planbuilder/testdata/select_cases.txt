@@ -411,15 +411,23 @@
   "QueryType": "SELECT",
   "Original": "select database() from dual",
   "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectReference",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select :__vtdbname as `database()` from dual where 1 != 1",
-    "Query": "select :__vtdbname as `database()` from dual",
-    "Table": "dual"
+    "OperatorType": "Projection",
+    "Variant": "",
+    "Expressions": [
+      {
+        "Expr": {
+          "Type": 5,
+          "Val": "Ol9fdnRkYm5hbWU="
+        },
+        "As": "database()"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow",
+        "Variant": ""
+      }
+    ]
   }
 }
 
@@ -1348,5 +1356,30 @@
     "FieldQuery": "select * from unsharded as route2 where 1 != 1",
     "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded as route2",
     "Table": "unsharded"
+  }
+}
+
+# testing SingleRow Projection
+"select 42"
+{
+  "Original": "select 42",
+  "Instructions": {
+    "OperatorType": "Projection",
+    "Variant": "",
+    "Expressions": [
+      {
+        "Expr": {
+          "Type": 1,
+          "Val": "NDI="
+        },
+        "As": ""
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow",
+        "Variant": ""
+      }
+    ]
   }
 }
