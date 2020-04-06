@@ -64,7 +64,7 @@ type ConnectionPool struct {
 	wg          sync.WaitGroup
 	hostIsNotIP bool
 
-	mysqlStats *stats.Timings
+	mysqlStats StatsTimings
 	name       string
 }
 
@@ -142,7 +142,7 @@ func (cp *ConnectionPool) validAddress(addr net.IP) bool {
 // ...
 // conn, err := pool.Get()
 // ...
-func (cp *ConnectionPool) Open(info dbconfigs.Connector, mysqlStats *stats.Timings) {
+func (cp *ConnectionPool) Open(info dbconfigs.Connector, mysqlStats StatsTimings) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	cp.info = info

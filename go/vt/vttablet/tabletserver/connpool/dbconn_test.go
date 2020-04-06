@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 func compareTimingCounts(t *testing.T, op string, delta int64, before, after map[string]int64) {
@@ -46,7 +45,6 @@ func compareTimingCounts(t *testing.T, op string, delta int64, before, after map
 func TestDBConnExec(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	startCounts := tabletenv.MySQLStats.Counts()
 
 	sql := "select * from test_table limit 1000"
 	expectedResult := &sqltypes.Result{
@@ -60,6 +58,8 @@ func TestDBConnExec(t *testing.T) {
 	}
 	db.AddQuery(sql, expectedResult)
 	connPool := newPool()
+	mysqlTimings := connPool.env.Stats().MySQLTimings
+	startCounts := mysqlTimings.Counts()
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
@@ -81,10 +81,10 @@ func TestDBConnExec(t *testing.T) {
 		t.Errorf("Exec: %v, want %v", expectedResult, result)
 	}
 
-	compareTimingCounts(t, "Connect", 1, startCounts, tabletenv.MySQLStats.Counts())
-	compareTimingCounts(t, "Exec", 1, startCounts, tabletenv.MySQLStats.Counts())
+	compareTimingCounts(t, "PoolTest.Connect", 1, startCounts, mysqlTimings.Counts())
+	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
 
-	startCounts = tabletenv.MySQLStats.Counts()
+	startCounts = mysqlTimings.Counts()
 
 	// Exec fail due to client side error
 	db.AddRejectedQuery(sql, &mysql.SQLError{
@@ -99,10 +99,10 @@ func TestDBConnExec(t *testing.T) {
 	}
 
 	// The client side error triggers a retry in exec.
-	compareTimingCounts(t, "Connect", 1, startCounts, tabletenv.MySQLStats.Counts())
-	compareTimingCounts(t, "Exec", 2, startCounts, tabletenv.MySQLStats.Counts())
+	compareTimingCounts(t, "PoolTest.Connect", 1, startCounts, mysqlTimings.Counts())
+	compareTimingCounts(t, "PoolTest.Exec", 2, startCounts, mysqlTimings.Counts())
 
-	startCounts = tabletenv.MySQLStats.Counts()
+	startCounts = mysqlTimings.Counts()
 
 	// Set the connection fail flag and try again.
 	// This time the initial query fails as does the reconnect attempt.
@@ -114,15 +114,14 @@ func TestDBConnExec(t *testing.T) {
 	}
 	db.DisableConnFail()
 
-	compareTimingCounts(t, "Connect", 1, startCounts, tabletenv.MySQLStats.Counts())
-	compareTimingCounts(t, "ConnectError", 1, startCounts, tabletenv.MySQLStats.Counts())
-	compareTimingCounts(t, "Exec", 1, startCounts, tabletenv.MySQLStats.Counts())
+	compareTimingCounts(t, "PoolTest.Connect", 1, startCounts, mysqlTimings.Counts())
+	compareTimingCounts(t, "PoolTest.ConnectError", 1, startCounts, mysqlTimings.Counts())
+	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
 }
 
 func TestDBConnDeadline(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	startCounts := tabletenv.MySQLStats.Counts()
 	sql := "select * from test_table limit 1000"
 	expectedResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -136,6 +135,8 @@ func TestDBConnDeadline(t *testing.T) {
 	db.AddQuery(sql, expectedResult)
 
 	connPool := newPool()
+	mysqlTimings := connPool.env.Stats().MySQLTimings
+	startCounts := mysqlTimings.Counts()
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 
@@ -157,11 +158,11 @@ func TestDBConnDeadline(t *testing.T) {
 		t.Errorf("Exec: %v, want %s", err, want)
 	}
 
-	compareTimingCounts(t, "Connect", 1, startCounts, tabletenv.MySQLStats.Counts())
-	compareTimingCounts(t, "ConnectError", 0, startCounts, tabletenv.MySQLStats.Counts())
-	compareTimingCounts(t, "Exec", 0, startCounts, tabletenv.MySQLStats.Counts())
+	compareTimingCounts(t, "PoolTest.Connect", 1, startCounts, mysqlTimings.Counts())
+	compareTimingCounts(t, "PoolTest.ConnectError", 0, startCounts, mysqlTimings.Counts())
+	compareTimingCounts(t, "PoolTest.Exec", 0, startCounts, mysqlTimings.Counts())
 
-	startCounts = tabletenv.MySQLStats.Counts()
+	startCounts = mysqlTimings.Counts()
 
 	ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
 	defer cancel()
@@ -175,11 +176,11 @@ func TestDBConnDeadline(t *testing.T) {
 		t.Errorf("Exec: %v, want %v", expectedResult, result)
 	}
 
-	compareTimingCounts(t, "Connect", 0, startCounts, tabletenv.MySQLStats.Counts())
-	compareTimingCounts(t, "ConnectError", 0, startCounts, tabletenv.MySQLStats.Counts())
-	compareTimingCounts(t, "Exec", 1, startCounts, tabletenv.MySQLStats.Counts())
+	compareTimingCounts(t, "PoolTest.Connect", 0, startCounts, mysqlTimings.Counts())
+	compareTimingCounts(t, "PoolTest.ConnectError", 0, startCounts, mysqlTimings.Counts())
+	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
 
-	startCounts = tabletenv.MySQLStats.Counts()
+	startCounts = mysqlTimings.Counts()
 
 	// Test with just the background context (with no deadline)
 	result, err = dbConn.Exec(context.Background(), sql, 1, false)
@@ -191,10 +192,9 @@ func TestDBConnDeadline(t *testing.T) {
 		t.Errorf("Exec: %v, want %v", expectedResult, result)
 	}
 
-	compareTimingCounts(t, "Connect", 0, startCounts, tabletenv.MySQLStats.Counts())
-	compareTimingCounts(t, "ConnectError", 0, startCounts, tabletenv.MySQLStats.Counts())
-	compareTimingCounts(t, "Exec", 1, startCounts, tabletenv.MySQLStats.Counts())
-
+	compareTimingCounts(t, "PoolTest.Connect", 0, startCounts, mysqlTimings.Counts())
+	compareTimingCounts(t, "PoolTest.ConnectError", 0, startCounts, mysqlTimings.Counts())
+	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
 }
 
 func TestDBConnKill(t *testing.T) {

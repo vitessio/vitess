@@ -35,7 +35,7 @@ func (pc *PooledDBConnection) Recycle() {
 // if possible. Recycle should still be called afterwards.
 func (pc *PooledDBConnection) Reconnect() error {
 	pc.DBConnection.Close()
-	newConn, err := NewDBConnection(pc.pool.info, pc.mysqlStats)
+	newConn, err := NewDBConnection(pc.pool.info, pc.MySQLTimings)
 	if err != nil {
 		return err
 	}

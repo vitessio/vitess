@@ -23,16 +23,21 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 )
+
+// StatsTimings specifies the interface needed for DBConnection to record Timings.
+type StatsTimings interface {
+	Add(name string, elapsed time.Duration)
+	Record(name string, startTime time.Time)
+}
 
 // DBConnection re-exposes mysql.Conn with some wrapping to implement
 // most of PoolConnection interface, except Recycle. That way it can be used
 // by itself. (Recycle needs to know about the Pool).
 type DBConnection struct {
 	*mysql.Conn
-	mysqlStats *stats.Timings
+	MySQLTimings StatsTimings
 }
 
 func (dbc *DBConnection) handleError(err error) {
@@ -43,7 +48,7 @@ func (dbc *DBConnection) handleError(err error) {
 
 // ExecuteFetch overwrites mysql.Conn.ExecuteFetch.
 func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-	defer dbc.mysqlStats.Record("Exec", time.Now())
+	defer dbc.MySQLTimings.Record("Exec", time.Now())
 	mqr, err := dbc.Conn.ExecuteFetch(query, maxrows, wantfields)
 	if err != nil {
 		dbc.handleError(err)
@@ -54,7 +59,7 @@ func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool
 
 // ExecuteStreamFetch overwrites mysql.Conn.ExecuteStreamFetch.
 func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
-	defer dbc.mysqlStats.Record("ExecStream", time.Now())
+	defer dbc.MySQLTimings.Record("ExecStream", time.Now())
 
 	err := dbc.Conn.ExecuteStreamFetch(query)
 	if err != nil {
@@ -115,7 +120,7 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 
 // NewDBConnection returns a new DBConnection based on the ConnParams
 // and will use the provided stats to collect timing.
-func NewDBConnection(info dbconfigs.Connector, mysqlStats *stats.Timings) (*DBConnection, error) {
+func NewDBConnection(info dbconfigs.Connector, mysqlStats StatsTimings) (*DBConnection, error) {
 	start := time.Now()
 	defer mysqlStats.Record("Connect", start)
 

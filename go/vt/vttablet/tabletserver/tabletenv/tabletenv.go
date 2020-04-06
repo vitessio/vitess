@@ -35,19 +35,17 @@ import (
 )
 
 var (
-	// MySQLStats shows the time histogram for operations spent on mysql side.
-	MySQLStats = stats.NewTimings("Mysql", "MySQl query time", "operation")
 	// QueryStats shows the time histogram for each type of queries.
-	QueryStats = stats.NewTimings("Queries", "MySQL query timings", "plan_type")
+	QueryStats = stats.NewTimings("Queries1", "MySQL query timings", "plan_type")
 	// QPSRates shows the qps of QueryStats. Sample every 5 seconds and keep samples for up to 15 mins.
-	QPSRates = stats.NewRates("QPS", QueryStats, 15*60/5, 5*time.Second)
+	QPSRates = stats.NewRates("QPS1", QueryStats, 15*60/5, 5*time.Second)
 	// WaitStats shows the time histogram for wait operations
-	WaitStats = stats.NewTimings("Waits", "Wait operations", "type")
+	WaitStats = stats.NewTimings("Waits1", "Wait operations", "type")
 	// KillStats shows number of connections being killed.
-	KillStats = stats.NewCountersWithSingleLabel("Kills", "Number of connections being killed", "query_type", "Transactions", "Queries")
+	KillStats = stats.NewCountersWithSingleLabel("Kills1", "Number of connections being killed", "query_type", "Transactions", "Queries")
 	// ErrorStats shows number of critial errors happened.
 	ErrorStats = stats.NewCountersWithSingleLabel(
-		"Errors",
+		"Errors1",
 		"Critical errors",
 		"error_code",
 		vtrpcpb.Code_OK.String(),
@@ -69,48 +67,48 @@ var (
 		vtrpcpb.Code_DATA_LOSS.String(),
 	)
 	// InternalErrors shows number of errors from internal components.
-	InternalErrors = stats.NewCountersWithSingleLabel("InternalErrors", "Internal component errors", "type", "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection", "WatchdogFail", "Messages")
+	InternalErrors = stats.NewCountersWithSingleLabel("InternalErrors1", "Internal component errors", "type", "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection", "WatchdogFail", "Messages")
 	// Warnings shows number of warnings
-	Warnings = stats.NewCountersWithSingleLabel("Warnings", "Warnings", "type", "ResultsExceeded")
+	Warnings = stats.NewCountersWithSingleLabel("Warnings1", "Warnings", "type", "ResultsExceeded")
 	// Unresolved tracks unresolved items. For now it's just Prepares.
-	Unresolved = stats.NewGaugesWithSingleLabel("Unresolved", "Unresolved items", "item_type", "Prepares")
+	Unresolved = stats.NewGaugesWithSingleLabel("Unresolved1", "Unresolved items", "item_type", "Prepares")
 	// UserTableQueryCount shows number of queries received for each CallerID/table combination.
 	UserTableQueryCount = stats.NewCountersWithMultiLabels(
-		"UserTableQueryCount",
+		"UserTableQueryCount1",
 		"Queries received for each CallerID/table combination",
 		[]string{"TableName", "CallerID", "Type"})
 	// UserTableQueryTimesNs shows total latency for each CallerID/table combination.
 	UserTableQueryTimesNs = stats.NewCountersWithMultiLabels(
-		"UserTableQueryTimesNs",
+		"UserTableQueryTimesNs1",
 		"Total latency for each CallerID/table combination",
 		[]string{"TableName", "CallerID", "Type"})
 	// UserTransactionCount shows number of transactions received for each CallerID.
 	UserTransactionCount = stats.NewCountersWithMultiLabels(
-		"UserTransactionCount",
+		"UserTransactionCount1",
 		"transactions received for each CallerID",
 		[]string{"CallerID", "Conclusion"})
 	// UserTransactionTimesNs shows total transaction latency for each CallerID.
 	UserTransactionTimesNs = stats.NewCountersWithMultiLabels(
-		"UserTransactionTimesNs",
+		"UserTransactionTimesNs1",
 		"Total transaction latency for each CallerID",
 		[]string{"CallerID", "Conclusion"})
 	// ResultStats shows the histogram of number of rows returned.
-	ResultStats = stats.NewHistogram("Results",
+	ResultStats = stats.NewHistogram("Results1",
 		"Distribution of rows returned",
 		[]int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000})
 	// TableaclAllowed tracks the number allows.
 	TableaclAllowed = stats.NewCountersWithMultiLabels(
-		"TableACLAllowed",
+		"TableACLAllowed1",
 		"ACL acceptances",
 		[]string{"TableName", "TableGroup", "PlanID", "Username"})
 	// TableaclDenied tracks the number of denials.
 	TableaclDenied = stats.NewCountersWithMultiLabels(
-		"TableACLDenied",
+		"TableACLDenied1",
 		"ACL denials",
 		[]string{"TableName", "TableGroup", "PlanID", "Username"})
 	// TableaclPseudoDenied tracks the number of pseudo denies.
 	TableaclPseudoDenied = stats.NewCountersWithMultiLabels(
-		"TableACLPseudoDenied",
+		"TableACLPseudoDenied1",
 		"ACL pseudodenials",
 		[]string{"TableName", "TableGroup", "PlanID", "Username"})
 	// Infof can be overridden during tests
@@ -128,21 +126,25 @@ type Env interface {
 	Config() *TabletConfig
 	DBConfigs() *dbconfigs.DBConfigs
 	Exporter() *servenv.Exporter
+	Stats() *Stats
 }
 
 type testEnv struct {
 	config    *TabletConfig
 	dbconfigs *dbconfigs.DBConfigs
 	exporter  *servenv.Exporter
+	stats     *Stats
 }
 
 // NewTestEnv creates an Env that can be used for tests.
 // CheckMySQL is a no-op.
 func NewTestEnv(config *TabletConfig, dbconfigs *dbconfigs.DBConfigs, exporterName string) Env {
+	exporter := servenv.NewExporter(exporterName, "Tablet")
 	return &testEnv{
 		config:    config,
 		dbconfigs: dbconfigs,
-		exporter:  servenv.NewExporter(exporterName, "Tablet"),
+		exporter:  exporter,
+		stats:     NewStats(exporter),
 	}
 }
 
@@ -150,6 +152,7 @@ func (*testEnv) CheckMySQL()                        {}
 func (te *testEnv) Config() *TabletConfig           { return te.config }
 func (te *testEnv) DBConfigs() *dbconfigs.DBConfigs { return te.dbconfigs }
 func (te *testEnv) Exporter() *servenv.Exporter     { return te.exporter }
+func (te *testEnv) Stats() *Stats                   { return te.stats }
 
 // RecordUserQuery records the query data against the user.
 func RecordUserQuery(ctx context.Context, tableName sqlparser.TableIdent, queryType string, duration int64) {

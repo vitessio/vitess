@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -62,10 +63,8 @@ type DBConn struct {
 }
 
 // NewDBConn creates a new DBConn. It triggers a CheckMySQL if creation fails.
-func NewDBConn(
-	cp *Pool,
-	appParams dbconfigs.Connector) (*DBConn, error) {
-	c, err := dbconnpool.NewDBConnection(appParams, tabletenv.MySQLStats)
+func NewDBConn(cp *Pool, appParams dbconfigs.Connector) (*DBConn, error) {
+	c, err := dbconnpool.NewDBConnection(appParams, cp.env.Stats().MySQLTimings)
 	if err != nil {
 		cp.env.CheckMySQL()
 		return nil, err
@@ -80,7 +79,7 @@ func NewDBConn(
 
 // NewDBConnNoPool creates a new DBConn without a pool.
 func NewDBConnNoPool(params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool) (*DBConn, error) {
-	c, err := dbconnpool.NewDBConnection(params, tabletenv.MySQLStats)
+	c, err := dbconnpool.NewDBConnection(params, stats.NewTimings("", "", ""))
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +322,8 @@ func (dbc *DBConn) ID() int64 {
 
 func (dbc *DBConn) reconnect() error {
 	dbc.conn.Close()
-	newConn, err := dbconnpool.NewDBConnection(dbc.info, tabletenv.MySQLStats)
+	// Reuse MySQLTimings from dbc.conn.
+	newConn, err := dbconnpool.NewDBConnection(dbc.info, dbc.conn.MySQLTimings)
 	if err != nil {
 		return err
 	}
