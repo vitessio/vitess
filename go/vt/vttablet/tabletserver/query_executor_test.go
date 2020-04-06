@@ -1040,9 +1040,7 @@ const (
 
 // newTestQueryExecutor uses a package level variable testTabletServer defined in tabletserver_test.go
 func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb.DB) *TabletServer {
-	randID := rand.Int63()
 	config := tabletenv.DefaultQsConfig
-	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 	config.PoolSize = 100
 	if flags&smallTxPool > 0 {
 		config.TransactionCap = 3
@@ -1069,8 +1067,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 		config.MaxResultSize = 2
 	}
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
-	testUtils := newTestUtils()
-	dbconfigs := testUtils.newDBConfigs(db)
+	dbconfigs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	tsv.StartService(target, dbconfigs)
 	return tsv

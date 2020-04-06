@@ -103,12 +103,11 @@ type TxPool struct {
 // NewTxPool creates a new TxPool. It's not operational until it's Open'd.
 func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 	config := env.Config()
-	prefix := config.PoolNamePrefix
 	transactionTimeout := time.Duration(config.TransactionTimeout * 1e9)
 	axp := &TxPool{
 		env:                    env,
-		conns:                  connpool.New(env, prefix+"TransactionPool", config.TransactionCap, config.TxPoolPrefillParallelism, time.Duration(config.IdleTimeout*1e9)),
-		foundRowsPool:          connpool.New(env, prefix+"FoundRowsPool", config.FoundRowsPoolSize, config.TxPoolPrefillParallelism, time.Duration(config.IdleTimeout*1e9)),
+		conns:                  connpool.New(env, "TransactionPool", config.TransactionCap, config.TxPoolPrefillParallelism, time.Duration(config.IdleTimeout*1e9)),
+		foundRowsPool:          connpool.New(env, "FoundRowsPool", config.FoundRowsPoolSize, config.TxPoolPrefillParallelism, time.Duration(config.IdleTimeout*1e9)),
 		activePool:             pools.NewNumbered(),
 		lastID:                 sync2.NewAtomicInt64(time.Now().UnixNano()),
 		transactionTimeout:     sync2.NewAtomicDuration(transactionTimeout),
@@ -121,9 +120,9 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 	}
 	// Careful: conns also exports name+"xxx" vars,
 	// but we know it doesn't export Timeout.
-	env.Exporter().NewGaugeDurationFunc(prefix+"TransactionTimeout", "Transaction timeout", axp.transactionTimeout.Get)
-	env.Exporter().NewGaugeDurationFunc(prefix+"TransactionPoolTimeout", "Timeout to get a connection from the transaction pool", axp.transactionPoolTimeout.Get)
-	env.Exporter().NewGaugeFunc(prefix+"TransactionPoolWaiters", "Transaction pool waiters", axp.waiters.Get)
+	env.Exporter().NewGaugeDurationFunc("TransactionTimeout", "Transaction timeout", axp.transactionTimeout.Get)
+	env.Exporter().NewGaugeDurationFunc("TransactionPoolTimeout", "Timeout to get a connection from the transaction pool", axp.transactionPoolTimeout.Get)
+	env.Exporter().NewGaugeFunc("TransactionPoolWaiters", "Transaction pool waiters", axp.waiters.Get)
 	return axp
 }
 

@@ -181,10 +181,10 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 		queryPoolWaiterCap: sync2.NewAtomicInt64(int64(config.QueryPoolWaiterCap)),
 	}
 
-	qe.conns = connpool.New(env, config.PoolNamePrefix+"ConnPool", config.PoolSize, config.PoolPrefillParallelism, time.Duration(config.IdleTimeout*1e9))
+	qe.conns = connpool.New(env, "ConnPool", config.PoolSize, config.PoolPrefillParallelism, time.Duration(config.IdleTimeout*1e9))
 	qe.connTimeout.Set(time.Duration(config.QueryPoolTimeout * 1e9))
 
-	qe.streamConns = connpool.New(env, config.PoolNamePrefix+"StreamConnPool", config.StreamPoolSize, config.StreamPoolPrefillParallelism, time.Duration(config.IdleTimeout*1e9))
+	qe.streamConns = connpool.New(env, "StreamConnPool", config.StreamPoolSize, config.StreamPoolPrefillParallelism, time.Duration(config.IdleTimeout*1e9))
 	qe.enableConsolidator = config.EnableConsolidator
 	qe.enableConsolidatorReplicas = config.EnableConsolidatorReplicas
 	qe.enableQueryPlanFieldCaching = config.EnableQueryPlanFieldCaching

@@ -46,15 +46,13 @@ func TestStrictMode(t *testing.T) {
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	testUtils := newTestUtils()
-	dbcfgs := testUtils.newDBConfigs(db)
 
 	// Test default behavior.
 	config := tabletenv.DefaultQsConfig
-	env := tabletenv.NewTestEnv(&config, dbcfgs, "TabletServerTest")
+	env := tabletenv.NewTestEnv(&config, newDBConfigs(db), "TabletServerTest")
 	se := schema.NewEngine(env)
 	qe := NewQueryEngine(env, se)
-	qe.se.InitDBConfig(dbcfgs.DbaWithDB())
+	qe.se.InitDBConfig(newDBConfigs(db).DbaWithDB())
 	qe.se.Open()
 	if err := qe.Open(); err != nil {
 		t.Error(err)
@@ -92,9 +90,7 @@ func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	testUtils := newTestUtils()
-	dbcfgs := testUtils.newDBConfigs(db)
-	qe := newTestQueryEngine(10, 10*time.Second, true, dbcfgs)
+	qe := newTestQueryEngine(10, 10*time.Second, true, newDBConfigs(db))
 	qe.se.Open()
 	qe.Open()
 	defer qe.Close()
@@ -114,9 +110,7 @@ func TestGetMessageStreamPlan(t *testing.T) {
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	testUtils := newTestUtils()
-	dbcfgs := testUtils.newDBConfigs(db)
-	qe := newTestQueryEngine(10, 10*time.Second, true, dbcfgs)
+	qe := newTestQueryEngine(10, 10*time.Second, true, newDBConfigs(db))
 	qe.se.Open()
 	qe.Open()
 	defer qe.Close()
@@ -153,9 +147,7 @@ func TestQueryPlanCache(t *testing.T) {
 	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
 	db.AddQuery("select * from test_table_02 where 1 != 1", &sqltypes.Result{})
 
-	testUtils := newTestUtils()
-	dbcfgs := testUtils.newDBConfigs(db)
-	qe := newTestQueryEngine(10, 10*time.Second, true, dbcfgs)
+	qe := newTestQueryEngine(10, 10*time.Second, true, newDBConfigs(db))
 	qe.se.Open()
 	qe.Open()
 	defer qe.Close()
@@ -197,9 +189,7 @@ func TestNoQueryPlanCache(t *testing.T) {
 	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
 	db.AddQuery("select * from test_table_02 where 1 != 1", &sqltypes.Result{})
 
-	testUtils := newTestUtils()
-	dbcfgs := testUtils.newDBConfigs(db)
-	qe := newTestQueryEngine(10, 10*time.Second, true, dbcfgs)
+	qe := newTestQueryEngine(10, 10*time.Second, true, newDBConfigs(db))
 	qe.se.Open()
 	qe.Open()
 	defer qe.Close()
@@ -231,9 +221,7 @@ func TestNoQueryPlanCacheDirective(t *testing.T) {
 	db.AddQuery("select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from test_table_01 where 1 != 1", &sqltypes.Result{})
 	db.AddQuery("select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from test_table_02 where 1 != 1", &sqltypes.Result{})
 
-	testUtils := newTestUtils()
-	dbcfgs := testUtils.newDBConfigs(db)
-	qe := newTestQueryEngine(10, 10*time.Second, true, dbcfgs)
+	qe := newTestQueryEngine(10, 10*time.Second, true, newDBConfigs(db))
 	qe.se.Open()
 	qe.Open()
 	defer qe.Close()
@@ -262,9 +250,7 @@ func TestStatsURL(t *testing.T) {
 	}
 	query := "select * from test_table_01"
 	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
-	testUtils := newTestUtils()
-	dbcfgs := testUtils.newDBConfigs(db)
-	qe := newTestQueryEngine(10, 1*time.Second, true, dbcfgs)
+	qe := newTestQueryEngine(10, 1*time.Second, true, newDBConfigs(db))
 	qe.se.Open()
 	qe.Open()
 	defer qe.Close()
@@ -301,9 +287,7 @@ func runConsolidatedQuery(t *testing.T, sql string) *QueryEngine {
 	db := fakesqldb.New(t)
 	defer db.Close()
 
-	testUtils := newTestUtils()
-	dbcfgs := testUtils.newDBConfigs(db)
-	qe := newTestQueryEngine(10, 1*time.Second, true, dbcfgs)
+	qe := newTestQueryEngine(10, 1*time.Second, true, newDBConfigs(db))
 	qe.se.Open()
 	qe.Open()
 	defer qe.Close()

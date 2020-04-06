@@ -1444,7 +1444,7 @@ func masterPosition(t *testing.T) string {
 func setVSchema(t *testing.T, vschema string) {
 	t.Helper()
 
-	curCount := vschemaUpdates.Get()
+	curCount := engine.vschemaUpdates.Get()
 
 	if err := env.SetVSchema(vschema); err != nil {
 		t.Fatal(err)
@@ -1453,7 +1453,7 @@ func setVSchema(t *testing.T, vschema string) {
 	// Wait for curCount to go up.
 	updated := false
 	for i := 0; i < 10; i++ {
-		if vschemaUpdates.Get() != curCount {
+		if engine.vschemaUpdates.Get() != curCount {
 			updated = true
 			break
 		}

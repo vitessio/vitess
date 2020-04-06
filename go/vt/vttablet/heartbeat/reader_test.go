@@ -21,8 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"math/rand"
-
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
@@ -102,10 +100,8 @@ func TestReaderReadHeartbeatError(t *testing.T) {
 }
 
 func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {
-	randID := rand.Int63()
 	config := tabletenv.DefaultQsConfig
 	config.HeartbeatEnable = true
-	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 	params, _ := db.ConnParams().MysqlParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")

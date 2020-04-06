@@ -18,7 +18,6 @@ package tabletserver
 
 import (
 	"fmt"
-	"math/rand"
 	"strings"
 	"testing"
 	"time"
@@ -698,8 +697,6 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 
 func newTxPool() *TxPool {
 	config := tabletenv.DefaultQsConfig
-	randID := rand.Int63()
-	config.PoolNamePrefix = fmt.Sprintf("TestTransactionPool-%d", randID)
 	config.TransactionCap = 300
 	config.TransactionTimeout = 30
 	config.TxPoolTimeout = 40

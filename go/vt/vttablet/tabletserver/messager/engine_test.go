@@ -17,8 +17,6 @@ limitations under the License.
 package messager
 
 import (
-	"fmt"
-	"math/rand"
 	"reflect"
 	"testing"
 
@@ -172,9 +170,7 @@ func TestEngineGenerate(t *testing.T) {
 }
 
 func newTestEngine(db *fakesqldb.DB) *Engine {
-	randID := rand.Int63()
 	config := tabletenv.DefaultQsConfig
-	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 	tsv := &fakeTabletServer{
 		Env: tabletenv.NewTestEnv(&config, nil, "MessagerTest"),
 	}
