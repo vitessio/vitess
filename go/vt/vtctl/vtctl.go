@@ -2062,7 +2062,7 @@ func commandSwitchWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	}
 	if *dryRun {
 		wr.Logger().Printf("Dry Run results for SwitchWrites run at %s\nParameters: %s\n\n", time.RFC822, strings.Join(args, " "))
-		wr.Logger().Printf("%s\n", strings.Join(dryRunResults, "\n"))
+		wr.Logger().Printf("%s\n", strings.Join(*dryRunResults, "\n"))
 	} else {
 		wr.Logger().Infof("Migration Journal ID: %v", journalID)
 	}
