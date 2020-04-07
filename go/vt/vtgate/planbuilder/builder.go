@@ -19,7 +19,6 @@ package planbuilder
 import (
 	"errors"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/key"
@@ -28,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 //-------------------------------------------------------------------------
@@ -306,7 +306,7 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback:
 		// Empty by design. Not executed by a plan
 	default:
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
 	}
 
 	if err != nil {

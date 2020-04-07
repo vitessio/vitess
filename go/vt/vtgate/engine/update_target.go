@@ -19,6 +19,9 @@ package engine
 import (
 	"encoding/json"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/query"
 )
@@ -81,10 +84,10 @@ func (updTarget UpdateTarget) Execute(vcursor VCursor, bindVars map[string]*quer
 
 // StreamExecute implements the Primitive interface
 func (updTarget UpdateTarget) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	panic("implement me")
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "use cannot be used for streaming")
 }
 
 // GetFields implements the Primitive interface
 func (updTarget UpdateTarget) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
-	panic("implement me")
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "use cannot be used for get fields")
 }

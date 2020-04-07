@@ -233,9 +233,4 @@ func insertStartValue() {
 	if err != nil {
 		panic(err)
 	}
-	res, err := conn.ExecuteFetch("select last_insert_id()", 1999, false)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(res)
 }
