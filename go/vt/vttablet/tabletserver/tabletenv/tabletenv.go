@@ -19,59 +19,13 @@ limitations under the License.
 package tabletenv
 
 import (
-	"golang.org/x/net/context"
-
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
-	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 var (
-	// Unresolved tracks unresolved items. For now it's just Prepares.
-	Unresolved = stats.NewGaugesWithSingleLabel("Unresolved1", "Unresolved items", "item_type", "Prepares")
-	// UserTableQueryCount shows number of queries received for each CallerID/table combination.
-	UserTableQueryCount = stats.NewCountersWithMultiLabels(
-		"UserTableQueryCount1",
-		"Queries received for each CallerID/table combination",
-		[]string{"TableName", "CallerID", "Type"})
-	// UserTableQueryTimesNs shows total latency for each CallerID/table combination.
-	UserTableQueryTimesNs = stats.NewCountersWithMultiLabels(
-		"UserTableQueryTimesNs1",
-		"Total latency for each CallerID/table combination",
-		[]string{"TableName", "CallerID", "Type"})
-	// UserTransactionCount shows number of transactions received for each CallerID.
-	UserTransactionCount = stats.NewCountersWithMultiLabels(
-		"UserTransactionCount1",
-		"transactions received for each CallerID",
-		[]string{"CallerID", "Conclusion"})
-	// UserTransactionTimesNs shows total transaction latency for each CallerID.
-	UserTransactionTimesNs = stats.NewCountersWithMultiLabels(
-		"UserTransactionTimesNs1",
-		"Total transaction latency for each CallerID",
-		[]string{"CallerID", "Conclusion"})
-	// ResultStats shows the histogram of number of rows returned.
-	ResultStats = stats.NewHistogram("Results1",
-		"Distribution of rows returned",
-		[]int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000})
-	// TableaclAllowed tracks the number allows.
-	TableaclAllowed = stats.NewCountersWithMultiLabels(
-		"TableACLAllowed1",
-		"ACL acceptances",
-		[]string{"TableName", "TableGroup", "PlanID", "Username"})
-	// TableaclDenied tracks the number of denials.
-	TableaclDenied = stats.NewCountersWithMultiLabels(
-		"TableACLDenied1",
-		"ACL denials",
-		[]string{"TableName", "TableGroup", "PlanID", "Username"})
-	// TableaclPseudoDenied tracks the number of pseudo denies.
-	TableaclPseudoDenied = stats.NewCountersWithMultiLabels(
-		"TableACLPseudoDenied1",
-		"ACL pseudodenials",
-		[]string{"TableName", "TableGroup", "PlanID", "Username"})
 	// Infof can be overridden during tests
 	Infof = log.Infof
 	// Warningf can be overridden during tests
@@ -114,16 +68,6 @@ func (te *testEnv) Config() *TabletConfig           { return te.config }
 func (te *testEnv) DBConfigs() *dbconfigs.DBConfigs { return te.dbconfigs }
 func (te *testEnv) Exporter() *servenv.Exporter     { return te.exporter }
 func (te *testEnv) Stats() *Stats                   { return te.stats }
-
-// RecordUserQuery records the query data against the user.
-func RecordUserQuery(ctx context.Context, tableName sqlparser.TableIdent, queryType string, duration int64) {
-	username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(ctx))
-	if username == "" {
-		username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(ctx))
-	}
-	UserTableQueryCount.Add([]string{tableName.String(), username, queryType}, 1)
-	UserTableQueryTimesNs.Add([]string{tableName.String(), username, queryType}, int64(duration))
-}
 
 // LogError logs panics and increments InternalErrors.
 func LogError(env Env) {

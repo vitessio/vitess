@@ -521,7 +521,7 @@ func (te *TxEngine) startWatchdog() {
 			te.env.Stats().InternalErrors.Add("WatchdogFail", 1)
 			log.Errorf("Error reading unresolved prepares: '%v': %v", te.coordinatorAddress, err)
 		}
-		tabletenv.Unresolved.Set("Prepares", count)
+		te.env.Stats().Unresolved.Set("Prepares", count)
 
 		// Resolve lingering distributed transactions.
 		txs, err := te.twoPC.ReadAbandoned(ctx, time.Now().Add(-te.abandonAge))

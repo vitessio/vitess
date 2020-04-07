@@ -72,7 +72,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	defer func(start time.Time) {
 		duration := time.Since(start)
 		qre.tsv.stats.QueryTimings.Add(planName, duration)
-		tabletenv.RecordUserQuery(qre.ctx, qre.plan.TableName(), "Execute", int64(duration))
+		qre.recordUserQuery("Execute", int64(duration))
 
 		mysqlTime := qre.logStats.MysqlResponseTime
 		tableName := qre.plan.TableName().String()
@@ -89,7 +89,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		qre.plan.AddStats(1, duration, mysqlTime, int64(reply.RowsAffected), 0)
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
-		tabletenv.ResultStats.Add(int64(len(reply.Rows)))
+		qre.tsv.Stats().ResultHistogram.Add(int64(len(reply.Rows)))
 	}(time.Now())
 
 	if err := qre.checkPermissions(); err != nil {
@@ -221,7 +221,7 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 
 	defer func(start time.Time) {
 		qre.tsv.stats.QueryTimings.Record(qre.plan.PlanID.String(), start)
-		tabletenv.RecordUserQuery(qre.ctx, qre.plan.TableName(), "Stream", int64(time.Since(start)))
+		qre.recordUserQuery("Stream", int64(time.Since(start)))
 	}(time.Now())
 
 	if err := qre.checkPermissions(); err != nil {
@@ -260,7 +260,7 @@ func (qre *QueryExecutor) MessageStream(callback func(*sqltypes.Result) error) e
 
 	defer func(start time.Time) {
 		qre.tsv.stats.QueryTimings.Record(qre.plan.PlanID.String(), start)
-		tabletenv.RecordUserQuery(qre.ctx, qre.plan.TableName(), "MessageStream", int64(time.Since(start)))
+		qre.recordUserQuery("MessageStream", int64(time.Since(start)))
 	}(time.Now())
 
 	if err := qre.checkPermissions(); err != nil {
@@ -345,18 +345,18 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 	statsKey := []string{tableName, authorized.GroupName, qre.plan.PlanID.String(), callerID.Username}
 	if !authorized.IsMember(callerID) {
 		if qre.tsv.qe.enableTableACLDryRun {
-			tabletenv.TableaclPseudoDenied.Add(statsKey, 1)
+			qre.tsv.Stats().TableaclPseudoDenied.Add(statsKey, 1)
 			return nil
 		}
 		if qre.tsv.qe.strictTableACL {
 			errStr := fmt.Sprintf("table acl error: %q %v cannot run %v on table %q", callerID.Username, callerID.Groups, qre.plan.PlanID, tableName)
-			tabletenv.TableaclDenied.Add(statsKey, 1)
+			qre.tsv.Stats().TableaclDenied.Add(statsKey, 1)
 			qre.tsv.qe.accessCheckerLogger.Infof("%s", errStr)
 			return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "%s", errStr)
 		}
 		return nil
 	}
-	tabletenv.TableaclAllowed.Add(statsKey, 1)
+	qre.tsv.Stats().TableaclAllowed.Add(statsKey, 1)
 	return nil
 }
 
@@ -671,6 +671,16 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callb
 		return err
 	}
 	return nil
+}
+
+func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
+	username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(qre.ctx))
+	if username == "" {
+		username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(qre.ctx))
+	}
+	tableName := qre.plan.TableName().String()
+	qre.tsv.Stats().UserTableQueryCount.Add([]string{tableName, username, queryType}, 1)
+	qre.tsv.Stats().UserTableQueryTimesNs.Add([]string{tableName, username, queryType}, int64(duration))
 }
 
 // resolveNumber extracts a number from a bind variable or sql value.
