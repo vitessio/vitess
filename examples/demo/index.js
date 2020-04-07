@@ -70,7 +70,7 @@ function DemoController($scope, $http) {
     try {
       $http({
           method: 'POST',
-          url: '/cgi-bin/data.py',
+          url: '/exec',
           data: "query=" + $scope.query,
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded'
