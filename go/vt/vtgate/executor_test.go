@@ -2099,10 +2099,11 @@ func TestPassthroughDDL(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	masterSession.TargetString = "TestExecutor"
 
-	_, err := executorExec(executor, "/* leading */ create table passthrough_ddl (col bigint default 123) /* trailing */", nil)
+	alterDDL := "/* leading */ alter table passthrough_ddl add columne col bigint default 123 /* trailing */"
+	_, err := executorExec(executor, alterDDL, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "/* leading */ create table passthrough_ddl (col bigint default 123) /* trailing */",
+		Sql:           alterDDL,
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -2118,7 +2119,7 @@ func TestPassthroughDDL(t *testing.T) {
 	masterSession.TargetString = "TestExecutor/40-60"
 	executor.normalize = true
 
-	_, err = executorExec(executor, "/* leading */ create table passthrough_ddl (col bigint default 123) /* trailing */", nil)
+	_, err = executorExec(executor, alterDDL, nil)
 	require.NoError(t, err)
 	require.Nil(t, sbc1.Queries)
 	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
@@ -2131,7 +2132,7 @@ func TestPassthroughDDL(t *testing.T) {
 	masterSession.TargetString = "TestExecutor[-]"
 	executor.normalize = true
 
-	_, err = executorExec(executor, "/* leading */ create table passthrough_ddl (col bigint default 123) /* trailing */", nil)
+	_, err = executorExec(executor, alterDDL, nil)
 	require.NoError(t, err)
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)

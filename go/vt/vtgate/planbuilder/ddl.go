@@ -6,9 +6,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildDDLPlan(in sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+func buildDDLPlan(sql string, in sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
 	stmt := in.(*sqlparser.DDL)
-	query := generateQuery(stmt)
+	// This method call will validate the destination != nil check.
 	destination, keyspace, _, err := vschema.TargetDestination(stmt.Table.Qualifier.String())
 	if err != nil {
 		return nil, err
@@ -21,7 +21,7 @@ func buildDDLPlan(in sqlparser.Statement, vschema ContextVSchema) (engine.Primit
 	return &engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: destination,
-		Query:             query,
+		Query:             sql, //This is original sql query to be passed as the parser can provide partial ddl AST.
 		IsDML:             false,
 	}, nil
 }

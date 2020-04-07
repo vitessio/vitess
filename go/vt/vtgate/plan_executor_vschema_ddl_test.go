@@ -160,7 +160,7 @@ func TestPlanExecutorCreateVindexDDL(t *testing.T) {
 	defer func() {
 		*vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
 	ks := "TestExecutor"
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
@@ -193,38 +193,6 @@ func TestPlanExecutorCreateVindexDDL(t *testing.T) {
 	case <-vschemaUpdates:
 		t.Error("vschema should not be updated on error")
 	default:
-	}
-
-	t.Skip("not yet planned")
-
-	// Create a new vschema keyspace implicitly by creating a vindex with a different
-	// target in the session
-	ksNew := "test_new_keyspace"
-	session = NewSafeSession(&vtgatepb.Session{TargetString: ksNew})
-	stmt = "alter vschema create vindex test_vindex2 using hash"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	if err != nil {
-		t.Fatalf("error in %s: %v", stmt, err)
-	}
-
-	vschema, vindex = waitForVindex(t, ksNew, "test_vindex2", vschemaUpdates, executor)
-	if vindex.Type != "hash" {
-		t.Errorf("vindex type %s not hash", vindex.Type)
-	}
-	keyspace, ok := vschema.Keyspaces[ksNew]
-	if !ok || !keyspace.Sharded {
-		t.Errorf("keyspace should have been created with Sharded=true")
-	}
-
-	// No queries should have gone to any tablets
-	wantCount := []int64{0, 0, 0}
-	gotCount := []int64{
-		sbc1.ExecCount.Get(),
-		sbc2.ExecCount.Get(),
-		sbclookup.ExecCount.Get(),
-	}
-	if !reflect.DeepEqual(gotCount, wantCount) {
-		t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
 	}
 }
 
@@ -345,7 +313,6 @@ func TestPlanExecutorAddSequenceDDL(t *testing.T) {
 }
 
 func TestPlanExecutorAddDropVindexDDL(t *testing.T) {
-	t.Skip("not yet planned")
 	*vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
 		*vschemaacl.AuthorizedDDLUsers = ""
@@ -375,6 +342,8 @@ func TestPlanExecutorAddDropVindexDDL(t *testing.T) {
 	if vindex.Type != "hash" {
 		t.Errorf("vindex type %s not hash", vindex.Type)
 	}
+
+	t.Skip("not yet planned")
 
 	_ = waitForColVindexes(t, ks, "test", []string{"test_hash"}, executor)
 	qr, err := executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test", nil)
@@ -674,69 +643,6 @@ func TestPlanExecutorAddDropVindexDDL(t *testing.T) {
 	if !reflect.DeepEqual(gotCount, wantCount) {
 		t.Errorf("Exec %s: %v, want %v", "", gotCount, wantCount)
 	}
-}
-
-func TestPlanExecutorVindexDDLNewKeyspace(t *testing.T) {
-	*vschemaacl.AuthorizedDDLUsers = "%"
-	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
-	}()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnvUsing(planAllTheThings)
-	ksName := "NewKeyspace"
-
-	vschema := executor.vm.GetCurrentSrvVschema()
-	ks, ok := vschema.Keyspaces[ksName]
-	if ok || ks != nil {
-		t.Fatalf("keyspace should not exist before test")
-	}
-
-	t.Skip("not yet planned")
-
-	session := NewSafeSession(&vtgatepb.Session{TargetString: ksName})
-	stmt := "alter vschema create vindex test_hash using hash"
-	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	require.NoError(t, err)
-
-	time.Sleep(50 * time.Millisecond)
-
-	stmt = "alter vschema on test add vindex test_hash2 (id) using hash"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	if err != nil {
-		t.Fatalf("error in %s: %v", stmt, err)
-	}
-
-	time.Sleep(50 * time.Millisecond)
-	vschema = executor.vm.GetCurrentSrvVschema()
-	ks, ok = vschema.Keyspaces[ksName]
-	if !ok || ks == nil {
-		t.Fatalf("keyspace was not created as expected")
-	}
-
-	vindex := ks.Vindexes["test_hash"]
-	if vindex == nil {
-		t.Fatalf("vindex was not created as expected")
-	}
-
-	vindex2 := ks.Vindexes["test_hash2"]
-	if vindex2 == nil {
-		t.Fatalf("vindex was not created as expected")
-	}
-
-	table := ks.Tables["test"]
-	if table == nil {
-		t.Fatalf("column vindex was not created as expected")
-	}
-
-	wantCount := []int64{0, 0, 0}
-	gotCount := []int64{
-		sbc1.ExecCount.Get(),
-		sbc2.ExecCount.Get(),
-		sbclookup.ExecCount.Get(),
-	}
-	if !reflect.DeepEqual(gotCount, wantCount) {
-		t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
-	}
-
 }
 
 func TestPlanExecutorVindexDDLACL(t *testing.T) {

@@ -297,7 +297,7 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 		if sqlparser.IsVschemaDDL(stmt) {
 			instruction, err = buildVSchemaDDLPlan(stmt, vschema)
 		} else {
-			instruction, err = buildRoutePlan(stmt, vschema, buildDDLPlan)
+			instruction, err = buildDDLPlan(query, stmt, vschema)
 		}
 	case *sqlparser.Use:
 		instruction, err = buildUsePlan(stmt, vschema)
