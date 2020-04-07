@@ -28,38 +28,9 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
-	// ErrorStats shows number of critial errors happened.
-	ErrorStats = stats.NewCountersWithSingleLabel(
-		"Errors1",
-		"Critical errors",
-		"error_code",
-		vtrpcpb.Code_OK.String(),
-		vtrpcpb.Code_CANCELED.String(),
-		vtrpcpb.Code_UNKNOWN.String(),
-		vtrpcpb.Code_INVALID_ARGUMENT.String(),
-		vtrpcpb.Code_DEADLINE_EXCEEDED.String(),
-		vtrpcpb.Code_NOT_FOUND.String(),
-		vtrpcpb.Code_ALREADY_EXISTS.String(),
-		vtrpcpb.Code_PERMISSION_DENIED.String(),
-		vtrpcpb.Code_UNAUTHENTICATED.String(),
-		vtrpcpb.Code_RESOURCE_EXHAUSTED.String(),
-		vtrpcpb.Code_FAILED_PRECONDITION.String(),
-		vtrpcpb.Code_ABORTED.String(),
-		vtrpcpb.Code_OUT_OF_RANGE.String(),
-		vtrpcpb.Code_UNIMPLEMENTED.String(),
-		vtrpcpb.Code_INTERNAL.String(),
-		vtrpcpb.Code_UNAVAILABLE.String(),
-		vtrpcpb.Code_DATA_LOSS.String(),
-	)
-	// InternalErrors shows number of errors from internal components.
-	InternalErrors = stats.NewCountersWithSingleLabel("InternalErrors1", "Internal component errors", "type", "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection", "WatchdogFail", "Messages")
-	// Warnings shows number of warnings
-	Warnings = stats.NewCountersWithSingleLabel("Warnings1", "Warnings", "type", "ResultsExceeded")
 	// Unresolved tracks unresolved items. For now it's just Prepares.
 	Unresolved = stats.NewGaugesWithSingleLabel("Unresolved1", "Unresolved items", "item_type", "Prepares")
 	// UserTableQueryCount shows number of queries received for each CallerID/table combination.
@@ -155,9 +126,9 @@ func RecordUserQuery(ctx context.Context, tableName sqlparser.TableIdent, queryT
 }
 
 // LogError logs panics and increments InternalErrors.
-func LogError() {
+func LogError(env Env) {
 	if x := recover(); x != nil {
 		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
-		InternalErrors.Add("Panic", 1)
+		env.Stats().InternalErrors.Add("Panic", 1)
 	}
 }

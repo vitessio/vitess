@@ -495,7 +495,7 @@ func (qre *QueryExecutor) verifyRowCount(count, maxrows int64) error {
 	warnThreshold := qre.tsv.qe.warnResultSize.Get()
 	if warnThreshold > 0 && count > warnThreshold {
 		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
-		tabletenv.Warnings.Add("ResultsExceeded", 1)
+		qre.tsv.Stats().Warnings.Add("ResultsExceeded", 1)
 		log.Warningf("caller id: %s row count %v exceeds warning threshold %v: %q", callerID.Username, count, warnThreshold, queryAsString(qre.plan.FullQuery.Query, qre.bindVars))
 	}
 	return nil

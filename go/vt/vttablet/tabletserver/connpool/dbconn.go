@@ -366,7 +366,7 @@ func (dbc *DBConn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup)
 		defer tmr2.Stop()
 		select {
 		case <-tmr2.C:
-			tabletenv.InternalErrors.Add("HungQuery", 1)
+			dbc.stats.InternalErrors.Add("HungQuery", 1)
 			log.Warningf("Query may be hung: %s", dbc.Current())
 		case <-done:
 			return

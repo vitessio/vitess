@@ -235,7 +235,7 @@ func NewTabletServer(name string, config tabletenv.TabletConfig, topoServer *top
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se)
-	tsv.watcher = NewReplicationWatcher(tsv.vstreamer, config)
+	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, config)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
@@ -573,7 +573,7 @@ func (tsv *TabletServer) gracefulStop() {
 // keep QueryEngine open.
 func (tsv *TabletServer) StopService() {
 	defer close(tsv.setTimeBomb())
-	defer tabletenv.LogError()
+	defer tabletenv.LogError(tsv)
 
 	tsv.mu.Lock()
 	if tsv.state != StateServing && tsv.state != StateNotServing {
@@ -676,7 +676,7 @@ func (tsv *TabletServer) CheckMySQL() {
 	}
 	go func() {
 		defer func() {
-			tabletenv.LogError()
+			tabletenv.LogError(tsv)
 			time.Sleep(1 * time.Second)
 			tsv.checkMySQLThrottler.Release()
 		}()
@@ -1430,7 +1430,7 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 			tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
 		log.Errorf(errorMessage)
 		terr := vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "%s", errorMessage)
-		tabletenv.InternalErrors.Add("Panic", 1)
+		tsv.stats.InternalErrors.Add("Panic", 1)
 		if logStats != nil {
 			logStats.Error = terr
 		}
@@ -1450,7 +1450,7 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	}
 
 	errCode := convertErrorCode(err)
-	tabletenv.ErrorStats.Add(errCode.String(), 1)
+	tsv.stats.ErrorCounters.Add(errCode.String(), 1)
 
 	callerID := ""
 	cid := callerid.ImmediateCallerIDFromContext(ctx)
