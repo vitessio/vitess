@@ -908,13 +908,13 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
-	beforeCount := tabletenv.TableaclPseudoDenied.Counts()[tableACLStatsKey]
+	beforeCount := tsv.stats.TableaclPseudoDenied.Counts()[tableACLStatsKey]
 	// query should fail because current user do not have read permissions
 	_, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want: nil", err)
 	}
-	afterCount := tabletenv.TableaclPseudoDenied.Counts()[tableACLStatsKey]
+	afterCount := tsv.stats.TableaclPseudoDenied.Counts()[tableACLStatsKey]
 	if afterCount-beforeCount != 1 {
 		t.Fatalf("table acl pseudo denied count should increase by one. got: %d, want: %d", afterCount, beforeCount+1)
 	}

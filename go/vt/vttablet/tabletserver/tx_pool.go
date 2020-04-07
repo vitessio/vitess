@@ -516,8 +516,8 @@ func (txc *TxConnection) log(conclusion string) {
 		username = callerid.GetUsername(txc.ImmediateCallerID)
 	}
 	duration := txc.EndTime.Sub(txc.StartTime)
-	tabletenv.UserTransactionCount.Add([]string{username, conclusion}, 1)
-	tabletenv.UserTransactionTimesNs.Add([]string{username, conclusion}, int64(duration))
+	txc.pool.env.Stats().UserTransactionCount.Add([]string{username, conclusion}, 1)
+	txc.pool.env.Stats().UserTransactionTimesNs.Add([]string{username, conclusion}, int64(duration))
 	txc.pool.txStats.Add(conclusion, duration)
 	if txc.LogToFile.Get() != 0 {
 		log.Infof("Logged transaction: %s", txc.Format(nil))
