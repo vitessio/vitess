@@ -106,11 +106,24 @@ func insertMoreCustomers(t *testing.T, numCustomers int) {
 }
 
 func validateDryRunResults(t *testing.T, output string, want []string) {
+	t.Helper()
 	assert.NotEmpty(t, output)
 	gotDryRun := strings.Split(output, "\n")
 	assert.True(t, len(gotDryRun) > 3)
 	gotDryRun = gotDryRun[3 : len(gotDryRun)-1]
-	assert.Equal(t, strings.Join(want, "\n"), strings.Join(gotDryRun, "\n"))
+	if len(want) != len(gotDryRun) {
+		t.Fatalf("want and got: lengths don't match, \nwant\n%s\n\ngot\n%s", strings.Join(want, "\n"), strings.Join(gotDryRun, "\n"))
+	}
+	match := true
+	for i, w := range want {
+		if strings.TrimSpace(w) != strings.TrimSpace(gotDryRun[i]) {
+			match = false
+			t.Logf("want %s, got %s\n", w, gotDryRun[i])
+		}
+	}
+	if !match {
+		t.Fatal("Results don't match")
+	}
 }
 
 func shardCustomer(t *testing.T, testReverse bool) {
@@ -155,10 +168,9 @@ func shardCustomer(t *testing.T, testReverse bool) {
 		t.Fatalf("SwitchReads error: %s\n", output)
 	}
 	want := []string{
-		"Will lock keyspace product",
-		"Will switch reads for tables customer to keyspace customer",
-		"Will switch reads from keyspace product to keyspace customer for shards 0 to shards -80,80-",
-		"Will unlock keyspace product",
+		"Lock keyspace product",
+		"Switch reads for tables customer to keyspace customer",
+		"Unlock keyspace product",
 	}
 	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+cell.Name, "-tablet_type=replica", "-dry_run", "customer.p2c"); err != nil {
 		t.Fatalf("SwitchReads Dry Run error: %s\n", output)
@@ -171,20 +183,23 @@ func shardCustomer(t *testing.T, testReverse bool) {
 	assert.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTabReplica, "customer", query, query))
 	assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", query, query))
 	want = []string{
-		"Will lock source keyspace product and target keyspace customer",
-		"Writes will be stopped in keyspace product, tables customer",
-		"Will wait for VReplication on all streams to catchup for upto 30s",
-		"Streams will be migrated to customer",
-		"Reverse replication workflow p2c_reverse will be created",
-		"Binlog entries will be created on source databases, SwitchWrites will have reached a point of no return",
-		"Writes will be enabled on keyspace customer tables customer",
-		"Routing will be switched from keyspace product to keyspace customer",
-		"Reverse replication streams will be started on:",
-		"\ttablet cell:\"zone1\" uid:100 ",
-		"SwitchWrites completed, migration streams will be frozen and then deleted on:",
-		"\ttablet cell:\"zone1\" uid:200 ",
-		"\ttablet cell:\"zone1\" uid:300 ",
-		"Will unlock source keyspace product and target keyspace customer",
+		"Lock keyspace product",
+		"Lock keyspace customer",
+		"Stop writes on keyspace product, tables customer",
+		"Wait for VReplication on all streams to catchup for upto 30s",
+		"Migrate streams to customer",
+		"Crate reverse replication workflow p2c_reverse",
+		"Create journal entries on source databases",
+		"Enable writes on keyspace customer tables customer",
+		"Switch routing from keyspace product to keyspace customer",
+		"SwitchWrites completed, freeze and delete migration streams on:",
+		"	tablet cell:\"zone1\" uid:200",
+		"	tablet cell:\"zone1\" uid:300",
+		"Start reverse replication streams on:",
+		"	tablet cell:\"zone1\" uid:100",
+		"Delete left-over streams",
+		"Unlock keyspace customer",
+		"Unlock keyspace product",
 	}
 	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "-dry_run", "customer.p2c"); err != nil {
 		t.Fatalf("SwitchWrites error: %s\n", output)

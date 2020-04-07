@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/stretchr/testify/require"
 
 	"golang.org/x/net/context"
@@ -62,22 +64,6 @@ var (
 		}},
 	}
 )
-
-func validateDryRunResults(t *testing.T, want []string, got []string) {
-	t.Helper()
-	match := true
-	if len(want) != len(got) {
-		t.Fatalf("want and got: lengths don't match, \nwant\n%s\n\ngot\n%s", strings.Join(want, "\n"), strings.Join(got, "\n"))
-	}
-	for ind, want := range want {
-		if strings.TrimSpace(want) != strings.TrimSpace(got[ind]) {
-			t.Fatalf("dry Run Results didn't match, want %s, got %s", want, got[ind])
-		}
-	}
-	if !match {
-		t.Fatal("Results don't match")
-	}
-}
 
 // TestTableMigrate tests table mode migrations.
 // This has to be kept in sync with TestShardMigrate.
@@ -836,29 +822,30 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 	defer tme.stopTablets(t)
 
 	wantdryRunReads := []string{
-		"Will lock keyspace ks1",
-		"Will switch reads for tables t1,t2 to keyspace ks2",
-		"Will switch reads from keyspace ks1 to keyspace ks2 for shards 0 to shards -80,80-",
-		"Will unlock keyspace ks1",
+		"Lock keyspace ks1",
+		"Switch reads for tables t1,t2 to keyspace ks2",
+		"Unlock keyspace ks1",
 	}
 	wantdryRunWrites := []string{
-		"Will lock keyspace ks1",
-		"Will lock keyspace ks2",
-		"Writes will be stopped in keyspace ks1, tables t1,t2",
-		"Will wait for VReplication on all streams to catchup for upto 1s",
-		"Streams will be migrated to ks2",
-		"Reverse replication workflow test_reverse will be created",
-		"Binlog entries will be created on source databases, SwitchWrites will have reached a point of no return",
-		"Writes will be enabled on keyspace ks2 tables t1,t2",
-		"Routing will be switched from keyspace ks1 to keyspace ks2",
-		"SwitchWrites completed, migration streams will be frozen and then deleted on:",
-		"\ttablet cell:\"cell1\" uid:20",
-		"\ttablet cell:\"cell1\" uid:30",
-		"Will unlock source keyspace ks1 and target keyspace ks2",
+		"Lock keyspace ks1",
+		"Lock keyspace ks2",
+		"Stop writes on keyspace ks1, tables t1,t2",
+		"Wait for VReplication on all streams to catchup for upto 1s",
+		"Migrate streams to ks2",
+		"Crate reverse replication workflow test_reverse",
+		"Create journal entries on source databases",
+		"Enable writes on keyspace ks2 tables t1,t2",
+		"Switch routing from keyspace ks1 to keyspace ks2",
+		"SwitchWrites completed, freeze and delete migration streams on:",
+		`	tablet cell:"cell1" uid:20 `,
+		`	tablet cell:"cell1" uid:30 `,
+		"Delete left-over streams",
+		"Unlock keyspace ks2",
+		"Unlock keyspace ks1",
 	}
 	dryRunResults, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, true)
 	require.NoError(t, err)
-	validateDryRunResults(t, wantdryRunReads, dryRunResults)
+	require.Empty(t, cmp.Diff(wantdryRunReads, *dryRunResults))
 
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	require.NoError(t, err)
@@ -929,7 +916,7 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 
 	_, results, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true)
 	require.NoError(t, err)
-	validateDryRunResults(t, wantdryRunWrites, *results)
+	require.Empty(t, cmp.Diff(wantdryRunWrites, *results))
 }
 
 // TestMigrateFailJournal tests that cancel doesn't get called after point of no return.
@@ -1222,11 +1209,11 @@ func TestTableMigrateCancelDryRun(t *testing.T) {
 	defer tme.stopTablets(t)
 
 	want := []string{
-		"Will lock keyspace ks1",
-		"Will lock keyspace ks2",
-		"Stream migrations will be cancelled as requested",
-		"Will unlock keyspace ks2",
-		"Will unlock keyspace ks1",
+		"Lock keyspace ks1",
+		"Lock keyspace ks2",
+		"Cancel stream migrations as requested",
+		"Unlock keyspace ks2",
+		"Unlock keyspace ks1",
 	}
 
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
@@ -1268,7 +1255,7 @@ func TestTableMigrateCancelDryRun(t *testing.T) {
 
 	_, dryRunResults, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false, true)
 	require.NoError(t, err)
-	validateDryRunResults(t, want, *dryRunResults)
+	require.Empty(t, cmp.Diff(want, *dryRunResults))
 }
 
 func TestTableMigrateNoReverse(t *testing.T) {

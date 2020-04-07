@@ -2034,7 +2034,7 @@ func commandSwitchReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}
 	if *dryRun {
 		wr.Logger().Printf("Dry Run results for SwitchReads run at %s\nParameters: %s\n\n", time.RFC822, strings.Join(args, " "))
-		wr.Logger().Printf("%s\n", strings.Join(dryRunResults, "\n"))
+		wr.Logger().Printf("%s\n", strings.Join(*dryRunResults, "\n"))
 	}
 	return nil
 }
