@@ -288,6 +288,14 @@ func (tsv *TabletServer) Stats() *tabletenv.Stats {
 	return tsv.stats
 }
 
+// LogError satisfies tabletenv.Env.
+func (tsv *TabletServer) LogError() {
+	if x := recover(); x != nil {
+		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
+		tsv.stats.InternalErrors.Add("Panic", 1)
+	}
+}
+
 // RegisterQueryRuleSource registers ruleSource for setting query rules.
 func (tsv *TabletServer) RegisterQueryRuleSource(ruleSource string) {
 	tsv.qe.queryRuleSources.RegisterSource(ruleSource)
@@ -573,7 +581,7 @@ func (tsv *TabletServer) gracefulStop() {
 // keep QueryEngine open.
 func (tsv *TabletServer) StopService() {
 	defer close(tsv.setTimeBomb())
-	defer tabletenv.LogError(tsv)
+	defer tsv.LogError()
 
 	tsv.mu.Lock()
 	if tsv.state != StateServing && tsv.state != StateNotServing {
@@ -676,7 +684,7 @@ func (tsv *TabletServer) CheckMySQL() {
 	}
 	go func() {
 		defer func() {
-			tabletenv.LogError(tsv)
+			tsv.LogError()
 			time.Sleep(1 * time.Second)
 			tsv.checkMySQLThrottler.Release()
 		}()
@@ -1458,7 +1466,7 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		callerID = fmt.Sprintf(" (CallerID: %s)", cid.Username)
 	}
 
-	logMethod := tabletenv.Errorf
+	logMethod := log.Errorf
 	// Suppress or demote some errors in logs.
 	switch errCode {
 	case vtrpcpb.Code_FAILED_PRECONDITION, vtrpcpb.Code_ALREADY_EXISTS:
@@ -1466,9 +1474,9 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	case vtrpcpb.Code_RESOURCE_EXHAUSTED:
 		logMethod = logPoolFull.Errorf
 	case vtrpcpb.Code_ABORTED:
-		logMethod = tabletenv.Warningf
+		logMethod = log.Warningf
 	case vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_DEADLINE_EXCEEDED:
-		logMethod = tabletenv.Infof
+		logMethod = log.Infof
 	}
 
 	// If TerseErrors is on, strip the error message returned by MySQL and only

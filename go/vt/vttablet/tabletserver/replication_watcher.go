@@ -75,7 +75,7 @@ func (rpw *ReplicationWatcher) Close() {
 
 // Process processes the replication stream.
 func (rpw *ReplicationWatcher) Process(ctx context.Context) {
-	defer tabletenv.LogError(rpw.env)
+	defer rpw.env.LogError()
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{

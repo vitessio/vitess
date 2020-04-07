@@ -2115,44 +2115,52 @@ func TestHandleExecUnknownError(t *testing.T) {
 	panic("unknown exec error")
 }
 
-var testLogs []string
-
-func recordInfof(format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	testLogs = append(testLogs, msg)
-	log.Infof(msg)
+type testLogger struct {
+	logs        []string
+	savedInfof  func(format string, args ...interface{})
+	savedErrorf func(format string, args ...interface{})
 }
 
-func recordErrorf(format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	testLogs = append(testLogs, msg)
-	log.Errorf(msg)
-}
-
-func setupTestLogger() {
-	testLogs = make([]string, 0)
-	tabletenv.Infof = recordInfof
-	tabletenv.Errorf = recordErrorf
-}
-
-func clearTestLogger() {
-	tabletenv.Infof = log.Infof
-	tabletenv.Errorf = log.Errorf
-}
-
-func getTestLog(i int) string {
-	if i < len(testLogs) {
-		return testLogs[i]
+func newTestLogger() *testLogger {
+	tl := &testLogger{
+		savedInfof:  log.Infof,
+		savedErrorf: log.Errorf,
 	}
-	return fmt.Sprintf("ERROR: log %d/%d does not exist", i, len(testLogs))
+	log.Infof = tl.recordInfof
+	log.Errorf = tl.recordErrorf
+	return tl
+}
+
+func (tl *testLogger) Close() {
+	log.Infof = tl.savedInfof
+	log.Errorf = tl.savedErrorf
+}
+
+func (tl *testLogger) recordInfof(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	tl.logs = append(tl.logs, msg)
+	tl.savedInfof(msg)
+}
+
+func (tl *testLogger) recordErrorf(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	tl.logs = append(tl.logs, msg)
+	tl.savedErrorf(msg)
+}
+
+func (tl *testLogger) getLog(i int) string {
+	if i < len(tl.logs) {
+		return tl.logs[i]
+	}
+	return fmt.Sprintf("ERROR: log %d/%d does not exist", i, len(tl.logs))
 }
 
 func TestHandleExecTabletError(t *testing.T) {
 	ctx := context.Background()
 	config := tabletenv.DefaultQsConfig
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
-	setupTestLogger()
-	defer clearTestLogger()
+	tl := newTestLogger()
+	defer tl.Close()
 	err := tsv.convertAndLogError(
 		ctx,
 		"select * from test_table",
@@ -2166,8 +2174,8 @@ func TestHandleExecTabletError(t *testing.T) {
 		t.Errorf("got `%v`, want '%s'", err, want)
 	}
 	want = "Sql: \"select * from test_table\", BindVars: {}"
-	if !strings.Contains(getTestLog(0), want) {
-		t.Errorf("error log %s, want '%s'", getTestLog(0), want)
+	if !strings.Contains(tl.getLog(0), want) {
+		t.Errorf("error log %s, want '%s'", tl.getLog(0), want)
 	}
 }
 
@@ -2176,8 +2184,8 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 	config := tabletenv.DefaultQsConfig
 	config.TerseErrors = true
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
-	setupTestLogger()
-	defer clearTestLogger()
+	tl := newTestLogger()
+	defer tl.Close()
 	err := tsv.convertAndLogError(
 		ctx,
 		"select * from test_table",
@@ -2190,8 +2198,8 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 		t.Errorf("%v, want '%s'", err, want)
 	}
 	want = "Sql: \"select * from test_table\", BindVars: {}"
-	if !strings.Contains(getTestLog(0), want) {
-		t.Errorf("error log %s, want '%s'", getTestLog(0), want)
+	if !strings.Contains(tl.getLog(0), want) {
+		t.Errorf("error log %s, want '%s'", tl.getLog(0), want)
 	}
 }
 
@@ -2200,8 +2208,8 @@ func TestTerseErrorsBindVars(t *testing.T) {
 	config := tabletenv.DefaultQsConfig
 	config.TerseErrors = true
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
-	setupTestLogger()
-	defer clearTestLogger()
+	tl := newTestLogger()
+	defer tl.Close()
 
 	sqlErr := mysql.NewSQLError(10, "HY000", "sensitive message")
 	sqlErr.Query = "select * from test_table where a = 1"
@@ -2219,8 +2227,8 @@ func TestTerseErrorsBindVars(t *testing.T) {
 	}
 
 	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where a = :a\", BindVars: {a: \"type:INT64 value:\\\"1\\\" \"}"
-	if wantLog != getTestLog(0) {
-		t.Errorf("log got '%s', want '%s'", getTestLog(0), wantLog)
+	if wantLog != tl.getLog(0) {
+		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
 	}
 }
 
@@ -2229,16 +2237,16 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 	config := tabletenv.DefaultQsConfig
 	config.TerseErrors = true
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
-	setupTestLogger()
-	defer clearTestLogger()
+	tl := newTestLogger()
+	defer tl.Close()
 	err := tsv.convertAndLogError(ctx, "", nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "sensitive message"), nil)
 	want := "sensitive message"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("%v, want '%s'", err, want)
 	}
 	want = "Sql: \"\", BindVars: {}"
-	if !strings.Contains(getTestLog(0), want) {
-		t.Errorf("error log '%s', want '%s'", getTestLog(0), want)
+	if !strings.Contains(tl.getLog(0), want) {
+		t.Errorf("error log '%s', want '%s'", tl.getLog(0), want)
 	}
 }
 
@@ -2247,8 +2255,8 @@ func TestTruncateErrors(t *testing.T) {
 	config := tabletenv.DefaultQsConfig
 	config.TerseErrors = true
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
-	setupTestLogger()
-	defer clearTestLogger()
+	tl := newTestLogger()
+	defer tl.Close()
 
 	*sqlparser.TruncateErrLen = 52
 	sql := "select * from test_table where xyz = :vtg1 order by abc desc"
@@ -2267,8 +2275,8 @@ func TestTruncateErrors(t *testing.T) {
 	}
 
 	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vt [TRUNCATED]\", BindVars: {vtg1: \"type:VARCHAR value:\\\"t [TRUNCATED]"
-	if wantLog != getTestLog(0) {
-		t.Errorf("log got '%s', want '%s'", getTestLog(0), wantLog)
+	if wantLog != tl.getLog(0) {
+		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
 	}
 
 	*sqlparser.TruncateErrLen = 140
@@ -2286,8 +2294,8 @@ func TestTruncateErrors(t *testing.T) {
 	}
 
 	wantLog = "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARCHAR value:\\\"this is kinda long eh\\\" \"}"
-	if wantLog != getTestLog(1) {
-		t.Errorf("log got '%s', want '%s'", getTestLog(1), wantLog)
+	if wantLog != tl.getLog(1) {
+		t.Errorf("log got '%s', want '%s'", tl.getLog(1), wantLog)
 	}
 	*sqlparser.TruncateErrLen = 0
 }
@@ -2297,8 +2305,8 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	config := tabletenv.DefaultQsConfig
 	config.TerseErrors = true
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
-	setupTestLogger()
-	defer clearTestLogger()
+	tl := newTestLogger()
+	defer tl.Close()
 	err := tsv.convertAndLogError(ctx, "select * from test_table where id = :a",
 		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(1)},
 		mysql.NewSQLError(1227, "42000", "failover in progress"),
@@ -2309,7 +2317,7 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	}
 
 	// errors during failover aren't logged at all
-	if len(testLogs) != 0 {
+	if len(tl.logs) != 0 {
 		t.Errorf("unexpected error log during failover")
 	}
 }

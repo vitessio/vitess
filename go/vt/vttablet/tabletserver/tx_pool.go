@@ -172,7 +172,7 @@ func (axp *TxPool) RollbackNonBusy(ctx context.Context) {
 }
 
 func (axp *TxPool) transactionKiller() {
-	defer tabletenv.LogError(axp.env)
+	defer axp.env.LogError()
 	for _, v := range axp.activePool.GetOutdated(time.Duration(axp.Timeout()), "for tx killer rollback") {
 		conn := v.(*TxConnection)
 		log.Warningf("killing transaction (exceeded timeout: %v): %s", axp.Timeout(), conn.Format(nil))

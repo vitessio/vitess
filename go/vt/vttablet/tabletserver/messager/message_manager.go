@@ -433,7 +433,7 @@ func (mm *messageManager) Add(mr *MessageRow) bool {
 
 func (mm *messageManager) runSend() {
 	defer func() {
-		tabletenv.LogError(mm.tsv)
+		mm.tsv.LogError()
 		mm.wg.Done()
 	}()
 
@@ -506,7 +506,7 @@ func (mm *messageManager) runSend() {
 
 func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result) {
 	defer func() {
-		tabletenv.LogError(mm.tsv)
+		mm.tsv.LogError()
 		mm.wg.Done()
 	}()
 
@@ -702,7 +702,7 @@ func (mm *messageManager) runPoller() {
 
 	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), mm.pollerTicks.Interval())
 	defer func() {
-		tabletenv.LogError(mm.tsv)
+		mm.tsv.LogError()
 		cancel()
 	}()
 
@@ -756,7 +756,7 @@ func (mm *messageManager) runPurge() {
 func purge(tsv TabletService, name string, purgeAfter, purgeInterval time.Duration) {
 	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), purgeInterval)
 	defer func() {
-		tabletenv.LogError(tsv)
+		tsv.LogError()
 		cancel()
 	}()
 	for {

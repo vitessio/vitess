@@ -182,7 +182,7 @@ func (se *Engine) reload(ctx context.Context) error {
 	start := time.Now()
 	defer func() {
 		log.Infof("Time taken to load the schema: %v", time.Since(start))
-		tabletenv.LogError(se.env)
+		se.env.LogError()
 	}()
 
 	conn, err := se.conns.Get(ctx)
