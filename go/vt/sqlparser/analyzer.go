@@ -87,6 +87,15 @@ func ASTToStatementType(stmt Statement) StatementType {
 	}
 }
 
+//CanNormalize takes Statement and returns if the statement can be normalized.
+func CanNormalize(stmt Statement) bool {
+	switch stmt.(type) {
+	case *Select, *Union, *Insert, *Update, *Delete, *Set:
+		return true
+	}
+	return false
+}
+
 // Preview analyzes the beginning of the query using a simpler and faster
 // textual comparison to identify the statement type.
 func Preview(sql string) StatementType {

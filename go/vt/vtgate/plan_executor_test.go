@@ -28,6 +28,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"vitess.io/vitess/go/vt/topo"
 
 	"github.com/golang/protobuf/proto"
@@ -991,23 +993,45 @@ func TestPlanExecutorUse(t *testing.T) {
 }
 
 func TestPlanExecutorComment(t *testing.T) {
-	t.Skip("not support yet")
 	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
 
-	stmts := []string{
-		"/*! SET autocommit=1*/",
-		"/*!50708 SET @x=5000*/",
+	var tcs = []struct {
+		sql string
+		qr  *sqltypes.Result
+	}{
+		{
+			sql: "/*! select * from t where id = 1 */",
+			qr: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"id|value",
+					"int32|varchar",
+				),
+				"1|foo",
+			),
+		},
+		{
+			sql: "/*! insert into t(id, value) values(1000, 'msg') */",
+			qr: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"id|value",
+					"int32|varchar",
+				),
+				"1|foo",
+			),
+		},
+		// TODO (harshit): remove the comments, once set as plan is supported.
+		//{
+		//	sql: "/*!50708 set @x = 42 */",
+		//	qr:  &sqltypes.Result{},
+		//},
 	}
-	wantResult := &sqltypes.Result{}
 
-	for _, stmt := range stmts {
-		gotResult, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), stmt, nil)
-		if err != nil {
-			t.Error(err)
-		}
-		if !reflect.DeepEqual(gotResult, wantResult) {
-			t.Errorf("Exec %s: %v, want %v", stmt, gotResult, wantResult)
-		}
+	for _, tc := range tcs {
+		t.Run(tc.sql, func(t *testing.T) {
+			gotResult, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), tc.sql, nil)
+			require.NoError(t, err)
+			utils.MustMatch(t, tc.qr, gotResult, "did not get expected result")
+		})
 	}
 }
 

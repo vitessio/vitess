@@ -1354,7 +1354,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	if err != nil {
 		return nil, err
 	}
-	if !e.normalize {
+	if !e.normalize || !sqlparser.CanNormalize(stmt) {
 		plan, err := planbuilder.BuildFromStmt(sql, stmt, vcursor, sqlparser.BindVarNeeds{})
 		if err != nil {
 			return nil, err
