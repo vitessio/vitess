@@ -114,6 +114,10 @@ func (tqsc *Controller) Stats() *tabletenv.Stats {
 func (tqsc *Controller) Register() {
 }
 
+// AddStatusHeader is part of the tabletserver.Controller interface
+func (tqsc *Controller) AddStatusHeader() {
+}
+
 // AddStatusPart is part of the tabletserver.Controller interface
 func (tqsc *Controller) AddStatusPart() {
 }

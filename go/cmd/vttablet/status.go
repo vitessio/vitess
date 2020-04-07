@@ -30,6 +30,7 @@ import (
 
 var (
 	// tabletTemplate contains the style sheet and the tablet itself.
+	// This template is a slight duplicate of the one in go/vt/vttablet/tabletserver/status.go.
 	tabletTemplate = `
 <style>
   table {
@@ -74,11 +75,10 @@ var (
       <a href="/schemaz">Schema</a></br>
       <a href="/debug/tablet_plans">Schema&nbsp;Query&nbsp;Plans</a></br>
       <a href="/debug/query_stats">Schema&nbsp;Query&nbsp;Stats</a></br>
-      <a href="/debug/table_stats">Schema&nbsp;Table&nbsp;Stats</a></br>
-    </td>
-    <td width="25%" border="">
       <a href="/queryz">Query&nbsp;Stats</a></br>
       <a href="/streamqueryz">Streaming&nbsp;Query&nbsp;Stats</a></br>
+    </td>
+    <td width="25%" border="">
       <a href="/debug/consolidations">Consolidations</a></br>
       <a href="/querylogz">Current&nbsp;Query&nbsp;Log</a></br>
       <a href="/txlogz">Current&nbsp;Transaction&nbsp;Log</a></br>
@@ -147,9 +147,6 @@ func healthHTMLName() template.HTML {
 	return health.DefaultAggregator.HTMLName()
 }
 
-// For use by plugins which wish to avoid racing when registering status page parts.
-var onStatusRegistered func()
-
 func addStatusParts(qsc tabletserver.Controller) {
 	servenv.AddStatusPart("Tablet", tabletTemplate, func() interface{} {
 		return map[string]interface{}{
@@ -172,7 +169,4 @@ func addStatusParts(qsc tabletserver.Controller) {
 	})
 	qsc.AddStatusPart()
 	vreplication.AddStatusPart()
-	if onStatusRegistered != nil {
-		onStatusRegistered()
-	}
 }
