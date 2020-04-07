@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -62,6 +64,7 @@ var (
 )
 
 func validateDryRunResults(t *testing.T, want []string, got []string) {
+	t.Helper()
 	match := true
 	if len(want) != len(got) {
 		t.Fatalf("want and got: lengths don't match, \nwant\n%s\n\ngot\n%s", strings.Join(want, "\n"), strings.Join(got, "\n"))
@@ -839,7 +842,8 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 		"Will unlock keyspace ks1",
 	}
 	wantdryRunWrites := []string{
-		"Will lock source keyspace ks1 and target keyspace ks2",
+		"Will lock keyspace ks1",
+		"Will lock keyspace ks2",
 		"Writes will be stopped in keyspace ks1, tables t1,t2",
 		"Will wait for VReplication on all streams to catchup for upto 1s",
 		"Streams will be migrated to ks2",
@@ -853,19 +857,13 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 		"Will unlock source keyspace ks1 and target keyspace ks2",
 	}
 	dryRunResults, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	validateDryRunResults(t, wantdryRunReads, dryRunResults)
 
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// checkJournals
 	tme.dbSourceClients[0].addQueryRE("select val from _vt.resharding_journal.*", &sqltypes.Result{}, nil)
@@ -929,11 +927,9 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 	}
 	deleteTargetVReplication()
 
-	_, dryRunResults, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	validateDryRunResults(t, wantdryRunWrites, dryRunResults)
+	_, results, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true)
+	require.NoError(t, err)
+	validateDryRunResults(t, wantdryRunWrites, *results)
 }
 
 // TestMigrateFailJournal tests that cancel doesn't get called after point of no return.
@@ -1226,9 +1222,11 @@ func TestTableMigrateCancelDryRun(t *testing.T) {
 	defer tme.stopTablets(t)
 
 	want := []string{
-		"Will lock source keyspace ks1 and target keyspace ks2",
+		"Will lock keyspace ks1",
+		"Will lock keyspace ks2",
 		"Stream migrations will be cancelled as requested",
-		"Will unlock source keyspace ks1 and target keyspace ks2",
+		"Will unlock keyspace ks2",
+		"Will unlock keyspace ks1",
 	}
 
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
@@ -1269,10 +1267,8 @@ func TestTableMigrateCancelDryRun(t *testing.T) {
 	cancelMigration()
 
 	_, dryRunResults, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	validateDryRunResults(t, want, dryRunResults)
+	require.NoError(t, err)
+	validateDryRunResults(t, want, *dryRunResults)
 }
 
 func TestTableMigrateNoReverse(t *testing.T) {
