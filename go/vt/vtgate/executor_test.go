@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -27,8 +28,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 
@@ -1194,7 +1193,7 @@ func TestExecutorDDL(t *testing.T) {
 	}
 
 	stmts := []string{
-		"create",
+		"create table t1(id bigint primary key)",
 		"alter table t1 add primary key id",
 		"rename table t1 to t2",
 		"truncate table t2",
@@ -1297,19 +1296,19 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 
 	// Create a new vschema keyspace implicitly by creating a vindex with a different
 	// target in the session
-	ksNew := "test_new_keyspace"
-	session = NewSafeSession(&vtgatepb.Session{TargetString: ksNew})
+	//ksNew := "test_new_keyspace"
+	session = NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	stmt = "alter vschema create vindex test_vindex2 using hash"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
 	if err != nil {
 		t.Fatalf("error in %s: %v", stmt, err)
 	}
 
-	vschema, vindex = waitForVindex(t, ksNew, "test_vindex2", vschemaUpdates, executor)
+	vschema, vindex = waitForVindex(t, ks, "test_vindex2", vschemaUpdates, executor)
 	if vindex.Type != "hash" {
 		t.Errorf("vindex type %s not hash", vindex.Type)
 	}
-	keyspace, ok := vschema.Keyspaces[ksNew]
+	keyspace, ok := vschema.Keyspaces[ks]
 	if !ok || !keyspace.Sharded {
 		t.Errorf("keyspace should have been created with Sharded=true")
 	}
@@ -1742,14 +1741,14 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 
 	stmt = "alter vschema on nonexistent drop vindex test_lookup"
 	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: "InvalidKeyspace"}), stmt, nil)
-	wantErr = "table InvalidKeyspace.nonexistent not defined in vschema"
+	wantErr = "no keyspace with name [InvalidKeyspace] found"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("got %v want err %s", err, wantErr)
 	}
 
 	stmt = "alter vschema on nowhere.nohow drop vindex test_lookup"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	wantErr = "table nowhere.nohow not defined in vschema"
+	wantErr = "no keyspace with name [nowhere] found"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("got %v want err %s", err, wantErr)
 	}
@@ -1771,67 +1770,6 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	if !reflect.DeepEqual(gotCount, wantCount) {
 		t.Errorf("Exec %s: %v, want %v", "", gotCount, wantCount)
 	}
-}
-
-func TestExecutorVindexDDLNewKeyspace(t *testing.T) {
-	*vschemaacl.AuthorizedDDLUsers = "%"
-	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
-	}()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
-	ksName := "NewKeyspace"
-
-	vschema := executor.vm.GetCurrentSrvVschema()
-	ks, ok := vschema.Keyspaces[ksName]
-	if ok || ks != nil {
-		t.Fatalf("keyspace should not exist before test")
-	}
-
-	session := NewSafeSession(&vtgatepb.Session{TargetString: ksName})
-	stmt := "alter vschema create vindex test_hash using hash"
-	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	require.NoError(t, err)
-
-	time.Sleep(50 * time.Millisecond)
-
-	stmt = "alter vschema on test add vindex test_hash2 (id) using hash"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	if err != nil {
-		t.Fatalf("error in %s: %v", stmt, err)
-	}
-
-	time.Sleep(50 * time.Millisecond)
-	vschema = executor.vm.GetCurrentSrvVschema()
-	ks, ok = vschema.Keyspaces[ksName]
-	if !ok || ks == nil {
-		t.Fatalf("keyspace was not created as expected")
-	}
-
-	vindex := ks.Vindexes["test_hash"]
-	if vindex == nil {
-		t.Fatalf("vindex was not created as expected")
-	}
-
-	vindex2 := ks.Vindexes["test_hash2"]
-	if vindex2 == nil {
-		t.Fatalf("vindex was not created as expected")
-	}
-
-	table := ks.Tables["test"]
-	if table == nil {
-		t.Fatalf("column vindex was not created as expected")
-	}
-
-	wantCount := []int64{0, 0, 0}
-	gotCount := []int64{
-		sbc1.ExecCount.Get(),
-		sbc2.ExecCount.Get(),
-		sbclookup.ExecCount.Get(),
-	}
-	if !reflect.DeepEqual(gotCount, wantCount) {
-		t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
-	}
-
 }
 
 func TestExecutorVindexDDLACL(t *testing.T) {
