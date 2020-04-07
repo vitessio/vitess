@@ -42,9 +42,19 @@ create table t3 (
 create table t4 like t3;
 
 create table t5 (like t2);
+
+create table test_partitioned (
+	id bigint,
+	date_create int,
+	primary key(id)
+) Engine=InnoDB	/*!50100 PARTITION BY RANGE (date_create)
+	(PARTITION p2018_06_14 VALUES LESS THAN (1528959600) ENGINE = InnoDB,
+	PARTITION p2018_06_15 VALUES LESS THAN (1529046000) ENGINE = InnoDB,
+	PARTITION p2018_06_16 VALUES LESS THAN (1529132400) ENGINE = InnoDB,
+	PARTITION p2018_06_17 VALUES LESS THAN (1529218800) ENGINE = InnoDB)*/;
 `
 
-	ddls, err := parseSchema(testSchema, &Options{StrictDDL: true})
+	ddls, err := parseSchema(testSchema, &Options{StrictDDL: false})
 	if err != nil {
 		t.Fatalf("parseSchema: %v", err)
 	}
