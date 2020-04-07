@@ -734,7 +734,18 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		db := c.parseComInitDB(data)
 		c.recycleReadPacket()
 		c.schemaName = db
-		handler.ComInitDB(c, db)
+		if err := handler.ComInitDB(c, db); err != nil {
+			log.Errorf("ComInitDB failed %s: %v", c, err)
+
+			if werr := c.writeErrorPacketFromError(err); werr != nil {
+				// If we can't even write the error, we're done.
+				log.Errorf("Conn %v: Error writing query error: %v", c, werr)
+				return werr
+			}
+
+			return nil
+		}
+
 		if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
 			log.Errorf("Error writing ComInitDB result to %s: %v", c, err)
 			return err

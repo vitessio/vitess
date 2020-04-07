@@ -90,7 +90,7 @@ type Handler interface {
 
 	// InitDB is called once at the beginning to set db name,
 	// and subsequently for every ComInitDB event.
-	ComInitDB(c *Conn, schemaName string)
+	ComInitDB(c *Conn, schemaName string) error
 
 	// ComQuery is called when a connection receives a query.
 	// Note the contents of the query slice may change after
@@ -435,6 +435,14 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		defer connCountPerUser.Add(c.User, -1)
 	}
 
+	// Set db name.
+	if err = l.handler.ComInitDB(c, c.schemaName); err != nil {
+		log.Errorf("failed to set the database %s: %v", c, err)
+
+		c.writeErrorPacketFromError(err)
+		return
+	}
+
 	// Negotiation worked, send OK packet.
 	if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
 		log.Errorf("Cannot write OK packet to %s: %v", c, err)
@@ -450,9 +458,6 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		connSlow.Add(1)
 		log.Warningf("Slow connection from %s: %v", c, connectTime)
 	}
-
-	// Set initial db name.
-	l.handler.ComInitDB(c, c.schemaName)
 
 	for {
 		err := c.handleNextCommand(l.handler)

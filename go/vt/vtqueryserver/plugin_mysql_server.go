@@ -86,8 +86,9 @@ func (mh *proxyHandler) ConnectionClosed(c *mysql.Conn) {
 	}
 }
 
-func (mh *proxyHandler) ComInitDB(c *mysql.Conn, schemaName string) {
+func (mh *proxyHandler) ComInitDB(c *mysql.Conn, schemaName string) error {
 	mh.session(c).TargetString = schemaName
+	return nil
 }
 
 func (mh *proxyHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {

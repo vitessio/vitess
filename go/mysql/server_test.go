@@ -77,7 +77,8 @@ func (th *testHandler) NewConnection(c *Conn) {
 func (th *testHandler) ConnectionClosed(c *Conn) {
 }
 
-func (th *testHandler) ComInitDB(c *Conn, schemaName string) {
+func (th *testHandler) ComInitDB(c *Conn, schemaName string) error {
+	return nil
 }
 
 func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {

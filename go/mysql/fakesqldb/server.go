@@ -315,7 +315,8 @@ func (db *DB) ConnectionClosed(c *mysql.Conn) {
 }
 
 // ComInitDB is part of the mysql.Handler interface.
-func (db *DB) ComInitDB(c *mysql.Conn, schemaName string) {
+func (db *DB) ComInitDB(c *mysql.Conn, schemaName string) error {
+	return nil
 }
 
 // ComQuery is part of the mysql.Handler interface.
