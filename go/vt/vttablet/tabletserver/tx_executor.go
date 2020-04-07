@@ -126,7 +126,7 @@ func (txe *TxExecutor) CommitPrepared(dtid string) error {
 // The function uses the passed in context that has no timeout
 // instead of TxExecutor's context.
 func (txe *TxExecutor) markFailed(ctx context.Context, dtid string) {
-	tabletenv.InternalErrors.Add("TwopcCommit", 1)
+	txe.te.env.Stats().InternalErrors.Add("TwopcCommit", 1)
 	txe.te.preparedPool.SetFailed(dtid)
 	conn, _, err := txe.te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {

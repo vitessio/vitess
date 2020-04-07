@@ -143,7 +143,7 @@ func (r *Reader) GetLatest() (time.Duration, error) {
 // readHeartbeat reads from the heartbeat table exactly once, updating
 // the last known lag and/or error, and incrementing counters.
 func (r *Reader) readHeartbeat() {
-	defer tabletenv.LogError()
+	defer tabletenv.LogError(r.env)
 
 	ctx, cancel := context.WithDeadline(context.Background(), r.now().Add(r.interval))
 	defer cancel()

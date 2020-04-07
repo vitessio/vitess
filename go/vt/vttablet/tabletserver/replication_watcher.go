@@ -37,6 +37,7 @@ type VStreamer interface {
 // replication stream.  It will trigger schema reloads if a DDL
 // is encountered.
 type ReplicationWatcher struct {
+	env              tabletenv.Env
 	watchReplication bool
 	vs               VStreamer
 
@@ -44,8 +45,9 @@ type ReplicationWatcher struct {
 }
 
 // NewReplicationWatcher creates a new ReplicationWatcher.
-func NewReplicationWatcher(vs VStreamer, config tabletenv.TabletConfig) *ReplicationWatcher {
+func NewReplicationWatcher(env tabletenv.Env, vs VStreamer, config tabletenv.TabletConfig) *ReplicationWatcher {
 	return &ReplicationWatcher{
+		env:              env,
 		vs:               vs,
 		watchReplication: config.WatchReplication,
 	}
@@ -73,7 +75,7 @@ func (rpw *ReplicationWatcher) Close() {
 
 // Process processes the replication stream.
 func (rpw *ReplicationWatcher) Process(ctx context.Context) {
-	defer tabletenv.LogError()
+	defer tabletenv.LogError(rpw.env)
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{

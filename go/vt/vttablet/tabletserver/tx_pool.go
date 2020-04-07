@@ -144,7 +144,7 @@ func (axp *TxPool) Close() {
 	for _, v := range axp.activePool.GetOutdated(time.Duration(0), "for closing") {
 		conn := v.(*TxConnection)
 		log.Warningf("killing transaction for shutdown: %s", conn.Format(nil))
-		tabletenv.InternalErrors.Add("StrayTransactions", 1)
+		axp.env.Stats().InternalErrors.Add("StrayTransactions", 1)
 		conn.Close()
 		conn.conclude(TxClose, "pool closed")
 	}
@@ -172,7 +172,7 @@ func (axp *TxPool) RollbackNonBusy(ctx context.Context) {
 }
 
 func (axp *TxPool) transactionKiller() {
-	defer tabletenv.LogError()
+	defer tabletenv.LogError(axp.env)
 	for _, v := range axp.activePool.GetOutdated(time.Duration(axp.Timeout()), "for tx killer rollback") {
 		conn := v.(*TxConnection)
 		log.Warningf("killing transaction (exceeded timeout: %v): %s", axp.Timeout(), conn.Format(nil))
