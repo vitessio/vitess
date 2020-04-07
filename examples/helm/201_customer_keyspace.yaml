@@ -1,8 +1,6 @@
 topology:
   cells:
     - name: "zone1"
-      etcd:
-        replicas: 1
       vtctld:
         replicas: 1
       vtgate:
@@ -26,10 +24,6 @@ jobs:
   - name: "create-customer-ks"
     kind: "vtctlclient"
     command: "CreateKeyspace -served_from='master:commerce,replica:commerce,rdonly:commerce' customer"
-
-etcd:
-  replicas: 1
-  resources:
 
 vtctld:
   serviceType: "NodePort"
