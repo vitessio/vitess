@@ -198,7 +198,7 @@ func (w *Writer) bindHeartbeatVars(query string) (string, error) {
 
 // writeHeartbeat updates the heartbeat row for this tablet with the current time in nanoseconds.
 func (w *Writer) writeHeartbeat() {
-	defer tabletenv.LogError(w.env)
+	defer w.env.LogError()
 	ctx, cancel := context.WithDeadline(context.Background(), w.now().Add(w.interval))
 	defer cancel()
 	update, err := w.bindHeartbeatVars(sqlUpdateHeartbeat)

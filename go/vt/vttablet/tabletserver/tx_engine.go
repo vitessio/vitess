@@ -389,7 +389,7 @@ func (te *TxEngine) close(immediate bool) {
 	// verified to make sure it won't kick in later.
 	go func() {
 		defer func() {
-			tabletenv.LogError(te.env)
+			te.env.LogError()
 			close(rollbackDone)
 		}()
 		if immediate {

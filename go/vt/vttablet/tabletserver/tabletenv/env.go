@@ -25,15 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 )
 
-var (
-	// Infof can be overridden during tests
-	Infof = log.Infof
-	// Warningf can be overridden during tests
-	Warningf = log.Warningf
-	// Errorf can be overridden during tests
-	Errorf = log.Errorf
-)
-
 // Env defines the functions supported by TabletServer
 // that the sub-componennts need to access.
 type Env interface {
@@ -42,6 +33,7 @@ type Env interface {
 	DBConfigs() *dbconfigs.DBConfigs
 	Exporter() *servenv.Exporter
 	Stats() *Stats
+	LogError()
 }
 
 type testEnv struct {
@@ -69,10 +61,9 @@ func (te *testEnv) DBConfigs() *dbconfigs.DBConfigs { return te.dbconfigs }
 func (te *testEnv) Exporter() *servenv.Exporter     { return te.exporter }
 func (te *testEnv) Stats() *Stats                   { return te.stats }
 
-// LogError logs panics and increments InternalErrors.
-func LogError(env Env) {
+func (te *testEnv) LogError() {
 	if x := recover(); x != nil {
 		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
-		env.Stats().InternalErrors.Add("Panic", 1)
+		te.Stats().InternalErrors.Add("Panic", 1)
 	}
 }
