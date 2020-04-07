@@ -57,3 +57,17 @@ func TestUpdateTargetTable(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateTargetStreamExecute(t *testing.T) {
+	updateTarget := &UpdateTarget{}
+	vc := &noopVCursor{}
+	err := updateTarget.StreamExecute(vc, map[string]*querypb.BindVariable{}, false, nil)
+	require.EqualError(t, err, "use cannot be used for streaming")
+}
+
+func TestUpdateTargetGetFields(t *testing.T) {
+	updateTarget := &UpdateTarget{}
+	vc := &noopVCursor{}
+	_, err := updateTarget.GetFields(vc, map[string]*querypb.BindVariable{})
+	require.EqualError(t, err, "use cannot be used for get fields")
+}
