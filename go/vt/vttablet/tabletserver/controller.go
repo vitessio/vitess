@@ -36,7 +36,11 @@ import (
 type Controller interface {
 	// Register registers this query service with the RPC layer.
 	Register()
-	// AddStatusPart adds the status part to the status page
+
+	// AddStatusHeader adds the header part to the status page.
+	AddStatusHeader()
+
+	// AddStatusHeader adds the status part to the status page
 	AddStatusPart()
 
 	// Stats returns stats vars.
