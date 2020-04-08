@@ -1,6 +1,7 @@
 package planbuilder
 
 import (
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -8,7 +9,7 @@ import (
 var _ builder = (*vtgateExecution)(nil)
 
 type vtgateExecution struct {
-	Exprs []*sqlparser.AliasedExpr
+	Exprs []sqltypes.Expr
 }
 
 func (v *vtgateExecution) Order() int {
