@@ -469,6 +469,7 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 
 	pos, err := mysql.DecodePosition(position)
 	if err != nil {
+
 		return "", err
 	}
 
@@ -487,18 +488,21 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 	}
 
 	startTime := time.Now()
-	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
-		return "", err
-	}
-
 	_, err = topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, logutil.TimeToProto(startTime))
 	if err != nil {
 		return "", err
 	}
+
 	// We only update agent's masterTermStartTime if we were able to update the topo.
 	// This ensures that in case of a failure, we are never in a situation where the
 	// tablet's timestamp is ahead of the topo's timestamp.
 	agent.setMasterTermStartTime(startTime)
+
+	// We call SetReadOnly only after the topo has been updated to avoid
+	// situations where two tablets are master at the DB level but not at the vitess level
+	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
+		return "", err
+	}
 
 	if err := agent.refreshTablet(ctx, "PromoteSlaveWhenCaughtUp"); err != nil {
 		return "", err
@@ -745,7 +749,7 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*rep
 }
 
 // PromoteSlave makes the current tablet the master
-func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
+func (agent *ActionAgent) PromoteSlave(ctx context.Context) (replicationPosition string, finalErr error) {
 	if err := agent.lock(ctx); err != nil {
 		return "", err
 	}
@@ -763,13 +767,16 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
 
 	// Set the server read-write
 	startTime := time.Now()
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, logutil.TimeToProto(startTime)); err != nil {
+		return "", err
+	}
+
+	// We call SetReadOnly only after the topo has been updated to avoid
+	// situations where two tablets are master at the DB level but not at the vitess level
 	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
 		return "", err
 	}
 
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, logutil.TimeToProto(startTime)); err != nil {
-		return "", err
-	}
 	// We only update agent's masterTermStartTime if we were able to update the topo.
 	// This ensures that in case of a failure, we are never in a situation where the
 	// tablet's timestamp is ahead of the topo's timestamp.
