@@ -115,7 +115,12 @@ func (e *planExecute) execute(ctx context.Context, safeSession *SafeSession, sql
 	execStart := e.logPlanningFinished(logStats, sql)
 
 	if err != nil {
+		safeSession.ClearWarnings()
 		return nil, err
+	}
+
+	if plan.Type != sqlparser.StmtShow {
+		safeSession.ClearWarnings()
 	}
 
 	// We need to explicitly handle errors, and begin/commit/rollback, since these control transactions. Everything else
