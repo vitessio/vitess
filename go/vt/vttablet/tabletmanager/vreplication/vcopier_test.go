@@ -321,9 +321,6 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"3\\" > ' where vrepl_id=.*`,
 		"/delete from _vt.copy_state.*src",
 		// Copy is done. Go into running state.
-		// All tables copied. Final catch up followed by Running state.
-	})
-	expectDBClientQueries(t, []string{
 		"/update _vt.vreplication set state='Running'",
 	})
 	expectData(t, "src", [][]string{
@@ -470,10 +467,6 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 		"insert into not_copied(id,val) values (1,'bbb')",
 		`/update _vt.copy_state set lastpk='fields:<name:\\\"id\\\" type:INT32 > rows:<lengths:1 values:\\\"1\\\" > ' where vrepl_id=.*`,
 		"/delete from _vt.copy_state.*not_copied",
-	})
-	// Explicitly eat the Running state query. You can't make expectNontxQueries
-	// wait for it because it ignores _vt.vreplication events.
-	expectDBClientQueries(t, []string{
 		"/update _vt.vreplication set state='Running'",
 	})
 	expectData(t, "dst1", [][]string{
@@ -567,10 +560,6 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 		"insert into dst(id,val) values (3,'uncopied'), (4,'new')",
 		`/update _vt.copy_state set lastpk.*`,
 		"/delete from _vt.copy_state.*dst",
-	})
-	// Explicitly eat the Running state query. You can't make expectNontxQueries
-	// wait for it because it ignores _vt.vreplication events.
-	expectDBClientQueries(t, []string{
 		"/update _vt.vreplication set state='Running'",
 	})
 	expectData(t, "dst", [][]string{
