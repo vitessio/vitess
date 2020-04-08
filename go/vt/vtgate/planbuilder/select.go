@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -74,9 +76,9 @@ func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 // of the above trees to make it discard unwanted rows.
 func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) error {
 	if checkForDual(sel) && outer == nil {
-		exprs := make([]*sqlparser.AliasedExpr, len(sel.SelectExprs))
+		exprs := make([]sqltypes.Expr, len(sel.SelectExprs))
 		for i, e := range sel.SelectExprs {
-			exprs[i] = e.(*sqlparser.AliasedExpr)
+			exprs[i] = sqlparser.Convert(e.(*sqlparser.AliasedExpr).Expr)
 		}
 		pb.bldr = &vtgateExecution{
 			exprs,

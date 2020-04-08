@@ -34,6 +34,7 @@ type numeric struct {
 	ival int64
 	uval uint64
 	fval float64
+	err  error
 }
 
 var zeroBytes = []byte("0")

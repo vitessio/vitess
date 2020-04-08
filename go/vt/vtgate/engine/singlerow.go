@@ -29,22 +29,22 @@ type SingleRow struct {
 }
 
 // RouteType returns a description of the query routing type used by the primitive
-func (s SingleRow) RouteType() string {
+func (s *SingleRow) RouteType() string {
 	return ""
 }
 
 // GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (s SingleRow) GetKeyspaceName() string {
+func (s *SingleRow) GetKeyspaceName() string {
 	return ""
 }
 
 // GetTableName specifies the table that this primitive routes to.
-func (s SingleRow) GetTableName() string {
+func (s *SingleRow) GetTableName() string {
 	return ""
 }
 
 // Execute performs a non-streaming exec.
-func (s SingleRow) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (s *SingleRow) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	result := sqltypes.Result{
 		Fields:       nil,
 		RowsAffected: 0,
@@ -57,7 +57,7 @@ func (s SingleRow) Execute(vcursor VCursor, bindVars map[string]*query.BindVaria
 }
 
 // StreamExecute performs a streaming exec.
-func (s SingleRow) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
+func (s *SingleRow) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
 	result := sqltypes.Result{
 		Fields:       nil,
 		RowsAffected: 0,
@@ -70,11 +70,11 @@ func (s SingleRow) StreamExecute(vcursor VCursor, bindVars map[string]*query.Bin
 }
 
 // GetFields fetches the field info.
-func (s SingleRow) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
+func (s *SingleRow) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{}, nil
 }
 
-func (s SingleRow) description() PrimitiveDescription {
+func (s *SingleRow) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "SingleRow",
 	}

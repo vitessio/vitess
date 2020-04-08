@@ -228,14 +228,16 @@ func TestSelectLastInsertId(t *testing.T) {
 	defer QueryLogger.Unsubscribe(logChan)
 
 	sql := "select last_insert_id()"
-	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	masterSession.LastInsertId = 42
+	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	wantResult := &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(42),
+		}},
+	}
 	require.NoError(t, err)
-	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select :__lastInsertId as `last_insert_id()` from dual",
-		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(52)},
-	}}
-
-	assert.Equal(t, wantQueries, sbc1.Queries)
+	utils.MustMatch(t, result, wantResult, "Mismatch")
+	assert.Empty(t, sbc1.Queries)
 }
 
 func TestSelectUserDefindVariable(t *testing.T) {
