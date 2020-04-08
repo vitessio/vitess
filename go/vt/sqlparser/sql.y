@@ -234,7 +234,7 @@ func skipToEnd(yylex interface{}) {
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
 %type <selectExpr> select_expression
-%type <expr> expression
+%type <expr> expression naked_like
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
@@ -1779,6 +1779,14 @@ show_statement:
     showCollationFilterOpt := $4
     $$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
   }
+| SHOW COLLATION naked_like
+  {
+    // Cannot dereference $3 directly, or else the parser stackcannot be pooled. See yyParsePooled
+    cmp := $3.(*ComparisonExpr)
+    cmp.Left = &ColName{Name: NewColIdent("collation")}
+    var ex Expr = cmp
+    $$ = &Show{Type: string($2), ShowCollationFilterOpt: &ex}
+  }
 | SHOW VITESS_METADATA VARIABLES like_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $4}
@@ -1813,6 +1821,12 @@ show_statement:
 | SHOW ID ddl_skip_to_end
   {
     $$ = &Show{Type: string($2)}
+  }
+
+naked_like:
+LIKE value_expression like_escape_opt
+  {
+    $$ = &ComparisonExpr{Operator: LikeStr, Right: $2, Escape: $3}
   }
 
 tables_or_processlist:
@@ -2739,6 +2753,10 @@ function_call_keyword:
 | RIGHT openb select_expression_list closeb
   {
     $$ = &FuncExpr{Name: NewColIdent("right"), Exprs: $3}
+  }
+| SCHEMA openb closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent("schema")}
   }
 | CONVERT openb expression ',' convert_type closeb
   {

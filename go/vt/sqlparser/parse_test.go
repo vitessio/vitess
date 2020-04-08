@@ -1148,6 +1148,9 @@ var (
 		input:  "show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'",
 		output: "show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'",
 	}, {
+		input:  "show collation like 'utf8%'",
+		output: "show collation where `collation` like 'utf8%'",
+	}, {
 		input:  "show create database d",
 	}, {
 		input:  "show create schema d",
