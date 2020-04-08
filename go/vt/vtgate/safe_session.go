@@ -247,3 +247,10 @@ func (session *SafeSession) SetUserDefinedVariable(key string, value *querypb.Bi
 	}
 	session.UserDefinedVariables[key] = value
 }
+
+// SetTargetString sets the target string in the session.
+func (session *SafeSession) SetTargetString(target string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.TargetString = target
+}

@@ -26,6 +26,9 @@ import (
 	"strings"
 	"testing"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
@@ -165,6 +168,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "vindex_func_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "wireup_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "memory_sort_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "use_cases.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func TestOne(t *testing.T) {
@@ -191,6 +195,22 @@ func TestBypassPlanningFromFile(t *testing.T) {
 	testFile(t, "bypass_cases.txt", testOutputTempDir, vschema)
 }
 
+func TestDDLPlanningFromFile(t *testing.T) {
+	// We are testing this separately so we can set a default keyspace
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	require.NoError(t, err)
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json"),
+		keyspace: &vindexes.Keyspace{
+			Name:    "main",
+			Sharded: false,
+		},
+		tabletType: topodatapb.TabletType_MASTER,
+	}
+
+	testFile(t, "ddl_cases.txt", testOutputTempDir, vschema)
+}
+
 func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
 	formal, err := vindexes.LoadFormal(locateFile(filename))
 	if err != nil {
@@ -215,6 +235,22 @@ type vschemaWrapper struct {
 	keyspace   *vindexes.Keyspace
 	tabletType topodatapb.TabletType
 	dest       key.Destination
+}
+
+func (vw *vschemaWrapper) TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error) {
+	keyspaceName := vw.keyspace.Name
+	if vw.dest == nil && qualifier != "" {
+		keyspaceName = qualifier
+	}
+	if keyspaceName == "" {
+		return nil, nil, 0, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace not specified")
+	}
+	keyspace := vw.v.Keyspaces[keyspaceName]
+	if keyspace == nil {
+		return nil, nil, 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no keyspace with name [%s] found", keyspaceName)
+	}
+	return vw.dest, keyspace.Keyspace, vw.tabletType, nil
+
 }
 
 func (vw *vschemaWrapper) TabletType() topodatapb.TabletType {
@@ -269,7 +305,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 
 				if out != tcase.output {
 					fail = true
-					t.Errorf("File: %s, Line: %v\n %s\n%s", filename, tcase.lineno, cmp.Diff(tcase.output, out), out)
+					t.Errorf("File: %s, Line: %v\n %s \n%s", filename, tcase.lineno, cmp.Diff(tcase.output, out), out)
 				}
 
 				if err != nil {

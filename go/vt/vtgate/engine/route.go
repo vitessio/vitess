@@ -88,6 +88,9 @@ type Route struct {
 
 	// Route does not take inputs
 	noInputs
+
+	// Route does not need transaction handling
+	noTxNeeded
 }
 
 // NewSimpleRoute creates a Route with the bare minimum of parameters.

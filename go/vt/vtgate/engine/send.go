@@ -1,3 +1,19 @@
+/*
+Copyright 2020 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package engine
 
 import (
@@ -26,10 +42,15 @@ type Send struct {
 	// Query specifies the query to be executed.
 	Query string
 
-	// NoAutoCommit specifies if we need to check autocommit behaviour
-	NoAutoCommit bool
+	// IsDML specifies how to deal with autocommit behaviour
+	IsDML bool
 
 	noInputs
+}
+
+//NeedsTransaction implements the Primitive interface
+func (s *Send) NeedsTransaction() bool {
+	return s.IsDML
 }
 
 // MarshalJSON serializes the Send into a JSON representation.
@@ -40,12 +61,12 @@ func (s *Send) MarshalJSON() ([]byte, error) {
 		Keyspace          *vindexes.Keyspace
 		TargetDestination key.Destination
 		Query             string
-		NoAutoCommit      bool
+		IsDML             bool
 	}{
 		Opcode:            "Send",
 		Keyspace:          s.Keyspace,
 		TargetDestination: s.TargetDestination,
-		NoAutoCommit:      s.NoAutoCommit,
+		IsDML:             s.IsDML,
 		Query:             s.Query,
 	}
 
@@ -54,8 +75,8 @@ func (s *Send) MarshalJSON() ([]byte, error) {
 
 // RouteType implements Primitive interface
 func (s *Send) RouteType() string {
-	if s.NoAutoCommit {
-		return "SendNoAutoCommit"
+	if s.IsDML {
+		return "SendDML"
 	}
 
 	return "Send"
@@ -91,11 +112,11 @@ func (s *Send) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable,
 	}
 
 	canAutocommit := false
-	if !s.NoAutoCommit {
+	if s.IsDML {
 		canAutocommit = len(rss) == 1 && vcursor.AutocommitApproval()
 	}
 
-	rollbackOnError := !s.NoAutoCommit // for non-dml queries, there's no need to do a rollback
+	rollbackOnError := s.IsDML // for non-dml queries, there's no need to do a rollback
 	result, errs := vcursor.ExecuteMultiShard(rss, queries, rollbackOnError, canAutocommit)
 	err = vterrors.Aggregate(errs)
 	if err != nil {
@@ -116,9 +137,9 @@ func (s *Send) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariabl
 
 func (s *Send) description() PrimitiveDescription {
 	other := map[string]interface{}{
-		"Query":        s.Query,
-		"Table":        s.GetTableName(),
-		"NoAutoCommit": s.NoAutoCommit,
+		"Query": s.Query,
+		"Table": s.GetTableName(),
+		"IsDML": s.IsDML,
 	}
 	return PrimitiveDescription{
 		OperatorType:      "Send",

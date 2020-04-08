@@ -1,6 +1,7 @@
 # HAVING implicitly references table col
 "select user.col1 from user having col2 = 2"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col1 from user having col2 = 2",
   "Instructions": {
     "OperatorType": "Route",
@@ -22,6 +23,7 @@
 # non-ambiguous symbol reference
 "select user.col1, user_extra.col1 from user join user_extra having user_extra.col1 = 2"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col1, user_extra.col1 from user join user_extra having user_extra.col1 = 2",
   "Instructions": {
     "OperatorType": "Join",
@@ -58,6 +60,7 @@
 # HAVING multi-route
 "select user.col1 as a, user.col2, user_extra.col3 from user join user_extra having 1 = 1 and a = 1 and a = user.col2 and user_extra.col3 = 1"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col1 as a, user.col2, user_extra.col3 from user join user_extra having 1 = 1 and a = 1 and a = user.col2 and user_extra.col3 = 1",
   "Instructions": {
     "OperatorType": "Join",
@@ -94,6 +97,7 @@
 # HAVING uses subquery
 "select id from user having id in (select col from user)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user having id in (select col from user)",
   "Instructions": {
     "OperatorType": "Subquery",
@@ -132,6 +136,7 @@
 # ORDER BY, reference col from local table.
 "select col from user where id = 5 order by aa"
 {
+  "QueryType": "SELECT",
   "Original": "select col from user where id = 5 order by aa",
   "Instructions": {
     "OperatorType": "Route",
@@ -153,6 +158,7 @@
 # ORDER BY uses column numbers
 "select col from user where id = 1 order by 1"
 {
+  "QueryType": "SELECT",
   "Original": "select col from user where id = 1 order by 1",
   "Instructions": {
     "OperatorType": "Route",
@@ -174,6 +180,7 @@
 # ORDER BY on scatter
 "select col from user order by col"
 {
+  "QueryType": "SELECT",
   "Original": "select col from user order by col",
   "Instructions": {
     "OperatorType": "Route",
@@ -191,6 +198,7 @@
 # ORDER BY works for select * from authoritative table
 "select * from authoritative order by user_id"
 {
+  "QueryType": "SELECT",
   "Original": "select * from authoritative order by user_id",
   "Instructions": {
     "OperatorType": "Route",
@@ -208,6 +216,7 @@
 # ORDER BY works for select * from authoritative table
 "select * from authoritative order by col1"
 {
+  "QueryType": "SELECT",
   "Original": "select * from authoritative order by col1",
   "Instructions": {
     "OperatorType": "Route",
@@ -225,6 +234,7 @@
 # ORDER BY on scatter with text column
 "select a, textcol1, b from user order by a, textcol1, b"
 {
+  "QueryType": "SELECT",
   "Original": "select a, textcol1, b from user order by a, textcol1, b",
   "Instructions": {
     "OperatorType": "Route",
@@ -242,6 +252,7 @@
 # ORDER BY on scatter with text column, qualified name
 "select a, user.textcol1, b from user order by a, textcol1, b"
 {
+  "QueryType": "SELECT",
   "Original": "select a, user.textcol1, b from user order by a, textcol1, b",
   "Instructions": {
     "OperatorType": "Route",
@@ -259,6 +270,7 @@
 # ORDER BY on scatter with multiple text columns
 "select a, textcol1, b, textcol2 from user order by a, textcol1, b, textcol2"
 {
+  "QueryType": "SELECT",
   "Original": "select a, textcol1, b, textcol2 from user order by a, textcol1, b, textcol2",
   "Instructions": {
     "OperatorType": "Route",
@@ -280,6 +292,7 @@
 # ORDER BY NULL
 "select col from user order by null"
 {
+  "QueryType": "SELECT",
   "Original": "select col from user order by null",
   "Instructions": {
     "OperatorType": "Route",
@@ -297,6 +310,7 @@
 # ORDER BY after pull-out subquery
 "select col from user where col in (select col2 from user) order by col"
 {
+  "QueryType": "SELECT",
   "Original": "select col from user where col in (select col2 from user) order by col",
   "Instructions": {
     "OperatorType": "Subquery",
@@ -331,6 +345,7 @@
 # ORDER BY NULL for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null",
   "Instructions": {
     "OperatorType": "Join",
@@ -375,6 +390,7 @@
 # ORDER BY non-key column for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by a"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by a",
   "Instructions": {
     "OperatorType": "Join",
@@ -419,6 +435,7 @@
 # ORDER BY non-key column for implicit join
 "select user.col1 as a, user.col2, music.col3 from user, music where user.id = music.id and user.id = 1 order by a"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col1 as a, user.col2, music.col3 from user, music where user.id = music.id and user.id = 1 order by a",
   "Instructions": {
     "OperatorType": "Join",
@@ -463,6 +480,7 @@
 # ORDER BY NULL after pull-out subquery
 "select col from user where col in (select col2 from user) order by null"
 {
+  "QueryType": "SELECT",
   "Original": "select col from user where col in (select col2 from user) order by null",
   "Instructions": {
     "OperatorType": "Subquery",
@@ -497,6 +515,7 @@
 # ORDER BY RAND()
 "select col from user order by RAND()"
 {
+  "QueryType": "SELECT",
   "Original": "select col from user order by RAND()",
   "Instructions": {
     "OperatorType": "Route",
@@ -514,6 +533,7 @@
 # ORDER BY RAND() for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()",
   "Instructions": {
     "OperatorType": "Join",
@@ -558,6 +578,7 @@
 # ORDER BY RAND() after pull-out subquery
 "select col from user where col in (select col2 from user) order by rand()"
 {
+  "QueryType": "SELECT",
   "Original": "select col from user where col in (select col2 from user) order by rand()",
   "Instructions": {
     "OperatorType": "Subquery",
@@ -592,6 +613,7 @@
 # Order by, '*' expression
 "select * from user where id = 5 order by col"
 {
+  "QueryType": "SELECT",
   "Original": "select * from user where id = 5 order by col",
   "Instructions": {
     "OperatorType": "Route",
@@ -613,6 +635,7 @@
 # Order by, qualified '*' expression
 "select user.* from user where id = 5 order by user.col"
 {
+  "QueryType": "SELECT",
   "Original": "select user.* from user where id = 5 order by user.col",
   "Instructions": {
     "OperatorType": "Route",
@@ -634,6 +657,7 @@
 # Order by, '*' expression with qualified reference
 "select * from user where id = 5 order by user.col"
 {
+  "QueryType": "SELECT",
   "Original": "select * from user where id = 5 order by user.col",
   "Instructions": {
     "OperatorType": "Route",
@@ -655,6 +679,7 @@
 # Order by, '*' expression in a subquery
 "select u.id, e.id from user u join user_extra e where u.col = e.col and u.col in (select * from user where user.id = u.id order by col)"
 {
+  "QueryType": "SELECT",
   "Original": "select u.id, e.id from user u join user_extra e where u.col = e.col and u.col in (select * from user where user.id = u.id order by col)",
   "Instructions": {
     "OperatorType": "Join",
@@ -707,6 +732,7 @@
 # Order by, '*' expression with qualified reference and using collate
 "select * from user where id = 5 order by user.col collate utf8_general_ci"
 {
+  "QueryType": "SELECT",
   "Original": "select * from user where id = 5 order by user.col collate utf8_general_ci",
   "Instructions": {
     "OperatorType": "Route",
@@ -728,6 +754,7 @@
 #Order by with math functions
 "select * from user where id = 5 order by -col1"
 {
+  "QueryType": "SELECT",
   "Original": "select * from user where id = 5 order by -col1",
   "Instructions": {
     "OperatorType": "Route",
@@ -749,6 +776,7 @@
 #Order by with string operations
 "select * from user where id = 5 order by concat(col,col1) collate utf8_general_ci desc"
 {
+  "QueryType": "SELECT",
   "Original": "select * from user where id = 5 order by concat(col,col1) collate utf8_general_ci desc",
   "Instructions": {
     "OperatorType": "Route",
@@ -770,6 +798,7 @@
 #Order by with math operations
 "select * from user where id = 5 order by id+col collate utf8_general_ci desc"
 {
+  "QueryType": "SELECT",
   "Original": "select * from user where id = 5 order by id+col collate utf8_general_ci desc",
   "Instructions": {
     "OperatorType": "Route",
@@ -791,6 +820,7 @@
 #Order by subquery column
 "select * from user u join (select user_id from user_extra where user_id = 5) eu on u.id = eu.user_id where u.id = 5 order by eu.user_id"
 {
+  "QueryType": "SELECT",
   "Original": "select * from user u join (select user_id from user_extra where user_id = 5) eu on u.id = eu.user_id where u.id = 5 order by eu.user_id",
   "Instructions": {
     "OperatorType": "Route",
@@ -812,6 +842,7 @@
 # routing rules: order by test pushed to all options. table 1 is chosen.
 "select col from route1 where id = 1 order by col"
 {
+  "QueryType": "SELECT",
   "Original": "select col from route1 where id = 1 order by col",
   "Instructions": {
     "OperatorType": "Route",
@@ -833,6 +864,7 @@
 # routing rules: order by test pushed to all options. table 2 is chosen.
 "select col from route1 where email = 'aaa' order by col"
 {
+  "QueryType": "SELECT",
   "Original": "select col from route1 where email = 'aaa' order by col",
   "Instructions": {
     "OperatorType": "Route",
@@ -854,6 +886,7 @@
 # LIMIT
 "select col1 from user where id = 1 limit 1"
 {
+  "QueryType": "SELECT",
   "Original": "select col1 from user where id = 1 limit 1",
   "Instructions": {
     "OperatorType": "Route",
@@ -876,6 +909,7 @@
 # counts get multiplied by join operations.
 "select user.col from user join user_extra limit 1"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col from user join user_extra limit 1",
   "Instructions": {
     "OperatorType": "Limit",
@@ -919,6 +953,7 @@
 # limit for scatter
 "select col from user limit 1"
 {
+  "QueryType": "SELECT",
   "Original": "select col from user limit 1",
   "Instructions": {
     "OperatorType": "Limit",
@@ -943,6 +978,7 @@
 # limit for scatter with bind var
 "select col from user limit :a"
 {
+  "QueryType": "SELECT",
   "Original": "select col from user limit :a",
   "Instructions": {
     "OperatorType": "Limit",
@@ -967,6 +1003,7 @@
 # cross-shard expression in parenthesis with limit
 "select * from user where (id1 = 4 AND name1 ='abc') limit 5"
 {
+  "QueryType": "SELECT",
   "Original": "select * from user where (id1 = 4 AND name1 ='abc') limit 5",
   "Instructions": {
     "OperatorType": "Limit",
@@ -991,6 +1028,7 @@
 # scatter limit after pullout subquery
 "select col from user where col in (select col1 from user) limit 1"
 {
+  "QueryType": "SELECT",
   "Original": "select col from user where col in (select col1 from user) limit 1",
   "Instructions": {
     "OperatorType": "Limit",
@@ -1032,6 +1070,7 @@
 # limit on reference table
 "select col from ref limit 1"
 {
+  "QueryType": "SELECT",
   "Original": "select col from ref limit 1",
   "Instructions": {
     "OperatorType": "Route",

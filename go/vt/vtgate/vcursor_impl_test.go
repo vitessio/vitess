@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"vitess.io/vitess/go/vt/proto/vschema"
+
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -12,6 +14,24 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
+
+var _ VSchemaOperator = (*fakeVSchemaOperator)(nil)
+
+type fakeVSchemaOperator struct {
+	vschema *vindexes.VSchema
+}
+
+func (f fakeVSchemaOperator) GetCurrentSrvVschema() *vschema.SrvVSchema {
+	panic("implement me")
+}
+
+func (f fakeVSchemaOperator) GetCurrentVschema() (*vindexes.VSchema, error) {
+	return f.vschema, nil
+}
+
+func (f fakeVSchemaOperator) UpdateVSchema(ctx context.Context, ksName string, vschema *vschema.SrvVSchema) error {
+	panic("implement me")
+}
 
 func TestDestinationKeyspace(t *testing.T) {
 	ks1 := &vindexes.Keyspace{
@@ -118,7 +138,8 @@ func TestDestinationKeyspace(t *testing.T) {
 	}}
 
 	for _, tc := range tests {
-		impl, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString}), sqlparser.MarginComments{}, nil, nil, tc.vschema, nil)
+		impl, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString}), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, nil)
+		impl.vschema = tc.vschema
 		dest, keyspace, tabletType, err := impl.TargetDestination(tc.qualifier)
 		if tc.expectedError == "" {
 			require.NoError(t, err)

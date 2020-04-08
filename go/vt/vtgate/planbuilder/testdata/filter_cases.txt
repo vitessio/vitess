@@ -1,6 +1,7 @@
 # No where clause
 "select id from user"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user",
   "Instructions": {
     "OperatorType": "Route",
@@ -18,6 +19,7 @@
 # Single table unique vindex route
 "select id from user where user.id = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where user.id = 5",
   "Instructions": {
     "OperatorType": "Route",
@@ -39,6 +41,7 @@
 # Single table unique vindex route, but complex expr
 "select id from user where user.id = 5+5"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where user.id = 5+5",
   "Instructions": {
     "OperatorType": "Route",
@@ -56,6 +59,7 @@
 # Single table multiple unique vindex match
 "select id from music where id = 5 and user_id = 4"
 {
+  "QueryType": "SELECT",
   "Original": "select id from music where id = 5 and user_id = 4",
   "Instructions": {
     "OperatorType": "Route",
@@ -77,6 +81,7 @@
 # Single table multiple non-unique vindex match
 "select id from user where costly = 'aa' and name = 'bb'"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where costly = 'aa' and name = 'bb'",
   "Instructions": {
     "OperatorType": "Route",
@@ -98,6 +103,7 @@
 # Single table multiple non-unique vindex match for IN clause
 "select id from user where costly in ('aa', 'bb') and name in ('aa', 'bb')"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where costly in ('aa', 'bb') and name in ('aa', 'bb')",
   "Instructions": {
     "OperatorType": "Route",
@@ -122,6 +128,7 @@
 # Single table complex in clause
 "select id from user where name in (col, 'bb')"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where name in (col, 'bb')",
   "Instructions": {
     "OperatorType": "Route",
@@ -139,6 +146,7 @@
 # Single table equality route with val arg
 "select id from user where name = :a"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where name = :a",
   "Instructions": {
     "OperatorType": "Route",
@@ -160,6 +168,7 @@
 # Single table equality route with unsigned value
 "select id from user where name = 18446744073709551615"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where name = 18446744073709551615",
   "Instructions": {
     "OperatorType": "Route",
@@ -181,6 +190,7 @@
 # Single table in clause list arg
 "select id from user where name in ::list"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where name in ::list",
   "Instructions": {
     "OperatorType": "Route",
@@ -202,6 +212,7 @@
 # Multi-table unique vindex constraint
 "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5",
   "Instructions": {
     "OperatorType": "Route",
@@ -223,6 +234,7 @@
 # Multi-table unique vindex constraint on right table
 "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
   "Instructions": {
     "OperatorType": "Route",
@@ -244,6 +256,7 @@
 # Multi-table unique vindex constraint on left table of left join
 "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user.id = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user.id = 5",
   "Instructions": {
     "OperatorType": "Route",
@@ -265,6 +278,7 @@
 # Multi-table unique vindex constraint on left-joined right table
 "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
   "Instructions": {
     "OperatorType": "Route",
@@ -286,6 +300,7 @@
 # Multi-route unique vindex constraint
 "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5",
   "Instructions": {
     "OperatorType": "Join",
@@ -326,6 +341,7 @@
 # Multi-route unique vindex route on both routes
 "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5 and user_extra.user_id = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5 and user_extra.user_id = 5",
   "Instructions": {
     "OperatorType": "Join",
@@ -370,6 +386,7 @@
 # Multi-route with cross-route constraint
 "select user_extra.id from user join user_extra on user.col = user_extra.col where user_extra.user_id = user.col"
 {
+  "QueryType": "SELECT",
   "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user_extra.user_id = user.col",
   "Instructions": {
     "OperatorType": "Join",
@@ -410,6 +427,7 @@
 # Multi-route with non-route constraint, should use first route.
 "select user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1"
 {
+  "QueryType": "SELECT",
   "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1",
   "Instructions": {
     "OperatorType": "Join",
@@ -446,6 +464,7 @@
 # Route with multiple route constraints, SelectIN is the best constraint.
 "select id from user where user.col = 5 and user.id in (1, 2)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where user.col = 5 and user.id in (1, 2)",
   "Instructions": {
     "OperatorType": "Route",
@@ -470,6 +489,7 @@
 # Route with multiple route constraints and boolean, SelectIN is the best constraint.
 "select id from user where user.col = case user.col when 'foo' then true else false end and user.id in (1, 2)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where user.col = case user.col when 'foo' then true else false end and user.id in (1, 2)",
   "Instructions": {
     "OperatorType": "Route",
@@ -494,6 +514,7 @@
 # Route with multiple route constraints and boolean, SelectEqual is the best constraint.
 "select (id or col) as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'"
 {
+  "QueryType": "SELECT",
   "Original": "select (id or col) as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
   "Instructions": {
     "OperatorType": "Route",
@@ -515,6 +536,7 @@
 # Route with multiple route constraints, SelectEqual is the best constraint.
 "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'",
   "Instructions": {
     "OperatorType": "Route",
@@ -536,6 +558,7 @@
 # Route with multiple route constraints, SelectEqualUnique is the best constraint.
 "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1",
   "Instructions": {
     "OperatorType": "Route",
@@ -557,6 +580,7 @@
 # Route with multiple route constraints, SelectEqualUnique is the best constraint, order reversed.
 "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5",
   "Instructions": {
     "OperatorType": "Route",
@@ -578,6 +602,7 @@
 # Route with OR and AND clause, must parenthesize correctly.
 "select id from user where user.id = 1 or user.name = 'aa' and user.id in (1, 2)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where user.id = 1 or user.name = 'aa' and user.id in (1, 2)",
   "Instructions": {
     "OperatorType": "Route",
@@ -595,6 +620,7 @@
 # Unsharded route
 "select unsharded.id from user join unsharded where unsharded.id = user.id"
 {
+  "QueryType": "SELECT",
   "Original": "select unsharded.id from user join unsharded where unsharded.id = user.id",
   "Instructions": {
     "OperatorType": "Join",
@@ -631,6 +657,7 @@
 # routing rules: choose first table due to better plan
 "select col from route1 where id = 1"
 {
+  "QueryType": "SELECT",
   "Original": "select col from route1 where id = 1",
   "Instructions": {
     "OperatorType": "Route",
@@ -652,6 +679,7 @@
 # routing rules: choose second table due to better plan
 "select col from route1 where email = 'aaa'"
 {
+  "QueryType": "SELECT",
   "Original": "select col from route1 where email = 'aaa'",
   "Instructions": {
     "OperatorType": "Route",
@@ -673,6 +701,7 @@
 # subquery of information_schema with itself
 "select * from information_schema.a where id in (select * from information_schema.b)"
 {
+  "QueryType": "SELECT",
   "Original": "select * from information_schema.a where id in (select * from information_schema.b)",
   "Instructions": {
     "OperatorType": "Route",
@@ -689,6 +718,7 @@
 # subquery
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col) and u.id in (user_extra.col, 1)"
 {
+  "QueryType": "SELECT",
   "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col) and u.id in (user_extra.col, 1)",
   "Instructions": {
     "OperatorType": "Join",
@@ -732,6 +762,7 @@
 # ensure subquery reordering gets us a better plan
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = 5) and u.id = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = 5) and u.id = 5",
   "Instructions": {
     "OperatorType": "Join",
@@ -772,6 +803,7 @@
 # nested subquery
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in (user_extra.col, 1)"
 {
+  "QueryType": "SELECT",
   "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in (user_extra.col, 1)",
   "Instructions": {
     "OperatorType": "Join",
@@ -815,6 +847,7 @@
 # Correlated subquery in where clause
 "select id from user where user.col in (select user_extra.col from user_extra where user_extra.user_id = user.id)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where user.col in (select user_extra.col from user_extra where user_extra.user_id = user.id)",
   "Instructions": {
     "OperatorType": "Route",
@@ -832,6 +865,7 @@
 # outer and inner subquery route by same int val
 "select id from user where id = 5 and user.col in (select user_extra.col from user_extra where user_extra.user_id = 5)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where id = 5 and user.col in (select user_extra.col from user_extra where user_extra.user_id = 5)",
   "Instructions": {
     "OperatorType": "Route",
@@ -853,6 +887,7 @@
 # outer and inner subquery route by same str val
 "select id from user where id = 'aa' and user.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where id = 'aa' and user.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')",
   "Instructions": {
     "OperatorType": "Route",
@@ -874,6 +909,7 @@
 # outer and inner subquery route by same val arg
 "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)",
   "Instructions": {
     "OperatorType": "Route",
@@ -899,6 +935,7 @@
 # outer and inner subquery route by same outermost column value
 "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))"
 {
+  "QueryType": "SELECT",
   "Original": "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))",
   "Instructions": {
     "OperatorType": "Route",
@@ -917,6 +954,7 @@
 # Note the improved Underlying plan as SelectIN.
 "select id from user where id in (select col from user)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where id in (select col from user)",
   "Instructions": {
     "OperatorType": "Subquery",
@@ -955,6 +993,7 @@
 # cross-shard subquery in NOT IN clause.
 "select id from user where id not in (select col from user)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where id not in (select col from user)",
   "Instructions": {
     "OperatorType": "Subquery",
@@ -989,6 +1028,7 @@
 # cross-shard subquery in EXISTS clause.
 "select id from user where exists (select col from user)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where exists (select col from user)",
   "Instructions": {
     "OperatorType": "Subquery",
@@ -1023,6 +1063,7 @@
 # cross-shard subquery as expression
 "select id from user where id = (select col from user)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where id = (select col from user)",
   "Instructions": {
     "OperatorType": "Subquery",
@@ -1061,6 +1102,7 @@
 # multi-level pullout
 "select id1 from user where id = (select id2 from user where id2 in (select id3 from user))"
 {
+  "QueryType": "SELECT",
   "Original": "select id1 from user where id = (select id2 from user where id2 in (select id3 from user))",
   "Instructions": {
     "OperatorType": "Subquery",
@@ -1116,6 +1158,7 @@
 # routing rules subquery merge
 "select col from user where id = (select id from route2 where route2.id = user.id)"
 {
+  "QueryType": "SELECT",
   "Original": "select col from user where id = (select id from route2 where route2.id = user.id)",
   "Instructions": {
     "OperatorType": "Route",
@@ -1133,6 +1176,7 @@
 # routing rules subquery pullout
 "select col from user where id = (select id from route2)"
 {
+  "QueryType": "SELECT",
   "Original": "select col from user where id = (select id from route2)",
   "Instructions": {
     "OperatorType": "Subquery",
@@ -1171,6 +1215,7 @@
 # Case preservation test
 "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5",
   "Instructions": {
     "OperatorType": "Route",
@@ -1192,6 +1237,7 @@
 # database() call in where clause.
 "select id from user where database()"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where database()",
   "Instructions": {
     "OperatorType": "Route",

@@ -40,6 +40,6 @@ func buildPlanForBypass(stmt sqlparser.Statement, vschema ContextVSchema) (engin
 		Keyspace:          keyspace,
 		TargetDestination: vschema.Destination(),
 		Query:             sqlparser.String(stmt),
-		NoAutoCommit:      !sqlparser.IsDMLStatement(stmt),
+		IsDML:             sqlparser.IsDMLStatement(stmt),
 	}, nil
 }

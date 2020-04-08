@@ -1,6 +1,7 @@
 # Single table sharded scatter
 "select col from user"
 {
+  "QueryType": "SELECT",
   "Original": "select col from user",
   "Instructions": {
     "OperatorType": "Route",
@@ -18,6 +19,7 @@
 # Single table unsharded
 "select col from unsharded"
 {
+  "QueryType": "SELECT",
   "Original": "select col from unsharded",
   "Instructions": {
     "OperatorType": "Route",
@@ -35,6 +37,7 @@
 # Select from sequence
 "select next 2 values from seq"
 {
+  "QueryType": "SELECT",
   "Original": "select next 2 values from seq",
   "Instructions": {
     "OperatorType": "Route",
@@ -52,6 +55,7 @@
 # Select from reference
 "select * from ref"
 {
+  "QueryType": "SELECT",
   "Original": "select * from ref",
   "Instructions": {
     "OperatorType": "Route",
@@ -69,6 +73,7 @@
 # Single information_schema query
 "select col from information_schema.foo"
 {
+  "QueryType": "SELECT",
   "Original": "select col from information_schema.foo",
   "Instructions": {
     "OperatorType": "Route",
@@ -85,6 +90,7 @@
 # Multi-table unsharded
 "select m1.col from unsharded as m1 join unsharded as m2"
 {
+  "QueryType": "SELECT",
   "Original": "select m1.col from unsharded as m1 join unsharded as m2",
   "Instructions": {
     "OperatorType": "Route",
@@ -102,6 +108,7 @@
 # Multi-table, multi-chunk
 "select music.col from user join music"
 {
+  "QueryType": "SELECT",
   "Original": "select music.col from user join music",
   "Instructions": {
     "OperatorType": "Join",
@@ -138,6 +145,7 @@
 # routing rules where table name matches, and there's no alias.
 "select * from second_user.user"
 {
+  "QueryType": "SELECT",
   "Original": "select * from second_user.user",
   "Instructions": {
     "OperatorType": "Route",
@@ -155,6 +163,7 @@
 # routing rules where table name matches, and there's an alias.
 "select * from second_user.user as a"
 {
+  "QueryType": "SELECT",
   "Original": "select * from second_user.user as a",
   "Instructions": {
     "OperatorType": "Route",
@@ -172,6 +181,7 @@
 # routing rules where table name does not match, and there's no alias.
 "select * from route1"
 {
+  "QueryType": "SELECT",
   "Original": "select * from route1",
   "Instructions": {
     "OperatorType": "Route",
@@ -189,6 +199,7 @@
 # routing rules where table name does not match, and there's an alias.
 "select * from route1 as a"
 {
+  "QueryType": "SELECT",
   "Original": "select * from route1 as a",
   "Instructions": {
     "OperatorType": "Route",
@@ -206,6 +217,7 @@
 # routing rules with master targeting
 "select * from master_redirect"
 {
+  "QueryType": "SELECT",
   "Original": "select * from master_redirect",
   "Instructions": {
     "OperatorType": "Route",
@@ -231,6 +243,7 @@
 # ',' join
 "select music.col from user, music"
 {
+  "QueryType": "SELECT",
   "Original": "select music.col from user, music",
   "Instructions": {
     "OperatorType": "Join",
@@ -267,6 +280,7 @@
 # ',' join unsharded
 "select u1.a, u2.a from unsharded u1, unsharded u2"
 {
+  "QueryType": "SELECT",
   "Original": "select u1.a, u2.a from unsharded u1, unsharded u2",
   "Instructions": {
     "OperatorType": "Route",
@@ -284,6 +298,7 @@
 # ',' join information_schema
 "select * from information_schema.a, information_schema.b"
 {
+  "QueryType": "SELECT",
   "Original": "select * from information_schema.a, information_schema.b",
   "Instructions": {
     "OperatorType": "Route",
@@ -300,6 +315,7 @@
 # ',' 3-way join unsharded
 "select u1.a, u2.a from unsharded u1, unsharded u2, unsharded u3"
 {
+  "QueryType": "SELECT",
   "Original": "select u1.a, u2.a from unsharded u1, unsharded u2, unsharded u3",
   "Instructions": {
     "OperatorType": "Route",
@@ -317,6 +333,7 @@
 # Left join, single chunk
 "select m1.col from unsharded as m1 left join unsharded as m2 on m1.a=m2.b"
 {
+  "QueryType": "SELECT",
   "Original": "select m1.col from unsharded as m1 left join unsharded as m2 on m1.a=m2.b",
   "Instructions": {
     "OperatorType": "Route",
@@ -334,6 +351,7 @@
 # Left join, multi-chunk
 "select u.col from user u left join unsharded m on u.a = m.b"
 {
+  "QueryType": "SELECT",
   "Original": "select u.col from user u left join unsharded m on u.a = m.b",
   "Instructions": {
     "OperatorType": "Join",
@@ -370,6 +388,7 @@
 # Three-way left join
 "select user.col from user left join unsharded as m1 on user.col = m1.co left join unsharded as m2 on m1.col = m2.col"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col from user left join unsharded as m1 on user.col = m1.co left join unsharded as m2 on m1.col = m2.col",
   "Instructions": {
     "OperatorType": "Join",
@@ -425,6 +444,7 @@
 # Three-way left join, right-associated
 "select user.col from user left join user_extra as e left join unsharded as m1 on m1.col = e.col on user.col = e.col"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col from user left join user_extra as e left join unsharded as m1 on m1.col = e.col on user.col = e.col",
   "Instructions": {
     "OperatorType": "Join",
@@ -479,6 +499,7 @@
 # Right join
 "select m1.col from unsharded as m1 right join unsharded as m2 on m1.a=m2.b"
 {
+  "QueryType": "SELECT",
   "Original": "select m1.col from unsharded as m1 right join unsharded as m2 on m1.a=m2.b",
   "Instructions": {
     "OperatorType": "Route",
@@ -496,6 +517,7 @@
 # Right join with a join LHS
 "select m1.col from unsharded as m1 join unsharded as m2 right join unsharded as m3 on m1.a=m2.b"
 {
+  "QueryType": "SELECT",
   "Original": "select m1.col from unsharded as m1 join unsharded as m2 right join unsharded as m3 on m1.a=m2.b",
   "Instructions": {
     "OperatorType": "Route",
@@ -513,6 +535,7 @@
 # Straight-join
 "select m1.col from unsharded as m1 straight_join unsharded as m2"
 {
+  "QueryType": "SELECT",
   "Original": "select m1.col from unsharded as m1 straight_join unsharded as m2",
   "Instructions": {
     "OperatorType": "Route",
@@ -530,6 +553,7 @@
 # Three-way join
 "select user.col from user join unsharded as m1 join unsharded as m2"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col from user join unsharded as m1 join unsharded as m2",
   "Instructions": {
     "OperatorType": "Join",
@@ -585,6 +609,7 @@
 # Parenthesized, single chunk
 "select user.col from user join (unsharded as m1 join unsharded as m2)"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col from user join (unsharded as m1 join unsharded as m2)",
   "Instructions": {
     "OperatorType": "Join",
@@ -621,6 +646,7 @@
 # Parenthesized, multi-chunk
 "select user.col from user join (user as u1 join unsharded)"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col from user join (user as u1 join unsharded)",
   "Instructions": {
     "OperatorType": "Join",
@@ -675,6 +701,7 @@
 # index hints, make sure they are not stripped.
 "select user.col from user use index(a)"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col from user use index(a)",
   "Instructions": {
     "OperatorType": "Route",
@@ -692,6 +719,7 @@
 # mergeable sharded join on unique vindex
 "select user.col from user join user_extra on user.id = user_extra.user_id"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col from user join user_extra on user.id = user_extra.user_id",
   "Instructions": {
     "OperatorType": "Route",
@@ -709,6 +737,7 @@
 # mergeable sharded join on unique vindex (parenthesized ON clause)
 "select user.col from user join user_extra on (user.id = user_extra.user_id)"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col from user join user_extra on (user.id = user_extra.user_id)",
   "Instructions": {
     "OperatorType": "Route",
@@ -726,6 +755,7 @@
 # mergeable sharded join on unique vindex, with a stray condition
 "select user.col from user join user_extra on user.col between 1 and 2 and user.id = user_extra.user_id"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col from user join user_extra on user.col between 1 and 2 and user.id = user_extra.user_id",
   "Instructions": {
     "OperatorType": "Route",
@@ -743,6 +773,7 @@
 # mergeable sharded join on unique vindex, swapped operands
 "select user.col from user join user_extra on user_extra.user_id = user.id"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col from user join user_extra on user_extra.user_id = user.id",
   "Instructions": {
     "OperatorType": "Route",
@@ -760,6 +791,7 @@
 # mergeable sharded join on unique vindex, and condition
 "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id",
   "Instructions": {
     "OperatorType": "Route",
@@ -781,6 +813,7 @@
 # sharded join on unique vindex, inequality
 "select user.col from user join user_extra on user.id < user_extra.user_id"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col from user join user_extra on user.id \u003c user_extra.user_id",
   "Instructions": {
     "OperatorType": "Join",
@@ -817,6 +850,7 @@
 # sharded join, non-col reference RHS
 "select user.col from user join user_extra on user.id = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col from user join user_extra on user.id = 5",
   "Instructions": {
     "OperatorType": "Join",
@@ -857,6 +891,7 @@
 # sharded join, non-col reference LHS
 "select user.col from user join user_extra on 5 = user.id"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col from user join user_extra on 5 = user.id",
   "Instructions": {
     "OperatorType": "Join",
@@ -897,6 +932,7 @@
 # sharded join, non-vindex col
 "select user.col from user join user_extra on user.id = user_extra.col"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col from user join user_extra on user.id = user_extra.col",
   "Instructions": {
     "OperatorType": "Join",
@@ -933,6 +969,7 @@
 # sharded join, non-unique vindex
 "select user.col from user_extra join user on user_extra.user_id = user.name"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col from user_extra join user on user_extra.user_id = user.name",
   "Instructions": {
     "OperatorType": "Join",
@@ -973,6 +1010,7 @@
 # join with reference table
 "select user.col from user join ref"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col from user join ref",
   "Instructions": {
     "OperatorType": "Route",
@@ -990,6 +1028,7 @@
 # reference table self-join
 "select r1.col from ref r1 join ref"
 {
+  "QueryType": "SELECT",
   "Original": "select r1.col from ref r1 join ref",
   "Instructions": {
     "OperatorType": "Route",
@@ -1007,6 +1046,7 @@
 # reference table can merge with other opcodes left to right.
 "select ref.col from ref join user"
 {
+  "QueryType": "SELECT",
   "Original": "select ref.col from ref join user",
   "Instructions": {
     "OperatorType": "Route",
@@ -1024,6 +1064,7 @@
 # routing rules for join, merged route wins
 "select route2.col from route2 join user_extra on route2.id = user_extra.user_id"
 {
+  "QueryType": "SELECT",
   "Original": "select route2.col from route2 join user_extra on route2.id = user_extra.user_id",
   "Instructions": {
     "OperatorType": "Route",
@@ -1041,6 +1082,7 @@
 # routing rules for join, unsharded route wins if we can't find a merged route
 "select route2.col from route2 join user_extra"
 {
+  "QueryType": "SELECT",
   "Original": "select route2.col from route2 join user_extra",
   "Instructions": {
     "OperatorType": "Join",
@@ -1077,6 +1119,7 @@
 # subquery
 "select id from (select id, col from user where id = 5) as t"
 {
+  "QueryType": "SELECT",
   "Original": "select id from (select id, col from user where id = 5) as t",
   "Instructions": {
     "OperatorType": "Route",
@@ -1098,6 +1141,7 @@
 # subquery with join
 "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.user_id"
 {
+  "QueryType": "SELECT",
   "Original": "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.user_id",
   "Instructions": {
     "OperatorType": "Route",
@@ -1119,6 +1163,7 @@
 # subquery with join, and aliased references
 "select t.id from (select user.id from user where user.id = 5) as t join user_extra on t.id = user_extra.user_id"
 {
+  "QueryType": "SELECT",
   "Original": "select t.id from (select user.id from user where user.id = 5) as t join user_extra on t.id = user_extra.user_id",
   "Instructions": {
     "OperatorType": "Route",
@@ -1144,6 +1189,7 @@
 # subquery in RHS of join
 "select t.id from user_extra join (select id from user where id = 5) as t on t.id = user_extra.user_id"
 {
+  "QueryType": "SELECT",
   "Original": "select t.id from user_extra join (select id from user where id = 5) as t on t.id = user_extra.user_id",
   "Instructions": {
     "OperatorType": "Route",
@@ -1161,6 +1207,7 @@
 # subquery in FROM with cross-shard join
 "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.col"
 {
+  "QueryType": "SELECT",
   "Original": "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.col",
   "Instructions": {
     "OperatorType": "Join",
@@ -1201,6 +1248,7 @@
 # routing rules for subquery where the first route wins
 "select id from (select id, col from route1 where id = 5) as t"
 {
+  "QueryType": "SELECT",
   "Original": "select id from (select id, col from route1 where id = 5) as t",
   "Instructions": {
     "OperatorType": "Route",
@@ -1222,6 +1270,7 @@
 # routing rules for subquery where the second route wins
 "select id from (select id, col from route1 where email = 'aaa') as t"
 {
+  "QueryType": "SELECT",
   "Original": "select id from (select id, col from route1 where email = 'aaa') as t",
   "Instructions": {
     "OperatorType": "Route",
@@ -1243,6 +1292,7 @@
 # routing rules for subquery where the constraint is in the outer query
 "select id from (select id, col from route1) as t where id = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select id from (select id, col from route1) as t where id = 5",
   "Instructions": {
     "OperatorType": "Route",
@@ -1264,6 +1314,7 @@
 # merge subqueries with single-shard routes
 "select u.col, e.col from (select col from user where id = 5) as u join (select col from user_extra where user_id = 5) as e"
 {
+  "QueryType": "SELECT",
   "Original": "select u.col, e.col from (select col from user where id = 5) as u join (select col from user_extra where user_id = 5) as e",
   "Instructions": {
     "OperatorType": "Route",
@@ -1285,6 +1336,7 @@
 # access to unqualified column names in information_schema
 "select * from information_schema.a where b=10"
 {
+  "QueryType": "SELECT",
   "Original": "select * from information_schema.a where b=10",
   "Instructions": {
     "OperatorType": "Route",
@@ -1301,6 +1353,7 @@
 # access to qualified column names in information_schema
 "select * from information_schema.a where information_schema.a.b=10"
 {
+  "QueryType": "SELECT",
   "Original": "select * from information_schema.a where information_schema.a.b=10",
   "Instructions": {
     "OperatorType": "Route",
@@ -1317,6 +1370,7 @@
 # join of information_schema with normal table
 "select unsharded.foo from information_schema.a join unsharded"
 {
+  "QueryType": "SELECT",
   "Original": "select unsharded.foo from information_schema.a join unsharded",
   "Instructions": {
     "OperatorType": "Join",
@@ -1352,6 +1406,7 @@
 # join of normal table with information_schema
 "select unsharded.foo from unsharded join information_schema.a"
 {
+  "QueryType": "SELECT",
   "Original": "select unsharded.foo from unsharded join information_schema.a",
   "Instructions": {
     "OperatorType": "Join",
@@ -1387,6 +1442,7 @@
 # wire-up on join with cross-shard subquery
 "select t.col1 from (select user.id, user.col1 from user join user_extra) as t join unsharded on unsharded.col1 = t.col1 and unsharded.id = t.id"
 {
+  "QueryType": "SELECT",
   "Original": "select t.col1 from (select user.id, user.col1 from user join user_extra) as t join unsharded on unsharded.col1 = t.col1 and unsharded.id = t.id",
   "Instructions": {
     "OperatorType": "Join",
@@ -1452,6 +1508,7 @@
 # wire-up on within cross-shard subquery
 "select t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t"
 {
+  "QueryType": "SELECT",
   "Original": "select t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t",
   "Instructions": {
     "OperatorType": "Subquery",
@@ -1497,6 +1554,7 @@
 # Join with cross-shard subquery on rhs
 "select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t"
 {
+  "QueryType": "SELECT",
   "Original": "select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t",
   "Instructions": {
     "OperatorType": "Join",
@@ -1561,6 +1619,7 @@
 # subquery in ON clause, single route
 "select unsharded_a.col from unsharded_a join unsharded_b on (select col from user)"
 {
+  "QueryType": "SELECT",
   "Original": "select unsharded_a.col from unsharded_a join unsharded_b on (select col from user)",
   "Instructions": {
     "OperatorType": "Subquery",
@@ -1595,6 +1654,7 @@
 # subquery in ON clause as sub-expression
 "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col+(select col from user)"
 {
+  "QueryType": "SELECT",
   "Original": "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col+(select col from user)",
   "Instructions": {
     "OperatorType": "Subquery",
@@ -1629,6 +1689,7 @@
 # IN subquery in ON clause, single route
 "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col in (select col from user)"
 {
+  "QueryType": "SELECT",
   "Original": "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col in (select col from user)",
   "Instructions": {
     "OperatorType": "Subquery",
@@ -1663,6 +1724,7 @@
 # subquery in ON clause, with join primitives
 "select unsharded.col from unsharded join user on user.col in (select col from user)"
 {
+  "QueryType": "SELECT",
   "Original": "select unsharded.col from unsharded join user on user.col in (select col from user)",
   "Instructions": {
     "OperatorType": "Subquery",
@@ -1717,6 +1779,7 @@
 # The subquery is not pulled all the way out.
 "select unsharded.col from unsharded left join user on user.col in (select col from user)"
 {
+  "QueryType": "SELECT",
   "Original": "select unsharded.col from unsharded left join user on user.col in (select col from user)",
   "Instructions": {
     "OperatorType": "Join",
@@ -1771,6 +1834,7 @@
 # The subquery is not pulled all the way out.
 "select unsharded.col from unsharded join user on user.col in (select col from user) join unsharded_a"
 {
+  "QueryType": "SELECT",
   "Original": "select unsharded.col from unsharded join user on user.col in (select col from user) join unsharded_a",
   "Instructions": {
     "OperatorType": "Join",
@@ -1843,6 +1907,7 @@
 # keyspace-qualified queries
 "select user.user.col1, main.unsharded.col1 from user.user join main.unsharded where main.unsharded.col2 = user.user.col2"
 {
+  "QueryType": "SELECT",
   "Original": "select user.user.col1, main.unsharded.col1 from user.user join main.unsharded where main.unsharded.col2 = user.user.col2",
   "Instructions": {
     "OperatorType": "Join",
@@ -1879,6 +1944,7 @@
 # implicit table reference for unsharded keyspace
 "select main.foo.col from main.foo"
 {
+  "QueryType": "SELECT",
   "Original": "select main.foo.col from main.foo",
   "Instructions": {
     "OperatorType": "Route",
@@ -1896,6 +1962,7 @@
 # col refs should be case-insensitive
 "select user.col from user join user_extra on user.ID = user_extra.User_Id"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col from user join user_extra on user.ID = user_extra.User_Id",
   "Instructions": {
     "OperatorType": "Route",
@@ -1913,6 +1980,7 @@
 # subquery with join primitive (FROM)
 "select id, t.id from (select user.id from user join user_extra) as t"
 {
+  "QueryType": "SELECT",
   "Original": "select id, t.id from (select user.id from user join user_extra) as t",
   "Instructions": {
     "OperatorType": "Subquery",
@@ -1960,6 +2028,7 @@
 # The on clause is weird because the substitution must even for root expressions.
 "select u1.a from unsharded u1 join unsharded u2 on database()"
 {
+  "QueryType": "SELECT",
   "Original": "select u1.a from unsharded u1 join unsharded u2 on database()",
   "Instructions": {
     "OperatorType": "Route",
@@ -1977,6 +2046,7 @@
 # last_insert_id for dual
 "select last_insert_id()"
 {
+  "QueryType": "SELECT",
   "Original": "select last_insert_id()",
   "Instructions": {
     "OperatorType": "Route",
@@ -1994,6 +2064,7 @@
 # last_insert_id for sharded keyspace
 "select last_insert_id() from user"
 {
+  "QueryType": "SELECT",
   "Original": "select last_insert_id() from user",
   "Instructions": {
     "OperatorType": "Route",
@@ -2011,6 +2082,7 @@
 # last_insert_id for unsharded route
 "select last_insert_id() from main.unsharded"
 {
+  "QueryType": "SELECT",
   "Original": "select last_insert_id() from main.unsharded",
   "Instructions": {
     "OperatorType": "Route",

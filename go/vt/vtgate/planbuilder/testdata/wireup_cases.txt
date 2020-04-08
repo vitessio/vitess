@@ -1,6 +1,7 @@
 # join on having clause
 "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid"
 {
+  "QueryType": "SELECT",
   "Original": "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid",
   "Instructions": {
     "OperatorType": "Join",
@@ -37,6 +38,7 @@
 # bind var already in use
 "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid and e.col = :uid"
 {
+  "QueryType": "SELECT",
   "Original": "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid and e.col = :uid",
   "Instructions": {
     "OperatorType": "Join",
@@ -73,6 +75,7 @@
 # wire-up join with join, going left
 "select u1.id from user u1 join user u2 join user u3 where u3.col = u1.col"
 {
+  "QueryType": "SELECT",
   "Original": "select u1.id from user u1 join user u2 join user u3 where u3.col = u1.col",
   "Instructions": {
     "OperatorType": "Join",
@@ -128,6 +131,7 @@
 # wire-up join with join, going left, then right
 "select u1.id from user u1 join user u2 join user u3 where u3.col = u2.col"
 {
+  "QueryType": "SELECT",
   "Original": "select u1.id from user u1 join user u2 join user u3 where u3.col = u2.col",
   "Instructions": {
     "OperatorType": "Join",
@@ -183,6 +187,7 @@
 # wire-up join with join, reuse existing result from a lower join
 "select u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col"
 {
+  "QueryType": "SELECT",
   "Original": "select u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col",
   "Instructions": {
     "OperatorType": "Join",
@@ -241,6 +246,7 @@
 # u4 requests it, it should be reused from the u1-u2 join.
 "select u1.id from user u1 join user u2 join user u3 on u3.id = u1.col join user u4 where u4.col = u1.col"
 {
+  "QueryType": "SELECT",
   "Original": "select u1.id from user u1 join user u2 join user u3 on u3.id = u1.col join user u4 where u4.col = u1.col",
   "Instructions": {
     "OperatorType": "Join",
@@ -319,6 +325,7 @@
 # Test reuse of join var already being supplied to the right of a node.
 "select u1.id from user u1 join (user u2 join user u3) where u2.id = u1.col and u3.id = u1.col"
 {
+  "QueryType": "SELECT",
   "Original": "select u1.id from user u1 join (user u2 join user u3) where u2.id = u1.col and u3.id = u1.col",
   "Instructions": {
     "OperatorType": "Join",
@@ -381,6 +388,7 @@
 # Join on weird columns.
 "select `weird``name`.a, unsharded.b from `weird``name` join unsharded on `weird``name`.`a``b*c` = unsharded.id"
 {
+  "QueryType": "SELECT",
   "Original": "select `weird``name`.a, unsharded.b from `weird``name` join unsharded on `weird``name`.`a``b*c` = unsharded.id",
   "Instructions": {
     "OperatorType": "Join",
@@ -417,6 +425,7 @@
 # Join on weird column (col is not in select)
 "select unsharded.b from `weird``name` join unsharded on `weird``name`.`a``b*c` = unsharded.id"
 {
+  "QueryType": "SELECT",
   "Original": "select unsharded.b from `weird``name` join unsharded on `weird``name`.`a``b*c` = unsharded.id",
   "Instructions": {
     "OperatorType": "Join",
@@ -453,6 +462,7 @@
 # wire-up with limit primitive
 "select u.id, e.id from user u join user_extra e where e.id = u.col limit 10"
 {
+  "QueryType": "SELECT",
   "Original": "select u.id, e.id from user u join user_extra e where e.id = u.col limit 10",
   "Instructions": {
     "OperatorType": "Limit",
@@ -496,6 +506,7 @@
 # Wire-up in subquery
 "select 1 from user where id in (select u.id, e.id from user u join user_extra e where e.id = u.col limit 10)"
 {
+  "QueryType": "SELECT",
   "Original": "select 1 from user where id in (select u.id, e.id from user u join user_extra e where e.id = u.col limit 10)",
   "Instructions": {
     "OperatorType": "Subquery",
@@ -560,6 +571,7 @@
 # Wire-up in underlying primitive after pullout
 "select u.id, e.id, (select col from user) from user u join user_extra e where e.id = u.col limit 10"
 {
+  "QueryType": "SELECT",
   "Original": "select u.id, e.id, (select col from user) from user u join user_extra e where e.id = u.col limit 10",
   "Instructions": {
     "OperatorType": "Limit",
