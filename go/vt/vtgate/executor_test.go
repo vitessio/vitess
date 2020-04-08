@@ -1217,7 +1217,7 @@ func TestExecutorDDL(t *testing.T) {
 
 			_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
 			if tc.hasNoKeyspaceErr {
-				require.EqualError(t, err, errNoKeyspace.Error(), "expect query to fail")
+				require.EqualError(t, err, "keyspace not specified", "expect query to fail")
 			} else {
 				require.NoError(t, err)
 			}
