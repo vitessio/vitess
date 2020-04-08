@@ -446,6 +446,16 @@ func TestPlanExecutorAutocommit(t *testing.T) {
 	}
 }
 
+func TestPlanExecutorClearsWarnings(t *testing.T) {
+	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	session := NewSafeSession(&vtgatepb.Session{
+		Warnings: []*querypb.QueryWarning{{Code: 234, Message: "oh noes"}},
+	})
+	_, err := executor.Execute(context.Background(), "TestExecute", session, "select 42", nil)
+	require.NoError(t, err)
+	require.Empty(t, session.Warnings)
+}
+
 func TestPlanExecutorShow(t *testing.T) {
 	t.Skip("not support yet")
 	executor, _, _, sbclookup := createExecutorEnvUsing(planAllTheThings)
