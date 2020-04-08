@@ -144,7 +144,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/mysqlserver"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 12,
+			"Shard": 24,
 			"RetryMax": 0,
 			"Tags": []
 		},
