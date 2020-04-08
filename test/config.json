@@ -144,7 +144,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/mysqlserver"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 12,
+			"Shard": 24,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -207,7 +207,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/initialsharding/multi"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 14,
+			"Shard": -1,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -355,7 +355,7 @@
 			],
 			"Command": [],
 			"Manual": false,
-			"Shard": 24,
+			"Shard": 25,
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"
