@@ -50,6 +50,7 @@ type MergeSort struct {
 	Primitives []StreamExecutor
 	OrderBy    []OrderbyParams
 	noInputs
+	noTxNeeded
 }
 
 // RouteType satisfies Primitive.

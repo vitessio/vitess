@@ -31,6 +31,10 @@ type Subquery struct {
 	Subquery Primitive
 }
 
+func (sq *Subquery) NeedsTransaction() bool {
+	return sq.Subquery.NeedsTransaction()
+}
+
 // RouteType returns a description of the query routing type used by the primitive
 func (sq *Subquery) RouteType() string {
 	return sq.Subquery.RouteType()

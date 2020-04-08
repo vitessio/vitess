@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"github.com/stretchr/testify/require"
 
 	"golang.org/x/net/context"
@@ -39,8 +41,18 @@ import (
 
 var testMaxMemoryRows = 100
 
+var _ VCursor = (*noopVCursor)(nil)
+
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
+}
+
+func (t noopVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
+	panic("implement me")
+}
+
+func (t noopVCursor) SetTarget(target string) error {
+	panic("implement me")
 }
 
 func (t noopVCursor) Context() context.Context {
@@ -86,6 +98,8 @@ func (t noopVCursor) ResolveDestinations(keyspace string, ids []*querypb.Value, 
 	panic("unimplemented")
 }
 
+var _ VCursor = (*loggingVCursor)(nil)
+
 // loggingVCursor logs requests and allows you to verify
 // that the correct requests were made.
 type loggingVCursor struct {
@@ -107,6 +121,15 @@ type loggingVCursor struct {
 	multiShardErrs []error
 
 	log []string
+}
+
+func (f *loggingVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
+	panic("implement me")
+}
+
+func (f *loggingVCursor) SetTarget(target string) error {
+	f.log = append(f.log, fmt.Sprintf("Target set to %s", target))
+	return nil
 }
 
 func (f *loggingVCursor) Context() context.Context {

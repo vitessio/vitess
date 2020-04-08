@@ -18,7 +18,8 @@ package planbuilder
 
 import (
 	"errors"
-	"fmt"
+
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -26,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 //-------------------------------------------------------------------------
@@ -124,6 +126,7 @@ type ContextVSchema interface {
 	TargetString() string
 	Destination() key.Destination
 	TabletType() topodatapb.TabletType
+	TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error)
 }
 
 //-------------------------------------------------------------------------
@@ -268,6 +271,9 @@ func Build(query string, vschema ContextVSchema) (*engine.Plan, error) {
 	return BuildFromStmt(query, result.AST, vschema, result.BindVarNeeds)
 }
 
+// ErrPlanNotSupported is an error for plan building not supported
+var ErrPlanNotSupported = errors.New("plan building not supported")
+
 // BuildFromStmt builds a plan based on the AST provided.
 // TODO(sougou): The query input is trusted as the source
 // of the AST. Maybe this function just returns instructions
@@ -276,49 +282,48 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 	var err error
 	var instruction engine.Primitive
 
-	if vschema.Destination() != nil {
-		instruction, err = buildPlanForBypass(stmt, vschema)
-	} else {
-		switch stmt := stmt.(type) {
-		case *sqlparser.Select:
-			instruction, err = buildSelectPlan(stmt, vschema)
-		case *sqlparser.Insert:
-			instruction, err = buildInsertPlan(stmt, vschema)
-		case *sqlparser.Update:
-			instruction, err = buildUpdatePlan(stmt, vschema)
-		case *sqlparser.Delete:
-			instruction, err = buildDeletePlan(stmt, vschema)
-		case *sqlparser.Union:
-			instruction, err = buildUnionPlan(stmt, vschema)
-		case *sqlparser.Set:
-			return nil, errors.New("unsupported construct: set")
-		case *sqlparser.Show:
-			return nil, errors.New("unsupported construct: show")
-		case *sqlparser.DDL:
-			return nil, errors.New("unsupported construct: ddl")
-		case *sqlparser.DBDDL:
-			return nil, errors.New("unsupported construct: ddl on database")
-		case *sqlparser.OtherRead:
-			return nil, errors.New("unsupported construct: other read")
-		case *sqlparser.OtherAdmin:
-			return nil, errors.New("unsupported construct: other admin")
-		case *sqlparser.Begin:
-			return nil, errors.New("unsupported construct: begin")
-		case *sqlparser.Commit:
-			return nil, errors.New("unsupported construct: commit")
-		case *sqlparser.Rollback:
-			return nil, errors.New("unsupported construct: rollback")
-		default:
-			return nil, fmt.Errorf("BUG: unexpected statement type: %T", stmt)
+	switch stmt := stmt.(type) {
+	case *sqlparser.Select:
+		instruction, err = buildRoutePlan(stmt, vschema, buildSelectPlan)
+	case *sqlparser.Insert:
+		instruction, err = buildRoutePlan(stmt, vschema, buildInsertPlan)
+	case *sqlparser.Update:
+		instruction, err = buildRoutePlan(stmt, vschema, buildUpdatePlan)
+	case *sqlparser.Delete:
+		instruction, err = buildRoutePlan(stmt, vschema, buildDeletePlan)
+	case *sqlparser.Union:
+		instruction, err = buildRoutePlan(stmt, vschema, buildUnionPlan)
+	case *sqlparser.DDL:
+		if sqlparser.IsVschemaDDL(stmt) {
+			instruction, err = buildVSchemaDDLPlan(stmt, vschema)
+		} else {
+			instruction, err = buildDDLPlan(query, stmt, vschema)
 		}
+	case *sqlparser.Use:
+		instruction, err = buildUsePlan(stmt, vschema)
+	case *sqlparser.Set, *sqlparser.Show, *sqlparser.DBDDL, *sqlparser.OtherRead, *sqlparser.OtherAdmin:
+		return nil, ErrPlanNotSupported
+	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback:
+		// Empty by design. Not executed by a plan
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
 	}
+
 	if err != nil {
 		return nil, err
 	}
 	plan := &engine.Plan{
+		Type:         sqlparser.ASTToStatementType(stmt),
 		Original:     query,
 		Instructions: instruction,
+		BindVarNeeds: bindVarNeeds,
 	}
-	plan.BindVarNeeds = bindVarNeeds
 	return plan, nil
+}
+
+func buildRoutePlan(stmt sqlparser.Statement, vschema ContextVSchema, f func(statement sqlparser.Statement, schema ContextVSchema) (engine.Primitive, error)) (engine.Primitive, error) {
+	if vschema.Destination() != nil {
+		return buildPlanForBypass(stmt, vschema)
+	}
+	return f(stmt, vschema)
 }

@@ -1,6 +1,7 @@
 # No column referenced
 "select 1 from user"
 {
+  "QueryType": "SELECT",
   "Original": "select 1 from user",
   "Instructions": {
     "OperatorType": "Route",
@@ -18,6 +19,7 @@
 # '*' expression for simple route
 "select user.* from user"
 {
+  "QueryType": "SELECT",
   "Original": "select user.* from user",
   "Instructions": {
     "OperatorType": "Route",
@@ -35,6 +37,7 @@
 # unqualified '*' expression for simple route
 "select * from user"
 {
+  "QueryType": "SELECT",
   "Original": "select * from user",
   "Instructions": {
     "OperatorType": "Route",
@@ -52,6 +55,7 @@
 # select with timeout directive sets QueryTimeout in the route
 "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user"
 {
+  "QueryType": "SELECT",
   "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user",
   "Instructions": {
     "OperatorType": "Route",
@@ -69,6 +73,7 @@
 # select aggregation with timeout directive sets QueryTimeout in the route
 "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from user"
 {
+  "QueryType": "SELECT",
   "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -94,6 +99,7 @@
 # select limit with timeout directive sets QueryTimeout in the route
 "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user limit 10"
 {
+  "QueryType": "SELECT",
   "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user limit 10",
   "Instructions": {
     "OperatorType": "Limit",
@@ -118,6 +124,7 @@
 # select with partial scatter directive
 "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user"
 {
+  "QueryType": "SELECT",
   "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user",
   "Instructions": {
     "OperatorType": "Route",
@@ -135,6 +142,7 @@
 # select aggregation with partial scatter directive
 "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user"
 {
+  "QueryType": "SELECT",
   "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -160,6 +168,7 @@
 # select aggregation with partial scatter directive - added comments to try to confuse the hint extraction
 "/*VT_SPAN_CONTEXT=123*/select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user"
 {
+  "QueryType": "SELECT",
   "Original": "/*VT_SPAN_CONTEXT=123*/select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
@@ -185,6 +194,7 @@
 # select limit with partial scatter directive
 "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit 10"
 {
+  "QueryType": "SELECT",
   "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit 10",
   "Instructions": {
     "OperatorType": "Limit",
@@ -209,6 +219,7 @@
 # qualified '*' expression for simple route
 "select user.* from user"
 {
+  "QueryType": "SELECT",
   "Original": "select user.* from user",
   "Instructions": {
     "OperatorType": "Route",
@@ -226,6 +237,7 @@
 # fully qualified '*' expression for simple route
 "select user.user.* from user.user"
 {
+  "QueryType": "SELECT",
   "Original": "select user.user.* from user.user",
   "Instructions": {
     "OperatorType": "Route",
@@ -243,6 +255,7 @@
 # select * from authoritative table
 "select * from authoritative"
 {
+  "QueryType": "SELECT",
   "Original": "select * from authoritative",
   "Instructions": {
     "OperatorType": "Route",
@@ -260,6 +273,7 @@
 # select * from join of authoritative tables
 "select * from authoritative a join authoritative b on a.user_id=b.user_id"
 {
+  "QueryType": "SELECT",
   "Original": "select * from authoritative a join authoritative b on a.user_id=b.user_id",
   "Instructions": {
     "OperatorType": "Route",
@@ -281,6 +295,7 @@
 # select * from qualified authoritative table
 "select a.* from authoritative a"
 {
+  "QueryType": "SELECT",
   "Original": "select a.* from authoritative a",
   "Instructions": {
     "OperatorType": "Route",
@@ -298,6 +313,7 @@
 # select * from intermixing of authoritative table with non-authoritative results in no expansion
 "select * from authoritative join user on authoritative.user_id=user.id"
 {
+  "QueryType": "SELECT",
   "Original": "select * from authoritative join user on authoritative.user_id=user.id",
   "Instructions": {
     "OperatorType": "Route",
@@ -315,6 +331,7 @@
 # select authoritative.* with intermixing still expands
 "select user.id, a.*, user.col1 from authoritative a join user on a.user_id=user.id"
 {
+  "QueryType": "SELECT",
   "Original": "select user.id, a.*, user.col1 from authoritative a join user on a.user_id=user.id",
   "Instructions": {
     "OperatorType": "Route",
@@ -332,6 +349,7 @@
 # auto-resolve anonymous columns for simple route
 "select col from user join user_extra on user.id = user_extra.user_id"
 {
+  "QueryType": "SELECT",
   "Original": "select col from user join user_extra on user.id = user_extra.user_id",
   "Instructions": {
     "OperatorType": "Route",
@@ -353,6 +371,7 @@
 # Auto-resolve should work if unique vindex columns are referenced
 "select id, user_id from user join user_extra"
 {
+  "QueryType": "SELECT",
   "Original": "select id, user_id from user join user_extra",
   "Instructions": {
     "OperatorType": "Join",
@@ -389,6 +408,7 @@
 # database calls should be substituted
 "select database() from dual"
 {
+  "QueryType": "SELECT",
   "Original": "select database() from dual",
   "Instructions": {
     "OperatorType": "Route",
@@ -410,6 +430,7 @@
 # last_insert_id for unsharded route
 "select last_insert_id() as x from main.unsharded"
 {
+  "QueryType": "SELECT",
   "Original": "select last_insert_id() as x from main.unsharded",
   "Instructions": {
     "OperatorType": "Route",
@@ -427,6 +448,7 @@
 # select from dual on unqualified keyspace
 "select @@session.auto_increment_increment from dual"
 {
+  "QueryType": "SELECT",
   "Original": "select @@session.auto_increment_increment from dual",
   "Instructions": {
     "OperatorType": "Route",
@@ -444,6 +466,7 @@
 # select from pinned table
 "select * from pin_test"
 {
+  "QueryType": "SELECT",
   "Original": "select * from pin_test",
   "Instructions": {
     "OperatorType": "Route",
@@ -465,6 +488,7 @@
 # select from dual on sharded keyspace
 "select @@session.auto_increment_increment from user.dual"
 {
+  "QueryType": "SELECT",
   "Original": "select @@session.auto_increment_increment from user.dual",
   "Instructions": {
     "OperatorType": "Route",
@@ -482,6 +506,7 @@
 # RHS route referenced
 "select user_extra.id from user join user_extra"
 {
+  "QueryType": "SELECT",
   "Original": "select user_extra.id from user join user_extra",
   "Instructions": {
     "OperatorType": "Join",
@@ -518,6 +543,7 @@
 # Both routes referenced
 "select user.col, user_extra.id from user join user_extra"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col, user_extra.id from user join user_extra",
   "Instructions": {
     "OperatorType": "Join",
@@ -554,6 +580,7 @@
 # Expression with single-route reference
 "select user.col, user_extra.id + user_extra.col from user join user_extra"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col, user_extra.id + user_extra.col from user join user_extra",
   "Instructions": {
     "OperatorType": "Join",
@@ -590,6 +617,7 @@
 # Jumbled references
 "select user.col, user_extra.id, user.col2 from user join user_extra"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col, user_extra.id, user.col2 from user join user_extra",
   "Instructions": {
     "OperatorType": "Join",
@@ -626,6 +654,7 @@
 # Comments
 "select /* comment */ user.col from user join user_extra"
 {
+  "QueryType": "SELECT",
   "Original": "select /* comment */ user.col from user join user_extra",
   "Instructions": {
     "OperatorType": "Join",
@@ -662,6 +691,7 @@
 # for update
 "select user.col from user join user_extra for update"
 {
+  "QueryType": "SELECT",
   "Original": "select user.col from user join user_extra for update",
   "Instructions": {
     "OperatorType": "Join",
@@ -698,6 +728,7 @@
 # Field query should work for joins select bind vars
 "select user.id, (select user.id+outm.m+unsharded.m from unsharded) from user join unsharded outm"
 {
+  "QueryType": "SELECT",
   "Original": "select user.id, (select user.id+outm.m+unsharded.m from unsharded) from user join unsharded outm",
   "Instructions": {
     "OperatorType": "Join",
@@ -734,6 +765,7 @@
 # Case preservation
 "select user.Col, user_extra.Id from user join user_extra"
 {
+  "QueryType": "SELECT",
   "Original": "select user.Col, user_extra.Id from user join user_extra",
   "Instructions": {
     "OperatorType": "Join",
@@ -774,6 +806,7 @@
 # Hex number is not treated as a simple value
 "select * from user where id = 0x04"
 {
+  "QueryType": "SELECT",
   "Original": "select * from user where id = 0x04",
   "Instructions": {
     "OperatorType": "Route",
@@ -791,6 +824,7 @@
 # sharded limit offset
 "select user_id from music order by user_id limit 10, 20"
 {
+  "QueryType": "SELECT",
   "Original": "select user_id from music order by user_id limit 10, 20",
   "Instructions": {
     "OperatorType": "Limit",
@@ -816,6 +850,7 @@
 # Sharding Key Condition in Parenthesis
 "select * from user where name ='abc' AND (id = 4) limit 5"
 {
+  "QueryType": "SELECT",
   "Original": "select * from user where name ='abc' AND (id = 4) limit 5",
   "Instructions": {
     "OperatorType": "Route",
@@ -837,6 +872,7 @@
 # Multiple parenthesized expressions
 "select * from user where (id = 4) AND (name ='abc') limit 5"
 {
+  "QueryType": "SELECT",
   "Original": "select * from user where (id = 4) AND (name ='abc') limit 5",
   "Instructions": {
     "OperatorType": "Route",
@@ -858,6 +894,7 @@
 # Multiple parenthesized expressions
 "select * from user where (id = 4 and name ='abc') limit 5"
 {
+  "QueryType": "SELECT",
   "Original": "select * from user where (id = 4 and name ='abc') limit 5",
   "Instructions": {
     "OperatorType": "Route",
@@ -879,6 +916,7 @@
 # Column Aliasing with Table.Column
 "select user0_.col as col0_ from user user0_ where id = 1 order by user0_.col desc limit 2"
 {
+  "QueryType": "SELECT",
   "Original": "select user0_.col as col0_ from user user0_ where id = 1 order by user0_.col desc limit 2",
   "Instructions": {
     "OperatorType": "Route",
@@ -900,6 +938,7 @@
 # Column Aliasing with Column
 "select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc limit 3"
 {
+  "QueryType": "SELECT",
   "Original": "select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc limit 3",
   "Instructions": {
     "OperatorType": "Route",
@@ -921,6 +960,7 @@
 # Booleans and parenthesis
 "select * from user where (id = 1) AND name = true limit 5"
 {
+  "QueryType": "SELECT",
   "Original": "select * from user where (id = 1) AND name = true limit 5",
   "Instructions": {
     "OperatorType": "Route",
@@ -942,6 +982,7 @@
 # Column as boolean-ish
 "select * from user where (id = 1) AND name limit 5"
 {
+  "QueryType": "SELECT",
   "Original": "select * from user where (id = 1) AND name limit 5",
   "Instructions": {
     "OperatorType": "Route",
@@ -963,6 +1004,7 @@
 # PK as fake boolean, and column as boolean-ish
 "select * from user where (id = 5) AND name = true limit 5"
 {
+  "QueryType": "SELECT",
   "Original": "select * from user where (id = 5) AND name = true limit 5",
   "Instructions": {
     "OperatorType": "Route",
@@ -984,6 +1026,7 @@
 # top level subquery in select
 "select a, (select col from user) from unsharded"
 {
+  "QueryType": "SELECT",
   "Original": "select a, (select col from user) from unsharded",
   "Instructions": {
     "OperatorType": "Subquery",
@@ -1018,6 +1061,7 @@
 # sub-expression subquery in select
 "select a, 1+(select col from user) from unsharded"
 {
+  "QueryType": "SELECT",
   "Original": "select a, 1+(select col from user) from unsharded",
   "Instructions": {
     "OperatorType": "Subquery",
@@ -1052,6 +1096,7 @@
 # select * from subquery expands specific columns
 "select * from (select user.id id1, user_extra.id id2 from user join user_extra) as t"
 {
+  "QueryType": "SELECT",
   "Original": "select * from (select user.id id1, user_extra.id id2 from user join user_extra) as t",
   "Instructions": {
     "OperatorType": "Subquery",
@@ -1106,6 +1151,7 @@
 # union of information_schema
 "select * from information_schema.a union select * from information_schema.b"
 {
+  "QueryType": "SELECT",
   "Original": "select * from information_schema.a union select * from information_schema.b",
   "Instructions": {
     "OperatorType": "Route",
@@ -1122,6 +1168,7 @@
 # union with the same target shard
 "select * from music where user_id = 1 union select * from user where id = 1"
 {
+  "QueryType": "SELECT",
   "Original": "select * from music where user_id = 1 union select * from user where id = 1",
   "Instructions": {
     "OperatorType": "Route",
@@ -1143,6 +1190,7 @@
 # union with the same target shard last_insert_id
 "select *, last_insert_id() from music where user_id = 1 union select * from user where id = 1"
 {
+  "QueryType": "SELECT",
   "Original": "select *, last_insert_id() from music where user_id = 1 union select * from user where id = 1",
   "Instructions": {
     "OperatorType": "Route",
@@ -1163,6 +1211,7 @@
 
 "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a"
 {
+  "QueryType": "SELECT",
   "Original": "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a",
   "Instructions": {
     "OperatorType": "Route",
@@ -1179,6 +1228,7 @@
 
 "select id, name from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)"
 {
+  "QueryType": "SELECT",
   "Original": "select id, name from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
   "Instructions": {
     "OperatorType": "Route",
@@ -1195,6 +1245,7 @@
 
 "(select id from unsharded) union (select id from unsharded_auto) order by id limit 5"
 {
+  "QueryType": "SELECT",
   "Original": "(select id from unsharded) union (select id from unsharded_auto) order by id limit 5",
   "Instructions": {
     "OperatorType": "Route",
@@ -1211,6 +1262,7 @@
 
 "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)",
   "Instructions": {
     "OperatorType": "Route",
@@ -1227,6 +1279,7 @@
 
 "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)"
 {
+  "QueryType": "SELECT",
   "Original": "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
   "Instructions": {
     "OperatorType": "Route",
@@ -1243,6 +1296,7 @@
 
 "(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1"
 {
+  "QueryType": "SELECT",
   "Original": "(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1",
   "Instructions": {
     "OperatorType": "Route",
@@ -1260,6 +1314,7 @@
 # routing rules: union finds the correct option to merge, and renames the table
 "select a from route1 where email = 'aaa' union select b from route1 where email = 'aaa'"
 {
+  "QueryType": "SELECT",
   "Original": "select a from route1 where email = 'aaa' union select b from route1 where email = 'aaa'",
   "Instructions": {
     "OperatorType": "Route",
@@ -1281,6 +1336,7 @@
 # routing rules: ensure directives are not lost
 "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from route2"
 {
+  "QueryType": "SELECT",
   "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from route2",
   "Instructions": {
     "OperatorType": "Route",

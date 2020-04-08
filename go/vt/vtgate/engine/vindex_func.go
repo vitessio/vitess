@@ -42,6 +42,9 @@ type VindexFunc struct {
 
 	// VindexFunc does not take inputs
 	noInputs
+
+	// VindexFunc does not need to work inside a tx
+	noTxNeeded
 }
 
 // MarshalJSON serializes the VindexFunc into a JSON representation.

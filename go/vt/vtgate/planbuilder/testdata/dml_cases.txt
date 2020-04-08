@@ -9,6 +9,7 @@
 # explicit keyspace reference
 "update main.m1 set val = 1"
 {
+  "QueryType": "UPDATE",
   "Original": "update main.m1 set val = 1",
   "Instructions": {
     "OperatorType": "Update",
@@ -26,6 +27,7 @@
 # update unsharded
 "update unsharded set val = 1"
 {
+  "QueryType": "UPDATE",
   "Original": "update unsharded set val = 1",
   "Instructions": {
     "OperatorType": "Update",
@@ -43,6 +45,7 @@
 # subqueries in unsharded update
 "update unsharded set col = (select col from unsharded limit 1)"
 {
+  "QueryType": "UPDATE",
   "Original": "update unsharded set col = (select col from unsharded limit 1)",
   "Instructions": {
     "OperatorType": "Update",
@@ -60,6 +63,7 @@
 # unsharded union in subquery of unsharded update
 "update unsharded set col = (select id from unsharded union select id from unsharded)"
 {
+  "QueryType": "UPDATE",
   "Original": "update unsharded set col = (select id from unsharded union select id from unsharded)",
   "Instructions": {
     "OperatorType": "Update",
@@ -77,6 +81,7 @@
 # unsharded join in subquery of unsharded update
 "update unsharded set col = (select id from unsharded a join unsharded b on a.id = b.id)"
 {
+  "QueryType": "UPDATE",
   "Original": "update unsharded set col = (select id from unsharded a join unsharded b on a.id = b.id)",
   "Instructions": {
     "OperatorType": "Update",
@@ -94,6 +99,7 @@
 # update with join subquery
 "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col < 1000"
 {
+  "QueryType": "UPDATE",
   "Original": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col \u003c 1000",
   "Instructions": {
     "OperatorType": "Update",
@@ -111,6 +117,7 @@
 # routing rules: updated of a routed table
 "update route1 set a=1 where id=1"
 {
+  "QueryType": "UPDATE",
   "Original": "update route1 set a=1 where id=1",
   "Instructions": {
     "OperatorType": "Update",
@@ -133,6 +140,7 @@
 # routing rules: subquery chooses unsharded route for update
 "update unsharded_a set a=(select a from route2)"
 {
+  "QueryType": "UPDATE",
   "Original": "update unsharded_a set a=(select a from route2)",
   "Instructions": {
     "OperatorType": "Update",
@@ -150,6 +158,7 @@
 # delete unsharded
 "delete from unsharded"
 {
+  "QueryType": "DELETE",
   "Original": "delete from unsharded",
   "Instructions": {
     "OperatorType": "Delete",
@@ -167,6 +176,7 @@
 # update by primary keyspace id
 "update user set val = 1 where id = 1"
 {
+  "QueryType": "UPDATE",
   "Original": "update user set val = 1 where id = 1",
   "Instructions": {
     "OperatorType": "Update",
@@ -189,6 +199,7 @@
 # update by primary keyspace id with alias
 "update user as user_alias set val = 1 where user_alias.id = 1"
 {
+  "QueryType": "UPDATE",
   "Original": "update user as user_alias set val = 1 where user_alias.id = 1",
   "Instructions": {
     "OperatorType": "Update",
@@ -211,6 +222,7 @@
 # update by primary keyspace id with parenthesized expression
 "update user set val = 1 where (id = 1)"
 {
+  "QueryType": "UPDATE",
   "Original": "update user set val = 1 where (id = 1)",
   "Instructions": {
     "OperatorType": "Update",
@@ -233,6 +245,7 @@
 # update by primary keyspace id with multi-part where clause with parens
 "update user set val = 1 where (name = 'foo' and id = 1)"
 {
+  "QueryType": "UPDATE",
   "Original": "update user set val = 1 where (name = 'foo' and id = 1)",
   "Instructions": {
     "OperatorType": "Update",
@@ -255,6 +268,7 @@
 # update by primary keyspace id, changing one vindex column
 "update user_metadata set email = 'juan@vitess.io' where user_id = 1"
 {
+  "QueryType": "UPDATE",
   "Original": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
   "Instructions": {
     "OperatorType": "Update",
@@ -286,6 +300,7 @@
 # update by primary keyspace id, changing multiple vindex columns
 "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1"
 {
+  "QueryType": "UPDATE",
   "Original": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
   "Instructions": {
     "OperatorType": "Update",
@@ -314,6 +329,7 @@
 # update by primary keyspace id, changing one vindex column, using order by and limit
 "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10"
 {
+  "QueryType": "UPDATE",
   "Original": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
   "Instructions": {
     "OperatorType": "Update",
@@ -341,6 +357,7 @@
 # update by primary keyspace id, stray where clause
 "update user set val = 1 where id = id2 and id = 1"
 {
+  "QueryType": "UPDATE",
   "Original": "update user set val = 1 where id = id2 and id = 1",
   "Instructions": {
     "OperatorType": "Update",
@@ -363,6 +380,7 @@
 # update by primary keyspace id, stray where clause with conversion error
 "update user set val = 1 where id = 18446744073709551616 and id = 1"
 {
+  "QueryType": "UPDATE",
   "Original": "update user set val = 1 where id = 18446744073709551616 and id = 1",
   "Instructions": {
     "OperatorType": "Update",
@@ -385,6 +403,7 @@
 # delete from by primary keyspace id
 "delete from user where id = 1"
 {
+  "QueryType": "DELETE",
   "Original": "delete from user where id = 1",
   "Instructions": {
     "OperatorType": "Delete",
@@ -409,6 +428,7 @@
 # multi-table delete with comma join
 "delete a from unsharded_a a, unsharded_b b where a.id = b.id and b.val = 1"
 {
+  "QueryType": "DELETE",
   "Original": "delete a from unsharded_a a, unsharded_b b where a.id = b.id and b.val = 1",
   "Instructions": {
     "OperatorType": "Delete",
@@ -426,6 +446,7 @@
 # multi-table delete with ansi join
 "delete a from unsharded_a a join unsharded_b b on a.id = b.id where b.val = 1"
 {
+  "QueryType": "DELETE",
   "Original": "delete a from unsharded_a a join unsharded_b b on a.id = b.id where b.val = 1",
   "Instructions": {
     "OperatorType": "Delete",
@@ -443,6 +464,7 @@
 #delete with join from subquery
 "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000"
 {
+  "QueryType": "DELETE",
   "Original": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000",
   "Instructions": {
     "OperatorType": "Delete",
@@ -460,6 +482,7 @@
 # routing rules: deleted from a routed table
 "delete from route1 where id = 1"
 {
+  "QueryType": "DELETE",
   "Original": "delete from route1 where id = 1",
   "Instructions": {
     "OperatorType": "Delete",
@@ -484,6 +507,7 @@
 # routing rules: subquery chooses unsharded route for delete
 "delete from  unsharded_a where a=(select a from route2)"
 {
+  "QueryType": "DELETE",
   "Original": "delete from  unsharded_a where a=(select a from route2)",
   "Instructions": {
     "OperatorType": "Delete",
@@ -501,6 +525,7 @@
 # update by lookup
 "update music set val = 1 where id = 1"
 {
+  "QueryType": "UPDATE",
   "Original": "update music set val = 1 where id = 1",
   "Instructions": {
     "OperatorType": "Update",
@@ -523,6 +548,7 @@
 # update multi-table ansi join
 "update unsharded_a a join unsharded_b b on a.id = b.id set a.val = 'foo' where b.val = 1"
 {
+  "QueryType": "UPDATE",
   "Original": "update unsharded_a a join unsharded_b b on a.id = b.id set a.val = 'foo' where b.val = 1",
   "Instructions": {
     "OperatorType": "Update",
@@ -540,6 +566,7 @@
 # update multi-table comma join
 "update unsharded_a a, unsharded_b b set a.val = 'foo' where a.id = b.id and b.val = 1"
 {
+  "QueryType": "UPDATE",
   "Original": "update unsharded_a a, unsharded_b b set a.val = 'foo' where a.id = b.id and b.val = 1",
   "Instructions": {
     "OperatorType": "Update",
@@ -557,6 +584,7 @@
 # delete from by lookup
 "delete from music where id = 1"
 {
+  "QueryType": "DELETE",
   "Original": "delete from music where id = 1",
   "Instructions": {
     "OperatorType": "Delete",
@@ -581,6 +609,7 @@
 # delete from, no owned vindexes
 "delete from music_extra where user_id = 1"
 {
+  "QueryType": "DELETE",
   "Original": "delete from music_extra where user_id = 1",
   "Instructions": {
     "OperatorType": "Delete",
@@ -603,6 +632,7 @@
 # simple insert, no values
 "insert into unsharded values()"
 {
+  "QueryType": "INSERT",
   "Original": "insert into unsharded values()",
   "Instructions": {
     "OperatorType": "Insert",
@@ -621,6 +651,7 @@
 # simple insert unsharded
 "insert into unsharded values(1, 2)"
 {
+  "QueryType": "INSERT",
   "Original": "insert into unsharded values(1, 2)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -639,6 +670,7 @@
 # simple upsert unsharded
 "insert into unsharded values(1, 2) on duplicate key update x = 3"
 {
+  "QueryType": "INSERT",
   "Original": "insert into unsharded values(1, 2) on duplicate key update x = 3",
   "Instructions": {
     "OperatorType": "Insert",
@@ -657,6 +689,7 @@
 # unsharded insert, no col list with auto-inc and authoritative column list
 "insert into unsharded_authoritative values(1,1)"
 {
+  "QueryType": "INSERT",
   "Original": "insert into unsharded_authoritative values(1,1)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -675,6 +708,7 @@
 # sharded upsert with sharding key set to vindex column
 "insert into music(user_id, id) values(1, 2) on duplicate key update user_id = values(user_id)"
 {
+  "QueryType": "INSERT",
   "Original": "insert into music(user_id, id) values(1, 2) on duplicate key update user_id = values(user_id)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -693,6 +727,7 @@
 # sharded bulk upsert with sharding key set to vindex column
 "insert into music(user_id, id) values (1, 2), (3,4) on duplicate key update user_id = values(user_id)"
 {
+  "QueryType": "INSERT",
   "Original": "insert into music(user_id, id) values (1, 2), (3,4) on duplicate key update user_id = values(user_id)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -711,6 +746,7 @@
 # insert unsharded with select
 "insert into unsharded select id from unsharded_auto"
 {
+  "QueryType": "INSERT",
   "Original": "insert into unsharded select id from unsharded_auto",
   "Instructions": {
     "OperatorType": "Insert",
@@ -729,6 +765,7 @@
 # insert unsharded with select with join
 "insert into unsharded select id from unsharded join unsharded_auto"
 {
+  "QueryType": "INSERT",
   "Original": "insert into unsharded select id from unsharded join unsharded_auto",
   "Instructions": {
     "OperatorType": "Insert",
@@ -751,6 +788,7 @@
 # insert unsharded, column present
 "insert into unsharded_auto(id, val) values(1, 'aa')"
 {
+  "QueryType": "INSERT",
   "Original": "insert into unsharded_auto(id, val) values(1, 'aa')",
   "Instructions": {
     "OperatorType": "Insert",
@@ -769,6 +807,7 @@
 # insert unsharded, column absent
 "insert into unsharded_auto(val) values('aa')"
 {
+  "QueryType": "INSERT",
   "Original": "insert into unsharded_auto(val) values('aa')",
   "Instructions": {
     "OperatorType": "Insert",
@@ -787,6 +826,7 @@
 # insert unsharded, column absent
 "insert into unsharded_auto(val) values(false)"
 {
+  "QueryType": "INSERT",
   "Original": "insert into unsharded_auto(val) values(false)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -805,6 +845,7 @@
 # insert unsharded, multi-val
 "insert into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')"
 {
+  "QueryType": "INSERT",
   "Original": "insert into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')",
   "Instructions": {
     "OperatorType": "Insert",
@@ -823,6 +864,7 @@
 # unsharded insert subquery in insert value
 "insert into unsharded values((select 1 from dual), 1)"
 {
+  "QueryType": "INSERT",
   "Original": "insert into unsharded values((select 1 from dual), 1)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -841,6 +883,7 @@
 # insert into a routed table
 "insert into route1(id) values (1)"
 {
+  "QueryType": "INSERT",
   "Original": "insert into route1(id) values (1)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -863,6 +906,7 @@
 # insert no column list for sharded authoritative table
 "insert into authoritative values(1, 2, 3)"
 {
+  "QueryType": "INSERT",
   "Original": "insert into authoritative values(1, 2, 3)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -885,6 +929,7 @@
 # insert with one vindex
 "insert into user(id) values (1)"
 {
+  "QueryType": "INSERT",
   "Original": "insert into user(id) values (1)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -903,6 +948,7 @@
 # insert ignore sharded
 "insert ignore into user(id) values (1)"
 {
+  "QueryType": "INSERT",
   "Original": "insert ignore into user(id) values (1)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -921,6 +967,7 @@
 # insert on duplicate key
 "insert into user(id) values(1) on duplicate key update col = 2"
 {
+  "QueryType": "INSERT",
   "Original": "insert into user(id) values(1) on duplicate key update col = 2",
   "Instructions": {
     "OperatorType": "Insert",
@@ -939,6 +986,7 @@
 # insert with one vindex and bind var
 "insert into user(id) values (:aa)"
 {
+  "QueryType": "INSERT",
   "Original": "insert into user(id) values (:aa)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -957,6 +1005,7 @@
 # insert with non vindex
 "insert into user(nonid) values (2)"
 {
+  "QueryType": "INSERT",
   "Original": "insert into user(nonid) values (2)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -975,6 +1024,7 @@
 # insert with default seq
 "insert into user(id, nonid) values (default, 2)"
 {
+  "QueryType": "INSERT",
   "Original": "insert into user(id, nonid) values (default, 2)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -993,6 +1043,7 @@
 # insert with non vindex bool value
 "insert into user(nonid) values (true)"
 {
+  "QueryType": "INSERT",
   "Original": "insert into user(nonid) values (true)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -1011,6 +1062,7 @@
 # insert with all vindexes supplied
 "insert into user(nonid, name, id) values (2, 'foo', 1)"
 {
+  "QueryType": "INSERT",
   "Original": "insert into user(nonid, name, id) values (2, 'foo', 1)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -1029,6 +1081,7 @@
 # insert for non-vindex autoinc
 "insert into user_extra(nonid) values (2)"
 {
+  "QueryType": "INSERT",
   "Original": "insert into user_extra(nonid) values (2)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -1047,6 +1100,7 @@
 # insert for non-compliant names
 "insert into `weird``name`(`a``b*c`, `b*c`) values(1, 2)"
 {
+  "QueryType": "INSERT",
   "Original": "insert into `weird``name`(`a``b*c`, `b*c`) values(1, 2)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -1065,6 +1119,7 @@
 # unsharded insert from union
 "insert into unsharded select 1 from dual union select 1 from dual"
 {
+  "QueryType": "INSERT",
   "Original": "insert into unsharded select 1 from dual union select 1 from dual",
   "Instructions": {
     "OperatorType": "Insert",
@@ -1099,6 +1154,7 @@
 # insert with multiple rows
 "insert into user(id) values (1), (2)"
 {
+  "QueryType": "INSERT",
   "Original": "insert into user(id) values (1), (2)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -1117,6 +1173,7 @@
 # insert with query timeout
 "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id) values (1), (2)"
 {
+  "QueryType": "INSERT",
   "Original": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id) values (1), (2)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -1136,6 +1193,7 @@
 # insert with multiple rows - multi-shard autocommit
 "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id) values (1), (2)"
 {
+  "QueryType": "INSERT",
   "Original": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id) values (1), (2)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -1158,6 +1216,7 @@
 # simple replace unsharded
 "replace into unsharded values(1, 2)"
 {
+  "QueryType": "INSERT",
   "Original": "replace into unsharded values(1, 2)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -1176,6 +1235,7 @@
 # replace unsharded with select
 "replace into unsharded select id from unsharded_auto"
 {
+  "QueryType": "INSERT",
   "Original": "replace into unsharded select id from unsharded_auto",
   "Instructions": {
     "OperatorType": "Insert",
@@ -1198,6 +1258,7 @@
 # replace unsharded, column present
 "replace into unsharded_auto(id, val) values(1, 'aa')"
 {
+  "QueryType": "INSERT",
   "Original": "replace into unsharded_auto(id, val) values(1, 'aa')",
   "Instructions": {
     "OperatorType": "Insert",
@@ -1216,6 +1277,7 @@
 # replace unsharded, column absent
 "replace into unsharded_auto(val) values('aa')"
 {
+  "QueryType": "INSERT",
   "Original": "replace into unsharded_auto(val) values('aa')",
   "Instructions": {
     "OperatorType": "Insert",
@@ -1234,6 +1296,7 @@
 # replace unsharded, multi-val
 "replace into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')"
 {
+  "QueryType": "INSERT",
   "Original": "replace into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')",
   "Instructions": {
     "OperatorType": "Insert",
@@ -1256,6 +1319,7 @@
 # insert a row in a multi column vindex table
 "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4)"
 {
+  "QueryType": "INSERT",
   "Original": "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -1274,6 +1338,7 @@
 # insert for overlapped vindex columns
 "insert overlap_vindex (kid, column_a, column_b) VALUES (1,2,3)"
 {
+  "QueryType": "INSERT",
   "Original": "insert overlap_vindex (kid, column_a, column_b) VALUES (1,2,3)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -1292,6 +1357,7 @@
 # insert multiple rows in a multi column vindex table
 "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4), (5,6,7,8)"
 {
+  "QueryType": "INSERT",
   "Original": "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4), (5,6,7,8)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -1310,6 +1376,7 @@
 # delete row in a multi column vindex table
 "delete from multicolvin where kid=1"
 {
+  "QueryType": "DELETE",
   "Original": "delete from multicolvin where kid=1",
   "Instructions": {
     "OperatorType": "Delete",
@@ -1334,6 +1401,7 @@
 # update columns of multi column vindex
 "update multicolvin set column_b = 1, column_c = 2 where kid = 1"
 {
+  "QueryType": "UPDATE",
   "Original": "update multicolvin set column_b = 1, column_c = 2 where kid = 1",
   "Instructions": {
     "OperatorType": "Update",
@@ -1361,6 +1429,7 @@
 # update multiple vindexes, with multi column vindex
 "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1"
 {
+  "QueryType": "UPDATE",
   "Original": "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1",
   "Instructions": {
     "OperatorType": "Update",
@@ -1389,6 +1458,7 @@
 # update with no primary vindex on where clause (scatter update)
 "update user_extra set val = 1"
 {
+  "QueryType": "UPDATE",
   "Original": "update user_extra set val = 1",
   "Instructions": {
     "OperatorType": "Update",
@@ -1407,6 +1477,7 @@
 # update with target destination
 "update `user[-]`.user_extra set val = 1"
 {
+  "QueryType": "UPDATE",
   "Original": "update `user[-]`.user_extra set val = 1",
   "Instructions": {
     "OperatorType": "Update",
@@ -1425,6 +1496,7 @@
 # update with no primary vindex on where clause (scatter update)   - multi shard autocommit
 "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */  user_extra set val = 1"
 {
+  "QueryType": "UPDATE",
   "Original": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */  user_extra set val = 1",
   "Instructions": {
     "OperatorType": "Update",
@@ -1443,6 +1515,7 @@
 # update with no primary vindex on where clause (scatter update)   - query timeout
 "update /*vt+ QUERY_TIMEOUT_MS=1 */  user_extra set val = 1"
 {
+  "QueryType": "UPDATE",
   "Original": "update /*vt+ QUERY_TIMEOUT_MS=1 */  user_extra set val = 1",
   "Instructions": {
     "OperatorType": "Update",
@@ -1462,6 +1535,7 @@
 # update with non-comparison expr
 "update user_extra set val = 1 where id between 1 and 2"
 {
+  "QueryType": "UPDATE",
   "Original": "update user_extra set val = 1 where id between 1 and 2",
   "Instructions": {
     "OperatorType": "Update",
@@ -1480,6 +1554,7 @@
 # update with primary id through IN clause
 "update user_extra set val = 1 where user_id in (1, 2)"
 {
+  "QueryType": "UPDATE",
   "Original": "update user_extra set val = 1 where user_id in (1, 2)",
   "Instructions": {
     "OperatorType": "Update",
@@ -1498,6 +1573,7 @@
 # update with non-unique key
 "update user_extra set val = 1 where name = 'foo'"
 {
+  "QueryType": "UPDATE",
   "Original": "update user_extra set val = 1 where name = 'foo'",
   "Instructions": {
     "OperatorType": "Update",
@@ -1516,6 +1592,7 @@
 # update by lookup with IN clause
 "update user_extra set val = 1 where id in (1, 2)"
 {
+  "QueryType": "UPDATE",
   "Original": "update user_extra set val = 1 where id in (1, 2)",
   "Instructions": {
     "OperatorType": "Update",
@@ -1534,6 +1611,7 @@
 # update with where clause with parens
 "update user_extra set val = 1 where (name = 'foo' or id = 1)"
 {
+  "QueryType": "UPDATE",
   "Original": "update user_extra set val = 1 where (name = 'foo' or id = 1)",
   "Instructions": {
     "OperatorType": "Update",
@@ -1552,6 +1630,7 @@
 # delete from with no where clause
 "delete from user_extra"
 {
+  "QueryType": "DELETE",
   "Original": "delete from user_extra",
   "Instructions": {
     "OperatorType": "Delete",
@@ -1570,6 +1649,7 @@
 # delete with target destination
 "delete from `user[-]`.user_extra"
 {
+  "QueryType": "DELETE",
   "Original": "delete from `user[-]`.user_extra",
   "Instructions": {
     "OperatorType": "Delete",
@@ -1588,6 +1668,7 @@
 # delete with non-comparison expr
 "delete from user_extra where user_id between 1 and 2"
 {
+  "QueryType": "DELETE",
   "Original": "delete from user_extra where user_id between 1 and 2",
   "Instructions": {
     "OperatorType": "Delete",
@@ -1606,6 +1687,7 @@
 # delete from with no index match
 "delete from user_extra where name = 'jose'"
 {
+  "QueryType": "DELETE",
   "Original": "delete from user_extra where name = 'jose'",
   "Instructions": {
     "OperatorType": "Delete",
@@ -1624,6 +1706,7 @@
 # delete from with no index match - multi shard autocommit
 "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where name = 'jose'"
 {
+  "QueryType": "DELETE",
   "Original": "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where name = 'jose'",
   "Instructions": {
     "OperatorType": "Delete",
@@ -1642,6 +1725,7 @@
 # delete from with no index match - query timeout
 "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where name = 'jose'"
 {
+  "QueryType": "DELETE",
   "Original": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where name = 'jose'",
   "Instructions": {
     "OperatorType": "Delete",
@@ -1661,6 +1745,7 @@
 # delete from with primary id in through IN clause
 "delete from user_extra where user_id in (1, 2)"
 {
+  "QueryType": "DELETE",
   "Original": "delete from user_extra where user_id in (1, 2)",
   "Instructions": {
     "OperatorType": "Delete",
@@ -1679,6 +1764,7 @@
 # unsharded update where inner query references outer query
 "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)"
 {
+  "QueryType": "UPDATE",
   "Original": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)",
   "Instructions": {
     "OperatorType": "Update",
@@ -1696,6 +1782,7 @@
 # unsharded delete where inner query references outer query
 "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)"
 {
+  "QueryType": "DELETE",
   "Original": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)",
   "Instructions": {
     "OperatorType": "Delete",
@@ -1713,6 +1800,7 @@
 # update vindex value to null
 "update user set name = null where id = 1"
 {
+  "QueryType": "UPDATE",
   "Original": "update user set name = null where id = 1",
   "Instructions": {
     "OperatorType": "Update",
@@ -1740,6 +1828,7 @@
 # insert using last_insert_id
 "insert into unsharded values(last_insert_id(), 2)"
 {
+  "QueryType": "INSERT",
   "Original": "insert into unsharded values(last_insert_id(), 2)",
   "Instructions": {
     "OperatorType": "Insert",
@@ -1758,6 +1847,7 @@
 # update vindex value to null with multiple primary keyspace id
 "update user set name = null where id in (1, 2, 3)"
 {
+  "QueryType": "UPDATE",
   "Original": "update user set name = null where id in (1, 2, 3)",
   "Instructions": {
     "OperatorType": "Update",
@@ -1781,6 +1871,7 @@
 # update vindex value to null without a where clause
 "update user set name = null"
 {
+  "QueryType": "UPDATE",
   "Original": "update user set name = null",
   "Instructions": {
     "OperatorType": "Update",
@@ -1804,6 +1895,7 @@
 # update vindex value to null with complex where clause
 "update user set name = null where id + 1 = 2"
 {
+  "QueryType": "UPDATE",
   "Original": "update user set name = null where id + 1 = 2",
   "Instructions": {
     "OperatorType": "Update",
@@ -1827,6 +1919,7 @@
 # delete from user by primary keyspace id with in clause
 "delete from user where id in (1, 2, 3)"
 {
+  "QueryType": "DELETE",
   "Original": "delete from user where id in (1, 2, 3)",
   "Instructions": {
     "OperatorType": "Delete",
@@ -1847,6 +1940,7 @@
 # delete from user by complex expression
 "delete from user where id + 1 = 2"
 {
+  "QueryType": "DELETE",
   "Original": "delete from user where id + 1 = 2",
   "Instructions": {
     "OperatorType": "Delete",
@@ -1867,6 +1961,7 @@
 # delete from user without a where clause
 "delete from user"
 {
+  "QueryType": "DELETE",
   "Original": "delete from user",
   "Instructions": {
     "OperatorType": "Delete",
@@ -1887,6 +1982,7 @@
 # delete with single table targets
 "delete music from music where id = 1"
 {
+  "QueryType": "DELETE",
   "Original": "delete music from music where id = 1",
   "Instructions": {
     "OperatorType": "Delete",
@@ -1911,6 +2007,7 @@
 # scatter update table with owned vindexes without changing lookup vindex
 "update user set val = 1"
 {
+  "QueryType": "UPDATE",
   "Original": "update user set val = 1",
   "Instructions": {
     "OperatorType": "Update",
@@ -1929,6 +2026,7 @@
 # scatter delete with owned lookup vindex
 "delete from user"
 {
+  "QueryType": "DELETE",
   "Original": "delete from user",
   "Instructions": {
     "OperatorType": "Delete",
@@ -1949,6 +2047,7 @@
 # update multi column vindex, without values for all the vindex columns
 "update multicolvin set column_c = 2 where kid = 1"
 {
+  "QueryType": "UPDATE",
   "Original": "update multicolvin set column_c = 2 where kid = 1",
   "Instructions": {
     "OperatorType": "Update",

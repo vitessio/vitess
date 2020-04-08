@@ -4,28 +4,15 @@
 
 # SET
 "set a=1"
-"unsupported construct: set"
+"plan building not supported"
 
 # SHOW
 "show create database"
-"unsupported construct: show"
-
-# DDL
-"create table a(id int)"
-"unsupported construct: ddl"
-
-"create table a.b(id int)"
-"unsupported construct: ddl"
-
-"alter table a ADD id int"
-"unsupported construct: ddl"
-
-"alter table a.b ADD id int"
-"unsupported construct: ddl"
+"plan building not supported"
 
 # DBA statements
 "explain select * from user"
-"unsupported construct: other read"
+"plan building not supported"
 
 # union operations in subqueries (FROM)
 "select * from (select * from user union all select * from user_extra) as t"

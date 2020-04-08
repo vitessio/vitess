@@ -18,7 +18,7 @@ func TestSendTable(t *testing.T) {
 		shards           []string
 		destination      key.Destination
 		expectedQueryLog []string
-		noAutoCommit     bool
+		isDML            bool
 	}
 
 	singleShard := []string{"0"}
@@ -33,7 +33,7 @@ func TestSendTable(t *testing.T) {
 				`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 				`ExecuteMultiShard ks.0: dummy_query {} false false`,
 			},
-			noAutoCommit: true,
+			isDML: false,
 		},
 		{
 			testName:    "sharded with no autocommit",
@@ -44,7 +44,7 @@ func TestSendTable(t *testing.T) {
 				`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
 				`ExecuteMultiShard ks.DestinationShard(20-): dummy_query {} false false`,
 			},
-			noAutoCommit: true,
+			isDML: false,
 		},
 		{
 			testName:    "unsharded",
@@ -55,7 +55,7 @@ func TestSendTable(t *testing.T) {
 				`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 				`ExecuteMultiShard ks.0: dummy_query {} true true`,
 			},
-			noAutoCommit: false,
+			isDML: true,
 		},
 		{
 			testName:    "sharded with single shard destination",
@@ -66,7 +66,7 @@ func TestSendTable(t *testing.T) {
 				`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
 				`ExecuteMultiShard ks.DestinationShard(20-): dummy_query {} true true`,
 			},
-			noAutoCommit: false,
+			isDML: true,
 		},
 		{
 			testName:    "sharded with multi shard destination",
@@ -77,7 +77,7 @@ func TestSendTable(t *testing.T) {
 				`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 				`ExecuteMultiShard ks.-20: dummy_query {} ks.20-: dummy_query {} true false`,
 			},
-			noAutoCommit: false,
+			isDML: true,
 		},
 	}
 
@@ -90,7 +90,7 @@ func TestSendTable(t *testing.T) {
 				},
 				Query:             "dummy_query",
 				TargetDestination: tc.destination,
-				NoAutoCommit:      tc.noAutoCommit,
+				IsDML:             tc.isDML,
 			}
 			vc := &loggingVCursor{shards: tc.shards}
 			_, err := send.Execute(vc, map[string]*querypb.BindVariable{}, false)

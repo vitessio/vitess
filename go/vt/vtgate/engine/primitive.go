@@ -72,6 +72,8 @@ type VCursor interface {
 	// Resolver methods, from key.Destination to srvtopo.ResolvedShard.
 	// Will replace all of the Topo functions.
 	ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error)
+	SetTarget(target string) error
+	ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error
 }
 
 // Plan represents the execution strategy for a given query.
@@ -80,9 +82,10 @@ type VCursor interface {
 // each node does its part by combining the results of the
 // sub-nodes.
 type Plan struct {
-	Original               string    // Original is the original query.
-	Instructions           Primitive // Instructions contains the instructions needed to fulfil the query.
-	sqlparser.BindVarNeeds           // Stores BindVars needed to be provided as part of expression rewriting
+	Type                   sqlparser.StatementType // The type of query we have
+	Original               string                  // Original is the original query.
+	Instructions           Primitive               // Instructions contains the instructions needed to fulfil the query.
+	sqlparser.BindVarNeeds                         // Stores BindVars needed to be provided as part of expression rewriting
 
 	mu           sync.Mutex    // Mutex to protect the fields below
 	ExecCount    uint64        // Count of times this plan was executed
@@ -153,6 +156,7 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 	}
 
 	marshalPlan := struct {
+		QueryType    string
 		Original     string                `json:",omitempty"`
 		Instructions *PrimitiveDescription `json:",omitempty"`
 		ExecCount    uint64                `json:",omitempty"`
@@ -161,6 +165,7 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 		Rows         uint64                `json:",omitempty"`
 		Errors       uint64                `json:",omitempty"`
 	}{
+		QueryType:    p.Type.String(),
 		Original:     p.Original,
 		Instructions: instructions,
 		ExecCount:    p.ExecCount,
@@ -183,6 +188,7 @@ type Primitive interface {
 	Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
 	StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
 	GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
+	NeedsTransaction() bool
 
 	// The inputs to this Primitive
 	Inputs() []Primitive
@@ -197,4 +203,16 @@ type noInputs struct{}
 // Inputs implements no inputs
 func (noInputs) Inputs() []Primitive {
 	return nil
+}
+
+type noTxNeeded struct{}
+
+func (noTxNeeded) NeedsTransaction() bool {
+	return false
+}
+
+type txNeeded struct{}
+
+func (txNeeded) NeedsTransaction() bool {
+	return true
 }
