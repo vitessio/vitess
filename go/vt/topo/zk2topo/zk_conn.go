@@ -295,7 +295,7 @@ func (c *ZkConn) maybeAddAuth(ctx context.Context) {
 		log.Errorf("failed to read topo_zk_auth_file: %v", err)
 		return
 	}
-	authInfo := string(authInfoBytes)
+	authInfo := strings.TrimRight(string(authInfoBytes), "\n")
 	authInfoParts := strings.SplitN(authInfo, ":", 2)
 	if len(authInfoParts) != 2 {
 		log.Errorf("failed to parse topo_zk_auth_file contents, expected format <scheme>:<auth> but saw: %s", authInfo)
