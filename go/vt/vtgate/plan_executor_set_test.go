@@ -36,8 +36,51 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestExecutorSet(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+func createMap(keys []string, values []interface{}) map[string]*querypb.BindVariable {
+	result := make(map[string]*querypb.BindVariable)
+	for i, key := range keys {
+		variable, err := sqltypes.BuildBindVariable(values[i])
+		if err != nil {
+			panic(err)
+		}
+		result[key] = variable
+	}
+	return result
+}
+
+func TestPlanExecutorSetUDV(t *testing.T) {
+	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+
+	testcases := []struct {
+		in  string
+		out *vtgatepb.Session
+		err string
+	}{{
+		in:  "set @foo = 'bar'",
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"}), Autocommit: true},
+	}, {
+		in:  "set @foo = 2",
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{2}), Autocommit: true},
+	}, {
+		in:  "set @foo = 2.1, @bar = 'baz'",
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo", "bar"}, []interface{}{2.1, "baz"}), Autocommit: true},
+	}}
+	for _, tcase := range testcases {
+		t.Run(tcase.in, func(t *testing.T) {
+			session := NewSafeSession(&vtgatepb.Session{Autocommit: true})
+			_, err := executor.Execute(context.Background(), "TestExecute", session, tcase.in, nil)
+			if err != nil {
+				require.EqualError(t, err, tcase.err)
+			} else {
+				utils.MustMatch(t, tcase.out, session.Session, "session output was not as expected")
+			}
+		})
+	}
+}
+
+func TestPlanExecutorSetSystemVar(t *testing.T) {
+	t.Skip("Planning for system variables is not done yet")
+	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
 
 	testcases := []struct {
 		in  string
@@ -244,15 +287,6 @@ func TestExecutorSet(t *testing.T) {
 	}, {
 		in:  "set sql_safe_updates = 2",
 		err: "unexpected value for sql_safe_updates: 2",
-	}, {
-		in:  "set @foo = 'bar'",
-		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"}), Autocommit: true},
-	}, {
-		in:  "set @foo = 2",
-		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{2}), Autocommit: true},
-	}, {
-		in:  "set @foo = 2.1, @bar = 'baz'",
-		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo", "bar"}, []interface{}{2.1, "baz"}), Autocommit: true},
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
@@ -267,8 +301,9 @@ func TestExecutorSet(t *testing.T) {
 	}
 }
 
-func TestExecutorSetMetadata(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+func TestPlanExecutorSetMetadata(t *testing.T) {
+	t.Skip("planning for vitess metadata is not supported yet")
+	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
 
 	set := "set @@vitess_metadata.app_keyspace_v1= '1'"
@@ -280,7 +315,7 @@ func TestExecutorSetMetadata(t *testing.T) {
 		*vschemaacl.AuthorizedDDLUsers = ""
 	}()
 
-	executor, _, _, _ = createExecutorEnv()
+	executor, _, _, _ = createExecutorEnvUsing(planAllTheThings)
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
 
 	set = "set @@vitess_metadata.app_keyspace_v1= '1'"
