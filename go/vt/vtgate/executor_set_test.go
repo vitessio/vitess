@@ -19,11 +19,12 @@ package vtgate
 import (
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"context"
 
-	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 
@@ -262,21 +263,17 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set @foo = 2",
 		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{2}), Autocommit: true},
 	}, {
-		in:  "set @foo = 2.0, @bar = 'baz'",
-		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo", "bar"}, []interface{}{2.0, "baz"}), Autocommit: true},
+		in:  "set @foo = 2.1, @bar = 'baz'",
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo", "bar"}, []interface{}{2.1, "baz"}), Autocommit: true},
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
 			session := NewSafeSession(&vtgatepb.Session{Autocommit: true})
 			_, err := executor.Execute(context.Background(), "TestExecute", session, tcase.in, nil)
 			if err != nil {
-				if err.Error() != tcase.err {
-					t.Errorf("%s error: %v, want %s", tcase.in, err, tcase.err)
-				}
-				return
-			}
-			if !proto.Equal(session.Session, tcase.out) {
-				t.Errorf("%s: %v, want %s", tcase.in, session.Session, tcase.out)
+				require.EqualError(t, err, tcase.err)
+			} else {
+				utils.MustMatch(t, tcase.out, session.Session, "session output was not as expected")
 			}
 		})
 	}

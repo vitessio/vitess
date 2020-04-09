@@ -328,6 +328,15 @@ func (vc *vcursorImpl) SetTarget(target string) error {
 	return nil
 }
 
+func (vc *vcursorImpl) SetUDV(key string, value interface{}) error {
+	bindValue, err := sqltypes.BuildBindVariable(value)
+	if err != nil {
+		return err
+	}
+	vc.safeSession.SetUserDefinedVariable(key, bindValue)
+	return nil
+}
+
 // Destination implements the ContextVSchema interface
 func (vc *vcursorImpl) Destination() key.Destination {
 	return vc.destination
