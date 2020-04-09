@@ -2515,14 +2515,6 @@ func TestConfigChanges(t *testing.T) {
 	if val := int(tsv.qe.warnResultSize.Get()); val != newSize {
 		t.Errorf("tsv.qe.warnResultSize.Get: %d, want %d", val, newSize)
 	}
-
-	tsv.SetMaxDMLRows(newSize)
-	if val := tsv.MaxDMLRows(); val != newSize {
-		t.Errorf("MaxDMLRows: %d, want %d", val, newSize)
-	}
-	if val := int(tsv.qe.maxDMLRows.Get()); val != newSize {
-		t.Errorf("tsv.qe.maxDMLRows.Get: %d, want %d", val, newSize)
-	}
 }
 
 func setUpTabletServerTest(t *testing.T) *fakesqldb.DB {

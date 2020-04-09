@@ -143,7 +143,6 @@ type QueryEngine struct {
 	queryPoolWaiterCap sync2.AtomicInt64
 	maxResultSize      sync2.AtomicInt64
 	warnResultSize     sync2.AtomicInt64
-	maxDMLRows         sync2.AtomicInt64
 	streamBufferSize   sync2.AtomicInt64
 	// tableaclExemptCount count the number of accesses allowed
 	// based on membership in the superuser ACL
@@ -210,7 +209,6 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 
 	qe.maxResultSize = sync2.NewAtomicInt64(int64(config.MaxResultSize))
 	qe.warnResultSize = sync2.NewAtomicInt64(int64(config.WarnResultSize))
-	qe.maxDMLRows = sync2.NewAtomicInt64(int64(config.MaxDMLRows))
 	qe.streamBufferSize = sync2.NewAtomicInt64(int64(config.StreamBufferSize))
 
 	planbuilder.PassthroughDMLs = config.PassthroughDMLs
@@ -219,7 +217,6 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 
 	env.Exporter().NewGaugeFunc("MaxResultSize", "Query engine max result size", qe.maxResultSize.Get)
 	env.Exporter().NewGaugeFunc("WarnResultSize", "Query engine warn result size", qe.warnResultSize.Get)
-	env.Exporter().NewGaugeFunc("MaxDMLRows", "Query engine max DML rows", qe.maxDMLRows.Get)
 	env.Exporter().NewGaugeFunc("StreamBufferSize", "Query engine stream buffer size", qe.streamBufferSize.Get)
 	env.Exporter().NewCounterFunc("TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Get)
 	env.Exporter().NewGaugeFunc("QueryPoolWaiters", "Query engine query pool waiters", qe.queryPoolWaiters.Get)

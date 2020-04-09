@@ -64,9 +64,6 @@ func TestConfigVars(t *testing.T) {
 		tag: "ConnPoolMaxCap",
 		val: tabletenv.Config.PoolSize,
 	}, {
-		tag: "MaxDMLRows",
-		val: tabletenv.Config.MaxDMLRows,
-	}, {
 		tag: "MaxResultSize",
 		val: tabletenv.Config.MaxResultSize,
 	}, {

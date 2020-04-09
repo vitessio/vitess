@@ -1906,17 +1906,6 @@ func (tsv *TabletServer) WarnResultSize() int {
 	return int(tsv.qe.warnResultSize.Get())
 }
 
-// SetMaxDMLRows changes the max result size to the specified value.
-// This function should only be used for testing.
-func (tsv *TabletServer) SetMaxDMLRows(val int) {
-	tsv.qe.maxDMLRows.Set(int64(val))
-}
-
-// MaxDMLRows returns the max result size.
-func (tsv *TabletServer) MaxDMLRows() int {
-	return int(tsv.qe.maxDMLRows.Get())
-}
-
 // SetPassthroughDMLs changes the setting to pass through all DMLs
 // It should only be used for testing
 func (tsv *TabletServer) SetPassthroughDMLs(val bool) {
