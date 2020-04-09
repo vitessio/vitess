@@ -262,18 +262,15 @@ func (stream *VTGateStream) MessageStream(ks, shard string, keyRange *topodata.K
 		for {
 			qr, err := resultStream.Recv()
 			if err != nil {
-				fmt.Println("exit", err)
 				log.Infof("Message stream ended: %v", err)
 				return
 			}
 
 			if stream.mem != nil && stream.mem.Equal(qr) {
-				fmt.Println("discarted", qr)
 				continue
 			}
 
 			stream.mem = qr
-			fmt.Println("message", qr)
 			stream.respChan <- qr
 		}
 	}()
