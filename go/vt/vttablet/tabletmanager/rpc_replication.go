@@ -461,6 +461,7 @@ func (agent *ActionAgent) UndoDemoteMaster(ctx context.Context) error {
 // PromoteSlaveWhenCaughtUp waits for this slave to be caught up on
 // replication up to the provided point, and then makes the slave the
 // shard master.
+// Deprecated
 func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position string) (string, error) {
 	if err := agent.lock(ctx); err != nil {
 		return "", err
@@ -469,7 +470,6 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 
 	pos, err := mysql.DecodePosition(position)
 	if err != nil {
-
 		return "", err
 	}
 
@@ -477,7 +477,7 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 		return "", err
 	}
 
-	pos, err = agent.MysqlDaemon.PromoteSlave(agent.hookExtraEnv())
+	pos, err = agent.MysqlDaemon.Promote(agent.hookExtraEnv())
 	if err != nil {
 		return "", err
 	}
@@ -488,6 +488,10 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 	}
 
 	startTime := time.Now()
+	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
+		return "", err
+	}
+
 	_, err = topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, logutil.TimeToProto(startTime))
 	if err != nil {
 		return "", err
@@ -497,12 +501,6 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 	// This ensures that in case of a failure, we are never in a situation where the
 	// tablet's timestamp is ahead of the topo's timestamp.
 	agent.setMasterTermStartTime(startTime)
-
-	// We call SetReadOnly only after the topo has been updated to avoid
-	// situations where two tablets are master at the DB level but not at the vitess level
-	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
-		return "", err
-	}
 
 	if err := agent.refreshTablet(ctx, "PromoteSlaveWhenCaughtUp"); err != nil {
 		return "", err
@@ -748,14 +746,14 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*rep
 	return mysql.SlaveStatusToProto(rs), nil
 }
 
-// PromoteSlave makes the current tablet the master
-func (agent *ActionAgent) PromoteSlave(ctx context.Context) (replicationPosition string, finalErr error) {
+// PromoteReplica makes the current tablet the master
+func (agent *ActionAgent) PromoteReplica(ctx context.Context) (string, error) {
 	if err := agent.lock(ctx); err != nil {
 		return "", err
 	}
 	defer agent.unlock()
 
-	pos, err := agent.MysqlDaemon.PromoteSlave(agent.hookExtraEnv())
+	pos, err := agent.MysqlDaemon.Promote(agent.hookExtraEnv())
 	if err != nil {
 		return "", err
 	}
@@ -774,6 +772,46 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (replicationPosition
 	// We call SetReadOnly only after the topo has been updated to avoid
 	// situations where two tablets are master at the DB level but not at the vitess level
 	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
+		return "", err
+	}
+
+	// We only update agent's masterTermStartTime if we were able to update the topo.
+	// This ensures that in case of a failure, we are never in a situation where the
+	// tablet's timestamp is ahead of the topo's timestamp.
+	agent.setMasterTermStartTime(startTime)
+
+	if err := agent.refreshTablet(ctx, "PromoteReplica"); err != nil {
+		return "", err
+	}
+
+	return mysql.EncodePosition(pos), nil
+}
+
+// PromoteSlave makes the current tablet the master
+// Deprecated
+func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
+	if err := agent.lock(ctx); err != nil {
+		return "", err
+	}
+	defer agent.unlock()
+
+	pos, err := agent.MysqlDaemon.Promote(agent.hookExtraEnv())
+	if err != nil {
+		return "", err
+	}
+
+	// If using semi-sync, we need to enable it before going read-write.
+	if err := agent.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
+		return "", err
+	}
+
+	// Set the server read-write
+	startTime := time.Now()
+	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
+		return "", err
+	}
+
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, logutil.TimeToProto(startTime)); err != nil {
 		return "", err
 	}
 

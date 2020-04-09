@@ -944,7 +944,7 @@ func agentRPCTestInitMasterPanic(ctx context.Context, t *testing.T, client tmcli
 
 var testPopulateReparentJournalCalled = false
 var testTimeCreatedNS int64 = 4569900
-var testWaitPosition string = "test wait position"
+var testWaitPosition = "test wait position"
 var testActionName = "TestActionName"
 var testMasterAlias = &topodatapb.TabletAlias{
 	Cell: "ce",
@@ -1157,6 +1157,23 @@ func agentRPCTestPromoteSlavePanic(ctx context.Context, t *testing.T, client tmc
 	expectHandleRPCPanic(t, "PromoteSlave", true /*verbose*/, err)
 }
 
+func (fra *fakeRPCAgent) PromoteReplica(ctx context.Context) (string, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return testReplicationPosition, nil
+}
+
+func agentRPCTestPromoteReplica(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	rp, err := client.PromoteReplica(ctx, tablet)
+	compareError(t, "PromoteReplica", err, rp, testReplicationPosition)
+}
+
+func agentRPCTestPromoteReplicaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.PromoteReplica(ctx, tablet)
+	expectHandleRPCPanic(t, "PromoteReplica", true /*verbose*/, err)
+}
+
 //
 // Backup / restore related methods
 //
@@ -1298,6 +1315,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	agentRPCTestSlaveWasRestarted(ctx, t, client, tablet)
 	agentRPCTestStopReplicationAndGetStatus(ctx, t, client, tablet)
 	agentRPCTestPromoteSlave(ctx, t, client, tablet)
+	agentRPCTestPromoteReplica(ctx, t, client, tablet)
 
 	// Backup / restore related methods
 	agentRPCTestBackup(ctx, t, client, tablet)
@@ -1352,6 +1370,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	agentRPCTestSlaveWasRestartedPanic(ctx, t, client, tablet)
 	agentRPCTestStopReplicationAndGetStatusPanic(ctx, t, client, tablet)
 	agentRPCTestPromoteSlavePanic(ctx, t, client, tablet)
+	agentRPCTestPromoteReplicaPanic(ctx, t, client, tablet)
 
 	// Backup / restore related methods
 	agentRPCTestBackupPanic(ctx, t, client, tablet)
