@@ -75,7 +75,7 @@ var _ BinaryExpr = (*Multiplication)(nil)
 var _ BinaryExpr = (*Division)(nil)
 
 //Evaluate implements the Expr interface
-func (b BinaryOp) Evaluate(env ExpressionEnv) (EvalResult, error) {
+func (b *BinaryOp) Evaluate(env ExpressionEnv) (EvalResult, error) {
 	lVal, err := b.Left.Evaluate(env)
 	if err != nil {
 		return EvalResult{}, err
