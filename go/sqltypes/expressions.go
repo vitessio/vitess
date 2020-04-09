@@ -39,74 +39,103 @@ type Expr interface {
 	Evaluate(env ExpressionEnv) (EvalResult, error)
 }
 
-var _ Expr = (*SQLVal)(nil)
+var _ Expr = (*LiteralInt)(nil)
+var _ Expr = (*BindVariable)(nil)
 
-type SQLVal struct {
-	Type ValType
-	Val  []byte
+type LiteralInt struct {
+	Val []byte
 }
 
-func (s *SQLVal) Evaluate(env ExpressionEnv) (EvalResult, error) {
-	switch s.Type {
-	case IntVal:
-		ival, err := strconv.ParseInt(string(s.Val), 10, 64)
-		if err != nil {
-			ival = 0
-		}
-		return numeric{typ: Int64, ival: ival}, nil
-	case ValArg:
-		val := env.BindVars[string(s.Val[1:])]
-		ival, err := strconv.ParseInt(string(val.Value), 10, 64)
-		if err != nil {
-			ival = 0
-		}
-		return numeric{typ: Int64, ival: ival}, nil
+func (l *LiteralInt) Evaluate(env ExpressionEnv) (EvalResult, error) {
+	ival, err := strconv.ParseInt(string(l.Val), 10, 64)
+	if err != nil {
+		ival = 0
 	}
-	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not yet implemented")
+	return numeric{typ: Int64, ival: ival}, nil
 }
 
-type ValType int
-
-const (
-	StrVal = ValType(iota)
-	IntVal
-	FloatVal
-	HexNum
-	HexVal
-	ValArg
-	BitVal
-)
-
-var _ Expr = (*add)(nil)
-
-type add struct {
-	l, r Expr
+type BindVariable struct {
+	Key string
 }
 
-type subtract struct {
-	l, r Expr
+func (b *BindVariable) Evaluate(env ExpressionEnv) (EvalResult, error) {
+	val, ok := env.BindVars[b.Key]
+	if !ok {
+		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Bind variable not found")
+	}
+	ival, err := strconv.ParseInt(string(val.Value), 10, 64)
+	if err != nil {
+		ival = 0
+	}
+	return numeric{typ: Int64, ival: ival}, nil
+
 }
 
-func (a *add) Evaluate(env ExpressionEnv) (EvalResult, error) {
-	lVal, err := a.l.Evaluate(env)
+var _ Expr = (*Addition)(nil)
+var _ Expr = (*Subtraction)(nil)
+var _ Expr = (*Multiplication)(nil)
+var _ Expr = (*Division)(nil)
+
+type Addition struct {
+	Left, Right Expr
+}
+
+func (a *Addition) Evaluate(env ExpressionEnv) (EvalResult, error) {
+	lVal, err := a.Left.Evaluate(env)
 	if err != nil {
 		return EvalResult{}, err
 	}
-	rVal, err := a.r.Evaluate(env)
+	rVal, err := a.Right.Evaluate(env)
 	if err != nil {
 		return EvalResult{}, err
 	}
 	return addNumericWithError(lVal, rVal)
 }
 
-func (s *subtract) Evaluate(env ExpressionEnv) (EvalResult, error) {
-	lVal, err := s.l.Evaluate(env)
+type Subtraction struct {
+	Left, Right Expr
+}
+
+func (s *Subtraction) Evaluate(env ExpressionEnv) (EvalResult, error) {
+	lVal, err := s.Left.Evaluate(env)
 	if err != nil {
 		return EvalResult{}, err
 	}
-	rVal, err := s.r.Evaluate(env)
+	rVal, err := s.Right.Evaluate(env)
 	if err != nil {
 		return EvalResult{}, err
 	}
 	return subtractNumericWithError(lVal, rVal)
+}
+
+type Multiplication struct {
+	Left, Right Expr
+}
+
+func (m *Multiplication) Evaluate(env ExpressionEnv) (EvalResult, error) {
+	lVal, err := m.Left.Evaluate(env)
+	if err != nil {
+		return EvalResult{}, err
+	}
+	rVal, err := m.Right.Evaluate(env)
+	if err != nil {
+		return EvalResult{}, err
+	}
+	return multiplyNumericWithError(lVal, rVal)
+}
+
+type Division struct {
+	Left, Right Expr
+}
+
+func (d *Division) Evaluate(env ExpressionEnv) (EvalResult, error) {
+	lVal, err := d.Left.Evaluate(env)
+	if err != nil {
+		return EvalResult{}, err
+	}
+	rVal, err := d.Right.Evaluate(env)
+	if err != nil {
+		return EvalResult{}, err
+	}
+	return divideNumericWithError(lVal, rVal)
 }

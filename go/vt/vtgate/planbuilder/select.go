@@ -77,11 +77,14 @@ func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) error {
 	if checkForDual(sel) && outer == nil {
 		exprs := make([]sqltypes.Expr, len(sel.SelectExprs))
+		cols := make([]string, len(sel.SelectExprs))
 		for i, e := range sel.SelectExprs {
 			exprs[i] = sqlparser.Convert(e.(*sqlparser.AliasedExpr).Expr)
+			cols[i] = e.(*sqlparser.AliasedExpr).As.String()
 		}
 		pb.bldr = &vtgateExecution{
 			exprs,
+			cols,
 		}
 		return nil
 	}

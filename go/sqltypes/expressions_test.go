@@ -40,17 +40,27 @@ func TestEvaluate(t *testing.T) {
 		},
 		{
 			name:     "40+2",
-			e:        &add{i("40"), i("2")},
+			e:        &Addition{i("40"), i("2")},
 			expected: NewInt64(42),
 		},
 		{
 			name:     "40-2",
-			e:        &subtract{i("40"), i("2")},
+			e:        &Subtraction{i("40"), i("2")},
 			expected: NewInt64(38),
 		},
 		{
+			name:     "40*2",
+			e:        &Multiplication{i("40"), i("2")},
+			expected: NewInt64(80),
+		},
+		{
+			name:     "40/2",
+			e:        &Division{i("40"), i("2")},
+			expected: NewFloat64(20),
+		},
+		{
 			name:     "Bind Variable",
-			e:        b(":exp"),
+			e:        b("exp"),
 			expected: NewInt64(66),
 		},
 	}
@@ -59,7 +69,7 @@ func TestEvaluate(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			env := ExpressionEnv{
 				BindVars: map[string]*querypb.BindVariable{
-					":exp": Int64BindVariable(66),
+					"exp": Int64BindVariable(66),
 				},
 				Row: nil,
 			}
@@ -72,16 +82,14 @@ func TestEvaluate(t *testing.T) {
 
 }
 
-func i(in string) *SQLVal {
-	return &SQLVal{
-		Type: IntVal,
-		Val:  []byte(in),
+func i(in string) Expr {
+	return &LiteralInt{
+		Val: []byte(in),
 	}
 }
 
-func b(in string) *SQLVal {
-	return &SQLVal{
-		Type: ValArg,
-		Val:  []byte(in),
+func b(in string) Expr {
+	return &BindVariable{
+		Key: in,
 	}
 }

@@ -5,9 +5,11 @@ import "vitess.io/vitess/go/sqltypes"
 func Convert(e Expr) sqltypes.Expr {
 	switch node := e.(type) {
 	case *SQLVal:
-		return &sqltypes.SQLVal{
-			Type: sqltypes.ValType(node.Type), // eeeek! not a clean way of doing it
-			Val:  node.Val,
+		switch node.Type {
+		case IntVal:
+			return &sqltypes.LiteralInt{Val: node.Val}
+		case ValArg:
+			return &sqltypes.BindVariable{Key: string(node.Val[1:])}
 		}
 	}
 	return nil
