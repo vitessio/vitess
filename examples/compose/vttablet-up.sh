@@ -63,14 +63,10 @@ if [ $tablet_role != "master" ]; then
         echo "CREATE USER IF NOT EXISTS '$DB_USER'@'%' IDENTIFIED BY '$DB_PASS';" >> $init_db_sql_file
         echo "GRANT ALL ON *.* TO '$DB_USER'@'%';FLUSH PRIVILEGES;" >> $init_db_sql_file
         # Prevent replication failures in case external db server has multiple databases which have not been created here
-        echo "replicate-do-db=$keyspace" >> $VTROOT/config/mycnf/rbr.cnf
     else
         echo "CREATE DATABASE IF NOT EXISTS $db_name;" >> $init_db_sql_file
     fi
 fi
-# Enforce Row Based Replication
-export EXTRA_MY_CNF=$VTROOT/config/mycnf/default-fast.cnf:$VTROOT/config/mycnf/rbr.cnf
-export EXTRA_MY_CNF=$EXTRA_MY_CNF:$VTROOT/config/mycnf/master_mysql56.cnf
 
 mkdir -p $VTDATAROOT/backups
 

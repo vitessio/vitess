@@ -27,8 +27,10 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
+	"vitess.io/vitess/go/vt/log"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -124,6 +126,14 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	if !streamlog.ShouldEmitLog(stats.SQL) {
 		return nil
 	}
+
+	// FormatBindVariables call might panic so we're going to catch it here
+	// and print out the stack trace for debugging.
+	defer func() {
+		if x := recover(); x != nil {
+			log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
+		}
+	}()
 
 	formattedBindVars := "\"[REDACTED]\""
 	if !*streamlog.RedactDebugUIQueries {

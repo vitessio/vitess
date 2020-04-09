@@ -14,11 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+source build.env
+
 temp_log_file="$(mktemp --suffix .unit_test_race.log)"
 trap '[ -f "$temp_log_file" ] && rm $temp_log_file' EXIT
-
-# This can be removed once the docker images are rebuilt
-export GO111MODULE=on
 
 # Wrapper around go test -race.
 
@@ -34,6 +33,7 @@ export GO111MODULE=on
 # All endtoend Go packages with test files.
 # Output per line: <full Go package name> <all _test.go files in the package>*
 packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/.../endtoend/... | sort)
+packages_with_tests=$(echo "$packages_with_tests" |  grep -vE "go/test/endtoend" | cut -d" " -f1)
 
 # endtoend tests should be in a directory called endtoend
 all_e2e_tests=$(echo "$packages_with_tests" | cut -d" " -f1)

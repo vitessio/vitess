@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtgate"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -33,10 +34,10 @@ import (
 )
 
 var (
-	_ Vindex        = (*ConsistentLookupUnique)(nil)
+	_ SingleColumn  = (*ConsistentLookupUnique)(nil)
 	_ Lookup        = (*ConsistentLookupUnique)(nil)
 	_ WantOwnerInfo = (*ConsistentLookupUnique)(nil)
-	_ Vindex        = (*ConsistentLookup)(nil)
+	_ SingleColumn  = (*ConsistentLookup)(nil)
 	_ Lookup        = (*ConsistentLookup)(nil)
 	_ WantOwnerInfo = (*ConsistentLookup)(nil)
 )
@@ -75,9 +76,20 @@ func (lu *ConsistentLookup) IsUnique() bool {
 	return false
 }
 
+// NeedsVCursor satisfies the Vindex interface.
+func (lu *ConsistentLookup) NeedsVCursor() bool {
+	return true
+}
+
 // Map can map ids to key.Destination objects.
 func (lu *ConsistentLookup) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
+	if lu.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
 
 	results, err := lu.lkp.Lookup(vcursor, ids)
 	if err != nil {
@@ -129,9 +141,21 @@ func (lu *ConsistentLookupUnique) IsUnique() bool {
 	return true
 }
 
+// NeedsVCursor satisfies the Vindex interface.
+func (lu *ConsistentLookupUnique) NeedsVCursor() bool {
+	return true
+}
+
 // Map can map ids to key.Destination objects.
 func (lu *ConsistentLookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
+	if lu.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
+
 	results, err := lu.lkp.Lookup(vcursor, ids)
 	if err != nil {
 		return nil, err
@@ -156,6 +180,7 @@ func (lu *ConsistentLookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]
 // Unique and a Lookup.
 type clCommon struct {
 	name         string
+	writeOnly    bool
 	lkp          lookupInternal
 	keyspace     string
 	ownerTable   string
@@ -170,6 +195,11 @@ type clCommon struct {
 // newCLCommon is commone code for the consistent lookup vindexes.
 func newCLCommon(name string, m map[string]string) (*clCommon, error) {
 	lu := &clCommon{name: name}
+	var err error
+	lu.writeOnly, err = boolFromMap(m, "write_only")
+	if err != nil {
+		return nil, err
+	}
 
 	if err := lu.lkp.Init(m, false /* autocommit */, false /* upsert */); err != nil {
 		return nil, err
@@ -201,6 +231,13 @@ func (lu *clCommon) String() string {
 
 // Verify returns true if ids maps to ksids.
 func (lu *clCommon) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	if lu.writeOnly {
+		out := make([]bool, len(ids))
+		for i := range ids {
+			out[i] = true
+		}
+		return out, nil
+	}
 	return lu.lkp.VerifyCustom(vcursor, ids, ksidsToValues(ksids), vtgate.CommitOrder_PRE)
 }
 
@@ -229,19 +266,19 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 	bindVars[lu.lkp.To] = sqltypes.BytesBindVariable(ksid)
 
 	// Lock the lookup row using pre priority.
-	qr, err := vcursor.Execute("VindexCreate", lu.lockLookupQuery, bindVars, false /* isDML */, vtgatepb.CommitOrder_PRE)
+	qr, err := vcursor.Execute("VindexCreate", lu.lockLookupQuery, bindVars, false /* rollbackOnError */, vtgatepb.CommitOrder_PRE)
 	if err != nil {
 		return err
 	}
 	switch len(qr.Rows) {
 	case 0:
-		if _, err := vcursor.Execute("VindexCreate", lu.insertLookupQuery, bindVars, true /* isDML */, vtgatepb.CommitOrder_PRE); err != nil {
+		if _, err := vcursor.Execute("VindexCreate", lu.insertLookupQuery, bindVars, true /* rollbackOnError */, vtgatepb.CommitOrder_PRE); err != nil {
 			return err
 		}
 	case 1:
 		existingksid := qr.Rows[0][0].ToBytes()
 		// Lock the target row using normal transaction priority.
-		qr, err = vcursor.ExecuteKeyspaceID(lu.keyspace, existingksid, lu.lockOwnerQuery, bindVars, false /* isDML */, false /* autocommit */)
+		qr, err = vcursor.ExecuteKeyspaceID(lu.keyspace, existingksid, lu.lockOwnerQuery, bindVars, false /* rollbackOnError */, false /* autocommit */)
 		if err != nil {
 			return err
 		}
@@ -251,7 +288,7 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 		if bytes.Equal(existingksid, ksid) {
 			return nil
 		}
-		if _, err := vcursor.Execute("VindexCreate", lu.updateLookupQuery, bindVars, true /* isDML */, vtgatepb.CommitOrder_PRE); err != nil {
+		if _, err := vcursor.Execute("VindexCreate", lu.updateLookupQuery, bindVars, true /* rollbackOnError */, vtgatepb.CommitOrder_PRE); err != nil {
 			return err
 		}
 	default:
@@ -270,10 +307,8 @@ func (lu *clCommon) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []b
 	equal := true
 	for i := range oldValues {
 		result, err := sqltypes.NullsafeCompare(oldValues[i], newValues[i])
-		if err != nil {
-			return err
-		}
-		if result != 0 {
+		// errors from NullsafeCompare can be ignored. if they are real problems, we'll see them in the Create/Update
+		if err != nil || result != 0 {
 			equal = false
 			break
 		}

@@ -18,9 +18,13 @@
 # It should be kept in sync with the steps in https://vitess.io/docs/get-started/local/
 # So we can detect if a regression affecting a tutorial is introduced.
 
+source build.env
+
 set -xe
 
-cd "$VTTOP/examples/local"
+cd "$VTROOT/examples/local"
+
+unset VTROOT # ensure that the examples can run without VTROOT now.
 
 ./101_initial_cluster.sh
 

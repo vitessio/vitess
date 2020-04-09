@@ -37,7 +37,6 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 )
 
 func TestTxPoolExecuteCommit(t *testing.T) {
@@ -67,7 +66,7 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	_, _ = txConn.Exec(ctx, sql, 1, true)
 	txConn.Recycle()
 
-	commitSQL, err := txPool.Commit(ctx, transactionID, &fakeMessageCommitter{})
+	commitSQL, err := txPool.Commit(ctx, transactionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,7 +334,7 @@ func TestTxPoolAutocommit(t *testing.T) {
 	if beginSQL != "" {
 		t.Errorf("beginSQL got %q want ''", beginSQL)
 	}
-	commitSQL, err := txPool.Commit(ctx, txid, &fakeMessageCommitter{})
+	commitSQL, err := txPool.Commit(ctx, txid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -470,6 +469,25 @@ func TestTxPoolBeginWithError(t *testing.T) {
 	}
 }
 
+func TestTxPoolCancelledContextError(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddRejectedQuery("begin", errRejected)
+	txPool := newTxPool()
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer txPool.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	want := "transaction pool aborting request due to already expired context"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Unexpected error: %v, want %s", err, want)
+	}
+	if got, want := vterrors.Code(err), vtrpcpb.Code_RESOURCE_EXHAUSTED; got != want {
+		t.Errorf("wrong error code error: got = %v, want = %v", got, want)
+	}
+}
+
 func TestTxPoolRollbackFail(t *testing.T) {
 	sql := "alter table test_table add test_column int"
 	db := fakesqldb.New(t)
@@ -545,7 +563,7 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 
 	id, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
-	if _, err := txPool.Commit(ctx, id, &fakeMessageCommitter{}); err != nil {
+	if _, err := txPool.Commit(ctx, id); err != nil {
 		t.Fatalf("got error: %v", err)
 	}
 
@@ -580,16 +598,6 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	txc.Recycle()
 
 	assertErrorMatch(id, "closed")
-}
-
-type fakeMessageCommitter struct {
-}
-
-func (f *fakeMessageCommitter) LockDB(newMessages map[string][]*messager.MessageRow, changedMessages map[string][]string) func() {
-	return func() {}
-}
-
-func (f *fakeMessageCommitter) UpdateCaches(newMessages map[string][]*messager.MessageRow, changedMessages map[string][]string) {
 }
 
 func TestTxPoolExecFailDueToConnFail_Errno2006(t *testing.T) {
@@ -689,24 +697,14 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 }
 
 func newTxPool() *TxPool {
+	config := tabletenv.DefaultQsConfig
 	randID := rand.Int63()
-	poolName := fmt.Sprintf("TestTransactionPool-%d", randID)
-	transactionCap := 300
-	transactionTimeout := time.Duration(30 * time.Second)
-	transactionPoolTimeout := time.Duration(40 * time.Second)
-	waiterCap := 500000
-	idleTimeout := time.Duration(30 * time.Second)
+	config.PoolNamePrefix = fmt.Sprintf("TestTransactionPool-%d", randID)
+	config.TransactionCap = 300
+	config.TransactionTimeout = 30
+	config.TxPoolTimeout = 40
+	config.TxPoolWaiterCap = 500000
+	config.IdleTimeout = 30
 	limiter := &txlimiter.TxAllowAll{}
-	return NewTxPool(
-		poolName,
-		transactionCap,
-		transactionCap,
-		0,
-		transactionTimeout,
-		transactionPoolTimeout,
-		idleTimeout,
-		waiterCap,
-		DummyChecker,
-		limiter,
-	)
+	return NewTxPool(tabletenv.NewTestEnv(&config, nil), limiter)
 }

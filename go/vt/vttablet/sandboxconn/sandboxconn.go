@@ -86,6 +86,8 @@ type SandboxConn struct {
 
 	MessageIDs []*querypb.Value
 
+	// vstream expectations.
+	StartPos      string
 	VStreamEvents [][]*binlogdatapb.VEvent
 	VStreamErrors []error
 
@@ -325,40 +327,14 @@ func (sbc *SandboxConn) MessageAck(ctx context.Context, target *querypb.Target, 
 // SandboxSQRowCount is the default number of fake splits returned.
 var SandboxSQRowCount = int64(10)
 
-// SplitQuery returns a single QuerySplit whose 'sql' field describes the received arguments.
-func (sbc *SandboxConn) SplitQuery(
-	ctx context.Context,
-	target *querypb.Target,
-	query *querypb.BoundQuery,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm) ([]*querypb.QuerySplit, error) {
-	err := sbc.getError()
-	if err != nil {
-		return nil, err
-	}
-	splits := []*querypb.QuerySplit{
-		{
-			Query: &querypb.BoundQuery{
-				Sql: fmt.Sprintf(
-					"query:%v, splitColumns:%v, splitCount:%v,"+
-						" numRowsPerQueryPart:%v, algorithm:%v, shard:%v",
-					query, splitColumns, splitCount, numRowsPerQueryPart, algorithm, sbc.tablet.Shard),
-			},
-		},
-	}
-	return splits, nil
-}
-
 // StreamHealth is not implemented.
 func (sbc *SandboxConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
 	return fmt.Errorf("not implemented in test")
 }
 
-// UpdateStream is part of the QueryService interface.
-func (sbc *SandboxConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
-	return fmt.Errorf("not implemented in test")
+// ExpectVStreamStartPos makes the conn verify that that the next vstream request has the right startPos.
+func (sbc *SandboxConn) ExpectVStreamStartPos(startPos string) {
+	sbc.StartPos = startPos
 }
 
 // AddVStreamEvents adds a set of VStream events to be returned.
@@ -369,6 +345,9 @@ func (sbc *SandboxConn) AddVStreamEvents(events []*binlogdatapb.VEvent, err erro
 
 // VStream is part of the QueryService interface.
 func (sbc *SandboxConn) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	if sbc.StartPos != "" && sbc.StartPos != startPos {
+		return fmt.Errorf("startPos(%v): %v, want %v", target, startPos, sbc.StartPos)
+	}
 	for len(sbc.VStreamEvents) != 0 {
 		ev := sbc.VStreamEvents[0]
 		err := sbc.VStreamErrors[0]

@@ -379,12 +379,17 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		}
 	}
 
+	// Stop replication and see where we are.
+	if err := mysqld.StopSlave(nil); err != nil {
+		return fmt.Errorf("can't stop replication: %v", err)
+	}
+
 	// Did we make any progress?
 	status, err := mysqld.SlaveStatus()
 	if err != nil {
 		return fmt.Errorf("can't get replication status: %v", err)
 	}
-	log.Infof("Replication caught up to at least %v", status.Position)
+	log.Infof("Replication caught up to %v", status.Position)
 	if !status.Position.AtLeast(masterPos) && status.Position.Equal(restorePos) {
 		return fmt.Errorf("not taking backup: replication did not make any progress from restore point: %v", restorePos)
 	}

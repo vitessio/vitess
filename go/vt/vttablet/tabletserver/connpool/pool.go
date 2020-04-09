@@ -22,11 +22,11 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -45,12 +45,6 @@ var ErrConnPoolClosed = vterrors.New(vtrpcpb.Code_INTERNAL, "internal error: une
 // through non-test code.
 var usedNames = make(map[string]bool)
 
-// MySQLChecker defines the CheckMySQL interface that lower
-// level objects can use to call back into TabletServer.
-type MySQLChecker interface {
-	CheckMySQL()
-}
-
 // Pool implements a custom connection pool for tabletserver.
 // It's similar to dbconnpool.ConnPool, but the connections it creates
 // come with built-in ability to kill in-flight queries. These connections
@@ -58,6 +52,7 @@ type MySQLChecker interface {
 // Other than the connection type, ConnPool maintains an additional
 // pool of dba connections that are used to kill connections.
 type Pool struct {
+	env                tabletenv.Env
 	name               string
 	mu                 sync.Mutex
 	connections        *pools.ResourcePool
@@ -65,25 +60,19 @@ type Pool struct {
 	prefillParallelism int
 	idleTimeout        time.Duration
 	dbaPool            *dbconnpool.ConnectionPool
-	checker            MySQLChecker
-	appDebugParams     *mysql.ConnParams
+	appDebugParams     dbconfigs.Connector
 }
 
 // New creates a new Pool. The name is used
 // to publish stats only.
-func New(
-	name string,
-	capacity int,
-	prefillParallelism int,
-	idleTimeout time.Duration,
-	checker MySQLChecker) *Pool {
+func New(env tabletenv.Env, name string, capacity int, prefillParallelism int, idleTimeout time.Duration) *Pool {
 	cp := &Pool{
+		env:                env,
 		name:               name,
 		capacity:           capacity,
 		prefillParallelism: prefillParallelism,
 		idleTimeout:        idleTimeout,
 		dbaPool:            dbconnpool.NewConnectionPool("", 1, idleTimeout, 0),
-		checker:            checker,
 	}
 	if name == "" || usedNames[name] {
 		return cp
@@ -110,7 +99,7 @@ func (cp *Pool) pool() (p *pools.ResourcePool) {
 }
 
 // Open must be called before starting to use the pool.
-func (cp *Pool) Open(appParams, dbaParams, appDebugParams *mysql.ConnParams) {
+func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 
@@ -122,10 +111,19 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams *mysql.ConnParams) {
 	f := func() (pools.Resource, error) {
 		return NewDBConn(cp, appParams)
 	}
-	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism)
+	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism, cp.getLogWaitCallback())
 	cp.appDebugParams = appDebugParams
 
 	cp.dbaPool.Open(dbaParams, tabletenv.MySQLStats)
+}
+
+func (cp *Pool) getLogWaitCallback() func(time.Time) {
+	if cp.name == "" {
+		return func(start time.Time) {} // no op
+	}
+	return func(start time.Time) {
+		tabletenv.WaitStats.Record(cp.name+"ResourceWaitTime", start)
+	}
 }
 
 // Close will close the pool and wait for connections to be returned before
@@ -307,9 +305,13 @@ func (cp *Pool) Exhausted() int64 {
 }
 
 func (cp *Pool) isCallerIDAppDebug(ctx context.Context) bool {
-	if cp.appDebugParams == nil || cp.appDebugParams.Uname == "" {
+	params, err := cp.appDebugParams.MysqlParams()
+	if err != nil {
+		return false
+	}
+	if params == nil || params.Uname == "" {
 		return false
 	}
 	callerID := callerid.ImmediateCallerIDFromContext(ctx)
-	return callerID != nil && callerID.Username == cp.appDebugParams.Uname
+	return callerID != nil && callerID.Username == params.Uname
 }

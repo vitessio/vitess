@@ -8,13 +8,14 @@ and has been used there since 2011.
 
 This chart creates a Vitess cluster on Kubernetes in a single
 [release](https://github.com/kubernetes/helm/blob/master/docs/glossary.md#release).
-It currently includes all dependencies (e.g. etcd) and Vitess components
+It currently includes all Vitess components
 (vtctld, vtgate, vttablet) inline (in `templates/`) rather than as sub-charts.
 
-## Prerequisites
+## Using Etcd For Topology Data
 
-* Install [etcd-operator](https://github.com/coreos/etcd-operator) in the
-  namespace where you plan to install this chart.
+The chart will use Kubernetes as the topology store for Vitess. This is the preferred configuration when running Vitess in Kubernetes as it has no external dependencesi.
+
+If you do wish to use `etcd` as the toplogy service, then you will need to create an etcd cluster and provide the configuration in your `values.yaml`. Etcd can be managed manually or via the [etcd-operator](https://github.com/coreos/etcd-operator).
 
 ## Installing the Chart
 
@@ -49,8 +50,6 @@ look at the default `values.yaml` file, which is well commented.
 topology:
   cells:
     - name: "zone1"
-      etcd:
-        replicas: 3
       vtctld:
         replicas: 1
       vtgate:
@@ -392,7 +391,7 @@ metadata:
 data:
   extra.cnf: |-
     early-plugin-load=keyring_vault=keyring_vault.so
-    # this includes default rpl plugins, see https://github.com/vitessio/vitess/blob/master/config/mycnf/master_mysql56.cnf for details
+    # this includes default rpl plugins, see https://github.com/vitessio/vitess/blob/master/config/mycnf/master_mysql57.cnf for details
     plugin-load=rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so;keyring_udf=keyring_udf.so
     keyring_vault_config=/vt/usersecrets/vttablet-vault/vault.conf # load keyring configuration from secret
     innodb_encrypt_tables=ON # encrypt all tables by default
@@ -418,4 +417,16 @@ vttablet:
   extraMyCnf: vttablet-extra-config
   secrets:
   - vttablet-vault
+```
+
+### Enable tracing (opentracing-jaeger)
+
+To enable tracing using opentracing Jaeger of Vitess components add tracing config with tracer `opentracing-jaeger` to `extraFlags`. For example to enable tracing for `vtgate`:
+
+```yaml
+vtgate:
+  extraFlags:
+    jaeger-agent-host: "JAEGER-AGENT:6831"
+    tracing-sampling-rate: 0.1
+    tracer: opentracing-jaeger
 ```

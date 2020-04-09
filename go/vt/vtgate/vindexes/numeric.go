@@ -27,8 +27,8 @@ import (
 )
 
 var (
-	_ Vindex     = (*Numeric)(nil)
-	_ Reversible = (*Numeric)(nil)
+	_ SingleColumn = (*Numeric)(nil)
+	_ Reversible   = (*Numeric)(nil)
 )
 
 // Numeric defines a bit-pattern mapping of a uint64 to the KeyspaceId.
@@ -55,6 +55,11 @@ func (*Numeric) Cost() int {
 // IsUnique returns true since the Vindex is unique.
 func (*Numeric) IsUnique() bool {
 	return true
+}
+
+// NeedsVCursor satisfies the Vindex interface.
+func (*Numeric) NeedsVCursor() bool {
+	return false
 }
 
 // Verify returns true if ids and ksids match.

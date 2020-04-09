@@ -1,0 +1,35 @@
+name: e2e_race
+on: [push, pull_request]
+jobs:
+
+  build:
+    name: End-to-End Test (Race)
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Set up Go
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.13
+
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Get dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget
+        sudo service mysql stop
+        sudo service etcd stop
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        go mod download
+
+    - name: Run make minimaltools
+      run: |
+        make minimaltools
+
+    - name: e2e_race
+      timeout-minutes: 30
+      run: |
+        make e2e_test_race

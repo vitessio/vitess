@@ -39,6 +39,13 @@ func TestNormalize(t *testing.T) {
 			"bv1": sqltypes.BytesBindVariable([]byte("aa")),
 		},
 	}, {
+		// str val in select
+		in:      "select 'aa' from t",
+		outstmt: "select :bv1 from t",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.BytesBindVariable([]byte("aa")),
+		},
+	}, {
 		// int val
 		in:      "select * from t where v1 = 1",
 		outstmt: "select * from t where v1 = :bv1",

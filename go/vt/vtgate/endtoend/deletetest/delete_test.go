@@ -21,7 +21,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path"
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
@@ -127,7 +126,6 @@ func TestMain(m *testing.M) {
 				}},
 			}},
 		}
-		cfg.ExtraMyCnf = []string{path.Join(os.Getenv("VTTOP"), "config/mycnf/rbr.cnf")}
 		if err := cfg.InitSchemas("ks", schema, vschema); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.RemoveAll(cfg.SchemaDir)

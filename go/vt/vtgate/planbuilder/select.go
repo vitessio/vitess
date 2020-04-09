@@ -25,7 +25,8 @@ import (
 )
 
 // buildSelectPlan is the new function to build a Select plan.
-func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (primitive engine.Primitive, err error) {
+func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+	sel := stmt.(*sqlparser.Select)
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(sel)))
 	if err := pb.processSelect(sel, nil); err != nil {
 		return nil, err
@@ -123,8 +124,8 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 // pushFilter identifies the target route for the specified bool expr,
 // pushes it down, and updates the route info if the new constraint improves
 // the primitive. This function can push to a WHERE or HAVING clause.
-func (pb *primitiveBuilder) pushFilter(boolExpr sqlparser.Expr, whereType string) error {
-	filters := splitAndExpression(nil, boolExpr)
+func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string) error {
+	filters := splitAndExpression(nil, in)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
 		pullouts, origin, expr, err := pb.findOrigin(filter)

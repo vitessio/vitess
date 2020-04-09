@@ -31,6 +31,10 @@ type Subquery struct {
 	Subquery Primitive
 }
 
+func (sq *Subquery) NeedsTransaction() bool {
+	return sq.Subquery.NeedsTransaction()
+}
+
 // RouteType returns a description of the query routing type used by the primitive
 func (sq *Subquery) RouteType() string {
 	return sq.Subquery.RouteType()
@@ -71,6 +75,11 @@ func (sq *Subquery) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bind
 	return &sqltypes.Result{Fields: sq.buildFields(inner)}, nil
 }
 
+// Inputs returns the input to this primitive
+func (sq *Subquery) Inputs() []Primitive {
+	return []Primitive{sq.Subquery}
+}
+
 // buildResult builds a new result by pulling the necessary columns from
 // the subquery in the requested order.
 func (sq *Subquery) buildResult(inner *sqltypes.Result) *sqltypes.Result {
@@ -96,4 +105,14 @@ func (sq *Subquery) buildFields(inner *sqltypes.Result) []*querypb.Field {
 		fields = append(fields, inner.Fields[col])
 	}
 	return fields
+}
+
+func (sq *Subquery) description() PrimitiveDescription {
+	other := map[string]interface{}{
+		"Columns": sq.Cols,
+	}
+	return PrimitiveDescription{
+		OperatorType: "Subquery",
+		Other:        other,
+	}
 }

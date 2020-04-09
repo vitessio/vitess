@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -634,7 +635,6 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 	if err := agent.fixSemiSync(tabletType); err != nil {
 		return err
 	}
-
 	// Update the master address only if needed.
 	// We don't want to interrupt replication for no reason.
 	parent, err := agent.TopoServer.GetTablet(ctx, parentAlias)
@@ -646,13 +646,17 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 	if status.MasterHost != masterHost || status.MasterPort != masterPort {
 		// This handles both changing the address and starting replication.
 		if err := agent.MysqlDaemon.SetMaster(ctx, masterHost, masterPort, wasReplicating, shouldbeReplicating); err != nil {
-			return err
+			if err := agent.handleRelayLogError(err); err != nil {
+				return err
+			}
 		}
 	} else if shouldbeReplicating {
 		// The address is correct. Just start replication if needed.
 		if !status.SlaveRunning() {
 			if err := agent.MysqlDaemon.StartSlave(agent.hookExtraEnv()); err != nil {
-				return err
+				if err := agent.handleRelayLogError(err); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -852,4 +856,18 @@ func (agent *ActionAgent) fixSemiSyncAndReplication(tabletType topodatapb.Tablet
 		return vterrors.Wrap(err, "failed to StartSlave")
 	}
 	return nil
+}
+
+func (agent *ActionAgent) handleRelayLogError(err error) error {
+	// attempt to fix this error:
+	// Slave failed to initialize relay log info structure from the repository (errno 1872) (sqlstate HY000) during query: START SLAVE
+	// see https://bugs.mysql.com/bug.php?id=83713 or https://github.com/vitessio/vitess/issues/5067
+	if strings.Contains(err.Error(), "Slave failed to initialize relay log info structure from the repository") {
+		// Stop, reset and start slave again to resolve this error
+		if err := agent.MysqlDaemon.RestartSlave(agent.hookExtraEnv()); err != nil {
+			return err
+		}
+		return nil
+	}
+	return err
 }

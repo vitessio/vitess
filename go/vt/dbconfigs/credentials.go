@@ -113,7 +113,7 @@ func (fcs *FileCredentialsServer) GetUserAndPassword(user string) (string, strin
 
 // WithCredentials returns a copy of the provided ConnParams that we can use
 // to connect, after going through the CredentialsServer.
-func WithCredentials(cp *mysql.ConnParams) (*mysql.ConnParams, error) {
+func withCredentials(cp *mysql.ConnParams) (*mysql.ConnParams, error) {
 	result := *cp
 	user, passwd, err := GetCredentialsServer().GetUserAndPassword(cp.Uname)
 	switch err {

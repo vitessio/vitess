@@ -29,7 +29,8 @@ import (
 )
 
 // buildInsertPlan builds the route for an INSERT statement.
-func buildInsertPlan(ins *sqlparser.Insert, vschema ContextVSchema) (*engine.Insert, error) {
+func buildInsertPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+	ins := stmt.(*sqlparser.Insert)
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(ins)))
 	exprs := sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}}
 	ro, err := pb.processDMLTable(exprs)
@@ -45,7 +46,7 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema ContextVSchema) (*engine.Ins
 		if !pb.finalizeUnshardedDMLSubqueries(ins) {
 			return nil, errors.New("unsupported: sharded subquery in insert values")
 		}
-		return buildInsertUnshardedPlan(ins, ro.vschemaTable, vschema)
+		return buildInsertUnshardedPlan(ins, ro.vschemaTable)
 	}
 	if ins.Action == sqlparser.ReplaceStr {
 		return nil, errors.New("unsupported: REPLACE INTO with sharded schema")
@@ -53,7 +54,7 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema ContextVSchema) (*engine.Ins
 	return buildInsertShardedPlan(ins, ro.vschemaTable)
 }
 
-func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vschema ContextVSchema) (*engine.Insert, error) {
+func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engine.Primitive, error) {
 	eins := engine.NewSimpleInsert(
 		engine.InsertUnsharded,
 		table,
@@ -74,30 +75,30 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vsch
 	}
 	if eins.Table.AutoIncrement == nil {
 		eins.Query = generateQuery(ins)
-		return eins, nil
+	} else {
+		// Table has auto-inc and has a VALUES clause.
+		if len(ins.Columns) == 0 {
+			if table.ColumnListAuthoritative {
+				populateInsertColumnlist(ins, table)
+			} else {
+				return nil, errors.New("column list required for tables with auto-inc columns")
+			}
+		}
+		for _, row := range rows {
+			if len(ins.Columns) != len(row) {
+				return nil, errors.New("column list doesn't match values")
+			}
+		}
+		if err := modifyForAutoinc(ins, eins); err != nil {
+			return nil, err
+		}
+		eins.Query = generateQuery(ins)
 	}
 
-	// Table has auto-inc and has a VALUES clause.
-	if len(ins.Columns) == 0 {
-		if table.ColumnListAuthoritative {
-			populateInsertColumnlist(ins, table)
-		} else {
-			return nil, errors.New("column list required for tables with auto-inc columns")
-		}
-	}
-	for _, row := range rows {
-		if len(ins.Columns) != len(row) {
-			return nil, errors.New("column list doesn't match values")
-		}
-	}
-	if err := modifyForAutoinc(ins, eins); err != nil {
-		return nil, err
-	}
-	eins.Query = generateQuery(ins)
 	return eins, nil
 }
 
-func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engine.Insert, error) {
+func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engine.Primitive, error) {
 	eins := engine.NewSimpleInsert(
 		engine.InsertSharded,
 		table,

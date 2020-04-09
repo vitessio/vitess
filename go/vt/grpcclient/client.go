@@ -20,6 +20,7 @@ package grpcclient
 
 import (
 	"flag"
+	"time"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
@@ -35,8 +36,8 @@ import (
 )
 
 var (
-	keepaliveTime         = flag.Duration("grpc_keepalive_time", 0, "After a duration of this time if the client doesn't see any activity it pings the server to see if the transport is still alive.")
-	keepaliveTimeout      = flag.Duration("grpc_keepalive_timeout", 0, "After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
+	keepaliveTime         = flag.Duration("grpc_keepalive_time", 10*time.Second, "After a duration of this time if the client doesn't see any activity it pings the server to see if the transport is still alive.")
+	keepaliveTimeout      = flag.Duration("grpc_keepalive_timeout", 10*time.Second, "After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
 	initialConnWindowSize = flag.Int("grpc_initial_conn_window_size", 0, "grpc initial connection window size")
 	initialWindowSize     = flag.Int("grpc_initial_window_size", 0, "grpc initial window size")
 )

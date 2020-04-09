@@ -17,14 +17,13 @@ limitations under the License.
 package engine
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
-	"vitess.io/vitess/go/jsonutil"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/sqlannotation"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -37,107 +36,17 @@ var _ Primitive = (*Delete)(nil)
 
 // Delete represents the instructions to perform a delete.
 type Delete struct {
-	// Opcode is the execution opcode.
-	Opcode DeleteOpcode
+	DML
 
-	// Keyspace specifies the keyspace to send the query to.
-	Keyspace *vindexes.Keyspace
-
-	// TargetDestination specifies the destination to send the query to.
-	TargetDestination key.Destination
-
-	// Query specifies the query to be executed.
-	Query string
-
-	// Vindex specifies the vindex to be used.
-	Vindex vindexes.Vindex
-	// Values specifies the vindex values to use for routing.
-	// For now, only one value is specified.
-	Values []sqltypes.PlanValue
-
-	// Table specifies the table for the delete.
-	Table *vindexes.Table
-
-	// OwnedVindexQuery is used for deleting lookup vindex entries.
-	OwnedVindexQuery string
-
-	// Option to override the standard behavior and allow a multi-shard delete
-	// to use single round trip autocommit.
-	MultiShardAutocommit bool
-
-	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
-	QueryTimeout int
+	// Delete does not take inputs
+	noInputs
 }
 
-// MarshalJSON serializes the Delete into a JSON representation.
-// It's used for testing and diagnostics.
-func (del *Delete) MarshalJSON() ([]byte, error) {
-	var tname, vindexName string
-	if del.Table != nil {
-		tname = del.Table.Name.String()
-	}
-	if del.Vindex != nil {
-		vindexName = del.Vindex.String()
-	}
-	marshalDelete := struct {
-		Opcode               DeleteOpcode
-		Keyspace             *vindexes.Keyspace   `json:",omitempty"`
-		Query                string               `json:",omitempty"`
-		Vindex               string               `json:",omitempty"`
-		Values               []sqltypes.PlanValue `json:",omitempty"`
-		Table                string               `json:",omitempty"`
-		OwnedVindexQuery     string               `json:",omitempty"`
-		MultiShardAutocommit bool                 `json:",omitempty"`
-		QueryTimeout         int                  `json:",omitempty"`
-	}{
-		Opcode:               del.Opcode,
-		Keyspace:             del.Keyspace,
-		Query:                del.Query,
-		Vindex:               vindexName,
-		Values:               del.Values,
-		Table:                tname,
-		OwnedVindexQuery:     del.OwnedVindexQuery,
-		MultiShardAutocommit: del.MultiShardAutocommit,
-		QueryTimeout:         del.QueryTimeout,
-	}
-	return jsonutil.MarshalNoEscape(marshalDelete)
-}
-
-// DeleteOpcode is a number representing the opcode
-// for the Delete primitve.
-type DeleteOpcode int
-
-// This is the list of DeleteOpcode values.
-const (
-	// DeleteUnsharded is for routing a delete statement
-	// to an unsharded keyspace.
-	DeleteUnsharded = DeleteOpcode(iota)
-	// DeleteEqual is for routing a delete statement
-	// to a single shard. Requires: A Vindex, a single
-	// Value, and an OwnedVindexQuery, which will be used to
-	// determine if lookup rows need to be deleted.
-	DeleteEqual
-	// DeleteScatter is for routing a scattered
-	// delete statement.
-	DeleteScatter
-	// DeleteByDestination is to route explicitly to a given
-	// target destination. Is used when the query explicitly sets a target destination:
-	// in the from clause:
-	// e.g: DELETE FROM `keyspace[-]`.x1 LIMIT 100
-	DeleteByDestination
-)
-
-var delName = map[DeleteOpcode]string{
-	DeleteUnsharded:     "DeleteUnsharded",
-	DeleteEqual:         "DeleteEqual",
-	DeleteScatter:       "DeleteScatter",
-	DeleteByDestination: "DeleteByDestination",
-}
-
-// MarshalJSON serializes the DeleteOpcode as a JSON string.
-// It's used for testing and diagnostics.
-func (code DeleteOpcode) MarshalJSON() ([]byte, error) {
-	return json.Marshal(delName[code])
+var delName = map[DMLOpcode]string{
+	Unsharded:     "DeleteUnsharded",
+	Equal:         "DeleteEqual",
+	Scatter:       "DeleteScatter",
+	ByDestination: "DeleteByDestination",
 }
 
 // RouteType returns a description of the query routing type used by the primitive
@@ -166,13 +75,13 @@ func (del *Delete) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 	}
 
 	switch del.Opcode {
-	case DeleteUnsharded:
+	case Unsharded:
 		return del.execDeleteUnsharded(vcursor, bindVars)
-	case DeleteEqual:
+	case Equal:
 		return del.execDeleteEqual(vcursor, bindVars)
-	case DeleteScatter:
+	case Scatter:
 		return del.execDeleteByDestination(vcursor, bindVars, key.DestinationAllShards{})
-	case DeleteByDestination:
+	case ByDestination:
 		return del.execDeleteByDestination(vcursor, bindVars, del.TargetDestination)
 	default:
 		// Unreachable.
@@ -214,36 +123,53 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 		return &sqltypes.Result{}, nil
 	}
 	if del.OwnedVindexQuery != "" {
-		err = del.deleteVindexEntries(vcursor, bindVars, rs, ksid)
+		err = del.deleteVindexEntries(vcursor, bindVars, []*srvtopo.ResolvedShard{rs})
 		if err != nil {
 			return nil, vterrors.Wrap(err, "execDeleteEqual")
 		}
 	}
-	rewritten := sqlannotation.AddKeyspaceIDs(del.Query, [][]byte{ksid}, "")
-	return execShard(vcursor, rewritten, bindVars, rs, true /* isDML */, true /* canAutocommit */)
+	return execShard(vcursor, del.Query, bindVars, rs, true /* rollbackOnError */, true /* canAutocommit */)
 }
 
-func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, ksid []byte) error {
-	result, err := execShard(vcursor, del.OwnedVindexQuery, bindVars, rs, false /* isDML */, false /* canAutocommit */)
-	if err != nil {
-		return err
+// deleteVindexEntries performs an delete if table owns vindex.
+// Note: the commit order may be different from the DML order because it's possible
+// for DMLs to reuse existing transactions.
+func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{Sql: del.OwnedVindexQuery, BindVariables: bindVars}
 	}
-	if len(result.Rows) == 0 {
+	subQueryResults, errors := vcursor.ExecuteMultiShard(rss, queries, false, false)
+	for _, err := range errors {
+		if err != nil {
+			return vterrors.Wrap(err, "deleteVindexEntries")
+		}
+	}
+
+	if len(subQueryResults.Rows) == 0 {
 		return nil
 	}
-	colnum := 0
-	for _, colVindex := range del.Table.Owned {
-		ids := make([][]sqltypes.Value, len(result.Rows))
-		for range colVindex.Columns {
-			for rowIdx, row := range result.Rows {
-				ids[rowIdx] = append(ids[rowIdx], row[colnum])
-			}
-			colnum++
-		}
-		if err = colVindex.Vindex.(vindexes.Lookup).Delete(vcursor, ids, ksid); err != nil {
+
+	for _, row := range subQueryResults.Rows {
+		colnum := 1
+		ksid, err := resolveKeyspaceID(vcursor, del.KsidVindex, row[0])
+		if err != nil {
 			return err
 		}
+		for _, colVindex := range del.Table.Owned {
+			// Fetch the column values. colnum must keep incrementing.
+			fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
+			for range colVindex.Columns {
+				fromIds = append(fromIds, row[colnum])
+				colnum++
+			}
+			if err := colVindex.Vindex.(vindexes.Lookup).Delete(vcursor, [][]sqltypes.Value{fromIds}, ksid); err != nil {
+				return err
+			}
+		}
+
 	}
+
 	return nil
 }
 
@@ -254,14 +180,51 @@ func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]
 	}
 
 	queries := make([]*querypb.BoundQuery, len(rss))
-	sql := sqlannotation.AnnotateIfDML(del.Query, nil)
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{
-			Sql:           sql,
+			Sql:           del.Query,
 			BindVariables: bindVars,
 		}
 	}
+	if len(del.Table.Owned) > 0 {
+		err = del.deleteVindexEntries(vcursor, bindVars, rss)
+		if err != nil {
+			return nil, err
+		}
+	}
 	autocommit := (len(rss) == 1 || del.MultiShardAutocommit) && vcursor.AutocommitApproval()
-	res, errs := vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
+	res, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
 	return res, vterrors.Aggregate(errs)
+}
+
+func (del *Delete) description() PrimitiveDescription {
+	other := map[string]interface{}{
+		"Query":                del.Query,
+		"Table":                del.GetTableName(),
+		"OwnedVindexQuery":     del.OwnedVindexQuery,
+		"MultiShardAutocommit": del.MultiShardAutocommit,
+		"QueryTimeout":         del.QueryTimeout,
+	}
+
+	addFieldsIfNotEmpty(del.DML, other)
+
+	return PrimitiveDescription{
+		OperatorType:     "Delete",
+		Keyspace:         del.Keyspace,
+		Variant:          del.Opcode.String(),
+		TargetTabletType: topodatapb.TabletType_MASTER,
+		Other:            other,
+	}
+}
+
+func addFieldsIfNotEmpty(dml DML, other map[string]interface{}) {
+	if dml.Vindex != nil {
+		other["Vindex"] = dml.Vindex.String()
+	}
+	if dml.KsidVindex != nil {
+		other["KsidVindex"] = dml.KsidVindex.String()
+	}
+	if len(dml.Values) > 0 {
+		other["Values"] = dml.Values
+	}
 }

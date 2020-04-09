@@ -51,7 +51,7 @@ func init() {
 	addCommand(cellsGroupName, command{
 		"DeleteCellInfo",
 		commandDeleteCellInfo,
-		"<cell>",
+		"[-force] <cell>",
 		"Deletes the CellInfo for the provided cell. The cell cannot be referenced by any Shard record."})
 
 	addCommand(cellsGroupName, command{
@@ -111,6 +111,7 @@ func commandUpdateCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 }
 
 func commandDeleteCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	force := subFlags.Bool("force", false, "Proceeds even if the cell's topology server cannot be reached. The assumption is that you turned down the entire cell, and just need to update the global topo data.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -119,7 +120,7 @@ func commandDeleteCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 	cell := subFlags.Arg(0)
 
-	return wr.TopoServer().DeleteCellInfo(ctx, cell)
+	return wr.TopoServer().DeleteCellInfo(ctx, cell, *force)
 }
 
 func commandGetCellInfoNames(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

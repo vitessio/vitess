@@ -32,7 +32,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -112,6 +111,29 @@ func (mysqld *Mysqld) StopSlave(hookExtraEnv map[string]string) error {
 	defer conn.Recycle()
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopSlaveCommand()})
+}
+
+// RestartSlave stops, resets and starts a slave.
+func (mysqld *Mysqld) RestartSlave(hookExtraEnv map[string]string) error {
+	h := hook.NewSimpleHook("preflight_stop_slave")
+	h.ExtraEnv = hookExtraEnv
+	if err := h.ExecuteOptional(); err != nil {
+		return err
+	}
+	ctx := context.TODO()
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	if err := mysqld.executeSuperQueryListConn(ctx, conn, conn.RestartSlaveCommands()); err != nil {
+		return err
+	}
+
+	h = hook.NewSimpleHook("postflight_start_slave")
+	h.ExtraEnv = hookExtraEnv
+	return h.ExecuteOptional()
 }
 
 // GetMysqlPort returns mysql port
@@ -253,7 +275,7 @@ func (mysqld *Mysqld) SetSlavePosition(ctx context.Context, pos mysql.Position) 
 // SetMaster makes the provided host / port the master. It optionally
 // stops replication before, and starts it after.
 func (mysqld *Mysqld) SetMaster(ctx context.Context, masterHost string, masterPort int, slaveStopBefore bool, slaveStartAfter bool) error {
-	params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Repl())
+	params, err := mysqld.dbcfgs.Repl().MysqlParams()
 	if err != nil {
 		return err
 	}

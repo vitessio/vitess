@@ -48,7 +48,8 @@ type notifier func(full map[string]*Table, created, altered, dropped []string)
 // Engine stores the schema info and performs operations that
 // keep itself up-to-date.
 type Engine struct {
-	dbconfigs *dbconfigs.DBConfigs
+	env tabletenv.Env
+	cp  dbconfigs.Connector
 
 	// mu protects the following fields.
 	mu         sync.Mutex
@@ -67,21 +68,19 @@ type Engine struct {
 var schemaOnce sync.Once
 
 // NewEngine creates a new Engine.
-func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *Engine {
-	reloadTime := time.Duration(config.SchemaReloadTime * 1e9)
-	idleTimeout := time.Duration(config.IdleTimeout * 1e9)
+func NewEngine(env tabletenv.Env) *Engine {
+	reloadTime := time.Duration(env.Config().SchemaReloadTime * 1e9)
+	idleTimeout := time.Duration(env.Config().IdleTimeout * 1e9)
 	se := &Engine{
-		conns:      connpool.New("", 3, 0, idleTimeout, checker),
+		env: env,
+		// We need only one connection because the reloader is
+		// the only one that needs this.
+		conns:      connpool.New(env, "", 1, 0, idleTimeout),
 		ticks:      timer.NewTimer(reloadTime),
 		reloadTime: reloadTime,
 	}
 	schemaOnce.Do(func() {
 		_ = stats.NewGaugeDurationFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
-		_ = stats.NewGaugesFuncWithMultiLabels("TableRows", "table rows created in tabletserver", []string{"Table"}, se.getTableRows)
-		_ = stats.NewGaugesFuncWithMultiLabels("DataLength", "data length in tabletserver", []string{"Table"}, se.getDataLength)
-		_ = stats.NewGaugesFuncWithMultiLabels("IndexLength", "index length in tabletserver", []string{"Table"}, se.getIndexLength)
-		_ = stats.NewGaugesFuncWithMultiLabels("DataFree", "data free in tabletserver", []string{"Table"}, se.getDataFree)
-		_ = stats.NewGaugesFuncWithMultiLabels("MaxDataLength", "max data length in tabletserver", []string{"Table"}, se.getMaxDataLength)
 
 		http.Handle("/debug/schema", se)
 		http.HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
@@ -100,8 +99,8 @@ func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *En
 }
 
 // InitDBConfig must be called before Open.
-func (se *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	se.dbconfigs = dbcfgs
+func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
+	se.cp = cp
 }
 
 // Open initializes the Engine. Calling Open on an already
@@ -112,87 +111,32 @@ func (se *Engine) Open() error {
 	if se.isOpen {
 		return nil
 	}
-	start := time.Now()
-	defer func() { log.Infof("Time taken to load the schema: %v", time.Since(start)) }()
+
 	ctx := tabletenv.LocalContext()
-	dbaParams := se.dbconfigs.DbaWithDB()
-	se.conns.Open(dbaParams, dbaParams, dbaParams)
+	se.conns.Open(se.cp, se.cp, se.cp)
+	se.tables = map[string]*Table{
+		"dual": NewTable("dual"),
+	}
+	se.notifiers = make(map[string]notifier)
 
-	conn, err := se.conns.Get(ctx)
-	if err != nil {
+	if err := se.reload(ctx); err != nil {
 		return err
 	}
-	defer conn.Recycle()
-
-	curTime, err := se.mysqlTime(ctx, conn)
-	if err != nil {
-		return err
-	}
-
-	tableData, err := conn.Exec(ctx, mysql.BaseShowTables, maxTableCount, false)
-	if err != nil {
-		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get table list: %v", err)
-	}
-
-	tables := make(map[string]*Table, len(tableData.Rows)+1)
-	tables["dual"] = NewTable("dual")
-	wg := sync.WaitGroup{}
-	mu := sync.Mutex{}
-	for _, row := range tableData.Rows {
-		wg.Add(1)
-		go func(row []sqltypes.Value) {
-			defer func() {
-				tabletenv.LogError()
-				wg.Done()
-			}()
-
-			tableName := row[0].ToString()
-			conn, err := se.conns.Get(ctx)
-			if err != nil {
-				log.Errorf("Engine.Open: connection error while reading table %s: %v", tableName, err)
-				return
-			}
-			defer conn.Recycle()
-
-			table, err := LoadTable(
-				conn,
-				tableName,
-				row[1].ToString(), // table_type
-				row[3].ToString(), // table_comment
-			)
-			if err != nil {
-				tabletenv.InternalErrors.Add("Schema", 1)
-				log.Errorf("Engine.Open: failed to load table %s: %v", tableName, err)
-				// Skip over the table that had an error and move on to the next one
-				return
-			}
-			table.SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
-			mu.Lock()
-			tables[tableName] = table
-			mu.Unlock()
-		}(row)
-	}
-	wg.Wait()
-
-	// Fail if we can't load the schema for any tables, but we know that some tables exist. This points to a configuration problem.
-	if len(tableData.Rows) != 0 && len(tables) == 1 { // len(tables) is always at least 1 because of the "dual" table
-		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get schema for any tables")
-	}
-	se.tables = tables
-	se.lastChange = curTime
-
-	// register message topics on the engine if necessary
-	// must run after se.tables is set
-	se.registerTopics()
 
 	se.ticks.Start(func() {
 		if err := se.Reload(ctx); err != nil {
 			log.Errorf("periodic schema reload failed: %v", err)
 		}
 	})
-	se.notifiers = make(map[string]notifier)
 	se.isOpen = true
 	return nil
+}
+
+// IsOpen checks if engine is open
+func (se *Engine) IsOpen() bool {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	return se.isOpen
 }
 
 // Close shuts down Engine and is idempotent.
@@ -206,6 +150,7 @@ func (se *Engine) Close() {
 	se.ticks.Stop()
 	se.conns.Close()
 	se.tables = make(map[string]*Table)
+	se.lastChange = 0
 	se.notifiers = make(map[string]notifier)
 	se.isOpen = false
 }
@@ -228,82 +173,94 @@ func (se *Engine) MakeNonMaster() {
 
 // Reload reloads the schema info from the db.
 // Any tables that have changed since the last load are updated.
-// This is a no-op if the Engine is closed.
 func (se *Engine) Reload(ctx context.Context) error {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	if !se.isOpen {
 		return nil
 	}
-	defer tabletenv.LogError()
+	return se.reload(ctx)
+}
 
-	curTime, tableData, err := func() (int64, *sqltypes.Result, error) {
-		conn, err := se.conns.Get(ctx)
-		if err != nil {
-			return 0, nil, err
-		}
-		defer conn.Recycle()
-		curTime, err := se.mysqlTime(ctx, conn)
-		if err != nil {
-			return 0, nil, err
-		}
-		tableData, err := conn.Exec(ctx, mysql.BaseShowTables, maxTableCount, false)
-		if err != nil {
-			return 0, nil, err
-		}
-		return curTime, tableData, nil
+// reload reloads the schema. It can also be used to initialize it.
+func (se *Engine) reload(ctx context.Context) error {
+	start := time.Now()
+	defer func() {
+		log.Infof("Time taken to load the schema: %v", time.Since(start))
+		tabletenv.LogError()
 	}()
+
+	conn, err := se.conns.Get(ctx)
 	if err != nil {
-		return vterrors.Wrap(err, "could not get table list for reload")
+		return err
+	}
+	defer conn.Recycle()
+
+	// curTime will be saved into lastChange after schema is loaded.
+	curTime, err := se.mysqlTime(ctx, conn)
+	if err != nil {
+		return err
+	}
+	tableData, err := conn.Exec(ctx, mysql.BaseShowTables, maxTableCount, false)
+	if err != nil {
+		return err
 	}
 
-	// Reload any tables that have changed. We try every table even if some fail,
-	// but we return success only if all tables succeed.
-	// The following section requires us to hold mu.
 	rec := concurrency.AllErrorRecorder{}
+	// curTables keeps track of tables in the new snapshot so we can detect what was dropped.
 	curTables := map[string]bool{"dual": true}
+	// changedTables keeps track of tables that have changed so we can reload their pk info.
+	changedTables := make(map[string]*Table)
+	// created and altered contain the names of created and altered tables for broadcast.
 	var created, altered []string
 	for _, row := range tableData.Rows {
 		tableName := row[0].ToString()
 		curTables[tableName] = true
 		createTime, _ := sqltypes.ToInt64(row[2])
-		// Check if we know about the table or it has been recreated.
-		if _, ok := se.tables[tableName]; !ok || createTime >= se.lastChange {
-			log.Infof("Reloading schema for table: %s", tableName)
-			wasCreated, err := se.tableWasCreatedOrAltered(ctx, tableName)
+		if _, ok := se.tables[tableName]; ok && createTime < se.lastChange {
+			continue
+		}
+		log.Infof("Reading schema for table: %s", tableName)
+
+		table, err := LoadTable(conn, tableName, row[1].ToString(), row[3].ToString())
+		if err != nil {
 			rec.RecordError(err)
-			if wasCreated {
-				created = append(created, tableName)
-			} else {
-				altered = append(altered, tableName)
-			}
+			continue
+		}
+		changedTables[tableName] = table
+		if _, ok := se.tables[tableName]; ok {
+			altered = append(altered, tableName)
 		} else {
-			// Only update table_rows, data_length, index_length, max_data_length
-			se.tables[tableName].SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
+			created = append(created, tableName)
 		}
 	}
-	se.lastChange = curTime
+	if rec.HasErrors() {
+		return rec.Error()
+	}
 
-	// Handle table drops
+	// Compute and handle dropped tables.
 	var dropped []string
 	for tableName := range se.tables {
 		if curTables[tableName] {
 			continue
 		}
-
-		// only keep track of non-topic table drops
-		if !se.tables[tableName].IsTopic() {
-			dropped = append(dropped, tableName)
-			delete(se.tables, tableName)
-		}
+		dropped = append(dropped, tableName)
+		delete(se.tables, tableName)
 	}
 
-	// register message topics on the engine if necessary
-	// must run after se.tables is set
-	se.registerTopics()
+	// Populate PKColumns for changed tables.
+	if err := se.populatePrimaryKeys(ctx, conn, changedTables); err != nil {
+		return err
+	}
+
+	// Update se.tables and se.lastChange
+	for k, t := range changedTables {
+		se.tables[k] = t
+	}
+	se.lastChange = curTime
 
 	se.broadcast(created, altered, dropped)
-	return rec.Error()
+	return nil
 }
 
 func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, error) {
@@ -321,99 +278,26 @@ func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, 
 	return t, nil
 }
 
-// tableWasCreatedOrAltered must be called if a DDL was applied to that table.
-// the se.mu mutex _must_ be locked before entering this method
-func (se *Engine) tableWasCreatedOrAltered(ctx context.Context, tableName string) (bool, error) {
-	if !se.isOpen {
-		return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "DDL called on closed schema")
-	}
-
-	conn, err := se.conns.Get(ctx)
+// populatePrimaryKeys populates the PKColumns for the specified tables.
+func (se *Engine) populatePrimaryKeys(ctx context.Context, conn *connpool.DBConn, tables map[string]*Table) error {
+	pkData, err := conn.Exec(ctx, mysql.BaseShowPrimary, maxTableCount, false)
 	if err != nil {
-		return false, err
+		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get table primary key info: %v", err)
 	}
-	defer conn.Recycle()
-	tableData, err := conn.Exec(ctx, mysql.BaseShowTablesForTable(tableName), 1, false)
-	if err != nil {
-		tabletenv.InternalErrors.Add("Schema", 1)
-		return false, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "tableWasCreatedOrAltered: information_schema query failed for table %s: %v", tableName, err)
-	}
-	if len(tableData.Rows) != 1 {
-		// This can happen if DDLs race with each other.
-		return false, nil
-	}
-	row := tableData.Rows[0]
-	table, err := LoadTable(
-		conn,
-		tableName,
-		row[1].ToString(), // table_type
-		row[3].ToString(), // table_comment
-	)
-	if err != nil {
-		tabletenv.InternalErrors.Add("Schema", 1)
-		return false, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "tableWasCreatedOrAltered: failed to load table %s: %v", tableName, err)
-	}
-
-	// table_rows, data_length, index_length, max_data_length
-	table.SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
-
-	wasCreated := true
-	if _, ok := se.tables[tableName]; ok {
-		// If the table already exists, we overwrite it with the latest info.
-		// This also means that the query cache needs to be cleared.
-		// Otherwise, the query plans may not be in sync with the schema.
-		log.Infof("Updating table %s", tableName)
-		wasCreated = false
-	}
-	se.tables[tableName] = table
-	log.Infof("Initialized table: %s, type: %s", tableName, TypeNames[table.Type])
-	return wasCreated, nil
-}
-
-// registerTopics optionally connects the vt_topic metadata on a message table
-// to a map of topic strings. A table can belong to only one topic.
-func (se *Engine) registerTopics() {
-	// first drop all topics
-	for tableName, table := range se.tables {
-		if table.IsTopic() {
-			delete(se.tables, tableName)
+	for _, row := range pkData.Rows {
+		tableName := row[0].ToString()
+		table, ok := tables[tableName]
+		if !ok {
+			continue
 		}
-	}
-
-	// then register all the topics from scratch
-	for _, table := range se.tables {
-		se.registerTopic(table)
-	}
-}
-
-func (se *Engine) registerTopic(ta *Table) {
-	if ta.MessageInfo == nil || ta.MessageInfo.Topic == "" {
-		return
-	}
-
-	topicName := ta.MessageInfo.Topic
-	topicTable, ok := se.tables[topicName]
-	if !ok {
-		// initialize topic table if necessary
-		topicTable = NewTable(topicName)
-		topicTable.TopicInfo = &TopicInfo{
-			Subscribers: make([]*Table, 0, 1),
+		colName := row[1].ToString()
+		index := table.FindColumn(sqlparser.NewColIdent(colName))
+		if index < 0 {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column %v is listed as primary key, but not present in table %v", colName, tableName)
 		}
-		se.tables[topicName] = topicTable
-		log.Infof("creating topic table '%s'", topicName)
-	} else {
-		// check to see if this table is already registered to the topic
-		// so we don't double register
-		for _, t := range topicTable.TopicInfo.Subscribers {
-			if t.Name == ta.Name {
-				return
-			}
-		}
+		table.PKColumns = append(table.PKColumns, index)
 	}
-
-	// append this table to the list of subscribed tables to the topic
-	log.Infof("subscribing message table '%s' to topic '%s'", ta.Name.String(), topicName)
-	topicTable.TopicInfo.Subscribers = append(topicTable.TopicInfo.Subscribers, ta)
+	return nil
 }
 
 // RegisterNotifier registers the function for schema change notification.
@@ -474,73 +358,6 @@ func (se *Engine) GetSchema() map[string]*Table {
 		tables[k] = v
 	}
 	return tables
-}
-
-// SetReloadTime changes how often the schema is reloaded. This
-// call also triggers an immediate reload.
-func (se *Engine) SetReloadTime(reloadTime time.Duration) {
-	se.mu.Lock()
-	defer se.mu.Unlock()
-	se.ticks.Trigger()
-	se.ticks.SetInterval(reloadTime)
-	se.reloadTime = reloadTime
-}
-
-// ReloadTime returns schema info reload time.
-func (se *Engine) ReloadTime() time.Duration {
-	se.mu.Lock()
-	defer se.mu.Unlock()
-	return se.reloadTime
-}
-
-func (se *Engine) getTableRows() map[string]int64 {
-	se.mu.Lock()
-	defer se.mu.Unlock()
-	tstats := make(map[string]int64)
-	for k, v := range se.tables {
-		tstats[k] = v.TableRows.Get()
-	}
-	return tstats
-}
-
-func (se *Engine) getDataLength() map[string]int64 {
-	se.mu.Lock()
-	defer se.mu.Unlock()
-	tstats := make(map[string]int64)
-	for k, v := range se.tables {
-		tstats[k] = v.DataLength.Get()
-	}
-	return tstats
-}
-
-func (se *Engine) getIndexLength() map[string]int64 {
-	se.mu.Lock()
-	defer se.mu.Unlock()
-	tstats := make(map[string]int64)
-	for k, v := range se.tables {
-		tstats[k] = v.IndexLength.Get()
-	}
-	return tstats
-}
-
-func (se *Engine) getDataFree() map[string]int64 {
-	se.mu.Lock()
-	defer se.mu.Unlock()
-	tstats := make(map[string]int64)
-	for k, v := range se.tables {
-		tstats[k] = v.DataFree.Get()
-	}
-	return tstats
-}
-
-func (se *Engine) getMaxDataLength() map[string]int64 {
-	se.mu.Lock()
-	defer se.mu.Unlock()
-	tstats := make(map[string]int64)
-	for k, v := range se.tables {
-		tstats[k] = v.MaxDataLength.Get()
-	}
-	return tstats
 }
 
 func (se *Engine) ServeHTTP(response http.ResponseWriter, request *http.Request) {

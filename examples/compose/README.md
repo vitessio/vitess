@@ -51,7 +51,7 @@ Flags available:
     go run vtcompose/vtcompose.go -keyspaceData="test_keyspace:2:1:create_messages.sql,create_tokens.sql:lookup_keyspace;lookup_keyspace:1:1:create_tokens_token_lookup.sql,create_messages_message_lookup.sql"
     ```
 * **externalDbData** - Specifies which databases/keyspaces are external and provides data along with it to connect to the external db.
-    List of `<external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET>` seperated by ';'.  
+    List of `<external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET>` separated by ';'.  
     When using this, make sure to have the external_db_name/keyspace in the `keyspaceData` flag with no schema_file_names specified.  
     ```
     go run vtcompose/vtcompose.go -keyspaces="test:0:2::" -externalDbData="test:192.68.99.101:3306:admin:pass:CHARACTER SET utf8 COLLATE utf8_general_ci"
@@ -95,12 +95,17 @@ vitess/examples/compose$ ./client.sh
 
 ### Connect to vgate and run queries
 vtgate responds to the MySQL protocol, so we can connect to it using the default MySQL client command line.
-You can also use the `./lmysql.sh` helper script.  
 ```
 vitess/examples/compose$ mysql --port=15306 --host=127.0.0.1
-vitess/examples/compose$ ./lmysql.sh --port=15306 --host=127.0.0.1
 ```
 **Note that you may need to replace `127.0.0.1` with `docker ip` or `docker-machine ip`** 
+
+You can also use the `./lmysql.sh` helper script.
+```
+vitess/examples/compose$ ./lmysql.sh --port=15306 --host=<DOCKER_HOST_IP>
+```
+
+where `<DOCKER_HOST_IP>` is `docker-machine ip` or external docker host ip addr
 
 ### Play around with vtctl commands
 
@@ -150,11 +155,6 @@ DB_CHARSET=CHARACTER SET utf8 COLLATE utf8_general_ci
 ```
 
 Ensure you have log bin enabled on your external database.
-You may add the following configs to your conf.d directory and reload mysqld on your server
-```
-vitess/config/mycnf/master_mysql56.cnf
-vitess/config/mycnf/rbr.cnf
-```
 
 ### Start the cluster
 ```

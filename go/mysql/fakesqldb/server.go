@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 
+	"vitess.io/vitess/go/vt/dbconfigs"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -166,7 +167,7 @@ func New(t *testing.T) *DB {
 	authServer := &mysql.AuthServerNone{}
 
 	// Start listening.
-	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0)
+	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -205,6 +206,7 @@ func (db *DB) Close() {
 	db.listener.Close()
 	db.acceptWG.Wait()
 
+	db.WaitForClose(250 * time.Millisecond)
 	db.CloseAllConnections()
 
 	tmpDir := path.Dir(db.socketFile)
@@ -213,7 +215,7 @@ func (db *DB) Close() {
 
 // CloseAllConnections can be used to provoke MySQL client errors for open
 // connections.
-// Make sure to call WaitForShutdown() as well.
+// Make sure to call WaitForClose() as well.
 func (db *DB) CloseAllConnections() {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -256,23 +258,24 @@ func (db *DB) WaitForClose(timeout time.Duration) error {
 }
 
 // ConnParams returns the ConnParams to connect to the DB.
-func (db *DB) ConnParams() *mysql.ConnParams {
-	return &mysql.ConnParams{
+func (db *DB) ConnParams() dbconfigs.Connector {
+	return dbconfigs.New(&mysql.ConnParams{
 		UnixSocket: db.socketFile,
 		Uname:      "user1",
 		Pass:       "password1",
 		Charset:    "utf8",
-	}
+	})
+
 }
 
 // ConnParamsWithUname returns  ConnParams to connect to the DB with the Uname set to the provided value.
-func (db *DB) ConnParamsWithUname(uname string) *mysql.ConnParams {
-	return &mysql.ConnParams{
+func (db *DB) ConnParamsWithUname(uname string) dbconfigs.Connector {
+	return dbconfigs.New(&mysql.ConnParams{
 		UnixSocket: db.socketFile,
 		Uname:      uname,
 		Pass:       "password1",
 		Charset:    "utf8",
-	}
+	})
 }
 
 //
@@ -283,10 +286,6 @@ func (db *DB) ConnParamsWithUname(uname string) *mysql.ConnParams {
 func (db *DB) NewConnection(c *mysql.Conn) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-
-	if db.t != nil {
-		db.t.Logf("NewConnection(%v): client %v", db.name, c.ConnectionID)
-	}
 
 	if db.isConnFail {
 		panic(fmt.Errorf("simulating a connection failure"))
@@ -333,9 +332,6 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		return callback(&sqltypes.Result{})
 	}
 
-	if db.t != nil {
-		db.t.Logf("ComQuery(%v): client %v: %v", db.name, c.ConnectionID, query)
-	}
 	if db.orderMatters {
 		result, err := db.comQueryOrdered(query)
 		if err != nil {

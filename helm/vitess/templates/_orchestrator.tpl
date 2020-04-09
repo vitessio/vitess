@@ -123,7 +123,7 @@ spec:
               value: "15999"
 
         - name: recovery-log
-          image: vitess/logtail:helm-1.0.6
+          image: vitess/logtail:helm-2.0.0-0
           imagePullPolicy: IfNotPresent
           env:
           - name: TAIL_FILEPATH
@@ -133,7 +133,7 @@ spec:
               mountPath: /tmp
 
         - name: audit-log
-          image: vitess/logtail:helm-1.0.6
+          image: vitess/logtail:helm-2.0.0-0
           imagePullPolicy: IfNotPresent
           env:
           - name: TAIL_FILEPATH

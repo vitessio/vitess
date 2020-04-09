@@ -5,3 +5,7 @@ java/*/target
 java/*/bin
 php/vendor
 releases
+/dist/
+/vthook/
+/bin/
+/vtdataroot/

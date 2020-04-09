@@ -84,7 +84,6 @@ func TestPlayerCopyTables(t *testing.T) {
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
 		"commit",
-		"rollback",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
 		"begin",
@@ -93,14 +92,12 @@ func TestPlayerCopyTables(t *testing.T) {
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
-		"rollback",
 		// The next FF executes and updates the position before copying.
 		"begin",
 		"/update _vt.vreplication set pos=",
 		"commit",
 		// Nothing to copy from yes. Delete from copy_state.
 		"/delete from _vt.copy_state.*yes",
-		"rollback",
 		// All tables copied. Final catch up followed by Running state.
 		"/update _vt.vreplication set state='Running'",
 	})
@@ -159,12 +156,12 @@ func TestPlayerCopyBigTable(t *testing.T) {
 		vstreamRowsSendHook = nil
 	}
 
-	vstreamRowsHook = func(context.Context) {
+	vstreamHook = func(context.Context) {
 		// Sleeping 50ms guarantees that the catchup wait loop executes multiple times.
 		// This is because waitRetryTime is set to 10ms.
 		time.Sleep(50 * time.Millisecond)
 		// Do this no more than once.
-		vstreamRowsHook = nil
+		vstreamHook = nil
 	}
 
 	filter := &binlogdatapb.Filter{
@@ -193,46 +190,27 @@ func TestPlayerCopyBigTable(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectDBClientQueries(t, []string{
-		"/insert into _vt.vreplication",
+	expectNontxQueries(t, []string{
 		// Create the list of tables to copy and transition to Copying state.
-		"begin",
+		"/insert into _vt.vreplication",
 		"/insert into _vt.copy_state",
-		"/update _vt.vreplication set state='Copying'",
-		"commit",
-		"rollback",
 		// The first fast-forward has no starting point. So, it just saves the current position.
-		"/update _vt.vreplication set pos=",
-		"begin",
+		"/update _vt.vreplication set state='Copying'",
 		"insert into dst(id,val) values (1,'aaa')",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"1\\" > ' where vrepl_id=.*`,
-		"commit",
-		"rollback",
 		// The next catchup executes the new row insert, but will be a no-op.
-		"begin",
 		"insert into dst(id,val) select 3, 'ccc' from dual where (3) <= (1)",
-		"/update _vt.vreplication set pos=",
-		"commit",
 		// fastForward has nothing to add. Just saves position.
-		"begin",
-		"/update _vt.vreplication set pos=",
-		"commit",
 		// Second row gets copied.
-		"begin",
 		"insert into dst(id,val) values (2,'bbb')",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
-		"commit",
 		// Third row copied without going back to catchup state.
-		"begin",
 		"insert into dst(id,val) values (3,'ccc')",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"3\\" > ' where vrepl_id=.*`,
-		"commit",
 		"/delete from _vt.copy_state.*dst",
-		// rollback is a no-op because the delete is autocommitted.
-		"rollback",
 		// Copy is done. Go into running state.
-		"/update _vt.vreplication set state='Running'",
 		// All tables copied. Final catch up followed by Running state.
+		"/update _vt.vreplication set state='Running'",
 	})
 	expectData(t, "dst", [][]string{
 		{"1", "aaa"},
@@ -290,12 +268,12 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 		vstreamRowsSendHook = nil
 	}
 
-	vstreamRowsHook = func(context.Context) {
+	vstreamHook = func(context.Context) {
 		// Sleeping 50ms guarantees that the catchup wait loop executes multiple times.
 		// This is because waitRetryTime is set to 10ms.
 		time.Sleep(50 * time.Millisecond)
 		// Do this no more than once.
-		vstreamRowsHook = nil
+		vstreamHook = nil
 	}
 
 	filter := &binlogdatapb.Filter{
@@ -324,46 +302,26 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectDBClientQueries(t, []string{
-		"/insert into _vt.vreplication",
+	expectNontxQueries(t, []string{
 		// Create the list of tables to copy and transition to Copying state.
-		"begin",
+		"/insert into _vt.vreplication",
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
-		"commit",
-		"rollback",
 		// The first fast-forward has no starting point. So, it just saves the current position.
-		"/update _vt.vreplication set pos=",
-		"begin",
 		"insert into src(id,val) values (1,'aaa')",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"1\\" > ' where vrepl_id=.*`,
-		"commit",
-		"rollback",
 		// The next catchup executes the new row insert, but will be a no-op.
-		"begin",
 		"insert into src(id,val) select 3, 'ccc' from dual where (3) <= (1)",
-		"/update _vt.vreplication set pos=",
-		"commit",
 		// fastForward has nothing to add. Just saves position.
-		"begin",
-		"/update _vt.vreplication set pos=",
-		"commit",
 		// Second row gets copied.
-		"begin",
 		"insert into src(id,val) values (2,'bbb')",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
-		"commit",
 		// Third row copied without going back to catchup state.
-		"begin",
 		"insert into src(id,val) values (3,'ccc')",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"3\\" > ' where vrepl_id=.*`,
-		"commit",
 		"/delete from _vt.copy_state.*src",
-		// rollback is a no-op because the delete is autocommitted.
-		"rollback",
 		// Copy is done. Go into running state.
 		"/update _vt.vreplication set state='Running'",
-		// All tables copied. Final catch up followed by Running state.
 	})
 	expectData(t, "src", [][]string{
 		{"1", "aaa"},
@@ -505,16 +463,10 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 		"insert into dst1(id,val) values (7,'insert out'), (8,'no change'), (10,'updated'), (12,'move out')",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"id1\\" type:INT32 > fields:<name:\\"id2\\" type:INT32 > rows:<lengths:2 lengths:1 values:\\"126\\" > ' where vrepl_id=.*`,
 		"/delete from _vt.copy_state.*dst1",
-		"rollback",
 		// Copy again. There should be no events for catchup.
 		"insert into not_copied(id,val) values (1,'bbb')",
 		`/update _vt.copy_state set lastpk='fields:<name:\\\"id\\\" type:INT32 > rows:<lengths:1 values:\\\"1\\\" > ' where vrepl_id=.*`,
 		"/delete from _vt.copy_state.*not_copied",
-		"rollback",
-	})
-	// Explicitly eat the Running state query. You can't make expectNontxQueries
-	// wait for it because it ignores _vt.vreplication events.
-	expectDBClientQueries(t, []string{
 		"/update _vt.vreplication set state='Running'",
 	})
 	expectData(t, "dst1", [][]string{
@@ -601,16 +553,13 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 
 	expectNontxQueries(t, []string{
 		// Catchup
+		"/insert into _vt.vreplication",
+		"/update _vt.vreplication set state = 'Copying'",
 		"insert into dst(id,val) select 4, 'new' from dual where (4) <= (2)",
 		// Copy
 		"insert into dst(id,val) values (3,'uncopied'), (4,'new')",
 		`/update _vt.copy_state set lastpk.*`,
 		"/delete from _vt.copy_state.*dst",
-		"rollback",
-	})
-	// Explicitly eat the Running state query. You can't make expectNontxQueries
-	// wait for it because it ignores _vt.vreplication events.
-	expectDBClientQueries(t, []string{
 		"/update _vt.vreplication set state='Running'",
 	})
 	expectData(t, "dst", [][]string{
@@ -654,7 +603,71 @@ func TestPlayerCopyTablesNone(t *testing.T) {
 		"begin",
 		"/update _vt.vreplication set state='Stopped'",
 		"commit",
-		"rollback",
+	})
+}
+
+func TestPlayerCopyTablesStopAfterCopy(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table src1(id int, val varbinary(128), primary key(id))",
+		"insert into src1 values(2, 'bbb'), (1, 'aaa')",
+		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src1",
+		fmt.Sprintf("drop table %s.dst1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst1",
+			Filter: "select * from src1",
+		}},
+	}
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace:      env.KeyspaceName,
+		Shard:         env.ShardName,
+		Filter:        filter,
+		OnDdl:         binlogdatapb.OnDDLAction_IGNORE,
+		StopAfterCopy: true,
+	}
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	qr, err := playerEngine.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+		if _, err := playerEngine.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+		expectDeleteQueries(t)
+	}()
+
+	expectDBClientQueries(t, []string{
+		"/insert into _vt.vreplication",
+		// Create the list of tables to copy and transition to Copying state.
+		"begin",
+		"/insert into _vt.copy_state",
+		"/update _vt.vreplication set state='Copying'",
+		"commit",
+		// The first fast-forward has no starting point. So, it just saves the current position.
+		"/update _vt.vreplication set pos=",
+		"begin",
+		"insert into dst1(id,val) values (1,'aaa'), (2,'bbb')",
+		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		"commit",
+		// copy of dst1 is done: delete from copy_state.
+		"/delete from _vt.copy_state.*dst1",
+		// All tables copied. Stop vreplication because we requested it.
+		"/update _vt.vreplication set state='Stopped'",
+	})
+	expectData(t, "dst1", [][]string{
+		{"1", "aaa"},
+		{"2", "bbb"},
 	})
 }
 
@@ -717,10 +730,7 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
 		"commit",
-		"rollback",
 		// The first copy will do nothing because we set the timeout to be too low.
-		// We should expect it to do an empty rollback.
-		"rollback",
 		// The next copy should proceed as planned because we've made the timeout high again.
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
@@ -730,7 +740,6 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
-		"rollback",
 		// All tables copied. Go into running state.
 		"/update _vt.vreplication set state='Running'",
 	})

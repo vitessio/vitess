@@ -21,9 +21,10 @@ package vtctld
 import (
 	"flag"
 	"net/http"
-	"os"
-	"path"
 	"strings"
+	"time"
+
+	rice "github.com/GeertJohan/go.rice"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/log"
@@ -36,19 +37,17 @@ import (
 )
 
 var (
-	webDir = flag.String("web_dir", "", "directory from which to serve vtctld web interface resources")
-	// webDir2 is a temporary additional dir for a new, in-development UI.
-	webDir2             = flag.String("web_dir2", "", "directory from which to serve vtctld2 web interface resources")
 	enableRealtimeStats = flag.Bool("enable_realtime_stats", false, "Required for the Realtime Stats view. If set, vtctld will maintain a streaming RPC to each tablet (in all cells) to gather the realtime health stats.")
+
+	_ = flag.String("web_dir", "", "NOT USED, here for backward compatibility")
+	_ = flag.String("web_dir2", "", "NOT USED, here for backward compatibility")
 )
 
 const (
 	appPrefix = "/app/"
-	// appPrefix2 is a temporary additional path for a new, in-development UI.
-	appPrefix2 = "/app2/"
 )
 
-// InitVtctld initializes all the vtctld functionnality.
+// InitVtctld initializes all the vtctld functionality.
 func InitVtctld(ts *topo.Server) {
 	actionRepo := NewActionRepository(ts)
 
@@ -123,12 +122,12 @@ func InitVtctld(ts *topo.Server) {
 			return "", wr.ReloadSchema(ctx, tabletAlias)
 		})
 
-	// Anything unrecognized gets redirected to the main app2 page.
+	// Anything unrecognized gets redirected to the main app page.
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, appPrefix2, http.StatusFound)
+		http.Redirect(w, r, appPrefix, http.StatusFound)
 	})
 
-	// Serve the static files for the vtctld web app.
+	// Serve the static files for the vtctld2 web app
 	http.HandleFunc(appPrefix, func(w http.ResponseWriter, r *http.Request) {
 		// Strip the prefix.
 		parts := strings.SplitN(r.URL.Path, "/", 3)
@@ -140,36 +139,27 @@ func InitVtctld(ts *topo.Server) {
 		if rest == "" {
 			rest = "index.html"
 		}
-		http.ServeFile(w, r, path.Join(*webDir, rest))
-	})
 
-	// Serve the static files for the vtctld2 web app.
-	// This is a temporary additional URL for serving the new,
-	// in-development UI side-by-side with the current one.
-	http.HandleFunc(appPrefix2, func(w http.ResponseWriter, r *http.Request) {
-		// Strip the prefix.
-		parts := strings.SplitN(r.URL.Path, "/", 3)
-		if len(parts) != 3 {
+		riceBox, err := rice.FindBox("../../../web/vtctld2/app")
+		if err != nil {
+			log.Errorf("Unable to open rice box %s", err)
 			http.NotFound(w, r)
-			return
 		}
-		rest := parts[2]
-		if rest == "" {
-			rest = "index.html"
-		}
-		filePath := path.Join(*webDir2, rest)
-		if _, err := os.Stat(filePath); err != nil {
-			// The requested file doesn't exist.
-			if strings.ContainsAny(rest, "/.") {
-				// This looks like a real file path, so return Not Found.
-				http.NotFound(w, r)
-				return
+		log.Infof("Opening file from rice box : %s", rest)
+		fileToServe, err := riceBox.Open(rest)
+		if err != nil {
+			if !strings.ContainsAny(rest, "/.") {
+				//This is a virtual route so pass index.html
+				fileToServe, err = riceBox.Open("index.html")
 			}
-			// It looks like a virtual route path (for pages within the app).
-			// For these, we must serve index.html to initialize the app.
-			filePath = path.Join(*webDir2, "index.html")
+			if err != nil {
+				log.Errorf("Unable to open file from rice box %s : %s", rest, err)
+				http.NotFound(w, r)
+			}
 		}
-		http.ServeFile(w, r, filePath)
+		if fileToServe != nil {
+			http.ServeContent(w, r, rest, time.Now(), fileToServe)
+		}
 	})
 
 	var realtimeStats *realtimeStats

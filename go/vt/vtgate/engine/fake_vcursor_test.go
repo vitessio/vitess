@@ -25,6 +25,10 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
+	"github.com/stretchr/testify/require"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -37,8 +41,18 @@ import (
 
 var testMaxMemoryRows = 100
 
+var _ VCursor = (*noopVCursor)(nil)
+
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
+}
+
+func (t noopVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
+	panic("implement me")
+}
+
+func (t noopVCursor) SetTarget(target string) error {
+	panic("implement me")
 }
 
 func (t noopVCursor) Context() context.Context {
@@ -56,11 +70,11 @@ func (t noopVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc
 func (t noopVCursor) RecordWarning(warning *querypb.QueryWarning) {
 }
 
-func (t noopVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+func (t noopVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
 
-func (t noopVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, autocommit bool) (*sqltypes.Result, []error) {
+func (t noopVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error) {
 	panic("unimplemented")
 }
 
@@ -76,13 +90,15 @@ func (t noopVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedSha
 	panic("unimplemented")
 }
 
-func (t noopVCursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, isDML, autocommit bool) (*sqltypes.Result, error) {
+func (t noopVCursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
 
 func (t noopVCursor) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	panic("unimplemented")
 }
+
+var _ VCursor = (*loggingVCursor)(nil)
 
 // loggingVCursor logs requests and allows you to verify
 // that the correct requests were made.
@@ -107,6 +123,15 @@ type loggingVCursor struct {
 	log []string
 }
 
+func (f *loggingVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
+	panic("implement me")
+}
+
+func (f *loggingVCursor) SetTarget(target string) error {
+	f.log = append(f.log, fmt.Sprintf("Target set to %s", target))
+	return nil
+}
+
 func (f *loggingVCursor) Context() context.Context {
 	return context.Background()
 }
@@ -119,7 +144,7 @@ func (f *loggingVCursor) RecordWarning(warning *querypb.QueryWarning) {
 	f.warnings = append(f.warnings, warning)
 }
 
-func (f *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+func (f *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	name := "Unknown"
 	switch co {
 	case vtgatepb.CommitOrder_NORMAL:
@@ -131,12 +156,12 @@ func (f *loggingVCursor) Execute(method string, query string, bindvars map[strin
 	case vtgatepb.CommitOrder_AUTOCOMMIT:
 		name = "ExecuteAutocommit"
 	}
-	f.log = append(f.log, fmt.Sprintf("%s %s %v %v", name, query, printBindVars(bindvars), isDML))
+	f.log = append(f.log, fmt.Sprintf("%s %s %v %v", name, query, printBindVars(bindvars), rollbackOnError))
 	return f.nextResult()
 }
 
-func (f *loggingVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, []error) {
-	f.log = append(f.log, fmt.Sprintf("ExecuteMultiShard %v%v %v", printResolvedShardQueries(rss, queries), isDML, canAutocommit))
+func (f *loggingVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error) {
+	f.log = append(f.log, fmt.Sprintf("ExecuteMultiShard %v%v %v", printResolvedShardQueries(rss, queries), rollbackOnError, canAutocommit))
 	res, err := f.nextResult()
 	if err != nil {
 		return nil, []error{err}
@@ -200,6 +225,8 @@ func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Val
 			shards = f.shards[:1]
 		case key.DestinationNone:
 			// Nothing to do here.
+		case key.DestinationShard:
+			shards = []string{destination.String()}
 		default:
 			return nil, nil, fmt.Errorf("unsupported destination: %v", destination)
 		}
@@ -229,9 +256,7 @@ func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Val
 
 func (f *loggingVCursor) ExpectLog(t *testing.T, want []string) {
 	t.Helper()
-	if !reflect.DeepEqual(f.log, want) {
-		t.Errorf("vc.log:\n%v\nwant:\n%v", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
-	}
+	require.Equal(t, strings.Join(want, "\n"), strings.Join(f.log, "\n"))
 }
 
 func (f *loggingVCursor) ExpectWarnings(t *testing.T, want []*querypb.QueryWarning) {

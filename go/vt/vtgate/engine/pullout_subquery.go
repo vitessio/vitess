@@ -31,11 +31,19 @@ var _ Primitive = (*PulloutSubquery)(nil)
 // PulloutSubquery executes a "pulled out" subquery and stores
 // the results in a bind variable.
 type PulloutSubquery struct {
-	Opcode         PulloutOpcode
+	Opcode PulloutOpcode
+
+	// SubqueryResult and HasValues are used to send in the bindvar used in the query to the underlying primitive
 	SubqueryResult string
 	HasValues      string
-	Subquery       Primitive
-	Underlying     Primitive
+
+	Subquery   Primitive
+	Underlying Primitive
+}
+
+// Inputs returns the input primitives for this join
+func (ps *PulloutSubquery) Inputs() []Primitive {
+	return []Primitive{ps.Subquery, ps.Underlying}
 }
 
 // RouteType returns a description of the query routing type used by the primitive
@@ -92,6 +100,10 @@ func (ps *PulloutSubquery) GetFields(vcursor VCursor, bindVars map[string]*query
 	return ps.Underlying.GetFields(vcursor, combinedVars)
 }
 
+func (ps *PulloutSubquery) NeedsTransaction() bool {
+	return ps.Subquery.NeedsTransaction() || ps.Underlying.NeedsTransaction()
+}
+
 func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (map[string]*querypb.BindVariable, error) {
 	result, err := ps.Subquery.Execute(vcursor, bindVars, false)
 	if err != nil {
@@ -146,6 +158,13 @@ func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*qu
 		}
 	}
 	return combinedVars, nil
+}
+
+func (ps *PulloutSubquery) description() PrimitiveDescription {
+	return PrimitiveDescription{
+		OperatorType: "Subquery",
+		Variant:      ps.Opcode.String(),
+	}
 }
 
 // PulloutOpcode is a number representing the opcode

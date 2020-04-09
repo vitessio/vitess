@@ -193,7 +193,7 @@ func checkWatchInterrupt(t *testing.T, ts *topo.Server) {
 			break
 		}
 		if wd.Err != nil {
-			t.Fatalf("bad error returned for deletion: %v", wd.Err)
+			t.Fatalf("bad error returned for cancellation: %v", wd.Err)
 		}
 		// we got something, better be the right value
 		got := &topodatapb.SrvKeyspace{}

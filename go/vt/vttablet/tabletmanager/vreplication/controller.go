@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -49,11 +50,13 @@ var (
 // There is no mutex within a controller becaust its members are
 // either read-only or self-synchronized.
 type controller struct {
+	vre             *Engine
 	dbClientFactory func() binlogplayer.DBClient
 	mysqld          mysqlctl.MysqlDaemon
 	blpStats        *binlogplayer.Stats
 
 	id           uint32
+	workflow     string
 	source       binlogdatapb.BinlogSource
 	stopPos      string
 	tabletPicker *discovery.TabletPicker
@@ -67,11 +70,12 @@ type controller struct {
 
 // newController creates a new controller. Unless a stream is explicitly 'Stopped',
 // this function launches a goroutine to perform continuous vreplication.
-func newController(ctx context.Context, params map[string]string, dbClientFactory func() binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, ts *topo.Server, cell, tabletTypesStr string, blpStats *binlogplayer.Stats) (*controller, error) {
+func newController(ctx context.Context, params map[string]string, dbClientFactory func() binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, ts *topo.Server, cell, tabletTypesStr string, blpStats *binlogplayer.Stats, vre *Engine) (*controller, error) {
 	if blpStats == nil {
 		blpStats = binlogplayer.NewStats()
 	}
 	ct := &controller{
+		vre:             vre,
 		dbClientFactory: dbClientFactory,
 		mysqld:          mysqld,
 		blpStats:        blpStats,
@@ -84,7 +88,9 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 		return nil, err
 	}
 	ct.id = uint32(id)
+	ct.workflow = params["workflow"]
 
+	blpStats.State.Set(params["state"])
 	// Nothing to do if replication is stopped.
 	if params["state"] == binlogplayer.BlpStopped {
 		ct.cancel = func() {}
@@ -98,18 +104,20 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	}
 	ct.stopPos = params["stop_pos"]
 
-	// tabletPicker
-	if v, ok := params["cell"]; ok {
-		cell = v
+	if ct.source.GetExternalMysql() == "" {
+		// tabletPicker
+		if v := params["cell"]; v != "" {
+			cell = v
+		}
+		if v := params["tablet_types"]; v != "" {
+			tabletTypesStr = v
+		}
+		tp, err := discovery.NewTabletPicker(ctx, ts, cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr, *healthcheckTopologyRefresh, *healthcheckRetryDelay, *healthcheckTimeout)
+		if err != nil {
+			return nil, err
+		}
+		ct.tabletPicker = tp
 	}
-	if v, ok := params["tablet_types"]; ok {
-		tabletTypesStr = v
-	}
-	tp, err := discovery.NewTabletPicker(ctx, ts, cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr, *healthcheckTopologyRefresh, *healthcheckRetryDelay, *healthcheckTimeout)
-	if err != nil {
-		return nil, err
-	}
-	ct.tabletPicker = tp
 
 	// cancel
 	ctx, ct.cancel = context.WithCancel(ctx)
@@ -122,7 +130,9 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 func (ct *controller) run(ctx context.Context) {
 	defer func() {
 		log.Infof("stream %v: stopped", ct.id)
-		ct.tabletPicker.Close()
+		if ct.tabletPicker != nil {
+			ct.tabletPicker.Close()
+		}
 		close(ct.done)
 	}()
 
@@ -175,11 +185,16 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	}
 	defer dbClient.Close()
 
-	tablet, err := ct.tabletPicker.PickForStreaming(ctx)
-	if err != nil {
-		return err
+	var tablet *topodatapb.Tablet
+	if ct.source.GetExternalMysql() == "" {
+		log.Infof("trying to find a tablet eligible for vreplication. stream id: %v", ct.id)
+		tablet, err = ct.tabletPicker.PickForStreaming(ctx)
+		if err != nil {
+			return err
+		}
+		log.Infof("found a tablet eligible for vreplication. stream id: %v  tablet: %s", ct.id, tablet.Alias.String())
+		ct.sourceTablet.Set(tablet.Alias.String())
 	}
-	ct.sourceTablet.Set(tablet.Alias.String())
 
 	switch {
 	case len(ct.source.Tables) > 0:
@@ -205,8 +220,16 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		if _, err := dbClient.ExecuteFetch("set names binary", 10000); err != nil {
 			return err
 		}
-		vreplicator := newVReplicator(ct.id, &ct.source, tablet, ct.blpStats, dbClient, ct.mysqld)
-		return vreplicator.Replicate(ctx)
+
+		var vsClient VStreamerClient
+		if ct.source.GetExternalMysql() == "" {
+			vsClient = NewTabletVStreamerClient(tablet)
+		} else {
+			vsClient = NewMySQLVStreamerClient()
+		}
+
+		vr := newVReplicator(ct.id, &ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre)
+		return vr.Replicate(ctx)
 	}
 	return fmt.Errorf("missing source")
 }

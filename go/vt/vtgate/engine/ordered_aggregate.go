@@ -18,6 +18,7 @@ package engine
 
 import (
 	"fmt"
+	"strconv"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -65,6 +66,14 @@ type AggregateParams struct {
 
 func (ap AggregateParams) isDistinct() bool {
 	return ap.Opcode == AggregateCountDistinct || ap.Opcode == AggregateSumDistinct
+}
+
+func (ap AggregateParams) String() string {
+	if ap.Alias != "" {
+		return fmt.Sprintf("%s(%d) AS %s", ap.Opcode.String(), ap.Col, ap.Alias)
+	}
+
+	return fmt.Sprintf("%s(%d)", ap.Opcode.String(), ap.Col)
 }
 
 // AggregateOpcode is the aggregation Opcode.
@@ -156,7 +165,6 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 	out := &sqltypes.Result{
 		Fields: oa.convertFields(result.Fields),
 		Rows:   make([][]sqltypes.Value, 0, len(result.Rows)),
-		Extras: result.Extras,
 	}
 	// This code is similar to the one in StreamExecute.
 	var current []sqltypes.Value
@@ -309,6 +317,15 @@ func (oa *OrderedAggregate) GetFields(vcursor VCursor, bindVars map[string]*quer
 	return qr.Truncate(oa.TruncateColumnCount), nil
 }
 
+// Inputs returns the Primitive input for this aggregation
+func (oa *OrderedAggregate) Inputs() []Primitive {
+	return []Primitive{oa.Input}
+}
+
+func (oa *OrderedAggregate) NeedsTransaction() bool {
+	return oa.Input.NeedsTransaction()
+}
+
 func (oa *OrderedAggregate) keysEqual(row1, row2 []sqltypes.Value) (bool, error) {
 	for _, key := range oa.Keys {
 		cmp, err := sqltypes.NullsafeCompare(row1[key], row2[key])
@@ -388,4 +405,27 @@ func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
 
 	}
 	return sqltypes.NULL, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown aggregation %v", opcode)
+}
+
+func aggregateParamsToString(in interface{}) string {
+	return in.(AggregateParams).String()
+}
+
+func intToString(i interface{}) string {
+	return strconv.Itoa(i.(int))
+}
+
+func (oa *OrderedAggregate) description() PrimitiveDescription {
+	aggregates := GenericJoin(oa.Aggregates, aggregateParamsToString)
+	groupBy := GenericJoin(oa.Keys, intToString)
+	other := map[string]interface{}{
+		"Aggregates": aggregates,
+		"GroupBy":    groupBy,
+		"Distinct":   strconv.FormatBool(oa.HasDistinct),
+	}
+	return PrimitiveDescription{
+		OperatorType: "Aggregate",
+		Variant:      "Ordered",
+		Other:        other,
+	}
 }

@@ -30,12 +30,23 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
+var _ VSchemaOperator = (*VSchemaManager)(nil)
+
 // VSchemaManager is used to watch for updates to the vschema and to implement
 // the DDL commands to add / remove vindexes
 type VSchemaManager struct {
 	e                 *Executor
 	mu                sync.Mutex
 	currentSrvVschema *vschemapb.SrvVSchema
+}
+
+//GetCurrentVschema return the denormalized VSchema from SrvVSchema
+func (vm *VSchemaManager) GetCurrentVschema() (*vindexes.VSchema, error) {
+	srvVschema := vm.GetCurrentSrvVschema()
+	if srvVschema == nil {
+		return nil, nil
+	}
+	return vindexes.BuildVSchema(srvVschema)
 }
 
 // GetCurrentSrvVschema returns a copy of the latest SrvVschema from the
