@@ -260,12 +260,20 @@ func (stream *VTGateStream) MessageStream(ks, shard string, keyRange *topodata.K
 		return nil, err
 	}
 	go func() {
+		var oldQr *sqltypes.Result
 		for {
 			qr, err := resultStream.Recv()
 			if err != nil {
 				log.Infof("Message stream ended: %v", err)
 				return
 			}
+
+			if oldQr != nil && oldQr.Equal(qr) {
+				continue
+			}
+
+			oldQr = qr
+
 			stream.respChan <- qr
 		}
 	}()
