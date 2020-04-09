@@ -1714,9 +1714,9 @@ show_statement:
   {
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
-| SHOW CREATE VIEW ddl_skip_to_end
+| SHOW CREATE VIEW table_name
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{Type: string($2) + " " + string($3), Table: $4}
   }
 | SHOW DATABASES ddl_skip_to_end
   {
