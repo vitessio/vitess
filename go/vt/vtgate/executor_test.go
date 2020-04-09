@@ -1102,6 +1102,22 @@ func TestExecutorOther(t *testing.T) {
 				SbcLookupCnt: 0,
 			},
 		},
+		{
+			targetStr: "TestExecutor/-20",
+			wantCnts: cnts{
+				Sbc1Cnt:      1,
+				Sbc2Cnt:      0,
+				SbcLookupCnt: 0,
+			},
+		},
+		{
+			targetStr: "TestExecutor[00]",
+			wantCnts: cnts{
+				Sbc1Cnt:      1,
+				Sbc2Cnt:      0,
+				SbcLookupCnt: 0,
+			},
+		},
 	}
 
 	stmts := []string{

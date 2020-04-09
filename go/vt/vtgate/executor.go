@@ -1161,6 +1161,15 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 	}
 
 	switch dest.(type) {
+	case key.DestinationKeyspaceID:
+		rss, err := e.resolver.resolver.ResolveDestination(ctx, destKeyspace, destTabletType, dest)
+		if err != nil {
+			return nil, err
+		}
+		if len(rss) != 1 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %s, got: %v", sql, dest)
+		}
+		destKeyspace, dest = rss[0].Target.Keyspace, key.DestinationShard(rss[0].Target.Shard)
 	case key.DestinationShard:
 	// noop
 	default:
