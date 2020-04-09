@@ -169,8 +169,8 @@ func testMessaging(t *testing.T, name, ks string) {
 	defer stream.Close()
 
 	session := stream.Session("@master", nil)
-	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into "+name+" (id, message) values (1,'hello world 1')")
 	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into "+name+" (id, message) values (4,'hello world 4')")
+	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into "+name+" (id, message) values (1,'hello world 1')")
 
 	// validate fields
 	res, err := stream.MessageStream(ks, "", nil, name)
@@ -187,30 +187,28 @@ func testMessaging(t *testing.T, name, ks string) {
 		resMap[row[0].ToString()] = row[1].ToString()
 	}
 
-	res, err = stream.Next()
-	require.Nil(t, err)
-	for _, row := range res.Rows {
-		resMap[row[0].ToString()] = row[1].ToString()
+	if name == "sharded_message" {
+		res, err = stream.Next()
+		require.Nil(t, err)
+		for _, row := range res.Rows {
+			resMap[row[0].ToString()] = row[1].ToString()
+		}
 	}
 
 	assert.Equal(t, "hello world 1", resMap["1"])
 	assert.Equal(t, "hello world 4", resMap["4"])
 
 	resMap = make(map[string]string)
+	stream.ClearMem()
 	// validate message ack with id 4
 	qr, err := session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (4) and time_acked is null", nil)
 	require.Nil(t, err)
 	assert.Equal(t, uint64(1), qr.RowsAffected)
-	res, err = stream.Next()
-	require.Nil(t, err)
-	for _, row := range res.Rows {
-		resMap[row[0].ToString()] = row[1].ToString()
-	}
 
-	res, err = stream.Next()
-	require.Nil(t, err)
-	for _, row := range res.Rows {
-		resMap[row[0].ToString()] = row[1].ToString()
+	for res, err = stream.Next(); err == nil; res, err = stream.Next() {
+		for _, row := range res.Rows {
+			resMap[row[0].ToString()] = row[1].ToString()
+		}
 	}
 
 	assert.Equal(t, "hello world 1", resMap["1"])
@@ -231,6 +229,7 @@ type VTGateStream struct {
 	ctx      context.Context
 	host     string
 	respChan chan *sqltypes.Result
+	mem      *sqltypes.Result
 	*vtgateconn.VTGateConn
 }
 
@@ -260,33 +259,39 @@ func (stream *VTGateStream) MessageStream(ks, shard string, keyRange *topodata.K
 		return nil, err
 	}
 	go func() {
-		var oldQr *sqltypes.Result
 		for {
 			qr, err := resultStream.Recv()
 			if err != nil {
+				fmt.Println("exit", err)
 				log.Infof("Message stream ended: %v", err)
 				return
 			}
 
-			if oldQr != nil && oldQr.Equal(qr) {
+			if stream.mem != nil && stream.mem.Equal(qr) {
+				fmt.Println("discarted", qr)
 				continue
 			}
 
-			oldQr = qr
-
+			stream.mem = qr
+			fmt.Println("message", qr)
 			stream.respChan <- qr
 		}
 	}()
 	return qr, nil
 }
 
+// ClearMem cleares the last result stored.
+func (stream *VTGateStream) ClearMem() {
+	stream.mem = nil
+}
+
 // Next reads the new msg available in stream.
 func (stream *VTGateStream) Next() (*sqltypes.Result, error) {
-	ticker := time.Tick(10 * time.Second)
+	timer := time.NewTimer(10 * time.Second)
 	select {
 	case s := <-stream.respChan:
 		return s, nil
-	case <-ticker:
+	case <-timer.C:
 		return nil, fmt.Errorf("time limit exceeded")
 	}
 }
