@@ -97,8 +97,8 @@ func (mysqld *Mysqld) DemoteMaster() (rp mysql.Position, err error) {
 	return mysqld.MasterPosition()
 }
 
-// PromoteSlave will promote a slave to be the new master.
-func (mysqld *Mysqld) PromoteSlave(hookExtraEnv map[string]string) (mysql.Position, error) {
+// Promote will promote this server to be the new master.
+func (mysqld *Mysqld) Promote(hookExtraEnv map[string]string) (mysql.Position, error) {
 	ctx := context.TODO()
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {

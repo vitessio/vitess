@@ -63,7 +63,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",
 	}
-	newMaster.FakeMysqlDaemon.PromoteSlaveResult = mysql.Position{
+	newMaster.FakeMysqlDaemon.PromoteResult = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			mysql.MariadbGTID{
 				Domain:   2,

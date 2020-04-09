@@ -56,7 +56,7 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 			},
 		},
 	}
-	newMaster.FakeMysqlDaemon.PromoteSlaveResult = mysql.Position{
+	newMaster.FakeMysqlDaemon.PromoteResult = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			mysql.MariadbGTID{
 				Domain:   7,
@@ -172,7 +172,7 @@ func TestPlannedReparentShard(t *testing.T) {
 			},
 		},
 	}
-	newMaster.FakeMysqlDaemon.PromoteSlaveResult = mysql.Position{
+	newMaster.FakeMysqlDaemon.PromoteResult = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			mysql.MariadbGTID{
 				Domain:   7,
@@ -328,7 +328,7 @@ func TestPlannedReparentShardPromoteSlaveFail(t *testing.T) {
 			},
 		},
 	}
-	newMaster.FakeMysqlDaemon.PromoteSlaveResult = mysql.Position{
+	newMaster.FakeMysqlDaemon.PromoteResult = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			mysql.MariadbGTID{
 				Domain:   7,
@@ -349,7 +349,7 @@ func TestPlannedReparentShardPromoteSlaveFail(t *testing.T) {
 	oldMaster.FakeMysqlDaemon.ReadOnly = false
 	oldMaster.FakeMysqlDaemon.Replicating = false
 	// set to incorrect value to make promote fail on WaitForMasterPos
-	oldMaster.FakeMysqlDaemon.CurrentMasterPosition = newMaster.FakeMysqlDaemon.PromoteSlaveResult
+	oldMaster.FakeMysqlDaemon.CurrentMasterPosition = newMaster.FakeMysqlDaemon.PromoteResult
 	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
@@ -425,7 +425,7 @@ func TestPlannedReparentShardPromoteSlaveTimeout(t *testing.T) {
 			},
 		},
 	}
-	newMaster.FakeMysqlDaemon.PromoteSlaveResult = mysql.Position{
+	newMaster.FakeMysqlDaemon.PromoteResult = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			mysql.MariadbGTID{
 				Domain:   7,

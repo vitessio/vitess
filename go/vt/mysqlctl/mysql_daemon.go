@@ -65,10 +65,9 @@ type MysqlDaemon interface {
 
 	WaitMasterPos(context.Context, mysql.Position) error
 
-	// PromoteSlave makes the slave the new master. It will not change
+	// Promote makes the current server master. It will not change
 	// the read_only state of the server.
-	PromoteSlave(map[string]string) (mysql.Position, error)
-
+	Promote(map[string]string) (mysql.Position, error)
 	// Schema related methods
 	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
 	GetColumns(dbName, table string) ([]*querypb.Field, []string, error)

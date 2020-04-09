@@ -688,6 +688,9 @@ func (itmc *internalTabletManagerClient) StopReplicationAndGetStatus(ctx context
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
+func (itmc *internalTabletManagerClient) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+	return "", fmt.Errorf("not implemented in vtcombo")
+}
 func (itmc *internalTabletManagerClient) PromoteSlave(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	return "", fmt.Errorf("not implemented in vtcombo")
 }
