@@ -1258,6 +1258,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	}
 
 	logStats.ExecuteTime = time.Since(execStart)
+	e.updateQueryCounts("StreamExecute", plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
 
 	return err
 }
