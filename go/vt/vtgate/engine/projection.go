@@ -85,6 +85,7 @@ func (p *Projection) description() PrimitiveDescription {
 		OperatorType: "Projection",
 		Other: map[string]interface{}{
 			"Expressions": p.Exprs,
+			"Columns":     p.Cols,
 		},
 	}
 }

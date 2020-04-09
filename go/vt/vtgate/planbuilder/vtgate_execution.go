@@ -10,6 +10,7 @@ var _ builder = (*vtgateExecution)(nil)
 
 type vtgateExecution struct {
 	Exprs []sqltypes.Expr
+	Cols  []string
 }
 
 func (v *vtgateExecution) Order() int {
@@ -75,6 +76,7 @@ func (v *vtgateExecution) SupplyWeightString(colNumber int) (weightcolNumber int
 func (v *vtgateExecution) Primitive() engine.Primitive {
 	return &engine.Projection{
 		Exprs: v.Exprs,
+		Cols:  v.Cols,
 		Input: &engine.SingleRow{},
 	}
 }
