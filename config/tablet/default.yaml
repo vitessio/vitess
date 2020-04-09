@@ -1,0 +1,119 @@
+tabletID: zone-1234
+
+init:
+  dbName:            # init_db_name_override
+  keyspace:          # init_keyspace
+  shard:             # init_shard
+  tags: {}           # init_tags
+  tabletType:        # init_tablet_type
+  timeoutSeconds: 60 # init_timeout
+
+db:
+  socket:     # db_socket
+  host:       # db_host
+  port: 0     # db_port
+  flags: 0    # db_flags
+  flavor:     # db_flavor
+  sslCa:      # db_ssl_ca
+  sslCaPath:  # db_ssl_ca_path
+  sslCert:    # db_ssl_cert
+  sslKey:     # db_ssl_key
+  serverName: # db_server_name
+  connectTimeoutMilliseconds: 0 # db_connect_timeout_ms
+  app:
+    user: vt_app      # db_app_user
+    password:         # db_app_password
+    useSsl: true      # db_app_use_ssl
+    preferSocket: true
+  dba:
+    user: vt_dba      # db_dba_user
+    password:         # db_dba_password
+    useSsl: true      # db_dba_use_ssl
+    preferSocket: true
+  filtered:
+    user: vt_filtered # db_filtered_user
+    password:         # db_filtered_password
+    useSsl: true      # db_filtered_use_ssl
+    preferSocket: true
+  repl:
+    user: vt_repl     # db_repl_user
+    password:         # db_repl_password
+    useSsl: true      # db_repl_use_ssl
+    preferSocket: true
+  appdebug:
+    user: vt_appdebug # db_appdebug_user
+    password:         # db_appdebug_password
+    useSsl: true      # db_appdebug_use_ssl
+    preferSocket: true
+  allprivs:
+    user: vt_allprivs # db_allprivs_user
+    password:         # db_allprivs_password
+    useSsl: true      # db_allprivs_use_ssl
+    preferSocket: true
+
+oltpReadPool:
+  size: 16                 # queryserver-config-pool-size
+  timeoutSeconds: 0        # queryserver-config-query-pool-timeout
+  idleTimeoutSeconds: 1800 # queryserver-config-idle-timeout
+  prefillParallelism: 0    # queryserver-config-pool-prefill-parallelism
+  maxWaiters: 50000        # queryserver-config-query-pool-waiter-cap
+
+olapReadPool:
+  size: 200                # queryserver-config-stream-pool-size
+  timeoutSeconds: 0        # queryserver-config-query-pool-timeout
+  idleTimeoutSeconds: 1800 # queryserver-config-idle-timeout
+  prefillParallelism: 0    # queryserver-config-stream-pool-prefill-parallelism
+  maxWaiters: 0
+
+txPool:
+  size: 20                 # queryserver-config-transaction-cap
+  timeoutSeconds: 1        # queryserver-config-txpool-timeout
+  idleTimeoutSeconds: 1800 # queryserver-config-idle-timeout
+  prefillParallelism: 0    # queryserver-config-transaction-prefill-parallelism
+  maxWaiters: 50000        # queryserver-config-txpool-waiter-cap
+
+oltp:
+  queryTimeout: 30     # queryserver-config-query-timeout
+  txTimeoutSeconds: 30 # queryserver-config-transaction-timeout
+  maxRows: 10000       # queryserver-config-max-result-size
+  warnRows: 0          # queryserver-config-warn-result-size
+
+consolidator:
+  enable: true        # enable-consolidator
+  onlyReplicas: false # enable-consolidator-replicas
+
+hotRowProtection:
+  mode: disable|warn|enable # enable_hot_row_protection, enable_hot_row_protection_dry_run
+  maxQueueSize: 20          # hot_row_protection_max_queue_size
+  maxGlobalQueueSize: 1000  # hot_row_protection_max_global_queue_size
+  concurrentTransactions: 5 # hot_row_protection_concurrent_transactions
+
+heartbeat:
+  enable: false # heartbeat_enable
+  heartbeatIntervalMilliseconds: 1000
+
+shutdownGracePeriodSeconds: 0     # transaction_shutdown_grace_period
+passthroughDML: false             # queryserver-config-passthrough-dmls
+streamBufferSize: 32768           # queryserver-config-stream-buffer-size
+queryCacheSize: 5000              # queryserver-config-query-cache-size
+schemaReloadIntervalSeconds: 1800 # queryserver-config-schema-reload-time
+watchReplication: false           # watch_replication_stream
+terseErrors: false                # queryserver-config-terse-errors
+enforceStrictTransTables: true    # enforce_strict_trans_tables
+messagePostponeParallelism: 4     # queryserver-config-message-postpone-cap
+cacheResultFields: true           # enable-query-plan-field-caching
+
+
+queryserver-config-strict-table-acl
+queryserver-config-enable-table-acl-dry-run
+queryserver-config-acl-exempt-acl
+enable-tx-throttler
+tx-throttler-config
+tx-throttler-healthcheck-cells
+enable_transaction_limit
+enable_transaction_limit_dry_run
+transaction_limit_per_user
+transaction_limit_by_username
+transaction_limit_by_principal
+transaction_limit_by_component
+transaction_limit_by_subcomponent

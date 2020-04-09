@@ -47,7 +47,9 @@ var (
 	deprecatedMessagePoolPrefillParallelism int
 	deprecatedAutocommit                    bool
 	deprecateAllowUnsafeDMLs                bool
+	deprecatedMessagePoolSize               int
 	deprecatedPoolNamePrefix                string
+	deprecatedMaxDMLRows                    int
 )
 
 func init() {
@@ -55,7 +57,7 @@ func init() {
 	flag.IntVar(&Config.PoolPrefillParallelism, "queryserver-config-pool-prefill-parallelism", DefaultQsConfig.PoolPrefillParallelism, "query server read pool prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
 	flag.IntVar(&Config.StreamPoolSize, "queryserver-config-stream-pool-size", DefaultQsConfig.StreamPoolSize, "query server stream connection pool size, stream pool is used by stream queries: queries that return results to client in a streaming fashion")
 	flag.IntVar(&Config.StreamPoolPrefillParallelism, "queryserver-config-stream-pool-prefill-parallelism", DefaultQsConfig.StreamPoolPrefillParallelism, "query server stream pool prefill parallelism, a non-zero value will prefill the pool using the specified parallelism")
-	flag.IntVar(&Config.MessagePoolSize, "queryserver-config-message-conn-pool-size", DefaultQsConfig.MessagePoolSize, "query server message connection pool size, message pool is used by message managers: recommended value is one per message table")
+	flag.IntVar(&deprecatedMessagePoolSize, "queryserver-config-message-conn-pool-size", 0, "DEPRECATED")
 	flag.IntVar(&deprecatedMessagePoolPrefillParallelism, "queryserver-config-message-conn-pool-prefill-parallelism", 0, "DEPRECATED: Unused.")
 	flag.IntVar(&Config.TransactionCap, "queryserver-config-transaction-cap", DefaultQsConfig.TransactionCap, "query server transaction cap is the maximum number of transactions allowed to happen at any given point of a time for a single vttablet. E.g. by setting transaction cap to 100, there are at most 100 transactions will be processed by a vttablet and the 101th transaction will be blocked (and fail if it cannot get connection within specified timeout)")
 	flag.IntVar(&Config.TxPoolPrefillParallelism, "queryserver-config-transaction-prefill-parallelism", DefaultQsConfig.TxPoolPrefillParallelism, "query server transaction prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
@@ -65,7 +67,7 @@ func init() {
 	flag.Float64Var(&Config.TxShutDownGracePeriod, "transaction_shutdown_grace_period", DefaultQsConfig.TxShutDownGracePeriod, "how long to wait (in seconds) for transactions to complete during graceful shutdown.")
 	flag.IntVar(&Config.MaxResultSize, "queryserver-config-max-result-size", DefaultQsConfig.MaxResultSize, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
 	flag.IntVar(&Config.WarnResultSize, "queryserver-config-warn-result-size", DefaultQsConfig.WarnResultSize, "query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this")
-	flag.IntVar(&Config.MaxDMLRows, "queryserver-config-max-dml-rows", DefaultQsConfig.MaxDMLRows, "query server max dml rows per statement, maximum number of rows allowed to return at a time for an update or delete with either 1) an equality where clauses on primary keys, or 2) a subselect statement. For update and delete statements in above two categories, vttablet will split the original query into multiple small queries based on this configuration value. ")
+	flag.IntVar(&deprecatedMaxDMLRows, "queryserver-config-max-dml-rows", 0, "query server max dml rows per statement, maximum number of rows allowed to return at a time for an update or delete with either 1) an equality where clauses on primary keys, or 2) a subselect statement. For update and delete statements in above two categories, vttablet will split the original query into multiple small queries based on this configuration value. ")
 	flag.BoolVar(&Config.PassthroughDMLs, "queryserver-config-passthrough-dmls", DefaultQsConfig.PassthroughDMLs, "query server pass through all dml statements without rewriting")
 	flag.BoolVar(&deprecateAllowUnsafeDMLs, "queryserver-config-allowunsafe-dmls", false, "deprecated")
 
@@ -140,7 +142,6 @@ type TabletConfig struct {
 	PoolPrefillParallelism       int
 	StreamPoolSize               int
 	StreamPoolPrefillParallelism int
-	MessagePoolSize              int
 	TransactionCap               int
 	MessagePostponeCap           int
 	FoundRowsPoolSize            int
@@ -149,9 +150,7 @@ type TabletConfig struct {
 	TxShutDownGracePeriod        float64
 	MaxResultSize                int
 	WarnResultSize               int
-	MaxDMLRows                   int
 	PassthroughDMLs              bool
-	AllowUnsafeDMLs              bool
 	StreamBufferSize             int
 	QueryPlanCacheSize           int
 	SchemaReloadTime             float64
@@ -215,7 +214,6 @@ var DefaultQsConfig = TabletConfig{
 	PoolPrefillParallelism:       0,
 	StreamPoolSize:               200,
 	StreamPoolPrefillParallelism: 0,
-	MessagePoolSize:              5,
 	TransactionCap:               20,
 	MessagePostponeCap:           4,
 	FoundRowsPoolSize:            20,
@@ -224,9 +222,7 @@ var DefaultQsConfig = TabletConfig{
 	TxShutDownGracePeriod:        0,
 	MaxResultSize:                10000,
 	WarnResultSize:               0,
-	MaxDMLRows:                   500,
 	PassthroughDMLs:              false,
-	AllowUnsafeDMLs:              false,
 	QueryPlanCacheSize:           5000,
 	SchemaReloadTime:             30 * 60,
 	QueryTimeout:                 30,
