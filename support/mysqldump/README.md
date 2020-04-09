@@ -18,6 +18,6 @@ The script will also attempt to import the schema and data into Vitess via vtgat
 
 
 ## Notes
-This has been tested for small databases.  
-The script can be modified to include other unsupported statements that may be present.  
-The script has been tested with GNU sed, BSD sed users e.g. MacOS will need to update the script.  
+1. This has been tested for small databases.  
+2. The script can be modified to include other unsupported statements that may be present.  
+3. The script has been tested with GNU sed, BSD sed users e.g. MacOS will need to update the script.  

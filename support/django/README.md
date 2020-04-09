@@ -18,8 +18,8 @@ various types of databases.
 
 
 ## Notes
-This has been tested with python 3.7 and django 2.2.   
-Schema modifications using django migration tool are not yet fully tested. However, any errors that arise can be fixed by 
-overriding the file [schema.py] (https://github.com/django/django/master/django/db/backends/mysql/schema.py)   
-The django-vitess adapter could be maintained as a separate project within Vitess in future so users can run 
+1. This has been tested with python 3.7 and django 2.2.   
+2. Schema modifications using django migration tool are not yet fully tested. However, any errors that arise can be fixed by 
+overriding the file [schema.py](https://github.com/django/django/master/django/db/backends/mysql/schema.py)   
+3. The django-vitess adapter could be maintained as a separate project within Vitess in future so users can run 
 `pip install django-vitess` for their projects.
