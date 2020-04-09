@@ -21,8 +21,8 @@ type (
 
 	// UserDefinedVariable implements the SetOp interface to execute user defined variables.
 	UserDefinedVariable struct {
-		Name  string
-		Value sqltypes.PlanValue
+		Name      string
+		PlanValue sqltypes.PlanValue
 	}
 )
 
@@ -45,7 +45,13 @@ func (s *Set) GetTableName() string {
 
 //Execute implements the Primitive interface method.
 func (s *Set) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	panic("implement me")
+	for _, setOp := range s.Ops {
+		err := setOp.Execute(vcursor, bindVars)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &sqltypes.Result{}, nil
 }
 
 //StreamExecute implements the Primitive interface method.
@@ -78,5 +84,9 @@ func (u *UserDefinedVariable) VariableName() string {
 
 //Execute implements the SetOp interface method.
 func (u *UserDefinedVariable) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) error {
-	panic("implement me")
+	value, err := u.PlanValue.ResolveValue(bindVars)
+	if err != nil {
+		return err
+	}
+	return vcursor.SetUDV(u.Name, value)
 }

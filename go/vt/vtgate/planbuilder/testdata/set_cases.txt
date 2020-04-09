@@ -9,7 +9,7 @@
     "Ops": [
       {
         "Name": "foo",
-        "Value": 42
+        "PlanValue": 42
       }
     ]
   }
@@ -26,11 +26,11 @@
     "Ops": [
       {
         "Name": "foo",
-        "Value": 42
+        "PlanValue": 42
       },
       {
         "Name": "bar",
-        "Value": ":__vtudvfoo"
+        "PlanValue": ":__vtudvfoo"
       }
     ]
   }

@@ -6,13 +6,6 @@ import (
 )
 
 func buildSetPlan(sql string, stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive, error) {
-	//keyValues, scope, err := sqlparser.ExtractSetValues(sql)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//if scope == sqlparser.GlobalStr {
-	//	return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported in set: global")
-	//}
 	var setOps []engine.SetOp
 
 	for _, expr := range stmt.Exprs {
@@ -26,25 +19,10 @@ func buildSetPlan(sql string, stmt *sqlparser.Set, vschema ContextVSchema) (engi
 			return nil, err
 		}
 		setOps = append(setOps, &engine.UserDefinedVariable{
-			Name:  expr.Name.Lowered(),
-			Value: pv,
+			Name:      expr.Name.Lowered(),
+			PlanValue: pv,
 		})
 	}
-	//for key, value := range keyValues {
-	//	switch key.Scope {
-	//	case sqlparser.VariableStr:
-	//		setOps = append(setOps, &engine.UserDefinedVariable{
-	//			Value: sqltypes.PlanValue{
-	//				Key:     key.Key,
-	//				Value:   value,
-	//				ListKey: "",
-	//				Values:  nil,
-	//			},
-	//		})
-	//	default:
-	//		return nil, ErrPlanNotSupported
-	//	}
-	//}
 	return &engine.Set{
 		Ops: setOps,
 	}, nil
