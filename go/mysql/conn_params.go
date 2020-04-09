@@ -18,24 +18,25 @@ package mysql
 
 // ConnParams contains all the parameters to use to connect to mysql.
 type ConnParams struct {
-	Host       string `json:"host"`
-	Port       int    `json:"port"`
-	Uname      string `json:"uname"`
-	Pass       string `json:"pass"`
-	DbName     string `json:"dbname"`
-	UnixSocket string `json:"unix_socket"`
-	Charset    string `json:"charset"`
-	Flags      uint64 `json:"flags"`
-	Flavor     string `json:"flavor,omitempty"`
+	Host             string `json:"host"`
+	Port             int    `json:"port"`
+	Uname            string `json:"uname"`
+	Pass             string `json:"pass"`
+	DbName           string `json:"dbname"`
+	UnixSocket       string `json:"unix_socket"`
+	Charset          string `json:"charset"`
+	Flags            uint64 `json:"flags"`
+	Flavor           string `json:"flavor,omitempty"`
+	ConnectTimeoutMs uint64 `json:"connect_timeout_ms"`
+	WaitTimeoutS     uint64 `json:"wait_timeout_s"`
 
 	// The following SSL flags are only used when flags |= 2048
 	// is set (CapabilityClientSSL).
-	SslCa            string `json:"ssl_ca"`
-	SslCaPath        string `json:"ssl_ca_path"`
-	SslCert          string `json:"ssl_cert"`
-	SslKey           string `json:"ssl_key"`
-	ServerName       string `json:"server_name"`
-	ConnectTimeoutMs uint64 `json:"connect_timeout_ms"`
+	SslCa      string `json:"ssl_ca"`
+	SslCaPath  string `json:"ssl_ca_path"`
+	SslCert    string `json:"ssl_cert"`
+	SslKey     string `json:"ssl_key"`
+	ServerName string `json:"server_name"`
 
 	// The following is only set when the deprecated "dbname" flags are
 	// supplied and will be removed.

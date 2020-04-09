@@ -105,6 +105,7 @@ func registerBaseFlags() {
 	flag.StringVar(&baseConfig.SslKey, "db_ssl_key", "", "connection ssl key")
 	flag.StringVar(&baseConfig.ServerName, "db_server_name", "", "server name of the DB we are connecting to.")
 	flag.Uint64Var(&baseConfig.ConnectTimeoutMs, "db_connect_timeout_ms", 0, "connection timeout to mysqld in milliseconds (0 for no timeout)")
+	flag.Uint64Var(&baseConfig.WaitTimeoutS, "wait_timeout_s", 0, "if non-zero, set session wait_timeout at connect")
 }
 
 // The flags will change the global singleton
@@ -341,6 +342,7 @@ func Init(defaultSocketFile string) (*DBConfigs, error) {
 			uc.param.ServerName = baseConfig.ServerName
 		}
 		uc.param.ConnectTimeoutMs = baseConfig.ConnectTimeoutMs
+		uc.param.WaitTimeoutS = baseConfig.WaitTimeoutS
 	}
 
 	// See if the CredentialsServer is working. We do not use the

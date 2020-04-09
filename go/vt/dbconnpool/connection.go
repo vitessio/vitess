@@ -133,5 +133,11 @@ func NewDBConnection(info dbconfigs.Connector, mysqlStats *stats.Timings) (*DBCo
 	if err != nil {
 		mysqlStats.Record("ConnectError", start)
 	}
+	if params.WaitTimeoutS != 0 {
+		_, setErr := c.ExecuteFetch(fmt.Sprintf("SET @@SESSION.wait_timeout = %d", params.WaitTimeoutS), 0, false)
+		if setErr != nil {
+			return nil, setErr
+		}
+	}
 	return &DBConnection{c, mysqlStats}, err
 }

@@ -276,6 +276,7 @@ func TestInitTimeout(t *testing.T) {
 		Flags:            2,
 		Flavor:           "flavor",
 		ConnectTimeoutMs: 250,
+		WaitTimeoutS:     600,
 	}
 	dbConfigs = DBConfigs{
 		userConfigs: map[string]*userConfig{
@@ -305,6 +306,7 @@ func TestInitTimeout(t *testing.T) {
 					Flags:            2,
 					Flavor:           "flavor",
 					ConnectTimeoutMs: 250,
+					WaitTimeoutS:     600,
 				},
 			},
 		},
