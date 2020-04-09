@@ -63,8 +63,8 @@ var (
 	queriesProcessed = stats.NewCountersWithSingleLabel("QueriesProcessed", "Queries processed at vtgate by plan type", "Plan")
 	queriesRouted    = stats.NewCountersWithSingleLabel("QueriesRouted", "Queries routed from vtgate to vttablet by plan type", "Plan")
 
-	queriesProcessedByTable = stats.NewCountersWithMultiLabels("QueriesProcessedByTable", "Queries processed at vtgate by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
-	queriesRoutedByTable    = stats.NewCountersWithMultiLabels("QueriesRoutedByTable", "Queries routed from vtgate to vttablet by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
+	queriesProcessedByTable = stats.NewCountersWithMultiLabels("QueriesProcessedByTable", "Queries processed at vtgate by operation, plan type, keyspace and table", []string{"Operation", "Plan", "Keyspace", "Table"})
+	queriesRoutedByTable    = stats.NewCountersWithMultiLabels("QueriesRoutedByTable", "Queries routed from vtgate to vttablet by operation, plan type, keyspace and table", []string{"Operation", "Plan", "Keyspace", "Table"})
 )
 
 const (
@@ -296,7 +296,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 	qr, err := plan.Instructions.Execute(vcursor, bindVars, true)
 	logStats.ExecuteTime = time.Since(execStart)
 
-	e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
+	e.updateQueryCounts("Execute", plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
 
 	var errCount uint64
 	if err != nil {
@@ -396,7 +396,7 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 	result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
 	logStats.ExecuteTime = time.Since(execStart)
 
-	e.updateQueryCounts("DDL", "", "", int64(logStats.ShardQueries))
+	e.updateQueryCounts("Execute", "DDL", "", "", int64(logStats.ShardQueries))
 
 	return result, err
 }
@@ -446,7 +446,7 @@ func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, de
 	err := e.txConn.Begin(ctx, safeSession)
 	logStats.ExecuteTime = time.Since(execStart)
 
-	e.updateQueryCounts("Begin", "", "", 0)
+	e.updateQueryCounts("Execute", "Begin", "", "", 0)
 
 	return &sqltypes.Result{}, err
 }
@@ -455,7 +455,7 @@ func (e *Executor) handleCommit(ctx context.Context, safeSession *SafeSession, l
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
-	e.updateQueryCounts("Commit", "", "", int64(logStats.ShardQueries))
+	e.updateQueryCounts("Execute", "Commit", "", "", int64(logStats.ShardQueries))
 
 	err := e.txConn.Commit(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
@@ -466,7 +466,7 @@ func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession,
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
-	e.updateQueryCounts("Rollback", "", "", int64(logStats.ShardQueries))
+	e.updateQueryCounts("Execute", "Rollback", "", "", int64(logStats.ShardQueries))
 	err := e.txConn.Rollback(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
 	return &sqltypes.Result{}, err
@@ -1169,7 +1169,7 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 	execStart := time.Now()
 	result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
 
-	e.updateQueryCounts("Other", "", "", int64(logStats.ShardQueries))
+	e.updateQueryCounts("Execute", "Other", "", "", int64(logStats.ShardQueries))
 
 	logStats.ExecuteTime = time.Since(execStart)
 	return result, err
@@ -1440,12 +1440,12 @@ func (e *Executor) Plans() *cache.LRUCache {
 	return e.plans
 }
 
-func (e *Executor) updateQueryCounts(planType, keyspace, tableName string, shardQueries int64) {
+func (e *Executor) updateQueryCounts(operation, planType, keyspace, tableName string, shardQueries int64) {
 	queriesProcessed.Add(planType, 1)
 	queriesRouted.Add(planType, shardQueries)
 	if tableName != "" {
-		queriesProcessedByTable.Add([]string{planType, keyspace, tableName}, 1)
-		queriesRoutedByTable.Add([]string{planType, keyspace, tableName}, shardQueries)
+		queriesProcessedByTable.Add([]string{operation, planType, keyspace, tableName}, 1)
+		queriesRoutedByTable.Add([]string{operation, planType, keyspace, tableName}, shardQueries)
 	}
 }
 
