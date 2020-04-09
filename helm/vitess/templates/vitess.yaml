@@ -1,7 +1,30 @@
 # Create global resources.
 ---
+# Create role for topology crd
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vt-topo-member
+rules:
+- apiGroups:
+  - topo.vitess.io
+  resources:
+  - vitesstoponodes
+  verbs:
+  - '*'
+
+---
+
 # create a single vttablet service
 {{ include "vttablet-service" (tuple $.Values.pmm) }}
+
+# create a single vttablet serviceaccount
+{{ include "vttablet-serviceaccount" (tuple $.Release.Namespace) }}
+
+# create a single vttablet rolebinding
+{{ if eq $.Values.topology.globalCell.topologyProvider "k8s" }}
+{{ include "vttablet-topo-role-binding" (tuple $.Release.Namespace) }}
+{{ end }}
 ---
 {{ if $.Values.pmm.enabled }}
 # create the pmm service and stateful set
@@ -25,6 +48,7 @@
 
 {{ end }}
 
+{{ if eq $.Values.topology.globalCell.topologyProvider "etcd2" }}
 # create an etcd cluster for the global topology
 {{- $replicas := $.Values.topology.globalCell.replicas | default $.Values.etcd.replicas -}}
 {{- $version := $.Values.topology.globalCell.version | default $.Values.etcd.version -}}
@@ -32,10 +56,12 @@
 {{- $clusterWide := $.Values.topology.globalCell.resources | default $.Values.etcd.clusterWide -}}
 
 {{ include "etcd" (tuple "global" $replicas $version $resources $clusterWide) }}
+{{ end }}
 
 # Create requested resources in each cell.
 {{ range $cell := $.Values.topology.cells }}
 
+{{ if eq ($cell.topologyProvider | default "") "etcd2" }}
 ---
 # create an etcd cluster per cell
 {{- $cellClean := include "clean-label" $cell.name -}}
@@ -45,6 +71,8 @@
 {{- $clusterWide := $cell.etcd.clusterWide | default $.Values.etcd.clusterWide -}}
 
 {{ include "etcd" (tuple $cellClean $replicas $version $resources $clusterWide) }}
+{{ end }}
+
 ---
 # create one controller per cell
 {{ include "vtctld" (tuple $.Values.topology $cell $.Values.vtctld $.Release.Namespace $.Values.config) }}
@@ -77,7 +105,11 @@
   {{ if eq $job.kind "vtctlclient" }}
     {{ include "vtctlclient-job" (tuple $job $.Values.vtctlclient $.Release.Namespace) }}
   {{ else }}
-    {{ include "vtworker-job" (tuple $job $.Values.vtworker $.Release.Namespace) }}
+    {{ range $cell := $.Values.topology.cells }}
+      {{ if eq $cell.name $job.cell }}
+        {{ include "vtworker-job" (tuple $job $.Values.vtworker $.Release.Namespace $cell) }}
+      {{ end }}
+    {{ end }}
   {{ end }}
 {{ end }}
 ---

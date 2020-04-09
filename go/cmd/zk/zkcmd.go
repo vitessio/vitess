@@ -177,7 +177,7 @@ func main() {
 
 func fixZkPath(zkPath string) string {
 	if zkPath != "/" {
-		zkPath = strings.TrimRight(zkPath, "/")
+		zkPath = strings.TrimSuffix(zkPath, "/")
 	}
 	return path.Clean(zkPath)
 }

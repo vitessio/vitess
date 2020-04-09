@@ -18,33 +18,29 @@ package vindexes
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
 
-var reverseBits Vindex
+var reverseBits SingleColumn
 
 func init() {
 	hv, err := CreateVindex("reverse_bits", "rr", map[string]string{"Table": "t", "Column": "c"})
 	if err != nil {
 		panic(err)
 	}
-	reverseBits = hv
+	reverseBits = hv.(SingleColumn)
 }
 
-func TestReverseBitsCost(t *testing.T) {
-	if reverseBits.Cost() != 1 {
-		t.Errorf("Cost(): %d, want 1", reverseBits.Cost())
-	}
-}
-
-func TestReverseBitsString(t *testing.T) {
-	if strings.Compare("rr", reverseBits.String()) != 0 {
-		t.Errorf("String(): %s, want hash", reverseBits.String())
-	}
+func TestReverseBitsInfo(t *testing.T) {
+	assert.Equal(t, 1, reverseBits.Cost())
+	assert.Equal(t, "rr", reverseBits.String())
+	assert.True(t, reverseBits.IsUnique())
+	assert.False(t, reverseBits.NeedsVCursor())
 }
 
 func TestReverseBitsMap(t *testing.T) {
@@ -57,9 +53,7 @@ func TestReverseBitsMap(t *testing.T) {
 		sqltypes.NewInt64(5),
 		sqltypes.NewInt64(6),
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationKeyspaceID([]byte("\x80\x00\x00\x00\x00\x00\x00\x00")),
 		key.DestinationKeyspaceID([]byte("@\x00\x00\x00\x00\x00\x00\x00")),
@@ -96,9 +90,7 @@ func TestReverseBitsVerify(t *testing.T) {
 
 func TestReverseBitsReverseMap(t *testing.T) {
 	got, err := reverseBits.(Reversible).ReverseMap(nil, [][]byte{[]byte("\x80\x00\x00\x00\x00\x00\x00\x00")})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []sqltypes.Value{sqltypes.NewUint64(uint64(1))}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ReverseMap(): %v, want %v", got, want)

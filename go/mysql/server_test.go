@@ -24,9 +24,12 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -64,13 +67,46 @@ var selectRowsResult = &sqltypes.Result{
 }
 
 type testHandler struct {
+	mu       sync.Mutex
 	lastConn *Conn
 	result   *sqltypes.Result
 	err      error
 	warnings uint16
 }
 
+func (th *testHandler) LastConn() *Conn {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	return th.lastConn
+}
+
+func (th *testHandler) Result() *sqltypes.Result {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	return th.result
+}
+
+func (th *testHandler) SetErr(err error) {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	th.err = err
+}
+
+func (th *testHandler) Err() error {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	return th.err
+}
+
+func (th *testHandler) SetWarnings(count uint16) {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	th.warnings = count
+}
+
 func (th *testHandler) NewConnection(c *Conn) {
+	th.mu.Lock()
+	defer th.mu.Unlock()
 	th.lastConn = c
 }
 
@@ -81,21 +117,21 @@ func (th *testHandler) ComInitDB(c *Conn, schemaName string) {
 }
 
 func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
-	if th.result != nil {
-		callback(th.result)
+	if result := th.Result(); result != nil {
+		callback(result)
 		return nil
 	}
 
 	switch query {
 	case "error":
-		return th.err
+		return th.Err()
 	case "panic":
 		panic("test panic attack!")
 	case "select rows":
 		callback(selectRowsResult)
 	case "error after send":
 		callback(selectRowsResult)
-		return th.err
+		return th.Err()
 	case "insert":
 		callback(&sqltypes.Result{
 			RowsAffected: 123,
@@ -152,6 +188,19 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 				},
 			},
 		})
+	case "50ms delay":
+		callback(&sqltypes.Result{
+			Fields: []*querypb.Field{{
+				Name: "result",
+				Type: querypb.Type_VARCHAR,
+			}},
+		})
+		time.Sleep(50 * time.Millisecond)
+		callback(&sqltypes.Result{
+			Rows: [][]sqltypes.Value{{
+				sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("delayed")),
+			}},
+		})
 	default:
 		if strings.HasPrefix(query, benchmarkQueryPrefix) {
 			callback(&sqltypes.Result{
@@ -187,6 +236,8 @@ func (th *testHandler) ComResetConnection(c *Conn) {
 }
 
 func (th *testHandler) WarningCount(c *Conn) uint16 {
+	th.mu.Lock()
+	defer th.mu.Unlock()
 	return th.warnings
 }
 
@@ -206,11 +257,12 @@ func getHostPort(t *testing.T, a net.Addr) (string, int) {
 func TestConnectionFromListener(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
+	defer authServer.close()
 	// Make sure we can create our own net.Listener for use with the mysql
 	// listener
 	listener, err := net.Listen("tcp", ":0")
@@ -245,12 +297,13 @@ func TestConnectionFromListener(t *testing.T) {
 func TestConnectionWithoutSourceHost(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	defer authServer.close()
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -277,17 +330,17 @@ func TestConnectionWithoutSourceHost(t *testing.T) {
 func TestConnectionWithSourceHost(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{
 		{
 			Password:   "password1",
 			UserData:   "userData1",
 			SourceHost: "localhost",
 		},
 	}
+	defer authServer.close()
 
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -314,17 +367,17 @@ func TestConnectionWithSourceHost(t *testing.T) {
 func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{
 		{
 			MysqlNativePassword: "*9E128DA0C64A6FCCCDCFBDD0FC0A2C967C6DB36F",
 			UserData:            "userData1",
 			SourceHost:          "localhost",
 		},
 	}
+	defer authServer.close()
 
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -351,15 +404,15 @@ func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
 func TestConnectionUnixSocket(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{
 		{
 			Password:   "password1",
 			UserData:   "userData1",
 			SourceHost: "localhost",
 		},
 	}
+	defer authServer.close()
 
 	unixSocket, err := ioutil.TempFile("", "mysql_vitess_test.sock")
 	if err != nil {
@@ -367,7 +420,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 	}
 	os.Remove(unixSocket.Name())
 
-	l, err := NewListener("unix", unixSocket.Name(), authServer, th, 0, 0)
+	l, err := NewListener("unix", unixSocket.Name(), authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -391,12 +444,13 @@ func TestConnectionUnixSocket(t *testing.T) {
 func TestClientFoundRows(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	defer authServer.close()
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -418,9 +472,9 @@ func TestClientFoundRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	foundRows := th.lastConn.Capabilities & CapabilityClientFoundRows
+	foundRows := th.LastConn().Capabilities & CapabilityClientFoundRows
 	if foundRows != 0 {
-		t.Errorf("FoundRows flag: %x, second bit must be 0", th.lastConn.Capabilities)
+		t.Errorf("FoundRows flag: %x, second bit must be 0", th.LastConn().Capabilities)
 	}
 	c.Close()
 	if !c.IsClosed() {
@@ -433,9 +487,9 @@ func TestClientFoundRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	foundRows = th.lastConn.Capabilities & CapabilityClientFoundRows
+	foundRows = th.LastConn().Capabilities & CapabilityClientFoundRows
 	if foundRows == 0 {
-		t.Errorf("FoundRows flag: %x, second bit must be set", th.lastConn.Capabilities)
+		t.Errorf("FoundRows flag: %x, second bit must be set", th.LastConn().Capabilities)
 	}
 	c.Close()
 }
@@ -448,12 +502,13 @@ func TestConnCounts(t *testing.T) {
 	user := "anotherNotYetConnectedUser1"
 	passwd := "password1"
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries[user] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries[user] = []*AuthServerStaticEntry{{
 		Password: passwd,
 		UserData: "userData1",
 	}}
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	defer authServer.close()
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -520,15 +575,17 @@ func checkCountsForUser(t *testing.T, user string, expected int64) {
 func TestServer(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	defer authServer.close()
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
+	l.SlowConnectWarnThreshold.Set(time.Duration(time.Nanosecond * 1))
 	defer l.Close()
 	go l.Accept()
 
@@ -545,11 +602,10 @@ func TestServer(t *testing.T) {
 	initialTimingCounts := timings.Counts()
 	initialConnAccept := connAccept.Get()
 	initialConnSlow := connSlow.Get()
-
-	l.SlowConnectWarnThreshold = time.Duration(time.Nanosecond * 1)
+	initialconnRefuse := connRefuse.Get()
 
 	// Run an 'error' command.
-	th.err = NewSQLError(ERUnknownComError, SSUnknownComError, "forced query error")
+	th.SetErr(NewSQLError(ERUnknownComError, SSUnknownComError, "forced query error"))
 	output, ok := runMysql(t, params, "error")
 	if ok {
 		t.Fatalf("mysql should have failed: %v", output)
@@ -567,6 +623,9 @@ func TestServer(t *testing.T) {
 	if connSlow.Get()-initialConnSlow != 1 {
 		t.Errorf("Expected ConnSlow delta=1, got %d", connSlow.Get()-initialConnSlow)
 	}
+	if connRefuse.Get()-initialconnRefuse != 0 {
+		t.Errorf("Expected connRefuse delta=0, got %d", connRefuse.Get()-initialconnRefuse)
+	}
 
 	expectedTimingDeltas := map[string]int64{
 		"All":            2,
@@ -583,7 +642,7 @@ func TestServer(t *testing.T) {
 	}
 
 	// Set the slow connect threshold to something high that we don't expect to trigger
-	l.SlowConnectWarnThreshold = time.Duration(time.Second * 1)
+	l.SlowConnectWarnThreshold.Set(time.Duration(time.Second * 1))
 
 	// Run a 'panic' command, other side should panic, recover and
 	// close the connection.
@@ -604,6 +663,9 @@ func TestServer(t *testing.T) {
 	if connSlow.Get()-initialConnSlow != 1 {
 		t.Errorf("Expected ConnSlow delta=1, got %d", connSlow.Get()-initialConnSlow)
 	}
+	if connRefuse.Get()-initialconnRefuse != 0 {
+		t.Errorf("Expected connRefuse delta=0, got %d", connRefuse.Get()-initialconnRefuse)
+	}
 
 	// Run a 'select rows' command with results.
 	output, ok = runMysql(t, params, "select rows")
@@ -620,7 +682,7 @@ func TestServer(t *testing.T) {
 	}
 
 	// Run a 'select rows' command with warnings
-	th.warnings = 13
+	th.SetWarnings(13)
 	output, ok = runMysql(t, params, "select rows")
 	if !ok {
 		t.Fatalf("mysql failed: %v", output)
@@ -631,11 +693,11 @@ func TestServer(t *testing.T) {
 		!strings.Contains(output, "13 warnings") {
 		t.Errorf("Unexpected output for 'select rows': %v", output)
 	}
-	th.warnings = 0
+	th.SetWarnings(0)
 
 	// If there's an error after streaming has started,
 	// we should get a 2013
-	th.err = NewSQLError(ERUnknownComError, SSUnknownComError, "forced error after send")
+	th.SetErr(NewSQLError(ERUnknownComError, SSUnknownComError, "forced error after send"))
 	output, ok = runMysql(t, params, "error after send")
 	if ok {
 		t.Fatalf("mysql should have failed: %v", output)
@@ -719,20 +781,16 @@ func TestServer(t *testing.T) {
 // TestClearTextServer creates a Server that needs clear text
 // passwords from the client.
 func TestClearTextServer(t *testing.T) {
-	// If the database we're using is MariaDB, the client
-	// is also the MariaDB client, that does support
-	// clear text by default.
-	isMariaDB := os.Getenv("MYSQL_FLAVOR") == "MariaDB"
-
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
-	authServer.Method = MysqlClearPassword
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	authServer.method = MysqlClearPassword
+	defer authServer.close()
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -740,6 +798,9 @@ func TestClearTextServer(t *testing.T) {
 	go l.Accept()
 
 	host, port := getHostPort(t, l.Addr())
+
+	version, _ := runMysql(t, nil, "--version")
+	isMariaDB := strings.Contains(version, "MariaDB")
 
 	// Setup the right parameters.
 	params := &ConnParams{
@@ -752,7 +813,7 @@ func TestClearTextServer(t *testing.T) {
 	// Run a 'select rows' command with results.  This should fail
 	// as clear text is not enabled by default on the client
 	// (except MariaDB).
-	l.AllowClearTextWithoutTLS = true
+	l.AllowClearTextWithoutTLS.Set(true)
 	sql := "select rows"
 	output, ok := runMysql(t, params, sql)
 	if ok {
@@ -772,7 +833,7 @@ func TestClearTextServer(t *testing.T) {
 	}
 
 	// Now enable clear text plugin in client, but server requires SSL.
-	l.AllowClearTextWithoutTLS = false
+	l.AllowClearTextWithoutTLS.Set(false)
 	if !isMariaDB {
 		sql = enableCleartextPluginPrefix + sql
 	}
@@ -785,7 +846,7 @@ func TestClearTextServer(t *testing.T) {
 	}
 
 	// Now enable clear text plugin, it should now work.
-	l.AllowClearTextWithoutTLS = true
+	l.AllowClearTextWithoutTLS.Set(true)
 	output, ok = runMysql(t, params, sql)
 	if !ok {
 		t.Fatalf("mysql failed: %v", output)
@@ -811,17 +872,18 @@ func TestClearTextServer(t *testing.T) {
 func TestDialogServer(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
-	authServer.Method = MysqlDialog
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	authServer.method = MysqlDialog
+	defer authServer.close()
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
-	l.AllowClearTextWithoutTLS = true
+	l.AllowClearTextWithoutTLS.Set(true)
 	defer l.Close()
 	go l.Accept()
 
@@ -855,16 +917,17 @@ func TestDialogServer(t *testing.T) {
 func TestTLSServer(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 	}}
+	defer authServer.close()
 
 	// Create the listener, so we can get its host.
 	// Below, we are enabling --ssl-verify-server-cert, which adds
 	// a check that the common name of the certificate matches the
 	// server host name we connect to.
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -957,16 +1020,17 @@ func TestTLSServer(t *testing.T) {
 func TestTLSRequired(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 	}}
+	defer authServer.close()
 
 	// Create the listener, so we can get its host.
 	// Below, we are enabling --ssl-verify-server-cert, which adds
 	// a check that the common name of the certificate matches the
 	// server host name we connect to.
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -1047,12 +1111,13 @@ func checkCountForTLSVer(t *testing.T, version string, expected int64) {
 func TestErrorCodes(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	defer authServer.close()
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -1124,7 +1189,7 @@ func TestErrorCodes(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		th.err = NewSQLErrorFromError(test.err)
+		th.SetErr(NewSQLErrorFromError(test.err))
 		result, err := client.ExecuteFetch("error", 100, false)
 		if err == nil {
 			t.Fatalf("mysql should have failed but returned: %v", result)
@@ -1170,30 +1235,34 @@ func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
 		command = command[len(enableCleartextPluginPrefix):]
 		args = append(args, "--enable-cleartext-plugin")
 	}
-	args = append(args, "-e", command)
-	if params.UnixSocket != "" {
-		args = append(args, "-S", params.UnixSocket)
+	if command == "--version" {
+		args = append(args, command)
 	} else {
-		args = append(args,
-			"-h", params.Host,
-			"-P", fmt.Sprintf("%v", params.Port))
-	}
-	if params.Uname != "" {
-		args = append(args, "-u", params.Uname)
-	}
-	if params.Pass != "" {
-		args = append(args, "-p"+params.Pass)
-	}
-	if params.DbName != "" {
-		args = append(args, "-D", params.DbName)
-	}
-	if params.Flags&CapabilityClientSSL > 0 {
-		args = append(args,
-			"--ssl",
-			"--ssl-ca", params.SslCa,
-			"--ssl-cert", params.SslCert,
-			"--ssl-key", params.SslKey,
-			"--ssl-verify-server-cert")
+		args = append(args, "-e", command)
+		if params.UnixSocket != "" {
+			args = append(args, "-S", params.UnixSocket)
+		} else {
+			args = append(args,
+				"-h", params.Host,
+				"-P", fmt.Sprintf("%v", params.Port))
+		}
+		if params.Uname != "" {
+			args = append(args, "-u", params.Uname)
+		}
+		if params.Pass != "" {
+			args = append(args, "-p"+params.Pass)
+		}
+		if params.DbName != "" {
+			args = append(args, "-D", params.DbName)
+		}
+		if params.Flags&CapabilityClientSSL > 0 {
+			args = append(args,
+				"--ssl",
+				"--ssl-ca", params.SslCa,
+				"--ssl-cert", params.SslCert,
+				"--ssl-key", params.SslKey,
+				"--ssl-verify-server-cert")
+		}
 	}
 	env := []string{
 		"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql"),
@@ -1230,12 +1299,13 @@ func binaryPath(root, binary string) (string, error) {
 
 func TestListenerShutdown(t *testing.T) {
 	th := &testHandler{}
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	defer authServer.close()
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -1251,6 +1321,7 @@ func TestListenerShutdown(t *testing.T) {
 		Uname: "user1",
 		Pass:  "password1",
 	}
+	initialconnRefuse := connRefuse.Get()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1265,6 +1336,10 @@ func TestListenerShutdown(t *testing.T) {
 	}
 
 	l.Shutdown()
+
+	if connRefuse.Get()-initialconnRefuse != 1 {
+		t.Errorf("Expected connRefuse delta=1, got %d", connRefuse.Get()-initialconnRefuse)
+	}
 
 	if err := conn.Ping(); err != nil {
 		sqlErr, ok := err.(*SQLError)
@@ -1319,4 +1394,53 @@ func TestParseConnAttrs(t *testing.T) {
 			t.Fatalf("Error reading key %s from connection attributes: attrs: %-v", k, attrs)
 		}
 	}
+}
+
+func TestServerFlush(t *testing.T) {
+	defer func(saved time.Duration) { *mysqlServerFlushDelay = saved }(*mysqlServerFlushDelay)
+	*mysqlServerFlushDelay = 10 * time.Millisecond
+
+	th := &testHandler{}
+
+	l, err := NewListener("tcp", ":0", &AuthServerNone{}, th, 0, 0, false)
+	require.NoError(t, err)
+	defer l.Close()
+	go l.Accept()
+
+	host, port := getHostPort(t, l.Addr())
+	params := &ConnParams{
+		Host: host,
+		Port: port,
+	}
+
+	c, err := Connect(context.Background(), params)
+	require.NoError(t, err)
+	defer c.Close()
+
+	start := time.Now()
+	err = c.ExecuteStreamFetch("50ms delay")
+	require.NoError(t, err)
+
+	flds, err := c.Fields()
+	require.NoError(t, err)
+	if duration, want := time.Since(start), 20*time.Millisecond; duration < *mysqlServerFlushDelay || duration > want {
+		t.Errorf("duration: %v, want between %v and %v", duration, *mysqlServerFlushDelay, want)
+	}
+	want1 := []*querypb.Field{{
+		Name: "result",
+		Type: querypb.Type_VARCHAR,
+	}}
+	assert.Equal(t, want1, flds)
+
+	row, err := c.FetchNext()
+	require.NoError(t, err)
+	if duration, want := time.Since(start), 50*time.Millisecond; duration < want {
+		t.Errorf("duration: %v, want > %v", duration, want)
+	}
+	want2 := []sqltypes.Value{sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("delayed"))}
+	assert.Equal(t, want2, row)
+
+	row, err = c.FetchNext()
+	require.NoError(t, err)
+	assert.Nil(t, row)
 }

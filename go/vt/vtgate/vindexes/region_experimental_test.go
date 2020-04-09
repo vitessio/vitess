@@ -21,27 +21,38 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
 
-func TestRegionExperimentalMapMulti1(t *testing.T) {
+func TestRegionExperimentalMisc(t *testing.T) {
 	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
+	require.NoError(t, err)
+	assert.Equal(t, 1, ge.Cost())
+	assert.Equal(t, "region_experimental", ge.String())
+	assert.True(t, ge.IsUnique())
+	assert.False(t, ge.NeedsVCursor())
+}
+
+func TestRegionExperimentalMap(t *testing.T) {
+	vindex, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
-	got, err := ge.(MultiColumn).MapMulti(nil, [][]sqltypes.Value{{
+	ge := vindex.(MultiColumn)
+	got, err := ge.Map(nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
 	}, {
-		sqltypes.NewInt64(1), sqltypes.NewInt64(255),
+		sqltypes.NewInt64(255), sqltypes.NewInt64(1),
 	}, {
-		sqltypes.NewInt64(1), sqltypes.NewInt64(256),
+		sqltypes.NewInt64(256), sqltypes.NewInt64(1),
 	}, {
 		// Invalid length.
 		sqltypes.NewInt64(1),
 	}, {
-		// Invalid id.
+		// Invalid region.
 		sqltypes.NewVarBinary("abcd"), sqltypes.NewInt64(256),
 	}, {
-		// Invalid region.
+		// Invalid id.
 		sqltypes.NewInt64(1), sqltypes.NewVarBinary("abcd"),
 	}})
 	assert.NoError(t, err)
@@ -58,16 +69,17 @@ func TestRegionExperimentalMapMulti1(t *testing.T) {
 }
 
 func TestRegionExperimentalMapMulti2(t *testing.T) {
-	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 2)
+	vindex, err := createRegionVindex(t, "region_experimental", "f1,f2", 2)
 	assert.NoError(t, err)
-	got, err := ge.(MultiColumn).MapMulti(nil, [][]sqltypes.Value{{
+	ge := vindex.(MultiColumn)
+	got, err := ge.Map(nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
 	}, {
-		sqltypes.NewInt64(1), sqltypes.NewInt64(255),
+		sqltypes.NewInt64(255), sqltypes.NewInt64(1),
 	}, {
-		sqltypes.NewInt64(1), sqltypes.NewInt64(256),
+		sqltypes.NewInt64(256), sqltypes.NewInt64(1),
 	}, {
-		sqltypes.NewInt64(1), sqltypes.NewInt64(0x10000),
+		sqltypes.NewInt64(0x10000), sqltypes.NewInt64(1),
 	}})
 	assert.NoError(t, err)
 
@@ -81,14 +93,11 @@ func TestRegionExperimentalMapMulti2(t *testing.T) {
 }
 
 func TestRegionExperimentalVerifyMulti(t *testing.T) {
-
-	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
+	vindex, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
+	ge := vindex.(MultiColumn)
 	vals := [][]sqltypes.Value{{
 		// One for match
-		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
-	}, {
-		// One for mismatch by lookup
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
 	}, {
 		// One for mismatch
@@ -99,26 +108,13 @@ func TestRegionExperimentalVerifyMulti(t *testing.T) {
 	}}
 	ksids := [][]byte{
 		[]byte("\x01\x16k@\xb4J\xbaK\xd6"),
-		[]byte("\x01\x16k@\xb4J\xbaK\xd6"),
 		[]byte("no match"),
 		[]byte(""),
 	}
-	vc := &loggingVCursor{}
-	vc.AddResult(makeTestResult(1), nil)
-	// The second value should return a mismatch.
-	vc.AddResult(&sqltypes.Result{}, nil)
-	vc.AddResult(makeTestResult(1), nil)
-	vc.AddResult(makeTestResult(1), nil)
 
-	want := []bool{true, false, false, false}
-	got, err := ge.(MultiColumn).VerifyMulti(vc, vals, ksids)
+	want := []bool{true, false, false}
+	got, err := ge.Verify(nil, vals, ksids)
 	assert.NoError(t, err)
-	vc.verifyLog(t, []string{
-		"ExecutePre select f1 from t where f1 = :f1 and toc = :toc [{f1 1} {toc \x01\x16k@\xb4J\xbaK\xd6}] false",
-		"ExecutePre select f1 from t where f1 = :f1 and toc = :toc [{f1 1} {toc \x01\x16k@\xb4J\xbaK\xd6}] false",
-		"ExecutePre select f1 from t where f1 = :f1 and toc = :toc [{f1 1} {toc no match}] false",
-		"ExecutePre select f1 from t where f1 = :f1 and toc = :toc [{f1 1} {toc }] false",
-	})
 	assert.Equal(t, want, got)
 }
 
@@ -127,8 +123,6 @@ func TestRegionExperimentalCreateErrors(t *testing.T) {
 	assert.EqualError(t, err, "region_bits must be 1 or 2: 3")
 	_, err = CreateVindex("region_experimental", "region_experimental", nil)
 	assert.EqualError(t, err, "region_experimental missing region_bytes param")
-	_, err = createRegionVindex(t, "region_experimental", "f1", 2)
-	assert.EqualError(t, err, "two columns are required for region_experimental: [f1]")
 }
 
 func createRegionVindex(t *testing.T, name, from string, rb int) (Vindex, error) {

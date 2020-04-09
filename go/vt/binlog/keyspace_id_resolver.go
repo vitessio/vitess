@@ -19,6 +19,7 @@ package binlog
 import (
 	"flag"
 	"fmt"
+	"strings"
 
 	"golang.org/x/net/context"
 
@@ -78,8 +79,8 @@ func newKeyspaceIDResolverFactoryV2(ctx context.Context, ts *topo.Server, keyspa
 		return nil, fmt.Errorf("unknown ShardingColumnType %v for v2 sharding key for keyspace %v", ki.ShardingColumnType, keyspace)
 	}
 	return func(table *schema.Table) (int, keyspaceIDResolver, error) {
-		for i, col := range table.Columns {
-			if col.Name.EqualString(ki.ShardingColumnName) {
+		for i, col := range table.Fields {
+			if strings.EqualFold(col.Name, ki.ShardingColumnName) {
 				// We found the column.
 				return i, &keyspaceIDResolverFactoryV2{
 					shardingColumnType: ki.ShardingColumnType,
@@ -143,11 +144,12 @@ func newKeyspaceIDResolverFactoryV3(ctx context.Context, ts *topo.Server, keyspa
 		// TODO @rafael - when rewriting the mapping function, this will need to change.
 		// for now it's safe to assume the sharding key will be always on index 0.
 		shardingColumnName := colVindex.Columns[0].String()
-		for i, col := range table.Columns {
-			if col.Name.EqualString(shardingColumnName) {
+		for i, col := range table.Fields {
+			if strings.EqualFold(col.Name, shardingColumnName) {
 				// We found the column.
 				return i, &keyspaceIDResolverFactoryV3{
-					vindex: colVindex.Vindex,
+					// Only SingleColumn vindexes are returned by FindVindexForSharding.
+					vindex: colVindex.Vindex.(vindexes.SingleColumn),
 				}, nil
 			}
 		}
@@ -158,7 +160,7 @@ func newKeyspaceIDResolverFactoryV3(ctx context.Context, ts *topo.Server, keyspa
 
 // keyspaceIDResolverFactoryV3 uses the Vindex to compute the value.
 type keyspaceIDResolverFactoryV3 struct {
-	vindex vindexes.Vindex
+	vindex vindexes.SingleColumn
 }
 
 func (r *keyspaceIDResolverFactoryV3) keyspaceID(v sqltypes.Value) ([]byte, error) {

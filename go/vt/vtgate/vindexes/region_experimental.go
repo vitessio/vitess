@@ -26,22 +26,20 @@ import (
 )
 
 var (
-	_ Vindex        = (*RegionExperimental)(nil)
-	_ Lookup        = (*RegionExperimental)(nil)
-	_ WantOwnerInfo = (*RegionExperimental)(nil)
-	_ MultiColumn   = (*RegionExperimental)(nil)
+	_ MultiColumn = (*RegionExperimental)(nil)
 )
 
 func init() {
 	Register("region_experimental", NewRegionExperimental)
 }
 
-// RegionExperimental defines a vindex that uses a lookup table.
-// The table is expected to define the id column as unique. It's
-// Unique and a Lookup.
+// RegionExperimental is a multi-column unique vindex. The first column is prefixed
+// to the hash of the second column to produce the keyspace id.
+// RegionExperimental can be used for geo-partitioning because the first column can denote a region,
+// and its value will dictate the shard for that region.
 type RegionExperimental struct {
+	name        string
 	regionBytes int
-	*ConsistentLookupUnique
 }
 
 // NewRegionExperimental creates a RegionExperimental vindex.
@@ -61,45 +59,56 @@ func NewRegionExperimental(name string, m map[string]string) (Vindex, error) {
 	default:
 		return nil, fmt.Errorf("region_bits must be 1 or 2: %v", rbs)
 	}
-	vindex, err := NewConsistentLookupUnique(name, m)
-	if err != nil {
-		// Unreachable.
-		return nil, err
-	}
-	cl := vindex.(*ConsistentLookupUnique)
-	if len(cl.lkp.FromColumns) != 2 {
-		return nil, fmt.Errorf("two columns are required for region_experimental: %v", cl.lkp.FromColumns)
-	}
 	return &RegionExperimental{
-		regionBytes:            rb,
-		ConsistentLookupUnique: cl,
+		name:        name,
+		regionBytes: rb,
 	}, nil
 }
 
-// MapMulti satisfies MultiColumn.
-func (ge *RegionExperimental) MapMulti(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+// String returns the name of the vindex.
+func (ge *RegionExperimental) String() string {
+	return ge.name
+}
+
+// Cost returns the cost of this index as 1.
+func (ge *RegionExperimental) Cost() int {
+	return 1
+}
+
+// IsUnique returns true since the Vindex is unique.
+func (ge *RegionExperimental) IsUnique() bool {
+	return true
+}
+
+// NeedsVCursor satisfies the Vindex interface.
+func (ge *RegionExperimental) NeedsVCursor() bool {
+	return false
+}
+
+// Map satisfies MultiColumn.
+func (ge *RegionExperimental) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
 	destinations := make([]key.Destination, 0, len(rowsColValues))
 	for _, row := range rowsColValues {
 		if len(row) != 2 {
 			destinations = append(destinations, key.DestinationNone{})
 			continue
 		}
+		// Compute region prefix.
+		rn, err := sqltypes.ToUint64(row[0])
+		if err != nil {
+			destinations = append(destinations, key.DestinationNone{})
+			continue
+		}
+		r := make([]byte, 2, 2+8)
+		binary.BigEndian.PutUint16(r, uint16(rn))
+
 		// Compute hash.
-		hn, err := sqltypes.ToUint64(row[0])
+		hn, err := sqltypes.ToUint64(row[1])
 		if err != nil {
 			destinations = append(destinations, key.DestinationNone{})
 			continue
 		}
 		h := vhash(hn)
-
-		// Compute region prefix.
-		rn, err := sqltypes.ToUint64(row[1])
-		if err != nil {
-			destinations = append(destinations, key.DestinationNone{})
-			continue
-		}
-		r := make([]byte, 2)
-		binary.BigEndian.PutUint16(r, uint16(rn))
 
 		// Concatenate and add to destinations.
 		if ge.regionBytes == 1 {
@@ -111,25 +120,16 @@ func (ge *RegionExperimental) MapMulti(vcursor VCursor, rowsColValues [][]sqltyp
 	return destinations, nil
 }
 
-// VerifyMulti satisfies MultiColumn.
-func (ge *RegionExperimental) VerifyMulti(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+// Verify satisfies MultiColumn.
+func (ge *RegionExperimental) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	result := make([]bool, len(rowsColValues))
-	destinations, _ := ge.MapMulti(vcursor, rowsColValues)
+	destinations, _ := ge.Map(vcursor, rowsColValues)
 	for i, dest := range destinations {
 		destksid, ok := dest.(key.DestinationKeyspaceID)
 		if !ok {
 			continue
 		}
 		result[i] = bytes.Equal([]byte(destksid), ksids[i])
-	}
-	// We also need to verify from the lookup.
-	// TODO(sougou): we should only verify true values from previous result.
-	lresult, err := Verify(ge.ConsistentLookupUnique, vcursor, rowsColValues, ksids)
-	if err != nil {
-		return nil, err
-	}
-	for i := range result {
-		result[i] = result[i] && lresult[i]
 	}
 	return result, nil
 }

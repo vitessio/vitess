@@ -20,7 +20,7 @@
 
 set -e
 
-vtctld2_dir=$VTTOP/web/vtctld2
+vtctld2_dir=$VTROOT/web/vtctld2
 if [[ -d $vtctld2_dir/app ]]; then
   rm -rf $vtctld2_dir/app
 fi

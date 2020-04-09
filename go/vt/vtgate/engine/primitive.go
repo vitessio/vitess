@@ -17,8 +17,11 @@ limitations under the License.
 package engine
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"golang.org/x/net/context"
 
@@ -55,20 +58,22 @@ type VCursor interface {
 	RecordWarning(warning *querypb.QueryWarning)
 
 	// V3 functions.
-	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
+	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
 	AutocommitApproval() bool
 
 	// Shard-level functions.
-	ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, []error)
+	ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error)
 	ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error)
 	StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error
 
 	// Keyspace ID level functions.
-	ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, isDML, autocommit bool) (*sqltypes.Result, error)
+	ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
 
 	// Resolver methods, from key.Destination to srvtopo.ResolvedShard.
 	// Will replace all of the Topo functions.
 	ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error)
+	SetTarget(target string) error
+	ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error
 }
 
 // Plan represents the execution strategy for a given query.
@@ -77,23 +82,17 @@ type VCursor interface {
 // each node does its part by combining the results of the
 // sub-nodes.
 type Plan struct {
-	// Original is the original query.
-	Original string `json:",omitempty"`
-	// Instructions contains the instructions needed to
-	// fulfil the query.
-	Instructions Primitive `json:",omitempty"`
-	// Mutex to protect the stats
-	mu sync.Mutex
-	// Count of times this plan was executed
-	ExecCount uint64 `json:",omitempty"`
-	// Total execution time
-	ExecTime time.Duration `json:",omitempty"`
-	// Total number of shard queries
-	ShardQueries uint64 `json:",omitempty"`
-	// Total number of rows
-	Rows uint64 `json:",omitempty"`
-	// Total number of errors
-	Errors uint64 `json:",omitempty"`
+	Type                   sqlparser.StatementType // The type of query we have
+	Original               string                  // Original is the original query.
+	Instructions           Primitive               // Instructions contains the instructions needed to fulfil the query.
+	sqlparser.BindVarNeeds                         // Stores BindVars needed to be provided as part of expression rewriting
+
+	mu           sync.Mutex    // Mutex to protect the fields below
+	ExecCount    uint64        // Count of times this plan was executed
+	ExecTime     time.Duration // Total execution time
+	ShardQueries uint64        // Total number of shard queries
+	Rows         uint64        // Total number of rows
+	Errors       uint64        // Total number of errors
 }
 
 // AddStats updates the plan execution statistics
@@ -119,6 +118,28 @@ func (p *Plan) Stats() (execCount uint64, execTime time.Duration, shardQueries, 
 	return
 }
 
+// Match is used to check if a Primitive matches
+type Match func(node Primitive) bool
+
+// Find will return the first Primitive that matches the evaluate function. If no match is found, nil will be returned
+func Find(isMatch Match, start Primitive) Primitive {
+	if isMatch(start) {
+		return start
+	}
+	for _, input := range start.Inputs() {
+		result := Find(isMatch, input)
+		if result != nil {
+			return result
+		}
+	}
+	return nil
+}
+
+// Exists traverses recursively down the Primitive tree structure, and returns true when Match returns true
+func Exists(m Match, p Primitive) bool {
+	return Find(m, p) != nil
+}
+
 // Size is defined so that Plan can be given to a cache.LRUCache.
 // VTGate needs to maintain a cache of plans. It uses LRUCache, which
 // in turn requires its objects to define a Size function.
@@ -126,8 +147,40 @@ func (p *Plan) Size() int {
 	return 1
 }
 
-// Primitive is the interface that needs to be satisfied by
-// all primitives of a plan.
+//MarshalJSON serializes the plan into a JSON representation.
+func (p *Plan) MarshalJSON() ([]byte, error) {
+	var instructions *PrimitiveDescription
+	if p.Instructions != nil {
+		description := PrimitiveToPlanDescription(p.Instructions)
+		instructions = &description
+	}
+
+	marshalPlan := struct {
+		QueryType    string
+		Original     string                `json:",omitempty"`
+		Instructions *PrimitiveDescription `json:",omitempty"`
+		ExecCount    uint64                `json:",omitempty"`
+		ExecTime     time.Duration         `json:",omitempty"`
+		ShardQueries uint64                `json:",omitempty"`
+		Rows         uint64                `json:",omitempty"`
+		Errors       uint64                `json:",omitempty"`
+	}{
+		QueryType:    p.Type.String(),
+		Original:     p.Original,
+		Instructions: instructions,
+		ExecCount:    p.ExecCount,
+		ExecTime:     p.ExecTime,
+		ShardQueries: p.ShardQueries,
+		Rows:         p.Rows,
+		Errors:       p.Errors,
+	}
+	return json.Marshal(marshalPlan)
+}
+
+// Primitive is the building block of the engine execution plan. They form a tree structure, where the leaves typically
+// issue queries to one or more vttablet.
+// During execution, the Primitive's pass Result objects up the tree structure, until reaching the root,
+// and its result is passed to the client.
 type Primitive interface {
 	RouteType() string
 	GetKeyspaceName() string
@@ -135,4 +188,31 @@ type Primitive interface {
 	Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
 	StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
 	GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
+	NeedsTransaction() bool
+
+	// The inputs to this Primitive
+	Inputs() []Primitive
+
+	// description is the description, sans the inputs, of this Primitive.
+	// to get the plan description with all children, use PrimitiveToPlanDescription()
+	description() PrimitiveDescription
+}
+
+type noInputs struct{}
+
+// Inputs implements no inputs
+func (noInputs) Inputs() []Primitive {
+	return nil
+}
+
+type noTxNeeded struct{}
+
+func (noTxNeeded) NeedsTransaction() bool {
+	return false
+}
+
+type txNeeded struct{}
+
+func (txNeeded) NeedsTransaction() bool {
+	return true
 }

@@ -88,6 +88,7 @@ func TestVStream(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		fmt.Printf("events: %v\n", events)
 		// An empty transaction has three events: begin, gtid and commit.
 		if len(events) == 3 && !emptyEventSkipped {
 			emptyEventSkipped = true
@@ -107,7 +108,7 @@ func TestVStream(t *testing.T) {
 				Type: querypb.Type_INT64,
 			}},
 		}
-		gotFields := events[2].FieldEvent
+		gotFields := events[1].FieldEvent
 		if !proto.Equal(gotFields, wantFields) {
 			t.Errorf("FieldEvent:\n%v, want\n%v", gotFields, wantFields)
 		}
@@ -120,7 +121,7 @@ func TestVStream(t *testing.T) {
 				},
 			}},
 		}
-		gotRows := events[3].RowEvent
+		gotRows := events[2].RowEvent
 		if !proto.Equal(gotRows, wantRows) {
 			t.Errorf("RowEvent:\n%v, want\n%v", gotRows, wantRows)
 		}

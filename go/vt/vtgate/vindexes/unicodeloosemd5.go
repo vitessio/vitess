@@ -30,7 +30,7 @@ import (
 )
 
 var (
-	_ Vindex = (*UnicodeLooseMD5)(nil)
+	_ SingleColumn = (*UnicodeLooseMD5)(nil)
 )
 
 // UnicodeLooseMD5 is a vindex that normalizes and hashes unicode strings
@@ -60,6 +60,11 @@ func (vind *UnicodeLooseMD5) Cost() int {
 // IsUnique returns true since the Vindex is unique.
 func (vind *UnicodeLooseMD5) IsUnique() bool {
 	return true
+}
+
+// NeedsVCursor satisfies the Vindex interface.
+func (vind *UnicodeLooseMD5) NeedsVCursor() bool {
+	return false
 }
 
 // Verify returns true if ids maps to ksids.

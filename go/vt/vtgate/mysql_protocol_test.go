@@ -47,9 +47,7 @@ func TestMySQLProtocolExecute(t *testing.T) {
 	defer c.Close()
 
 	qr, err := c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !reflect.DeepEqual(sandboxconn.SingleRowResult, qr) {
 		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
 	}
@@ -74,14 +72,10 @@ func TestMySQLProtocolStreamExecute(t *testing.T) {
 	defer c.Close()
 
 	_, err = c.ExecuteFetch("set workload='olap'", 1, true /* wantfields */)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	qr, err := c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !reflect.DeepEqual(sandboxconn.SingleRowResult, qr) {
 		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
 	}
@@ -135,7 +129,7 @@ func TestMySQLProtocolExecuteUseStatement(t *testing.T) {
 	require.NoError(t, err)
 
 	// No replica tablets, this should also fail
-	qr, err = c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
+	_, err = c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no valid tablet")
 }
@@ -167,9 +161,7 @@ func TestMySQLProtocolClientFoundRows(t *testing.T) {
 	defer c.Close()
 
 	qr, err := c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !reflect.DeepEqual(sandboxconn.SingleRowResult, qr) {
 		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
 	}

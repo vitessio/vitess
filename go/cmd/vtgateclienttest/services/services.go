@@ -25,7 +25,6 @@ import (
 func CreateServices() vtgateservice.VTGateService {
 	var s vtgateservice.VTGateService
 	s = newTerminalClient()
-	s = newSuccessClient(s)
 	s = newErrorClient(s)
 	s = newCallerIDClient(s)
 	s = newEchoClient(s)

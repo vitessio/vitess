@@ -111,11 +111,11 @@ func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *Writer {
 	config.HeartbeatEnable = true
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 
-	dbc := dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
+	params, _ := db.ConnParams().MysqlParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
-	tw := NewWriter(&fakeMysqlChecker{},
-		topodatapb.TabletAlias{Cell: "test", Uid: 1111},
-		config)
+	tw := NewWriter(tabletenv.NewTestEnv(&config, nil), topodatapb.TabletAlias{Cell: "test", Uid: 1111})
 	tw.dbName = sqlescape.EscapeID(dbc.SidecarDBName.Get())
 	tw.keyspaceShard = "test:0"
 	tw.now = nowFunc
@@ -123,7 +123,3 @@ func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *Writer {
 
 	return tw
 }
-
-type fakeMysqlChecker struct{}
-
-func (f fakeMysqlChecker) CheckMySQL() {}

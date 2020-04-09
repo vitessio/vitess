@@ -36,23 +36,8 @@ func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlpars
 	case *sqlparser.AndExpr:
 		filters = splitAndExpression(filters, node.Left)
 		return splitAndExpression(filters, node.Right)
-	case *sqlparser.ParenExpr:
-		// If the inner expression is AndExpr, then we can remove
-		// the parenthesis because they are unnecessary.
-		if node, ok := node.Expr.(*sqlparser.AndExpr); ok {
-			return splitAndExpression(filters, node)
-		}
 	}
 	return append(filters, node)
-}
-
-// skipParenthesis skips the parenthesis (if any) of an expression and
-// returns the innermost unparenthesized expression.
-func skipParenthesis(node sqlparser.Expr) sqlparser.Expr {
-	if node, ok := node.(*sqlparser.ParenExpr); ok {
-		return skipParenthesis(node.Expr)
-	}
-	return node
 }
 
 type subqueryInfo struct {
@@ -150,15 +135,6 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 			}
 			subqueries = append(subqueries, sqi)
 			return false, nil
-		case *sqlparser.FuncExpr:
-			switch {
-			// If it's last_insert_id, ensure it's a single unsharded route.
-			case node.Name.EqualString("last_insert_id"):
-				if rb, isRoute := pb.bldr.(*route); !isRoute || !rb.removeShardedOptions() {
-					return false, errors.New("unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces")
-				}
-			}
-			return true, nil
 		}
 		return true, nil
 	}, expr)
@@ -188,33 +164,25 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 		case *sqlparser.ComparisonExpr:
 			if construct.Operator == sqlparser.InStr {
 				// a in (subquery) -> (:__sq_has_values = 1 and (a in ::__sq))
-				newExpr := &sqlparser.ParenExpr{
-					Expr: &sqlparser.AndExpr{
-						Left: &sqlparser.ComparisonExpr{
-							Left:     sqlparser.NewValArg([]byte(":" + hasValues)),
-							Operator: sqlparser.EqualStr,
-							Right:    sqlparser.NewIntVal([]byte("1")),
-						},
-						Right: &sqlparser.ParenExpr{
-							Expr: sqlparser.ReplaceExpr(construct, sqi.ast, sqlparser.ListArg([]byte("::"+sqName))),
-						},
+				newExpr := &sqlparser.AndExpr{
+					Left: &sqlparser.ComparisonExpr{
+						Left:     sqlparser.NewValArg([]byte(":" + hasValues)),
+						Operator: sqlparser.EqualStr,
+						Right:    sqlparser.NewIntVal([]byte("1")),
 					},
+					Right: sqlparser.ReplaceExpr(construct, sqi.ast, sqlparser.ListArg([]byte("::"+sqName))),
 				}
 				expr = sqlparser.ReplaceExpr(expr, construct, newExpr)
 				pullouts = append(pullouts, newPulloutSubquery(engine.PulloutIn, sqName, hasValues, sqi.bldr))
 			} else {
 				// a not in (subquery) -> (:__sq_has_values = 0 or (a not in ::__sq))
-				newExpr := &sqlparser.ParenExpr{
-					Expr: &sqlparser.OrExpr{
-						Left: &sqlparser.ComparisonExpr{
-							Left:     sqlparser.NewValArg([]byte(":" + hasValues)),
-							Operator: sqlparser.EqualStr,
-							Right:    sqlparser.NewIntVal([]byte("0")),
-						},
-						Right: &sqlparser.ParenExpr{
-							Expr: sqlparser.ReplaceExpr(construct, sqi.ast, sqlparser.ListArg([]byte("::"+sqName))),
-						},
+				newExpr := &sqlparser.OrExpr{
+					Left: &sqlparser.ComparisonExpr{
+						Left:     sqlparser.NewValArg([]byte(":" + hasValues)),
+						Operator: sqlparser.EqualStr,
+						Right:    sqlparser.NewIntVal([]byte("0")),
 					},
+					Right: sqlparser.ReplaceExpr(construct, sqi.ast, sqlparser.ListArg([]byte("::"+sqName))),
 				}
 				expr = sqlparser.ReplaceExpr(expr, construct, newExpr)
 				pullouts = append(pullouts, newPulloutSubquery(engine.PulloutNotIn, sqName, hasValues, sqi.bldr))
@@ -321,12 +289,12 @@ func valEqual(a, b sqlparser.Expr) bool {
 		switch a.Type {
 		case sqlparser.ValArg:
 			if b.Type == sqlparser.ValArg {
-				return bytes.Equal([]byte(a.Val), []byte(b.Val))
+				return bytes.Equal(a.Val, b.Val)
 			}
 		case sqlparser.StrVal:
 			switch b.Type {
 			case sqlparser.StrVal:
-				return bytes.Equal([]byte(a.Val), []byte(b.Val))
+				return bytes.Equal(a.Val, b.Val)
 			case sqlparser.HexVal:
 				return hexEqual(b, a)
 			}
@@ -334,7 +302,7 @@ func valEqual(a, b sqlparser.Expr) bool {
 			return hexEqual(a, b)
 		case sqlparser.IntVal:
 			if b.Type == (sqlparser.IntVal) {
-				return bytes.Equal([]byte(a.Val), []byte(b.Val))
+				return bytes.Equal(a.Val, b.Val)
 			}
 		}
 	}

@@ -25,7 +25,7 @@ import (
 )
 
 var (
-	_ Vindex = (*BinaryMD5)(nil)
+	_ SingleColumn = (*BinaryMD5)(nil)
 )
 
 // BinaryMD5 is a vindex that hashes binary bits to a keyspace id.
@@ -51,6 +51,11 @@ func (vind *BinaryMD5) Cost() int {
 // IsUnique returns true since the Vindex is unique.
 func (vind *BinaryMD5) IsUnique() bool {
 	return true
+}
+
+// NeedsVCursor satisfies the Vindex interface.
+func (vind *BinaryMD5) NeedsVCursor() bool {
+	return false
 }
 
 // Verify returns true if ids maps to ksids.

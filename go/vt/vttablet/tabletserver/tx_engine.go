@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dtids"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -67,6 +66,7 @@ func (state txEngineState) String() string {
 // states. It will start and shut down the underlying tx-pool as required.
 // It does this in a concurrently safe way.
 type TxEngine struct {
+	env tabletenv.Env
 	// the following four fields are interconnected. `state` and `nextState` should be protected by the
 	// `stateLock`
 	//
@@ -84,8 +84,6 @@ type TxEngine struct {
 	// transition while creating new transactions
 	beginRequests sync.WaitGroup
 
-	dbconfigs *dbconfigs.DBConfigs
-
 	twopcEnabled        bool
 	shutdownGracePeriod time.Duration
 	coordinatorAddress  string
@@ -98,32 +96,14 @@ type TxEngine struct {
 }
 
 // NewTxEngine creates a new TxEngine.
-func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *TxEngine {
+func NewTxEngine(env tabletenv.Env) *TxEngine {
+	config := env.Config()
 	te := &TxEngine{
+		env:                 env,
 		shutdownGracePeriod: time.Duration(config.TxShutDownGracePeriod * 1e9),
 	}
-	limiter := txlimiter.New(
-		config.TransactionCap,
-		config.TransactionLimitPerUser,
-		config.EnableTransactionLimit,
-		config.EnableTransactionLimitDryRun,
-		config.TransactionLimitByUsername,
-		config.TransactionLimitByPrincipal,
-		config.TransactionLimitByComponent,
-		config.TransactionLimitBySubcomponent,
-	)
-	te.txPool = NewTxPool(
-		config.PoolNamePrefix,
-		config.TransactionCap,
-		config.FoundRowsPoolSize,
-		config.TxPoolPrefillParallelism,
-		time.Duration(config.TransactionTimeout*1e9),
-		time.Duration(config.TxPoolTimeout*1e9),
-		time.Duration(config.IdleTimeout*1e9),
-		config.TxPoolWaiterCap,
-		checker,
-		limiter,
-	)
+	limiter := txlimiter.New(env)
+	te.txPool = NewTxPool(env, limiter)
 	te.twopcEnabled = config.TwoPCEnable
 	if te.twopcEnabled {
 		if config.TwoPCCoordinatorAddress == "" {
@@ -145,13 +125,7 @@ func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *
 	// the system can deadlock if all connections get moved to
 	// the TxPreparedPool.
 	te.preparedPool = NewTxPreparedPool(config.TransactionCap - 2)
-	readPool := connpool.New(
-		config.PoolNamePrefix+"TxReadPool",
-		3,
-		0,
-		time.Duration(config.IdleTimeout*1e9),
-		checker,
-	)
+	readPool := connpool.New(env, config.PoolNamePrefix+"TxReadPool", 3, 0, time.Duration(config.IdleTimeout*1e9))
 	te.twoPC = NewTwoPC(readPool)
 	te.transitionSignal = make(chan struct{})
 	// By immediately closing this channel, all state changes can simply be made blocking by issuing the
@@ -299,10 +273,10 @@ func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) 
 }
 
 // Commit commits the specified transaction.
-func (te *TxEngine) Commit(ctx context.Context, transactionID int64, mc messageCommitter) (string, error) {
+func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Commit")
 	defer span.Finish()
-	return te.txPool.Commit(ctx, transactionID, mc)
+	return te.txPool.Commit(ctx, transactionID)
 }
 
 // Rollback rolls back the specified transaction.
@@ -359,16 +333,11 @@ func (te *TxEngine) transitionTo(nextState txEngineState) error {
 	return nil
 }
 
-// InitDBConfig must be called before Init.
-func (te *TxEngine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	te.dbconfigs = dbcfgs
-}
-
 // Init must be called once when vttablet starts for setting
 // up the metadata tables.
 func (te *TxEngine) Init() error {
 	if te.twopcEnabled {
-		return te.twoPC.Init(te.dbconfigs.SidecarDBName.Get(), te.dbconfigs.DbaWithDB())
+		return te.twoPC.Init(te.env.DBConfigs().SidecarDBName.Get(), te.env.DBConfigs().DbaWithDB())
 	}
 	return nil
 }
@@ -377,10 +346,10 @@ func (te *TxEngine) Init() error {
 // all previously prepared transactions from the redo log.
 // this should only be called when the state is already locked
 func (te *TxEngine) open() {
-	te.txPool.Open(te.dbconfigs.AppWithDB(), te.dbconfigs.DbaWithDB(), te.dbconfigs.AppDebugWithDB())
+	te.txPool.Open(te.env.DBConfigs().AppWithDB(), te.env.DBConfigs().DbaWithDB(), te.env.DBConfigs().AppDebugWithDB())
 
 	if te.twopcEnabled && te.state == AcceptingReadAndWrite {
-		te.twoPC.Open(te.dbconfigs)
+		te.twoPC.Open(te.env.DBConfigs())
 		if err := te.prepareFromRedo(); err != nil {
 			// If this operation fails, we choose to raise an alert and
 			// continue anyway. Serving traffic is considered more important

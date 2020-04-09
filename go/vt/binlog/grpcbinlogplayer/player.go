@@ -52,7 +52,7 @@ func (client *client) Dial(tablet *topodatapb.Tablet) error {
 	if err != nil {
 		return err
 	}
-	client.cc, err = grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
+	client.cc, err = grpcclient.Dial(addr, grpcclient.FailFast(true), opt)
 	if err != nil {
 		return err
 	}

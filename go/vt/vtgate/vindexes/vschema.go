@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -313,6 +314,9 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 				if !columnVindex.Vindex.IsUnique() {
 					return fmt.Errorf("primary vindex %s is not Unique for table %s", ind.Name, tname)
 				}
+				if owned {
+					return fmt.Errorf("primary vindex %s cannot be owned for table %s", ind.Name, tname)
+				}
 			}
 			t.ColumnVindexes = append(t.ColumnVindexes, columnVindex)
 			if owned {
@@ -348,13 +352,18 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) {
 			if t == nil || table.AutoIncrement == nil {
 				continue
 			}
-			t.AutoIncrement = &AutoIncrement{Column: sqlparser.NewColIdent(table.AutoIncrement.Column)}
 			seq, err := vschema.findQualified(table.AutoIncrement.Sequence)
 			if err != nil {
+				// Better to remove the table than to leave it partially initialized.
+				delete(ksvschema.Tables, tname)
+				delete(vschema.uniqueTables, tname)
 				ksvschema.Error = fmt.Errorf("cannot resolve sequence %s: %v", table.AutoIncrement.Sequence, err)
 				continue
 			}
-			t.AutoIncrement.Sequence = seq
+			t.AutoIncrement = &AutoIncrement{
+				Column:   sqlparser.NewColIdent(table.AutoIncrement.Column),
+				Sequence: seq,
+			}
 		}
 	}
 }
@@ -606,6 +615,42 @@ func LoadFormalKeyspace(filename string) (*vschemapb.Keyspace, error) {
 	return formal, nil
 }
 
+// ChooseVindexForType chooses the most appropriate vindex for the give type.
+func ChooseVindexForType(typ querypb.Type) (string, error) {
+	switch {
+	case sqltypes.IsIntegral(typ):
+		return "hash", nil
+	case sqltypes.IsText(typ):
+		return "unicode_loose_md5", nil
+	case sqltypes.IsBinary(typ):
+		return "binary_md5", nil
+	}
+	return "", fmt.Errorf("type %v is not recommended for a vindex", typ)
+}
+
+// FindBestColVindex finds the best ColumnVindex for VReplication.
+func FindBestColVindex(table *Table) (*ColumnVindex, error) {
+	if len(table.ColumnVindexes) == 0 {
+		return nil, fmt.Errorf("table %s has no vindex", table.Name.String())
+	}
+	var result *ColumnVindex
+	for _, cv := range table.ColumnVindexes {
+		if cv.Vindex.NeedsVCursor() {
+			continue
+		}
+		if !cv.Vindex.IsUnique() {
+			continue
+		}
+		if result == nil || result.Vindex.Cost() > cv.Vindex.Cost() {
+			result = cv
+		}
+	}
+	if result == nil {
+		return nil, fmt.Errorf("could not find a vindex to compute keyspace id for table %v", table.Name.String())
+	}
+	return result, nil
+}
+
 // FindVindexForSharding searches through the given slice
 // to find the lowest cost unique vindex
 // primary vindex is always unique
@@ -617,6 +662,10 @@ func FindVindexForSharding(tableName string, colVindexes []*ColumnVindex) (*Colu
 	}
 	result := colVindexes[0]
 	for _, colVindex := range colVindexes {
+		// Only allow SingleColumn for legacy resharding.
+		if _, ok := colVindex.Vindex.(SingleColumn); !ok {
+			continue
+		}
 		if colVindex.Vindex.Cost() < result.Vindex.Cost() && colVindex.Vindex.IsUnique() {
 			result = colVindex
 		}

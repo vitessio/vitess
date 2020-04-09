@@ -25,7 +25,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -57,7 +56,7 @@ const (
 // Writer runs on master tablets and writes heartbeats to the _vt.heartbeat
 // table at a regular interval, defined by heartbeat_interval.
 type Writer struct {
-	dbconfigs *dbconfigs.DBConfigs
+	env tabletenv.Env
 
 	enabled       bool
 	interval      time.Duration
@@ -74,24 +73,21 @@ type Writer struct {
 }
 
 // NewWriter creates a new Writer.
-func NewWriter(checker connpool.MySQLChecker, alias topodatapb.TabletAlias, config tabletenv.TabletConfig) *Writer {
+func NewWriter(env tabletenv.Env, alias topodatapb.TabletAlias) *Writer {
+	config := env.Config()
 	if !config.HeartbeatEnable {
 		return &Writer{}
 	}
 	return &Writer{
+		env:         env,
 		enabled:     true,
 		tabletAlias: alias,
 		now:         time.Now,
 		interval:    config.HeartbeatInterval,
 		ticks:       timer.NewTimer(config.HeartbeatInterval),
 		errorLog:    logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
-		pool:        connpool.New(config.PoolNamePrefix+"HeartbeatWritePool", 1, 0, time.Duration(config.IdleTimeout*1e9), checker),
+		pool:        connpool.New(env, config.PoolNamePrefix+"HeartbeatWritePool", 1, 0, time.Duration(config.IdleTimeout*1e9)),
 	}
-}
-
-// InitDBConfig must be called before Init.
-func (w *Writer) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	w.dbconfigs = dbcfgs
 }
 
 // Init runs at tablet startup and last minute initialization of db settings, and
@@ -103,9 +99,10 @@ func (w *Writer) Init(target querypb.Target) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	log.Info("Initializing heartbeat table.")
-	w.dbName = sqlescape.EscapeID(w.dbconfigs.SidecarDBName.Get())
+	w.dbName = sqlescape.EscapeID(w.env.DBConfigs().SidecarDBName.Get())
 	w.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
-	err := w.initializeTables(w.dbconfigs.DbaWithDB())
+
+	err := w.initializeTables(w.env.DBConfigs().DbaWithDB())
 	if err != nil {
 		w.recordError(err)
 		return err
@@ -128,7 +125,7 @@ func (w *Writer) Open() {
 		return
 	}
 	log.Info("Beginning heartbeat writes")
-	w.pool.Open(w.dbconfigs.AppWithDB(), w.dbconfigs.DbaWithDB(), w.dbconfigs.AppDebugWithDB())
+	w.pool.Open(w.env.DBConfigs().AppWithDB(), w.env.DBConfigs().DbaWithDB(), w.env.DBConfigs().AppDebugWithDB())
 	w.ticks.Start(func() { w.writeHeartbeat() })
 	w.isOpen = true
 }
@@ -155,7 +152,7 @@ func (w *Writer) Close() {
 // or master. For that reason, we use values that are common between them, such as keyspace:shard,
 // and we also execute them with an isolated connection that turns off the binlog and
 // is closed at the end.
-func (w *Writer) initializeTables(cp *mysql.ConnParams) error {
+func (w *Writer) initializeTables(cp dbconfigs.Connector) error {
 	conn, err := dbconnpool.NewDBConnection(cp, stats.NewTimings("", "", ""))
 	if err != nil {
 		return vterrors.Wrap(err, "Failed to create connection for heartbeat")

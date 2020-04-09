@@ -49,9 +49,11 @@ type XtrabackupEngine struct {
 var (
 	// path where backup engine program is located
 	xtrabackupEnginePath = flag.String("xtrabackup_root_path", "", "directory location of the xtrabackup executable, e.g., /usr/bin")
-	// flags to pass through to backup engine
+	// flags to pass through to backup phase
 	xtrabackupBackupFlags = flag.String("xtrabackup_backup_flags", "", "flags to pass to backup command. These should be space separated and will be added to the end of the command")
-	// flags to pass through to restore phase
+	// flags to pass through to prepare phase of restore
+	xtrabackupPrepareFlags = flag.String("xtrabackup_prepare_flags", "", "flags to pass to prepare command. These should be space separated and will be added to the end of the command")
+	// flags to pass through to extract phase of restore
 	xbstreamRestoreFlags = flag.String("xbstream_restore_flags", "", "flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt")
 	// streaming mode
 	xtrabackupStreamMode = flag.String("xtrabackup_stream_mode", "tar", "which mode to use if streaming, valid values are tar and xbstream")
@@ -158,7 +160,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 
 	// open the MANIFEST
 	params.Logger.Infof("Writing backup MANIFEST")
-	mwc, err := bh.AddFile(ctx, backupManifestFileName, 0)
+	mwc, err := bh.AddFile(ctx, backupManifestFileName, backupstorage.FileSizeUnknown)
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot add %v to backup", backupManifestFileName)
 	}
@@ -328,7 +330,11 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 		// Enforce minimum block size.
 		blockSize = 1024
 	}
-	if _, err := copyToStripes(destWriters, backupOut, blockSize); err != nil {
+	// Add a buffer in front of the raw stdout pipe so io.CopyN() can use the
+	// buffered reader's WriteTo() method instead of allocating a new buffer
+	// every time.
+	backupOutBuf := bufio.NewReaderSize(backupOut, int(blockSize))
+	if _, err := copyToStripes(destWriters, backupOutBuf, blockSize); err != nil {
 		return replicationPosition, vterrors.Wrap(err, "cannot copy output from xtrabackup command")
 	}
 
@@ -422,6 +428,9 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 	flagsToExec := []string{"--defaults-file=" + cnf.path,
 		"--prepare",
 		"--target-dir=" + tempDir,
+	}
+	if *xtrabackupPrepareFlags != "" {
+		flagsToExec = append(flagsToExec, strings.Fields(*xtrabackupPrepareFlags)...)
 	}
 	prepareCmd := exec.CommandContext(ctx, restoreProgram, flagsToExec...)
 	prepareOut, err := prepareCmd.StdoutPipe()
@@ -571,11 +580,10 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 	case xbstream:
 		// now extract the files by running xbstream
 		xbstreamProgram := xbstream
-		flagsToExec := []string{}
+		flagsToExec := []string{"-C", tempDir, "-xv"}
 		if *xbstreamRestoreFlags != "" {
 			flagsToExec = append(flagsToExec, strings.Fields(*xbstreamRestoreFlags)...)
 		}
-		flagsToExec = append(flagsToExec, "-C", tempDir, "-xv")
 		xbstreamCmd := exec.CommandContext(ctx, xbstreamProgram, flagsToExec...)
 		logger.Infof("Executing xbstream cmd: %v %v", xbstreamProgram, flagsToExec)
 		xbstreamCmd.Stdin = reader

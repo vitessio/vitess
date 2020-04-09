@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 
@@ -282,9 +283,10 @@ func (dp DestinationAnyShardPickerFirstShard) PickShard(shardCount int) int {
 type keyRangeLookuper struct {
 }
 
-func (v *keyRangeLookuper) String() string { return "keyrange_lookuper" }
-func (*keyRangeLookuper) Cost() int        { return 0 }
-func (*keyRangeLookuper) IsUnique() bool   { return false }
+func (v *keyRangeLookuper) String() string   { return "keyrange_lookuper" }
+func (*keyRangeLookuper) Cost() int          { return 0 }
+func (*keyRangeLookuper) IsUnique() bool     { return false }
+func (*keyRangeLookuper) NeedsVCursor() bool { return false }
 func (*keyRangeLookuper) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
@@ -306,9 +308,10 @@ func newKeyRangeLookuper(name string, params map[string]string) (vindexes.Vindex
 type keyRangeLookuperUnique struct {
 }
 
-func (v *keyRangeLookuperUnique) String() string { return "keyrange_lookuper" }
-func (*keyRangeLookuperUnique) Cost() int        { return 0 }
-func (*keyRangeLookuperUnique) IsUnique() bool   { return true }
+func (v *keyRangeLookuperUnique) String() string   { return "keyrange_lookuper" }
+func (*keyRangeLookuperUnique) Cost() int          { return 0 }
+func (*keyRangeLookuperUnique) IsUnique() bool     { return true }
+func (*keyRangeLookuperUnique) NeedsVCursor() bool { return false }
 func (*keyRangeLookuperUnique) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
@@ -331,7 +334,14 @@ func init() {
 	vindexes.Register("keyrange_lookuper_unique", newKeyRangeLookuperUnique)
 }
 
-func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
+type executorType bool
+
+const (
+	legacy           executorType = true
+	planAllTheThings executorType = false
+)
+
+func createExecutorEnvUsing(t executorType) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck()
 	s := createSandbox("TestExecutor")
@@ -357,10 +367,22 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	bad.VSchema = badVSchema
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	switch t {
+	case legacy:
+		executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	case planAllTheThings:
+		f := func(executor *Executor) executeMethod {
+			return &planExecute{e: executor}
+		}
+		executor = NewTestExecutor(context.Background(), f, serv, cell, resolver, false, testBufferSize, testCacheSize)
+	}
 
-	executor = NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	return executor, sbc1, sbc2, sbclookup
+}
+
+func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
+	return createExecutorEnvUsing(legacy)
 }
 
 func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
@@ -377,7 +399,7 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	executor = NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 	return executor, sbc1, sbc2, sbclookup
 }
 
@@ -552,4 +574,10 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 	}
 
 	return logStats
+}
+
+func newTestResolver(hc discovery.HealthCheck, serv srvtopo.Server, cell string) *Resolver {
+	sc := newTestScatterConn(hc, serv, cell)
+	srvResolver := srvtopo.NewResolver(serv, sc.gateway, cell)
+	return NewResolver(srvResolver, serv, cell, sc)
 }

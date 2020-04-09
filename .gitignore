@@ -30,9 +30,6 @@ tags
 # C build dirs
 **/build
 
-# site-local example files
-/examples/kubernetes/config.sh
-
 # generated protobuf files
 /go/vt/.proto.tmp
 
@@ -79,3 +76,12 @@ releases
 
 # Vagrant
 .vagrant
+
+/dist/
+/vthook/
+/bin/
+/vtdataroot/
+venv
+
+.scannerwork
+report

@@ -17,14 +17,14 @@ limitations under the License.
 package engine
 
 import (
-	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
-	"vitess.io/vitess/go/jsonutil"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/sqlannotation"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -35,113 +35,25 @@ import (
 
 var _ Primitive = (*Update)(nil)
 
+// VindexValues contains changed values for a vindex.
+type VindexValues map[string]sqltypes.PlanValue
+
 // Update represents the instructions to perform an update.
 type Update struct {
-	// Opcode is the execution opcode.
-	Opcode UpdateOpcode
-
-	// Keyspace specifies the keyspace to send the query to.
-	Keyspace *vindexes.Keyspace
-
-	// TargetDestination specifies the destination to send the query to.
-	TargetDestination key.Destination
-
-	// Query specifies the query to be executed.
-	Query string
-
-	// Vindex specifies the vindex to be used.
-	Vindex vindexes.Vindex
-	// Values specifies the vindex values to use for routing.
-	// For now, only one value is specified.
-	Values []sqltypes.PlanValue
+	DML
 
 	// ChangedVindexValues contains values for updated Vindexes during an update statement.
-	ChangedVindexValues map[string][]sqltypes.PlanValue
+	ChangedVindexValues map[string]VindexValues
 
-	// Table specifies the table for the update.
-	Table *vindexes.Table
-
-	// OwnedVindexQuery is used for updating changes in lookup vindexes.
-	OwnedVindexQuery string
-
-	// Option to override the standard behavior and allow a multi-shard update
-	// to use single round trip autocommit.
-	MultiShardAutocommit bool
-
-	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
-	QueryTimeout int
+	// Update does not take inputs
+	noInputs
 }
 
-// MarshalJSON serializes the Update into a JSON representation.
-// It's used for testing and diagnostics.
-func (upd *Update) MarshalJSON() ([]byte, error) {
-	var tname, vindexName string
-	if upd.Table != nil {
-		tname = upd.Table.Name.String()
-	}
-	if upd.Vindex != nil {
-		vindexName = upd.Vindex.String()
-	}
-	marshalUpdate := struct {
-		Opcode               UpdateOpcode
-		Keyspace             *vindexes.Keyspace              `json:",omitempty"`
-		Query                string                          `json:",omitempty"`
-		Vindex               string                          `json:",omitempty"`
-		Values               []sqltypes.PlanValue            `json:",omitempty"`
-		ChangedVindexValues  map[string][]sqltypes.PlanValue `json:",omitempty"`
-		Table                string                          `json:",omitempty"`
-		OwnedVindexQuery     string                          `json:",omitempty"`
-		MultiShardAutocommit bool                            `json:",omitempty"`
-		QueryTimeout         int                             `json:",omitempty"`
-	}{
-		Opcode:               upd.Opcode,
-		Keyspace:             upd.Keyspace,
-		Query:                upd.Query,
-		Vindex:               vindexName,
-		Values:               upd.Values,
-		ChangedVindexValues:  upd.ChangedVindexValues,
-		Table:                tname,
-		OwnedVindexQuery:     upd.OwnedVindexQuery,
-		MultiShardAutocommit: upd.MultiShardAutocommit,
-		QueryTimeout:         upd.QueryTimeout,
-	}
-	return jsonutil.MarshalNoEscape(marshalUpdate)
-}
-
-// UpdateOpcode is a number representing the opcode
-// for the Update primitve.
-type UpdateOpcode int
-
-// This is the list of UpdateOpcode values.
-const (
-	// UpdateUnsharded is for routing an update statement
-	// to an unsharded keyspace.
-	UpdateUnsharded = UpdateOpcode(iota)
-	// UpdateEqual is for routing an update statement
-	// to a single shard: Requires: A Vindex, and
-	// a single Value.
-	UpdateEqual
-	// UpdateScatter is for routing a scattered
-	// update statement.
-	UpdateScatter
-	// UpdateByDestination is to route explicitly to a given
-	// target destination. Is used when the query explicitly sets a target destination:
-	// in the clause:
-	// e.g: UPDATE `keyspace[-]`.x1 SET foo=1
-	UpdateByDestination
-)
-
-var updName = map[UpdateOpcode]string{
-	UpdateUnsharded:     "UpdateUnsharded",
-	UpdateEqual:         "UpdateEqual",
-	UpdateScatter:       "UpdateScatter",
-	UpdateByDestination: "UpdateByDestination",
-}
-
-// MarshalJSON serializes the UpdateOpcode as a JSON string.
-// It's used for testing and diagnostics.
-func (code UpdateOpcode) MarshalJSON() ([]byte, error) {
-	return json.Marshal(updName[code])
+var updName = map[DMLOpcode]string{
+	Unsharded:     "UpdateUnsharded",
+	Equal:         "UpdateEqual",
+	Scatter:       "UpdateScatter",
+	ByDestination: "UpdateByDestination",
 }
 
 // RouteType returns a description of the query routing type used by the primitive
@@ -170,13 +82,13 @@ func (upd *Update) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 	}
 
 	switch upd.Opcode {
-	case UpdateUnsharded:
+	case Unsharded:
 		return upd.execUpdateUnsharded(vcursor, bindVars)
-	case UpdateEqual:
+	case Equal:
 		return upd.execUpdateEqual(vcursor, bindVars)
-	case UpdateScatter:
+	case Scatter:
 		return upd.execUpdateByDestination(vcursor, bindVars, key.DestinationAllShards{})
-	case UpdateByDestination:
+	case ByDestination:
 		return upd.execUpdateByDestination(vcursor, bindVars, upd.TargetDestination)
 	default:
 		// Unreachable.
@@ -218,12 +130,11 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 		return &sqltypes.Result{}, nil
 	}
 	if len(upd.ChangedVindexValues) != 0 {
-		if err := upd.updateVindexEntries(vcursor, upd.OwnedVindexQuery, bindVars, rs, ksid); err != nil {
+		if err := upd.updateVindexEntries(vcursor, bindVars, []*srvtopo.ResolvedShard{rs}); err != nil {
 			return nil, vterrors.Wrap(err, "execUpdateEqual")
 		}
 	}
-	rewritten := sqlannotation.AddKeyspaceIDs(upd.Query, [][]byte{ksid}, "")
-	return execShard(vcursor, rewritten, bindVars, rs, true /* isDML */, true /* canAutocommit */)
+	return execShard(vcursor, upd.Query, bindVars, rs, true /* rollbackOnError */, true /* canAutocommit */)
 }
 
 // updateVindexEntries performs an update when a vindex is being modified
@@ -232,39 +143,56 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 // for DMLs to reuse existing transactions.
 // Note 2: While changes are being committed, the changing row could be
 // unreachable by either the new or old column values.
-func (upd *Update) updateVindexEntries(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, ksid []byte) error {
-	subQueryResult, err := execShard(vcursor, upd.OwnedVindexQuery, bindVars, rs, false /* isDML */, false /* canAutocommit */)
-	if err != nil {
-		return err
+func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{Sql: upd.OwnedVindexQuery, BindVariables: bindVars}
 	}
+	subQueryResult, errors := vcursor.ExecuteMultiShard(rss, queries, false, false)
+	for _, err := range errors {
+		if err != nil {
+			return vterrors.Wrap(err, "updateVindexEntries")
+		}
+	}
+
 	if len(subQueryResult.Rows) == 0 {
 		return nil
 	}
-	if len(subQueryResult.Rows) > 1 {
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update changes multiple rows in the vindex")
-	}
-	colnum := 0
-	for _, colVindex := range upd.Table.Owned {
-		// Fetch the column values. colnum must keep incrementing.
-		fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
-		for range colVindex.Columns {
-			fromIds = append(fromIds, subQueryResult.Rows[0][colnum])
-			colnum++
-		}
 
-		// Update columns only if they're being changed.
-		if colValues, ok := upd.ChangedVindexValues[colVindex.Name]; ok {
-			vindexColumnKeys := make([]sqltypes.Value, 0, len(colValues))
-			for _, colValue := range colValues {
-				resolvedVal, err := colValue.ResolveValue(bindVars)
-				if err != nil {
+	fieldColNumMap := make(map[string]int)
+	for colNum, field := range subQueryResult.Fields {
+		fieldColNumMap[field.Name] = colNum
+	}
+
+	for _, row := range subQueryResult.Rows {
+		ksid, err := resolveKeyspaceID(vcursor, upd.KsidVindex, row[0])
+		if err != nil {
+			return err
+		}
+		for _, colVindex := range upd.Table.Owned {
+			// Update columns only if they're being changed.
+			if updColValues, ok := upd.ChangedVindexValues[colVindex.Name]; ok {
+				fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
+				var vindexColumnKeys []sqltypes.Value
+				for _, vCol := range colVindex.Columns {
+					// Fetch the column values.
+					origColValue := row[fieldColNumMap[vCol.String()]]
+					fromIds = append(fromIds, origColValue)
+					if colValue, exists := updColValues[vCol.String()]; exists {
+						resolvedVal, err := colValue.ResolveValue(bindVars)
+						if err != nil {
+							return err
+						}
+						vindexColumnKeys = append(vindexColumnKeys, resolvedVal)
+					} else {
+						// Set the column value to original as this column in vindex is not updated.
+						vindexColumnKeys = append(vindexColumnKeys, origColValue)
+					}
+				}
+
+				if err := colVindex.Vindex.(vindexes.Lookup).Update(vcursor, fromIds, ksid, vindexColumnKeys); err != nil {
 					return err
 				}
-				vindexColumnKeys = append(vindexColumnKeys, resolvedVal)
-			}
-
-			if err := colVindex.Vindex.(vindexes.Lookup).Update(vcursor, fromIds, ksid, vindexColumnKeys); err != nil {
-				return err
 			}
 		}
 	}
@@ -278,14 +206,50 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 	}
 
 	queries := make([]*querypb.BoundQuery, len(rss))
-	sql := sqlannotation.AnnotateIfDML(upd.Query, nil)
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{
-			Sql:           sql,
+			Sql:           upd.Query,
 			BindVariables: bindVars,
 		}
 	}
+
+	// update any owned vindexes
+	if len(upd.ChangedVindexValues) != 0 {
+		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
+			return nil, vterrors.Wrap(err, "execUpdateByDestination")
+		}
+	}
+
 	autocommit := (len(rss) == 1 || upd.MultiShardAutocommit) && vcursor.AutocommitApproval()
-	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
+	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
 	return result, vterrors.Aggregate(errs)
+}
+
+func (upd *Update) description() PrimitiveDescription {
+	other := map[string]interface{}{
+		"Query":                upd.Query,
+		"Table":                upd.GetTableName(),
+		"OwnedVindexQuery":     upd.OwnedVindexQuery,
+		"MultiShardAutocommit": upd.MultiShardAutocommit,
+		"QueryTimeout":         upd.QueryTimeout,
+	}
+
+	addFieldsIfNotEmpty(upd.DML, other)
+
+	var changedVindexes []string
+	for vindex := range upd.ChangedVindexValues {
+		changedVindexes = append(changedVindexes, vindex)
+	}
+	sort.Strings(changedVindexes) // We sort these so random changes in the map order does not affect output
+	if len(changedVindexes) > 0 {
+		other["ChangedVindexValues"] = changedVindexes
+	}
+
+	return PrimitiveDescription{
+		OperatorType:     "Update",
+		Keyspace:         upd.Keyspace,
+		Variant:          upd.Opcode.String(),
+		TargetTabletType: topodatapb.TabletType_MASTER,
+		Other:            other,
+	}
 }

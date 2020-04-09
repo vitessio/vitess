@@ -168,10 +168,11 @@ func TestIsBetterThan(t *testing.T) {
 		case 2:
 			v, _ = newLookupIndex("", nil)
 		}
+		single, _ := v.(vindexes.SingleColumn)
 		return &routeOption{
 			eroute: &engine.Route{
 				Opcode: opt,
-				Vindex: v,
+				Vindex: single,
 			},
 		}
 	}

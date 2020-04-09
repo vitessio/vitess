@@ -52,7 +52,49 @@ const (
 	StmtOther
 	StmtUnknown
 	StmtComment
+	StmtPriv
 )
+
+//ASTToStatementType returns a StatementType from an AST stmt
+func ASTToStatementType(stmt Statement) StatementType {
+	switch stmt.(type) {
+	case *Select, *Union:
+		return StmtSelect
+	case *Insert:
+		return StmtInsert
+	case *Update:
+		return StmtUpdate
+	case *Delete:
+		return StmtDelete
+	case *Set:
+		return StmtSet
+	case *Show:
+		return StmtShow
+	case *DDL, *DBDDL:
+		return StmtDDL
+	case *Use:
+		return StmtUse
+	case *OtherRead, *OtherAdmin:
+		return StmtOther
+	case *Begin:
+		return StmtBegin
+	case *Commit:
+		return StmtCommit
+	case *Rollback:
+		return StmtRollback
+	default:
+		return StmtUnknown
+	}
+}
+
+//CanNormalize takes Statement and returns if the statement can be normalized.
+func CanNormalize(stmt Statement) bool {
+	switch stmt.(type) {
+	case *Select, *Union, *Insert, *Update, *Delete, *Set:
+		return true
+	}
+	return false
+}
 
 // Preview analyzes the beginning of the query using a simpler and faster
 // textual comparison to identify the statement type.
@@ -110,6 +152,8 @@ func Preview(sql string) StatementType {
 		return StmtUse
 	case "analyze", "describe", "desc", "explain", "repair", "optimize":
 		return StmtOther
+	case "grant", "revoke":
+		return StmtPriv
 	}
 	return StmtUnknown
 }
@@ -144,6 +188,8 @@ func (s StatementType) String() string {
 		return "USE"
 	case StmtOther:
 		return "OTHER"
+	case StmtPriv:
+		return "PRIV"
 	default:
 		return "UNKNOWN"
 	}
@@ -153,6 +199,25 @@ func (s StatementType) String() string {
 func IsDML(sql string) bool {
 	switch Preview(sql) {
 	case StmtInsert, StmtReplace, StmtUpdate, StmtDelete:
+		return true
+	}
+	return false
+}
+
+//IsDMLStatement returns true if the query is an INSERT, UPDATE or DELETE statement.
+func IsDMLStatement(stmt Statement) bool {
+	switch stmt.(type) {
+	case *Insert, *Update, *Delete:
+		return true
+	}
+
+	return false
+}
+
+//IsVschemaDDL returns true if the query is an Vschema alter ddl.
+func IsVschemaDDL(ddl *DDL) bool {
+	switch ddl.Action {
+	case CreateVindexStr, AddVschemaTableStr, DropVschemaTableStr, AddColVindexStr, DropColVindexStr, AddSequenceStr, AddAutoIncStr:
 		return true
 	}
 	return false
@@ -169,10 +234,33 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 	case *AndExpr:
 		filters = SplitAndExpression(filters, node.Left)
 		return SplitAndExpression(filters, node.Right)
-	case *ParenExpr:
-		return SplitAndExpression(filters, node.Expr)
 	}
 	return append(filters, node)
+}
+
+// TableFromStatement returns the qualified table name for the query.
+// This works only for select statements.
+func TableFromStatement(sql string) (TableName, error) {
+	stmt, err := Parse(sql)
+	if err != nil {
+		return TableName{}, err
+	}
+	sel, ok := stmt.(*Select)
+	if !ok {
+		return TableName{}, fmt.Errorf("unrecognized statement: %s", sql)
+	}
+	if len(sel.From) != 1 {
+		return TableName{}, fmt.Errorf("table expression is complex")
+	}
+	aliased, ok := sel.From[0].(*AliasedTableExpr)
+	if !ok {
+		return TableName{}, fmt.Errorf("table expression is complex")
+	}
+	tableName, ok := aliased.Expr.(TableName)
+	if !ok {
+		return TableName{}, fmt.Errorf("table expression is complex")
+	}
+	return tableName, nil
 }
 
 // GetTableName returns the table name from the SimpleTableExpr
@@ -297,28 +385,37 @@ func ExtractSetValues(sql string) (keyValues map[SetKey]interface{}, scope strin
 	}
 	result := make(map[SetKey]interface{})
 	for _, expr := range setStmt.Exprs {
-		scope := ImplicitStr
+		var scope string
 		key := expr.Name.Lowered()
-		switch {
-		case strings.HasPrefix(key, "@@global."):
-			scope = GlobalStr
-			key = strings.TrimPrefix(key, "@@global.")
-		case strings.HasPrefix(key, "@@session."):
-			scope = SessionStr
-			key = strings.TrimPrefix(key, "@@session.")
-		case strings.HasPrefix(key, "@@vitess_metadata."):
-			scope = VitessMetadataStr
-			key = strings.TrimPrefix(key, "@@vitess_metadata.")
-		case strings.HasPrefix(key, "@@"):
-			key = strings.TrimPrefix(key, "@@")
-		}
 
-		if strings.HasPrefix(expr.Name.Lowered(), "@@") {
-			if setStmt.Scope != "" && scope != "" {
-				return nil, "", fmt.Errorf("unsupported in set: mixed using of variable scope")
+		switch expr.Name.at {
+		case NoAt:
+			scope = ImplicitStr
+		case SingleAt:
+			scope = VariableStr
+		case DoubleAt:
+			switch {
+			case strings.HasPrefix(key, "global."):
+				scope = GlobalStr
+				key = strings.TrimPrefix(key, "global.")
+			case strings.HasPrefix(key, "session."):
+				scope = SessionStr
+				key = strings.TrimPrefix(key, "session.")
+			case strings.HasPrefix(key, "vitess_metadata."):
+				scope = VitessMetadataStr
+				key = strings.TrimPrefix(key, "vitess_metadata.")
+			default:
+				scope = SessionStr
 			}
+
+			// This is what correctly allows us to handle queries such as "set @@session.`autocommit`=1"
+			// it will remove backticks and double quotes that might surround the part after the first period
 			_, out := NewStringTokenizer(key).Scan()
 			key = string(out)
+		}
+
+		if setStmt.Scope != "" && scope != "" {
+			return nil, "", fmt.Errorf("unsupported in set: mixed using of variable scope")
 		}
 
 		setKey := SetKey{
@@ -333,6 +430,12 @@ func ExtractSetValues(sql string) (keyValues map[SetKey]interface{}, scope strin
 				result[setKey] = strings.ToLower(string(expr.Val))
 			case IntVal:
 				num, err := strconv.ParseInt(string(expr.Val), 0, 64)
+				if err != nil {
+					return nil, "", err
+				}
+				result[setKey] = num
+			case FloatVal:
+				num, err := strconv.ParseFloat(string(expr.Val), 64)
 				if err != nil {
 					return nil, "", err
 				}

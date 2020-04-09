@@ -20,8 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"reflect"
-	"testing"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -30,27 +28,16 @@ import (
 
 var errRejected = errors.New("rejected")
 
-type dummyChecker struct {
-}
-
-func (dummyChecker) CheckMySQL() {}
-
-var DummyChecker = dummyChecker{}
-
 type testUtils struct{}
 
 func newTestUtils() *testUtils {
 	return &testUtils{}
 }
 
-func (util *testUtils) checkEqual(t *testing.T, expected interface{}, result interface{}) {
-	if !reflect.DeepEqual(expected, result) {
-		t.Fatalf("expect to get: %v, but got: %v", expected, result)
-	}
-}
-
 func (util *testUtils) newDBConfigs(db *fakesqldb.DB) *dbconfigs.DBConfigs {
-	return dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
+	params, _ := db.ConnParams().MysqlParams()
+	cp := *params
+	return dbconfigs.NewTestDBConfigs(cp, cp, "")
 }
 
 func (util *testUtils) newQueryServiceConfig() tabletenv.TabletConfig {

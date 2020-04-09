@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -118,6 +119,32 @@ var (
 	// Errorf can be overridden during tests
 	Errorf = log.Errorf
 )
+
+// Env defines the functions supported by TabletServer
+// that the sub-componennts need to access.
+type Env interface {
+	CheckMySQL()
+	Config() *TabletConfig
+	DBConfigs() *dbconfigs.DBConfigs
+}
+
+type testEnv struct {
+	config    *TabletConfig
+	dbconfigs *dbconfigs.DBConfigs
+}
+
+// NewTestEnv creates an Env that can be used for tests.
+// CheckMySQL is a no-op.
+func NewTestEnv(config *TabletConfig, dbconfigs *dbconfigs.DBConfigs) Env {
+	return &testEnv{
+		config:    config,
+		dbconfigs: dbconfigs,
+	}
+}
+
+func (*testEnv) CheckMySQL()                        {}
+func (te *testEnv) Config() *TabletConfig           { return te.config }
+func (te *testEnv) DBConfigs() *dbconfigs.DBConfigs { return te.dbconfigs }
 
 // RecordUserQuery records the query data against the user.
 func RecordUserQuery(ctx context.Context, tableName sqlparser.TableIdent, queryType string, duration int64) {

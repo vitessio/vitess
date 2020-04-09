@@ -93,7 +93,7 @@ func (r *v2Resolver) keyspaceID(row []sqltypes.Value) ([]byte, error) {
 // table.
 type v3Resolver struct {
 	shardingColumnIndex int
-	vindex              vindexes.Vindex
+	vindex              vindexes.SingleColumn
 }
 
 // newV3ResolverFromTableDefinition returns a keyspaceIDResolver for a v3 table.
@@ -119,7 +119,8 @@ func newV3ResolverFromTableDefinition(keyspaceSchema *vindexes.KeyspaceSchema, t
 
 	return &v3Resolver{
 		shardingColumnIndex: columnIndex,
-		vindex:              colVindex.Vindex,
+		// Only SingleColumn vindexes are returned by FindVindexForSharding.
+		vindex: colVindex.Vindex.(vindexes.SingleColumn),
 	}, nil
 }
 
@@ -149,7 +150,8 @@ func newV3ResolverFromColumnList(keyspaceSchema *vindexes.KeyspaceSchema, name s
 
 	return &v3Resolver{
 		shardingColumnIndex: columnIndex,
-		vindex:              colVindex.Vindex,
+		// Only SingleColumn vindexes are returned by FindVindexForSharding.
+		vindex: colVindex.Vindex.(vindexes.SingleColumn),
 	}, nil
 }
 

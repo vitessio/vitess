@@ -17,9 +17,8 @@ limitations under the License.
 package binlogplayer
 
 import (
+	"context"
 	"fmt"
-
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -40,12 +39,12 @@ type DBClient interface {
 
 // dbClientImpl is a real DBClient backed by a mysql connection.
 type dbClientImpl struct {
-	dbConfig *mysql.ConnParams
+	dbConfig dbconfigs.Connector
 	dbConn   *mysql.Conn
 }
 
 // NewDBClient creates a DBClient instance
-func NewDBClient(params *mysql.ConnParams) DBClient {
+func NewDBClient(params dbconfigs.Connector) DBClient {
 	return &dbClientImpl{
 		dbConfig: params,
 	}
@@ -58,18 +57,16 @@ func (dc *dbClientImpl) handleError(err error) {
 }
 
 func (dc *dbClientImpl) DBName() string {
-	return dc.dbConfig.DbName
+	params, _ := dc.dbConfig.MysqlParams()
+	return params.DbName
 }
 
 func (dc *dbClientImpl) Connect() error {
-	params, err := dbconfigs.WithCredentials(dc.dbConfig)
-	if err != nil {
-		return err
-	}
+	var err error
 	ctx := context.Background()
-	dc.dbConn, err = mysql.Connect(ctx, params)
+	dc.dbConn, err = dc.dbConfig.Connect(ctx)
 	if err != nil {
-		return fmt.Errorf("error in connecting to mysql db, err %v", err)
+		return fmt.Errorf("error in connecting to mysql db with connection %v, err %v", dc.dbConn, err)
 	}
 	return nil
 }
@@ -102,10 +99,7 @@ func (dc *dbClientImpl) Rollback() error {
 }
 
 func (dc *dbClientImpl) Close() {
-	if dc.dbConn != nil {
-		dc.dbConn.Close()
-		dc.dbConn = nil
-	}
+	dc.dbConn.Close()
 }
 
 func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {

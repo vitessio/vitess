@@ -279,7 +279,7 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 	defer unlock(&err)
 
 	// validate parameters
-	name, keyRange, err := ValidateShardName(shard)
+	_, keyRange, err := ValidateShardName(shard)
 	if err != nil {
 		return err
 	}
@@ -288,26 +288,19 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 		KeyRange: keyRange,
 	}
 
-	isMasterServing := true
-
-	// start the shard IsMasterServing. If it overlaps with
-	// other shards for some serving types, remove them.
-
-	if IsShardUsingRangeBasedSharding(name) {
-		// if we are using range-based sharding, we don't want
-		// overlapping shards to all serve and confuse the clients.
-		sis, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
-		if err != nil && !IsErrType(err, NoNode) {
-			return err
-		}
-		for _, si := range sis {
-			if si.KeyRange == nil || key.KeyRangesIntersect(si.KeyRange, keyRange) {
-				isMasterServing = false
-			}
+	// Set master as serving only if its keyrange doesn't overlap
+	// with other shards. This applies to unsharded keyspaces also
+	value.IsMasterServing = true
+	sis, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
+	if err != nil && !IsErrType(err, NoNode) {
+		return err
+	}
+	for _, si := range sis {
+		if si.KeyRange == nil || key.KeyRangesIntersect(si.KeyRange, keyRange) {
+			value.IsMasterServing = false
+			break
 		}
 	}
-
-	value.IsMasterServing = isMasterServing
 
 	// Marshal and save.
 	data, err := proto.Marshal(value)
@@ -333,28 +326,33 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 // GetOrCreateShard will return the shard object, or create one if it doesn't
 // already exist. Note the shard creation is protected by a keyspace Lock.
 func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) (si *ShardInfo, err error) {
+	log.Info("GetShard %s/%s", keyspace, shard)
 	si, err = ts.GetShard(ctx, keyspace, shard)
 	if !IsErrType(err, NoNode) {
 		return
 	}
 
 	// create the keyspace, maybe it already exists
+	log.Info("CreateKeyspace %s/%s", keyspace, shard)
 	if err = ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil && !IsErrType(err, NodeExists) {
 		return nil, vterrors.Wrapf(err, "CreateKeyspace(%v) failed", keyspace)
 	}
 
 	// make sure a valid vschema has been loaded
+	log.Info("EnsureVSchema %s/%s", keyspace, shard)
 	if err = ts.EnsureVSchema(ctx, keyspace); err != nil {
 		return nil, vterrors.Wrapf(err, "EnsureVSchema(%v) failed", keyspace)
 	}
 
 	// now try to create with the lock, may already exist
+	log.Info("CreateShard %s/%s", keyspace, shard)
 	if err = ts.CreateShard(ctx, keyspace, shard); err != nil && !IsErrType(err, NodeExists) {
 		return nil, vterrors.Wrapf(err, "CreateShard(%v/%v) failed", keyspace, shard)
 	}
 
 	// try to read the shard again, maybe someone created it
 	// in between the original GetShard and the LockKeyspace
+	log.Info("GetShard %s/%s", keyspace, shard)
 	return ts.GetShard(ctx, keyspace, shard)
 }
 

@@ -30,13 +30,12 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate/grpcvtgateservice"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconntest"
 )
 
 // TestGRPCVTGateConn makes sure the grpc service works
 func TestGRPCVTGateConn(t *testing.T) {
 	// fake service
-	service := vtgateconntest.CreateFakeServer(t)
+	service := CreateFakeServer(t)
 
 	// listen on a random port
 	listener, err := net.Listen("tcp", ":0")
@@ -55,11 +54,11 @@ func TestGRPCVTGateConn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
-	vtgateconntest.RegisterTestDialProtocol(client)
+	RegisterTestDialProtocol(client)
 
 	// run the test suite
-	vtgateconntest.TestSuite(t, client, service)
-	vtgateconntest.TestErrorSuite(t, service)
+	RunTests(t, client, service)
+	RunErrorTests(t, service)
 
 	// and clean up
 	client.Close()
@@ -69,7 +68,7 @@ func TestGRPCVTGateConn(t *testing.T) {
 func TestGRPCVTGateConnAuth(t *testing.T) {
 	var opts []grpc.ServerOption
 	// fake service
-	service := vtgateconntest.CreateFakeServer(t)
+	service := CreateFakeServer(t)
 
 	// listen on a random port
 	listener, err := net.Listen("tcp", ":0")
@@ -110,11 +109,11 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
-	vtgateconntest.RegisterTestDialProtocol(client)
+	RegisterTestDialProtocol(client)
 
 	// run the test suite
-	vtgateconntest.TestSuite(t, client, service)
-	vtgateconntest.TestErrorSuite(t, service)
+	RunTests(t, client, service)
+	RunErrorTests(t, service)
 
 	// and clean up
 	client.Close()
@@ -143,10 +142,10 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
-	vtgateconntest.RegisterTestDialProtocol(client)
+	RegisterTestDialProtocol(client)
 	conn, _ := vtgateconn.DialProtocol(context.Background(), "test", "")
 	// run the test suite
-	_, err = conn.Begin(context.Background())
+	_, err = conn.Session("", nil).Execute(context.Background(), "select * from t", nil)
 	want := "rpc error: code = Unauthenticated desc = username and password must be provided"
 	if err == nil || err.Error() != want {
 		t.Errorf("expected auth failure:\n%v, want\n%s", err, want)

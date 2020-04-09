@@ -42,8 +42,7 @@ func TestTxEngineClose(t *testing.T) {
 	config.TransactionCap = 10
 	config.TransactionTimeout = 0.5
 	config.TxShutDownGracePeriod = 0
-	te := NewTxEngine(nil, config)
-	te.InitDBConfig(dbcfgs)
+	te := NewTxEngine(tabletenv.NewTestEnv(&config, dbcfgs))
 
 	// Normal close.
 	te.open()
@@ -467,8 +466,7 @@ func setupTxEngine(db *fakesqldb.DB) *TxEngine {
 	config.TransactionCap = 10
 	config.TransactionTimeout = 0.5
 	config.TxShutDownGracePeriod = 0
-	te := NewTxEngine(nil, config)
-	te.InitDBConfig(dbcfgs)
+	te := NewTxEngine(tabletenv.NewTestEnv(&config, dbcfgs))
 	return te
 }
 

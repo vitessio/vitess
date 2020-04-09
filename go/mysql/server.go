@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	proxyproto "github.com/pires/go-proxyproto"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -37,7 +38,7 @@ import (
 const (
 	// DefaultServerVersion is the default server version we're sending to the client.
 	// Can be changed.
-	DefaultServerVersion = "5.5.10-Vitess"
+	DefaultServerVersion = "5.7.9-Vitess"
 
 	// timing metric keys
 	connectTimingKey  = "Connect"
@@ -54,6 +55,7 @@ var (
 	timings    = stats.NewTimings("MysqlServerTimings", "MySQL server timings", "operation")
 	connCount  = stats.NewGauge("MysqlServerConnCount", "Active MySQL server connections")
 	connAccept = stats.NewCounter("MysqlServerConnAccepted", "Connections accepted by MySQL server")
+	connRefuse = stats.NewCounter("MysqlServerConnRefused", "Connections refused by MySQL server")
 	connSlow   = stats.NewCounter("MysqlServerConnSlow", "Connections that took more than the configured mysql_slow_connect_warn_threshold to establish")
 
 	connCountByTLSVer = stats.NewGaugesWithSingleLabel("MysqlServerConnCountByTLSVer", "Active MySQL server connections by TLS version", "tls")
@@ -144,11 +146,11 @@ type Listener struct {
 	// AllowClearTextWithoutTLS needs to be set for the
 	// mysql_clear_password authentication method to be accepted
 	// by the server when TLS is not in use.
-	AllowClearTextWithoutTLS bool
+	AllowClearTextWithoutTLS sync2.AtomicBool
 
 	// SlowConnectWarnThreshold if non-zero specifies an amount of time
 	// beyond which a warning is logged to identify the slow connection
-	SlowConnectWarnThreshold time.Duration
+	SlowConnectWarnThreshold sync2.AtomicDuration
 
 	// The following parameters are changed by the Accept routine.
 
@@ -184,10 +186,14 @@ func NewFromListener(l net.Listener, authServer AuthServer, handler Handler, con
 }
 
 // NewListener creates a new Listener.
-func NewListener(protocol, address string, authServer AuthServer, handler Handler, connReadTimeout time.Duration, connWriteTimeout time.Duration) (*Listener, error) {
+func NewListener(protocol, address string, authServer AuthServer, handler Handler, connReadTimeout time.Duration, connWriteTimeout time.Duration, proxyProtocol bool) (*Listener, error) {
 	listener, err := net.Listen(protocol, address)
 	if err != nil {
 		return nil, err
+	}
+	if proxyProtocol {
+		proxyListener := &proxyproto.Listener{Listener: listener}
+		return NewFromListener(proxyListener, authServer, handler, connReadTimeout, connWriteTimeout)
 	}
 
 	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout)
@@ -243,6 +249,7 @@ func (l *Listener) Accept() {
 		conn, err := l.listener.Accept()
 		if err != nil {
 			// Close() was probably called.
+			connRefuse.Add(1)
 			return
 		}
 
@@ -272,9 +279,9 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		if x := recover(); x != nil {
 			log.Errorf("mysql_server caught panic:\n%v\n%s", x, tb.Stack(4))
 		}
-		// We call flush here in case there's a premature return after
+		// We call endWriterBuffering here in case there's a premature return after
 		// startWriterBuffering is called
-		c.flush()
+		c.endWriterBuffering()
 
 		conn.Close()
 	}()
@@ -375,9 +382,8 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		if err != nil {
 			return
 		}
-		//lint:ignore SA4006 This line is required because the binary protocol requires padding with 0
-		data := make([]byte, 21)
-		data = append(salt, byte(0x00))
+		// The binary protocol requires padding with 0
+		data := append(salt, byte(0x00))
 		if err := c.writeAuthSwitchRequest(MysqlNativePassword, data); err != nil {
 			log.Errorf("Error writing auth switch packet for %s: %v", c, err)
 			return
@@ -403,7 +409,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		// The server wants to use something else, re-negotiate.
 
 		// The negotiation happens in clear text. Let's check we can.
-		if !l.AllowClearTextWithoutTLS && c.Capabilities&CapabilityClientSSL == 0 {
+		if !l.AllowClearTextWithoutTLS.Get() && c.Capabilities&CapabilityClientSSL == 0 {
 			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Cannot use clear text authentication over non-SSL connections.")
 			return
 		}
@@ -446,7 +452,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	// Log a warning if it took too long to connect
 	connectTime := time.Since(acceptTime)
-	if l.SlowConnectWarnThreshold != 0 && connectTime > l.SlowConnectWarnThreshold {
+	if threshold := l.SlowConnectWarnThreshold.Get(); threshold != 0 && connectTime > threshold {
 		connSlow.Add(1)
 		log.Warningf("Slow connection from %s: %v", c, connectTime)
 	}
@@ -483,6 +489,7 @@ func (l *Listener) isShutdown() bool {
 // It returns the salt data.
 func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, enableTLS bool) ([]byte, error) {
 	capabilities := CapabilityClientLongPassword |
+		CapabilityClientFoundRows |
 		CapabilityClientLongFlag |
 		CapabilityClientConnectWithDB |
 		CapabilityClientProtocol41 |

@@ -725,64 +725,6 @@ func testMessageAckPanics(t *testing.T, conn queryservice.QueryService, f *FakeQ
 	})
 }
 
-func testSplitQuery(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
-	t.Log("testSplitQuery")
-	ctx := context.Background()
-	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	qsl, err := conn.SplitQuery(
-		ctx,
-		TestTarget,
-		SplitQueryBoundQuery,
-		SplitQuerySplitColumns,
-		SplitQuerySplitCount,
-		SplitQueryNumRowsPerQueryPart,
-		SplitQueryAlgorithm,
-	)
-	if err != nil {
-		t.Fatalf("SplitQuery failed: %v", err)
-	}
-	if !proto.Equal(
-		&querypb.SplitQueryResponse{Queries: qsl},
-		&querypb.SplitQueryResponse{Queries: SplitQueryQuerySplitList},
-	) {
-		t.Errorf("Unexpected result from SplitQuery: got %v wanted %v", qsl, SplitQueryQuerySplitList)
-	}
-}
-
-func testSplitQueryError(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
-	t.Log("testSplitQueryError")
-	f.HasError = true
-	testErrorHelper(t, f, "SplitQuery", func(ctx context.Context) error {
-		_, err := conn.SplitQuery(
-			ctx,
-			TestTarget,
-			SplitQueryBoundQuery,
-			SplitQuerySplitColumns,
-			SplitQuerySplitCount,
-			SplitQueryNumRowsPerQueryPart,
-			SplitQueryAlgorithm,
-		)
-		return err
-	})
-	f.HasError = false
-}
-
-func testSplitQueryPanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
-	t.Log("testSplitQueryPanics")
-	testPanicHelper(t, f, "SplitQuery", func(ctx context.Context) error {
-		_, err := conn.SplitQuery(
-			ctx,
-			TestTarget,
-			SplitQueryBoundQuery,
-			SplitQuerySplitColumns,
-			SplitQuerySplitCount,
-			SplitQueryNumRowsPerQueryPart,
-			SplitQueryAlgorithm,
-		)
-		return err
-	})
-}
-
 // this test is a bit of a hack: we write something on the channel
 // upon registration, and we also return an error, so the streaming query
 // ends right there. Otherwise we have no real way to trigger a real
@@ -828,97 +770,6 @@ func testStreamHealthPanics(t *testing.T, conn queryservice.QueryService, f *Fak
 	})
 }
 
-func testUpdateStream(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
-	t.Log("testUpdateStream")
-	ctx := context.Background()
-	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	i := 0
-	err := conn.UpdateStream(ctx, TestTarget, UpdateStreamPosition, UpdateStreamTimestamp, func(qr *querypb.StreamEvent) error {
-		switch i {
-		case 0:
-			if !proto.Equal(qr, &UpdateStreamStreamEvent1) {
-				t.Errorf("Unexpected result1 from UpdateStream: got %v wanted %v", qr, UpdateStreamStreamEvent1)
-			}
-		case 1:
-			if !proto.Equal(qr, &UpdateStreamStreamEvent2) {
-				t.Errorf("Unexpected result2 from UpdateStream: got %v wanted %v", qr, UpdateStreamStreamEvent2)
-			}
-		default:
-			t.Fatal("callback should not be called any more")
-		}
-		i++
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("UpdateStream failed: %v", err)
-	}
-}
-
-func testUpdateStreamError(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
-	t.Log("testUpdateStreamError")
-	f.HasError = true
-	testErrorHelper(t, f, "UpdateStream", func(ctx context.Context) error {
-		f.ErrorWait = make(chan struct{})
-		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		return conn.UpdateStream(ctx, TestTarget, UpdateStreamPosition, UpdateStreamTimestamp, func(qr *querypb.StreamEvent) error {
-			// For some errors, the call can be retried.
-			select {
-			case <-f.ErrorWait:
-				return nil
-			default:
-			}
-			if !proto.Equal(qr, &UpdateStreamStreamEvent1) {
-				t.Errorf("Unexpected result1 from UpdateStream: got %v wanted %v", qr, UpdateStreamStreamEvent1)
-			}
-			// signal to the server that the first result has been received
-			close(f.ErrorWait)
-			return nil
-		})
-	})
-	f.HasError = false
-}
-
-func testUpdateStreamPanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
-	t.Log("testUpdateStreamPanics")
-	// early panic is before sending the Fields, that is returned
-	// by the UpdateStream call itself, or as the first error
-	// by ErrFunc
-	f.UpdateStreamPanicsEarly = true
-	testPanicHelper(t, f, "UpdateStream.Early", func(ctx context.Context) error {
-		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		return conn.UpdateStream(ctx, TestTarget, UpdateStreamPosition, UpdateStreamTimestamp, func(qr *querypb.StreamEvent) error {
-			return nil
-		})
-	})
-
-	// late panic is after sending Fields
-	f.UpdateStreamPanicsEarly = false
-	testPanicHelper(t, f, "UpdateStream.Late", func(ctx context.Context) error {
-		f.PanicWait = make(chan struct{})
-		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		i := 0
-		return conn.UpdateStream(ctx, TestTarget, UpdateStreamPosition, UpdateStreamTimestamp, func(qr *querypb.StreamEvent) error {
-			// For some errors, the call can be retried.
-			select {
-			case <-f.PanicWait:
-				return nil
-			default:
-			}
-			switch i {
-			case 0:
-				if !proto.Equal(qr, &UpdateStreamStreamEvent1) {
-					t.Errorf("Unexpected result1 from UpdateStream: got %v wanted %v", qr, UpdateStreamStreamEvent1)
-				}
-				close(f.PanicWait)
-			default:
-				t.Fatal("callback should not be called any more")
-			}
-			i++
-			return nil
-		})
-	})
-}
-
 // TestSuite runs all the tests.
 // If fake.TestingGateway is set, we only test the calls that can go through
 // a gateway.
@@ -943,8 +794,6 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testBeginExecuteBatch,
 		testMessageStream,
 		testMessageAck,
-		testSplitQuery,
-		testUpdateStream,
 
 		// error test cases
 		testBeginError,
@@ -967,8 +816,6 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testBeginExecuteBatchErrorInExecuteBatch,
 		testMessageStreamError,
 		testMessageAckError,
-		testSplitQueryError,
-		testUpdateStreamError,
 
 		// panic test cases
 		testBeginPanics,
@@ -989,8 +836,6 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testBeginExecuteBatchPanics,
 		testMessageStreamPanics,
 		testMessageAckPanics,
-		testSplitQueryPanics,
-		testUpdateStreamPanics,
 	}
 
 	if !fake.TestingGateway {

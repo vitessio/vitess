@@ -234,17 +234,11 @@ message BoundQuery {
 
 // ExecuteOptions is passed around for all Execute calls.
 message ExecuteOptions {
-  // This used to be exclude_field_names, which was replaced by
+  // 1 used to be exclude_field_names, which was replaced by
   // IncludedFields enum below
-  reserved 1;
-
-  // If set, we will try to include an EventToken with the responses.
-  bool include_event_token = 2;
-
-  // If set, the fresher field may be set as a result comparison to this token.
-  // This is a shortcut so the application doesn't need to care about
-  // comparing EventTokens.
-  EventToken compare_event_token = 3;
+  // 2 used to be include_event_token
+  // 3 used to be compare_event_token
+  reserved 1, 2, 3;
 
   enum IncludedFields {
     TYPE_AND_NAME = 0;
@@ -345,18 +339,6 @@ message Row {
   bytes values = 2;
 }
 
-// ResultExtras contains optional out-of-band information. Usually the
-// extras are requested by adding ExecuteOptions flags.
-message ResultExtras {
-  // event_token is populated if the include_event_token flag is set
-  // in ExecuteOptions.
-  EventToken event_token = 1;
-
-  // If set, it means the data returned with this result is fresher
-  // than the compare_token passed in the ExecuteOptions.
-  bool fresher = 2;
-}
-
 // QueryResult is returned by Execute and ExecuteStream.
 //
 // As returned by Execute, len(fields) is always equal to len(row)
@@ -367,11 +349,13 @@ message ResultExtras {
 // len(QueryResult[0].fields) is always equal to len(row) (for each
 // row in rows for each QueryResult in QueryResult[1:]).
 message QueryResult {
+  // This used to be ResultExtras.
+  reserved 5;
+
   repeated Field fields = 1;
   uint64 rows_affected = 2;
   uint64 insert_id = 3;
   repeated Row rows = 4;
-  ResultExtras extras = 5;
 }
 
 // QueryWarning is used to convey out of band query execution warnings
@@ -676,42 +660,6 @@ message MessageAckResponse {
   QueryResult result = 1;
 }
 
-// SplitQueryRequest is the payload for SplitQuery sent by VTGate to a VTTablet.
-// See vtgate.SplitQueryRequest for more details.
-message SplitQueryRequest {
-  vtrpc.CallerID effective_caller_id = 1;
-  VTGateCallerID immediate_caller_id = 2;
-  Target target = 3;
-
-  BoundQuery query = 4;
-  repeated string split_column = 5;
-
-  // Exactly one of the following must be nonzero.
-  int64 split_count = 6;
-  int64 num_rows_per_query_part = 8;
-
-  enum Algorithm {
-    EQUAL_SPLITS = 0;
-    FULL_SCAN = 1;
-  }
-  Algorithm algorithm = 9;
-}
-
-// QuerySplit represents one query to execute on the tablet
-message QuerySplit {
-  // query is the query to execute
-  BoundQuery query = 1;
-
-  // row_count is the approximate row count the query will return
-  int64 row_count = 2;
-}
-
-// SplitQueryResponse is returned by SplitQuery and represents all the queries
-// to execute in order to get the entire data set.
-message SplitQueryResponse {
-  repeated QuerySplit queries = 1;
-}
-
 // StreamHealthRequest is the payload for StreamHealth
 message StreamHealthRequest {
 }
@@ -776,14 +724,10 @@ message AggregateStats {
 }
 
 // StreamHealthResponse is streamed by StreamHealth on a regular basis.
-// When StreamHealth is used between a vtgate and vttablet:
+// It is expected to be used between a vtgate and vttablet:
 // - target describes the tablet.
 // - realtime_stats is set.
-// - aggregate_stats is not set.
-// When StreamHealth is used between two vtgates:
-// - target describes the group of tablets.
-// - realtime_stats is not set.
-// - aggregate_stats is set.
+// - aggregate_stats is not set (deprecated)
 message StreamHealthResponse {
   // target is the current server type. Only queries with that exact Target
   // record will be accepted (the cell may not match, however).
@@ -826,37 +770,17 @@ message StreamHealthResponse {
   // It is only filled in if the information is about a tablet.
   RealtimeStats realtime_stats = 4;
 
+  reserved 6;
+  // Deprecated
   // AggregateStats constrains information about the group of tablet status.
   // It is only filled in if the information is about a group of tablets.
-  AggregateStats aggregate_stats = 6;
+  // AggregateStats aggregate_stats = 6;
 
   // tablet_alias is the alias of the sending tablet. The discovery/healthcheck.go
   // code uses it to verify that it's talking to the correct tablet and that it
   // hasn't changed in the meantime e.g. due to tablet restarts where ports or
   // ips have been reused but assigned differently.
   topodata.TabletAlias tablet_alias = 5;
-}
-
-// UpdateStreamRequest is the payload for UpdateStream. At most one of
-// position and timestamp can be set. If neither is set, we will start
-// streaming from the current binlog position.
-message UpdateStreamRequest {
-  vtrpc.CallerID effective_caller_id = 1;
-  VTGateCallerID immediate_caller_id = 2;
-  Target target = 3;
-
-  // If position is set, we will start the streaming from that replication
-  // position. Incompatible with timestamp.
-  string position = 4;
-
-  // If timestamp is set, we will start the streaming from the first
-  // event in the binlogs that have that timestamp. Incompatible with position.
-  int64 timestamp = 5;
-}
-
-// UpdateStreamResponse is returned by UpdateStream
-message UpdateStreamResponse {
-  StreamEvent event = 1;
 }
 
 // TransactionState represents the state of a distributed transaction.

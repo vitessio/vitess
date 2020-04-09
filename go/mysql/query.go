@@ -261,7 +261,7 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field) ([]sqltypes.Value,
 		}
 		var s []byte
 		var ok bool
-		s, pos, ok = readLenEncStringAsBytes(data, pos)
+		s, pos, ok = readLenEncStringAsBytesCopy(data, pos)
 		if !ok {
 			return nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "decoding string failed")
 		}
@@ -609,7 +609,7 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 		return sqltypes.NULL, pos, true
 	case sqltypes.Int8:
 		val, pos, ok := readByte(data, pos)
-		return sqltypes.NewInt64(int64(val)), pos, ok
+		return sqltypes.NewInt64(int64(int8(val))), pos, ok
 	case sqltypes.Uint8:
 		val, pos, ok := readByte(data, pos)
 		return sqltypes.NewUint64(uint64(val)), pos, ok
@@ -618,13 +618,13 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 		return sqltypes.NewUint64(uint64(val)), pos, ok
 	case sqltypes.Int16, sqltypes.Year:
 		val, pos, ok := readUint16(data, pos)
-		return sqltypes.NewInt64(int64(val)), pos, ok
+		return sqltypes.NewInt64(int64(int16(val))), pos, ok
 	case sqltypes.Uint24, sqltypes.Uint32:
 		val, pos, ok := readUint32(data, pos)
 		return sqltypes.NewUint64(uint64(val)), pos, ok
 	case sqltypes.Int24, sqltypes.Int32:
 		val, pos, ok := readUint32(data, pos)
-		return sqltypes.NewInt64(int64(val)), pos, ok
+		return sqltypes.NewInt64(int64(int32(val))), pos, ok
 	case sqltypes.Float32:
 		val, pos, ok := readUint32(data, pos)
 		return sqltypes.NewFloat64(float64(math.Float32frombits(uint32(val)))), pos, ok
@@ -680,7 +680,7 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 				strconv.Itoa(int(hour)) + ":" +
 				strconv.Itoa(int(minute)) + ":" +
 				strconv.Itoa(int(second)) + "." +
-				strconv.Itoa(int(microSecond))
+				fmt.Sprintf("%06d", microSecond)
 
 			return sqltypes.NewVarChar(val), pos, ok
 		case 0x07:
@@ -781,7 +781,7 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 			val += strconv.Itoa(int(hours)) + ":" +
 				strconv.Itoa(int(minute)) + ":" +
 				strconv.Itoa(int(second)) + "." +
-				strconv.Itoa(int(microSecond))
+				fmt.Sprintf("%06d", microSecond)
 
 			return sqltypes.NewVarChar(val), pos, ok
 		case 0x08:
@@ -823,7 +823,7 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 		}
 	case sqltypes.Decimal, sqltypes.Text, sqltypes.Blob, sqltypes.VarChar, sqltypes.VarBinary, sqltypes.Char,
 		sqltypes.Bit, sqltypes.Enum, sqltypes.Set, sqltypes.Geometry, sqltypes.Binary, sqltypes.TypeJSON:
-		val, pos, ok := readLenEncStringAsBytes(data, pos)
+		val, pos, ok := readLenEncStringAsBytesCopy(data, pos)
 		return sqltypes.MakeTrusted(sqltypes.VarBinary, val), pos, ok
 	default:
 		return sqltypes.NULL, pos, false
@@ -1063,7 +1063,7 @@ func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
 		}
 	}
 
-	return c.flush()
+	return nil
 }
 
 func (c *Conn) writeBinaryRow(fields []*querypb.Field, row []sqltypes.Value) error {

@@ -1,2 +1,0 @@
-Flask==1.0
-pyyaml==4.2b1

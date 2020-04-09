@@ -28,10 +28,10 @@ import (
 )
 
 var (
-	_ Vindex = (*LookupUnicodeLooseMD5Hash)(nil)
-	_ Lookup = (*LookupUnicodeLooseMD5Hash)(nil)
-	_ Vindex = (*LookupUnicodeLooseMD5HashUnique)(nil)
-	_ Lookup = (*LookupUnicodeLooseMD5HashUnique)(nil)
+	_ SingleColumn = (*LookupUnicodeLooseMD5Hash)(nil)
+	_ Lookup       = (*LookupUnicodeLooseMD5Hash)(nil)
+	_ SingleColumn = (*LookupUnicodeLooseMD5HashUnique)(nil)
+	_ Lookup       = (*LookupUnicodeLooseMD5HashUnique)(nil)
 )
 
 func init() {
@@ -92,6 +92,11 @@ func (lh *LookupUnicodeLooseMD5Hash) Cost() int {
 // IsUnique returns false since the Vindex is not unique.
 func (lh *LookupUnicodeLooseMD5Hash) IsUnique() bool {
 	return false
+}
+
+// NeedsVCursor satisfies the Vindex interface.
+func (lh *LookupUnicodeLooseMD5Hash) NeedsVCursor() bool {
+	return true
 }
 
 // Map can map ids to key.Destination objects.
@@ -253,6 +258,11 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) Cost() int {
 
 // IsUnique returns true since the Vindex is unique.
 func (lhu *LookupUnicodeLooseMD5HashUnique) IsUnique() bool {
+	return true
+}
+
+// NeedsVCursor satisfies the Vindex interface.
+func (lhu *LookupUnicodeLooseMD5HashUnique) NeedsVCursor() bool {
 	return true
 }
 

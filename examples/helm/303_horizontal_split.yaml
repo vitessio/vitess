@@ -1,8 +1,6 @@
 topology:
   cells:
     - name: "zone1"
-      etcd:
-        replicas: 1
       vtctld:
         replicas: 1
       vtgate:
@@ -54,10 +52,6 @@ jobs:
     cell: "zone1"
     command: "SplitClone -min_healthy_rdonly_tablets=1 customer/0"
 
-etcd:
-  replicas: 1
-  resources:
-
 vtctld:
   serviceType: "NodePort"
   resources:
@@ -67,7 +61,7 @@ vtgate:
   resources:
 
 vttablet:
-  mysqlSize: "test"
+  mysqlSize: "prod"
   resources:
   mysqlResources:
 

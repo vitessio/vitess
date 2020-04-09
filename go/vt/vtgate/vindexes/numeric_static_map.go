@@ -30,7 +30,7 @@ import (
 )
 
 var (
-	_ Vindex = (*NumericStaticMap)(nil)
+	_ SingleColumn = (*NumericStaticMap)(nil)
 )
 
 // NumericLookupTable stores the mapping of keys.
@@ -78,6 +78,11 @@ func (*NumericStaticMap) Cost() int {
 // IsUnique returns true since the Vindex is unique.
 func (vind *NumericStaticMap) IsUnique() bool {
 	return true
+}
+
+// NeedsVCursor satisfies the Vindex interface.
+func (vind *NumericStaticMap) NeedsVCursor() bool {
+	return false
 }
 
 // Verify returns true if ids and ksids match.

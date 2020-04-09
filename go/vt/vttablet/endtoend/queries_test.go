@@ -33,7 +33,7 @@ RowsAffected mismatch: 2, want 1
 Rewritten mismatch:
 '["select eid, id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1" "select /* fail */ eid, id from vitess_a union select eid, id from vitess_b limit 10001"]' does not match
 '["select eid id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1" "select /* fail */ eid, id from vitess_a union select eid, id from vitess_b"]'
-Plan mismatch: PASS_SELECT, want aa`
+Plan mismatch: Select, want aa`
 
 func TestTheFramework(t *testing.T) {
 	client := framework.NewClient()
@@ -59,7 +59,8 @@ func TestTheFramework(t *testing.T) {
 	}
 }
 
-// TODO(sougou): break this up into smaller parts.
+// Most of these tests are not really needed because the queries are mostly pass-through.
+// They're left as is because they still demonstrate the variety of constructs being supported.
 func TestQueries(t *testing.T) {
 	client := framework.NewClient()
 
@@ -280,8 +281,8 @@ func TestQueries(t *testing.T) {
 				{"1"},
 			},
 			Rewritten: []string{
-				"select (eid) from vitess_a where 1 != 1",
-				"select /* parenthesised col */ (eid) from vitess_a where eid = 1 and id = 1 limit 10001",
+				"select eid from vitess_a where 1 != 1",
+				"select /* parenthesised col */ eid from vitess_a where eid = 1 and id = 1 limit 10001",
 			},
 			RowsAffected: 1,
 		},
@@ -354,7 +355,7 @@ func TestQueries(t *testing.T) {
 			},
 			Rewritten: []string{
 				"select * from vitess_a where 1 != 1",
-				"select /* (condition) */ * from vitess_a where (eid = 1) limit 10001",
+				"select /* (condition) */ * from vitess_a where eid = 1 limit 10001",
 			},
 			RowsAffected: 2,
 		},
@@ -478,7 +479,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert /* simple */ into vitess_a values (2, 1, 'aaaa', 'bbbb')",
 					Rewritten: []string{
-						"insert /* simple */ into vitess_a(eid, id, name, foo) values (2, 1, 'aaaa', 'bbbb') /* _stream vitess_a (eid id ) (2 1 )",
+						"insert /* simple */ into vitess_a values (2, 1, 'aaaa', 'bbbb')",
 					},
 					RowsAffected: 1,
 				},
@@ -501,7 +502,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert /* simple */ ignore into vitess_a values (2, 1, 'aaaa', 'bbbb')",
 					Rewritten: []string{
-						"insert /* simple */ ignore into vitess_a(eid, id, name, foo) values (2, 1, 'aaaa', 'bbbb') /* _stream vitess_a (eid id ) (2 1 )",
+						"insert /* simple */ ignore into vitess_a values (2, 1, 'aaaa', 'bbbb')",
 					},
 					RowsAffected: 1,
 				},
@@ -516,7 +517,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert /* simple */ ignore into vitess_a values (2, 1, 'cccc', 'cccc')",
 					Rewritten: []string{
-						"insert /* simple */ ignore into vitess_a(eid, id, name, foo) values (2, 1, 'cccc', 'cccc') /* _stream vitess_a (eid id ) (2 1 )",
+						"insert /* simple */ ignore into vitess_a values (2, 1, 'cccc', 'cccc')",
 					},
 				},
 				framework.TestQuery("commit"),
@@ -538,7 +539,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert /* qualified */ into vitess_a(eid, id, name, foo) values (3, 1, 'aaaa', 'cccc')",
 					Rewritten: []string{
-						"insert /* qualified */ into vitess_a(eid, id, name, foo) values (3, 1, 'aaaa', 'cccc') /* _stream vitess_a (eid id ) (3 1 )",
+						"insert /* qualified */ into vitess_a(eid, id, name, foo) values (3, 1, 'aaaa', 'cccc')",
 					},
 					RowsAffected: 1,
 				},
@@ -561,7 +562,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into vitess_mixed_case(col1, col2) values(1, 2)",
 					Rewritten: []string{
-						"insert into vitess_mixed_case(col1, col2) values (1, 2) /* _stream vitess_mixed_case (Col1 ) (1 )",
+						"insert into vitess_mixed_case(col1, col2) values (1, 2)",
 					},
 					RowsAffected: 1,
 				},
@@ -585,7 +586,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert /* auto_increment */ into vitess_e(name, foo) values ('aaaa', 'cccc')",
 					Rewritten: []string{
-						"insert /* auto_increment */ into vitess_e(name, foo) values ('aaaa', 'cccc') /* _stream vitess_e (eid id name ) (null 1 'YWFhYQ==' )",
+						"insert /* auto_increment */ into vitess_e(name, foo) values ('aaaa', 'cccc')",
 					},
 					RowsAffected: 1,
 				},
@@ -609,7 +610,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert /* auto_increment */ into vitess_e(eid, name, foo) values (NULL, 'aaaa', 'cccc')",
 					Rewritten: []string{
-						"insert /* auto_increment */ into vitess_e(eid, name, foo) values (null, 'aaaa', 'cccc') /* _stream vitess_e (eid id name ) (null 1 'YWFhYQ==' )",
+						"insert /* auto_increment */ into vitess_e(eid, name, foo) values (null, 'aaaa', 'cccc')",
 					},
 					RowsAffected: 1,
 				},
@@ -632,7 +633,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert /* num default */ into vitess_a(eid, name, foo) values (3, 'aaaa', 'cccc')",
 					Rewritten: []string{
-						"insert /* num default */ into vitess_a(eid, name, foo) values (3, 'aaaa', 'cccc') /* _stream vitess_a (eid id ) (3 1 )",
+						"insert /* num default */ into vitess_a(eid, name, foo) values (3, 'aaaa', 'cccc')",
 					},
 					RowsAffected: 1,
 				},
@@ -655,7 +656,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert /* string default */ into vitess_f(id) values (1)",
 					Rewritten: []string{
-						"insert /* string default */ into vitess_f(id) values (1) /* _stream vitess_f (vb ) ('YWI=' )",
+						"insert /* string default */ into vitess_f(id) values (1)",
 					},
 					RowsAffected: 1,
 				},
@@ -684,7 +685,7 @@ func TestQueries(t *testing.T) {
 						"id":   sqltypes.Int64BindVariable(1),
 					},
 					Rewritten: []string{
-						"insert /* bind values */ into vitess_a(eid, id, name, foo) values (4, 1, 'aaaa', 'cccc') /* _stream vitess_a (eid id ) (4 1 )",
+						"insert /* bind values */ into vitess_a(eid, id, name, foo) values (4, 1, 'aaaa', 'cccc')",
 					},
 					RowsAffected: 1,
 				},
@@ -713,7 +714,7 @@ func TestQueries(t *testing.T) {
 						"v4": sqltypes.StringBindVariable("cccc"),
 					},
 					Rewritten: []string{
-						"insert /* positional values */ into vitess_a(eid, id, name, foo) values (4, 1, 'aaaa', 'cccc') /* _stream vitess_a (eid id ) (4 1 )",
+						"insert /* positional values */ into vitess_a(eid, id, name, foo) values (4, 1, 'aaaa', 'cccc')",
 					},
 					RowsAffected: 1,
 				},
@@ -736,7 +737,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into vitess_a(id, eid, foo, name) values (-1, 5, 'aaa', 'bbb')",
 					Rewritten: []string{
-						"insert into vitess_a(id, eid, foo, name) values (-1, 5, 'aaa', 'bbb') /* _stream vitess_a (eid id ) (5 -1 )",
+						"insert into vitess_a(id, eid, foo, name) values (-1, 5, 'aaa', 'bbb')",
 					},
 					RowsAffected: 1,
 				},
@@ -759,8 +760,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert /* subquery */ into vitess_a(eid, name, foo) select eid, name, foo from vitess_c",
 					Rewritten: []string{
-						"select eid, name, foo from vitess_c limit 10001",
-						"insert /* subquery */ into vitess_a(eid, name, foo) values (10, 'abcd', '20'), (11, 'bcde', '30') /* _stream vitess_a (eid id ) (10 1 ) (11 1 )",
+						"insert /* subquery */ into vitess_a(eid, name, foo) select eid, name, foo from vitess_c",
 					},
 					RowsAffected: 2,
 				},
@@ -777,8 +777,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into vitess_e(id, name, foo) select eid, name, foo from vitess_c",
 					Rewritten: []string{
-						"select eid, name, foo from vitess_c limit 10001",
-						"insert into vitess_e(id, name, foo) values (10, 'abcd', '20'), (11, 'bcde', '30') /* _stream vitess_e (eid id name ) (null 10 'YWJjZA==' ) (null 11 'YmNkZQ==' )",
+						"insert into vitess_e(id, name, foo) select eid, name, foo from vitess_c",
 					},
 					RowsAffected: 2,
 				},
@@ -797,29 +796,13 @@ func TestQueries(t *testing.T) {
 			},
 		},
 		&framework.MultiCase{
-			Name: "reorganize partition with bindvar",
-			Cases: []framework.Testable{
-				framework.TestQuery("begin"),
-				&framework.TestCase{
-					Query: "alter table vitess_part reorganize partition p1 into (partition p2 values less than (:bv), partition p3 values less than (maxvalue))",
-					BindVars: map[string]*querypb.BindVariable{
-						"bv": sqltypes.Int64BindVariable(1000),
-					},
-					Rewritten: []string{
-						"alter table vitess_part reorganize partition p1 into (partition p2 values less than (1000), partition p3 values less than (maxvalue))",
-					},
-				},
-				framework.TestQuery("commit"),
-			},
-		},
-		&framework.MultiCase{
 			Name: "multi-value",
 			Cases: []framework.Testable{
 				framework.TestQuery("begin"),
 				&framework.TestCase{
 					Query: "insert into vitess_a(eid, id, name, foo) values (5, 1, '', ''), (7, 1, '', '')",
 					Rewritten: []string{
-						"insert into vitess_a(eid, id, name, foo) values (5, 1, '', ''), (7, 1, '', '') /* _stream vitess_a (eid id ) (5 1 ) (7 1 )",
+						"insert into vitess_a(eid, id, name, foo) values (5, 1, '', ''), (7, 1, '', '')",
 					},
 					RowsAffected: 2,
 				},
@@ -843,7 +826,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into upsert_test(id1, id2) values (1, 1) on duplicate key update id2 = 1",
 					Rewritten: []string{
-						"insert into upsert_test(id1, id2) values (1, 1) /* _stream upsert_test (id1 ) (1 )",
+						"insert into upsert_test(id1, id2) values (1, 1) on duplicate key update id2 = 1",
 					},
 					RowsAffected: 1,
 				},
@@ -856,8 +839,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into upsert_test(id1, id2) values (1, 2) on duplicate key update id2 = 2",
 					Rewritten: []string{
-						"insert into upsert_test(id1, id2) values (1, 2) /* _stream upsert_test (id1 ) (1 )",
-						"update upsert_test set id2 = 2 where id1 in (1) /* _stream upsert_test (id1 ) (1 )",
+						"insert into upsert_test(id1, id2) values (1, 2) on duplicate key update id2 = 2",
 					},
 					RowsAffected: 2,
 				},
@@ -870,15 +852,13 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into upsert_test(id1, id2) values (1, 2) on duplicate key update id2 = 2",
 					Rewritten: []string{
-						"insert into upsert_test(id1, id2) values (1, 2) /* _stream upsert_test (id1 ) (1 )",
-						"update upsert_test set id2 = 2 where id1 in (1) /* _stream upsert_test (id1 ) (1 )",
+						"insert into upsert_test(id1, id2) values (1, 2) on duplicate key update id2 = 2",
 					},
 				},
 				&framework.TestCase{
 					Query: "insert ignore into upsert_test(id1, id2) values (1, 3) on duplicate key update id2 = 3",
 					Rewritten: []string{
-						"insert into upsert_test(id1, id2) values (1, 3) /* _stream upsert_test (id1 ) (1 )",
-						"update upsert_test set id2 = 3 where id1 in (1) /* _stream upsert_test (id1 ) (1 )",
+						"insert ignore into upsert_test(id1, id2) values (1, 3) on duplicate key update id2 = 3",
 					},
 					RowsAffected: 2,
 				},
@@ -901,7 +881,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into upsert_test(id1, id2) values (1, 1) on duplicate key update id1 = 1",
 					Rewritten: []string{
-						"insert into upsert_test(id1, id2) values (1, 1) /* _stream upsert_test (id1 ) (1 )",
+						"insert into upsert_test(id1, id2) values (1, 1) on duplicate key update id1 = 1",
 					},
 					RowsAffected: 1,
 				},
@@ -914,8 +894,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into upsert_test(id1, id2) values (1, 2) on duplicate key update id1 = 2",
 					Rewritten: []string{
-						"insert into upsert_test(id1, id2) values (1, 2) /* _stream upsert_test (id1 ) (1 )",
-						"update upsert_test set id1 = 2 where id1 in (1) /* _stream upsert_test (id1 ) (1 ) (2 )",
+						"insert into upsert_test(id1, id2) values (1, 2) on duplicate key update id1 = 2",
 					},
 					RowsAffected: 2,
 				},
@@ -938,7 +917,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into upsert_test(id1, id2) values (1, 1) on duplicate key update id2 = values(id2) + 1",
 					Rewritten: []string{
-						"insert into upsert_test(id1, id2) values (1, 1) /* _stream upsert_test (id1 ) (1 )",
+						"insert into upsert_test(id1, id2) values (1, 1) on duplicate key update id2 = values(id2) + 1",
 					},
 					RowsAffected: 1,
 				},
@@ -951,8 +930,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into upsert_test(id1, id2) values (1, 2) on duplicate key update id2 = values(id2) + 1",
 					Rewritten: []string{
-						"insert into upsert_test(id1, id2) values (1, 2) /* _stream upsert_test (id1 ) (1 )",
-						"update upsert_test set id2 = (2) + 1 where id1 in (1) /* _stream upsert_test (id1 ) (1 )",
+						"insert into upsert_test(id1, id2) values (1, 2) on duplicate key update id2 = values(id2) + 1",
 					},
 					RowsAffected: 2,
 				},
@@ -965,8 +943,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into upsert_test(id1, id2) values (1, 2) on duplicate key update id2 = values(id1)",
 					Rewritten: []string{
-						"insert into upsert_test(id1, id2) values (1, 2) /* _stream upsert_test (id1 ) (1 )",
-						"update upsert_test set id2 = (1) where id1 in (1) /* _stream upsert_test (id1 ) (1 )",
+						"insert into upsert_test(id1, id2) values (1, 2) on duplicate key update id2 = values(id1)",
 					},
 				},
 				&framework.TestCase{
@@ -978,8 +955,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert ignore into upsert_test(id1, id2) values (1, 3) on duplicate key update id2 = greatest(values(id1), values(id2))",
 					Rewritten: []string{
-						"insert into upsert_test(id1, id2) values (1, 3) /* _stream upsert_test (id1 ) (1 )",
-						"update upsert_test set id2 = greatest((1), (3)) where id1 in (1) /* _stream upsert_test (id1 ) (1 )",
+						"insert ignore into upsert_test(id1, id2) values (1, 3) on duplicate key update id2 = greatest(values(id1), values(id2))",
 					},
 					RowsAffected: 2,
 				},
@@ -1002,7 +978,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "update /* pk */ vitess_a set foo='bar' where eid = 1 and id = 1",
 					Rewritten: []string{
-						"update /* pk */ vitess_a set foo = 'bar' where (eid = 1 and id = 1) /* _stream vitess_a (eid id ) (1 1 )",
+						"update /* pk */ vitess_a set foo = 'bar' where eid = 1 and id = 1 limit 10001",
 					},
 					RowsAffected: 1,
 				},
@@ -1025,7 +1001,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "update /* pk */ vitess_a set foo='bar' where eid = 1 and id in (1, 2)",
 					Rewritten: []string{
-						"update /* pk */ vitess_a set foo = 'bar' where (eid = 1 and id = 1) or (eid = 1 and id = 2) /* _stream vitess_a (eid id ) (1 1 ) (1 2 )",
+						"update /* pk */ vitess_a set foo = 'bar' where eid = 1 and id in (1, 2) limit 10001",
 					},
 					RowsAffected: 2,
 				},
@@ -1049,8 +1025,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "update /* pk */ vitess_a set foo='bar' where eid in (1) and id in (1, 2)",
 					Rewritten: []string{
-						"select eid, id from vitess_a where eid in (1) and id in (1, 2) limit 10001 for update",
-						"update /* pk */ vitess_a set foo = 'bar' where (eid = 1 and id = 1) or (eid = 1 and id = 2) /* _stream vitess_a (eid id ) (1 1 ) (1 2 )",
+						"update /* pk */ vitess_a set foo = 'bar' where eid in (1) and id in (1, 2) limit 10001",
 					},
 					RowsAffected: 2,
 				},
@@ -1074,8 +1049,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "update /* pk */ vitess_a set foo='bar' where eid in (1, 2) and id in (1, 2)",
 					Rewritten: []string{
-						"select eid, id from vitess_a where eid in (1, 2) and id in (1, 2) limit 10001 for update",
-						"update /* pk */ vitess_a set foo = 'bar' where (eid = 1 and id = 1) or (eid = 1 and id = 2) /* _stream vitess_a (eid id ) (1 1 ) (1 2 )",
+						"update /* pk */ vitess_a set foo = 'bar' where eid in (1, 2) and id in (1, 2) limit 10001",
 					},
 					RowsAffected: 2,
 				},
@@ -1099,7 +1073,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "update vitess_a set eid = 2 where eid = 1 and id = 1",
 					Rewritten: []string{
-						"update vitess_a set eid = 2 where (eid = 1 and id = 1) /* _stream vitess_a (eid id ) (1 1 ) (2 1 )",
+						"update vitess_a set eid = 2 where eid = 1 and id = 1 limit 10001",
 					},
 					RowsAffected: 1,
 				},
@@ -1122,8 +1096,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "update /* pk */ vitess_a set foo='bar' where id = 1",
 					Rewritten: []string{
-						"select eid, id from vitess_a where id = 1 limit 10001 for update",
-						"update /* pk */ vitess_a set foo = 'bar' where (eid = 1 and id = 1) /* _stream vitess_a (eid id ) (1 1 )",
+						"update /* pk */ vitess_a set foo = 'bar' where id = 1 limit 10001",
 					},
 					RowsAffected: 1,
 				},
@@ -1146,8 +1119,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "update /* pk */ vitess_a set foo='bar' where eid = 1 limit 1",
 					Rewritten: []string{
-						"select eid, id from vitess_a where eid = 1 limit 1 for update",
-						"update /* pk */ vitess_a set foo = 'bar' where (eid = 1 and id = 1) /* _stream vitess_a (eid id ) (1 1 )",
+						"update /* pk */ vitess_a set foo = 'bar' where eid = 1 limit 1",
 					},
 					RowsAffected: 1,
 				},
@@ -1170,8 +1142,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "update /* pk */ vitess_a set foo='bar' where eid = 1 order by id desc limit 1",
 					Rewritten: []string{
-						"select eid, id from vitess_a where eid = 1 order by id desc limit 1 for update",
-						"update /* pk */ vitess_a set foo = 'bar' where (eid = 1 and id = 2) order by id desc /* _stream vitess_a (eid id ) (1 2 )",
+						"update /* pk */ vitess_a set foo = 'bar' where eid = 1 order by id desc limit 1",
 					},
 					RowsAffected: 1,
 				},
@@ -1194,8 +1165,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "update vitess_a set foo='bar'",
 					Rewritten: []string{
-						"select eid, id from vitess_a limit 10001 for update",
-						"update vitess_a set foo = 'bar' where (eid = 1 and id = 1) or (eid = 1 and id = 2) /* _stream vitess_a (eid id ) (1 1 ) (1 2 )",
+						"update vitess_a set foo = 'bar' limit 10001",
 					},
 					RowsAffected: 2,
 				},
@@ -1223,7 +1193,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "update vitess_f set id=2 where vb='a'",
 					Rewritten: []string{
-						"update vitess_f set id = 2 where vb in ('a') /* _stream vitess_f (vb ) ('YQ==' )",
+						"update vitess_f set id = 2 where vb = 'a' limit 10001",
 					},
 					RowsAffected: 1,
 				},
@@ -1250,7 +1220,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "update vitess_f set id=3 where vb in ('a', 'b')",
 					Rewritten: []string{
-						"update vitess_f set id = 3 where vb in ('a', 'b') /* _stream vitess_f (vb ) ('YQ==' ) ('Yg==' )",
+						"update vitess_f set id = 3 where vb in ('a', 'b') limit 10001",
 					},
 					RowsAffected: 2,
 				},
@@ -1277,8 +1247,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "update vitess_f set id=4 where id >= 0",
 					Rewritten: []string{
-						"select vb from vitess_f where id >= 0 limit 10001 for update",
-						"update vitess_f set id = 4 where vb in ('a', 'b') /* _stream vitess_f (vb ) ('YQ==' ) ('Yg==' )",
+						"update vitess_f set id = 4 where id >= 0 limit 10001",
 					},
 					RowsAffected: 2,
 				},
@@ -1305,7 +1274,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "update vitess_f set id=4 where id < 0",
 					Rewritten: []string{
-						"select vb from vitess_f where id < 0 limit 10001 for update",
+						"update vitess_f set id = 4 where id < 0 limit 10001",
 					},
 				},
 				framework.TestQuery("commit"),
@@ -1329,7 +1298,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "delete /* pk */ from vitess_a where eid = 2 and id = 1",
 					Rewritten: []string{
-						"delete /* pk */ from vitess_a where (eid = 2 and id = 1) /* _stream vitess_a (eid id ) (2 1 )",
+						"delete /* pk */ from vitess_a where eid = 2 and id = 1 limit 10001",
 					},
 					RowsAffected: 1,
 				},
@@ -1347,7 +1316,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "delete /* pk */ from vitess_a where eid = 2 and id in (1, 2)",
 					Rewritten: []string{
-						"delete /* pk */ from vitess_a where (eid = 2 and id = 1) or (eid = 2 and id = 2) /* _stream vitess_a (eid id ) (2 1 ) (2 2 )",
+						"delete /* pk */ from vitess_a where eid = 2 and id in (1, 2) limit 10001",
 					},
 					RowsAffected: 1,
 				},
@@ -1365,8 +1334,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "delete /* pk */ from vitess_a where eid in (2) and id in (1, 2)",
 					Rewritten: []string{
-						"select eid, id from vitess_a where eid in (2) and id in (1, 2) limit 10001 for update",
-						"delete /* pk */ from vitess_a where (eid = 2 and id = 1) /* _stream vitess_a (eid id ) (2 1 )",
+						"delete /* pk */ from vitess_a where eid in (2) and id in (1, 2) limit 10001",
 					},
 					RowsAffected: 1,
 				},
@@ -1384,8 +1352,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "delete /* pk */ from vitess_a where eid in (2, 3) and id in (1, 2)",
 					Rewritten: []string{
-						"select eid, id from vitess_a where eid in (2, 3) and id in (1, 2) limit 10001 for update",
-						"delete /* pk */ from vitess_a where (eid = 2 and id = 1) /* _stream vitess_a (eid id ) (2 1 )",
+						"delete /* pk */ from vitess_a where eid in (2, 3) and id in (1, 2) limit 10001",
 					},
 					RowsAffected: 1,
 				},
@@ -1403,8 +1370,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "delete from vitess_a where eid = 1+1 and id = 1",
 					Rewritten: []string{
-						"select eid, id from vitess_a where eid = 1 + 1 and id = 1 limit 10001 for update",
-						"delete from vitess_a where (eid = 2 and id = 1) /* _stream vitess_a (eid id ) (2 1 )",
+						"delete from vitess_a where eid = 1 + 1 and id = 1 limit 10001",
 					},
 					RowsAffected: 1,
 				},
@@ -1422,8 +1388,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "delete from vitess_a where eid = 2",
 					Rewritten: []string{
-						"select eid, id from vitess_a where eid = 2 limit 10001 for update",
-						"delete from vitess_a where (eid = 2 and id = 1) /* _stream vitess_a (eid id ) (2 1 )",
+						"delete from vitess_a where eid = 2 limit 10001",
 					},
 					RowsAffected: 1,
 				},
@@ -1441,8 +1406,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "delete from vitess_a where eid = 2 limit 1",
 					Rewritten: []string{
-						"select eid, id from vitess_a where eid = 2 limit 1 for update",
-						"delete from vitess_a where (eid = 2 and id = 1) /* _stream vitess_a (eid id ) (2 1 )",
+						"delete from vitess_a where eid = 2 limit 1",
 					},
 					RowsAffected: 1,
 				},
@@ -1461,8 +1425,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "delete from vitess_a where eid = 2 order by id desc",
 					Rewritten: []string{
-						"select eid, id from vitess_a where eid = 2 order by id desc limit 10001 for update",
-						"delete from vitess_a where (eid = 2 and id = 2) or (eid = 2 and id = 1) order by id desc /* _stream vitess_a (eid id ) (2 2 ) (2 1 )",
+						"delete from vitess_a where eid = 2 order by id desc limit 10001",
 					},
 					RowsAffected: 2,
 				},
@@ -1492,7 +1455,7 @@ func TestQueries(t *testing.T) {
 						"mediumu": sqltypes.Int64BindVariable(16777215),
 					},
 					Rewritten: []string{
-						"insert into vitess_ints(tiny, tinyu, small, smallu, medium, mediumu, normal, normalu, big, bigu, y) values (-128, 255, -32768, 65535, -8388608, 16777215, -2147483648, 4294967295, -9223372036854775808, 18446744073709551615, 2012) /* _stream vitess_ints (tiny ) (-128 )",
+						"insert into vitess_ints values (-128, 255, -32768, 65535, -8388608, 16777215, -2147483648, 4294967295, -9223372036854775808, 18446744073709551615, 2012)",
 					},
 				},
 				framework.TestQuery("commit"),
@@ -1519,8 +1482,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into vitess_ints select 2, tinyu, small, smallu, medium, mediumu, normal, normalu, big, bigu, y from vitess_ints",
 					Rewritten: []string{
-						"select 2, tinyu, small, smallu, medium, mediumu, normal, normalu, big, bigu, y from vitess_ints limit 10001",
-						"insert into vitess_ints(tiny, tinyu, small, smallu, medium, mediumu, normal, normalu, big, bigu, y) values (2, 255, -32768, 65535, -8388608, 16777215, -2147483648, 4294967295, -9223372036854775808, 18446744073709551615, 2012) /* _stream vitess_ints (tiny ) (2 )",
+						"insert into vitess_ints select 2, tinyu, small, smallu, medium, mediumu, normal, normalu, big, bigu, y from vitess_ints",
 					},
 				},
 				framework.TestQuery("commit"),
@@ -1543,7 +1505,7 @@ func TestQueries(t *testing.T) {
 						"deci": sqltypes.StringBindVariable("1.99"),
 					},
 					Rewritten: []string{
-						"insert into vitess_fracts(id, deci, num, f, d) values (1, '1.99', '2.99', 3.99, 4.99) /* _stream vitess_fracts (id ) (1 )",
+						"insert into vitess_fracts values (1, '1.99', '2.99', 3.99, 4.99)",
 					},
 				},
 				framework.TestQuery("commit"),
@@ -1570,8 +1532,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into vitess_fracts select 2, deci, num, f, d from vitess_fracts",
 					Rewritten: []string{
-						"select 2, deci, num, f, d from vitess_fracts limit 10001",
-						"insert into vitess_fracts(id, deci, num, f, d) values (2, 1.99, 2.99, 3.99, 4.99) /* _stream vitess_fracts (id ) (2 )",
+						"insert into vitess_fracts select 2, deci, num, f, d from vitess_fracts",
 					},
 				},
 				framework.TestQuery("commit"),
@@ -1599,7 +1560,7 @@ func TestQueries(t *testing.T) {
 						"c":   sqltypes.StringBindVariable("b"),
 					},
 					Rewritten: []string{
-						"insert into vitess_strings(vb, c, vc, b, tb, bl, ttx, tx, en, s) values ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b') /* _stream vitess_strings (vb ) ('YQ==' )",
+						"insert into vitess_strings values ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b')",
 					},
 				},
 				framework.TestQuery("commit"),
@@ -1626,8 +1587,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into vitess_strings select 'b', c, vc, b, tb, bl, ttx, tx, en, s from vitess_strings",
 					Rewritten: []string{
-						"select 'b', c, vc, b, tb, bl, ttx, tx, en, s from vitess_strings limit 10001",
-						"insert into vitess_strings(vb, c, vc, b, tb, bl, ttx, tx, en, s) values ('b', 'b', 'c', 'd\\0\\0\\0', 'e', 'f', 'g', 'h', 'a', 'a,b') /* _stream vitess_strings (vb ) ('Yg==' )",
+						"insert into vitess_strings select 'b', c, vc, b, tb, bl, ttx, tx, en, s from vitess_strings",
 					},
 				},
 				framework.TestQuery("commit"),
@@ -1650,7 +1610,7 @@ func TestQueries(t *testing.T) {
 						"d":  sqltypes.StringBindVariable("2012-01-01"),
 					},
 					Rewritten: []string{
-						"insert into vitess_misc(id, b, d, dt, t, g) values (1, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45', point(1, 2)) /* _stream vitess_misc (id ) (1 )",
+						"insert into vitess_misc values (1, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45', point(1, 2))",
 					},
 				},
 				framework.TestQuery("commit"),
@@ -1678,8 +1638,7 @@ func TestQueries(t *testing.T) {
 					// Skip geometry test. The binary representation is non-trivial to represent as go string.
 					Query: "insert into vitess_misc(id, b, d, dt, t) select 2, b, d, dt, t from vitess_misc",
 					Rewritten: []string{
-						"select 2, b, d, dt, t from vitess_misc limit 10001",
-						"insert into vitess_misc(id, b, d, dt, t) values (2, b'00000001', '2012-01-01', '2012-01-01 15:45:45', '15:45:45') /* _stream vitess_misc (id ) (2 )",
+						"insert into vitess_misc(id, b, d, dt, t) select 2, b, d, dt, t from vitess_misc",
 					},
 				},
 				framework.TestQuery("commit"),
@@ -1731,7 +1690,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into vitess_bool(auto, bval, sval, ival) values (1, false, 'test2', 191) on duplicate key update bval = false",
 					Rewritten: []string{
-						"insert into vitess_bool(auto, bval, sval, ival) values (1, false, 'test2', 191) on duplicate key update bval = false /* _stream vitess_bool (auto ) (1 )",
+						"insert into vitess_bool(auto, bval, sval, ival) values (1, false, 'test2', 191) on duplicate key update bval = false",
 					},
 					RowsAffected: 2,
 				},
@@ -1759,8 +1718,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "update vitess_bool set sval = 'test' where bval is false or ival = 23",
 					Rewritten: []string{
-						"select auto from vitess_bool where bval is false or ival = 23 limit 10001 for update",
-						"update vitess_bool set sval = 'test' where auto in (1, 2, 6, 7, 8, 9) /* _stream vitess_bool (auto ) (1 ) (2 ) (6 ) (7 ) (8 ) (9 )",
+						"update vitess_bool set sval = 'test' where bval is false or ival = 23 limit 10001",
 					},
 					RowsAffected: 6,
 				},
@@ -1825,43 +1783,6 @@ func TestQueries(t *testing.T) {
 	for _, tcase := range testCases {
 		if err := tcase.Test("", client); err != nil {
 			t.Error(err)
-		}
-	}
-}
-
-func TestBitDefault(t *testing.T) {
-	// Default values for bit fields that are PKs are not supported
-	// Does not make sense to use a bit field as PK
-	client := framework.NewClient()
-
-	expectedError := "bit default value: Execute failed: could not create default row for insert without row values: cannot convert value BIT(\"\\x05\") to AST (CallerID: dev)"
-	testCases := []framework.Testable{
-		&framework.MultiCase{
-			Name: "bit default value",
-			Cases: []framework.Testable{
-				framework.TestQuery("begin"),
-				&framework.TestCase{
-					Query: "insert into vitess_bit_default values()",
-					Rewritten: []string{
-						"insert into vitess_bit_default(id) values ('\x05') /* _stream vitess_bit_default (id ) ('BQ==' )",
-					},
-					RowsAffected: 1,
-				},
-				framework.TestQuery("commit"),
-				&framework.TestCase{
-					Query: "select hex(id) from vitess_bit_default",
-					Result: [][]string{
-						{"5"},
-					},
-					RowsAffected: 1,
-				},
-			},
-		},
-	}
-	for _, tcase := range testCases {
-		err := tcase.Test("", client)
-		if err == nil || err.Error() != expectedError {
-			t.Errorf("TestBitDefault result: \n%q\nexpecting\n%q", err.Error(), expectedError)
 		}
 	}
 }

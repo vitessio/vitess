@@ -40,6 +40,12 @@ type fakePrimitive struct {
 	log []string
 }
 
+func (f *fakePrimitive) Inputs() []Primitive {
+	return []Primitive{}
+}
+
+var _ Primitive = (*fakePrimitive)(nil)
+
 func (f *fakePrimitive) rewind() {
 	f.curResult = 0
 	f.log = nil
@@ -116,6 +122,10 @@ func (f *fakePrimitive) ExpectLog(t *testing.T, want []string) {
 	}
 }
 
+func (f *fakePrimitive) NeedsTransaction() bool {
+	return false
+}
+
 func wrapStreamExecute(prim Primitive, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	var result *sqltypes.Result
 	err := prim.StreamExecute(vcursor, bindVars, wantfields, func(r *sqltypes.Result) error {
@@ -130,4 +140,8 @@ func wrapStreamExecute(prim Primitive, vcursor VCursor, bindVars map[string]*que
 		result.RowsAffected = uint64(len(result.Rows))
 	}
 	return result, err
+}
+
+func (f *fakePrimitive) description() PrimitiveDescription {
+	return PrimitiveDescription{OperatorType: "fake"}
 }
