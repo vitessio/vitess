@@ -1178,7 +1178,7 @@ var (
 		output: "show create user",
 	}, {
 		input:  "show create view v",
-		output: "show create view",
+		output: "show create view v",
 	}, {
 		input:  "show databases",
 		output: "show databases",
