@@ -290,6 +290,10 @@ func handleError(err error) {
 func appendToSqlFile(schemaFileNames []string, f *os.File) {
 	for _, file := range schemaFileNames {
 		data, err := ioutil.ReadFile(tablesPath + file)
+		if err != nil {
+			log.Fatalf("reading %s: %s", tablesPath+file, err)
+		}
+
 		_, err = f.Write(data)
 		handleError(err)
 
