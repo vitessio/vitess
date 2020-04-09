@@ -1933,8 +1933,8 @@ func TestKeywords(t *testing.T) {
 		input:  "select /* share and mode as cols */ share, mode from t where share = 'foo'",
 		output: "select /* share and mode as cols */ `share`, `mode` from t where `share` = 'foo'",
 	}, {
-		input:  "select /* unused keywords as cols */ write, varying from t where trailing = 'foo'",
-		output: "select /* unused keywords as cols */ `write`, `varying` from t where `trailing` = 'foo'",
+		input:  "select /* unused keywords as cols */ write, virtual from t where trailing = 'foo'",
+		output: "select /* unused keywords as cols */ `write`, `virtual` from t where `trailing` = 'foo'",
 	}, {
 		input:  "select status from t",
 		output: "select `status` from t",
@@ -2139,11 +2139,18 @@ func TestCreateTable(t *testing.T) {
 			"	col_real2 real(1,2) not null default 1.23,\n" +
 			"	col_double double,\n" +
 			"	col_double2 double(3,4) not null default 1.23,\n" +
+			"	col_double3 double precision not null default 1.23,\n" +
 			"	col_float float,\n" +
 			"	col_float2 float(3,4) not null default 1.23,\n" +
 			"	col_decimal decimal,\n" +
 			"	col_decimal2 decimal(2),\n" +
 			"	col_decimal3 decimal(2,3),\n" +
+			"	col_dec dec,\n" +
+			"	col_dec2 dec(2),\n" +
+			"	col_dec3 dec(2,3),\n" +
+			"	col_fixed fixed,\n" +
+			"	col_fixed2 fixed(2),\n" +
+			"	col_fixed3 fixed(2,3),\n" +
 			"	col_numeric numeric,\n" +
 			"	col_numeric2 numeric(2),\n" +
 			"	col_numeric3 numeric(2,3),\n" +
@@ -2156,10 +2163,30 @@ func TestCreateTable(t *testing.T) {
 			"	col_char2 char(2),\n" +
 			"	col_char3 char(3) character set ascii,\n" +
 			"	col_char4 char(4) character set ascii collate ascii_bin,\n" +
+			"	col_character character,\n" +
+			"	col_character2 character(2),\n" +
+			"	col_character3 character(3) character set ascii,\n" +
+			"	col_character4 character(4) character set ascii collate ascii_bin,\n" +
+			"	col_nchar nchar,\n" +
+			"	col_nchar2 nchar(2),\n" +
+			"	col_national_char national char,\n" +
+			"	col_national_char2 national char(2),\n" +
+			"	col_national_character national character,\n" +
+			"	col_national_character2 national character(2),\n" +
 			"	col_varchar varchar,\n" +
 			"	col_varchar2 varchar(2),\n" +
 			"	col_varchar3 varchar(3) character set ascii,\n" +
 			"	col_varchar4 varchar(4) character set ascii collate ascii_bin,\n" +
+			"	col_character_varying character varying,\n" +
+			"	col_character_varying2 character varying(2),\n" +
+			"	col_character_varying3 character varying(3) character set ascii,\n" +
+			"	col_character_varying4 character varying(4) character set ascii collate ascii_bin,\n" +
+			"	col_nvarchar nvarchar,\n" +
+			"	col_nvarchar2 nvarchar(2),\n" +
+			"	col_national_varchar national varchar,\n" +
+			"	col_national_varchar2 national varchar(2),\n" +
+			"	col_national_character_varying national character varying,\n" +
+			"	col_national_character_varying2 national character varying(2),\n" +
 			"	col_binary binary,\n" +
 			"	col_varbinary varbinary(10),\n" +
 			"	col_tinyblob tinyblob,\n" +
@@ -2169,6 +2196,8 @@ func TestCreateTable(t *testing.T) {
 			"	col_tinytext tinytext,\n" +
 			"	col_text text,\n" +
 			"	col_mediumtext mediumtext,\n" +
+			"	col_long long,\n" +
+			"	col_long_varchar long varchar,\n" +
 			"	col_longtext longtext,\n" +
 			"	col_text text character set ascii collate ascii_bin,\n" +
 			"	col_json json,\n" +

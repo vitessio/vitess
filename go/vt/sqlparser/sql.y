@@ -181,10 +181,10 @@ func skipToEnd(yylex interface{}) {
 
 // Type Tokens
 %token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
-%token <bytes> REAL DOUBLE FLOAT_TYPE DECIMAL NUMERIC
+%token <bytes> REAL DOUBLE FLOAT_TYPE DECIMAL NUMERIC DEC FIXED PRECISION
 %token <bytes> TIME TIMESTAMP DATETIME YEAR
-%token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR 
-%token <bytes> TEXT TINYTEXT MEDIUMTEXT LONGTEXT
+%token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR NVARCHAR NATIONAL VARYING
+%token <bytes> TEXT TINYTEXT MEDIUMTEXT LONGTEXT LONG
 %token <bytes> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON ENUM
 %token <bytes> GEOMETRY POINT LINESTRING POLYGON GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
 
@@ -866,6 +866,12 @@ REAL float_length_opt
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
+| DOUBLE PRECISION float_length_opt
+  {
+    $$ = ColumnType{Type: string($1) + " " + string($2)}
+    $$.Length = $3.Length
+    $$.Scale = $3.Scale
+  }
 | FLOAT_TYPE float_length_opt
   {
     $$ = ColumnType{Type: string($1)}
@@ -879,6 +885,18 @@ REAL float_length_opt
     $$.Scale = $2.Scale
   }
 | NUMERIC decimal_length_opt
+  {
+    $$ = ColumnType{Type: string($1)}
+    $$.Length = $2.Length
+    $$.Scale = $2.Scale
+  }
+| DEC decimal_length_opt
+  {
+    $$ = ColumnType{Type: string($1)}
+    $$.Length = $2.Length
+    $$.Scale = $2.Scale
+  }
+| FIXED decimal_length_opt
   {
     $$ = ColumnType{Type: string($1)}
     $$.Length = $2.Length
@@ -912,9 +930,41 @@ char_type:
   {
     $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, Collate: $4}
   }
+| CHARACTER length_opt charset_opt collate_opt
+  {
+    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, Collate: $4}
+  }
+| NATIONAL CHAR length_opt
+  {
+    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
+  }
+| NATIONAL CHARACTER length_opt
+  {
+    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
+  }
+| NCHAR length_opt
+  {
+    $$ = ColumnType{Type: string($1), Length: $2}
+  }
 | VARCHAR length_opt charset_opt collate_opt
   {
     $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, Collate: $4}
+  }
+| CHARACTER VARYING length_opt charset_opt collate_opt
+  {
+    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3, Charset: $4, Collate: $5}
+  }
+| NVARCHAR length_opt
+  {
+    $$ = ColumnType{Type: string($1), Length: $2}
+  }
+| NATIONAL VARCHAR length_opt
+  {
+    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
+  }
+| NATIONAL CHARACTER VARYING length_opt
+  {
+    $$ = ColumnType{Type: string($1) + " " + string($2) + " " + string($3), Length: $4}
   }
 | BINARY length_opt
   {
@@ -939,6 +989,14 @@ char_type:
 | LONGTEXT charset_opt collate_opt
   {
     $$ = ColumnType{Type: string($1), Charset: $2, Collate: $3}
+  }
+| LONG charset_opt collate_opt
+  {
+    $$ = ColumnType{Type: string($1), Charset: $2, Collate: $3}
+  }
+| LONG VARCHAR charset_opt collate_opt
+  {
+    $$ = ColumnType{Type: string($1) + " " + string($2), Charset: $3, Collate: $4}
   }
 | BLOB
   {
@@ -1008,11 +1066,11 @@ enum_values:
   STRING
   {
     $$ = make([]string, 0, 4)
-    $$ = append($$, "'" + string($1) + "'")
+    $$ = append($$, string($1))
   }
 | enum_values ',' STRING
   {
-    $$ = append($1, "'" + string($3) + "'")
+    $$ = append($1, string($3))
   }
 
 length_opt:

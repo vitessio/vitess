@@ -1215,8 +1215,8 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		buf.Myprintf("(%v)", ct.Length)
 	}
 
-	if ct.EnumValues != nil {
-		buf.Myprintf("(%s)", strings.Join(ct.EnumValues, ", "))
+	if len(ct.EnumValues) > 0 {
+		buf.Myprintf("('%s')", strings.Join(ct.EnumValues, "', '"))
 	}
 
 	opts := make([]string, 0, 16)
