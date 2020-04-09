@@ -357,7 +357,11 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 	// Parse the statement to handle vindex operations
 	// If the statement failed to be properly parsed, fall through anyway
 	// to broadcast the ddl to all shards.
-	stmt, _ := sqlparser.Parse(sql)
+	query, _ := sqlparser.SplitMarginComments(sql)
+	stmt, err := sqlparser.Parse(query)
+	if err != nil {
+		return nil, err
+	}
 	ddl, ok := stmt.(*sqlparser.DDL)
 	if ok {
 		execStart := time.Now()

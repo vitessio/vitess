@@ -1198,6 +1198,15 @@ func TestExecutorDDL(t *testing.T) {
 		"rename table t1 to t2",
 		"truncate table t2",
 		"drop table t2",
+		`create table test_partitioned (
+			id bigint,
+			date_create int,		
+			primary key(id)
+		) Engine=InnoDB	/*!50100 PARTITION BY RANGE (date_create)
+		  (PARTITION p2018_06_14 VALUES LESS THAN (1528959600) ENGINE = InnoDB,
+		   PARTITION p2018_06_15 VALUES LESS THAN (1529046000) ENGINE = InnoDB,
+		   PARTITION p2018_06_16 VALUES LESS THAN (1529132400) ENGINE = InnoDB,
+		   PARTITION p2018_06_17 VALUES LESS THAN (1529218800) ENGINE = InnoDB)*/`,
 	}
 
 	for _, stmt := range stmts {
@@ -1208,9 +1217,9 @@ func TestExecutorDDL(t *testing.T) {
 
 			_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
 			if tc.hasNoKeyspaceErr {
-				assert.Error(t, err, errNoKeyspace)
+				require.EqualError(t, err, "keyspace not specified", "expect query to fail")
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 
 			diff := cmp.Diff(tc.wantCnts, cnts{
