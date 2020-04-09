@@ -34,7 +34,6 @@ type numeric struct {
 	ival int64
 	uval uint64
 	fval float64
-	err  error
 }
 
 var zeroBytes = []byte("0")
@@ -110,7 +109,7 @@ func Multiply(v1, v2 Value) (Value, error) {
 	return castFromNumeric(lresult, lresult.typ), nil
 }
 
-// Float Division for MySQL. Replicates behavior of "/" operator
+// Divide (Float) for MySQL. Replicates behavior of "/" operator
 func Divide(v1, v2 Value) (Value, error) {
 	if v1.IsNull() || v2.IsNull() {
 		return NULL, nil

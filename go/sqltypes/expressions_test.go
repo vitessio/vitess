@@ -28,7 +28,6 @@ func TestEvaluate(t *testing.T) {
 	type testCase struct {
 		name     string
 		e        Expr
-		bindvars map[string]*querypb.BindVariable
 		expected Value
 	}
 
@@ -39,23 +38,39 @@ func TestEvaluate(t *testing.T) {
 			expected: NewInt64(42),
 		},
 		{
-			name:     "40+2",
-			e:        &Addition{i("40"), i("2")},
+			name: "40+2",
+			e: BinaryOp{
+				Expr:  &Addition{},
+				Left:  i("40"),
+				Right: i("2"),
+			},
 			expected: NewInt64(42),
 		},
 		{
-			name:     "40-2",
-			e:        &Subtraction{i("40"), i("2")},
+			name: "40-2",
+			e: BinaryOp{
+				Expr:  &Subtraction{},
+				Left:  i("40"),
+				Right: i("2"),
+			},
 			expected: NewInt64(38),
 		},
 		{
-			name:     "40*2",
-			e:        &Multiplication{i("40"), i("2")},
+			name: "40*2",
+			e: BinaryOp{
+				Expr:  &Multiplication{},
+				Left:  i("40"),
+				Right: i("2"),
+			},
 			expected: NewInt64(80),
 		},
 		{
-			name:     "40/2",
-			e:        &Division{i("40"), i("2")},
+			name: "40/2",
+			e: BinaryOp{
+				Expr:  &Division{},
+				Left:  i("40"),
+				Right: i("2"),
+			},
 			expected: NewFloat64(20),
 		},
 		{

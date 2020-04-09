@@ -24,28 +24,70 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-type ExpressionEnv struct {
-	BindVars map[string]*querypb.BindVariable
-	Row      []Value
-}
+type (
 
-type EvalResult = numeric
+	//ExpressionEnv contains the environment that the expression
+	//evaluates in, such as the current row and bindvars
+	ExpressionEnv struct {
+		BindVars map[string]*querypb.BindVariable
+		Row      []Value
+	}
 
+	// We use this type alias so we don't have to expose the private struct numeric
+	EvalResult = numeric
+
+	// Expr is the interface that all evaluating expressions must implement
+	Expr interface {
+		Evaluate(env ExpressionEnv) (EvalResult, error)
+	}
+
+	//BinaryExpr allows binary expressions to not have to evaluate child expressions - this is done by the BinaryOp
+	BinaryExpr interface {
+		Evaluate(left, right EvalResult) (EvalResult, error)
+	}
+
+	// Expressions
+	LiteralInt   struct{ Val []byte }
+	BindVariable struct{ Key string }
+	BinaryOp     struct {
+		Expr        BinaryExpr
+		Left, Right Expr
+	}
+
+	// Binary ops
+	Addition       struct{}
+	Subtraction    struct{}
+	Multiplication struct{}
+	Division       struct{}
+)
+
+//Value allows for retrieval of the value we need
 func (e EvalResult) Value() Value {
 	return castFromNumeric(e, e.typ)
 }
 
-type Expr interface {
-	Evaluate(env ExpressionEnv) (EvalResult, error)
-}
-
 var _ Expr = (*LiteralInt)(nil)
 var _ Expr = (*BindVariable)(nil)
+var _ Expr = (*BinaryOp)(nil)
+var _ BinaryExpr = (*Addition)(nil)
+var _ BinaryExpr = (*Subtraction)(nil)
+var _ BinaryExpr = (*Multiplication)(nil)
+var _ BinaryExpr = (*Division)(nil)
 
-type LiteralInt struct {
-	Val []byte
+//Evaluate implements the Expr interface
+func (b BinaryOp) Evaluate(env ExpressionEnv) (EvalResult, error) {
+	lVal, err := b.Left.Evaluate(env)
+	if err != nil {
+		return EvalResult{}, err
+	}
+	rVal, err := b.Right.Evaluate(env)
+	if err != nil {
+		return EvalResult{}, err
+	}
+	return b.Expr.Evaluate(lVal, rVal)
 }
 
+//Evaluate implements the Expr interface
 func (l *LiteralInt) Evaluate(env ExpressionEnv) (EvalResult, error) {
 	ival, err := strconv.ParseInt(string(l.Val), 10, 64)
 	if err != nil {
@@ -54,10 +96,7 @@ func (l *LiteralInt) Evaluate(env ExpressionEnv) (EvalResult, error) {
 	return numeric{typ: Int64, ival: ival}, nil
 }
 
-type BindVariable struct {
-	Key string
-}
-
+//Evaluate implements the Expr interface
 func (b *BindVariable) Evaluate(env ExpressionEnv) (EvalResult, error) {
 	val, ok := env.BindVars[b.Key]
 	if !ok {
@@ -71,71 +110,22 @@ func (b *BindVariable) Evaluate(env ExpressionEnv) (EvalResult, error) {
 
 }
 
-var _ Expr = (*Addition)(nil)
-var _ Expr = (*Subtraction)(nil)
-var _ Expr = (*Multiplication)(nil)
-var _ Expr = (*Division)(nil)
-
-type Addition struct {
-	Left, Right Expr
+//Evaluate implements the BinaryOp interface
+func (a *Addition) Evaluate(left, right EvalResult) (EvalResult, error) {
+	return addNumericWithError(left, right)
 }
 
-func (a *Addition) Evaluate(env ExpressionEnv) (EvalResult, error) {
-	lVal, err := a.Left.Evaluate(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	rVal, err := a.Right.Evaluate(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	return addNumericWithError(lVal, rVal)
+//Evaluate implements the BinaryOp interface
+func (s *Subtraction) Evaluate(left, right EvalResult) (EvalResult, error) {
+	return subtractNumericWithError(left, right)
 }
 
-type Subtraction struct {
-	Left, Right Expr
+//Evaluate implements the BinaryOp interface
+func (m *Multiplication) Evaluate(left, right EvalResult) (EvalResult, error) {
+	return multiplyNumericWithError(left, right)
 }
 
-func (s *Subtraction) Evaluate(env ExpressionEnv) (EvalResult, error) {
-	lVal, err := s.Left.Evaluate(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	rVal, err := s.Right.Evaluate(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	return subtractNumericWithError(lVal, rVal)
-}
-
-type Multiplication struct {
-	Left, Right Expr
-}
-
-func (m *Multiplication) Evaluate(env ExpressionEnv) (EvalResult, error) {
-	lVal, err := m.Left.Evaluate(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	rVal, err := m.Right.Evaluate(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	return multiplyNumericWithError(lVal, rVal)
-}
-
-type Division struct {
-	Left, Right Expr
-}
-
-func (d *Division) Evaluate(env ExpressionEnv) (EvalResult, error) {
-	lVal, err := d.Left.Evaluate(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	rVal, err := d.Right.Evaluate(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	return divideNumericWithError(lVal, rVal)
+//Evaluate implements the BinaryOp interface
+func (d *Division) Evaluate(left, right EvalResult) (EvalResult, error) {
+	return divideNumericWithError(left, right)
 }
