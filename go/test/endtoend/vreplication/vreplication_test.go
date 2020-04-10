@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -34,13 +35,10 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	vc = InitCluster(t, cellName)
 	assert.NotNil(t, vc)
 
-	if true {
-		defer vc.TearDown()
-	}
+	defer vc.TearDown()
+
 	cell = vc.Cells[cellName]
-
 	vc.AddKeyspace(t, cell, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100)
-
 	vtgate = cell.Vtgates[0]
 	assert.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
@@ -50,8 +48,8 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	verifyClusterHealth(t)
 	insertInitialData(t)
 	shardCustomer(t, true)
-	shardOrders(t)
 
+	shardOrders(t)
 	shardMerchant(t)
 	materializeProduct(t)
 	materializeMerchantOrders(t)
@@ -114,15 +112,23 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 	if len(want) != len(gotDryRun) {
 		t.Fatalf("want and got: lengths don't match, \nwant\n%s\n\ngot\n%s", strings.Join(want, "\n"), strings.Join(gotDryRun, "\n"))
 	}
-	match := true
+	var match bool
 	for i, w := range want {
-		if strings.TrimSpace(w) != strings.TrimSpace(gotDryRun[i]) {
+		w = strings.TrimSpace(w)
+		g := strings.TrimSpace(gotDryRun[i])
+		if w[0] == '/' {
+			result, _ := regexp.MatchString(w[1:], g)
+			match = result
+		} else {
+			match = (g == w)
+		}
+		if !match {
 			match = false
 			t.Logf("want %s, got %s\n", w, gotDryRun[i])
 		}
 	}
 	if !match {
-		t.Fatal("Results don't match")
+		t.Fatal("Dry run results don't match")
 	}
 }
 
@@ -185,19 +191,31 @@ func shardCustomer(t *testing.T, testReverse bool) {
 	want = []string{
 		"Lock keyspace product",
 		"Lock keyspace customer",
-		"Stop writes on keyspace product, tables customer",
-		"Wait for VReplication on all streams to catchup for upto 30s",
-		"Migrate streams to customer",
-		"Crate reverse replication workflow p2c_reverse",
+		"Stop writes on keyspace product, tables customer:",
+		"/       Keyspace product, Shard 0 at Position",
+		"Wait for VReplication on stopped streams to catchup for upto 30s",
+		"Create reverse replication workflow p2c_reverse",
 		"Create journal entries on source databases",
 		"Enable writes on keyspace customer tables customer",
 		"Switch routing from keyspace product to keyspace customer",
-		"SwitchWrites completed, freeze and delete migration streams on:",
-		"	tablet cell:\"zone1\" uid:200",
-		"	tablet cell:\"zone1\" uid:300",
+		"Following rules will be deleted:",
+		"       customer.customer@rdonly => customer.customer",
+		"       customer.customer@replica => customer.customer",
+		"       customer@rdonly => customer.customer",
+		"       customer@replica => customer.customer",
+		"       product.customer@rdonly => customer.customer",
+		"       product.customer@replica => customer.customer",
+		"Following rules will be added:",
+		"       customer => customer.customer",
+		"       product.customer => customer.customer",
+		"SwitchWrites completed, freeze and delete vreplication streams on:",
+		"       tablet cell:\"zone1\" uid:200 ",
+		"       tablet cell:\"zone1\" uid:300 ",
 		"Start reverse replication streams on:",
-		"	tablet cell:\"zone1\" uid:100",
-		"Delete left-over streams",
+		"       tablet cell:\"zone1\" uid:100 ",
+		"Deleting vreplication streams on:",
+		"       Keyspace customer, Shard -80, Tablet 200, Workflow p2c, DbName vt_customer",
+		"       Keyspace customer, Shard 80-, Tablet 300, Workflow p2c, DbName vt_customer",
 		"Unlock keyspace customer",
 		"Unlock keyspace product",
 	}
