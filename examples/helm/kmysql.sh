@@ -16,8 +16,8 @@
 
 # This is a convenience script to run the mysql client against the local example.
 
-host=$(minikube service vtgate-zone1 --format "{{.IP}}" | tail -n 1)
-port=$(minikube service vtgate-zone1 --format "{{.Port}}" | tail -n 1)
+host=$(minikube service vtgate-zone1 --url=true --format="{{.IP}}" | tail -n 1)
+port=$(minikube service vtgate-zone1 --url=true --format="{{.Port}}" | tail -n 1)
 
 if [ -z $port ]; then 
 	#This checks K8s running on an single node by kubeadm

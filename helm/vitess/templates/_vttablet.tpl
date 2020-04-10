@@ -130,7 +130,7 @@ spec:
         type: {{ $tablet.type | quote }}
     spec:
       serviceAccountName: vttablet
-      terminationGracePeriodSeconds: 60000000
+      terminationGracePeriodSeconds: {{ $defaultVttablet.terminationGracePeriodSeconds | default 60000000 }}
 {{ include "pod-security" . | indent 6 }}
 {{ include "vttablet-affinity" (tuple $cellClean $keyspaceClean $shardClean $cell.region) | indent 6 }}
 
