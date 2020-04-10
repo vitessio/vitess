@@ -61,6 +61,8 @@ vttablet:
   mysqlSize: "prod"
   resources:
   mysqlResources:
+  # It's generally not recommended to override this value for production usage.
+  terminationGracePeriodSeconds: 1
 
 vtworker:
   resources:
