@@ -30,7 +30,7 @@ import (
 func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
 	sel := stmt.(*sqlparser.Select)
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(sel)))
-	if err := pb.processSelect(sel, nil); err != nil {
+	if err := pb.processSelect(sel, nil, true); err != nil {
 		return nil, err
 	}
 	if err := pb.bldr.Wireup(pb.bldr, pb.jt); err != nil {
@@ -74,8 +74,8 @@ func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 // The LIMIT clause is the last construct of a query. If it cannot be
 // pushed into a route, then a primitive is created on top of any
 // of the above trees to make it discard unwanted rows.
-func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) error {
-	if checkForDual(sel) && outer == nil {
+func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, canRunLocally bool) error {
+	if checkForDual(sel) && outer == nil && canRunLocally {
 		exprs := make([]sqltypes.Expr, len(sel.SelectExprs))
 		cols := make([]string, len(sel.SelectExprs))
 		for i, e := range sel.SelectExprs {

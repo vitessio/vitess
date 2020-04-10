@@ -104,7 +104,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 			spb := newPrimitiveBuilder(pb.vschema, pb.jt)
 			switch stmt := node.Select.(type) {
 			case *sqlparser.Select:
-				if err := spb.processSelect(stmt, pb.st); err != nil {
+				if err := spb.processSelect(stmt, pb.st, false); err != nil {
 					return false, err
 				}
 			case *sqlparser.Union:
@@ -230,7 +230,7 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(nodes ...sqlparser.SQ
 					return true, nil
 				}
 				spb := newPrimitiveBuilder(pb.vschema, pb.jt)
-				if err := spb.processSelect(nodeType, pb.st); err != nil {
+				if err := spb.processSelect(nodeType, pb.st, false); err != nil {
 					samePlan = false
 					return false, err
 				}
