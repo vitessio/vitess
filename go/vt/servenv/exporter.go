@@ -130,6 +130,11 @@ func (e *Exporter) resetLocked() {
 	e.sp.reset()
 }
 
+// Name returns the name of the exporter.
+func (e *Exporter) Name() string {
+	return e.name
+}
+
 // URLPrefix returns the URL prefix for the exporter.
 func (e *Exporter) URLPrefix() string {
 	// There are two other places where this logic is duplicated:

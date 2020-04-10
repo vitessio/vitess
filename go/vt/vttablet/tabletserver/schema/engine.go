@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -65,8 +64,6 @@ type Engine struct {
 	ticks *timer.Timer
 }
 
-var schemaOnce sync.Once
-
 // NewEngine creates a new Engine.
 func NewEngine(env tabletenv.Env) *Engine {
 	reloadTime := time.Duration(env.Config().SchemaReloadTime * 1e9)
@@ -79,21 +76,19 @@ func NewEngine(env tabletenv.Env) *Engine {
 		ticks:      timer.NewTimer(reloadTime),
 		reloadTime: reloadTime,
 	}
-	schemaOnce.Do(func() {
-		_ = stats.NewGaugeDurationFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
+	_ = env.Exporter().NewGaugeDurationFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
 
-		http.Handle("/debug/schema", se)
-		http.HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
-			// Ensure schema engine is Open. If vttablet came up in a non_serving role,
-			// the schema engine may not have been initialized.
-			err := se.Open()
-			if err != nil {
-				w.Write([]byte(err.Error()))
-				return
-			}
+	env.Exporter().HandleFunc("/debug/schema", se.handleDebugSchema)
+	env.Exporter().HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
+		// Ensure schema engine is Open. If vttablet came up in a non_serving role,
+		// the schema engine may not have been initialized.
+		err := se.Open()
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			return
+		}
 
-			schemazHandler(se.GetSchema(), w, r)
-		})
+		schemazHandler(se.GetSchema(), w, r)
 	})
 	return se
 }
@@ -187,7 +182,7 @@ func (se *Engine) reload(ctx context.Context) error {
 	start := time.Now()
 	defer func() {
 		log.Infof("Time taken to load the schema: %v", time.Since(start))
-		tabletenv.LogError()
+		se.env.LogError()
 	}()
 
 	conn, err := se.conns.Get(ctx)
@@ -360,7 +355,7 @@ func (se *Engine) GetSchema() map[string]*Table {
 	return tables
 }
 
-func (se *Engine) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+func (se *Engine) handleDebugSchema(response http.ResponseWriter, request *http.Request) {
 	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
 		acl.SendError(response, err)
 		return

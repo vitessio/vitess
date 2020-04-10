@@ -27,7 +27,6 @@ import (
 
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -86,7 +85,7 @@ func NewWriter(env tabletenv.Env, alias topodatapb.TabletAlias) *Writer {
 		interval:    config.HeartbeatInterval,
 		ticks:       timer.NewTimer(config.HeartbeatInterval),
 		errorLog:    logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
-		pool:        connpool.New(env, config.PoolNamePrefix+"HeartbeatWritePool", 1, 0, time.Duration(config.IdleTimeout*1e9)),
+		pool:        connpool.New(env, "HeartbeatWritePool", 1, 0, time.Duration(config.IdleTimeout*1e9)),
 	}
 }
 
@@ -153,7 +152,7 @@ func (w *Writer) Close() {
 // and we also execute them with an isolated connection that turns off the binlog and
 // is closed at the end.
 func (w *Writer) initializeTables(cp dbconfigs.Connector) error {
-	conn, err := dbconnpool.NewDBConnection(cp, stats.NewTimings("", "", ""))
+	conn, err := dbconnpool.NewDBConnection(cp)
 	if err != nil {
 		return vterrors.Wrap(err, "Failed to create connection for heartbeat")
 	}
@@ -199,7 +198,7 @@ func (w *Writer) bindHeartbeatVars(query string) (string, error) {
 
 // writeHeartbeat updates the heartbeat row for this tablet with the current time in nanoseconds.
 func (w *Writer) writeHeartbeat() {
-	defer tabletenv.LogError()
+	defer w.env.LogError()
 	ctx, cancel := context.WithDeadline(context.Background(), w.now().Add(w.interval))
 	defer cancel()
 	update, err := w.bindHeartbeatVars(sqlUpdateHeartbeat)

@@ -172,7 +172,7 @@ func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altere
 			continue
 		}
 		if me.managers[name] != nil {
-			tabletenv.InternalErrors.Add("Messages", 1)
+			me.tsv.Stats().InternalErrors.Add("Messages", 1)
 			log.Errorf("Newly created table already exists in messages: %s", name)
 			continue
 		}

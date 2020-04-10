@@ -35,14 +35,13 @@ import (
 func TestTxEngineClose(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
-	testUtils := newTestUtils()
-	dbcfgs := testUtils.newDBConfigs(db)
+	dbcfgs := newDBConfigs(db)
 	ctx := context.Background()
 	config := tabletenv.DefaultQsConfig
 	config.TransactionCap = 10
 	config.TransactionTimeout = 0.5
 	config.TxShutDownGracePeriod = 0
-	te := NewTxEngine(tabletenv.NewTestEnv(&config, dbcfgs))
+	te := NewTxEngine(tabletenv.NewTestEnv(&config, dbcfgs, "TabletServerTest"))
 
 	// Normal close.
 	te.open()
@@ -460,13 +459,12 @@ func TestWithInnerTests(outerT *testing.T) {
 }
 
 func setupTxEngine(db *fakesqldb.DB) *TxEngine {
-	testUtils := newTestUtils()
-	dbcfgs := testUtils.newDBConfigs(db)
+	dbcfgs := newDBConfigs(db)
 	config := tabletenv.DefaultQsConfig
 	config.TransactionCap = 10
 	config.TransactionTimeout = 0.5
 	config.TxShutDownGracePeriod = 0
-	te := NewTxEngine(tabletenv.NewTestEnv(&config, dbcfgs))
+	te := NewTxEngine(tabletenv.NewTestEnv(&config, dbcfgs, "TabletServerTest"))
 	return te
 }
 
