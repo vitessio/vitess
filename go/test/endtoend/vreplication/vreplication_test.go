@@ -106,6 +106,7 @@ func insertMoreCustomers(t *testing.T, numCustomers int) {
 func validateDryRunResults(t *testing.T, output string, want []string) {
 	t.Helper()
 	assert.NotEmpty(t, output)
+
 	gotDryRun := strings.Split(output, "\n")
 	assert.True(t, len(gotDryRun) > 3)
 	gotDryRun = gotDryRun[3 : len(gotDryRun)-1]
@@ -117,6 +118,7 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 		w = strings.TrimSpace(w)
 		g := strings.TrimSpace(gotDryRun[i])
 		if w[0] == '/' {
+			w = strings.TrimSpace(w[1:])
 			result, _ := regexp.MatchString(w[1:], g)
 			match = result
 		} else {
@@ -173,11 +175,7 @@ func shardCustomer(t *testing.T, testReverse bool) {
 	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+cell.Name, "-tablet_type=rdonly", "customer.p2c"); err != nil {
 		t.Fatalf("SwitchReads error: %s\n", output)
 	}
-	want := []string{
-		"Lock keyspace product",
-		"Switch reads for tables customer to keyspace customer",
-		"Unlock keyspace product",
-	}
+	want := dryRunResultsReadCustomerShard
 	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+cell.Name, "-tablet_type=replica", "-dry_run", "customer.p2c"); err != nil {
 		t.Fatalf("SwitchReads Dry Run error: %s\n", output)
 	}
@@ -188,37 +186,7 @@ func shardCustomer(t *testing.T, testReverse bool) {
 
 	assert.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTabReplica, "customer", query, query))
 	assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", query, query))
-	want = []string{
-		"Lock keyspace product",
-		"Lock keyspace customer",
-		"Stop writes on keyspace product, tables customer:",
-		"/       Keyspace product, Shard 0 at Position",
-		"Wait for VReplication on stopped streams to catchup for upto 30s",
-		"Create reverse replication workflow p2c_reverse",
-		"Create journal entries on source databases",
-		"Enable writes on keyspace customer tables customer",
-		"Switch routing from keyspace product to keyspace customer",
-		"Following rules will be deleted:",
-		"       customer.customer@rdonly => customer.customer",
-		"       customer.customer@replica => customer.customer",
-		"       customer@rdonly => customer.customer",
-		"       customer@replica => customer.customer",
-		"       product.customer@rdonly => customer.customer",
-		"       product.customer@replica => customer.customer",
-		"Following rules will be added:",
-		"       customer => customer.customer",
-		"       product.customer => customer.customer",
-		"SwitchWrites completed, freeze and delete vreplication streams on:",
-		"       tablet cell:\"zone1\" uid:200 ",
-		"       tablet cell:\"zone1\" uid:300 ",
-		"Start reverse replication streams on:",
-		"       tablet cell:\"zone1\" uid:100 ",
-		"Deleting vreplication streams on:",
-		"       Keyspace customer, Shard -80, Tablet 200, Workflow p2c, DbName vt_customer",
-		"       Keyspace customer, Shard 80-, Tablet 300, Workflow p2c, DbName vt_customer",
-		"Unlock keyspace customer",
-		"Unlock keyspace product",
-	}
+	want = dryRunResultsSwitchWritesCustomerShard
 	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "-dry_run", "customer.p2c"); err != nil {
 		t.Fatalf("SwitchWrites error: %s\n", output)
 	}
@@ -287,7 +255,7 @@ func shardCustomer(t *testing.T, testReverse bool) {
 func reshardCustomer2to4Split(t *testing.T) {
 	ksName := "customer"
 	counts := map[string]int{"zone1-600": 4, "zone1-700": 6, "zone1-800": 5, "zone1-900": 5}
-	reshard(t, ksName, "customer", "c2c4", "-80,80-", "-40,40-80,80-c0,c0-", 600, counts)
+	reshard(t, ksName, "customer", "c2c4", "-80,80-", "-40,40-80,80-c0,c0-", 600, counts, nil)
 	assert.Empty(t, validateCount(t, vtgateConn, ksName, "customer", 20))
 	query := "insert into customer (name) values('yoko')"
 	execVtgateQuery(t, vtgateConn, ksName, query)
@@ -297,7 +265,7 @@ func reshardCustomer2to4Split(t *testing.T) {
 func reshardMerchant2to3SplitMerge(t *testing.T) {
 	ksName := "merchant"
 	counts := map[string]int{"zone1-1600": 0, "zone1-1700": 2, "zone1-1800": 0}
-	reshard(t, ksName, "merchant", "m2m3", "-80,80-", "-40,40-c0,c0-", 1600, counts)
+	reshard(t, ksName, "merchant", "m2m3", "-80,80-", "-40,40-c0,c0-", 1600, counts, dryrunresultsswitchwritesM2m3)
 	assert.Empty(t, validateCount(t, vtgateConn, ksName, "merchant", 2))
 	query := "insert into merchant (mname, category) values('amazon', 'electronics')"
 	execVtgateQuery(t, vtgateConn, ksName, query)
@@ -307,7 +275,7 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 func reshardMerchant3to1Merge(t *testing.T) {
 	ksName := "merchant"
 	counts := map[string]int{"zone1-2000": 3}
-	reshard(t, ksName, "merchant", "m3m1", "-40,40-c0,c0-", "0", 2000, counts)
+	reshard(t, ksName, "merchant", "m3m1", "-40,40-c0,c0-", "0", 2000, counts, nil)
 	assert.Empty(t, validateCount(t, vtgateConn, ksName, "merchant", 3))
 	query := "insert into merchant (mname, category) values('flipkart', 'electronics')"
 	execVtgateQuery(t, vtgateConn, ksName, query)
@@ -317,16 +285,16 @@ func reshardMerchant3to1Merge(t *testing.T) {
 func reshardCustomer3to2SplitMerge(t *testing.T) { //-40,40-80,80-c0 => merge/split, c0- stays the same  ending up with 3
 	ksName := "customer"
 	counts := map[string]int{"zone1-600": 5, "zone1-700": 6, "zone1-800": 5, "zone1-900": 5}
-	reshard(t, ksName, "customer", "c4c3", "-40,40-80,80-c0", "-60,60-c0", 1000, counts)
+	reshard(t, ksName, "customer", "c4c3", "-40,40-80,80-c0", "-60,60-c0", 1000, counts, nil)
 }
 
 func reshardCustomer3to1Merge(t *testing.T) { //to unsharded
 	ksName := "customer"
 	counts := map[string]int{"zone1-1500": 21}
-	reshard(t, ksName, "customer", "c3c1", "-60,60-c0,c0-", "0", 1500, counts)
+	reshard(t, ksName, "customer", "c3c1", "-60,60-c0,c0-", "0", 1500, counts, nil)
 }
 
-func reshard(t *testing.T, ksName string, tableName string, workflow string, sourceShards string, targetShards string, tabletIDBase int, counts map[string]int) {
+func reshard(t *testing.T, ksName string, tableName string, workflow string, sourceShards string, targetShards string, tabletIDBase int, counts map[string]int, dryRunResultswitchWrites []string) {
 	ksWorkflow := ksName + "." + workflow
 	keyspace := vc.Cells[cell.Name].Keyspaces[ksName]
 	if err := vc.AddShards(t, cell, keyspace, targetShards, defaultReplicas, defaultRdonly, tabletIDBase); err != nil {
@@ -362,6 +330,16 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+cell.Name, "-tablet_type=replica", ksWorkflow); err != nil {
 		t.Fatalf("SwitchReads error: %s\n", output)
 	}
+
+	if dryRunResultswitchWrites != nil {
+		var output string
+		var err error
+		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "-dry_run", ksWorkflow); err != nil {
+			t.Fatalf("SwitchWrites dry run error: %s\n", output)
+		}
+		validateDryRunResults(t, output, dryRunResultswitchWrites)
+	}
+
 	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", ksWorkflow); err != nil {
 		t.Fatalf("SwitchWrites error: %s\n", output)
 	}
