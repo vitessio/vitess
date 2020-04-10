@@ -413,14 +413,11 @@
   "Instructions": {
     "OperatorType": "Projection",
     "Variant": "",
+    "Columns": [
+      "database()"
+    ],
     "Expressions": [
-      {
-        "Expr": {
-          "Type": 5,
-          "Val": "Ol9fdnRkYm5hbWU="
-        },
-        "As": "database()"
-      }
+      ":__vtdbname"
     ],
     "Inputs": [
       {
@@ -1362,18 +1359,16 @@
 # testing SingleRow Projection
 "select 42"
 {
+  "QueryType": "SELECT",
   "Original": "select 42",
   "Instructions": {
     "OperatorType": "Projection",
     "Variant": "",
+    "Columns": [
+      ""
+    ],
     "Expressions": [
-      {
-        "Expr": {
-          "Type": 1,
-          "Val": "NDI="
-        },
-        "As": ""
-      }
+      "42"
     ],
     "Inputs": [
       {
