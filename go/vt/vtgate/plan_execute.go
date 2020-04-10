@@ -223,7 +223,7 @@ func (e *planExecute) executePlan(ctx context.Context, plan *engine.Plan, vcurso
 func (e *planExecute) logExecutionEnd(logStats *LogStats, execStart time.Time, plan *engine.Plan, err error, qr *sqltypes.Result) uint64 {
 	logStats.ExecuteTime = time.Since(execStart)
 
-	e.e.updateQueryCounts("Execute", plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
+	e.e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
 
 	var errCount uint64
 	if err != nil {
