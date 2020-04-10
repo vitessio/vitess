@@ -53,17 +53,6 @@ func (txc *TxConn) Begin(ctx context.Context, session *SafeSession) error {
 			return err
 		}
 	}
-	// UNSPECIFIED & SINGLE mode are always allowed.
-	switch session.TransactionMode {
-	case vtgatepb.TransactionMode_MULTI:
-		if txc.mode == vtgatepb.TransactionMode_SINGLE {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requested transaction mode %v disallowed: vtgate must be started with --transaction_mode=MULTI (or TWOPC). Current transaction mode: %v", session.TransactionMode, txc.mode)
-		}
-	case vtgatepb.TransactionMode_TWOPC:
-		if txc.mode != vtgatepb.TransactionMode_TWOPC {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requested transaction mode %v disallowed: vtgate must be started with --transaction_mode=TWOPC. Current transaction mode: %v", session.TransactionMode, txc.mode)
-		}
-	}
 	session.Session.InTransaction = true
 	return nil
 }
@@ -79,10 +68,6 @@ func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
 	twopc := false
 	switch session.TransactionMode {
 	case vtgatepb.TransactionMode_TWOPC:
-		if txc.mode != vtgatepb.TransactionMode_TWOPC {
-			_ = txc.Rollback(ctx, session)
-			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "2pc transaction disallowed")
-		}
 		twopc = true
 	case vtgatepb.TransactionMode_UNSPECIFIED:
 		twopc = (txc.mode == vtgatepb.TransactionMode_TWOPC)
