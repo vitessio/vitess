@@ -222,7 +222,7 @@ func TestStreamBuffering(t *testing.T) {
 
 func TestSelectLastInsertId(t *testing.T) {
 	masterSession.LastInsertId = 52
-	executor, sbc1, _, _ := createExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	executor.normalize = true
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -231,35 +231,41 @@ func TestSelectLastInsertId(t *testing.T) {
 	masterSession.LastInsertId = 42
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "last_insert_id()", Type: sqltypes.Int64},
+		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(42),
 		}},
 	}
 	require.NoError(t, err)
 	utils.MustMatch(t, result, wantResult, "Mismatch")
-	assert.Empty(t, sbc1.Queries)
 }
 
 func TestSelectUserDefindVariable(t *testing.T) {
-	executor, sbc1, _, _ := createExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	executor.normalize = true
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
 	sql := "select @foo"
 	masterSession = &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"})}
-	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
-	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select :__vtudvfoo as `@foo` from dual",
-		BindVariables: map[string]*querypb.BindVariable{"__vtudvfoo": sqltypes.StringBindVariable("bar")},
-	}}
-
-	assert.Equal(t, wantQueries, sbc1.Queries)
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "@foo", Type: sqltypes.Int64},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(0),
+		}},
+	}
+	require.NoError(t, err)
+	utils.MustMatch(t, result, wantResult, "Mismatch")
 }
 
 func TestFoundRows(t *testing.T) {
-	executor, sbc1, _, _ := createExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	executor.normalize = true
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -269,14 +275,17 @@ func TestFoundRows(t *testing.T) {
 	require.NoError(t, err)
 
 	sql := "select found_rows()"
-	_, err = executorExec(executor, sql, map[string]*querypb.BindVariable{})
-	require.NoError(t, err)
-	expected := &querypb.BoundQuery{
-		Sql:           "select :__vtfrows as `found_rows()` from dual",
-		BindVariables: map[string]*querypb.BindVariable{"__vtfrows": sqltypes.Uint64BindVariable(1)},
+	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "found_rows()", Type: sqltypes.Int64},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(0),
+		}},
 	}
-
-	assert.Equal(t, expected, sbc1.Queries[1])
+	require.NoError(t, err)
+	utils.MustMatch(t, result, wantResult, "Mismatch")
 }
 
 func TestSelectLastInsertIdInUnion(t *testing.T) {
@@ -363,26 +372,29 @@ func TestLastInsertIDInSubQueryExpression(t *testing.T) {
 }
 
 func TestSelectDatabase(t *testing.T) {
-	executor, sbc1, _, _ := createExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	executor.normalize = true
 	sql := "select database()"
 	newSession := *masterSession
 	session := NewSafeSession(&newSession)
 	session.TargetString = "TestExecutor@master"
-	_, err := executor.Execute(
+	result, err := executor.Execute(
 		context.Background(),
 		"TestExecute",
 		session,
 		sql,
 		map[string]*querypb.BindVariable{})
-
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "database()", Type: sqltypes.Int64},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(0),
+		}},
+	}
 	require.NoError(t, err)
-	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select :__vtdbname as `database()` from dual",
-		BindVariables: map[string]*querypb.BindVariable{"__vtdbname": sqltypes.StringBindVariable("TestExecutor")},
-	}}
+	utils.MustMatch(t, result, wantResult, "Mismatch")
 
-	assert.Equal(t, wantQueries, sbc1.Queries)
 }
 
 func TestSelectBindvars(t *testing.T) {
