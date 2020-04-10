@@ -15,10 +15,7 @@ topology:
               tablets:
                 - type: "replica"
                   vttablet:
-                    replicas: 2
-                - type: "rdonly"
-                  vttablet:
-                    replicas: 1
+                    replicas: 3
           schema:
             initial: |-
               create table product(
