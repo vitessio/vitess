@@ -32,46 +32,9 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-)
-
-var (
-	// waits stores how many times a transaction was queued because another
-	// transaction was already in flight for the same row (range).
-	// The key of the map is the table name of the query.
-	waits = stats.NewCountersWithSingleLabel(
-		"TxSerializerWaits",
-		"Number of times a transaction was queued because another transaction was already in flight for the same row range",
-		"table_name")
-	// waitsDryRun is similar as "waits": In dry-run mode it records how many
-	// transactions would have been queued.
-	// The key of the map is the table name of the query.
-	waitsDryRun = stats.NewCountersWithSingleLabel(
-		"TxSerializerWaitsDryRun",
-		"Dry run number of transactions that would've been queued",
-		"table_name")
-
-	// queueExceeded counts per table how many transactions were rejected because
-	// the max queue size per row (range) was exceeded.
-	queueExceeded = stats.NewCountersWithSingleLabel(
-		"TxSerializerQueueExceeded",
-		"Number of transactions that were rejected because the max queue size per row range was exceeded",
-		"table_name")
-	// queueExceededDryRun counts in dry-run mode how many transactions would have
-	// been rejected due to exceeding the max queue size per row (range).
-	queueExceededDryRun = stats.NewCountersWithSingleLabel(
-		"TxSerializerQueueExceededDryRun",
-		"Dry-run Number of transactions that were rejected because the max queue size was exceeded",
-		"table_name")
-
-	// globalQueueExceeded is the same as queueExceeded but for the global queue.
-	globalQueueExceeded = stats.NewCounter(
-		"TxSerializerGlobalQueueExceeded",
-		"Number of transactions that were rejected on the global queue because of exceeding the max queue size per row range")
-	globalQueueExceededDryRun = stats.NewCounter(
-		"TxSerializerGlobalQueueExceededDryRun",
-		"Dry-run stats for TxSerializerGlobalQueueExceeded")
 )
 
 // TxSerializer serializes incoming transactions which target the same row range
@@ -90,6 +53,7 @@ var (
 //   of vttablet. This is important if the capaciy is finite. For example, the
 //   number of RPCs in flight could be limited by the RPC subsystem.
 type TxSerializer struct {
+	env tabletenv.Env
 	*sync2.ConsolidatorCache
 
 	// Immutable fields.
@@ -97,6 +61,24 @@ type TxSerializer struct {
 	maxQueueSize           int
 	maxGlobalQueueSize     int
 	concurrentTransactions int
+
+	// waits stores how many times a transaction was queued because another
+	// transaction was already in flight for the same row (range).
+	// The key of the map is the table name of the query.
+	//
+	// waitsDryRun is similar as "waits": In dry-run mode it records how many
+	// transactions would have been queued.
+	// The key of the map is the table name of the query.
+	//
+	// queueExceeded counts per table how many transactions were rejected because
+	// the max queue size per row (range) was exceeded.
+	//
+	// queueExceededDryRun counts in dry-run mode how many transactions would have
+	// been rejected due to exceeding the max queue size per row (range).
+	//
+	// globalQueueExceeded is the same as queueExceeded but for the global queue.
+	waits, waitsDryRun, queueExceeded, queueExceededDryRun *stats.CountersWithSingleLabel
+	globalQueueExceeded, globalQueueExceededDryRun         *stats.Counter
 
 	log                          *logutil.ThrottledLogger
 	logDryRun                    *logutil.ThrottledLogger
@@ -110,13 +92,37 @@ type TxSerializer struct {
 }
 
 // New returns a TxSerializer object.
-func New(dryRun bool, maxQueueSize, maxGlobalQueueSize, concurrentTransactions int) *TxSerializer {
+func New(env tabletenv.Env) *TxSerializer {
+	config := env.Config()
 	return &TxSerializer{
-		ConsolidatorCache:            sync2.NewConsolidatorCache(1000),
-		dryRun:                       dryRun,
-		maxQueueSize:                 maxQueueSize,
-		maxGlobalQueueSize:           maxGlobalQueueSize,
-		concurrentTransactions:       concurrentTransactions,
+		env:                    env,
+		ConsolidatorCache:      sync2.NewConsolidatorCache(1000),
+		dryRun:                 config.EnableHotRowProtectionDryRun,
+		maxQueueSize:           config.HotRowProtectionMaxQueueSize,
+		maxGlobalQueueSize:     config.HotRowProtectionMaxGlobalQueueSize,
+		concurrentTransactions: config.HotRowProtectionConcurrentTransactions,
+		waits: env.Exporter().NewCountersWithSingleLabel(
+			"TxSerializerWaits",
+			"Number of times a transaction was queued because another transaction was already in flight for the same row range",
+			"table_name"),
+		waitsDryRun: env.Exporter().NewCountersWithSingleLabel(
+			"TxSerializerWaitsDryRun",
+			"Dry run number of transactions that would've been queued",
+			"table_name"),
+		queueExceeded: env.Exporter().NewCountersWithSingleLabel(
+			"TxSerializerQueueExceeded",
+			"Number of transactions that were rejected because the max queue size per row range was exceeded",
+			"table_name"),
+		queueExceededDryRun: env.Exporter().NewCountersWithSingleLabel(
+			"TxSerializerQueueExceededDryRun",
+			"Dry-run Number of transactions that were rejected because the max queue size was exceeded",
+			"table_name"),
+		globalQueueExceeded: env.Exporter().NewCounter(
+			"TxSerializerGlobalQueueExceeded",
+			"Number of transactions that were rejected on the global queue because of exceeding the max queue size per row range"),
+		globalQueueExceededDryRun: env.Exporter().NewCounter(
+			"TxSerializerGlobalQueueExceededDryRun",
+			"Dry-run stats for TxSerializerGlobalQueueExceeded"),
 		log:                          logutil.NewThrottledLogger("HotRowProtection", 5*time.Second),
 		logDryRun:                    logutil.NewThrottledLogger("HotRowProtection DryRun", 5*time.Second),
 		logWaitsDryRun:               logutil.NewThrottledLogger("HotRowProtection Waits DryRun", 5*time.Second),
@@ -124,6 +130,7 @@ func New(dryRun bool, maxQueueSize, maxGlobalQueueSize, concurrentTransactions i
 		logGlobalQueueExceededDryRun: logutil.NewThrottledLogger("HotRowProtection GlobalQueueExceeded DryRun", 5*time.Second),
 		queues:                       make(map[string]*queue),
 	}
+
 }
 
 // DoneFunc is returned by Wait() and must be called by the caller.
@@ -135,53 +142,53 @@ type DoneFunc func()
 // done and the next waiting transaction can be unblocked.
 // "waited" is true if Wait() had to wait for other transactions.
 // "err" is not nil if a) the context is done or b) a queue limit was reached.
-func (t *TxSerializer) Wait(ctx context.Context, key, table string) (done DoneFunc, waited bool, err error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+func (txs *TxSerializer) Wait(ctx context.Context, key, table string) (done DoneFunc, waited bool, err error) {
+	txs.mu.Lock()
+	defer txs.mu.Unlock()
 
-	waited, err = t.lockLocked(ctx, key, table)
+	waited, err = txs.lockLocked(ctx, key, table)
 	if err != nil {
 		if waited {
 			// Waiting failed early e.g. due a canceled context and we did NOT get the
-			// slot. Call "done" now because we don't return it to the caller.
-			t.unlockLocked(key, false /* returnSlot */)
+			// slot. Call "done" now because we don'txs return it to the caller.
+			txs.unlockLocked(key, false /* returnSlot */)
 		}
 		return nil, waited, err
 	}
-	return func() { t.unlock(key) }, waited, nil
+	return func() { txs.unlock(key) }, waited, nil
 }
 
 // lockLocked queues this transaction. It will unblock immediately if this
 // transaction is the first in the queue or when it acquired a slot.
-// The method has the suffix "Locked" to clarify that "t.mu" must be locked.
-func (t *TxSerializer) lockLocked(ctx context.Context, key, table string) (bool, error) {
-	q, ok := t.queues[key]
+// The method has the suffix "Locked" to clarify that "txs.mu" must be locked.
+func (txs *TxSerializer) lockLocked(ctx context.Context, key, table string) (bool, error) {
+	q, ok := txs.queues[key]
 	if !ok {
 		// First transaction in the queue i.e. we don't wait and return immediately.
-		t.queues[key] = newQueueForFirstTransaction(t.concurrentTransactions)
-		t.globalSize++
+		txs.queues[key] = newQueueForFirstTransaction(txs.concurrentTransactions)
+		txs.globalSize++
 		return false, nil
 	}
 
-	if t.globalSize >= t.maxGlobalQueueSize {
-		if t.dryRun {
-			globalQueueExceededDryRun.Add(1)
-			t.logGlobalQueueExceededDryRun.Warningf("Would have rejected BeginExecute RPC because there are too many queued transactions (%d >= %d)", t.globalSize, t.maxGlobalQueueSize)
+	if txs.globalSize >= txs.maxGlobalQueueSize {
+		if txs.dryRun {
+			txs.globalQueueExceededDryRun.Add(1)
+			txs.logGlobalQueueExceededDryRun.Warningf("Would have rejected BeginExecute RPC because there are too many queued transactions (%d >= %d)", txs.globalSize, txs.maxGlobalQueueSize)
 		} else {
-			globalQueueExceeded.Add(1)
+			txs.globalQueueExceeded.Add(1)
 			return false, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED,
-				"hot row protection: too many queued transactions (%d >= %d)", t.globalSize, t.maxGlobalQueueSize)
+				"hot row protection: too many queued transactions (%d >= %d)", txs.globalSize, txs.maxGlobalQueueSize)
 		}
 	}
 
-	if q.size >= t.maxQueueSize {
-		if t.dryRun {
-			queueExceededDryRun.Add(table, 1)
-			t.logQueueExceededDryRun.Warningf("Would have rejected BeginExecute RPC because there are too many queued transactions (%d >= %d) for the same row (table + WHERE clause: '%v')", q.size, t.maxQueueSize, key)
+	if q.size >= txs.maxQueueSize {
+		if txs.dryRun {
+			txs.queueExceededDryRun.Add(table, 1)
+			txs.logQueueExceededDryRun.Warningf("Would have rejected BeginExecute RPC because there are too many queued transactions (%d >= %d) for the same row (table + WHERE clause: '%v')", q.size, txs.maxQueueSize, key)
 		} else {
-			queueExceeded.Add(table, 1)
+			txs.queueExceeded.Add(table, 1)
 			return false, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED,
-				"hot row protection: too many queued transactions (%d >= %d) for the same row (table + WHERE clause: '%v')", q.size, t.maxQueueSize, key)
+				"hot row protection: too many queued transactions (%d >= %d) for the same row (table + WHERE clause: '%v')", q.size, txs.maxQueueSize, key)
 		}
 	}
 
@@ -190,33 +197,33 @@ func (t *TxSerializer) lockLocked(ctx context.Context, key, table string) (bool,
 		// first time.
 
 		// As an optimization, we deferred the creation of the channel until now.
-		q.availableSlots = make(chan struct{}, t.concurrentTransactions)
+		q.availableSlots = make(chan struct{}, txs.concurrentTransactions)
 		q.availableSlots <- struct{}{}
 
 		// Include first transaction in the count at /debug/hotrows. (It was not
 		// recorded on purpose because it did not wait.)
-		t.Record(key)
+		txs.Record(key)
 	}
 
-	t.globalSize++
+	txs.globalSize++
 	q.size++
 	q.count++
 	if q.size > q.max {
 		q.max = q.size
 	}
 	// Publish the number of waits at /debug/hotrows.
-	t.Record(key)
+	txs.Record(key)
 
-	if t.dryRun {
-		waitsDryRun.Add(table, 1)
-		t.logWaitsDryRun.Warningf("Would have queued BeginExecute RPC for row (range): '%v' because another transaction to the same range is already in progress.", key)
+	if txs.dryRun {
+		txs.waitsDryRun.Add(table, 1)
+		txs.logWaitsDryRun.Warningf("Would have queued BeginExecute RPC for row (range): '%v' because another transaction to the same range is already in progress.", key)
 		return false, nil
 	}
 
 	// Unlock before the wait and relock before returning because our caller
 	// Wait() holds the lock and assumes it still has it.
-	t.mu.Unlock()
-	defer t.mu.Lock()
+	txs.mu.Unlock()
+	defer txs.mu.Lock()
 
 	// Non-blocking write attempt to get a slot.
 	select {
@@ -227,7 +234,7 @@ func (t *TxSerializer) lockLocked(ctx context.Context, key, table string) (bool,
 	}
 
 	// Blocking wait for the next available slot.
-	waits.Add(table, 1)
+	txs.waits.Add(table, 1)
 	select {
 	case q.availableSlots <- struct{}{}:
 		return true, nil
@@ -236,27 +243,27 @@ func (t *TxSerializer) lockLocked(ctx context.Context, key, table string) (bool,
 	}
 }
 
-func (t *TxSerializer) unlock(key string) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+func (txs *TxSerializer) unlock(key string) {
+	txs.mu.Lock()
+	defer txs.mu.Unlock()
 
-	t.unlockLocked(key, true)
+	txs.unlockLocked(key, true)
 }
 
-func (t *TxSerializer) unlockLocked(key string, returnSlot bool) {
-	q := t.queues[key]
+func (txs *TxSerializer) unlockLocked(key string, returnSlot bool) {
+	q := txs.queues[key]
 	q.size--
-	t.globalSize--
+	txs.globalSize--
 
 	if q.size == 0 {
 		// This is the last transaction in flight.
-		delete(t.queues, key)
+		delete(txs.queues, key)
 
 		if q.max > 1 {
-			if t.dryRun {
-				t.logDryRun.Infof("%v simultaneous transactions (%v in total) for the same row range (%v) would have been queued.", q.max, q.count, key)
+			if txs.dryRun {
+				txs.logDryRun.Infof("%v simultaneous transactions (%v in total) for the same row range (%v) would have been queued.", q.max, q.count, key)
 			} else {
-				t.log.Infof("%v simultaneous transactions (%v in total) for the same row range (%v) were queued.", q.max, q.count, key)
+				txs.log.Infof("%v simultaneous transactions (%v in total) for the same row range (%v) were queued.", q.max, q.count, key)
 			}
 		}
 
@@ -270,7 +277,7 @@ func (t *TxSerializer) unlockLocked(key string, returnSlot bool) {
 	// Give up slot by removing ourselves from the channel.
 	// Wakes up the next queued transaction.
 
-	if t.dryRun {
+	if txs.dryRun {
 		// Dry-run did not acquire a slot in the first place.
 		return
 	}
@@ -286,11 +293,11 @@ func (t *TxSerializer) unlockLocked(key string, returnSlot bool) {
 
 // Pending returns the number of queued transactions (including the ones which
 // are currently in flight.)
-func (t *TxSerializer) Pending(key string) int {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+func (txs *TxSerializer) Pending(key string) int {
+	txs.mu.Lock()
+	defer txs.mu.Unlock()
 
-	q, ok := t.queues[key]
+	q, ok := txs.queues[key]
 	if !ok {
 		return 0
 	}
@@ -298,7 +305,7 @@ func (t *TxSerializer) Pending(key string) int {
 }
 
 // ServeHTTP lists the most recent, cached queries and their count.
-func (t *TxSerializer) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+func (txs *TxSerializer) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	if *streamlog.RedactDebugUIQueries {
 		response.Write([]byte(`
 	<!DOCTYPE html>
@@ -316,7 +323,7 @@ func (t *TxSerializer) ServeHTTP(response http.ResponseWriter, request *http.Req
 		acl.SendError(response, err)
 		return
 	}
-	items := t.Items()
+	items := txs.Items()
 	response.Header().Set("Content-Type", "text/plain")
 	if items == nil {
 		response.Write([]byte("empty\n"))

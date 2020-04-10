@@ -47,6 +47,7 @@ var (
 	deprecatedMessagePoolPrefillParallelism int
 	deprecatedAutocommit                    bool
 	deprecateAllowUnsafeDMLs                bool
+	deprecatedPoolNamePrefix                string
 )
 
 func init() {
@@ -82,7 +83,7 @@ func init() {
 	flag.BoolVar(&Config.EnableTableACLDryRun, "queryserver-config-enable-table-acl-dry-run", DefaultQsConfig.EnableTableACLDryRun, "If this flag is enabled, tabletserver will emit monitoring metrics and let the request pass regardless of table acl check results")
 	flag.StringVar(&Config.TableACLExemptACL, "queryserver-config-acl-exempt-acl", DefaultQsConfig.TableACLExemptACL, "an acl that exempt from table acl checking (this acl is free to access any vitess tables).")
 	flag.BoolVar(&Config.TerseErrors, "queryserver-config-terse-errors", DefaultQsConfig.TerseErrors, "prevent bind vars from escaping in returned errors")
-	flag.StringVar(&Config.PoolNamePrefix, "pool-name-prefix", DefaultQsConfig.PoolNamePrefix, "pool name prefix, vttablet has several pools and each of them has a name. This config specifies the prefix of these pool names")
+	flag.StringVar(&deprecatedPoolNamePrefix, "pool-name-prefix", "", "Deprecated")
 	flag.BoolVar(&Config.WatchReplication, "watch_replication_stream", false, "When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to support the include_event_token ExecuteOptions.")
 	flag.BoolVar(&deprecatedAutocommit, "enable-autocommit", true, "This flag is deprecated. Autocommit is always allowed.")
 	flag.BoolVar(&Config.TwoPCEnable, "twopc_enable", DefaultQsConfig.TwoPCEnable, "if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.")
@@ -163,7 +164,6 @@ type TabletConfig struct {
 	StrictTableACL               bool
 	TerseErrors                  bool
 	EnableTableACLDryRun         bool
-	PoolNamePrefix               string
 	TableACLExemptACL            string
 	WatchReplication             bool
 	TwoPCEnable                  bool
@@ -239,7 +239,6 @@ var DefaultQsConfig = TabletConfig{
 	StrictTableACL:               false,
 	TerseErrors:                  false,
 	EnableTableACLDryRun:         false,
-	PoolNamePrefix:               "",
 	TableACLExemptACL:            "",
 	WatchReplication:             false,
 	TwoPCEnable:                  false,

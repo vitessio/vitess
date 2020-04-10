@@ -136,6 +136,7 @@ func stateInfo(state int64) string {
 type TabletServer struct {
 	exporter               *servenv.Exporter
 	config                 *tabletenv.TabletConfig
+	stats                  *tabletenv.Stats
 	QueryTimeout           sync2.AtomicDuration
 	TerseErrors            bool
 	enableHotRowProtection bool
@@ -200,17 +201,22 @@ type TabletServer struct {
 var RegisterFunctions []func(Controller)
 
 // NewServer creates a new TabletServer based on the command line flags.
-func NewServer(topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
-	return NewTabletServer(tabletenv.Config, topoServer, alias)
+func NewServer(name string, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
+	return NewTabletServer(name, tabletenv.Config, topoServer, alias)
 }
 
-var tsOnce sync.Once
-var srvTopoServer srvtopo.Server
+var (
+	tsOnce        sync.Once
+	srvTopoServer srvtopo.Server
+)
 
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
-func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
+func NewTabletServer(name string, config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
+	exporter := servenv.NewExporter(name, "Tablet")
 	tsv := &TabletServer{
+		exporter:               exporter,
+		stats:                  tabletenv.NewStats(exporter),
 		config:                 &config,
 		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
 		TerseErrors:            config.TerseErrors,
@@ -227,27 +233,30 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 	tsv.hw = heartbeat.NewWriter(tsv, alias)
 	tsv.hr = heartbeat.NewReader(tsv)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
-	tsOnce.Do(func() {
-		srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo")
-		stats.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
-			tsv.mu.Lock()
-			state := tsv.state
-			tsv.mu.Unlock()
-			return state
-		})
-		stats.Publish("TabletStateName", stats.StringFunc(tsv.GetState))
-
-		// TabletServerState exports the same information as the above two stats (TabletState / TabletStateName),
-		// but exported with TabletStateName as a label for Prometheus, which doesn't support exporting strings as stat values.
-		stats.NewGaugesFuncWithMultiLabels("TabletServerState", "Tablet server state labeled by state name", []string{"name"}, func() map[string]int64 {
-			return map[string]int64{tsv.GetState(): 1}
-		})
-		stats.NewGaugeDurationFunc("QueryTimeout", "Tablet server query timeout", tsv.QueryTimeout.Get)
-		stats.NewGaugeDurationFunc("QueryPoolTimeout", "Tablet server timeout to get a connection from the query pool", tsv.qe.connTimeout.Get)
-	})
+	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se)
-	tsv.watcher = NewReplicationWatcher(tsv.vstreamer, config)
+	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, config)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
+
+	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
+		tsv.mu.Lock()
+		defer tsv.mu.Unlock()
+		return tsv.state
+	})
+	tsv.exporter.Publish("TabletStateName", stats.StringFunc(tsv.GetState))
+
+	// TabletServerState exports the same information as the above two stats (TabletState / TabletStateName),
+	// but exported with TabletStateName as a label for Prometheus, which doesn't support exporting strings as stat values.
+	tsv.exporter.NewGaugesFuncWithMultiLabels("TabletServerState", "Tablet server state labeled by state name", []string{"name"}, func() map[string]int64 {
+		return map[string]int64{tsv.GetState(): 1}
+	})
+	tsv.exporter.NewGaugeDurationFunc("QueryTimeout", "Tablet server query timeout", tsv.QueryTimeout.Get)
+	tsv.exporter.NewGaugeDurationFunc("QueryPoolTimeout", "Tablet server timeout to get a connection from the query pool", tsv.qe.connTimeout.Get)
+
+	tsv.registerDebugHealthHandler()
+	tsv.registerQueryzHandler()
+	tsv.registerStreamQueryzHandlers()
+	tsv.registerTwopczHandler()
 	return tsv
 }
 
@@ -257,10 +266,6 @@ func (tsv *TabletServer) Register() {
 	for _, f := range RegisterFunctions {
 		f(tsv)
 	}
-	tsv.registerDebugHealthHandler()
-	tsv.registerQueryzHandler()
-	tsv.registerStreamQueryzHandlers()
-	tsv.registerTwopczHandler()
 }
 
 // Exporter satisfies tabletenv.Env.
@@ -276,6 +281,19 @@ func (tsv *TabletServer) Config() *tabletenv.TabletConfig {
 // DBConfigs satisfies tabletenv.Env.
 func (tsv *TabletServer) DBConfigs() *dbconfigs.DBConfigs {
 	return tsv.dbconfigs
+}
+
+// Stats satisfies tabletenv.Env.
+func (tsv *TabletServer) Stats() *tabletenv.Stats {
+	return tsv.stats
+}
+
+// LogError satisfies tabletenv.Env.
+func (tsv *TabletServer) LogError() {
+	if x := recover(); x != nil {
+		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
+		tsv.stats.InternalErrors.Add("Panic", 1)
+	}
 }
 
 // RegisterQueryRuleSource registers ruleSource for setting query rules.
@@ -497,7 +515,7 @@ func (tsv *TabletServer) decideAction(tabletType topodatapb.TabletType, serving 
 }
 
 func (tsv *TabletServer) fullStart() (err error) {
-	c, err := dbconnpool.NewDBConnection(tsv.dbconfigs.AppWithDB(), tabletenv.MySQLStats)
+	c, err := dbconnpool.NewDBConnection(tsv.dbconfigs.AppWithDB())
 	if err != nil {
 		log.Errorf("error creating db app connection: %v", err)
 		return err
@@ -563,7 +581,7 @@ func (tsv *TabletServer) gracefulStop() {
 // keep QueryEngine open.
 func (tsv *TabletServer) StopService() {
 	defer close(tsv.setTimeBomb())
-	defer tabletenv.LogError()
+	defer tsv.LogError()
 
 	tsv.mu.Lock()
 	if tsv.state != StateServing && tsv.state != StateNotServing {
@@ -666,7 +684,7 @@ func (tsv *TabletServer) CheckMySQL() {
 	}
 	go func() {
 		defer func() {
-			tabletenv.LogError()
+			tsv.LogError()
 			time.Sleep(1 * time.Second)
 			tsv.checkMySQLThrottler.Release()
 		}()
@@ -748,7 +766,7 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, opti
 			// handlePanicAndSendLogStats doesn't log the no-op.
 			logStats.OriginalSQL = beginSQL
 			if beginSQL != "" {
-				tabletenv.QueryStats.Record("BEGIN", startTime)
+				tsv.stats.QueryTimings.Record("BEGIN", startTime)
 			} else {
 				logStats.Method = ""
 			}
@@ -775,7 +793,7 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 			// the tablet metrics, and clear out the logStats Method so that
 			// handlePanicAndSendLogStats doesn't log the no-op.
 			if commitSQL != "" {
-				tabletenv.QueryStats.Record("COMMIT", startTime)
+				tsv.stats.QueryTimings.Record("COMMIT", startTime)
 			} else {
 				logStats.Method = ""
 			}
@@ -791,7 +809,7 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, t
 		"Rollback", "rollback", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			defer tabletenv.QueryStats.Record("ROLLBACK", time.Now())
+			defer tsv.stats.QueryTimings.Record("ROLLBACK", time.Now())
 			logStats.TransactionID = transactionID
 			return tsv.te.Rollback(ctx, transactionID)
 		},
@@ -1156,7 +1174,7 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 			done, waited, waitErr := tsv.qe.txSerializer.Wait(ctx, k, table)
 			txDone = done
 			if waited {
-				tabletenv.WaitStats.Record("TxSerializer", startTime)
+				tsv.stats.WaitTimings.Record("TxSerializer", startTime)
 			}
 
 			return waitErr
@@ -1420,7 +1438,7 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 			tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
 		log.Errorf(errorMessage)
 		terr := vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "%s", errorMessage)
-		tabletenv.InternalErrors.Add("Panic", 1)
+		tsv.stats.InternalErrors.Add("Panic", 1)
 		if logStats != nil {
 			logStats.Error = terr
 		}
@@ -1440,7 +1458,7 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	}
 
 	errCode := convertErrorCode(err)
-	tabletenv.ErrorStats.Add(errCode.String(), 1)
+	tsv.stats.ErrorCounters.Add(errCode.String(), 1)
 
 	callerID := ""
 	cid := callerid.ImmediateCallerIDFromContext(ctx)
@@ -1448,7 +1466,7 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		callerID = fmt.Sprintf(" (CallerID: %s)", cid.Username)
 	}
 
-	logMethod := tabletenv.Errorf
+	logMethod := log.Errorf
 	// Suppress or demote some errors in logs.
 	switch errCode {
 	case vtrpcpb.Code_FAILED_PRECONDITION, vtrpcpb.Code_ALREADY_EXISTS:
@@ -1456,9 +1474,9 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	case vtrpcpb.Code_RESOURCE_EXHAUSTED:
 		logMethod = logPoolFull.Errorf
 	case vtrpcpb.Code_ABORTED:
-		logMethod = tabletenv.Warningf
+		logMethod = log.Warningf
 	case vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_DEADLINE_EXCEEDED:
-		logMethod = tabletenv.Infof
+		logMethod = log.Infof
 	}
 
 	// If TerseErrors is on, strip the error message returned by MySQL and only
@@ -1771,7 +1789,7 @@ func (tsv *TabletServer) endRequest() {
 }
 
 func (tsv *TabletServer) registerDebugHealthHandler() {
-	http.HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
+	tsv.exporter.HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
 			acl.SendError(w, err)
 			return
@@ -1786,22 +1804,22 @@ func (tsv *TabletServer) registerDebugHealthHandler() {
 }
 
 func (tsv *TabletServer) registerQueryzHandler() {
-	http.HandleFunc("/queryz", func(w http.ResponseWriter, r *http.Request) {
+	tsv.exporter.HandleFunc("/queryz", func(w http.ResponseWriter, r *http.Request) {
 		queryzHandler(tsv.qe, w, r)
 	})
 }
 
 func (tsv *TabletServer) registerStreamQueryzHandlers() {
-	http.HandleFunc("/streamqueryz", func(w http.ResponseWriter, r *http.Request) {
+	tsv.exporter.HandleFunc("/streamqueryz", func(w http.ResponseWriter, r *http.Request) {
 		streamQueryzHandler(tsv.qe.streamQList, w, r)
 	})
-	http.HandleFunc("/streamqueryz/terminate", func(w http.ResponseWriter, r *http.Request) {
+	tsv.exporter.HandleFunc("/streamqueryz/terminate", func(w http.ResponseWriter, r *http.Request) {
 		streamQueryzTerminateHandler(tsv.qe.streamQList, w, r)
 	})
 }
 
 func (tsv *TabletServer) registerTwopczHandler() {
-	http.HandleFunc("/twopcz", func(w http.ResponseWriter, r *http.Request) {
+	tsv.exporter.HandleFunc("/twopcz", func(w http.ResponseWriter, r *http.Request) {
 		ctx := tabletenv.LocalContext()
 		txe := &TxExecutor{
 			ctx:      ctx,

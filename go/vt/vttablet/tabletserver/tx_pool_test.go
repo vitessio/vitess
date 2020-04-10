@@ -18,7 +18,6 @@ package tabletserver
 
 import (
 	"fmt"
-	"math/rand"
 	"strings"
 	"testing"
 	"time"
@@ -158,7 +157,7 @@ func TestTxPoolTransactionKillerEnforceTimeoutEnabled(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
-	killCount := tabletenv.KillStats.Counts()["Transactions"]
+	killCount := txPool.env.Stats().KillCounters.Counts()["Transactions"]
 
 	txWithoutTimeout, err := addQuery(ctx, sqlWithoutTimeout, txPool, querypb.ExecuteOptions_DBA)
 	if err != nil {
@@ -177,13 +176,14 @@ func TestTxPoolTransactionKillerEnforceTimeoutEnabled(t *testing.T) {
 
 	// transaction killer should kill the query the second query
 	for {
-		killCountDiff = tabletenv.KillStats.Counts()["Transactions"] - killCount
+		killCountDiff = txPool.env.Stats().KillCounters.Counts()["Transactions"] - killCount
 		if killCountDiff >= expectedKills {
 			break
 		}
 
 		select {
 		case <-timeoutCh:
+			txPool.Rollback(ctx, txWithoutTimeout)
 			t.Fatal("waited too long for timed transaction to be killed by transaction killer")
 		default:
 		}
@@ -672,13 +672,13 @@ func TestTxPoolExecFailDueToConnFail_Errno2013(t *testing.T) {
 }
 
 func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
-	startingStray := tabletenv.InternalErrors.Counts()["StrayTransactions"]
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("begin", &sqltypes.Result{})
 
 	txPool := newTxPool()
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	startingStray := txPool.env.Stats().InternalErrors.Counts()["StrayTransactions"]
 
 	// Start stray transaction.
 	_, _, err := txPool.Begin(context.Background(), &querypb.ExecuteOptions{})
@@ -688,7 +688,7 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 
 	// Close kills stray transaction.
 	txPool.Close()
-	if got, want := tabletenv.InternalErrors.Counts()["StrayTransactions"]-startingStray, int64(1); got != want {
+	if got, want := txPool.env.Stats().InternalErrors.Counts()["StrayTransactions"]-startingStray, int64(1); got != want {
 		t.Fatalf("internal error count for stray transactions not increased: got = %v, want = %v", got, want)
 	}
 	if got, want := txPool.conns.Capacity(), int64(0); got != want {
@@ -698,13 +698,11 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 
 func newTxPool() *TxPool {
 	config := tabletenv.DefaultQsConfig
-	randID := rand.Int63()
-	config.PoolNamePrefix = fmt.Sprintf("TestTransactionPool-%d", randID)
 	config.TransactionCap = 300
 	config.TransactionTimeout = 30
 	config.TxPoolTimeout = 40
 	config.TxPoolWaiterCap = 500000
 	config.IdleTimeout = 30
 	limiter := &txlimiter.TxAllowAll{}
-	return NewTxPool(tabletenv.NewTestEnv(&config, nil), limiter)
+	return NewTxPool(tabletenv.NewTestEnv(&config, nil, "TabletServerTest"), limiter)
 }

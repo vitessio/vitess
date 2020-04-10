@@ -56,6 +56,7 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -69,8 +70,10 @@ var (
 	hcErrorCounters          = stats.NewCountersWithMultiLabels("HealthcheckErrors", "Healthcheck Errors", []string{"Keyspace", "ShardName", "TabletType"})
 	hcMasterPromotedCounters = stats.NewCountersWithMultiLabels("HealthcheckMasterPromoted", "Master promoted in keyspace/shard name because of health check errors", []string{"Keyspace", "ShardName"})
 	healthcheckOnce          sync.Once
-	tabletURLTemplateString  = flag.String("tablet_url_template", "http://{{.GetTabletHostPort}}", "format string describing debug tablet url formatting. See the Go code for getTabletDebugURL() how to customize this.")
-	tabletURLTemplate        *template.Template
+
+	// TabletURLTemplateString is a flag to generate URLs for the tablets that vtgate discovers.
+	TabletURLTemplateString = flag.String("tablet_url_template", "http://{{.GetTabletHostPort}}", "format string describing debug tablet url formatting. See the Go code for getTabletDebugURL() how to customize this.")
+	tabletURLTemplate       *template.Template
 )
 
 // See the documentation for NewHealthCheck below for an explanation of these parameters.
@@ -127,7 +130,7 @@ func init() {
 // ParseTabletURLTemplateFromFlag loads or reloads the URL template.
 func ParseTabletURLTemplateFromFlag() {
 	tabletURLTemplate = template.New("")
-	_, err := tabletURLTemplate.Parse(*tabletURLTemplateString)
+	_, err := tabletURLTemplate.Parse(*TabletURLTemplateString)
 	if err != nil {
 		log.Exitf("error parsing template: %v", err)
 	}
@@ -229,6 +232,11 @@ func (e TabletStats) GetHostNameLevel(level int) string {
 	}
 }
 
+// NamedStatusURL returns the URL for the case where a tablet server is named.
+func (e TabletStats) NamedStatusURL() string {
+	return "/" + topoproto.TabletAliasString(e.Tablet.Alias) + servenv.StatusURLPath()
+}
+
 // getTabletDebugURL formats a debug url to the tablet.
 // It uses a format string that can be passed into the app to format
 // the debug URL to accommodate different network setups. It applies
@@ -241,6 +249,7 @@ func (e TabletStats) GetHostNameLevel(level int) string {
 // http://{{.GetTabletHostPort}} -> http://host.dc.domain:22
 // https://{{.Tablet.Hostname}} -> https://host.dc.domain
 // https://{{.GetHostNameLevel 0}}.bastion.corp -> https://host.bastion.corp
+// {{.NamedStatusURL}} -> test-0000000001/debug/status
 func (e TabletStats) getTabletDebugURL() string {
 	var buffer bytes.Buffer
 	tabletURLTemplate.Execute(&buffer, e)

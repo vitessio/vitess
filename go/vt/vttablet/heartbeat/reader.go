@@ -81,7 +81,7 @@ func NewReader(env tabletenv.Env) *Reader {
 		interval: config.HeartbeatInterval,
 		ticks:    timer.NewTimer(config.HeartbeatInterval),
 		errorLog: logutil.NewThrottledLogger("HeartbeatReporter", 60*time.Second),
-		pool:     connpool.New(env, config.PoolNamePrefix+"HeartbeatReadPool", 1, 0, time.Duration(config.IdleTimeout*1e9)),
+		pool:     connpool.New(env, "HeartbeatReadPool", 1, 0, time.Duration(config.IdleTimeout*1e9)),
 	}
 }
 
@@ -143,7 +143,7 @@ func (r *Reader) GetLatest() (time.Duration, error) {
 // readHeartbeat reads from the heartbeat table exactly once, updating
 // the last known lag and/or error, and incrementing counters.
 func (r *Reader) readHeartbeat() {
-	defer tabletenv.LogError()
+	defer r.env.LogError()
 
 	ctx, cancel := context.WithDeadline(context.Background(), r.now().Add(r.interval))
 	defer cancel()

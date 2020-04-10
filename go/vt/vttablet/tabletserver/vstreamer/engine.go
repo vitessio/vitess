@@ -38,12 +38,6 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
-var (
-	once           sync.Once
-	vschemaErrors  *stats.Counter
-	vschemaUpdates *stats.Counter
-)
-
 // Engine is the engine for handling vreplication streaming requests.
 type Engine struct {
 	env tabletenv.Env
@@ -72,6 +66,9 @@ type Engine struct {
 	se       *schema.Engine
 	keyspace string
 	cell     string
+
+	vschemaErrors  *stats.Counter
+	vschemaUpdates *stats.Counter
 }
 
 // NewEngine creates a new Engine.
@@ -86,12 +83,10 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine) *Engine 
 		lvschema:        &localVSchema{vschema: &vindexes.VSchema{}},
 		ts:              ts,
 		se:              se,
+		vschemaErrors:   env.Exporter().NewCounter("VSchemaErrors", "Count of VSchema errors"),
+		vschemaUpdates:  env.Exporter().NewCounter("VSchemaUpdates", "Count of VSchema updates. Does not include errors"),
 	}
-	once.Do(func() {
-		vschemaErrors = stats.NewCounter("VSchemaErrors", "Count of VSchema errors")
-		vschemaUpdates = stats.NewCounter("VSchemaUpdates", "Count of VSchema updates. Does not include errors")
-		http.Handle("/debug/tablet_vschema", vse)
-	})
+	env.Exporter().HandleFunc("/debug/tablet_vschema", vse.ServeHTTP)
 	return vse
 }
 
@@ -291,7 +286,7 @@ func (vse *Engine) setWatch() {
 			v = nil
 		default:
 			log.Errorf("Error fetching vschema: %v", err)
-			vschemaErrors.Add(1)
+			vse.vschemaErrors.Add(1)
 			return
 		}
 		var vschema *vindexes.VSchema
@@ -299,7 +294,7 @@ func (vse *Engine) setWatch() {
 			vschema, err = vindexes.BuildVSchema(v)
 			if err != nil {
 				log.Errorf("Error building vschema: %v", err)
-				vschemaErrors.Add(1)
+				vse.vschemaErrors.Add(1)
 				return
 			}
 		} else {
@@ -318,6 +313,6 @@ func (vse *Engine) setWatch() {
 		for _, s := range vse.streamers {
 			s.SetVSchema(vse.lvschema)
 		}
-		vschemaUpdates.Add(1)
+		vse.vschemaUpdates.Add(1)
 	})
 }

@@ -17,8 +17,6 @@ limitations under the License.
 package connpool
 
 import (
-	"fmt"
-	"math/rand"
 	"testing"
 	"time"
 
@@ -223,8 +221,8 @@ func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
 
 func newPool() *Pool {
 	return New(
-		tabletenv.NewTestEnv(nil, nil),
-		fmt.Sprintf("TestPool%d", rand.Int63()),
+		tabletenv.NewTestEnv(nil, nil, "PoolTest"),
+		"TestPool",
 		100,
 		0,
 		10*time.Second,

@@ -145,7 +145,6 @@ func InitVtctld(ts *topo.Server) {
 			log.Errorf("Unable to open rice box %s", err)
 			http.NotFound(w, r)
 		}
-		log.Infof("Opening file from rice box : %s", rest)
 		fileToServe, err := riceBox.Open(rest)
 		if err != nil {
 			if !strings.ContainsAny(rest, "/.") {

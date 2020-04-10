@@ -77,7 +77,7 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 		TabletType: topodatapb.TabletType_MASTER,
 	}
 
-	Server = tabletserver.NewTabletServer(config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	Server = tabletserver.NewTabletServer("", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	Server.Register()
 	err := Server.StartService(Target, dbcfgs)
 	if err != nil {

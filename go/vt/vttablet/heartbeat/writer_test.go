@@ -18,7 +18,6 @@ package heartbeat
 
 import (
 	"fmt"
-	"math/rand"
 	"testing"
 	"time"
 
@@ -106,16 +105,14 @@ func TestWriteHeartbeatError(t *testing.T) {
 }
 
 func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *Writer {
-	randID := rand.Int63()
 	config := tabletenv.DefaultQsConfig
 	config.HeartbeatEnable = true
-	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 
 	params, _ := db.ConnParams().MysqlParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
-	tw := NewWriter(tabletenv.NewTestEnv(&config, nil), topodatapb.TabletAlias{Cell: "test", Uid: 1111})
+	tw := NewWriter(tabletenv.NewTestEnv(&config, nil, "WriterTest"), topodatapb.TabletAlias{Cell: "test", Uid: 1111})
 	tw.dbName = sqlescape.EscapeID(dbc.SidecarDBName.Get())
 	tw.keyspaceShard = "test:0"
 	tw.now = nowFunc

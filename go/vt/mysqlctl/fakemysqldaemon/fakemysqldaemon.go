@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -163,7 +162,7 @@ func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 	}
 	if db != nil {
 		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", 5, time.Minute, 0)
-		result.appPool.Open(db.ConnParams(), stats.NewTimings("", "", ""))
+		result.appPool.Open(db.ConnParams())
 	}
 	return result
 }
@@ -473,12 +472,12 @@ func (fmd *FakeMysqlDaemon) GetAppConnection(ctx context.Context) (*dbconnpool.P
 
 // GetDbaConnection is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetDbaConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(fmd.db.ConnParams(), stats.NewTimings("", "", ""))
+	return dbconnpool.NewDBConnection(fmd.db.ConnParams())
 }
 
 // GetAllPrivsConnection is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetAllPrivsConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(fmd.db.ConnParams(), stats.NewTimings("", "", ""))
+	return dbconnpool.NewDBConnection(fmd.db.ConnParams())
 }
 
 // SetSemiSyncEnabled is part of the MysqlDaemon interface.

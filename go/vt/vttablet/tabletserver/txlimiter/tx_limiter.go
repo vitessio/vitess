@@ -31,11 +31,6 @@ import (
 
 const unknown string = "unknown"
 
-var (
-	rejections       = stats.NewCountersWithSingleLabel("TxLimiterRejections", "rejections from TxLimiter", "user")
-	rejectionsDryRun = stats.NewCountersWithSingleLabel("TxLimiterRejectionsDryRun", "rejections from TxLimiter in dry run", "user")
-)
-
 // TxLimiter is the transaction limiter interface.
 type TxLimiter interface {
 	Get(immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID) bool
@@ -58,14 +53,16 @@ func New(env tabletenv.Env) TxLimiter {
 	}
 
 	return &Impl{
-		maxPerUser:      int64(float64(config.TransactionCap) * config.TransactionLimitPerUser),
-		dryRun:          config.EnableTransactionLimitDryRun,
-		byUsername:      config.TransactionLimitByUsername,
-		byPrincipal:     config.TransactionLimitByPrincipal,
-		byComponent:     config.TransactionLimitByComponent,
-		bySubcomponent:  config.TransactionLimitBySubcomponent,
-		byEffectiveUser: config.TransactionLimitByPrincipal || config.TransactionLimitByComponent || config.TransactionLimitBySubcomponent,
-		usageMap:        make(map[string]int64),
+		maxPerUser:       int64(float64(config.TransactionCap) * config.TransactionLimitPerUser),
+		dryRun:           config.EnableTransactionLimitDryRun,
+		byUsername:       config.TransactionLimitByUsername,
+		byPrincipal:      config.TransactionLimitByPrincipal,
+		byComponent:      config.TransactionLimitByComponent,
+		bySubcomponent:   config.TransactionLimitBySubcomponent,
+		byEffectiveUser:  config.TransactionLimitByPrincipal || config.TransactionLimitByComponent || config.TransactionLimitBySubcomponent,
+		usageMap:         make(map[string]int64),
+		rejections:       env.Exporter().NewCountersWithSingleLabel("TxLimiterRejections", "rejections from TxLimiter", "user"),
+		rejectionsDryRun: env.Exporter().NewCountersWithSingleLabel("TxLimiterRejectionsDryRun", "rejections from TxLimiter in dry run", "user"),
 	}
 }
 
@@ -99,6 +96,8 @@ type Impl struct {
 	byComponent     bool
 	bySubcomponent  bool
 	byEffectiveUser bool
+
+	rejections, rejectionsDryRun *stats.CountersWithSingleLabel
 }
 
 // Get tells whether given user (identified by context.Context) is allowed
@@ -119,12 +118,12 @@ func (txl *Impl) Get(immediate *querypb.VTGateCallerID, effective *vtrpcpb.Calle
 
 	if txl.dryRun {
 		log.Infof("TxLimiter: DRY RUN: user over limit: %s", key)
-		rejectionsDryRun.Add(key, 1)
+		txl.rejectionsDryRun.Add(key, 1)
 		return true
 	}
 
 	log.Infof("TxLimiter: Over limit, rejecting transaction request for user: %s", key)
-	rejections.Add(key, 1)
+	txl.rejections.Add(key, 1)
 	return false
 }
 
