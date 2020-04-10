@@ -2051,14 +2051,11 @@
   "Instructions": {
     "OperatorType": "Projection",
     "Variant": "",
+    "Columns": [
+      "last_insert_id()"
+    ],
     "Expressions": [
-      {
-        "Expr": {
-          "Type": 5,
-          "Val": "Ol9fbGFzdEluc2VydElk"
-        },
-        "As": "last_insert_id()"
-      }
+      ":__lastInsertId"
     ],
     "Inputs": [
       {

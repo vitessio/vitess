@@ -39,11 +39,13 @@ type (
 	// Expr is the interface that all evaluating expressions must implement
 	Expr interface {
 		Evaluate(env ExpressionEnv) (EvalResult, error)
+		String() string
 	}
 
 	//BinaryExpr allows binary expressions to not have to evaluate child expressions - this is done by the BinaryOp
 	BinaryExpr interface {
 		Evaluate(left, right EvalResult) (EvalResult, error)
+		String() string
 	}
 
 	// Expressions
@@ -60,6 +62,34 @@ type (
 	Multiplication struct{}
 	Division       struct{}
 )
+
+func (d *Division) String() string {
+	return "/"
+}
+
+func (m *Multiplication) String() string {
+	return "*"
+}
+
+func (s *Subtraction) String() string {
+	return "-"
+}
+
+func (a *Addition) String() string {
+	return "+"
+}
+
+func (b *BinaryOp) String() string {
+	return b.Left.String() + " " + b.Expr.String() + " " + b.Right.String()
+}
+
+func (b *BindVariable) String() string {
+	return ":" + b.Key
+}
+
+func (l *LiteralInt) String() string {
+	return string(l.Val)
+}
 
 //Value allows for retrieval of the value we need
 func (e EvalResult) Value() Value {

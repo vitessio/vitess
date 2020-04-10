@@ -81,10 +81,14 @@ func (p *Projection) Inputs() []Primitive {
 }
 
 func (p *Projection) description() PrimitiveDescription {
+	var exprs []string
+	for _, e := range p.Exprs {
+		exprs = append(exprs, e.String())
+	}
 	return PrimitiveDescription{
 		OperatorType: "Projection",
 		Other: map[string]interface{}{
-			"Expressions": p.Exprs,
+			"Expressions": exprs,
 			"Columns":     p.Cols,
 		},
 	}
