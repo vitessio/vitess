@@ -15,41 +15,19 @@ topology:
               tablets:
                 - type: "replica"
                   vttablet:
-                    replicas: 2
-                - type: "rdonly"
-                  vttablet:
-                    replicas: 1
+                    replicas: 3
         - name: "customer"
           shards:
             - name: "0"
               tablets:
                 - type: "replica"
                   vttablet:
-                    replicas: 2
-                - type: "rdonly"
-                  vttablet:
-                    replicas: 1
-            - name: "-80"
-              tablets:
-                - type: "replica"
-                  vttablet:
-                    replicas: 2
-                - type: "rdonly"
-                  vttablet:
-                    replicas: 1
-            - name: "80-"
-              tablets:
-                - type: "replica"
-                  vttablet:
-                    replicas: 2
-                - type: "rdonly"
-                  vttablet:
-                    replicas: 1
+                    replicas: 3
 
 jobs:
-  - name: "mst3"
+  - name: "mswitch3"
     kind: "vtctlclient"
-    command: "MigrateServedTypes customer/0 master"
+    command: "SwitchWrites customer.commerce2customer"
 
 vtctld:
   serviceType: "NodePort"
