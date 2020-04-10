@@ -1359,7 +1359,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		if err != nil {
 			return nil, err
 		}
-		if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(stmt) {
+		if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(stmt) && plan.Instructions != nil {
 			e.plans.Set(planKey, plan)
 		}
 		return plan, nil
@@ -1386,7 +1386,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	if err != nil {
 		return nil, err
 	}
-	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(rewrittenStatement) {
+	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(rewrittenStatement) && plan.Instructions != nil {
 		e.plans.Set(planKey, plan)
 	}
 	return plan, nil
