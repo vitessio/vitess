@@ -37,7 +37,7 @@ type TabletPicker struct {
 	tabletTypes []topodatapb.TabletType
 
 	healthCheck LegacyHealthCheck
-	watcher     *TopologyWatcher
+	watcher     *LegacyTopologyWatcher
 	statsCache  *LegacyTabletStatsCache
 }
 
@@ -51,7 +51,7 @@ func NewTabletPicker(ctx context.Context, ts *topo.Server, cell, keyspace, shard
 	// These have to be initialized in the following sequence (watcher must be last).
 	healthCheck := NewLegacyHealthCheck(healthcheckRetryDelay, healthcheckTimeout)
 	statsCache := NewLegacyTabletStatsCache(healthCheck, ts, cell)
-	watcher := NewShardReplicationWatcher(ctx, ts, healthCheck, cell, keyspace, shard, healthcheckTopologyRefresh, DefaultTopoReadConcurrency)
+	watcher := NewLegacyShardReplicationWatcher(ctx, ts, healthCheck, cell, keyspace, shard, healthcheckTopologyRefresh, DefaultTopoReadConcurrency)
 
 	return &TabletPicker{
 		ts:          ts,

@@ -29,7 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
-func checkOpCounts(t *testing.T, tw *TopologyWatcher, prevCounts, deltas map[string]int64) map[string]int64 {
+func checkOpCounts(t *testing.T, tw *LegacyTopologyWatcher, prevCounts, deltas map[string]int64) map[string]int64 {
 	t.Helper()
 	newCounts := topologyWatcherOperations.Counts()
 	for key, prevVal := range prevCounts {
@@ -49,7 +49,7 @@ func checkOpCounts(t *testing.T, tw *TopologyWatcher, prevCounts, deltas map[str
 	return newCounts
 }
 
-func checkChecksum(t *testing.T, tw *TopologyWatcher, want uint32) {
+func checkChecksum(t *testing.T, tw *LegacyTopologyWatcher, want uint32) {
 	t.Helper()
 	got := tw.TopoChecksum()
 	if want != got {
@@ -75,11 +75,11 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	logger := logutil.NewMemoryLogger()
 	topologyWatcherOperations.ZeroAll()
 	counts := topologyWatcherOperations.Counts()
-	var tw *TopologyWatcher
+	var tw *LegacyTopologyWatcher
 	if cellTablets {
-		tw = NewCellTabletsWatcher(context.Background(), ts, fhc, "aa", 10*time.Minute, refreshKnownTablets, 5)
+		tw = NewLegacyCellTabletsWatcher(context.Background(), ts, fhc, "aa", 10*time.Minute, refreshKnownTablets, 5)
 	} else {
-		tw = NewShardReplicationWatcher(context.Background(), ts, fhc, "aa", "keyspace", "shard", 10*time.Minute, 5)
+		tw = NewLegacyShardReplicationWatcher(context.Background(), ts, fhc, "aa", "keyspace", "shard", 10*time.Minute, 5)
 	}
 
 	// Wait for the initial topology load to finish. Otherwise we
@@ -136,7 +136,7 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	}
 	tw.loadTablets()
 
-	// If refreshKnownTablets is disabled, only the new tablet is read
+	// If RefreshKnownTablets is disabled, only the new tablet is read
 	// from the topo
 	if refreshKnownTablets {
 		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "AddTablet": 1})
@@ -152,7 +152,7 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 		t.Errorf("fhc.GetAllTablets() = %+v; want %+v", allTablets, tablet2)
 	}
 
-	// Load the tablets again to show that when refreshKnownTablets is disabled,
+	// Load the tablets again to show that when RefreshKnownTablets is disabled,
 	// only the list is read from the topo and the checksum doesn't change
 	tw.loadTablets()
 	if refreshKnownTablets {
@@ -165,7 +165,7 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	// same tablet, different port, should update (previous
 	// one should go away, new one be added)
 	//
-	// if refreshKnownTablets is disabled, this case is *not*
+	// if RefreshKnownTablets is disabled, this case is *not*
 	// detected and the tablet remains in the topo using the
 	// old key
 	origTablet := proto.Clone(tablet).(*topodatapb.Tablet)
@@ -207,7 +207,7 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	// trigger a ReplaceTablet in loadTablets because the uid does not
 	// match.
 	//
-	// This case *is* detected even if refreshKnownTablets is false
+	// This case *is* detected even if RefreshKnownTablets is false
 	// because the delete tablet / create tablet sequence causes the
 	// list of tablets to change and therefore the change is detected.
 	if err := ts.DeleteTablet(context.Background(), tablet2.Alias); err != nil {
@@ -395,9 +395,9 @@ func TestFilterByShard(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		fbs, err := NewFilterByShard(nil, tc.filters)
+		fbs, err := NewLegacyFilterByShard(nil, tc.filters)
 		if err != nil {
-			t.Errorf("cannot create FilterByShard for filters %v: %v", tc.filters, err)
+			t.Errorf("cannot create LegacyFilterByShard for filters %v: %v", tc.filters, err)
 		}
 
 		tablet := &topodatapb.Tablet{
@@ -433,9 +433,9 @@ var (
 
 func TestFilterByKeyspace(t *testing.T) {
 	hc := NewFakeHealthCheck()
-	tr := NewFilterByKeyspace(hc, testKeyspacesToWatch)
+	tr := NewLegacyFilterByKeyspace(hc, testKeyspacesToWatch)
 	ts := memorytopo.NewServer(testCell)
-	tw := NewCellTabletsWatcher(context.Background(), ts, tr, testCell, 10*time.Minute, true, 5)
+	tw := NewLegacyCellTabletsWatcher(context.Background(), ts, tr, testCell, 10*time.Minute, true, 5)
 
 	for _, test := range testFilterByKeyspace {
 		// Add a new tablet to the topology.

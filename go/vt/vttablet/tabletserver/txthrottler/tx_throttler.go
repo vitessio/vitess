@@ -144,8 +144,8 @@ type ThrottlerInterface interface {
 }
 
 // TopologyWatcherInterface defines the public interface that is implemented by
-// discovery.TopologyWatcher. It is only used here to allow mocking out
-// go/vt/discovery.TopologyWatcher.
+// discovery.LegacyTopologyWatcher. It is only used here to allow mocking out
+// go/vt/discovery.LegacyTopologyWatcher.
 type TopologyWatcherInterface interface {
 	WaitForInitialTopology() error
 	Stop()
@@ -182,7 +182,7 @@ func init() {
 func resetTxThrottlerFactories() {
 	healthCheckFactory = discovery.NewLegacyDefaultHealthCheck
 	topologyWatcherFactory = func(topoServer *topo.Server, tr discovery.TabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
-		return discovery.NewShardReplicationWatcher(context.Background(), topoServer, tr, cell, keyspace, shard, refreshInterval, topoReadConcurrency)
+		return discovery.NewLegacyShardReplicationWatcher(context.Background(), topoServer, tr, cell, keyspace, shard, refreshInterval, topoReadConcurrency)
 	}
 	throttlerFactory = func(name, unit string, threadCount int, maxRate, maxReplicationLag int64) (ThrottlerInterface, error) {
 		return throttler.NewThrottler(name, unit, threadCount, maxRate, maxReplicationLag)

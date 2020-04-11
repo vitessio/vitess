@@ -52,7 +52,7 @@ func FindHealthyTablet(ctx context.Context, wr *wrangler.Wrangler, tsc *discover
 		// No healthcheck instance provided. Create one.
 		healthCheck := discovery.NewLegacyHealthCheck(*healthcheckRetryDelay, *healthCheckTimeout)
 		tsc = discovery.NewLegacyTabletStatsCache(healthCheck, wr.TopoServer(), cell)
-		watcher := discovery.NewShardReplicationWatcher(ctx, wr.TopoServer(), healthCheck, cell, keyspace, shard, *healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
+		watcher := discovery.NewLegacyShardReplicationWatcher(ctx, wr.TopoServer(), healthCheck, cell, keyspace, shard, *healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
 		defer watcher.Stop()
 		defer healthCheck.Close()
 	}

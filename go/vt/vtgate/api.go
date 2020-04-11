@@ -88,7 +88,63 @@ func getItemPath(url string) string {
 	return parts[1]
 }
 
-func initAPI(ctx context.Context, hc discovery.LegacyHealthCheck) {
+func initAPI(ctx context.Context, hc discovery.HealthCheck) {
+	// Healthcheck real time status per (cell, keyspace, tablet type, metric).
+	handleCollection("health-check", func(r *http.Request) (interface{}, error) {
+		cacheStatus := hc.CacheStatus()
+
+		itemPath := getItemPath(r.URL.Path)
+		if itemPath == "" {
+			return cacheStatus, nil
+		}
+		parts := strings.SplitN(itemPath, "/", 2)
+		collectionFilter := parts[0]
+		if collectionFilter == "" {
+			return cacheStatus, nil
+		}
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid health-check path: %q  expected path: / or /cell/<cell> or /keyspace/<keyspace> or /tablet/<tablet|mysql_hostname>", itemPath)
+		}
+		value := parts[1]
+
+		switch collectionFilter {
+		case "cell":
+			{
+				filteredStatus := make(discovery.TabletsCacheStatusList, 0)
+				for _, tabletCacheStatus := range cacheStatus {
+					if tabletCacheStatus.Cell == value {
+						filteredStatus = append(filteredStatus, tabletCacheStatus)
+					}
+				}
+				return filteredStatus, nil
+			}
+		case "keyspace":
+			{
+				filteredStatus := make(discovery.TabletsCacheStatusList, 0)
+				for _, tabletCacheStatus := range cacheStatus {
+					if tabletCacheStatus.Target.Keyspace == value {
+						filteredStatus = append(filteredStatus, tabletCacheStatus)
+					}
+				}
+				return filteredStatus, nil
+			}
+		case "tablet":
+			{
+				// Return a _specific tablet_
+				for _, tabletCacheStatus := range cacheStatus {
+					for _, tabletStats := range tabletCacheStatus.TabletsStats {
+						if tabletStats.Name == value || tabletStats.Tablet.MysqlHostname == value {
+							return tabletStats, nil
+						}
+					}
+				}
+			}
+		}
+		return nil, fmt.Errorf("cannot find health for: %s", itemPath)
+	})
+}
+
+func legacyInitAPI(ctx context.Context, hc discovery.LegacyHealthCheck) {
 	// Healthcheck real time status per (cell, keyspace, tablet type, metric).
 	handleCollection("health-check", func(r *http.Request) (interface{}, error) {
 		cacheStatus := hc.CacheStatus()

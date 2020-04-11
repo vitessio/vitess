@@ -105,11 +105,11 @@ type SplitCloneWorker struct {
 	lastPos       string // contains the GTID position for the source
 	transactions  []int64
 
-	// shardWatchers contains a TopologyWatcher for each source and destination
+	// shardWatchers contains a LegacyTopologyWatcher for each source and destination
 	// shard. It updates the list of tablets in the healthcheck if replicas are
 	// added/removed.
 	// Each watcher must be stopped at the end of the command.
-	shardWatchers []*discovery.TopologyWatcher
+	shardWatchers []*discovery.LegacyTopologyWatcher
 	// destinationDbNames stores for each destination keyspace/shard the MySQL
 	// database name.
 	// Example Map Entry: test_keyspace/-80 => vt_test_keyspace
@@ -566,7 +566,7 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 	// Start watchers to get tablets added automatically to healthCheck.
 	allShards := append(scw.sourceShards, scw.destinationShards...)
 	for _, si := range allShards {
-		watcher := discovery.NewShardReplicationWatcher(ctx, scw.wr.TopoServer(), scw.healthCheck,
+		watcher := discovery.NewLegacyShardReplicationWatcher(ctx, scw.wr.TopoServer(), scw.healthCheck,
 			scw.cell, si.Keyspace(), si.ShardName(),
 			*healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
 		scw.shardWatchers = append(scw.shardWatchers, watcher)

@@ -18,32 +18,30 @@ package discovery
 
 import (
 	"flag"
-	"fmt"
 	"sort"
 	"time"
 )
 
 var (
 	// lowReplicationLag defines the duration that replication lag is low enough that the VTTablet is considered healthy.
-	lowReplicationLag             = flag.Duration("discovery_low_replication_lag", 30*time.Second, "the replication lag that is considered low enough to be healthy")
-	highReplicationLagMinServing  = flag.Duration("discovery_high_replication_lag_minimum_serving", 2*time.Hour, "the replication lag that is considered too high when selecting the minimum num vttablets for serving")
-	minNumTablets                 = flag.Int("min_number_serving_vttablets", 2, "the minimum number of vttablets that will be continue to be used even with low replication lag")
-	legacyReplicationLagAlgorithm = flag.Bool("legacy_replication_lag_algorithm", true, "use the legacy algorithm when selecting the vttablets for serving")
+	lowReplicationLag            = flag.Duration("discovery_low_replication_lag", 30*time.Second, "the replication lag that is considered low enough to be healthy")
+	highReplicationLagMinServing = flag.Duration("discovery_high_replication_lag_minimum_serving", 2*time.Hour, "the replication lag that is considered too high when selecting the minimum num vttablets for serving")
+	minNumTablets                = flag.Int("min_number_serving_vttablets", 2, "the minimum number of vttablets that will be continue to be used even with low replication lag")
 )
 
 // IsReplicationLagHigh verifies that the given LegacyTabletStats refers to a tablet with high
 // replication lag, i.e. higher than the configured discovery_low_replication_lag flag.
-func IsReplicationLagHigh(tabletStats *LegacyTabletStats) bool {
+func IsReplicationLagHigh(tabletStats *TabletStats) bool {
 	return float64(tabletStats.Stats.SecondsBehindMaster) > lowReplicationLag.Seconds()
 }
 
 // IsReplicationLagVeryHigh verifies that the given LegacyTabletStats refers to a tablet with very high
 // replication lag, i.e. higher than the configured discovery_high_replication_lag_minimum_serving flag.
-func IsReplicationLagVeryHigh(tabletStats *LegacyTabletStats) bool {
+func IsReplicationLagVeryHigh(tabletStats *TabletStats) bool {
 	return float64(tabletStats.Stats.SecondsBehindMaster) > highReplicationLagMinServing.Seconds()
 }
 
-// FilterByReplicationLag filters the list of LegacyTabletStats by LegacyTabletStats.Stats.SecondsBehindMaster.
+// FilterStatsByReplicationLag filters the list of LegacyTabletStats by LegacyTabletStats.Stats.SecondsBehindMaster.
 // Note that LegacyTabletStats that is non-serving or has error is ignored.
 //
 // The simplified logic:
@@ -68,21 +66,11 @@ func IsReplicationLagVeryHigh(tabletStats *LegacyTabletStats) bool {
 //   The default for this is 2h, same as the discovery_high_replication_lag_minimum_serving here.
 // * degraded_threshold: this is only used by vttablet for display. It should match
 //   discovery_low_replication_lag here, so the vttablet status display matches what vtgate will do of it.
-func FilterByReplicationLag(tabletStatsList []*LegacyTabletStats) []*LegacyTabletStats {
-	if !*legacyReplicationLagAlgorithm {
-		return filterByLag(tabletStatsList)
-	}
-
-	res := filterByLagWithLegacyAlgorithm(tabletStatsList)
-	// run the filter again if exactly one tablet is removed,
-	// and we have spare tablets.
-	if len(res) > *minNumTablets && len(res) == len(tabletStatsList)-1 {
-		res = filterByLagWithLegacyAlgorithm(res)
-	}
-	return res
+func FilterStatsByReplicationLag(tabletStatsList []*TabletStats) []*TabletStats {
+	return filterStatsByLag(tabletStatsList)
 }
 
-func filterByLag(tabletStatsList []*LegacyTabletStats) []*LegacyTabletStats {
+func filterStatsByLag(tabletStatsList []*TabletStats) []*TabletStats {
 	list := make([]tabletLagSnapshot, 0, len(tabletStatsList))
 	// filter non-serving tablets and those with very high replication lag
 	for _, ts := range tabletStatsList {
@@ -96,10 +84,10 @@ func filterByLag(tabletStatsList []*LegacyTabletStats) []*LegacyTabletStats {
 	}
 
 	// Sort by replication lag.
-	sort.Sort(byReplag(list))
+	sort.Sort(tabletLagSnapshotList(list))
 
 	// Pick those with low replication lag, but at least minNumTablets tablets regardless.
-	res := make([]*LegacyTabletStats, 0, len(list))
+	res := make([]*TabletStats, 0, len(list))
 	for i := 0; i < len(list); i++ {
 		if !IsReplicationLagHigh(list[i].ts) || i < *minNumTablets {
 			res = append(res, list[i].ts)
@@ -108,136 +96,19 @@ func filterByLag(tabletStatsList []*LegacyTabletStats) []*LegacyTabletStats {
 	return res
 }
 
-func filterByLagWithLegacyAlgorithm(tabletStatsList []*LegacyTabletStats) []*LegacyTabletStats {
-	list := make([]*LegacyTabletStats, 0, len(tabletStatsList))
-	// filter non-serving tablets
-	for _, ts := range tabletStatsList {
-		if !ts.Serving || ts.LastError != nil || ts.Stats == nil {
-			continue
-		}
-		list = append(list, ts)
-	}
-	if len(list) <= 1 {
-		return list
-	}
-	// if all have low replication lag (<=30s), return all tablets.
-	allLowLag := true
-	for _, ts := range list {
-		if IsReplicationLagHigh(ts) {
-			allLowLag = false
-			break
-		}
-	}
-	if allLowLag {
-		return list
-	}
-	// filter those affecting "mean" lag significantly
-	// calculate mean for all tablets
-	res := make([]*LegacyTabletStats, 0, len(list))
-	m, _ := mean(list, -1)
-	for i, ts := range list {
-		// calculate mean by excluding ith tablet
-		mi, _ := mean(list, i)
-		if float64(mi) > float64(m)*0.7 {
-			res = append(res, ts)
-		}
-	}
-	if len(res) >= *minNumTablets {
-		return res
-	}
-	// return at least minNumTablets tablets to avoid over loading,
-	// if there is enough tablets with replication lag < highReplicationLagMinServing.
-	// Pull the current replication lag for a stable sort.
-	snapshots := make([]tabletLagSnapshot, 0, len(list))
-	for _, ts := range list {
-		if !IsReplicationLagVeryHigh(ts) {
-			snapshots = append(snapshots, tabletLagSnapshot{
-				ts:     ts,
-				replag: ts.Stats.SecondsBehindMaster})
-		}
-	}
-	if len(snapshots) == 0 {
-		// We get here if all tablets are over the high
-		// replication lag threshold, and their lag is
-		// different enough that the 70% mean computation up
-		// there didn't find them all in a group. For
-		// instance, if *minNumTablets = 2, and we have two
-		// tablets with lag of 3h and 30h.  In that case, we
-		// just use them all.
-		for _, ts := range list {
-			snapshots = append(snapshots, tabletLagSnapshot{
-				ts:     ts,
-				replag: ts.Stats.SecondsBehindMaster})
-		}
-	}
-
-	// Sort by replication lag.
-	sort.Sort(byReplag(snapshots))
-
-	// Pick the first minNumTablets tablets.
-	res = make([]*LegacyTabletStats, 0, *minNumTablets)
-	for i := 0; i < min(*minNumTablets, len(snapshots)); i++ {
-		res = append(res, snapshots[i].ts)
-	}
-	return res
+type tabletLagSnapshot struct {
+	ts     *TabletStats
+	replag uint32
 }
+type tabletLagSnapshotList []tabletLagSnapshot
+
+func (a tabletLagSnapshotList) Len() int           { return len(a) }
+func (a tabletLagSnapshotList) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a tabletLagSnapshotList) Less(i, j int) bool { return a[i].replag < a[j].replag }
 
 func min(a, b int) int {
 	if a > b {
 		return b
 	}
 	return a
-}
-
-type tabletLagSnapshot struct {
-	ts     *LegacyTabletStats
-	replag uint32
-}
-type byReplag []tabletLagSnapshot
-
-func (a byReplag) Len() int           { return len(a) }
-func (a byReplag) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a byReplag) Less(i, j int) bool { return a[i].replag < a[j].replag }
-
-// mean calculates the mean value over the given list,
-// while excluding the item with the specified index.
-func mean(tabletStatsList []*LegacyTabletStats, idxExclude int) (uint64, error) {
-	var sum uint64
-	var count uint64
-	for i, ts := range tabletStatsList {
-		if i == idxExclude {
-			continue
-		}
-		sum = sum + uint64(ts.Stats.SecondsBehindMaster)
-		count++
-	}
-	if count == 0 {
-		return 0, fmt.Errorf("empty list")
-	}
-	return sum / count, nil
-}
-
-// TrivialStatsUpdate returns true iff the old and new LegacyTabletStats
-// haven't changed enough to warrant re-calling FilterByReplicationLag.
-func TrivialStatsUpdate(o, n *LegacyTabletStats) bool {
-	// Skip replag filter when replag remains in the low rep lag range,
-	// which should be the case majority of the time.
-	lowRepLag := lowReplicationLag.Seconds()
-	oldRepLag := float64(o.Stats.SecondsBehindMaster)
-	newRepLag := float64(n.Stats.SecondsBehindMaster)
-	if oldRepLag <= lowRepLag && newRepLag <= lowRepLag {
-		return true
-	}
-
-	// Skip replag filter when replag remains in the high rep lag range,
-	// and did not change beyond +/- 10%.
-	// when there is a high rep lag, it takes a long time for it to reduce,
-	// so it is not necessary to re-calculate every time.
-	// In that case, we won't save the new record, so we still
-	// remember the original replication lag.
-	if oldRepLag > lowRepLag && newRepLag > lowRepLag && newRepLag < oldRepLag*1.1 && newRepLag > oldRepLag*0.9 {
-		return true
-	}
-
-	return false
 }

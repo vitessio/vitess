@@ -30,7 +30,7 @@ import (
 type realtimeStats struct {
 	healthCheck discovery.LegacyHealthCheck
 	*tabletStatsCache
-	cellWatchers []*discovery.TopologyWatcher
+	cellWatchers []*discovery.LegacyTopologyWatcher
 }
 
 func newRealtimeStats(ts *topo.Server) (*realtimeStats, error) {
@@ -49,9 +49,9 @@ func newRealtimeStats(ts *topo.Server) (*realtimeStats, error) {
 	if err != nil {
 		return r, fmt.Errorf("error when getting cells: %v", err)
 	}
-	var watchers []*discovery.TopologyWatcher
+	var watchers []*discovery.LegacyTopologyWatcher
 	for _, cell := range cells {
-		watcher := discovery.NewCellTabletsWatcher(context.Background(), ts, hc, cell, *vtctl.HealthCheckTopologyRefresh, true /* refreshKnownTablets */, discovery.DefaultTopoReadConcurrency)
+		watcher := discovery.NewLegacyCellTabletsWatcher(context.Background(), ts, hc, cell, *vtctl.HealthCheckTopologyRefresh, true /* refreshKnownTablets */, discovery.DefaultTopoReadConcurrency)
 		watchers = append(watchers, watcher)
 	}
 	r.cellWatchers = watchers

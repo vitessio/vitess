@@ -78,11 +78,11 @@ type LegacySplitCloneWorker struct {
 	// It must be closed at the end of the command.
 	healthCheck discovery.LegacyHealthCheck
 	tsc         *discovery.LegacyTabletStatsCache
-	// destinationShardWatchers contains a TopologyWatcher for each destination
+	// destinationShardWatchers contains a LegacyTopologyWatcher for each destination
 	// shard. It updates the list of tablets in the healthcheck if replicas are
 	// added/removed.
 	// Each watcher must be stopped at the end of the command.
-	destinationShardWatchers []*discovery.TopologyWatcher
+	destinationShardWatchers []*discovery.LegacyTopologyWatcher
 	// destinationDbNames stores for each destination keyspace/shard the MySQL
 	// database name.
 	// Example Map Entry: test_keyspace/-80 => vt_test_keyspace
@@ -389,7 +389,7 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 	scw.healthCheck = discovery.NewLegacyHealthCheck(*healthcheckRetryDelay, *healthCheckTimeout)
 	scw.tsc = discovery.NewLegacyTabletStatsCache(scw.healthCheck, scw.wr.TopoServer(), scw.cell)
 	for _, si := range scw.destinationShards {
-		watcher := discovery.NewShardReplicationWatcher(ctx, scw.wr.TopoServer(), scw.healthCheck,
+		watcher := discovery.NewLegacyShardReplicationWatcher(ctx, scw.wr.TopoServer(), scw.healthCheck,
 			scw.cell, si.Keyspace(), si.ShardName(),
 			*healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
 		scw.destinationShardWatchers = append(scw.destinationShardWatchers, watcher)
