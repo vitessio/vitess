@@ -55,6 +55,15 @@ func TestEvaluate(t *testing.T) {
 	}, {
 		expression: ":exp",
 		expected:   sqltypes.NewInt64(66),
+	}, {
+		expression: ":uint64_bind_variable",
+		expected:   sqltypes.NewUint64(22),
+	}, {
+		expression: ":string_bind_variable",
+		expected:   sqltypes.NewVarChar("bar"),
+	}, {
+		expression: ":float_bind_variable",
+		expected:   sqltypes.NewFloat64(2.2),
 	}}
 
 	for _, test := range tests {
@@ -67,7 +76,10 @@ func TestEvaluate(t *testing.T) {
 			require.NotNil(t, sqltypesExpr)
 			env := sqltypes.ExpressionEnv{
 				BindVars: map[string]*querypb.BindVariable{
-					"exp": sqltypes.Int64BindVariable(66),
+					"exp":                  sqltypes.Int64BindVariable(66),
+					"string_bind_variable": sqltypes.StringBindVariable("bar"),
+					"uint64_bind_variable": sqltypes.Uint64BindVariable(22),
+					"float_bind_variable":  sqltypes.Float64BindVariable(2.2),
 				},
 				Row: nil,
 			}

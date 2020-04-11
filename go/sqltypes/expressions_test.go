@@ -16,4 +16,4 @@ limitations under the License.
 
 package sqltypes
 
-// these tests live in go/sqltypes/expressions_test.go
+// these tests live in go/sqlparser/expressions_test.go

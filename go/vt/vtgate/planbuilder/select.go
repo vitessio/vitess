@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -79,8 +78,9 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 		exprs := make([]sqltypes.Expr, len(sel.SelectExprs))
 		cols := make([]string, len(sel.SelectExprs))
 		for i, e := range sel.SelectExprs {
-			exprs[i] = sqlparser.Convert(e.(*sqlparser.AliasedExpr).Expr)
-			cols[i] = e.(*sqlparser.AliasedExpr).As.String()
+			expr := e.(*sqlparser.AliasedExpr)
+			exprs[i] = sqlparser.Convert(expr.Expr)
+			cols[i] = expr.As.String()
 		}
 		pb.bldr = &vtgateExecution{
 			exprs,

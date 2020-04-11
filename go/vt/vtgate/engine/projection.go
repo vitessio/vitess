@@ -36,7 +36,7 @@ func (p *Projection) Execute(vcursor VCursor, bindVars map[string]*querypb.BindV
 	}
 
 	if wantfields {
-		p.addFields(result)
+		p.addFields(result, bindVars)
 	}
 	var rows [][]sqltypes.Value
 	for _, row := range result.Rows {
@@ -63,15 +63,16 @@ func (p *Projection) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bin
 	if err != nil {
 		return nil, err
 	}
-	p.addFields(qr)
+	p.addFields(qr, bindVars)
 	return qr, nil
 }
 
-func (p *Projection) addFields(qr *sqltypes.Result) {
-	for _, col := range p.Cols {
+func (p *Projection) addFields(qr *sqltypes.Result, bindVars map[string]*querypb.BindVariable) {
+	env := sqltypes.ExpressionEnv{BindVars: bindVars}
+	for i, col := range p.Cols {
 		qr.Fields = append(qr.Fields, &querypb.Field{
 			Name: col,
-			Type: querypb.Type_INT64,
+			Type: p.Exprs[i].Type(env),
 		})
 	}
 }

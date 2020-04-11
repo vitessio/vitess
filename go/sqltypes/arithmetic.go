@@ -29,13 +29,6 @@ import (
 
 // numeric represents a numeric value extracted from
 // a Value, used for arithmetic operations.
-type numeric struct {
-	typ  querypb.Type
-	ival int64
-	uval uint64
-	fval float64
-}
-
 var zeroBytes = []byte("0")
 
 // Add adds two values together
@@ -360,68 +353,68 @@ func ToNative(v Value) (interface{}, error) {
 }
 
 // newNumeric parses a value and produces an Int64, Uint64 or Float64.
-func newNumeric(v Value) (numeric, error) {
+func newNumeric(v Value) (evalResult, error) {
 	str := v.ToString()
 	switch {
 	case v.IsSigned():
 		ival, err := strconv.ParseInt(str, 10, 64)
 		if err != nil {
-			return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+			return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
-		return numeric{ival: ival, typ: Int64}, nil
+		return evalResult{ival: ival, typ: Int64}, nil
 	case v.IsUnsigned():
 		uval, err := strconv.ParseUint(str, 10, 64)
 		if err != nil {
-			return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+			return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
-		return numeric{uval: uval, typ: Uint64}, nil
+		return evalResult{uval: uval, typ: Uint64}, nil
 	case v.IsFloat():
 		fval, err := strconv.ParseFloat(str, 64)
 		if err != nil {
-			return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+			return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
-		return numeric{fval: fval, typ: Float64}, nil
+		return evalResult{fval: fval, typ: Float64}, nil
 	}
 
 	// For other types, do best effort.
 	if ival, err := strconv.ParseInt(str, 10, 64); err == nil {
-		return numeric{ival: ival, typ: Int64}, nil
+		return evalResult{ival: ival, typ: Int64}, nil
 	}
 	if fval, err := strconv.ParseFloat(str, 64); err == nil {
-		return numeric{fval: fval, typ: Float64}, nil
+		return evalResult{fval: fval, typ: Float64}, nil
 	}
-	return numeric{ival: 0, typ: Int64}, nil
+	return evalResult{ival: 0, typ: Int64}, nil
 }
 
 // newIntegralNumeric parses a value and produces an Int64 or Uint64.
-func newIntegralNumeric(v Value) (numeric, error) {
+func newIntegralNumeric(v Value) (evalResult, error) {
 	str := v.ToString()
 	switch {
 	case v.IsSigned():
 		ival, err := strconv.ParseInt(str, 10, 64)
 		if err != nil {
-			return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+			return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
-		return numeric{ival: ival, typ: Int64}, nil
+		return evalResult{ival: ival, typ: Int64}, nil
 	case v.IsUnsigned():
 		uval, err := strconv.ParseUint(str, 10, 64)
 		if err != nil {
-			return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+			return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
-		return numeric{uval: uval, typ: Uint64}, nil
+		return evalResult{uval: uval, typ: Uint64}, nil
 	}
 
 	// For other types, do best effort.
 	if ival, err := strconv.ParseInt(str, 10, 64); err == nil {
-		return numeric{ival: ival, typ: Int64}, nil
+		return evalResult{ival: ival, typ: Int64}, nil
 	}
 	if uval, err := strconv.ParseUint(str, 10, 64); err == nil {
-		return numeric{uval: uval, typ: Uint64}, nil
+		return evalResult{uval: uval, typ: Uint64}, nil
 	}
-	return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: '%s'", str)
+	return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: '%s'", str)
 }
 
-func addNumeric(v1, v2 numeric) numeric {
+func addNumeric(v1, v2 evalResult) evalResult {
 	v1, v2 = prioritize(v1, v2)
 	switch v1.typ {
 	case Int64:
@@ -439,7 +432,7 @@ func addNumeric(v1, v2 numeric) numeric {
 	panic("unreachable")
 }
 
-func addNumericWithError(v1, v2 numeric) (numeric, error) {
+func addNumericWithError(v1, v2 evalResult) (evalResult, error) {
 	v1, v2 = prioritize(v1, v2)
 	switch v1.typ {
 	case Int64:
@@ -457,7 +450,7 @@ func addNumericWithError(v1, v2 numeric) (numeric, error) {
 	panic("unreachable")
 }
 
-func subtractNumericWithError(v1, v2 numeric) (numeric, error) {
+func subtractNumericWithError(v1, v2 evalResult) (evalResult, error) {
 	switch v1.typ {
 	case Int64:
 		switch v2.typ {
@@ -483,7 +476,7 @@ func subtractNumericWithError(v1, v2 numeric) (numeric, error) {
 	panic("unreachable")
 }
 
-func multiplyNumericWithError(v1, v2 numeric) (numeric, error) {
+func multiplyNumericWithError(v1, v2 evalResult) (evalResult, error) {
 	v1, v2 = prioritize(v1, v2)
 	switch v1.typ {
 	case Int64:
@@ -501,7 +494,7 @@ func multiplyNumericWithError(v1, v2 numeric) (numeric, error) {
 	panic("unreachable")
 }
 
-func divideNumericWithError(v1, v2 numeric) (numeric, error) {
+func divideNumericWithError(v1, v2 evalResult) (evalResult, error) {
 	switch v1.typ {
 	case Int64:
 		return floatDivideAnyWithError(float64(v1.ival), v2)
@@ -517,7 +510,7 @@ func divideNumericWithError(v1, v2 numeric) (numeric, error) {
 
 // prioritize reorders the input parameters
 // to be Float64, Uint64, Int64.
-func prioritize(v1, v2 numeric) (altv1, altv2 numeric) {
+func prioritize(v1, v2 evalResult) (altv1, altv2 evalResult) {
 	switch v1.typ {
 	case Int64:
 		if v2.typ == Uint64 || v2.typ == Float64 {
@@ -531,7 +524,7 @@ func prioritize(v1, v2 numeric) (altv1, altv2 numeric) {
 	return v1, v2
 }
 
-func intPlusInt(v1, v2 int64) numeric {
+func intPlusInt(v1, v2 int64) evalResult {
 	result := v1 + v2
 	if v1 > 0 && v2 > 0 && result < 0 {
 		goto overflow
@@ -539,61 +532,61 @@ func intPlusInt(v1, v2 int64) numeric {
 	if v1 < 0 && v2 < 0 && result > 0 {
 		goto overflow
 	}
-	return numeric{typ: Int64, ival: result}
+	return evalResult{typ: Int64, ival: result}
 
 overflow:
-	return numeric{typ: Float64, fval: float64(v1) + float64(v2)}
+	return evalResult{typ: Float64, fval: float64(v1) + float64(v2)}
 }
 
-func intPlusIntWithError(v1, v2 int64) (numeric, error) {
+func intPlusIntWithError(v1, v2 int64) (evalResult, error) {
 	result := v1 + v2
 	if (result > v1) != (v2 > 0) {
-		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v + %v", v1, v2)
+		return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v + %v", v1, v2)
 	}
-	return numeric{typ: Int64, ival: result}, nil
+	return evalResult{typ: Int64, ival: result}, nil
 }
 
-func intMinusIntWithError(v1, v2 int64) (numeric, error) {
+func intMinusIntWithError(v1, v2 int64) (evalResult, error) {
 	result := v1 - v2
 
 	if (result < v1) != (v2 > 0) {
-		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v - %v", v1, v2)
+		return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v - %v", v1, v2)
 	}
-	return numeric{typ: Int64, ival: result}, nil
+	return evalResult{typ: Int64, ival: result}, nil
 }
 
-func intTimesIntWithError(v1, v2 int64) (numeric, error) {
+func intTimesIntWithError(v1, v2 int64) (evalResult, error) {
 	result := v1 * v2
 	if v1 != 0 && result/v1 != v2 {
-		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v * %v", v1, v2)
+		return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v * %v", v1, v2)
 	}
-	return numeric{typ: Int64, ival: result}, nil
+	return evalResult{typ: Int64, ival: result}, nil
 
 }
 
-func intMinusUintWithError(v1 int64, v2 uint64) (numeric, error) {
+func intMinusUintWithError(v1 int64, v2 uint64) (evalResult, error) {
 	if v1 < 0 || v1 < int64(v2) {
-		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v - %v", v1, v2)
+		return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v - %v", v1, v2)
 	}
 	return uintMinusUintWithError(uint64(v1), v2)
 }
 
-func uintPlusInt(v1 uint64, v2 int64) numeric {
+func uintPlusInt(v1 uint64, v2 int64) evalResult {
 	return uintPlusUint(v1, uint64(v2))
 }
 
-func uintPlusIntWithError(v1 uint64, v2 int64) (numeric, error) {
+func uintPlusIntWithError(v1 uint64, v2 int64) (evalResult, error) {
 	if v2 < 0 && v1 < uint64(v2) {
-		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v + %v", v1, v2)
+		return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v + %v", v1, v2)
 	}
 	// convert to int -> uint is because for numeric operators (such as + or -)
 	// where one of the operands is an unsigned integer, the result is unsigned by default.
 	return uintPlusUintWithError(v1, uint64(v2))
 }
 
-func uintMinusIntWithError(v1 uint64, v2 int64) (numeric, error) {
+func uintMinusIntWithError(v1 uint64, v2 int64) (evalResult, error) {
 	if int64(v1) < v2 && v2 > 0 {
-		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v - %v", v1, v2)
+		return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v - %v", v1, v2)
 	}
 	// uint - (- int) = uint + int
 	if v2 < 0 {
@@ -602,77 +595,77 @@ func uintMinusIntWithError(v1 uint64, v2 int64) (numeric, error) {
 	return uintMinusUintWithError(v1, uint64(v2))
 }
 
-func uintTimesIntWithError(v1 uint64, v2 int64) (numeric, error) {
+func uintTimesIntWithError(v1 uint64, v2 int64) (evalResult, error) {
 	if v2 < 0 || int64(v1) < 0 {
-		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v * %v", v1, v2)
+		return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v * %v", v1, v2)
 	}
 	return uintTimesUintWithError(v1, uint64(v2))
 }
 
-func uintPlusUint(v1, v2 uint64) numeric {
+func uintPlusUint(v1, v2 uint64) evalResult {
 	result := v1 + v2
 	if result < v2 {
-		return numeric{typ: Float64, fval: float64(v1) + float64(v2)}
+		return evalResult{typ: Float64, fval: float64(v1) + float64(v2)}
 	}
-	return numeric{typ: Uint64, uval: result}
+	return evalResult{typ: Uint64, uval: result}
 }
 
-func uintPlusUintWithError(v1, v2 uint64) (numeric, error) {
+func uintPlusUintWithError(v1, v2 uint64) (evalResult, error) {
 	result := v1 + v2
 	if result < v2 {
-		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v + %v", v1, v2)
+		return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v + %v", v1, v2)
 	}
-	return numeric{typ: Uint64, uval: result}, nil
+	return evalResult{typ: Uint64, uval: result}, nil
 }
 
-func uintMinusUintWithError(v1, v2 uint64) (numeric, error) {
+func uintMinusUintWithError(v1, v2 uint64) (evalResult, error) {
 	result := v1 - v2
 	if v2 > v1 {
-		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v - %v", v1, v2)
+		return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v - %v", v1, v2)
 	}
 
-	return numeric{typ: Uint64, uval: result}, nil
+	return evalResult{typ: Uint64, uval: result}, nil
 }
 
-func uintTimesUintWithError(v1, v2 uint64) (numeric, error) {
+func uintTimesUintWithError(v1, v2 uint64) (evalResult, error) {
 	result := v1 * v2
 	if result < v2 || result < v1 {
-		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v * %v", v1, v2)
+		return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v * %v", v1, v2)
 	}
-	return numeric{typ: Uint64, uval: result}, nil
+	return evalResult{typ: Uint64, uval: result}, nil
 }
 
-func floatPlusAny(v1 float64, v2 numeric) numeric {
+func floatPlusAny(v1 float64, v2 evalResult) evalResult {
 	switch v2.typ {
 	case Int64:
 		v2.fval = float64(v2.ival)
 	case Uint64:
 		v2.fval = float64(v2.uval)
 	}
-	return numeric{typ: Float64, fval: v1 + v2.fval}
+	return evalResult{typ: Float64, fval: v1 + v2.fval}
 }
 
-func floatMinusAny(v1 float64, v2 numeric) numeric {
+func floatMinusAny(v1 float64, v2 evalResult) evalResult {
 	switch v2.typ {
 	case Int64:
 		v2.fval = float64(v2.ival)
 	case Uint64:
 		v2.fval = float64(v2.uval)
 	}
-	return numeric{typ: Float64, fval: v1 - v2.fval}
+	return evalResult{typ: Float64, fval: v1 - v2.fval}
 }
 
-func floatTimesAny(v1 float64, v2 numeric) numeric {
+func floatTimesAny(v1 float64, v2 evalResult) evalResult {
 	switch v2.typ {
 	case Int64:
 		v2.fval = float64(v2.ival)
 	case Uint64:
 		v2.fval = float64(v2.uval)
 	}
-	return numeric{typ: Float64, fval: v1 * v2.fval}
+	return evalResult{typ: Float64, fval: v1 * v2.fval}
 }
 
-func floatDivideAnyWithError(v1 float64, v2 numeric) (numeric, error) {
+func floatDivideAnyWithError(v1 float64, v2 evalResult) (evalResult, error) {
 	switch v2.typ {
 	case Int64:
 		v2.fval = float64(v2.ival)
@@ -681,26 +674,26 @@ func floatDivideAnyWithError(v1 float64, v2 numeric) (numeric, error) {
 	}
 	result := v1 / v2.fval
 	divisorLessThanOne := v2.fval < 1
-	resultMismatch := (v2.fval*result != v1)
+	resultMismatch := v2.fval*result != v1
 
 	if divisorLessThanOne && resultMismatch {
-		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT is out of range in %v / %v", v1, v2.fval)
+		return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT is out of range in %v / %v", v1, v2.fval)
 	}
 
-	return numeric{typ: Float64, fval: v1 / v2.fval}, nil
+	return evalResult{typ: Float64, fval: v1 / v2.fval}, nil
 }
 
-func anyMinusFloat(v1 numeric, v2 float64) numeric {
+func anyMinusFloat(v1 evalResult, v2 float64) evalResult {
 	switch v1.typ {
 	case Int64:
 		v1.fval = float64(v1.ival)
 	case Uint64:
 		v1.fval = float64(v1.uval)
 	}
-	return numeric{typ: Float64, fval: v1.fval - v2}
+	return evalResult{typ: Float64, fval: v1.fval - v2}
 }
 
-func castFromNumeric(v numeric, resultType querypb.Type) Value {
+func castFromNumeric(v evalResult, resultType querypb.Type) Value {
 	switch {
 	case IsSigned(resultType):
 		switch v.typ {
@@ -735,11 +728,13 @@ func castFromNumeric(v numeric, resultType querypb.Type) Value {
 			}
 			return MakeTrusted(resultType, strconv.AppendFloat(nil, v.fval, format, -1, 64))
 		}
+	case resultType == VarChar:
+		return MakeTrusted(resultType, []byte(v.str))
 	}
 	return NULL
 }
 
-func compareNumeric(v1, v2 numeric) int {
+func compareNumeric(v1, v2 evalResult) int {
 	// Equalize the types.
 	switch v1.typ {
 	case Int64:
@@ -748,9 +743,9 @@ func compareNumeric(v1, v2 numeric) int {
 			if v1.ival < 0 {
 				return -1
 			}
-			v1 = numeric{typ: Uint64, uval: uint64(v1.ival)}
+			v1 = evalResult{typ: Uint64, uval: uint64(v1.ival)}
 		case Float64:
-			v1 = numeric{typ: Float64, fval: float64(v1.ival)}
+			v1 = evalResult{typ: Float64, fval: float64(v1.ival)}
 		}
 	case Uint64:
 		switch v2.typ {
@@ -758,16 +753,16 @@ func compareNumeric(v1, v2 numeric) int {
 			if v2.ival < 0 {
 				return 1
 			}
-			v2 = numeric{typ: Uint64, uval: uint64(v2.ival)}
+			v2 = evalResult{typ: Uint64, uval: uint64(v2.ival)}
 		case Float64:
-			v1 = numeric{typ: Float64, fval: float64(v1.uval)}
+			v1 = evalResult{typ: Float64, fval: float64(v1.uval)}
 		}
 	case Float64:
 		switch v2.typ {
 		case Int64:
-			v2 = numeric{typ: Float64, fval: float64(v2.ival)}
+			v2 = evalResult{typ: Float64, fval: float64(v2.ival)}
 		case Uint64:
-			v2 = numeric{typ: Float64, fval: float64(v2.uval)}
+			v2 = evalResult{typ: Float64, fval: float64(v2.uval)}
 		}
 	}
 

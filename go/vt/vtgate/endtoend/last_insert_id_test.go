@@ -44,7 +44,7 @@ func TestLastInsertId(t *testing.T) {
 	// even without a transaction, we should get the last inserted id back
 	qr = exec(t, conn, "select last_insert_id()")
 	got := fmt.Sprintf("%v", qr.Rows)
-	want := fmt.Sprintf("[[INT64(%d)]]", oldLastID+1)
+	want := fmt.Sprintf("[[UINT64(%d)]]", oldLastID+1)
 
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Error(diff)
@@ -67,7 +67,7 @@ func TestLastInsertIdWithRollback(t *testing.T) {
 	exec(t, conn, "insert into t1_last_insert_id(id1) values(42)")
 	qr = exec(t, conn, "select last_insert_id()")
 	got := fmt.Sprintf("%v", qr.Rows)
-	want := fmt.Sprintf("[[INT64(%d)]]", oldLastID+1)
+	want := fmt.Sprintf("[[UINT64(%d)]]", oldLastID+1)
 
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Error(diff)
