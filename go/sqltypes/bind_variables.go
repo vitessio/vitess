@@ -84,7 +84,7 @@ func Float64BindVariable(v float64) *querypb.BindVariable {
 
 // StringBindVariable converts a string to a bind var.
 func StringBindVariable(v string) *querypb.BindVariable {
-	return ValueBindVariable(NewVarChar(v))
+	return ValueBindVariable(NewVarBinary(v))
 }
 
 // BytesBindVariable converts a []byte to a bind var.
