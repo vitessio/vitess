@@ -101,7 +101,7 @@ func ValueBindVariable(v Value) *querypb.BindVariable {
 func BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
 	switch v := v.(type) {
 	case string:
-		return StringBindVariable(v), nil
+		return BytesBindVariable([]byte(v)), nil
 	case []byte:
 		return BytesBindVariable(v), nil
 	case bool:
@@ -149,7 +149,7 @@ func BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
 		}
 		values := make([]querypb.Value, len(v))
 		for i, lv := range v {
-			values[i].Type = querypb.Type_VARCHAR
+			values[i].Type = querypb.Type_VARBINARY
 			values[i].Value = []byte(lv)
 			bv.Values[i] = &values[i]
 		}
