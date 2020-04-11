@@ -1620,7 +1620,12 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 
 	if !*allowEmptyVSchema {
-		err = wr.TopoServer().EnsureVSchema(ctx, keyspace)
+		cells, err := wr.TopoServer().GetKnownCells(ctx)
+		if err != nil {
+			return fmt.Errorf("GetKnownCells failed: %v", err)
+		}
+
+		err = wr.TopoServer().EnsureVSchema(ctx, keyspace, cells)
 	}
 
 	if err != nil {

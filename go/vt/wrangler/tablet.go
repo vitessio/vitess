@@ -53,7 +53,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 
 	if createShardAndKeyspace {
 		// create the parent keyspace and shard if needed
-		si, err = wr.ts.GetOrCreateShard(ctx, tablet.Keyspace, tablet.Shard)
+		si, err = wr.ts.GetOrCreateShard(ctx, tablet.Keyspace, tablet.Shard, tablet.Alias.GetCell())
 	} else {
 		si, err = wr.ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 		if topo.IsErrType(err, topo.NoNode) {
