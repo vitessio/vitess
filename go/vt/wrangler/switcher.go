@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/concurrency"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
@@ -30,6 +32,11 @@ type switcher interface {
 	switchTableReads(ctx context.Context, cells []string, servedType topodatapb.TabletType, direction TrafficSwitchDirection) error
 	switchShardReads(ctx context.Context, cells []string, servedType topodatapb.TabletType, direction TrafficSwitchDirection) error
 	Logs() *[]string
+	validateWorkflowHasCompleted(ctx context.Context) error
+	dropSourceTables(ctx context.Context) error
+	dropSourceShards(ctx context.Context) error
+	dropSourceStreams(ctx context.Context) error
+	dropSourceBlacklistedTables(ctx context.Context) error
 }
 
 var _ switcher = (*switchForReal)(nil)
@@ -37,6 +44,97 @@ var _ switcher = (*switchForReal)(nil)
 type switchForReal struct {
 	ts *trafficSwitcher
 	wr *Wrangler
+}
+
+func (r *switchForReal) dropSourceBlacklistedTables(ctx context.Context) error {
+	return r.ts.forAllSources(func(source *tsSource) error {
+		for _, st := range source.si.GetServedTypes() {
+			r.ts.wr.Logger().Infof("Deleting blacklisted tables for cell %s tablet type %s", source.si.MasterAlias.Cell, st.TabletType.String())
+			if err := source.si.UpdateSourceBlacklistedTables(ctx, st.TabletType, []string{source.si.MasterAlias.Cell}, true, r.ts.tables); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func (r *switchForReal) dropSourceStreams(ctx context.Context) error {
+	return r.ts.forAllSources(func(source *tsSource) error {
+		r.ts.wr.Logger().Infof("Dropping source streams for workflow %s db_name %s", r.ts.workflow, source.master.DbName())
+		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s",
+			encodeString(source.master.DbName()), encodeString(r.ts.workflow))
+		_, err := r.ts.wr.tmc.VReplicationExec(ctx, source.master.Tablet, query)
+		return err
+	})
+}
+
+func (r *switchForReal) validateWorkflowHasCompleted(ctx context.Context) error {
+	wg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+	_ = r.ts.forAllSources(func(source *tsSource) error {
+		wg.Add(1)
+		if source.si.IsMasterServing {
+			rec.RecordError(fmt.Errorf(fmt.Sprintf("Shard %s is still serving", source.si.ShardName())))
+		}
+		query := fmt.Sprintf("select 1 from _vt.vreplication where db_name='%s' and workflow='%s'", source.master.DbName(), r.ts.workflow)
+		rs, _ := r.ts.wr.VReplicationExec(ctx, source.master.Alias, query)
+		if len(rs.Rows) > 0 {
+			rec.RecordError(fmt.Errorf("vreplication streams are not deleted from %s", source.master.Alias.String()))
+		}
+		wg.Done()
+		return nil
+	})
+	//check if table is routable
+	wg.Wait()
+	if r.ts.migrationType == binlogdatapb.MigrationType_TABLES {
+		rules, err := r.ts.wr.getRoutingRules(ctx)
+		if err != nil {
+			rec.RecordError(fmt.Errorf("could not get RoutingRules"))
+		}
+		for fromTable, toTables := range rules {
+			for _, toTable := range toTables {
+				for _, table := range r.ts.tables {
+					if toTable == fmt.Sprintf("%s.%s", r.ts.sourceKeyspace, table) {
+						rec.RecordError(fmt.Errorf("routing still exists from keyspace %s table %s to %s", r.ts.sourceKeyspace, table, fromTable))
+					}
+				}
+			}
+		}
+	}
+	if rec.HasErrors() {
+		return rec.Error()
+	}
+	return nil
+}
+
+//TODO: do we need to disable ForeignKey before dropping tables?
+//TODO: delete multiple tables in single statement?
+func (r *switchForReal) dropSourceTables(ctx context.Context) error {
+	return r.ts.forAllSources(func(source *tsSource) error {
+		for _, tableName := range r.ts.tables {
+			query := fmt.Sprintf("drop table %s.%s", encodeString(source.master.DbName()), tableName)
+			_, err := r.ts.wr.ExecuteFetchAsDba(ctx, source.master.Alias, query, 1, false, true)
+			if err != nil {
+				r.ts.wr.Logger().Errorf("Error dropping table %s: %v", tableName, err)
+				return err
+			}
+			r.ts.wr.Logger().Printf("Dropped table %s.%s\n", source.master.DbName(), tableName)
+
+		}
+		return nil
+	})
+}
+
+func (r *switchForReal) dropSourceShards(ctx context.Context) error {
+	return r.ts.forAllSources(func(source *tsSource) error {
+		err := r.ts.wr.DeleteShard(ctx, source.si.Keyspace(), source.si.ShardName(), true, false)
+		if err != nil {
+			r.ts.wr.Logger().Errorf("Error deleting shard %s: %v", source.si.ShardName(), err)
+			return err
+		}
+		r.ts.wr.Logger().Printf("Deleted shard %s.%s\n", source.si.Keyspace(), source.si.ShardName())
+		return nil
+	})
 }
 
 func (r *switchForReal) switchShardReads(ctx context.Context, cells []string, servedType topodatapb.TabletType, direction TrafficSwitchDirection) error {
@@ -316,6 +414,74 @@ func (dr *switchDryRun) deleteTargetVReplication(ctx context.Context) error {
 	}
 	if len(logs) > 0 {
 		dr.drLog.Log("Deleting vreplication streams on:")
+		dr.drLog.LogSlice(logs)
+	}
+	return nil
+}
+
+func (dr *switchDryRun) dropSourceTables(ctx context.Context) error {
+	logs := make([]string, 0)
+	for _, source := range dr.ts.sources {
+		for _, tableName := range dr.ts.tables {
+			logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s DbName %s Tablet %s Table %s",
+				source.master.Keyspace, source.master.Shard, source.master.DbName(), source.master.Alias, tableName))
+		}
+	}
+	if len(logs) > 0 {
+		dr.drLog.Log("Dropping following tables:")
+		dr.drLog.LogSlice(logs)
+	}
+	return nil
+}
+
+func (dr *switchDryRun) dropSourceShards(ctx context.Context) error {
+	logs := make([]string, 0)
+	tabletsList := make(map[string][]string)
+	for _, si := range dr.ts.sourceShards() {
+		tabletAliases, err := dr.ts.wr.TopoServer().FindAllTabletAliasesInShard(ctx, si.Keyspace(), si.ShardName())
+		if err != nil {
+			return err
+		}
+		tabletsList[si.ShardName()] = make([]string, 0)
+		for _, t := range tabletAliases {
+			tabletsList[si.ShardName()] = append(tabletsList[si.ShardName()], fmt.Sprintf("\t\t%d", t.Uid))
+		}
+		sort.Strings(tabletsList[si.ShardName()])
+		logs = append(logs, fmt.Sprintf("\tCell %s Keyspace %s Shard\n%s",
+			si.Shard.MasterAlias.Cell, si.Keyspace(), si.ShardName()), strings.Join(tabletsList[si.ShardName()], "\n"))
+	}
+	if len(logs) > 0 {
+		dr.drLog.Log("Deleting following shards (and all related tablets):")
+		dr.drLog.LogSlice(logs)
+	}
+
+	return nil
+}
+
+func (dr *switchDryRun) validateWorkflowHasCompleted(ctx context.Context) error {
+	return nil
+}
+
+func (dr *switchDryRun) dropSourceStreams(ctx context.Context) error {
+	dr.drLog.Log("Delete vreplication streams on:")
+	logs := make([]string, 0)
+	for _, s := range dr.ts.sources {
+		logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s Workflow %s DbName %s Tablet %s",
+			s.si.Keyspace(), s.si.ShardName(), dr.ts.workflow, s.master.DbName(), s.master.Alias.String()))
+	}
+	dr.drLog.LogSlice(logs)
+	return nil
+}
+
+func (dr *switchDryRun) dropSourceBlacklistedTables(ctx context.Context) error {
+	logs := make([]string, 0)
+	for _, si := range dr.ts.sourceShards() {
+		for _, st := range si.GetServedTypes() {
+			logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s TabletType %s", si.Keyspace(), si.ShardName(), st.TabletType.String()))
+		}
+	}
+	if len(logs) > 0 {
+		dr.drLog.Log("Blacklisted tables will be removed from:")
 		dr.drLog.LogSlice(logs)
 	}
 	return nil
