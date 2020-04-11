@@ -107,6 +107,9 @@ type FakeMysqlDaemon struct {
 	// PromoteResult is returned by Promote
 	PromoteResult mysql.Position
 
+	// PromoteError is used by Promote
+	PromoteError error
+
 	// SchemaFunc provides the return value for GetSchema.
 	// If not defined, the "Schema" field will be used instead, see below.
 	SchemaFunc func() (*tabletmanagerdatapb.SchemaDefinition, error)
@@ -350,6 +353,9 @@ func (fmd *FakeMysqlDaemon) WaitMasterPos(_ context.Context, pos mysql.Position)
 
 // Promote is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) Promote(hookExtraEnv map[string]string) (mysql.Position, error) {
+	if fmd.PromoteError != nil {
+		return mysql.Position{}, fmd.PromoteError
+	}
 	return fmd.PromoteResult, nil
 }
 

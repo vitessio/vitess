@@ -641,7 +641,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 
 	// Check we still have the topology lock.
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return fmt.Errorf("lost topology lock, aborting: %v", err)
+		return vterrors.Wrap(err, "lost topology lock, aborting")
 	}
 
 	// Create a cancelable context for the following RPCs.
