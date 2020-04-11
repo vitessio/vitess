@@ -325,7 +325,7 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 
 // GetOrCreateShard will return the shard object, or create one if it doesn't
 // already exist. Note the shard creation is protected by a keyspace Lock.
-func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) (si *ShardInfo, err error) {
+func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard, cell string) (si *ShardInfo, err error) {
 	log.Info("GetShard %s/%s", keyspace, shard)
 	si, err = ts.GetShard(ctx, keyspace, shard)
 	if !IsErrType(err, NoNode) {
@@ -340,7 +340,7 @@ func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) 
 
 	// make sure a valid vschema has been loaded
 	log.Info("EnsureVSchema %s/%s", keyspace, shard)
-	if err = ts.EnsureVSchema(ctx, keyspace); err != nil {
+	if err = ts.EnsureVSchema(ctx, keyspace, []string{cell}); err != nil {
 		return nil, vterrors.Wrapf(err, "EnsureVSchema(%v) failed", keyspace)
 	}
 

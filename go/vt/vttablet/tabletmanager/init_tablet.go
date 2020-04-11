@@ -90,7 +90,8 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 	var si *topo.ShardInfo
 	if err := agent.withRetry(ctx, "creating keyspace and shard", func() error {
 		var err error
-		si, err = agent.TopoServer.GetOrCreateShard(ctx, *initKeyspace, shard)
+		cell := agent.TabletAlias.GetCell()
+		si, err = agent.TopoServer.GetOrCreateShard(ctx, *initKeyspace, shard, cell)
 		return err
 	}); err != nil {
 		return vterrors.Wrap(err, "InitTablet cannot GetOrCreateShard shard")
