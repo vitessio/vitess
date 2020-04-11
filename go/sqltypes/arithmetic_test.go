@@ -932,25 +932,25 @@ func TestToNative(t *testing.T) {
 func TestNewNumeric(t *testing.T) {
 	tcases := []struct {
 		v   Value
-		out numeric
+		out evalResult
 		err error
 	}{{
 		v:   NewInt64(1),
-		out: numeric{typ: Int64, ival: 1},
+		out: evalResult{typ: Int64, ival: 1},
 	}, {
 		v:   NewUint64(1),
-		out: numeric{typ: Uint64, uval: 1},
+		out: evalResult{typ: Uint64, uval: 1},
 	}, {
 		v:   NewFloat64(1),
-		out: numeric{typ: Float64, fval: 1},
+		out: evalResult{typ: Float64, fval: 1},
 	}, {
 		// For non-number type, Int64 is the default.
 		v:   TestValue(VarChar, "1"),
-		out: numeric{typ: Int64, ival: 1},
+		out: evalResult{typ: Int64, ival: 1},
 	}, {
 		// If Int64 can't work, we use Float64.
 		v:   TestValue(VarChar, "1.2"),
-		out: numeric{typ: Float64, fval: 1.2},
+		out: evalResult{typ: Float64, fval: 1.2},
 	}, {
 		// Only valid Int64 allowed if type is Int64.
 		v:   TestValue(Int64, "1.2"),
@@ -965,7 +965,7 @@ func TestNewNumeric(t *testing.T) {
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseFloat: parsing \"abcd\": invalid syntax"),
 	}, {
 		v:   TestValue(VarChar, "abcd"),
-		out: numeric{typ: Float64, fval: 0},
+		out: evalResult{typ: Float64, fval: 0},
 	}}
 	for _, tcase := range tcases {
 		got, err := newNumeric(tcase.v)
@@ -985,25 +985,25 @@ func TestNewNumeric(t *testing.T) {
 func TestNewIntegralNumeric(t *testing.T) {
 	tcases := []struct {
 		v   Value
-		out numeric
+		out evalResult
 		err error
 	}{{
 		v:   NewInt64(1),
-		out: numeric{typ: Int64, ival: 1},
+		out: evalResult{typ: Int64, ival: 1},
 	}, {
 		v:   NewUint64(1),
-		out: numeric{typ: Uint64, uval: 1},
+		out: evalResult{typ: Uint64, uval: 1},
 	}, {
 		v:   NewFloat64(1),
-		out: numeric{typ: Int64, ival: 1},
+		out: evalResult{typ: Int64, ival: 1},
 	}, {
 		// For non-number type, Int64 is the default.
 		v:   TestValue(VarChar, "1"),
-		out: numeric{typ: Int64, ival: 1},
+		out: evalResult{typ: Int64, ival: 1},
 	}, {
 		// If Int64 can't work, we use Uint64.
 		v:   TestValue(VarChar, "18446744073709551615"),
-		out: numeric{typ: Uint64, uval: 18446744073709551615},
+		out: evalResult{typ: Uint64, uval: 18446744073709551615},
 	}, {
 		// Only valid Int64 allowed if type is Int64.
 		v:   TestValue(Int64, "1.2"),
@@ -1033,52 +1033,52 @@ func TestNewIntegralNumeric(t *testing.T) {
 
 func TestAddNumeric(t *testing.T) {
 	tcases := []struct {
-		v1, v2 numeric
-		out    numeric
+		v1, v2 evalResult
+		out    evalResult
 		err    error
 	}{{
-		v1:  numeric{typ: Int64, ival: 1},
-		v2:  numeric{typ: Int64, ival: 2},
-		out: numeric{typ: Int64, ival: 3},
+		v1:  evalResult{typ: Int64, ival: 1},
+		v2:  evalResult{typ: Int64, ival: 2},
+		out: evalResult{typ: Int64, ival: 3},
 	}, {
-		v1:  numeric{typ: Int64, ival: 1},
-		v2:  numeric{typ: Uint64, uval: 2},
-		out: numeric{typ: Uint64, uval: 3},
+		v1:  evalResult{typ: Int64, ival: 1},
+		v2:  evalResult{typ: Uint64, uval: 2},
+		out: evalResult{typ: Uint64, uval: 3},
 	}, {
-		v1:  numeric{typ: Int64, ival: 1},
-		v2:  numeric{typ: Float64, fval: 2},
-		out: numeric{typ: Float64, fval: 3},
+		v1:  evalResult{typ: Int64, ival: 1},
+		v2:  evalResult{typ: Float64, fval: 2},
+		out: evalResult{typ: Float64, fval: 3},
 	}, {
-		v1:  numeric{typ: Uint64, uval: 1},
-		v2:  numeric{typ: Uint64, uval: 2},
-		out: numeric{typ: Uint64, uval: 3},
+		v1:  evalResult{typ: Uint64, uval: 1},
+		v2:  evalResult{typ: Uint64, uval: 2},
+		out: evalResult{typ: Uint64, uval: 3},
 	}, {
-		v1:  numeric{typ: Uint64, uval: 1},
-		v2:  numeric{typ: Float64, fval: 2},
-		out: numeric{typ: Float64, fval: 3},
+		v1:  evalResult{typ: Uint64, uval: 1},
+		v2:  evalResult{typ: Float64, fval: 2},
+		out: evalResult{typ: Float64, fval: 3},
 	}, {
-		v1:  numeric{typ: Float64, fval: 1},
-		v2:  numeric{typ: Float64, fval: 2},
-		out: numeric{typ: Float64, fval: 3},
+		v1:  evalResult{typ: Float64, fval: 1},
+		v2:  evalResult{typ: Float64, fval: 2},
+		out: evalResult{typ: Float64, fval: 3},
 	}, {
 		// Int64 overflow.
-		v1:  numeric{typ: Int64, ival: 9223372036854775807},
-		v2:  numeric{typ: Int64, ival: 2},
-		out: numeric{typ: Float64, fval: 9223372036854775809},
+		v1:  evalResult{typ: Int64, ival: 9223372036854775807},
+		v2:  evalResult{typ: Int64, ival: 2},
+		out: evalResult{typ: Float64, fval: 9223372036854775809},
 	}, {
 		// Int64 underflow.
-		v1:  numeric{typ: Int64, ival: -9223372036854775807},
-		v2:  numeric{typ: Int64, ival: -2},
-		out: numeric{typ: Float64, fval: -9223372036854775809},
+		v1:  evalResult{typ: Int64, ival: -9223372036854775807},
+		v2:  evalResult{typ: Int64, ival: -2},
+		out: evalResult{typ: Float64, fval: -9223372036854775809},
 	}, {
-		v1:  numeric{typ: Int64, ival: -1},
-		v2:  numeric{typ: Uint64, uval: 2},
-		out: numeric{typ: Float64, fval: 18446744073709551617},
+		v1:  evalResult{typ: Int64, ival: -1},
+		v2:  evalResult{typ: Uint64, uval: 2},
+		out: evalResult{typ: Float64, fval: 18446744073709551617},
 	}, {
 		// Uint64 overflow.
-		v1:  numeric{typ: Uint64, uval: 18446744073709551615},
-		v2:  numeric{typ: Uint64, uval: 2},
-		out: numeric{typ: Float64, fval: 18446744073709551617},
+		v1:  evalResult{typ: Uint64, uval: 18446744073709551615},
+		v2:  evalResult{typ: Uint64, uval: 2},
+		out: evalResult{typ: Float64, fval: 18446744073709551617},
 	}}
 	for _, tcase := range tcases {
 		got := addNumeric(tcase.v1, tcase.v2)
@@ -1090,13 +1090,13 @@ func TestAddNumeric(t *testing.T) {
 }
 
 func TestPrioritize(t *testing.T) {
-	ival := numeric{typ: Int64}
-	uval := numeric{typ: Uint64}
-	fval := numeric{typ: Float64}
+	ival := evalResult{typ: Int64}
+	uval := evalResult{typ: Uint64}
+	fval := evalResult{typ: Float64}
 
 	tcases := []struct {
-		v1, v2     numeric
-		out1, out2 numeric
+		v1, v2     evalResult
+		out1, out2 evalResult
 	}{{
 		v1:   ival,
 		v2:   uval,
@@ -1139,62 +1139,62 @@ func TestPrioritize(t *testing.T) {
 func TestCastFromNumeric(t *testing.T) {
 	tcases := []struct {
 		typ querypb.Type
-		v   numeric
+		v   evalResult
 		out Value
 		err error
 	}{{
 		typ: Int64,
-		v:   numeric{typ: Int64, ival: 1},
+		v:   evalResult{typ: Int64, ival: 1},
 		out: NewInt64(1),
 	}, {
 		typ: Int64,
-		v:   numeric{typ: Uint64, uval: 1},
+		v:   evalResult{typ: Uint64, uval: 1},
 		out: NewInt64(1),
 	}, {
 		typ: Int64,
-		v:   numeric{typ: Float64, fval: 1.2e-16},
+		v:   evalResult{typ: Float64, fval: 1.2e-16},
 		out: NewInt64(0),
 	}, {
 		typ: Uint64,
-		v:   numeric{typ: Int64, ival: 1},
+		v:   evalResult{typ: Int64, ival: 1},
 		out: NewUint64(1),
 	}, {
 		typ: Uint64,
-		v:   numeric{typ: Uint64, uval: 1},
+		v:   evalResult{typ: Uint64, uval: 1},
 		out: NewUint64(1),
 	}, {
 		typ: Uint64,
-		v:   numeric{typ: Float64, fval: 1.2e-16},
+		v:   evalResult{typ: Float64, fval: 1.2e-16},
 		out: NewUint64(0),
 	}, {
 		typ: Float64,
-		v:   numeric{typ: Int64, ival: 1},
+		v:   evalResult{typ: Int64, ival: 1},
 		out: TestValue(Float64, "1"),
 	}, {
 		typ: Float64,
-		v:   numeric{typ: Uint64, uval: 1},
+		v:   evalResult{typ: Uint64, uval: 1},
 		out: TestValue(Float64, "1"),
 	}, {
 		typ: Float64,
-		v:   numeric{typ: Float64, fval: 1.2e-16},
+		v:   evalResult{typ: Float64, fval: 1.2e-16},
 		out: TestValue(Float64, "1.2e-16"),
 	}, {
 		typ: Decimal,
-		v:   numeric{typ: Int64, ival: 1},
+		v:   evalResult{typ: Int64, ival: 1},
 		out: TestValue(Decimal, "1"),
 	}, {
 		typ: Decimal,
-		v:   numeric{typ: Uint64, uval: 1},
+		v:   evalResult{typ: Uint64, uval: 1},
 		out: TestValue(Decimal, "1"),
 	}, {
 		// For float, we should not use scientific notation.
 		typ: Decimal,
-		v:   numeric{typ: Float64, fval: 1.2e-16},
+		v:   evalResult{typ: Float64, fval: 1.2e-16},
 		out: TestValue(Decimal, "0.00000000000000012"),
 	}, {
 		typ: VarBinary,
-		v:   numeric{typ: Int64, ival: 1},
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion to non-numeric: VARBINARY"),
+		v:   evalResult{typ: Int64, ival: 1},
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion to non-evalResult: VARBINARY"),
 	}}
 	for _, tcase := range tcases {
 		got := castFromNumeric(tcase.v, tcase.typ)
@@ -1207,125 +1207,125 @@ func TestCastFromNumeric(t *testing.T) {
 
 func TestCompareNumeric(t *testing.T) {
 	tcases := []struct {
-		v1, v2 numeric
+		v1, v2 evalResult
 		out    int
 	}{{
-		v1:  numeric{typ: Int64, ival: 1},
-		v2:  numeric{typ: Int64, ival: 1},
+		v1:  evalResult{typ: Int64, ival: 1},
+		v2:  evalResult{typ: Int64, ival: 1},
 		out: 0,
 	}, {
-		v1:  numeric{typ: Int64, ival: 1},
-		v2:  numeric{typ: Int64, ival: 2},
+		v1:  evalResult{typ: Int64, ival: 1},
+		v2:  evalResult{typ: Int64, ival: 2},
 		out: -1,
 	}, {
-		v1:  numeric{typ: Int64, ival: 2},
-		v2:  numeric{typ: Int64, ival: 1},
+		v1:  evalResult{typ: Int64, ival: 2},
+		v2:  evalResult{typ: Int64, ival: 1},
 		out: 1,
 	}, {
 		// Special case.
-		v1:  numeric{typ: Int64, ival: -1},
-		v2:  numeric{typ: Uint64, uval: 1},
+		v1:  evalResult{typ: Int64, ival: -1},
+		v2:  evalResult{typ: Uint64, uval: 1},
 		out: -1,
 	}, {
-		v1:  numeric{typ: Int64, ival: 1},
-		v2:  numeric{typ: Uint64, uval: 1},
+		v1:  evalResult{typ: Int64, ival: 1},
+		v2:  evalResult{typ: Uint64, uval: 1},
 		out: 0,
 	}, {
-		v1:  numeric{typ: Int64, ival: 1},
-		v2:  numeric{typ: Uint64, uval: 2},
+		v1:  evalResult{typ: Int64, ival: 1},
+		v2:  evalResult{typ: Uint64, uval: 2},
 		out: -1,
 	}, {
-		v1:  numeric{typ: Int64, ival: 2},
-		v2:  numeric{typ: Uint64, uval: 1},
+		v1:  evalResult{typ: Int64, ival: 2},
+		v2:  evalResult{typ: Uint64, uval: 1},
 		out: 1,
 	}, {
-		v1:  numeric{typ: Int64, ival: 1},
-		v2:  numeric{typ: Float64, fval: 1},
+		v1:  evalResult{typ: Int64, ival: 1},
+		v2:  evalResult{typ: Float64, fval: 1},
 		out: 0,
 	}, {
-		v1:  numeric{typ: Int64, ival: 1},
-		v2:  numeric{typ: Float64, fval: 2},
+		v1:  evalResult{typ: Int64, ival: 1},
+		v2:  evalResult{typ: Float64, fval: 2},
 		out: -1,
 	}, {
-		v1:  numeric{typ: Int64, ival: 2},
-		v2:  numeric{typ: Float64, fval: 1},
+		v1:  evalResult{typ: Int64, ival: 2},
+		v2:  evalResult{typ: Float64, fval: 1},
 		out: 1,
 	}, {
 		// Special case.
-		v1:  numeric{typ: Uint64, uval: 1},
-		v2:  numeric{typ: Int64, ival: -1},
+		v1:  evalResult{typ: Uint64, uval: 1},
+		v2:  evalResult{typ: Int64, ival: -1},
 		out: 1,
 	}, {
-		v1:  numeric{typ: Uint64, uval: 1},
-		v2:  numeric{typ: Int64, ival: 1},
+		v1:  evalResult{typ: Uint64, uval: 1},
+		v2:  evalResult{typ: Int64, ival: 1},
 		out: 0,
 	}, {
-		v1:  numeric{typ: Uint64, uval: 1},
-		v2:  numeric{typ: Int64, ival: 2},
+		v1:  evalResult{typ: Uint64, uval: 1},
+		v2:  evalResult{typ: Int64, ival: 2},
 		out: -1,
 	}, {
-		v1:  numeric{typ: Uint64, uval: 2},
-		v2:  numeric{typ: Int64, ival: 1},
+		v1:  evalResult{typ: Uint64, uval: 2},
+		v2:  evalResult{typ: Int64, ival: 1},
 		out: 1,
 	}, {
-		v1:  numeric{typ: Uint64, uval: 1},
-		v2:  numeric{typ: Uint64, uval: 1},
+		v1:  evalResult{typ: Uint64, uval: 1},
+		v2:  evalResult{typ: Uint64, uval: 1},
 		out: 0,
 	}, {
-		v1:  numeric{typ: Uint64, uval: 1},
-		v2:  numeric{typ: Uint64, uval: 2},
+		v1:  evalResult{typ: Uint64, uval: 1},
+		v2:  evalResult{typ: Uint64, uval: 2},
 		out: -1,
 	}, {
-		v1:  numeric{typ: Uint64, uval: 2},
-		v2:  numeric{typ: Uint64, uval: 1},
+		v1:  evalResult{typ: Uint64, uval: 2},
+		v2:  evalResult{typ: Uint64, uval: 1},
 		out: 1,
 	}, {
-		v1:  numeric{typ: Uint64, uval: 1},
-		v2:  numeric{typ: Float64, fval: 1},
+		v1:  evalResult{typ: Uint64, uval: 1},
+		v2:  evalResult{typ: Float64, fval: 1},
 		out: 0,
 	}, {
-		v1:  numeric{typ: Uint64, uval: 1},
-		v2:  numeric{typ: Float64, fval: 2},
+		v1:  evalResult{typ: Uint64, uval: 1},
+		v2:  evalResult{typ: Float64, fval: 2},
 		out: -1,
 	}, {
-		v1:  numeric{typ: Uint64, uval: 2},
-		v2:  numeric{typ: Float64, fval: 1},
+		v1:  evalResult{typ: Uint64, uval: 2},
+		v2:  evalResult{typ: Float64, fval: 1},
 		out: 1,
 	}, {
-		v1:  numeric{typ: Float64, fval: 1},
-		v2:  numeric{typ: Int64, ival: 1},
+		v1:  evalResult{typ: Float64, fval: 1},
+		v2:  evalResult{typ: Int64, ival: 1},
 		out: 0,
 	}, {
-		v1:  numeric{typ: Float64, fval: 1},
-		v2:  numeric{typ: Int64, ival: 2},
+		v1:  evalResult{typ: Float64, fval: 1},
+		v2:  evalResult{typ: Int64, ival: 2},
 		out: -1,
 	}, {
-		v1:  numeric{typ: Float64, fval: 2},
-		v2:  numeric{typ: Int64, ival: 1},
+		v1:  evalResult{typ: Float64, fval: 2},
+		v2:  evalResult{typ: Int64, ival: 1},
 		out: 1,
 	}, {
-		v1:  numeric{typ: Float64, fval: 1},
-		v2:  numeric{typ: Uint64, uval: 1},
+		v1:  evalResult{typ: Float64, fval: 1},
+		v2:  evalResult{typ: Uint64, uval: 1},
 		out: 0,
 	}, {
-		v1:  numeric{typ: Float64, fval: 1},
-		v2:  numeric{typ: Uint64, uval: 2},
+		v1:  evalResult{typ: Float64, fval: 1},
+		v2:  evalResult{typ: Uint64, uval: 2},
 		out: -1,
 	}, {
-		v1:  numeric{typ: Float64, fval: 2},
-		v2:  numeric{typ: Uint64, uval: 1},
+		v1:  evalResult{typ: Float64, fval: 2},
+		v2:  evalResult{typ: Uint64, uval: 1},
 		out: 1,
 	}, {
-		v1:  numeric{typ: Float64, fval: 1},
-		v2:  numeric{typ: Float64, fval: 1},
+		v1:  evalResult{typ: Float64, fval: 1},
+		v2:  evalResult{typ: Float64, fval: 1},
 		out: 0,
 	}, {
-		v1:  numeric{typ: Float64, fval: 1},
-		v2:  numeric{typ: Float64, fval: 2},
+		v1:  evalResult{typ: Float64, fval: 1},
+		v2:  evalResult{typ: Float64, fval: 2},
 		out: -1,
 	}, {
-		v1:  numeric{typ: Float64, fval: 2},
-		v2:  numeric{typ: Float64, fval: 1},
+		v1:  evalResult{typ: Float64, fval: 2},
+		v2:  evalResult{typ: Float64, fval: 1},
 		out: 1,
 	}}
 	for _, tcase := range tcases {
@@ -1499,8 +1499,8 @@ func BenchmarkAddGoInterface(b *testing.B) {
 }
 
 func BenchmarkAddGoNonInterface(b *testing.B) {
-	v1 := numeric{typ: Int64, ival: 1}
-	v2 := numeric{typ: Int64, ival: 12}
+	v1 := evalResult{typ: Int64, ival: 1}
+	v2 := evalResult{typ: Int64, ival: 12}
 	for i := 0; i < b.N; i++ {
 		if v1.typ != Int64 {
 			b.Error("type assertion failed")
@@ -1508,7 +1508,7 @@ func BenchmarkAddGoNonInterface(b *testing.B) {
 		if v2.typ != Int64 {
 			b.Error("type assertion failed")
 		}
-		v1 = numeric{typ: Int64, ival: v1.ival + v2.ival}
+		v1 = evalResult{typ: Int64, ival: v1.ival + v2.ival}
 	}
 }
 
