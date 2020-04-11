@@ -128,11 +128,8 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		return nil, err
 	}
 
-	var unlock func(*error)
-	var lockErr error
-
 	// For reads, locking the source keyspace is sufficient.
-	ctx, unlock, lockErr = sw.LockKeyspace(ctx, ts.sourceKeyspace, "SwitchReads")
+	ctx, unlock, lockErr := sw.LockKeyspace(ctx, ts.sourceKeyspace, "SwitchReads")
 	if lockErr != nil {
 		ts.wr.Logger().Errorf("LockKeyspace failed: %v", lockErr)
 		return nil, lockErr
@@ -293,6 +290,42 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 		return 0, nil, err
 	}
 	return ts.id, sw.Logs(), nil
+}
+
+// DropSources cleans up source tables, shards and blacklisted tables after a MoveTables/Reshard is completed
+func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow string, dryRun bool) (*[]string, error) {
+	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
+	if err != nil {
+		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
+		return nil, err
+	}
+	var sw switcher
+	if dryRun {
+		sw = &switchDryRun{ts: ts, drLog: NewLogRecorder()}
+	} else {
+		sw = &switchForReal{ts: ts, wr: wr}
+	}
+
+	ctx, unlock, lockErr := sw.LockKeyspace(ctx, ts.sourceKeyspace, "DropSources")
+	if lockErr != nil {
+		ts.wr.Logger().Errorf("LockKeyspace failed: %v", lockErr)
+		return nil, lockErr
+	}
+	defer unlock(&err)
+
+	if err := sw.validateWorkflowHasCompleted(ctx); err != nil {
+		return nil, err
+	}
+	switch ts.migrationType {
+	case binlogdatapb.MigrationType_TABLES:
+		sw.dropSourceTables(ctx)
+	case binlogdatapb.MigrationType_SHARDS:
+		sw.dropSourceShards(ctx)
+	}
+
+	sw.dropSourceStreams(ctx)
+	sw.dropSourceBlacklistedTables(ctx)
+	return sw.Logs(), nil
 }
 
 func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workflow string) (*trafficSwitcher, error) {

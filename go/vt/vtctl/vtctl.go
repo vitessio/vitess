@@ -314,6 +314,9 @@ var commands = []commandGroup{
 			{"MoveTables", commandMoveTables,
 				"[-cell=<cell>] [-tablet_types=<source_tablet_types>] -workflow=<workflow> <source_keyspace> <target_keyspace> <table_specs>",
 				`Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{""column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{""column": "id2", "name": "hash"}]}}`},
+			{"DropSources", commandDropSources,
+				"[-dry_run] <keyspace.workflow>",
+				"After a MoveTables or Resharding workflow cleanup unused artifacts like source tables, source shards and blacklists"},
 			{"CreateLookupVindex", commandCreateLookupVindex,
 				"[-cell=<cell>] [-tablet_types=<source_tablet_types>] <keyspace> <json_spec>",
 				`Create and backfill a lookup vindex. the json_spec must contain the vindex and colvindex specs for the new lookup.`},
@@ -1994,6 +1997,30 @@ func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFla
 		cells = strings.Split(*cellsStr, ",")
 	}
 	return wr.MigrateServedFrom(ctx, keyspace, shard, servedType, cells, *reverse, *filteredReplicationWaitTime)
+}
+
+func commandDropSources(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of commandDropSources and only reports the actions to be taken")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("<keyspace.workflow> is required")
+	}
+	keyspace, workflow, err := splitKeyspaceWorkflow(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	_, _, _ = dryRun, keyspace, workflow
+	dryRunResults, err := wr.DropSources(ctx, keyspace, workflow, *dryRun)
+	if err != nil {
+		return err
+	}
+	if *dryRun {
+		wr.Logger().Printf("Dry Run results for commandDropSources run at %s\nParameters: %s\n\n", time.RFC822, strings.Join(args, " "))
+		wr.Logger().Printf("%s\n", strings.Join(*dryRunResults, "\n"))
+	}
+	return nil
 }
 
 func commandSwitchReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
