@@ -45,13 +45,14 @@ type (
 	// Expr is the interface that all evaluating expressions must implement
 	Expr interface {
 		Evaluate(env ExpressionEnv) (EvalResult, error)
-		String() string
 		Type(env ExpressionEnv) querypb.Type
+		String() string
 	}
 
 	//BinaryExpr allows binary expressions to not have to evaluate child expressions - this is done by the BinaryOp
 	BinaryExpr interface {
 		Evaluate(left, right EvalResult) (EvalResult, error)
+		Type(left, right querypb.Type) querypb.Type
 		String() string
 	}
 
@@ -88,15 +89,7 @@ func (b *BinaryOp) Type(env ExpressionEnv) querypb.Type {
 	ltype := b.Left.Type(env)
 	rtype := b.Right.Type(env)
 	ltype, rtype = prioritizeTypes(ltype, rtype)
-	switch ltype {
-	case Int64:
-		return Int64
-	case Uint64:
-		return Uint64
-	case Float64:
-		return Float64
-	}
-	panic("unreachable")
+	return b.Expr.Type(ltype, rtype)
 }
 
 func (b *BindVariable) Type(env ExpressionEnv) querypb.Type {
@@ -104,7 +97,7 @@ func (b *BindVariable) Type(env ExpressionEnv) querypb.Type {
 	return e[b.Key].Type
 }
 
-func (l *LiteralInt) Type(env ExpressionEnv) querypb.Type {
+func (l *LiteralInt) Type(_ ExpressionEnv) querypb.Type {
 	return Int64
 }
 
@@ -163,7 +156,7 @@ func (b *BinaryOp) Evaluate(env ExpressionEnv) (EvalResult, error) {
 }
 
 //Evaluate implements the Expr interface
-func (l *LiteralInt) Evaluate(env ExpressionEnv) (EvalResult, error) {
+func (l *LiteralInt) Evaluate(ExpressionEnv) (EvalResult, error) {
 	ival, err := strconv.ParseInt(string(l.Val), 10, 64)
 	if err != nil {
 		ival = 0
@@ -224,4 +217,32 @@ func (m *Multiplication) Evaluate(left, right EvalResult) (EvalResult, error) {
 //Evaluate implements the BinaryOp interface
 func (d *Division) Evaluate(left, right EvalResult) (EvalResult, error) {
 	return divideNumericWithError(left, right)
+}
+
+func (a *Addition) Type(left, _ querypb.Type) querypb.Type {
+	return addAndSubtractType(left)
+}
+
+func addAndSubtractType(left querypb.Type) querypb.Type {
+	switch left {
+	case Int64:
+		return Int64
+	case Uint64:
+		return Uint64
+	case Float64:
+		return Float64
+	}
+	panic("oops")
+}
+
+func (m *Multiplication) Type(left, _ querypb.Type) querypb.Type {
+	return addAndSubtractType(left)
+}
+
+func (d *Division) Type(querypb.Type, querypb.Type) querypb.Type {
+	return Float64
+}
+
+func (s *Subtraction) Type(left, _ querypb.Type) querypb.Type {
+	return addAndSubtractType(left)
 }
