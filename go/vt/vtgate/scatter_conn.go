@@ -89,6 +89,29 @@ func LegacyNewScatterConn(statsName string, txConn *TxConn, gw Gateway, hc disco
 	}
 }
 
+// NewScatterConn creates a new ScatterConn.
+func NewScatterConn(statsName string, txConn *TxConn, gw *TabletGateway) *ScatterConn {
+	// this only works with TabletGateway
+	tabletCallErrorCountStatsName := ""
+	if statsName != "" {
+		tabletCallErrorCountStatsName = statsName + "ErrorCount"
+	}
+	return &ScatterConn{
+		timings: stats.NewMultiTimings(
+			statsName,
+			"Scatter connection timings",
+			[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
+		tabletCallErrorCount: stats.NewCountersWithMultiLabels(
+			tabletCallErrorCountStatsName,
+			"Error count from tablet calls in scatter conns",
+			[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
+		txConn:  txConn,
+		gateway: gw,
+		//TODO(deepthi): we need to get ScatterConn working without using legacyHealthCheck
+		legacyHealthCheck: nil,
+	}
+}
+
 func (stc *ScatterConn) startAction(name string, target *querypb.Target) (time.Time, []string) {
 	statsKey := []string{name, target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType)}
 	startTime := time.Now()
@@ -419,9 +442,21 @@ func (stc *ScatterConn) GetGatewayCacheStatus() TabletCacheStatusList {
 	return stc.gateway.CacheStatus()
 }
 
+// GetLegacyHealthCheckCacheStatus returns a displayable version of the HealthCheck cache.
+func (stc *ScatterConn) GetLegacyHealthCheckCacheStatus() discovery.LegacyTabletsCacheStatusList {
+	if stc.legacyHealthCheck != nil {
+		return stc.legacyHealthCheck.CacheStatus()
+	}
+	return nil
+}
+
 // GetHealthCheckCacheStatus returns a displayable version of the HealthCheck cache.
-func (stc *ScatterConn) GetHealthCheckCacheStatus() discovery.LegacyTabletsCacheStatusList {
-	return stc.legacyHealthCheck.CacheStatus()
+func (stc *ScatterConn) GetHealthCheckCacheStatus() TabletCacheStatusList {
+	gw, ok := stc.gateway.(*TabletGateway)
+	if ok {
+		return gw.CacheStatus()
+	}
+	return nil
 }
 
 // multiGo performs the requested 'action' on the specified

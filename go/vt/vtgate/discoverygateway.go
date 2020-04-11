@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"flag"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -28,7 +27,6 @@ import (
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/topotools"
 
-	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
@@ -44,28 +42,17 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
-var (
-	cellsToWatch        = flag.String("cells_to_watch", "", "comma-separated list of cells for watching tablets")
-	refreshInterval     = flag.Duration("tablet_refresh_interval", 1*time.Minute, "tablet refresh interval")
-	refreshKnownTablets = flag.Bool("tablet_refresh_known_tablets", true, "tablet refresh reloads the tablet address/port map from topo in case it changes")
-	topoReadConcurrency = flag.Int("topo_read_concurrency", 32, "concurrent topo reads")
-
-	allowedTabletTypes []topodatapb.TabletType
-
-	tabletFilters flagutil.StringListValue
-)
-
 const (
 	gatewayImplementationDiscovery = "discoverygateway"
 )
 
 func init() {
-	flag.Var(&tabletFilters, "tablet_filters", "Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch")
-	topoproto.TabletTypeListVar(&allowedTabletTypes, "allowed_tablet_types", "Specifies the tablet types this vtgate is allowed to route queries to")
 	RegisterGatewayCreator(gatewayImplementationDiscovery, createDiscoveryGateway)
 }
 
-type discoveryGateway struct {
+// DiscoveryGateway is the default Gateway implementation.
+// This implementation uses the legacy healthcheck module.
+type DiscoveryGateway struct {
 	queryservice.QueryService
 	hc            discovery.LegacyHealthCheck
 	tsc           *discovery.LegacyTabletStatsCache
@@ -75,7 +62,7 @@ type discoveryGateway struct {
 
 	// tabletsWatchers contains a list of all the watchers we use.
 	// We create one per cell.
-	tabletsWatchers []*discovery.TopologyWatcher
+	tabletsWatchers []*discovery.LegacyTopologyWatcher
 
 	// mu protects the fields of this group.
 	mu sync.RWMutex
@@ -91,11 +78,11 @@ func createDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck,
 	return NewDiscoveryGateway(ctx, hc, serv, cell, retryCount)
 }
 
-// NewDiscoveryGateway creates a new discoveryGateway using the provided healthcheck and toposerver.
+// NewDiscoveryGateway creates a new DiscoveryGateway using the provided healthcheck and toposerver.
 // cell is the cell where the gateway is located a.k.a localCell.
 // This gateway can route to MASTER in any cell provided by the cells_to_watch command line argument.
 // Other tablet type requests (REPLICA/RDONLY) are only routed to tablets in the same cell.
-func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string, retryCount int) *discoveryGateway {
+func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string, retryCount int) *DiscoveryGateway {
 	var topoServer *topo.Server
 	if serv != nil {
 		var err error
@@ -105,13 +92,13 @@ func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, se
 		}
 	}
 
-	dg := &discoveryGateway{
+	dg := &DiscoveryGateway{
 		hc:                hc,
 		tsc:               discovery.NewTabletStatsCacheDoNotSetListener(topoServer, cell),
 		srvTopoServer:     serv,
 		localCell:         cell,
 		retryCount:        retryCount,
-		tabletsWatchers:   make([]*discovery.TopologyWatcher, 0, 1),
+		tabletsWatchers:   make([]*discovery.LegacyTopologyWatcher, 0, 1),
 		statusAggregators: make(map[string]*TabletStatusAggregator),
 		buffer:            buffer.New(),
 	}
@@ -120,27 +107,28 @@ func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, se
 	// We set sendDownEvents=true because it's required by LegacyTabletStatsCache.
 	hc.SetListener(dg, true /* sendDownEvents */)
 
-	log.Infof("loading tablets for cells: %v", *cellsToWatch)
-	for _, c := range strings.Split(*cellsToWatch, ",") {
+	cellsToWatch := *discovery.CellsToWatch
+	log.Infof("loading tablets for cells: %v", cellsToWatch)
+	for _, c := range strings.Split(cellsToWatch, ",") {
 		if c == "" {
 			continue
 		}
-		var tr discovery.TabletRecorder = dg.hc
-		if len(tabletFilters) > 0 {
-			if len(KeyspacesToWatch) > 0 {
+		var recorder discovery.TabletRecorder = dg.hc
+		if len(discovery.TabletFilters) > 0 {
+			if len(discovery.KeyspacesToWatch) > 0 {
 				log.Exitf("Only one of -keyspaces_to_watch and -tablet_filters may be specified at a time")
 			}
 
-			fbs, err := discovery.NewFilterByShard(dg.hc, tabletFilters)
+			fbs, err := discovery.NewLegacyFilterByShard(recorder, discovery.TabletFilters)
 			if err != nil {
 				log.Exitf("Cannot parse tablet_filters parameter: %v", err)
 			}
-			tr = fbs
-		} else if len(KeyspacesToWatch) > 0 {
-			tr = discovery.NewFilterByKeyspace(dg.hc, KeyspacesToWatch)
+			recorder = fbs
+		} else if len(discovery.KeyspacesToWatch) > 0 {
+			recorder = discovery.NewLegacyFilterByKeyspace(recorder, discovery.KeyspacesToWatch)
 		}
 
-		ctw := discovery.NewCellTabletsWatcher(ctx, topoServer, tr, c, *refreshInterval, *refreshKnownTablets, *topoReadConcurrency)
+		ctw := discovery.NewLegacyCellTabletsWatcher(ctx, topoServer, recorder, c, *discovery.RefreshInterval, *discovery.RefreshKnownTablets, *discovery.TopoReadConcurrency)
 		dg.tabletsWatchers = append(dg.tabletsWatchers, ctw)
 	}
 	dg.QueryService = queryservice.Wrap(nil, dg.withRetry)
@@ -149,7 +137,7 @@ func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, se
 
 // RegisterStats registers the stats to export the lag since the last refresh
 // and the checksum of the topology
-func (dg *discoveryGateway) RegisterStats() {
+func (dg *DiscoveryGateway) RegisterStats() {
 	stats.NewGaugeDurationFunc(
 		"TopologyWatcherMaxRefreshLag",
 		"maximum time since the topology watcher refreshed a cell",
@@ -165,7 +153,7 @@ func (dg *discoveryGateway) RegisterStats() {
 
 // topologyWatcherMaxRefreshLag returns the maximum lag since the watched
 // cells were refreshed from the topo server
-func (dg *discoveryGateway) topologyWatcherMaxRefreshLag() time.Duration {
+func (dg *DiscoveryGateway) topologyWatcherMaxRefreshLag() time.Duration {
 	var lag time.Duration
 	for _, tw := range dg.tabletsWatchers {
 		cellLag := tw.RefreshLag()
@@ -177,7 +165,7 @@ func (dg *discoveryGateway) topologyWatcherMaxRefreshLag() time.Duration {
 }
 
 // topologyWatcherChecksum returns a checksum of the topology watcher state
-func (dg *discoveryGateway) topologyWatcherChecksum() int64 {
+func (dg *DiscoveryGateway) topologyWatcherChecksum() int64 {
 	var checksum int64
 	for _, tw := range dg.tabletsWatchers {
 		checksum = checksum ^ int64(tw.TopoChecksum())
@@ -187,7 +175,7 @@ func (dg *discoveryGateway) topologyWatcherChecksum() int64 {
 
 // StatsUpdate forwards LegacyHealthCheck updates to LegacyTabletStatsCache and MasterBuffer.
 // It is part of the discovery.LegacyHealthCheckStatsListener interface.
-func (dg *discoveryGateway) StatsUpdate(ts *discovery.LegacyTabletStats) {
+func (dg *DiscoveryGateway) StatsUpdate(ts *discovery.LegacyTabletStats) {
 	dg.tsc.StatsUpdate(ts)
 
 	if ts.Target.TabletType == topodatapb.TabletType_MASTER {
@@ -196,7 +184,7 @@ func (dg *discoveryGateway) StatsUpdate(ts *discovery.LegacyTabletStats) {
 }
 
 // WaitForTablets is part of the gateway.Gateway interface.
-func (dg *discoveryGateway) WaitForTablets(ctx context.Context, tabletTypesToWait []topodatapb.TabletType) error {
+func (dg *DiscoveryGateway) WaitForTablets(ctx context.Context, tabletTypesToWait []topodatapb.TabletType) error {
 	// Skip waiting for tablets if we are not told to do so.
 	if len(tabletTypesToWait) == 0 {
 		return nil
@@ -213,7 +201,7 @@ func (dg *discoveryGateway) WaitForTablets(ctx context.Context, tabletTypesToWai
 
 // Close shuts down underlying connections.
 // This function hides the inner implementation.
-func (dg *discoveryGateway) Close(ctx context.Context) error {
+func (dg *DiscoveryGateway) Close(ctx context.Context) error {
 	dg.buffer.Shutdown()
 	for _, ctw := range dg.tabletsWatchers {
 		ctw.Stop()
@@ -223,7 +211,7 @@ func (dg *discoveryGateway) Close(ctx context.Context) error {
 
 // CacheStatus returns a list of TabletCacheStatus per
 // keyspace/shard/tablet_type.
-func (dg *discoveryGateway) CacheStatus() TabletCacheStatusList {
+func (dg *DiscoveryGateway) CacheStatus() TabletCacheStatusList {
 	dg.mu.RLock()
 	res := make(TabletCacheStatusList, 0, len(dg.statusAggregators))
 	for _, aggr := range dg.statusAggregators {
@@ -239,21 +227,21 @@ func (dg *discoveryGateway) CacheStatus() TabletCacheStatusList {
 // the middle of a transaction. While returning the error check if it maybe a result of
 // a resharding event, and set the re-resolve bit and let the upper layers
 // re-resolve and retry.
-func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Target, unused queryservice.QueryService, name string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
+func (dg *DiscoveryGateway) withRetry(ctx context.Context, target *querypb.Target, unused queryservice.QueryService, name string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
 	var tabletLastUsed *topodatapb.Tablet
 	var err error
 	invalidTablets := make(map[string]bool)
 
-	if len(allowedTabletTypes) > 0 {
+	if len(discovery.AllowedTabletTypes) > 0 {
 		var match bool
-		for _, allowed := range allowedTabletTypes {
+		for _, allowed := range discovery.AllowedTabletTypes {
 			if allowed == target.TabletType {
 				match = true
 				break
 			}
 		}
 		if !match {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requested tablet type %v is not part of the allowed tablet types for this vtgate: %+v", target.TabletType.String(), allowedTabletTypes)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requested tablet type %v is not part of the allowed tablet types for this vtgate: %+v", target.TabletType.String(), discovery.AllowedTabletTypes)
 		}
 	}
 
@@ -378,13 +366,13 @@ func nextTablet(cell string, tablets []discovery.LegacyTabletStats, offset, leng
 	return -1
 }
 
-func (dg *discoveryGateway) updateStats(target *querypb.Target, startTime time.Time, err error) {
+func (dg *DiscoveryGateway) updateStats(target *querypb.Target, startTime time.Time, err error) {
 	elapsed := time.Since(startTime)
 	aggr := dg.getStatsAggregator(target)
 	aggr.UpdateQueryInfo("", target.TabletType, elapsed, err != nil)
 }
 
-func (dg *discoveryGateway) getStatsAggregator(target *querypb.Target) *TabletStatusAggregator {
+func (dg *DiscoveryGateway) getStatsAggregator(target *querypb.Target) *TabletStatusAggregator {
 	key := fmt.Sprintf("%v/%v/%v", target.Keyspace, target.Shard, target.TabletType.String())
 
 	// get existing aggregator

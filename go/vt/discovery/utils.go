@@ -26,7 +26,7 @@ import (
 
 // This file contains helper filter methods to process the unfiltered list of
 // tablets returned by LegacyHealthCheck.GetTabletStatsFrom*.
-// See also replicationlag.go for a more sophisicated filter used by vtgate.
+// See also legacy_replicationlag.go for a more sophisicated filter used by vtgate.
 
 // RemoveUnhealthyTablets filters all unhealthy tablets out.
 // NOTE: Non-serving tablets are considered healthy.
@@ -38,7 +38,7 @@ func RemoveUnhealthyTablets(tabletStatsList []LegacyTabletStats) []LegacyTabletS
 		// source and destination, and the source is not serving (disabled by
 		// TabletControl). When we switch the tablet to 'worker', it will
 		// go back to serving state.
-		if ts.Stats == nil || ts.Stats.HealthError != "" || ts.LastError != nil || IsReplicationLagHigh(&ts) {
+		if ts.Stats == nil || ts.Stats.HealthError != "" || ts.LastError != nil || LegacyIsReplicationLagHigh(&ts) {
 			continue
 		}
 		result = append(result, ts)

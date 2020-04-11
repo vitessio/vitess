@@ -37,15 +37,15 @@ import (
 )
 
 var (
-	cell                  = flag.String("cell", "test_nj", "cell to use")
-	retryCount            = flag.Int("retry-count", 2, "retry count")
-	healthCheckRetryDelay = flag.Duration("healthcheck_retry_delay", 2*time.Millisecond, "health check retry delay")
-	healthCheckTimeout    = flag.Duration("healthcheck_timeout", time.Minute, "the health check timeout period")
-	tabletTypesToWait     = flag.String("tablet_types_to_wait", "", "wait till connected for specified tablet types during Gateway initialization")
+	cell                 = flag.String("cell", "test_nj", "cell to use")
+	retryCount           = flag.Int("retry-count", 2, "retry count")
+	tabletTypesToWait    = flag.String("tablet_types_to_wait", "", "wait till connected for specified tablet types during Gateway initialization")
+	useLegacyHealthCheck = flag.Bool("use_legacy_health_check", true, "whether to use the legacy health check")
 )
 
 var resilientServer *srvtopo.ResilientServer
 var legacyHealthCheck discovery.LegacyHealthCheck
+var healthCheck discovery.HealthCheck
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -75,10 +75,15 @@ func main() {
 		}
 	}
 
-	legacyHealthCheck = discovery.NewLegacyHealthCheck(*healthCheckRetryDelay, *healthCheckTimeout)
-	legacyHealthCheck.RegisterStats()
+	var vtg *vtgate.VTGate
+	if *useLegacyHealthCheck {
+		legacyHealthCheck = discovery.NewLegacyHealthCheck(*vtgate.HealthCheckRetryDelay, *vtgate.HealthCheckTimeout)
+		legacyHealthCheck.RegisterStats()
 
-	vtg := vtgate.LegacyInit(context.Background(), legacyHealthCheck, resilientServer, *cell, *retryCount, tabletTypes)
+		vtg = vtgate.LegacyInit(context.Background(), legacyHealthCheck, resilientServer, *cell, *retryCount, tabletTypes)
+	} else {
+		vtg = vtgate.Init(context.Background(), resilientServer, *cell, *retryCount, tabletTypes)
+	}
 
 	servenv.OnRun(func() {
 		// Flags are parsed now. Parse the template using the actual flag value and overwrite the current template.

@@ -139,7 +139,7 @@ type shardSchemaSwap struct {
 	tabletHealthCheck discovery.LegacyHealthCheck
 	// tabletWatchers contains list of topology watchers monitoring changes in the shard
 	// topology. There are several of them because the watchers are per-cell.
-	tabletWatchers []*discovery.TopologyWatcher
+	tabletWatchers []*discovery.LegacyTopologyWatcher
 
 	// allTabletsLock is a mutex protecting access to contents of health check related
 	// variables below.
@@ -697,7 +697,7 @@ func (shardSwap *shardSchemaSwap) startHealthWatchers(ctx context.Context) error
 		return err
 	}
 	for _, cell := range cellList {
-		watcher := discovery.NewShardReplicationWatcher(
+		watcher := discovery.NewLegacyShardReplicationWatcher(
 			ctx,
 			topoServer,
 			shardSwap.tabletHealthCheck,
@@ -751,7 +751,7 @@ func (shardSwap *shardSchemaSwap) stopHealthWatchers() {
 // isTabletHealthy verifies that the given LegacyTabletStats represents a healthy tablet that is
 // caught up with replication to a serving level.
 func isTabletHealthy(tabletStats *discovery.LegacyTabletStats) bool {
-	return tabletStats.Stats.HealthError == "" && !discovery.IsReplicationLagHigh(tabletStats)
+	return tabletStats.Stats.HealthError == "" && !discovery.LegacyIsReplicationLagHigh(tabletStats)
 }
 
 // startWaitingOnUnhealthyTablet registers the tablet as being waited on in a way that
