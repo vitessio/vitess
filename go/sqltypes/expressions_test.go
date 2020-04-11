@@ -16,4 +16,89 @@ limitations under the License.
 
 package sqltypes
 
-// these tests live in go/sqlparser/expressions_test.go
+import (
+	"fmt"
+	"reflect"
+	"testing"
+
+	"github.com/magiconair/properties/assert"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+)
+
+// more tests in go/sqlparser/expressions_test.go
+
+func TestBinaryOpTypes(t *testing.T) {
+	type testcase struct {
+		l, r, e querypb.Type
+	}
+	type ops struct {
+		op        BinaryExpr
+		testcases []testcase
+	}
+
+	tests := []ops{
+		{
+			op: &Addition{},
+			testcases: []testcase{
+				{Int64, Int64, Int64},
+				{Uint64, Int64, Uint64},
+				{Float64, Int64, Float64},
+				{Int64, Uint64, Int64},
+				{Uint64, Uint64, Uint64},
+				{Float64, Uint64, Float64},
+				{Int64, Float64, Int64},
+				{Uint64, Float64, Uint64},
+				{Float64, Float64, Float64},
+			},
+		}, {
+			op: &Subtraction{},
+			testcases: []testcase{
+				{Int64, Int64, Int64},
+				{Uint64, Int64, Uint64},
+				{Float64, Int64, Float64},
+				{Int64, Uint64, Int64},
+				{Uint64, Uint64, Uint64},
+				{Float64, Uint64, Float64},
+				{Int64, Float64, Int64},
+				{Uint64, Float64, Uint64},
+				{Float64, Float64, Float64},
+			},
+		}, {
+			op: &Multiplication{},
+			testcases: []testcase{
+				{Int64, Int64, Int64},
+				{Uint64, Int64, Uint64},
+				{Float64, Int64, Float64},
+				{Int64, Uint64, Int64},
+				{Uint64, Uint64, Uint64},
+				{Float64, Uint64, Float64},
+				{Int64, Float64, Int64},
+				{Uint64, Float64, Uint64},
+				{Float64, Float64, Float64},
+			},
+		}, {
+			op: &Division{},
+			testcases: []testcase{
+				{Int64, Int64, Float64},
+				{Uint64, Int64, Float64},
+				{Float64, Int64, Float64},
+				{Int64, Uint64, Float64},
+				{Uint64, Uint64, Float64},
+				{Float64, Uint64, Float64},
+				{Int64, Float64, Float64},
+				{Uint64, Float64, Float64},
+				{Float64, Float64, Float64},
+			},
+		},
+	}
+
+	for _, op := range tests {
+		for _, tc := range op.testcases {
+			name := fmt.Sprintf("%s %s %s", tc.l.String(), reflect.TypeOf(op.op).String(), tc.r.String())
+			t.Run(name, func(t *testing.T) {
+				result := op.op.Type(tc.l, tc.r)
+				assert.Equal(t, tc.e, result)
+			})
+		}
+	}
+}
