@@ -524,11 +524,19 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		}
 		reparentJournalPos = rp
 	} else if topoproto.TabletAliasEqual(currentMaster.Alias, masterElectTabletAlias) {
+		// It is possible that a previous attempt to reparent failed to SetReadWrite
+		// so call it here to make sure underlying mysql is ReadWrite
+		rwCtx, rwCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+		defer rwCancel()
+
+		if err := wr.tmc.SetReadWrite(rwCtx, masterElectTabletInfo.Tablet); err != nil {
+			return vterrors.Wrapf(err, "failed to SetReadWrite on current master %v", masterElectTabletAliasStr)
+		}
+		// The master is already the one we want according to its tablet record.
+		// Refresh it to make sure the tablet has read its record recently.
 		refreshCtx, refreshCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 		defer refreshCancel()
 
-		// The master is already the one we want according to its tablet record.
-		// Refresh it to make sure the tablet has read its record recently.
 		if err := wr.tmc.RefreshState(refreshCtx, masterElectTabletInfo.Tablet); err != nil {
 			return vterrors.Wrapf(err, "failed to RefreshState on current master %v", masterElectTabletAliasStr)
 		}
@@ -954,10 +962,10 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		}
 		pos, err := mysql.DecodePosition(status.Position)
 		if err != nil {
-			return fmt.Errorf("cannot decode slave %v position %v: %v", alias, status.Position, err)
+			return fmt.Errorf("cannot decode replica %v position %v: %v", alias, status.Position, err)
 		}
 		if !masterElectPos.AtLeast(pos) {
-			return fmt.Errorf("tablet %v is more advanced than master elect tablet %v: %v > %v", alias, masterElectTabletAliasStr, status.Position, masterElectStatus)
+			return fmt.Errorf("tablet %v is more advanced than master elect tablet %v: %v > %v", alias, masterElectTabletAliasStr, status.Position, masterElectStatus.Position)
 		}
 	}
 
