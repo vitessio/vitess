@@ -232,10 +232,10 @@ func TestSelectLastInsertId(t *testing.T) {
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "last_insert_id()", Type: sqltypes.Int64},
+			{Name: "last_insert_id()", Type: sqltypes.Uint64},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt64(42),
+			sqltypes.NewUint64(42),
 		}},
 	}
 	require.NoError(t, err)
@@ -254,10 +254,10 @@ func TestSelectUserDefindVariable(t *testing.T) {
 	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "@foo", Type: sqltypes.Int64},
+			{Name: "@foo", Type: sqltypes.VarChar},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt64(0),
+			sqltypes.NewVarChar("bar"),
 		}},
 	}
 	require.NoError(t, err)
@@ -278,10 +278,10 @@ func TestFoundRows(t *testing.T) {
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "found_rows()", Type: sqltypes.Int64},
+			{Name: "found_rows()", Type: sqltypes.Uint64},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt64(0),
+			sqltypes.NewUint64(0),
 		}},
 	}
 	require.NoError(t, err)
@@ -386,10 +386,10 @@ func TestSelectDatabase(t *testing.T) {
 		map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "database()", Type: sqltypes.Int64},
+			{Name: "database()", Type: sqltypes.VarChar},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt64(0),
+			sqltypes.NewVarChar("TestExecutor"),
 		}},
 	}
 	require.NoError(t, err)
