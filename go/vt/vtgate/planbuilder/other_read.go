@@ -5,7 +5,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildOtherRead(sql string, vschema ContextVSchema) (engine.Primitive, error) {
+func buildOtherReadAndAdmin(sql string, vschema ContextVSchema) (engine.Primitive, error) {
 	destination, keyspace, _, err := vschema.TargetDestination("")
 	if err != nil {
 		return nil, err

@@ -1121,7 +1121,6 @@ func TestPlanExecutorOtherRead(t *testing.T) {
 }
 
 func TestPlanExecutorOtherAdmin(t *testing.T) {
-	t.Skip("not support yet")
 	executor, sbc1, sbc2, sbclookup := createExecutorEnvUsing(planAllTheThings)
 
 	type cnts struct {

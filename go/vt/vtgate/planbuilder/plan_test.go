@@ -211,7 +211,7 @@ func TestDDLPlanningFromFile(t *testing.T) {
 	testFile(t, "ddl_cases.txt", testOutputTempDir, vschema)
 }
 
-func TestOtherReadPlanningFromFile(t *testing.T) {
+func TestOtherPlanningFromFile(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
@@ -225,6 +225,7 @@ func TestOtherReadPlanningFromFile(t *testing.T) {
 	}
 
 	testFile(t, "other_read_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "other_admin_cases.txt", testOutputTempDir, vschema)
 }
 
 func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
