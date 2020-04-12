@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 var (
@@ -56,6 +57,23 @@ const (
 
 	jsonContentType = "application/json; charset=utf-8"
 )
+
+// TabletWithURL wraps topo.Tablet and adds a URL property.
+type TabletWithURL struct {
+	Alias               *topodatapb.TabletAlias `json:"alias,omitempty"`
+	Hostname            string                  `json:"hostname,omitempty"`
+	PortMap             map[string]int32        `json:"port_map,omitempty"`
+	Keyspace            string                  `json:"keyspace,omitempty"`
+	Shard               string                  `json:"shard,omitempty"`
+	KeyRange            *topodatapb.KeyRange    `json:"key_range,omitempty"`
+	Type                topodatapb.TabletType   `json:"type,omitempty"`
+	DbNameOverride      string                  `json:"db_name_override,omitempty"`
+	Tags                map[string]string       `json:"tags,omitempty"`
+	MysqlHostname       string                  `json:"mysql_hostname,omitempty"`
+	MysqlPort           int32                   `json:"mysql_port,omitempty"`
+	MasterTermStartTime *vttime.Time            `json:"master_term_start_time,omitempty"`
+	URL                 string                  `json:"url,omitempty"`
+}
 
 func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...interface{}) {
 	errMsg := fmt.Sprintf(format, args...)
@@ -90,6 +108,7 @@ func handleCollection(collection string, getFunc func(*http.Request) (interface{
 
 		// JSON encode response.
 		data, err := vtctl.MarshalJSON(obj)
+		log.Flush()
 		if err != nil {
 			return fmt.Errorf("cannot marshal data: %v", err)
 		}
@@ -372,8 +391,30 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		if err != nil {
 			return nil, err
 		}
-		// Pass the embedded proto directly or jsonpb will panic.
-		return t.Tablet, err
+
+		tab := &TabletWithURL{
+			Alias:               t.Alias,
+			Hostname:            t.Hostname,
+			PortMap:             t.PortMap,
+			Keyspace:            t.Keyspace,
+			Shard:               t.Shard,
+			KeyRange:            t.KeyRange,
+			Type:                t.Type,
+			DbNameOverride:      t.DbNameOverride,
+			Tags:                t.Tags,
+			MysqlHostname:       t.MysqlHostname,
+			MysqlPort:           t.MysqlPort,
+			MasterTermStartTime: t.MasterTermStartTime,
+		}
+		tabletPath = fmt.Sprintf("http://%s:%d", t.Tablet.Hostname, t.PortMap["vt"])
+		if *proxyTablets {
+			tabletID := fmt.Sprintf("%s-%d", t.Tablet.Alias.Cell, t.Tablet.Alias.Uid)
+			addRemote(tabletID, tabletPath)
+			tab.URL = fmt.Sprintf("/vttablet/%s-%d", t.Tablet.Alias.Cell, t.Tablet.Alias.Uid)
+		} else {
+			tab.URL = tabletPath
+		}
+		return tab, nil
 	})
 
 	// Healthcheck real time status per (cell, keyspace, tablet type, metric).
