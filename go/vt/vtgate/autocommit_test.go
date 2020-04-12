@@ -92,7 +92,7 @@ func TestAutocommitUpdateVindexChange(t *testing.T) {
 	testQueries(t, "sbclookup", sbclookup, []*querypb.BoundQuery{{
 		Sql: "delete from name_lastname_keyspace_id_map where name = :name and lastname = :lastname and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
-			"lastname":    sqltypes.StringBindVariable("foo"),
+			"lastname":    sqltypes.ValueBindVariable(sqltypes.NewVarChar("foo")),
 			"name":        sqltypes.Int32BindVariable(1),
 			"keyspace_id": sqltypes.BytesBindVariable([]byte("\026k@\264J\272K\326")),
 		},
