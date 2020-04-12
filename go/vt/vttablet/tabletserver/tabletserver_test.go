@@ -1038,6 +1038,55 @@ func TestTabletServerStreamExecute(t *testing.T) {
 	}
 }
 
+func TestTabletServerStreamExecuteComments(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	// sql that will be executed in this test
+	executeSQL := "/* leading */ select * from test_table limit 1000 /* trailing */"
+	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+		},
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarBinary("row01")},
+		},
+	}
+	db.AddQuery(executeSQL, executeSQLResult)
+
+	config := tabletenv.DefaultQsConfig
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	ctx := context.Background()
+	callback := func(*sqltypes.Result) error { return nil }
+
+	ch := tabletenv.StatsLogger.Subscribe("test stats logging")
+	defer tabletenv.StatsLogger.Unsubscribe(ch)
+
+	if err := tsv.StreamExecute(ctx, &target, executeSQL, nil, 0, nil, callback); err != nil {
+		t.Fatalf("TabletServer.StreamExecute should success: %s, but get error: %v",
+			executeSQL, err)
+	}
+
+	wantSQL := executeSQL
+	select {
+	case out := <-ch:
+		stats, ok := out.(*tabletenv.LogStats)
+		if !ok {
+			t.Errorf("Unexpected value in query logs: %#v (expecting value of type %T)", out, &tabletenv.LogStats{})
+		}
+
+		if wantSQL != stats.OriginalSQL {
+			t.Errorf("logstats: SQL want %s got %s", wantSQL, stats.OriginalSQL)
+		}
+	default:
+	}
+}
 func TestTabletServerExecuteBatch(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
