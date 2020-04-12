@@ -403,11 +403,3 @@
 # delete with multi-table targets
 "delete music,user from music inner join user where music.id = user.id"
 "unsupported: multi-shard or vindex write statement"
-
-# Repair statement
-"repair table t1,t2 quick"
-"plan building not supported"
-
-# Optimize statement
-"optimize table t1"
-"plan building not supported"

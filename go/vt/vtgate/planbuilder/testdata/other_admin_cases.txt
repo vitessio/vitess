@@ -1,0 +1,37 @@
+# Repair statement
+"repair table t1,t2 quick"
+{
+  "QueryType": "OTHER",
+  "Original": "repair table t1,t2 quick",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Variant": "",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "repair table t1,t2 quick",
+    "SingleShardOnly": true
+  }
+}
+
+# Optimize statement
+"optimize table t1"
+{
+  "QueryType": "OTHER",
+  "Original": "optimize table t1",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Variant": "",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "optimize table t1",
+    "SingleShardOnly": true
+  }
+}
