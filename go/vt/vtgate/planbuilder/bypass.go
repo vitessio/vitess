@@ -41,5 +41,6 @@ func buildPlanForBypass(stmt sqlparser.Statement, vschema ContextVSchema) (engin
 		TargetDestination: vschema.Destination(),
 		Query:             sqlparser.String(stmt),
 		IsDML:             sqlparser.IsDMLStatement(stmt),
+		SingleShardOnly:   false,
 	}, nil
 }
