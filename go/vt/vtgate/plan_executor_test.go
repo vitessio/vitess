@@ -1045,7 +1045,82 @@ func TestPlanExecutorComment(t *testing.T) {
 	}
 }
 
-func TestPlanExecutorOther(t *testing.T) {
+func TestPlanExecutorOtherRead(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup := createExecutorEnvUsing(planAllTheThings)
+
+	type cnts struct {
+		Sbc1Cnt      int64
+		Sbc2Cnt      int64
+		SbcLookupCnt int64
+	}
+
+	tcs := []struct {
+		targetStr string
+
+		hasNoKeyspaceErr       bool
+		hasDestinationShardErr bool
+		wantCnts               cnts
+	}{
+		{
+			targetStr:        "",
+			hasNoKeyspaceErr: true,
+		},
+		{
+			targetStr:              "TestExecutor[-]",
+			hasDestinationShardErr: true,
+		},
+		{
+			targetStr: KsTestUnsharded,
+			wantCnts: cnts{
+				Sbc1Cnt:      0,
+				Sbc2Cnt:      0,
+				SbcLookupCnt: 1,
+			},
+		},
+		{
+			targetStr: "TestExecutor",
+			wantCnts: cnts{
+				Sbc1Cnt:      1,
+				Sbc2Cnt:      0,
+				SbcLookupCnt: 0,
+			},
+		},
+	}
+
+	stmts := []string{
+		"analyze table t1",
+		"describe t1",
+		"explain t1",
+	}
+
+	for _, stmt := range stmts {
+		for _, tc := range tcs {
+			sbc1.ExecCount.Set(0)
+			sbc2.ExecCount.Set(0)
+			sbclookup.ExecCount.Set(0)
+
+			_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
+			if tc.hasNoKeyspaceErr {
+				assert.Error(t, err, errNoKeyspace)
+			} else if tc.hasDestinationShardErr {
+				assert.Errorf(t, err, "Destination can only be a single shard for statement: %s, got: DestinationExactKeyRange(-)", stmt)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			diff := cmp.Diff(tc.wantCnts, cnts{
+				Sbc1Cnt:      sbc1.ExecCount.Get(),
+				Sbc2Cnt:      sbc2.ExecCount.Get(),
+				SbcLookupCnt: sbclookup.ExecCount.Get(),
+			})
+			if diff != "" {
+				t.Errorf("stmt: %s\ntc: %+v\n-want,+got:\n%s", stmt, tc, diff)
+			}
+		}
+	}
+}
+
+func TestPlanExecutorOtherAdmin(t *testing.T) {
 	t.Skip("not support yet")
 	executor, sbc1, sbc2, sbclookup := createExecutorEnvUsing(planAllTheThings)
 
@@ -1089,10 +1164,6 @@ func TestPlanExecutorOther(t *testing.T) {
 	}
 
 	stmts := []string{
-		"show tables",
-		"analyze table t1",
-		"describe t1",
-		"explain t1",
 		"repair table t1",
 		"optimize table t1",
 	}
