@@ -4,7 +4,6 @@ init:
   dbName:            # init_db_name_override
   keyspace:          # init_keyspace
   shard:             # init_shard
-  tags: {}           # init_tags
   tabletType:        # init_tablet_type
   timeoutSeconds: 60 # init_timeout
 
@@ -12,6 +11,7 @@ db:
   socket:     # db_socket
   host:       # db_host
   port: 0     # db_port
+  charSet:    # db_charset
   flags: 0    # db_flags
   flavor:     # db_flavor
   sslCa:      # db_ssl_ca
