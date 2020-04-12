@@ -1085,6 +1085,7 @@ func TestTabletServerStreamExecuteComments(t *testing.T) {
 			t.Errorf("logstats: SQL want %s got %s", wantSQL, stats.OriginalSQL)
 		}
 	default:
+		t.Fatal("stats are empty")
 	}
 }
 func TestTabletServerExecuteBatch(t *testing.T) {
