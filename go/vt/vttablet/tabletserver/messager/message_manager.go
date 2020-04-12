@@ -782,7 +782,7 @@ func (mm *messageManager) GenerateAckQuery(ids []string) (string, map[string]*qu
 	}
 	for _, id := range ids {
 		idbvs.Values = append(idbvs.Values, &querypb.Value{
-			Type:  querypb.Type_VARCHAR,
+			Type:  querypb.Type_VARBINARY,
 			Value: []byte(id),
 		})
 	}
@@ -800,7 +800,7 @@ func (mm *messageManager) GeneratePostponeQuery(ids []string) (string, map[strin
 	}
 	for _, id := range ids {
 		idbvs.Values = append(idbvs.Values, &querypb.Value{
-			Type:  querypb.Type_VARCHAR,
+			Type:  querypb.Type_VARBINARY,
 			Value: []byte(id),
 		})
 	}
