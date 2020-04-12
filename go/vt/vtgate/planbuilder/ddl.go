@@ -23,6 +23,7 @@ func buildDDLPlan(sql string, in sqlparser.Statement, vschema ContextVSchema) (e
 		TargetDestination: destination,
 		Query:             sql, //This is original sql query to be passed as the parser can provide partial ddl AST.
 		IsDML:             false,
+		SingleShardOnly:   false,
 	}, nil
 }
 

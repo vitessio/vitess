@@ -301,7 +301,9 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 		}
 	case *sqlparser.Use:
 		instruction, err = buildUsePlan(stmt, vschema)
-	case *sqlparser.Set, *sqlparser.Show, *sqlparser.DBDDL, *sqlparser.OtherRead, *sqlparser.OtherAdmin:
+	case *sqlparser.OtherRead:
+		instruction, err = buildOtherRead(query, vschema)
+	case *sqlparser.Set, *sqlparser.Show, *sqlparser.DBDDL, *sqlparser.OtherAdmin:
 		return nil, ErrPlanNotSupported
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback:
 		// Empty by design. Not executed by a plan
