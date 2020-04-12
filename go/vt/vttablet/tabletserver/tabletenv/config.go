@@ -43,7 +43,7 @@ var (
 	StatsLogger = streamlog.New("TabletServer", 50)
 
 	// Placeholder for deprecated variable.
-	// TODO(sougou): deprecate the flag after release 7.0.
+	// TODO(sougou): deprecate the flags after release 7.0.
 	deprecatedMessagePoolPrefillParallelism int
 	deprecatedAutocommit                    bool
 	deprecateAllowUnsafeDMLs                bool
@@ -53,7 +53,7 @@ var (
 )
 
 func init() {
-	flag.IntVar(&Config.PoolSize, "queryserver-config-pool-size", DefaultQsConfig.PoolSize, "query server read pool size, connection pool is used by regular queries (non streaming, not in a transaction)")
+	flag.Int64Var(&Config.OltpReadPool.Size, "queryserver-config-pool-size", DefaultQsConfig.OltpReadPool.Size, "query server read pool size, connection pool is used by regular queries (non streaming, not in a transaction)")
 	flag.IntVar(&Config.PoolPrefillParallelism, "queryserver-config-pool-prefill-parallelism", DefaultQsConfig.PoolPrefillParallelism, "query server read pool prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
 	flag.IntVar(&Config.StreamPoolSize, "queryserver-config-stream-pool-size", DefaultQsConfig.StreamPoolSize, "query server stream connection pool size, stream pool is used by stream queries: queries that return results to client in a streaming fashion")
 	flag.IntVar(&Config.StreamPoolPrefillParallelism, "queryserver-config-stream-pool-prefill-parallelism", DefaultQsConfig.StreamPoolPrefillParallelism, "query server stream pool prefill parallelism, a non-zero value will prefill the pool using the specified parallelism")
@@ -138,56 +138,66 @@ func Init() {
 
 // TabletConfig contains all the configuration for query service
 type TabletConfig struct {
-	PoolSize                     int
-	PoolPrefillParallelism       int
-	StreamPoolSize               int
-	StreamPoolPrefillParallelism int
-	TransactionCap               int
-	MessagePostponeCap           int
-	FoundRowsPoolSize            int
-	TxPoolPrefillParallelism     int
-	TransactionTimeout           float64
-	TxShutDownGracePeriod        float64
-	MaxResultSize                int
-	WarnResultSize               int
-	PassthroughDMLs              bool
-	StreamBufferSize             int
-	QueryPlanCacheSize           int
-	SchemaReloadTime             float64
-	QueryTimeout                 float64
-	QueryPoolTimeout             float64
-	TxPoolTimeout                float64
-	IdleTimeout                  float64
-	QueryPoolWaiterCap           int
-	TxPoolWaiterCap              int
-	StrictTableACL               bool
-	TerseErrors                  bool
-	EnableTableACLDryRun         bool
-	TableACLExemptACL            string
-	WatchReplication             bool
-	TwoPCEnable                  bool
-	TwoPCCoordinatorAddress      string
-	TwoPCAbandonAge              float64
+	OltpReadPool                 ConnPoolConfig `json:"oltpReadPool,omitempty"`
+	PoolSize                     int            `json:"-"`
+	PoolPrefillParallelism       int            `json:"-"`
+	StreamPoolSize               int            `json:"-"`
+	StreamPoolPrefillParallelism int            `json:"-"`
+	TransactionCap               int            `json:"-"`
+	MessagePostponeCap           int            `json:"-"`
+	FoundRowsPoolSize            int            `json:"-"`
+	TxPoolPrefillParallelism     int            `json:"-"`
+	TransactionTimeout           float64        `json:"-"`
+	TxShutDownGracePeriod        float64        `json:"-"`
+	MaxResultSize                int            `json:"-"`
+	WarnResultSize               int            `json:"-"`
+	PassthroughDMLs              bool           `json:"-"`
+	StreamBufferSize             int            `json:"-"`
+	QueryPlanCacheSize           int            `json:"-"`
+	SchemaReloadTime             float64        `json:"-"`
+	QueryTimeout                 float64        `json:"-"`
+	QueryPoolTimeout             float64        `json:"-"`
+	TxPoolTimeout                float64        `json:"-"`
+	IdleTimeout                  float64        `json:"-"`
+	QueryPoolWaiterCap           int            `json:"-"`
+	TxPoolWaiterCap              int            `json:"-"`
+	StrictTableACL               bool           `json:"-"`
+	TerseErrors                  bool           `json:"-"`
+	EnableTableACLDryRun         bool           `json:"-"`
+	TableACLExemptACL            string         `json:"-"`
+	WatchReplication             bool           `json:"-"`
+	TwoPCEnable                  bool           `json:"-"`
+	TwoPCCoordinatorAddress      string         `json:"-"`
+	TwoPCAbandonAge              float64        `json:"-"`
 
-	EnableTxThrottler           bool
-	TxThrottlerConfig           string
-	TxThrottlerHealthCheckCells []string
+	EnableTxThrottler           bool     `json:"-"`
+	TxThrottlerConfig           string   `json:"-"`
+	TxThrottlerHealthCheckCells []string `json:"-"`
 
-	EnableHotRowProtection                 bool
-	EnableHotRowProtectionDryRun           bool
-	HotRowProtectionMaxQueueSize           int
-	HotRowProtectionMaxGlobalQueueSize     int
-	HotRowProtectionConcurrentTransactions int
+	EnableHotRowProtection                 bool `json:"-"`
+	EnableHotRowProtectionDryRun           bool `json:"-"`
+	HotRowProtectionMaxQueueSize           int  `json:"-"`
+	HotRowProtectionMaxGlobalQueueSize     int  `json:"-"`
+	HotRowProtectionConcurrentTransactions int  `json:"-"`
 
-	TransactionLimitConfig
+	TransactionLimitConfig `json:"-"`
 
-	HeartbeatEnable   bool
-	HeartbeatInterval time.Duration
+	HeartbeatEnable   bool          `json:"-"`
+	HeartbeatInterval time.Duration `json:"-"`
 
-	EnforceStrictTransTables    bool
-	EnableConsolidator          bool
-	EnableConsolidatorReplicas  bool
-	EnableQueryPlanFieldCaching bool
+	EnforceStrictTransTables    bool `json:"-"`
+	EnableConsolidator          bool `json:"-"`
+	EnableConsolidatorReplicas  bool `json:"-"`
+	EnableQueryPlanFieldCaching bool `json:"-"`
+}
+
+// ConnPoolConfig contains the conig parameters for a conn pool.
+type ConnPoolConfig struct {
+	Size               int64 `json:"size,omitempty"`
+	TimeoutSeconds     int64 `json:"timeoutSeconds,omitempty"`
+	IdleTimeoutSeconds int64 `json:"idleTimeoutSeconds,omitempty"`
+	PrefillParallelism int64 `json:"prefillParallelism,omitempty"`
+	MaxWaiters         int64 `json:"maxWaiters,omitempty"`
 }
 
 // TransactionLimitConfig captures configuration of transaction pool slots
@@ -210,7 +220,9 @@ type TransactionLimitConfig struct {
 // great (the overhead makes the final packets on the wire about twice
 // bigger than this).
 var DefaultQsConfig = TabletConfig{
-	PoolSize:                     16,
+	OltpReadPool: ConnPoolConfig{
+		Size: 16,
+	},
 	PoolPrefillParallelism:       0,
 	StreamPoolSize:               200,
 	StreamPoolPrefillParallelism: 0,
