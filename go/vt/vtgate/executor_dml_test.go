@@ -127,7 +127,7 @@ func TestUpdateEqual(t *testing.T) {
 		{
 			Sql: "delete from name_lastname_keyspace_id_map where name = :name and lastname = :lastname and keyspace_id = :keyspace_id",
 			BindVariables: map[string]*querypb.BindVariable{
-				"lastname":    sqltypes.StringBindVariable("foo"),
+				"lastname":    sqltypes.ValueBindVariable(sqltypes.NewVarChar("foo")),
 				"name":        sqltypes.Int32BindVariable(1),
 				"keyspace_id": sqltypes.BytesBindVariable([]byte("\026k@\264J\272K\326")),
 			},
@@ -355,7 +355,7 @@ func TestDeleteEqual(t *testing.T) {
 		Sql: "delete from name_user_map where name = :name and user_id = :user_id",
 		BindVariables: map[string]*querypb.BindVariable{
 			"user_id": sqltypes.Uint64BindVariable(1),
-			"name":    sqltypes.StringBindVariable("myname"),
+			"name":    sqltypes.ValueBindVariable(sqltypes.NewVarChar("myname")),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -442,7 +442,7 @@ func TestDeleteEqual(t *testing.T) {
 		{
 			Sql: "delete from name_lastname_keyspace_id_map where name = :name and lastname = :lastname and keyspace_id = :keyspace_id",
 			BindVariables: map[string]*querypb.BindVariable{
-				"lastname":    sqltypes.StringBindVariable("foo"),
+				"lastname":    sqltypes.ValueBindVariable(sqltypes.NewVarChar("foo")),
 				"name":        sqltypes.Int32BindVariable(1),
 				"keyspace_id": sqltypes.BytesBindVariable([]byte("\026k@\264J\272K\326")),
 			},
@@ -538,7 +538,7 @@ func TestDeleteComments(t *testing.T) {
 		Sql: "delete from name_user_map where name = :name and user_id = :user_id /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"user_id": sqltypes.Uint64BindVariable(1),
-			"name":    sqltypes.StringBindVariable("myname"),
+			"name":    sqltypes.ValueBindVariable(sqltypes.NewVarChar("myname")),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
