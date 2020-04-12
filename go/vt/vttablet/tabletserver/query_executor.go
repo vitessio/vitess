@@ -216,7 +216,6 @@ func (qre *QueryExecutor) txConnExec(conn *TxConnection) (*sqltypes.Result, erro
 
 // Stream performs a streaming query execution.
 func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
-	qre.logStats.OriginalSQL = qre.query
 	qre.logStats.PlanType = qre.plan.PlanID.String()
 
 	defer func(start time.Time) {
