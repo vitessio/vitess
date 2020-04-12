@@ -10,10 +10,6 @@
 "show create database"
 "plan building not supported"
 
-# DBA statements
-"explain select * from user"
-"plan building not supported"
-
 # union operations in subqueries (FROM)
 "select * from (select * from user union all select * from user_extra) as t"
 "unsupported: UNION cannot be executed as a single route"
@@ -407,3 +403,11 @@
 # delete with multi-table targets
 "delete music,user from music inner join user where music.id = user.id"
 "unsupported: multi-shard or vindex write statement"
+
+# Repair statement
+"repair table t1,t2 quick"
+"plan building not supported"
+
+# Optimize statement
+"optimize table t1"
+"plan building not supported"
