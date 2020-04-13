@@ -372,8 +372,8 @@ func TestQueryTimeout(t *testing.T) {
 		return
 	}
 	_, err = client.Execute("select sleep(1) from vitess_test", nil)
-	if code := vterrors.Code(err); code != vtrpcpb.Code_DEADLINE_EXCEEDED {
-		t.Errorf("Error code: %v, want %v", code, vtrpcpb.Code_DEADLINE_EXCEEDED)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_CANCELED {
+		t.Errorf("Error code: %v, want %v", code, vtrpcpb.Code_CANCELED)
 	}
 	_, err = client.Execute("select 1 from dual", nil)
 	if code := vterrors.Code(err); code != vtrpcpb.Code_ABORTED {
@@ -435,8 +435,8 @@ func TestQueryPoolTimeout(t *testing.T) {
 	framework.Server.QueryTimeout.Set(100 * time.Millisecond)
 
 	_, err = client.Execute("select sleep(1) from vitess_test", nil)
-	if code := vterrors.Code(err); code != vtrpcpb.Code_DEADLINE_EXCEEDED {
-		t.Errorf("Error code: %v, want %v", code, vtrpcpb.Code_DEADLINE_EXCEEDED)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_CANCELED {
+		t.Errorf("Error code: %v, want %v", code, vtrpcpb.Code_CANCELED)
 	}
 
 	vend := framework.DebugVars()

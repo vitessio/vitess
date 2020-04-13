@@ -8,7 +8,6 @@
 {{- $namespace := index . 2 -}}
 
 {{- $vitessTag := $job.vitessTag | default $defaultVtctlclient.vitessTag -}}
-{{- $vtctlclientImage := $defaultVtctlclient.vtctlclientImage -}}
 {{- $secrets := $job.secrets | default $defaultVtctlclient.secrets }}
 ---
 ###################################
@@ -31,7 +30,7 @@ spec:
       restartPolicy: OnFailure
       containers:
       - name: vtjob
-        image: "{{$vtctlclientImage}}:{{$vitessTag}}"
+        image: "vitess/vtctlclient:{{$vitessTag}}"
         volumeMounts:
 {{ include "user-secret-volumeMounts" $defaultVtctlclient.secrets | indent 10 }}
         resources:
@@ -55,13 +54,40 @@ spec:
 {{- $job := index . 0 -}}
 {{- $defaultVtworker := index . 1 -}}
 {{- $namespace := index . 2 -}}
+{{- $cell := index . 3 -}}
 
 {{- $vitessTag := $job.vitessTag | default $defaultVtworker.vitessTag -}}
-{{- $vtworkerImage := $job.vtworkerImage | default $defaultVtworker.vtworkerImage -}}
-
-
 {{- $secrets := $job.secrets | default $defaultVtworker.secrets }}
 ---
+
+###################################
+# vtworker ServiceAccount
+###################################
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vtworker
+  labels:
+    app: vitess
+---
+
+###################################
+# vtgate RoleBinding
+###################################
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vtworker-topo-member
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: vt-topo-member
+subjects:
+- kind: ServiceAccount
+  name: vtworker
+  namespace: {{ $namespace }}
+---
+
 ###################################
 # Vitess vtworker Job
 ###################################
@@ -79,11 +105,12 @@ spec:
         vtworkerJob: "true"
 
     spec:
+      serviceAccountName: vtworker
 {{ include "pod-security" . | indent 6 }}
       restartPolicy: OnFailure
       containers:
       - name: vtjob
-        image: "{{$vtworkerImage}}:{{$vitessTag}}"
+        image: "vitess/vtworker:{{$vitessTag}}"
         volumeMounts:
 {{ include "user-secret-volumeMounts" $defaultVtworker.secrets | indent 10 }}
         resources:
@@ -96,9 +123,13 @@ spec:
             set -ex
 
             eval exec /vt/bin/vtworker $(cat <<END_OF_COMMAND
-              -topo_implementation="etcd2"
-              -topo_global_server_address="etcd-global-client.{{ $namespace }}:2379"
               -topo_global_root=/vitess/global
+              {{- if eq ($cell.topologyProvider | default "") "etcd2" }}
+              -topo_implementation=etcd2
+              -topo_global_server_address="etcd-global-client.{{ $namespace }}:2379"
+              {{- else }}
+              -topo_implementation="k8s"
+              {{- end }}
               -cell={{ $job.cell | quote }}
               -logtostderr=true
               -stderrthreshold=0

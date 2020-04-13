@@ -125,6 +125,11 @@ func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 			"-xtrabackup_backup_flags", fmt.Sprintf("--password=%s", dbPassword),
 		}
 
+		// if streamMode is xbstream, add some additional args to test other xtrabackup flags
+		if streamMode == "xbstream" {
+			xtrabackupArgs = append(xtrabackupArgs, "-xtrabackup_prepare_flags", fmt.Sprintf("--use-memory=100M"))
+		}
+
 		commonTabletArg = append(commonTabletArg, xtrabackupArgs...)
 	}
 

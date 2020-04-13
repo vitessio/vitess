@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strings"
 	"time"
 
 	"golang.org/x/net/context"
@@ -290,6 +291,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	// TODO(sougou): if we also stored the time of the last event, we
 	// can estimate this value more accurately.
 	defer vp.vr.stats.SecondsBehindMaster.Set(math.MaxInt64)
+	var sbm int64 = -1
 	for {
 		items, err := relay.Fetch()
 		if err != nil {
@@ -322,7 +324,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 				if event.Timestamp != 0 {
 					vp.lastTimestampNs = event.Timestamp * 1e9
 					vp.timeOffsetNs = time.Now().UnixNano() - event.CurrentTime
-					vp.vr.stats.SecondsBehindMaster.Set(event.CurrentTime/1e9 - event.Timestamp)
+					sbm = event.CurrentTime/1e9 - event.Timestamp
 				}
 				mustSave := false
 				switch event.Type {
@@ -348,6 +350,10 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 				}
 			}
 		}
+		if sbm >= 0 {
+			vp.vr.stats.SecondsBehindMaster.Set(sbm)
+		}
+
 	}
 }
 
@@ -419,15 +425,18 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		stats.Send(fmt.Sprintf("%v", event.FieldEvent))
 
 	case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE, binlogdatapb.VEventType_REPLACE:
-		// This is a player using stament based replication
-		if err := vp.vr.dbClient.Begin(); err != nil {
-			return err
-		}
+		// If the event is for one of the AWS RDS "special" tables, we skip
+		if !strings.Contains(event.Dml, " mysql.rds_") {
+			// This is a player using stament based replication
+			if err := vp.vr.dbClient.Begin(); err != nil {
+				return err
+			}
 
-		if err := vp.applyStmtEvent(ctx, event); err != nil {
-			return err
+			if err := vp.applyStmtEvent(ctx, event); err != nil {
+				return err
+			}
+			stats.Send(fmt.Sprintf(event.Dml))
 		}
-		stats.Send(fmt.Sprintf(event.Dml))
 	case binlogdatapb.VEventType_ROW:
 		// This player is configured for row based replication
 		if err := vp.vr.dbClient.Begin(); err != nil {

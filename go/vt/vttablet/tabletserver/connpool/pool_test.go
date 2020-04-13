@@ -17,13 +17,12 @@ limitations under the License.
 package connpool
 
 import (
-	"fmt"
-	"math/rand"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	"golang.org/x/net/context"
 )
@@ -220,19 +219,12 @@ func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
 	}
 }
 
-type dummyChecker struct {
-}
-
-func (dummyChecker) CheckMySQL() {}
-
-var checker = dummyChecker{}
-
 func newPool() *Pool {
 	return New(
-		fmt.Sprintf("TestPool%d", rand.Int63()),
+		tabletenv.NewTestEnv(nil, nil, "PoolTest"),
+		"TestPool",
 		100,
 		0,
 		10*time.Second,
-		checker,
 	)
 }

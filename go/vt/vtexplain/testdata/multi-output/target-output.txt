@@ -12,7 +12,7 @@ select * from user where id in (1,2,3,4,5,6,7,8)
 insert into user (id, name) values (2, 'bob')
 
 1 ks_sharded/40-80: begin
-1 ks_sharded/40-80: insert into user(id, name) values (2, 'bob')/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/40-80: insert into user(id, name) values (2, 'bob')
 1 ks_sharded/40-80: commit
 
 ----------------------------------------------------------------------

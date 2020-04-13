@@ -64,37 +64,39 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 func TestPlan(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	for tcase := range iterateExecFile("exec_cases.txt") {
-		if strings.Contains(tcase.options, "PassthroughDMLs") {
-			PassthroughDMLs = true
-		}
-		var plan *Plan
-		var err error
-		statement, err := sqlparser.Parse(tcase.input)
-		if err == nil {
-			plan, err = Build(statement, testSchema)
-		}
-		PassthroughDMLs = false
-
-		var out string
-		if err != nil {
-			out = err.Error()
-		} else {
-			bout, err := json.Marshal(plan)
-			if err != nil {
-				t.Fatalf("Error marshalling %v: %v", plan, err)
+		t.Run(tcase.input, func(t *testing.T) {
+			if strings.Contains(tcase.options, "PassthroughDMLs") {
+				PassthroughDMLs = true
 			}
-			out = string(bout)
-		}
-		if out != tcase.output {
-			t.Errorf("Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
+			var plan *Plan
+			var err error
+			statement, err := sqlparser.Parse(tcase.input)
+			if err == nil {
+				plan, err = Build(statement, testSchema)
+			}
+			PassthroughDMLs = false
+
+			var out string
 			if err != nil {
-				out = fmt.Sprintf("\"%s\"", out)
+				out = err.Error()
 			} else {
-				bout, _ := json.MarshalIndent(plan, "", "  ")
+				bout, err := json.Marshal(plan)
+				if err != nil {
+					t.Fatalf("Error marshalling %v: %v", plan, err)
+				}
 				out = string(bout)
 			}
-			fmt.Printf("\"%s\"\n%s\n\n", tcase.input, out)
-		}
+			if out != tcase.output {
+				t.Errorf("Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
+				if err != nil {
+					out = fmt.Sprintf("\"%s\"", out)
+				} else {
+					bout, _ := json.MarshalIndent(plan, "", "  ")
+					out = string(bout)
+				}
+				fmt.Printf("\"%s\"\n%s\n\n", tcase.input, out)
+			}
+		})
 	}
 }
 

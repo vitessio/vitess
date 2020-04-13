@@ -42,7 +42,7 @@ func TestAutocommitUpdateSharded(t *testing.T) {
 	require.NoError(t, err)
 
 	testBatchQuery(t, "sbc1", sbc1, &querypb.BoundQuery{
-		Sql:           "update user set a = 2 where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql:           "update user set a = 2 where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	})
 	testAsTransactionCount(t, "sbc1", sbc1, 1)
@@ -70,7 +70,7 @@ func TestAutocommitUpdateLookup(t *testing.T) {
 	testCommitCount(t, "sbclookup", sbclookup, 1)
 
 	testQueries(t, "sbc1", sbc1, []*querypb.BoundQuery{{
-		Sql:           "update music set a = 2 where id = 2 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql:           "update music set a = 2 where id = 2",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}})
 	testAsTransactionCount(t, "sbc1", sbc1, 0)
@@ -111,7 +111,7 @@ func TestAutocommitUpdateVindexChange(t *testing.T) {
 		Sql:           "select id, name, lastname from user2 where id = 1 for update",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "update user2 set name = 'myname', lastname = 'mylastname' where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql:           "update user2 set name = 'myname', lastname = 'mylastname' where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}})
 	testAsTransactionCount(t, "sbc", sbc, 0)
@@ -126,7 +126,7 @@ func TestAutocommitDeleteSharded(t *testing.T) {
 	require.NoError(t, err)
 
 	testBatchQuery(t, "sbc1", sbc1, &querypb.BoundQuery{
-		Sql:           "delete from user_extra where user_id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql:           "delete from user_extra where user_id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	})
 	testAsTransactionCount(t, "sbc1", sbc1, 1)
@@ -168,7 +168,7 @@ func TestAutocommitDeleteLookup(t *testing.T) {
 		Sql:           "select user_id, id from music where id = 1 for update",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "delete from music where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql:           "delete from music where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}})
 	testAsTransactionCount(t, "sbc1", sbc1, 0)
@@ -183,7 +183,7 @@ func TestAutocommitDeleteMultiShard(t *testing.T) {
 	require.NoError(t, err)
 
 	testQueries(t, "sbc1", sbc1, []*querypb.BoundQuery{{
-		Sql:           "delete from user_extra where user_id in (1, 2)/* vtgate:: filtered_replication_unfriendly */",
+		Sql:           "delete from user_extra where user_id in (1, 2)",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}})
 	testBatchQuery(t, "sbc1", sbc1, nil)
@@ -191,7 +191,7 @@ func TestAutocommitDeleteMultiShard(t *testing.T) {
 	testCommitCount(t, "sbc1", sbc1, 1)
 
 	testQueries(t, "sbc2", sbc2, []*querypb.BoundQuery{{
-		Sql:           "delete from user_extra where user_id in (1, 2)/* vtgate:: filtered_replication_unfriendly */",
+		Sql:           "delete from user_extra where user_id in (1, 2)",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}})
 	testBatchQuery(t, "sbc2", sbc2, nil)
@@ -207,14 +207,14 @@ func TestAutocommitDeleteMultiShardAutoCommit(t *testing.T) {
 	require.NoError(t, err)
 
 	testBatchQuery(t, "sbc1", sbc1, &querypb.BoundQuery{
-		Sql:           "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id in (1, 2)/* vtgate:: filtered_replication_unfriendly */",
+		Sql:           "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id in (1, 2)",
 		BindVariables: map[string]*querypb.BindVariable{},
 	})
 	testAsTransactionCount(t, "sbc1", sbc1, 1)
 	testCommitCount(t, "sbc1", sbc1, 0)
 
 	testBatchQuery(t, "sbc2", sbc2, &querypb.BoundQuery{
-		Sql:           "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id in (1, 2)/* vtgate:: filtered_replication_unfriendly */",
+		Sql:           "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id in (1, 2)",
 		BindVariables: map[string]*querypb.BindVariable{},
 	})
 	testAsTransactionCount(t, "sbc2", sbc2, 1)
@@ -229,7 +229,7 @@ func TestAutocommitInsertSharded(t *testing.T) {
 	require.NoError(t, err)
 
 	testBatchQuery(t, "sbc1", sbc1, &querypb.BoundQuery{
-		Sql: "insert into user_extra(user_id, v) values (:_user_id0, 2) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql: "insert into user_extra(user_id, v) values (:_user_id0, 2)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id0": sqltypes.Int64BindVariable(1),
 		},
@@ -260,7 +260,7 @@ func TestAutocommitInsertLookup(t *testing.T) {
 	testCommitCount(t, "sbclookup", sbclookup, 1)
 
 	testQueries(t, "sbc1", sbc1, []*querypb.BoundQuery{{
-		Sql: "insert into user(id, v, name) values (:_Id0, 2, :_name0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql: "insert into user(id, v, name) values (:_Id0, 2, :_name0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id0":   sqltypes.Int64BindVariable(1),
 			"_name0": sqltypes.BytesBindVariable([]byte("myname")),
@@ -279,7 +279,7 @@ func TestAutocommitInsertMultishardAutoCommit(t *testing.T) {
 	require.NoError(t, err)
 
 	testBatchQuery(t, "sbc1", sbc1, &querypb.BoundQuery{
-		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id0, 2) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id0, 2)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id0": sqltypes.Int64BindVariable(1),
 			"_user_id1": sqltypes.Int64BindVariable(3),
@@ -289,7 +289,7 @@ func TestAutocommitInsertMultishardAutoCommit(t *testing.T) {
 	testCommitCount(t, "sbc1", sbc1, 0)
 
 	testBatchQuery(t, "sbc2", sbc2, &querypb.BoundQuery{
-		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id1, 4) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
+		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id1, 4)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id0": sqltypes.Int64BindVariable(1),
 			"_user_id1": sqltypes.Int64BindVariable(3),
@@ -311,7 +311,7 @@ func TestAutocommitInsertMultishardAutoCommit(t *testing.T) {
 	testCommitCount(t, "sbc1", sbc1, 0)
 
 	testBatchQuery(t, "sbc2", sbc2, &querypb.BoundQuery{
-		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id1, 4) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
+		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id1, 4)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id0": sqltypes.Int64BindVariable(1),
 			"_user_id1": sqltypes.Int64BindVariable(3),
@@ -329,7 +329,7 @@ func TestAutocommitInsertMultishard(t *testing.T) {
 	require.NoError(t, err)
 
 	testQueries(t, "sbc1", sbc1, []*querypb.BoundQuery{{
-		Sql: "insert into user_extra(user_id, v) values (:_user_id0, 2) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql: "insert into user_extra(user_id, v) values (:_user_id0, 2)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id0": sqltypes.Int64BindVariable(1),
 			"_user_id1": sqltypes.Int64BindVariable(3),
@@ -339,7 +339,7 @@ func TestAutocommitInsertMultishard(t *testing.T) {
 	testCommitCount(t, "sbc1", sbc1, 1)
 
 	testQueries(t, "sbc2", sbc2, []*querypb.BoundQuery{{
-		Sql: "insert into user_extra(user_id, v) values (:_user_id1, 4) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
+		Sql: "insert into user_extra(user_id, v) values (:_user_id1, 4)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_user_id0": sqltypes.Int64BindVariable(1),
 			"_user_id1": sqltypes.Int64BindVariable(3),
@@ -386,7 +386,7 @@ func TestAutocommitTransactionStarted(t *testing.T) {
 	require.NoError(t, err)
 
 	testQueries(t, "sbc1", sbc1, []*querypb.BoundQuery{{
-		Sql:           "update user set a = 2 where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql:           "update user set a = 2 where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}})
 	testAsTransactionCount(t, "sbc1", sbc1, 0)
@@ -408,7 +408,7 @@ func TestAutocommitDirectTarget(t *testing.T) {
 	require.NoError(t, err)
 
 	testBatchQuery(t, "sbclookup", sbclookup, &querypb.BoundQuery{
-		Sql:           sql + "/* vtgate:: filtered_replication_unfriendly */",
+		Sql:           sql,
 		BindVariables: map[string]*querypb.BindVariable{},
 	})
 	testAsTransactionCount(t, "sbclookup", sbclookup, 1)
@@ -424,13 +424,13 @@ func TestAutocommitDirectRangeTarget(t *testing.T) {
 		Autocommit:      true,
 		TransactionMode: vtgatepb.TransactionMode_MULTI,
 	}
-	sql := "DELETE FROM sharded_user_msgs LIMIT 1000"
+	sql := "delete from sharded_user_msgs limit 1000"
 
 	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 
 	testQueries(t, "sbc1", sbc1, []*querypb.BoundQuery{{
-		Sql:           sql + "/* vtgate:: filtered_replication_unfriendly */",
+		Sql:           sql,
 		BindVariables: map[string]*querypb.BindVariable{},
 	}})
 	testAsTransactionCount(t, "sbc1", sbc1, 0)

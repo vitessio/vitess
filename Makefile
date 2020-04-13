@@ -74,14 +74,6 @@ install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
 	cp "$${VTROOT}/bin/"{mysqlctld,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
-	# config files
-	mkdir -p "$${PREFIX}/src/vitess.io/vitess"
-	cp -R config "$${PREFIX}/src/vitess.io/vitess/"
-	# also symlink config files in the old location
-	ln -sf src/vitess.io/vitess/config "$${PREFIX}/config"
-	# vtctld web UI files
-	mkdir -p "$${PREFIX}/src/vitess.io/vitess/web/vtctld2"
-	cp -R web/vtctld2/app "$${PREFIX}/src/vitess.io/vitess/web/vtctld2/"
 
 parser:
 	make -C go/vt/sqlparser
@@ -289,12 +281,6 @@ docker_test:
 docker_unit_test:
 	go run test.go -flavor $(flavor) unit
 
-# This can be used to rebalance the total average runtime of each group of
-# tests in Travis. The results are saved in test/config.json, which you can
-# then commit and push.
-rebalance_tests:
-	go run test.go -rebalance 5
-
 # Release a version.
 # This will generate a tar.gz file into the releases folder with the current source
 release: docker_base
@@ -324,7 +310,7 @@ tools:
 
 minimaltools:
 	echo $$(date): Installing minimal dependencies
-	BUILD_JAVA=0 BUILD_CONSUL=0 ./bootstrap.sh
+	BUILD_CHROME=0 BUILD_JAVA=0 BUILD_CONSUL=0 ./bootstrap.sh
 
 dependency_check:
 	./tools/dependency_check.sh

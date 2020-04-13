@@ -1,8 +1,6 @@
 topology:
   cells:
     - name: "zone1"
-      etcd:
-        replicas: 1
       vtctld:
         replicas: 1
       vtgate:
@@ -40,15 +38,6 @@ topology:
                   vttablet:
                     replicas: 1
 
-jobs:
-  - name: "delete-shard0"
-    kind: "vtctlclient"
-    command: "DeleteShard -recursive customer/0"
-
-etcd:
-  replicas: 1
-  resources:
-
 vtctld:
   serviceType: "NodePort"
   resources:
@@ -61,6 +50,8 @@ vttablet:
   mysqlSize: "prod"
   resources:
   mysqlResources:
+  # It's generally not recommended to override this value for production usage.
+  terminationGracePeriodSeconds: 1
 
 vtworker:
   resources:

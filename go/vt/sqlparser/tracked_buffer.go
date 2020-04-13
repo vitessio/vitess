@@ -56,10 +56,23 @@ func (buf *TrackedBuffer) WriteNode(node SQLNode) *TrackedBuffer {
 // Myprintf mimics fmt.Fprintf(buf, ...), but limited to Node(%v),
 // Node.Value(%s) and string(%s). It also allows a %a for a value argument, in
 // which case it adds tracking info for future substitutions.
+// It adds parens as needed to follow precedence rules when printing expressions
 //
 // The name must be something other than the usual Printf() to avoid "go vet"
 // warnings due to our custom format specifiers.
+// *** THIS METHOD SHOULD NOT BE USED FROM ast.go. USE astPrintf INSTEAD ***
 func (buf *TrackedBuffer) Myprintf(format string, values ...interface{}) {
+	buf.astPrintf(nil, format, values...)
+}
+
+// astPrintf is for internal use by the ast structs
+func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values ...interface{}) {
+	currentExpr, checkParens := currentNode.(Expr)
+	if checkParens {
+		// expressions that have Precedence Syntactic will never need parens
+		checkParens = precedenceFor(currentExpr) != Syntactic
+	}
+
 	end := len(format)
 	fieldnum := 0
 	for i := 0; i < end; {
@@ -94,12 +107,18 @@ func (buf *TrackedBuffer) Myprintf(format string, values ...interface{}) {
 				panic(fmt.Sprintf("unexpected TrackedBuffer type %T", v))
 			}
 		case 'v':
-			node := values[fieldnum].(SQLNode)
-			if buf.nodeFormatter == nil {
-				node.Format(buf)
+			value := values[fieldnum]
+			expr := getExpressionForParensEval(checkParens, value)
+
+			if expr != nil { //
+				needParens := needParens(currentExpr, expr)
+				buf.printIf(needParens, "(")
+				buf.formatter(expr)
+				buf.printIf(needParens, ")")
 			} else {
-				buf.nodeFormatter(buf, node)
+				buf.formatter(value.(SQLNode))
 			}
+
 		case 'a':
 			buf.WriteArg(values[fieldnum].(string))
 		default:
@@ -108,6 +127,53 @@ func (buf *TrackedBuffer) Myprintf(format string, values ...interface{}) {
 		fieldnum++
 		i++
 	}
+}
+
+func getExpressionForParensEval(checkParens bool, value interface{}) Expr {
+	if checkParens {
+		expr, isExpr := value.(Expr)
+		if isExpr {
+			return expr
+		}
+	}
+	return nil
+}
+
+func (buf *TrackedBuffer) printIf(condition bool, text string) {
+	if condition {
+		buf.WriteString(text)
+	}
+}
+
+func (buf *TrackedBuffer) formatter(node SQLNode) {
+	if buf.nodeFormatter == nil {
+		node.Format(buf)
+	} else {
+		buf.nodeFormatter(buf, node)
+	}
+}
+
+func needParens(op, val Expr) bool {
+	if areBothISExpr(op, val) {
+		return true
+	}
+
+	opBinding := precedenceFor(op)
+	valBinding := precedenceFor(val)
+
+	return !(opBinding == Syntactic || valBinding == Syntactic) && valBinding > opBinding
+}
+
+func areBothISExpr(op Expr, val Expr) bool {
+	_, isOpIS := op.(*IsExpr)
+	if isOpIS {
+		_, isValIS := val.(*IsExpr)
+		if isValIS {
+			// when using IS on an IS op, we need special handling
+			return true
+		}
+	}
+	return false
 }
 
 // WriteArg writes a value argument into the buffer along with

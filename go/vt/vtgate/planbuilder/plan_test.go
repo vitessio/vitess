@@ -26,6 +26,9 @@ import (
 	"strings"
 	"testing"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
@@ -142,7 +145,10 @@ func init() {
 }
 
 func TestPlan(t *testing.T) {
-	vschema := loadSchema(t, "schema_test.json")
+	vschemaWrapper := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json"),
+	}
+
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
 	// You will notice that some tests expect user.Id instead of user.id.
@@ -151,22 +157,58 @@ func TestPlan(t *testing.T) {
 	// the column is named as Id. This is to make sure that
 	// column names are case-preserved, but treated as
 	// case-insensitive even if they come from the vschema.
-	testFile(t, "aggr_cases.txt", testOutputTempDir, vschema)
-	testFile(t, "dml_cases.txt", testOutputTempDir, vschema)
-	testFile(t, "from_cases.txt", testOutputTempDir, vschema)
-	testFile(t, "filter_cases.txt", testOutputTempDir, vschema)
-	testFile(t, "postprocess_cases.txt", testOutputTempDir, vschema)
-	testFile(t, "select_cases.txt", testOutputTempDir, vschema)
-	testFile(t, "symtab_cases.txt", testOutputTempDir, vschema)
-	testFile(t, "unsupported_cases.txt", testOutputTempDir, vschema)
-	testFile(t, "vindex_func_cases.txt", testOutputTempDir, vschema)
-	testFile(t, "wireup_cases.txt", testOutputTempDir, vschema)
-	testFile(t, "memory_sort_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "aggr_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "dml_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "from_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "filter_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "postprocess_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "select_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "symtab_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "unsupported_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "vindex_func_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "wireup_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "memory_sort_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "use_cases.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func TestOne(t *testing.T) {
-	vschema := loadSchema(t, "schema_test.json")
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json"),
+	}
+
 	testFile(t, "onecase.txt", "", vschema)
+}
+
+func TestBypassPlanningFromFile(t *testing.T) {
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	require.NoError(t, err)
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json"),
+		keyspace: &vindexes.Keyspace{
+			Name:    "main",
+			Sharded: false,
+		},
+		tabletType: topodatapb.TabletType_MASTER,
+		dest:       key.DestinationShard("-80"),
+	}
+
+	testFile(t, "bypass_cases.txt", testOutputTempDir, vschema)
+}
+
+func TestDDLPlanningFromFile(t *testing.T) {
+	// We are testing this separately so we can set a default keyspace
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	require.NoError(t, err)
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json"),
+		keyspace: &vindexes.Keyspace{
+			Name:    "main",
+			Sharded: false,
+		},
+		tabletType: topodatapb.TabletType_MASTER,
+	}
+
+	testFile(t, "ddl_cases.txt", testOutputTempDir, vschema)
 }
 
 func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
@@ -186,8 +228,37 @@ func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
 	return vschema
 }
 
+var _ ContextVSchema = (*vschemaWrapper)(nil)
+
 type vschemaWrapper struct {
-	v *vindexes.VSchema
+	v          *vindexes.VSchema
+	keyspace   *vindexes.Keyspace
+	tabletType topodatapb.TabletType
+	dest       key.Destination
+}
+
+func (vw *vschemaWrapper) TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error) {
+	keyspaceName := vw.keyspace.Name
+	if vw.dest == nil && qualifier != "" {
+		keyspaceName = qualifier
+	}
+	if keyspaceName == "" {
+		return nil, nil, 0, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace not specified")
+	}
+	keyspace := vw.v.Keyspaces[keyspaceName]
+	if keyspace == nil {
+		return nil, nil, 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no keyspace with name [%s] found", keyspaceName)
+	}
+	return vw.dest, keyspace.Keyspace, vw.tabletType, nil
+
+}
+
+func (vw *vschemaWrapper) TabletType() topodatapb.TabletType {
+	return vw.tabletType
+}
+
+func (vw *vschemaWrapper) Destination() key.Destination {
+	return vw.dest
 }
 
 func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {
@@ -222,28 +293,19 @@ func (vw *vschemaWrapper) TargetString() string {
 	return "targetString"
 }
 
-// For the purposes of this set of tests, just compare the actual plan
-// and ignore all the metrics.
-type testPlan struct {
-	Original     string           `json:",omitempty"`
-	Instructions engine.Primitive `json:",omitempty"`
-}
-
-func testFile(t *testing.T, filename, tempDir string, vschema *vindexes.VSchema) {
+func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 	t.Run(filename, func(t *testing.T) {
 		expected := &strings.Builder{}
 		fail := false
 		for tcase := range iterateExecFile(filename) {
 			t.Run(tcase.comments, func(t *testing.T) {
-				plan, err := Build(tcase.input, &vschemaWrapper{
-					v: vschema,
-				})
+				plan, err := Build(tcase.input, vschema)
 
 				out := getPlanOrErrorOutput(err, plan)
 
 				if out != tcase.output {
 					fail = true
-					t.Errorf("File: %s, Line: %v\n %s", filename, tcase.lineno, cmp.Diff(out, tcase.output))
+					t.Errorf("File: %s, Line: %v\n %s \n%s", filename, tcase.lineno, cmp.Diff(tcase.output, out), out)
 				}
 
 				if err != nil {
@@ -266,10 +328,7 @@ func getPlanOrErrorOutput(err error, plan *engine.Plan) string {
 	if err != nil {
 		return err.Error()
 	}
-	bout, _ := json.MarshalIndent(testPlan{
-		Original:     plan.Original,
-		Instructions: plan.Instructions,
-	}, "", "  ")
+	bout, _ := json.MarshalIndent(plan, "", "  ")
 	return string(bout)
 }
 

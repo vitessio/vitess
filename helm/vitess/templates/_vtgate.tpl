@@ -12,7 +12,6 @@
 
 # define image to use
 {{- $vitessTag := .vitessTag | default $defaultVtgate.vitessTag -}}
-{{- $vtgateImage := .vtgateImage | default $defaultVtgate.vtgateImage -}}
 {{- $cellClean := include "clean-label" $cell.name }}
 
 ###################################
@@ -42,10 +41,39 @@ spec:
     app: vitess
   type: {{.serviceType | default $defaultVtgate.serviceType}}
 ---
+
+###################################
+# vtgate ServiceAccount
+###################################
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vtgate
+  labels:
+    app: vitess
+---
+
+###################################
+# vtgate RoleBinding
+###################################
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vtgate-topo-member
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: vt-topo-member
+subjects:
+- kind: ServiceAccount
+  name: vtgate
+  namespace: {{ $namespace }}
+---
+
 ###################################
 # vtgate Deployment
 ###################################
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: vtgate-{{ $cellClean }}
@@ -63,19 +91,20 @@ spec:
         component: vtgate
         cell: {{ $cellClean }}
     spec:
+      serviceAccountName: vtgate
 {{ include "pod-security" . | indent 6 }}
 {{ include "vtgate-affinity" (tuple $cellClean $cell.region) | indent 6 }}
 
 {{ if $cell.mysqlProtocol.enabled }}
 {{ if eq $cell.mysqlProtocol.authType "secret" }}
       initContainers:
-{{ include "init-mysql-creds" (tuple $vitessTag $vtgateImage $cell) | indent 8 }}
+{{ include "init-mysql-creds" (tuple $vitessTag $cell) | indent 8 }}
 {{ end }}
 {{ end }}
 
       containers:
         - name: vtgate
-          image: {{$vtgateImage}}:{{$vitessTag}}
+          image: vitess/vtgate:{{$vitessTag}}
           imagePullPolicy: IfNotPresent
           readinessProbe:
             httpGet:
@@ -103,9 +132,14 @@ spec:
               set -ex
 
               eval exec /vt/bin/vtgate $(cat <<END_OF_COMMAND
+                -topo_global_root=/vitess/global
+                {{- if eq ($cell.topologyProvider | default "") "etcd2" }}
                 -topo_implementation=etcd2
                 -topo_global_server_address="etcd-global-client.{{ $namespace }}:2379"
-                -topo_global_root=/vitess/global
+                {{- else }}
+                -topo_implementation="k8s"
+                -topo_global_server_address="k8s"
+                {{- end }}
                 -logtostderr=true
                 -stderrthreshold=0
                 -port=15001
@@ -159,7 +193,7 @@ metadata:
   name: vtgate-{{ $cellClean }}
 spec:
   scaleTargetRef:
-    apiVersion: apps/v1beta1
+    apiVersion: apps/v1
     kind: Deployment
     name: vtgate-{{ $cellClean }}
   minReplicas: {{ .replicas }}
@@ -219,13 +253,12 @@ affinity:
 ###################################
 {{ define "init-mysql-creds" -}}
 {{- $vitessTag := index . 0 -}}
-{{- $vtgateImage := index . 1 -}}
-{{- $cell := index . 2 -}}
+{{- $cell := index . 1 -}}
 
 {{- with $cell.mysqlProtocol }}
 
 - name: init-mysql-creds
-  image: "{{$vtgateImage}}:{{$vitessTag}}"
+  image: "vitess/vtgate:{{$vitessTag}}"
   imagePullPolicy: IfNotPresent
   volumeMounts:
     - name: creds

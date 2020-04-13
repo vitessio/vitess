@@ -295,22 +295,15 @@ func TestStatsURL(t *testing.T) {
 
 	request, _ := http.NewRequest("GET", "/debug/schema", nil)
 	response := httptest.NewRecorder()
-	se.ServeHTTP(response, request)
+	se.handleDebugSchema(response, request)
 }
-
-type dummyChecker struct {
-}
-
-func (dummyChecker) CheckMySQL() {}
-
-var DummyChecker = dummyChecker{}
 
 func newEngine(queryPlanCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, strict bool, db *fakesqldb.DB) *Engine {
 	config := tabletenv.DefaultQsConfig
 	config.QueryPlanCacheSize = queryPlanCacheSize
 	config.SchemaReloadTime = float64(reloadTime) / 1e9
 	config.IdleTimeout = float64(idleTimeout) / 1e9
-	se := NewEngine(DummyChecker, config)
+	se := NewEngine(tabletenv.NewTestEnv(&config, nil, "SchemaTest"))
 	se.InitDBConfig(newDBConfigs(db).DbaWithDB())
 	return se
 }
@@ -376,6 +369,9 @@ func initialSchema() map[string]*Table {
 				Name: "id",
 				Type: sqltypes.Int64,
 			}, {
+				Name: "priority",
+				Type: sqltypes.Int64,
+			}, {
 				Name: "time_next",
 				Type: sqltypes.Int64,
 			}, {
@@ -399,6 +395,7 @@ func initialSchema() map[string]*Table {
 				}},
 				AckWaitDuration:    30 * time.Second,
 				PurgeAfterDuration: 120 * time.Second,
+				MinBackoff:         30 * time.Second,
 				BatchSize:          1,
 				CacheSize:          10,
 				PollInterval:       30 * time.Second,

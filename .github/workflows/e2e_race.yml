@@ -30,5 +30,6 @@ jobs:
         make minimaltools
 
     - name: e2e_race
+      timeout-minutes: 30
       run: |
         make e2e_test_race

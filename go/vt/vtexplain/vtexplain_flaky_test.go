@@ -48,7 +48,7 @@ func initTest(mode string, opts *Options, t *testing.T) {
 
 	opts.ExecutionMode = mode
 	err = Init(string(vSchema), string(schema), opts)
-	require.NoError(t, err, "vtexplain Init error")
+	require.NoError(t, err, "vtexplain Init error\n%s", string(schema))
 }
 
 func testExplain(testcase string, opts *Options, t *testing.T) {

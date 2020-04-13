@@ -459,10 +459,6 @@ func (r *replaceOrderByItems) inc() {
 	*r++
 }
 
-func replaceParenExprExpr(newNode, parent SQLNode) {
-	parent.(*ParenExpr).Expr = newNode.(Expr)
-}
-
 func replaceParenSelectSelect(newNode, parent SQLNode) {
 	parent.(*ParenSelect).Select = newNode.(SelectStatement)
 }
@@ -1089,9 +1085,6 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *OtherAdmin:
 
 	case *OtherRead:
-
-	case *ParenExpr:
-		a.apply(node, n.Expr, replaceParenExprExpr)
 
 	case *ParenSelect:
 		a.apply(node, n.Select, replaceParenSelectSelect)

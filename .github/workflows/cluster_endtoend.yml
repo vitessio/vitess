@@ -40,6 +40,7 @@ jobs:
         fi
 
     - name: sharded cluster_endtoend
+      timeout-minutes: 30
       run: |
         source build.env
         eatmydata -- go run test.go -docker=false -print-log -follow -shard ${{matrix.name}}

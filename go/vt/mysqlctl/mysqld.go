@@ -45,7 +45,6 @@ import (
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	vtenv "vitess.io/vitess/go/vt/env"
@@ -78,10 +77,6 @@ var (
 	// masterConnectRetry is used in 'SET MASTER' commands
 	masterConnectRetry = flag.Duration("master_connect_retry", 10*time.Second, "how long to wait in between slave -> connection attempts. Only precise to the second.")
 
-	dbaMysqlStats      = stats.NewTimings("MysqlDba", "MySQL DBA stats", "operation")
-	allprivsMysqlStats = stats.NewTimings("MysqlAllPrivs", "MySQl Stats for all privs", "operation")
-	appMysqlStats      = stats.NewTimings("MysqlApp", "MySQL app stats", "operation")
-
 	versionRegex = regexp.MustCompile(`Ver ([0-9]+)\.([0-9]+)\.([0-9]+)`)
 )
 
@@ -111,11 +106,11 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 
 	// Create and open the connection pool for dba access.
 	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *dbaIdleTimeout, *poolDynamicHostnameResolution)
-	result.dbaPool.Open(dbcfgs.DbaWithDB(), dbaMysqlStats)
+	result.dbaPool.Open(dbcfgs.DbaWithDB())
 
 	// Create and open the connection pool for app access.
 	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout, *poolDynamicHostnameResolution)
-	result.appPool.Open(dbcfgs.AppWithDB(), appMysqlStats)
+	result.appPool.Open(dbcfgs.AppWithDB())
 
 	/*
 	 Unmanaged tablets are special because the MYSQL_FLAVOR detection
@@ -1102,12 +1097,12 @@ func (mysqld *Mysqld) GetAppConnection(ctx context.Context) (*dbconnpool.PooledD
 
 // GetDbaConnection creates a new DBConnection.
 func (mysqld *Mysqld) GetDbaConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(mysqld.dbcfgs.Dba(), dbaMysqlStats)
+	return dbconnpool.NewDBConnection(mysqld.dbcfgs.Dba())
 }
 
 // GetAllPrivsConnection creates a new DBConnection.
 func (mysqld *Mysqld) GetAllPrivsConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(mysqld.dbcfgs.AllPrivsWithDB(), allprivsMysqlStats)
+	return dbconnpool.NewDBConnection(mysqld.dbcfgs.AllPrivsWithDB())
 }
 
 // Close will close this instance of Mysqld. It will wait for all dba

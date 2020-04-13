@@ -28,13 +28,13 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -61,9 +61,6 @@ type queries struct {
 }
 
 var (
-	txOnce  sync.Once
-	txStats = stats.NewTimings("Transactions", "Transaction stats", "operation")
-
 	txIsolations = map[querypb.ExecuteOptions_TransactionIsolation]queries{
 		querypb.ExecuteOptions_DEFAULT:                       {setIsolationLevel: "", openTransaction: "begin"},
 		querypb.ExecuteOptions_REPEATABLE_READ:               {setIsolationLevel: "REPEATABLE READ", openTransaction: "begin"},
@@ -76,9 +73,12 @@ var (
 
 // TxPool is the transaction pool for the query service.
 type TxPool struct {
+	env tabletenv.Env
+
 	// conns is the 'regular' pool. By default, connections
 	// are pulled from here for starting transactions.
 	conns *connpool.Pool
+
 	// foundRowsPool is the alternate pool that creates
 	// connections with CLIENT_FOUND_ROWS flag set. A separate
 	// pool is needed because this option can only be set at
@@ -89,8 +89,10 @@ type TxPool struct {
 	transactionTimeout     sync2.AtomicDuration
 	transactionPoolTimeout sync2.AtomicDuration
 	ticks                  *timer.Timer
-	checker                connpool.MySQLChecker
 	limiter                txlimiter.TxLimiter
+
+	txStats *servenv.TimingsWrapper
+
 	// Tracking culprits that cause tx pool full errors.
 	logMu     sync.Mutex
 	lastLog   time.Time
@@ -99,37 +101,28 @@ type TxPool struct {
 }
 
 // NewTxPool creates a new TxPool. It's not operational until it's Open'd.
-func NewTxPool(
-	prefix string,
-	capacity int,
-	foundRowsCapacity int,
-	prefillParallelism int,
-	transactionTimeout time.Duration,
-	transactionPoolTimeout time.Duration,
-	idleTimeout time.Duration,
-	waiterCap int,
-	checker connpool.MySQLChecker,
-	limiter txlimiter.TxLimiter) *TxPool {
+func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
+	config := env.Config()
+	transactionTimeout := time.Duration(config.TransactionTimeout * 1e9)
 	axp := &TxPool{
-		conns:                  connpool.New(prefix+"TransactionPool", capacity, prefillParallelism, idleTimeout, checker),
-		foundRowsPool:          connpool.New(prefix+"FoundRowsPool", foundRowsCapacity, prefillParallelism, idleTimeout, checker),
+		env:                    env,
+		conns:                  connpool.New(env, "TransactionPool", config.TransactionCap, config.TxPoolPrefillParallelism, time.Duration(config.IdleTimeout*1e9)),
+		foundRowsPool:          connpool.New(env, "FoundRowsPool", config.FoundRowsPoolSize, config.TxPoolPrefillParallelism, time.Duration(config.IdleTimeout*1e9)),
 		activePool:             pools.NewNumbered(),
 		lastID:                 sync2.NewAtomicInt64(time.Now().UnixNano()),
 		transactionTimeout:     sync2.NewAtomicDuration(transactionTimeout),
-		transactionPoolTimeout: sync2.NewAtomicDuration(transactionPoolTimeout),
-		waiterCap:              sync2.NewAtomicInt64(int64(waiterCap)),
+		transactionPoolTimeout: sync2.NewAtomicDuration(time.Duration(config.TxPoolTimeout * 1e9)),
+		waiterCap:              sync2.NewAtomicInt64(int64(config.TxPoolWaiterCap)),
 		waiters:                sync2.NewAtomicInt64(0),
 		ticks:                  timer.NewTimer(transactionTimeout / 10),
-		checker:                checker,
 		limiter:                limiter,
+		txStats:                env.Exporter().NewTimings("Transactions", "Transaction stats", "operation"),
 	}
-	txOnce.Do(func() {
-		// Careful: conns also exports name+"xxx" vars,
-		// but we know it doesn't export Timeout.
-		stats.NewGaugeDurationFunc(prefix+"TransactionTimeout", "Transaction timeout", axp.transactionTimeout.Get)
-		stats.NewGaugeDurationFunc(prefix+"TransactionPoolTimeout", "Timeout to get a connection from the transaction pool", axp.transactionPoolTimeout.Get)
-		stats.NewGaugeFunc(prefix+"TransactionPoolWaiters", "Transaction pool waiters", axp.waiters.Get)
-	})
+	// Careful: conns also exports name+"xxx" vars,
+	// but we know it doesn't export Timeout.
+	env.Exporter().NewGaugeDurationFunc("TransactionTimeout", "Transaction timeout", axp.transactionTimeout.Get)
+	env.Exporter().NewGaugeDurationFunc("TransactionPoolTimeout", "Timeout to get a connection from the transaction pool", axp.transactionPoolTimeout.Get)
+	env.Exporter().NewGaugeFunc("TransactionPoolWaiters", "Transaction pool waiters", axp.waiters.Get)
 	return axp
 }
 
@@ -151,7 +144,7 @@ func (axp *TxPool) Close() {
 	for _, v := range axp.activePool.GetOutdated(time.Duration(0), "for closing") {
 		conn := v.(*TxConnection)
 		log.Warningf("killing transaction for shutdown: %s", conn.Format(nil))
-		tabletenv.InternalErrors.Add("StrayTransactions", 1)
+		axp.env.Stats().InternalErrors.Add("StrayTransactions", 1)
 		conn.Close()
 		conn.conclude(TxClose, "pool closed")
 	}
@@ -179,11 +172,11 @@ func (axp *TxPool) RollbackNonBusy(ctx context.Context) {
 }
 
 func (axp *TxPool) transactionKiller() {
-	defer tabletenv.LogError()
+	defer axp.env.LogError()
 	for _, v := range axp.activePool.GetOutdated(time.Duration(axp.Timeout()), "for tx killer rollback") {
 		conn := v.(*TxConnection)
 		log.Warningf("killing transaction (exceeded timeout: %v): %s", axp.Timeout(), conn.Format(nil))
-		tabletenv.KillStats.Add("Transactions", 1)
+		axp.env.Stats().KillCounters.Add("Transactions", 1)
 		conn.Close()
 		conn.conclude(TxKill, fmt.Sprintf("exceeded timeout: %v", axp.Timeout()))
 	}
@@ -463,7 +456,7 @@ func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wa
 				// If the context is done, the query was killed.
 				// So, don't trigger a mysql check.
 			default:
-				txc.pool.checker.CheckMySQL()
+				txc.pool.env.CheckMySQL()
 			}
 		}
 		return nil, err
@@ -523,9 +516,9 @@ func (txc *TxConnection) log(conclusion string) {
 		username = callerid.GetUsername(txc.ImmediateCallerID)
 	}
 	duration := txc.EndTime.Sub(txc.StartTime)
-	tabletenv.UserTransactionCount.Add([]string{username, conclusion}, 1)
-	tabletenv.UserTransactionTimesNs.Add([]string{username, conclusion}, int64(duration))
-	txStats.Add(conclusion, duration)
+	txc.pool.env.Stats().UserTransactionCount.Add([]string{username, conclusion}, 1)
+	txc.pool.env.Stats().UserTransactionTimesNs.Add([]string{username, conclusion}, int64(duration))
+	txc.pool.txStats.Add(conclusion, duration)
 	if txc.LogToFile.Get() != 0 {
 		log.Infof("Logged transaction: %s", txc.Format(nil))
 	}
