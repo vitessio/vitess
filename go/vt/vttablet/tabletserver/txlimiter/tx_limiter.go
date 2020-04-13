@@ -53,7 +53,7 @@ func New(env tabletenv.Env) TxLimiter {
 	}
 
 	return &Impl{
-		maxPerUser:       int64(float64(config.TransactionCap) * config.TransactionLimitPerUser),
+		maxPerUser:       int64(float64(config.TxPool.Size) * config.TransactionLimitPerUser),
 		dryRun:           config.EnableTransactionLimitDryRun,
 		byUsername:       config.TransactionLimitByUsername,
 		byPrincipal:      config.TransactionLimitByPrincipal,

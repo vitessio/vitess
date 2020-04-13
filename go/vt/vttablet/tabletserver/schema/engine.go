@@ -68,7 +68,7 @@ type Engine struct {
 // NewEngine creates a new Engine.
 func NewEngine(env tabletenv.Env) *Engine {
 	reloadTime := time.Duration(env.Config().SchemaReloadTime * 1e9)
-	idleTimeout := time.Duration(env.Config().IdleTimeout * 1e9)
+	idleTimeout := time.Duration(env.Config().OltpReadPool.IdleTimeoutSeconds * 1e9)
 	se := &Engine{
 		env: env,
 		// We need only one connection because the reloader is

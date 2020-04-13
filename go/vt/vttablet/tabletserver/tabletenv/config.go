@@ -50,19 +50,20 @@ var (
 	deprecatedMessagePoolSize               int
 	deprecatedPoolNamePrefix                string
 	deprecatedMaxDMLRows                    int
+	deprecatedFoundRowsPoolSize             int
 )
 
 func init() {
-	flag.Int64Var(&Config.OltpReadPool.Size, "queryserver-config-pool-size", DefaultQsConfig.OltpReadPool.Size, "query server read pool size, connection pool is used by regular queries (non streaming, not in a transaction)")
-	flag.IntVar(&Config.PoolPrefillParallelism, "queryserver-config-pool-prefill-parallelism", DefaultQsConfig.PoolPrefillParallelism, "query server read pool prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
-	flag.IntVar(&Config.StreamPoolSize, "queryserver-config-stream-pool-size", DefaultQsConfig.StreamPoolSize, "query server stream connection pool size, stream pool is used by stream queries: queries that return results to client in a streaming fashion")
-	flag.IntVar(&Config.StreamPoolPrefillParallelism, "queryserver-config-stream-pool-prefill-parallelism", DefaultQsConfig.StreamPoolPrefillParallelism, "query server stream pool prefill parallelism, a non-zero value will prefill the pool using the specified parallelism")
+	flag.IntVar(&Config.OltpReadPool.Size, "queryserver-config-pool-size", DefaultQsConfig.OltpReadPool.Size, "query server read pool size, connection pool is used by regular queries (non streaming, not in a transaction)")
+	flag.IntVar(&Config.OltpReadPool.PrefillParallelism, "queryserver-config-pool-prefill-parallelism", DefaultQsConfig.OltpReadPool.PrefillParallelism, "query server read pool prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
+	flag.IntVar(&Config.OlapReadPool.Size, "queryserver-config-stream-pool-size", DefaultQsConfig.OlapReadPool.Size, "query server stream connection pool size, stream pool is used by stream queries: queries that return results to client in a streaming fashion")
+	flag.IntVar(&Config.OlapReadPool.PrefillParallelism, "queryserver-config-stream-pool-prefill-parallelism", DefaultQsConfig.OlapReadPool.PrefillParallelism, "query server stream pool prefill parallelism, a non-zero value will prefill the pool using the specified parallelism")
 	flag.IntVar(&deprecatedMessagePoolSize, "queryserver-config-message-conn-pool-size", 0, "DEPRECATED")
 	flag.IntVar(&deprecatedMessagePoolPrefillParallelism, "queryserver-config-message-conn-pool-prefill-parallelism", 0, "DEPRECATED: Unused.")
-	flag.IntVar(&Config.TransactionCap, "queryserver-config-transaction-cap", DefaultQsConfig.TransactionCap, "query server transaction cap is the maximum number of transactions allowed to happen at any given point of a time for a single vttablet. E.g. by setting transaction cap to 100, there are at most 100 transactions will be processed by a vttablet and the 101th transaction will be blocked (and fail if it cannot get connection within specified timeout)")
-	flag.IntVar(&Config.TxPoolPrefillParallelism, "queryserver-config-transaction-prefill-parallelism", DefaultQsConfig.TxPoolPrefillParallelism, "query server transaction prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
+	flag.IntVar(&Config.TxPool.Size, "queryserver-config-transaction-cap", DefaultQsConfig.TxPool.Size, "query server transaction cap is the maximum number of transactions allowed to happen at any given point of a time for a single vttablet. E.g. by setting transaction cap to 100, there are at most 100 transactions will be processed by a vttablet and the 101th transaction will be blocked (and fail if it cannot get connection within specified timeout)")
+	flag.IntVar(&Config.TxPool.PrefillParallelism, "queryserver-config-transaction-prefill-parallelism", DefaultQsConfig.TxPool.PrefillParallelism, "query server transaction prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
 	flag.IntVar(&Config.MessagePostponeCap, "queryserver-config-message-postpone-cap", DefaultQsConfig.MessagePostponeCap, "query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem.")
-	flag.IntVar(&Config.FoundRowsPoolSize, "client-found-rows-pool-size", DefaultQsConfig.FoundRowsPoolSize, "size of a special pool that will be used if the client requests that statements be executed with the CLIENT_FOUND_ROWS option of MySQL.")
+	flag.IntVar(&deprecatedFoundRowsPoolSize, "client-found-rows-pool-size", 0, "DEPRECATED: queryserver-config-transaction-cap will be used instead.")
 	flag.Float64Var(&Config.TransactionTimeout, "queryserver-config-transaction-timeout", DefaultQsConfig.TransactionTimeout, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
 	flag.Float64Var(&Config.TxShutDownGracePeriod, "transaction_shutdown_grace_period", DefaultQsConfig.TxShutDownGracePeriod, "how long to wait (in seconds) for transactions to complete during graceful shutdown.")
 	flag.IntVar(&Config.MaxResultSize, "queryserver-config-max-result-size", DefaultQsConfig.MaxResultSize, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
@@ -75,9 +76,9 @@ func init() {
 	flag.IntVar(&Config.QueryPlanCacheSize, "queryserver-config-query-cache-size", DefaultQsConfig.QueryPlanCacheSize, "query server query cache size, maximum number of queries to be cached. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
 	flag.Float64Var(&Config.SchemaReloadTime, "queryserver-config-schema-reload-time", DefaultQsConfig.SchemaReloadTime, "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
 	flag.Float64Var(&Config.QueryTimeout, "queryserver-config-query-timeout", DefaultQsConfig.QueryTimeout, "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
-	flag.Float64Var(&Config.QueryPoolTimeout, "queryserver-config-query-pool-timeout", DefaultQsConfig.QueryPoolTimeout, "query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
+	flag.IntVar(&Config.OltpReadPool.TimeoutSeconds, "queryserver-config-query-pool-timeout", DefaultQsConfig.OltpReadPool.TimeoutSeconds, "query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
 	flag.Float64Var(&Config.TxPoolTimeout, "queryserver-config-txpool-timeout", DefaultQsConfig.TxPoolTimeout, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
-	flag.Float64Var(&Config.IdleTimeout, "queryserver-config-idle-timeout", DefaultQsConfig.IdleTimeout, "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
+	flag.IntVar(&Config.OltpReadPool.IdleTimeoutSeconds, "queryserver-config-idle-timeout", DefaultQsConfig.OltpReadPool.IdleTimeoutSeconds, "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
 	flag.IntVar(&Config.QueryPoolWaiterCap, "queryserver-config-query-pool-waiter-cap", DefaultQsConfig.QueryPoolWaiterCap, "query server query pool waiter limit, this is the maximum number of queries that can be queued waiting to get a connection")
 	flag.IntVar(&Config.TxPoolWaiterCap, "queryserver-config-txpool-waiter-cap", DefaultQsConfig.TxPoolWaiterCap, "query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection")
 	// tableacl related configurations.
@@ -120,6 +121,10 @@ func init() {
 
 // Init must be called after flag.Parse, and before doing any other operations.
 func Init() {
+	// IdleTimeout is only initialized for OltpReadPool , but the other pools need to inherit the value.
+	Config.OlapReadPool.IdleTimeoutSeconds = Config.OltpReadPool.IdleTimeoutSeconds
+	Config.TxPool.IdleTimeoutSeconds = Config.OltpReadPool.IdleTimeoutSeconds
+
 	switch *streamlog.QueryLogFormat {
 	case streamlog.QueryLogFormatText:
 	case streamlog.QueryLogFormatJSON:
@@ -138,37 +143,30 @@ func Init() {
 
 // TabletConfig contains all the configuration for query service
 type TabletConfig struct {
-	OltpReadPool                 ConnPoolConfig `json:"oltpReadPool,omitempty"`
-	PoolSize                     int            `json:"-"`
-	PoolPrefillParallelism       int            `json:"-"`
-	StreamPoolSize               int            `json:"-"`
-	StreamPoolPrefillParallelism int            `json:"-"`
-	TransactionCap               int            `json:"-"`
-	MessagePostponeCap           int            `json:"-"`
-	FoundRowsPoolSize            int            `json:"-"`
-	TxPoolPrefillParallelism     int            `json:"-"`
-	TransactionTimeout           float64        `json:"-"`
-	TxShutDownGracePeriod        float64        `json:"-"`
-	MaxResultSize                int            `json:"-"`
-	WarnResultSize               int            `json:"-"`
-	PassthroughDMLs              bool           `json:"-"`
-	StreamBufferSize             int            `json:"-"`
-	QueryPlanCacheSize           int            `json:"-"`
-	SchemaReloadTime             float64        `json:"-"`
-	QueryTimeout                 float64        `json:"-"`
-	QueryPoolTimeout             float64        `json:"-"`
-	TxPoolTimeout                float64        `json:"-"`
-	IdleTimeout                  float64        `json:"-"`
-	QueryPoolWaiterCap           int            `json:"-"`
-	TxPoolWaiterCap              int            `json:"-"`
-	StrictTableACL               bool           `json:"-"`
-	TerseErrors                  bool           `json:"-"`
-	EnableTableACLDryRun         bool           `json:"-"`
-	TableACLExemptACL            string         `json:"-"`
-	WatchReplication             bool           `json:"-"`
-	TwoPCEnable                  bool           `json:"-"`
-	TwoPCCoordinatorAddress      string         `json:"-"`
-	TwoPCAbandonAge              float64        `json:"-"`
+	OltpReadPool            ConnPoolConfig `json:"oltpReadPool,omitempty"`
+	OlapReadPool            ConnPoolConfig `json:"olapReadPool,omitempty"`
+	TxPool                  ConnPoolConfig `json:"txPool,omitempty"`
+	MessagePostponeCap      int            `json:"-"`
+	TransactionTimeout      float64        `json:"-"`
+	TxShutDownGracePeriod   float64        `json:"-"`
+	MaxResultSize           int            `json:"-"`
+	WarnResultSize          int            `json:"-"`
+	PassthroughDMLs         bool           `json:"-"`
+	StreamBufferSize        int            `json:"-"`
+	QueryPlanCacheSize      int            `json:"-"`
+	SchemaReloadTime        float64        `json:"-"`
+	QueryTimeout            float64        `json:"-"`
+	TxPoolTimeout           float64        `json:"-"`
+	QueryPoolWaiterCap      int            `json:"-"`
+	TxPoolWaiterCap         int            `json:"-"`
+	StrictTableACL          bool           `json:"-"`
+	TerseErrors             bool           `json:"-"`
+	EnableTableACLDryRun    bool           `json:"-"`
+	TableACLExemptACL       string         `json:"-"`
+	WatchReplication        bool           `json:"-"`
+	TwoPCEnable             bool           `json:"-"`
+	TwoPCCoordinatorAddress string         `json:"-"`
+	TwoPCAbandonAge         float64        `json:"-"`
 
 	EnableTxThrottler           bool     `json:"-"`
 	TxThrottlerConfig           string   `json:"-"`
@@ -193,11 +191,11 @@ type TabletConfig struct {
 
 // ConnPoolConfig contains the conig parameters for a conn pool.
 type ConnPoolConfig struct {
-	Size               int64 `json:"size,omitempty"`
-	TimeoutSeconds     int64 `json:"timeoutSeconds,omitempty"`
-	IdleTimeoutSeconds int64 `json:"idleTimeoutSeconds,omitempty"`
-	PrefillParallelism int64 `json:"prefillParallelism,omitempty"`
-	MaxWaiters         int64 `json:"maxWaiters,omitempty"`
+	Size               int `json:"size,omitempty"`
+	TimeoutSeconds     int `json:"timeoutSeconds,omitempty"`
+	IdleTimeoutSeconds int `json:"idleTimeoutSeconds,omitempty"`
+	PrefillParallelism int `json:"prefillParallelism,omitempty"`
+	MaxWaiters         int `json:"maxWaiters,omitempty"`
 }
 
 // TransactionLimitConfig captures configuration of transaction pool slots
@@ -221,37 +219,38 @@ type TransactionLimitConfig struct {
 // bigger than this).
 var DefaultQsConfig = TabletConfig{
 	OltpReadPool: ConnPoolConfig{
-		Size: 16,
+		Size:               16,
+		IdleTimeoutSeconds: 30 * 60,
 	},
-	PoolPrefillParallelism:       0,
-	StreamPoolSize:               200,
-	StreamPoolPrefillParallelism: 0,
-	TransactionCap:               20,
-	MessagePostponeCap:           4,
-	FoundRowsPoolSize:            20,
-	TxPoolPrefillParallelism:     0,
-	TransactionTimeout:           30,
-	TxShutDownGracePeriod:        0,
-	MaxResultSize:                10000,
-	WarnResultSize:               0,
-	PassthroughDMLs:              false,
-	QueryPlanCacheSize:           5000,
-	SchemaReloadTime:             30 * 60,
-	QueryTimeout:                 30,
-	QueryPoolTimeout:             0,
-	TxPoolTimeout:                1,
-	IdleTimeout:                  30 * 60,
-	QueryPoolWaiterCap:           50000,
-	TxPoolWaiterCap:              50000,
-	StreamBufferSize:             32 * 1024,
-	StrictTableACL:               false,
-	TerseErrors:                  false,
-	EnableTableACLDryRun:         false,
-	TableACLExemptACL:            "",
-	WatchReplication:             false,
-	TwoPCEnable:                  false,
-	TwoPCCoordinatorAddress:      "",
-	TwoPCAbandonAge:              0,
+	OlapReadPool: ConnPoolConfig{
+		Size:               200,
+		IdleTimeoutSeconds: 30 * 60,
+	},
+	TxPool: ConnPoolConfig{
+		Size:               20,
+		IdleTimeoutSeconds: 30 * 60,
+	},
+	MessagePostponeCap:      4,
+	TransactionTimeout:      30,
+	TxShutDownGracePeriod:   0,
+	MaxResultSize:           10000,
+	WarnResultSize:          0,
+	PassthroughDMLs:         false,
+	QueryPlanCacheSize:      5000,
+	SchemaReloadTime:        30 * 60,
+	QueryTimeout:            30,
+	TxPoolTimeout:           1,
+	QueryPoolWaiterCap:      50000,
+	TxPoolWaiterCap:         50000,
+	StreamBufferSize:        32 * 1024,
+	StrictTableACL:          false,
+	TerseErrors:             false,
+	EnableTableACLDryRun:    false,
+	TableACLExemptACL:       "",
+	WatchReplication:        false,
+	TwoPCEnable:             false,
+	TwoPCCoordinatorAddress: "",
+	TwoPCAbandonAge:         0,
 
 	EnableTxThrottler:           false,
 	TxThrottlerConfig:           defaultTxThrottlerConfig(),
@@ -330,7 +329,7 @@ func (c *TabletConfig) verifyTransactionLimitConfig() error {
 	if v := c.TransactionLimitPerUser; v <= 0 || v >= 1 {
 		return fmt.Errorf("-transaction_limit_per_user should be a fraction within range (0, 1) (specified value: %v)", v)
 	}
-	if limit := int(c.TransactionLimitPerUser * float64(c.TransactionCap)); limit == 0 {
+	if limit := int(c.TransactionLimitPerUser * float64(c.TxPool.Size)); limit == 0 {
 		return fmt.Errorf("effective transaction limit per user is 0 due to rounding, increase -transaction_limit_per_user")
 	}
 	return nil

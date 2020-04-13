@@ -826,7 +826,7 @@ func TestTabletServerBeginFail(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
 	config := tabletenv.DefaultQsConfig
-	config.TransactionCap = 1
+	config.TxPool.Size = 1
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1341,7 +1341,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	config.EnableHotRowProtection = true
 	config.HotRowProtectionConcurrentTransactions = 1
 	// Reduce the txpool to 2 because we should never consume more than two slots.
-	config.TransactionCap = 2
+	config.TxPool.Size = 2
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1452,7 +1452,7 @@ func TestDMLQueryWithoutWhereClause(t *testing.T) {
 	config.EnableHotRowProtection = true
 	config.HotRowProtectionConcurrentTransactions = 1
 
-	config.TransactionCap = 2
+	config.TxPool.Size = 2
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1492,7 +1492,7 @@ func TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction(t *testing.T) {
 	config.EnableHotRowProtection = true
 	config.HotRowProtectionConcurrentTransactions = 1
 	// Reduce the txpool to 2 because we should never consume more than two slots.
-	config.TransactionCap = 2
+	config.TxPool.Size = 2
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1609,7 +1609,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 	config.EnableHotRowProtection = true
 	config.HotRowProtectionConcurrentTransactions = 2
 	// Reduce the txpool to 2 because we should never consume more than two slots.
-	config.TransactionCap = 2
+	config.TxPool.Size = 2
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}

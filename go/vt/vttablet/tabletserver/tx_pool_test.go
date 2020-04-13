@@ -698,11 +698,13 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 
 func newTxPool() *TxPool {
 	config := tabletenv.DefaultQsConfig
-	config.TransactionCap = 300
+	config.TxPool.Size = 300
 	config.TransactionTimeout = 30
 	config.TxPoolTimeout = 40
 	config.TxPoolWaiterCap = 500000
-	config.IdleTimeout = 30
+	config.OltpReadPool.IdleTimeoutSeconds = 30
+	config.OlapReadPool.IdleTimeoutSeconds = 30
+	config.TxPool.IdleTimeoutSeconds = 30
 	limiter := &txlimiter.TxAllowAll{}
 	return NewTxPool(tabletenv.NewTestEnv(&config, nil, "TabletServerTest"), limiter)
 }

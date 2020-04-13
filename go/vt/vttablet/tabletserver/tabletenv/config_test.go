@@ -36,12 +36,14 @@ func TestConfigParse(t *testing.T) {
 	}
 	gotBytes, err := yaml.Marshal(&cfg)
 	require.NoError(t, err)
-	wantBytes := `oltpReadPool:
+	wantBytes := `olapReadPool: {}
+oltpReadPool:
   idleTimeoutSeconds: 20
   maxWaiters: 40
   prefillParallelism: 30
   size: 16
   timeoutSeconds: 10
+txPool: {}
 `
 	assert.Equal(t, wantBytes, string(gotBytes))
 

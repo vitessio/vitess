@@ -302,7 +302,9 @@ func newEngine(queryPlanCacheSize int, reloadTime time.Duration, idleTimeout tim
 	config := tabletenv.DefaultQsConfig
 	config.QueryPlanCacheSize = queryPlanCacheSize
 	config.SchemaReloadTime = float64(reloadTime) / 1e9
-	config.IdleTimeout = float64(idleTimeout) / 1e9
+	config.OltpReadPool.IdleTimeoutSeconds = int(idleTimeout / 1e9)
+	config.OlapReadPool.IdleTimeoutSeconds = int(idleTimeout / 1e9)
+	config.TxPool.IdleTimeoutSeconds = int(idleTimeout / 1e9)
 	se := NewEngine(tabletenv.NewTestEnv(&config, nil, "SchemaTest"))
 	se.InitDBConfig(newDBConfigs(db).DbaWithDB())
 	return se
