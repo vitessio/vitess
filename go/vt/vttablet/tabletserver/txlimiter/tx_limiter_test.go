@@ -39,7 +39,7 @@ func createCallers(username, principal, component, subcomponent string) (*queryp
 
 func TestTxLimiter_DisabledAllowsAll(t *testing.T) {
 	config := tabletenv.DefaultQsConfig
-	config.TransactionCap = 10
+	config.TxPool.Size = 10
 	config.TransactionLimitPerUser = 0.1
 	config.EnableTransactionLimit = false
 	config.EnableTransactionLimitDryRun = false
@@ -59,7 +59,7 @@ func TestTxLimiter_DisabledAllowsAll(t *testing.T) {
 
 func TestTxLimiter_LimitsOnlyOffendingUser(t *testing.T) {
 	config := tabletenv.DefaultQsConfig
-	config.TransactionCap = 10
+	config.TxPool.Size = 10
 	config.TransactionLimitPerUser = 0.3
 	config.EnableTransactionLimit = true
 	config.EnableTransactionLimitDryRun = false
@@ -125,7 +125,7 @@ func TestTxLimiter_LimitsOnlyOffendingUser(t *testing.T) {
 
 func TestTxLimiterDryRun(t *testing.T) {
 	config := tabletenv.DefaultQsConfig
-	config.TransactionCap = 10
+	config.TxPool.Size = 10
 	config.TransactionLimitPerUser = 0.3
 	config.EnableTransactionLimit = true
 	config.EnableTransactionLimitDryRun = true

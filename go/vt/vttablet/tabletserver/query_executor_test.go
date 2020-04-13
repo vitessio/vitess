@@ -1043,9 +1043,9 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	config := tabletenv.DefaultQsConfig
 	config.OltpReadPool.Size = 100
 	if flags&smallTxPool > 0 {
-		config.TransactionCap = 3
+		config.TxPool.Size = 3
 	} else {
-		config.TransactionCap = 100
+		config.TxPool.Size = 100
 	}
 	if flags&enableStrictTableACL > 0 {
 		config.StrictTableACL = true
