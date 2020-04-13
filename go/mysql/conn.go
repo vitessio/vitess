@@ -41,7 +41,7 @@ import (
 const (
 	// connBufferSize is how much we buffer for reading and
 	// writing. It is also how much we allocate for ephemeral buffers.
-	connBufferSize = 16 * 1024
+	DefaultConnBufferSize = 16 * 1024
 )
 
 // Constants for how ephemeral buffers were used for reading / writing.
@@ -178,10 +178,10 @@ type PrepareData struct {
 }
 
 // bufPool is used to allocate and free buffers in an efficient way.
-var bufPool = bucketpool.New(connBufferSize, MaxPacketSize)
+var bufPool = bucketpool.New(DefaultConnBufferSize, MaxPacketSize)
 
 // writersPool is used for pooling bufio.Writer objects.
-var writersPool = sync.Pool{New: func() interface{} { return bufio.NewWriterSize(nil, connBufferSize) }}
+var writersPool = sync.Pool{New: func() interface{} { return bufio.NewWriterSize(nil, DefaultConnBufferSize) }}
 
 // newConn is an internal method to create a Conn. Used by client and server
 // side for common creation code.
@@ -189,7 +189,7 @@ func newConn(conn net.Conn) *Conn {
 	return &Conn{
 		conn:           conn,
 		closed:         sync2.NewAtomicBool(false),
-		bufferedReader: bufio.NewReaderSize(conn, connBufferSize),
+		bufferedReader: bufio.NewReaderSize(conn, DefaultConnBufferSize),
 	}
 }
 
@@ -634,10 +634,35 @@ func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, wa
 	pos = writeLenEncInt(data, pos, affectedRows)
 	pos = writeLenEncInt(data, pos, lastInsertID)
 	pos = writeUint16(data, pos, flags)
-	_ = writeUint16(data, pos, warnings)
+	pos = writeUint16(data, pos, warnings)
 
 	return c.writeEphemeralPacket()
 }
+
+// writeOKPacket writes an OK packet with info string.
+// Server -> Client.
+// This method returns a generic error, not a SQLError.
+func (c *Conn) writeOKPacketWithInfo(affectedRows, lastInsertID uint64, flags uint16, warnings uint16, info string) error {
+	length := 1 + // OKPacket
+			lenEncIntSize(affectedRows) +
+			lenEncIntSize(lastInsertID) +
+			2 + // flags
+			2 + // warnings
+			1 + // 1 byte before info string
+			lenEOFString(info)
+	data := c.startEphemeralPacket(length)
+	pos := 0
+	pos = writeByte(data, pos, OKPacket)
+	pos = writeLenEncInt(data, pos, affectedRows)
+	pos = writeLenEncInt(data, pos, lastInsertID)
+	pos = writeUint16(data, pos, flags)
+	pos = writeUint16(data, pos, warnings)
+	pos = writeByte(data, pos, '#')
+	pos = writeEOFString(data, pos, info)
+
+	return c.writeEphemeralPacket()
+}
+
 
 // writeOKPacketWithEOFHeader writes an OK packet with an EOF header.
 // This is used at the end of a result set if
@@ -1100,7 +1125,7 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) error {
 				// We should not send any more packets after this, but make sure
 				// to extract the affected rows and last insert id from the result
 				// struct here since clients expect it.
-				return c.writeOKPacket(qr.RowsAffected, qr.InsertID, flag, handler.WarningCount(c))
+				return c.writeOKPacketWithInfo(qr.RowsAffected, qr.InsertID, flag, handler.WarningCount(c), qr.Info)
 			}
 			if err := c.writeFields(qr); err != nil {
 				return err
