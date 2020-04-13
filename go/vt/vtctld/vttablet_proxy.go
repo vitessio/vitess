@@ -33,9 +33,64 @@ import (
 var (
 	proxyTablets = flag.Bool("proxy_tablets", false, "Setting this true will make vtctld proxy the tablet status instead of redirecting to them")
 
-	proxyMu sync.Mutex
-	remotes = make(map[string]*httputil.ReverseProxy)
+	remotesMu sync.Mutex
+	remotes   = make(map[string]*redirection)
 )
+
+type redirection struct {
+	mu         sync.Mutex
+	url        *url.URL
+	prefixPath string
+}
+
+func newRedirection(u *url.URL, prefixPath string) *redirection {
+	rd := &redirection{
+		url:        u,
+		prefixPath: prefixPath,
+	}
+
+	// rp is created once per prefixPath. But the data it uses
+	// to redirect is controlled by redirection.
+	rp := &httputil.ReverseProxy{}
+	rp.Director = func(req *http.Request) {
+		rd.mu.Lock()
+		defer rd.mu.Unlock()
+
+		splits := strings.SplitN(req.URL.Path, "/", 4)
+		if len(splits) < 4 {
+			return
+		}
+		req.URL.Scheme = rd.url.Scheme
+		req.URL.Host = rd.url.Host
+		req.URL.Path = "/" + splits[3]
+	}
+
+	rp.ModifyResponse = func(r *http.Response) error {
+		rd.mu.Lock()
+		defer rd.mu.Unlock()
+
+		b, _ := ioutil.ReadAll(r.Body)
+		b = bytes.ReplaceAll(b, []byte(`href="/`), []byte(fmt.Sprintf(`href="%s`, rd.prefixPath)))
+		b = bytes.ReplaceAll(b, []byte(`href=/`), []byte(fmt.Sprintf(`href=%s`, rd.prefixPath)))
+		r.Body = ioutil.NopCloser(bytes.NewBuffer(b))
+		r.Header["Content-Length"] = []string{fmt.Sprint(len(b))}
+		// Don't forget redirects
+		loc := r.Header["Location"]
+		for i, v := range loc {
+			loc[i] = strings.Replace(v, "/", rd.prefixPath, 1)
+		}
+		return nil
+	}
+	http.Handle(prefixPath, rp)
+	return rd
+}
+
+func (rd *redirection) set(u *url.URL, prefixPath string) {
+	rd.mu.Lock()
+	defer rd.mu.Unlock()
+	rd.url = u
+	rd.prefixPath = prefixPath
+}
 
 func addRemote(tabletID, path string) {
 	u, err := url.Parse(path)
@@ -43,39 +98,13 @@ func addRemote(tabletID, path string) {
 		log.Errorf("Error parsing URL %v: %v", path, err)
 		return
 	}
-
-	proxyMu.Lock()
-	defer proxyMu.Unlock()
-	if _, ok := remotes[tabletID]; ok {
-		return
-	}
-
-	rp := &httputil.ReverseProxy{}
-	rp.Director = func(req *http.Request) {
-		splits := strings.SplitN(req.URL.Path, "/", 4)
-		if len(splits) < 4 {
-			return
-		}
-		req.URL.Scheme = u.Scheme
-		req.URL.Host = u.Host
-		req.URL.Path = "/" + splits[3]
-	}
-
 	prefixPath := fmt.Sprintf("/vttablet/%s/", tabletID)
 
-	rp.ModifyResponse = func(r *http.Response) error {
-		b, _ := ioutil.ReadAll(r.Body)
-		b = bytes.ReplaceAll(b, []byte(`href="/`), []byte(fmt.Sprintf(`href="%s`, prefixPath)))
-		b = bytes.ReplaceAll(b, []byte(`href=/`), []byte(fmt.Sprintf(`href=%s`, prefixPath)))
-		r.Body = ioutil.NopCloser(bytes.NewBuffer(b))
-		r.Header["Content-Length"] = []string{fmt.Sprint(len(b))}
-		// Don't forget redirects
-		loc := r.Header["Location"]
-		for i, v := range loc {
-			loc[i] = strings.Replace(v, "/", prefixPath, 1)
-		}
-		return nil
+	remotesMu.Lock()
+	defer remotesMu.Unlock()
+	if rd, ok := remotes[tabletID]; ok {
+		rd.set(u, prefixPath)
+		return
 	}
-	http.Handle(prefixPath, rp)
-	remotes[tabletID] = rp
+	remotes[tabletID] = newRedirection(u, prefixPath)
 }
