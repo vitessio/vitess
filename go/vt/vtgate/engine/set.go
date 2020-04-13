@@ -18,8 +18,12 @@ package engine
 
 import (
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 type (
@@ -42,10 +46,21 @@ type (
 		PlanValue sqltypes.PlanValue
 	}
 
-	// SysVarIgnore implements the SetOp interface to execute changes to system locally.
+	// SysVarIgnore implements the SetOp interface to ignore the settings.
 	SysVarIgnore struct {
 		Name      string
 		PlanValue sqltypes.PlanValue
+	}
+
+	// SysVarCheckAndIgnore implements the SetOp interface to check underlying setting and ignore if same.
+	SysVarCheckAndIgnore struct {
+		Name               string
+		Keyspace           *vindexes.Keyspace
+		TargetDestination  key.Destination
+		CurrentSysVarQuery string
+		ResolveExpr        bool
+		PlanValue          sqltypes.PlanValue
+		NewSysVarQuery     string
 	}
 )
 
@@ -128,5 +143,46 @@ func (svi *SysVarIgnore) Execute(vcursor VCursor, bindVars map[string]*querypb.B
 		return err
 	}
 	log.Warningf("Ignored inapplicable SET %v = %v", svi.Name, value.String())
+	return nil
+}
+
+var _ SetOp = (*SysVarCheckAndIgnore)(nil)
+
+//VariableName implements the SetOp interface method
+func (svci SysVarCheckAndIgnore) VariableName() string {
+	return svci.Name
+}
+
+//Execute implements the SetOp interface method
+func (svci SysVarCheckAndIgnore) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) error {
+	var err error
+	var result *sqltypes.Result
+	var cValue, nValue sqltypes.Value
+	rss, _, err := vcursor.ResolveDestinations(svci.Keyspace.Name, nil, []key.Destination{svci.TargetDestination})
+	if err != nil {
+		return vterrors.Wrap(err, "SysVarCheckAndIgnore")
+	}
+
+	if len(rss) != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %v", svci.TargetDestination)
+	}
+	if svci.ResolveExpr {
+		nValue, err = svci.PlanValue.ResolveValue(bindVars)
+	} else {
+		result, err = execShard(vcursor, svci.NewSysVarQuery, bindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
+		nValue = result.Rows[0][0]
+	}
+	if err != nil {
+		return err
+	}
+	result, err = execShard(vcursor, svci.CurrentSysVarQuery, bindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
+	if err != nil {
+		return err
+	}
+	cValue = result.Rows[0][0]
+	if cValue.String() != nValue.String() {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Modification not allowed using set construct for: %s", svci.Name)
+	}
+
 	return nil
 }

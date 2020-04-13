@@ -17,11 +17,21 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
+
+	"vitess.io/vitess/go/vt/key"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
+
+var sysVarPlanningFunc = map[string]func(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error){}
+
+func init() {
+	sysVarPlanningFunc["debug"] = buildSetOpIgnore
+	sysVarPlanningFunc["sql_mode"] = buildSetOpCheckAndIgnore
+}
 
 func buildSetPlan(sql string, stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive, error) {
 	var setOps []engine.SetOp
@@ -34,15 +44,6 @@ func buildSetPlan(sql string, stmt *sqlparser.Set, vschema ContextVSchema) (engi
 
 	for _, expr := range stmt.Exprs {
 		switch expr.Name.AtCount() {
-		case sqlparser.NoAt:
-			planFunc, ok := sysVarPlanningFunc[expr.Name.Lowered()]
-			if !ok {
-				return nil, ErrPlanNotSupported
-			}
-			setOp, err = planFunc(expr)
-			if err != nil {
-				return nil, err
-			}
 		case sqlparser.SingleAt:
 			pv, err := sqlparser.NewPlanValue(expr.Expr)
 			if err != nil {
@@ -51,6 +52,15 @@ func buildSetPlan(sql string, stmt *sqlparser.Set, vschema ContextVSchema) (engi
 			setOp = &engine.UserDefinedVariable{
 				Name:      expr.Name.Lowered(),
 				PlanValue: pv,
+			}
+		case sqlparser.DoubleAt:
+			planFunc, ok := sysVarPlanningFunc[expr.Name.Lowered()]
+			if !ok {
+				return nil, ErrPlanNotSupported
+			}
+			setOp, err = planFunc(expr, vschema)
+			if err != nil {
+				return nil, err
 			}
 		default:
 			return nil, ErrPlanNotSupported
@@ -62,13 +72,7 @@ func buildSetPlan(sql string, stmt *sqlparser.Set, vschema ContextVSchema) (engi
 	}, nil
 }
 
-var sysVarPlanningFunc = map[string]func(expr *sqlparser.SetExpr) (*engine.SysVarIgnore, error){}
-
-func init() {
-	sysVarPlanningFunc["debug"] = buildSetOpIgnore
-}
-
-func buildSetOpIgnore(expr *sqlparser.SetExpr) (*engine.SysVarIgnore, error) {
+func buildSetOpIgnore(expr *sqlparser.SetExpr, _ ContextVSchema) (engine.SetOp, error) {
 	pv, err := sqlparser.NewPlanValue(expr.Expr)
 	if err != nil {
 		return nil, err
@@ -76,5 +80,34 @@ func buildSetOpIgnore(expr *sqlparser.SetExpr) (*engine.SysVarIgnore, error) {
 	return &engine.SysVarIgnore{
 		Name:      expr.Name.Lowered(),
 		PlanValue: pv,
+	}, nil
+}
+
+func buildSetOpCheckAndIgnore(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error) {
+	resolveExpr := true
+	pv, err := sqlparser.NewPlanValue(expr.Expr)
+	if err != nil {
+		resolveExpr = false
+	}
+	keyspace, err := vschema.DefaultKeyspace()
+	if err != nil {
+		return nil, err
+	}
+
+	dest := vschema.Destination()
+	if dest == nil {
+		dest = key.DestinationAnyShard{}
+	}
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("%v", expr.Expr)
+
+	return &engine.SysVarCheckAndIgnore{
+		Name:               expr.Name.Lowered(),
+		Keyspace:           keyspace,
+		TargetDestination:  dest,
+		CurrentSysVarQuery: fmt.Sprintf("select @@%s from dual", expr.Name.Lowered()),
+		ResolveExpr:        resolveExpr,
+		PlanValue:          pv,
+		NewSysVarQuery:     fmt.Sprintf("select %s from dual", buf.String()),
 	}, nil
 }
