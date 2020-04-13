@@ -41,7 +41,6 @@ import (
 )
 
 const (
-	sqlTurnoffBinlog        = "set @@session.sql_log_bin = 0"
 	sqlCreateSidecarDB      = "create database if not exists %s"
 	sqlCreateHeartbeatTable = `CREATE TABLE IF NOT EXISTS %s.heartbeat (
   keyspaceShard VARBINARY(256) NOT NULL PRIMARY KEY,
@@ -101,12 +100,13 @@ func (w *Writer) Init(target querypb.Target) error {
 	w.dbName = sqlescape.EscapeID(w.env.DBConfigs().SidecarDBName.Get())
 	w.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
 
-	err := w.initializeTables(w.env.DBConfigs().DbaWithDB())
-	if err != nil {
-		w.recordError(err)
-		return err
+	if target.TabletType == topodatapb.TabletType_MASTER {
+		err := w.initializeTables(w.env.DBConfigs().AppWithDB())
+		if err != nil {
+			w.recordError(err)
+			return err
+		}
 	}
-
 	return nil
 }
 
@@ -158,7 +158,6 @@ func (w *Writer) initializeTables(cp dbconfigs.Connector) error {
 	}
 	defer conn.Close()
 	statements := []string{
-		sqlTurnoffBinlog,
 		fmt.Sprintf(sqlCreateSidecarDB, w.dbName),
 		fmt.Sprintf(sqlCreateHeartbeatTable, w.dbName),
 	}

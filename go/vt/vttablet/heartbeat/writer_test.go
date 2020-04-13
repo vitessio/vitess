@@ -47,7 +47,6 @@ func TestCreateSchema(t *testing.T) {
 	defer tw.Close()
 	writes.Reset()
 
-	db.AddQuery(sqlTurnoffBinlog, &sqltypes.Result{})
 	db.AddQuery(fmt.Sprintf(sqlCreateHeartbeatTable, tw.dbName), &sqltypes.Result{})
 	db.AddQuery(fmt.Sprintf("INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%d, %d, '%s') ON DUPLICATE KEY UPDATE ts=VALUES(ts)", tw.dbName, now.UnixNano(), tw.tabletAlias.Uid, tw.keyspaceShard), &sqltypes.Result{})
 	if err := tw.initializeTables(db.ConnParams()); err == nil {
