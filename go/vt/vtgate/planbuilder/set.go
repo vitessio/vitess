@@ -25,14 +25,24 @@ import (
 
 func buildSetPlan(sql string, stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive, error) {
 	var setOps []engine.SetOp
+	var setOp engine.SetOp
+	var err error
 
 	if stmt.Scope == sqlparser.GlobalStr {
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported in set: global")
 	}
 
 	for _, expr := range stmt.Exprs {
-		var setOp engine.SetOp
 		switch expr.Name.AtCount() {
+		case sqlparser.NoAt:
+			planFunc, ok := sysVarPlanningFunc[expr.Name.Lowered()]
+			if !ok {
+				return nil, ErrPlanNotSupported
+			}
+			setOp, err = planFunc(expr)
+			if err != nil {
+				return nil, err
+			}
 		case sqlparser.SingleAt:
 			pv, err := sqlparser.NewPlanValue(expr.Expr)
 			if err != nil {
@@ -49,5 +59,22 @@ func buildSetPlan(sql string, stmt *sqlparser.Set, vschema ContextVSchema) (engi
 	}
 	return &engine.Set{
 		Ops: setOps,
+	}, nil
+}
+
+var sysVarPlanningFunc = map[string]func(expr *sqlparser.SetExpr) (*engine.SysVarIgnore, error){}
+
+func init() {
+	sysVarPlanningFunc["debug"] = buildSetOpIgnore
+}
+
+func buildSetOpIgnore(expr *sqlparser.SetExpr) (*engine.SysVarIgnore, error) {
+	pv, err := sqlparser.NewPlanValue(expr.Expr)
+	if err != nil {
+		return nil, err
+	}
+	return &engine.SysVarIgnore{
+		Name:      expr.Name.Lowered(),
+		PlanValue: pv,
 	}, nil
 }

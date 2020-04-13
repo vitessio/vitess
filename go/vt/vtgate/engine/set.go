@@ -18,6 +18,7 @@ package engine
 
 import (
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -37,6 +38,12 @@ type (
 
 	// UserDefinedVariable implements the SetOp interface to execute user defined variables.
 	UserDefinedVariable struct {
+		Name      string
+		PlanValue sqltypes.PlanValue
+	}
+
+	// SysVarIgnore implements the SetOp interface to execute changes to system locally.
+	SysVarIgnore struct {
 		Name      string
 		PlanValue sqltypes.PlanValue
 	}
@@ -105,4 +112,21 @@ func (u *UserDefinedVariable) Execute(vcursor VCursor, bindVars map[string]*quer
 		return err
 	}
 	return vcursor.SetUDV(u.Name, value)
+}
+
+var _ SetOp = (*SysVarIgnore)(nil)
+
+//VariableName implements the SetOp interface method.
+func (svi *SysVarIgnore) VariableName() string {
+	return svi.Name
+}
+
+//Execute implements the SetOp interface method.
+func (svi *SysVarIgnore) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) error {
+	value, err := svi.PlanValue.ResolveValue(bindVars)
+	if err != nil {
+		return err
+	}
+	log.Warningf("Ignored inapplicable SET %v = %v", svi.Name, value.String())
+	return nil
 }

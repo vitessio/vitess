@@ -1,0 +1,20 @@
+# set ignore plan
+"set debug = '+P'"
+{
+  "QueryType": "SET",
+  "Original": "set debug = '+P'",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Variant": "",
+    "Ops": [
+      {
+        "Name": "debug",
+        "PlanValue": "+P"
+      }
+    ]
+  }
+}
+
+# set plan building not supported
+"set innodb_strict_mode = OFF"
+"plan building not supported"
