@@ -19,7 +19,6 @@ package dbconnpool
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -36,16 +35,7 @@ type DBConnection struct {
 // NewDBConnection returns a new DBConnection based on the ConnParams
 // and will use the provided stats to collect timing.
 func NewDBConnection(info dbconfigs.Connector) (*DBConnection, error) {
-	ctx := context.Background()
-	params, err := info.MysqlParams()
-	if err != nil {
-		return nil, err
-	}
-	if params.ConnectTimeoutMs != 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(params.ConnectTimeoutMs)*time.Millisecond)
-		defer cancel()
-	}
+	ctx := context.TODO()
 	c, err := info.Connect(ctx)
 	if err != nil {
 		return nil, err
