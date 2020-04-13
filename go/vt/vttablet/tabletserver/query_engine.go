@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -106,12 +105,6 @@ func (ep *TabletPlan) buildAuthorized() {
 	}
 }
 
-var (
-	// Global stats vars.
-	// TODO(sougou): unglobalize after componentizing TabletServer.
-	queryCounts, queryTimes, queryRowCounts, queryErrorCounts *stats.CountersWithMultiLabels
-)
-
 //_______________________________________________
 
 // QueryEngine implements the core functionality of tabletserver.
@@ -122,8 +115,8 @@ var (
 // Close: There should be no more pending queries when this
 // function is called.
 type QueryEngine struct {
-	se        *schema.Engine
-	dbconfigs *dbconfigs.DBConfigs
+	env tabletenv.Env
+	se  *schema.Engine
 
 	// mu protects the following fields.
 	mu               sync.RWMutex
@@ -167,19 +160,20 @@ type QueryEngine struct {
 	enableConsolidatorReplicas  bool
 	enableQueryPlanFieldCaching bool
 
+	// stats
+	queryCounts, queryTimes, queryRowCounts, queryErrorCounts *stats.CountersWithMultiLabels
+
 	// Loggers
 	accessCheckerLogger *logutil.ThrottledLogger
 }
 
-var (
-	qeOnce sync.Once
-)
-
 // NewQueryEngine creates a new QueryEngine.
 // This is a singleton class.
 // You must call this only once.
-func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tabletenv.TabletConfig) *QueryEngine {
+func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
+	config := env.Config()
 	qe := &QueryEngine{
+		env:                env,
 		se:                 se,
 		tables:             make(map[string]*schema.Table),
 		plans:              cache.NewLRUCache(int64(config.QueryPlanCacheSize)),
@@ -187,30 +181,15 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		queryPoolWaiterCap: sync2.NewAtomicInt64(int64(config.QueryPoolWaiterCap)),
 	}
 
-	qe.conns = connpool.New(
-		config.PoolNamePrefix+"ConnPool",
-		config.PoolSize,
-		config.PoolPrefillParallelism,
-		time.Duration(config.IdleTimeout*1e9),
-		checker,
-	)
+	qe.conns = connpool.New(env, "ConnPool", config.PoolSize, config.PoolPrefillParallelism, time.Duration(config.IdleTimeout*1e9))
 	qe.connTimeout.Set(time.Duration(config.QueryPoolTimeout * 1e9))
 
-	qe.streamConns = connpool.New(
-		config.PoolNamePrefix+"StreamConnPool",
-		config.StreamPoolSize,
-		config.StreamPoolPrefillParallelism,
-		time.Duration(config.IdleTimeout*1e9),
-		checker,
-	)
+	qe.streamConns = connpool.New(env, "StreamConnPool", config.StreamPoolSize, config.StreamPoolPrefillParallelism, time.Duration(config.IdleTimeout*1e9))
 	qe.enableConsolidator = config.EnableConsolidator
 	qe.enableConsolidatorReplicas = config.EnableConsolidatorReplicas
 	qe.enableQueryPlanFieldCaching = config.EnableQueryPlanFieldCaching
 	qe.consolidator = sync2.NewConsolidator()
-	qe.txSerializer = txserializer.New(config.EnableHotRowProtectionDryRun,
-		config.HotRowProtectionMaxQueueSize,
-		config.HotRowProtectionMaxGlobalQueueSize,
-		config.HotRowProtectionConcurrentTransactions)
+	qe.txSerializer = txserializer.New(env)
 	qe.streamQList = NewQueryList()
 
 	qe.strictTableACL = config.StrictTableACL
@@ -240,51 +219,38 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
-	qeOnce.Do(func() {
-		stats.NewGaugeFunc("MaxResultSize", "Query engine max result size", qe.maxResultSize.Get)
-		stats.NewGaugeFunc("WarnResultSize", "Query engine warn result size", qe.warnResultSize.Get)
-		stats.NewGaugeFunc("MaxDMLRows", "Query engine max DML rows", qe.maxDMLRows.Get)
-		stats.NewGaugeFunc("StreamBufferSize", "Query engine stream buffer size", qe.streamBufferSize.Get)
-		stats.NewCounterFunc("TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Get)
-		stats.NewGaugeFunc("QueryPoolWaiters", "Query engine query pool waiters", qe.queryPoolWaiters.Get)
+	env.Exporter().NewGaugeFunc("MaxResultSize", "Query engine max result size", qe.maxResultSize.Get)
+	env.Exporter().NewGaugeFunc("WarnResultSize", "Query engine warn result size", qe.warnResultSize.Get)
+	env.Exporter().NewGaugeFunc("MaxDMLRows", "Query engine max DML rows", qe.maxDMLRows.Get)
+	env.Exporter().NewGaugeFunc("StreamBufferSize", "Query engine stream buffer size", qe.streamBufferSize.Get)
+	env.Exporter().NewCounterFunc("TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Get)
+	env.Exporter().NewGaugeFunc("QueryPoolWaiters", "Query engine query pool waiters", qe.queryPoolWaiters.Get)
 
-		stats.NewGaugeFunc("QueryCacheLength", "Query engine query cache length", qe.plans.Length)
-		stats.NewGaugeFunc("QueryCacheSize", "Query engine query cache size", qe.plans.Size)
-		stats.NewGaugeFunc("QueryCacheCapacity", "Query engine query cache capacity", qe.plans.Capacity)
-		stats.NewCounterFunc("QueryCacheEvictions", "Query engine query cache evictions", qe.plans.Evictions)
-		stats.Publish("QueryCacheOldest", stats.StringFunc(func() string {
-			return fmt.Sprintf("%v", qe.plans.Oldest())
-		}))
-		queryCounts = stats.NewCountersWithMultiLabels("QueryCounts", "query counts", []string{"Table", "Plan"})
-		queryTimes = stats.NewCountersWithMultiLabels("QueryTimesNs", "query times in ns", []string{"Table", "Plan"})
-		queryRowCounts = stats.NewCountersWithMultiLabels("QueryRowCounts", "query row counts", []string{"Table", "Plan"})
-		queryErrorCounts = stats.NewCountersWithMultiLabels("QueryErrorCounts", "query error counts", []string{"Table", "Plan"})
+	env.Exporter().NewGaugeFunc("QueryCacheLength", "Query engine query cache length", qe.plans.Length)
+	env.Exporter().NewGaugeFunc("QueryCacheSize", "Query engine query cache size", qe.plans.Size)
+	env.Exporter().NewGaugeFunc("QueryCacheCapacity", "Query engine query cache capacity", qe.plans.Capacity)
+	env.Exporter().NewCounterFunc("QueryCacheEvictions", "Query engine query cache evictions", qe.plans.Evictions)
+	env.Exporter().Publish("QueryCacheOldest", stats.StringFunc(func() string {
+		return fmt.Sprintf("%v", qe.plans.Oldest())
+	}))
+	qe.queryCounts = env.Exporter().NewCountersWithMultiLabels("QueryCounts", "query counts", []string{"Table", "Plan"})
+	qe.queryTimes = env.Exporter().NewCountersWithMultiLabels("QueryTimesNs", "query times in ns", []string{"Table", "Plan"})
+	qe.queryRowCounts = env.Exporter().NewCountersWithMultiLabels("QueryRowCounts", "query row counts", []string{"Table", "Plan"})
+	qe.queryErrorCounts = env.Exporter().NewCountersWithMultiLabels("QueryErrorCounts", "query error counts", []string{"Table", "Plan"})
 
-		http.Handle("/debug/hotrows", qe.txSerializer)
-
-		endpoints := []string{
-			"/debug/tablet_plans",
-			"/debug/query_stats",
-			"/debug/query_rules",
-			"/debug/consolidations",
-			"/debug/acl",
-		}
-		for _, ep := range endpoints {
-			http.Handle(ep, qe)
-		}
-	})
+	env.Exporter().HandleFunc("/debug/hotrows", qe.txSerializer.ServeHTTP)
+	env.Exporter().HandleFunc("/debug/tablet_plans", qe.handleHTTPQueryPlans)
+	env.Exporter().HandleFunc("/debug/query_stats", qe.handleHTTPQueryStats)
+	env.Exporter().HandleFunc("/debug/query_rules", qe.handleHTTPQueryRules)
+	env.Exporter().HandleFunc("/debug/consolidations", qe.handleHTTPConsolidations)
+	env.Exporter().HandleFunc("/debug/acl", qe.handleHTTPAclJSON)
 
 	return qe
 }
 
-// InitDBConfig must be called before Open.
-func (qe *QueryEngine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	qe.dbconfigs = dbcfgs
-}
-
 // Open must be called before sending requests to QueryEngine.
 func (qe *QueryEngine) Open() error {
-	qe.conns.Open(qe.dbconfigs.AppWithDB(), qe.dbconfigs.DbaWithDB(), qe.dbconfigs.AppDebugWithDB())
+	qe.conns.Open(qe.env.DBConfigs().AppWithDB(), qe.env.DBConfigs().DbaWithDB(), qe.env.DBConfigs().AppDebugWithDB())
 
 	conn, err := qe.conns.Get(tabletenv.LocalContext())
 	if err != nil {
@@ -301,7 +267,7 @@ func (qe *QueryEngine) Open() error {
 		return err
 	}
 
-	qe.streamConns.Open(qe.dbconfigs.AppWithDB(), qe.dbconfigs.DbaWithDB(), qe.dbconfigs.AppDebugWithDB())
+	qe.streamConns.Open(qe.env.DBConfigs().AppWithDB(), qe.env.DBConfigs().DbaWithDB(), qe.env.DBConfigs().AppDebugWithDB())
 	qe.se.RegisterNotifier("qe", qe.schemaChanged)
 	return nil
 }
@@ -431,7 +397,7 @@ func (qe *QueryEngine) ClearQueryPlanCache() {
 
 // IsMySQLReachable returns true if we can connect to MySQL.
 func (qe *QueryEngine) IsMySQLReachable() bool {
-	conn, err := dbconnpool.NewDBConnection(qe.dbconfigs.DbaWithDB(), tabletenv.MySQLStats)
+	conn, err := dbconnpool.NewDBConnection(qe.env.DBConfigs().DbaWithDB())
 	if err != nil {
 		if mysql.IsConnErr(err) {
 			return false
@@ -485,10 +451,10 @@ func (qe *QueryEngine) QueryPlanCacheCap() int {
 func (qe *QueryEngine) AddStats(planName, tableName string, queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
 	// table names can contain "." characters, replace them!
 	keys := []string{tableName, planName}
-	queryCounts.Add(keys, queryCount)
-	queryTimes.Add(keys, int64(duration))
-	queryRowCounts.Add(keys, rowCount)
-	queryErrorCounts.Add(keys, errorCount)
+	qe.queryCounts.Add(keys, queryCount)
+	qe.queryTimes.Add(keys, int64(duration))
+	qe.queryRowCounts.Add(keys, rowCount)
+	qe.queryErrorCounts.Add(keys, errorCount)
 }
 
 type perQueryStats struct {
@@ -502,28 +468,11 @@ type perQueryStats struct {
 	ErrorCount int64
 }
 
-func (qe *QueryEngine) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, request *http.Request) {
 	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
 		acl.SendError(response, err)
 		return
 	}
-	switch request.URL.Path {
-	case "/debug/tablet_plans":
-		qe.handleHTTPQueryPlans(response, request)
-	case "/debug/query_stats":
-		qe.handleHTTPQueryStats(response, request)
-	case "/debug/query_rules":
-		qe.handleHTTPQueryRules(response, request)
-	case "/debug/acl":
-		qe.handleHTTPAclJSON(response, request)
-	case "/debug/consolidations":
-		qe.handleHTTPConsolidations(response, request)
-	default:
-		response.WriteHeader(http.StatusNotFound)
-	}
-}
-
-func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, request *http.Request) {
 	keys := qe.plans.Keys()
 	response.Header().Set("Content-Type", "text/plain")
 	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
@@ -541,6 +490,10 @@ func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, reques
 }
 
 func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, request *http.Request) {
+	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
+		acl.SendError(response, err)
+		return
+	}
 	keys := qe.plans.Keys()
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
 	qstats := make([]perQueryStats, 0, len(keys))
@@ -563,6 +516,10 @@ func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, reques
 }
 
 func (qe *QueryEngine) handleHTTPQueryRules(response http.ResponseWriter, request *http.Request) {
+	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
+		acl.SendError(response, err)
+		return
+	}
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
 	b, err := json.MarshalIndent(qe.queryRuleSources, "", " ")
 	if err != nil {
@@ -575,6 +532,10 @@ func (qe *QueryEngine) handleHTTPQueryRules(response http.ResponseWriter, reques
 }
 
 func (qe *QueryEngine) handleHTTPAclJSON(response http.ResponseWriter, request *http.Request) {
+	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
+		acl.SendError(response, err)
+		return
+	}
 	aclConfig := tableacl.GetCurrentConfig()
 	if aclConfig == nil {
 		response.WriteHeader(http.StatusNotFound)
@@ -593,6 +554,10 @@ func (qe *QueryEngine) handleHTTPAclJSON(response http.ResponseWriter, request *
 
 // ServeHTTP lists the most recent, cached queries and their count.
 func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, request *http.Request) {
+	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
+		acl.SendError(response, err)
+		return
+	}
 	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
 		acl.SendError(response, err)
 		return

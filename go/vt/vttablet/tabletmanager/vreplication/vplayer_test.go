@@ -135,6 +135,10 @@ func TestPlayerFilters(t *testing.T) {
 		"create table no(id int, val varbinary(128), primary key(id))",
 		"create table nopk(id int, val varbinary(128))",
 		fmt.Sprintf("create table %s.nopk(id int, val varbinary(128))", vrepldb),
+		"create table src4(id1 int, id2 int, val varbinary(128), primary key(id1))",
+		fmt.Sprintf("create table %s.dst4(id1 int, val varbinary(128), primary key(id1))", vrepldb),
+		"create table src5(id1 int, id2 int, val varbinary(128), primary key(id1))",
+		fmt.Sprintf("create table %s.dst5(id1 int, val varbinary(128), primary key(id1))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table src1",
@@ -148,6 +152,10 @@ func TestPlayerFilters(t *testing.T) {
 		"drop table no",
 		"drop table nopk",
 		fmt.Sprintf("drop table %s.nopk", vrepldb),
+		"drop table src4",
+		fmt.Sprintf("drop table %s.dst4", vrepldb),
+		"drop table src5",
+		fmt.Sprintf("drop table %s.dst5", vrepldb),
 	})
 	env.SchemaEngine.Reload(context.Background())
 
@@ -165,6 +173,12 @@ func TestPlayerFilters(t *testing.T) {
 			Match: "/yes",
 		}, {
 			Match: "/nopk",
+		}, {
+			Match:  "dst4",
+			Filter: "select id1, val from src4 where id2 = 100",
+		}, {
+			Match:  "dst5",
+			Filter: "select id1, val from src5 where val = 'abc'",
 		}},
 	}
 	bls := &binlogdatapb.BinlogSource{
@@ -386,6 +400,30 @@ func TestPlayerFilters(t *testing.T) {
 		},
 		table: "nopk",
 		data:  [][]string{},
+	}, {
+		// filter by int
+		input: "insert into src4 values (1,100,'aaa'),(2,200,'bbb'),(3,100,'ccc')",
+		output: []string{
+			"begin",
+			"insert into dst4(id1,val) values (1,'aaa')",
+			"insert into dst4(id1,val) values (3,'ccc')",
+			"/update _vt.vreplication set pos=",
+			"commit",
+		},
+		table: "dst4",
+		data:  [][]string{{"1", "aaa"}, {"3", "ccc"}},
+	}, {
+		// filter by int
+		input: "insert into src5 values (1,100,'abc'),(2,200,'xyz'),(3,100,'xyz'),(4,300,'abc'),(5,200,'xyz')",
+		output: []string{
+			"begin",
+			"insert into dst5(id1,val) values (1,'abc')",
+			"insert into dst5(id1,val) values (4,'abc')",
+			"/update _vt.vreplication set pos=",
+			"commit",
+		},
+		table: "dst5",
+		data:  [][]string{{"1", "abc"}, {"4", "abc"}},
 	}}
 
 	for _, tcase := range testcases {

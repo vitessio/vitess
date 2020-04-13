@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dtids"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -67,6 +66,7 @@ func (state txEngineState) String() string {
 // states. It will start and shut down the underlying tx-pool as required.
 // It does this in a concurrently safe way.
 type TxEngine struct {
+	env tabletenv.Env
 	// the following four fields are interconnected. `state` and `nextState` should be protected by the
 	// `stateLock`
 	//
@@ -84,8 +84,6 @@ type TxEngine struct {
 	// transition while creating new transactions
 	beginRequests sync.WaitGroup
 
-	dbconfigs *dbconfigs.DBConfigs
-
 	twopcEnabled        bool
 	shutdownGracePeriod time.Duration
 	coordinatorAddress  string
@@ -98,32 +96,14 @@ type TxEngine struct {
 }
 
 // NewTxEngine creates a new TxEngine.
-func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *TxEngine {
+func NewTxEngine(env tabletenv.Env) *TxEngine {
+	config := env.Config()
 	te := &TxEngine{
+		env:                 env,
 		shutdownGracePeriod: time.Duration(config.TxShutDownGracePeriod * 1e9),
 	}
-	limiter := txlimiter.New(
-		config.TransactionCap,
-		config.TransactionLimitPerUser,
-		config.EnableTransactionLimit,
-		config.EnableTransactionLimitDryRun,
-		config.TransactionLimitByUsername,
-		config.TransactionLimitByPrincipal,
-		config.TransactionLimitByComponent,
-		config.TransactionLimitBySubcomponent,
-	)
-	te.txPool = NewTxPool(
-		config.PoolNamePrefix,
-		config.TransactionCap,
-		config.FoundRowsPoolSize,
-		config.TxPoolPrefillParallelism,
-		time.Duration(config.TransactionTimeout*1e9),
-		time.Duration(config.TxPoolTimeout*1e9),
-		time.Duration(config.IdleTimeout*1e9),
-		config.TxPoolWaiterCap,
-		checker,
-		limiter,
-	)
+	limiter := txlimiter.New(env)
+	te.txPool = NewTxPool(env, limiter)
 	te.twopcEnabled = config.TwoPCEnable
 	if te.twopcEnabled {
 		if config.TwoPCCoordinatorAddress == "" {
@@ -145,13 +125,7 @@ func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *
 	// the system can deadlock if all connections get moved to
 	// the TxPreparedPool.
 	te.preparedPool = NewTxPreparedPool(config.TransactionCap - 2)
-	readPool := connpool.New(
-		config.PoolNamePrefix+"TxReadPool",
-		3,
-		0,
-		time.Duration(config.IdleTimeout*1e9),
-		checker,
-	)
+	readPool := connpool.New(env, "TxReadPool", 3, 0, time.Duration(config.IdleTimeout*1e9))
 	te.twoPC = NewTwoPC(readPool)
 	te.transitionSignal = make(chan struct{})
 	// By immediately closing this channel, all state changes can simply be made blocking by issuing the
@@ -359,16 +333,11 @@ func (te *TxEngine) transitionTo(nextState txEngineState) error {
 	return nil
 }
 
-// InitDBConfig must be called before Init.
-func (te *TxEngine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	te.dbconfigs = dbcfgs
-}
-
 // Init must be called once when vttablet starts for setting
 // up the metadata tables.
 func (te *TxEngine) Init() error {
 	if te.twopcEnabled {
-		return te.twoPC.Init(te.dbconfigs.SidecarDBName.Get(), te.dbconfigs.DbaWithDB())
+		return te.twoPC.Init(te.env.DBConfigs().SidecarDBName.Get(), te.env.DBConfigs().DbaWithDB())
 	}
 	return nil
 }
@@ -377,15 +346,15 @@ func (te *TxEngine) Init() error {
 // all previously prepared transactions from the redo log.
 // this should only be called when the state is already locked
 func (te *TxEngine) open() {
-	te.txPool.Open(te.dbconfigs.AppWithDB(), te.dbconfigs.DbaWithDB(), te.dbconfigs.AppDebugWithDB())
+	te.txPool.Open(te.env.DBConfigs().AppWithDB(), te.env.DBConfigs().DbaWithDB(), te.env.DBConfigs().AppDebugWithDB())
 
 	if te.twopcEnabled && te.state == AcceptingReadAndWrite {
-		te.twoPC.Open(te.dbconfigs)
+		te.twoPC.Open(te.env.DBConfigs())
 		if err := te.prepareFromRedo(); err != nil {
 			// If this operation fails, we choose to raise an alert and
 			// continue anyway. Serving traffic is considered more important
 			// than blocking everything for the sake of a few transactions.
-			tabletenv.InternalErrors.Add("TwopcResurrection", 1)
+			te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)
 			log.Errorf("Could not prepare transactions: %v", err)
 		}
 		te.startWatchdog()
@@ -420,7 +389,7 @@ func (te *TxEngine) close(immediate bool) {
 	// verified to make sure it won't kick in later.
 	go func() {
 		defer func() {
-			tabletenv.LogError()
+			te.env.LogError()
 			close(rollbackDone)
 		}()
 		if immediate {
@@ -549,15 +518,15 @@ func (te *TxEngine) startWatchdog() {
 		// Use 5x abandonAge to give opportunity for watchdog to resolve these.
 		count, err := te.twoPC.CountUnresolvedRedo(ctx, time.Now().Add(-te.abandonAge*5))
 		if err != nil {
-			tabletenv.InternalErrors.Add("WatchdogFail", 1)
+			te.env.Stats().InternalErrors.Add("WatchdogFail", 1)
 			log.Errorf("Error reading unresolved prepares: '%v': %v", te.coordinatorAddress, err)
 		}
-		tabletenv.Unresolved.Set("Prepares", count)
+		te.env.Stats().Unresolved.Set("Prepares", count)
 
 		// Resolve lingering distributed transactions.
 		txs, err := te.twoPC.ReadAbandoned(ctx, time.Now().Add(-te.abandonAge))
 		if err != nil {
-			tabletenv.InternalErrors.Add("WatchdogFail", 1)
+			te.env.Stats().InternalErrors.Add("WatchdogFail", 1)
 			log.Errorf("Error reading transactions for 2pc watchdog: %v", err)
 			return
 		}
@@ -567,7 +536,7 @@ func (te *TxEngine) startWatchdog() {
 
 		coordConn, err := vtgateconn.Dial(ctx, te.coordinatorAddress)
 		if err != nil {
-			tabletenv.InternalErrors.Add("WatchdogFail", 1)
+			te.env.Stats().InternalErrors.Add("WatchdogFail", 1)
 			log.Errorf("Error connecting to coordinator '%v': %v", te.coordinatorAddress, err)
 			return
 		}
@@ -579,7 +548,7 @@ func (te *TxEngine) startWatchdog() {
 			go func(dtid string) {
 				defer wg.Done()
 				if err := coordConn.ResolveTransaction(ctx, dtid); err != nil {
-					tabletenv.InternalErrors.Add("WatchdogFail", 1)
+					te.env.Stats().InternalErrors.Add("WatchdogFail", 1)
 					log.Errorf("Error notifying for dtid %s: %v", dtid, err)
 				}
 			}(tx)

@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
@@ -45,8 +46,8 @@ func TestUnsharded(t *testing.T) {
 	testMessaging(t, "unsharded_message", lookupKeyspace)
 }
 
-// TestRepareting checks the client connection count after reparenting.
-func TestRepareting(t *testing.T) {
+// TestReparenting checks the client connection count after reparenting.
+func TestReparenting(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	name := "sharded_message"
 
@@ -100,7 +101,7 @@ func TestRepareting(t *testing.T) {
 	assert.Equal(t, 0, getClientCount(shard0Replica))
 	assert.Equal(t, 1, getClientCount(shard1Master))
 
-	_, err = stream.MessageAck(ctx, userKeyspace, name, keyRange(3))
+	_, err = session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (3) and time_acked is null", nil)
 	require.Nil(t, err)
 }
 
@@ -149,7 +150,7 @@ func TestConnection(t *testing.T) {
 	_, err = stream.Next()
 	require.Nil(t, err)
 
-	_, err = stream.MessageAck(ctx, userKeyspace, name, keyRange(2, 5))
+	_, err = session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (2, 5) and time_acked is null", nil)
 	require.Nil(t, err)
 	// After closing one stream, ensure vttablets have dropped it.
 	stream.Close()
@@ -197,9 +198,9 @@ func testMessaging(t *testing.T, name, ks string) {
 
 	resMap = make(map[string]string)
 	// validate message ack with id 4
-	count, err := stream.MessageAck(ctx, ks, name, keyRange(4))
+	qr, err := session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (4) and time_acked is null", nil)
 	require.Nil(t, err)
-	assert.Equal(t, int64(1), count)
+	assert.Equal(t, uint64(1), qr.RowsAffected)
 	res, err = stream.Next()
 	require.Nil(t, err)
 	for _, row := range res.Rows {
@@ -215,9 +216,9 @@ func testMessaging(t *testing.T, name, ks string) {
 	assert.Equal(t, "hello world 1", resMap["1"])
 
 	// validate message ack with 1 and 4, only 1 should be ack
-	count, err = stream.MessageAck(ctx, ks, name, keyRange(1, 4))
+	qr, err = session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (1, 4) and time_acked is null", nil)
 	require.Nil(t, err)
-	assert.Equal(t, int64(1), count)
+	assert.Equal(t, uint64(1), qr.RowsAffected)
 }
 
 func validateField(t *testing.T, field *query.Field, name string, _type query.Type) {
@@ -249,12 +250,26 @@ func VtgateGrpcConn(ctx context.Context, cluster *cluster.LocalProcessCluster) (
 // MessageStream strarts the stream for the corresponding connection.
 func (stream *VTGateStream) MessageStream(ks, shard string, keyRange *topodata.KeyRange, name string) (*sqltypes.Result, error) {
 	// start message stream which send received message to the respChan
-	go stream.VTGateConn.MessageStream(stream.ctx, ks, shard, keyRange, name, func(s *sqltypes.Result) error {
-		stream.respChan <- s
-		return nil
-	})
-	// wait for field details
-	return stream.Next()
+	session := stream.Session("@master", nil)
+	resultStream, err := session.StreamExecute(stream.ctx, fmt.Sprintf("stream * from %s", name), nil)
+	if err != nil {
+		return nil, err
+	}
+	qr, err := resultStream.Recv()
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		for {
+			qr, err := resultStream.Recv()
+			if err != nil {
+				log.Infof("Message stream ended: %v", err)
+				return
+			}
+			stream.respChan <- qr
+		}
+	}()
+	return qr, nil
 }
 
 // Next reads the new msg available in stream.
@@ -311,19 +326,4 @@ func getVar(vttablet *cluster.Vttablet) (map[string]interface{}, error) {
 		return resultMap, err
 	}
 	return nil, nil
-}
-
-// keyRange created keyRange array for correponding ids
-func keyRange(s ...int) []*query.Value {
-	out := make([]*query.Value, 0, len(s))
-
-	for _, v := range s {
-		q := new(query.Value)
-		q.Type = query.Type_INT64
-		q.Value = []byte(fmt.Sprint(v))
-
-		out = append(out, q)
-	}
-
-	return out
 }

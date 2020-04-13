@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -139,7 +140,15 @@ func TestStreamRowsUnicode(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.se.Reload(context.Background())
+
+	// Use an engine with latin1 charset.
+	savedEngine := engine
+	defer func() { engine = savedEngine }()
+	engine = customEngine(t, func(in mysql.ConnParams) mysql.ConnParams {
+		in.Charset = "latin1"
+		return in
+	})
+	defer engine.Close()
 
 	// We need a latin1 connection.
 	conn, err := env.Mysqld.GetDbaConnection()
@@ -156,14 +165,6 @@ func TestStreamRowsUnicode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	savecp := engine.cp
-	// Rowstreamer must override this to "binary"
-	params, err := engine.cp.MysqlParams()
-	if err != nil {
-		t.Fatal(err)
-	}
-	params.Charset = "latin1"
-	defer func() { engine.cp = savecp }()
 	err = engine.StreamRows(context.Background(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		// Skip fields.
 		if len(rows.Rows) == 0 {
@@ -208,6 +209,64 @@ func TestStreamRowsKeyRange(t *testing.T) {
 	}
 	wantQuery := "select id1, val from t1 order by id1"
 	checkStream(t, "select * from t1 where in_keyrange('-80')", nil, wantQuery, wantStream)
+}
+
+func TestStreamRowsFilterInt(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	if err := env.SetVSchema(shardedVSchema); err != nil {
+		t.Fatal(err)
+	}
+	defer env.SetVSchema("{}")
+
+	execStatements(t, []string{
+		"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
+		"insert into t1 values (1, 100, 'aaa'), (2, 200, 'bbb'), (3, 200, 'ccc'), (4, 100, 'ddd'), (5, 200, 'eee')",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+
+	time.Sleep(1 * time.Second)
+
+	wantStream := []string{
+		`fields:<name:"id1" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id1" type:INT32 > `,
+		`rows:<lengths:1 lengths:3 values:"1aaa" > rows:<lengths:1 lengths:3 values:"4ddd" > lastpk:<lengths:1 values:"5" > `,
+	}
+	wantQuery := "select id1, id2, val from t1 order by id1"
+	checkStream(t, "select id1, val from t1 where id2 = 100", nil, wantQuery, wantStream)
+}
+
+func TestStreamRowsFilterVarBinary(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	if err := env.SetVSchema(shardedVSchema); err != nil {
+		t.Fatal(err)
+	}
+	defer env.SetVSchema("{}")
+
+	execStatements(t, []string{
+		"create table t1(id1 int, val varbinary(128), primary key(id1))",
+		"insert into t1 values (1,'kepler'), (2, 'newton'), (3, 'newton'), (4, 'kepler'), (5, 'newton'), (6, 'kepler')",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+
+	time.Sleep(1 * time.Second)
+
+	wantStream := []string{
+		`fields:<name:"id1" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id1" type:INT32 > `,
+		`rows:<lengths:1 lengths:6 values:"2newton" > rows:<lengths:1 lengths:6 values:"3newton" > rows:<lengths:1 lengths:6 values:"5newton" > lastpk:<lengths:1 values:"6" > `,
+	}
+	wantQuery := "select id1, val from t1 order by id1"
+	checkStream(t, "select id1, val from t1 where val = 'newton'", nil, wantQuery, wantStream)
 }
 
 func TestStreamRowsMultiPacket(t *testing.T) {

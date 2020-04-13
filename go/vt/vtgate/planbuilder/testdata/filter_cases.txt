@@ -1,15 +1,17 @@
 # No where clause
 "select id from user"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user",
     "FieldQuery": "select id from user where 1 != 1",
+    "Query": "select id from user",
     "Table": "user"
   }
 }
@@ -17,35 +19,39 @@
 # Single table unique vindex route
 "select id from user where user.id = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where user.id = 5",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where user.id = 5",
     "FieldQuery": "select id from user where 1 != 1",
-    "Vindex": "user_index",
+    "Query": "select id from user where user.id = 5",
+    "Table": "user",
     "Values": [
       5
     ],
-    "Table": "user"
+    "Vindex": "user_index"
   }
 }
 
 # Single table unique vindex route, but complex expr
 "select id from user where user.id = 5+5"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where user.id = 5+5",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where user.id = 5 + 5",
     "FieldQuery": "select id from user where 1 != 1",
+    "Query": "select id from user where user.id = 5 + 5",
     "Table": "user"
   }
 }
@@ -53,78 +59,86 @@
 # Single table multiple unique vindex match
 "select id from music where id = 5 and user_id = 4"
 {
+  "QueryType": "SELECT",
   "Original": "select id from music where id = 5 and user_id = 4",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from music where id = 5 and user_id = 4",
     "FieldQuery": "select id from music where 1 != 1",
-    "Vindex": "user_index",
+    "Query": "select id from music where id = 5 and user_id = 4",
+    "Table": "music",
     "Values": [
       4
     ],
-    "Table": "music"
+    "Vindex": "user_index"
   }
 }
 
 # Single table multiple non-unique vindex match
 "select id from user where costly = 'aa' and name = 'bb'"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where costly = 'aa' and name = 'bb'",
   "Instructions": {
-    "Opcode": "SelectEqual",
+    "OperatorType": "Route",
+    "Variant": "SelectEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where costly = 'aa' and name = 'bb'",
     "FieldQuery": "select id from user where 1 != 1",
-    "Vindex": "name_user_map",
+    "Query": "select id from user where costly = 'aa' and name = 'bb'",
+    "Table": "user",
     "Values": [
       "bb"
     ],
-    "Table": "user"
+    "Vindex": "name_user_map"
   }
 }
 
 # Single table multiple non-unique vindex match for IN clause
 "select id from user where costly in ('aa', 'bb') and name in ('aa', 'bb')"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where costly in ('aa', 'bb') and name in ('aa', 'bb')",
   "Instructions": {
-    "Opcode": "SelectIN",
+    "OperatorType": "Route",
+    "Variant": "SelectIN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where costly in ('aa', 'bb') and name in ::__vals",
     "FieldQuery": "select id from user where 1 != 1",
-    "Vindex": "name_user_map",
+    "Query": "select id from user where costly in ('aa', 'bb') and name in ::__vals",
+    "Table": "user",
     "Values": [
       [
         "aa",
         "bb"
       ]
     ],
-    "Table": "user"
+    "Vindex": "name_user_map"
   }
 }
 
 # Single table complex in clause
 "select id from user where name in (col, 'bb')"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where name in (col, 'bb')",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where name in (col, 'bb')",
     "FieldQuery": "select id from user where 1 != 1",
+    "Query": "select id from user where name in (col, 'bb')",
     "Table": "user"
   }
 }
@@ -132,437 +146,473 @@
 # Single table equality route with val arg
 "select id from user where name = :a"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where name = :a",
   "Instructions": {
-    "Opcode": "SelectEqual",
+    "OperatorType": "Route",
+    "Variant": "SelectEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where name = :a",
     "FieldQuery": "select id from user where 1 != 1",
-    "Vindex": "name_user_map",
+    "Query": "select id from user where name = :a",
+    "Table": "user",
     "Values": [
       ":a"
     ],
-    "Table": "user"
+    "Vindex": "name_user_map"
   }
 }
 
 # Single table equality route with unsigned value
 "select id from user where name = 18446744073709551615"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where name = 18446744073709551615",
   "Instructions": {
-    "Opcode": "SelectEqual",
+    "OperatorType": "Route",
+    "Variant": "SelectEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where name = 18446744073709551615",
     "FieldQuery": "select id from user where 1 != 1",
-    "Vindex": "name_user_map",
+    "Query": "select id from user where name = 18446744073709551615",
+    "Table": "user",
     "Values": [
       18446744073709551615
     ],
-    "Table": "user"
+    "Vindex": "name_user_map"
   }
 }
 
 # Single table in clause list arg
 "select id from user where name in ::list"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where name in ::list",
   "Instructions": {
-    "Opcode": "SelectIN",
+    "OperatorType": "Route",
+    "Variant": "SelectIN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where name in ::__vals",
     "FieldQuery": "select id from user where 1 != 1",
-    "Vindex": "name_user_map",
+    "Query": "select id from user where name in ::__vals",
+    "Table": "user",
     "Values": [
       "::list"
     ],
-    "Table": "user"
+    "Vindex": "name_user_map"
   }
 }
 
 # Multi-table unique vindex constraint
 "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5",
     "FieldQuery": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where 1 != 1",
-    "Vindex": "user_index",
+    "Query": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5",
+    "Table": "user",
     "Values": [
       5
     ],
-    "Table": "user"
+    "Vindex": "user_index"
   }
 }
 
 # Multi-table unique vindex constraint on right table
 "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
     "FieldQuery": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where 1 != 1",
-    "Vindex": "user_index",
+    "Query": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
+    "Table": "user",
     "Values": [
       5
     ],
-    "Table": "user"
+    "Vindex": "user_index"
   }
 }
 
 # Multi-table unique vindex constraint on left table of left join
 "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user.id = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user.id = 5",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user.id = 5",
     "FieldQuery": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where 1 != 1",
-    "Vindex": "user_index",
+    "Query": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user.id = 5",
+    "Table": "user",
     "Values": [
       5
     ],
-    "Table": "user"
+    "Vindex": "user_index"
   }
 }
 
 # Multi-table unique vindex constraint on left-joined right table
 "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
     "FieldQuery": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where 1 != 1",
-    "Vindex": "user_index",
+    "Query": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
+    "Table": "user",
     "Values": [
       5
     ],
-    "Table": "user"
+    "Vindex": "user_index"
   }
 }
 
 # Multi-route unique vindex constraint
 "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectEqualUnique",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "TableName": "user_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user.col from user where 1 != 1",
+        "Query": "select user.col from user where user.id = 5",
+        "Table": "user",
+        "Values": [
+          5
+        ],
+        "Vindex": "user_index"
       },
-      "Query": "select user.col from user where user.id = 5",
-      "FieldQuery": "select user.col from user where 1 != 1",
-      "Vindex": "user_index",
-      "Values": [
-        5
-      ],
-      "Table": "user"
-    },
-    "Right": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
-      "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-      "Table": "user_extra"
-    },
-    "Cols": [
-      1
-    ],
-    "Vars": {
-      "user_col": 0
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+        "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
+        "Table": "user_extra"
+      }
+    ]
   }
 }
 
 # Multi-route unique vindex route on both routes
 "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5 and user_extra.user_id = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5 and user_extra.user_id = 5",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectEqualUnique",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "TableName": "user_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user.col from user where 1 != 1",
+        "Query": "select user.col from user where user.id = 5",
+        "Table": "user",
+        "Values": [
+          5
+        ],
+        "Vindex": "user_index"
       },
-      "Query": "select user.col from user where user.id = 5",
-      "FieldQuery": "select user.col from user where 1 != 1",
-      "Vindex": "user_index",
-      "Values": [
-        5
-      ],
-      "Table": "user"
-    },
-    "Right": {
-      "Opcode": "SelectEqualUnique",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select user_extra.id from user_extra where user_extra.col = :user_col and user_extra.user_id = 5",
-      "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-      "Vindex": "user_index",
-      "Values": [
-        5
-      ],
-      "Table": "user_extra"
-    },
-    "Cols": [
-      1
-    ],
-    "Vars": {
-      "user_col": 0
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+        "Query": "select user_extra.id from user_extra where user_extra.col = :user_col and user_extra.user_id = 5",
+        "Table": "user_extra",
+        "Values": [
+          5
+        ],
+        "Vindex": "user_index"
+      }
+    ]
   }
 }
 
 # Multi-route with cross-route constraint
 "select user_extra.id from user join user_extra on user.col = user_extra.col where user_extra.user_id = user.col"
 {
+  "QueryType": "SELECT",
   "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user_extra.user_id = user.col",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "TableName": "user_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user.col from user where 1 != 1",
+        "Query": "select user.col from user",
+        "Table": "user"
       },
-      "Query": "select user.col from user",
-      "FieldQuery": "select user.col from user where 1 != 1",
-      "Table": "user"
-    },
-    "Right": {
-      "Opcode": "SelectEqualUnique",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select user_extra.id from user_extra where user_extra.col = :user_col and user_extra.user_id = :user_col",
-      "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-      "Vindex": "user_index",
-      "Values": [
-        ":user_col"
-      ],
-      "Table": "user_extra"
-    },
-    "Cols": [
-      1
-    ],
-    "Vars": {
-      "user_col": 0
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+        "Query": "select user_extra.id from user_extra where user_extra.col = :user_col and user_extra.user_id = :user_col",
+        "Table": "user_extra",
+        "Values": [
+          ":user_col"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
   }
 }
 
 # Multi-route with non-route constraint, should use first route.
 "select user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1"
 {
+  "QueryType": "SELECT",
   "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "TableName": "user_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user.col from user where 1 != 1",
+        "Query": "select user.col from user where 1 = 1",
+        "Table": "user"
       },
-      "Query": "select user.col from user where 1 = 1",
-      "FieldQuery": "select user.col from user where 1 != 1",
-      "Table": "user"
-    },
-    "Right": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
-      "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-      "Table": "user_extra"
-    },
-    "Cols": [
-      1
-    ],
-    "Vars": {
-      "user_col": 0
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+        "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
+        "Table": "user_extra"
+      }
+    ]
   }
 }
 
 # Route with multiple route constraints, SelectIN is the best constraint.
 "select id from user where user.col = 5 and user.id in (1, 2)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where user.col = 5 and user.id in (1, 2)",
   "Instructions": {
-    "Opcode": "SelectIN",
+    "OperatorType": "Route",
+    "Variant": "SelectIN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where user.col = 5 and user.id in ::__vals",
     "FieldQuery": "select id from user where 1 != 1",
-    "Vindex": "user_index",
+    "Query": "select id from user where user.col = 5 and user.id in ::__vals",
+    "Table": "user",
     "Values": [
       [
         1,
         2
       ]
     ],
-    "Table": "user"
+    "Vindex": "user_index"
   }
 }
 
 # Route with multiple route constraints and boolean, SelectIN is the best constraint.
 "select id from user where user.col = case user.col when 'foo' then true else false end and user.id in (1, 2)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where user.col = case user.col when 'foo' then true else false end and user.id in (1, 2)",
   "Instructions": {
-    "Opcode": "SelectIN",
+    "OperatorType": "Route",
+    "Variant": "SelectIN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where user.col = case user.col when 'foo' then true else false end and user.id in ::__vals",
     "FieldQuery": "select id from user where 1 != 1",
-    "Vindex": "user_index",
+    "Query": "select id from user where user.col = case user.col when 'foo' then true else false end and user.id in ::__vals",
+    "Table": "user",
     "Values": [
       [
         1,
         2
       ]
     ],
-    "Table": "user"
+    "Vindex": "user_index"
   }
 }
 
 # Route with multiple route constraints and boolean, SelectEqual is the best constraint.
 "select (id or col) as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'"
 {
+  "QueryType": "SELECT",
   "Original": "select (id or col) as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
   "Instructions": {
-    "Opcode": "SelectEqual",
+    "OperatorType": "Route",
+    "Variant": "SelectEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select (id or col) as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
-    "FieldQuery": "select (id or col) as val from user where 1 != 1",
-    "Vindex": "name_user_map",
+    "FieldQuery": "select id or col as val from user where 1 != 1",
+    "Query": "select id or col as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
+    "Table": "user",
     "Values": [
       "aa"
     ],
-    "Table": "user"
+    "Vindex": "name_user_map"
   }
 }
 
 # Route with multiple route constraints, SelectEqual is the best constraint.
 "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'",
   "Instructions": {
-    "Opcode": "SelectEqual",
+    "OperatorType": "Route",
+    "Variant": "SelectEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'",
     "FieldQuery": "select id from user where 1 != 1",
-    "Vindex": "name_user_map",
+    "Query": "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'",
+    "Table": "user",
     "Values": [
       "aa"
     ],
-    "Table": "user"
+    "Vindex": "name_user_map"
   }
 }
 
 # Route with multiple route constraints, SelectEqualUnique is the best constraint.
 "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1",
     "FieldQuery": "select id from user where 1 != 1",
-    "Vindex": "user_index",
+    "Query": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1",
+    "Table": "user",
     "Values": [
       1
     ],
-    "Table": "user"
+    "Vindex": "user_index"
   }
 }
 
 # Route with multiple route constraints, SelectEqualUnique is the best constraint, order reversed.
 "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5",
     "FieldQuery": "select id from user where 1 != 1",
-    "Vindex": "user_index",
+    "Query": "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5",
+    "Table": "user",
     "Values": [
       1
     ],
-    "Table": "user"
+    "Vindex": "user_index"
   }
 }
 
 # Route with OR and AND clause, must parenthesize correctly.
 "select id from user where user.id = 1 or user.name = 'aa' and user.id in (1, 2)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where user.id = 1 or user.name = 'aa' and user.id in (1, 2)",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where (user.id = 1 or user.name = 'aa' and user.id in (1, 2))",
     "FieldQuery": "select id from user where 1 != 1",
+    "Query": "select id from user where user.id = 1 or user.name = 'aa' and user.id in (1, 2)",
     "Table": "user"
   }
 }
@@ -570,167 +620,182 @@
 # Unsharded route
 "select unsharded.id from user join unsharded where unsharded.id = user.id"
 {
+  "QueryType": "SELECT",
   "Original": "select unsharded.id from user join unsharded where unsharded.id = user.id",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "TableName": "user_unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user.id from user where 1 != 1",
+        "Query": "select user.id from user",
+        "Table": "user"
       },
-      "Query": "select user.id from user",
-      "FieldQuery": "select user.id from user where 1 != 1",
-      "Table": "user"
-    },
-    "Right": {
-      "Opcode": "SelectUnsharded",
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
-      },
-      "Query": "select unsharded.id from unsharded where unsharded.id = :user_id",
-      "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
-      "Table": "unsharded"
-    },
-    "Cols": [
-      1
-    ],
-    "Vars": {
-      "user_id": 0
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+        "Query": "select unsharded.id from unsharded where unsharded.id = :user_id",
+        "Table": "unsharded"
+      }
+    ]
   }
 }
 
 # routing rules: choose first table due to better plan
 "select col from route1 where id = 1"
 {
+  "QueryType": "SELECT",
   "Original": "select col from route1 where id = 1",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select col from user as route1 where id = 1",
     "FieldQuery": "select col from user as route1 where 1 != 1",
-    "Vindex": "user_index",
+    "Query": "select col from user as route1 where id = 1",
+    "Table": "user",
     "Values": [
       1
     ],
-    "Table": "user"
+    "Vindex": "user_index"
   }
 }
 
 # routing rules: choose second table due to better plan
 "select col from route1 where email = 'aaa'"
 {
+  "QueryType": "SELECT",
   "Original": "select col from route1 where email = 'aaa'",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select col from user_metadata as route1 where email = 'aaa'",
     "FieldQuery": "select col from user_metadata as route1 where 1 != 1",
-    "Vindex": "email_user_map",
+    "Query": "select col from user_metadata as route1 where email = 'aaa'",
+    "Table": "user_metadata",
     "Values": [
       "aaa"
     ],
-    "Table": "user_metadata"
+    "Vindex": "email_user_map"
   }
 }
 
 # subquery of information_schema with itself
 "select * from information_schema.a where id in (select * from information_schema.b)"
 {
+  "QueryType": "SELECT",
   "Original": "select * from information_schema.a where id in (select * from information_schema.b)",
   "Instructions": {
-    "Opcode": "SelectDBA",
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "select * from information_schema.a where id in (select * from information_schema.b)",
-    "FieldQuery": "select * from information_schema.a where 1 != 1"
+    "FieldQuery": "select * from information_schema.a where 1 != 1",
+    "Query": "select * from information_schema.a where id in (select * from information_schema.b)"
   }
 }
 
 # subquery
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col) and u.id in (user_extra.col, 1)"
 {
+  "QueryType": "SELECT",
   "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col) and u.id in (user_extra.col, 1)",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "TableName": "user_extra_user",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra",
+        "Table": "user_extra"
       },
-      "Query": "select user_extra.col from user_extra",
-      "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-      "Table": "user_extra"
-    },
-    "Right": {
-      "Opcode": "SelectIN",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select u.m from user as u where u.id in ::__vals and u.id in (select m2 from user where user.id = u.id and user.col = :user_extra_col)",
-      "FieldQuery": "select u.m from user as u where 1 != 1",
-      "Vindex": "user_index",
-      "Values": [
-        [
-          ":user_extra_col",
-          1
-        ]
-      ],
-      "Table": "user"
-    },
-    "Cols": [
-      1
-    ],
-    "Vars": {
-      "user_extra_col": 0
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectIN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.m from user as u where 1 != 1",
+        "Query": "select u.m from user as u where u.id in ::__vals and u.id in (select m2 from user where user.id = u.id and user.col = :user_extra_col)",
+        "Table": "user",
+        "Values": [
+          [
+            ":user_extra_col",
+            1
+          ]
+        ],
+        "Vindex": "user_index"
+      }
+    ]
   }
 }
 
 # ensure subquery reordering gets us a better plan
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = 5) and u.id = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = 5) and u.id = 5",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "TableName": "user_extra_user",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "Query": "select 1 from user_extra",
+        "Table": "user_extra"
       },
-      "Query": "select 1 from user_extra",
-      "FieldQuery": "select 1 from user_extra where 1 != 1",
-      "Table": "user_extra"
-    },
-    "Right": {
-      "Opcode": "SelectEqualUnique",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select u.m from user as u where u.id = 5 and u.id in (select m2 from user where user.id = 5)",
-      "FieldQuery": "select u.m from user as u where 1 != 1",
-      "Vindex": "user_index",
-      "Values": [
-        5
-      ],
-      "Table": "user"
-    },
-    "Cols": [
-      1
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.m from user as u where 1 != 1",
+        "Query": "select u.m from user as u where u.id = 5 and u.id in (select m2 from user where user.id = 5)",
+        "Table": "user",
+        "Values": [
+          5
+        ],
+        "Vindex": "user_index"
+      }
     ]
   }
 }
@@ -738,57 +803,61 @@
 # nested subquery
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in (user_extra.col, 1)"
 {
+  "QueryType": "SELECT",
   "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in (user_extra.col, 1)",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "TableName": "user_extra_user",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra",
+        "Table": "user_extra"
       },
-      "Query": "select user_extra.col from user_extra",
-      "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-      "Table": "user_extra"
-    },
-    "Right": {
-      "Opcode": "SelectIN",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select u.m from user as u where u.id in ::__vals and u.id in (select m2 from user where user.id = u.id and user.col = :user_extra_col and user.id in (select m3 from user_extra where user_extra.user_id = user.id))",
-      "FieldQuery": "select u.m from user as u where 1 != 1",
-      "Vindex": "user_index",
-      "Values": [
-        [
-          ":user_extra_col",
-          1
-        ]
-      ],
-      "Table": "user"
-    },
-    "Cols": [
-      1
-    ],
-    "Vars": {
-      "user_extra_col": 0
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectIN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.m from user as u where 1 != 1",
+        "Query": "select u.m from user as u where u.id in ::__vals and u.id in (select m2 from user where user.id = u.id and user.col = :user_extra_col and user.id in (select m3 from user_extra where user_extra.user_id = user.id))",
+        "Table": "user",
+        "Values": [
+          [
+            ":user_extra_col",
+            1
+          ]
+        ],
+        "Vindex": "user_index"
+      }
+    ]
   }
 }
 
 # Correlated subquery in where clause
 "select id from user where user.col in (select user_extra.col from user_extra where user_extra.user_id = user.id)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where user.col in (select user_extra.col from user_extra where user_extra.user_id = user.id)",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where user.col in (select user_extra.col from user_extra where user_extra.user_id = user.id)",
     "FieldQuery": "select id from user where 1 != 1",
+    "Query": "select id from user where user.col in (select user_extra.col from user_extra where user_extra.user_id = user.id)",
     "Table": "user"
   }
 }
@@ -796,60 +865,66 @@
 # outer and inner subquery route by same int val
 "select id from user where id = 5 and user.col in (select user_extra.col from user_extra where user_extra.user_id = 5)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where id = 5 and user.col in (select user_extra.col from user_extra where user_extra.user_id = 5)",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where id = 5 and user.col in (select user_extra.col from user_extra where user_extra.user_id = 5)",
     "FieldQuery": "select id from user where 1 != 1",
-    "Vindex": "user_index",
+    "Query": "select id from user where id = 5 and user.col in (select user_extra.col from user_extra where user_extra.user_id = 5)",
+    "Table": "user",
     "Values": [
       5
     ],
-    "Table": "user"
+    "Vindex": "user_index"
   }
 }
 
 # outer and inner subquery route by same str val
 "select id from user where id = 'aa' and user.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where id = 'aa' and user.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where id = 'aa' and user.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')",
     "FieldQuery": "select id from user where 1 != 1",
-    "Vindex": "user_index",
+    "Query": "select id from user where id = 'aa' and user.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')",
+    "Table": "user",
     "Values": [
       "aa"
     ],
-    "Table": "user"
+    "Vindex": "user_index"
   }
 }
 
 # outer and inner subquery route by same val arg
 "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)",
     "FieldQuery": "select id from user where 1 != 1",
-    "Vindex": "user_index",
+    "Query": "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)",
+    "Table": "user",
     "Values": [
       ":a"
     ],
-    "Table": "user"
+    "Vindex": "user_index"
   }
 }
 
@@ -860,15 +935,17 @@
 # outer and inner subquery route by same outermost column value
 "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))"
 {
+  "QueryType": "SELECT",
   "Original": "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id2 from user as uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))",
     "FieldQuery": "select id2 from user as uu where 1 != 1",
+    "Query": "select id2 from user as uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))",
     "Table": "user"
   }
 }
@@ -877,197 +954,221 @@
 # Note the improved Underlying plan as SelectIN.
 "select id from user where id in (select col from user)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where id in (select col from user)",
   "Instructions": {
-    "Opcode": "PulloutIn",
-    "SubqueryResult": "__sq1",
-    "HasValues": "__sq_has_values1",
-    "Subquery": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from user where 1 != 1",
+        "Query": "select col from user",
+        "Table": "user"
       },
-      "Query": "select col from user",
-      "FieldQuery": "select col from user where 1 != 1",
-      "Table": "user"
-    },
-    "Underlying": {
-      "Opcode": "SelectIN",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select id from user where :__sq_has_values1 = 1 and (id in ::__vals)",
-      "FieldQuery": "select id from user where 1 != 1",
-      "Vindex": "user_index",
-      "Values": [
-        "::__sq1"
-      ],
-      "Table": "user"
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectIN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from user where 1 != 1",
+        "Query": "select id from user where :__sq_has_values1 = 1 and id in ::__vals",
+        "Table": "user",
+        "Values": [
+          "::__sq1"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
   }
 }
 
 # cross-shard subquery in NOT IN clause.
 "select id from user where id not in (select col from user)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where id not in (select col from user)",
   "Instructions": {
-    "Opcode": "PulloutNotIn",
-    "SubqueryResult": "__sq1",
-    "HasValues": "__sq_has_values1",
-    "Subquery": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Subquery",
+    "Variant": "PulloutNotIn",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from user where 1 != 1",
+        "Query": "select col from user",
+        "Table": "user"
       },
-      "Query": "select col from user",
-      "FieldQuery": "select col from user where 1 != 1",
-      "Table": "user"
-    },
-    "Underlying": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select id from user where (:__sq_has_values1 = 0 or (id not in ::__sq1))",
-      "FieldQuery": "select id from user where 1 != 1",
-      "Table": "user"
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from user where 1 != 1",
+        "Query": "select id from user where :__sq_has_values1 = 0 or id not in ::__sq1",
+        "Table": "user"
+      }
+    ]
   }
 }
 
 # cross-shard subquery in EXISTS clause.
 "select id from user where exists (select col from user)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where exists (select col from user)",
   "Instructions": {
-    "Opcode": "PulloutExists",
-    "SubqueryResult": "__sq1",
-    "HasValues": "__sq_has_values1",
-    "Subquery": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Subquery",
+    "Variant": "PulloutExists",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from user where 1 != 1",
+        "Query": "select col from user",
+        "Table": "user"
       },
-      "Query": "select col from user",
-      "FieldQuery": "select col from user where 1 != 1",
-      "Table": "user"
-    },
-    "Underlying": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select id from user where :__sq_has_values1",
-      "FieldQuery": "select id from user where 1 != 1",
-      "Table": "user"
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from user where 1 != 1",
+        "Query": "select id from user where :__sq_has_values1",
+        "Table": "user"
+      }
+    ]
   }
 }
 
 # cross-shard subquery as expression
 "select id from user where id = (select col from user)"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where id = (select col from user)",
   "Instructions": {
-    "Opcode": "PulloutValue",
-    "SubqueryResult": "__sq1",
-    "HasValues": "__sq_has_values1",
-    "Subquery": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
+    "OperatorType": "Subquery",
+    "Variant": "PulloutValue",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from user where 1 != 1",
+        "Query": "select col from user",
+        "Table": "user"
       },
-      "Query": "select col from user",
-      "FieldQuery": "select col from user where 1 != 1",
-      "Table": "user"
-    },
-    "Underlying": {
-      "Opcode": "SelectEqualUnique",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select id from user where id = :__sq1",
-      "FieldQuery": "select id from user where 1 != 1",
-      "Vindex": "user_index",
-      "Values": [
-        ":__sq1"
-      ],
-      "Table": "user"
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from user where 1 != 1",
+        "Query": "select id from user where id = :__sq1",
+        "Table": "user",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
   }
 }
 
 # multi-level pullout
 "select id1 from user where id = (select id2 from user where id2 in (select id3 from user))"
 {
+  "QueryType": "SELECT",
   "Original": "select id1 from user where id = (select id2 from user where id2 in (select id3 from user))",
   "Instructions": {
-    "Opcode": "PulloutValue",
-    "SubqueryResult": "__sq2",
-    "HasValues": "__sq_has_values2",
-    "Subquery": {
-      "Opcode": "PulloutIn",
-      "SubqueryResult": "__sq1",
-      "HasValues": "__sq_has_values1",
-      "Subquery": {
-        "Opcode": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "select id3 from user",
-        "FieldQuery": "select id3 from user where 1 != 1",
-        "Table": "user"
+    "OperatorType": "Subquery",
+    "Variant": "PulloutValue",
+    "Inputs": [
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutIn",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id3 from user where 1 != 1",
+            "Query": "select id3 from user",
+            "Table": "user"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id2 from user where 1 != 1",
+            "Query": "select id2 from user where :__sq_has_values1 = 1 and id2 in ::__sq1",
+            "Table": "user"
+          }
+        ]
       },
-      "Underlying": {
-        "Opcode": "SelectScatter",
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
-        "Query": "select id2 from user where :__sq_has_values1 = 1 and (id2 in ::__sq1)",
-        "FieldQuery": "select id2 from user where 1 != 1",
-        "Table": "user"
+        "FieldQuery": "select id1 from user where 1 != 1",
+        "Query": "select id1 from user where id = :__sq2",
+        "Table": "user",
+        "Values": [
+          ":__sq2"
+        ],
+        "Vindex": "user_index"
       }
-    },
-    "Underlying": {
-      "Opcode": "SelectEqualUnique",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select id1 from user where id = :__sq2",
-      "FieldQuery": "select id1 from user where 1 != 1",
-      "Vindex": "user_index",
-      "Values": [
-        ":__sq2"
-      ],
-      "Table": "user"
-    }
+    ]
   }
 }
 
 # routing rules subquery merge
 "select col from user where id = (select id from route2 where route2.id = user.id)"
 {
+  "QueryType": "SELECT",
   "Original": "select col from user where id = (select id from route2 where route2.id = user.id)",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select col from user where id = (select id from user as route2 where route2.id = user.id)",
     "FieldQuery": "select col from user where 1 != 1",
+    "Query": "select col from user where id = (select id from user as route2 where route2.id = user.id)",
     "Table": "user"
   }
 }
@@ -1075,70 +1176,78 @@
 # routing rules subquery pullout
 "select col from user where id = (select id from route2)"
 {
+  "QueryType": "SELECT",
   "Original": "select col from user where id = (select id from route2)",
   "Instructions": {
-    "Opcode": "PulloutValue",
-    "SubqueryResult": "__sq1",
-    "HasValues": "__sq_has_values1",
-    "Subquery": {
-      "Opcode": "SelectUnsharded",
-      "Keyspace": {
-        "Name": "main",
-        "Sharded": false
+    "OperatorType": "Subquery",
+    "Variant": "PulloutValue",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select id from unsharded as route2 where 1 != 1",
+        "Query": "select id from unsharded as route2",
+        "Table": "unsharded"
       },
-      "Query": "select id from unsharded as route2",
-      "FieldQuery": "select id from unsharded as route2 where 1 != 1",
-      "Table": "unsharded"
-    },
-    "Underlying": {
-      "Opcode": "SelectEqualUnique",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select col from user where id = :__sq1",
-      "FieldQuery": "select col from user where 1 != 1",
-      "Vindex": "user_index",
-      "Values": [
-        ":__sq1"
-      ],
-      "Table": "user"
-    }
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from user where 1 != 1",
+        "Query": "select col from user where id = :__sq1",
+        "Table": "user",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
   }
 }
 
 # Case preservation test
 "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5"
 {
+  "QueryType": "SELECT",
   "Original": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5",
     "FieldQuery": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where 1 != 1",
-    "Vindex": "user_index",
+    "Query": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5",
+    "Table": "user",
     "Values": [
       5
     ],
-    "Table": "user"
+    "Vindex": "user_index"
   }
 }
 
 # database() call in where clause.
 "select id from user where database()"
 {
+  "QueryType": "SELECT",
   "Original": "select id from user where database()",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where database()",
     "FieldQuery": "select id from user where 1 != 1",
+    "Query": "select id from user where database()",
     "Table": "user"
   }
 }

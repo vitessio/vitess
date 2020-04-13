@@ -29,9 +29,6 @@ import io.vitess.proto.Query;
 import io.vitess.proto.Query.BindVariable;
 import io.vitess.proto.Query.BoundQuery;
 import io.vitess.proto.Query.QueryResult;
-import io.vitess.proto.Vtgate.BoundKeyspaceIdQuery;
-import io.vitess.proto.Vtgate.BoundShardQuery;
-import io.vitess.proto.Vtgate.ExecuteEntityIdsRequest.EntityId;
 import io.vitess.proto.Vtrpc.RPCError;
 
 import java.math.BigDecimal;
@@ -60,13 +57,6 @@ public class Proto {
         @Override
         public ByteString apply(byte[] from) {
           return ByteString.copyFrom(from);
-        }
-      };
-  public static final Function<Map.Entry<byte[], ?>, EntityId> MAP_ENTRY_TO_ENTITY_KEYSPACE_ID =
-      new Function<Map.Entry<byte[], ?>, EntityId>() {
-        @Override
-        public EntityId apply(Map.Entry<byte[], ?> entry) {
-          return buildEntityId(entry.getKey(), entry.getValue());
         }
       };
   private static final int MAX_DECIMAL_UNIT = 30;
@@ -209,13 +199,6 @@ public class Proto {
     return builder.build();
   }
 
-  public static EntityId buildEntityId(byte[] keyspaceId, Object value) {
-    TypedValue tval = new TypedValue(value);
-
-    return EntityId.newBuilder().setKeyspaceId(ByteString.copyFrom(keyspaceId)).setType(tval.type)
-        .setValue(tval.value).build();
-  }
-
   /**
    * bindQuery creates a BoundQuery from query and vars.
    */
@@ -227,49 +210,6 @@ public class Proto {
       }
     }
     return boundQueryBuilder.build();
-  }
-
-  /**
-   * bindShardQuery creates a BoundShardQuery.
-   */
-  public static BoundShardQuery bindShardQuery(String keyspace, Iterable<String> shards,
-      BoundQuery query) {
-    return BoundShardQuery.newBuilder().setKeyspace(keyspace).addAllShards(shards).setQuery(query)
-        .build();
-  }
-
-  /**
-   * bindShardQuery creates a BoundShardQuery.
-   */
-  public static BoundShardQuery bindShardQuery(String keyspace, Iterable<String> shards,
-      String query, Map<String, ?> vars) {
-    return bindShardQuery(keyspace, shards, bindQuery(query, vars));
-  }
-
-  /**
-   * bindKeyspaceIdQuery creates a BoundKeyspaceIdQuery.
-   */
-  public static BoundKeyspaceIdQuery bindKeyspaceIdQuery(String keyspace,
-      Iterable<byte[]> keyspaceIds, BoundQuery query) {
-    return BoundKeyspaceIdQuery.newBuilder().setKeyspace(keyspace)
-        .addAllKeyspaceIds(Iterables.transform(keyspaceIds, BYTE_ARRAY_TO_BYTE_STRING))
-        .setQuery(query).build();
-  }
-
-  /**
-   * bindKeyspaceIdQuery creates a BoundKeyspaceIdQuery.
-   */
-  public static BoundKeyspaceIdQuery bindKeyspaceIdQuery(String keyspace,
-      Iterable<byte[]> keyspaceIds, String query, Map<String, ?> vars) {
-    return bindKeyspaceIdQuery(keyspace, keyspaceIds, bindQuery(query, vars));
-  }
-
-  public static List<Cursor> toCursorList(List<QueryResult> queryResults) {
-    ImmutableList.Builder<Cursor> builder = new ImmutableList.Builder<Cursor>();
-    for (QueryResult queryResult : queryResults) {
-      builder.add(new SimpleCursor(queryResult));
-    }
-    return builder.build();
   }
 
   public static List<CursorWithError> fromQueryResponsesToCursorList(

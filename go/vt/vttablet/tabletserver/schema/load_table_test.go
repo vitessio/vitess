@@ -23,12 +23,14 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -98,6 +100,9 @@ func TestLoadTableMessage(t *testing.T) {
 			Name: "id",
 			Type: sqltypes.Int64,
 		}, {
+			Name: "priority",
+			Type: sqltypes.Int64,
+		}, {
 			Name: "time_next",
 			Type: sqltypes.Int64,
 		}, {
@@ -120,11 +125,19 @@ func TestLoadTableMessage(t *testing.T) {
 			}},
 			AckWaitDuration:    30 * time.Second,
 			PurgeAfterDuration: 120 * time.Second,
+			MinBackoff:         30 * time.Second,
 			BatchSize:          1,
 			CacheSize:          10,
 			PollInterval:       30 * time.Second,
 		},
 	}
+	assert.Equal(t, want, table)
+
+	// Test loading min/max backoff
+	table, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30,vt_min_backoff=10,vt_max_backoff=100", db)
+	require.NoError(t, err)
+	want.MessageInfo.MinBackoff = 10 * time.Second
+	want.MessageInfo.MaxBackoff = 100 * time.Second
 	assert.Equal(t, want, table)
 
 	// Missing property
@@ -149,7 +162,7 @@ func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 	appParams := db.ConnParams()
 	dbaParams := db.ConnParams()
 	connPoolIdleTimeout := 10 * time.Second
-	connPool := connpool.New("", 2, 0, connPoolIdleTimeout, DummyChecker)
+	connPool := connpool.New(tabletenv.NewTestEnv(nil, nil, "SchemaTest"), "", 2, 0, connPoolIdleTimeout)
 	connPool.Open(appParams, dbaParams, appParams)
 	conn, err := connPool.Get(ctx)
 	if err != nil {
@@ -178,12 +191,13 @@ func getTestLoadTableQueries() map[string]*sqltypes.Result {
 }
 
 func getMessageTableQueries() map[string]*sqltypes.Result {
-	// id is intentionally after the message column to ensure that the
-	// loader still makes it the first one.
 	return map[string]*sqltypes.Result{
 		"select * from test_table where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "id",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "priority",
 				Type: sqltypes.Int64,
 			}, {
 				Name: "time_next",

@@ -308,7 +308,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "t1",
 		td: &tableDiffer{
 			targetTable:      "t1",
-			sourceExpression: "select c1, c2 from t1 where (c2 = 2) order by c1 asc",
+			sourceExpression: "select c1, c2 from t1 where c2 = 2 order by c1 asc",
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
 			compareCols:      []int{-1, 1},
 			comparePKs:       []int{0},
@@ -359,12 +359,14 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		},
 	}}
 	for _, tcase := range testcases {
-		filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{tcase.input}}
-		df := &vdiff{}
-		err := df.buildVDiffPlan(context.Background(), filter, schm)
-		require.NoError(t, err, tcase.input)
-		require.Equal(t, 1, len(df.differs), tcase.input)
-		assert.Equal(t, tcase.td, df.differs[tcase.table], tcase.input)
+		t.Run(tcase.input.Filter, func(t *testing.T) {
+			filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{tcase.input}}
+			df := &vdiff{}
+			err := df.buildVDiffPlan(context.Background(), filter, schm)
+			require.NoError(t, err, tcase.input)
+			require.Equal(t, 1, len(df.differs), tcase.input)
+			assert.Equal(t, tcase.td, df.differs[tcase.table], tcase.input)
+		})
 	}
 }
 

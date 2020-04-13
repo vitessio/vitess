@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	"vitess.io/vitess/go/jsonutil"
@@ -87,6 +88,9 @@ type Route struct {
 
 	// Route does not take inputs
 	noInputs
+
+	// Route does not need transaction handling
+	noTxNeeded
 }
 
 // NewSimpleRoute creates a Route with the bare minimum of parameters.
@@ -112,6 +116,16 @@ func NewRoute(opcode RouteOpcode, keyspace *vindexes.Keyspace, query, fieldQuery
 type OrderbyParams struct {
 	Col  int
 	Desc bool
+}
+
+func (obp OrderbyParams) String() string {
+	val := strconv.Itoa(obp.Col)
+	if obp.Desc {
+		val += " DESC"
+	} else {
+		val += " ASC"
+	}
+	return val
 }
 
 // MarshalJSON serializes the Route into a JSON representation.
@@ -267,7 +281,7 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 	}
 
 	queries := getQueries(route.Query, bvs)
-	result, errs := vcursor.ExecuteMultiShard(rss, queries, false /* isDML */, false /* autocommit */)
+	result, errs := vcursor.ExecuteMultiShard(rss, queries, false /* rollbackOnError */, false /* autocommit */)
 
 	if errs != nil {
 		if route.ScatterErrorsAsWarnings {
@@ -362,7 +376,7 @@ func (route *Route) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bind
 		// This code is unreachable. It's just a sanity check.
 		return nil, fmt.Errorf("no shards for keyspace: %s", route.Keyspace.Name)
 	}
-	qr, err := execShard(vcursor, route.FieldQuery, bindVars, rss[0], false /* isDML */, false /* canAutocommit */)
+	qr, err := execShard(vcursor, route.FieldQuery, bindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
 	if err != nil {
 		return nil, err
 	}
@@ -518,14 +532,14 @@ func resolveKeyspaceID(vcursor VCursor, vindex vindexes.SingleColumn, vindexKey 
 	}
 }
 
-func execShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, isDML, canAutocommit bool) (*sqltypes.Result, error) {
+func execShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, rollbackOnError, canAutocommit bool) (*sqltypes.Result, error) {
 	autocommit := canAutocommit && vcursor.AutocommitApproval()
 	result, errs := vcursor.ExecuteMultiShard([]*srvtopo.ResolvedShard{rs}, []*querypb.BoundQuery{
 		{
 			Sql:           query,
 			BindVariables: bindVars,
 		},
-	}, isDML, autocommit)
+	}, rollbackOnError, autocommit)
 	return result, vterrors.Aggregate(errs)
 }
 
@@ -554,4 +568,26 @@ func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) 
 		shardVars[i] = newbv
 	}
 	return shardVars
+}
+
+func (route *Route) description() PrimitiveDescription {
+	other := map[string]interface{}{
+		"Query":      route.Query,
+		"Table":      route.TableName,
+		"FieldQuery": route.FieldQuery,
+	}
+	if route.Vindex != nil {
+		other["Vindex"] = route.Vindex.String()
+	}
+	if len(route.Values) > 0 {
+		other["Values"] = route.Values
+	}
+
+	return PrimitiveDescription{
+		OperatorType:      "Route",
+		Variant:           routeName[route.Opcode],
+		Keyspace:          route.Keyspace,
+		TargetDestination: route.TargetDestination,
+		Other:             other,
+	}
 }

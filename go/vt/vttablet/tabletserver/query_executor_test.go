@@ -908,13 +908,13 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
-	beforeCount := tabletenv.TableaclPseudoDenied.Counts()[tableACLStatsKey]
+	beforeCount := tsv.stats.TableaclPseudoDenied.Counts()[tableACLStatsKey]
 	// query should fail because current user do not have read permissions
 	_, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want: nil", err)
 	}
-	afterCount := tabletenv.TableaclPseudoDenied.Counts()[tableACLStatsKey]
+	afterCount := tsv.stats.TableaclPseudoDenied.Counts()[tableACLStatsKey]
 	if afterCount-beforeCount != 1 {
 		t.Fatalf("table acl pseudo denied count should increase by one. got: %d, want: %d", afterCount, beforeCount+1)
 	}
@@ -1040,9 +1040,7 @@ const (
 
 // newTestQueryExecutor uses a package level variable testTabletServer defined in tabletserver_test.go
 func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb.DB) *TabletServer {
-	randID := rand.Int63()
 	config := tabletenv.DefaultQsConfig
-	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 	config.PoolSize = 100
 	if flags&smallTxPool > 0 {
 		config.TransactionCap = 3
@@ -1068,9 +1066,8 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	if flags&smallResultSize > 0 {
 		config.MaxResultSize = 2
 	}
-	tsv := NewTabletServer(config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
-	testUtils := newTestUtils()
-	dbconfigs := testUtils.newDBConfigs(db)
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbconfigs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	tsv.StartService(target, dbconfigs)
 	return tsv
@@ -1233,6 +1230,9 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 		"select * from msg where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "id",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "priority",
 				Type: sqltypes.Int64,
 			}, {
 				Name: "time_next",

@@ -50,7 +50,7 @@ spec:
     spec:
       containers:
         - name: pmm
-          image: "{{ $pmm.image}}:{{ $pmm.pmmTag }}"
+          image: "percona/pmm-server:{{ $pmm.pmmTag }}"
 
           ports:
             - name: web
@@ -219,7 +219,7 @@ spec:
       trap : TERM INT; sleep infinity & wait
 
 - name: pmm-client-metrics-log
-  image: vitess/logtail:helm-1.0.7-5
+  image: vitess/logtail:helm-2.0.0-0
   imagePullPolicy: IfNotPresent
   env:
   - name: TAIL_FILEPATH

@@ -327,7 +327,9 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 func (rp *ResourcePool) recordWait(start time.Time) {
 	rp.waitCount.Add(1)
 	rp.waitTime.Add(time.Since(start))
-	rp.logWait(start)
+	if rp.logWait != nil {
+		rp.logWait(start)
+	}
 }
 
 // SetIdleTimeout sets the idle timeout. It can only be used if there was an

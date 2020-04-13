@@ -1,0 +1,58 @@
+# use db
+"use ks"
+{
+  "QueryType": "USE",
+  "Original": "use ks",
+  "Instructions": {
+    "OperatorType": "UpdateTarget",
+    "Variant": "",
+    "target": "ks"
+  }
+}
+
+# use db tablet
+"use ks@replica"
+{
+  "QueryType": "USE",
+  "Original": "use ks@replica",
+  "Instructions": {
+    "OperatorType": "UpdateTarget",
+    "Variant": "",
+    "target": "ks@replica"
+  }
+}
+
+# use db target with :
+"use `ks:-80@replica`"
+{
+  "QueryType": "USE",
+  "Original": "use `ks:-80@replica`",
+  "Instructions": {
+    "OperatorType": "UpdateTarget",
+    "Variant": "",
+    "target": "ks:-80@replica"
+  }
+}
+
+# use db target with /
+"use `ks/80-@replica`"
+{
+  "QueryType": "USE",
+  "Original": "use `ks/80-@replica`",
+  "Instructions": {
+    "OperatorType": "UpdateTarget",
+    "Variant": "",
+    "target": "ks/80-@replica"
+  }
+}
+
+# reset db
+"use"
+{
+  "QueryType": "USE",
+  "Original": "use",
+  "Instructions": {
+    "OperatorType": "UpdateTarget",
+    "Variant": ""
+  }
+}

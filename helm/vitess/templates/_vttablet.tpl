@@ -29,8 +29,41 @@ spec:
   selector:
     app: vitess
     component: vttablet
-
+---
 {{- end -}}
+
+###################################
+# vttablet ServiceAccount
+###################################
+{{ define "vttablet-serviceaccount" -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vttablet
+  labels:
+    app: vitess
+---
+{{ end }}
+
+###################################
+# vttablet RoleBinding
+###################################
+{{ define "vttablet-topo-role-binding" -}}
+{{- $namespace := index . 0 -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vttablet-topo-member
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: vt-topo-member
+subjects:
+- kind: ServiceAccount
+  name: vttablet
+  namespace: {{ $namespace }}
+---
+{{ end }}
 
 ###################################
 # vttablet
@@ -48,10 +81,6 @@ spec:
 {{- $config := index . 8 -}}
 {{- $pmm := index . 9 -}}
 {{- $orc := index . 10 -}}
-{{- $mysqlctld := index . 11 -}}
-{{- $logrotate := index . 12 -}}
-{{- $logtail := index . 13 -}}
-{{- $vtctl := index . 14 -}}
 
 # sanitize inputs for labels
 {{- $cellClean := include "clean-label" $cell.name -}}
@@ -65,7 +94,6 @@ spec:
 
 # define images to use
 {{- $vitessTag := .vitessTag | default $defaultVttablet.vitessTag -}}
-{{- $vtctlclientImage := .vtctlclientImage | default $defaultVttablet.vtctlclientImage -}}
 {{- $image := .image | default $defaultVttablet.image -}}
 {{- $mysqlImage := .mysqlImage | default $defaultVttablet.mysqlImage -}}
 {{- $mysqlImage := .mysqlImage | default $defaultVttablet.mysqlImage }}
@@ -73,7 +101,7 @@ spec:
 ###################################
 # vttablet StatefulSet
 ###################################
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: {{ $setName | quote }}
@@ -101,22 +129,23 @@ spec:
         shard: {{ $shardClean | quote }}
         type: {{ $tablet.type | quote }}
     spec:
-      terminationGracePeriodSeconds: 60000000
+      serviceAccountName: vttablet
+      terminationGracePeriodSeconds: {{ $defaultVttablet.terminationGracePeriodSeconds | default 60000000 }}
 {{ include "pod-security" . | indent 6 }}
 {{ include "vttablet-affinity" (tuple $cellClean $keyspaceClean $shardClean $cell.region) | indent 6 }}
 
       initContainers:
-{{ include "init-mysql" (tuple $vitessTag $cellClean $mysqlctld) | indent 8 }}
-{{ include "init-vttablet" (tuple $vitessTag $cell $cellClean $namespace $mysqlctld $vtctl) | indent 8 }}
+{{ include "init-mysql" (tuple $vitessTag $cellClean) | indent 8 }}
+{{ include "init-vttablet" (tuple $vitessTag $cell $cellClean $namespace) | indent 8 }}
 
       containers:
 {{ include "cont-mysql" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $uid) | indent 8 }}
 {{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $defaultVtctlclient $vitessTag $uid $namespace $config $orc) | indent 8 }}
-{{ include "cont-logrotate" (tuple $logrotate) | indent 8 }}
-{{ include "cont-mysql-generallog" (tuple $logrotate) | indent 8 }}
-{{ include "cont-mysql-errorlog" (tuple $logrotate) | indent 8 }}
-{{ include "cont-mysql-slowlog" (tuple $logrotate) | indent 8 }}
-{{ if $pmm.enabled }}{{ include "cont-pmm-client" (tuple $pmm $namespace $keyspace  $logtail) | indent 8 }}{{ end }}
+{{ include "cont-logrotate" . | indent 8 }}
+{{ include "cont-mysql-generallog" . | indent 8 }}
+{{ include "cont-mysql-errorlog" . | indent 8 }}
+{{ include "cont-mysql-slowlog" . | indent 8 }}
+{{ if $pmm.enabled }}{{ include "cont-pmm-client" (tuple $pmm $namespace $keyspace) | indent 8 }}{{ end }}
 
       volumes:
         - name: vt
@@ -169,13 +198,9 @@ spec:
 {{ define "init-mysql" -}}
 {{- $vitessTag := index . 0 -}}
 {{- $cellClean := index . 1 }}
-{{- $mysqlctld := index . 2 }}
-
-{{- $vitessTag :=   $mysqlctld.vitessTag -}}
-{{- $mysqlctldImage :=  $mysqlctld.mysqlctldImage -}}
 
 - name: "init-mysql"
-  image: "{{$mysqlctldImage}}:{{$vitessTag}}"
+  image: "vitess/mysqlctld:{{$vitessTag}}"
   imagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
@@ -218,11 +243,9 @@ spec:
 {{- $cell := index . 1 -}}
 {{- $cellClean := index . 2 -}}
 {{- $namespace := index . 3 }}
-{{- $vtctl := index . 4 }}
-
 
 - name: init-vttablet
-  image: "{{$vtctl.vtctlImage}}:{{$vitessTag}}"
+  image: "vitess/vtctl:{{$vitessTag}}"
   imagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
@@ -252,13 +275,23 @@ spec:
 
       # make sure that etcd is initialized
       eval exec /vt/bin/vtctl $(cat <<END_OF_COMMAND
-        -topo_implementation="etcd2"
         -topo_global_root=/vitess/global
+        {{- if eq ($cell.topologyProvider | default "") "etcd2" }}
+        -topo_implementation="etcd2"
         -topo_global_server_address="etcd-global-client.{{ $namespace }}:2379"
+        {{- else }}
+        -topo_implementation=k8s
+        -topo_global_server_address=k8s
+        {{- end }}
         -logtostderr=true
         -stderrthreshold=0
         UpdateCellInfo
+        -root /vitess/{{ $cell.name }}
+        {{- if eq ($cell.topologyProvider | default "") "etcd2" }}
         -server_address="etcd-global-client.{{ $namespace }}:2379"
+        {{- else }}
+        -server_address=k8s
+        {{- end }}
         {{ $cellClean | quote}}
       END_OF_COMMAND
       )
@@ -286,11 +319,8 @@ spec:
 {{- $cellClean := include "clean-label" $cell.name -}}
 {{- with $tablet.vttablet }}
 
-{{- $vitessTag :=  $defaultVttablet.vitessTag -}}
-{{- $vttabletImage := $defaultVttablet.vttabletImage -}}
-
 - name: vttablet
-  image: "{{$vttabletImage}}:{{$vitessTag}}"
+  image: "vitess/vttablet:{{$vitessTag}}"
   imagePullPolicy: IfNotPresent
   readinessProbe:
     httpGet:
@@ -417,9 +447,14 @@ spec:
 {{ include "backup-exec" $config.backup | indent 6 }}
 
       eval exec /vt/bin/vttablet $(cat <<END_OF_COMMAND
+        -topo_global_root /vitess/global
+        {{- if eq ($cell.topologyProvider | default "") "etcd2" }}
         -topo_implementation="etcd2"
         -topo_global_server_address="etcd-global-client.{{ $namespace }}:2379"
-        -topo_global_root=/vitess/global
+        {{- else }}
+        -topo_implementation k8s
+        -topo_global_server_address k8s
+        {{- end }}
         -logtostderr
         -port 15002
         -grpc_port 16002
@@ -546,10 +581,9 @@ spec:
 # run logrotate for all log files in /vtdataroot/tabletdata
 ##########################
 {{ define "cont-logrotate" }}
-{{- $logrotate := index . 0 }}
 
 - name: logrotate
-  image: {{ $logrotate.image }}:{{ $logrotate.tag }}
+  image: vitess/logrotate:helm-2.0.0-0
   imagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
@@ -561,10 +595,9 @@ spec:
 # redirect the error log file to stdout
 ##########################
 {{ define "cont-mysql-errorlog" }}
-{{- $logtail := index . 0 -}}
 
 - name: error-log
-  image: {{ $logtail.image }}:{{ $logtail.tag }}
+  image: vitess/logtail:helm-2.0.0-0
   imagePullPolicy: IfNotPresent
 
   env:
@@ -580,10 +613,9 @@ spec:
 # redirect the slow log file to stdout
 ##########################
 {{ define "cont-mysql-slowlog" }}
-{{- $logtail := index . 0 -}}
 
 - name: slow-log
-  image: {{ $logtail.image }}:{{ $logtail.tag }}
+  image: vitess/logtail:helm-2.0.0-0
   imagePullPolicy: IfNotPresent
 
   env:
@@ -599,10 +631,9 @@ spec:
 # redirect the general log file to stdout
 ##########################
 {{ define "cont-mysql-generallog" }}
-{{- $logtail := index . 0 -}}
 
 - name: general-log
-  image: {{ $logtail.image }}:{{ $logtail.tag }}
+  image: vitess/logtail:helm-2.0.0-0
   imagePullPolicy: IfNotPresent
 
   env:

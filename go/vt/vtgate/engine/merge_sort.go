@@ -50,6 +50,7 @@ type MergeSort struct {
 	Primitives []StreamExecutor
 	OrderBy    []OrderbyParams
 	noInputs
+	noTxNeeded
 }
 
 // RouteType satisfies Primitive.
@@ -153,6 +154,17 @@ func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 		}
 	}
 	return nil
+}
+
+func (ms *MergeSort) description() PrimitiveDescription {
+	other := map[string]interface{}{
+		"OrderBy": ms.OrderBy,
+	}
+	return PrimitiveDescription{
+		OperatorType: "Sort",
+		Variant:      "Merge",
+		Other:        other,
+	}
 }
 
 // streamHandle is the rendez-vous point between each stream and the merge-sorter.

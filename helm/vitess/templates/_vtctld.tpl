@@ -13,7 +13,6 @@
 
 # define image to use
 {{- $vitessTag := .vitessTag | default $defaultVtctld.vitessTag -}}
-{{- $vtcldImage := .vtcldImage | default $defaultVtctld.vtcldImage -}}
 {{- $cellClean := include "clean-label" $cell.name }}
 
 ###################################
@@ -37,10 +36,39 @@ spec:
     app: vitess
   type: {{.serviceType | default $defaultVtctld.serviceType}}
 ---
+
+###################################
+# vtctld ServiceAccount
+###################################
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vtctld
+  labels:
+    app: vitess
+---
+
+###################################
+# vtctld RoleBinding
+###################################
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vtctld-topo-member
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: vt-topo-member
+subjects:
+- kind: ServiceAccount
+  name: vtctld
+  namespace: {{ $namespace }}
+---
+
 ###################################
 # vtctld Service + Deployment
 ###################################
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: vtctld
@@ -56,11 +84,12 @@ spec:
         app: vitess
         component: vtctld
     spec:
+      serviceAccountName: vtctld
 {{ include "pod-security" . | indent 6 }}
 {{ include "vtctld-affinity" (tuple $cellClean $cell.region) | indent 6 }}
       containers:
         - name: vtctld
-          image: {{$vtcldImage}}:{{$vitessTag}}
+          image: vitess/vtctld:{{$vitessTag}}
           imagePullPolicy: IfNotPresent
           readinessProbe:
             httpGet:
@@ -100,9 +129,14 @@ spec:
                 -port=15000
                 -grpc_port=15999
                 -service_map="grpc-vtctl"
+                -topo_global_root=/vitess/global
+                {{- if eq ($cell.topologyProvider | default "") "etcd2" }}
                 -topo_implementation="etcd2"
                 -topo_global_server_address="etcd-global-client.{{ $namespace }}:2379"
-                -topo_global_root=/vitess/global
+                {{- else }}
+                -topo_implementation="k8s"
+                -topo_global_server_address="k8s"
+                {{- end }}
 {{ include "backup-flags" (tuple $config.backup "vtctld") | indent 16 }}
 {{ include "format-flags-all" (tuple $defaultVtctld.extraFlags .extraFlags) | indent 16 }}
               END_OF_COMMAND

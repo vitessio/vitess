@@ -55,6 +55,47 @@ const (
 	StmtPriv
 )
 
+//ASTToStatementType returns a StatementType from an AST stmt
+func ASTToStatementType(stmt Statement) StatementType {
+	switch stmt.(type) {
+	case *Select, *Union:
+		return StmtSelect
+	case *Insert:
+		return StmtInsert
+	case *Update:
+		return StmtUpdate
+	case *Delete:
+		return StmtDelete
+	case *Set:
+		return StmtSet
+	case *Show:
+		return StmtShow
+	case *DDL, *DBDDL:
+		return StmtDDL
+	case *Use:
+		return StmtUse
+	case *OtherRead, *OtherAdmin:
+		return StmtOther
+	case *Begin:
+		return StmtBegin
+	case *Commit:
+		return StmtCommit
+	case *Rollback:
+		return StmtRollback
+	default:
+		return StmtUnknown
+	}
+}
+
+//CanNormalize takes Statement and returns if the statement can be normalized.
+func CanNormalize(stmt Statement) bool {
+	switch stmt.(type) {
+	case *Select, *Union, *Insert, *Update, *Delete, *Set:
+		return true
+	}
+	return false
+}
+
 // Preview analyzes the beginning of the query using a simpler and faster
 // textual comparison to identify the statement type.
 func Preview(sql string) StatementType {
@@ -163,6 +204,25 @@ func IsDML(sql string) bool {
 	return false
 }
 
+//IsDMLStatement returns true if the query is an INSERT, UPDATE or DELETE statement.
+func IsDMLStatement(stmt Statement) bool {
+	switch stmt.(type) {
+	case *Insert, *Update, *Delete:
+		return true
+	}
+
+	return false
+}
+
+//IsVschemaDDL returns true if the query is an Vschema alter ddl.
+func IsVschemaDDL(ddl *DDL) bool {
+	switch ddl.Action {
+	case CreateVindexStr, AddVschemaTableStr, DropVschemaTableStr, AddColVindexStr, DropColVindexStr, AddSequenceStr, AddAutoIncStr:
+		return true
+	}
+	return false
+}
+
 // SplitAndExpression breaks up the Expr into AND-separated conditions
 // and appends them to filters. Outer parenthesis are removed. Precedence
 // should be taken into account if expressions are recombined.
@@ -174,8 +234,6 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 	case *AndExpr:
 		filters = SplitAndExpression(filters, node.Left)
 		return SplitAndExpression(filters, node.Right)
-	case *ParenExpr:
-		return SplitAndExpression(filters, node.Expr)
 	}
 	return append(filters, node)
 }

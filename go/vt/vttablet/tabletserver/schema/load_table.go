@@ -58,6 +58,7 @@ func fetchColumns(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
 
 func loadMessageInfo(ta *Table, comment string) error {
 	hiddenCols := map[string]struct{}{
+		"priority":   {},
 		"time_next":  {},
 		"epoch":      {},
 		"time_acked": {},
@@ -65,6 +66,7 @@ func loadMessageInfo(ta *Table, comment string) error {
 
 	requiredCols := []string{
 		"id",
+		"priority",
 		"time_next",
 		"epoch",
 		"time_acked",
@@ -98,6 +100,16 @@ func loadMessageInfo(ta *Table, comment string) error {
 	if ta.MessageInfo.PollInterval, err = getDuration(keyvals, "vt_poller_interval"); err != nil {
 		return err
 	}
+
+	// errors are ignored because these fields are optional and 0 is the default value
+	ta.MessageInfo.MinBackoff, _ = getDuration(keyvals, "vt_min_backoff")
+	// the original default minimum backoff was based on ack wait timeout, so this preserves that
+	if ta.MessageInfo.MinBackoff == 0 {
+		ta.MessageInfo.MinBackoff = ta.MessageInfo.AckWaitDuration
+	}
+
+	ta.MessageInfo.MaxBackoff, _ = getDuration(keyvals, "vt_max_backoff")
+
 	for _, col := range requiredCols {
 		num := ta.FindColumn(sqlparser.NewColIdent(col))
 		if num == -1 {

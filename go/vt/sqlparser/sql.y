@@ -135,6 +135,7 @@ func skipToEnd(yylex interface{}) {
 // Some of these operators don't conflict in our situation. Nevertheless,
 // it's better to have these listed in the correct order. Also, we don't
 // support all operators yet.
+// * NOTE: If you change anything here, update precedence.go as well *
 %left <bytes> OR
 %left <bytes> AND
 %right <bytes> NOT '!'
@@ -159,7 +160,7 @@ func skipToEnd(yylex interface{}) {
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH
-%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK
+%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
@@ -183,7 +184,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> COLLATION DATABASES TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
+%token <bytes> COLLATION DATABASES TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -268,7 +269,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
-%type <str> full_opt from_database_opt tables_or_processlist columns_or_fields
+%type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <byt> exists_opt
 %type <empty> not_exists_opt non_add_drop_or_rename_operation to_opt index_opt constraint_opt
@@ -294,7 +295,7 @@ func skipToEnd(yylex interface{}) {
 %type <columnDefinition> column_definition
 %type <indexDefinition> index_definition
 %type <constraintDefinition> constraint_definition
-%type <str> index_or_key
+%type <str> index_or_key index_symbols from_or_in
 %type <str> name_opt
 %type <str> equal_opt
 %type <TableSpec> table_spec table_column_list
@@ -1157,6 +1158,31 @@ index_info:
     $$ = &IndexInfo{Type: string($1), Name: NewColIdent($2), Unique: false}
   }
 
+index_symbols:
+  INDEX
+  {
+    $$ = string($1)
+  }
+| KEYS
+  {
+    $$ = string($1)
+  }
+| INDEXES
+  {
+    $$ = string($1)
+  }
+
+
+from_or_in:
+  FROM
+  {
+    $$ = string($1)
+  }
+| IN
+  {
+    $$ = string($1)
+  }
+
 index_or_key:
     INDEX
   {
@@ -1561,16 +1587,12 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW INDEX FROM table_name from_database_opt like_or_where_opt
+| SHOW extended_opt index_symbols from_or_in table_name from_database_opt like_or_where_opt
   {
-    showTablesOpt := &ShowTablesOpt{DbName:$5, Filter:$6}
-    $$ = &Show{Type: string($2), ShowTablesOpt: showTablesOpt, OnTable: $4}
+    showTablesOpt := &ShowTablesOpt{DbName:$6, Filter:$7}
+    $$ = &Show{Extended: string($2), Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
   }
-| SHOW KEYS FROM table_name from_database_opt like_or_where_opt
-  {
-    showTablesOpt := &ShowTablesOpt{DbName:$5, Filter:$6}
-    $$ = &Show{Type: string($2), ShowTablesOpt: showTablesOpt, OnTable: $4}
-  }
+
 | SHOW PLUGINS
   {
     $$ = &Show{Type: string($2)}
@@ -1661,6 +1683,16 @@ tables_or_processlist:
   {
     $$ = string($1)
   }
+
+  extended_opt:
+    /* empty */
+    {
+      $$ = ""
+    }
+  | EXTENDED
+    {
+      $$ = "extended "
+    }
 
 full_opt:
   /* empty */
@@ -3078,7 +3110,7 @@ tuple_expression:
   row_tuple
   {
     if len($1) == 1 {
-      $$ = &ParenExpr{$1[0]}
+      $$ = $1[0]
     } else {
       $$ = $1
     }
@@ -3422,6 +3454,7 @@ non_reserved_keyword:
 | ENUM
 | EXCLUDE
 | EXPANSION
+| EXTENDED
 | FLOAT_TYPE
 | FIELDS
 | FLUSH
@@ -3439,6 +3472,7 @@ non_reserved_keyword:
 | INT
 | INTEGER
 | INVISIBLE
+| INDEXES
 | ISOLATION
 | JSON
 | KEY_BLOCK_SIZE

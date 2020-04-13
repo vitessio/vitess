@@ -5,7 +5,6 @@
 # set tuple values to more recognizable variables
 {{- $orc := index . 0 -}}
 {{- $defaultVtctlclient := index . 1 }}
-{{- $logtail := index . 2 }}
 
 apiVersion: v1
 kind: Service
@@ -124,7 +123,7 @@ spec:
               value: "15999"
 
         - name: recovery-log
-          image: "{{ $logtail.image }}:{{ $logtail.tag }}"
+          image: vitess/logtail:helm-2.0.0-0
           imagePullPolicy: IfNotPresent
           env:
           - name: TAIL_FILEPATH
@@ -134,7 +133,7 @@ spec:
               mountPath: /tmp
 
         - name: audit-log
-          image: "{{ $logtail.image }}:{{ $logtail.tag }}"
+          image: vitess/logtail:helm-2.0.0-0
           imagePullPolicy: IfNotPresent
           env:
           - name: TAIL_FILEPATH

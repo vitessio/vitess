@@ -27,27 +27,20 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
-var (
-	once           sync.Once
-	vschemaErrors  *stats.Counter
-	vschemaUpdates *stats.Counter
-)
-
 // Engine is the engine for handling vreplication streaming requests.
 type Engine struct {
-	// cp is initialized by InitDBConfig
-	cp dbconfigs.Connector
+	env tabletenv.Env
 
 	// mu protects isOpen, streamers, streamIdx and vschema.
 	mu sync.Mutex
@@ -73,31 +66,28 @@ type Engine struct {
 	se       *schema.Engine
 	keyspace string
 	cell     string
+
+	vschemaErrors  *stats.Counter
+	vschemaUpdates *stats.Counter
 }
 
 // NewEngine creates a new Engine.
 // Initialization sequence is: NewEngine->InitDBConfig->Open.
 // Open and Close can be called multiple times and are idempotent.
-func NewEngine(ts srvtopo.Server, se *schema.Engine) *Engine {
+func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine) *Engine {
 	vse := &Engine{
+		env:             env,
 		streamers:       make(map[int]*vstreamer),
 		rowStreamers:    make(map[int]*rowStreamer),
 		resultStreamers: make(map[int]*resultStreamer),
 		lvschema:        &localVSchema{vschema: &vindexes.VSchema{}},
 		ts:              ts,
 		se:              se,
+		vschemaErrors:   env.Exporter().NewCounter("VSchemaErrors", "Count of VSchema errors"),
+		vschemaUpdates:  env.Exporter().NewCounter("VSchemaUpdates", "Count of VSchema updates. Does not include errors"),
 	}
-	once.Do(func() {
-		vschemaErrors = stats.NewCounter("VSchemaErrors", "Count of VSchema errors")
-		vschemaUpdates = stats.NewCounter("VSchemaUpdates", "Count of VSchema updates. Does not include errors")
-		http.Handle("/debug/tablet_vschema", vse)
-	})
+	env.Exporter().HandleFunc("/debug/tablet_vschema", vse.ServeHTTP)
 	return vse
-}
-
-// InitDBConfig performs saves the required info from dbconfigs for future use.
-func (vse *Engine) InitDBConfig(cp dbconfigs.Connector) {
-	vse.cp = cp
 }
 
 // Open starts the Engine service.
@@ -166,7 +156,7 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, filter *binlogda
 		if !vse.isOpen {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
-		streamer := newVStreamer(ctx, vse.cp, vse.se, startPos, filter, vse.lvschema, send)
+		streamer := newVStreamer(ctx, vse.env.DBConfigs().DbaWithDB(), vse.se, startPos, filter, vse.lvschema, send)
 		idx := vse.streamIdx
 		vse.streamers[idx] = streamer
 		vse.streamIdx++
@@ -206,7 +196,7 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 		if !vse.isOpen {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
-		rowStreamer := newRowStreamer(ctx, vse.cp, vse.se, query, lastpk, vse.lvschema, send)
+		rowStreamer := newRowStreamer(ctx, vse.env.DBConfigs().AppWithDB(), vse.se, query, lastpk, vse.lvschema, send)
 		idx := vse.streamIdx
 		vse.rowStreamers[idx] = rowStreamer
 		vse.streamIdx++
@@ -240,7 +230,7 @@ func (vse *Engine) StreamResults(ctx context.Context, query string, send func(*b
 		if !vse.isOpen {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
-		resultStreamer := newResultStreamer(ctx, vse.cp, query, send)
+		resultStreamer := newResultStreamer(ctx, vse.env.DBConfigs().AppWithDB(), query, send)
 		idx := vse.streamIdx
 		vse.resultStreamers[idx] = resultStreamer
 		vse.streamIdx++
@@ -296,7 +286,7 @@ func (vse *Engine) setWatch() {
 			v = nil
 		default:
 			log.Errorf("Error fetching vschema: %v", err)
-			vschemaErrors.Add(1)
+			vse.vschemaErrors.Add(1)
 			return
 		}
 		var vschema *vindexes.VSchema
@@ -304,7 +294,7 @@ func (vse *Engine) setWatch() {
 			vschema, err = vindexes.BuildVSchema(v)
 			if err != nil {
 				log.Errorf("Error building vschema: %v", err)
-				vschemaErrors.Add(1)
+				vse.vschemaErrors.Add(1)
 				return
 			}
 		} else {
@@ -323,6 +313,6 @@ func (vse *Engine) setWatch() {
 		for _, s := range vse.streamers {
 			s.SetVSchema(vse.lvschema)
 		}
-		vschemaUpdates.Add(1)
+		vse.vschemaUpdates.Add(1)
 	})
 }

@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttest"
@@ -46,18 +45,13 @@ type Env struct {
 	ShardName    string
 	Cells        []string
 
+	TabletEnv    tabletenv.Env
 	TopoServ     *topo.Server
 	SrvTopo      srvtopo.Server
 	Dbcfgs       *dbconfigs.DBConfigs
 	Mysqld       *mysqlctl.Mysqld
 	SchemaEngine *schema.Engine
 }
-
-type checker struct{}
-
-var _ = connpool.MySQLChecker(checker{})
-
-func (checker) CheckMySQL() {}
 
 // Init initializes an Env.
 func Init() (*Env, error) {
@@ -102,8 +96,10 @@ func Init() (*Env, error) {
 	}
 
 	te.Dbcfgs = dbconfigs.NewTestDBConfigs(te.cluster.MySQLConnParams(), te.cluster.MySQLAppDebugConnParams(), te.cluster.DbName())
+	config := tabletenv.DefaultQsConfig
+	te.TabletEnv = tabletenv.NewTestEnv(&config, te.Dbcfgs, "VStreamerTest")
 	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
-	te.SchemaEngine = schema.NewEngine(checker{}, tabletenv.DefaultQsConfig)
+	te.SchemaEngine = schema.NewEngine(te.TabletEnv)
 	te.SchemaEngine.InitDBConfig(te.Dbcfgs.DbaWithDB())
 
 	// The first vschema should not be empty. Leads to Node not found error.
