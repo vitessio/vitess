@@ -41,7 +41,7 @@ import (
 const (
 	// connBufferSize is how much we buffer for reading and
 	// writing. It is also how much we allocate for ephemeral buffers.
-	connBufferSize = 16 * 1024
+	DefaultConnBufferSize = 16 * 1024
 )
 
 // Constants for how ephemeral buffers were used for reading / writing.
@@ -178,10 +178,10 @@ type PrepareData struct {
 }
 
 // bufPool is used to allocate and free buffers in an efficient way.
-var bufPool = bucketpool.New(connBufferSize, MaxPacketSize)
+var bufPool = bucketpool.New(DefaultConnBufferSize, MaxPacketSize)
 
 // writersPool is used for pooling bufio.Writer objects.
-var writersPool = sync.Pool{New: func() interface{} { return bufio.NewWriterSize(nil, connBufferSize) }}
+var writersPool = sync.Pool{New: func() interface{} { return bufio.NewWriterSize(nil, DefaultConnBufferSize) }}
 
 // newConn is an internal method to create a Conn. Used by client and server
 // side for common creation code.
@@ -189,7 +189,7 @@ func newConn(conn net.Conn) *Conn {
 	return &Conn{
 		conn:           conn,
 		closed:         sync2.NewAtomicBool(false),
-		bufferedReader: bufio.NewReaderSize(conn, connBufferSize),
+		bufferedReader: bufio.NewReaderSize(conn, DefaultConnBufferSize),
 	}
 }
 

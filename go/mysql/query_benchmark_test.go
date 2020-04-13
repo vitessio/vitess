@@ -26,10 +26,10 @@ import (
 	"golang.org/x/net/context"
 )
 
-var testReadConnBufferSize = connBufferSize
+var testReadConnBufferSize = DefaultConnBufferSize
 
 func init() {
-	flag.IntVar(&testReadConnBufferSize, "test.read_conn_buffer_size", connBufferSize, "buffer size for reads from connections in tests")
+	flag.IntVar(&testReadConnBufferSize, "test.read_conn_buffer_size", DefaultConnBufferSize, "buffer size for reads from connections in tests")
 }
 
 const benchmarkQueryPrefix = "benchmark "
@@ -74,7 +74,7 @@ func benchmarkQuery(b *testing.B, threads int, query string) {
 	b.ResetTimer()
 
 	// MaxPacketSize is too big for benchmarks, so choose something smaller
-	maxPacketSize := connBufferSize * 4
+	maxPacketSize := DefaultConnBufferSize * 4
 
 	b.RunParallel(func(pb *testing.PB) {
 		conn, err := Connect(ctx, params)
@@ -111,7 +111,7 @@ func BenchmarkParallelShortQueries(b *testing.B) {
 }
 
 func BenchmarkParallelMediumQueries(b *testing.B) {
-	benchmarkQuery(b, 10, benchmarkQueryPrefix+"select"+strings.Repeat("x", connBufferSize))
+	benchmarkQuery(b, 10, benchmarkQueryPrefix+"select"+strings.Repeat("x", DefaultConnBufferSize))
 }
 
 func BenchmarkParallelRandomQueries(b *testing.B) {

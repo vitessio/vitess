@@ -181,7 +181,7 @@ func NewFromListener(l net.Listener, authServer AuthServer, handler Handler, con
 		Handler:            handler,
 		ConnReadTimeout:    connReadTimeout,
 		ConnWriteTimeout:   connWriteTimeout,
-		ConnReadBufferSize: connBufferSize,
+		ConnReadBufferSize: DefaultConnBufferSize,
 	}
 	return NewListenerWithConfig(cfg)
 }
