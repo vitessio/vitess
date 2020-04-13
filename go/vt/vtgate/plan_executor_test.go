@@ -1101,21 +1101,18 @@ func TestPlanExecutorOtherRead(t *testing.T) {
 
 			_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
 			if tc.hasNoKeyspaceErr {
-				assert.Error(t, err, errNoKeyspace)
+				assert.EqualError(t, err, "keyspace not specified")
 			} else if tc.hasDestinationShardErr {
 				assert.Errorf(t, err, "Destination can only be a single shard for statement: %s, got: DestinationExactKeyRange(-)", stmt)
 			} else {
 				assert.NoError(t, err)
 			}
 
-			diff := cmp.Diff(tc.wantCnts, cnts{
+			utils.MustMatch(t, tc.wantCnts, cnts{
 				Sbc1Cnt:      sbc1.ExecCount.Get(),
 				Sbc2Cnt:      sbc2.ExecCount.Get(),
 				SbcLookupCnt: sbclookup.ExecCount.Get(),
-			})
-			if diff != "" {
-				t.Errorf("stmt: %s\ntc: %+v\n-want,+got:\n%s", stmt, tc, diff)
-			}
+			}, "count did not match")
 		}
 	}
 }
