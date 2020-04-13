@@ -92,6 +92,16 @@ func TestConnectTimeout(t *testing.T) {
 		t.Errorf("Was expecting context.DeadlineExceeded but got: %v", err)
 	}
 
+	// Tests a connection timeout through params
+	ctx = context.Background()
+	paramsWithTimeout := params
+	paramsWithTimeout.ConnectTimeoutMs = 1
+	_, err = Connect(ctx, paramsWithTimeout)
+	cancel()
+	if err != context.DeadlineExceeded {
+		t.Errorf("Was expecting context.DeadlineExceeded but got: %v", err)
+	}
+
 	// Now the server will listen, but close all connections on accept.
 	wg := sync.WaitGroup{}
 	wg.Add(1)
