@@ -250,12 +250,13 @@ func TestTabletVStreamerClientVStreamRows(t *testing.T) {
 
 	defer vsClient.Close(ctx)
 
-	// This asserts that events are flowing through the VStream when using mysql client
-	go vsClient.VStreamRows(ctx, "select * from t1", nil, send)
-
 	execStatements(t, []string{
 		fmt.Sprintf("insert into t1 values(1, '%s', '%s')", want, want),
 	})
+
+	// This asserts that events are flowing through VStreamRows when using mysql client
+	// This needs to happen after the insert above to avoid race where select precedes the insert
+	go vsClient.VStreamRows(ctx, "select * from t1", nil, send)
 
 	select {
 	case <-eventsChan:
