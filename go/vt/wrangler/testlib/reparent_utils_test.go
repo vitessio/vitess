@@ -38,7 +38,7 @@ func TestShardReplicationStatuses(t *testing.T) {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// create shard and tablets
-	if _, err := ts.GetOrCreateShard(ctx, "test_keyspace", "0"); err != nil {
+	if _, err := ts.GetOrCreateShard(ctx, "test_keyspace", "0", "cell1"); err != nil {
 		t.Fatalf("GetOrCreateShard failed: %v", err)
 	}
 	master := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_MASTER, nil)
@@ -108,7 +108,7 @@ func TestReparentTablet(t *testing.T) {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// create shard and tablets
-	if _, err := ts.GetOrCreateShard(ctx, "test_keyspace", "0"); err != nil {
+	if _, err := ts.GetOrCreateShard(ctx, "test_keyspace", "0", "cell1"); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
 	master := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_MASTER, nil)
