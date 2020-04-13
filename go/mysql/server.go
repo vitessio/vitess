@@ -129,6 +129,9 @@ type Listener struct {
 	// This is the main listener socket.
 	listener net.Listener
 
+	// Max limit for connections
+	maxConns uint64
+
 	// The following parameters are read by multiple connection go
 	// routines.  They are not protected by a mutex, so they
 	// should be set after NewListener, and not changed while
@@ -170,7 +173,7 @@ type Listener struct {
 	RequireSecureTransport bool
 }
 
-// NewFromListener creares a new mysql listener from an existing net.Listener
+// NewFromListener creates a new mysql listener from an existing net.Listener
 func NewFromListener(l net.Listener, authServer AuthServer, handler Handler, connReadTimeout time.Duration, connWriteTimeout time.Duration) (*Listener, error) {
 	cfg := ListenerConfig{
 		Listener:           l,
@@ -204,6 +207,7 @@ type ListenerConfig struct {
 	ConnReadTimeout    time.Duration
 	ConnWriteTimeout   time.Duration
 	ConnReadBufferSize int
+	MaxConns           uint64
 }
 
 // NewListenerWithConfig creates new listener using provided config. There are
@@ -229,6 +233,7 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 		connReadTimeout:    cfg.ConnReadTimeout,
 		connWriteTimeout:   cfg.ConnWriteTimeout,
 		connReadBufferSize: cfg.ConnReadBufferSize,
+		maxConns:           cfg.MaxConns,
 	}, nil
 }
 
@@ -251,9 +256,13 @@ func (l *Listener) Accept() {
 		connectionID := l.connectionID
 		l.connectionID++
 
+		for l.maxConns > 0 && uint64(connCount.Get()) >= l.maxConns {
+			// TODO: make this behavior configurable (wait v. reject)
+			time.Sleep(500 * time.Millisecond)
+		}
+
 		connCount.Add(1)
 		connAccept.Add(1)
-
 		go l.handle(conn, connectionID, acceptTime)
 	}
 }
