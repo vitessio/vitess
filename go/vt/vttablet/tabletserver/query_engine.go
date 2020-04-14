@@ -397,7 +397,7 @@ func (qe *QueryEngine) ClearQueryPlanCache() {
 
 // IsMySQLReachable returns true if we can connect to MySQL.
 func (qe *QueryEngine) IsMySQLReachable() bool {
-	conn, err := dbconnpool.NewDBConnection(qe.env.DBConfigs().DbaWithDB())
+	conn, err := dbconnpool.NewDBConnection(context.TODO(), qe.env.DBConfigs().DbaWithDB())
 	if err != nil {
 		if mysql.IsConnErr(err) {
 			return false

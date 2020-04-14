@@ -99,8 +99,8 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 		defer log.Infof("Done opening pool: '%s'", cp.name)
 	}
 
-	f := func() (pools.Resource, error) {
-		return NewDBConn(cp, appParams)
+	f := func(ctx context.Context) (pools.Resource, error) {
+		return NewDBConn(ctx, cp, appParams)
 	}
 	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism, cp.getLogWaitCallback())
 	cp.appDebugParams = appDebugParams
@@ -140,7 +140,7 @@ func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
 	defer span.Finish()
 
 	if cp.isCallerIDAppDebug(ctx) {
-		return NewDBConnNoPool(cp.appDebugParams, cp.dbaPool)
+		return NewDBConnNoPool(ctx, cp.appDebugParams, cp.dbaPool)
 	}
 	p := cp.pool()
 	if p == nil {

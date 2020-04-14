@@ -34,8 +34,7 @@ type DBConnection struct {
 
 // NewDBConnection returns a new DBConnection based on the ConnParams
 // and will use the provided stats to collect timing.
-func NewDBConnection(info dbconfigs.Connector) (*DBConnection, error) {
-	ctx := context.TODO()
+func NewDBConnection(ctx context.Context, info dbconfigs.Connector) (*DBConnection, error) {
 	c, err := info.Connect(ctx)
 	if err != nil {
 		return nil, err

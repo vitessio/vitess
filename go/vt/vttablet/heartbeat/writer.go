@@ -152,7 +152,7 @@ func (w *Writer) Close() {
 // and we also execute them with an isolated connection that turns off the binlog and
 // is closed at the end.
 func (w *Writer) initializeTables(cp dbconfigs.Connector) error {
-	conn, err := dbconnpool.NewDBConnection(cp)
+	conn, err := dbconnpool.NewDBConnection(context.TODO(), cp)
 	if err != nil {
 		return vterrors.Wrap(err, "Failed to create connection for heartbeat")
 	}

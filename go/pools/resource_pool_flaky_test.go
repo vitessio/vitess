@@ -44,16 +44,16 @@ func logWait(start time.Time) {
 	waitStarts = append(waitStarts, start)
 }
 
-func PoolFactory() (Resource, error) {
+func PoolFactory(ctx context.Context) (Resource, error) {
 	count.Add(1)
 	return &TestResource{lastID.Add(1), false}, nil
 }
 
-func FailFactory() (Resource, error) {
+func FailFactory(ctx context.Context) (Resource, error) {
 	return nil, errors.New("Failed")
 }
 
-func SlowFailFactory() (Resource, error) {
+func SlowFailFactory(ctx context.Context) (Resource, error) {
 	time.Sleep(10 * time.Millisecond)
 	return nil, errors.New("Failed")
 }
