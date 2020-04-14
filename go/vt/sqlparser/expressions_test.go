@@ -41,6 +41,9 @@ func TestEvaluate(t *testing.T) {
 		expression: "42",
 		expected:   sqltypes.NewInt64(42),
 	}, {
+		expression: "42.42",
+		expected:   sqltypes.NewFloat64(42.42),
+	}, {
 		expression: "40+2",
 		expected:   sqltypes.NewInt64(42),
 	}, {

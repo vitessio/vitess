@@ -1191,10 +1191,6 @@ func TestCastFromNumeric(t *testing.T) {
 		typ: Decimal,
 		v:   evalResult{typ: Float64, fval: 1.2e-16},
 		out: TestValue(Decimal, "0.00000000000000012"),
-	}, {
-		typ: VarBinary,
-		v:   evalResult{typ: Int64, ival: 1},
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion to non-evalResult: VARBINARY"),
 	}}
 	for _, tcase := range tcases {
 		got := castFromNumeric(tcase.v, tcase.typ)
