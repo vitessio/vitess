@@ -36,10 +36,9 @@ import (
 )
 
 func TestDisabledThrottler(t *testing.T) {
-	oldConfig := tabletenv.Config
-	defer func() { tabletenv.Config = oldConfig }()
-	tabletenv.Config.EnableTxThrottler = false
-	throttler := CreateTxThrottlerFromTabletConfig(nil)
+	config := tabletenv.NewDefaultConfig()
+	config.EnableTxThrottler = false
+	throttler := NewTxThrottler(config, nil)
 	if err := throttler.Open("keyspace", "shard"); err != nil {
 		t.Fatalf("want: nil, got: %v", err)
 	}
@@ -110,12 +109,11 @@ func TestEnabledThrottler(t *testing.T) {
 	call3.After(call2)
 	call4.After(call3)
 
-	oldConfig := tabletenv.Config
-	defer func() { tabletenv.Config = oldConfig }()
-	tabletenv.Config.EnableTxThrottler = true
-	tabletenv.Config.TxThrottlerHealthCheckCells = []string{"cell1", "cell2"}
+	config := tabletenv.NewDefaultConfig()
+	config.EnableTxThrottler = true
+	config.TxThrottlerHealthCheckCells = []string{"cell1", "cell2"}
 
-	throttler, err := tryCreateTxThrottler(ts)
+	throttler, err := tryCreateTxThrottler(config, ts)
 	if err != nil {
 		t.Fatalf("want: nil, got: %v", err)
 	}

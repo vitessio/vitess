@@ -34,7 +34,7 @@ type Reporter struct {
 // RegisterReporter registers the heartbeat reader as a healthcheck reporter so that its
 // measurements will be picked up in healthchecks.
 func registerHeartbeatReporter(controller tabletserver.Controller) {
-	if !tabletenv.Config.HeartbeatEnable {
+	if !tabletenv.NewCurrentConfig().HeartbeatEnable {
 		return
 	}
 

@@ -53,7 +53,7 @@ func main() {
 
 	servenv.ParseFlags("vttablet")
 
-	if err := tabletenv.VerifyConfig(); err != nil {
+	if err := tabletenv.NewCurrentConfig().Verify(); err != nil {
 		log.Exitf("invalid config: %v", err)
 	}
 
