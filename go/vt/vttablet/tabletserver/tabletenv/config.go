@@ -79,8 +79,8 @@ func init() {
 	flag.IntVar(&Config.OltpReadPool.TimeoutSeconds, "queryserver-config-query-pool-timeout", DefaultQsConfig.OltpReadPool.TimeoutSeconds, "query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
 	flag.IntVar(&Config.TxPool.TimeoutSeconds, "queryserver-config-txpool-timeout", DefaultQsConfig.TxPool.TimeoutSeconds, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
 	flag.IntVar(&Config.OltpReadPool.IdleTimeoutSeconds, "queryserver-config-idle-timeout", DefaultQsConfig.OltpReadPool.IdleTimeoutSeconds, "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
-	flag.IntVar(&Config.QueryPoolWaiterCap, "queryserver-config-query-pool-waiter-cap", DefaultQsConfig.QueryPoolWaiterCap, "query server query pool waiter limit, this is the maximum number of queries that can be queued waiting to get a connection")
-	flag.IntVar(&Config.TxPoolWaiterCap, "queryserver-config-txpool-waiter-cap", DefaultQsConfig.TxPoolWaiterCap, "query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection")
+	flag.IntVar(&Config.OltpReadPool.MaxWaiters, "queryserver-config-query-pool-waiter-cap", DefaultQsConfig.OltpReadPool.MaxWaiters, "query server query pool waiter limit, this is the maximum number of queries that can be queued waiting to get a connection")
+	flag.IntVar(&Config.TxPool.MaxWaiters, "queryserver-config-txpool-waiter-cap", DefaultQsConfig.TxPool.MaxWaiters, "query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection")
 	// tableacl related configurations.
 	flag.BoolVar(&Config.StrictTableACL, "queryserver-config-strict-table-acl", DefaultQsConfig.StrictTableACL, "only allow queries that pass table acl checks")
 	flag.BoolVar(&Config.EnableTableACLDryRun, "queryserver-config-enable-table-acl-dry-run", DefaultQsConfig.EnableTableACLDryRun, "If this flag is enabled, tabletserver will emit monitoring metrics and let the request pass regardless of table acl check results")
@@ -153,8 +153,6 @@ type TabletConfig struct {
 	StreamBufferSize        int            `json:"-"`
 	QueryPlanCacheSize      int            `json:"-"`
 	SchemaReloadTime        float64        `json:"-"`
-	QueryPoolWaiterCap      int            `json:"-"`
-	TxPoolWaiterCap         int            `json:"-"`
 	StrictTableACL          bool           `json:"-"`
 	TerseErrors             bool           `json:"-"`
 	EnableTableACLDryRun    bool           `json:"-"`
@@ -225,6 +223,7 @@ var DefaultQsConfig = TabletConfig{
 	OltpReadPool: ConnPoolConfig{
 		Size:               16,
 		IdleTimeoutSeconds: 30 * 60,
+		MaxWaiters:         5000,
 	},
 	OlapReadPool: ConnPoolConfig{
 		Size:               200,
@@ -234,6 +233,7 @@ var DefaultQsConfig = TabletConfig{
 		Size:               20,
 		TimeoutSeconds:     1,
 		IdleTimeoutSeconds: 30 * 60,
+		MaxWaiters:         5000,
 	},
 	Oltp: OltpConfig{
 		QueryTimeoutSeconds: 30,
@@ -245,8 +245,6 @@ var DefaultQsConfig = TabletConfig{
 	PassthroughDMLs:         false,
 	QueryPlanCacheSize:      5000,
 	SchemaReloadTime:        30 * 60,
-	QueryPoolWaiterCap:      50000,
-	TxPoolWaiterCap:         50000,
 	StreamBufferSize:        32 * 1024,
 	StrictTableACL:          false,
 	TerseErrors:             false,

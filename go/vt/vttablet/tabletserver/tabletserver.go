@@ -1912,34 +1912,6 @@ func (tsv *TabletServer) SetPassthroughDMLs(val bool) {
 	planbuilder.PassthroughDMLs = val
 }
 
-// SetQueryPoolWaiterCap changes the limit on the number of queries that can be
-// waiting for a connection from the pool
-// This function should only be used for testing.
-func (tsv *TabletServer) SetQueryPoolWaiterCap(val int64) {
-	tsv.qe.queryPoolWaiterCap.Set(val)
-}
-
-// GetQueryPoolWaiterCap returns the limit on the number of queries that can be
-// waiting for a connection from the pool
-// This function should only be used for testing.
-func (tsv *TabletServer) GetQueryPoolWaiterCap() int64 {
-	return tsv.qe.queryPoolWaiterCap.Get()
-}
-
-// SetTxPoolWaiterCap changes the limit on the number of queries that can be
-// waiting for a connection from the pool
-// This function should only be used for testing.
-func (tsv *TabletServer) SetTxPoolWaiterCap(val int64) {
-	tsv.te.txPool.waiterCap.Set(val)
-}
-
-// GetTxPoolWaiterCap returns the limit on the number of queries that can be
-// waiting for a connection from the pool
-// This function should only be used for testing.
-func (tsv *TabletServer) GetTxPoolWaiterCap() int64 {
-	return tsv.te.txPool.waiterCap.Get()
-}
-
 // SetConsolidatorEnabled (true) will enable the query consolidator.
 // SetConsolidatorEnabled (false) will disable the query consolidator.
 // This function should only be used for testing.

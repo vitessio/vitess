@@ -17,6 +17,7 @@ limitations under the License.
 package connpool
 
 import (
+	"runtime"
 	"testing"
 	"time"
 
@@ -64,6 +65,38 @@ func TestConnPoolTimeout(t *testing.T) {
 	defer dbConn.Recycle()
 	_, err = connPool.Get(context.Background())
 	assert.EqualError(t, err, "resource pool timed out")
+}
+
+func TestConnPoolMaxWaiters(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	connPool := New(tabletenv.NewTestEnv(nil, nil, "PoolTest"), "TestPool", tabletenv.ConnPoolConfig{
+		Size:       1,
+		MaxWaiters: 1,
+	})
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer connPool.Close()
+	dbConn, err := connPool.Get(context.Background())
+	require.NoError(t, err)
+
+	// waiter 1
+	go func() {
+		c1, err := connPool.Get(context.Background())
+		assert.NoError(t, err)
+		c1.Recycle()
+	}()
+	// Wait for the first waiter to increment count.
+	for {
+		runtime.Gosched()
+		if connPool.waiterCount.Get() == 1 {
+			break
+		}
+	}
+	_, err = connPool.Get(context.Background())
+	assert.EqualError(t, err, "pool TestPool waiter count exceeded")
+
+	// This recycle will make waiter1 succeed.
+	dbConn.Recycle()
 }
 
 func TestConnPoolGetEmptyDebugConfig(t *testing.T) {

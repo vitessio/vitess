@@ -701,7 +701,7 @@ func newTxPool() *TxPool {
 	config.TxPool.Size = 300
 	config.Oltp.TxTimeoutSeconds = 30
 	config.TxPool.TimeoutSeconds = 40
-	config.TxPoolWaiterCap = 500000
+	config.TxPool.MaxWaiters = 500000
 	config.OltpReadPool.IdleTimeoutSeconds = 30
 	config.OlapReadPool.IdleTimeoutSeconds = 30
 	config.TxPool.IdleTimeoutSeconds = 30
