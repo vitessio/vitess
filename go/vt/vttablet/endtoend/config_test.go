@@ -168,8 +168,8 @@ func TestDisableConsolidator(t *testing.T) {
 	if initial+1 != afterOne {
 		t.Errorf("expected one consolidation, but got: before consolidation count: %v; after consolidation count: %v", initial, afterOne)
 	}
-	framework.Server.SetConsolidatorEnabled(false)
-	defer framework.Server.SetConsolidatorEnabled(true)
+	framework.Server.SetConsolidatorMode(tabletenv.Disable)
+	defer framework.Server.SetConsolidatorMode(tabletenv.Enable)
 	var wg2 sync.WaitGroup
 	wg2.Add(2)
 	go func() {
@@ -206,10 +206,8 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 		t.Errorf("expected one consolidation, but got: before consolidation count: %v; after consolidation count: %v", initial, afterOne)
 	}
 
-	framework.Server.SetConsolidatorEnabled(false)
-	defer framework.Server.SetConsolidatorEnabled(true)
-	framework.Server.SetConsolidatorReplicasEnabled(true)
-	defer framework.Server.SetConsolidatorReplicasEnabled(false)
+	framework.Server.SetConsolidatorMode(tabletenv.NotOnMaster)
+	defer framework.Server.SetConsolidatorMode(tabletenv.Enable)
 
 	// master should not do query consolidation
 	var wg2 sync.WaitGroup
