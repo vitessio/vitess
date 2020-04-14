@@ -68,12 +68,14 @@ type Engine struct {
 // NewEngine creates a new Engine.
 func NewEngine(env tabletenv.Env) *Engine {
 	reloadTime := time.Duration(env.Config().SchemaReloadTime * 1e9)
-	idleTimeout := time.Duration(env.Config().OltpReadPool.IdleTimeoutSeconds * 1e9)
 	se := &Engine{
 		env: env,
 		// We need only one connection because the reloader is
 		// the only one that needs this.
-		conns:      connpool.New(env, "", 1, 0, 0, idleTimeout),
+		conns: connpool.New(env, "", tabletenv.ConnPoolConfig{
+			Size:               1,
+			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
+		}),
 		ticks:      timer.NewTimer(reloadTime),
 		reloadTime: reloadTime,
 	}

@@ -103,11 +103,10 @@ type TxPool struct {
 func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 	config := env.Config()
 	transactionTimeout := time.Duration(config.TransactionTimeout * 1e9)
-	poolTimeout := time.Duration(config.TxPoolTimeout * 1e9)
 	axp := &TxPool{
 		env:                env,
-		conns:              connpool.New(env, "TransactionPool", int(config.TxPool.Size), int(config.TxPool.PrefillParallelism), poolTimeout, time.Duration(config.TxPool.IdleTimeoutSeconds*1e9)),
-		foundRowsPool:      connpool.New(env, "FoundRowsPool", int(config.TxPool.Size), int(config.TxPool.PrefillParallelism), poolTimeout, time.Duration(config.TxPool.IdleTimeoutSeconds*1e9)),
+		conns:              connpool.New(env, "TransactionPool", config.TxPool),
+		foundRowsPool:      connpool.New(env, "FoundRowsPool", config.TxPool),
 		activePool:         pools.NewNumbered(),
 		lastID:             sync2.NewAtomicInt64(time.Now().UnixNano()),
 		transactionTimeout: sync2.NewAtomicDuration(transactionTimeout),
