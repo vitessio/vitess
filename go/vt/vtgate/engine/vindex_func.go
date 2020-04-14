@@ -47,25 +47,6 @@ type VindexFunc struct {
 	noTxNeeded
 }
 
-// MarshalJSON serializes the VindexFunc into a JSON representation.
-// It's used for testing and diagnostics.
-func (vf *VindexFunc) MarshalJSON() ([]byte, error) {
-	v := struct {
-		Opcode VindexOpcode
-		Fields []*querypb.Field
-		Cols   []int
-		Vindex string
-		Value  sqltypes.PlanValue
-	}{
-		Opcode: vf.Opcode,
-		Fields: vf.Fields,
-		Cols:   vf.Cols,
-		Vindex: vf.Vindex.String(),
-		Value:  vf.Value,
-	}
-	return json.Marshal(v)
-}
-
 // VindexOpcode is the opcode for a VindexFunc.
 type VindexOpcode int
 

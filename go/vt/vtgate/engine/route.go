@@ -23,7 +23,6 @@ import (
 	"strconv"
 	"time"
 
-	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -126,41 +125,6 @@ func (obp OrderbyParams) String() string {
 		val += " ASC"
 	}
 	return val
-}
-
-// MarshalJSON serializes the Route into a JSON representation.
-// It's used for testing and diagnostics.
-func (route *Route) MarshalJSON() ([]byte, error) {
-	var vindexName string
-	if route.Vindex != nil {
-		vindexName = route.Vindex.String()
-	}
-	marshalRoute := struct {
-		Opcode                  RouteOpcode
-		Keyspace                *vindexes.Keyspace   `json:",omitempty"`
-		Query                   string               `json:",omitempty"`
-		FieldQuery              string               `json:",omitempty"`
-		Vindex                  string               `json:",omitempty"`
-		Values                  []sqltypes.PlanValue `json:",omitempty"`
-		OrderBy                 []OrderbyParams      `json:",omitempty"`
-		TruncateColumnCount     int                  `json:",omitempty"`
-		QueryTimeout            int                  `json:",omitempty"`
-		ScatterErrorsAsWarnings bool                 `json:",omitempty"`
-		Table                   string               `json:",omitempty"`
-	}{
-		Opcode:                  route.Opcode,
-		Keyspace:                route.Keyspace,
-		Query:                   route.Query,
-		FieldQuery:              route.FieldQuery,
-		Vindex:                  vindexName,
-		Values:                  route.Values,
-		OrderBy:                 route.OrderBy,
-		TruncateColumnCount:     route.TruncateColumnCount,
-		QueryTimeout:            route.QueryTimeout,
-		ScatterErrorsAsWarnings: route.ScatterErrorsAsWarnings,
-		Table:                   route.TableName,
-	}
-	return jsonutil.MarshalNoEscape(marshalRoute)
 }
 
 // RouteOpcode is a number representing the opcode
