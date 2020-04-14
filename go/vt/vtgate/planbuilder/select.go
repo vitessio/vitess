@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -29,8 +28,14 @@ import (
 // buildSelectPlan is the new function to build a Select plan.
 func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
 	sel := stmt.(*sqlparser.Select)
+
+	p := tryAtVtgate(sel)
+	if p != nil {
+		return p, nil
+	}
+
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(sel)))
-	if err := pb.processSelect(sel, nil, true); err != nil {
+	if err := pb.processSelect(sel, nil); err != nil {
 		return nil, err
 	}
 	if err := pb.bldr.Wireup(pb.bldr, pb.jt); err != nil {
@@ -74,14 +79,7 @@ func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 // The LIMIT clause is the last construct of a query. If it cannot be
 // pushed into a route, then a primitive is created on top of any
 // of the above trees to make it discard unwanted rows.
-func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, canRunLocally bool) error {
-	err, done := pb.runAtVtgate(sel, outer, canRunLocally)
-	if err == sqlparser.ExprNotSupported {
-		log.Warningf("Expression not supported at vtgate level")
-	}
-	if done {
-		return err
-	}
+func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) error {
 	if err := pb.processTableExprs(sel.From); err != nil {
 		return err
 	}
@@ -130,8 +128,8 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 	return nil
 }
 
-func (pb *primitiveBuilder) runAtVtgate(sel *sqlparser.Select, outer *symtab, canRunLocally bool) (error, bool) {
-	if checkForDual(sel) && outer == nil && canRunLocally {
+func tryAtVtgate(sel *sqlparser.Select) engine.Primitive {
+	if checkForDual(sel) {
 		var err error
 		exprs := make([]sqltypes.Expr, len(sel.SelectExprs))
 		cols := make([]string, len(sel.SelectExprs))
@@ -139,17 +137,17 @@ func (pb *primitiveBuilder) runAtVtgate(sel *sqlparser.Select, outer *symtab, ca
 			expr := e.(*sqlparser.AliasedExpr)
 			exprs[i], err = sqlparser.Convert(expr.Expr)
 			if err != nil {
-				return err, false
+				return nil
 			}
 			cols[i] = expr.As.String()
 		}
-		pb.bldr = &vtgateExecution{
-			exprs,
-			cols,
+		return &engine.Projection{
+			Exprs: exprs,
+			Cols:  cols,
+			Input: &engine.SingleRow{},
 		}
-		return nil, true
 	}
-	return nil, false
+	return nil
 }
 
 func checkForDual(sel *sqlparser.Select) bool {
