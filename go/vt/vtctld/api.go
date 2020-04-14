@@ -29,6 +29,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schemamanager"
@@ -408,9 +409,9 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 			MasterTermStartTime: t.MasterTermStartTime,
 		}
 		if *proxyTablets {
-			tab.URL = fmt.Sprintf("/vttablet/%s-%d", t.Tablet.Alias.Cell, t.Tablet.Alias.Uid)
+			tab.URL = fmt.Sprintf("/vttablet/%s-%d", t.Alias.Cell, t.Alias.Uid)
 		} else {
-			tab.URL = fmt.Sprintf("http://%s:%d", t.Tablet.Hostname, t.PortMap["vt"])
+			tab.URL = "http://" + netutil.JoinHostPort(t.Hostname, t.PortMap["vt"])
 		}
 		return tab, nil
 	})
