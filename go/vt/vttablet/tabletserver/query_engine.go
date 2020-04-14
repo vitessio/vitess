@@ -39,7 +39,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	tacl "vitess.io/vitess/go/vt/tableacl/acl"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -48,7 +47,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txserializer"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 //_______________________________________________
@@ -139,11 +137,9 @@ type QueryEngine struct {
 	streamQList  *QueryList
 
 	// Vars
-	queryPoolWaiters   sync2.AtomicInt64
-	queryPoolWaiterCap sync2.AtomicInt64
-	maxResultSize      sync2.AtomicInt64
-	warnResultSize     sync2.AtomicInt64
-	streamBufferSize   sync2.AtomicInt64
+	maxResultSize    sync2.AtomicInt64
+	warnResultSize   sync2.AtomicInt64
+	streamBufferSize sync2.AtomicInt64
 	// tableaclExemptCount count the number of accesses allowed
 	// based on membership in the superuser ACL
 	tableaclExemptCount  sync2.AtomicInt64
@@ -171,12 +167,11 @@ type QueryEngine struct {
 func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	config := env.Config()
 	qe := &QueryEngine{
-		env:                env,
-		se:                 se,
-		tables:             make(map[string]*schema.Table),
-		plans:              cache.NewLRUCache(int64(config.QueryPlanCacheSize)),
-		queryRuleSources:   rules.NewMap(),
-		queryPoolWaiterCap: sync2.NewAtomicInt64(int64(config.QueryPoolWaiterCap)),
+		env:              env,
+		se:               se,
+		tables:           make(map[string]*schema.Table),
+		plans:            cache.NewLRUCache(int64(config.QueryPlanCacheSize)),
+		queryRuleSources: rules.NewMap(),
 	}
 
 	qe.conns = connpool.New(env, "ConnPool", config.OltpReadPool)
@@ -218,7 +213,6 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	env.Exporter().NewGaugeFunc("WarnResultSize", "Query engine warn result size", qe.warnResultSize.Get)
 	env.Exporter().NewGaugeFunc("StreamBufferSize", "Query engine stream buffer size", qe.streamBufferSize.Get)
 	env.Exporter().NewCounterFunc("TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Get)
-	env.Exporter().NewGaugeFunc("QueryPoolWaiters", "Query engine query pool waiters", qe.queryPoolWaiters.Get)
 
 	env.Exporter().NewGaugeFunc("QueryCacheLength", "Query engine query cache length", qe.plans.Length)
 	env.Exporter().NewGaugeFunc("QueryCacheSize", "Query engine query cache size", qe.plans.Size)
@@ -308,7 +302,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	plan.buildAuthorized()
 	if plan.PlanID.IsSelect() {
 		if qe.enableQueryPlanFieldCaching && plan.FieldQuery != nil {
-			conn, err := qe.getQueryConn(ctx)
+			conn, err := qe.conns.Get(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -330,19 +324,6 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 		qe.plans.Set(sql, plan)
 	}
 	return plan, nil
-}
-
-// getQueryConn returns a connection from the query pool using either
-// the conn pool timeout if configured, or the original context query timeout
-func (qe *QueryEngine) getQueryConn(ctx context.Context) (*connpool.DBConn, error) {
-	waiterCount := qe.queryPoolWaiters.Add(1)
-	defer qe.queryPoolWaiters.Add(-1)
-
-	if waiterCount > qe.queryPoolWaiterCap.Get() {
-		return nil, vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "query pool waiter count exceeded")
-	}
-
-	return qe.conns.Get(ctx)
 }
 
 // GetStreamPlan is similar to GetPlan, but doesn't use the cache

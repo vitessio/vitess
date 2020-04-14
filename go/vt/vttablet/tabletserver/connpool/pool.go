@@ -23,6 +23,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/pools"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -52,6 +53,8 @@ type Pool struct {
 	prefillParallelism int
 	timeout            time.Duration
 	idleTimeout        time.Duration
+	waiterCap          int64
+	waiterCount        sync2.AtomicInt64
 	dbaPool            *dbconnpool.ConnectionPool
 	appDebugParams     dbconfigs.Connector
 }
@@ -67,6 +70,7 @@ func New(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool {
 		prefillParallelism: cfg.PrefillParallelism,
 		timeout:            time.Duration(cfg.TimeoutSeconds * 1e9),
 		idleTimeout:        idleTimeout,
+		waiterCap:          int64(cfg.MaxWaiters),
 		dbaPool:            dbconnpool.NewConnectionPool("", 1, idleTimeout, 0),
 	}
 	if name == "" {
@@ -141,6 +145,14 @@ func (cp *Pool) Close() {
 func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
 	span, ctx := trace.NewSpan(ctx, "Pool.Get")
 	defer span.Finish()
+
+	if cp.waiterCap > 0 {
+		waiterCount := cp.waiterCount.Add(1)
+		defer cp.waiterCount.Add(-1)
+		if waiterCount > cp.waiterCap {
+			return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "pool %s waiter count exceeded", cp.name)
+		}
+	}
 
 	if cp.isCallerIDAppDebug(ctx) {
 		return NewDBConnNoPool(ctx, cp.appDebugParams, cp.dbaPool, cp.env.Stats())
