@@ -30,7 +30,7 @@ func Convert(e Expr) (sqltypes.Expr, error) {
 	case *SQLVal:
 		switch node.Type {
 		case IntVal:
-			return &sqltypes.LiteralInt{Val: node.Val}, nil
+			return sqltypes.NewLiteralInt(node.Val)
 		case FloatVal:
 			return sqltypes.NewLiteralFloat(node.Val)
 		case ValArg:
