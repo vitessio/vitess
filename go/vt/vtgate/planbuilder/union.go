@@ -62,7 +62,7 @@ func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, outer *s
 	case *sqlparser.Union:
 		return pb.processUnion(part, outer)
 	case *sqlparser.Select:
-		return pb.processSelect(part, outer, false)
+		return pb.processSelect(part, outer)
 	case *sqlparser.ParenSelect:
 		return pb.processPart(part.Select, outer)
 	}
