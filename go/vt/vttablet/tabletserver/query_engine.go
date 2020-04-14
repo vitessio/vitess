@@ -150,8 +150,7 @@ type QueryEngine struct {
 
 	strictTransTables bool
 
-	enableConsolidator          bool
-	enableConsolidatorReplicas  bool
+	consolidatorMode            string
 	enableQueryPlanFieldCaching bool
 
 	// stats
@@ -176,8 +175,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 
 	qe.conns = connpool.New(env, "ConnPool", config.OltpReadPool)
 	qe.streamConns = connpool.New(env, "StreamConnPool", config.OlapReadPool)
-	qe.enableConsolidator = config.EnableConsolidator
-	qe.enableConsolidatorReplicas = config.EnableConsolidatorReplicas
+	qe.consolidatorMode = config.Consolidator
 	qe.enableQueryPlanFieldCaching = config.EnableQueryPlanFieldCaching
 	qe.consolidator = sync2.NewConsolidator()
 	qe.txSerializer = txserializer.New(env)

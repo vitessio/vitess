@@ -1912,18 +1912,10 @@ func (tsv *TabletServer) SetPassthroughDMLs(val bool) {
 	planbuilder.PassthroughDMLs = val
 }
 
-// SetConsolidatorEnabled (true) will enable the query consolidator.
-// SetConsolidatorEnabled (false) will disable the query consolidator.
+// SetConsolidatorMode sets the consolidator mode.
 // This function should only be used for testing.
-func (tsv *TabletServer) SetConsolidatorEnabled(enabled bool) {
-	tsv.qe.enableConsolidator = enabled
-}
-
-// SetConsolidatorReplicasEnabled (true) will enable the query consolidator for replicas.
-// SetConsolidatorReplicasEnabled (false) will disable the query consolidator for replicas.
-// This function should only be used for testing.
-func (tsv *TabletServer) SetConsolidatorReplicasEnabled(enabled bool) {
-	tsv.qe.enableConsolidatorReplicas = enabled
+func (tsv *TabletServer) SetConsolidatorMode(mode string) {
+	tsv.qe.consolidatorMode = mode
 }
 
 // queryAsString returns a readable version of query+bind variables.

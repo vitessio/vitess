@@ -32,9 +32,10 @@ import (
 
 // These constants represent values for various config parameters.
 const (
-	Enable  = "enable"
-	Disable = "disable"
-	Dryrun  = "dryRun"
+	Enable      = "enable"
+	Disable     = "disable"
+	Dryrun      = "dryRun"
+	NotOnMaster = "notOnMaster"
 )
 
 var (
@@ -64,6 +65,8 @@ var (
 	// The following vars are used for custom initialization of Tabletconfig.
 	enableHotRowProtection       bool
 	enableHotRowProtectionDryRun bool
+	enableConsolidator           bool
+	enableConsolidatorReplicas   bool
 )
 
 func init() {
@@ -127,8 +130,8 @@ func init() {
 	flag.DurationVar(&currentConfig.HeartbeatInterval, "heartbeat_interval", defaultConfig.HeartbeatInterval, "How frequently to read and write replication heartbeat.")
 
 	flag.BoolVar(&currentConfig.EnforceStrictTransTables, "enforce_strict_trans_tables", defaultConfig.EnforceStrictTransTables, "If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database.")
-	flag.BoolVar(&currentConfig.EnableConsolidator, "enable-consolidator", defaultConfig.EnableConsolidator, "This option enables the query consolidator.")
-	flag.BoolVar(&currentConfig.EnableConsolidatorReplicas, "enable-consolidator-replicas", defaultConfig.EnableConsolidatorReplicas, "This option enables the query consolidator only on replicas.")
+	flag.BoolVar(&enableConsolidator, "enable-consolidator", true, "This option enables the query consolidator.")
+	flag.BoolVar(&enableConsolidatorReplicas, "enable-consolidator-replicas", false, "This option enables the query consolidator only on replicas.")
 	flag.BoolVar(&currentConfig.EnableQueryPlanFieldCaching, "enable-query-plan-field-caching", defaultConfig.EnableQueryPlanFieldCaching, "This option fetches & caches fields (columns) when storing query plans")
 }
 
@@ -146,6 +149,15 @@ func Init() {
 		}
 	} else {
 		currentConfig.HotRowProtection.Mode = Disable
+	}
+
+	switch {
+	case enableConsolidatorReplicas:
+		currentConfig.Consolidator = NotOnMaster
+	case enableConsolidator:
+		currentConfig.Consolidator = Enable
+	default:
+		currentConfig.Consolidator = Disable
 	}
 
 	switch *streamlog.QueryLogFormat {
@@ -166,25 +178,27 @@ func Init() {
 
 // TabletConfig contains all the configuration for query service
 type TabletConfig struct {
-	OltpReadPool            ConnPoolConfig         `json:"oltpReadPool,omitempty"`
-	OlapReadPool            ConnPoolConfig         `json:"olapReadPool,omitempty"`
-	TxPool                  ConnPoolConfig         `json:"txPool,omitempty"`
-	Oltp                    OltpConfig             `json:"oltp,omitempty"`
-	HotRowProtection        HotRowProtectionConfig `json:"hotRowProtection,omitempty"`
-	MessagePostponeCap      int                    `json:"-"`
-	TxShutDownGracePeriod   float64                `json:"-"`
-	PassthroughDMLs         bool                   `json:"-"`
-	StreamBufferSize        int                    `json:"-"`
-	QueryPlanCacheSize      int                    `json:"-"`
-	SchemaReloadTime        float64                `json:"-"`
-	StrictTableACL          bool                   `json:"-"`
-	TerseErrors             bool                   `json:"-"`
-	EnableTableACLDryRun    bool                   `json:"-"`
-	TableACLExemptACL       string                 `json:"-"`
-	WatchReplication        bool                   `json:"-"`
-	TwoPCEnable             bool                   `json:"-"`
-	TwoPCCoordinatorAddress string                 `json:"-"`
-	TwoPCAbandonAge         float64                `json:"-"`
+	OltpReadPool     ConnPoolConfig         `json:"oltpReadPool,omitempty"`
+	OlapReadPool     ConnPoolConfig         `json:"olapReadPool,omitempty"`
+	TxPool           ConnPoolConfig         `json:"txPool,omitempty"`
+	Oltp             OltpConfig             `json:"oltp,omitempty"`
+	HotRowProtection HotRowProtectionConfig `json:"hotRowProtection,omitempty"`
+	Consolidator     string                 `json:"consolidator,omitempty"`
+
+	MessagePostponeCap      int     `json:"-"`
+	TxShutDownGracePeriod   float64 `json:"-"`
+	PassthroughDMLs         bool    `json:"-"`
+	StreamBufferSize        int     `json:"-"`
+	QueryPlanCacheSize      int     `json:"-"`
+	SchemaReloadTime        float64 `json:"-"`
+	StrictTableACL          bool    `json:"-"`
+	TerseErrors             bool    `json:"-"`
+	EnableTableACLDryRun    bool    `json:"-"`
+	TableACLExemptACL       string  `json:"-"`
+	WatchReplication        bool    `json:"-"`
+	TwoPCEnable             bool    `json:"-"`
+	TwoPCCoordinatorAddress string  `json:"-"`
+	TwoPCAbandonAge         float64 `json:"-"`
 
 	EnableTxThrottler           bool     `json:"-"`
 	TxThrottlerConfig           string   `json:"-"`
@@ -196,8 +210,6 @@ type TabletConfig struct {
 	HeartbeatInterval time.Duration `json:"-"`
 
 	EnforceStrictTransTables    bool `json:"-"`
-	EnableConsolidator          bool `json:"-"`
-	EnableConsolidatorReplicas  bool `json:"-"`
 	EnableQueryPlanFieldCaching bool `json:"-"`
 }
 
@@ -340,6 +352,7 @@ var defaultConfig = TabletConfig{
 		// of them ready in MySQL and profit from a pipelining effect.
 		MaxConcurrency: 5,
 	},
+	Consolidator:            Enable,
 	MessagePostponeCap:      4,
 	TxShutDownGracePeriod:   0,
 	PassthroughDMLs:         false,
@@ -365,8 +378,6 @@ var defaultConfig = TabletConfig{
 	HeartbeatInterval: 1 * time.Second,
 
 	EnforceStrictTransTables:    true,
-	EnableConsolidator:          true,
-	EnableConsolidatorReplicas:  false,
 	EnableQueryPlanFieldCaching: true,
 }
 
