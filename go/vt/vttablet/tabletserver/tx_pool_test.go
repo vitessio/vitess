@@ -700,7 +700,7 @@ func newTxPool() *TxPool {
 	config := tabletenv.DefaultQsConfig
 	config.TxPool.Size = 300
 	config.TransactionTimeout = 30
-	config.TxPoolTimeout = 40
+	config.TxPool.TimeoutSeconds = 40
 	config.TxPoolWaiterCap = 500000
 	config.OltpReadPool.IdleTimeoutSeconds = 30
 	config.OlapReadPool.IdleTimeoutSeconds = 30

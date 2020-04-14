@@ -83,7 +83,10 @@ func NewReader(env tabletenv.Env) *Reader {
 		interval: config.HeartbeatInterval,
 		ticks:    timer.NewTimer(config.HeartbeatInterval),
 		errorLog: logutil.NewThrottledLogger("HeartbeatReporter", 60*time.Second),
-		pool:     connpool.New(env, "HeartbeatReadPool", 1, 0, 0, time.Duration(config.OltpReadPool.IdleTimeoutSeconds*1e9)),
+		pool: connpool.New(env, "HeartbeatReadPool", tabletenv.ConnPoolConfig{
+			Size:               1,
+			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
+		}),
 	}
 }
 

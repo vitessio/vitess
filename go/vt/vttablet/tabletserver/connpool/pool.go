@@ -58,13 +58,14 @@ type Pool struct {
 
 // New creates a new Pool. The name is used
 // to publish stats only.
-func New(env tabletenv.Env, name string, capacity int, prefillParallelism int, timeout, idleTimeout time.Duration) *Pool {
+func New(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool {
+	idleTimeout := time.Duration(cfg.IdleTimeoutSeconds * 1e9)
 	cp := &Pool{
 		env:                env,
 		name:               name,
-		capacity:           capacity,
-		prefillParallelism: prefillParallelism,
-		timeout:            timeout,
+		capacity:           cfg.Size,
+		prefillParallelism: cfg.PrefillParallelism,
+		timeout:            time.Duration(cfg.TimeoutSeconds * 1e9),
 		idleTimeout:        idleTimeout,
 		dbaPool:            dbconnpool.NewConnectionPool("", 1, idleTimeout, 0),
 	}

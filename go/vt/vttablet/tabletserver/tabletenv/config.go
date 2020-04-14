@@ -77,7 +77,7 @@ func init() {
 	flag.Float64Var(&Config.SchemaReloadTime, "queryserver-config-schema-reload-time", DefaultQsConfig.SchemaReloadTime, "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
 	flag.Float64Var(&Config.QueryTimeout, "queryserver-config-query-timeout", DefaultQsConfig.QueryTimeout, "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
 	flag.IntVar(&Config.OltpReadPool.TimeoutSeconds, "queryserver-config-query-pool-timeout", DefaultQsConfig.OltpReadPool.TimeoutSeconds, "query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
-	flag.Float64Var(&Config.TxPoolTimeout, "queryserver-config-txpool-timeout", DefaultQsConfig.TxPoolTimeout, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
+	flag.IntVar(&Config.TxPool.TimeoutSeconds, "queryserver-config-txpool-timeout", DefaultQsConfig.TxPool.TimeoutSeconds, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
 	flag.IntVar(&Config.OltpReadPool.IdleTimeoutSeconds, "queryserver-config-idle-timeout", DefaultQsConfig.OltpReadPool.IdleTimeoutSeconds, "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
 	flag.IntVar(&Config.QueryPoolWaiterCap, "queryserver-config-query-pool-waiter-cap", DefaultQsConfig.QueryPoolWaiterCap, "query server query pool waiter limit, this is the maximum number of queries that can be queued waiting to get a connection")
 	flag.IntVar(&Config.TxPoolWaiterCap, "queryserver-config-txpool-waiter-cap", DefaultQsConfig.TxPoolWaiterCap, "query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection")
@@ -156,7 +156,6 @@ type TabletConfig struct {
 	QueryPlanCacheSize      int            `json:"-"`
 	SchemaReloadTime        float64        `json:"-"`
 	QueryTimeout            float64        `json:"-"`
-	TxPoolTimeout           float64        `json:"-"`
 	QueryPoolWaiterCap      int            `json:"-"`
 	TxPoolWaiterCap         int            `json:"-"`
 	StrictTableACL          bool           `json:"-"`
@@ -228,6 +227,7 @@ var DefaultQsConfig = TabletConfig{
 	},
 	TxPool: ConnPoolConfig{
 		Size:               20,
+		TimeoutSeconds:     1,
 		IdleTimeoutSeconds: 30 * 60,
 	},
 	MessagePostponeCap:      4,
@@ -239,7 +239,6 @@ var DefaultQsConfig = TabletConfig{
 	QueryPlanCacheSize:      5000,
 	SchemaReloadTime:        30 * 60,
 	QueryTimeout:            30,
-	TxPoolTimeout:           1,
 	QueryPoolWaiterCap:      50000,
 	TxPoolWaiterCap:         50000,
 	StreamBufferSize:        32 * 1024,

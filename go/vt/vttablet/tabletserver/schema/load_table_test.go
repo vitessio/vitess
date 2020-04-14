@@ -161,8 +161,10 @@ func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 	ctx := context.Background()
 	appParams := db.ConnParams()
 	dbaParams := db.ConnParams()
-	connPoolIdleTimeout := 10 * time.Second
-	connPool := connpool.New(tabletenv.NewTestEnv(nil, nil, "SchemaTest"), "", 2, 0, 0, connPoolIdleTimeout)
+	connPool := connpool.New(tabletenv.NewTestEnv(nil, nil, "SchemaTest"), "", tabletenv.ConnPoolConfig{
+		Size:               2,
+		IdleTimeoutSeconds: 10,
+	})
 	connPool.Open(appParams, dbaParams, appParams)
 	conn, err := connPool.Get(ctx)
 	if err != nil {
