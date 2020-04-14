@@ -57,7 +57,7 @@ type (
 	}
 
 	// Expressions
-	LiteralInt   struct{ Val []byte }
+	LiteralInt   struct{ Val EvalResult }
 	LiteralFloat struct{ Val EvalResult }
 	BindVariable struct{ Key string }
 	BinaryOp     struct {
@@ -75,6 +75,14 @@ type (
 //Value allows for retrieval of the value we expose for public consumption
 func (e EvalResult) Value() Value {
 	return castFromNumeric(e, e.typ)
+}
+
+func NewLiteralInt(val []byte) (Expr, error) {
+	ival, err := strconv.ParseInt(string(val), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	return &LiteralFloat{evalResult{typ: Int64, ival: ival}}, nil
 }
 
 func NewLiteralFloat(val []byte) (Expr, error) {
@@ -110,11 +118,7 @@ func (b *BinaryOp) Evaluate(env ExpressionEnv) (EvalResult, error) {
 
 //Evaluate implements the Expr interface
 func (l *LiteralInt) Evaluate(ExpressionEnv) (EvalResult, error) {
-	ival, err := strconv.ParseInt(string(l.Val), 10, 64)
-	if err != nil {
-		ival = 0
-	}
-	return evalResult{typ: Int64, ival: ival}, nil
+	return l.Val, nil
 }
 
 func (l *LiteralFloat) Evaluate(env ExpressionEnv) (EvalResult, error) {
@@ -225,7 +229,7 @@ func (b *BindVariable) String() string {
 
 //String implements the Expr interface
 func (l *LiteralInt) String() string {
-	return string(l.Val)
+	return l.Val.Value().String()
 }
 
 func (l *LiteralFloat) String() string {
