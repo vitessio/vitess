@@ -31,6 +31,8 @@ import (
 )
 
 var (
+	currentConfig TabletConfig
+
 	queryLogHandler = flag.String("query-log-stream-handler", "/debug/querylog", "URL handler for streaming queries log")
 	txLogHandler    = flag.String("transaction-log-stream-handler", "/debug/txlog", "URL handler for streaming transactions log")
 
@@ -54,76 +56,76 @@ var (
 )
 
 func init() {
-	flag.IntVar(&Config.OltpReadPool.Size, "queryserver-config-pool-size", DefaultQsConfig.OltpReadPool.Size, "query server read pool size, connection pool is used by regular queries (non streaming, not in a transaction)")
-	flag.IntVar(&Config.OltpReadPool.PrefillParallelism, "queryserver-config-pool-prefill-parallelism", DefaultQsConfig.OltpReadPool.PrefillParallelism, "query server read pool prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
-	flag.IntVar(&Config.OlapReadPool.Size, "queryserver-config-stream-pool-size", DefaultQsConfig.OlapReadPool.Size, "query server stream connection pool size, stream pool is used by stream queries: queries that return results to client in a streaming fashion")
-	flag.IntVar(&Config.OlapReadPool.PrefillParallelism, "queryserver-config-stream-pool-prefill-parallelism", DefaultQsConfig.OlapReadPool.PrefillParallelism, "query server stream pool prefill parallelism, a non-zero value will prefill the pool using the specified parallelism")
+	flag.IntVar(&currentConfig.OltpReadPool.Size, "queryserver-config-pool-size", defaultConfig.OltpReadPool.Size, "query server read pool size, connection pool is used by regular queries (non streaming, not in a transaction)")
+	flag.IntVar(&currentConfig.OltpReadPool.PrefillParallelism, "queryserver-config-pool-prefill-parallelism", defaultConfig.OltpReadPool.PrefillParallelism, "query server read pool prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
+	flag.IntVar(&currentConfig.OlapReadPool.Size, "queryserver-config-stream-pool-size", defaultConfig.OlapReadPool.Size, "query server stream connection pool size, stream pool is used by stream queries: queries that return results to client in a streaming fashion")
+	flag.IntVar(&currentConfig.OlapReadPool.PrefillParallelism, "queryserver-config-stream-pool-prefill-parallelism", defaultConfig.OlapReadPool.PrefillParallelism, "query server stream pool prefill parallelism, a non-zero value will prefill the pool using the specified parallelism")
 	flag.IntVar(&deprecatedMessagePoolSize, "queryserver-config-message-conn-pool-size", 0, "DEPRECATED")
 	flag.IntVar(&deprecatedMessagePoolPrefillParallelism, "queryserver-config-message-conn-pool-prefill-parallelism", 0, "DEPRECATED: Unused.")
-	flag.IntVar(&Config.TxPool.Size, "queryserver-config-transaction-cap", DefaultQsConfig.TxPool.Size, "query server transaction cap is the maximum number of transactions allowed to happen at any given point of a time for a single vttablet. E.g. by setting transaction cap to 100, there are at most 100 transactions will be processed by a vttablet and the 101th transaction will be blocked (and fail if it cannot get connection within specified timeout)")
-	flag.IntVar(&Config.TxPool.PrefillParallelism, "queryserver-config-transaction-prefill-parallelism", DefaultQsConfig.TxPool.PrefillParallelism, "query server transaction prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
-	flag.IntVar(&Config.MessagePostponeCap, "queryserver-config-message-postpone-cap", DefaultQsConfig.MessagePostponeCap, "query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem.")
+	flag.IntVar(&currentConfig.TxPool.Size, "queryserver-config-transaction-cap", defaultConfig.TxPool.Size, "query server transaction cap is the maximum number of transactions allowed to happen at any given point of a time for a single vttablet. E.g. by setting transaction cap to 100, there are at most 100 transactions will be processed by a vttablet and the 101th transaction will be blocked (and fail if it cannot get connection within specified timeout)")
+	flag.IntVar(&currentConfig.TxPool.PrefillParallelism, "queryserver-config-transaction-prefill-parallelism", defaultConfig.TxPool.PrefillParallelism, "query server transaction prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
+	flag.IntVar(&currentConfig.MessagePostponeCap, "queryserver-config-message-postpone-cap", defaultConfig.MessagePostponeCap, "query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem.")
 	flag.IntVar(&deprecatedFoundRowsPoolSize, "client-found-rows-pool-size", 0, "DEPRECATED: queryserver-config-transaction-cap will be used instead.")
-	flag.IntVar(&Config.Oltp.TxTimeoutSeconds, "queryserver-config-transaction-timeout", DefaultQsConfig.Oltp.TxTimeoutSeconds, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
-	flag.Float64Var(&Config.TxShutDownGracePeriod, "transaction_shutdown_grace_period", DefaultQsConfig.TxShutDownGracePeriod, "how long to wait (in seconds) for transactions to complete during graceful shutdown.")
-	flag.IntVar(&Config.Oltp.MaxRows, "queryserver-config-max-result-size", DefaultQsConfig.Oltp.MaxRows, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
-	flag.IntVar(&Config.Oltp.WarnRows, "queryserver-config-warn-result-size", DefaultQsConfig.Oltp.WarnRows, "query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this")
+	flag.IntVar(&currentConfig.Oltp.TxTimeoutSeconds, "queryserver-config-transaction-timeout", defaultConfig.Oltp.TxTimeoutSeconds, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
+	flag.Float64Var(&currentConfig.TxShutDownGracePeriod, "transaction_shutdown_grace_period", defaultConfig.TxShutDownGracePeriod, "how long to wait (in seconds) for transactions to complete during graceful shutdown.")
+	flag.IntVar(&currentConfig.Oltp.MaxRows, "queryserver-config-max-result-size", defaultConfig.Oltp.MaxRows, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
+	flag.IntVar(&currentConfig.Oltp.WarnRows, "queryserver-config-warn-result-size", defaultConfig.Oltp.WarnRows, "query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this")
 	flag.IntVar(&deprecatedMaxDMLRows, "queryserver-config-max-dml-rows", 0, "query server max dml rows per statement, maximum number of rows allowed to return at a time for an update or delete with either 1) an equality where clauses on primary keys, or 2) a subselect statement. For update and delete statements in above two categories, vttablet will split the original query into multiple small queries based on this configuration value. ")
-	flag.BoolVar(&Config.PassthroughDMLs, "queryserver-config-passthrough-dmls", DefaultQsConfig.PassthroughDMLs, "query server pass through all dml statements without rewriting")
+	flag.BoolVar(&currentConfig.PassthroughDMLs, "queryserver-config-passthrough-dmls", defaultConfig.PassthroughDMLs, "query server pass through all dml statements without rewriting")
 	flag.BoolVar(&deprecateAllowUnsafeDMLs, "queryserver-config-allowunsafe-dmls", false, "deprecated")
 
-	flag.IntVar(&Config.StreamBufferSize, "queryserver-config-stream-buffer-size", DefaultQsConfig.StreamBufferSize, "query server stream buffer size, the maximum number of bytes sent from vttablet for each stream call. It's recommended to keep this value in sync with vtgate's stream_buffer_size.")
-	flag.IntVar(&Config.QueryPlanCacheSize, "queryserver-config-query-cache-size", DefaultQsConfig.QueryPlanCacheSize, "query server query cache size, maximum number of queries to be cached. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
-	flag.Float64Var(&Config.SchemaReloadTime, "queryserver-config-schema-reload-time", DefaultQsConfig.SchemaReloadTime, "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
-	flag.IntVar(&Config.Oltp.QueryTimeoutSeconds, "queryserver-config-query-timeout", DefaultQsConfig.Oltp.QueryTimeoutSeconds, "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
-	flag.IntVar(&Config.OltpReadPool.TimeoutSeconds, "queryserver-config-query-pool-timeout", DefaultQsConfig.OltpReadPool.TimeoutSeconds, "query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
-	flag.IntVar(&Config.TxPool.TimeoutSeconds, "queryserver-config-txpool-timeout", DefaultQsConfig.TxPool.TimeoutSeconds, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
-	flag.IntVar(&Config.OltpReadPool.IdleTimeoutSeconds, "queryserver-config-idle-timeout", DefaultQsConfig.OltpReadPool.IdleTimeoutSeconds, "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
-	flag.IntVar(&Config.OltpReadPool.MaxWaiters, "queryserver-config-query-pool-waiter-cap", DefaultQsConfig.OltpReadPool.MaxWaiters, "query server query pool waiter limit, this is the maximum number of queries that can be queued waiting to get a connection")
-	flag.IntVar(&Config.TxPool.MaxWaiters, "queryserver-config-txpool-waiter-cap", DefaultQsConfig.TxPool.MaxWaiters, "query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection")
+	flag.IntVar(&currentConfig.StreamBufferSize, "queryserver-config-stream-buffer-size", defaultConfig.StreamBufferSize, "query server stream buffer size, the maximum number of bytes sent from vttablet for each stream call. It's recommended to keep this value in sync with vtgate's stream_buffer_size.")
+	flag.IntVar(&currentConfig.QueryPlanCacheSize, "queryserver-config-query-cache-size", defaultConfig.QueryPlanCacheSize, "query server query cache size, maximum number of queries to be cached. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
+	flag.Float64Var(&currentConfig.SchemaReloadTime, "queryserver-config-schema-reload-time", defaultConfig.SchemaReloadTime, "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
+	flag.IntVar(&currentConfig.Oltp.QueryTimeoutSeconds, "queryserver-config-query-timeout", defaultConfig.Oltp.QueryTimeoutSeconds, "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
+	flag.IntVar(&currentConfig.OltpReadPool.TimeoutSeconds, "queryserver-config-query-pool-timeout", defaultConfig.OltpReadPool.TimeoutSeconds, "query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
+	flag.IntVar(&currentConfig.TxPool.TimeoutSeconds, "queryserver-config-txpool-timeout", defaultConfig.TxPool.TimeoutSeconds, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
+	flag.IntVar(&currentConfig.OltpReadPool.IdleTimeoutSeconds, "queryserver-config-idle-timeout", defaultConfig.OltpReadPool.IdleTimeoutSeconds, "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
+	flag.IntVar(&currentConfig.OltpReadPool.MaxWaiters, "queryserver-config-query-pool-waiter-cap", defaultConfig.OltpReadPool.MaxWaiters, "query server query pool waiter limit, this is the maximum number of queries that can be queued waiting to get a connection")
+	flag.IntVar(&currentConfig.TxPool.MaxWaiters, "queryserver-config-txpool-waiter-cap", defaultConfig.TxPool.MaxWaiters, "query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection")
 	// tableacl related configurations.
-	flag.BoolVar(&Config.StrictTableACL, "queryserver-config-strict-table-acl", DefaultQsConfig.StrictTableACL, "only allow queries that pass table acl checks")
-	flag.BoolVar(&Config.EnableTableACLDryRun, "queryserver-config-enable-table-acl-dry-run", DefaultQsConfig.EnableTableACLDryRun, "If this flag is enabled, tabletserver will emit monitoring metrics and let the request pass regardless of table acl check results")
-	flag.StringVar(&Config.TableACLExemptACL, "queryserver-config-acl-exempt-acl", DefaultQsConfig.TableACLExemptACL, "an acl that exempt from table acl checking (this acl is free to access any vitess tables).")
-	flag.BoolVar(&Config.TerseErrors, "queryserver-config-terse-errors", DefaultQsConfig.TerseErrors, "prevent bind vars from escaping in returned errors")
+	flag.BoolVar(&currentConfig.StrictTableACL, "queryserver-config-strict-table-acl", defaultConfig.StrictTableACL, "only allow queries that pass table acl checks")
+	flag.BoolVar(&currentConfig.EnableTableACLDryRun, "queryserver-config-enable-table-acl-dry-run", defaultConfig.EnableTableACLDryRun, "If this flag is enabled, tabletserver will emit monitoring metrics and let the request pass regardless of table acl check results")
+	flag.StringVar(&currentConfig.TableACLExemptACL, "queryserver-config-acl-exempt-acl", defaultConfig.TableACLExemptACL, "an acl that exempt from table acl checking (this acl is free to access any vitess tables).")
+	flag.BoolVar(&currentConfig.TerseErrors, "queryserver-config-terse-errors", defaultConfig.TerseErrors, "prevent bind vars from escaping in returned errors")
 	flag.StringVar(&deprecatedPoolNamePrefix, "pool-name-prefix", "", "Deprecated")
-	flag.BoolVar(&Config.WatchReplication, "watch_replication_stream", false, "When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to support the include_event_token ExecuteOptions.")
+	flag.BoolVar(&currentConfig.WatchReplication, "watch_replication_stream", false, "When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to support the include_event_token ExecuteOptions.")
 	flag.BoolVar(&deprecatedAutocommit, "enable-autocommit", true, "This flag is deprecated. Autocommit is always allowed.")
-	flag.BoolVar(&Config.TwoPCEnable, "twopc_enable", DefaultQsConfig.TwoPCEnable, "if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.")
-	flag.StringVar(&Config.TwoPCCoordinatorAddress, "twopc_coordinator_address", DefaultQsConfig.TwoPCCoordinatorAddress, "address of the (VTGate) process(es) that will be used to notify of abandoned transactions.")
-	flag.Float64Var(&Config.TwoPCAbandonAge, "twopc_abandon_age", DefaultQsConfig.TwoPCAbandonAge, "time in seconds. Any unresolved transaction older than this time will be sent to the coordinator to be resolved.")
-	flag.BoolVar(&Config.EnableTxThrottler, "enable-tx-throttler", DefaultQsConfig.EnableTxThrottler, "If true replication-lag-based throttling on transactions will be enabled.")
-	flag.StringVar(&Config.TxThrottlerConfig, "tx-throttler-config", DefaultQsConfig.TxThrottlerConfig, "The configuration of the transaction throttler as a text formatted throttlerdata.Configuration protocol buffer message")
-	flagutil.StringListVar(&Config.TxThrottlerHealthCheckCells, "tx-throttler-healthcheck-cells", DefaultQsConfig.TxThrottlerHealthCheckCells, "A comma-separated list of cells. Only tabletservers running in these cells will be monitored for replication lag by the transaction throttler.")
+	flag.BoolVar(&currentConfig.TwoPCEnable, "twopc_enable", defaultConfig.TwoPCEnable, "if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.")
+	flag.StringVar(&currentConfig.TwoPCCoordinatorAddress, "twopc_coordinator_address", defaultConfig.TwoPCCoordinatorAddress, "address of the (VTGate) process(es) that will be used to notify of abandoned transactions.")
+	flag.Float64Var(&currentConfig.TwoPCAbandonAge, "twopc_abandon_age", defaultConfig.TwoPCAbandonAge, "time in seconds. Any unresolved transaction older than this time will be sent to the coordinator to be resolved.")
+	flag.BoolVar(&currentConfig.EnableTxThrottler, "enable-tx-throttler", defaultConfig.EnableTxThrottler, "If true replication-lag-based throttling on transactions will be enabled.")
+	flag.StringVar(&currentConfig.TxThrottlerConfig, "tx-throttler-config", defaultConfig.TxThrottlerConfig, "The configuration of the transaction throttler as a text formatted throttlerdata.Configuration protocol buffer message")
+	flagutil.StringListVar(&currentConfig.TxThrottlerHealthCheckCells, "tx-throttler-healthcheck-cells", defaultConfig.TxThrottlerHealthCheckCells, "A comma-separated list of cells. Only tabletservers running in these cells will be monitored for replication lag by the transaction throttler.")
 
-	flag.BoolVar(&Config.EnableHotRowProtection, "enable_hot_row_protection", DefaultQsConfig.EnableHotRowProtection, "If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.")
-	flag.BoolVar(&Config.EnableHotRowProtectionDryRun, "enable_hot_row_protection_dry_run", DefaultQsConfig.EnableHotRowProtectionDryRun, "If true, hot row protection is not enforced but logs if transactions would have been queued.")
-	flag.IntVar(&Config.HotRowProtectionMaxQueueSize, "hot_row_protection_max_queue_size", DefaultQsConfig.HotRowProtectionMaxQueueSize, "Maximum number of BeginExecute RPCs which will be queued for the same row (range).")
-	flag.IntVar(&Config.HotRowProtectionMaxGlobalQueueSize, "hot_row_protection_max_global_queue_size", DefaultQsConfig.HotRowProtectionMaxGlobalQueueSize, "Global queue limit across all row (ranges). Useful to prevent that the queue can grow unbounded.")
-	flag.IntVar(&Config.HotRowProtectionConcurrentTransactions, "hot_row_protection_concurrent_transactions", DefaultQsConfig.HotRowProtectionConcurrentTransactions, "Number of concurrent transactions let through to the txpool/MySQL for the same hot row. Should be > 1 to have enough 'ready' transactions in MySQL and benefit from a pipelining effect.")
+	flag.BoolVar(&currentConfig.EnableHotRowProtection, "enable_hot_row_protection", defaultConfig.EnableHotRowProtection, "If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.")
+	flag.BoolVar(&currentConfig.EnableHotRowProtectionDryRun, "enable_hot_row_protection_dry_run", defaultConfig.EnableHotRowProtectionDryRun, "If true, hot row protection is not enforced but logs if transactions would have been queued.")
+	flag.IntVar(&currentConfig.HotRowProtectionMaxQueueSize, "hot_row_protection_max_queue_size", defaultConfig.HotRowProtectionMaxQueueSize, "Maximum number of BeginExecute RPCs which will be queued for the same row (range).")
+	flag.IntVar(&currentConfig.HotRowProtectionMaxGlobalQueueSize, "hot_row_protection_max_global_queue_size", defaultConfig.HotRowProtectionMaxGlobalQueueSize, "Global queue limit across all row (ranges). Useful to prevent that the queue can grow unbounded.")
+	flag.IntVar(&currentConfig.HotRowProtectionConcurrentTransactions, "hot_row_protection_concurrent_transactions", defaultConfig.HotRowProtectionConcurrentTransactions, "Number of concurrent transactions let through to the txpool/MySQL for the same hot row. Should be > 1 to have enough 'ready' transactions in MySQL and benefit from a pipelining effect.")
 
-	flag.BoolVar(&Config.EnableTransactionLimit, "enable_transaction_limit", DefaultQsConfig.EnableTransactionLimit, "If true, limit on number of transactions open at the same time will be enforced for all users. User trying to open a new transaction after exhausting their limit will receive an error immediately, regardless of whether there are available slots or not.")
-	flag.BoolVar(&Config.EnableTransactionLimitDryRun, "enable_transaction_limit_dry_run", DefaultQsConfig.EnableTransactionLimitDryRun, "If true, limit on number of transactions open at the same time will be tracked for all users, but not enforced.")
-	flag.Float64Var(&Config.TransactionLimitPerUser, "transaction_limit_per_user", DefaultQsConfig.TransactionLimitPerUser, "Maximum number of transactions a single user is allowed to use at any time, represented as fraction of -transaction_cap.")
-	flag.BoolVar(&Config.TransactionLimitByUsername, "transaction_limit_by_username", DefaultQsConfig.TransactionLimitByUsername, "Include VTGateCallerID.username when considering who the user is for the purpose of transaction limit.")
-	flag.BoolVar(&Config.TransactionLimitByPrincipal, "transaction_limit_by_principal", DefaultQsConfig.TransactionLimitByPrincipal, "Include CallerID.principal when considering who the user is for the purpose of transaction limit.")
-	flag.BoolVar(&Config.TransactionLimitByComponent, "transaction_limit_by_component", DefaultQsConfig.TransactionLimitByComponent, "Include CallerID.component when considering who the user is for the purpose of transaction limit.")
-	flag.BoolVar(&Config.TransactionLimitBySubcomponent, "transaction_limit_by_subcomponent", DefaultQsConfig.TransactionLimitBySubcomponent, "Include CallerID.subcomponent when considering who the user is for the purpose of transaction limit.")
+	flag.BoolVar(&currentConfig.EnableTransactionLimit, "enable_transaction_limit", defaultConfig.EnableTransactionLimit, "If true, limit on number of transactions open at the same time will be enforced for all users. User trying to open a new transaction after exhausting their limit will receive an error immediately, regardless of whether there are available slots or not.")
+	flag.BoolVar(&currentConfig.EnableTransactionLimitDryRun, "enable_transaction_limit_dry_run", defaultConfig.EnableTransactionLimitDryRun, "If true, limit on number of transactions open at the same time will be tracked for all users, but not enforced.")
+	flag.Float64Var(&currentConfig.TransactionLimitPerUser, "transaction_limit_per_user", defaultConfig.TransactionLimitPerUser, "Maximum number of transactions a single user is allowed to use at any time, represented as fraction of -transaction_cap.")
+	flag.BoolVar(&currentConfig.TransactionLimitByUsername, "transaction_limit_by_username", defaultConfig.TransactionLimitByUsername, "Include VTGateCallerID.username when considering who the user is for the purpose of transaction limit.")
+	flag.BoolVar(&currentConfig.TransactionLimitByPrincipal, "transaction_limit_by_principal", defaultConfig.TransactionLimitByPrincipal, "Include CallerID.principal when considering who the user is for the purpose of transaction limit.")
+	flag.BoolVar(&currentConfig.TransactionLimitByComponent, "transaction_limit_by_component", defaultConfig.TransactionLimitByComponent, "Include CallerID.component when considering who the user is for the purpose of transaction limit.")
+	flag.BoolVar(&currentConfig.TransactionLimitBySubcomponent, "transaction_limit_by_subcomponent", defaultConfig.TransactionLimitBySubcomponent, "Include CallerID.subcomponent when considering who the user is for the purpose of transaction limit.")
 
-	flag.BoolVar(&Config.HeartbeatEnable, "heartbeat_enable", DefaultQsConfig.HeartbeatEnable, "If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.")
-	flag.DurationVar(&Config.HeartbeatInterval, "heartbeat_interval", DefaultQsConfig.HeartbeatInterval, "How frequently to read and write replication heartbeat.")
+	flag.BoolVar(&currentConfig.HeartbeatEnable, "heartbeat_enable", defaultConfig.HeartbeatEnable, "If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.")
+	flag.DurationVar(&currentConfig.HeartbeatInterval, "heartbeat_interval", defaultConfig.HeartbeatInterval, "How frequently to read and write replication heartbeat.")
 
-	flag.BoolVar(&Config.EnforceStrictTransTables, "enforce_strict_trans_tables", DefaultQsConfig.EnforceStrictTransTables, "If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database.")
-	flag.BoolVar(&Config.EnableConsolidator, "enable-consolidator", DefaultQsConfig.EnableConsolidator, "This option enables the query consolidator.")
-	flag.BoolVar(&Config.EnableConsolidatorReplicas, "enable-consolidator-replicas", DefaultQsConfig.EnableConsolidatorReplicas, "This option enables the query consolidator only on replicas.")
-	flag.BoolVar(&Config.EnableQueryPlanFieldCaching, "enable-query-plan-field-caching", DefaultQsConfig.EnableQueryPlanFieldCaching, "This option fetches & caches fields (columns) when storing query plans")
+	flag.BoolVar(&currentConfig.EnforceStrictTransTables, "enforce_strict_trans_tables", defaultConfig.EnforceStrictTransTables, "If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database.")
+	flag.BoolVar(&currentConfig.EnableConsolidator, "enable-consolidator", defaultConfig.EnableConsolidator, "This option enables the query consolidator.")
+	flag.BoolVar(&currentConfig.EnableConsolidatorReplicas, "enable-consolidator-replicas", defaultConfig.EnableConsolidatorReplicas, "This option enables the query consolidator only on replicas.")
+	flag.BoolVar(&currentConfig.EnableQueryPlanFieldCaching, "enable-query-plan-field-caching", defaultConfig.EnableQueryPlanFieldCaching, "This option fetches & caches fields (columns) when storing query plans")
 }
 
 // Init must be called after flag.Parse, and before doing any other operations.
 func Init() {
 	// IdleTimeout is only initialized for OltpReadPool , but the other pools need to inherit the value.
-	Config.OlapReadPool.IdleTimeoutSeconds = Config.OltpReadPool.IdleTimeoutSeconds
-	Config.TxPool.IdleTimeoutSeconds = Config.OltpReadPool.IdleTimeoutSeconds
+	currentConfig.OlapReadPool.IdleTimeoutSeconds = currentConfig.OltpReadPool.IdleTimeoutSeconds
+	currentConfig.TxPool.IdleTimeoutSeconds = currentConfig.OltpReadPool.IdleTimeoutSeconds
 
 	switch *streamlog.QueryLogFormat {
 	case streamlog.QueryLogFormatText:
@@ -212,14 +214,82 @@ type TransactionLimitConfig struct {
 	TransactionLimitBySubcomponent bool
 }
 
-// DefaultQsConfig is the default value for the query service config.
+// NewCurrentConfig returns a copy of the current config.
+func NewCurrentConfig() *TabletConfig {
+	return currentConfig.Clone()
+}
+
+// NewDefaultConfig returns a new TabletConfig with pre-initialized defaults.
 // The value for StreamBufferSize was chosen after trying out a few of
 // them. Too small buffers force too many packets to be sent. Too big
 // buffers force the clients to read them in multiple chunks and make
 // memory copies.  so with the encoding overhead, this seems to work
 // great (the overhead makes the final packets on the wire about twice
 // bigger than this).
-var DefaultQsConfig = TabletConfig{
+func NewDefaultConfig() *TabletConfig {
+	return defaultConfig.Clone()
+}
+
+// Clone creates a clone of TabletConfig.
+func (c *TabletConfig) Clone() *TabletConfig {
+	tc := *c
+	return &tc
+}
+
+// Verify checks for contradicting flags.
+func (c *TabletConfig) Verify() error {
+	if err := c.verifyTransactionLimitConfig(); err != nil {
+		return err
+	}
+	if actual, dryRun := c.EnableHotRowProtection, c.EnableHotRowProtectionDryRun; actual && dryRun {
+		return errors.New("only one of two flags allowed: -enable_hot_row_protection or -enable_hot_row_protection_dry_run")
+	}
+	if v := c.HotRowProtectionMaxQueueSize; v <= 0 {
+		return fmt.Errorf("-hot_row_protection_max_queue_size must be > 0 (specified value: %v)", v)
+	}
+	if v := c.HotRowProtectionMaxGlobalQueueSize; v <= 0 {
+		return fmt.Errorf("-hot_row_protection_max_global_queue_size must be > 0 (specified value: %v)", v)
+	}
+	if globalSize, size := c.HotRowProtectionMaxGlobalQueueSize, c.HotRowProtectionMaxQueueSize; globalSize < size {
+		return fmt.Errorf("global queue size must be >= per row (range) queue size: -hot_row_protection_max_global_queue_size < hot_row_protection_max_queue_size (%v < %v)", globalSize, size)
+	}
+	if v := c.HotRowProtectionConcurrentTransactions; v <= 0 {
+		return fmt.Errorf("-hot_row_protection_concurrent_transactions must be > 0 (specified value: %v)", v)
+	}
+	return nil
+}
+
+// verifyTransactionLimitConfig checks TransactionLimitConfig for sanity
+func (c *TabletConfig) verifyTransactionLimitConfig() error {
+	actual, dryRun := c.EnableTransactionLimit, c.EnableTransactionLimitDryRun
+	if actual && dryRun {
+		return errors.New("only one of two flags allowed: -enable_transaction_limit or -enable_transaction_limit_dry_run")
+	}
+
+	// Skip other checks if this is not enabled
+	if !actual && !dryRun {
+		return nil
+	}
+
+	var (
+		byUser      = c.TransactionLimitByUsername
+		byPrincipal = c.TransactionLimitByPrincipal
+		byComp      = c.TransactionLimitByComponent
+		bySubcomp   = c.TransactionLimitBySubcomponent
+	)
+	if byAny := byUser || byPrincipal || byComp || bySubcomp; !byAny {
+		return errors.New("no user discriminating fields selected for transaction limiter, everyone would share single chunk of transaction pool. Override with at least one of -transaction_limit_by flags set to true")
+	}
+	if v := c.TransactionLimitPerUser; v <= 0 || v >= 1 {
+		return fmt.Errorf("-transaction_limit_per_user should be a fraction within range (0, 1) (specified value: %v)", v)
+	}
+	if limit := int(c.TransactionLimitPerUser * float64(c.TxPool.Size)); limit == 0 {
+		return fmt.Errorf("effective transaction limit per user is 0 due to rounding, increase -transaction_limit_per_user")
+	}
+	return nil
+}
+
+var defaultConfig = TabletConfig{
 	OltpReadPool: ConnPoolConfig{
 		Size:               16,
 		IdleTimeoutSeconds: 30 * 60,
@@ -306,61 +376,4 @@ func defaultTransactionLimitConfig() TransactionLimitConfig {
 		TransactionLimitByComponent:    false,
 		TransactionLimitBySubcomponent: false,
 	}
-}
-
-// verifyTransactionLimitConfig checks TransactionLimitConfig for sanity
-func (c *TabletConfig) verifyTransactionLimitConfig() error {
-	actual, dryRun := c.EnableTransactionLimit, c.EnableTransactionLimitDryRun
-	if actual && dryRun {
-		return errors.New("only one of two flags allowed: -enable_transaction_limit or -enable_transaction_limit_dry_run")
-	}
-
-	// Skip other checks if this is not enabled
-	if !actual && !dryRun {
-		return nil
-	}
-
-	var (
-		byUser      = c.TransactionLimitByUsername
-		byPrincipal = c.TransactionLimitByPrincipal
-		byComp      = c.TransactionLimitByComponent
-		bySubcomp   = c.TransactionLimitBySubcomponent
-	)
-	if byAny := byUser || byPrincipal || byComp || bySubcomp; !byAny {
-		return errors.New("no user discriminating fields selected for transaction limiter, everyone would share single chunk of transaction pool. Override with at least one of -transaction_limit_by flags set to true")
-	}
-	if v := c.TransactionLimitPerUser; v <= 0 || v >= 1 {
-		return fmt.Errorf("-transaction_limit_per_user should be a fraction within range (0, 1) (specified value: %v)", v)
-	}
-	if limit := int(c.TransactionLimitPerUser * float64(c.TxPool.Size)); limit == 0 {
-		return fmt.Errorf("effective transaction limit per user is 0 due to rounding, increase -transaction_limit_per_user")
-	}
-	return nil
-}
-
-// Config contains all the current config values. It's read-only,
-// except for tests.
-var Config TabletConfig
-
-// VerifyConfig checks "Config" for contradicting flags.
-func VerifyConfig() error {
-	if err := Config.verifyTransactionLimitConfig(); err != nil {
-		return err
-	}
-	if actual, dryRun := Config.EnableHotRowProtection, Config.EnableHotRowProtectionDryRun; actual && dryRun {
-		return errors.New("only one of two flags allowed: -enable_hot_row_protection or -enable_hot_row_protection_dry_run")
-	}
-	if v := Config.HotRowProtectionMaxQueueSize; v <= 0 {
-		return fmt.Errorf("-hot_row_protection_max_queue_size must be > 0 (specified value: %v)", v)
-	}
-	if v := Config.HotRowProtectionMaxGlobalQueueSize; v <= 0 {
-		return fmt.Errorf("-hot_row_protection_max_global_queue_size must be > 0 (specified value: %v)", v)
-	}
-	if globalSize, size := Config.HotRowProtectionMaxGlobalQueueSize, Config.HotRowProtectionMaxQueueSize; globalSize < size {
-		return fmt.Errorf("global queue size must be >= per row (range) queue size: -hot_row_protection_max_global_queue_size < hot_row_protection_max_queue_size (%v < %v)", globalSize, size)
-	}
-	if v := Config.HotRowProtectionConcurrentTransactions; v <= 0 {
-		return fmt.Errorf("-hot_row_protection_concurrent_transactions must be > 0 (specified value: %v)", v)
-	}
-	return nil
 }

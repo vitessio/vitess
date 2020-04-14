@@ -202,7 +202,7 @@ var RegisterFunctions []func(Controller)
 
 // NewServer creates a new TabletServer based on the command line flags.
 func NewServer(name string, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
-	return NewTabletServer(name, tabletenv.Config, topoServer, alias)
+	return NewTabletServer(name, tabletenv.NewCurrentConfig(), topoServer, alias)
 }
 
 var (
@@ -212,12 +212,12 @@ var (
 
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
-func NewTabletServer(name string, config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
+func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
 	exporter := servenv.NewExporter(name, "Tablet")
 	tsv := &TabletServer{
 		exporter:               exporter,
 		stats:                  tabletenv.NewStats(exporter),
-		config:                 &config,
+		config:                 config,
 		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.Oltp.QueryTimeoutSeconds * 1e9)),
 		TerseErrors:            config.TerseErrors,
 		enableHotRowProtection: config.EnableHotRowProtection || config.EnableHotRowProtectionDryRun,
@@ -232,10 +232,10 @@ func NewTabletServer(name string, config tabletenv.TabletConfig, topoServer *top
 	tsv.te = NewTxEngine(tsv)
 	tsv.hw = heartbeat.NewWriter(tsv, alias)
 	tsv.hr = heartbeat.NewReader(tsv)
-	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
+	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se)
-	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, config)
+	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {

@@ -100,13 +100,13 @@ func TestReaderReadHeartbeatError(t *testing.T) {
 }
 
 func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	config.HeartbeatEnable = true
 	params, _ := db.ConnParams().MysqlParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
-	tr := NewReader(tabletenv.NewTestEnv(&config, nil, "ReaderTest"))
+	tr := NewReader(tabletenv.NewTestEnv(config, nil, "ReaderTest"))
 	tr.dbName = sqlescape.EscapeID(dbc.SidecarDBName.Get())
 	tr.keyspaceShard = "test:0"
 	tr.now = nowFunc

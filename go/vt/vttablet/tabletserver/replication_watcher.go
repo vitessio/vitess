@@ -45,7 +45,7 @@ type ReplicationWatcher struct {
 }
 
 // NewReplicationWatcher creates a new ReplicationWatcher.
-func NewReplicationWatcher(env tabletenv.Env, vs VStreamer, config tabletenv.TabletConfig) *ReplicationWatcher {
+func NewReplicationWatcher(env tabletenv.Env, vs VStreamer, config *tabletenv.TabletConfig) *ReplicationWatcher {
 	return &ReplicationWatcher{
 		env:              env,
 		vs:               vs,

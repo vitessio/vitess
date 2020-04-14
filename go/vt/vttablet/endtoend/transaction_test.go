@@ -311,7 +311,7 @@ func TestTxPoolSize(t *testing.T) {
 		return
 	}
 	defer client1.Rollback()
-	if err := verifyIntValue(framework.DebugVars(), "TransactionPoolAvailable", tabletenv.Config.TxPool.Size-1); err != nil {
+	if err := verifyIntValue(framework.DebugVars(), "TransactionPoolAvailable", tabletenv.NewCurrentConfig().TxPool.Size-1); err != nil {
 		t.Error(err)
 	}
 
