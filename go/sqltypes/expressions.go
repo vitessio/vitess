@@ -58,6 +58,7 @@ type (
 
 	// Expressions
 	LiteralInt   struct{ Val []byte }
+	LiteralFloat struct{ Val EvalResult }
 	BindVariable struct{ Key string }
 	BinaryOp     struct {
 		Expr        BinaryExpr
@@ -76,7 +77,16 @@ func (e EvalResult) Value() Value {
 	return castFromNumeric(e, e.typ)
 }
 
+func NewLiteralFloat(val []byte) (Expr, error) {
+	fval, err := strconv.ParseFloat(string(val), 64)
+	if err != nil {
+		return nil, err
+	}
+	return &LiteralFloat{evalResult{typ: Float64, fval: fval}}, nil
+}
+
 var _ Expr = (*LiteralInt)(nil)
+var _ Expr = (*LiteralFloat)(nil)
 var _ Expr = (*BindVariable)(nil)
 var _ Expr = (*BinaryOp)(nil)
 
@@ -105,6 +115,10 @@ func (l *LiteralInt) Evaluate(ExpressionEnv) (EvalResult, error) {
 		ival = 0
 	}
 	return evalResult{typ: Int64, ival: ival}, nil
+}
+
+func (l *LiteralFloat) Evaluate(env ExpressionEnv) (EvalResult, error) {
+	return l.Val, nil
 }
 
 //Evaluate implements the Expr interface
@@ -175,6 +189,10 @@ func (l *LiteralInt) Type(_ ExpressionEnv) querypb.Type {
 	return Int64
 }
 
+func (l *LiteralFloat) Type(env ExpressionEnv) querypb.Type {
+	return Float64
+}
+
 //String implements the BinaryExpr interface
 func (d *Division) String() string {
 	return "/"
@@ -208,6 +226,10 @@ func (b *BindVariable) String() string {
 //String implements the Expr interface
 func (l *LiteralInt) String() string {
 	return string(l.Val)
+}
+
+func (l *LiteralFloat) String() string {
+	return l.Val.Value().String()
 }
 
 func mergeNumericalTypes(ltype, rtype querypb.Type) querypb.Type {
