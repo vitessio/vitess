@@ -22,9 +22,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
-	"net/url"
 	"strings"
 
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -51,14 +51,19 @@ func initVTTabletRedirection(ts *topo.Server) {
 			http.NotFound(w, r)
 			return
 		}
-		redirect := fmt.Sprintf("http://%s:%d", tablet.Hostname, tablet.PortMap["vt"])
-		u, err := url.Parse(redirect)
-		if err != nil {
-			log.Errorf("Error parsing url %s: %v", redirect, err)
+		if tablet.Hostname == "" || tablet.PortMap["vt"] == 0 {
+			log.Errorf("Invalid host/port: %s %d", tablet.Hostname, tablet.PortMap["vt"])
 			http.NotFound(w, r)
 			return
 		}
-		rp := httputil.NewSingleHostReverseProxy(u)
+
+		rp := &httputil.ReverseProxy{}
+		rp.Director = func(req *http.Request) {
+			req.URL.Scheme = "http"
+			req.URL.Host = netutil.JoinHostPort(tablet.Hostname, tablet.PortMap["vt"])
+			req.URL.Path = "/" + splits[3]
+		}
+
 		prefixPath := fmt.Sprintf("/vttablet/%s/", tabletID)
 		rp.ModifyResponse = func(r *http.Response) error {
 			b, _ := ioutil.ReadAll(r.Body)
@@ -66,14 +71,17 @@ func initVTTabletRedirection(ts *topo.Server) {
 			b = bytes.ReplaceAll(b, []byte(`href=/`), []byte(fmt.Sprintf(`href=%s`, prefixPath)))
 			r.Body = ioutil.NopCloser(bytes.NewBuffer(b))
 			r.Header["Content-Length"] = []string{fmt.Sprint(len(b))}
+
 			// Don't forget redirects
 			loc := r.Header["Location"]
 			for i, v := range loc {
-				loc[i] = strings.Replace(v, "/", prefixPath, 1)
+				if strings.HasPrefix(v, "/") {
+					loc[i] = strings.Replace(v, "/", prefixPath, 1)
+				}
 			}
 			return nil
 		}
-		r.URL.Path = "/" + splits[3]
+
 		rp.ServeHTTP(w, r)
 	})
 }
