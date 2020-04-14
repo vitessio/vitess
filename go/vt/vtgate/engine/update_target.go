@@ -17,8 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"encoding/json"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -43,19 +41,6 @@ func (updTarget *UpdateTarget) description() PrimitiveDescription {
 		OperatorType: "UpdateTarget",
 		Other:        map[string]interface{}{"target": updTarget.Target},
 	}
-}
-
-// MarshalJSON serializes the UpdateTarget into a JSON representation.
-// It's used for testing and diagnostics.
-func (updTarget *UpdateTarget) MarshalJSON() ([]byte, error) {
-	marshalUpdateTarget := struct {
-		Opcode string
-		Target string
-	}{
-		Opcode: "UpdateTarget",
-		Target: updTarget.Target,
-	}
-	return json.Marshal(marshalUpdateTarget)
 }
 
 // RouteType implements the Primitive interface
