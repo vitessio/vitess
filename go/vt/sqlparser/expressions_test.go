@@ -60,7 +60,7 @@ func TestEvaluate(t *testing.T) {
 		expected:   sqltypes.NewUint64(22),
 	}, {
 		expression: ":string_bind_variable",
-		expected:   sqltypes.NewVarChar("bar"),
+		expected:   sqltypes.NewVarBinary("bar"),
 	}, {
 		expression: ":float_bind_variable",
 		expected:   sqltypes.NewFloat64(2.2),
@@ -72,7 +72,8 @@ func TestEvaluate(t *testing.T) {
 			stmt, err := Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*Select).SelectExprs[0].(*AliasedExpr).Expr
-			sqltypesExpr := Convert(astExpr)
+			sqltypesExpr, err := Convert(astExpr)
+			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 			env := sqltypes.ExpressionEnv{
 				BindVars: map[string]*querypb.BindVariable{

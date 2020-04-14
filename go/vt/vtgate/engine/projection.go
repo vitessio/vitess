@@ -11,6 +11,7 @@ type Projection struct {
 	Cols  []string
 	Exprs []sqltypes.Expr
 	Input Primitive
+	noTxNeeded
 }
 
 func (p *Projection) RouteType() string {
