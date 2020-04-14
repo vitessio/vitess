@@ -206,8 +206,8 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 		}
 	}
 
-	qe.maxResultSize = sync2.NewAtomicInt64(int64(config.MaxResultSize))
-	qe.warnResultSize = sync2.NewAtomicInt64(int64(config.WarnResultSize))
+	qe.maxResultSize = sync2.NewAtomicInt64(int64(config.Oltp.MaxRows))
+	qe.warnResultSize = sync2.NewAtomicInt64(int64(config.Oltp.WarnRows))
 	qe.streamBufferSize = sync2.NewAtomicInt64(int64(config.StreamBufferSize))
 
 	planbuilder.PassthroughDMLs = config.PassthroughDMLs

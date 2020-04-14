@@ -64,10 +64,10 @@ func init() {
 	flag.IntVar(&Config.TxPool.PrefillParallelism, "queryserver-config-transaction-prefill-parallelism", DefaultQsConfig.TxPool.PrefillParallelism, "query server transaction prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
 	flag.IntVar(&Config.MessagePostponeCap, "queryserver-config-message-postpone-cap", DefaultQsConfig.MessagePostponeCap, "query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem.")
 	flag.IntVar(&deprecatedFoundRowsPoolSize, "client-found-rows-pool-size", 0, "DEPRECATED: queryserver-config-transaction-cap will be used instead.")
-	flag.Float64Var(&Config.TransactionTimeout, "queryserver-config-transaction-timeout", DefaultQsConfig.TransactionTimeout, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
+	flag.IntVar(&Config.Oltp.TxTimeoutSeconds, "queryserver-config-transaction-timeout", DefaultQsConfig.Oltp.TxTimeoutSeconds, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
 	flag.Float64Var(&Config.TxShutDownGracePeriod, "transaction_shutdown_grace_period", DefaultQsConfig.TxShutDownGracePeriod, "how long to wait (in seconds) for transactions to complete during graceful shutdown.")
-	flag.IntVar(&Config.MaxResultSize, "queryserver-config-max-result-size", DefaultQsConfig.MaxResultSize, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
-	flag.IntVar(&Config.WarnResultSize, "queryserver-config-warn-result-size", DefaultQsConfig.WarnResultSize, "query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this")
+	flag.IntVar(&Config.Oltp.MaxRows, "queryserver-config-max-result-size", DefaultQsConfig.Oltp.MaxRows, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
+	flag.IntVar(&Config.Oltp.WarnRows, "queryserver-config-warn-result-size", DefaultQsConfig.Oltp.WarnRows, "query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this")
 	flag.IntVar(&deprecatedMaxDMLRows, "queryserver-config-max-dml-rows", 0, "query server max dml rows per statement, maximum number of rows allowed to return at a time for an update or delete with either 1) an equality where clauses on primary keys, or 2) a subselect statement. For update and delete statements in above two categories, vttablet will split the original query into multiple small queries based on this configuration value. ")
 	flag.BoolVar(&Config.PassthroughDMLs, "queryserver-config-passthrough-dmls", DefaultQsConfig.PassthroughDMLs, "query server pass through all dml statements without rewriting")
 	flag.BoolVar(&deprecateAllowUnsafeDMLs, "queryserver-config-allowunsafe-dmls", false, "deprecated")
@@ -75,7 +75,7 @@ func init() {
 	flag.IntVar(&Config.StreamBufferSize, "queryserver-config-stream-buffer-size", DefaultQsConfig.StreamBufferSize, "query server stream buffer size, the maximum number of bytes sent from vttablet for each stream call. It's recommended to keep this value in sync with vtgate's stream_buffer_size.")
 	flag.IntVar(&Config.QueryPlanCacheSize, "queryserver-config-query-cache-size", DefaultQsConfig.QueryPlanCacheSize, "query server query cache size, maximum number of queries to be cached. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
 	flag.Float64Var(&Config.SchemaReloadTime, "queryserver-config-schema-reload-time", DefaultQsConfig.SchemaReloadTime, "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
-	flag.Float64Var(&Config.QueryTimeout, "queryserver-config-query-timeout", DefaultQsConfig.QueryTimeout, "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
+	flag.IntVar(&Config.Oltp.QueryTimeoutSeconds, "queryserver-config-query-timeout", DefaultQsConfig.Oltp.QueryTimeoutSeconds, "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
 	flag.IntVar(&Config.OltpReadPool.TimeoutSeconds, "queryserver-config-query-pool-timeout", DefaultQsConfig.OltpReadPool.TimeoutSeconds, "query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
 	flag.IntVar(&Config.TxPool.TimeoutSeconds, "queryserver-config-txpool-timeout", DefaultQsConfig.TxPool.TimeoutSeconds, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
 	flag.IntVar(&Config.OltpReadPool.IdleTimeoutSeconds, "queryserver-config-idle-timeout", DefaultQsConfig.OltpReadPool.IdleTimeoutSeconds, "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
@@ -146,16 +146,13 @@ type TabletConfig struct {
 	OltpReadPool            ConnPoolConfig `json:"oltpReadPool,omitempty"`
 	OlapReadPool            ConnPoolConfig `json:"olapReadPool,omitempty"`
 	TxPool                  ConnPoolConfig `json:"txPool,omitempty"`
+	Oltp                    OltpConfig     `json:"oltp,omitempty"`
 	MessagePostponeCap      int            `json:"-"`
-	TransactionTimeout      float64        `json:"-"`
 	TxShutDownGracePeriod   float64        `json:"-"`
-	MaxResultSize           int            `json:"-"`
-	WarnResultSize          int            `json:"-"`
 	PassthroughDMLs         bool           `json:"-"`
 	StreamBufferSize        int            `json:"-"`
 	QueryPlanCacheSize      int            `json:"-"`
 	SchemaReloadTime        float64        `json:"-"`
-	QueryTimeout            float64        `json:"-"`
 	QueryPoolWaiterCap      int            `json:"-"`
 	TxPoolWaiterCap         int            `json:"-"`
 	StrictTableACL          bool           `json:"-"`
@@ -197,6 +194,14 @@ type ConnPoolConfig struct {
 	MaxWaiters         int `json:"maxWaiters,omitempty"`
 }
 
+// OltpConfig contains the config for oltp settings.
+type OltpConfig struct {
+	QueryTimeoutSeconds int `json:"queryTimeoutSeconds,omitempty"`
+	TxTimeoutSeconds    int `json:"txTimeoutSeconds,omitempty"`
+	MaxRows             int `json:"maxRpws,omitempty"`
+	WarnRows            int `json:"warnRows,omitempty"`
+}
+
 // TransactionLimitConfig captures configuration of transaction pool slots
 // limiter configuration.
 type TransactionLimitConfig struct {
@@ -230,15 +235,16 @@ var DefaultQsConfig = TabletConfig{
 		TimeoutSeconds:     1,
 		IdleTimeoutSeconds: 30 * 60,
 	},
+	Oltp: OltpConfig{
+		QueryTimeoutSeconds: 30,
+		TxTimeoutSeconds:    30,
+		MaxRows:             10000,
+	},
 	MessagePostponeCap:      4,
-	TransactionTimeout:      30,
 	TxShutDownGracePeriod:   0,
-	MaxResultSize:           10000,
-	WarnResultSize:          0,
 	PassthroughDMLs:         false,
 	QueryPlanCacheSize:      5000,
 	SchemaReloadTime:        30 * 60,
-	QueryTimeout:            30,
 	QueryPoolWaiterCap:      50000,
 	TxPoolWaiterCap:         50000,
 	StreamBufferSize:        32 * 1024,
