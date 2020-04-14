@@ -16,17 +16,23 @@ limitations under the License.
 
 package sqlparser
 
-import "vitess.io/vitess/go/sqltypes"
+import (
+	"fmt"
+
+	"vitess.io/vitess/go/sqltypes"
+)
+
+var ExprNotSupported = fmt.Errorf("Expr Not Supported")
 
 //Convert converts between AST expressions and executable expressions
-func Convert(e Expr) sqltypes.Expr {
+func Convert(e Expr) (sqltypes.Expr, error) {
 	switch node := e.(type) {
 	case *SQLVal:
 		switch node.Type {
 		case IntVal:
-			return &sqltypes.LiteralInt{Val: node.Val}
+			return &sqltypes.LiteralInt{Val: node.Val}, nil
 		case ValArg:
-			return &sqltypes.BindVariable{Key: string(node.Val[1:])}
+			return &sqltypes.BindVariable{Key: string(node.Val[1:])}, nil
 		}
 	case *BinaryExpr:
 		var op sqltypes.BinaryExpr
@@ -40,14 +46,22 @@ func Convert(e Expr) sqltypes.Expr {
 		case DivStr:
 			op = &sqltypes.Division{}
 		default:
-			return nil
+			return nil, ExprNotSupported
+		}
+		left, err := Convert(node.Left)
+		if err != nil {
+			return nil, err
+		}
+		right, err := Convert(node.Right)
+		if err != nil {
+			return nil, err
 		}
 		return &sqltypes.BinaryOp{
 			Expr:  op,
-			Left:  Convert(node.Left),
-			Right: Convert(node.Right),
-		}
+			Left:  left,
+			Right: right,
+		}, nil
 
 	}
-	return nil
+	return nil, ExprNotSupported
 }

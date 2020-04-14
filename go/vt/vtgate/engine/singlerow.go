@@ -26,6 +26,7 @@ var _ Primitive = (*SingleRow)(nil)
 // SingleRow defines an empty result
 type SingleRow struct {
 	noInputs
+	noTxNeeded
 }
 
 // RouteType returns a description of the query routing type used by the primitive

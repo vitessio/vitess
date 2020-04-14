@@ -254,10 +254,10 @@ func TestSelectUserDefindVariable(t *testing.T) {
 	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "@foo", Type: sqltypes.VarChar},
+			{Name: "@foo", Type: sqltypes.VarBinary},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewVarChar("bar"),
+			sqltypes.NewVarBinary("bar"),
 		}},
 	}
 	require.NoError(t, err)
@@ -386,10 +386,10 @@ func TestSelectDatabase(t *testing.T) {
 		map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "database()", Type: sqltypes.VarChar},
+			{Name: "database()", Type: sqltypes.VarBinary},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewVarChar("TestExecutor"),
+			sqltypes.NewVarBinary("TestExecutor"),
 		}},
 	}
 	require.NoError(t, err)

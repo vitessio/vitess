@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -74,19 +75,12 @@ func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 // pushed into a route, then a primitive is created on top of any
 // of the above trees to make it discard unwanted rows.
 func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, canRunLocally bool) error {
-	if checkForDual(sel) && outer == nil && canRunLocally {
-		exprs := make([]sqltypes.Expr, len(sel.SelectExprs))
-		cols := make([]string, len(sel.SelectExprs))
-		for i, e := range sel.SelectExprs {
-			expr := e.(*sqlparser.AliasedExpr)
-			exprs[i] = sqlparser.Convert(expr.Expr)
-			cols[i] = expr.As.String()
-		}
-		pb.bldr = &vtgateExecution{
-			exprs,
-			cols,
-		}
-		return nil
+	err, done := pb.runAtVtgate(sel, outer, canRunLocally)
+	if err == sqlparser.ExprNotSupported {
+		log.Warningf("Expression not supported at vtgate level")
+	}
+	if done {
+		return err
 	}
 	if err := pb.processTableExprs(sel.From); err != nil {
 		return err
@@ -134,6 +128,28 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 	}
 	pb.bldr.PushMisc(sel)
 	return nil
+}
+
+func (pb *primitiveBuilder) runAtVtgate(sel *sqlparser.Select, outer *symtab, canRunLocally bool) (error, bool) {
+	if checkForDual(sel) && outer == nil && canRunLocally {
+		var err error
+		exprs := make([]sqltypes.Expr, len(sel.SelectExprs))
+		cols := make([]string, len(sel.SelectExprs))
+		for i, e := range sel.SelectExprs {
+			expr := e.(*sqlparser.AliasedExpr)
+			exprs[i], err = sqlparser.Convert(expr.Expr)
+			if err != nil {
+				return err, false
+			}
+			cols[i] = expr.As.String()
+		}
+		pb.bldr = &vtgateExecution{
+			exprs,
+			cols,
+		}
+		return nil, true
+	}
+	return nil, false
 }
 
 func checkForDual(sel *sqlparser.Select) bool {

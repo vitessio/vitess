@@ -728,7 +728,7 @@ func castFromNumeric(v evalResult, resultType querypb.Type) Value {
 			}
 			return MakeTrusted(resultType, strconv.AppendFloat(nil, v.fval, format, -1, 64))
 		}
-	case resultType == VarChar:
+	case resultType == VarChar || resultType == VarBinary:
 		return MakeTrusted(resultType, []byte(v.str))
 	}
 	return NULL
