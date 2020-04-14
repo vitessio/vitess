@@ -83,13 +83,12 @@ type TxPool struct {
 	// connections with CLIENT_FOUND_ROWS flag set. A separate
 	// pool is needed because this option can only be set at
 	// connection time.
-	foundRowsPool          *connpool.Pool
-	activePool             *pools.Numbered
-	lastID                 sync2.AtomicInt64
-	transactionTimeout     sync2.AtomicDuration
-	transactionPoolTimeout sync2.AtomicDuration
-	ticks                  *timer.Timer
-	limiter                txlimiter.TxLimiter
+	foundRowsPool      *connpool.Pool
+	activePool         *pools.Numbered
+	lastID             sync2.AtomicInt64
+	transactionTimeout sync2.AtomicDuration
+	ticks              *timer.Timer
+	limiter            txlimiter.TxLimiter
 
 	txStats *servenv.TimingsWrapper
 
@@ -104,24 +103,23 @@ type TxPool struct {
 func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 	config := env.Config()
 	transactionTimeout := time.Duration(config.TransactionTimeout * 1e9)
+	poolTimeout := time.Duration(config.TxPoolTimeout * 1e9)
 	axp := &TxPool{
-		env:                    env,
-		conns:                  connpool.New(env, "TransactionPool", config.TransactionCap, config.TxPoolPrefillParallelism, time.Duration(config.IdleTimeout*1e9)),
-		foundRowsPool:          connpool.New(env, "FoundRowsPool", config.FoundRowsPoolSize, config.TxPoolPrefillParallelism, time.Duration(config.IdleTimeout*1e9)),
-		activePool:             pools.NewNumbered(),
-		lastID:                 sync2.NewAtomicInt64(time.Now().UnixNano()),
-		transactionTimeout:     sync2.NewAtomicDuration(transactionTimeout),
-		transactionPoolTimeout: sync2.NewAtomicDuration(time.Duration(config.TxPoolTimeout * 1e9)),
-		waiterCap:              sync2.NewAtomicInt64(int64(config.TxPoolWaiterCap)),
-		waiters:                sync2.NewAtomicInt64(0),
-		ticks:                  timer.NewTimer(transactionTimeout / 10),
-		limiter:                limiter,
-		txStats:                env.Exporter().NewTimings("Transactions", "Transaction stats", "operation"),
+		env:                env,
+		conns:              connpool.New(env, "TransactionPool", config.TransactionCap, config.TxPoolPrefillParallelism, poolTimeout, time.Duration(config.IdleTimeout*1e9)),
+		foundRowsPool:      connpool.New(env, "FoundRowsPool", config.FoundRowsPoolSize, config.TxPoolPrefillParallelism, poolTimeout, time.Duration(config.IdleTimeout*1e9)),
+		activePool:         pools.NewNumbered(),
+		lastID:             sync2.NewAtomicInt64(time.Now().UnixNano()),
+		transactionTimeout: sync2.NewAtomicDuration(transactionTimeout),
+		waiterCap:          sync2.NewAtomicInt64(int64(config.TxPoolWaiterCap)),
+		waiters:            sync2.NewAtomicInt64(0),
+		ticks:              timer.NewTimer(transactionTimeout / 10),
+		limiter:            limiter,
+		txStats:            env.Exporter().NewTimings("Transactions", "Transaction stats", "operation"),
 	}
 	// Careful: conns also exports name+"xxx" vars,
 	// but we know it doesn't export Timeout.
 	env.Exporter().NewGaugeDurationFunc("TransactionTimeout", "Transaction timeout", axp.transactionTimeout.Get)
-	env.Exporter().NewGaugeDurationFunc("TransactionPoolTimeout", "Timeout to get a connection from the transaction pool", axp.transactionPoolTimeout.Get)
 	env.Exporter().NewGaugeFunc("TransactionPoolWaiters", "Transaction pool waiters", axp.waiters.Get)
 	return axp
 }
@@ -223,12 +221,10 @@ func (axp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (
 		axp.limiter.Release(immediateCaller, effectiveCaller)
 	}()
 
-	poolCtx, poolCancel := context.WithTimeout(ctx, axp.transactionPoolTimeout.Get())
-	defer poolCancel()
 	if options.GetClientFoundRows() {
-		conn, err = axp.foundRowsPool.Get(poolCtx)
+		conn, err = axp.foundRowsPool.Get(ctx)
 	} else {
-		conn, err = axp.conns.Get(poolCtx)
+		conn, err = axp.conns.Get(ctx)
 	}
 	if err != nil {
 		switch err {
@@ -395,16 +391,6 @@ func (axp *TxPool) Timeout() time.Duration {
 func (axp *TxPool) SetTimeout(timeout time.Duration) {
 	axp.transactionTimeout.Set(timeout)
 	axp.ticks.SetInterval(timeout / 10)
-}
-
-// PoolTimeout returns the transaction pool timeout.
-func (axp *TxPool) PoolTimeout() time.Duration {
-	return axp.transactionPoolTimeout.Get()
-}
-
-// SetPoolTimeout sets the transaction pool timeout.
-func (axp *TxPool) SetPoolTimeout(timeout time.Duration) {
-	axp.transactionPoolTimeout.Set(timeout)
 }
 
 // TxConnection is meant for executing transactions. It can return itself to

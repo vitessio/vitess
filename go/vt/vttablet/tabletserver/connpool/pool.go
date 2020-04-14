@@ -50,6 +50,7 @@ type Pool struct {
 	connections        *pools.ResourcePool
 	capacity           int
 	prefillParallelism int
+	timeout            time.Duration
 	idleTimeout        time.Duration
 	dbaPool            *dbconnpool.ConnectionPool
 	appDebugParams     dbconfigs.Connector
@@ -57,12 +58,13 @@ type Pool struct {
 
 // New creates a new Pool. The name is used
 // to publish stats only.
-func New(env tabletenv.Env, name string, capacity int, prefillParallelism int, idleTimeout time.Duration) *Pool {
+func New(env tabletenv.Env, name string, capacity int, prefillParallelism int, timeout, idleTimeout time.Duration) *Pool {
 	cp := &Pool{
 		env:                env,
 		name:               name,
 		capacity:           capacity,
 		prefillParallelism: prefillParallelism,
+		timeout:            timeout,
 		idleTimeout:        idleTimeout,
 		dbaPool:            dbconnpool.NewConnectionPool("", 1, idleTimeout, 0),
 	}
@@ -151,6 +153,11 @@ func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
 	span.Annotate("available", p.Available())
 	span.Annotate("active", p.Active())
 
+	if cp.timeout != 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, cp.timeout)
+		defer cancel()
+	}
 	r, err := p.Get(ctx)
 	if err != nil {
 		return nil, err

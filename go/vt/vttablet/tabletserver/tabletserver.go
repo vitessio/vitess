@@ -251,7 +251,6 @@ func NewTabletServer(name string, config tabletenv.TabletConfig, topoServer *top
 		return map[string]int64{tsv.GetState(): 1}
 	})
 	tsv.exporter.NewGaugeDurationFunc("QueryTimeout", "Tablet server query timeout", tsv.QueryTimeout.Get)
-	tsv.exporter.NewGaugeDurationFunc("QueryPoolTimeout", "Tablet server timeout to get a connection from the query pool", tsv.qe.connTimeout.Get)
 
 	tsv.registerDebugHealthHandler()
 	tsv.registerQueryzHandler()
@@ -1874,17 +1873,6 @@ func (tsv *TabletServer) TxTimeout() time.Duration {
 	return tsv.te.txPool.Timeout()
 }
 
-// SetTxPoolTimeout changes the transaction pool timeout to the specified value.
-// This function should only be used for testing.
-func (tsv *TabletServer) SetTxPoolTimeout(val time.Duration) {
-	tsv.te.txPool.SetPoolTimeout(val)
-}
-
-// TxPoolTimeout returns the transaction pool timeout.
-func (tsv *TabletServer) TxPoolTimeout() time.Duration {
-	return tsv.te.txPool.PoolTimeout()
-}
-
 // SetQueryPlanCacheCap changes the pool size to the specified value.
 // This function should only be used for testing.
 func (tsv *TabletServer) SetQueryPlanCacheCap(val int) {
@@ -1933,20 +1921,6 @@ func (tsv *TabletServer) MaxDMLRows() int {
 // It should only be used for testing
 func (tsv *TabletServer) SetPassthroughDMLs(val bool) {
 	planbuilder.PassthroughDMLs = val
-}
-
-// SetQueryPoolTimeout changes the timeout to get a connection from the
-// query pool
-// This function should only be used for testing.
-func (tsv *TabletServer) SetQueryPoolTimeout(val time.Duration) {
-	tsv.qe.connTimeout.Set(val)
-}
-
-// GetQueryPoolTimeout returns the timeout to get a connection from the
-// query pool
-// This function should only be used for testing.
-func (tsv *TabletServer) GetQueryPoolTimeout() time.Duration {
-	return tsv.qe.connTimeout.Get()
 }
 
 // SetQueryPoolWaiterCap changes the limit on the number of queries that can be
