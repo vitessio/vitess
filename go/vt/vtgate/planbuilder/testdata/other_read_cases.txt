@@ -1,0 +1,76 @@
+# Explain statement
+"explain select * from user"
+{
+  "QueryType": "OTHER",
+  "Original": "explain select * from user",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Variant": "",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "explain select * from user",
+    "SingleShardOnly": true
+  }
+}
+
+# Analyze statement
+"analyze table t1"
+{
+  "QueryType": "OTHER",
+  "Original": "analyze table t1",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Variant": "",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "analyze table t1",
+    "SingleShardOnly": true
+  }
+}
+
+# Describe statement
+"describe t1"
+{
+  "QueryType": "OTHER",
+  "Original": "describe t1",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Variant": "",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "describe t1",
+    "SingleShardOnly": true
+  }
+}
+
+# Desc statement
+"desc t1"
+{
+  "QueryType": "OTHER",
+  "Original": "desc t1",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Variant": "",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "desc t1",
+    "SingleShardOnly": true
+  }
+}
+

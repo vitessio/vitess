@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2020 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,29 +18,24 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/key"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildPlanForBypass(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
-	switch vschema.Destination().(type) {
-	case key.DestinationExactKeyRange:
-		if _, ok := stmt.(*sqlparser.Insert); ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "range queries not supported for inserts: %s", vschema.TargetString())
-		}
-	}
-
-	keyspace, err := vschema.DefaultKeyspace()
+func buildOtherReadAndAdmin(sql string, vschema ContextVSchema) (engine.Primitive, error) {
+	destination, keyspace, _, err := vschema.TargetDestination("")
 	if err != nil {
 		return nil, err
 	}
+
+	if destination == nil {
+		destination = key.DestinationAnyShard{}
+	}
+
 	return &engine.Send{
 		Keyspace:          keyspace,
-		TargetDestination: vschema.Destination(),
-		Query:             sqlparser.String(stmt),
-		IsDML:             sqlparser.IsDMLStatement(stmt),
-		SingleShardOnly:   false,
+		TargetDestination: destination,
+		Query:             sql, //This is original sql query to be passed as the parser can provide partial ddl AST.
+		IsDML:             false,
+		SingleShardOnly:   true,
 	}, nil
 }
