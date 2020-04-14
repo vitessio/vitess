@@ -17,8 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"encoding/json"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/query"
@@ -45,32 +43,15 @@ type Send struct {
 	// IsDML specifies how to deal with autocommit behaviour
 	IsDML bool
 
+	// SingleShardOnly specifies that the query must be send to only single shard
+	SingleShardOnly bool
+
 	noInputs
 }
 
 //NeedsTransaction implements the Primitive interface
 func (s *Send) NeedsTransaction() bool {
 	return s.IsDML
-}
-
-// MarshalJSON serializes the Send into a JSON representation.
-// It's used for testing and diagnostics.
-func (s *Send) MarshalJSON() ([]byte, error) {
-	marshalSend := struct {
-		Opcode            string
-		Keyspace          *vindexes.Keyspace
-		TargetDestination key.Destination
-		Query             string
-		IsDML             bool
-	}{
-		Opcode:            "Send",
-		Keyspace:          s.Keyspace,
-		TargetDestination: s.TargetDestination,
-		IsDML:             s.IsDML,
-		Query:             s.Query,
-	}
-
-	return json.Marshal(marshalSend)
 }
 
 // RouteType implements Primitive interface
@@ -101,6 +82,10 @@ func (s *Send) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable,
 
 	if !s.Keyspace.Sharded && len(rss) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
+	}
+
+	if s.SingleShardOnly && len(rss) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %s, got: %v", s.Query, s.TargetDestination)
 	}
 
 	queries := make([]*querypb.BoundQuery, len(rss))
@@ -137,9 +122,10 @@ func (s *Send) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariabl
 
 func (s *Send) description() PrimitiveDescription {
 	other := map[string]interface{}{
-		"Query": s.Query,
-		"Table": s.GetTableName(),
-		"IsDML": s.IsDML,
+		"Query":           s.Query,
+		"Table":           s.GetTableName(),
+		"IsDML":           s.IsDML,
+		"SingleShardOnly": s.SingleShardOnly,
 	}
 	return PrimitiveDescription{
 		OperatorType:      "Send",

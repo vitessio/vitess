@@ -211,6 +211,23 @@ func TestDDLPlanningFromFile(t *testing.T) {
 	testFile(t, "ddl_cases.txt", testOutputTempDir, vschema)
 }
 
+func TestOtherPlanningFromFile(t *testing.T) {
+	// We are testing this separately so we can set a default keyspace
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	require.NoError(t, err)
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json"),
+		keyspace: &vindexes.Keyspace{
+			Name:    "main",
+			Sharded: false,
+		},
+		tabletType: topodatapb.TabletType_MASTER,
+	}
+
+	testFile(t, "other_read_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "other_admin_cases.txt", testOutputTempDir, vschema)
+}
+
 func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
 	formal, err := vindexes.LoadFormal(locateFile(filename))
 	if err != nil {
@@ -238,7 +255,10 @@ type vschemaWrapper struct {
 }
 
 func (vw *vschemaWrapper) TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error) {
-	keyspaceName := vw.keyspace.Name
+	var keyspaceName string
+	if vw.keyspace != nil {
+		keyspaceName = vw.keyspace.Name
+	}
 	if vw.dest == nil && qualifier != "" {
 		keyspaceName = qualifier
 	}

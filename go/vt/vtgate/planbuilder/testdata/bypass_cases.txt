@@ -12,7 +12,8 @@
     },
     "TargetDestination": "Shard(-80)",
     "IsDML": false,
-    "Query": "select count(*), col from unsharded"
+    "Query": "select count(*), col from unsharded",
+    "SingleShardOnly": false
   }
 }
 
@@ -30,7 +31,8 @@
     },
     "TargetDestination": "Shard(-80)",
     "IsDML": true,
-    "Query": "update user set val = 1 where id = 18446744073709551616 and id = 1"
+    "Query": "update user set val = 1 where id = 18446744073709551616 and id = 1",
+    "SingleShardOnly": false
   }
 }
 
@@ -48,7 +50,8 @@
     },
     "TargetDestination": "Shard(-80)",
     "IsDML": true,
-    "Query": "delete from USER where ID = 42"
+    "Query": "delete from USER where ID = 42",
+    "SingleShardOnly": false
   }
 }
 
@@ -66,6 +69,7 @@
     },
     "TargetDestination": "Shard(-80)",
     "IsDML": true,
-    "Query": "insert into USER(ID, NAME) values (42, 'ms X')"
+    "Query": "insert into USER(ID, NAME) values (42, 'ms X')",
+    "SingleShardOnly": false
   }
 }

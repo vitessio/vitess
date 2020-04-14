@@ -10,10 +10,6 @@
 "show create database"
 "plan building not supported"
 
-# DBA statements
-"explain select * from user"
-"plan building not supported"
-
 # union operations in subqueries (FROM)
 "select * from (select * from user union all select * from user_extra) as t"
 "unsupported: UNION cannot be executed as a single route"

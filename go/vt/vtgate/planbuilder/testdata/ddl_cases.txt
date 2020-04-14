@@ -12,7 +12,8 @@
     },
     "TargetDestination": "AllShards()",
     "IsDML": false,
-    "Query": "create table t1(id bigint, primary key(id))"
+    "Query": "create table t1(id bigint, primary key(id))",
+    "SingleShardOnly": false
   }
 }
 
@@ -30,7 +31,8 @@
     },
     "TargetDestination": "AllShards()",
     "IsDML": false,
-    "Query": "create table user.t1(id bigint, primary key(id))"
+    "Query": "create table user.t1(id bigint, primary key(id))",
+    "SingleShardOnly": false
   }
 }
 
@@ -48,7 +50,8 @@
     },
     "TargetDestination": "AllShards()",
     "IsDML": false,
-    "Query": "create table a(id int)"
+    "Query": "create table a(id int)",
+    "SingleShardOnly": false
   }
 }
 
@@ -70,7 +73,8 @@
     },
     "TargetDestination": "AllShards()",
     "IsDML": false,
-    "Query": "alter table a ADD id int"
+    "Query": "alter table a ADD id int",
+    "SingleShardOnly": false
   }
 }
 
@@ -88,7 +92,8 @@
     },
     "TargetDestination": "AllShards()",
     "IsDML": false,
-    "Query": "alter table user.b ADD id int"
+    "Query": "alter table user.b ADD id int",
+    "SingleShardOnly": false
   }
 }
 
