@@ -30,6 +30,13 @@ import (
 	"vitess.io/vitess/go/vt/throttler"
 )
 
+// These constants represent values for various config parameters.
+const (
+	Enable  = "enable"
+	Disable = "disable"
+	Dryrun  = "dryRun"
+)
+
 var (
 	currentConfig TabletConfig
 
@@ -53,6 +60,10 @@ var (
 	deprecatedPoolNamePrefix                string
 	deprecatedMaxDMLRows                    int
 	deprecatedFoundRowsPoolSize             int
+
+	// The following vars are used for custom initialization of Tabletconfig.
+	enableHotRowProtection       bool
+	enableHotRowProtectionDryRun bool
 )
 
 func init() {
@@ -98,11 +109,11 @@ func init() {
 	flag.StringVar(&currentConfig.TxThrottlerConfig, "tx-throttler-config", defaultConfig.TxThrottlerConfig, "The configuration of the transaction throttler as a text formatted throttlerdata.Configuration protocol buffer message")
 	flagutil.StringListVar(&currentConfig.TxThrottlerHealthCheckCells, "tx-throttler-healthcheck-cells", defaultConfig.TxThrottlerHealthCheckCells, "A comma-separated list of cells. Only tabletservers running in these cells will be monitored for replication lag by the transaction throttler.")
 
-	flag.BoolVar(&currentConfig.EnableHotRowProtection, "enable_hot_row_protection", defaultConfig.EnableHotRowProtection, "If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.")
-	flag.BoolVar(&currentConfig.EnableHotRowProtectionDryRun, "enable_hot_row_protection_dry_run", defaultConfig.EnableHotRowProtectionDryRun, "If true, hot row protection is not enforced but logs if transactions would have been queued.")
-	flag.IntVar(&currentConfig.HotRowProtectionMaxQueueSize, "hot_row_protection_max_queue_size", defaultConfig.HotRowProtectionMaxQueueSize, "Maximum number of BeginExecute RPCs which will be queued for the same row (range).")
-	flag.IntVar(&currentConfig.HotRowProtectionMaxGlobalQueueSize, "hot_row_protection_max_global_queue_size", defaultConfig.HotRowProtectionMaxGlobalQueueSize, "Global queue limit across all row (ranges). Useful to prevent that the queue can grow unbounded.")
-	flag.IntVar(&currentConfig.HotRowProtectionConcurrentTransactions, "hot_row_protection_concurrent_transactions", defaultConfig.HotRowProtectionConcurrentTransactions, "Number of concurrent transactions let through to the txpool/MySQL for the same hot row. Should be > 1 to have enough 'ready' transactions in MySQL and benefit from a pipelining effect.")
+	flag.BoolVar(&enableHotRowProtection, "enable_hot_row_protection", false, "If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.")
+	flag.BoolVar(&enableHotRowProtectionDryRun, "enable_hot_row_protection_dry_run", false, "If true, hot row protection is not enforced but logs if transactions would have been queued.")
+	flag.IntVar(&currentConfig.HotRowProtection.MaxQueueSize, "hot_row_protection_max_queue_size", defaultConfig.HotRowProtection.MaxQueueSize, "Maximum number of BeginExecute RPCs which will be queued for the same row (range).")
+	flag.IntVar(&currentConfig.HotRowProtection.MaxGlobalQueueSize, "hot_row_protection_max_global_queue_size", defaultConfig.HotRowProtection.MaxGlobalQueueSize, "Global queue limit across all row (ranges). Useful to prevent that the queue can grow unbounded.")
+	flag.IntVar(&currentConfig.HotRowProtection.MaxConcurrency, "hot_row_protection_concurrent_transactions", defaultConfig.HotRowProtection.MaxConcurrency, "Number of concurrent transactions let through to the txpool/MySQL for the same hot row. Should be > 1 to have enough 'ready' transactions in MySQL and benefit from a pipelining effect.")
 
 	flag.BoolVar(&currentConfig.EnableTransactionLimit, "enable_transaction_limit", defaultConfig.EnableTransactionLimit, "If true, limit on number of transactions open at the same time will be enforced for all users. User trying to open a new transaction after exhausting their limit will receive an error immediately, regardless of whether there are available slots or not.")
 	flag.BoolVar(&currentConfig.EnableTransactionLimitDryRun, "enable_transaction_limit_dry_run", defaultConfig.EnableTransactionLimitDryRun, "If true, limit on number of transactions open at the same time will be tracked for all users, but not enforced.")
@@ -127,6 +138,16 @@ func Init() {
 	currentConfig.OlapReadPool.IdleTimeoutSeconds = currentConfig.OltpReadPool.IdleTimeoutSeconds
 	currentConfig.TxPool.IdleTimeoutSeconds = currentConfig.OltpReadPool.IdleTimeoutSeconds
 
+	if enableHotRowProtection {
+		if enableHotRowProtectionDryRun {
+			currentConfig.HotRowProtection.Mode = Dryrun
+		} else {
+			currentConfig.HotRowProtection.Mode = Enable
+		}
+	} else {
+		currentConfig.HotRowProtection.Mode = Disable
+	}
+
 	switch *streamlog.QueryLogFormat {
 	case streamlog.QueryLogFormatText:
 	case streamlog.QueryLogFormatJSON:
@@ -145,34 +166,29 @@ func Init() {
 
 // TabletConfig contains all the configuration for query service
 type TabletConfig struct {
-	OltpReadPool            ConnPoolConfig `json:"oltpReadPool,omitempty"`
-	OlapReadPool            ConnPoolConfig `json:"olapReadPool,omitempty"`
-	TxPool                  ConnPoolConfig `json:"txPool,omitempty"`
-	Oltp                    OltpConfig     `json:"oltp,omitempty"`
-	MessagePostponeCap      int            `json:"-"`
-	TxShutDownGracePeriod   float64        `json:"-"`
-	PassthroughDMLs         bool           `json:"-"`
-	StreamBufferSize        int            `json:"-"`
-	QueryPlanCacheSize      int            `json:"-"`
-	SchemaReloadTime        float64        `json:"-"`
-	StrictTableACL          bool           `json:"-"`
-	TerseErrors             bool           `json:"-"`
-	EnableTableACLDryRun    bool           `json:"-"`
-	TableACLExemptACL       string         `json:"-"`
-	WatchReplication        bool           `json:"-"`
-	TwoPCEnable             bool           `json:"-"`
-	TwoPCCoordinatorAddress string         `json:"-"`
-	TwoPCAbandonAge         float64        `json:"-"`
+	OltpReadPool            ConnPoolConfig         `json:"oltpReadPool,omitempty"`
+	OlapReadPool            ConnPoolConfig         `json:"olapReadPool,omitempty"`
+	TxPool                  ConnPoolConfig         `json:"txPool,omitempty"`
+	Oltp                    OltpConfig             `json:"oltp,omitempty"`
+	HotRowProtection        HotRowProtectionConfig `json:"hotRowProtection,omitempty"`
+	MessagePostponeCap      int                    `json:"-"`
+	TxShutDownGracePeriod   float64                `json:"-"`
+	PassthroughDMLs         bool                   `json:"-"`
+	StreamBufferSize        int                    `json:"-"`
+	QueryPlanCacheSize      int                    `json:"-"`
+	SchemaReloadTime        float64                `json:"-"`
+	StrictTableACL          bool                   `json:"-"`
+	TerseErrors             bool                   `json:"-"`
+	EnableTableACLDryRun    bool                   `json:"-"`
+	TableACLExemptACL       string                 `json:"-"`
+	WatchReplication        bool                   `json:"-"`
+	TwoPCEnable             bool                   `json:"-"`
+	TwoPCCoordinatorAddress string                 `json:"-"`
+	TwoPCAbandonAge         float64                `json:"-"`
 
 	EnableTxThrottler           bool     `json:"-"`
 	TxThrottlerConfig           string   `json:"-"`
 	TxThrottlerHealthCheckCells []string `json:"-"`
-
-	EnableHotRowProtection                 bool `json:"-"`
-	EnableHotRowProtectionDryRun           bool `json:"-"`
-	HotRowProtectionMaxQueueSize           int  `json:"-"`
-	HotRowProtectionMaxGlobalQueueSize     int  `json:"-"`
-	HotRowProtectionConcurrentTransactions int  `json:"-"`
 
 	TransactionLimitConfig `json:"-"`
 
@@ -185,7 +201,7 @@ type TabletConfig struct {
 	EnableQueryPlanFieldCaching bool `json:"-"`
 }
 
-// ConnPoolConfig contains the conig parameters for a conn pool.
+// ConnPoolConfig contains the config for a conn pool.
 type ConnPoolConfig struct {
 	Size               int `json:"size,omitempty"`
 	TimeoutSeconds     int `json:"timeoutSeconds,omitempty"`
@@ -200,6 +216,14 @@ type OltpConfig struct {
 	TxTimeoutSeconds    int `json:"txTimeoutSeconds,omitempty"`
 	MaxRows             int `json:"maxRpws,omitempty"`
 	WarnRows            int `json:"warnRows,omitempty"`
+}
+
+// HotRowProtectionConfig contains the config for hot row protection.
+type HotRowProtectionConfig struct {
+	Mode               string `json:"mode,omitempty"`
+	MaxQueueSize       int    `json:"maxQueueSize,omitempty"`
+	MaxGlobalQueueSize int    `json:"maxGlobalQueueSize,omitempty"`
+	MaxConcurrency     int    `json:"maxConcurrency,omitempty"`
 }
 
 // TransactionLimitConfig captures configuration of transaction pool slots
@@ -241,19 +265,16 @@ func (c *TabletConfig) Verify() error {
 	if err := c.verifyTransactionLimitConfig(); err != nil {
 		return err
 	}
-	if actual, dryRun := c.EnableHotRowProtection, c.EnableHotRowProtectionDryRun; actual && dryRun {
-		return errors.New("only one of two flags allowed: -enable_hot_row_protection or -enable_hot_row_protection_dry_run")
-	}
-	if v := c.HotRowProtectionMaxQueueSize; v <= 0 {
+	if v := c.HotRowProtection.MaxQueueSize; v <= 0 {
 		return fmt.Errorf("-hot_row_protection_max_queue_size must be > 0 (specified value: %v)", v)
 	}
-	if v := c.HotRowProtectionMaxGlobalQueueSize; v <= 0 {
+	if v := c.HotRowProtection.MaxGlobalQueueSize; v <= 0 {
 		return fmt.Errorf("-hot_row_protection_max_global_queue_size must be > 0 (specified value: %v)", v)
 	}
-	if globalSize, size := c.HotRowProtectionMaxGlobalQueueSize, c.HotRowProtectionMaxQueueSize; globalSize < size {
+	if globalSize, size := c.HotRowProtection.MaxGlobalQueueSize, c.HotRowProtection.MaxQueueSize; globalSize < size {
 		return fmt.Errorf("global queue size must be >= per row (range) queue size: -hot_row_protection_max_global_queue_size < hot_row_protection_max_queue_size (%v < %v)", globalSize, size)
 	}
-	if v := c.HotRowProtectionConcurrentTransactions; v <= 0 {
+	if v := c.HotRowProtection.MaxConcurrency; v <= 0 {
 		return fmt.Errorf("-hot_row_protection_concurrent_transactions must be > 0 (specified value: %v)", v)
 	}
 	return nil
@@ -310,6 +331,15 @@ var defaultConfig = TabletConfig{
 		TxTimeoutSeconds:    30,
 		MaxRows:             10000,
 	},
+	HotRowProtection: HotRowProtectionConfig{
+		Mode: Disable,
+		// Default value is the same as TxPool.Size.
+		MaxQueueSize:       20,
+		MaxGlobalQueueSize: 1000,
+		// Allow more than 1 transaction for the same hot row through to have enough
+		// of them ready in MySQL and profit from a pipelining effect.
+		MaxConcurrency: 5,
+	},
 	MessagePostponeCap:      4,
 	TxShutDownGracePeriod:   0,
 	PassthroughDMLs:         false,
@@ -328,15 +358,6 @@ var defaultConfig = TabletConfig{
 	EnableTxThrottler:           false,
 	TxThrottlerConfig:           defaultTxThrottlerConfig(),
 	TxThrottlerHealthCheckCells: []string{},
-
-	EnableHotRowProtection:       false,
-	EnableHotRowProtectionDryRun: false,
-	// Default value is the same as TransactionCap.
-	HotRowProtectionMaxQueueSize:       20,
-	HotRowProtectionMaxGlobalQueueSize: 1000,
-	// Allow more than 1 transaction for the same hot row through to have enough
-	// of them ready in MySQL and profit from a pipelining effect.
-	HotRowProtectionConcurrentTransactions: 5,
 
 	TransactionLimitConfig: defaultTransactionLimitConfig(),
 

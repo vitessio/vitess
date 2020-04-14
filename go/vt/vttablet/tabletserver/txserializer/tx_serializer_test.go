@@ -45,10 +45,9 @@ func resetVariables(txs *TxSerializer) {
 
 func TestTxSerializer_NoHotRow(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
-	config.EnableHotRowProtectionDryRun = false
-	config.HotRowProtectionMaxQueueSize = 1
-	config.HotRowProtectionMaxGlobalQueueSize = 1
-	config.HotRowProtectionConcurrentTransactions = 5
+	config.HotRowProtection.MaxQueueSize = 1
+	config.HotRowProtection.MaxGlobalQueueSize = 1
+	config.HotRowProtection.MaxConcurrency = 5
 	txs := New(tabletenv.NewTestEnv(config, nil, "TxSerializerTest"))
 	resetVariables(txs)
 
@@ -78,10 +77,9 @@ func TestTxSerializerRedactDebugUI(t *testing.T) {
 	}()
 
 	config := tabletenv.NewDefaultConfig()
-	config.EnableHotRowProtectionDryRun = false
-	config.HotRowProtectionMaxQueueSize = 1
-	config.HotRowProtectionMaxGlobalQueueSize = 1
-	config.HotRowProtectionConcurrentTransactions = 5
+	config.HotRowProtection.MaxQueueSize = 1
+	config.HotRowProtection.MaxGlobalQueueSize = 1
+	config.HotRowProtection.MaxConcurrency = 5
 	txs := New(tabletenv.NewTestEnv(config, nil, "TxSerializerTest"))
 	resetVariables(txs)
 
@@ -106,10 +104,9 @@ func TestTxSerializerRedactDebugUI(t *testing.T) {
 
 func TestTxSerializer(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
-	config.EnableHotRowProtectionDryRun = false
-	config.HotRowProtectionMaxQueueSize = 2
-	config.HotRowProtectionMaxGlobalQueueSize = 3
-	config.HotRowProtectionConcurrentTransactions = 1
+	config.HotRowProtection.MaxQueueSize = 2
+	config.HotRowProtection.MaxGlobalQueueSize = 3
+	config.HotRowProtection.MaxConcurrency = 1
 	txs := New(tabletenv.NewTestEnv(config, nil, "TxSerializerTest"))
 	resetVariables(txs)
 
@@ -180,10 +177,9 @@ func TestTxSerializer(t *testing.T) {
 func TestTxSerializer_ConcurrentTransactions(t *testing.T) {
 	// Allow up to 2 concurrent transactions per hot row.
 	config := tabletenv.NewDefaultConfig()
-	config.EnableHotRowProtectionDryRun = false
-	config.HotRowProtectionMaxQueueSize = 3
-	config.HotRowProtectionMaxGlobalQueueSize = 3
-	config.HotRowProtectionConcurrentTransactions = 2
+	config.HotRowProtection.MaxQueueSize = 3
+	config.HotRowProtection.MaxGlobalQueueSize = 3
+	config.HotRowProtection.MaxConcurrency = 2
 	txs := New(tabletenv.NewTestEnv(config, nil, "TxSerializerTest"))
 	resetVariables(txs)
 
@@ -304,10 +300,9 @@ func testHTTPHandler(txs *TxSerializer, count int, redacted bool) error {
 // tx3 will get canceled and tx4 will be unblocked once tx1 is done.
 func TestTxSerializerCancel(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
-	config.EnableHotRowProtectionDryRun = false
-	config.HotRowProtectionMaxQueueSize = 4
-	config.HotRowProtectionMaxGlobalQueueSize = 4
-	config.HotRowProtectionConcurrentTransactions = 2
+	config.HotRowProtection.MaxQueueSize = 4
+	config.HotRowProtection.MaxGlobalQueueSize = 4
+	config.HotRowProtection.MaxConcurrency = 2
 	txs := New(tabletenv.NewTestEnv(config, nil, "TxSerializerTest"))
 	resetVariables(txs)
 
@@ -405,10 +400,10 @@ func TestTxSerializerCancel(t *testing.T) {
 // the two concurrent transactions for the same key.
 func TestTxSerializerDryRun(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
-	config.EnableHotRowProtectionDryRun = true
-	config.HotRowProtectionMaxQueueSize = 1
-	config.HotRowProtectionMaxGlobalQueueSize = 2
-	config.HotRowProtectionConcurrentTransactions = 1
+	config.HotRowProtection.Mode = tabletenv.Dryrun
+	config.HotRowProtection.MaxQueueSize = 1
+	config.HotRowProtection.MaxGlobalQueueSize = 2
+	config.HotRowProtection.MaxConcurrency = 1
 	txs := New(tabletenv.NewTestEnv(config, nil, "TxSerializerTest"))
 	resetVariables(txs)
 
@@ -476,10 +471,9 @@ func TestTxSerializerDryRun(t *testing.T) {
 // and RPC deadline.
 func TestTxSerializerGlobalQueueOverflow(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
-	config.EnableHotRowProtectionDryRun = false
-	config.HotRowProtectionMaxQueueSize = 1
-	config.HotRowProtectionMaxGlobalQueueSize = 1
-	config.HotRowProtectionConcurrentTransactions = 1
+	config.HotRowProtection.MaxQueueSize = 1
+	config.HotRowProtection.MaxGlobalQueueSize = 1
+	config.HotRowProtection.MaxConcurrency = 1
 	txs := New(tabletenv.NewTestEnv(config, nil, "TxSerializerTest"))
 
 	// tx1.
@@ -518,10 +512,9 @@ func TestTxSerializerGlobalQueueOverflow(t *testing.T) {
 
 func TestTxSerializerPending(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
-	config.EnableHotRowProtectionDryRun = false
-	config.HotRowProtectionMaxQueueSize = 1
-	config.HotRowProtectionMaxGlobalQueueSize = 1
-	config.HotRowProtectionConcurrentTransactions = 1
+	config.HotRowProtection.MaxQueueSize = 1
+	config.HotRowProtection.MaxGlobalQueueSize = 1
+	config.HotRowProtection.MaxConcurrency = 1
 	txs := New(tabletenv.NewTestEnv(config, nil, "TxSerializerTest"))
 	if got, want := txs.Pending("t1 where1"), 0; got != want {
 		t.Errorf("there should be no pending transaction: got = %v, want = %v", got, want)
@@ -530,10 +523,9 @@ func TestTxSerializerPending(t *testing.T) {
 
 func BenchmarkTxSerializer_NoHotRow(b *testing.B) {
 	config := tabletenv.NewDefaultConfig()
-	config.EnableHotRowProtectionDryRun = false
-	config.HotRowProtectionMaxQueueSize = 1
-	config.HotRowProtectionMaxGlobalQueueSize = 1
-	config.HotRowProtectionConcurrentTransactions = 5
+	config.HotRowProtection.MaxQueueSize = 1
+	config.HotRowProtection.MaxGlobalQueueSize = 1
+	config.HotRowProtection.MaxConcurrency = 5
 	txs := New(tabletenv.NewTestEnv(config, nil, "TxSerializerTest"))
 
 	b.ResetTimer()

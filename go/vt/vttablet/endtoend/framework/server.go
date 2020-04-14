@@ -69,7 +69,7 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 	config.TwoPCEnable = true
 	config.TwoPCAbandonAge = 1
 	config.TwoPCCoordinatorAddress = "fake"
-	config.EnableHotRowProtection = true
+	config.HotRowProtection.Mode = tabletenv.Enable
 
 	Target = querypb.Target{
 		Keyspace:   "vttest",
