@@ -1338,8 +1338,8 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
 	config := tabletenv.NewDefaultConfig()
-	config.EnableHotRowProtection = true
-	config.HotRowProtectionConcurrentTransactions = 1
+	config.HotRowProtection.Mode = tabletenv.Enable
+	config.HotRowProtection.MaxConcurrency = 1
 	// Reduce the txpool to 2 because we should never consume more than two slots.
 	config.TxPool.Size = 2
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
@@ -1449,8 +1449,8 @@ func TestDMLQueryWithoutWhereClause(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
 	config := tabletenv.NewDefaultConfig()
-	config.EnableHotRowProtection = true
-	config.HotRowProtectionConcurrentTransactions = 1
+	config.HotRowProtection.Mode = tabletenv.Enable
+	config.HotRowProtection.MaxConcurrency = 1
 
 	config.TxPool.Size = 2
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
@@ -1489,8 +1489,8 @@ func TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
 	config := tabletenv.NewDefaultConfig()
-	config.EnableHotRowProtection = true
-	config.HotRowProtectionConcurrentTransactions = 1
+	config.HotRowProtection.Mode = tabletenv.Enable
+	config.HotRowProtection.MaxConcurrency = 1
 	// Reduce the txpool to 2 because we should never consume more than two slots.
 	config.TxPool.Size = 2
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
@@ -1606,8 +1606,8 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
 	config := tabletenv.NewDefaultConfig()
-	config.EnableHotRowProtection = true
-	config.HotRowProtectionConcurrentTransactions = 2
+	config.HotRowProtection.Mode = tabletenv.Enable
+	config.HotRowProtection.MaxConcurrency = 2
 	// Reduce the txpool to 2 because we should never consume more than two slots.
 	config.TxPool.Size = 2
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
@@ -1747,9 +1747,9 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
 	config := tabletenv.NewDefaultConfig()
-	config.EnableHotRowProtection = true
-	config.HotRowProtectionMaxQueueSize = 1
-	config.HotRowProtectionConcurrentTransactions = 1
+	config.HotRowProtection.Mode = tabletenv.Enable
+	config.HotRowProtection.MaxQueueSize = 1
+	config.HotRowProtection.MaxConcurrency = 1
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1835,9 +1835,9 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests_ExecuteBatchAsTrans
 	db := setUpTabletServerTest(t)
 	defer db.Close()
 	config := tabletenv.NewDefaultConfig()
-	config.EnableHotRowProtection = true
-	config.HotRowProtectionMaxQueueSize = 1
-	config.HotRowProtectionConcurrentTransactions = 1
+	config.HotRowProtection.Mode = tabletenv.Enable
+	config.HotRowProtection.MaxQueueSize = 1
+	config.HotRowProtection.MaxConcurrency = 1
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1927,8 +1927,8 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
 	config := tabletenv.NewDefaultConfig()
-	config.EnableHotRowProtection = true
-	config.HotRowProtectionConcurrentTransactions = 1
+	config.HotRowProtection.Mode = tabletenv.Enable
+	config.HotRowProtection.MaxConcurrency = 1
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}

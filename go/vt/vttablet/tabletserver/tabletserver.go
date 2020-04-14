@@ -220,7 +220,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		config:                 config,
 		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.Oltp.QueryTimeoutSeconds * 1e9)),
 		TerseErrors:            config.TerseErrors,
-		enableHotRowProtection: config.EnableHotRowProtection || config.EnableHotRowProtectionDryRun,
+		enableHotRowProtection: config.HotRowProtection.Mode != tabletenv.Disable,
 		checkMySQLThrottler:    sync2.NewSemaphore(1, 0),
 		streamHealthMap:        make(map[int]chan<- *querypb.StreamHealthResponse),
 		history:                history.New(10),
