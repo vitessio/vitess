@@ -73,10 +73,10 @@ txPool:
   maxWaiters: 50000        # queryserver-config-txpool-waiter-cap
 
 oltp:
-  queryTimeout: 30     # queryserver-config-query-timeout
-  txTimeoutSeconds: 30 # queryserver-config-transaction-timeout
-  maxRows: 10000       # queryserver-config-max-result-size
-  warnRows: 0          # queryserver-config-warn-result-size
+  queryTimeoutSeconds: 30 # queryserver-config-query-timeout
+  txTimeoutSeconds: 30    # queryserver-config-transaction-timeout
+  maxRows: 10000          # queryserver-config-max-result-size
+  warnRows: 0             # queryserver-config-warn-result-size
 
 consolidator:
   enable: true        # enable-consolidator

@@ -65,16 +65,16 @@ func TestConfigVars(t *testing.T) {
 		val: tabletenv.Config.OltpReadPool.Size,
 	}, {
 		tag: "MaxResultSize",
-		val: tabletenv.Config.MaxResultSize,
+		val: tabletenv.Config.Oltp.MaxRows,
 	}, {
 		tag: "WarnResultSize",
-		val: tabletenv.Config.WarnResultSize,
+		val: tabletenv.Config.Oltp.WarnRows,
 	}, {
 		tag: "QueryCacheCapacity",
 		val: tabletenv.Config.QueryPlanCacheSize,
 	}, {
 		tag: "QueryTimeout",
-		val: int(tabletenv.Config.QueryTimeout * 1e9),
+		val: int(tabletenv.Config.Oltp.QueryTimeoutSeconds * 1e9),
 	}, {
 		tag: "SchemaReloadTime",
 		val: int(tabletenv.Config.SchemaReloadTime * 1e9),
@@ -107,7 +107,7 @@ func TestConfigVars(t *testing.T) {
 		val: tabletenv.Config.TxPool.Size,
 	}, {
 		tag: "TransactionTimeout",
-		val: int(tabletenv.Config.TransactionTimeout * 1e9),
+		val: int(tabletenv.Config.Oltp.TxTimeoutSeconds * 1e9),
 	}}
 	for _, tcase := range cases {
 		if err := verifyIntValue(vars, tcase.tag, int(tcase.val)); err != nil {

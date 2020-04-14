@@ -699,7 +699,7 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 func newTxPool() *TxPool {
 	config := tabletenv.DefaultQsConfig
 	config.TxPool.Size = 300
-	config.TransactionTimeout = 30
+	config.Oltp.TxTimeoutSeconds = 30
 	config.TxPool.TimeoutSeconds = 40
 	config.TxPoolWaiterCap = 500000
 	config.OltpReadPool.IdleTimeoutSeconds = 30

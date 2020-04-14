@@ -1064,7 +1064,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 		config.TwoPCAbandonAge = 10
 	}
 	if flags&smallResultSize > 0 {
-		config.MaxResultSize = 2
+		config.Oltp.MaxRows = 2
 	}
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbconfigs := newDBConfigs(db)

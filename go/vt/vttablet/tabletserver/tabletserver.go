@@ -218,7 +218,7 @@ func NewTabletServer(name string, config tabletenv.TabletConfig, topoServer *top
 		exporter:               exporter,
 		stats:                  tabletenv.NewStats(exporter),
 		config:                 &config,
-		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
+		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.Oltp.QueryTimeoutSeconds * 1e9)),
 		TerseErrors:            config.TerseErrors,
 		enableHotRowProtection: config.EnableHotRowProtection || config.EnableHotRowProtectionDryRun,
 		checkMySQLThrottler:    sync2.NewSemaphore(1, 0),

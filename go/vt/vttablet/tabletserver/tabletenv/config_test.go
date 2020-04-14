@@ -37,6 +37,7 @@ func TestConfigParse(t *testing.T) {
 	gotBytes, err := yaml.Marshal(&cfg)
 	require.NoError(t, err)
 	wantBytes := `olapReadPool: {}
+oltp: {}
 oltpReadPool:
   idleTimeoutSeconds: 20
   maxWaiters: 40
