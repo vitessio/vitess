@@ -250,7 +250,7 @@ func TestSelectUserDefindVariable(t *testing.T) {
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select :__vtudvfoo as `@foo` from dual",
-		BindVariables: map[string]*querypb.BindVariable{"__vtudvfoo": sqltypes.StringBindVariable("bar")},
+		BindVariables: map[string]*querypb.BindVariable{"__vtudvfoo": sqltypes.BytesBindVariable([]byte("bar"))},
 	}}
 
 	assert.Equal(t, wantQueries, sbc1.Queries)
@@ -409,15 +409,15 @@ func TestSelectBindvars(t *testing.T) {
 	// Test with StringBindVariable
 	sql = "select id from user where name in (:name1, :name2)"
 	_, err = executorExec(executor, sql, map[string]*querypb.BindVariable{
-		"name1": sqltypes.StringBindVariable("foo1"),
-		"name2": sqltypes.StringBindVariable("foo2"),
+		"name1": sqltypes.BytesBindVariable([]byte("foo1")),
+		"name2": sqltypes.BytesBindVariable([]byte("foo2")),
 	})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select id from user where name in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name1":  sqltypes.StringBindVariable("foo1"),
-			"name2":  sqltypes.StringBindVariable("foo2"),
+			"name1":  sqltypes.BytesBindVariable([]byte("foo1")),
+			"name2":  sqltypes.BytesBindVariable([]byte("foo2")),
 			"__vals": sqltypes.TestBindVariable([]interface{}{"foo1", "foo2"}),
 		},
 	}}
