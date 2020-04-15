@@ -33,10 +33,7 @@
           "Sharded": false
         },
         "TargetDestination": {},
-        "CurrentSysVarQuery": "select @@sql_mode from dual",
-        "ResolveExpr": false,
-        "PlanValue": null,
-        "NewSysVarQuery": "select concat(@@sql_mode, ',NO_AUTO_CREATE_USER') from dual"
+        "CheckSysVarQuery": "select 1 from dual where @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER')"
       }
     ]
   }
