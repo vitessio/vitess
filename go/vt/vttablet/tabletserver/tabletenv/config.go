@@ -67,6 +67,8 @@ var (
 	enableHotRowProtectionDryRun bool
 	enableConsolidator           bool
 	enableConsolidatorReplicas   bool
+	enableHeartbeat              bool
+	heartbeatInterval            time.Duration
 )
 
 func init() {
@@ -126,8 +128,8 @@ func init() {
 	flag.BoolVar(&currentConfig.TransactionLimitByComponent, "transaction_limit_by_component", defaultConfig.TransactionLimitByComponent, "Include CallerID.component when considering who the user is for the purpose of transaction limit.")
 	flag.BoolVar(&currentConfig.TransactionLimitBySubcomponent, "transaction_limit_by_subcomponent", defaultConfig.TransactionLimitBySubcomponent, "Include CallerID.subcomponent when considering who the user is for the purpose of transaction limit.")
 
-	flag.BoolVar(&currentConfig.HeartbeatEnable, "heartbeat_enable", defaultConfig.HeartbeatEnable, "If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.")
-	flag.DurationVar(&currentConfig.HeartbeatInterval, "heartbeat_interval", defaultConfig.HeartbeatInterval, "How frequently to read and write replication heartbeat.")
+	flag.BoolVar(&enableHeartbeat, "heartbeat_enable", false, "If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.")
+	flag.DurationVar(&heartbeatInterval, "heartbeat_interval", 1*time.Second, "How frequently to read and write replication heartbeat.")
 
 	flag.BoolVar(&currentConfig.EnforceStrictTransTables, "enforce_strict_trans_tables", defaultConfig.EnforceStrictTransTables, "If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database.")
 	flag.BoolVar(&enableConsolidator, "enable-consolidator", true, "This option enables the query consolidator.")
@@ -160,6 +162,10 @@ func Init() {
 		currentConfig.Consolidator = Disable
 	}
 
+	if enableHeartbeat {
+		currentConfig.HeartbeatIntervalMilliseconds = int(heartbeatInterval / time.Millisecond)
+	}
+
 	switch *streamlog.QueryLogFormat {
 	case streamlog.QueryLogFormatText:
 	case streamlog.QueryLogFormatJSON:
@@ -178,12 +184,13 @@ func Init() {
 
 // TabletConfig contains all the configuration for query service
 type TabletConfig struct {
-	OltpReadPool     ConnPoolConfig         `json:"oltpReadPool,omitempty"`
-	OlapReadPool     ConnPoolConfig         `json:"olapReadPool,omitempty"`
-	TxPool           ConnPoolConfig         `json:"txPool,omitempty"`
-	Oltp             OltpConfig             `json:"oltp,omitempty"`
-	HotRowProtection HotRowProtectionConfig `json:"hotRowProtection,omitempty"`
-	Consolidator     string                 `json:"consolidator,omitempty"`
+	OltpReadPool                  ConnPoolConfig         `json:"oltpReadPool,omitempty"`
+	OlapReadPool                  ConnPoolConfig         `json:"olapReadPool,omitempty"`
+	TxPool                        ConnPoolConfig         `json:"txPool,omitempty"`
+	Oltp                          OltpConfig             `json:"oltp,omitempty"`
+	HotRowProtection              HotRowProtectionConfig `json:"hotRowProtection,omitempty"`
+	Consolidator                  string                 `json:"consolidator,omitempty"`
+	HeartbeatIntervalMilliseconds int                    `json:"heartbeatIntervalMilliseconds,omitempty"`
 
 	MessagePostponeCap      int     `json:"-"`
 	TxShutDownGracePeriod   float64 `json:"-"`
@@ -205,9 +212,6 @@ type TabletConfig struct {
 	TxThrottlerHealthCheckCells []string `json:"-"`
 
 	TransactionLimitConfig `json:"-"`
-
-	HeartbeatEnable   bool          `json:"-"`
-	HeartbeatInterval time.Duration `json:"-"`
 
 	EnforceStrictTransTables    bool `json:"-"`
 	EnableQueryPlanFieldCaching bool `json:"-"`
@@ -373,9 +377,6 @@ var defaultConfig = TabletConfig{
 	TxThrottlerHealthCheckCells: []string{},
 
 	TransactionLimitConfig: defaultTransactionLimitConfig(),
-
-	HeartbeatEnable:   false,
-	HeartbeatInterval: 1 * time.Second,
 
 	EnforceStrictTransTables:    true,
 	EnableQueryPlanFieldCaching: true,
