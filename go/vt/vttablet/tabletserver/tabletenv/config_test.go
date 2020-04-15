@@ -61,3 +61,37 @@ txPool: {}
 	require.NoError(t, err)
 	assert.Equal(t, cfg, gotCfg)
 }
+
+func TestDefaultConfig(t *testing.T) {
+	gotBytes, err := yaml.Marshal(NewDefaultConfig())
+	require.NoError(t, err)
+	want := `cacheResultFields: true
+consolidator: enable
+hotRowProtection:
+  maxConcurrency: 5
+  maxGlobalQueueSize: 1000
+  maxQueueSize: 20
+  mode: disable
+messagePostponeParallelism: 4
+olapReadPool:
+  idleTimeoutSeconds: 1800
+  size: 200
+oltp:
+  maxRpws: 10000
+  queryTimeoutSeconds: 30
+  txTimeoutSeconds: 30
+oltpReadPool:
+  idleTimeoutSeconds: 1800
+  maxWaiters: 5000
+  size: 16
+queryCacheSize: 5000
+schemaReloadIntervalSeconds: 1800
+streamBufferSize: 32768
+txPool:
+  idleTimeoutSeconds: 1800
+  maxWaiters: 5000
+  size: 20
+  timeoutSeconds: 1
+`
+	assert.Equal(t, want, string(gotBytes))
+}

@@ -100,7 +100,7 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 	config := env.Config()
 	te := &TxEngine{
 		env:                 env,
-		shutdownGracePeriod: time.Duration(config.TxShutDownGracePeriod * 1e9),
+		shutdownGracePeriod: time.Duration(config.ShutdownGracePeriodSeconds * 1e9),
 	}
 	limiter := txlimiter.New(env)
 	te.txPool = NewTxPool(env, limiter)

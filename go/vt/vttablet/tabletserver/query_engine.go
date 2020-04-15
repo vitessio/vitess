@@ -169,14 +169,14 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 		env:              env,
 		se:               se,
 		tables:           make(map[string]*schema.Table),
-		plans:            cache.NewLRUCache(int64(config.QueryPlanCacheSize)),
+		plans:            cache.NewLRUCache(int64(config.QueryCacheSize)),
 		queryRuleSources: rules.NewMap(),
 	}
 
 	qe.conns = connpool.New(env, "ConnPool", config.OltpReadPool)
 	qe.streamConns = connpool.New(env, "StreamConnPool", config.OlapReadPool)
 	qe.consolidatorMode = config.Consolidator
-	qe.enableQueryPlanFieldCaching = config.EnableQueryPlanFieldCaching
+	qe.enableQueryPlanFieldCaching = config.CacheResultFields
 	qe.consolidator = sync2.NewConsolidator()
 	qe.txSerializer = txserializer.New(env)
 	qe.streamQList = NewQueryList()
@@ -203,7 +203,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	qe.warnResultSize = sync2.NewAtomicInt64(int64(config.Oltp.WarnRows))
 	qe.streamBufferSize = sync2.NewAtomicInt64(int64(config.StreamBufferSize))
 
-	planbuilder.PassthroughDMLs = config.PassthroughDMLs
+	planbuilder.PassthroughDMLs = config.PassthroughDML
 
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
