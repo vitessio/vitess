@@ -105,7 +105,7 @@ func TestWriteHeartbeatError(t *testing.T) {
 
 func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *Writer {
 	config := tabletenv.NewDefaultConfig()
-	config.HeartbeatEnable = true
+	config.HeartbeatIntervalMilliseconds = 1000
 
 	params, _ := db.ConnParams().MysqlParams()
 	cp := *params
