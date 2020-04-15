@@ -98,17 +98,18 @@ messagePostponeParallelism: 4            # queryserver-config-message-postpone-c
 cacheResultFields: true                  # enable-query-plan-field-caching
 
 
-enforce_strict_trans_tables
-queryserver-config-strict-table-acl
-queryserver-config-enable-table-acl-dry-run
-queryserver-config-acl-exempt-acl
-enable-tx-throttler
-tx-throttler-config
-tx-throttler-healthcheck-cells
-enable_transaction_limit
-enable_transaction_limit_dry_run
-transaction_limit_per_user
-transaction_limit_by_username
-transaction_limit_by_principal
-transaction_limit_by_component
-transaction_limit_by_subcomponent
+# The following flags are currently not supported.
+# enforce_strict_trans_tables
+# queryserver-config-strict-table-acl
+# queryserver-config-enable-table-acl-dry-run
+# queryserver-config-acl-exempt-acl
+# enable-tx-throttler
+# tx-throttler-config
+# tx-throttler-healthcheck-cells
+# enable_transaction_limit
+# enable_transaction_limit_dry_run
+# transaction_limit_per_user
+# transaction_limit_by_username
+# transaction_limit_by_principal
+# transaction_limit_by_component
+# transaction_limit_by_subcomponent

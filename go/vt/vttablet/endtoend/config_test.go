@@ -72,13 +72,13 @@ func TestConfigVars(t *testing.T) {
 		val: currentConfig.Oltp.WarnRows,
 	}, {
 		tag: "QueryCacheCapacity",
-		val: currentConfig.QueryPlanCacheSize,
+		val: currentConfig.QueryCacheSize,
 	}, {
 		tag: "QueryTimeout",
 		val: int(currentConfig.Oltp.QueryTimeoutSeconds * 1e9),
 	}, {
 		tag: "SchemaReloadTime",
-		val: int(currentConfig.SchemaReloadTime * 1e9),
+		val: int(currentConfig.SchemaReloadIntervalSeconds * 1e9),
 	}, {
 		tag: "StreamBufferSize",
 		val: currentConfig.StreamBufferSize,

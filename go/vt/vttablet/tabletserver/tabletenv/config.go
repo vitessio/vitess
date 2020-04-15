@@ -80,19 +80,19 @@ func init() {
 	flag.IntVar(&deprecatedMessagePoolPrefillParallelism, "queryserver-config-message-conn-pool-prefill-parallelism", 0, "DEPRECATED: Unused.")
 	flag.IntVar(&currentConfig.TxPool.Size, "queryserver-config-transaction-cap", defaultConfig.TxPool.Size, "query server transaction cap is the maximum number of transactions allowed to happen at any given point of a time for a single vttablet. E.g. by setting transaction cap to 100, there are at most 100 transactions will be processed by a vttablet and the 101th transaction will be blocked (and fail if it cannot get connection within specified timeout)")
 	flag.IntVar(&currentConfig.TxPool.PrefillParallelism, "queryserver-config-transaction-prefill-parallelism", defaultConfig.TxPool.PrefillParallelism, "query server transaction prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
-	flag.IntVar(&currentConfig.MessagePostponeCap, "queryserver-config-message-postpone-cap", defaultConfig.MessagePostponeCap, "query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem.")
+	flag.IntVar(&currentConfig.MessagePostponeParallelism, "queryserver-config-message-postpone-cap", defaultConfig.MessagePostponeParallelism, "query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem.")
 	flag.IntVar(&deprecatedFoundRowsPoolSize, "client-found-rows-pool-size", 0, "DEPRECATED: queryserver-config-transaction-cap will be used instead.")
 	flag.IntVar(&currentConfig.Oltp.TxTimeoutSeconds, "queryserver-config-transaction-timeout", defaultConfig.Oltp.TxTimeoutSeconds, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
-	flag.Float64Var(&currentConfig.TxShutDownGracePeriod, "transaction_shutdown_grace_period", defaultConfig.TxShutDownGracePeriod, "how long to wait (in seconds) for transactions to complete during graceful shutdown.")
+	flag.IntVar(&currentConfig.ShutdownGracePeriodSeconds, "transaction_shutdown_grace_period", defaultConfig.ShutdownGracePeriodSeconds, "how long to wait (in seconds) for transactions to complete during graceful shutdown.")
 	flag.IntVar(&currentConfig.Oltp.MaxRows, "queryserver-config-max-result-size", defaultConfig.Oltp.MaxRows, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
 	flag.IntVar(&currentConfig.Oltp.WarnRows, "queryserver-config-warn-result-size", defaultConfig.Oltp.WarnRows, "query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this")
 	flag.IntVar(&deprecatedMaxDMLRows, "queryserver-config-max-dml-rows", 0, "query server max dml rows per statement, maximum number of rows allowed to return at a time for an update or delete with either 1) an equality where clauses on primary keys, or 2) a subselect statement. For update and delete statements in above two categories, vttablet will split the original query into multiple small queries based on this configuration value. ")
-	flag.BoolVar(&currentConfig.PassthroughDMLs, "queryserver-config-passthrough-dmls", defaultConfig.PassthroughDMLs, "query server pass through all dml statements without rewriting")
+	flag.BoolVar(&currentConfig.PassthroughDML, "queryserver-config-passthrough-dmls", defaultConfig.PassthroughDML, "query server pass through all dml statements without rewriting")
 	flag.BoolVar(&deprecateAllowUnsafeDMLs, "queryserver-config-allowunsafe-dmls", false, "deprecated")
 
 	flag.IntVar(&currentConfig.StreamBufferSize, "queryserver-config-stream-buffer-size", defaultConfig.StreamBufferSize, "query server stream buffer size, the maximum number of bytes sent from vttablet for each stream call. It's recommended to keep this value in sync with vtgate's stream_buffer_size.")
-	flag.IntVar(&currentConfig.QueryPlanCacheSize, "queryserver-config-query-cache-size", defaultConfig.QueryPlanCacheSize, "query server query cache size, maximum number of queries to be cached. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
-	flag.Float64Var(&currentConfig.SchemaReloadTime, "queryserver-config-schema-reload-time", defaultConfig.SchemaReloadTime, "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
+	flag.IntVar(&currentConfig.QueryCacheSize, "queryserver-config-query-cache-size", defaultConfig.QueryCacheSize, "query server query cache size, maximum number of queries to be cached. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
+	flag.IntVar(&currentConfig.SchemaReloadIntervalSeconds, "queryserver-config-schema-reload-time", defaultConfig.SchemaReloadIntervalSeconds, "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
 	flag.IntVar(&currentConfig.Oltp.QueryTimeoutSeconds, "queryserver-config-query-timeout", defaultConfig.Oltp.QueryTimeoutSeconds, "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
 	flag.IntVar(&currentConfig.OltpReadPool.TimeoutSeconds, "queryserver-config-query-pool-timeout", defaultConfig.OltpReadPool.TimeoutSeconds, "query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
 	flag.IntVar(&currentConfig.TxPool.TimeoutSeconds, "queryserver-config-txpool-timeout", defaultConfig.TxPool.TimeoutSeconds, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
@@ -134,7 +134,7 @@ func init() {
 	flag.BoolVar(&currentConfig.EnforceStrictTransTables, "enforce_strict_trans_tables", defaultConfig.EnforceStrictTransTables, "If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database.")
 	flag.BoolVar(&enableConsolidator, "enable-consolidator", true, "This option enables the query consolidator.")
 	flag.BoolVar(&enableConsolidatorReplicas, "enable-consolidator-replicas", false, "This option enables the query consolidator only on replicas.")
-	flag.BoolVar(&currentConfig.EnableQueryPlanFieldCaching, "enable-query-plan-field-caching", defaultConfig.EnableQueryPlanFieldCaching, "This option fetches & caches fields (columns) when storing query plans")
+	flag.BoolVar(&currentConfig.CacheResultFields, "enable-query-plan-field-caching", defaultConfig.CacheResultFields, "This option fetches & caches fields (columns) when storing query plans")
 }
 
 // Init must be called after flag.Parse, and before doing any other operations.
@@ -191,18 +191,19 @@ type TabletConfig struct {
 	HotRowProtection              HotRowProtectionConfig `json:"hotRowProtection,omitempty"`
 	Consolidator                  string                 `json:"consolidator,omitempty"`
 	HeartbeatIntervalMilliseconds int                    `json:"heartbeatIntervalMilliseconds,omitempty"`
+	ShutdownGracePeriodSeconds    int                    `json:"shutdownGracePeriodSeconds,omitempty"`
+	PassthroughDML                bool                   `json:"passthroughDML,omitempty"`
+	StreamBufferSize              int                    `json:"streamBufferSize,omitempty"`
+	QueryCacheSize                int                    `json:"queryCacheSize,omitempty"`
+	SchemaReloadIntervalSeconds   int                    `json:"schemaReloadIntervalSeconds,omitempty"`
+	WatchReplication              bool                   `json:"watchReplication,omitempty"`
+	TerseErrors                   bool                   `json:"terseErrors,omitempty"`
+	MessagePostponeParallelism    int                    `json:"messagePostponeParallelism,omitempty"`
+	CacheResultFields             bool                   `json:"cacheResultFields,omitempty"`
 
-	MessagePostponeCap      int     `json:"-"`
-	TxShutDownGracePeriod   float64 `json:"-"`
-	PassthroughDMLs         bool    `json:"-"`
-	StreamBufferSize        int     `json:"-"`
-	QueryPlanCacheSize      int     `json:"-"`
-	SchemaReloadTime        float64 `json:"-"`
 	StrictTableACL          bool    `json:"-"`
-	TerseErrors             bool    `json:"-"`
 	EnableTableACLDryRun    bool    `json:"-"`
 	TableACLExemptACL       string  `json:"-"`
-	WatchReplication        bool    `json:"-"`
 	TwoPCEnable             bool    `json:"-"`
 	TwoPCCoordinatorAddress string  `json:"-"`
 	TwoPCAbandonAge         float64 `json:"-"`
@@ -213,8 +214,7 @@ type TabletConfig struct {
 
 	TransactionLimitConfig `json:"-"`
 
-	EnforceStrictTransTables    bool `json:"-"`
-	EnableQueryPlanFieldCaching bool `json:"-"`
+	EnforceStrictTransTables bool `json:"-"`
 }
 
 // ConnPoolConfig contains the config for a conn pool.
@@ -356,21 +356,12 @@ var defaultConfig = TabletConfig{
 		// of them ready in MySQL and profit from a pipelining effect.
 		MaxConcurrency: 5,
 	},
-	Consolidator:            Enable,
-	MessagePostponeCap:      4,
-	TxShutDownGracePeriod:   0,
-	PassthroughDMLs:         false,
-	QueryPlanCacheSize:      5000,
-	SchemaReloadTime:        30 * 60,
-	StreamBufferSize:        32 * 1024,
-	StrictTableACL:          false,
-	TerseErrors:             false,
-	EnableTableACLDryRun:    false,
-	TableACLExemptACL:       "",
-	WatchReplication:        false,
-	TwoPCEnable:             false,
-	TwoPCCoordinatorAddress: "",
-	TwoPCAbandonAge:         0,
+	Consolidator:                Enable,
+	StreamBufferSize:            32 * 1024,
+	QueryCacheSize:              5000,
+	SchemaReloadIntervalSeconds: 30 * 60,
+	MessagePostponeParallelism:  4,
+	CacheResultFields:           true,
 
 	EnableTxThrottler:           false,
 	TxThrottlerConfig:           defaultTxThrottlerConfig(),
@@ -378,8 +369,7 @@ var defaultConfig = TabletConfig{
 
 	TransactionLimitConfig: defaultTransactionLimitConfig(),
 
-	EnforceStrictTransTables:    true,
-	EnableQueryPlanFieldCaching: true,
+	EnforceStrictTransTables: true,
 }
 
 // defaultTxThrottlerConfig formats the default throttlerdata.Configuration

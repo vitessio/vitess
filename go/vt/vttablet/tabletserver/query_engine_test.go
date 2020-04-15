@@ -272,9 +272,9 @@ func TestStatsURL(t *testing.T) {
 	qe.handleHTTPQueryRules(response, request)
 }
 
-func newTestQueryEngine(queryPlanCacheSize int, idleTimeout time.Duration, strict bool, dbcfgs *dbconfigs.DBConfigs) *QueryEngine {
+func newTestQueryEngine(queryCacheSize int, idleTimeout time.Duration, strict bool, dbcfgs *dbconfigs.DBConfigs) *QueryEngine {
 	config := tabletenv.NewDefaultConfig()
-	config.QueryPlanCacheSize = queryPlanCacheSize
+	config.QueryCacheSize = queryCacheSize
 	config.OltpReadPool.IdleTimeoutSeconds = int(idleTimeout / 1e9)
 	config.OlapReadPool.IdleTimeoutSeconds = int(idleTimeout / 1e9)
 	config.TxPool.IdleTimeoutSeconds = int(idleTimeout / 1e9)
