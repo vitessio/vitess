@@ -18,10 +18,12 @@ package engine
 
 import (
 	"encoding/json"
+	"fmt"
+
+	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -165,7 +167,7 @@ func (svi *SysVarIgnore) Execute(vcursor VCursor, bindVars map[string]*querypb.B
 	if err != nil {
 		return err
 	}
-	log.Warningf("Ignored inapplicable SET %v = %v", svi.Name, value.String())
+	vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: mysql.ERNotSupportedYet, Message: fmt.Sprintf("Ignored inapplicable SET %v = %v", svi.Name, value.String())})
 	return nil
 }
 
