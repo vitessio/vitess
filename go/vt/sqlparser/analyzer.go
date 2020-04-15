@@ -416,9 +416,10 @@ func ExtractSetValues(sql string) (keyValues map[SetKey]interface{}, scope strin
 			key = string(out)
 		}
 
-		if setStmt.Scope != "" && scope != "" {
-			return nil, "", fmt.Errorf("unsupported in set: mixed using of variable scope")
-		}
+		// TODO
+		//if setStmt.Scope != "" && scope != "" {
+		//	return nil, "", fmt.Errorf("unsupported in set: mixed using of variable scope")
+		//}
 
 		setKey := SetKey{
 			Key:   key,
@@ -461,5 +462,5 @@ func ExtractSetValues(sql string) (keyValues map[SetKey]interface{}, scope strin
 			return nil, "", fmt.Errorf("invalid syntax: %s", String(expr))
 		}
 	}
-	return result, strings.ToLower(setStmt.Scope), nil
+	return result, "strings.ToLower(setStmt.Scope)", nil
 }

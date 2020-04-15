@@ -523,23 +523,23 @@ func TestExtractSetValues(t *testing.T) {
 		scope: GlobalStr,
 	}, {
 		sql:   "set session transaction isolation level repeatable read",
-		out:   map[SetKey]interface{}{{Key: TransactionStr, Scope: ImplicitStr}: IsolationLevelRepeatableRead},
+		out:   map[SetKey]interface{}{{Key: TransactionStr, Scope: ImplicitStr}: RepeatableRead},
 		scope: SessionStr,
 	}, {
 		sql:   "set session transaction isolation level read committed",
-		out:   map[SetKey]interface{}{{Key: TransactionStr, Scope: ImplicitStr}: IsolationLevelReadCommitted},
+		out:   map[SetKey]interface{}{{Key: TransactionStr, Scope: ImplicitStr}: ReadCommitted},
 		scope: SessionStr,
 	}, {
 		sql:   "set session transaction isolation level read uncommitted",
-		out:   map[SetKey]interface{}{{Key: TransactionStr, Scope: ImplicitStr}: IsolationLevelReadUncommitted},
+		out:   map[SetKey]interface{}{{Key: TransactionStr, Scope: ImplicitStr}: ReadUncommitted},
 		scope: SessionStr,
 	}, {
 		sql:   "set session transaction isolation level serializable",
-		out:   map[SetKey]interface{}{{Key: TransactionStr, Scope: ImplicitStr}: IsolationLevelSerializable},
+		out:   map[SetKey]interface{}{{Key: TransactionStr, Scope: ImplicitStr}: Serializable},
 		scope: SessionStr,
 	}, {
 		sql: "set transaction isolation level serializable",
-		out: map[SetKey]interface{}{{Key: TransactionStr, Scope: ImplicitStr}: IsolationLevelSerializable},
+		out: map[SetKey]interface{}{{Key: TransactionStr, Scope: ImplicitStr}: Serializable},
 	}, {
 		sql: "set transaction read only",
 		out: map[SetKey]interface{}{{Key: TransactionStr, Scope: ImplicitStr}: TxReadOnly},

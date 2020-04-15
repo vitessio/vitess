@@ -89,6 +89,8 @@ func skipToEnd(yylex interface{}) {
   setExprs      SetExprs
   updateExpr    *UpdateExpr
   setExpr       *SetExpr
+  characteristic Characteristic
+  characteristics []Characteristic
   colIdent      ColIdent
   tableIdent    TableIdent
   convertType   *ConvertType
@@ -213,7 +215,7 @@ func skipToEnd(yylex interface{}) {
 
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
-%type <statement> stream_statement insert_statement update_statement delete_statement set_statement
+%type <statement> stream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
@@ -262,10 +264,12 @@ func skipToEnd(yylex interface{}) {
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
-%type <setExprs> set_list transaction_chars
+%type <setExprs> set_list
 %type <bytes> charset_or_character_set
 %type <updateExpr> update_expression
-%type <setExpr> set_expression transaction_char
+%type <setExpr> set_expression
+%type <characteristic> transaction_char
+%type <characteristics> transaction_chars
 %type <str> isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
@@ -340,6 +344,7 @@ command:
 | update_statement
 | delete_statement
 | set_statement
+| set_transaction_statement
 | create_statement
 | alter_statement
 | rename_statement
@@ -520,23 +525,21 @@ set_statement:
   {
     $$ = &Set{Comments: Comments($2), Exprs: $3}
   }
-| SET comment_opt set_session_or_global set_list
+
+set_transaction_statement:
+  SET comment_opt set_session_or_global TRANSACTION transaction_chars
   {
-    $$ = &Set{Comments: Comments($2), Scope: $3, Exprs: $4}
-  }
-| SET comment_opt set_session_or_global TRANSACTION transaction_chars
-  {
-    $$ = &Set{Comments: Comments($2), Scope: $3, Exprs: $5}
+    $$ = &SetTransaction{Comments: Comments($2), Scope: $3, Characteristics: $5}
   }
 | SET comment_opt TRANSACTION transaction_chars
   {
-    $$ = &Set{Comments: Comments($2), Exprs: $4}
+    $$ = &SetTransaction{Comments: Comments($2), Characteristics: $4}
   }
 
 transaction_chars:
   transaction_char
   {
-    $$ = SetExprs{$1}
+    $$ = []Characteristic{$1}
   }
 | transaction_chars ',' transaction_char
   {
@@ -546,33 +549,33 @@ transaction_chars:
 transaction_char:
   ISOLATION LEVEL isolation_level
   {
-    $$ = &SetExpr{Name: NewColIdent(TransactionStr), Expr: NewStrVal([]byte($3))}
+    $$ = &IsolationLevel{Level: string($3)}
   }
 | READ WRITE
   {
-    $$ = &SetExpr{Name: NewColIdent(TransactionStr), Expr: NewStrVal([]byte(TxReadWrite))}
+    $$ = &AccessMode{Mode: TxReadWrite}
   }
 | READ ONLY
   {
-    $$ = &SetExpr{Name: NewColIdent(TransactionStr), Expr: NewStrVal([]byte(TxReadOnly))}
+    $$ = &AccessMode{Mode: TxReadOnly}
   }
 
 isolation_level:
   REPEATABLE READ
   {
-    $$ = IsolationLevelRepeatableRead
+    $$ = RepeatableRead
   }
 | READ COMMITTED
   {
-    $$ = IsolationLevelReadCommitted
+    $$ = ReadCommitted
   }
 | READ UNCOMMITTED
   {
-    $$ = IsolationLevelReadUncommitted
+    $$ = ReadUncommitted
   }
 | SERIALIZABLE
   {
-    $$ = IsolationLevelSerializable
+    $$ = Serializable
   }
 
 set_session_or_global:
@@ -3136,6 +3139,11 @@ set_list:
   set_expression
   {
     $$ = SetExprs{$1}
+  }
+|  set_session_or_global set_expression
+  {
+    $2.Scope = $1
+    $$ = SetExprs{$2}
   }
 | set_list ',' set_expression
   {
