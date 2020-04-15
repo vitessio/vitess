@@ -17,12 +17,12 @@ limitations under the License.
 package testlib
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"golang.org/x/net/context"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
@@ -124,16 +124,16 @@ func TestEmergencyReparentShard(t *testing.T) {
 	// run EmergencyReparentShard
 	err := vp.Run([]string{"EmergencyReparentShard", "-wait_slave_timeout", "10s", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard,
 		topoproto.TabletAliasString(newMaster.Tablet.Alias)})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	// check what was run
 	err = newMaster.FakeMysqlDaemon.CheckSuperQueryList()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = oldMaster.FakeMysqlDaemon.CheckSuperQueryList()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = goodReplica1.FakeMysqlDaemon.CheckSuperQueryList()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = goodReplica2.FakeMysqlDaemon.CheckSuperQueryList()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.False(t, newMaster.FakeMysqlDaemon.ReadOnly, "newMaster.FakeMysqlDaemon.ReadOnly set")
 	// old master read-only flag doesn't matter, it is scrapped
@@ -224,9 +224,9 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	assert.Contains(t, err.Error(), "is more advanced than master elect tablet")
 	// check what was run
 	err = newMaster.FakeMysqlDaemon.CheckSuperQueryList()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = oldMaster.FakeMysqlDaemon.CheckSuperQueryList()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = moreAdvancedReplica.FakeMysqlDaemon.CheckSuperQueryList()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
