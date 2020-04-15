@@ -410,6 +410,12 @@ func TestNewPlanValue(t *testing.T) {
 	}, {
 		in:  &NullVal{},
 		out: sqltypes.PlanValue{},
+	}, {
+		in: &SQLVal{
+			Type: FloatVal,
+			Val:  []byte("2.1"),
+		},
+		out: sqltypes.PlanValue{Value: sqltypes.NewFloat64(2.1)},
 	}}
 	for _, tc := range tcases {
 		got, err := NewPlanValue(tc.in)
@@ -423,7 +429,7 @@ func TestNewPlanValue(t *testing.T) {
 			t.Error(err)
 			continue
 		}
-		if !reflect.DeepEqual(got, tc.out) {
+		if !reflect.DeepEqual(tc.out, got) {
 			t.Errorf("NewPlanValue(%s): %v, want %v", String(tc.in), got, tc.out)
 		}
 	}
