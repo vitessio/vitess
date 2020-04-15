@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -45,6 +47,26 @@ func TestConnPoolGet(t *testing.T) {
 		t.Fatalf("db conn pool should not be nil")
 	}
 	dbConn.Recycle()
+}
+
+func TestConnPoolTimeout(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	connPool := New(
+		tabletenv.NewTestEnv(nil, nil, "PoolTest"),
+		"TestPool",
+		1,
+		0,
+		10*time.Millisecond,
+		10*time.Second,
+	)
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer connPool.Close()
+	dbConn, err := connPool.Get(context.Background())
+	require.NoError(t, err)
+	defer dbConn.Recycle()
+	_, err = connPool.Get(context.Background())
+	assert.EqualError(t, err, "resource pool timed out")
 }
 
 func TestConnPoolGetEmptyDebugConfig(t *testing.T) {
@@ -224,6 +246,7 @@ func newPool() *Pool {
 		tabletenv.NewTestEnv(nil, nil, "PoolTest"),
 		"TestPool",
 		100,
+		0,
 		0,
 		10*time.Second,
 	)

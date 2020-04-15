@@ -127,7 +127,7 @@ func NewTwoPC(readPool *connpool.Pool) *TwoPC {
 // are not present, they are created.
 func (tpc *TwoPC) Init(sidecarDBName string, dbaparams dbconfigs.Connector) error {
 	dbname := sqlescape.EscapeID(sidecarDBName)
-	conn, err := dbconnpool.NewDBConnection(dbaparams)
+	conn, err := dbconnpool.NewDBConnection(context.TODO(), dbaparams)
 	if err != nil {
 		return err
 	}

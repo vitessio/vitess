@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -29,14 +28,12 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestCommit(t *testing.T) {
@@ -336,50 +333,6 @@ func TestTxPoolSize(t *testing.T) {
 	}
 	if err := compareIntDiff(framework.DebugVars(), "Errors/RESOURCE_EXHAUSTED", vstart, 1); err != nil {
 		t.Error(err)
-	}
-}
-
-func TestTxTimeout(t *testing.T) {
-	vstart := framework.DebugVars()
-
-	defer framework.Server.SetTxTimeout(framework.Server.TxTimeout())
-	txTimeout := 1 * time.Millisecond
-	framework.Server.SetTxTimeout(txTimeout)
-	if err := verifyIntValue(framework.DebugVars(), "TransactionTimeout", int(txTimeout)); err != nil {
-		t.Error(err)
-	}
-
-	defer framework.Server.SetTxPoolTimeout(framework.Server.TxPoolTimeout())
-	txPoolTimeout := 2 * time.Millisecond
-	framework.Server.SetTxPoolTimeout(txPoolTimeout)
-	if err := verifyIntValue(framework.DebugVars(), "TransactionPoolTimeout", int(txPoolTimeout)); err != nil {
-		t.Error(err)
-	}
-
-	catcher := framework.NewTxCatcher()
-	defer catcher.Close()
-	client := framework.NewClient()
-	err := client.Begin(false)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	tx, err := catcher.Next()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if tx.Conclusion != "kill" {
-		t.Errorf("Conclusion: %s, want kill", tx.Conclusion)
-	}
-	if err := compareIntDiff(framework.DebugVars(), "Kills/Transactions", vstart, 1); err != nil {
-		t.Error(err)
-	}
-
-	// Ensure commit fails.
-	err = client.Commit()
-	if code := vterrors.Code(err); code != vtrpcpb.Code_ABORTED {
-		t.Errorf("Commit code: %v, want %v", code, vtrpcpb.Code_ABORTED)
 	}
 }
 
@@ -812,45 +765,4 @@ func TestManualTwopcz(t *testing.T) {
 	fmt.Printf("%s/twopcz\n", framework.ServerAddress)
 	fmt.Print("Sleeping for 30 seconds\n")
 	time.Sleep(30 * time.Second)
-}
-
-func TestTransactionPoolResourceWaitTime(t *testing.T) {
-	defer framework.Server.SetPoolSize(framework.Server.TxPoolSize())
-	defer framework.Server.SetTxPoolTimeout(framework.Server.TxPoolTimeout())
-	framework.Server.SetTxPoolSize(1)
-	framework.Server.SetTxPoolTimeout(10 * time.Second)
-	debugVarPath := "Waits/Histograms/TransactionPoolResourceWaitTime/Count"
-
-	for sleep := 0.1; sleep < 10.0; sleep *= 2 {
-		vstart := framework.DebugVars()
-		var wg sync.WaitGroup
-		wg.Add(2)
-
-		transactionFunc := func() {
-			client := framework.NewClient()
-
-			bv := map[string]*querypb.BindVariable{}
-			query := fmt.Sprintf("select sleep(%v) from dual", sleep)
-			if _, err := client.BeginExecute(query, bv); err != nil {
-				t.Error(err)
-				return
-			}
-			if err := client.Rollback(); err != nil {
-				t.Error(err)
-				return
-			}
-			wg.Done()
-		}
-		go transactionFunc()
-		go transactionFunc()
-		wg.Wait()
-		vend := framework.DebugVars()
-		if err := compareIntDiff(vend, debugVarPath, vstart, 1); err != nil {
-			t.Logf("DebugVars %v not incremented with sleep=%v", debugVarPath, sleep)
-			continue
-		}
-		t.Logf("DebugVars %v properly incremented with sleep=%v", debugVarPath, sleep)
-		return
-	}
-	t.Errorf("DebugVars %v not incremented", debugVarPath)
 }
