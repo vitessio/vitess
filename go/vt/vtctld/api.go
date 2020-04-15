@@ -29,6 +29,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schemamanager"
@@ -48,6 +49,7 @@ import (
 var (
 	localCell        = flag.String("cell", "", "cell to use")
 	showTopologyCRUD = flag.Bool("vtctld_show_topology_crud", true, "Controls the display of the CRUD topology actions in the vtctld UI.")
+	proxyTablets     = flag.Bool("proxy_tablets", false, "Setting this true will make vtctld proxy the tablet status instead of redirecting to them")
 )
 
 // This file implements a REST-style API for the vtctld web interface.
@@ -406,13 +408,10 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 			MysqlPort:           t.MysqlPort,
 			MasterTermStartTime: t.MasterTermStartTime,
 		}
-		tabletPath = fmt.Sprintf("http://%s:%d", t.Tablet.Hostname, t.PortMap["vt"])
 		if *proxyTablets {
-			tabletID := fmt.Sprintf("%s-%d", t.Tablet.Alias.Cell, t.Tablet.Alias.Uid)
-			addRemote(tabletID, tabletPath)
-			tab.URL = fmt.Sprintf("/vttablet/%s-%d", t.Tablet.Alias.Cell, t.Tablet.Alias.Uid)
+			tab.URL = fmt.Sprintf("/vttablet/%s-%d", t.Alias.Cell, t.Alias.Uid)
 		} else {
-			tab.URL = tabletPath
+			tab.URL = "http://" + netutil.JoinHostPort(t.Hostname, t.PortMap["vt"])
 		}
 		return tab, nil
 	})

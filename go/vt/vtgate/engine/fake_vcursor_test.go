@@ -47,6 +47,10 @@ var _ VCursor = (*noopVCursor)(nil)
 type noopVCursor struct {
 }
 
+func (t noopVCursor) SetUDV(key string, value interface{}) error {
+	panic("implement me")
+}
+
 func (t noopVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
 	panic("implement me")
 }
@@ -121,6 +125,11 @@ type loggingVCursor struct {
 	multiShardErrs []error
 
 	log []string
+}
+
+func (f *loggingVCursor) SetUDV(key string, value interface{}) error {
+	f.log = append(f.log, fmt.Sprintf("UDV set with (%s,%v)", key, value))
+	return nil
 }
 
 func (f *loggingVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {

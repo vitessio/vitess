@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 
@@ -746,9 +748,7 @@ func TestMMGenerate(t *testing.T) {
 	}
 	gotids := bv["ids"]
 	wantids := sqltypes.TestBindVariable([]interface{}{"1", "2"})
-	if !reflect.DeepEqual(gotids, wantids) {
-		t.Errorf("gotid: %v, want %v", gotids, wantids)
-	}
+	utils.MustMatch(t, wantids, gotids, "did not match")
 
 	query, bv = mm.GeneratePostponeQuery([]string{"1", "2"})
 	wantQuery = "update foo set time_next = :time_now+(:min_backoff<<ifnull(epoch, 0)), epoch = ifnull(epoch, 0)+1 where id in ::ids and time_acked is null"
@@ -765,9 +765,7 @@ func TestMMGenerate(t *testing.T) {
 		"min_backoff": sqltypes.Int64BindVariable(1e9),
 		"ids":         wantids,
 	}
-	if !reflect.DeepEqual(bv, wantbv) {
-		t.Errorf("gotid: %v, want %v", bv, wantbv)
-	}
+	utils.MustMatch(t, wantbv, bv, "did not match")
 
 	query, bv = mm.GeneratePurgeQuery(3)
 	wantQuery = "delete from foo where time_acked < :time_acked limit 500"
