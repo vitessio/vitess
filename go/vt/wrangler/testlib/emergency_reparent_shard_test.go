@@ -17,9 +17,10 @@ limitations under the License.
 package testlib
 
 import (
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"golang.org/x/net/context"
 
@@ -121,39 +122,25 @@ func TestEmergencyReparentShard(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run EmergencyReparentShard
-	if err := vp.Run([]string{"EmergencyReparentShard", "-wait_slave_timeout", "10s", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, topoproto.TabletAliasString(newMaster.Tablet.Alias)}); err != nil {
-		t.Fatalf("EmergencyReparentShard failed: %v", err)
-	}
-
+	err := vp.Run([]string{"EmergencyReparentShard", "-wait_slave_timeout", "10s", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard,
+		topoproto.TabletAliasString(newMaster.Tablet.Alias)})
+	assert.NoError(t, err)
 	// check what was run
-	if err := newMaster.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
-		t.Fatalf("newMaster.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
-	}
-	if err := oldMaster.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
-		t.Fatalf("oldMaster.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
-	}
-	if err := goodReplica1.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
-		t.Fatalf("goodReplica1.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
-	}
-	if err := goodReplica2.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
-		t.Fatalf("goodReplica2.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
-	}
-	if newMaster.FakeMysqlDaemon.ReadOnly {
-		t.Errorf("newMaster.FakeMysqlDaemon.ReadOnly set")
-	}
+	err = newMaster.FakeMysqlDaemon.CheckSuperQueryList()
+	assert.NoError(t, err)
+	err = oldMaster.FakeMysqlDaemon.CheckSuperQueryList()
+	assert.NoError(t, err)
+	err = goodReplica1.FakeMysqlDaemon.CheckSuperQueryList()
+	assert.NoError(t, err)
+	err = goodReplica2.FakeMysqlDaemon.CheckSuperQueryList()
+	assert.NoError(t, err)
+
+	assert.False(t, newMaster.FakeMysqlDaemon.ReadOnly, "newMaster.FakeMysqlDaemon.ReadOnly set")
 	// old master read-only flag doesn't matter, it is scrapped
-	if !goodReplica1.FakeMysqlDaemon.ReadOnly {
-		t.Errorf("goodReplica1.FakeMysqlDaemon.ReadOnly not set")
-	}
-	if !goodReplica2.FakeMysqlDaemon.ReadOnly {
-		t.Errorf("goodReplica2.FakeMysqlDaemon.ReadOnly not set")
-	}
-	if !goodReplica1.FakeMysqlDaemon.Replicating {
-		t.Errorf("goodReplica1.FakeMysqlDaemon.Replicating not set")
-	}
-	if goodReplica2.FakeMysqlDaemon.Replicating {
-		t.Errorf("goodReplica2.FakeMysqlDaemon.Replicating set")
-	}
+	assert.True(t, goodReplica1.FakeMysqlDaemon.ReadOnly, "goodReplica1.FakeMysqlDaemon.ReadOnly not set")
+	assert.True(t, goodReplica2.FakeMysqlDaemon.ReadOnly, "goodReplica2.FakeMysqlDaemon.ReadOnly not set")
+	assert.True(t, goodReplica1.FakeMysqlDaemon.Replicating, "goodReplica1.FakeMysqlDaemon.Replicating not set")
+	assert.False(t, goodReplica2.FakeMysqlDaemon.Replicating, "goodReplica2.FakeMysqlDaemon.Replicating set")
 	checkSemiSyncEnabled(t, true, true, newMaster)
 	checkSemiSyncEnabled(t, false, true, goodReplica1, goodReplica2)
 }
@@ -232,18 +219,14 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	defer moreAdvancedReplica.StopActionLoop(t)
 
 	// run EmergencyReparentShard
-	if err := wr.EmergencyReparentShard(ctx, newMaster.Tablet.Keyspace, newMaster.Tablet.Shard, newMaster.Tablet.Alias, 10*time.Second); err == nil || !strings.Contains(err.Error(), "is more advanced than master elect tablet") {
-		t.Fatalf("EmergencyReparentShard returned the wrong error: %v", err)
-	}
-
+	err := wr.EmergencyReparentShard(ctx, newMaster.Tablet.Keyspace, newMaster.Tablet.Shard, newMaster.Tablet.Alias, 10*time.Second)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "is more advanced than master elect tablet")
 	// check what was run
-	if err := newMaster.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
-		t.Fatalf("newMaster.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
-	}
-	if err := oldMaster.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
-		t.Fatalf("oldMaster.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
-	}
-	if err := moreAdvancedReplica.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
-		t.Fatalf("moreAdvancedReplica.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
-	}
+	err = newMaster.FakeMysqlDaemon.CheckSuperQueryList()
+	assert.NoError(t, err)
+	err = oldMaster.FakeMysqlDaemon.CheckSuperQueryList()
+	assert.NoError(t, err)
+	err = moreAdvancedReplica.FakeMysqlDaemon.CheckSuperQueryList()
+	assert.NoError(t, err)
 }

@@ -487,9 +487,9 @@ func (fmd *FakeMysqlDaemon) GetAllPrivsConnection() (*dbconnpool.DBConnection, e
 }
 
 // SetSemiSyncEnabled is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SetSemiSyncEnabled(master, slave bool) error {
+func (fmd *FakeMysqlDaemon) SetSemiSyncEnabled(master, replica bool) error {
 	fmd.SemiSyncMasterEnabled = master
-	fmd.SemiSyncSlaveEnabled = slave
+	fmd.SemiSyncSlaveEnabled = replica
 	return nil
 }
 
