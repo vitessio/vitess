@@ -21,15 +21,15 @@ function vsetmysql() {
   alias mysql="mysql -h $vhost -P $vport"
 }
 
-function vsetvclient() {
+function vsetvtctlclient() {
   vhostport vtctld
   if [ -z $vport ]; then
     echo "Error: failed to: obtain [host:port] minikube or kubectl."
     return 1
   fi
-  echo "Setting alias vclient to vtctlclient -server=$vhost:$vport"
-  alias vclient="vtctlclient -server=$vhost:$vport"
+  echo "Setting alias vtctlclient to vtctlclient -server=$vhost:$vport"
+  alias vtctlclient="vtctlclient -server=$vhost:$vport"
 }
 
 vsetmysql
-vsetvclient
+vsetvtctlclient
