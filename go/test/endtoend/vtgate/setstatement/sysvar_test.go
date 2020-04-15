@@ -36,15 +36,17 @@ func TestSetSysVar(t *testing.T) {
 		Port: clusterInstance.VtgateMySQLPort,
 	}
 	type queriesWithExpectations struct {
-		query        string
-		expectedRows string
-		rowsAffected int
-		errMsg       string
+		query           string
+		expectedRows    string
+		rowsAffected    int
+		errMsg          string
+		expectedWarning string
 	}
 
 	queries := []queriesWithExpectations{{
-		query:        `set @@debug = 'T'`,
+		query:        `set @@default_storage_engine = INNODB`,
 		expectedRows: ``, rowsAffected: 0,
+		expectedWarning: "[[VARCHAR(\"Warning\") UINT16(1235) VARCHAR(\"Ignored inapplicable SET default_storage_engine = INNODB\")]]",
 	}, {
 		query:        `set @@sql_mode = @@sql_mode`,
 		expectedRows: ``, rowsAffected: 0,
@@ -72,6 +74,13 @@ func TestSetSysVar(t *testing.T) {
 					result := fmt.Sprintf("%v", qr.Rows)
 					if diff := cmp.Diff(q.expectedRows, result); diff != "" {
 						t.Errorf("%s\nfor query: %s", diff, q.query)
+					}
+				}
+				if q.expectedWarning != "" {
+					qr, err := exec(t, conn, "show warnings")
+					require.NoError(t, err)
+					if got, want := fmt.Sprintf("%v", qr.Rows), q.expectedWarning; got != want {
+						t.Errorf("select:\n%v want\n%v", got, want)
 					}
 				}
 			}

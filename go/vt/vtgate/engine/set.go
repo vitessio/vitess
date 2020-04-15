@@ -52,8 +52,8 @@ type (
 
 	// SysVarIgnore implements the SetOp interface to ignore the settings.
 	SysVarIgnore struct {
-		Name      string
-		PlanValue sqltypes.PlanValue
+		Name string
+		Expr string
 	}
 
 	// SysVarCheckAndIgnore implements the SetOp interface to check underlying setting and ignore if same.
@@ -163,11 +163,7 @@ func (svi *SysVarIgnore) VariableName() string {
 
 //Execute implements the SetOp interface method.
 func (svi *SysVarIgnore) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) error {
-	value, err := svi.PlanValue.ResolveValue(bindVars)
-	if err != nil {
-		return err
-	}
-	vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: mysql.ERNotSupportedYet, Message: fmt.Sprintf("Ignored inapplicable SET %v = %v", svi.Name, value.String())})
+	vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: mysql.ERNotSupportedYet, Message: fmt.Sprintf("Ignored inapplicable SET %v = %v", svi.Name, svi.Expr)})
 	return nil
 }
 

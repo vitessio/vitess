@@ -73,13 +73,12 @@ func buildSetPlan(sql string, stmt *sqlparser.Set, vschema ContextVSchema) (engi
 }
 
 func buildSetOpIgnore(expr *sqlparser.SetExpr, _ ContextVSchema) (engine.SetOp, error) {
-	pv, err := sqlparser.NewPlanValue(expr.Expr)
-	if err != nil {
-		return nil, err
-	}
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("%v", expr.Expr)
+
 	return &engine.SysVarIgnore{
-		Name:      expr.Name.Lowered(),
-		PlanValue: pv,
+		Name: expr.Name.Lowered(),
+		Expr: buf.String(),
 	}, nil
 }
 

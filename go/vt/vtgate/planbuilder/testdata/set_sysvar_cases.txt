@@ -10,7 +10,7 @@
       {
         "Type": "SysVarIgnore",
         "Name": "default_storage_engine",
-        "PlanValue": "DONOTCHANGEME"
+        "Expr": "'DONOTCHANGEME'"
       }
     ]
   }
