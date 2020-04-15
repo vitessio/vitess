@@ -518,17 +518,25 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		// Promote the selected candidate to master.
 		promoteCtx, promoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 		defer promoteCancel()
-		rp, err := wr.tmc.PromoteSlave(promoteCtx, masterElectTabletInfo.Tablet)
+		rp, err := wr.tmc.PromoteReplica(promoteCtx, masterElectTabletInfo.Tablet)
 		if err != nil {
 			return vterrors.Wrapf(err, "failed to promote %v to master", masterElectTabletAliasStr)
 		}
 		reparentJournalPos = rp
 	} else if topoproto.TabletAliasEqual(currentMaster.Alias, masterElectTabletAlias) {
+		// It is possible that a previous attempt to reparent failed to SetReadWrite
+		// so call it here to make sure underlying mysql is ReadWrite
+		rwCtx, rwCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+		defer rwCancel()
+
+		if err := wr.tmc.SetReadWrite(rwCtx, masterElectTabletInfo.Tablet); err != nil {
+			return vterrors.Wrapf(err, "failed to SetReadWrite on current master %v", masterElectTabletAliasStr)
+		}
+		// The master is already the one we want according to its tablet record.
+		// Refresh it to make sure the tablet has read its record recently.
 		refreshCtx, refreshCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 		defer refreshCancel()
 
-		// The master is already the one we want according to its tablet record.
-		// Refresh it to make sure the tablet has read its record recently.
 		if err := wr.tmc.RefreshState(refreshCtx, masterElectTabletInfo.Tablet); err != nil {
 			return vterrors.Wrapf(err, "failed to RefreshState on current master %v", masterElectTabletAliasStr)
 		}
@@ -594,18 +602,13 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 			return fmt.Errorf("old master tablet %v DemoteMaster failed: %v", topoproto.TabletAliasString(shardInfo.MasterAlias), err)
 		}
 
-		// Wait on the master-elect tablet until it reaches that position,
-		// then promote it.
-		wr.logger.Infof("promote replica %v", masterElectTabletAliasStr)
-		event.DispatchUpdate(ev, "promoting replica")
+		waitCtx, waitCancel := context.WithTimeout(ctx, waitReplicasTimeout)
+		defer waitCancel()
 
-		promoteCtx, promoteCancel := context.WithTimeout(ctx, waitReplicasTimeout)
-		defer promoteCancel()
-
-		rp, err = wr.tmc.PromoteSlaveWhenCaughtUp(promoteCtx, masterElectTabletInfo.Tablet, rp)
-		if err != nil || (ctx.Err() != nil && ctx.Err() == context.DeadlineExceeded) {
-			// If we fail to promote the new master, try to roll back to the
-			// original master before aborting.
+		waitErr := wr.tmc.WaitForPosition(waitCtx, masterElectTabletInfo.Tablet, rp)
+		if waitErr != nil || ctx.Err() == context.DeadlineExceeded {
+			// If the new master fails to catch up within the timeout,
+			// we try to roll back to the original master before aborting.
 			// It is possible that we have used up the original context, or that
 			// not enough time is left on it before it times out.
 			// But at this point we really need to be able to Undo so as not to
@@ -613,17 +616,32 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 			// So we create a fresh context based on context.Background().
 			undoCtx, undoCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 			defer undoCancel()
-			if err1 := wr.tmc.UndoDemoteMaster(undoCtx, oldMasterTabletInfo.Tablet); err1 != nil {
-				log.Warningf("Encountered error %v while trying to undo DemoteMaster", err1)
+			if undoErr := wr.tmc.UndoDemoteMaster(undoCtx, oldMasterTabletInfo.Tablet); undoErr != nil {
+				log.Warningf("Encountered error while trying to undo DemoteMaster: %v", undoErr)
 			}
-			return fmt.Errorf("master-elect tablet %v failed to catch up with replication or be upgraded to master: %v", masterElectTabletAliasStr, err)
+			if waitErr != nil {
+				return vterrors.Wrapf(err, "master-elect tablet %v failed to catch up with replication", masterElectTabletAliasStr)
+			}
+			return vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "PlannedReparent timed out, please try again.")
+		}
+
+		promoteCtx, promoteCancel := context.WithTimeout(ctx, waitReplicasTimeout)
+		defer promoteCancel()
+		rp, err = wr.tmc.PromoteReplica(promoteCtx, masterElectTabletInfo.Tablet)
+		if err != nil {
+			return vterrors.Wrapf(err, "master-elect tablet %v failed to be upgraded to master - please try again", masterElectTabletAliasStr)
+		}
+
+		if ctx.Err() == context.DeadlineExceeded {
+			// PromoteReplica succeeded but the context has expired. PRS needs to be re-run to complete
+			return vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "PlannedReparent timed out after promoting new master. Please re-run to fixup replicas.")
 		}
 		reparentJournalPos = rp
 	}
 
 	// Check we still have the topology lock.
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return fmt.Errorf("lost topology lock, aborting: %v", err)
+		return vterrors.Wrap(err, "lost topology lock, aborting")
 	}
 
 	// Create a cancelable context for the following RPCs.
@@ -944,17 +962,17 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		}
 		pos, err := mysql.DecodePosition(status.Position)
 		if err != nil {
-			return fmt.Errorf("cannot decode slave %v position %v: %v", alias, status.Position, err)
+			return fmt.Errorf("cannot decode replica %v position %v: %v", alias, status.Position, err)
 		}
 		if !masterElectPos.AtLeast(pos) {
-			return fmt.Errorf("tablet %v is more advanced than master elect tablet %v: %v > %v", alias, masterElectTabletAliasStr, status.Position, masterElectStatus)
+			return fmt.Errorf("tablet %v is more advanced than master elect tablet %v: %v > %v", alias, masterElectTabletAliasStr, status.Position, masterElectStatus.Position)
 		}
 	}
 
 	// Promote the masterElect
-	wr.logger.Infof("promote slave %v", topoproto.TabletAliasString(masterElectTabletAlias))
-	event.DispatchUpdate(ev, "promoting slave")
-	rp, err := wr.tmc.PromoteSlave(ctx, masterElectTabletInfo.Tablet)
+	wr.logger.Infof("promote tablet %v to master", topoproto.TabletAliasString(masterElectTabletAlias))
+	event.DispatchUpdate(ev, "promoting replica")
+	rp, err := wr.tmc.PromoteReplica(ctx, masterElectTabletInfo.Tablet)
 	if err != nil {
 		return fmt.Errorf("master-elect tablet %v failed to be upgraded to master: %v", topoproto.TabletAliasString(masterElectTabletAlias), err)
 	}
