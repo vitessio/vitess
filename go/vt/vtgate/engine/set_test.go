@@ -62,13 +62,11 @@ func TestSetTable(t *testing.T) {
 			setOps: []SetOp{
 				&SysVarIgnore{
 					Name: "x",
-					PlanValue: sqltypes.PlanValue{
-						Value: sqltypes.NewInt64(42),
-					},
+					Expr: "42",
 				},
 			},
 			expectedWarning: []*querypb.QueryWarning{
-				{Code: 1235, Message: "Ignored inapplicable SET x = INT64(42)"},
+				{Code: 1235, Message: "Ignored inapplicable SET x = 42"},
 			},
 		},
 		{
@@ -144,9 +142,7 @@ func TestSetTable(t *testing.T) {
 				},
 				&SysVarIgnore{
 					Name: "y",
-					PlanValue: sqltypes.PlanValue{
-						Value: sqltypes.NewInt64(2),
-					},
+					Expr: "2",
 				},
 				&SysVarCheckAndIgnore{
 					Name: "z",
@@ -164,7 +160,7 @@ func TestSetTable(t *testing.T) {
 				`ExecuteMultiShard ks.-20: dummy_query {} false false`,
 			},
 			expectedWarning: []*querypb.QueryWarning{
-				{Code: 1235, Message: "Ignored inapplicable SET y = INT64(2)"},
+				{Code: 1235, Message: "Ignored inapplicable SET y = 2"},
 			},
 			qr: []*sqltypes.Result{sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
