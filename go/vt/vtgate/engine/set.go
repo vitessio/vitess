@@ -137,7 +137,7 @@ func (u *UserDefinedVariable) Execute(vcursor VCursor, bindVars map[string]*quer
 	if err != nil {
 		return err
 	}
-	return vcursor.SetUDV(u.Name, value)
+	return vcursor.Session().SetUDV(u.Name, value)
 }
 
 var _ SetOp = (*SysVarIgnore)(nil)
