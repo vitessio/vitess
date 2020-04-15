@@ -509,7 +509,7 @@ func NewColIdent(str string) ColIdent {
 }
 
 // NewColIdentWithAt makes a new ColIdent.
-func NewColIdentWithAt(str string, at atCount) ColIdent {
+func NewColIdentWithAt(str string, at AtCount) ColIdent {
 	return ColIdent{
 		val: str,
 		at:  at,
@@ -618,7 +618,7 @@ func (node *TableIdent) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func containEscapableChars(s string, at atCount) bool {
+func containEscapableChars(s string, at AtCount) bool {
 	isDbSystemVariable := at != NoAt
 
 	for i, c := range s {
@@ -639,7 +639,7 @@ func isKeyword(s string) bool {
 	return isKeyword
 }
 
-func formatID(buf *TrackedBuffer, original, lowered string, at atCount) {
+func formatID(buf *TrackedBuffer, original, lowered string, at AtCount) {
 	if containEscapableChars(original, at) || isKeyword(lowered) {
 		writeEscapedString(buf, original)
 	} else {
@@ -734,11 +734,12 @@ func (node *Union) SetLimit(limit *Limit) {
 	node.Limit = limit
 }
 
-type atCount int
+// AtCount represents the '@' count in ColIdent
+type AtCount int
 
 const (
 	// NoAt represents no @
-	NoAt atCount = iota
+	NoAt AtCount = iota
 	// SingleAt represents @
 	SingleAt
 	// DoubleAt represnts @@

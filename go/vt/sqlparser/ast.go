@@ -797,7 +797,7 @@ type ColIdent struct {
 	// last field in the struct.
 	_            [0]struct{ _ []byte }
 	val, lowered string
-	at           atCount
+	at           AtCount
 }
 
 // TableIdent is a case sensitive SQL identifier. It will be escaped with
@@ -1749,4 +1749,9 @@ func (node ColIdent) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node TableIdent) Format(buf *TrackedBuffer) {
 	formatID(buf, node.v, strings.ToLower(node.v), NoAt)
+}
+
+// AtCount return the '@' count present in ColIdent Name
+func (node ColIdent) AtCount() AtCount {
+	return node.at
 }

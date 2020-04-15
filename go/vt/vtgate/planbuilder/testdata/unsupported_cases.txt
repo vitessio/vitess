@@ -6,6 +6,14 @@
 "set a=1"
 "plan building not supported"
 
+# set multi user defined variable with complex expression
+"set @foo = 42, @bar = @foo + 1"
+"expression is too complex ':__vtudvfoo + 1'"
+
+# set user defined and system variable
+"set @foo = 42, @bar = @foo, @@sql_mode = @@sql_mode"
+"plan building not supported"
+
 # SHOW
 "show create database"
 "plan building not supported"
