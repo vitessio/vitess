@@ -132,7 +132,30 @@ type (
 	Set struct {
 		Comments Comments
 		Exprs    SetExprs
-		Scope    string
+	}
+
+	// SetTransaction represents a SET TRANSACTION statement.
+	SetTransaction struct {
+		SQLNode
+		Comments        Comments
+		Scope           string
+		Characteristics []Characteristic
+	}
+
+	// Characteristic is a transaction related change
+	Characteristic interface {
+		SQLNode
+		iChar()
+	}
+
+	// IsolationLevel is self-explanatory in this context
+	IsolationLevel struct {
+		Level string
+	}
+
+	// AccessMode is ReadOnly/ReadWrite
+	AccessMode struct {
+		Mode string
 	}
 
 	// DBDDL represents a CREATE, DROP, or ALTER database statement.
@@ -222,6 +245,7 @@ func (*Insert) iStatement()            {}
 func (*Update) iStatement()            {}
 func (*Delete) iStatement()            {}
 func (*Set) iStatement()               {}
+func (*SetTransaction) iStatement()    {}
 func (*DBDDL) iStatement()             {}
 func (*DDL) iStatement()               {}
 func (*Show) iStatement()              {}
@@ -782,8 +806,9 @@ type SetExprs []*SetExpr
 
 // SetExpr represents a set expression.
 type SetExpr struct {
-	Name ColIdent
-	Expr Expr
+	Scope string
+	Name  ColIdent
+	Expr  Expr
 }
 
 // OnDup represents an ON DUPLICATE KEY clause.
@@ -860,10 +885,22 @@ func (node *Delete) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Set) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "set %v%v", node.Comments, node.Exprs)
+}
+
+// Format formats the node.
+func (node *SetTransaction) Format(buf *TrackedBuffer) {
 	if node.Scope == "" {
-		buf.astPrintf(node, "set %v%v", node.Comments, node.Exprs)
+		buf.astPrintf(node, "set %vtransaction ", node.Comments)
 	} else {
-		buf.astPrintf(node, "set %v%s %v", node.Comments, node.Scope, node.Exprs)
+		buf.astPrintf(node, "set %v%s transaction ", node.Comments, node.Scope)
+	}
+
+	for i, char := range node.Characteristics {
+		if i > 0 {
+			buf.WriteString(", ")
+		}
+		buf.astPrintf(node, "%v", char)
 	}
 }
 
@@ -1719,13 +1756,18 @@ func (node SetExprs) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *SetExpr) Format(buf *TrackedBuffer) {
+	if node.Scope != "" {
+		buf.WriteString(node.Scope)
+		buf.WriteString(" ")
+	}
 	// We don't have to backtick set variable names.
-	if node.Name.EqualString("charset") || node.Name.EqualString("names") {
+	switch {
+	case node.Name.EqualString("charset") || node.Name.EqualString("names"):
 		buf.astPrintf(node, "%s %v", node.Name.String(), node.Expr)
-	} else if node.Name.EqualString(TransactionStr) {
+	case node.Name.EqualString(TransactionStr):
 		sqlVal := node.Expr.(*SQLVal)
 		buf.astPrintf(node, "%s %s", node.Name.String(), strings.ToLower(string(sqlVal.Val)))
-	} else {
+	default:
 		buf.astPrintf(node, "%v = %v", node.Name, node.Expr)
 	}
 }
@@ -1754,4 +1796,17 @@ func (node TableIdent) Format(buf *TrackedBuffer) {
 // AtCount return the '@' count present in ColIdent Name
 func (node ColIdent) AtCount() AtCount {
 	return node.at
+}
+
+func (*IsolationLevel) iChar() {}
+func (*AccessMode) iChar()     {}
+
+// Format formats the node.
+func (node *IsolationLevel) Format(buf *TrackedBuffer) {
+	buf.WriteString("isolation level " + node.Level)
+}
+
+// Format formats the node.
+func (node *AccessMode) Format(buf *TrackedBuffer) {
+	buf.WriteString(node.Mode)
 }

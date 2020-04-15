@@ -159,6 +159,11 @@ const (
 	IsolationLevelRepeatableRead  = "isolation level repeatable read"
 	IsolationLevelSerializable    = "isolation level serializable"
 
+	ReadUncommitted = "read uncommitted"
+	ReadCommitted   = "read committed"
+	RepeatableRead  = "repeatable read"
+	Serializable    = "serializable"
+
 	TxReadOnly  = "read only"
 	TxReadWrite = "read write"
 )
