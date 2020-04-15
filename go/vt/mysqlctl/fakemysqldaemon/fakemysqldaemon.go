@@ -104,8 +104,11 @@ type FakeMysqlDaemon struct {
 	// same it returns nil, if different it returns an error
 	WaitMasterPosition mysql.Position
 
-	// PromoteSlaveResult is returned by PromoteSlave
-	PromoteSlaveResult mysql.Position
+	// PromoteResult is returned by Promote
+	PromoteResult mysql.Position
+
+	// PromoteError is used by Promote
+	PromoteError error
 
 	// SchemaFunc provides the return value for GetSchema.
 	// If not defined, the "Schema" field will be used instead, see below.
@@ -348,9 +351,12 @@ func (fmd *FakeMysqlDaemon) WaitMasterPos(_ context.Context, pos mysql.Position)
 	return fmt.Errorf("wrong input for WaitMasterPos: expected %v got %v", fmd.WaitMasterPosition, pos)
 }
 
-// PromoteSlave is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) PromoteSlave(hookExtraEnv map[string]string) (mysql.Position, error) {
-	return fmd.PromoteSlaveResult, nil
+// Promote is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) Promote(hookExtraEnv map[string]string) (mysql.Position, error) {
+	if fmd.PromoteError != nil {
+		return mysql.Position{}, fmd.PromoteError
+	}
+	return fmd.PromoteResult, nil
 }
 
 // ExecuteSuperQueryList is part of the MysqlDaemon interface
@@ -481,9 +487,9 @@ func (fmd *FakeMysqlDaemon) GetAllPrivsConnection() (*dbconnpool.DBConnection, e
 }
 
 // SetSemiSyncEnabled is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SetSemiSyncEnabled(master, slave bool) error {
+func (fmd *FakeMysqlDaemon) SetSemiSyncEnabled(master, replica bool) error {
 	fmd.SemiSyncMasterEnabled = master
-	fmd.SemiSyncSlaveEnabled = slave
+	fmd.SemiSyncSlaveEnabled = replica
 	return nil
 }
 

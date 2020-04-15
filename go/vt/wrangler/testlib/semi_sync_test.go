@@ -20,6 +20,8 @@ import (
 	"flag"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
@@ -28,13 +30,9 @@ func init() {
 	flag.Set("enable_semi_sync", "true")
 }
 
-func checkSemiSyncEnabled(t *testing.T, master, slave bool, tablets ...*FakeTablet) {
+func checkSemiSyncEnabled(t *testing.T, master, replica bool, tablets ...*FakeTablet) {
 	for _, tablet := range tablets {
-		if got, want := tablet.FakeMysqlDaemon.SemiSyncMasterEnabled, master; got != want {
-			t.Errorf("%v: SemiSyncMasterEnabled = %v, want %v", topoproto.TabletAliasString(tablet.Tablet.Alias), got, want)
-		}
-		if got, want := tablet.FakeMysqlDaemon.SemiSyncSlaveEnabled, slave; got != want {
-			t.Errorf("%v: SemiSyncSlaveEnabled = %v, want %v", topoproto.TabletAliasString(tablet.Tablet.Alias), got, want)
-		}
+		assert.Equal(t, master, tablet.FakeMysqlDaemon.SemiSyncMasterEnabled, "%v: SemiSyncMasterEnabled", topoproto.TabletAliasString(tablet.Tablet.Alias))
+		assert.Equal(t, replica, tablet.FakeMysqlDaemon.SemiSyncSlaveEnabled, "%v: SemiSyncSlaveEnabled", topoproto.TabletAliasString(tablet.Tablet.Alias))
 	}
 }
