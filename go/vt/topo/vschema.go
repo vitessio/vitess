@@ -94,7 +94,6 @@ func (ts *Server) EnsureVSchema(ctx context.Context, keyspace string, cells []st
 		log.Errorf("could not rebuild SrvVschema after creating keyspace: %v", err)
 		return err
 	}
-
 	return nil
 }
 
