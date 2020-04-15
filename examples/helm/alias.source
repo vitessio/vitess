@@ -17,8 +17,8 @@ function vsetmysql() {
     echo "Error: failed to obtain [host:port] minikube or kubectl."
     return 1
   fi
-  echo "Setting alias vmysql to: mysql -h $vhost -P $vport"
-  alias vmysql="mysql -h $vhost -P $vport"
+  echo "Setting alias mysql to: mysql -h $vhost -P $vport"
+  alias mysql="mysql -h $vhost -P $vport"
 }
 
 function vsetvclient() {
