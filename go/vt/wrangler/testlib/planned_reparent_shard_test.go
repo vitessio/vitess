@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
@@ -111,17 +112,18 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 
 	// run PlannedReparentShard
 	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// check what was run
 	err = newMaster.FakeMysqlDaemon.CheckSuperQueryList()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = oldMaster.FakeMysqlDaemon.CheckSuperQueryList()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = goodReplica1.FakeMysqlDaemon.CheckSuperQueryList()
-	assert.NoError(t, err)
+	require.NoError(t, err)
+
 	assert.False(t, newMaster.FakeMysqlDaemon.ReadOnly, "newMaster.FakeMysqlDaemon.ReadOnly is set")
 	assert.True(t, oldMaster.FakeMysqlDaemon.ReadOnly, "oldMaster.FakeMysqlDaemon.ReadOnly not set")
 	assert.True(t, goodReplica1.FakeMysqlDaemon.ReadOnly, "goodReplica1.FakeMysqlDaemon.ReadOnly not set")
@@ -224,17 +226,17 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	// run PlannedReparentShard
 	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master",
 		topoproto.TabletAliasString(newMaster.Tablet.Alias)})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// check what was run
 	err = newMaster.FakeMysqlDaemon.CheckSuperQueryList()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = oldMaster.FakeMysqlDaemon.CheckSuperQueryList()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = goodReplica1.FakeMysqlDaemon.CheckSuperQueryList()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = goodReplica2.FakeMysqlDaemon.CheckSuperQueryList()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.False(t, newMaster.FakeMysqlDaemon.ReadOnly, "newMaster.FakeMysqlDaemon.ReadOnly set")
 	assert.True(t, oldMaster.FakeMysqlDaemon.ReadOnly, "oldMaster.FakeMysqlDaemon.ReadOnly not set")
@@ -506,12 +508,13 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 	// run PlannedReparentShard
 	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", master.Tablet.Keyspace + "/" + master.Tablet.Shard, "-new_master",
 		topoproto.TabletAliasString(master.Tablet.Alias)})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	// check what was run
 	err = master.FakeMysqlDaemon.CheckSuperQueryList()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = goodReplica1.FakeMysqlDaemon.CheckSuperQueryList()
-	assert.NoError(t, err)
+	require.NoError(t, err)
+
 	assert.False(t, master.FakeMysqlDaemon.ReadOnly, "master.FakeMysqlDaemon.ReadOnly set")
 	assert.True(t, goodReplica1.FakeMysqlDaemon.ReadOnly, "goodReplica1.FakeMysqlDaemon.ReadOnly not set")
 	assert.True(t, master.Agent.QueryServiceControl.IsServing(), "master...QueryServiceControl not serving")
@@ -573,12 +576,13 @@ func TestPlannedReparentShardRelayLogErrorStartSlave(t *testing.T) {
 	// run PlannedReparentShard
 	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", master.Tablet.Keyspace + "/" + master.Tablet.Shard, "-new_master",
 		topoproto.TabletAliasString(master.Tablet.Alias)})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	// check what was run
 	err = master.FakeMysqlDaemon.CheckSuperQueryList()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = goodReplica1.FakeMysqlDaemon.CheckSuperQueryList()
-	assert.NoError(t, err)
+	require.NoError(t, err)
+
 	assert.False(t, master.FakeMysqlDaemon.ReadOnly, "master.FakeMysqlDaemon.ReadOnly set")
 	assert.True(t, goodReplica1.FakeMysqlDaemon.ReadOnly, "goodReplica1.FakeMysqlDaemon.ReadOnly not set")
 	assert.True(t, master.Agent.QueryServiceControl.IsServing(), "master...QueryServiceControl not serving")
@@ -708,7 +712,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 
 	// run PlannedReparentShard
 	err = vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// check that mastership changed correctly
 	assert.False(t, newMaster.FakeMysqlDaemon.ReadOnly, "newMaster.FakeMysqlDaemon.ReadOnly")
@@ -775,6 +779,6 @@ func TestPlannedReparentShardSameMaster(t *testing.T) {
 
 	// run PlannedReparentShard
 	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", oldMaster.Tablet.Keyspace + "/" + oldMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(oldMaster.Tablet.Alias)})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, oldMaster.FakeMysqlDaemon.ReadOnly, "oldMaster.FakeMysqlDaemon.ReadOnly")
 }
