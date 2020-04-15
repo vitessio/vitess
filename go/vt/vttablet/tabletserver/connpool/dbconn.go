@@ -64,11 +64,11 @@ type DBConn struct {
 }
 
 // NewDBConn creates a new DBConn. It triggers a CheckMySQL if creation fails.
-func NewDBConn(cp *Pool, appParams dbconfigs.Connector) (*DBConn, error) {
+func NewDBConn(ctx context.Context, cp *Pool, appParams dbconfigs.Connector) (*DBConn, error) {
 	start := time.Now()
 	defer cp.env.Stats().MySQLTimings.Record("Connect", start)
 
-	c, err := dbconnpool.NewDBConnection(appParams)
+	c, err := dbconnpool.NewDBConnection(ctx, appParams)
 	if err != nil {
 		cp.env.Stats().MySQLTimings.Record("ConnectError", start)
 		cp.env.CheckMySQL()
@@ -84,8 +84,8 @@ func NewDBConn(cp *Pool, appParams dbconfigs.Connector) (*DBConn, error) {
 }
 
 // NewDBConnNoPool creates a new DBConn without a pool.
-func NewDBConnNoPool(params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool) (*DBConn, error) {
-	c, err := dbconnpool.NewDBConnection(params)
+func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool) (*DBConn, error) {
+	c, err := dbconnpool.NewDBConnection(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,7 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 		default:
 		}
 
-		if reconnectErr := dbc.reconnect(); reconnectErr != nil {
+		if reconnectErr := dbc.reconnect(ctx); reconnectErr != nil {
 			dbc.pool.env.CheckMySQL()
 			// Return the error of the reconnect and not the original connection error.
 			return nil, reconnectErr
@@ -208,7 +208,7 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 			return err
 		default:
 		}
-		if reconnectErr := dbc.reconnect(); reconnectErr != nil {
+		if reconnectErr := dbc.reconnect(ctx); reconnectErr != nil {
 			dbc.pool.env.CheckMySQL()
 			// Return the error of the reconnect and not the original connection error.
 			return reconnectErr
@@ -331,10 +331,10 @@ func (dbc *DBConn) ID() int64 {
 	return dbc.conn.ID()
 }
 
-func (dbc *DBConn) reconnect() error {
+func (dbc *DBConn) reconnect(ctx context.Context) error {
 	dbc.conn.Close()
 	// Reuse MySQLTimings from dbc.conn.
-	newConn, err := dbconnpool.NewDBConnection(dbc.info)
+	newConn, err := dbconnpool.NewDBConnection(ctx, dbc.info)
 	if err != nil {
 		return err
 	}

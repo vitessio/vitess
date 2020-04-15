@@ -167,8 +167,8 @@ func (cp *ConnectionPool) Open(info dbconfigs.Connector) {
 }
 
 // connect is used by the resource pool to create a new Resource.
-func (cp *ConnectionPool) connect() (pools.Resource, error) {
-	c, err := NewDBConnection(cp.info)
+func (cp *ConnectionPool) connect(ctx context.Context) (pools.Resource, error) {
+	c, err := NewDBConnection(ctx, cp.info)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +216,7 @@ func (cp *ConnectionPool) Get(ctx context.Context) (*PooledDBConnection, error) 
 	if cp.resolutionFrequency > 0 &&
 		cp.hostIsNotIP &&
 		!cp.validAddress(net.ParseIP(r.(*PooledDBConnection).RemoteAddr().String())) {
-		err := r.(*PooledDBConnection).Reconnect()
+		err := r.(*PooledDBConnection).Reconnect(ctx)
 		if err != nil {
 			p.Put(r)
 			return nil, err

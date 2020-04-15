@@ -139,7 +139,6 @@ type QueryEngine struct {
 	streamQList  *QueryList
 
 	// Vars
-	connTimeout        sync2.AtomicDuration
 	queryPoolWaiters   sync2.AtomicInt64
 	queryPoolWaiterCap sync2.AtomicInt64
 	maxResultSize      sync2.AtomicInt64
@@ -181,10 +180,9 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 		queryPoolWaiterCap: sync2.NewAtomicInt64(int64(config.QueryPoolWaiterCap)),
 	}
 
-	qe.conns = connpool.New(env, "ConnPool", config.PoolSize, config.PoolPrefillParallelism, time.Duration(config.IdleTimeout*1e9))
-	qe.connTimeout.Set(time.Duration(config.QueryPoolTimeout * 1e9))
+	qe.conns = connpool.New(env, "ConnPool", config.PoolSize, config.PoolPrefillParallelism, time.Duration(config.QueryPoolTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 
-	qe.streamConns = connpool.New(env, "StreamConnPool", config.StreamPoolSize, config.StreamPoolPrefillParallelism, time.Duration(config.IdleTimeout*1e9))
+	qe.streamConns = connpool.New(env, "StreamConnPool", config.StreamPoolSize, config.StreamPoolPrefillParallelism, time.Duration(config.QueryPoolTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.enableConsolidator = config.EnableConsolidator
 	qe.enableConsolidatorReplicas = config.EnableConsolidatorReplicas
 	qe.enableQueryPlanFieldCaching = config.EnableQueryPlanFieldCaching
@@ -348,16 +346,6 @@ func (qe *QueryEngine) getQueryConn(ctx context.Context) (*connpool.DBConn, erro
 		return nil, vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "query pool waiter count exceeded")
 	}
 
-	timeout := qe.connTimeout.Get()
-	if timeout != 0 {
-		ctxTimeout, cancel := context.WithTimeout(ctx, timeout)
-		defer cancel()
-		conn, err := qe.conns.Get(ctxTimeout)
-		if err != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "query pool wait time exceeded")
-		}
-		return conn, err
-	}
 	return qe.conns.Get(ctx)
 }
 
@@ -397,7 +385,7 @@ func (qe *QueryEngine) ClearQueryPlanCache() {
 
 // IsMySQLReachable returns true if we can connect to MySQL.
 func (qe *QueryEngine) IsMySQLReachable() bool {
-	conn, err := dbconnpool.NewDBConnection(qe.env.DBConfigs().DbaWithDB())
+	conn, err := dbconnpool.NewDBConnection(context.TODO(), qe.env.DBConfigs().DbaWithDB())
 	if err != nil {
 		if mysql.IsConnErr(err) {
 			return false

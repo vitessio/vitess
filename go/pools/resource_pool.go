@@ -45,7 +45,7 @@ var (
 )
 
 // Factory is a function that can be used to create a resource.
-type Factory func() (Resource, error)
+type Factory func(context.Context) (Resource, error)
 
 // Resource defines the interface that every resource must provide.
 // Thread synchronization between Close() and IsClosed()
@@ -228,7 +228,7 @@ func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) 
 	// Unwrap
 	if wrapper.resource == nil {
 		span, _ := trace.NewSpan(ctx, "ResourcePool.factory")
-		wrapper.resource, err = rp.factory()
+		wrapper.resource, err = rp.factory(ctx)
 		span.Finish()
 		if err != nil {
 			rp.resources <- resourceWrapper{}
@@ -267,7 +267,7 @@ func (rp *ResourcePool) Put(resource Resource) {
 }
 
 func (rp *ResourcePool) reopenResource(wrapper *resourceWrapper) {
-	if r, err := rp.factory(); err == nil {
+	if r, err := rp.factory(context.TODO()); err == nil {
 		wrapper.resource = r
 		wrapper.timeUsed = time.Now()
 	} else {
