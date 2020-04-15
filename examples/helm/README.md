@@ -15,8 +15,8 @@ helm install vitess ../../helm/vitess -f 101_initial_cluster.yaml
 source alias.source
 
 # Insert and verify data
-vmysql < ../common/insert_commerce_data.sql
-vmysql --table < ../common/select_commerce_data.sql
+mysql < ../common/insert_commerce_data.sql
+mysql --table < ../common/select_commerce_data.sql
 
 # Bring up customer keyspace
 helm upgrade vitess ../../helm/vitess/ -f 201_customer_tablets.yaml
