@@ -8,6 +8,7 @@
     "Variant": "",
     "Ops": [
       {
+        "Type": "UserDefinedVariable",
         "Name": "foo",
         "PlanValue": 42
       }
@@ -25,10 +26,12 @@
     "Variant": "",
     "Ops": [
       {
+        "Type": "UserDefinedVariable",
         "Name": "foo",
         "PlanValue": 42
       },
       {
+        "Type": "UserDefinedVariable",
         "Name": "bar",
         "PlanValue": ":__vtudvfoo"
       }

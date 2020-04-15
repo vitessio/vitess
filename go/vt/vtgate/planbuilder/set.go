@@ -29,7 +29,7 @@ import (
 var sysVarPlanningFunc = map[string]func(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error){}
 
 func init() {
-	sysVarPlanningFunc["debug"] = buildSetOpIgnore
+	sysVarPlanningFunc["default_storage_engine"] = buildSetOpIgnore
 	sysVarPlanningFunc["sql_mode"] = buildSetOpCheckAndIgnore
 }
 

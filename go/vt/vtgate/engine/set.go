@@ -17,6 +17,8 @@ limitations under the License.
 package engine
 
 import (
+	"encoding/json"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -115,6 +117,18 @@ func (s *Set) description() PrimitiveDescription {
 
 var _ SetOp = (*UserDefinedVariable)(nil)
 
+//MarshalJSON provides the type to SetOp for plan json
+func (u *UserDefinedVariable) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Type string
+		UserDefinedVariable
+	}{
+		Type:                "UserDefinedVariable",
+		UserDefinedVariable: *u,
+	})
+
+}
+
 //VariableName implements the SetOp interface method.
 func (u *UserDefinedVariable) VariableName() string {
 	return u.Name
@@ -130,6 +144,18 @@ func (u *UserDefinedVariable) Execute(vcursor VCursor, bindVars map[string]*quer
 }
 
 var _ SetOp = (*SysVarIgnore)(nil)
+
+//MarshalJSON provides the type to SetOp for plan json
+func (svi *SysVarIgnore) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Type string
+		SysVarIgnore
+	}{
+		Type:         "SysVarIgnore",
+		SysVarIgnore: *svi,
+	})
+
+}
 
 //VariableName implements the SetOp interface method.
 func (svi *SysVarIgnore) VariableName() string {
@@ -148,13 +174,25 @@ func (svi *SysVarIgnore) Execute(vcursor VCursor, bindVars map[string]*querypb.B
 
 var _ SetOp = (*SysVarCheckAndIgnore)(nil)
 
+//MarshalJSON provides the type to SetOp for plan json
+func (svci *SysVarCheckAndIgnore) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Type string
+		SysVarCheckAndIgnore
+	}{
+		Type:                 "SysVarCheckAndIgnore",
+		SysVarCheckAndIgnore: *svci,
+	})
+
+}
+
 //VariableName implements the SetOp interface method
-func (svci SysVarCheckAndIgnore) VariableName() string {
+func (svci *SysVarCheckAndIgnore) VariableName() string {
 	return svci.Name
 }
 
 //Execute implements the SetOp interface method
-func (svci SysVarCheckAndIgnore) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) error {
+func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) error {
 	var err error
 	var result *sqltypes.Result
 	var cValue, nValue sqltypes.Value

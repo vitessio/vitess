@@ -1,15 +1,16 @@
 # set ignore plan
-"set @@debug = '+P'"
+"set @@default_storage_engine = 'DONOTCHANGEME'"
 {
   "QueryType": "SET",
-  "Original": "set @@debug = '+P'",
+  "Original": "set @@default_storage_engine = 'DONOTCHANGEME'",
   "Instructions": {
     "OperatorType": "Set",
     "Variant": "",
     "Ops": [
       {
-        "Name": "debug",
-        "PlanValue": "+P"
+        "Type": "SysVarIgnore",
+        "Name": "default_storage_engine",
+        "PlanValue": "DONOTCHANGEME"
       }
     ]
   }
@@ -25,13 +26,16 @@
     "Variant": "",
     "Ops": [
       {
+        "Type": "SysVarCheckAndIgnore",
         "Name": "sql_mode",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
         },
-        "TargetDestination": null,
+        "TargetDestination": {},
         "CurrentSysVarQuery": "select @@sql_mode from dual",
+        "ResolveExpr": false,
+        "PlanValue": null,
         "NewSysVarQuery": "select concat(@@sql_mode, ',NO_AUTO_CREATE_USER') from dual"
       }
     ]
