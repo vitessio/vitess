@@ -56,7 +56,32 @@ func (p *Projection) Execute(vcursor VCursor, bindVars map[string]*querypb.BindV
 }
 
 func (p *Projection) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
-	panic("implement me")
+	result, err := p.Input.Execute(vcursor, bindVars, wantields)
+	if err != nil {
+		return err
+	}
+
+	env := sqltypes.ExpressionEnv{
+		BindVars: bindVars,
+	}
+
+	if wantields {
+		p.addFields(result, bindVars)
+	}
+	var rows [][]sqltypes.Value
+	for _, row := range result.Rows {
+		env.Row = row
+		for _, exp := range p.Exprs {
+			result, err := exp.Evaluate(env)
+			if err != nil {
+				return err
+			}
+			row = append(row, result.Value())
+		}
+		rows = append(rows, row)
+	}
+	result.Rows = rows
+	return callback(result)
 }
 
 func (p *Projection) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {

@@ -287,5 +287,5 @@ func addAndSubtractType(left querypb.Type) querypb.Type {
 	case Float64:
 		return Float64
 	}
-	panic("oops")
+	panic("unreachable")
 }
