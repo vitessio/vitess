@@ -56,13 +56,10 @@ type (
 
 	// SysVarCheckAndIgnore implements the SetOp interface to check underlying setting and ignore if same.
 	SysVarCheckAndIgnore struct {
-		Name               string
-		Keyspace           *vindexes.Keyspace
-		TargetDestination  key.Destination
-		CurrentSysVarQuery string
-		ResolveExpr        bool
-		PlanValue          sqltypes.PlanValue
-		NewSysVarQuery     string
+		Name              string
+		Keyspace          *vindexes.Keyspace
+		TargetDestination key.Destination
+		CheckSysVarQuery  string
 	}
 )
 
@@ -193,9 +190,6 @@ func (svci *SysVarCheckAndIgnore) VariableName() string {
 
 //Execute implements the SetOp interface method
 func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) error {
-	var err error
-	var result *sqltypes.Result
-	var cValue, nValue sqltypes.Value
 	rss, _, err := vcursor.ResolveDestinations(svci.Keyspace.Name, nil, []key.Destination{svci.TargetDestination})
 	if err != nil {
 		return vterrors.Wrap(err, "SysVarCheckAndIgnore")
@@ -204,23 +198,12 @@ func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, bindVars map[string]*
 	if len(rss) != 1 {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %v", svci.TargetDestination)
 	}
-	if svci.ResolveExpr {
-		nValue, err = svci.PlanValue.ResolveValue(bindVars)
-	} else {
-		result, err = execShard(vcursor, svci.NewSysVarQuery, bindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
-		nValue = result.Rows[0][0]
-	}
+	result, err := execShard(vcursor, svci.CheckSysVarQuery, bindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
 	if err != nil {
 		return err
 	}
-	result, err = execShard(vcursor, svci.CurrentSysVarQuery, bindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
-	if err != nil {
-		return err
-	}
-	cValue = result.Rows[0][0]
-	if cValue.String() != nValue.String() {
+	if result.RowsAffected != 1 {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Modification not allowed using set construct for: %s", svci.Name)
 	}
-
 	return nil
 }

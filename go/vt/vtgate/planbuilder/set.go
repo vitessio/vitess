@@ -84,11 +84,6 @@ func buildSetOpIgnore(expr *sqlparser.SetExpr, _ ContextVSchema) (engine.SetOp, 
 }
 
 func buildSetOpCheckAndIgnore(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error) {
-	resolveExpr := true
-	pv, err := sqlparser.NewPlanValue(expr.Expr)
-	if err != nil {
-		resolveExpr = false
-	}
 	keyspace, err := vschema.DefaultKeyspace()
 	if err != nil {
 		return nil, err
@@ -98,16 +93,14 @@ func buildSetOpCheckAndIgnore(expr *sqlparser.SetExpr, vschema ContextVSchema) (
 	if dest == nil {
 		dest = key.DestinationAnyShard{}
 	}
+
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("%v", expr.Expr)
 
 	return &engine.SysVarCheckAndIgnore{
-		Name:               expr.Name.Lowered(),
-		Keyspace:           keyspace,
-		TargetDestination:  dest,
-		CurrentSysVarQuery: fmt.Sprintf("select @@%s from dual", expr.Name.Lowered()),
-		ResolveExpr:        resolveExpr,
-		PlanValue:          pv,
-		NewSysVarQuery:     fmt.Sprintf("select %s from dual", buf.String()),
+		Name:              expr.Name.Lowered(),
+		Keyspace:          keyspace,
+		TargetDestination: dest,
+		CheckSysVarQuery:  fmt.Sprintf("select 1 from dual where @@%s = %s", expr.Name.Lowered(), buf.String()),
 	}, nil
 }
