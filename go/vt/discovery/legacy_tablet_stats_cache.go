@@ -23,7 +23,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
@@ -50,8 +49,6 @@ type LegacyTabletStatsCache struct {
 	mu sync.RWMutex
 	// entries maps from keyspace/shard/tabletType to our cache.
 	entries map[string]map[string]map[topodatapb.TabletType]*legacyTabletStatsCacheEntry
-	// tsm is a helper to broadcast aggregate stats.
-	tsm srvtopo.TargetStatsMultiplexer
 	// cellAliases is a cache of cell aliases
 	cellAliases map[string]string
 }
@@ -128,7 +125,6 @@ func newLegacyTabletStatsCache(hc LegacyHealthCheck, ts *topo.Server, cell strin
 		cell:        cell,
 		ts:          ts,
 		entries:     make(map[string]map[string]map[topodatapb.TabletType]*legacyTabletStatsCacheEntry),
-		tsm:         srvtopo.NewTargetStatsMultiplexer(),
 		cellAliases: make(map[string]string),
 	}
 

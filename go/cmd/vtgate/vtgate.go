@@ -38,7 +38,6 @@ import (
 
 var (
 	cell                 = flag.String("cell", "test_nj", "cell to use")
-	retryCount           = flag.Int("retry-count", 2, "retry count")
 	tabletTypesToWait    = flag.String("tablet_types_to_wait", "", "wait till connected for specified tablet types during Gateway initialization")
 	useLegacyHealthCheck = flag.Bool("use_legacy_health_check", true, "whether to use the legacy health check")
 )
@@ -80,9 +79,9 @@ func main() {
 		legacyHealthCheck = discovery.NewLegacyHealthCheck(*vtgate.HealthCheckRetryDelay, *vtgate.HealthCheckTimeout)
 		legacyHealthCheck.RegisterStats()
 
-		vtg = vtgate.LegacyInit(context.Background(), legacyHealthCheck, resilientServer, *cell, *retryCount, tabletTypes)
+		vtg = vtgate.LegacyInit(context.Background(), legacyHealthCheck, resilientServer, *cell, *vtgate.RetryCount, tabletTypes)
 	} else {
-		vtg = vtgate.Init(context.Background(), resilientServer, *cell, *retryCount, tabletTypes)
+		vtg = vtgate.Init(context.Background(), resilientServer, *cell, tabletTypes)
 	}
 
 	servenv.OnRun(func() {

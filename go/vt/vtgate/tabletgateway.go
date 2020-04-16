@@ -66,12 +66,12 @@ type TabletGateway struct {
 }
 
 func createTabletGateway(ctx context.Context, unused discovery.LegacyHealthCheck, serv srvtopo.Server,
-	cell string, retryCount int) Gateway {
-	return NewTabletGateway(ctx, serv, cell, retryCount)
+	cell string, unused2 int) Gateway {
+	return NewTabletGateway(ctx, serv, cell)
 }
 
 // NewTabletGateway creates and returns a new TabletGateway
-func NewTabletGateway(ctx context.Context, serv srvtopo.Server, localCell string, retryCount int) *TabletGateway {
+func NewTabletGateway(ctx context.Context, serv srvtopo.Server, localCell string) *TabletGateway {
 	var topoServer *topo.Server
 	if serv != nil {
 		var err error
@@ -87,7 +87,7 @@ func NewTabletGateway(ctx context.Context, serv srvtopo.Server, localCell string
 		hc:                hc,
 		srvTopoServer:     serv,
 		localCell:         localCell,
-		retryCount:        retryCount,
+		retryCount:        *RetryCount,
 		statusAggregators: make(map[string]*TabletStatusAggregator),
 		buffer:            buffer.New(),
 	}
@@ -127,6 +127,7 @@ func (gw *TabletGateway) WaitForTablets(ctx context.Context, tabletTypesToWait [
 		return err
 	}
 	return nil
+	// TODO(deepthi): this needs to be implemented
 	//return gw.hc.WaitForAllServingTablets(ctx, targets)
 }
 
