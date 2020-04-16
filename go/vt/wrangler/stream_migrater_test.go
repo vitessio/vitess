@@ -133,7 +133,7 @@ func TestStreamMigrateMainflow(t *testing.T) {
 	}
 	migrateStreams()
 
-	// mi.createJouranls (verify workflows are in the insert)
+	// mi.createJournals (verify workflows are in the insert)
 	journal := "insert into _vt.resharding_journal.*source_workflows.*t1t2"
 	tme.dbSourceClients[0].addQueryRE(journal, &sqltypes.Result{}, nil)
 	tme.dbSourceClients[1].addQueryRE(journal, &sqltypes.Result{}, nil)
