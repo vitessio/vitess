@@ -99,7 +99,7 @@ func (sm *streamMigrater) readSourceStreams(ctx context.Context, cancelMigrate b
 				return err
 			}
 			if len(stoppedStreams) != 0 {
-				return fmt.Errorf("cannot migrate until all streams are running: %s/%s", source.si.ShardName(), source.master.Alias)
+				return fmt.Errorf("cannot migrate until all streams are running: %s", source.si.ShardName())
 			}
 		}
 		tabletStreams, err := sm.readTabletStreams(ctx, source.master, "")

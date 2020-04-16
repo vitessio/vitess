@@ -320,9 +320,6 @@ func (dr *switchDryRun) cancelMigration(ctx context.Context, sm *streamMigrater)
 }
 
 func (dr *switchDryRun) lockKeyspace(ctx context.Context, keyspace, _ string) (context.Context, func(*error), error) {
-	if strings.TrimSpace(keyspace) == "" {
-		panic(fmt.Sprintf("======lockKeyspace %s\n", keyspace))
-	}
 	dr.drLog.Log(fmt.Sprintf("Lock keyspace %s", keyspace))
 	return ctx, func(e *error) {
 		dr.drLog.Log(fmt.Sprintf("Unlock keyspace %s", keyspace))
