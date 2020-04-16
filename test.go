@@ -39,7 +39,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -86,7 +85,6 @@ var (
 	shard          = flag.Int("shard", -1, "if N>=0, run the tests whose Shard field matches N")
 	tag            = flag.String("tag", "", "if provided, only run tests with the given tag. Can't be combined with -shard or explicit test list")
 	exclude        = flag.String("exclude", "", "if provided, exclude tests containing any of the given tags (comma delimited)")
-	reshard        = flag.Int("rebalance", 0, "if N>0, check the stats and group tests into N similarly-sized bins by average run time")
 	keepData       = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
 	printLog       = flag.Bool("print-log", false, "print the log of each failed test (or all tests if -log-pass) to the console")
 	follow         = flag.Bool("follow", false, "print test output as it runs, instead of waiting to see if it passes or fails")
@@ -297,22 +295,6 @@ func main() {
 	var config Config
 	if err := json.Unmarshal(configData, &config); err != nil {
 		log.Fatalf("Can't parse config file: %v", err)
-	}
-
-	// Resharding.
-	if *reshard > 0 {
-		if err := reshardTests(&config, *reshard); err != nil {
-			log.Fatalf("resharding error: %v", err)
-		}
-		log.Printf("Saving updated config...")
-		data, err := json.MarshalIndent(config, "", "\t")
-		if err != nil {
-			log.Fatalf("can't save new config: %v", err)
-		}
-		if err := ioutil.WriteFile(configFileName, data, 0644); err != nil {
-			log.Fatalf("can't write new config: %v", err)
-		}
-		return
 	}
 
 	flavors := []string{"local"}
@@ -695,105 +677,6 @@ func updateTestStats(name string, update func(*TestStats)) {
 	if err := ioutil.WriteFile(statsFileName, data, 0644); err != nil {
 		log.Printf("Can't write stats file: %v", err)
 	}
-}
-
-func reshardTests(config *Config, numShards int) error {
-	var stats Stats
-
-	var data []byte
-	if *remoteStats != "" {
-		log.Printf("Using remote stats for resharding: %v", *remoteStats)
-		resp, err := http.Get(*remoteStats)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-		if data, err = ioutil.ReadAll(resp.Body); err != nil {
-			return err
-		}
-	} else {
-		var err error
-		data, err = ioutil.ReadFile(statsFileName)
-		if err != nil {
-			return errors.New("can't read stats file")
-		}
-	}
-
-	if err := json.Unmarshal(data, &stats); err != nil {
-		return fmt.Errorf("can't parse stats file: %v", err)
-	}
-
-	// Sort tests by PassTime.
-	var tests []TestStats
-	var totalTime int64
-	for name, test := range stats.TestStats {
-		test.name = name
-		tests = append(tests, test)
-		totalTime += int64(test.PassTime)
-	}
-	sort.Sort(ByPassTime(tests))
-
-	// Group into shards.
-	max := totalTime / int64(numShards)
-	shards := make([][]TestStats, numShards)
-	sums := make([]int64, numShards)
-	// First pass: greedy approximation.
-firstPass:
-	for len(tests) > 0 {
-		v := int64(tests[0].PassTime)
-
-		for n := range shards {
-			if sums[n]+v < max {
-				shards[n] = append(shards[n], tests[0])
-				sums[n] += v
-				tests = tests[1:]
-				continue firstPass
-			}
-		}
-		// None of the bins has room. Go to second pass.
-		break
-	}
-	// Second pass: distribute the remainder.
-	for len(tests) > 0 {
-		nmin := 0
-		min := sums[0]
-
-		for n := range sums {
-			if sums[n] < min {
-				nmin = n
-				min = sums[n]
-			}
-		}
-
-		shards[nmin] = append(shards[nmin], tests[0])
-		sums[nmin] += int64(tests[0].PassTime)
-		tests = tests[1:]
-	}
-
-	// Update config and print results.
-	for i, tests := range shards {
-		for _, t := range tests {
-			ct, ok := config.Tests[t.name]
-			if !ok {
-				log.Printf("WARNING: skipping unknown test: %v", t.name)
-				continue
-			}
-			ct.Shard = i
-			if ct.Args == nil {
-				ct.Args = []string{}
-			}
-			if ct.Command == nil {
-				ct.Command = []string{}
-			}
-			if ct.Tags == nil {
-				ct.Tags = []string{}
-			}
-			log.Printf("%v:\t%v\n", t.name, t.PassTime)
-		}
-		log.Printf("Shard %v total: %v\n", i, time.Duration(sums[i]))
-	}
-
-	return nil
 }
 
 type ByPassTime []TestStats

@@ -1,8 +1,6 @@
 topology:
   cells:
     - name: "zone1"
-      etcd:
-        replicas: 1
       vtctld:
         replicas: 1
       vtgate:
@@ -47,10 +45,6 @@ jobs:
     kind: "vtctlclient"
     command: "SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 master"
 
-etcd:
-  replicas: 1
-  resources:
-
 vtctld:
   serviceType: "NodePort"
   resources:
@@ -63,6 +57,8 @@ vttablet:
   mysqlSize: "prod"
   resources:
   mysqlResources:
+  # It's generally not recommended to override this value for production usage.
+  terminationGracePeriodSeconds: 1
 
 vtworker:
   resources:

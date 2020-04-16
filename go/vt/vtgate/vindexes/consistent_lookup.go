@@ -266,19 +266,19 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 	bindVars[lu.lkp.To] = sqltypes.BytesBindVariable(ksid)
 
 	// Lock the lookup row using pre priority.
-	qr, err := vcursor.Execute("VindexCreate", lu.lockLookupQuery, bindVars, false /* isDML */, vtgatepb.CommitOrder_PRE)
+	qr, err := vcursor.Execute("VindexCreate", lu.lockLookupQuery, bindVars, false /* rollbackOnError */, vtgatepb.CommitOrder_PRE)
 	if err != nil {
 		return err
 	}
 	switch len(qr.Rows) {
 	case 0:
-		if _, err := vcursor.Execute("VindexCreate", lu.insertLookupQuery, bindVars, true /* isDML */, vtgatepb.CommitOrder_PRE); err != nil {
+		if _, err := vcursor.Execute("VindexCreate", lu.insertLookupQuery, bindVars, true /* rollbackOnError */, vtgatepb.CommitOrder_PRE); err != nil {
 			return err
 		}
 	case 1:
 		existingksid := qr.Rows[0][0].ToBytes()
 		// Lock the target row using normal transaction priority.
-		qr, err = vcursor.ExecuteKeyspaceID(lu.keyspace, existingksid, lu.lockOwnerQuery, bindVars, false /* isDML */, false /* autocommit */)
+		qr, err = vcursor.ExecuteKeyspaceID(lu.keyspace, existingksid, lu.lockOwnerQuery, bindVars, false /* rollbackOnError */, false /* autocommit */)
 		if err != nil {
 			return err
 		}
@@ -288,7 +288,7 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 		if bytes.Equal(existingksid, ksid) {
 			return nil
 		}
-		if _, err := vcursor.Execute("VindexCreate", lu.updateLookupQuery, bindVars, true /* isDML */, vtgatepb.CommitOrder_PRE); err != nil {
+		if _, err := vcursor.Execute("VindexCreate", lu.updateLookupQuery, bindVars, true /* rollbackOnError */, vtgatepb.CommitOrder_PRE); err != nil {
 			return err
 		}
 	default:
@@ -307,10 +307,8 @@ func (lu *clCommon) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []b
 	equal := true
 	for i := range oldValues {
 		result, err := sqltypes.NullsafeCompare(oldValues[i], newValues[i])
-		if err != nil {
-			return err
-		}
-		if result != 0 {
+		// errors from NullsafeCompare can be ignored. if they are real problems, we'll see them in the Create/Update
+		if err != nil || result != 0 {
 			equal = false
 			break
 		}

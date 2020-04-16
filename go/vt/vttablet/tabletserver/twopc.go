@@ -22,10 +22,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
@@ -127,9 +125,9 @@ func NewTwoPC(readPool *connpool.Pool) *TwoPC {
 
 // Init initializes TwoPC. If the metadata database or tables
 // are not present, they are created.
-func (tpc *TwoPC) Init(sidecarDBName string, dbaparams *mysql.ConnParams) error {
+func (tpc *TwoPC) Init(sidecarDBName string, dbaparams dbconfigs.Connector) error {
 	dbname := sqlescape.EscapeID(sidecarDBName)
-	conn, err := dbconnpool.NewDBConnection(dbaparams, stats.NewTimings("", "", ""))
+	conn, err := dbconnpool.NewDBConnection(dbaparams)
 	if err != nil {
 		return err
 	}

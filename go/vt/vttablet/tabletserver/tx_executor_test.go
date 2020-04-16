@@ -529,12 +529,11 @@ func newTestTxExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fa
 	db.AddQueryPattern("insert into `_vt`\\.redo_statement.*", &sqltypes.Result{})
 	db.AddQuery("delete from `_vt`.redo_state where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("delete from `_vt`.redo_statement where dtid = 'aa'", &sqltypes.Result{})
-	db.AddQuery("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
+	db.AddQuery("update test_table set name = 2 where pk = 1 limit 10001", &sqltypes.Result{})
 	return &TxExecutor{
 		ctx:      ctx,
 		logStats: logStats,
 		te:       tsv.te,
-		messager: tsv.messager,
 	}, tsv, db
 }
 
@@ -548,12 +547,11 @@ func newShortAgeExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *
 	db.AddQueryPattern("insert into `_vt`\\.redo_statement.*", &sqltypes.Result{})
 	db.AddQuery("delete from `_vt`.redo_state where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("delete from `_vt`.redo_statement where dtid = 'aa'", &sqltypes.Result{})
-	db.AddQuery("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
+	db.AddQuery("update test_table set name = 2 where pk = 1 limit 10001", &sqltypes.Result{})
 	return &TxExecutor{
 		ctx:      ctx,
 		logStats: logStats,
 		te:       tsv.te,
-		messager: tsv.messager,
 	}, tsv, db
 }
 
@@ -567,7 +565,6 @@ func newNoTwopcExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *f
 		ctx:      ctx,
 		logStats: logStats,
 		te:       tsv.te,
-		messager: tsv.messager,
 	}, tsv, db
 }
 

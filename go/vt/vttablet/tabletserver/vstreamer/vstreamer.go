@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // PacketSize is the suggested packet size for VReplication streamer.
@@ -53,7 +54,7 @@ type VStreamer interface {
 }
 
 // NewVStreamer returns a VStreamer.
-func NewVStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) VStreamer {
+func NewVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) VStreamer {
 	return newVStreamer(ctx, cp, se, startPos, filter, &localVSchema{vschema: &vindexes.VSchema{}}, send)
 }
 
@@ -70,7 +71,7 @@ type vstreamer struct {
 	ctx    context.Context
 	cancel func()
 
-	cp       *mysql.ConnParams
+	cp       dbconfigs.Connector
 	se       *schema.Engine
 	startPos string
 	filter   *binlogdatapb.Filter
@@ -112,7 +113,7 @@ type streamerPlan struct {
 //   Other constructs like joins, group by, etc. are not supported.
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
-func newVStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
+func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
 		ctx:      ctx,
@@ -154,6 +155,15 @@ func (vs *vstreamer) Stream() error {
 	}
 	if vs.startPos == "current" {
 		vs.pos = curPos
+		vevents := []*binlogdatapb.VEvent{{
+			Type: binlogdatapb.VEventType_GTID,
+			Gtid: mysql.EncodePosition(vs.pos),
+		}, {
+			Type: binlogdatapb.VEventType_OTHER,
+		}}
+		if err := vs.send(vevents); err != nil {
+			return wrapError(err, vs.pos)
+		}
 	} else {
 		pos, err := mysql.DecodePosition(vs.startPos)
 		if err != nil {
@@ -186,11 +196,7 @@ func (vs *vstreamer) Stream() error {
 }
 
 func (vs *vstreamer) currentPosition() (mysql.Position, error) {
-	cp, err := dbconfigs.WithCredentials(vs.cp)
-	if err != nil {
-		return mysql.Position{}, err
-	}
-	conn, err := mysql.Connect(vs.ctx, cp)
+	conn, err := vs.cp.Connect(vs.ctx)
 	if err != nil {
 		return mysql.Position{}, err
 	}
@@ -363,6 +369,12 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 	if err != nil {
 		return nil, fmt.Errorf("can't strip checksum from binlog event: %v, event data: %#v", err, ev)
 	}
+
+	// Get the DbName for vstreamer
+	params, err := vs.cp.MysqlParams()
+	if err != nil {
+		return nil, err
+	}
 	var vevents []*binlogdatapb.VEvent
 	switch {
 	case ev.IsGTID():
@@ -392,7 +404,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		// could be using SBR. Vitess itself will never run into cases where it needs to consume non rbr statements.
 		switch cat := sqlparser.Preview(q.SQL); cat {
 		case sqlparser.StmtInsert:
-			mustSend := mustSendStmt(q, vs.cp.DbName)
+			mustSend := mustSendStmt(q, params.DbName)
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_INSERT,
@@ -400,7 +412,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				})
 			}
 		case sqlparser.StmtUpdate:
-			mustSend := mustSendStmt(q, vs.cp.DbName)
+			mustSend := mustSendStmt(q, params.DbName)
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_UPDATE,
@@ -408,7 +420,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				})
 			}
 		case sqlparser.StmtDelete:
-			mustSend := mustSendStmt(q, vs.cp.DbName)
+			mustSend := mustSendStmt(q, params.DbName)
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_DELETE,
@@ -416,7 +428,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				})
 			}
 		case sqlparser.StmtReplace:
-			mustSend := mustSendStmt(q, vs.cp.DbName)
+			mustSend := mustSendStmt(q, params.DbName)
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_REPLACE,
@@ -432,7 +444,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				Type: binlogdatapb.VEventType_COMMIT,
 			})
 		case sqlparser.StmtDDL:
-			if mustSendDDL(q, vs.cp.DbName, vs.filter) {
+			if mustSendDDL(q, params.DbName, vs.filter) {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_GTID,
 					Gtid: mysql.EncodePosition(vs.pos),
@@ -486,7 +498,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			// A journal is a special case that generates a JOURNAL event.
 			return nil, vs.buildJournalPlan(id, tm)
 		}
-		if tm.Database != "" && tm.Database != vs.cp.DbName {
+		if tm.Database != "" && tm.Database != params.DbName {
 			vs.plans[id] = nil
 			return nil, nil
 		}
@@ -529,16 +541,22 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 }
 
 func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
-	st, err := vs.se.LoadTableBasic(vs.ctx, "_vt.resharding_journal")
+	conn, err := vs.cp.Connect(vs.ctx)
 	if err != nil {
 		return err
 	}
-	if len(st.Columns) < len(tm.Types) {
-		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema as %v", tm.Name, tm.Types, st.Columns)
+	defer conn.Close()
+	qr, err := conn.ExecuteFetch("select * from _vt.resharding_journal where 1 != 1", 1, true)
+	if err != nil {
+		return err
+	}
+	fields := qr.Fields
+	if len(fields) < len(tm.Types) {
+		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema as %v", tm.Name, tm.Types, fields)
 	}
 	table := &Table{
-		Name:    "_vt.resharding_journal",
-		Columns: st.Columns[:len(tm.Types)],
+		Name:   "_vt.resharding_journal",
+		Fields: fields[:len(tm.Types)],
 	}
 	// Build a normal table plan, which means, return all rows
 	// and columns as is. Special handling is done when we actually
@@ -562,8 +580,8 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 	}
 
 	table := &Table{
-		Name:    tm.Name,
-		Columns: cols,
+		Name:   tm.Name,
+		Fields: cols,
 	}
 	plan, err := buildPlan(table, vs.vschema, vs.filter)
 	if err != nil {
@@ -586,15 +604,15 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 	}, nil
 }
 
-func (vs *vstreamer) buildTableColumns(id uint64, tm *mysql.TableMap) ([]schema.TableColumn, error) {
-	var cols []schema.TableColumn
+func (vs *vstreamer) buildTableColumns(id uint64, tm *mysql.TableMap) ([]*querypb.Field, error) {
+	var fields []*querypb.Field
 	for i, typ := range tm.Types {
 		t, err := sqltypes.MySQLToType(int64(typ), 0)
 		if err != nil {
 			return nil, fmt.Errorf("unsupported type: %d, position: %d", typ, i)
 		}
-		cols = append(cols, schema.TableColumn{
-			Name: sqlparser.NewColIdent(fmt.Sprintf("@%d", i+1)),
+		fields = append(fields, &querypb.Field{
+			Name: fmt.Sprintf("@%d", i+1),
 			Type: t,
 		})
 	}
@@ -604,29 +622,34 @@ func (vs *vstreamer) buildTableColumns(id uint64, tm *mysql.TableMap) ([]schema.
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
 			return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
 		}
-		return cols, nil
+		return fields, nil
 	}
 
-	if len(st.Columns) < len(tm.Types) {
+	if len(st.Fields) < len(tm.Types) {
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
-			return nil, fmt.Errorf("cannot determine table columns for %s: event has %v, schema as %v", tm.Name, tm.Types, st.Columns)
+			return nil, fmt.Errorf("cannot determine table columns for %s: event has %v, schema as %v", tm.Name, tm.Types, st.Fields)
 		}
-		return cols, nil
+		return fields, nil
 	}
 
 	// check if the schema returned by schema.Engine matches with row.
 	for i := range tm.Types {
-		if !sqltypes.AreTypesEquivalent(cols[i].Type, st.Columns[i].Type) {
-			return cols, nil
+		if !sqltypes.AreTypesEquivalent(fields[i].Type, st.Fields[i].Type) {
+			return fields, nil
 		}
 	}
 
 	// Columns should be truncated to match those in tm.
-	cols = st.Columns[:len(tm.Types)]
-	return cols, nil
+	fields = st.Fields[:len(tm.Types)]
+	return fields, nil
 }
 
 func (vs *vstreamer) processJounalEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {
+	// Get DbName
+	params, err := vs.cp.MysqlParams()
+	if err != nil {
+		return nil, err
+	}
 nextrow:
 	for _, row := range rows.Rows {
 		afterOK, afterValues, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
@@ -639,7 +662,7 @@ nextrow:
 		}
 		// Exclude events that don't match the db_name.
 		for i, fld := range plan.fields() {
-			if fld.Name == "db_name" && afterValues[i].ToString() != vs.cp.DbName {
+			if fld.Name == "db_name" && afterValues[i].ToString() != params.DbName {
 				continue nextrow
 			}
 		}
@@ -729,7 +752,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 			valueIndex++
 			continue
 		}
-		value, l, err := mysql.CellValue(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum], plan.Table.Columns[colNum].Type)
+		value, l, err := mysql.CellValue(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum], plan.Table.Fields[colNum].Type)
 		if err != nil {
 			return false, nil, err
 		}

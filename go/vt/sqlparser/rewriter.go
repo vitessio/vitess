@@ -2,7 +2,7 @@
 
 package sqlparser
 
-//go:generate go run visitorgen/main -input=ast.go -output=rewriter.go
+//go:generate go run ./visitorgen/main -input=ast.go -output=rewriter.go
 
 import (
 	"reflect"
@@ -318,6 +318,10 @@ func replaceGroupConcatExprExprs(newNode, parent SQLNode) {
 	parent.(*GroupConcatExpr).Exprs = newNode.(SelectExprs)
 }
 
+func replaceGroupConcatExprLimit(newNode, parent SQLNode) {
+	parent.(*GroupConcatExpr).Limit = newNode.(*Limit)
+}
+
 func replaceGroupConcatExprOrderBy(newNode, parent SQLNode) {
 	parent.(*GroupConcatExpr).OrderBy = newNode.(OrderBy)
 }
@@ -453,10 +457,6 @@ func (r *replaceOrderByItems) replace(newNode, container SQLNode) {
 
 func (r *replaceOrderByItems) inc() {
 	*r++
-}
-
-func replaceParenExprExpr(newNode, parent SQLNode) {
-	parent.(*ParenExpr).Expr = newNode.(Expr)
 }
 
 func replaceParenSelectSelect(newNode, parent SQLNode) {
@@ -998,6 +998,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *GroupConcatExpr:
 		a.apply(node, n.Exprs, replaceGroupConcatExprExprs)
+		a.apply(node, n.Limit, replaceGroupConcatExprLimit)
 		a.apply(node, n.OrderBy, replaceGroupConcatExprOrderBy)
 
 	case *IndexDefinition:
@@ -1084,9 +1085,6 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *OtherAdmin:
 
 	case *OtherRead:
-
-	case *ParenExpr:
-		a.apply(node, n.Expr, replaceParenExprExpr)
 
 	case *ParenSelect:
 		a.apply(node, n.Select, replaceParenSelectSelect)

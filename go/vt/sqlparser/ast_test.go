@@ -83,7 +83,6 @@ func TestSelect(t *testing.T) {
 		t.Errorf("having: %q, want %s", buf.String(), want)
 	}
 
-	// OR clauses must be parenthesized.
 	tree, err = Parse("select * from t where a = 1 or b = 1")
 	require.NoError(t, err)
 	expr = tree.(*Select).Where.Expr
@@ -91,7 +90,7 @@ func TestSelect(t *testing.T) {
 	sel.AddWhere(expr)
 	buf = NewTrackedBuffer(nil)
 	sel.Where.Format(buf)
-	want = " where (a = 1 or b = 1)"
+	want = " where a = 1 or b = 1"
 	if buf.String() != want {
 		t.Errorf("where: %q, want %s", buf.String(), want)
 	}
@@ -99,7 +98,7 @@ func TestSelect(t *testing.T) {
 	sel.AddHaving(expr)
 	buf = NewTrackedBuffer(nil)
 	sel.Having.Format(buf)
-	want = " having (a = 1 or b = 1)"
+	want = " having a = 1 or b = 1"
 	if buf.String() != want {
 		t.Errorf("having: %q, want %s", buf.String(), want)
 	}
@@ -439,7 +438,7 @@ func TestReplaceExpr(t *testing.T) {
 		out: "not :a",
 	}, {
 		in:  "select * from t where ((select a from b))",
-		out: "(:a)",
+		out: ":a",
 	}, {
 		in:  "select * from t where (select a from b) = 1",
 		out: ":a = 1",
@@ -669,7 +668,7 @@ func TestColIdentMarshal(t *testing.T) {
 
 func TestColIdentSize(t *testing.T) {
 	size := unsafe.Sizeof(NewColIdent(""))
-	want := 2 * unsafe.Sizeof("")
+	want := 2*unsafe.Sizeof("") + 8
 	if size != want {
 		t.Errorf("Size of ColIdent: %d, want 32", want)
 	}

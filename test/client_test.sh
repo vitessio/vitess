@@ -37,9 +37,6 @@ vtctlclient -server localhost:15999 RebuildVSchemaGraph
 
 CELL=test ./scripts/vtgate-up.sh
 
-echo "Run Python client script.."
-$VTROOT/test/client.sh
-
 echo "Run Go client script..."
 go run $VTROOT/test/client.go -server=localhost:15991
 

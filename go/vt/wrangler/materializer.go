@@ -48,8 +48,8 @@ type materializer struct {
 	targetShards  []*topo.ShardInfo
 }
 
-// Migrate initiates a table migration.
-func (wr *Wrangler) Migrate(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs, cell, tabletTypes string) error {
+// MoveTables initiates moving table(s) over to another keyspace
+func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs, cell, tabletTypes string) error {
 	var tables []string
 	var vschema *vschemapb.Keyspace
 	if strings.HasPrefix(tableSpecs, "{") {

@@ -298,7 +298,7 @@ func NewActionAgent(
 
 	var mysqlHost string
 	var mysqlPort int32
-	if appConfig := dbcfgs.AppWithDB(); appConfig.Host != "" {
+	if appConfig, _ := dbcfgs.AppWithDB().MysqlParams(); appConfig.Host != "" {
 		mysqlHost = appConfig.Host
 		mysqlPort = int32(appConfig.Port)
 
@@ -324,10 +324,11 @@ func NewActionAgent(
 	vreplication.InitVStreamerClient(agent.DBConfigs)
 
 	// The db name is set by the Start function called above
+	filteredWithDBParams, _ := agent.DBConfigs.FilteredWithDB().MysqlParams()
 	agent.VREngine = vreplication.NewEngine(ts, tabletAlias.Cell, mysqld, func() binlogplayer.DBClient {
 		return binlogplayer.NewDBClient(agent.DBConfigs.FilteredWithDB())
 	},
-		agent.DBConfigs.FilteredWithDB().DbName,
+		filteredWithDBParams.DbName,
 	)
 	servenv.OnTerm(agent.VREngine.Close)
 
@@ -770,7 +771,11 @@ func (agent *ActionAgent) Close() {
 		tablet.PortMap = nil
 		return nil
 	}
-	if _, err := agent.TopoServer.UpdateTabletFields(context.Background(), agent.TabletAlias, f); err != nil {
+
+	updateCtx, updateCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	defer updateCancel()
+
+	if _, err := agent.TopoServer.UpdateTabletFields(updateCtx, agent.TabletAlias, f); err != nil {
 		log.Warningf("Failed to update tablet record, may contain stale identifiers: %v", err)
 	}
 }

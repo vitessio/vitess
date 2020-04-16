@@ -103,6 +103,7 @@ var (
 // Note this test is just testing the full workflow, not corner cases or error
 // cases. These are mostly done by the other resharding tests.
 func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
+	defer cluster.PanicHandler(t)
 	clusterInstance = cluster.NewCluster(cell, hostname)
 	defer clusterInstance.Teardown()
 
@@ -165,7 +166,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
-			fmt.Println("Starting MySql for tablet ", tablet.Alias)
+			log.Infof("Starting MySql for tablet %v", tablet.Alias)
 			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
 				t.Fatal(err)
 			} else {
@@ -514,18 +515,18 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 func insertStartupValues(t *testing.T) {
 	insertSQL := fmt.Sprintf(insertTabletTemplateKsID, "resharding1", fixedParentID, 1, "msg1", key1, key1, 1)
-	sharding.InsertToTablet(t, insertSQL, *shard0.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard0.MasterTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding1", fixedParentID, 2, "msg2", key2, key2, 2)
-	sharding.InsertToTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding1", fixedParentID, 3, "msg3", key3, key3, 3)
-	sharding.InsertToTablet(t, insertSQL, *shard2.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard2.MasterTablet(), keyspaceName, false)
 }
 
 func insertValue(t *testing.T, tablet *cluster.Vttablet, keyspaceName string, tableName string, id int, msg string, ksID uint64) {
 	insertSQL := fmt.Sprintf(insertTabletTemplateKsID, tableName, fixedParentID, id, msg, ksID, ksID, id)
-	sharding.InsertToTablet(t, insertSQL, *tablet, keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *tablet, keyspaceName, false)
 }
 
 func checkStartupValues(t *testing.T, shardingKeyType querypb.Type) {
@@ -626,8 +627,8 @@ func insertLots(t *testing.T, count uint64, base uint64, table string, parentID 
 		query2 = fmt.Sprintf(insertTabletTemplateKsID, table, parentID, 20000+base+i,
 			fmt.Sprintf("msg-range1-%d", 20000+base+i), key2, key2, 20000+base+i)
 
-		sharding.InsertToTablet(t, query1, *shard0.MasterTablet(), ks, false)
-		sharding.InsertToTablet(t, query2, *shard1.MasterTablet(), ks, false)
+		sharding.ExecuteOnTablet(t, query1, *shard0.MasterTablet(), ks, false)
+		sharding.ExecuteOnTablet(t, query2, *shard1.MasterTablet(), ks, false)
 	}
 }
 

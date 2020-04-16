@@ -445,6 +445,41 @@ func TestConsistentLookupNoUpdate(t *testing.T) {
 	vc.verifyLog(t, []string{})
 }
 
+func TestConsistentLookupUpdateBecauseUncomparableTypes(t *testing.T) {
+	lookup := createConsistentLookup(t, "consistent_lookup", false)
+	vc := &loggingVCursor{}
+
+	type test struct {
+		typ querypb.Type
+		val string
+	}
+
+	tests := []test{
+		{querypb.Type_TEXT, "some string"},
+		{querypb.Type_VARCHAR, "some string"},
+		{querypb.Type_CHAR, "some string"},
+		{querypb.Type_BIT, "some string"},
+		{querypb.Type_ENUM, "some string"},
+		{querypb.Type_SET, "some string"},
+		{querypb.Type_GEOMETRY, "some string"},
+		{querypb.Type_JSON, "some string"},
+	}
+
+	for _, val := range tests {
+		t.Run(val.typ.String(), func(t *testing.T) {
+			vc.AddResult(&sqltypes.Result{}, nil)
+			vc.AddResult(&sqltypes.Result{}, nil)
+			sqlVal, err := sqltypes.NewValue(val.typ, []byte(val.val))
+			require.NoError(t, err)
+
+			err = lookup.(Lookup).Update(vc, []sqltypes.Value{sqlVal, sqlVal}, []byte("test"), []sqltypes.Value{sqlVal, sqlVal})
+			require.NoError(t, err)
+			require.NotEmpty(t, vc.log)
+			vc.log = nil
+		})
+	}
+}
+
 func createConsistentLookup(t *testing.T, name string, writeOnly bool) SingleColumn {
 	t.Helper()
 	write := "false"
@@ -487,7 +522,7 @@ func (vc *loggingVCursor) AddResult(qr *sqltypes.Result, err error) {
 	vc.errors = append(vc.errors, err)
 }
 
-func (vc *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+func (vc *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	name := "Unknown"
 	switch co {
 	case vtgatepb.CommitOrder_NORMAL:
@@ -499,14 +534,14 @@ func (vc *loggingVCursor) Execute(method string, query string, bindvars map[stri
 	case vtgatepb.CommitOrder_AUTOCOMMIT:
 		name = "ExecuteAutocommit"
 	}
-	return vc.execute(name, query, bindvars, isDML)
+	return vc.execute(name, query, bindvars, rollbackOnError)
 }
 
-func (vc *loggingVCursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, isDML, autocommit bool) (*sqltypes.Result, error) {
-	return vc.execute("ExecuteKeyspaceID", query, bindVars, isDML)
+func (vc *loggingVCursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error) {
+	return vc.execute("ExecuteKeyspaceID", query, bindVars, rollbackOnError)
 }
 
-func (vc *loggingVCursor) execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+func (vc *loggingVCursor) execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool) (*sqltypes.Result, error) {
 	if vc.index >= len(vc.results) {
 		return nil, fmt.Errorf("ran out of results to return: %s", query)
 	}
@@ -515,7 +550,7 @@ func (vc *loggingVCursor) execute(method string, query string, bindvars map[stri
 		bvl = append(bvl, bv{Name: k, Bv: string(v.Value)})
 	}
 	sort.Slice(bvl, func(i, j int) bool { return bvl[i].Name < bvl[j].Name })
-	vc.log = append(vc.log, fmt.Sprintf("%s %s %v %v", method, query, bvl, isDML))
+	vc.log = append(vc.log, fmt.Sprintf("%s %s %v %v", method, query, bvl, rollbackOnError))
 	idx := vc.index
 	vc.index++
 	if vc.errors[idx] != nil {

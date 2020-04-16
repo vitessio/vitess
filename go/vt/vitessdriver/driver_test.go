@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
@@ -420,16 +422,16 @@ func TestBindVars(t *testing.T) {
 	converter := &converter{}
 
 	for _, tc := range testcases {
-		bv, err := converter.bindVarsFromNamedValues(tc.in)
-		if bv != nil {
-			if !reflect.DeepEqual(bv, tc.out) {
-				t.Errorf("%s: %v, want %v", tc.desc, bv, tc.out)
+		t.Run(tc.desc, func(t *testing.T) {
+			bv, err := converter.bindVarsFromNamedValues(tc.in)
+			if tc.outErr != "" {
+				assert.EqualError(t, err, tc.outErr)
+			} else {
+				if !reflect.DeepEqual(bv, tc.out) {
+					t.Errorf("%s: %v, want %v", tc.desc, bv, tc.out)
+				}
 			}
-		} else {
-			if err == nil || err.Error() != tc.outErr {
-				t.Errorf("%s: %v, want %v", tc.desc, err, tc.outErr)
-			}
-		}
+		})
 	}
 }
 

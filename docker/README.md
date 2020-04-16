@@ -40,11 +40,3 @@ All these Vitess images include a specific MySQL/MariaDB version ("flavor").
   * On Docker Hub we publish only images with MySQL 5.7 to minimize maintenance overhead and avoid confusion.
 
 If you are looking for a stable version of Vitess, use the **lite** image with a fixed version. If you are looking for the latest Vitess code in binary form, use the "latest" tag of the **base** image.
-
-### Kubernetes Tutorial Dependencies
-
-| Image | How (When) Updated | Description |
-| --- | --- | --- |
-| **guestbook** | manual (updated with every Vitess release) | Vitess adaption of the Kubernetes guestbook example. Used to showcase sharding in Vitess. Dockerfile is located in [`examples/kubernetes/guestbook/`](https://github.com/vitessio/vitess/tree/master/examples/kubernetes/guestbook). |
-| **orchestrator** | manual | Binaries for [Orchestrator](https://github.com/github/orchestrator). It can be used with Vitess for automatic failovers. Currently not part of the Kubernetes Tutorial and only used in tests. |
-

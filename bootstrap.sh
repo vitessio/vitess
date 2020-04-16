@@ -23,9 +23,9 @@ source ./dev.env
 # 0. Initialization and helper methods.
 # 1. Installation of dependencies.
 
-BUILD_PYTHON=${BUILD_PYTHON:-1}
 BUILD_JAVA=${BUILD_JAVA:-1}
 BUILD_CONSUL=${BUILD_CONSUL:-1}
+BUILD_CHROME=${BUILD_CHROME:-1}
 
 #
 # 0. Initialization and helper methods.
@@ -88,34 +88,6 @@ function install_dep() {
 function get_arch() {
   uname -m
 }
-
-
-# Install the gRPC Python library (grpcio) and the protobuf gRPC Python plugin (grpcio-tools) from PyPI.
-# Dependencies like the Python protobuf package will be installed automatically.
-function install_grpc() {
-  local version="$1"
-  local dist="$2"
-
-  # Python requires a very recent version of virtualenv.
-  # We also require a recent version of pip, as we use it to
-  # upgrade the other tools.
-  # For instance, setuptools doesn't work with pip 6.0:
-  # https://github.com/pypa/setuptools/issues/945
-  # (and setuptools is used by grpc install).
-  grpc_virtualenv="$dist/usr/local"
-  $VIRTUALENV -v "$grpc_virtualenv"
-  PIP=$grpc_virtualenv/bin/pip
-  $PIP install --upgrade pip
-  $PIP install --upgrade --ignore-installed virtualenv
-  $PIP install mysql-connector-python
-
-  grpcio_ver=$version
-  $PIP install --upgrade grpcio=="$grpcio_ver" grpcio-tools=="$grpcio_ver"
-}
-
-if [ "$BUILD_PYTHON" == 1 ] ; then
-    install_dep "gRPC" "1.16.0" "$VTROOT/dist/grpc" install_grpc
-fi
 
 # Install protoc.
 function install_protoc() {
@@ -194,6 +166,32 @@ function install_etcd() {
 command -v etcd && echo "etcd already installed" || install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
 
 
+# Download and install k3s, link k3s binary into our root
+function install_k3s() {
+  local version="$1"
+  local dist="$2"
+
+  case $(uname) in
+    Linux)  local platform=linux;;
+    *)   echo "WARNING: unsupported platform. K3s only supports running on Linux, the k8s topology will not be available for local examples."; return;;
+  esac
+
+  case $(get_arch) in
+      aarch64)  local target="-arm64";;
+      x86_64)  local target="";;
+      *)   echo "WARNING: unsupported architecture, the k8s topology will not be available for local examples."; return;;
+  esac
+
+  download_url=https://github.com/rancher/k3s/releases/download
+  file="k3s${target}"
+
+  local dest="$dist/k3s${target}-${version}-${platform}"
+  wget -O  $dest "$download_url/$version/$file"
+  chmod +x $dest
+  ln -snf  $dest "$VTROOT/bin/k3s"
+}
+command -v  k3s || install_dep "k3s" "v1.0.0" "$VTROOT/dist/k3s" install_k3s
+
 # Download and install consul, link consul binary into our root.
 function install_consul() {
   local version="$1"
@@ -220,48 +218,15 @@ if [ "$BUILD_CONSUL" == 1 ] ; then
   install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
 fi
 
-# Install py-mock.
-function install_pymock() {
-  local version="$1"
-  local dist="$2"
-
-  # For some reason, it seems like setuptools won't create directories even with the --prefix argument
-  mkdir -p lib/python2.7/site-packages
-  PYTHONPATH=$(prepend_path "$PYTHONPATH" "$dist/lib/python2.7/site-packages")
-  export PYTHONPATH
-
-  pushd "$VTROOT/third_party/py" >/dev/null
-  tar -xzf "mock-$version.tar.gz"
-  cd "mock-$version"
-  $PYTHON ./setup.py install --prefix="$dist"
-  cd ..
-  rm -r "mock-$version"
-  popd >/dev/null
-}
-pymock_version=1.0.1
-if [ "$BUILD_PYTHON" == 1 ] ; then
-    install_dep "py-mock" "$pymock_version" "$VTROOT/dist/py-mock-$pymock_version" install_pymock
-fi
-
-# Download Selenium (necessary to run test/vtctld_web_test.py).
-function install_selenium() {
-  local version="$1"
-  local dist="$2"
-
-  PYTHONPATH='' $VIRTUALENV "$dist"
-  PIP="$dist/bin/pip"
-  # PYTHONPATH is removed for `pip install` because otherwise it can pick up go/dist/grpc/usr/local/lib/python2.7/site-packages
-  # instead of go/dist/selenium/lib/python3.5/site-packages and then can't find module 'pip._vendor.requests'
-  PYTHONPATH='' $PIP install selenium
-}
-if [ "$BUILD_PYTHON" == 1 ] ; then
-    install_dep "Selenium" "latest" "$VTROOT/dist/selenium" install_selenium
-fi
-
-# Download chromedriver (necessary to run test/vtctld_web_test.py).
+# Download chromedriver
 function install_chromedriver() {
   local version="$1"
   local dist="$2"
+
+  case $(uname) in
+    Linux)  local platform=linux;;
+    *)   echo "Platform not supported for vtctl-web tests. Skipping chromedriver install."; return;;
+  esac
 
   if [ "$(arch)" == "aarch64" ] ; then
       os=$(cat /etc/*release | grep "^ID=" | cut -d '=' -f 2)
@@ -283,10 +248,9 @@ function install_chromedriver() {
       rm chromedriver_linux64.zip
   fi
 }
-install_dep "chromedriver" "73.0.3683.20" "$VTROOT/dist/chromedriver" install_chromedriver
 
-if [ "$BUILD_PYTHON" == 1 ] ; then
-  PYTHONPATH='' $PIP install mysql-connector-python
+if [ "$BUILD_CHROME" == 1 ] ; then
+	install_dep "chromedriver" "73.0.3683.20" "$VTROOT/dist/chromedriver" install_chromedriver
 fi
 
 echo

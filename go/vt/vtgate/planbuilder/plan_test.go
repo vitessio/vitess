@@ -18,13 +18,19 @@ package planbuilder
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -139,30 +145,70 @@ func init() {
 }
 
 func TestPlan(t *testing.T) {
-	vschema := loadSchema(t, "schema_test.json")
+	vschemaWrapper := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json"),
+	}
 
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	require.NoError(t, err)
 	// You will notice that some tests expect user.Id instead of user.id.
 	// This is because we now pre-create vindex columns in the symbol
 	// table, which come from vschema. In the test vschema,
 	// the column is named as Id. This is to make sure that
 	// column names are case-preserved, but treated as
 	// case-insensitive even if they come from the vschema.
-	testFile(t, "aggr_cases.txt", vschema)
-	testFile(t, "dml_cases.txt", vschema)
-	testFile(t, "from_cases.txt", vschema)
-	testFile(t, "filter_cases.txt", vschema)
-	testFile(t, "postprocess_cases.txt", vschema)
-	testFile(t, "select_cases.txt", vschema)
-	testFile(t, "symtab_cases.txt", vschema)
-	testFile(t, "unsupported_cases.txt", vschema)
-	testFile(t, "vindex_func_cases.txt", vschema)
-	testFile(t, "wireup_cases.txt", vschema)
-	testFile(t, "memory_sort_cases.txt", vschema)
+	testFile(t, "aggr_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "dml_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "from_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "filter_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "postprocess_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "select_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "symtab_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "unsupported_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "vindex_func_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "wireup_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "memory_sort_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "use_cases.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func TestOne(t *testing.T) {
-	vschema := loadSchema(t, "schema_test.json")
-	testFile(t, "onecase.txt", vschema)
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json"),
+	}
+
+	testFile(t, "onecase.txt", "", vschema)
+}
+
+func TestBypassPlanningFromFile(t *testing.T) {
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	require.NoError(t, err)
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json"),
+		keyspace: &vindexes.Keyspace{
+			Name:    "main",
+			Sharded: false,
+		},
+		tabletType: topodatapb.TabletType_MASTER,
+		dest:       key.DestinationShard("-80"),
+	}
+
+	testFile(t, "bypass_cases.txt", testOutputTempDir, vschema)
+}
+
+func TestDDLPlanningFromFile(t *testing.T) {
+	// We are testing this separately so we can set a default keyspace
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	require.NoError(t, err)
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json"),
+		keyspace: &vindexes.Keyspace{
+			Name:    "main",
+			Sharded: false,
+		},
+		tabletType: topodatapb.TabletType_MASTER,
+	}
+
+	testFile(t, "ddl_cases.txt", testOutputTempDir, vschema)
 }
 
 func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
@@ -182,8 +228,37 @@ func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
 	return vschema
 }
 
+var _ ContextVSchema = (*vschemaWrapper)(nil)
+
 type vschemaWrapper struct {
-	v *vindexes.VSchema
+	v          *vindexes.VSchema
+	keyspace   *vindexes.Keyspace
+	tabletType topodatapb.TabletType
+	dest       key.Destination
+}
+
+func (vw *vschemaWrapper) TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error) {
+	keyspaceName := vw.keyspace.Name
+	if vw.dest == nil && qualifier != "" {
+		keyspaceName = qualifier
+	}
+	if keyspaceName == "" {
+		return nil, nil, 0, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace not specified")
+	}
+	keyspace := vw.v.Keyspaces[keyspaceName]
+	if keyspace == nil {
+		return nil, nil, 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no keyspace with name [%s] found", keyspaceName)
+	}
+	return vw.dest, keyspace.Keyspace, vw.tabletType, nil
+
+}
+
+func (vw *vschemaWrapper) TabletType() topodatapb.TabletType {
+	return vw.tabletType
+}
+
+func (vw *vschemaWrapper) Destination() key.Destination {
+	return vw.dest
 }
 
 func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {
@@ -218,42 +293,43 @@ func (vw *vschemaWrapper) TargetString() string {
 	return "targetString"
 }
 
-// For the purposes of this set of tests, just compare the actual plan
-// and ignore all the metrics.
-type testPlan struct {
-	Original     string           `json:",omitempty"`
-	Instructions engine.Primitive `json:",omitempty"`
+func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
+	t.Run(filename, func(t *testing.T) {
+		expected := &strings.Builder{}
+		fail := false
+		for tcase := range iterateExecFile(filename) {
+			t.Run(tcase.comments, func(t *testing.T) {
+				plan, err := Build(tcase.input, vschema)
+
+				out := getPlanOrErrorOutput(err, plan)
+
+				if out != tcase.output {
+					fail = true
+					t.Errorf("File: %s, Line: %v\n %s \n%s", filename, tcase.lineno, cmp.Diff(tcase.output, out), out)
+				}
+
+				if err != nil {
+					out = `"` + out + `"`
+				}
+
+				expected.WriteString(fmt.Sprintf("%s\"%s\"\n%s\n\n", tcase.comments, tcase.input, out))
+
+			})
+		}
+		if fail && tempDir != "" {
+			gotFile := fmt.Sprintf("%s/%s", tempDir, filename)
+			ioutil.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
+			fmt.Println(fmt.Sprintf("Errors found in plantests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir))
+		}
+	})
 }
 
-func testFile(t *testing.T, filename string, vschema *vindexes.VSchema) {
-	for tcase := range iterateExecFile(filename) {
-		t.Run(tcase.comments, func(t *testing.T) {
-			plan, err := Build(tcase.input, &vschemaWrapper{
-				v: vschema,
-			})
-			var out string
-			if err != nil {
-				out = err.Error()
-			} else {
-				bout, _ := json.Marshal(testPlan{
-					Original:     plan.Original,
-					Instructions: plan.Instructions,
-				})
-				out = string(bout)
-			}
-			if out != tcase.output {
-				t.Errorf("File: %s, Line:%v\n got:\n%s, \nwant:\n%s", filename, tcase.lineno, out, tcase.output)
-				// Uncomment these lines to re-generate input files
-				if err != nil {
-					out = fmt.Sprintf("\"%s\"", out)
-				} else {
-					bout, _ := json.MarshalIndent(plan, "", "  ")
-					out = string(bout)
-				}
-				fmt.Printf("%s\"%s\"\n%s\n\n", tcase.comments, tcase.input, out)
-			}
-		})
+func getPlanOrErrorOutput(err error, plan *engine.Plan) string {
+	if err != nil {
+		return err.Error()
 	}
+	bout, _ := json.MarshalIndent(plan, "", "  ")
+	return string(bout)
 }
 
 type testCase struct {
@@ -281,8 +357,7 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 			binput, err := r.ReadBytes('\n')
 			if err != nil {
 				if err != io.EOF {
-					fmt.Printf("Line: %d\n", lineno)
-					panic(fmt.Errorf("error reading file %s: %s", name, err.Error()))
+					panic(fmt.Errorf("error reading file %s: line %d: %s", name, lineno, err.Error()))
 				}
 				break
 			}
@@ -297,8 +372,7 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 			}
 			err = json.Unmarshal(binput, &input)
 			if err != nil {
-				fmt.Printf("Line: %d, input: %s\n", lineno, binput)
-				panic(err)
+				panic(fmt.Sprintf("Line: %d, input: %s, error: %v\n", lineno, binput, err))
 			}
 			input = strings.Trim(input, "\"")
 			var output []byte
@@ -306,19 +380,11 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 				l, err := r.ReadBytes('\n')
 				lineno++
 				if err != nil {
-					fmt.Printf("Line: %d\n", lineno)
-					panic(fmt.Errorf("error reading file %s: %s", name, err.Error()))
+					panic(fmt.Sprintf("error reading file %s line# %d: %s", name, lineno, err.Error()))
 				}
 				output = append(output, l...)
 				if l[0] == '}' {
 					output = output[:len(output)-1]
-					b := bytes.NewBuffer(make([]byte, 0, 64))
-					err := json.Compact(b, output)
-					if err == nil {
-						output = b.Bytes()
-					} else {
-						panic("Invalid JSON " + string(output) + err.Error())
-					}
 					break
 				}
 				if l[0] == '"' {

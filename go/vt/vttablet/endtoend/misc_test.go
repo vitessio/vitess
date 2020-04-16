@@ -38,7 +38,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 func TestSimpleRead(t *testing.T) {
@@ -52,7 +51,7 @@ func TestSimpleRead(t *testing.T) {
 	if err := compareIntDiff(vend, "Queries/TotalCount", vstart, 1); err != nil {
 		t.Error(err)
 	}
-	if err := compareIntDiff(vend, "Queries/Histograms/PASS_SELECT/Count", vstart, 1); err != nil {
+	if err := compareIntDiff(vend, "Queries/Histograms/Select/Count", vstart, 1); err != nil {
 		t.Error(err)
 	}
 }
@@ -296,10 +295,6 @@ func TestConsolidation(t *testing.T) {
 		wg.Wait()
 
 		vend := framework.DebugVars()
-		if err := compareIntDiff(vend, "Waits/TotalCount", vstart, 1); err != nil {
-			t.Logf("DebugVars Waits/TotalCount not incremented with sleep=%v", sleep)
-			continue
-		}
 		if err := compareIntDiff(vend, "Waits/Histograms/Consolidations/Count", vstart, 1); err != nil {
 			t.Logf("DebugVars Waits/Histograms/Consolidations/Count not incremented with sleep=%v", sleep)
 			continue
@@ -479,7 +474,7 @@ func TestQueryStats(t *testing.T) {
 	want := framework.QueryStat{
 		Query:      query,
 		Table:      "vitess_a",
-		Plan:       "PASS_SELECT",
+		Plan:       "Select",
 		QueryCount: 1,
 		RowCount:   2,
 		ErrorCount: 0,
@@ -497,7 +492,7 @@ func TestQueryStats(t *testing.T) {
 	want = framework.QueryStat{
 		Query:      query,
 		Table:      "vitess_a",
-		Plan:       "PASS_SELECT",
+		Plan:       "Select",
 		QueryCount: 1,
 		RowCount:   0,
 		ErrorCount: 1,
@@ -506,13 +501,13 @@ func TestQueryStats(t *testing.T) {
 		t.Errorf("stat: %+v, want %+v", stat, want)
 	}
 	vend := framework.DebugVars()
-	if err := compareIntDiff(vend, "QueryCounts/vitess_a.PASS_SELECT", vstart, 2); err != nil {
+	if err := compareIntDiff(vend, "QueryCounts/vitess_a.Select", vstart, 2); err != nil {
 		t.Error(err)
 	}
-	if err := compareIntDiff(vend, "QueryRowCounts/vitess_a.PASS_SELECT", vstart, 2); err != nil {
+	if err := compareIntDiff(vend, "QueryRowCounts/vitess_a.Select", vstart, 2); err != nil {
 		t.Error(err)
 	}
-	if err := compareIntDiff(vend, "QueryErrorCounts/vitess_a.PASS_SELECT", vstart, 1); err != nil {
+	if err := compareIntDiff(vend, "QueryErrorCounts/vitess_a.Select", vstart, 1); err != nil {
 		t.Error(err)
 	}
 
@@ -565,55 +560,63 @@ func TestDBAStatements(t *testing.T) {
 	}
 }
 
-var testLogs []string
-
-func recordInfof(format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	testLogs = append(testLogs, msg)
-	log.Infof(msg)
+type testLogger struct {
+	logs        []string
+	savedInfof  func(format string, args ...interface{})
+	savedErrorf func(format string, args ...interface{})
 }
 
-func recordErrorf(format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	testLogs = append(testLogs, msg)
-	log.Errorf(msg)
-}
-
-func setupTestLogger() {
-	testLogs = make([]string, 0)
-	tabletenv.Infof = recordInfof
-	tabletenv.Errorf = recordErrorf
-}
-
-func clearTestLogger() {
-	tabletenv.Infof = log.Infof
-	tabletenv.Errorf = log.Errorf
-}
-
-func getTestLog(i int) string {
-	if i < len(testLogs) {
-		return testLogs[i]
+func newTestLogger() *testLogger {
+	tl := &testLogger{
+		savedInfof:  log.Infof,
+		savedErrorf: log.Errorf,
 	}
-	return fmt.Sprintf("ERROR: log %d/%d does not exist", i, len(testLogs))
+	log.Infof = tl.recordInfof
+	log.Errorf = tl.recordErrorf
+	return tl
+}
+
+func (tl *testLogger) Close() {
+	log.Infof = tl.savedInfof
+	log.Errorf = tl.savedErrorf
+}
+
+func (tl *testLogger) recordInfof(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	tl.logs = append(tl.logs, msg)
+	tl.savedInfof(msg)
+}
+
+func (tl *testLogger) recordErrorf(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	tl.logs = append(tl.logs, msg)
+	tl.savedErrorf(msg)
+}
+
+func (tl *testLogger) getLog(i int) string {
+	if i < len(tl.logs) {
+		return tl.logs[i]
+	}
+	return fmt.Sprintf("ERROR: log %d/%d does not exist", i, len(tl.logs))
 }
 
 func TestLogTruncation(t *testing.T) {
 	client := framework.NewClient()
-	setupTestLogger()
-	defer clearTestLogger()
+	tl := newTestLogger()
+	defer tl.Close()
 
 	// Test that a long error string is not truncated by default
 	_, err := client.Execute(
 		"insert into vitess_test values(123, null, :data, null)",
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
-	wantLog := `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null)", BindVars: {#maxLimit: "type:INT64 value:\"10001\" "data: "type:VARCHAR value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\" "}`
+	wantLog := `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null)", BindVars: {data: "type:VARBINARY value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\" "}`
 	wantErr := wantLog
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
 	}
-	if getTestLog(0) != wantLog {
-		t.Errorf("log was unexpectedly truncated: got\n'%s', want\n'%s'", getTestLog(0), wantLog)
+	if tl.getLog(0) != wantLog {
+		t.Errorf("log was unexpectedly truncated: got\n'%s', want\n'%s'", tl.getLog(0), wantLog)
 	}
 
 	if err.Error() != wantErr {
@@ -626,13 +629,13 @@ func TestLogTruncation(t *testing.T) {
 		"insert into vitess_test values(123, null, :data, null)",
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
-	wantLog = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess [TRUNCATED]", BindVars: {#maxLim [TRUNCATED]`
-	wantErr = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null)", BindVars: {#maxLimit: "type:INT64 value:\"10001\" "data: "type:VARCHAR value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\" "}`
+	wantLog = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess [TRUNCATED]", BindVars: {data: " [TRUNCATED]`
+	wantErr = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null)", BindVars: {data: "type:VARBINARY value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\" "}`
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
 	}
-	if getTestLog(1) != wantLog {
-		t.Errorf("log was not truncated properly: got\n'%s', want\n'%s'", getTestLog(1), wantLog)
+	if tl.getLog(1) != wantLog {
+		t.Errorf("log was not truncated properly: got\n'%s', want\n'%s'", tl.getLog(1), wantLog)
 	}
 	if err.Error() != wantErr {
 		t.Errorf("error was unexpectedly truncated: got\n'%s', want\n'%s'", err.Error(), wantErr)
@@ -644,13 +647,13 @@ func TestLogTruncation(t *testing.T) {
 		"insert into vitess_test values(123, null, :data, null) /* KEEP ME */",
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
-	wantLog = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess [TRUNCATED] /* KEEP ME */", BindVars: {#maxLim [TRUNCATED]`
-	wantErr = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null) /* KEEP ME */", BindVars: {#maxLimit: "type:INT64 value:\"10001\" "data: "type:VARCHAR value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\" "}`
+	wantLog = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess [TRUNCATED] /* KEEP ME */", BindVars: {data: " [TRUNCATED]`
+	wantErr = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null) /* KEEP ME */", BindVars: {data: "type:VARBINARY value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\" "}`
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
 	}
-	if getTestLog(2) != wantLog {
-		t.Errorf("log was not truncated properly: got\n'%s', want\n'%s'", getTestLog(2), wantLog)
+	if tl.getLog(2) != wantLog {
+		t.Errorf("log was not truncated properly: got\n'%s', want\n'%s'", tl.getLog(2), wantLog)
 	}
 	if err.Error() != wantErr {
 		t.Errorf("error was unexpectedly truncated: got\n'%s', want\n'%s'", err.Error(), wantErr)

@@ -180,6 +180,7 @@ type (
 
 	// Show represents a show statement.
 	Show struct {
+		Extended               string
 		Type                   string
 		OnTable                TableName
 		Table                  TableName
@@ -526,11 +527,6 @@ type (
 		Expr Expr
 	}
 
-	// ParenExpr represents a parenthesized boolean expression.
-	ParenExpr struct {
-		Expr Expr
-	}
-
 	// ComparisonExpr represents a two-value comparison expression.
 	ComparisonExpr struct {
 		Operator    string
@@ -638,6 +634,7 @@ type (
 		Exprs     SelectExprs
 		OrderBy   OrderBy
 		Separator string
+		Limit     *Limit
 	}
 
 	// ValuesFuncExpr represents a function call.
@@ -707,7 +704,6 @@ type (
 func (*AndExpr) iExpr()           {}
 func (*OrExpr) iExpr()            {}
 func (*NotExpr) iExpr()           {}
-func (*ParenExpr) iExpr()         {}
 func (*ComparisonExpr) iExpr()    {}
 func (*RangeCond) iExpr()         {}
 func (*IsExpr) iExpr()            {}
@@ -801,6 +797,7 @@ type ColIdent struct {
 	// last field in the struct.
 	_            [0]struct{ _ []byte }
 	val, lowered string
+	at           atCount
 }
 
 // TableIdent is a case sensitive SQL identifier. It will be escaped with
@@ -813,7 +810,7 @@ type TableIdent struct {
 
 // Format formats the node.
 func (node *Select) Format(buf *TrackedBuffer) {
-	buf.Myprintf("select %v%s%s%s%v from %v%v%v%v%v%v%s",
+	buf.astPrintf(node, "select %v%s%s%s%v from %v%v%v%v%v%v%s",
 		node.Comments, node.Cache, node.Distinct, node.Hints, node.SelectExprs,
 		node.From, node.Where,
 		node.GroupBy, node.Having, node.OrderBy,
@@ -822,24 +819,24 @@ func (node *Select) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ParenSelect) Format(buf *TrackedBuffer) {
-	buf.Myprintf("(%v)", node.Select)
+	buf.astPrintf(node, "(%v)", node.Select)
 }
 
 // Format formats the node.
 func (node *Union) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v %s %v%v%v%s", node.Left, node.Type, node.Right,
+	buf.astPrintf(node, "%v %s %v%v%v%s", node.Left, node.Type, node.Right,
 		node.OrderBy, node.Limit, node.Lock)
 }
 
 // Format formats the node.
 func (node *Stream) Format(buf *TrackedBuffer) {
-	buf.Myprintf("stream %v%v from %v",
+	buf.astPrintf(node, "stream %v%v from %v",
 		node.Comments, node.SelectExpr, node.Table)
 }
 
 // Format formats the node.
 func (node *Insert) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s %v%sinto %v%v%v %v%v",
+	buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
 		node.Action,
 		node.Comments, node.Ignore,
 		node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
@@ -847,26 +844,26 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Update) Format(buf *TrackedBuffer) {
-	buf.Myprintf("update %v%s%v set %v%v%v%v",
+	buf.astPrintf(node, "update %v%s%v set %v%v%v%v",
 		node.Comments, node.Ignore, node.TableExprs,
 		node.Exprs, node.Where, node.OrderBy, node.Limit)
 }
 
 // Format formats the node.
 func (node *Delete) Format(buf *TrackedBuffer) {
-	buf.Myprintf("delete %v", node.Comments)
+	buf.astPrintf(node, "delete %v", node.Comments)
 	if node.Targets != nil {
-		buf.Myprintf("%v ", node.Targets)
+		buf.astPrintf(node, "%v ", node.Targets)
 	}
-	buf.Myprintf("from %v%v%v%v%v", node.TableExprs, node.Partitions, node.Where, node.OrderBy, node.Limit)
+	buf.astPrintf(node, "from %v%v%v%v%v", node.TableExprs, node.Partitions, node.Where, node.OrderBy, node.Limit)
 }
 
 // Format formats the node.
 func (node *Set) Format(buf *TrackedBuffer) {
 	if node.Scope == "" {
-		buf.Myprintf("set %v%v", node.Comments, node.Exprs)
+		buf.astPrintf(node, "set %v%v", node.Comments, node.Exprs)
 	} else {
-		buf.Myprintf("set %v%s %v", node.Comments, node.Scope, node.Exprs)
+		buf.astPrintf(node, "set %v%s %v", node.Comments, node.Scope, node.Exprs)
 	}
 }
 
@@ -889,79 +886,79 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case CreateStr:
 		if node.OptLike != nil {
-			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.OptLike)
+			buf.astPrintf(node, "%s table %v %v", node.Action, node.Table, node.OptLike)
 		} else if node.TableSpec != nil {
-			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.TableSpec)
+			buf.astPrintf(node, "%s table %v %v", node.Action, node.Table, node.TableSpec)
 		} else {
-			buf.Myprintf("%s table %v", node.Action, node.Table)
+			buf.astPrintf(node, "%s table %v", node.Action, node.Table)
 		}
 	case DropStr:
 		exists := ""
 		if node.IfExists {
 			exists = " if exists"
 		}
-		buf.Myprintf("%s table%s %v", node.Action, exists, node.FromTables)
+		buf.astPrintf(node, "%s table%s %v", node.Action, exists, node.FromTables)
 	case RenameStr:
-		buf.Myprintf("%s table %v to %v", node.Action, node.FromTables[0], node.ToTables[0])
+		buf.astPrintf(node, "%s table %v to %v", node.Action, node.FromTables[0], node.ToTables[0])
 		for i := 1; i < len(node.FromTables); i++ {
-			buf.Myprintf(", %v to %v", node.FromTables[i], node.ToTables[i])
+			buf.astPrintf(node, ", %v to %v", node.FromTables[i], node.ToTables[i])
 		}
 	case AlterStr:
 		if node.PartitionSpec != nil {
-			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.PartitionSpec)
+			buf.astPrintf(node, "%s table %v %v", node.Action, node.Table, node.PartitionSpec)
 		} else {
-			buf.Myprintf("%s table %v", node.Action, node.Table)
+			buf.astPrintf(node, "%s table %v", node.Action, node.Table)
 		}
 	case FlushStr:
-		buf.Myprintf("%s", node.Action)
+		buf.astPrintf(node, "%s", node.Action)
 	case CreateVindexStr:
-		buf.Myprintf("alter vschema create vindex %v %v", node.Table, node.VindexSpec)
+		buf.astPrintf(node, "alter vschema create vindex %v %v", node.Table, node.VindexSpec)
 	case DropVindexStr:
-		buf.Myprintf("alter vschema drop vindex %v", node.Table)
+		buf.astPrintf(node, "alter vschema drop vindex %v", node.Table)
 	case AddVschemaTableStr:
-		buf.Myprintf("alter vschema add table %v", node.Table)
+		buf.astPrintf(node, "alter vschema add table %v", node.Table)
 	case DropVschemaTableStr:
-		buf.Myprintf("alter vschema drop table %v", node.Table)
+		buf.astPrintf(node, "alter vschema drop table %v", node.Table)
 	case AddColVindexStr:
-		buf.Myprintf("alter vschema on %v add vindex %v (", node.Table, node.VindexSpec.Name)
+		buf.astPrintf(node, "alter vschema on %v add vindex %v (", node.Table, node.VindexSpec.Name)
 		for i, col := range node.VindexCols {
 			if i != 0 {
-				buf.Myprintf(", %v", col)
+				buf.astPrintf(node, ", %v", col)
 			} else {
-				buf.Myprintf("%v", col)
+				buf.astPrintf(node, "%v", col)
 			}
 		}
-		buf.Myprintf(")")
+		buf.astPrintf(node, ")")
 		if node.VindexSpec.Type.String() != "" {
-			buf.Myprintf(" %v", node.VindexSpec)
+			buf.astPrintf(node, " %v", node.VindexSpec)
 		}
 	case DropColVindexStr:
-		buf.Myprintf("alter vschema on %v drop vindex %v", node.Table, node.VindexSpec.Name)
+		buf.astPrintf(node, "alter vschema on %v drop vindex %v", node.Table, node.VindexSpec.Name)
 	case AddSequenceStr:
-		buf.Myprintf("alter vschema add sequence %v", node.Table)
+		buf.astPrintf(node, "alter vschema add sequence %v", node.Table)
 	case AddAutoIncStr:
-		buf.Myprintf("alter vschema on %v add auto_increment %v", node.Table, node.AutoIncSpec)
+		buf.astPrintf(node, "alter vschema on %v add auto_increment %v", node.Table, node.AutoIncSpec)
 	default:
-		buf.Myprintf("%s table %v", node.Action, node.Table)
+		buf.astPrintf(node, "%s table %v", node.Action, node.Table)
 	}
 }
 
 // Format formats the node.
 func (node *OptLike) Format(buf *TrackedBuffer) {
-	buf.Myprintf("like %v", node.LikeTable)
+	buf.astPrintf(node, "like %v", node.LikeTable)
 }
 
 // Format formats the node.
 func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case ReorganizeStr:
-		buf.Myprintf("%s %v into (", node.Action, node.Name)
+		buf.astPrintf(node, "%s %v into (", node.Action, node.Name)
 		var prefix string
 		for _, pd := range node.Definitions {
-			buf.Myprintf("%s%v", prefix, pd)
+			buf.astPrintf(node, "%s%v", prefix, pd)
 			prefix = ", "
 		}
-		buf.Myprintf(")")
+		buf.astPrintf(node, ")")
 	default:
 		panic("unimplemented")
 	}
@@ -970,50 +967,50 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *PartitionDefinition) Format(buf *TrackedBuffer) {
 	if !node.Maxvalue {
-		buf.Myprintf("partition %v values less than (%v)", node.Name, node.Limit)
+		buf.astPrintf(node, "partition %v values less than (%v)", node.Name, node.Limit)
 	} else {
-		buf.Myprintf("partition %v values less than (maxvalue)", node.Name)
+		buf.astPrintf(node, "partition %v values less than (maxvalue)", node.Name)
 	}
 }
 
 // Format formats the node.
 func (ts *TableSpec) Format(buf *TrackedBuffer) {
-	buf.Myprintf("(\n")
+	buf.astPrintf(ts, "(\n")
 	for i, col := range ts.Columns {
 		if i == 0 {
-			buf.Myprintf("\t%v", col)
+			buf.astPrintf(ts, "\t%v", col)
 		} else {
-			buf.Myprintf(",\n\t%v", col)
+			buf.astPrintf(ts, ",\n\t%v", col)
 		}
 	}
 	for _, idx := range ts.Indexes {
-		buf.Myprintf(",\n\t%v", idx)
+		buf.astPrintf(ts, ",\n\t%v", idx)
 	}
 	for _, c := range ts.Constraints {
-		buf.Myprintf(",\n\t%v", c)
+		buf.astPrintf(ts, ",\n\t%v", c)
 	}
 
-	buf.Myprintf("\n)%s", strings.Replace(ts.Options, ", ", ",\n  ", -1))
+	buf.astPrintf(ts, "\n)%s", strings.Replace(ts.Options, ", ", ",\n  ", -1))
 }
 
 // Format formats the node.
 func (col *ColumnDefinition) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v %v", col.Name, &col.Type)
+	buf.astPrintf(col, "%v %v", col.Name, &col.Type)
 }
 
 // Format returns a canonical string representation of the type and all relevant options
 func (ct *ColumnType) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s", ct.Type)
+	buf.astPrintf(ct, "%s", ct.Type)
 
 	if ct.Length != nil && ct.Scale != nil {
-		buf.Myprintf("(%v,%v)", ct.Length, ct.Scale)
+		buf.astPrintf(ct, "(%v,%v)", ct.Length, ct.Scale)
 
 	} else if ct.Length != nil {
-		buf.Myprintf("(%v)", ct.Length)
+		buf.astPrintf(ct, "(%v)", ct.Length)
 	}
 
 	if ct.EnumValues != nil {
-		buf.Myprintf("(%s)", strings.Join(ct.EnumValues, ", "))
+		buf.astPrintf(ct, "(%s)", strings.Join(ct.EnumValues, ", "))
 	}
 
 	opts := make([]string, 0, 16)
@@ -1061,31 +1058,31 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	}
 
 	if len(opts) != 0 {
-		buf.Myprintf(" %s", strings.Join(opts, " "))
+		buf.astPrintf(ct, " %s", strings.Join(opts, " "))
 	}
 }
 
 // Format formats the node.
 func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v (", idx.Info)
+	buf.astPrintf(idx, "%v (", idx.Info)
 	for i, col := range idx.Columns {
 		if i != 0 {
-			buf.Myprintf(", %v", col.Column)
+			buf.astPrintf(idx, ", %v", col.Column)
 		} else {
-			buf.Myprintf("%v", col.Column)
+			buf.astPrintf(idx, "%v", col.Column)
 		}
 		if col.Length != nil {
-			buf.Myprintf("(%v)", col.Length)
+			buf.astPrintf(idx, "(%v)", col.Length)
 		}
 	}
-	buf.Myprintf(")")
+	buf.astPrintf(idx, ")")
 
 	for _, opt := range idx.Options {
-		buf.Myprintf(" %s", opt.Name)
+		buf.astPrintf(idx, " %s", opt.Name)
 		if opt.Using != "" {
-			buf.Myprintf(" %s", opt.Using)
+			buf.astPrintf(idx, " %s", opt.Using)
 		} else {
-			buf.Myprintf(" %v", opt.Value)
+			buf.astPrintf(idx, " %v", opt.Value)
 		}
 	}
 }
@@ -1093,48 +1090,48 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (ii *IndexInfo) Format(buf *TrackedBuffer) {
 	if ii.Primary {
-		buf.Myprintf("%s", ii.Type)
+		buf.astPrintf(ii, "%s", ii.Type)
 	} else {
-		buf.Myprintf("%s", ii.Type)
+		buf.astPrintf(ii, "%s", ii.Type)
 		if !ii.Name.IsEmpty() {
-			buf.Myprintf(" %v", ii.Name)
+			buf.astPrintf(ii, " %v", ii.Name)
 		}
 	}
 }
 
 // Format formats the node.
 func (node *AutoIncSpec) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v ", node.Column)
-	buf.Myprintf("using %v", node.Sequence)
+	buf.astPrintf(node, "%v ", node.Column)
+	buf.astPrintf(node, "using %v", node.Sequence)
 }
 
 // Format formats the node. The "CREATE VINDEX" preamble was formatted in
 // the containing DDL node Format, so this just prints the type, any
 // parameters, and optionally the owner
 func (node *VindexSpec) Format(buf *TrackedBuffer) {
-	buf.Myprintf("using %v", node.Type)
+	buf.astPrintf(node, "using %v", node.Type)
 
 	numParams := len(node.Params)
 	if numParams != 0 {
-		buf.Myprintf(" with ")
+		buf.astPrintf(node, " with ")
 		for i, p := range node.Params {
 			if i != 0 {
-				buf.Myprintf(", ")
+				buf.astPrintf(node, ", ")
 			}
-			buf.Myprintf("%v", p)
+			buf.astPrintf(node, "%v", p)
 		}
 	}
 }
 
 // Format formats the node.
 func (node VindexParam) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s=%s", node.Key.String(), node.Val)
+	buf.astPrintf(node, "%s=%s", node.Key.String(), node.Val)
 }
 
 // Format formats the node.
 func (c *ConstraintDefinition) Format(buf *TrackedBuffer) {
 	if c.Name != "" {
-		buf.Myprintf("constraint %s ", c.Name)
+		buf.astPrintf(c, "constraint %s ", c.Name)
 	}
 	c.Details.Format(buf)
 }
@@ -1157,45 +1154,53 @@ func (a ReferenceAction) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
-	buf.Myprintf("foreign key %v references %v %v", f.Source, f.ReferencedTable, f.ReferencedColumns)
+	buf.astPrintf(f, "foreign key %v references %v %v", f.Source, f.ReferencedTable, f.ReferencedColumns)
 	if f.OnDelete != DefaultAction {
-		buf.Myprintf(" on delete %v", f.OnDelete)
+		buf.astPrintf(f, " on delete %v", f.OnDelete)
 	}
 	if f.OnUpdate != DefaultAction {
-		buf.Myprintf(" on update %v", f.OnUpdate)
+		buf.astPrintf(f, " on update %v", f.OnUpdate)
 	}
 }
 
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
-	if (node.Type == "tables" || node.Type == "columns" || node.Type == "fields") && node.ShowTablesOpt != nil {
+	nodeType := strings.ToLower(node.Type)
+	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys" || nodeType == "indexes") && node.ShowTablesOpt != nil {
 		opt := node.ShowTablesOpt
-		buf.Myprintf("show %s%s", opt.Full, node.Type)
-		if (node.Type == "columns" || node.Type == "fields") && node.HasOnTable() {
-			buf.Myprintf(" from %v", node.OnTable)
+		if node.Extended != "" {
+			buf.astPrintf(node, "show %s%s", node.Extended, nodeType)
+		} else {
+			buf.astPrintf(node, "show %s%s", opt.Full, nodeType)
+		}
+		if (nodeType == "columns" || nodeType == "fields") && node.HasOnTable() {
+			buf.astPrintf(node, " from %v", node.OnTable)
+		}
+		if (nodeType == "index" || nodeType == "keys" || nodeType == "indexes") && node.HasOnTable() {
+			buf.astPrintf(node, " from %v", node.OnTable)
 		}
 		if opt.DbName != "" {
-			buf.Myprintf(" from %s", opt.DbName)
+			buf.astPrintf(node, " from %s", opt.DbName)
 		}
-		buf.Myprintf("%v", opt.Filter)
+		buf.astPrintf(node, "%v", opt.Filter)
 		return
 	}
 	if node.Scope == "" {
-		buf.Myprintf("show %s", node.Type)
+		buf.astPrintf(node, "show %s", nodeType)
 	} else {
-		buf.Myprintf("show %s %s", node.Scope, node.Type)
+		buf.astPrintf(node, "show %s %s", node.Scope, nodeType)
 	}
 	if node.HasOnTable() {
-		buf.Myprintf(" on %v", node.OnTable)
+		buf.astPrintf(node, " on %v", node.OnTable)
 	}
-	if node.Type == "collation" && node.ShowCollationFilterOpt != nil {
-		buf.Myprintf(" where %v", *node.ShowCollationFilterOpt)
+	if nodeType == "collation" && node.ShowCollationFilterOpt != nil {
+		buf.astPrintf(node, " where %v", *node.ShowCollationFilterOpt)
 	}
-	if node.Type == "charset" && node.ShowTablesOpt != nil {
-		buf.Myprintf("%v", node.ShowTablesOpt.Filter)
+	if nodeType == "charset" && node.ShowTablesOpt != nil {
+		buf.astPrintf(node, "%v", node.ShowTablesOpt.Filter)
 	}
 	if node.HasTable() {
-		buf.Myprintf(" %v", node.Table)
+		buf.astPrintf(node, " %v", node.Table)
 	}
 }
 
@@ -1205,18 +1210,18 @@ func (node *ShowFilter) Format(buf *TrackedBuffer) {
 		return
 	}
 	if node.Like != "" {
-		buf.Myprintf(" like '%s'", node.Like)
+		buf.astPrintf(node, " like '%s'", node.Like)
 	} else {
-		buf.Myprintf(" where %v", node.Filter)
+		buf.astPrintf(node, " where %v", node.Filter)
 	}
 }
 
 // Format formats the node.
 func (node *Use) Format(buf *TrackedBuffer) {
 	if node.DBName.v != "" {
-		buf.Myprintf("use %v", node.DBName)
+		buf.astPrintf(node, "use %v", node.DBName)
 	} else {
-		buf.Myprintf("use")
+		buf.astPrintf(node, "use")
 	}
 }
 
@@ -1248,7 +1253,7 @@ func (node *OtherAdmin) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node Comments) Format(buf *TrackedBuffer) {
 	for _, c := range node {
-		buf.Myprintf("%s ", c)
+		buf.astPrintf(node, "%s ", c)
 	}
 }
 
@@ -1256,7 +1261,7 @@ func (node Comments) Format(buf *TrackedBuffer) {
 func (node SelectExprs) Format(buf *TrackedBuffer) {
 	var prefix string
 	for _, n := range node {
-		buf.Myprintf("%s%v", prefix, n)
+		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
 	}
 }
@@ -1264,22 +1269,22 @@ func (node SelectExprs) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *StarExpr) Format(buf *TrackedBuffer) {
 	if !node.TableName.IsEmpty() {
-		buf.Myprintf("%v.", node.TableName)
+		buf.astPrintf(node, "%v.", node.TableName)
 	}
-	buf.Myprintf("*")
+	buf.astPrintf(node, "*")
 }
 
 // Format formats the node.
 func (node *AliasedExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v", node.Expr)
+	buf.astPrintf(node, "%v", node.Expr)
 	if !node.As.IsEmpty() {
-		buf.Myprintf(" as %v", node.As)
+		buf.astPrintf(node, " as %v", node.As)
 	}
 }
 
 // Format formats the node.
 func (node Nextval) Format(buf *TrackedBuffer) {
-	buf.Myprintf("next %v values", node.Expr)
+	buf.astPrintf(node, "next %v values", node.Expr)
 }
 
 // Format formats the node.
@@ -1289,7 +1294,7 @@ func (node Columns) Format(buf *TrackedBuffer) {
 	}
 	prefix := "("
 	for _, n := range node {
-		buf.Myprintf("%s%v", prefix, n)
+		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
 	}
 	buf.WriteString(")")
@@ -1302,7 +1307,7 @@ func (node Partitions) Format(buf *TrackedBuffer) {
 	}
 	prefix := " partition ("
 	for _, n := range node {
-		buf.Myprintf("%s%v", prefix, n)
+		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
 	}
 	buf.WriteString(")")
@@ -1312,20 +1317,20 @@ func (node Partitions) Format(buf *TrackedBuffer) {
 func (node TableExprs) Format(buf *TrackedBuffer) {
 	var prefix string
 	for _, n := range node {
-		buf.Myprintf("%s%v", prefix, n)
+		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
 	}
 }
 
 // Format formats the node.
 func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v%v", node.Expr, node.Partitions)
+	buf.astPrintf(node, "%v%v", node.Expr, node.Partitions)
 	if !node.As.IsEmpty() {
-		buf.Myprintf(" as %v", node.As)
+		buf.astPrintf(node, " as %v", node.As)
 	}
 	if node.Hints != nil {
 		// Hint node provides the space padding.
-		buf.Myprintf("%v", node.Hints)
+		buf.astPrintf(node, "%v", node.Hints)
 	}
 }
 
@@ -1333,7 +1338,7 @@ func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 func (node TableNames) Format(buf *TrackedBuffer) {
 	var prefix string
 	for _, n := range node {
-		buf.Myprintf("%s%v", prefix, n)
+		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
 	}
 }
@@ -1344,43 +1349,43 @@ func (node TableName) Format(buf *TrackedBuffer) {
 		return
 	}
 	if !node.Qualifier.IsEmpty() {
-		buf.Myprintf("%v.", node.Qualifier)
+		buf.astPrintf(node, "%v.", node.Qualifier)
 	}
-	buf.Myprintf("%v", node.Name)
+	buf.astPrintf(node, "%v", node.Name)
 }
 
 // Format formats the node.
 func (node *ParenTableExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("(%v)", node.Exprs)
+	buf.astPrintf(node, "(%v)", node.Exprs)
 }
 
 // Format formats the node.
 func (node JoinCondition) Format(buf *TrackedBuffer) {
 	if node.On != nil {
-		buf.Myprintf(" on %v", node.On)
+		buf.astPrintf(node, " on %v", node.On)
 	}
 	if node.Using != nil {
-		buf.Myprintf(" using %v", node.Using)
+		buf.astPrintf(node, " using %v", node.Using)
 	}
 }
 
 // Format formats the node.
 func (node *JoinTableExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v %s %v%v", node.LeftExpr, node.Join, node.RightExpr, node.Condition)
+	buf.astPrintf(node, "%v %s %v%v", node.LeftExpr, node.Join, node.RightExpr, node.Condition)
 }
 
 // Format formats the node.
 func (node *IndexHints) Format(buf *TrackedBuffer) {
-	buf.Myprintf(" %sindex ", node.Type)
+	buf.astPrintf(node, " %sindex ", node.Type)
 	if len(node.Indexes) == 0 {
-		buf.Myprintf("()")
+		buf.astPrintf(node, "()")
 	} else {
 		prefix := "("
 		for _, n := range node.Indexes {
-			buf.Myprintf("%s%v", prefix, n)
+			buf.astPrintf(node, "%s%v", prefix, n)
 			prefix = ", "
 		}
-		buf.Myprintf(")")
+		buf.astPrintf(node, ")")
 	}
 }
 
@@ -1389,59 +1394,54 @@ func (node *Where) Format(buf *TrackedBuffer) {
 	if node == nil || node.Expr == nil {
 		return
 	}
-	buf.Myprintf(" %s %v", node.Type, node.Expr)
+	buf.astPrintf(node, " %s %v", node.Type, node.Expr)
 }
 
 // Format formats the node.
 func (node Exprs) Format(buf *TrackedBuffer) {
 	var prefix string
 	for _, n := range node {
-		buf.Myprintf("%s%v", prefix, n)
+		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
 	}
 }
 
 // Format formats the node.
 func (node *AndExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v and %v", node.Left, node.Right)
+	buf.astPrintf(node, "%v and %v", node.Left, node.Right)
 }
 
 // Format formats the node.
 func (node *OrExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v or %v", node.Left, node.Right)
+	buf.astPrintf(node, "%v or %v", node.Left, node.Right)
 }
 
 // Format formats the node.
 func (node *NotExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("not %v", node.Expr)
-}
-
-// Format formats the node.
-func (node *ParenExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("(%v)", node.Expr)
+	buf.astPrintf(node, "not %v", node.Expr)
 }
 
 // Format formats the node.
 func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v %s %v", node.Left, node.Operator, node.Right)
+	buf.astPrintf(node, "%v %s %v", node.Left, node.Operator, node.Right)
 	if node.Escape != nil {
-		buf.Myprintf(" escape %v", node.Escape)
+		buf.astPrintf(node, " escape %v", node.Escape)
 	}
 }
 
 // Format formats the node.
 func (node *RangeCond) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v %s %v and %v", node.Left, node.Operator, node.From, node.To)
+	buf.astPrintf(node, "%v %s %v and %v", node.Left, node.Operator, node.From, node.To)
 }
 
 // Format formats the node.
 func (node *IsExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v %s", node.Expr, node.Operator)
+	buf.astPrintf(node, "%v %s", node.Expr, node.Operator)
 }
 
 // Format formats the node.
 func (node *ExistsExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("exists %v", node.Subquery)
+	buf.astPrintf(node, "exists %v", node.Subquery)
 }
 
 // Format formats the node.
@@ -1450,11 +1450,11 @@ func (node *SQLVal) Format(buf *TrackedBuffer) {
 	case StrVal:
 		sqltypes.MakeTrusted(sqltypes.VarBinary, node.Val).EncodeSQL(buf)
 	case IntVal, FloatVal, HexNum:
-		buf.Myprintf("%s", []byte(node.Val))
+		buf.astPrintf(node, "%s", node.Val)
 	case HexVal:
-		buf.Myprintf("X'%s'", []byte(node.Val))
+		buf.astPrintf(node, "X'%s'", node.Val)
 	case BitVal:
-		buf.Myprintf("B'%s'", []byte(node.Val))
+		buf.astPrintf(node, "B'%s'", node.Val)
 	case ValArg:
 		buf.WriteArg(string(node.Val))
 	default:
@@ -1464,34 +1464,34 @@ func (node *SQLVal) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *NullVal) Format(buf *TrackedBuffer) {
-	buf.Myprintf("null")
+	buf.astPrintf(node, "null")
 }
 
 // Format formats the node.
 func (node BoolVal) Format(buf *TrackedBuffer) {
 	if node {
-		buf.Myprintf("true")
+		buf.astPrintf(node, "true")
 	} else {
-		buf.Myprintf("false")
+		buf.astPrintf(node, "false")
 	}
 }
 
 // Format formats the node.
 func (node *ColName) Format(buf *TrackedBuffer) {
 	if !node.Qualifier.IsEmpty() {
-		buf.Myprintf("%v.", node.Qualifier)
+		buf.astPrintf(node, "%v.", node.Qualifier)
 	}
-	buf.Myprintf("%v", node.Name)
+	buf.astPrintf(node, "%v", node.Name)
 }
 
 // Format formats the node.
 func (node ValTuple) Format(buf *TrackedBuffer) {
-	buf.Myprintf("(%v)", Exprs(node))
+	buf.astPrintf(node, "(%v)", Exprs(node))
 }
 
 // Format formats the node.
 func (node *Subquery) Format(buf *TrackedBuffer) {
-	buf.Myprintf("(%v)", node.Select)
+	buf.astPrintf(node, "(%v)", node.Select)
 }
 
 // Format formats the node.
@@ -1501,36 +1501,37 @@ func (node ListArg) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *BinaryExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v %s %v", node.Left, node.Operator, node.Right)
+	buf.astPrintf(node, "%v %s %v", node.Left, node.Operator, node.Right)
 }
 
 // Format formats the node.
 func (node *UnaryExpr) Format(buf *TrackedBuffer) {
 	if _, unary := node.Expr.(*UnaryExpr); unary {
-		buf.Myprintf("%s %v", node.Operator, node.Expr)
+		// They have same precedence so parenthesis is not required.
+		buf.astPrintf(node, "%s %v", node.Operator, node.Expr)
 		return
 	}
-	buf.Myprintf("%s%v", node.Operator, node.Expr)
+	buf.astPrintf(node, "%s%v", node.Operator, node.Expr)
 }
 
 // Format formats the node.
 func (node *IntervalExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("interval %v %s", node.Expr, node.Unit)
+	buf.astPrintf(node, "interval %v %s", node.Expr, node.Unit)
 }
 
 // Format formats the node.
 func (node *TimestampFuncExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s(%s, %v, %v)", node.Name, node.Unit, node.Expr1, node.Expr2)
+	buf.astPrintf(node, "%s(%s, %v, %v)", node.Name, node.Unit, node.Expr1, node.Expr2)
 }
 
 // Format formats the node.
 func (node *CurTimeFuncExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s(%v)", node.Name.String(), node.Fsp)
+	buf.astPrintf(node, "%s(%v)", node.Name.String(), node.Fsp)
 }
 
 // Format formats the node.
 func (node *CollateExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v collate %s", node.Expr, node.Charset)
+	buf.astPrintf(node, "%v collate %s", node.Expr, node.Charset)
 }
 
 // Format formats the node.
@@ -1540,22 +1541,28 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 		distinct = "distinct "
 	}
 	if !node.Qualifier.IsEmpty() {
-		buf.Myprintf("%v.", node.Qualifier)
+		buf.astPrintf(node, "%v.", node.Qualifier)
 	}
 	// Function names should not be back-quoted even
-	// if they match a reserved word. So, print the
-	// name as is.
-	buf.Myprintf("%s(%s%v)", node.Name.String(), distinct, node.Exprs)
+	// if they match a reserved word, only if they contain illegal characters
+	funcName := node.Name.String()
+
+	if containEscapableChars(funcName, NoAt) {
+		writeEscapedString(buf, funcName)
+	} else {
+		buf.WriteString(funcName)
+	}
+	buf.astPrintf(node, "(%s%v)", distinct, node.Exprs)
 }
 
 // Format formats the node
 func (node *GroupConcatExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("group_concat(%s%v%v%s)", node.Distinct, node.Exprs, node.OrderBy, node.Separator)
+	buf.astPrintf(node, "group_concat(%s%v%v%s%v)", node.Distinct, node.Exprs, node.OrderBy, node.Separator, node.Limit)
 }
 
 // Format formats the node.
 func (node *ValuesFuncExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("values(%v)", node.Name)
+	buf.astPrintf(node, "values(%v)", node.Name)
 }
 
 // Format formats the node.
@@ -1568,75 +1575,75 @@ func (node *SubstrExpr) Format(buf *TrackedBuffer) {
 	}
 
 	if node.To == nil {
-		buf.Myprintf("substr(%v, %v)", val, node.From)
+		buf.astPrintf(node, "substr(%v, %v)", val, node.From)
 	} else {
-		buf.Myprintf("substr(%v, %v, %v)", val, node.From, node.To)
+		buf.astPrintf(node, "substr(%v, %v, %v)", val, node.From, node.To)
 	}
 }
 
 // Format formats the node.
 func (node *ConvertExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("convert(%v, %v)", node.Expr, node.Type)
+	buf.astPrintf(node, "convert(%v, %v)", node.Expr, node.Type)
 }
 
 // Format formats the node.
 func (node *ConvertUsingExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("convert(%v using %s)", node.Expr, node.Type)
+	buf.astPrintf(node, "convert(%v using %s)", node.Expr, node.Type)
 }
 
 // Format formats the node.
 func (node *ConvertType) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s", node.Type)
+	buf.astPrintf(node, "%s", node.Type)
 	if node.Length != nil {
-		buf.Myprintf("(%v", node.Length)
+		buf.astPrintf(node, "(%v", node.Length)
 		if node.Scale != nil {
-			buf.Myprintf(", %v", node.Scale)
+			buf.astPrintf(node, ", %v", node.Scale)
 		}
-		buf.Myprintf(")")
+		buf.astPrintf(node, ")")
 	}
 	if node.Charset != "" {
-		buf.Myprintf("%s %s", node.Operator, node.Charset)
+		buf.astPrintf(node, "%s %s", node.Operator, node.Charset)
 	}
 }
 
 // Format formats the node
 func (node *MatchExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("match(%v) against (%v%s)", node.Columns, node.Expr, node.Option)
+	buf.astPrintf(node, "match(%v) against (%v%s)", node.Columns, node.Expr, node.Option)
 }
 
 // Format formats the node.
 func (node *CaseExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("case ")
+	buf.astPrintf(node, "case ")
 	if node.Expr != nil {
-		buf.Myprintf("%v ", node.Expr)
+		buf.astPrintf(node, "%v ", node.Expr)
 	}
 	for _, when := range node.Whens {
-		buf.Myprintf("%v ", when)
+		buf.astPrintf(node, "%v ", when)
 	}
 	if node.Else != nil {
-		buf.Myprintf("else %v ", node.Else)
+		buf.astPrintf(node, "else %v ", node.Else)
 	}
-	buf.Myprintf("end")
+	buf.astPrintf(node, "end")
 }
 
 // Format formats the node.
 func (node *Default) Format(buf *TrackedBuffer) {
-	buf.Myprintf("default")
+	buf.astPrintf(node, "default")
 	if node.ColName != "" {
-		buf.Myprintf("(%s)", node.ColName)
+		buf.astPrintf(node, "(%s)", node.ColName)
 	}
 }
 
 // Format formats the node.
 func (node *When) Format(buf *TrackedBuffer) {
-	buf.Myprintf("when %v then %v", node.Cond, node.Val)
+	buf.astPrintf(node, "when %v then %v", node.Cond, node.Val)
 }
 
 // Format formats the node.
 func (node GroupBy) Format(buf *TrackedBuffer) {
 	prefix := " group by "
 	for _, n := range node {
-		buf.Myprintf("%s%v", prefix, n)
+		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
 	}
 }
@@ -1645,7 +1652,7 @@ func (node GroupBy) Format(buf *TrackedBuffer) {
 func (node OrderBy) Format(buf *TrackedBuffer) {
 	prefix := " order by "
 	for _, n := range node {
-		buf.Myprintf("%s%v", prefix, n)
+		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
 	}
 }
@@ -1653,17 +1660,17 @@ func (node OrderBy) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *Order) Format(buf *TrackedBuffer) {
 	if node, ok := node.Expr.(*NullVal); ok {
-		buf.Myprintf("%v", node)
+		buf.astPrintf(node, "%v", node)
 		return
 	}
 	if node, ok := node.Expr.(*FuncExpr); ok {
 		if node.Name.Lowered() == "rand" {
-			buf.Myprintf("%v", node)
+			buf.astPrintf(node, "%v", node)
 			return
 		}
 	}
 
-	buf.Myprintf("%v %s", node.Expr, node.Direction)
+	buf.astPrintf(node, "%v %s", node.Expr, node.Direction)
 }
 
 // Format formats the node.
@@ -1671,18 +1678,18 @@ func (node *Limit) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-	buf.Myprintf(" limit ")
+	buf.astPrintf(node, " limit ")
 	if node.Offset != nil {
-		buf.Myprintf("%v, ", node.Offset)
+		buf.astPrintf(node, "%v, ", node.Offset)
 	}
-	buf.Myprintf("%v", node.Rowcount)
+	buf.astPrintf(node, "%v", node.Rowcount)
 }
 
 // Format formats the node.
 func (node Values) Format(buf *TrackedBuffer) {
 	prefix := "values "
 	for _, n := range node {
-		buf.Myprintf("%s%v", prefix, n)
+		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
 	}
 }
@@ -1691,21 +1698,21 @@ func (node Values) Format(buf *TrackedBuffer) {
 func (node UpdateExprs) Format(buf *TrackedBuffer) {
 	var prefix string
 	for _, n := range node {
-		buf.Myprintf("%s%v", prefix, n)
+		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
 	}
 }
 
 // Format formats the node.
 func (node *UpdateExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v = %v", node.Name, node.Expr)
+	buf.astPrintf(node, "%v = %v", node.Name, node.Expr)
 }
 
 // Format formats the node.
 func (node SetExprs) Format(buf *TrackedBuffer) {
 	var prefix string
 	for _, n := range node {
-		buf.Myprintf("%s%v", prefix, n)
+		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
 	}
 }
@@ -1714,12 +1721,12 @@ func (node SetExprs) Format(buf *TrackedBuffer) {
 func (node *SetExpr) Format(buf *TrackedBuffer) {
 	// We don't have to backtick set variable names.
 	if node.Name.EqualString("charset") || node.Name.EqualString("names") {
-		buf.Myprintf("%s %v", node.Name.String(), node.Expr)
+		buf.astPrintf(node, "%s %v", node.Name.String(), node.Expr)
 	} else if node.Name.EqualString(TransactionStr) {
 		sqlVal := node.Expr.(*SQLVal)
-		buf.Myprintf("%s %s", node.Name.String(), strings.ToLower(string(sqlVal.Val)))
+		buf.astPrintf(node, "%s %s", node.Name.String(), strings.ToLower(string(sqlVal.Val)))
 	} else {
-		buf.Myprintf("%s = %v", node.Name.String(), node.Expr)
+		buf.astPrintf(node, "%v = %v", node.Name, node.Expr)
 	}
 }
 
@@ -1728,15 +1735,18 @@ func (node OnDup) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-	buf.Myprintf(" on duplicate key update %v", UpdateExprs(node))
+	buf.astPrintf(node, " on duplicate key update %v", UpdateExprs(node))
 }
 
 // Format formats the node.
 func (node ColIdent) Format(buf *TrackedBuffer) {
-	formatID(buf, node.val, node.Lowered())
+	for i := NoAt; i < node.at; i++ {
+		buf.WriteByte('@')
+	}
+	formatID(buf, node.val, node.Lowered(), node.at)
 }
 
 // Format formats the node.
 func (node TableIdent) Format(buf *TrackedBuffer) {
-	formatID(buf, node.v, strings.ToLower(node.v))
+	formatID(buf, node.v, strings.ToLower(node.v), NoAt)
 }

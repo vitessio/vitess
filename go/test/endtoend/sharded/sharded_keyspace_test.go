@@ -73,10 +73,11 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
-		clusterInstance = &cluster.LocalProcessCluster{Cell: cell, Hostname: hostname}
+		clusterInstance = cluster.NewCluster(cell, hostname)
 		defer clusterInstance.Teardown()
 
 		// Start topo server
@@ -101,6 +102,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestShardedKeyspace(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	shard1 := clusterInstance.Keyspaces[0].Shards[0]
 	shard2 := clusterInstance.Keyspaces[0].Shards[1]
 
@@ -158,7 +160,7 @@ func TestShardedKeyspace(t *testing.T) {
 	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ValidateSchemaKeyspace", keyspaceName)
 	require.Error(t, err)
 	assert.True(t, strings.Contains(output, "schemas differ on table vt_select_test:\n"+shard1Master.Alias+": CREATE TABLE"))
-	fmt.Println(output)
+	//log.Info(output)
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateVersionShard", fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
 	require.Nil(t, err)

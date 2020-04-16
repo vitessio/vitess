@@ -1,3 +1,20 @@
+## 2.0.0-0 - 2020-04-03
+
+Vitess now supports using the Kubernetes API as a topology provider. This means that it is now easier than ever to run Vitess on Kubernetes! 
+
+Properly supporting this new provider requires a major, breaking change of the helm charts. The `etcd-operator` has been deprecated as well so the Vitess team has decided to make the Kubernetes topology the default going forward.
+
+### Upgrade and Migration Information
+
+* This version introduces a `topologyProvider` configuration in `topology.globalCell` and in the configuration for each cell individually. The default from v2 on is to use the `k8s` topology provider. Explicitly set these values to `etcd2` in order to continue to use the etcd topology provider.
+* The `root` is now being set properly for all topology cells. Prior to this version, all cells were using `""` as the root which worked, but was invalid. The root path for all cells  will now be set to `/vitess/{{ $cell.name }}`. In order to upgrade a helm deployment from v1 to v2 you will need to stop all vitess components, migrate all etcd keys except `/global`, from `/` to `/vitess/{{ $cell.name }}`. There is no automation for this procedure at this time.
+
+### Changes
+* Update images of Vitess components to **TODO: we need new images based on a released tag, not just master at a point in time**
+* Set the topology `root` in all new and existing cells to `/vitess/{{ $cell.name }}`
+* Add `topology.globalCell.topologyProvider` - default to `k8s`
+* Add `topolgy.cells[*].topologyProvider` - default to `k8s`
+
 ## 1.0.7-5 - 2019-12-02
 
 ### Changes

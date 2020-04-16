@@ -53,11 +53,7 @@ func Walk(visit Visit, nodes ...SQLNode) error {
 			return kontinue
 		}
 		post := func(cursor *Cursor) bool {
-			if err != nil {
-				return false // now we can abort the traversal if an error was found
-			}
-
-			return true
+			return err == nil // now we can abort the traversal if an error was found
 		}
 
 		Rewrite(node, pre, post)
@@ -533,6 +529,14 @@ func NewColIdent(str string) ColIdent {
 	}
 }
 
+// NewColIdentWithAt makes a new ColIdent.
+func NewColIdentWithAt(str string, at atCount) ColIdent {
+	return ColIdent{
+		val: str,
+		at:  at,
+	}
+}
+
 // IsEmpty returns true if the name is empty.
 func (node ColIdent) IsEmpty() bool {
 	return node.val == ""
@@ -543,7 +547,11 @@ func (node ColIdent) IsEmpty() bool {
 // instead. The Stringer conformance is for usage
 // in templates.
 func (node ColIdent) String() string {
-	return node.val
+	atStr := ""
+	for i := NoAt; i < node.at; i++ {
+		atStr += "@"
+	}
+	return atStr + node.val
 }
 
 // CompliantName returns a compliant id name
@@ -631,26 +639,36 @@ func (node *TableIdent) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func formatID(buf *TrackedBuffer, original, lowered string) {
-	isDbSystemVariable := false
-	if len(original) > 1 && original[:2] == "@@" {
-		isDbSystemVariable = true
-	}
+func containEscapableChars(s string, at atCount) bool {
+	isDbSystemVariable := at != NoAt
 
-	for i, c := range original {
-		if !isLetter(uint16(c)) && (!isDbSystemVariable || !isCarat(uint16(c))) {
+	for i, c := range s {
+		letter := isLetter(uint16(c))
+		systemVarChar := isDbSystemVariable && isCarat(uint16(c))
+		if !(letter || systemVarChar) {
 			if i == 0 || !isDigit(uint16(c)) {
-				goto mustEscape
+				return true
 			}
 		}
 	}
-	if _, ok := keywords[lowered]; ok {
-		goto mustEscape
-	}
-	buf.Myprintf("%s", original)
-	return
 
-mustEscape:
+	return false
+}
+
+func isKeyword(s string) bool {
+	_, isKeyword := keywords[s]
+	return isKeyword
+}
+
+func formatID(buf *TrackedBuffer, original, lowered string, at atCount) {
+	if containEscapableChars(original, at) || isKeyword(lowered) {
+		writeEscapedString(buf, original)
+	} else {
+		buf.Myprintf("%s", original)
+	}
+}
+
+func writeEscapedString(buf *TrackedBuffer, original string) {
 	buf.WriteByte('`')
 	for _, c := range original {
 		buf.WriteRune(c)
@@ -686,14 +704,8 @@ func (node *Select) SetLimit(limit *Limit) {
 }
 
 // AddWhere adds the boolean expression to the
-// WHERE clause as an AND condition. If the expression
-// is an OR clause, it parenthesizes it. Currently,
-// the OR operator is the only one that's lower precedence
-// than AND.
+// WHERE clause as an AND condition.
 func (node *Select) AddWhere(expr Expr) {
-	if _, ok := expr.(*OrExpr); ok {
-		expr = &ParenExpr{Expr: expr}
-	}
 	if node.Where == nil {
 		node.Where = &Where{
 			Type: WhereStr,
@@ -708,14 +720,8 @@ func (node *Select) AddWhere(expr Expr) {
 }
 
 // AddHaving adds the boolean expression to the
-// HAVING clause as an AND condition. If the expression
-// is an OR clause, it parenthesizes it. Currently,
-// the OR operator is the only one that's lower precedence
-// than AND.
+// HAVING clause as an AND condition.
 func (node *Select) AddHaving(expr Expr) {
-	if _, ok := expr.(*OrExpr); ok {
-		expr = &ParenExpr{Expr: expr}
-	}
 	if node.Having == nil {
 		node.Having = &Where{
 			Type: HavingStr,
@@ -748,3 +754,14 @@ func (node *Union) AddOrder(order *Order) {
 func (node *Union) SetLimit(limit *Limit) {
 	node.Limit = limit
 }
+
+type atCount int
+
+const (
+	// NoAt represents no @
+	NoAt atCount = iota
+	// SingleAt represents @
+	SingleAt
+	// DoubleAt represnts @@
+	DoubleAt
+)

@@ -4,28 +4,15 @@
 
 # SET
 "set a=1"
-"unsupported construct: set"
+"plan building not supported"
 
 # SHOW
 "show create database"
-"unsupported construct: show"
-
-# DDL
-"create table a(id int)"
-"unsupported construct: ddl"
-
-"create table a.b(id int)"
-"unsupported construct: ddl"
-
-"alter table a ADD id int"
-"unsupported construct: ddl"
-
-"alter table a.b ADD id int"
-"unsupported construct: ddl"
+"plan building not supported"
 
 # DBA statements
 "explain select * from user"
-"unsupported construct: other read"
+"plan building not supported"
 
 # union operations in subqueries (FROM)
 "select * from (select * from user union all select * from user_extra) as t"
@@ -43,13 +30,13 @@
 "insert into `user[-]`.user_metadata (a, b) values (1,2)"
 "unsupported: INSERT with a target destination"
 
-# Unsupported DELETE statement with a replica target destination
+# Unsupported delete statement with a replica target destination
 "DELETE FROM `user[-]@replica`.user_metadata limit 1"
-"unsupported: DELETE statement with a replica target"
+"unsupported: delete statement with a replica target"
 
-# Unsupported UPDATE statement with a replica target destination
+# Unsupported update statement with a replica target destination
 "update `user[-]@replica`.user_metadata set id=2"
-"unsupported: UPDATE statement with a replica target"
+"unsupported: update statement with a replica target"
 
 # scatter order by with * expression
 "select * from user order by id"
@@ -235,21 +222,9 @@
 "update user_extra set val = 1 where (name = 'foo' or id = 1) limit 1"
 "unsupported: multi shard update with limit"
 
-# scatter update table with owned vindexes
-"update user set val = 1"
-"unsupported: multi shard update on a table with owned lookup vindexes"
-
-# delete with multi-table targets
-"delete music from music where id = 1"
-"unsupported: multi-table delete statement in sharded keyspace"
-
 # multi delete multi table
 "delete user from user join user_extra on user.id = user_extra.id where user.name = 'foo'"
 "unsupported: multi-shard or vindex write statement"
-
-# scatter delete with owned lookup vindex
-"delete from user"
-"unsupported: multi shard delete on a table with owned lookup vindexes"
 
 # update changes primary vindex column
 "update user set id = 1 where id = 1"
@@ -270,10 +245,6 @@
 # update by primary keyspace id, changing one vindex column, limit without order clause
 "update user_metadata set email = 'juan@vitess.io' where user_id = 1 limit 10"
 "unsupported: Need to provide order by clause when using limit. Invalid update on vindex: email_user_map"
-
-# update multi column vindex, without values for all the vindex columns
-"update multicolvin set column_c = 2 where kid = 1"
-"unsupported: update does not have values for all the columns in vindex (colb_colc_map)"
 
 # cross-shard update tables
 "update (select id from user) as u set id = 4"
@@ -428,3 +399,11 @@
 
 "select func(keyspace_id) from user_index where id = :id"
 "unsupported: expression on results of a vindex function"
+
+# delete with unknown reference
+"delete music from user where id = 1"
+"Unknown table 'music' in MULTI DELETE"
+
+# delete with multi-table targets
+"delete music,user from music inner join user where music.id = user.id"
+"unsupported: multi-shard or vindex write statement"

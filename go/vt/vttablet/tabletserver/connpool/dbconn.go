@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -54,19 +56,22 @@ const (
 // It will also trigger a CheckMySQL whenever applicable.
 type DBConn struct {
 	conn    *dbconnpool.DBConnection
-	info    *mysql.ConnParams
-	dbaPool *dbconnpool.ConnectionPool
+	info    dbconfigs.Connector
 	pool    *Pool
+	dbaPool *dbconnpool.ConnectionPool
+	stats   *tabletenv.Stats
 	current sync2.AtomicString
 }
 
 // NewDBConn creates a new DBConn. It triggers a CheckMySQL if creation fails.
-func NewDBConn(
-	cp *Pool,
-	appParams *mysql.ConnParams) (*DBConn, error) {
-	c, err := dbconnpool.NewDBConnection(appParams, tabletenv.MySQLStats)
+func NewDBConn(cp *Pool, appParams dbconfigs.Connector) (*DBConn, error) {
+	start := time.Now()
+	defer cp.env.Stats().MySQLTimings.Record("Connect", start)
+
+	c, err := dbconnpool.NewDBConnection(appParams)
 	if err != nil {
-		cp.checker.CheckMySQL()
+		cp.env.Stats().MySQLTimings.Record("ConnectError", start)
+		cp.env.CheckMySQL()
 		return nil, err
 	}
 	return &DBConn{
@@ -74,12 +79,13 @@ func NewDBConn(
 		info:    appParams,
 		pool:    cp,
 		dbaPool: cp.dbaPool,
+		stats:   cp.env.Stats(),
 	}, nil
 }
 
 // NewDBConnNoPool creates a new DBConn without a pool.
-func NewDBConnNoPool(params *mysql.ConnParams, dbaPool *dbconnpool.ConnectionPool) (*DBConn, error) {
-	c, err := dbconnpool.NewDBConnection(params, tabletenv.MySQLStats)
+func NewDBConnNoPool(params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool) (*DBConn, error) {
+	c, err := dbconnpool.NewDBConnection(params)
 	if err != nil {
 		return nil, err
 	}
@@ -88,6 +94,7 @@ func NewDBConnNoPool(params *mysql.ConnParams, dbaPool *dbconnpool.ConnectionPoo
 		info:    params,
 		dbaPool: dbaPool,
 		pool:    nil,
+		stats:   tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
 	}, nil
 }
 
@@ -119,7 +126,7 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 		}
 
 		if reconnectErr := dbc.reconnect(); reconnectErr != nil {
-			dbc.pool.checker.CheckMySQL()
+			dbc.pool.env.CheckMySQL()
 			// Return the error of the reconnect and not the original connection error.
 			return nil, reconnectErr
 		}
@@ -140,6 +147,8 @@ func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, want
 		return nil, fmt.Errorf("%v before execution started", ctx.Err())
 	default:
 	}
+
+	defer dbc.stats.MySQLTimings.Record("Exec", time.Now())
 
 	done, wg := dbc.setDeadline(ctx)
 	if done != nil {
@@ -200,7 +209,7 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 		default:
 		}
 		if reconnectErr := dbc.reconnect(); reconnectErr != nil {
-			dbc.pool.checker.CheckMySQL()
+			dbc.pool.env.CheckMySQL()
 			// Return the error of the reconnect and not the original connection error.
 			return reconnectErr
 		}
@@ -209,6 +218,8 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 }
 
 func (dbc *DBConn) streamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
+	defer dbc.stats.MySQLTimings.Record("ExecStream", time.Now())
+
 	dbc.current.Set(query)
 	defer dbc.current.Set("")
 
@@ -226,65 +237,45 @@ var (
 	getModeSQL    = "select @@global.sql_mode"
 	getAutocommit = "select @@autocommit"
 	getAutoIsNull = "select @@sql_auto_is_null"
-	showBinlog    = "show variables like 'binlog_format'"
 )
 
 // VerifyMode is a helper method to verify mysql is running with
 // sql_mode = STRICT_TRANS_TABLES or STRICT_ALL_TABLES and autocommit=ON.
-// It also returns the current binlog format.
-func (dbc *DBConn) VerifyMode(strictTransTables bool) (BinlogFormat, error) {
+func (dbc *DBConn) VerifyMode(strictTransTables bool) error {
 	if strictTransTables {
 		qr, err := dbc.conn.ExecuteFetch(getModeSQL, 2, false)
 		if err != nil {
-			return 0, vterrors.Wrap(err, "could not verify mode")
+			return vterrors.Wrap(err, "could not verify mode")
 		}
 		if len(qr.Rows) != 1 {
-			return 0, fmt.Errorf("incorrect rowcount received for %s: %d", getModeSQL, len(qr.Rows))
+			return fmt.Errorf("incorrect rowcount received for %s: %d", getModeSQL, len(qr.Rows))
 		}
 		sqlMode := qr.Rows[0][0].ToString()
 		if !(strings.Contains(sqlMode, "STRICT_TRANS_TABLES") || strings.Contains(sqlMode, "STRICT_ALL_TABLES")) {
-			return 0, fmt.Errorf("require sql_mode to be STRICT_TRANS_TABLES or STRICT_ALL_TABLES: got '%s'", qr.Rows[0][0].ToString())
+			return fmt.Errorf("require sql_mode to be STRICT_TRANS_TABLES or STRICT_ALL_TABLES: got '%s'", qr.Rows[0][0].ToString())
 		}
 	}
 	qr, err := dbc.conn.ExecuteFetch(getAutocommit, 2, false)
 	if err != nil {
-		return 0, vterrors.Wrap(err, "could not verify mode")
+		return vterrors.Wrap(err, "could not verify mode")
 	}
 	if len(qr.Rows) != 1 {
-		return 0, fmt.Errorf("incorrect rowcount received for %s: %d", getAutocommit, len(qr.Rows))
+		return fmt.Errorf("incorrect rowcount received for %s: %d", getAutocommit, len(qr.Rows))
 	}
 	if !strings.Contains(qr.Rows[0][0].ToString(), "1") {
-		return 0, fmt.Errorf("require autocommit to be 1: got %s", qr.Rows[0][0].ToString())
+		return fmt.Errorf("require autocommit to be 1: got %s", qr.Rows[0][0].ToString())
 	}
 	qr, err = dbc.conn.ExecuteFetch(getAutoIsNull, 2, false)
 	if err != nil {
-		return 0, vterrors.Wrap(err, "could not verify mode")
+		return vterrors.Wrap(err, "could not verify mode")
 	}
 	if len(qr.Rows) != 1 {
-		return 0, fmt.Errorf("incorrect rowcount received for %s: %d", getAutoIsNull, len(qr.Rows))
+		return fmt.Errorf("incorrect rowcount received for %s: %d", getAutoIsNull, len(qr.Rows))
 	}
 	if !strings.Contains(qr.Rows[0][0].ToString(), "0") {
-		return 0, fmt.Errorf("require sql_auto_is_null to be 0: got %s", qr.Rows[0][0].ToString())
+		return fmt.Errorf("require sql_auto_is_null to be 0: got %s", qr.Rows[0][0].ToString())
 	}
-	qr, err = dbc.conn.ExecuteFetch(showBinlog, 10, false)
-	if err != nil {
-		return 0, vterrors.Wrap(err, "could not fetch binlog format")
-	}
-	if len(qr.Rows) != 1 {
-		return 0, fmt.Errorf("incorrect rowcount received for %s: %d", showBinlog, len(qr.Rows))
-	}
-	if len(qr.Rows[0]) != 2 {
-		return 0, fmt.Errorf("incorrect column count received for %s: %d", showBinlog, len(qr.Rows[0]))
-	}
-	switch qr.Rows[0][1].ToString() {
-	case "STATEMENT":
-		return BinlogFormatStatement, nil
-	case "ROW":
-		return BinlogFormatRow, nil
-	case "MIXED":
-		return BinlogFormatMixed, nil
-	}
-	return 0, fmt.Errorf("unexpected binlog format for %s: %s", showBinlog, qr.Rows[0][1].ToString())
+	return nil
 }
 
 // Close closes the DBConn.
@@ -313,7 +304,7 @@ func (dbc *DBConn) Recycle() {
 // and on the connection side. If no query is executing, it's a no-op.
 // Kill will also not kill a query more than once.
 func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
-	tabletenv.KillStats.Add("Queries", 1)
+	dbc.stats.KillCounters.Add("Queries", 1)
 	log.Infof("Due to %s, elapsed time: %v, killing query ID %v %s", reason, elapsed, dbc.conn.ID(), dbc.Current())
 	killConn, err := dbc.dbaPool.Get(context.TODO())
 	if err != nil {
@@ -342,7 +333,8 @@ func (dbc *DBConn) ID() int64 {
 
 func (dbc *DBConn) reconnect() error {
 	dbc.conn.Close()
-	newConn, err := dbconnpool.NewDBConnection(dbc.info, tabletenv.MySQLStats)
+	// Reuse MySQLTimings from dbc.conn.
+	newConn, err := dbconnpool.NewDBConnection(dbc.info)
 	if err != nil {
 		return err
 	}
@@ -378,7 +370,7 @@ func (dbc *DBConn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup)
 		defer tmr2.Stop()
 		select {
 		case <-tmr2.C:
-			tabletenv.InternalErrors.Add("HungQuery", 1)
+			dbc.stats.InternalErrors.Add("HungQuery", 1)
 			log.Warningf("Query may be hung: %s", dbc.Current())
 		case <-done:
 			return

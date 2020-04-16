@@ -35,13 +35,13 @@ type TestReplicatorPlan struct {
 type TestTablePlan struct {
 	TargetName   string
 	SendRule     string
-	PKReferences []string `json:",omitempty"`
 	InsertFront  string   `json:",omitempty"`
 	InsertValues string   `json:",omitempty"`
 	InsertOnDup  string   `json:",omitempty"`
 	Insert       string   `json:",omitempty"`
 	Update       string   `json:",omitempty"`
 	Delete       string   `json:",omitempty"`
+	PKReferences []string `json:",omitempty"`
 }
 
 func TestBuildPlayerPlan(t *testing.T) {

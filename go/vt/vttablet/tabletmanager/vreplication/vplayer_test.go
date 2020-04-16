@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -135,6 +137,10 @@ func TestPlayerFilters(t *testing.T) {
 		"create table no(id int, val varbinary(128), primary key(id))",
 		"create table nopk(id int, val varbinary(128))",
 		fmt.Sprintf("create table %s.nopk(id int, val varbinary(128))", vrepldb),
+		"create table src4(id1 int, id2 int, val varbinary(128), primary key(id1))",
+		fmt.Sprintf("create table %s.dst4(id1 int, val varbinary(128), primary key(id1))", vrepldb),
+		"create table src5(id1 int, id2 int, val varbinary(128), primary key(id1))",
+		fmt.Sprintf("create table %s.dst5(id1 int, val varbinary(128), primary key(id1))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table src1",
@@ -148,6 +154,10 @@ func TestPlayerFilters(t *testing.T) {
 		"drop table no",
 		"drop table nopk",
 		fmt.Sprintf("drop table %s.nopk", vrepldb),
+		"drop table src4",
+		fmt.Sprintf("drop table %s.dst4", vrepldb),
+		"drop table src5",
+		fmt.Sprintf("drop table %s.dst5", vrepldb),
 	})
 	env.SchemaEngine.Reload(context.Background())
 
@@ -165,6 +175,12 @@ func TestPlayerFilters(t *testing.T) {
 			Match: "/yes",
 		}, {
 			Match: "/nopk",
+		}, {
+			Match:  "dst4",
+			Filter: "select id1, val from src4 where id2 = 100",
+		}, {
+			Match:  "dst5",
+			Filter: "select id1, val from src5 where val = 'abc'",
 		}},
 	}
 	bls := &binlogdatapb.BinlogSource{
@@ -173,6 +189,7 @@ func TestPlayerFilters(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
+
 	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
@@ -181,6 +198,7 @@ func TestPlayerFilters(t *testing.T) {
 		output []string
 		table  string
 		data   [][]string
+		logs   []LogExpectation // logs are defined for a few testcases since they are enough to test all log events
 	}{{
 		// insert with insertNormal
 		input: "insert into src1 values(1, 'aaa')",
@@ -193,6 +211,11 @@ func TestPlayerFilters(t *testing.T) {
 		table: "dst1",
 		data: [][]string{
 			{"1", "aaa"},
+		},
+		logs: []LogExpectation{
+			{"FIELD", "/src1.*id.*INT32.*val.*VARBINARY.*"},
+			{"ROWCHANGE", "insert into dst1(id,val) values (1,'aaa')"},
+			{"ROW", "/src1.*3.*1aaa.*"},
 		},
 	}, {
 		// update with insertNormal
@@ -207,6 +230,10 @@ func TestPlayerFilters(t *testing.T) {
 		data: [][]string{
 			{"1", "bbb"},
 		},
+		logs: []LogExpectation{
+			{"ROWCHANGE", "update dst1 set val='bbb' where id=1"},
+			{"ROW", "/src1.*3.*1aaa.*"},
+		},
 	}, {
 		// delete with insertNormal
 		input: "delete from src1 where id=1",
@@ -218,6 +245,10 @@ func TestPlayerFilters(t *testing.T) {
 		},
 		table: "dst1",
 		data:  [][]string{},
+		logs: []LogExpectation{
+			{"ROWCHANGE", "delete from dst1 where id=1"},
+			{"ROW", "/src1.*3.*1bbb.*"},
+		},
 	}, {
 		// insert with insertOnDup
 		input: "insert into src2 values(1, 2, 3)",
@@ -231,6 +262,10 @@ func TestPlayerFilters(t *testing.T) {
 		data: [][]string{
 			{"1", "2", "3", "1"},
 		},
+		logs: []LogExpectation{
+			{"FIELD", "/src2.*id.*val1.*val2.*"},
+			{"ROWCHANGE", "insert into dst2(id,val1,sval2,rcount) values (1,2,ifnull(3, 0),1) on duplicate key update val1=values(val1), sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1"},
+		},
 	}, {
 		// update with insertOnDup
 		input: "update src2 set val1=5, val2=1 where id=1",
@@ -243,6 +278,10 @@ func TestPlayerFilters(t *testing.T) {
 		table: "dst2",
 		data: [][]string{
 			{"1", "5", "1", "1"},
+		},
+		logs: []LogExpectation{
+			{"ROWCHANGE", "update dst2 set val1=5, sval2=sval2-ifnull(3, 0)+ifnull(1, 0), rcount=rcount where id=1"},
+			{"ROW", "/src2.*123.*"},
 		},
 	}, {
 		// delete with insertOnDup
@@ -363,13 +402,41 @@ func TestPlayerFilters(t *testing.T) {
 		},
 		table: "nopk",
 		data:  [][]string{},
+	}, {
+		// filter by int
+		input: "insert into src4 values (1,100,'aaa'),(2,200,'bbb'),(3,100,'ccc')",
+		output: []string{
+			"begin",
+			"insert into dst4(id1,val) values (1,'aaa')",
+			"insert into dst4(id1,val) values (3,'ccc')",
+			"/update _vt.vreplication set pos=",
+			"commit",
+		},
+		table: "dst4",
+		data:  [][]string{{"1", "aaa"}, {"3", "ccc"}},
+	}, {
+		// filter by int
+		input: "insert into src5 values (1,100,'abc'),(2,200,'xyz'),(3,100,'xyz'),(4,300,'abc'),(5,200,'xyz')",
+		output: []string{
+			"begin",
+			"insert into dst5(id1,val) values (1,'abc')",
+			"insert into dst5(id1,val) values (4,'abc')",
+			"/update _vt.vreplication set pos=",
+			"commit",
+		},
+		table: "dst5",
+		data:  [][]string{{"1", "abc"}, {"4", "abc"}},
 	}}
 
-	for _, tcases := range testcases {
-		execStatements(t, []string{tcases.input})
-		expectDBClientQueries(t, tcases.output)
-		if tcases.table != "" {
-			expectData(t, tcases.table, tcases.data)
+	for _, tcase := range testcases {
+		if tcase.logs != nil {
+			logch := vrLogStatsLogger.Subscribe("vrlogstats")
+			defer expectLogsAndUnsubscribe(t, tcase.logs, logch)
+		}
+		execStatements(t, []string{tcase.input})
+		expectDBClientQueries(t, tcase.output)
+		if tcase.table != "" {
+			expectData(t, tcase.table, tcase.data)
 		}
 	}
 }
@@ -1048,10 +1115,9 @@ func TestPlayerDDL(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_STOP,
 	}
 	cancel, id := startVReplication(t, bls, "")
+	pos0 := masterPosition(t) //For debugging only
 	execStatements(t, []string{"alter table t1 add column val varchar(128)"})
 	pos1 := masterPosition(t)
-	execStatements(t, []string{"alter table t1 drop column val"})
-	pos2 := masterPosition(t)
 	// The stop position must be the GTID of the first DDL
 	expectDBClientQueries(t, []string{
 		"begin",
@@ -1059,6 +1125,11 @@ func TestPlayerDDL(t *testing.T) {
 		"/update _vt.vreplication set state='Stopped'",
 		"commit",
 	})
+	pos2b := masterPosition(t)
+	execStatements(t, []string{"alter table t1 drop column val"})
+	pos2 := masterPosition(t)
+	log.Errorf("Expected log:: TestPlayerDDL Positions are: before first alter %v, after first alter %v, before second alter %v, after second alter %v",
+		pos0, pos1, pos2b, pos2) //For debugging only: to check what are the positions when test works and if/when it fails
 	// Restart vreplication
 	if _, err := playerEngine.Exec(fmt.Sprintf(`update _vt.vreplication set state = 'Running', message='' where id=%d`, id)); err != nil {
 		t.Fatal(err)

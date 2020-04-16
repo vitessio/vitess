@@ -25,10 +25,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -43,7 +41,6 @@ import (
 )
 
 const (
-	sqlTurnoffBinlog        = "set @@session.sql_log_bin = 0"
 	sqlCreateSidecarDB      = "create database if not exists %s"
 	sqlCreateHeartbeatTable = `CREATE TABLE IF NOT EXISTS %s.heartbeat (
   keyspaceShard VARBINARY(256) NOT NULL PRIMARY KEY,
@@ -57,7 +54,7 @@ const (
 // Writer runs on master tablets and writes heartbeats to the _vt.heartbeat
 // table at a regular interval, defined by heartbeat_interval.
 type Writer struct {
-	dbconfigs *dbconfigs.DBConfigs
+	env tabletenv.Env
 
 	enabled       bool
 	interval      time.Duration
@@ -74,24 +71,21 @@ type Writer struct {
 }
 
 // NewWriter creates a new Writer.
-func NewWriter(checker connpool.MySQLChecker, alias topodatapb.TabletAlias, config tabletenv.TabletConfig) *Writer {
+func NewWriter(env tabletenv.Env, alias topodatapb.TabletAlias) *Writer {
+	config := env.Config()
 	if !config.HeartbeatEnable {
 		return &Writer{}
 	}
 	return &Writer{
+		env:         env,
 		enabled:     true,
 		tabletAlias: alias,
 		now:         time.Now,
 		interval:    config.HeartbeatInterval,
 		ticks:       timer.NewTimer(config.HeartbeatInterval),
 		errorLog:    logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
-		pool:        connpool.New(config.PoolNamePrefix+"HeartbeatWritePool", 1, 0, time.Duration(config.IdleTimeout*1e9), checker),
+		pool:        connpool.New(env, "HeartbeatWritePool", 1, 0, time.Duration(config.IdleTimeout*1e9)),
 	}
-}
-
-// InitDBConfig must be called before Init.
-func (w *Writer) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	w.dbconfigs = dbcfgs
 }
 
 // Init runs at tablet startup and last minute initialization of db settings, and
@@ -103,14 +97,16 @@ func (w *Writer) Init(target querypb.Target) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	log.Info("Initializing heartbeat table.")
-	w.dbName = sqlescape.EscapeID(w.dbconfigs.SidecarDBName.Get())
+	w.dbName = sqlescape.EscapeID(w.env.DBConfigs().SidecarDBName.Get())
 	w.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
-	err := w.initializeTables(w.dbconfigs.DbaWithDB())
-	if err != nil {
-		w.recordError(err)
-		return err
-	}
 
+	if target.TabletType == topodatapb.TabletType_MASTER {
+		err := w.initializeTables(w.env.DBConfigs().AppWithDB())
+		if err != nil {
+			w.recordError(err)
+			return err
+		}
+	}
 	return nil
 }
 
@@ -128,7 +124,7 @@ func (w *Writer) Open() {
 		return
 	}
 	log.Info("Beginning heartbeat writes")
-	w.pool.Open(w.dbconfigs.AppWithDB(), w.dbconfigs.DbaWithDB(), w.dbconfigs.AppDebugWithDB())
+	w.pool.Open(w.env.DBConfigs().AppWithDB(), w.env.DBConfigs().DbaWithDB(), w.env.DBConfigs().AppDebugWithDB())
 	w.ticks.Start(func() { w.writeHeartbeat() })
 	w.isOpen = true
 }
@@ -155,14 +151,13 @@ func (w *Writer) Close() {
 // or master. For that reason, we use values that are common between them, such as keyspace:shard,
 // and we also execute them with an isolated connection that turns off the binlog and
 // is closed at the end.
-func (w *Writer) initializeTables(cp *mysql.ConnParams) error {
-	conn, err := dbconnpool.NewDBConnection(cp, stats.NewTimings("", "", ""))
+func (w *Writer) initializeTables(cp dbconfigs.Connector) error {
+	conn, err := dbconnpool.NewDBConnection(cp)
 	if err != nil {
 		return vterrors.Wrap(err, "Failed to create connection for heartbeat")
 	}
 	defer conn.Close()
 	statements := []string{
-		sqlTurnoffBinlog,
 		fmt.Sprintf(sqlCreateSidecarDB, w.dbName),
 		fmt.Sprintf(sqlCreateHeartbeatTable, w.dbName),
 	}
@@ -202,7 +197,7 @@ func (w *Writer) bindHeartbeatVars(query string) (string, error) {
 
 // writeHeartbeat updates the heartbeat row for this tablet with the current time in nanoseconds.
 func (w *Writer) writeHeartbeat() {
-	defer tabletenv.LogError()
+	defer w.env.LogError()
 	ctx, cancel := context.WithDeadline(context.Background(), w.now().Add(w.interval))
 	defer cancel()
 	update, err := w.bindHeartbeatVars(sqlUpdateHeartbeat)

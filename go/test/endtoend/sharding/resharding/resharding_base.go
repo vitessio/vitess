@@ -26,11 +26,11 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/mysql"
-
-	"github.com/prometheus/common/log"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/sharding"
@@ -183,6 +183,7 @@ var (
 
 // TestResharding - main test with accepts different params for various test
 func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
+	defer cluster.PanicHandler(t)
 	clusterInstance = cluster.NewCluster(cell1, hostname)
 	defer clusterInstance.Teardown()
 
@@ -254,7 +255,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
-			fmt.Println("Starting MySql for tablet ", tablet.Alias)
+			log.Infof("Starting mysql for tablet %v", tablet.Alias)
 			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
 				t.Fatal(err)
 			} else {
@@ -547,9 +548,9 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// testing filtered replication: insert a bunch of data on shard 1, check we get most of it after a few seconds,
 	// wait for binlog server timeout, check we get all of it.
-	log.Debug("Inserting lots of data on source shard")
+	log.Info("Inserting lots of data on source shard")
 	insertLots(100, 0, *shard1Master, tableName, fixedParentID, keyspaceName)
-	log.Debug("Executing MultiValue Insert Queries")
+	log.Info("Executing MultiValue Insert Queries")
 	execMultiShardDmls(t, keyspaceName)
 
 	// Checking 100 percent of data is sent quickly
@@ -573,7 +574,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	clusterInstance.VtworkerProcess.Cell = cell1
 
 	// Compare using SplitDiff
-	log.Debug("Running vtworker SplitDiff")
+	log.Info("Running vtworker SplitDiff")
 	err = clusterInstance.VtworkerProcess.ExecuteVtworkerCommand(clusterInstance.GetAndReservePort(),
 		clusterInstance.GetAndReservePort(),
 		"--use_v3_resharding_mode=true",
@@ -584,7 +585,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.Nil(t, err)
 
 	// Compare using MultiSplitDiff
-	log.Debug("Running vtworker MultiSplitDiff")
+	log.Info("Running vtworker MultiSplitDiff")
 	err = clusterInstance.VtworkerProcess.ExecuteVtworkerCommand(clusterInstance.GetAndReservePort(),
 		clusterInstance.GetAndReservePort(),
 		"--use_v3_resharding_mode=true",
@@ -617,9 +618,9 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.Nil(t, err)
 
 	// test data goes through again
-	log.Debug("Inserting lots of data on source shard")
+	log.Info("Inserting lots of data on source shard")
 	insertLots(100, 100, *shard1Master, tableName, fixedParentID, keyspaceName)
-	log.Debug("Checking 100 percent of data was sent quickly")
+	log.Info("Checking 100 percent of data was sent quickly")
 	assert.True(t, checkLotsTimeout(t, 100, 100, tableName, keyspaceName, shardingKeyType))
 
 	sharding.CheckBinlogServerVars(t, *shard1Replica2, 80, 80, false)
@@ -639,7 +640,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 			"VtTabletStreamHealth",
 			"-count", "1", master.Alias)
 		require.Nil(t, err)
-		log.Debug("Got health: ", streamHealth)
+		log.Info("Got health: ", streamHealth)
 
 		var streamHealthResponse querypb.StreamHealthResponse
 		err = json.Unmarshal([]byte(streamHealth), &streamHealthResponse)
@@ -787,7 +788,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	assert.True(t, checkLotsTimeout(t, 100, 200, tableName, keyspaceName, shardingKeyType))
 
 	// Compare using SplitDiff
-	log.Debug("Running vtworker SplitDiff")
+	log.Info("Running vtworker SplitDiff")
 	err = clusterInstance.VtworkerProcess.ExecuteVtworkerCommand(clusterInstance.GetAndReservePort(),
 		clusterInstance.GetAndReservePort(),
 		"--use_v3_resharding_mode=true",
@@ -798,7 +799,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.Nil(t, err)
 
 	// Compare using MultiSplitDiff
-	log.Debug("Running vtworker MultiSplitDiff")
+	log.Info("Running vtworker MultiSplitDiff")
 	err = clusterInstance.VtworkerProcess.ExecuteVtworkerCommand(clusterInstance.GetAndReservePort(),
 		clusterInstance.GetAndReservePort(),
 		"--use_v3_resharding_mode=true",
@@ -973,30 +974,30 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 func insertStartupValues(t *testing.T) {
 	insertSQL := fmt.Sprintf(insertTabletTemplateKsID, "resharding1", fixedParentID, 1, "msg1", key1, key1, 1)
-	sharding.InsertToTablet(t, insertSQL, *shard0.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard0.MasterTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding1", fixedParentID, 2, "msg2", key2, key2, 2)
-	sharding.InsertToTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding1", fixedParentID, 3, "msg3", key3, key3, 3)
-	sharding.InsertToTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding3", fixedParentID, 1, "a", key1, key1, 1)
-	sharding.InsertToTablet(t, insertSQL, *shard0.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard0.MasterTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding3", fixedParentID, 2, "b", key2, key2, 2)
-	sharding.InsertToTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding3", fixedParentID, 3, "c", key3, key3, 3)
-	sharding.InsertToTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "no_pk", fixedParentID, 1, "msg1", key5, key5, 1)
-	sharding.InsertToTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
 }
 
 func insertValue(t *testing.T, tablet *cluster.Vttablet, keyspaceName string, tableName string, id int, msg string, ksID uint64) {
 	insertSQL := fmt.Sprintf(insertTabletTemplateKsID, tableName, fixedParentID, id, msg, ksID, ksID, id)
-	sharding.InsertToTablet(t, insertSQL, *tablet, keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *tablet, keyspaceName, false)
 }
 
 func execMultiShardDmls(t *testing.T, keyspaceName string) {
@@ -1314,7 +1315,7 @@ func insertLots(count uint64, base uint64, vttablet cluster.Vttablet, table stri
 func insertToTabletUsingSameConn(query string, dbConn *mysql.Conn) {
 	_, err := dbConn.ExecuteFetch(query, 1000, true)
 	if err != nil {
-		fmt.Println(err)
+		log.Errorf("error inserting data into tablet, query: %v, error: %v", query, err)
 	}
 }
 

@@ -94,7 +94,7 @@ var (
 // ClusterWrapper common wrapper code for cluster
 func ClusterWrapper(isMulti bool) (int, error) {
 	ClusterInstance = nil
-	ClusterInstance = &cluster.LocalProcessCluster{Cell: cell, Hostname: hostname}
+	ClusterInstance = cluster.NewCluster(cell, hostname)
 
 	// Start topo server
 	if err := ClusterInstance.StartTopo(); err != nil {
@@ -109,15 +109,14 @@ func ClusterWrapper(isMulti bool) (int, error) {
 
 	if err := ClusterInstance.VtctlProcess.CreateKeyspace(keyspaceName1); err != nil {
 		return 1, err
-	} else {
-		ClusterInstance.Keyspaces = append(ClusterInstance.Keyspaces, cluster.Keyspace{Name: keyspaceName1})
 	}
+	ClusterInstance.Keyspaces = append(ClusterInstance.Keyspaces, cluster.Keyspace{Name: keyspaceName1})
+
 	if isMulti {
 		if err := ClusterInstance.VtctlProcess.CreateKeyspace(keyspaceName2); err != nil {
 			return 1, err
-		} else {
-			ClusterInstance.Keyspaces = append(ClusterInstance.Keyspaces, cluster.Keyspace{Name: keyspaceName2})
 		}
+		ClusterInstance.Keyspaces = append(ClusterInstance.Keyspaces, cluster.Keyspace{Name: keyspaceName2})
 	}
 
 	initClusterForInitialSharding(keyspaceName1, []string{"0"}, 3, true, isMulti)
@@ -223,6 +222,7 @@ func AssignMysqlPortFromKs1ToKs2() {
 
 // TestInitialSharding - main test which accepts different params for various test
 func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType querypb.Type, isMulti bool, isExternal bool) {
+	defer cluster.PanicHandler(t)
 	if isExternal {
 		commonTabletArg = append(commonTabletArg, "-db_host", "127.0.0.1")
 		commonTabletArg = append(commonTabletArg, "-disable_active_reparents")
@@ -438,7 +438,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	// Insert row 4 (provokes a delete).
 	var ksid uint64 = 0xD000000000000000
 	insertSQL := fmt.Sprintf(sharding.InsertTabletTemplateKsID, tableName, ksid, "msg4", ksid)
-	sharding.InsertToTablet(t, insertSQL, *shard22.MasterTablet(), keyspaceName, true)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard22.MasterTablet(), keyspaceName, true)
 
 	_ = ClusterInstance.VtworkerProcess.ExecuteCommand("SplitClone",
 		"--exclude_tables", "unrelated",
@@ -449,27 +449,27 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 
 	// check first value is in the left shard
 	for _, tablet := range shard21.Vttablets {
-		sharding.CheckValues(t, *tablet, 0x1000000000000000, "msg1", true, tableName, keyspaceName, keyType)
+		sharding.CheckValues(t, *tablet, 0x1000000000000000, "msg1", true, tableName, keyspaceName, keyType, nil)
 	}
 
 	for _, tablet := range shard22.Vttablets {
-		sharding.CheckValues(t, *tablet, 0x1000000000000000, "msg1", false, tableName, keyspaceName, keyType)
+		sharding.CheckValues(t, *tablet, 0x1000000000000000, "msg1", false, tableName, keyspaceName, keyType, nil)
 	}
 
 	for _, tablet := range shard21.Vttablets {
-		sharding.CheckValues(t, *tablet, 0x9000000000000000, "msg2", false, tableName, keyspaceName, keyType)
+		sharding.CheckValues(t, *tablet, 0x9000000000000000, "msg2", false, tableName, keyspaceName, keyType, nil)
 	}
 
 	for _, tablet := range shard22.Vttablets {
-		sharding.CheckValues(t, *tablet, 0x9000000000000000, "msg2", true, tableName, keyspaceName, keyType)
+		sharding.CheckValues(t, *tablet, 0x9000000000000000, "msg2", true, tableName, keyspaceName, keyType, nil)
 	}
 
 	for _, tablet := range shard21.Vttablets {
-		sharding.CheckValues(t, *tablet, 0xD000000000000000, "msg3", false, tableName, keyspaceName, keyType)
+		sharding.CheckValues(t, *tablet, 0xD000000000000000, "msg3", false, tableName, keyspaceName, keyType, nil)
 	}
 
 	for _, tablet := range shard22.Vttablets {
-		sharding.CheckValues(t, *tablet, 0xD000000000000000, "msg3", true, tableName, keyspaceName, keyType)
+		sharding.CheckValues(t, *tablet, 0xD000000000000000, "msg3", true, tableName, keyspaceName, keyType, nil)
 	}
 
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("ValidateSchemaKeyspace", keyspaceName)

@@ -74,14 +74,6 @@ install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
 	cp "$${VTROOT}/bin/"{mysqlctld,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
-	# config files
-	mkdir -p "$${PREFIX}/src/vitess.io/vitess"
-	cp -R config "$${PREFIX}/src/vitess.io/vitess/"
-	# also symlink config files in the old location
-	ln -sf src/vitess.io/vitess/config "$${PREFIX}/config"
-	# vtctld web UI files
-	mkdir -p "$${PREFIX}/src/vitess.io/vitess/web/vtctld2"
-	cp -R web/vtctld2/app "$${PREFIX}/src/vitess.io/vitess/web/vtctld2/"
 
 parser:
 	make -C go/vt/sqlparser
@@ -165,11 +157,10 @@ endif
 
 PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
-PROTO_PY_OUTS = $(foreach name, $(PROTO_SRC_NAMES), py/vtproto/$(name)_pb2.py)
 PROTO_GO_OUTS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/proto/$(name)/$(name).pb.go)
 
 # This rule rebuilds all the go and python files from the proto definitions for gRPC.
-proto: proto_banner $(PROTO_GO_OUTS) $(PROTO_PY_OUTS)
+proto: proto_banner $(PROTO_GO_OUTS)
 
 proto_banner:
 ifeq (,$(PROTOC_COMMAND))
@@ -179,9 +170,6 @@ endif
 ifndef NOBANNER
 	echo $$(date): Compiling proto definitions
 endif
-
-$(PROTO_PY_OUTS): py/vtproto/%_pb2.py: proto/%.proto
-	$(PROTOC_COMMAND) -Iproto $< --python_out=py/vtproto --grpc_python_out=py/vtproto
 
 # TODO(sougou): find a better way around this temp hack.
 VTTOP=$(VTROOT)/../../..
@@ -284,9 +272,6 @@ docker_lite_alpine:
 	chmod -R o=g *
 	docker build -f docker/lite/Dockerfile.alpine -t vitess/lite:alpine .
 
-docker_guestbook:
-	cd examples/kubernetes/guestbook && ./build.sh
-
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.
 # Example: $ make docker_test flavor=mariadb
@@ -295,12 +280,6 @@ docker_test:
 
 docker_unit_test:
 	go run test.go -flavor $(flavor) unit
-
-# This can be used to rebalance the total average runtime of each group of
-# tests in Travis. The results are saved in test/config.json, which you can
-# then commit and push.
-rebalance_tests:
-	go run test.go -rebalance 5
 
 # Release a version.
 # This will generate a tar.gz file into the releases folder with the current source
@@ -327,11 +306,33 @@ packages: docker_base
 
 tools:
 	echo $$(date): Installing dependencies
-	BUILD_PYTHON=0 ./bootstrap.sh
+	./bootstrap.sh
 
 minimaltools:
 	echo $$(date): Installing minimal dependencies
-	BUILD_PYTHON=0 BUILD_JAVA=0 BUILD_CONSUL=0 ./bootstrap.sh
+	BUILD_CHROME=0 BUILD_JAVA=0 BUILD_CONSUL=0 ./bootstrap.sh
 
 dependency_check:
 	./tools/dependency_check.sh
+
+GEN_BASE_DIR ?= ./go/vt/topo/k8stopo
+
+client_go_gen:
+	echo $$(date): Regenerating client-go code
+	# Delete and re-generate the deepcopy types
+	find $(GEN_BASE_DIR)/apis/topo/v1beta1 -type f -name 'zz_generated*' -exec rm '{}' \;
+	deepcopy-gen -i $(GEN_BASE_DIR)/apis/topo/v1beta1 -O zz_generated.deepcopy -o ./ --bounding-dirs $(GEN_BASE_DIR)/apis --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
+
+	# Delete, generate, and move the client libraries
+	rm -rf go/vt/topo/k8stopo/client
+
+	# There is no way to get client-gen to automatically put files in the right place and still have the right import path so we generate and move them
+
+	# Generate client, informers, and listers
+	client-gen -o ./ --input 'topo/v1beta1' --clientset-name versioned --input-base 'vitess.io/vitess/go/vt/topo/k8stopo/apis/' -i vitess.io/vitess --output-package vitess.io/vitess/go/vt/topo/k8stopo/client/clientset --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
+	lister-gen -o ./ --input-dirs  vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1 --output-package vitess.io/vitess/go/vt/topo/k8stopo/client/listers --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
+	informer-gen -o ./ --input-dirs  vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1 --versioned-clientset-package vitess.io/vitess/go/vt/topo/k8stopo/client/clientset/versioned --listers-package vitess.io/vitess/go/vt/topo/k8stopo/client/listers --output-package vitess.io/vitess/go/vt/topo/k8stopo/client/informers --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
+
+	# Move and cleanup
+	mv vitess.io/vitess/go/vt/topo/k8stopo/client go/vt/topo/k8stopo/
+	rmdir -p vitess.io/vitess/go/vt/topo/k8stopo/

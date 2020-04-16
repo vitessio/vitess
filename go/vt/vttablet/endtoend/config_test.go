@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
@@ -194,6 +195,79 @@ func TestDisableConsolidator(t *testing.T) {
 	}
 }
 
+func TestConsolidatorReplicasOnly(t *testing.T) {
+	totalConsolidationsTag := "Waits/Histograms/Consolidations/inf"
+	initial := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		framework.NewClient().Execute("select sleep(0.5) from dual", nil)
+		wg.Done()
+	}()
+	go func() {
+		framework.NewClient().Execute("select sleep(0.5) from dual", nil)
+		wg.Done()
+	}()
+	wg.Wait()
+	afterOne := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
+	if initial+1 != afterOne {
+		t.Errorf("expected one consolidation, but got: before consolidation count: %v; after consolidation count: %v", initial, afterOne)
+	}
+
+	framework.Server.SetConsolidatorEnabled(false)
+	defer framework.Server.SetConsolidatorEnabled(true)
+	framework.Server.SetConsolidatorReplicasEnabled(true)
+	defer framework.Server.SetConsolidatorReplicasEnabled(false)
+
+	// master should not do query consolidation
+	var wg2 sync.WaitGroup
+	wg2.Add(2)
+	go func() {
+		framework.NewClient().Execute("select sleep(0.5) from dual", nil)
+		wg2.Done()
+	}()
+	go func() {
+		framework.NewClient().Execute("select sleep(0.5) from dual", nil)
+		wg2.Done()
+	}()
+	wg2.Wait()
+	noNewConsolidations := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
+	if afterOne != noNewConsolidations {
+		t.Errorf("expected no new consolidations, but got: before consolidation count: %v; after consolidation count: %v", afterOne, noNewConsolidations)
+	}
+
+	// become a replica, where query consolidation should happen
+	client := framework.NewClientWithTabletType(topodatapb.TabletType_REPLICA)
+
+	err := client.SetServingType(topodatapb.TabletType_REPLICA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		err = client.SetServingType(topodatapb.TabletType_MASTER)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	initial = framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
+	var wg3 sync.WaitGroup
+	wg3.Add(2)
+	go func() {
+		client.Execute("select sleep(0.5) from dual", nil)
+		wg3.Done()
+	}()
+	go func() {
+		client.Execute("select sleep(0.5) from dual", nil)
+		wg3.Done()
+	}()
+	wg3.Wait()
+	afterOne = framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
+	if initial+1 != afterOne {
+		t.Errorf("expected another consolidation, but got: before consolidation count: %v; after consolidation count: %v", initial, afterOne)
+	}
+}
+
 func TestQueryPlanCache(t *testing.T) {
 	defer framework.Server.SetQueryPlanCacheCap(framework.Server.QueryPlanCacheCap())
 	framework.Server.SetQueryPlanCacheCap(1)
@@ -286,106 +360,6 @@ func TestWarnResultSize(t *testing.T) {
 	}
 }
 
-func TestMaxDMLRows(t *testing.T) {
-	client := framework.NewClient()
-	_, err := client.Execute(
-		"insert into vitess_a(eid, id, name, foo) values "+
-			"(3, 1, '', ''), (3, 2, '', ''), (3, 3, '', '')",
-		nil,
-	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	catcher := framework.NewQueryCatcher()
-	defer catcher.Close()
-
-	// Verify all three rows are updated in a single DML.
-	_, err = client.Execute("update vitess_a set foo='fghi' where eid = 3", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	queryInfo, err := catcher.Next()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	want := "begin; " +
-		"select eid, id from vitess_a where eid = 3 limit 10001 for update; " +
-		"update vitess_a set foo = 'fghi' where " +
-		"(eid = 3 and id = 1) or (eid = 3 and id = 2) or (eid = 3 and id = 3); " +
-		"commit"
-	if queryInfo.RewrittenSQL() != want {
-		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
-	}
-
-	// Verify that rows get split, and if pk changes, those values are also
-	// split correctly.
-	defer framework.Server.SetMaxDMLRows(framework.Server.MaxDMLRows())
-	framework.Server.SetMaxDMLRows(2)
-	_, err = client.Execute("update vitess_a set eid=2 where eid = 3", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	queryInfo, err = catcher.Next()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	want = "begin; " +
-		"select eid, id from vitess_a where eid = 3 limit 10001 for update; " +
-		"update vitess_a set eid = 2 where " +
-		"(eid = 3 and id = 1) or (eid = 3 and id = 2); " +
-		"update vitess_a set eid = 2 where (eid = 3 and id = 3); " +
-		"commit"
-	if queryInfo.RewrittenSQL() != want {
-		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
-	}
-
-	// Verify that a normal update is split correctly.
-	_, err = client.Execute("update vitess_a set foo='fghi' where eid = 2", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	queryInfo, err = catcher.Next()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	want = "begin; " +
-		"select eid, id from vitess_a where eid = 2 limit 10001 for update; " +
-		"update vitess_a set foo = 'fghi' where (eid = 2 and id = 1) or " +
-		"(eid = 2 and id = 2); " +
-		"update vitess_a set foo = 'fghi' where (eid = 2 and id = 3); " +
-		"commit"
-	if queryInfo.RewrittenSQL() != want {
-		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
-	}
-
-	// Verufy that a delete is split correctly.
-	_, err = client.Execute("delete from vitess_a where eid = 2", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	queryInfo, err = catcher.Next()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	want = "begin; " +
-		"select eid, id from vitess_a where eid = 2 limit 10001 for update; " +
-		"delete from vitess_a where (eid = 2 and id = 1) or (eid = 2 and id = 2); " +
-		"delete from vitess_a where (eid = 2 and id = 3); " +
-		"commit"
-	if queryInfo.RewrittenSQL() != want {
-		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
-	}
-}
-
 func TestQueryTimeout(t *testing.T) {
 	vstart := framework.DebugVars()
 	defer framework.Server.QueryTimeout.Set(framework.Server.QueryTimeout.Get())
@@ -398,8 +372,8 @@ func TestQueryTimeout(t *testing.T) {
 		return
 	}
 	_, err = client.Execute("select sleep(1) from vitess_test", nil)
-	if code := vterrors.Code(err); code != vtrpcpb.Code_DEADLINE_EXCEEDED {
-		t.Errorf("Error code: %v, want %v", code, vtrpcpb.Code_DEADLINE_EXCEEDED)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_CANCELED {
+		t.Errorf("Error code: %v, want %v", code, vtrpcpb.Code_CANCELED)
 	}
 	_, err = client.Execute("select 1 from dual", nil)
 	if code := vterrors.Code(err); code != vtrpcpb.Code_ABORTED {
@@ -461,8 +435,8 @@ func TestQueryPoolTimeout(t *testing.T) {
 	framework.Server.QueryTimeout.Set(100 * time.Millisecond)
 
 	_, err = client.Execute("select sleep(1) from vitess_test", nil)
-	if code := vterrors.Code(err); code != vtrpcpb.Code_DEADLINE_EXCEEDED {
-		t.Errorf("Error code: %v, want %v", code, vtrpcpb.Code_DEADLINE_EXCEEDED)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_CANCELED {
+		t.Errorf("Error code: %v, want %v", code, vtrpcpb.Code_CANCELED)
 	}
 
 	vend := framework.DebugVars()

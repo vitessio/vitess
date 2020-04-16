@@ -1,61 +1,17 @@
 {
 	"Tests": {
-		"check_make_parser": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"tools/check_make_parser.sh"
-			],
-			"Manual": false,
-			"Shard": 5,
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"check_make_visitor": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"misc/git/hooks/visitorgen"
-			],
-			"Manual": false,
-			"Shard": 5,
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"java": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"make",
-				"java_test"
-			],
-			"Manual": false,
-			"Shard": 0,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"legacy_resharding": {
-			"File": "legacy_resharding.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 1,
-			"RetryMax": 0,
-			"Tags": [
-				"worker_test"
-			]
-		},
-		"local_example": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"test/local_example.sh"
-			],
-			"Manual": false,
-			"Shard": 5,
-			"RetryMax": 0,
-			"Tags": []
-		},
+        "java": {
+          "File": "",
+          "Args": [],
+          "Command": [
+            "make",
+            "java_test"
+          ],
+          "Manual": false,
+          "Shard": 25,
+          "RetryMax": 0,
+          "Tags": []
+        },
 		"client_test": {
 			"File": "",
 			"Args": [],
@@ -63,34 +19,42 @@
 					"test/client_test.sh"
 			],
 			"Manual": false,
-			"Shard": 2,
+			"Shard": 25,
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"python_client": {
-			"File": "python_client_test.py",
+		"e2e_race": {
+			"File": "",
 			"Args": [],
-			"Command": [],
+			"Command": [
+				"make",
+				"e2e_test_race"
+			],
 			"Manual": false,
-			"Shard": 1,
+			"Shard": -1,
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"update_stream": {
-			"File": "update_stream.py",
+		"unit": {
+			"File": "",
 			"Args": [],
-			"Command": [],
+			"Command": [
+				"tools/unit_test_runner.sh"
+			],
 			"Manual": false,
-			"Shard": 2,
+			"Shard": -1,
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"update_stream_rbr": {
-			"File": "update_stream_rbr.py",
+		"unit_race": {
+			"File": "",
 			"Args": [],
-			"Command": [],
+			"Command": [
+				"make",
+				"unit_test_race"
+			],
 			"Manual": false,
-			"Shard": 2,
+			"Shard": 5,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -157,15 +121,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"binlog": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/binlog"],
-			"Command": [],
-			"Manual": false,
-			"Shard": 12,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"cellalias": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/cellalias"],
@@ -189,7 +144,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/mysqlserver"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 12,
+			"Shard": 24,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -252,7 +207,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/initialsharding/multi"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 14,
+			"Shard": -1,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -400,7 +355,7 @@
 			],
 			"Command": [],
 			"Manual": false,
-			"Shard": 24,
+			"Shard": 25,
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"

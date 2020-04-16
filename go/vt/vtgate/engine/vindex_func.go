@@ -42,6 +42,9 @@ type VindexFunc struct {
 
 	// VindexFunc does not take inputs
 	noInputs
+
+	// VindexFunc does not need to work inside a tx
+	noTxNeeded
 }
 
 // MarshalJSON serializes the VindexFunc into a JSON representation.
@@ -192,4 +195,8 @@ func (vf *VindexFunc) buildRow(id sqltypes.Value, ksid []byte, kr *topodatapb.Ke
 		}
 	}
 	return row
+}
+
+func (vf *VindexFunc) description() PrimitiveDescription {
+	return PrimitiveDescription{OperatorType: "vindexfunc - not implemented"}
 }

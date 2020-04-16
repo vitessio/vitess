@@ -48,6 +48,10 @@ func newVCopier(vr *vreplicator) *vcopier {
 	}
 }
 
+// initTablesForCopy (phase 1) identifies the list of tables to be copied and inserts
+// them into copy_state. If there are no tables to copy, it explicitly stops
+// the stream. Otherwise, the copy phase (phase 2) may think that all tables are copied.
+// This will cause us to go into the replication phase (phase 3) without a starting position.
 func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 	defer vc.vr.dbClient.Rollback()
 
@@ -81,6 +85,23 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 	return vc.vr.dbClient.Commit()
 }
 
+// copyNext performs a multi-step process on each iteration.
+// Step 1: catchup: During this step, it replicates from the source from the last position.
+// This is a partial replication: events are applied only to tables or subsets of tables
+// that have already been copied. This goes on until replication catches up.
+// Step 2: Start streaming. This returns the initial field info along with the GTID
+// as of which the snapshot is being streamed.
+// Step 3: fastForward: The target is fast-forwarded to the GTID obtained. This should
+// be quick because we were mostly caught up as of step 1. This ensures that the
+// snapshot of the rows are consistent with the position where the target stopped.
+// Step 4: copy rows: Copy the next set of rows from the stream that was started in Step 2.
+// This goes on until all rows are copied, or a timeout. In both cases, copyNext
+// returns, and the replicator decides whether to invoke copyNext again, or to
+// go to the next phase if all the copying is done.
+// Steps 2, 3 and 4 are performed by copyTable.
+// copyNext also builds the copyState metadata that contains the tables and their last
+// primary key that was copied. A nil Result means that nothing has been copied.
+// A table that was fully copied is removed from copyState.
 func (vc *vcopier) copyNext(ctx context.Context, settings binlogplayer.VRSettings) error {
 	qr, err := vc.vr.dbClient.Execute(fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id=%d", vc.vr.id))
 	if err != nil {
@@ -112,6 +133,9 @@ func (vc *vcopier) copyNext(ctx context.Context, settings binlogplayer.VRSetting
 	return vc.copyTable(ctx, tableToCopy, copyState)
 }
 
+// catchup replays events to the subset of the tables that have been copied
+// until replication is caught up. In order to stop, the seconds behind master has
+// to fall below replicationLagTolerance.
 func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.Result) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -159,6 +183,9 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 	}
 }
 
+// copyTable performs the synchronized copy of the next set of rows from
+// the current table being copied. Each packet received is transactionally
+// committed with the lastpk. This allows for consistent resumability.
 func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState map[string]*sqltypes.Result) error {
 	defer vc.vr.dbClient.Rollback()
 

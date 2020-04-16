@@ -98,6 +98,7 @@ var (
 )
 
 func TestSecureTransport(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	flag.Parse()
 
 	// initialize cluster
@@ -178,9 +179,10 @@ func TestSecureTransport(t *testing.T) {
 	ctx := context.Background()
 	request := getRequest("select * from vt_insert_test")
 	vc, err := getVitessClient(grpcAddress)
-	require.Nil(t, nil)
+	require.Nil(t, err)
 
 	qr, err := vc.Execute(ctx, request)
+	require.Nil(t, err)
 	err = vterrors.FromVTRPC(qr.Error)
 	require.Nil(t, err)
 
@@ -190,17 +192,18 @@ func TestSecureTransport(t *testing.T) {
 	vc, err = getVitessClient(grpcAddress)
 	require.Nil(t, err)
 	qr, err = vc.Execute(ctx, request)
+	require.Nil(t, err)
 	err = vterrors.FromVTRPC(qr.Error)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "table acl error")
-	assert.Contains(t, err.Error(), "cannot run PASS_SELECT on table")
+	assert.Contains(t, err.Error(), "cannot run Select on table")
 
 	// now restart vtgate in the mode where we don't use SSL
 	// for client connections, but we copy effective caller id
 	// into immediate caller id.
 	clusterInstance.VtGateExtraArgs = []string{"-grpc_use_effective_callerid"}
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, tabletConnExtraArgs("vttablet-client-1")...)
-	err = clusterInstance.ReStartVtgate()
+	err = clusterInstance.RestartVtgate()
 	require.Nil(t, err)
 
 	grpcAddress = fmt.Sprintf("%s:%d", "localhost", clusterInstance.VtgateProcess.GrpcPort)
@@ -214,10 +217,11 @@ func TestSecureTransport(t *testing.T) {
 	// test with empty effective caller Id
 	request = getRequest("select * from vt_insert_test")
 	qr, err = vc.Execute(ctx, request)
+	require.Nil(t, err)
 	err = vterrors.FromVTRPC(qr.Error)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "table acl error")
-	assert.Contains(t, err.Error(), "cannot run PASS_SELECT on table")
+	assert.Contains(t, err.Error(), "cannot run Select on table")
 
 	// 'vtgate client 1' is authorized to access vt_insert_test
 	callerID := &vtrpc.CallerID{
@@ -225,6 +229,7 @@ func TestSecureTransport(t *testing.T) {
 	}
 	request = getRequestWithCallerID(callerID, "select * from vt_insert_test")
 	qr, err = vc.Execute(ctx, request)
+	require.Nil(t, err)
 	err = vterrors.FromVTRPC(qr.Error)
 	require.Nil(t, err)
 
@@ -234,10 +239,11 @@ func TestSecureTransport(t *testing.T) {
 	}
 	request = getRequestWithCallerID(callerID, "select * from vt_insert_test")
 	qr, err = vc.Execute(ctx, request)
+	require.Nil(t, err)
 	err = vterrors.FromVTRPC(qr.Error)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "table acl error")
-	assert.Contains(t, err.Error(), "cannot run PASS_SELECT on table")
+	assert.Contains(t, err.Error(), "cannot run Select on table")
 
 	clusterInstance.Teardown()
 }

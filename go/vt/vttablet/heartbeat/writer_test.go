@@ -18,7 +18,6 @@ package heartbeat
 
 import (
 	"fmt"
-	"math/rand"
 	"testing"
 	"time"
 
@@ -48,7 +47,6 @@ func TestCreateSchema(t *testing.T) {
 	defer tw.Close()
 	writes.Reset()
 
-	db.AddQuery(sqlTurnoffBinlog, &sqltypes.Result{})
 	db.AddQuery(fmt.Sprintf(sqlCreateHeartbeatTable, tw.dbName), &sqltypes.Result{})
 	db.AddQuery(fmt.Sprintf("INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%d, %d, '%s') ON DUPLICATE KEY UPDATE ts=VALUES(ts)", tw.dbName, now.UnixNano(), tw.tabletAlias.Uid, tw.keyspaceShard), &sqltypes.Result{})
 	if err := tw.initializeTables(db.ConnParams()); err == nil {
@@ -106,16 +104,14 @@ func TestWriteHeartbeatError(t *testing.T) {
 }
 
 func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *Writer {
-	randID := rand.Int63()
 	config := tabletenv.DefaultQsConfig
 	config.HeartbeatEnable = true
-	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 
-	dbc := dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
+	params, _ := db.ConnParams().MysqlParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
-	tw := NewWriter(&fakeMysqlChecker{},
-		topodatapb.TabletAlias{Cell: "test", Uid: 1111},
-		config)
+	tw := NewWriter(tabletenv.NewTestEnv(&config, nil, "WriterTest"), topodatapb.TabletAlias{Cell: "test", Uid: 1111})
 	tw.dbName = sqlescape.EscapeID(dbc.SidecarDBName.Get())
 	tw.keyspaceShard = "test:0"
 	tw.now = nowFunc
@@ -123,7 +119,3 @@ func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *Writer {
 
 	return tw
 }
-
-type fakeMysqlChecker struct{}
-
-func (f fakeMysqlChecker) CheckMySQL() {}

@@ -26,7 +26,9 @@ for tablet in 100 200 300 400; do
   # The zero tablet is up. Try to shutdown 0-2 tablet + mysqlctl
   for i in 0 1 2; do
    uid=$[$tablet + $i]
+   echo "Shutting down tablet zone1-$uid"
    CELL=zone1 TABLET_UID=$uid ./scripts/vttablet-down.sh
+   echo "Shutting down mysql zone1-$uid"
    CELL=zone1 TABLET_UID=$uid ./scripts/mysqlctl-down.sh
   done
  fi
@@ -36,6 +38,8 @@ done
 
 if [ "${TOPO}" = "zk2" ]; then
     CELL=zone1 ./scripts/zk-down.sh
+elif [ "${TOPO}" = "k8s" ]; then
+    CELL=zone1 ./scripts/k3s-down.sh
 else
     CELL=zone1 ./scripts/etcd-down.sh
 fi

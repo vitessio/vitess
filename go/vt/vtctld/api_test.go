@@ -193,20 +193,14 @@ func TestAPI(t *testing.T) {
 		{"GET", "tablets/?shard=ks1%2F80-&cell=cell1", "", `[]`},
 		{"GET", "tablets/cell1-100", "", `{
 				"alias": {"cell": "cell1", "uid": 100},
-				"hostname": "",
 				"port_map": {"vt": 100},
 				"keyspace": "ks1",
 				"shard": "-80",
 				"key_range": {
-					"start": null,
 					"end": "gA=="
 				},
 				"type": 2,
-				"db_name_override": "",
-				"tags": {},
-				"mysql_hostname":"",
-				"mysql_port":0,
-				"master_term_start_time":null
+				"url":"http://:100"
 			}`},
 		{"GET", "tablets/nonexistent-999", "", "404 page not found"},
 		{"POST", "tablets/cell1-100?action=TestTabletAction", "", `{

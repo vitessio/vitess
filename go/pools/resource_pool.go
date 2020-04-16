@@ -71,6 +71,7 @@ type ResourcePool struct {
 	resources chan resourceWrapper
 	factory   Factory
 	idleTimer *timer.Timer
+	logWait   func(time.Time)
 }
 
 type resourceWrapper struct {
@@ -89,7 +90,7 @@ type resourceWrapper struct {
 // An idleTimeout of 0 means that there is no timeout.
 // A non-zero value of prefillParallelism causes the pool to be pre-filled.
 // The value specifies how many resources can be opened in parallel.
-func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration, prefillParallelism int) *ResourcePool {
+func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration, prefillParallelism int, logWait func(time.Time)) *ResourcePool {
 	if capacity <= 0 || maxCap <= 0 || capacity > maxCap {
 		panic(errors.New("invalid/out of range capacity"))
 	}
@@ -99,6 +100,7 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 		available:   sync2.NewAtomicInt64(int64(capacity)),
 		capacity:    sync2.NewAtomicInt64(int64(capacity)),
 		idleTimeout: sync2.NewAtomicDuration(idleTimeout),
+		logWait:     logWait,
 	}
 	for i := 0; i < capacity; i++ {
 		rp.resources <- resourceWrapper{}
@@ -325,6 +327,9 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 func (rp *ResourcePool) recordWait(start time.Time) {
 	rp.waitCount.Add(1)
 	rp.waitTime.Add(time.Since(start))
+	if rp.logWait != nil {
+		rp.logWait(start)
+	}
 }
 
 // SetIdleTimeout sets the idle timeout. It can only be used if there was an

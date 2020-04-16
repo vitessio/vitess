@@ -18,10 +18,11 @@ package engine
 
 import (
 	"container/heap"
-	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
 	"sort"
+	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -39,23 +40,6 @@ type MemorySort struct {
 	// in the final result. Rest of the columns are truncated
 	// from the result received. If 0, no truncation happens.
 	TruncateColumnCount int `json:",omitempty"`
-}
-
-// MarshalJSON serializes the MemorySort into a JSON representation.
-// It's used for testing and diagnostics.
-func (ms *MemorySort) MarshalJSON() ([]byte, error) {
-	marshalMemorySort := struct {
-		Opcode  string
-		MaxRows sqltypes.PlanValue
-		OrderBy []OrderbyParams
-		Input   Primitive
-	}{
-		Opcode:  "MemorySort",
-		MaxRows: ms.UpperLimit,
-		OrderBy: ms.OrderBy,
-		Input:   ms.Input,
-	}
-	return json.Marshal(marshalMemorySort)
 }
 
 // RouteType returns a description of the query routing type used by the primitive.
@@ -165,6 +149,10 @@ func (ms *MemorySort) Inputs() []Primitive {
 	return []Primitive{ms.Input}
 }
 
+func (ms *MemorySort) NeedsTransaction() bool {
+	return ms.Input.NeedsTransaction()
+}
+
 func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int, error) {
 	resolved, err := ms.UpperLimit.ResolveValue(bindVars)
 	if err != nil {
@@ -182,6 +170,44 @@ func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int
 		return 0, fmt.Errorf("requested limit is out of range: %v", num)
 	}
 	return count, nil
+}
+
+func (ms *MemorySort) description() PrimitiveDescription {
+	orderByIndexes := GenericJoin(ms.OrderBy, orderByParamsToString)
+	value := ms.UpperLimit.Value
+	other := map[string]interface{}{"OrderBy": orderByIndexes}
+	if !value.IsNull() {
+		other["UpperLimit"] = value.String()
+	}
+	return PrimitiveDescription{
+		OperatorType: "Sort",
+		Variant:      "Memory",
+		Other:        other,
+	}
+}
+
+func orderByParamsToString(i interface{}) string {
+	return i.(OrderbyParams).String()
+}
+
+//GenericJoin will iterate over arrays, slices or maps, and executes the f function to get a
+//string representation of each element, and then uses strings.Join() join all the strings into a single one
+func GenericJoin(input interface{}, f func(interface{}) string) string {
+	sl := reflect.ValueOf(input)
+	var keys []string
+	switch sl.Kind() {
+	case reflect.Slice:
+		for i := 0; i < sl.Len(); i++ {
+			keys = append(keys, f(sl.Index(i).Interface()))
+		}
+	case reflect.Map:
+		for _, k := range sl.MapKeys() {
+			keys = append(keys, f(k.Interface()))
+		}
+	default:
+		panic("GenericJoin doesn't know how to deal with " + sl.Kind().String())
+	}
+	return strings.Join(keys, ", ")
 }
 
 // sortHeap is sorted based on the orderBy params.

@@ -44,6 +44,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
@@ -97,6 +98,7 @@ func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 }
 
 func TestTransactionRollBackWhenShutDown(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
@@ -112,7 +114,7 @@ func TestTransactionRollBackWhenShutDown(t *testing.T) {
 	exec(t, conn, "insert into buffer(id, msg) values(33,'mark')")
 
 	// Enforce a restart to enforce rollback
-	if err = clusterInstance.ReStartVtgate(); err != nil {
+	if err = clusterInstance.RestartVtgate(); err != nil {
 		t.Errorf("Fail to re-start vtgate: %v", err)
 	}
 
