@@ -36,17 +36,51 @@ var (
 	baseConfig = mysql.ConnParams{}
 )
 
+// DB contains the connection parameters and user credentials
+// that can be initialized through a yaml file.
+type DB struct {
+	Socket                     string     `json:"socket,omitempty"`
+	Host                       string     `json:"host,omitempty"`
+	Port                       int        `json:"port,omitempty"`
+	CharSet                    string     `json:"charSet,omitempty"`
+	Flags                      uint64     `json:"flags,omitempty"`
+	Flavor                     string     `json:"flavor,omitempty"`
+	SslCa                      string     `json:"sslCa,omitempty"`
+	SslCaPath                  string     `json:"sslCaPath,omitempty"`
+	SslCert                    string     `json:"sslCert,omitempty"`
+	SslKey                     string     `json:"sslKey,omitempty"`
+	ServerName                 string     `json:"serverName,omitempty"`
+	ConnectTimeoutMilliseconds int        `json:"connectTimeoutMilliseconds,omitempty"`
+	App                        UserConfig `json:"app,omitempty"`
+	Dba                        UserConfig `json:"dba,omitempty"`
+	Filtered                   UserConfig `json:"filtered,omitempty"`
+	Repl                       UserConfig `json:"repl,omitempty"`
+	Appdebug                   UserConfig `json:"appdebug,omitempty"`
+	Allprivs                   UserConfig `json:"allprivs,omitempty"`
+
+	DBName        sync2.AtomicString `json:"-"`
+	SidecarDBName sync2.AtomicString `json:"-"`
+}
+
+// UserConfig contains user-specific configs.
+type UserConfig struct {
+	User      string `json:"user,omitempty"`
+	Password  string `json:"password,omitempty"`
+	UseSSL    bool   `json:"useSsl,omitempty"`
+	PreferTCP bool   `json:"preferTcp,omitempty"`
+}
+
 // DBConfigs stores all the data needed to build various connection
 // parameters for the db. It stores credentials for app, appdebug,
 // allprivs, dba, filtered and repl users.
 // It contains other connection parameters like socket, charset, etc.
 // It also stores the default db name, which it can combine with the
 // rest of the data to build db-sepcific connection parameters.
-// It also supplies the SidecarDBName. This is currently hardcoded
-// to "_vt", but will soon become customizable.
-// The life-cycle of this package is as follows:
+// It also supplies the SidecarDBName. This is hardcoded to "_vt".
+//
+// The legacy way of initializing is as follows:
 // App must call RegisterFlags to request the types of connections
-// it wants support for. This must be done before involing flags.Parse.
+// it wants support for. This must be done before invoking flags.Parse.
 // After flag parsing, app invokes the Init function, which will return
 // a DBConfigs object.
 // The app must store the DBConfigs object internally, and use it to
@@ -139,8 +173,6 @@ func registerPerUserFlags(dbc *userConfig, userKey string) {
 // Connector contains Connection Parameters for mysql connection
 type Connector struct {
 	connParams *mysql.ConnParams
-	dbName     string
-	host       string
 }
 
 // New initializes a ConnParams from mysql connection parameters

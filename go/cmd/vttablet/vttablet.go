@@ -22,7 +22,6 @@ import (
 	"io/ioutil"
 
 	"golang.org/x/net/context"
-	"sigs.k8s.io/yaml"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -34,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/yaml2"
 )
 
 var (
@@ -67,10 +67,10 @@ func main() {
 		if err != nil {
 			log.Exitf("error reading config file %s: %v", *tabletConfig, err)
 		}
-		if err := yaml.Unmarshal(bytes, config); err != nil {
+		if err := yaml2.Unmarshal(bytes, config); err != nil {
 			log.Exitf("error parsing config file %s: %v", bytes, err)
 		}
-		gotBytes, _ := yaml.Marshal(config)
+		gotBytes, _ := yaml2.Marshal(config)
 		log.Infof("Loaded config file %s successfully:\n%s", *tabletConfig, gotBytes)
 	}
 
