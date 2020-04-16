@@ -448,7 +448,7 @@ func (tme *testShardMigraterEnv) expectStartReverseVReplication() {
 	}
 }
 
-func (tme *testShardMigraterEnv) expectDeleteTargetVReplication() {
+func (tme *testShardMigraterEnv) expectFrozenTargetVReplication() {
 	// NOTE: this is not a faithful reproduction of what should happen.
 	// The ids returned are not accurate.
 	for _, dbclient := range tme.dbTargetClients {
@@ -456,12 +456,16 @@ func (tme *testShardMigraterEnv) expectDeleteTargetVReplication() {
 		dbclient.addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1, 2)", &sqltypes.Result{}, nil)
 		dbclient.addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
 		dbclient.addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+	}
+}
 
+func (tme *testShardMigraterEnv) expectDeleteTargetVReplication() {
+	// NOTE: this is not a faithful reproduction of what should happen.
+	// The ids returned are not accurate.
+	for _, dbclient := range tme.dbTargetClients {
 		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
 		dbclient.addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
 		dbclient.addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
-
-		dbclient.addQuery("select 1 from _vt.vreplication where db_name='vt_ks' and workflow='test'", resultid12, nil)
 	}
 }
 

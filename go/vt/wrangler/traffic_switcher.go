@@ -324,7 +324,7 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow st
 		ctx = tctx
 	}
 	if err := sw.validateWorkflowHasCompleted(ctx); err != nil {
-		wr.Logger().Errorf("Workflow has not completed, cannot DropSources\n%v\n", err)
+		wr.Logger().Errorf("Workflow has not completed, cannot DropSources: %v", err)
 		return nil, err
 	}
 	switch ts.migrationType {
@@ -1066,21 +1066,28 @@ func (ts *trafficSwitcher) validateWorkflowHasCompleted(ctx context.Context) err
 func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) error {
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
-	_ = ts.forAllSources(func(source *tsSource) error {
-		wg.Add(1)
-		if ts.migrationType == binlogdatapb.MigrationType_SHARDS {
+	if ts.migrationType == binlogdatapb.MigrationType_SHARDS {
+		_ = ts.forAllSources(func(source *tsSource) error {
+			wg.Add(1)
 			if source.si.IsMasterServing {
 				rec.RecordError(fmt.Errorf(fmt.Sprintf("Shard %s is still serving", source.si.ShardName())))
 			}
-		}
-		query := fmt.Sprintf("select 1 from _vt.vreplication where db_name='%s' and workflow='%s'", source.master.DbName(), ts.workflow)
-		rs, _ := ts.wr.VReplicationExec(ctx, source.master.Alias, query)
-		if len(rs.Rows) > 0 {
-			rec.RecordError(fmt.Errorf("vreplication streams are not deleted from %d", source.master.Alias.Uid))
-		}
-		wg.Done()
-		return nil
-	})
+			wg.Done()
+			return nil
+		})
+	} else {
+		_ = ts.forAllTargets(func(target *tsTarget) error {
+			wg.Add(1)
+			query := fmt.Sprintf("select 1 from _vt.vreplication where db_name='%s' and workflow='%s' and message!='FROZEN'", target.master.DbName(), ts.workflow)
+			rs, _ := ts.wr.VReplicationExec(ctx, target.master.Alias, query)
+			if len(rs.Rows) > 0 {
+				rec.RecordError(fmt.Errorf("vreplication streams are not frozen on tablet %d", target.master.Alias.Uid))
+			}
+			wg.Done()
+			return nil
+		})
+	}
+
 	//check if table is routable
 	wg.Wait()
 	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
@@ -1151,7 +1158,9 @@ func (ts *trafficSwitcher) freezeTargetVReplication(ctx context.Context) error {
 func (ts *trafficSwitcher) dropTargetVReplicationStreams(ctx context.Context) error {
 	return ts.forAllTargets(func(target *tsTarget) error {
 		ts.wr.Logger().Infof("Delete target streams for workflow %s db_name %s", ts.workflow, target.master.DbName())
+		fmt.Printf("Delete target streams for workflow %s db_name %s tablet %d\n", ts.workflow, target.master.DbName(), target.master.Alias.Uid)
 		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(ts.workflow))
+		fmt.Println(query)
 		_, err := ts.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
 		return err
 	})
