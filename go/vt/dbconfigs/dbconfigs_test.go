@@ -25,7 +25,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/yaml2"
 )
 
 func TestRegisterFlagsWithSomeFlags(t *testing.T) {
@@ -426,4 +429,59 @@ func saveDBConfigs() (restore func()) {
 		dbConfigs.SidecarDBName.Set(savedDBConfigs.SidecarDBName.Get())
 		baseConfig = savedBaseConfig
 	}
+}
+
+func TestYaml(t *testing.T) {
+	db := DB{
+		Socket: "a",
+		Port:   1,
+		Flags:  20,
+		App: UserConfig{
+			User:   "vt_app",
+			UseSSL: true,
+		},
+		Dba: UserConfig{
+			User: "vt_dba",
+		},
+	}
+	gotBytes, err := yaml2.Marshal(&db)
+	require.NoError(t, err)
+	wantBytes := `allprivs: {}
+app:
+  useSsl: true
+  user: vt_app
+appdebug: {}
+dba:
+  user: vt_dba
+filtered: {}
+flags: 20
+port: 1
+repl: {}
+socket: a
+`
+	assert.Equal(t, wantBytes, string(gotBytes))
+
+	inBytes := []byte(`socket: a
+port: 1
+flags: 20
+app:
+  user: vt_app
+  useSsl: true
+  preferTCP: false
+dba:
+  user: vt_dba
+`)
+	gotdb := DB{
+		Port:  1,
+		Flags: 20,
+		App: UserConfig{
+			PreferTCP: true,
+		},
+		Dba: UserConfig{
+			User: "aaa",
+		},
+	}
+	err = yaml2.Unmarshal(inBytes, &gotdb)
+	require.NoError(t, err)
+	assert.Equal(t, &db, &gotdb)
 }

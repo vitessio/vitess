@@ -21,7 +21,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"sigs.k8s.io/yaml"
+	"vitess.io/vitess/go/yaml2"
 )
 
 func TestConfigParse(t *testing.T) {
@@ -34,7 +34,7 @@ func TestConfigParse(t *testing.T) {
 			MaxWaiters:         40,
 		},
 	}
-	gotBytes, err := yaml.Marshal(&cfg)
+	gotBytes, err := yaml2.Marshal(&cfg)
 	require.NoError(t, err)
 	wantBytes := `hotRowProtection: {}
 olapReadPool: {}
@@ -57,13 +57,13 @@ txPool: {}
   maxWaiters: 40
 `)
 	gotCfg := cfg
-	err = yaml.Unmarshal(inBytes, &gotCfg)
+	err = yaml2.Unmarshal(inBytes, &gotCfg)
 	require.NoError(t, err)
 	assert.Equal(t, cfg, gotCfg)
 }
 
 func TestDefaultConfig(t *testing.T) {
-	gotBytes, err := yaml.Marshal(NewDefaultConfig())
+	gotBytes, err := yaml2.Marshal(NewDefaultConfig())
 	require.NoError(t, err)
 	want := `cacheResultFields: true
 consolidator: enable
