@@ -82,17 +82,6 @@ func validateQuery(t *testing.T, conn *mysql.Conn, database string, query string
 	return ""
 }
 
-func validateQueryInTablet(t *testing.T, vttablet *cluster.VttabletProcess, database string, query string, want string) string {
-	qr, err := vttablet.QueryTabletWithDB(query, database)
-	if err != nil {
-		return err.Error()
-	}
-	if got, want := fmt.Sprintf("%v", qr.Rows), want; got != want {
-		return fmt.Sprintf("got:\n%v want\n%v", got, want)
-	}
-	return ""
-}
-
 func validateCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, database string, table string, want int) string {
 	query := fmt.Sprintf("select count(*) from %s", table)
 	qr, err := vttablet.QueryTablet(query, database, true)
@@ -175,3 +164,21 @@ func getQueryCount(url string, query string) int {
 	}
 	return count
 }
+
+/*func expectBlacklistedTables(t *testing.T, vc *VitessCluster, ksShard string, tables []string) (bool, error) {
+	var output string
+	var err error
+	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetShard", ksShard); err != nil {
+		t.Fatalf("GetShard error: %s\n", output)
+	}
+	assert.NotEmpty(t, output)
+	replacer := strings.NewReplacer("\n", "", "\"", "", " ", "")
+	output = replacer.Replace(output)
+	if want == "" && !strings.Contains(output, "blacklisted_tables") {
+		return true, nil
+	}
+	if want != "" && strings.Contains(output, )
+	return false, nil
+
+
+}*/
