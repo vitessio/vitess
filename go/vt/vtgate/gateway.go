@@ -35,6 +35,9 @@ import (
 var (
 	implementation       = flag.String("gateway_implementation", "discoverygateway", "The implementation of gateway")
 	initialTabletTimeout = flag.Duration("gateway_initial_tablet_timeout", 30*time.Second, "At startup, the gateway will wait up to that duration to get one tablet per keyspace/shard/tablettype")
+	// RetryCount is the number of times a query will be retried on error
+	// Make this unexported after DiscoveryGateway is deprecated
+	RetryCount = flag.Int("retry-count", 2, "retry count")
 )
 
 // A Gateway is the query processing module for each shard,

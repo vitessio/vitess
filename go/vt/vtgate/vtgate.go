@@ -128,7 +128,7 @@ type RegisterVTGate func(vtgateservice.VTGateService)
 var RegisterVTGates []RegisterVTGate
 
 // Init initializes VTGate server.
-func Init(ctx context.Context, serv srvtopo.Server, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *VTGate {
+func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWait []topodatapb.TabletType) *VTGate {
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
@@ -140,7 +140,7 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, retryCount int,
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
 	// we can't go on much further, so we log.Fatal out.
-	gw := NewTabletGateway(ctx, serv, cell, retryCount)
+	gw := NewTabletGateway(ctx, serv, cell)
 	gw.RegisterStats()
 	if err := WaitForTablets(gw, tabletTypesToWait); err != nil {
 		log.Fatalf("gateway.WaitForTablets failed: %v", err)

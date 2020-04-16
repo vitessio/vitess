@@ -70,8 +70,10 @@ var (
 	hcErrorCounters          = stats.NewCountersWithMultiLabels("HealthcheckErrors", "Healthcheck Errors", []string{"Keyspace", "ShardName", "TabletType"})
 	hcMasterPromotedCounters = stats.NewCountersWithMultiLabels("HealthcheckMasterPromoted", "Master promoted in keyspace/shard name because of health check errors", []string{"Keyspace", "ShardName"})
 	healthcheckOnce          sync.Once
-	TabletURLTemplateString  = flag.String("tablet_url_template", "http://{{.GetTabletHostPort}}", "format string describing debug tablet url formatting. See the Go code for getTabletDebugURL() how to customize this.")
-	tabletURLTemplate        *template.Template
+
+	// TabletURLTemplateString is a flag to generate URLs for the tablets that vtgate discovers.
+	TabletURLTemplateString = flag.String("tablet_url_template", "http://{{.GetTabletHostPort}}", "format string describing debug tablet url formatting. See the Go code for getTabletDebugURL() how to customize this.")
+	tabletURLTemplate       *template.Template
 
 	//TODO(deepthi): change these vars back to unexported when discoveryGateway is removed
 
@@ -178,11 +180,11 @@ type TabletStats struct {
 	Up bool
 	// Serving describes if the tablet can be serving traffic.
 	Serving bool
-	// TabletExternallyReparentedTimestamp is the last timestamp
-	// that this tablet was either elected the master, or received
+	// MasterTermStartTime is the last time at which
+	// this tablet was either elected the master, or received
 	// a TabletExternallyReparented event. It is set to 0 if the
 	// tablet doesn't think it's a master.
-	TabletExternallyReparentedTimestamp int64
+	MasterTermStartTime int64
 	// Stats is the current health status, as received by the
 	// StreamHealth RPC (replication lag, ...).
 	Stats *querypb.RealtimeStats
@@ -207,7 +209,7 @@ func (e *TabletStats) DeepEqual(f *TabletStats) bool {
 		proto.Equal(e.Target, f.Target) &&
 		e.Up == f.Up &&
 		e.Serving == f.Serving &&
-		e.TabletExternallyReparentedTimestamp == f.TabletExternallyReparentedTimestamp &&
+		e.MasterTermStartTime == f.MasterTermStartTime &&
 		proto.Equal(e.Stats, f.Stats) &&
 		((e.LastError == nil && f.LastError == nil) ||
 			(e.LastError != nil && f.LastError != nil && e.LastError.Error() == f.LastError.Error()))
@@ -528,7 +530,7 @@ func (hc *HealthCheckImpl) stateChecksum() int64 {
 		)
 		sort.Sort(st.TabletsStats)
 		for _, ts := range st.TabletsStats {
-			fmt.Fprintf(&buf, "%v%v%v\n", ts.Up, ts.Serving, ts.TabletExternallyReparentedTimestamp)
+			fmt.Fprintf(&buf, "%v%v%v\n", ts.Up, ts.Serving, ts.MasterTermStartTime)
 		}
 	}
 
@@ -560,7 +562,7 @@ func (hc *HealthCheckImpl) updateHealth(ts *TabletStats, conn queryservice.Query
 	if oldts.Target.TabletType != topodatapb.TabletType_UNKNOWN && oldts.Target.TabletType != ts.Target.TabletType {
 		// Log and maybe notify
 		log.Infof("HealthCheckUpdate(Type Change): %v, tablet: %s, target %+v => %+v, reparent time: %v",
-			oldts.Name, topotools.TabletIdent(oldts.Tablet), topotools.TargetIdent(oldts.Target), topotools.TargetIdent(ts.Target), ts.TabletExternallyReparentedTimestamp)
+			oldts.Name, topotools.TabletIdent(oldts.Tablet), topotools.TargetIdent(oldts.Target), topotools.TargetIdent(ts.Target), ts.MasterTermStartTime)
 		//TODO(deepthi): directly update hc.tsc here
 		//if hc.listener != nil && hc.sendDownEvents {
 		//oldts.Up = false
@@ -762,7 +764,7 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, shr *querypb.St
 	// realtimeStats change.
 	hcc.lastResponseTimestamp = time.Now()
 	hcc.tabletStats.Target = shr.Target
-	hcc.tabletStats.TabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
+	hcc.tabletStats.MasterTermStartTime = shr.TabletExternallyReparentedTimestamp
 	hcc.tabletStats.Stats = shr.RealtimeStats
 	hcc.tabletStats.LastError = healthErr
 	reason := "healthCheck update"
@@ -931,7 +933,7 @@ func (tcs *TabletsCacheStatus) StatusAsHTML() template.HTML {
 			color = "red"
 			extra = " (Down)"
 		} else if ts.Target.TabletType == topodatapb.TabletType_MASTER {
-			extra = fmt.Sprintf(" (MasterTS: %v)", ts.TabletExternallyReparentedTimestamp)
+			extra = fmt.Sprintf(" (MasterTS: %v)", ts.MasterTermStartTime)
 		} else {
 			extra = fmt.Sprintf(" (RepLag: %v)", ts.Stats.SecondsBehindMaster)
 		}
