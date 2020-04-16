@@ -5,8 +5,11 @@ This document contains the summary of the commands to be run.
 
 
 ```
+# Start minikube
+minikube start --cpus=4 --memory=8000
+
 # Bring up initial cluster and commerce keyspace
-./101_initial_cluster.sh
+helm install vitess ../../helm/vitess -f 101_initial_cluster.yaml
 
 # Setup aliases
 source alias.source
@@ -16,7 +19,7 @@ mysql < ../common/insert_commerce_data.sql
 mysql --table < ../common/select_commerce_data.sql
 
 # Bring up customer keyspace
-./201_customer_tablets.sh
+helm upgrade vitess ../../helm/vitess/ -f 201_customer_tablets.yaml
 
 # Initiate move tables
 vtctlclient MoveTables -workflow=commerce2customer commerce customer '{"customer":{}, "corder":{}}'
@@ -33,8 +36,8 @@ vtctlclient SetShardTabletControl -blacklisted_tables=customer,corder -remove co
 vtctlclient ApplyRoutingRules -rules='{}'
 
 # Prepare for resharding
-./301_customer_sharded.sh
-./302_new_shards.sh
+helm upgrade vitess ../../helm/vitess/ -f 301_customer_sharded.yaml
+helm upgrade vitess ../../helm/vitess/ -f 302_new_shards.yaml
 
 # Reshard
 vtctlclient Reshard customer.cust2cust '0' '-80,80-'
@@ -43,9 +46,6 @@ vtctlclient SwitchReads -tablet_type=replica customer.cust2cust
 vtctlclient SwitchWrites customer.cust2cust
 
 # Down shard 0
-./306_down_shard_0.sh
+helm upgrade vitess ../../helm/vitess/ -f 306_down_shard_0.yaml
 vtctlclient DeleteShard -recursive customer/0
-
-# Down cluster
-./401_teardown.sh
 ```

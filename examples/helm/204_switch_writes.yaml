@@ -18,21 +18,16 @@ topology:
                     replicas: 3
         - name: "customer"
           shards:
-            - name: "-80"
-              tablets:
-                - type: "replica"
-                  vttablet:
-                    replicas: 3
-            - name: "80-"
+            - name: "0"
               tablets:
                 - type: "replica"
                   vttablet:
                     replicas: 3
 
 jobs:
-  - name: "delete-shard0"
+  - name: "mswitch3"
     kind: "vtctlclient"
-    command: "DeleteShard -recursive customer/0"
+    command: "SwitchWrites customer.commerce2customer"
 
 vtctld:
   serviceType: "NodePort"
