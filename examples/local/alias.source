@@ -1,4 +1,0 @@
-echo "Setting alias mysql to mysql -h 127.0.0.1 -P 15306"
-alias mysql="mysql -h 127.0.0.1 -P 15306"
-echo "Setting alias vtctlclient to vtctlclient -server localhost:15999 -log_dir $VTDATAROOT/tmp -alsologtostderr"
-alias vtctlclient="vtctlclient -server localhost:15999 -log_dir $VTDATAROOT/tmp -alsologtostderr"
