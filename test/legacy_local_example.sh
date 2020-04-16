@@ -28,6 +28,8 @@ unset VTROOT # ensure that the examples can run without VTROOT now.
 
 ./101_initial_cluster.sh
 
+sleep 1 # Give vtgate a second to really start.
+
 mysql -h 127.0.0.1 -P 15306 < ../common/insert_commerce_data.sql
 mysql -h 127.0.0.1 -P 15306 --table < ../common/select_commerce_data.sql
 ./201_customer_keyspace.sh
