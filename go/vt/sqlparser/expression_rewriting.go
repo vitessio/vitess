@@ -41,10 +41,17 @@ type BindVarNeeds struct {
 func RewriteAST(in Statement) (*RewriteASTResult, error) {
 	er := newExpressionRewriter()
 	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
-	Rewrite(in, er.goingDown, nil)
+	setRewriter := &setNormalizer{}
+	out, ok := Rewrite(in, er.goingDown, setRewriter.rewriteSetComingUp).(Statement)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "statement rewriting returned a non statement: %s", String(out))
+	}
+	if setRewriter.err != nil {
+		return nil, setRewriter.err
+	}
 
 	r := &RewriteASTResult{
-		AST: in,
+		AST: out,
 	}
 	if _, ok := er.bindVars[LastInsertIDName]; ok {
 		r.NeedLastInsertID = true

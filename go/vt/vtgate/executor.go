@@ -294,6 +294,31 @@ func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession,
 }
 
 func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) (*sqltypes.Result, error) {
+	//stmt, err := sqlparser.Parse(sql)
+	//if err != nil {
+	//	return &sqltypes.Result{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
+	//}
+	//set := stmt.(*sqlparser.Set)
+	//
+	//execStart := time.Now()
+	//logStats.PlanTime = execStart.Sub(logStats.StartTime)
+	//defer func() {
+	//	logStats.ExecuteTime = time.Since(execStart)
+	//}()
+	//
+	//for _, expr := range set.Exprs {
+	//	if expr.Scope == sqlparser.GlobalStr {
+	//		return &sqltypes.Result{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported in set: global")
+	//	}
+	//
+	//	switch expr.Name.AtCount() {
+	//	case sqlparser.NoAt:
+	//
+	//	}
+	//
+	//}
+	//
+	////OLD CODE
 	vals, scope, err := sqlparser.ExtractSetValues(sql)
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
