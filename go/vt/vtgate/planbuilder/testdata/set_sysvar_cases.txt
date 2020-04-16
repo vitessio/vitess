@@ -1,0 +1,44 @@
+# set ignore plan
+"set @@default_storage_engine = 'DONOTCHANGEME'"
+{
+  "QueryType": "SET",
+  "Original": "set @@default_storage_engine = 'DONOTCHANGEME'",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Variant": "",
+    "Ops": [
+      {
+        "Type": "SysVarIgnore",
+        "Name": "default_storage_engine",
+        "Expr": "'DONOTCHANGEME'"
+      }
+    ]
+  }
+}
+
+# set check and ignore plan
+"set @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER')"
+{
+  "QueryType": "SET",
+  "Original": "set @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER')",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Variant": "",
+    "Ops": [
+      {
+        "Type": "SysVarCheckAndIgnore",
+        "Name": "sql_mode",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": {},
+        "CheckSysVarQuery": "select 1 from dual where @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER')"
+      }
+    ]
+  }
+}
+
+# set plan building not supported
+"set @@innodb_strict_mode = OFF"
+"plan building not supported"

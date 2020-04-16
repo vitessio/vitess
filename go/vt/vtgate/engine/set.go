@@ -17,8 +17,17 @@ limitations under the License.
 package engine
 
 import (
+	"encoding/json"
+	"fmt"
+
+	"vitess.io/vitess/go/mysql"
+
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 type (
@@ -39,6 +48,20 @@ type (
 	UserDefinedVariable struct {
 		Name      string
 		PlanValue sqltypes.PlanValue
+	}
+
+	// SysVarIgnore implements the SetOp interface to ignore the settings.
+	SysVarIgnore struct {
+		Name string
+		Expr string
+	}
+
+	// SysVarCheckAndIgnore implements the SetOp interface to check underlying setting and ignore if same.
+	SysVarCheckAndIgnore struct {
+		Name              string
+		Keyspace          *vindexes.Keyspace
+		TargetDestination key.Destination
+		CheckSysVarQuery  string
 	}
 )
 
@@ -93,6 +116,18 @@ func (s *Set) description() PrimitiveDescription {
 
 var _ SetOp = (*UserDefinedVariable)(nil)
 
+//MarshalJSON provides the type to SetOp for plan json
+func (u *UserDefinedVariable) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Type string
+		UserDefinedVariable
+	}{
+		Type:                "UserDefinedVariable",
+		UserDefinedVariable: *u,
+	})
+
+}
+
 //VariableName implements the SetOp interface method.
 func (u *UserDefinedVariable) VariableName() string {
 	return u.Name
@@ -104,5 +139,69 @@ func (u *UserDefinedVariable) Execute(vcursor VCursor, bindVars map[string]*quer
 	if err != nil {
 		return err
 	}
-	return vcursor.SetUDV(u.Name, value)
+	return vcursor.Session().SetUDV(u.Name, value)
+}
+
+var _ SetOp = (*SysVarIgnore)(nil)
+
+//MarshalJSON provides the type to SetOp for plan json
+func (svi *SysVarIgnore) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Type string
+		SysVarIgnore
+	}{
+		Type:         "SysVarIgnore",
+		SysVarIgnore: *svi,
+	})
+
+}
+
+//VariableName implements the SetOp interface method.
+func (svi *SysVarIgnore) VariableName() string {
+	return svi.Name
+}
+
+//Execute implements the SetOp interface method.
+func (svi *SysVarIgnore) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) error {
+	vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: mysql.ERNotSupportedYet, Message: fmt.Sprintf("Ignored inapplicable SET %v = %v", svi.Name, svi.Expr)})
+	return nil
+}
+
+var _ SetOp = (*SysVarCheckAndIgnore)(nil)
+
+//MarshalJSON provides the type to SetOp for plan json
+func (svci *SysVarCheckAndIgnore) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Type string
+		SysVarCheckAndIgnore
+	}{
+		Type:                 "SysVarCheckAndIgnore",
+		SysVarCheckAndIgnore: *svci,
+	})
+
+}
+
+//VariableName implements the SetOp interface method
+func (svci *SysVarCheckAndIgnore) VariableName() string {
+	return svci.Name
+}
+
+//Execute implements the SetOp interface method
+func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) error {
+	rss, _, err := vcursor.ResolveDestinations(svci.Keyspace.Name, nil, []key.Destination{svci.TargetDestination})
+	if err != nil {
+		return vterrors.Wrap(err, "SysVarCheckAndIgnore")
+	}
+
+	if len(rss) != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %v", svci.TargetDestination)
+	}
+	result, err := execShard(vcursor, svci.CheckSysVarQuery, bindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Modification not allowed using set construct for: %s", svci.Name)
+	}
+	return nil
 }

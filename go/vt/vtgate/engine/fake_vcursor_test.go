@@ -54,7 +54,9 @@ func (t noopVCursor) SetUDV(key string, value interface{}) error {
 func (t noopVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
 	panic("implement me")
 }
-
+func (t noopVCursor) Session() SessionActions {
+	return t
+}
 func (t noopVCursor) SetTarget(target string) error {
 	panic("implement me")
 }
@@ -134,6 +136,10 @@ func (f *loggingVCursor) SetUDV(key string, value interface{}) error {
 
 func (f *loggingVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
 	panic("implement me")
+}
+
+func (f *loggingVCursor) Session() SessionActions {
+	return f
 }
 
 func (f *loggingVCursor) SetTarget(target string) error {

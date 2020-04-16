@@ -1,99 +1,34 @@
+/*
+Copyright 2020 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package setstatement
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
-var (
-	clusterInstance *cluster.LocalProcessCluster
-	keyspaceName    = "ks"
-	cell            = "zone1"
-	hostname        = "localhost"
-	sqlSchema       = `
-	create table test(
-		id bigint,
-		val1 varchar(16),
-		val2 int,
-		val3 float,
-		primary key(id)
-	)Engine=InnoDB;`
-
-	vSchema = `
-		{	
-			"sharded":true,
-			"vindexes": {
-				"hash_index": {
-					"type": "hash"
-				}
-			},	
-			"tables": {
-				"test":{
-					"column_vindexes": [
-						{
-							"column": "id",
-							"name": "hash_index"
-						}
-					]
-				}
-			}
-		}
-	`
-)
-
-func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
-	flag.Parse()
-
-	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
-
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1
-		}
-
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
-			VSchema:   vSchema,
-		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false); err != nil {
-			return 1
-		}
-
-		// Start vtgate
-		if err := clusterInstance.StartVtgate(); err != nil {
-			return 1
-		}
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
-}
-
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.Nil(t, err)
-	return qr
-}
-
-func TestSet(t *testing.T) {
+func TestSetUDV(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
@@ -150,8 +85,9 @@ func TestSet(t *testing.T) {
 
 	for i, q := range queries {
 		t.Run(fmt.Sprintf("%d-%s", i, q.query), func(t *testing.T) {
-			qr := exec(t, conn, q.query)
-			assert.Equal(t, uint64(q.rowsAffected), qr.RowsAffected, "rows affected wrong for query: %s", q.query)
+			qr, err := exec(t, conn, q.query)
+			require.NoError(t, err)
+			require.Equal(t, uint64(q.rowsAffected), qr.RowsAffected, "rows affected wrong for query: %s", q.query)
 			if q.expectedRows != "" {
 				result := fmt.Sprintf("%v", qr.Rows)
 				if diff := cmp.Diff(q.expectedRows, result); diff != "" {
