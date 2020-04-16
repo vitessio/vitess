@@ -15,19 +15,28 @@ topology:
               tablets:
                 - type: "replica"
                   vttablet:
-                    replicas: 3
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
         - name: "customer"
           shards:
             - name: "-80"
               tablets:
                 - type: "replica"
                   vttablet:
-                    replicas: 3
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
             - name: "80-"
               tablets:
                 - type: "replica"
                   vttablet:
-                    replicas: 3
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
 
 jobs:
   - name: "delete-shard0"

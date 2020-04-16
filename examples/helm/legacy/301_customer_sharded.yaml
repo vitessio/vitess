@@ -15,7 +15,10 @@ topology:
               tablets:
                 - type: "replica"
                   vttablet:
-                    replicas: 3
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
           schema:
             seq: |-
               create table customer_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
@@ -41,7 +44,10 @@ topology:
               tablets:
                 - type: "replica"
                   vttablet:
-                    replicas: 3
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
           schema:
             sharded: |-
               alter table customer change customer_id customer_id bigint not null;

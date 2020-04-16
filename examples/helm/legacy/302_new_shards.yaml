@@ -15,24 +15,40 @@ topology:
               tablets:
                 - type: "replica"
                   vttablet:
-                    replicas: 3
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
         - name: "customer"
           shards:
+            - name: "0"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
             - name: "-80"
               tablets:
                 - type: "replica"
                   vttablet:
-                    replicas: 3
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
+              copySchema:
+                source: "customer/0"
             - name: "80-"
               tablets:
                 - type: "replica"
                   vttablet:
-                    replicas: 3
-
-jobs:
-  - name: "delete-shard0"
-    kind: "vtctlclient"
-    command: "DeleteShard -recursive customer/0"
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
+              copySchema:
+                source: "customer/0"
 
 vtctld:
   serviceType: "NodePort"
