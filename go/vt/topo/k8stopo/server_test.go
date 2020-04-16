@@ -29,7 +29,7 @@ import (
 
 	"testing"
 
-	extensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	extensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	kubeyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/tools/clientcmd"
@@ -102,16 +102,16 @@ func TestKubernetesTopo(t *testing.T) {
 		}
 
 		crdFile, err := os.Open("./VitessTopoNodes-crd.yaml")
-		defer crdFile.Close()
 		if err != nil {
 			t.Fatal(err)
+			defer crdFile.Close()
 		}
 
-		crd := &extensionsv1.CustomResourceDefinition{}
+		crd := &extensionsv1beta1.CustomResourceDefinition{}
 
 		kubeyaml.NewYAMLOrJSONDecoder(crdFile, 2048).Decode(crd)
 
-		_, err = apiextensionsClientSet.ApiextensionsV1().CustomResourceDefinitions().Create(crd)
+		_, err = apiextensionsClientSet.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
 		if err != nil {
 			t.Fatal(err)
 		}
