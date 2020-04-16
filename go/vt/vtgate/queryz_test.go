@@ -26,10 +26,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestQueryzHandler(t *testing.T) {
@@ -59,37 +56,6 @@ func TestQueryzHandler(t *testing.T) {
 	}
 	plan2 := result.(*engine.Plan)
 	plan2.ExecTime = time.Duration(1 * time.Second)
-
-	sql = "insert into user (id, name) values (:id, :name)"
-	_, err = executorExec(executor, sql, map[string]*querypb.BindVariable{
-		"id":   sqltypes.Uint64BindVariable(1),
-		"name": sqltypes.BytesBindVariable([]byte("myname")),
-	})
-	require.NoError(t, err)
-	result, ok = executor.plans.Get("@master:" + sql)
-	if !ok {
-		t.Fatalf("couldn't get plan from cache")
-	}
-	plan3 := result.(*engine.Plan)
-
-	// vindex insert from above execution
-	result, ok = executor.plans.Get("@master:" + "insert into name_user_map(name, user_id) values(:name0, :user_id0)")
-	if !ok {
-		t.Fatalf("couldn't get plan from cache")
-	}
-	plan4 := result.(*engine.Plan)
-
-	// same query again should add query counts to existing plans
-	sql = "insert into user (id, name) values (:id, :name)"
-	_, err = executorExec(executor, sql, map[string]*querypb.BindVariable{
-		"id":   sqltypes.Uint64BindVariable(1),
-		"name": sqltypes.BytesBindVariable([]byte("myname")),
-	})
-
-	require.NoError(t, err)
-
-	plan3.ExecTime = time.Duration(100 * time.Millisecond)
-	plan4.ExecTime = time.Duration(200 * time.Millisecond)
 
 	queryzHandler(executor, resp, req)
 	body, _ := ioutil.ReadAll(resp.Body)
@@ -123,36 +89,6 @@ func TestQueryzHandler(t *testing.T) {
 		`</tr>`,
 	}
 	checkQueryzHasPlan(t, planPattern2, plan2, body)
-	planPattern3 := []string{
-		`<tr class="medium">`,
-		`<td>insert into user.*</td>`,
-		`<td>2</td>`,
-		`<td>0.100000</td>`,
-		`<td>2</td>`,
-		`<td>2</td>`,
-		`<td>0</td>`,
-		`<td>0.050000</td>`,
-		`<td>1.000000</td>`,
-		`<td>1.000000</td>`,
-		`<td>0.000000</td>`,
-		`</tr>`,
-	}
-	checkQueryzHasPlan(t, planPattern3, plan3, body)
-	planPattern4 := []string{
-		`<tr class="high">`,
-		`<td>insert into name_user_map.*</td>`,
-		`<td>2</td>`,
-		`<td>0.200000</td>`,
-		`<td>2</td>`,
-		`<td>2</td>`,
-		`<td>0</td>`,
-		`<td>0.100000</td>`,
-		`<td>1.000000</td>`,
-		`<td>1.000000</td>`,
-		`<td>0.000000</td>`,
-		`</tr>`,
-	}
-	checkQueryzHasPlan(t, planPattern4, plan4, body)
 }
 
 func checkQueryzHasPlan(t *testing.T, planPattern []string, plan *engine.Plan, page []byte) {

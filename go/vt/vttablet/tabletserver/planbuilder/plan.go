@@ -108,7 +108,7 @@ func (pt PlanType) IsSelect() bool {
 
 // IsInsert returns true if PlanType is an insert query.
 func (pt PlanType) IsInsert() bool {
-	return pt == PlanInsertPK || pt == PlanInsertSubquery || pt == PlanInsertTopic || pt == PlanInsertMessage
+	return pt == PlanInsert || pt == PlanInsertMessage
 }
 
 // MarshalJSON returns a json string for PlanType.

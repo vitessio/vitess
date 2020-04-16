@@ -2010,19 +2010,12 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	r.normalize = true
 	unshardedvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.resolver.resolver)
 
-	query1 = "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
+	query2 := "select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from music_user_map where id = 1"
 	logStats1 = NewLogStats(context.Background(), "Test", "", nil)
-	_, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	_, err = r.getPlan(unshardedvc, query2, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
 	require.NoError(t, err)
 	if len(r.plans.Keys()) != 0 {
 		t.Errorf("Plan keys should be 0, got: %v", len(r.plans.Keys()))
-	}
-
-	query1 = "insert into user(id) values (1), (2)"
-	_, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
-	require.NoError(t, err)
-	if len(r.plans.Keys()) != 1 {
-		t.Errorf("Plan keys should be 1, got: %v", len(r.plans.Keys()))
 	}
 }
 
