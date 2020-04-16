@@ -97,10 +97,7 @@ func main() {
 	servenv.Init()
 	tabletenv.Init()
 
-	dbcfgs, err := dbconfigs.Init("")
-	if err != nil {
-		log.Warning(err)
-	}
+	dbcfgs := dbconfigs.GlobalDBConfigs.Init("")
 	mysqld := mysqlctl.NewMysqld(dbcfgs)
 	servenv.OnClose(mysqld.Close)
 

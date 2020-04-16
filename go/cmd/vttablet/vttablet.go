@@ -90,7 +90,7 @@ func main() {
 	// and use the socket from it. If connection parameters were specified,
 	// we assume that the mysql is not local, and we skip loading mycnf.
 	// This also means that backup and restore will not be allowed.
-	if !dbconfigs.HasConnectionParams() {
+	if dbconfigs.GlobalDBConfigs.IsZero() {
 		var err error
 		if mycnf, err = mysqlctl.NewMycnfFromFlags(tabletAlias.Uid); err != nil {
 			log.Exitf("mycnf read failed: %v", err)
@@ -103,10 +103,7 @@ func main() {
 	// If connection parameters were specified, socketFile will be empty.
 	// Otherwise, the socketFile (read from mycnf) will be used to initialize
 	// dbconfigs.
-	dbcfgs, err := dbconfigs.Init(socketFile)
-	if err != nil {
-		log.Warning(err)
-	}
+	dbcfgs := dbconfigs.GlobalDBConfigs.Init(socketFile)
 
 	if *tableACLConfig != "" {
 		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
