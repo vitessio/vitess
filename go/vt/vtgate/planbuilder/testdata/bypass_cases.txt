@@ -73,3 +73,22 @@
     "SingleShardOnly": false
   }
 }
+
+# insert bypass with sequence: sequences ignored
+"insert into user(nonid) values (2)"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user(nonid) values (2)",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Variant": "",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "Shard(-80)",
+    "IsDML": true,
+    "Query": "insert into user(nonid) values (2)",
+    "SingleShardOnly": false
+  }
+}
