@@ -73,7 +73,7 @@ func (s *Send) GetTableName() string {
 }
 
 // Execute implements Primitive interface
-func (s *Send) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+func (s *Send) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
 	if err != nil {
 		return nil, vterrors.Wrap(err, "sendExecute")
@@ -110,12 +110,43 @@ func (s *Send) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariabl
 }
 
 // StreamExecute implements Primitive interface
-func (s *Send) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable") // TODO: systay - this should work
+func (s *Send) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	rss, _, err := vcursor.ResolveDestinations(s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
+	if err != nil {
+		return vterrors.Wrap(err, "sendStreamExecute")
+	}
+
+	if !s.Keyspace.Sharded && len(rss) != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
+	}
+
+	if s.SingleShardOnly && len(rss) != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %s, got: %v", s.Query, s.TargetDestination)
+	}
+
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{
+			Sql:           s.Query,
+			BindVariables: bindVars,
+		}
+	}
+
+	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
+	for i := range multiBindVars {
+		multiBindVars[i] = bindVars
+	}
+	return vcursor.StreamExecuteMulti(s.Query, rss, multiBindVars, callback)
 }
 
 // GetFields implements Primitive interface
 func (s *Send) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	// We don't need to worry about GetFields being needed for joins since the Send primitive currently doesn't
+	// get nested with other types of primitives.
+	// However, GetFields is used for prepared statements. Because of that, prepared statements are not yet
+	// compatible with the Send primitive.
+	//
+	// TODO: implement this
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable")
 }
 
