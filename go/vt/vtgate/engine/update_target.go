@@ -60,7 +60,7 @@ func (updTarget UpdateTarget) GetTableName() string {
 
 // Execute implements the Primitive interface
 func (updTarget UpdateTarget) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	err := vcursor.SetTarget(updTarget.Target)
+	err := vcursor.Session().SetTarget(updTarget.Target)
 	if err != nil {
 		return nil, err
 	}

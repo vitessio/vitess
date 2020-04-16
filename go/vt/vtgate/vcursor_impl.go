@@ -312,6 +312,10 @@ func (vc *vcursorImpl) ResolveDestinations(keyspace string, ids []*querypb.Value
 	return vc.resolver.ResolveDestinations(vc.ctx, keyspace, vc.tabletType, ids, destinations)
 }
 
+func (vc *vcursorImpl) Session() engine.SessionActions {
+	return vc
+}
+
 func (vc *vcursorImpl) SetTarget(target string) error {
 	keyspace, tabletType, _, err := parseDestinationTarget(target, vc.vschema)
 	if err != nil {

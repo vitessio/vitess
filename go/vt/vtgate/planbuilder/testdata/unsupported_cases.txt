@@ -11,7 +11,7 @@
 "expression is too complex ':__vtudvfoo + 1'"
 
 # set user defined and system variable
-"set @foo = 42, @bar = @foo, @@sql_mode = @@sql_mode"
+"set @foo = 42, @bar = @foo, @@wait_timeout = 28800"
 "plan building not supported"
 
 # SHOW

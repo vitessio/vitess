@@ -117,7 +117,7 @@ func TestExecutorSet(t *testing.T) {
 		err: "unsupported in set: global",
 	}, {
 		in:  "set global @@session.client_found_rows = 1",
-		err: "unsupported in set: mixed using of variable scope",
+		err: "unsupported in set: global",
 	}, {
 		in:  "set client_found_rows = 'aa'",
 		err: "unexpected value type for client_found_rows: string",

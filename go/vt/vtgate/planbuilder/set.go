@@ -17,29 +17,89 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
+
+	"vitess.io/vitess/go/vt/key"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
+var sysVarPlanningFunc = map[string]func(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error){}
+
+func init() {
+	sysVarPlanningFunc["default_storage_engine"] = buildSetOpIgnore
+	sysVarPlanningFunc["sql_mode"] = buildSetOpCheckAndIgnore
+}
+
 func buildSetPlan(sql string, stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive, error) {
 	var setOps []engine.SetOp
+	var setOp engine.SetOp
+	var err error
+
+	if stmt.Scope == sqlparser.GlobalStr {
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported in set: global")
+	}
 
 	for _, expr := range stmt.Exprs {
 		switch expr.Name.AtCount() {
 		case sqlparser.SingleAt:
+			pv, err := sqlparser.NewPlanValue(expr.Expr)
+			if err != nil {
+				return nil, err
+			}
+			setOp = &engine.UserDefinedVariable{
+				Name:      expr.Name.Lowered(),
+				PlanValue: pv,
+			}
+		case sqlparser.DoubleAt:
+			planFunc, ok := sysVarPlanningFunc[expr.Name.Lowered()]
+			if !ok {
+				return nil, ErrPlanNotSupported
+			}
+			setOp, err = planFunc(expr, vschema)
+			if err != nil {
+				return nil, err
+			}
 		default:
 			return nil, ErrPlanNotSupported
 		}
-		pv, err := sqlparser.NewPlanValue(expr.Expr)
-		if err != nil {
-			return nil, err
-		}
-		setOps = append(setOps, &engine.UserDefinedVariable{
-			Name:      expr.Name.Lowered(),
-			PlanValue: pv,
-		})
+		setOps = append(setOps, setOp)
 	}
 	return &engine.Set{
 		Ops: setOps,
+	}, nil
+}
+
+func buildSetOpIgnore(expr *sqlparser.SetExpr, _ ContextVSchema) (engine.SetOp, error) {
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("%v", expr.Expr)
+
+	return &engine.SysVarIgnore{
+		Name: expr.Name.Lowered(),
+		Expr: buf.String(),
+	}, nil
+}
+
+func buildSetOpCheckAndIgnore(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error) {
+	keyspace, err := vschema.DefaultKeyspace()
+	if err != nil {
+		return nil, err
+	}
+
+	dest := vschema.Destination()
+	if dest == nil {
+		dest = key.DestinationAnyShard{}
+	}
+
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("%v", expr.Expr)
+
+	return &engine.SysVarCheckAndIgnore{
+		Name:              expr.Name.Lowered(),
+		Keyspace:          keyspace,
+		TargetDestination: dest,
+		CheckSysVarQuery:  fmt.Sprintf("select 1 from dual where @@%s = %s", expr.Name.Lowered(), buf.String()),
 	}, nil
 }
