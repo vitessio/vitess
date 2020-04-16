@@ -29,6 +29,8 @@ source ./env.sh # Required so that "mysql" works from alias
 
 ./101_initial_cluster.sh
 
+sleep 1 # Give vtgate a second to really start.
+
 mysql < ../common/insert_commerce_data.sql
 mysql --table < ../common/select_commerce_data.sql
 
