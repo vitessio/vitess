@@ -1,3 +1,10 @@
+## 2.0.1-0 - 2020-04-16
+
+The charts now officially support Kubernetes 1.11 and newer.
+
+### Changes
+* The VitessTopoNode CRD is now created using the `apiextensions.k8s.io/v1beta1` API.
+
 ## 2.0.0-0 - 2020-04-03
 
 Vitess now supports using the Kubernetes API as a topology provider. This means that it is now easier than ever to run Vitess on Kubernetes! 

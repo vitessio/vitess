@@ -1,6 +1,6 @@
 # This is a copy of the crd def from: vitess/go/vt/topo/k8stopo/VitessTopoNodes-crd.yaml
 # It is not symlinked so that the helm charts do not have references to outside files
-apiVersion: apiextensions.k8s.io/v1
+apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
   name: vitesstoponodes.topo.vitess.io
