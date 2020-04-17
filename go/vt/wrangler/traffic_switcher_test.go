@@ -838,8 +838,8 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	dropSources := func() {
 		tme.dbTargetClients[0].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[1].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
-		tme.tmeDB.AddQuery("drop table 'vt_ks1'.t1", &sqltypes.Result{})
-		tme.tmeDB.AddQuery("drop table 'vt_ks1'.t2", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("drop table vt_ks1.t1", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("drop table vt_ks1.t2", &sqltypes.Result{})
 		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", &sqltypes.Result{}, nil) //
 		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", &sqltypes.Result{}, nil)
 		//TODO, why are the delete queries not required?!
