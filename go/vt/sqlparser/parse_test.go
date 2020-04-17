@@ -1462,6 +1462,9 @@ var (
 		input:  "select straight_join distinct sql_no_cache 'foo' from t",
 		output: "select distinct sql_no_cache straight_join 'foo' from t",
 	}, {
+		input:  "select sql_calc_found_rows 'foo' from t",
+		output: "select sql_calc_found_rows 'foo' from t",
+	}, {
 		input: "select binary 'a' = 'A' from t",
 	}, {
 		input: "select 1 from t where foo = _binary 'bar'",
