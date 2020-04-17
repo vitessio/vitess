@@ -24,8 +24,10 @@ import (
 )
 
 // PrepareAST will normalize the query
-func PrepareAST(in Statement, bindVars map[string]*querypb.BindVariable, prefix string) (*RewriteASTResult, error) {
-	Normalize(in, bindVars, prefix)
+func PrepareAST(in Statement, bindVars map[string]*querypb.BindVariable, prefix string, parameterize bool) (*RewriteASTResult, error) {
+	if parameterize {
+		Normalize(in, bindVars, prefix)
+	}
 	return RewriteAST(in)
 }
 

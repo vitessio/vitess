@@ -96,6 +96,15 @@ func CanNormalize(stmt Statement) bool {
 	return false
 }
 
+//IsSetStatement takes Statement and returns if the statement is set statement.
+func IsSetStatement(stmt Statement) bool {
+	switch stmt.(type) {
+	case *Set:
+		return true
+	}
+	return false
+}
+
 // Preview analyzes the beginning of the query using a simpler and faster
 // textual comparison to identify the statement type.
 func Preview(sql string) StatementType {
