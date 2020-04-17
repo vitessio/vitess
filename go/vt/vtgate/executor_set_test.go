@@ -19,6 +19,7 @@ package vtgate
 import (
 	"testing"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -117,7 +118,7 @@ func TestExecutorSet(t *testing.T) {
 		err: "unsupported in set: global",
 	}, {
 		in:  "set global @@session.client_found_rows = 1",
-		err: "unsupported in set: global",
+		err: "cannot use scope and @@",
 	}, {
 		in:  "set client_found_rows = 'aa'",
 		err: "unexpected value type for client_found_rows: string",
@@ -206,8 +207,12 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set net_write_timeout = 600",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
-		in:  "set sql_mode = 'STRICT_ALL_TABLES'",
-		out: &vtgatepb.Session{Autocommit: true},
+		in: "set sql_mode = 'STRICT_ALL_TABLES'",
+		out: &vtgatepb.Session{Autocommit: true,
+			Warnings: []*querypb.QueryWarning{{
+				Code:    mysql.ERNotSupportedYet,
+				Message: "Ignored inapplicable SET sql_mode = 'STRICT_ALL_TABLES'",
+			}}},
 	}, {
 		in:  "set net_read_timeout = 600",
 		out: &vtgatepb.Session{Autocommit: true},
