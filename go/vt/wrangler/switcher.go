@@ -305,7 +305,7 @@ func (dr *switchDryRun) stopStreams(ctx context.Context, sm *streamMigrater) ([]
 	for _, streams := range sm.streams {
 		for _, stream := range streams {
 			logs = append(logs, fmt.Sprintf("\tId %d Keyspace %s Shard %s Rules %s at Position %v",
-				stream.id, stream.bls.Keyspace, stream.bls.Shard, stream.bls.Filter, mysql.EncodePosition(stream.pos)))
+				stream.id, stream.bls.Keyspace, stream.bls.Shard, stream.bls.Filter, stream.pos))
 		}
 	}
 	if len(logs) > 0 {

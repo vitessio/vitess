@@ -294,7 +294,6 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 
 // DropSources cleans up source tables, shards and blacklisted tables after a MoveTables/Reshard is completed
 func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow string, dryRun bool) (*[]string, error) {
-	fmt.Printf("DropSources: %s.%s\n", targetKeyspace, workflow)
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
 	if err != nil {
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
@@ -329,13 +328,21 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow st
 	}
 	switch ts.migrationType {
 	case binlogdatapb.MigrationType_TABLES:
-		sw.dropSourceTables(ctx)
+		if err := sw.dropSourceTables(ctx); err != nil {
+			return nil, err
+		}
+		if err := sw.dropSourceBlacklistedTables(ctx); err != nil {
+			return nil, err
+		}
 	case binlogdatapb.MigrationType_SHARDS:
-		sw.dropSourceShards(ctx)
+		if err := sw.dropSourceShards(ctx); err != nil {
+			return nil, err
+		}
+	}
+	if err := sw.dropTargetVReplicationStreams(ctx); err != nil {
+		return nil, err
 	}
 
-	sw.dropSourceBlacklistedTables(ctx)
-	sw.dropTargetVReplicationStreams(ctx)
 	return sw.logs(), nil
 }
 
@@ -1115,7 +1122,8 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 func (ts *trafficSwitcher) dropSourceTables(ctx context.Context) error {
 	return ts.forAllSources(func(source *tsSource) error {
 		for _, tableName := range ts.tables {
-			query := fmt.Sprintf("drop table %s.%s", encodeString(source.master.DbName()), tableName)
+			ts.wr.Logger().Infof("Dropping table %s.%s\n", source.master.DbName(), tableName)
+			query := fmt.Sprintf("drop table %s.%s", source.master.DbName(), tableName)
 			_, err := ts.wr.ExecuteFetchAsDba(ctx, source.master.Alias, query, 1, false, true)
 			if err != nil {
 				ts.wr.Logger().Errorf("Error dropping table %s: %v", tableName, err)
@@ -1130,12 +1138,13 @@ func (ts *trafficSwitcher) dropSourceTables(ctx context.Context) error {
 
 func (ts *trafficSwitcher) dropSourceShards(ctx context.Context) error {
 	return ts.forAllSources(func(source *tsSource) error {
+		ts.wr.Logger().Infof("Deleting shard %s.%s\n", source.si.Keyspace(), source.si.ShardName())
 		err := ts.wr.DeleteShard(ctx, source.si.Keyspace(), source.si.ShardName(), true, false)
 		if err != nil {
 			ts.wr.Logger().Errorf("Error deleting shard %s: %v", source.si.ShardName(), err)
 			return err
 		}
-		ts.wr.Logger().Printf("Deleted shard %s.%s\n", source.si.Keyspace(), source.si.ShardName())
+		ts.wr.Logger().Infof("Deleted shard %s.%s\n", source.si.Keyspace(), source.si.ShardName())
 		return nil
 	})
 }
@@ -1157,7 +1166,7 @@ func (ts *trafficSwitcher) freezeTargetVReplication(ctx context.Context) error {
 
 func (ts *trafficSwitcher) dropTargetVReplicationStreams(ctx context.Context) error {
 	return ts.forAllTargets(func(target *tsTarget) error {
-		ts.wr.Logger().Infof("Delete target streams for workflow %s db_name %s", ts.workflow, target.master.DbName())
+		ts.wr.Logger().Infof("Deleting target streams for workflow %s db_name %s", ts.workflow, target.master.DbName())
 		fmt.Printf("Delete target streams for workflow %s db_name %s tablet %d\n", ts.workflow, target.master.DbName(), target.master.Alias.Uid)
 		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(ts.workflow))
 		fmt.Println(query)
@@ -1179,6 +1188,7 @@ func (wr *Wrangler) getRoutingRules(ctx context.Context) (map[string][]string, e
 }
 
 func (wr *Wrangler) saveRoutingRules(ctx context.Context, rules map[string][]string) error {
+	wr.Logger().Infof("Saving routing rules %v\n", rules)
 	rrs := &vschemapb.RoutingRules{Rules: make([]*vschemapb.RoutingRule, 0, len(rules))}
 	for from, to := range rules {
 		rrs.Rules = append(rrs.Rules, &vschemapb.RoutingRule{
