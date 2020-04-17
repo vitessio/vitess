@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -27,6 +29,12 @@ import (
 // buildSelectPlan is the new function to build a Select plan.
 func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
 	sel := stmt.(*sqlparser.Select)
+
+	p := tryAtVtgate(sel)
+	if p != nil {
+		return p, nil
+	}
+
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(sel)))
 	if err := pb.processSelect(sel, nil); err != nil {
 		return nil, err
@@ -119,6 +127,50 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 	}
 	pb.bldr.PushMisc(sel)
 	return nil
+}
+
+func tryAtVtgate(sel *sqlparser.Select) engine.Primitive {
+	if checkForDual(sel) {
+		var err error
+		exprs := make([]evalengine.Expr, len(sel.SelectExprs))
+		cols := make([]string, len(sel.SelectExprs))
+		for i, e := range sel.SelectExprs {
+			expr := e.(*sqlparser.AliasedExpr)
+			exprs[i], err = sqlparser.Convert(expr.Expr)
+			if err != nil {
+				return nil
+			}
+			cols[i] = expr.As.String()
+		}
+		return &engine.Projection{
+			Exprs: exprs,
+			Cols:  cols,
+			Input: &engine.SingleRow{},
+		}
+	}
+	return nil
+}
+
+func checkForDual(sel *sqlparser.Select) bool {
+	if len(sel.From) == 1 {
+		if from, ok := sel.From[0].(*sqlparser.AliasedTableExpr); ok {
+			if tableName, ok := from.Expr.(sqlparser.TableName); ok {
+				if tableName.Name.String() == "dual" && tableName.Qualifier.IsEmpty() {
+					for _, expr := range sel.SelectExprs {
+						e, ok := expr.(*sqlparser.AliasedExpr)
+						if !ok {
+							return false
+						}
+						if _, ok := e.Expr.(*sqlparser.SQLVal); !ok {
+							return false
+						}
+					}
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // pushFilter identifies the target route for the specified bool expr,

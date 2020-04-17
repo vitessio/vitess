@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -306,7 +308,7 @@ func (lu *clCommon) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, ks
 func (lu *clCommon) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
 	equal := true
 	for i := range oldValues {
-		result, err := sqltypes.NullsafeCompare(oldValues[i], newValues[i])
+		result, err := evalengine.NullsafeCompare(oldValues[i], newValues[i])
 		// errors from NullsafeCompare can be ignored. if they are real problems, we'll see them in the Create/Update
 		if err != nil || result != 0 {
 			equal = false

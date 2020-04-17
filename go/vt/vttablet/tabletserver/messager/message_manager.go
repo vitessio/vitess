@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -829,28 +831,28 @@ func (mm *messageManager) GeneratePurgeQuery(timeCutoff int64) (string, map[stri
 func BuildMessageRow(row []sqltypes.Value) (*MessageRow, error) {
 	mr := &MessageRow{Row: row[4:]}
 	if !row[0].IsNull() {
-		v, err := sqltypes.ToInt64(row[0])
+		v, err := evalengine.ToInt64(row[0])
 		if err != nil {
 			return nil, err
 		}
 		mr.Priority = v
 	}
 	if !row[1].IsNull() {
-		v, err := sqltypes.ToInt64(row[0])
+		v, err := evalengine.ToInt64(row[0])
 		if err != nil {
 			return nil, err
 		}
 		mr.TimeNext = v
 	}
 	if !row[2].IsNull() {
-		v, err := sqltypes.ToInt64(row[1])
+		v, err := evalengine.ToInt64(row[1])
 		if err != nil {
 			return nil, err
 		}
 		mr.Epoch = v
 	}
 	if !row[3].IsNull() {
-		v, err := sqltypes.ToInt64(row[2])
+		v, err := evalengine.ToInt64(row[2])
 		if err != nil {
 			return nil, err
 		}

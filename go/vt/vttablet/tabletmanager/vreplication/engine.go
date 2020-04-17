@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -392,7 +394,7 @@ func (vre *Engine) fetchIDs(dbClient binlogplayer.DBClient, selector string) (id
 		return nil, nil, err
 	}
 	for _, row := range qr.Rows {
-		id, err := sqltypes.ToInt64(row[0])
+		id, err := evalengine.ToInt64(row[0])
 		if err != nil {
 			return nil, nil, err
 		}

@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -36,7 +38,7 @@ func (cv *converter) ToNative(v sqltypes.Value) (interface{}, error) {
 	case sqltypes.Date:
 		return DateToNative(v, cv.location)
 	}
-	return sqltypes.ToNative(v)
+	return evalengine.ToNative(v)
 }
 
 func (cv *converter) BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {

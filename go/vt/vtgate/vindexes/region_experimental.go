@@ -21,6 +21,8 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
@@ -94,7 +96,7 @@ func (ge *RegionExperimental) Map(vcursor VCursor, rowsColValues [][]sqltypes.Va
 			continue
 		}
 		// Compute region prefix.
-		rn, err := sqltypes.ToUint64(row[0])
+		rn, err := evalengine.ToUint64(row[0])
 		if err != nil {
 			destinations = append(destinations, key.DestinationNone{})
 			continue
@@ -103,7 +105,7 @@ func (ge *RegionExperimental) Map(vcursor VCursor, rowsColValues [][]sqltypes.Va
 		binary.BigEndian.PutUint16(r, uint16(rn))
 
 		// Compute hash.
-		hn, err := sqltypes.ToUint64(row[1])
+		hn, err := evalengine.ToUint64(row[1])
 		if err != nil {
 			destinations = append(destinations, key.DestinationNone{})
 			continue

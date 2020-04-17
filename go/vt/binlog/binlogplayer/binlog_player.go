@@ -27,6 +27,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
@@ -542,11 +544,11 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 	}
 	vrRow := qr.Rows[0]
 
-	maxTPS, err := sqltypes.ToInt64(vrRow[2])
+	maxTPS, err := evalengine.ToInt64(vrRow[2])
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse max_tps column: %v", err)
 	}
-	maxReplicationLag, err := sqltypes.ToInt64(vrRow[3])
+	maxReplicationLag, err := evalengine.ToInt64(vrRow[3])
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse max_replication_lag column: %v", err)
 	}
