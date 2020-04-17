@@ -686,11 +686,8 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 	// Verify the topology is correct.
 	agent.verifyTopology(ctx)
 
-	// Get and fix the dbname if necessary, only for real instances.
-	if !agent.DBConfigs.IsZero() {
-		dbname := topoproto.TabletDbName(agent.initialTablet)
-		agent.DBConfigs.DBName.Set(dbname)
-	}
+	dbname := topoproto.TabletDbName(agent.initialTablet)
+	agent.DBConfigs.DBName.Set(dbname)
 
 	// Create and register the RPC services from UpdateStream.
 	// (it needs the dbname, so it has to be delayed up to here,
