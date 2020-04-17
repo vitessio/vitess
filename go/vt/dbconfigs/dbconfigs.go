@@ -25,7 +25,6 @@ import (
 	"flag"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/yaml2"
 )
@@ -58,7 +57,6 @@ var (
 // It contains other connection parameters like socket, charset, etc.
 // It also stores the default db name, which it can combine with the
 // rest of the data to build db-sepcific connection parameters.
-// It also supplies the SidecarDBName. This is hardcoded to "_vt".
 //
 // The legacy way of initializing is as follows:
 // App must call RegisterFlags to request the types of connections
@@ -67,7 +65,6 @@ var (
 // a DBConfigs object.
 // The app must store the DBConfigs object internally, and use it to
 // build connection parameters as needed.
-// The DBName is initially empty and may later be set or changed by the app.
 type DBConfigs struct {
 	Socket                     string `json:"socket,omitempty"`
 	Host                       string `json:"host,omitempty"`
@@ -98,7 +95,7 @@ type DBConfigs struct {
 	allprivsParams     mysql.ConnParams
 	externalReplParams mysql.ConnParams
 
-	DBName sync2.AtomicString `json:"-"`
+	dbname string
 }
 
 // UserConfig contains user-specific configs.
@@ -210,6 +207,18 @@ func (c Connector) Host() string {
 	return c.connParams.Host
 }
 
+// WithDBName returns a new DBConfigs with the dbname set.
+func (dbcfgs *DBConfigs) WithDBName(dbname string) *DBConfigs {
+	dbcfgs = dbcfgs.Copy()
+	dbcfgs.dbname = dbname
+	return dbcfgs
+}
+
+// DBName returns the db name.
+func (dbcfgs *DBConfigs) DBName() string {
+	return dbcfgs.dbname
+}
+
 // AppWithDB returns connection parameters for app with dbname set.
 func (dbcfgs *DBConfigs) AppWithDB() Connector {
 	return dbcfgs.makeParams(&dbcfgs.appParams, true)
@@ -266,7 +275,7 @@ func (dbcfgs *DBConfigs) ExternalReplWithDB() Connector {
 func (dbcfgs *DBConfigs) makeParams(cp *mysql.ConnParams, withDB bool) Connector {
 	result := *cp
 	if withDB {
-		result.DbName = dbcfgs.DBName.Get()
+		result.DbName = dbcfgs.dbname
 	}
 	return Connector{
 		connParams: &result,
@@ -299,39 +308,9 @@ func (dbcfgs *DBConfigs) Redact() {
 }
 
 // Copy returns a copy of the DBConfig.
-// TODO(sougou): make DBConfigs lock-free so it can be direct-copied.
 func (dbcfgs *DBConfigs) Copy() *DBConfigs {
-	result := &DBConfigs{
-		Socket:                     dbcfgs.Socket,
-		Host:                       dbcfgs.Host,
-		Port:                       dbcfgs.Port,
-		Charset:                    dbcfgs.Charset,
-		Flags:                      dbcfgs.Flags,
-		Flavor:                     dbcfgs.Flavor,
-		SslCa:                      dbcfgs.SslCa,
-		SslCaPath:                  dbcfgs.SslCaPath,
-		SslCert:                    dbcfgs.SslCert,
-		SslKey:                     dbcfgs.SslKey,
-		ServerName:                 dbcfgs.ServerName,
-		ConnectTimeoutMilliseconds: dbcfgs.ConnectTimeoutMilliseconds,
-		App:                        dbcfgs.App,
-		Dba:                        dbcfgs.Dba,
-		Filtered:                   dbcfgs.Filtered,
-		Repl:                       dbcfgs.Repl,
-		Appdebug:                   dbcfgs.Appdebug,
-		Allprivs:                   dbcfgs.Allprivs,
-		externalRepl:               dbcfgs.externalRepl,
-
-		appParams:          dbcfgs.appParams,
-		dbaParams:          dbcfgs.dbaParams,
-		filteredParams:     dbcfgs.filteredParams,
-		replParams:         dbcfgs.replParams,
-		appdebugParams:     dbcfgs.appdebugParams,
-		allprivsParams:     dbcfgs.allprivsParams,
-		externalReplParams: dbcfgs.externalReplParams,
-	}
-	result.DBName.Set(dbcfgs.DBName.Get())
-	return result
+	result := *dbcfgs
+	return &result
 }
 
 // Init will initialize all the necessary connection parameters.
@@ -416,8 +395,8 @@ func (dbcfgs *DBConfigs) getParams(userKey string, dbc *DBConfigs) (*UserConfig,
 }
 
 // NewTestDBConfigs returns a DBConfigs meant for testing.
-func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbName string) *DBConfigs {
-	dbcfgs := &DBConfigs{
+func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbname string) *DBConfigs {
+	return &DBConfigs{
 		appParams:          genParams,
 		appdebugParams:     appDebugParams,
 		allprivsParams:     genParams,
@@ -425,7 +404,6 @@ func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbName string)
 		filteredParams:     genParams,
 		replParams:         genParams,
 		externalReplParams: genParams,
+		dbname:             dbname,
 	}
-	dbcfgs.DBName.Set(dbName)
-	return dbcfgs
 }
