@@ -258,6 +258,30 @@ func TestExecutorSet(t *testing.T) {
 	}, {
 		in:  "set @foo = 2.1, @bar = 'baz'",
 		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo", "bar"}, []interface{}{2.1, "baz"}), Autocommit: true},
+	}, {
+		in:  "set session transaction isolation level repeatable read",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set session transaction isolation level read committed",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set session transaction isolation level read uncommitted",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set session transaction isolation level serializable",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set transaction isolation level serializable",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set transaction read only",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set transaction read write",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set session transaction read write",
+		out: &vtgatepb.Session{Autocommit: true},
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
