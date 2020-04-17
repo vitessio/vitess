@@ -98,7 +98,6 @@ require (
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/krishicks/yaml-patch v0.0.10
 	github.com/lyft/protoc-gen-validate v0.0.0-20180911180927-64fcb82c878e // indirect
-	github.com/magiconair/properties v1.8.1
 	github.com/mattn/go-isatty v0.0.11 // indirect
 	github.com/minio/minio-go v0.0.0-20190131015406-c8a261de75c1
 	github.com/mitchellh/copystructure v0.0.0-20160804032330-cdac8253d00f // indirect

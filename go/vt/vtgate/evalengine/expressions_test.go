@@ -21,9 +21,10 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/sqltypes"
 
-	"github.com/magiconair/properties/assert"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
