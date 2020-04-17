@@ -94,12 +94,12 @@ func (sm *streamMigrater) readSourceStreams(ctx context.Context, cancelMigrate b
 			// If so, we request the operator to clean them up, or restart them before going ahead.
 			// This allows us to assume that all stopped streams can be safely restarted
 			// if we cancel the operation.
-			stoppedStreams, err := sm.readTabletStreams(ctx, source.master, "state = 'Stopped'")
+			stoppedStreams, err := sm.readTabletStreams(ctx, source.master, "state = 'Stopped' and message != 'FROZEN'")
 			if err != nil {
 				return err
 			}
 			if len(stoppedStreams) != 0 {
-				return fmt.Errorf("cannot migrate until all streams are running: %s", source.si.ShardName())
+				return fmt.Errorf("cannot migrate until all streams are running: %s: %d", source.si.ShardName(), source.master.Alias.Uid)
 			}
 		}
 		tabletStreams, err := sm.readTabletStreams(ctx, source.master, "")
