@@ -644,6 +644,10 @@ func TestExecutorShow(t *testing.T) {
 	session.TargetString = KsTestUnsharded
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "show create table unknown", nil)
 	require.NoError(t, err)
+
+	_, err = executor.Execute(context.Background(), "TestExecute", session, "show full columns from table1", nil)
+	require.NoError(t, err)
+
 	// Reset target string so other tests dont fail.
 	session.TargetString = "@master"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show full columns from unknown from %v", KsTestUnsharded), nil)
@@ -772,9 +776,7 @@ func TestExecutorShow(t *testing.T) {
 
 	// Test SHOW FULL COLUMNS FROM where query has a qualifier
 	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show full columns from %v.table1", KsTestUnsharded), nil)
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Just test for first & last.
 	qr.Rows = [][]sqltypes.Value{qr.Rows[0], qr.Rows[len(qr.Rows)-1]}
