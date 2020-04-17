@@ -700,8 +700,10 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			destKeyspace = show.OnTable.Qualifier.String()
 			show.OnTable.Qualifier = sqlparser.NewTableIdent("")
 		} else if show.ShowTablesOpt != nil {
-			destKeyspace = show.ShowTablesOpt.DbName
-			show.ShowTablesOpt.DbName = ""
+			if show.ShowTablesOpt.DbName != "" {
+				destKeyspace = show.ShowTablesOpt.DbName
+				show.ShowTablesOpt.DbName = ""
+			}
 		} else {
 			break
 		}
