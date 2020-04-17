@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -103,7 +105,7 @@ func (r *keyspaceIDResolverFactoryV2) keyspaceID(v sqltypes.Value) ([]byte, erro
 	case topodatapb.KeyspaceIdType_BYTES:
 		return v.ToBytes(), nil
 	case topodatapb.KeyspaceIdType_UINT64:
-		i, err := sqltypes.ToUint64(v)
+		i, err := evalengine.ToUint64(v)
 		if err != nil {
 			return nil, fmt.Errorf("non numerical value: %v", err)
 		}

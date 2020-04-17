@@ -19,6 +19,8 @@ package engine
 import (
 	"encoding/json"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -109,7 +111,7 @@ func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars map[string]*querypb.Bi
 	if err != nil {
 		return nil, err
 	}
-	vkey, err := sqltypes.Cast(k, sqltypes.VarBinary)
+	vkey, err := evalengine.Cast(k, sqltypes.VarBinary)
 	if err != nil {
 		return nil, err
 	}

@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
@@ -830,7 +832,7 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []int
 		if col == -1 {
 			continue
 		}
-		c, err := sqltypes.NullsafeCompare(sourceRow[col], targetRow[col])
+		c, err := evalengine.NullsafeCompare(sourceRow[col], targetRow[col])
 		if err != nil {
 			return 0, err
 		}

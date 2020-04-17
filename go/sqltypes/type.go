@@ -81,8 +81,8 @@ func IsBinary(t querypb.Type) bool {
 	return int(t)&flagIsBinary == flagIsBinary
 }
 
-// isNumber returns true if the type is any type of number.
-func isNumber(t querypb.Type) bool {
+// IsNumber returns true if the type is any type of number.
+func IsNumber(t querypb.Type) bool {
 	return IsIntegral(t) || IsFloat(t) || t == Decimal
 }
 

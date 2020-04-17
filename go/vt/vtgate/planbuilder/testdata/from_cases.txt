@@ -2049,15 +2049,20 @@
   "QueryType": "SELECT",
   "Original": "select last_insert_id()",
   "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectReference",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select :__lastInsertId as `last_insert_id()` from dual where 1 != 1",
-    "Query": "select :__lastInsertId as `last_insert_id()` from dual",
-    "Table": "dual"
+    "OperatorType": "Projection",
+    "Variant": "",
+    "Columns": [
+      "last_insert_id()"
+    ],
+    "Expressions": [
+      ":__lastInsertId"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow",
+        "Variant": ""
+      }
+    ]
   }
 }
 

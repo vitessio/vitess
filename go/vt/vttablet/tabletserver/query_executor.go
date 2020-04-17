@@ -22,6 +22,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -400,7 +402,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if len(qr.Rows) != 1 {
 				return nil, fmt.Errorf("unexpected rows from reading sequence %s (possible mis-route): %d", tableName, len(qr.Rows))
 			}
-			nextID, err := sqltypes.ToInt64(qr.Rows[0][0])
+			nextID, err := evalengine.ToInt64(qr.Rows[0][0])
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "error loading sequence %s", tableName)
 			}
@@ -415,7 +417,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 				t.SequenceInfo.NextVal = nextID
 				t.SequenceInfo.LastVal = nextID
 			}
-			cache, err := sqltypes.ToInt64(qr.Rows[0][1])
+			cache, err := evalengine.ToInt64(qr.Rows[0][1])
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "error loading sequence %s", tableName)
 			}
@@ -688,5 +690,5 @@ func resolveNumber(pv sqltypes.PlanValue, bindVars map[string]*querypb.BindVaria
 	if err != nil {
 		return 0, err
 	}
-	return sqltypes.ToInt64(v)
+	return evalengine.ToInt64(v)
 }

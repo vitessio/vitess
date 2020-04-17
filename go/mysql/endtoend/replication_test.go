@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -68,7 +70,7 @@ func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, mysql.BinlogFor
 		t.Fatalf("SHOW MASTER STATUS returned unexpected result: %v", result)
 	}
 	file := result.Rows[0][0].ToString()
-	position, err := sqltypes.ToUint64(result.Rows[0][1])
+	position, err := evalengine.ToUint64(result.Rows[0][1])
 	if err != nil {
 		t.Fatalf("SHOW MASTER STATUS returned invalid position: %v", result.Rows[0][1])
 	}

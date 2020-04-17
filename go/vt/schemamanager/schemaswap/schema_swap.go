@@ -27,6 +27,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -614,14 +616,14 @@ func (shardSwap *shardSchemaSwap) readShardMetadata(metadata *shardSwapMetadata,
 	for _, row := range queryResult.Rows {
 		switch row[0].ToString() {
 		case lastStartedMetadataName:
-			swapID, err := sqltypes.ToUint64(row[1])
+			swapID, err := evalengine.ToUint64(row[1])
 			if err != nil {
 				log.Warningf("Could not parse value of last started schema swap id %v, ignoring the value: %v", row[1], err)
 			} else {
 				metadata.lastStartedSwap = swapID
 			}
 		case lastFinishedMetadataName:
-			swapID, err := sqltypes.ToUint64(row[1])
+			swapID, err := evalengine.ToUint64(row[1])
 			if err != nil {
 				log.Warningf("Could not parse value of last finished schema swap id %v, ignoring the value: %v", row[1], err)
 			} else {
@@ -909,7 +911,7 @@ func (shardSwap *shardSchemaSwap) isSwapApplied(tablet *topodatapb.Tablet) (bool
 		// No such row means we need to apply the swap.
 		return false, nil
 	}
-	swapID, err := sqltypes.ToUint64(swapIDResult.Rows[0][0])
+	swapID, err := evalengine.ToUint64(swapIDResult.Rows[0][0])
 	if err != nil {
 		return false, err
 	}

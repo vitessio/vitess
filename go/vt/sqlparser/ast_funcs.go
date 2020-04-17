@@ -24,10 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // Walk calls visit on every node.
@@ -423,24 +420,6 @@ func (node *ComparisonExpr) IsImpossible() bool {
 		return true
 	}
 	return false
-}
-
-// ExprFromValue converts the given Value into an Expr or returns an error.
-func ExprFromValue(value sqltypes.Value) (Expr, error) {
-	// The type checks here follow the rules defined in sqltypes/types.go.
-	switch {
-	case value.Type() == sqltypes.Null:
-		return &NullVal{}, nil
-	case value.IsIntegral():
-		return NewIntVal(value.ToBytes()), nil
-	case value.IsFloat() || value.Type() == sqltypes.Decimal:
-		return NewFloatVal(value.ToBytes()), nil
-	case value.IsQuoted():
-		return NewStrVal(value.ToBytes()), nil
-	default:
-		// We cannot support sqltypes.Expression, or any other invalid type.
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot convert value %v to AST", value)
-	}
 }
 
 // NewStrVal builds a new StrVal.
