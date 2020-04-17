@@ -55,18 +55,18 @@ type (
 
 	// Select represents a SELECT statement.
 	Select struct {
-		Cache       string
-		Comments    Comments
-		Distinct    string
-		Hints       string
-		SelectExprs SelectExprs
-		From        TableExprs
-		Where       *Where
-		GroupBy     GroupBy
-		Having      *Where
-		OrderBy     OrderBy
-		Limit       *Limit
-		Lock        string
+		Cache            *bool // a reference here so it can be nil
+		Comments         Comments
+		Distinct         bool
+		StraightJoinHint bool
+		SelectExprs      SelectExprs
+		From             TableExprs
+		Where            *Where
+		GroupBy          GroupBy
+		Having           *Where
+		OrderBy          OrderBy
+		Limit            *Limit
+		Lock             string
 	}
 
 	// Union represents a UNION statement.
@@ -835,8 +835,22 @@ type TableIdent struct {
 
 // Format formats the node.
 func (node *Select) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "select %v%s%s%s%v from %v%v%v%v%v%v%s",
-		node.Comments, node.Cache, node.Distinct, node.Hints, node.SelectExprs,
+	var options string
+	if node.Distinct {
+		options = DistinctStr
+	}
+	if node.Cache != nil {
+		if *node.Cache {
+			options += SQLCacheStr
+		} else {
+			options += SQLNoCacheStr
+		}
+	}
+	if node.StraightJoinHint {
+		options += StraightJoinHint
+	}
+	buf.astPrintf(node, "select %v%s%v from %v%v%v%v%v%v%s",
+		node.Comments, options, node.SelectExprs,
 		node.From, node.Where,
 		node.GroupBy, node.Having, node.OrderBy,
 		node.Limit, node.Lock)

@@ -294,7 +294,7 @@ func analyzeSelectFrom(query string) (sel *sqlparser.Select, from string, err er
 	if !ok {
 		return nil, "", fmt.Errorf("unexpected: %v", sqlparser.String(statement))
 	}
-	if sel.Distinct != "" {
+	if sel.Distinct {
 		return nil, "", fmt.Errorf("unexpected: %v", sqlparser.String(sel))
 	}
 	if len(sel.From) > 1 {

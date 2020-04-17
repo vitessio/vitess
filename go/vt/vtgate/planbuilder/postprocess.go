@@ -26,7 +26,7 @@ import (
 // pushGroupBy processes the group by clause. It resolves all symbols
 // and ensures that there are no subqueries.
 func (pb *primitiveBuilder) pushGroupBy(sel *sqlparser.Select) error {
-	if sel.Distinct != "" {
+	if sel.Distinct {
 		if err := pb.bldr.MakeDistinct(); err != nil {
 			return err
 		}
