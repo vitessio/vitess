@@ -195,7 +195,9 @@ func (ts *Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardI
 	defer span.Finish()
 
 	shardPath := shardFilePath(keyspace, shard)
+
 	data, version, err := ts.globalCell.Get(ctx, shardPath)
+
 	if err != nil {
 		return nil, err
 	}

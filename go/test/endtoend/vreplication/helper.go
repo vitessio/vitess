@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/buger/jsonparser"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"github.com/PuerkitoBio/goquery"
@@ -165,20 +167,75 @@ func getQueryCount(url string, query string) int {
 	return count
 }
 
-/*func expectBlacklistedTables(t *testing.T, vc *VitessCluster, ksShard string, tables []string) (bool, error) {
+func validateDryRunResults(t *testing.T, output string, want []string) {
+	t.Helper()
+	assert.NotEmpty(t, output)
+
+	gotDryRun := strings.Split(output, "\n")
+	assert.True(t, len(gotDryRun) > 3)
+	gotDryRun = gotDryRun[3 : len(gotDryRun)-1]
+	if len(want) != len(gotDryRun) {
+		t.Fatalf("want and got: lengths don't match, \nwant\n%s\n\ngot\n%s", strings.Join(want, "\n"), strings.Join(gotDryRun, "\n"))
+	}
+	var match bool
+	for i, w := range want {
+		w = strings.TrimSpace(w)
+		g := strings.TrimSpace(gotDryRun[i])
+		if w[0] == '/' {
+			w = strings.TrimSpace(w[1:])
+			result := strings.HasPrefix(g, w)
+			match = result
+			//t.Logf("Partial match |%v|%v|%v\n", w, g, match)
+		} else {
+			match = (g == w)
+		}
+		if !match {
+			match = false
+			t.Logf("want %s, got %s\n", w, gotDryRun[i])
+		}
+	}
+	if !match {
+		t.Fatal("Dry run results don't match")
+	}
+}
+
+func checkIfTableExists(t *testing.T, vc *VitessCluster, tabletAlias string, table string) (bool, error) {
 	var output string
 	var err error
+	found := false
+
+	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetSchema", "-tables", table, tabletAlias); err != nil {
+		return false, err
+	}
+	jsonparser.ArrayEach([]byte(output), func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+		t, _ := jsonparser.GetString(value, "name")
+		if t == table {
+			found = true
+		}
+	}, "table_definitions")
+	return found, nil
+}
+
+func checkIfBlacklistExists(t *testing.T, vc *VitessCluster, ksShard string, table string) (bool, error) {
+	var output string
+	var err error
+	found := false
 	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetShard", ksShard); err != nil {
-		t.Fatalf("GetShard error: %s\n", output)
+		t.Fatalf("%v %v", err, output)
+		return false, err
 	}
-	assert.NotEmpty(t, output)
-	replacer := strings.NewReplacer("\n", "", "\"", "", " ", "")
-	output = replacer.Replace(output)
-	if want == "" && !strings.Contains(output, "blacklisted_tables") {
-		return true, nil
+	jsonparser.ArrayEach([]byte(output), func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+		if string(value) == table {
+			found = true
+		}
+	}, "tablet_controls", "[0]", "blacklisted_tables")
+	return found, nil
+}
+
+func expectNumberOfStreams(t *testing.T, vtgateConn *mysql.Conn, name string, workflow string, database string, want int) {
+	query := fmt.Sprintf("select count(*) from _vt.vreplication where workflow='%s';", workflow)
+	result := validateQuery(t, vtgateConn, database, query, fmt.Sprintf(`[[INT64(%d)]]`, want))
+	if result != "" {
+		t.Fatalf("Incorrect streams found for %s: %s\n", name, result)
 	}
-	if want != "" && strings.Contains(output, )
-	return false, nil
-
-
-}*/
+}

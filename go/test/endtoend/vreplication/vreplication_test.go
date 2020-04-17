@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -51,6 +50,7 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 
 	shardOrders(t)
 	shardMerchant(t)
+
 	materializeProduct(t)
 	materializeMerchantOrders(t)
 	materializeSales(t)
@@ -61,19 +61,11 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 
 	insertMoreCustomers(t, 16)
 	reshardCustomer2to4Split(t)
-	expectNumberOfStreams(t, "Customer2to4", "sales", "product:0", 4)
+	expectNumberOfStreams(t, vtgateConn, "Customer2to4", "sales", "product:0", 4)
 	reshardCustomer3to2SplitMerge(t)
-	expectNumberOfStreams(t, "Customer3to2", "sales", "product:0", 3)
+	expectNumberOfStreams(t, vtgateConn, "Customer3to2", "sales", "product:0", 3)
 	reshardCustomer3to1Merge(t)
-	expectNumberOfStreams(t, "Customer3to1", "sales", "product:0", 1)
-}
-
-func expectNumberOfStreams(t *testing.T, name string, workflow string, database string, want int) {
-	query := fmt.Sprintf("select count(*) from _vt.vreplication where workflow='%s';", workflow)
-	result := validateQuery(t, vtgateConn, database, query, fmt.Sprintf(`[[INT64(%d)]]`, want))
-	if result != "" {
-		t.Fatalf("Sales streams not migrated after 2to4: %s\n", result)
-	}
+	expectNumberOfStreams(t, vtgateConn, "Customer3to1", "sales", "product:0", 1)
 }
 
 func insertInitialData(t *testing.T) {
@@ -101,37 +93,6 @@ func insertMoreCustomers(t *testing.T, numCustomers int) {
 		}
 	}
 	execVtgateQuery(t, vtgateConn, "customer", sql)
-}
-
-func validateDryRunResults(t *testing.T, output string, want []string) {
-	t.Helper()
-	assert.NotEmpty(t, output)
-
-	gotDryRun := strings.Split(output, "\n")
-	assert.True(t, len(gotDryRun) > 3)
-	gotDryRun = gotDryRun[3 : len(gotDryRun)-1]
-	if len(want) != len(gotDryRun) {
-		t.Fatalf("want and got: lengths don't match, \nwant\n%s\n\ngot\n%s", strings.Join(want, "\n"), strings.Join(gotDryRun, "\n"))
-	}
-	var match bool
-	for i, w := range want {
-		w = strings.TrimSpace(w)
-		g := strings.TrimSpace(gotDryRun[i])
-		if w[0] == '/' {
-			w = strings.TrimSpace(w[1:])
-			result, _ := regexp.MatchString(w[1:], g)
-			match = result
-		} else {
-			match = (g == w)
-		}
-		if !match {
-			match = false
-			t.Logf("want %s, got %s\n", w, gotDryRun[i])
-		}
-	}
-	if !match {
-		t.Fatal("Dry run results don't match")
-	}
 }
 
 func shardCustomer(t *testing.T, testReverse bool) {
@@ -237,24 +198,40 @@ func shardCustomer(t *testing.T, testReverse bool) {
 		}
 		validateDryRunResults(t, output, want)
 
-		//TODO blackListedTables := getBlacklistedTables(t, vc, "product:0")
-		//TODO assert.Equal(t, blackListedTables, "customer")
+		var exists bool
+		if exists, err = checkIfBlacklistExists(t, vc, "product:0", "customer"); err != nil {
+			t.Fatal("Error getting blacklist for customer:0")
+		}
+		assert.True(t, exists)
+
 		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("DropSources", "customer.p2c"); err != nil {
 			t.Fatalf("DropSources error: %s\n", output)
 		}
-		//TODO blackListedTables = getBlacklistedTables(t, vc, "product:0")
-		//TODO assert.Equal(t, blackListedTables, "")
 
-		// TODO Verify Vreplication streams are deleted using VReplicationExec
-		// TODO HOWTO check table exists: using information_schema?  //show tables
-		// TODO Check if Shard exist using GetShard "customer:0"  //get keyspace (something)
+		if exists, err = checkIfBlacklistExists(t, vc, "product:0", "customer"); err != nil {
+			t.Fatal("Error getting blacklist for customer:0")
+		}
+		assert.False(t, exists)
+
+		for _, shard := range strings.Split("-80,80-", ",") {
+			expectNumberOfStreams(t, vtgateConn, "shardCustomer", "p2c", "customer:"+shard, 0)
+		}
+
+		var found bool
+		found, err = checkIfTableExists(t, vc, "zone1-100", "customer")
+		assert.NoError(t, err, "Customer table not deleted from zone1-100")
+		assert.False(t, found)
+
+		found, err = checkIfTableExists(t, vc, "zone1-200", "customer")
+		assert.NoError(t, err, "Customer table not deleted from zone1-200")
+		assert.True(t, found)
 
 		insertQuery2 = "insert into customer(name) values('tempCustomer8')" //ID 103, hence due to reverse_bits in shard 80-
 		assert.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2))
 		insertQuery2 = "insert into customer(name) values('tempCustomer9')" //ID 104, hence due to reverse_bits in shard 80-
-		assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery2, matchInsertQuery2))
-		insertQuery2 = "insert into customer(name) values('tempCustomer10')" //ID 105, hence due to reverse_bits in shard -80
 		assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery2, matchInsertQuery2))
+		insertQuery2 = "insert into customer(name) values('tempCustomer10')" //ID 105, hence due to reverse_bits in shard -80
+		assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery2, matchInsertQuery2))
 
 		execVtgateQuery(t, vtgateConn, "customer", "delete from customer where name like 'tempCustomer%'")
 		assert.Empty(t, validateCountInTablet(t, customerTab1, "customer", "customer", 1))
@@ -263,16 +240,15 @@ func shardCustomer(t *testing.T, testReverse bool) {
 
 		query = "insert into customer (name) values('george')"
 		execVtgateQuery(t, vtgateConn, "customer", query)
-		assert.Empty(t, validateCountInTablet(t, customerTab1, "customer", "customer", 2))
-		assert.Empty(t, validateCountInTablet(t, customerTab2, "customer", "customer", 2))
+		assert.Empty(t, validateCountInTablet(t, customerTab1, "customer", "customer", 1))
+		assert.Empty(t, validateCountInTablet(t, customerTab2, "customer", "customer", 3))
 		assert.Empty(t, validateCount(t, vtgateConn, "customer", "customer.customer", 4))
 	}
-	removeTabletControls(t, "product/0")
 }
 
 func reshardCustomer2to4Split(t *testing.T) {
 	ksName := "customer"
-	counts := map[string]int{"zone1-600": 4, "zone1-700": 6, "zone1-800": 5, "zone1-900": 5}
+	counts := map[string]int{"zone1-600": 4, "zone1-700": 5, "zone1-800": 5, "zone1-900": 6}
 	reshard(t, ksName, "customer", "c2c4", "-80,80-", "-40,40-80,80-c0,c0-", 600, counts, nil)
 	assert.Empty(t, validateCount(t, vtgateConn, ksName, "customer", 20))
 	query := "insert into customer (name) values('yoko')"
@@ -288,6 +264,39 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 	query := "insert into merchant (mname, category) values('amazon', 'electronics')"
 	execVtgateQuery(t, vtgateConn, ksName, query)
 	assert.Empty(t, validateCount(t, vtgateConn, ksName, "merchant", 3))
+
+	var output string
+	var err error
+
+	for _, shard := range strings.Split("-80,80-", ",") {
+		output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetShard", "merchant:"+shard)
+		if err == nil {
+			t.Fatal("GetShard merchant:-80 failed")
+		}
+		assert.Contains(t, output, "node doesn't exist", "GetShard succeeded for dropped shard merchant:"+shard)
+	}
+
+	for _, shard := range strings.Split("-40,40-c0,c0-", ",") {
+		output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetShard", "merchant:"+shard)
+		if err != nil {
+			t.Fatalf("GetShard merchant failed for: %s: %v", shard, err)
+		}
+		assert.NotContains(t, output, "node doesn't exist", "GetShard failed for valid shard merchant:"+shard)
+		assert.Contains(t, output, "master_alias", "GetShard failed for valid shard merchant:"+shard)
+	}
+
+	for _, shard := range strings.Split("-40,40-c0,c0-", ",") {
+		expectNumberOfStreams(t, vtgateConn, "reshardMerchant2to3SplitMerge", "m2m3", "merchant:"+shard, 0)
+	}
+
+	var found bool
+	found, err = checkIfTableExists(t, vc, "zone1-1600", "customer")
+	assert.NoError(t, err, "Customer table found incorrectly in zone1-1600")
+	assert.False(t, found)
+	found, err = checkIfTableExists(t, vc, "zone1-1600", "merchant")
+	assert.NoError(t, err, "Merchant table not found in zone1-1600")
+	assert.True(t, found)
+
 }
 
 func reshardMerchant3to1Merge(t *testing.T) {
@@ -302,7 +311,7 @@ func reshardMerchant3to1Merge(t *testing.T) {
 
 func reshardCustomer3to2SplitMerge(t *testing.T) { //-40,40-80,80-c0 => merge/split, c0- stays the same  ending up with 3
 	ksName := "customer"
-	counts := map[string]int{"zone1-600": 5, "zone1-700": 6, "zone1-800": 5, "zone1-900": 5}
+	counts := map[string]int{"zone1-600": 5, "zone1-700": 5, "zone1-800": 5, "zone1-900": 6}
 	reshard(t, ksName, "customer", "c4c3", "-40,40-80,80-c0", "-60,60-c0", 1000, counts, nil)
 }
 
@@ -357,7 +366,6 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		}
 		validateDryRunResults(t, output, dryRunResultswitchWrites)
 	}
-
 	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", ksWorkflow); err != nil {
 		t.Fatalf("SwitchWrites error: %s\n", output)
 	}
@@ -408,7 +416,6 @@ func shardOrders(t *testing.T) {
 	assert.Empty(t, validateCountInTablet(t, customerTab1, "customer", "orders", 1))
 	assert.Empty(t, validateCountInTablet(t, customerTab2, "customer", "orders", 2))
 	assert.Empty(t, validateCount(t, vtgateConn, "customer", "orders", 3))
-	removeTabletControls(t, "product/0")
 }
 
 func shardMerchant(t *testing.T) {
@@ -454,7 +461,6 @@ func shardMerchant(t *testing.T) {
 	assert.Empty(t, validateCountInTablet(t, merchantTab2, "merchant", "merchant", 1))
 	assert.Empty(t, validateCount(t, vtgateConn, "merchant", "merchant", 2))
 
-	removeTabletControls(t, "product/0")
 }
 
 func vdiff(t *testing.T, workflow string) {
@@ -589,13 +595,4 @@ func iterateCells(t *testing.T, f func(t *testing.T, cell *Cell)) {
 func verifyClusterHealth(t *testing.T) {
 	iterateCells(t, checkVtgateHealth)
 	iterateTablets(t, checkTabletHealth)
-}
-
-func removeTabletControls(t *testing.T, source string) {
-	tabletTypes := []string{"rdonly", "replica", "master"}
-	for _, tabletType := range tabletTypes {
-		if err := vc.VtctlClient.ExecuteCommand("SetShardTabletControl", "--remove", source, tabletType); err != nil {
-			t.Fatal(err)
-		}
-	}
 }
