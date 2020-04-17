@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -208,7 +210,7 @@ func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.
 	if len(qr.Rows) == 0 || len(qr.Rows[0]) == 0 {
 		return settings, numTablesToCopy, fmt.Errorf("unexpected result from %s: %v", query, qr)
 	}
-	numTablesToCopy, err = sqltypes.ToInt64(qr.Rows[0][0])
+	numTablesToCopy, err = evalengine.ToInt64(qr.Rows[0][0])
 	if err != nil {
 		return settings, numTablesToCopy, err
 	}

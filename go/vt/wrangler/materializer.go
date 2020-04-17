@@ -22,6 +22,8 @@ import (
 	"sync"
 	"text/template"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"github.com/gogo/protobuf/proto"
 	"golang.org/x/net/context"
 
@@ -476,7 +478,7 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 		}
 		qr := sqltypes.Proto3ToResult(p3qr)
 		for _, row := range qr.Rows {
-			id, err := sqltypes.ToInt64(row[0])
+			id, err := evalengine.ToInt64(row[0])
 			if err != nil {
 				return err
 			}

@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
@@ -226,8 +228,8 @@ func getTimeEpoch(qr *sqltypes.Result) (int64, int64) {
 	if len(qr.Rows) != 1 {
 		return 0, 0
 	}
-	t, _ := sqltypes.ToInt64(qr.Rows[0][0])
-	e, _ := sqltypes.ToInt64(qr.Rows[0][1])
+	t, _ := evalengine.ToInt64(qr.Rows[0][0])
+	e, _ := evalengine.ToInt64(qr.Rows[0][1])
 	return t, e
 }
 

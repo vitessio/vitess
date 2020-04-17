@@ -19,6 +19,8 @@ package sqlparser
 import (
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	"github.com/stretchr/testify/assert"
@@ -78,7 +80,7 @@ func TestEvaluate(t *testing.T) {
 			sqltypesExpr, err := Convert(astExpr)
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
-			env := sqltypes.ExpressionEnv{
+			env := evalengine.ExpressionEnv{
 				BindVars: map[string]*querypb.BindVariable{
 					"exp":                  sqltypes.Int64BindVariable(66),
 					"string_bind_variable": sqltypes.StringBindVariable("bar"),

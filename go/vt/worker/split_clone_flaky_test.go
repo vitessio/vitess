@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -391,7 +393,7 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 	// Send the values.
 	rowsAffected := 0
 	for _, row := range sq.rows {
-		v, _ := sqltypes.ToNative(row[0])
+		v, _ := evalengine.ToNative(row[0])
 		primaryKey := v.(int64)
 
 		if primaryKey >= int64(min) && primaryKey < int64(max) {

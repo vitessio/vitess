@@ -14,10 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package sqltypes
+package evalengine
 
 import (
 	"strconv"
+	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -36,7 +37,7 @@ type (
 	//evaluates in, such as the current row and bindvars
 	ExpressionEnv struct {
 		BindVars map[string]*querypb.BindVariable
-		Row      []Value
+		Row      []sqltypes.Value
 	}
 
 	// EvalResult is used so we don't have to expose all parts of the private struct
@@ -73,7 +74,7 @@ type (
 )
 
 //Value allows for retrieval of the value we expose for public consumption
-func (e EvalResult) Value() Value {
+func (e EvalResult) Value() sqltypes.Value {
 	return castFromNumeric(e, e.typ)
 }
 
@@ -82,7 +83,7 @@ func NewLiteralInt(val []byte) (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &LiteralFloat{evalResult{typ: Int64, ival: ival}}, nil
+	return &LiteralFloat{evalResult{typ: sqltypes.Int64, ival: ival}}, nil
 }
 
 func NewLiteralFloat(val []byte) (Expr, error) {
@@ -90,7 +91,7 @@ func NewLiteralFloat(val []byte) (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &LiteralFloat{evalResult{typ: Float64, fval: fval}}, nil
+	return &LiteralFloat{evalResult{typ: sqltypes.Float64, fval: fval}}, nil
 }
 
 var _ Expr = (*LiteralInt)(nil)
@@ -156,22 +157,22 @@ func (d *Division) Evaluate(left, right EvalResult) (EvalResult, error) {
 
 //Type implements the BinaryExpr interface
 func (a *Addition) Type(left querypb.Type) querypb.Type {
-	return addAndSubtractType(left)
+	return left
 }
 
 //Type implements the BinaryExpr interface
 func (m *Multiplication) Type(left querypb.Type) querypb.Type {
-	return addAndSubtractType(left)
+	return left
 }
 
 //Type implements the BinaryExpr interface
 func (d *Division) Type(querypb.Type) querypb.Type {
-	return Float64
+	return sqltypes.Float64
 }
 
 //Type implements the BinaryExpr interface
 func (s *Subtraction) Type(left querypb.Type) querypb.Type {
-	return addAndSubtractType(left)
+	return left
 }
 
 //Type implements the Expr interface
@@ -190,11 +191,11 @@ func (b *BindVariable) Type(env ExpressionEnv) querypb.Type {
 
 //Type implements the Expr interface
 func (l *LiteralInt) Type(_ ExpressionEnv) querypb.Type {
-	return Int64
+	return sqltypes.Int64
 }
 
 func (l *LiteralFloat) Type(env ExpressionEnv) querypb.Type {
-	return Float64
+	return sqltypes.Float64
 }
 
 //String implements the BinaryExpr interface
@@ -238,12 +239,12 @@ func (l *LiteralFloat) String() string {
 
 func mergeNumericalTypes(ltype, rtype querypb.Type) querypb.Type {
 	switch ltype {
-	case Int64:
-		if rtype == Uint64 || rtype == Float64 {
+	case sqltypes.Int64:
+		if rtype == sqltypes.Uint64 || rtype == sqltypes.Float64 {
 			return rtype
 		}
-	case Uint64:
-		if rtype == Float64 {
+	case sqltypes.Uint64:
+		if rtype == sqltypes.Float64 {
 			return rtype
 		}
 	}
@@ -252,40 +253,29 @@ func mergeNumericalTypes(ltype, rtype querypb.Type) querypb.Type {
 
 func evaluateByType(val *querypb.BindVariable) (EvalResult, error) {
 	switch val.Type {
-	case Int64:
+	case sqltypes.Int64:
 		ival, err := strconv.ParseInt(string(val.Value), 10, 64)
 		if err != nil {
 			ival = 0
 		}
-		return evalResult{typ: Int64, ival: ival}, nil
-	case Uint64:
+		return evalResult{typ: sqltypes.Int64, ival: ival}, nil
+	case sqltypes.Uint64:
 		uval, err := strconv.ParseUint(string(val.Value), 10, 64)
 		if err != nil {
 			uval = 0
 		}
-		return evalResult{typ: Uint64, uval: uval}, nil
-	case Float64:
+		return evalResult{typ: sqltypes.Uint64, uval: uval}, nil
+	case sqltypes.Float64:
 		fval, err := strconv.ParseFloat(string(val.Value), 64)
 		if err != nil {
 			fval = 0
 		}
-		return evalResult{typ: Float64, fval: fval}, nil
-	case VarChar:
-		return evalResult{typ: VarChar, str: string(val.Value)}, nil
-	case VarBinary:
-		return evalResult{typ: VarBinary, str: string(val.Value)}, nil
+		return evalResult{typ: sqltypes.Float64, fval: fval}, nil
+	case sqltypes.VarChar:
+		return evalResult{typ: sqltypes.VarChar, str: string(val.Value)}, nil
+	case sqltypes.VarBinary:
+		return evalResult{typ: sqltypes.VarBinary, str: string(val.Value)}, nil
 	}
 	return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported")
 }
 
-func addAndSubtractType(left querypb.Type) querypb.Type {
-	switch left {
-	case Int64:
-		return Int64
-	case Uint64:
-		return Uint64
-	case Float64:
-		return Float64
-	}
-	panic("unreachable")
-}

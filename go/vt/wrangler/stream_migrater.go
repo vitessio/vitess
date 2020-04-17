@@ -23,6 +23,8 @@ import (
 	"sync"
 	"text/template"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
@@ -225,7 +227,7 @@ func (sm *streamMigrater) readTabletStreams(ctx context.Context, ti *topo.Tablet
 
 	tabletStreams := make([]*vrStream, 0, len(qr.Rows))
 	for _, row := range qr.Rows {
-		id, err := sqltypes.ToInt64(row[0])
+		id, err := evalengine.ToInt64(row[0])
 		if err != nil {
 			return nil, err
 		}

@@ -19,6 +19,7 @@ package worker
 import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -78,7 +79,7 @@ func (r *v2Resolver) keyspaceID(row []sqltypes.Value) ([]byte, error) {
 	case topodatapb.KeyspaceIdType_BYTES:
 		return v.ToBytes(), nil
 	case topodatapb.KeyspaceIdType_UINT64:
-		i, err := sqltypes.ToUint64(v)
+		i, err := evalengine.ToUint64(v)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "Non numerical value")
 		}

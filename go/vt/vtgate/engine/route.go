@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -439,7 +441,7 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 				return true
 			}
 			var cmp int
-			cmp, err = sqltypes.NullsafeCompare(out.Rows[i][order.Col], out.Rows[j][order.Col])
+			cmp, err = evalengine.NullsafeCompare(out.Rows[i][order.Col], out.Rows[j][order.Col])
 			if err != nil {
 				return true
 			}

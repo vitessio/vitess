@@ -24,6 +24,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -161,7 +163,7 @@ func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int
 	if resolved.IsNull() {
 		return math.MaxInt64, nil
 	}
-	num, err := sqltypes.ToUint64(resolved)
+	num, err := evalengine.ToUint64(resolved)
 	if err != nil {
 		return 0, err
 	}
@@ -230,7 +232,7 @@ func (sh *sortHeap) Less(i, j int) bool {
 		if sh.err != nil {
 			return true
 		}
-		cmp, err := sqltypes.NullsafeCompare(sh.rows[i][order.Col], sh.rows[j][order.Col])
+		cmp, err := evalengine.NullsafeCompare(sh.rows[i][order.Col], sh.rows[j][order.Col])
 		if err != nil {
 			sh.err = err
 			return true

@@ -20,6 +20,8 @@ import (
 	"container/heap"
 	"io"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -250,7 +252,7 @@ func (sh *scatterHeap) Less(i, j int) bool {
 		if sh.err != nil {
 			return true
 		}
-		cmp, err := sqltypes.NullsafeCompare(sh.rows[i].row[order.Col], sh.rows[j].row[order.Col])
+		cmp, err := evalengine.NullsafeCompare(sh.rows[i].row[order.Col], sh.rows[j].row[order.Col])
 		if err != nil {
 			sh.err = err
 			return true

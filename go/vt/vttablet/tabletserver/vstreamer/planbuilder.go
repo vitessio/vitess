@@ -21,6 +21,8 @@ import (
 	"regexp"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -115,7 +117,7 @@ func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error
 	for _, filter := range plan.Filters {
 		switch filter.Opcode {
 		case Equal:
-			result, err := sqltypes.NullsafeCompare(values[filter.ColNum], filter.Value)
+			result, err := evalengine.NullsafeCompare(values[filter.ColNum], filter.Value)
 			if err != nil {
 				return false, nil, err
 			}
