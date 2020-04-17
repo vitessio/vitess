@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
-	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -47,13 +46,13 @@ func TestCreateSchema(t *testing.T) {
 	defer tw.Close()
 	writes.Reset()
 
-	db.AddQuery(fmt.Sprintf(sqlCreateHeartbeatTable, tw.dbName), &sqltypes.Result{})
-	db.AddQuery(fmt.Sprintf("INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%d, %d, '%s') ON DUPLICATE KEY UPDATE ts=VALUES(ts)", tw.dbName, now.UnixNano(), tw.tabletAlias.Uid, tw.keyspaceShard), &sqltypes.Result{})
+	db.AddQuery(fmt.Sprintf(sqlCreateHeartbeatTable, "_vt"), &sqltypes.Result{})
+	db.AddQuery(fmt.Sprintf("INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%d, %d, '%s') ON DUPLICATE KEY UPDATE ts=VALUES(ts)", "_vt", now.UnixNano(), tw.tabletAlias.Uid, tw.keyspaceShard), &sqltypes.Result{})
 	if err := tw.initializeTables(db.ConnParams()); err == nil {
 		t.Fatal("initializeTables() should not have succeeded")
 	}
 
-	db.AddQuery(fmt.Sprintf(sqlCreateSidecarDB, tw.dbName), &sqltypes.Result{})
+	db.AddQuery(fmt.Sprintf(sqlCreateSidecarDB, "_vt"), &sqltypes.Result{})
 	if err := tw.initializeTables(db.ConnParams()); err != nil {
 		t.Fatalf("Should not be in error: %v", err)
 	}
@@ -70,7 +69,7 @@ func TestWriteHeartbeat(t *testing.T) {
 	defer db.Close()
 
 	tw := newTestWriter(db, mockNowFunc)
-	db.AddQuery(fmt.Sprintf("UPDATE %s.heartbeat SET ts=%d, tabletUid=%d WHERE keyspaceShard='%s'", tw.dbName, now.UnixNano(), tw.tabletAlias.Uid, tw.keyspaceShard), &sqltypes.Result{})
+	db.AddQuery(fmt.Sprintf("UPDATE %s.heartbeat SET ts=%d, tabletUid=%d WHERE keyspaceShard='%s'", "_vt", now.UnixNano(), tw.tabletAlias.Uid, tw.keyspaceShard), &sqltypes.Result{})
 
 	writes.Reset()
 	writeErrors.Reset()
@@ -112,7 +111,6 @@ func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *Writer {
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
 	tw := NewWriter(tabletenv.NewTestEnv(config, nil, "WriterTest"), topodatapb.TabletAlias{Cell: "test", Uid: 1111})
-	tw.dbName = sqlescape.EscapeID(dbc.SidecarDBName.Get())
 	tw.keyspaceShard = "test:0"
 	tw.now = nowFunc
 	tw.pool.Open(dbc.AppWithDB(), dbc.DbaWithDB(), dbc.AppDebugWithDB())

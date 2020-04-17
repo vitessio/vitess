@@ -98,8 +98,7 @@ type DBConfigs struct {
 	allprivsParams     mysql.ConnParams
 	externalReplParams mysql.ConnParams
 
-	DBName        sync2.AtomicString `json:"-"`
-	SidecarDBName sync2.AtomicString `json:"-"`
+	DBName sync2.AtomicString `json:"-"`
 }
 
 // UserConfig contains user-specific configs.
@@ -332,7 +331,6 @@ func (dbcfgs *DBConfigs) Copy() *DBConfigs {
 		externalReplParams: dbcfgs.externalReplParams,
 	}
 	result.DBName.Set(dbcfgs.DBName.Get())
-	result.SidecarDBName.Set(dbcfgs.SidecarDBName.Get())
 	return result
 }
 
@@ -381,7 +379,6 @@ func (dbcfgs *DBConfigs) Init(defaultSocketFile string) *DBConfigs {
 			cp.ServerName = dbcfgs.ServerName
 		}
 	}
-	dbcfgs.SidecarDBName.Set("_vt")
 
 	log.Infof("DBConfigs: %v\n", dbcfgs.String())
 	return dbcfgs
@@ -430,6 +427,5 @@ func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbName string)
 		externalReplParams: genParams,
 	}
 	dbcfgs.DBName.Set(dbName)
-	dbcfgs.SidecarDBName.Set("_vt")
 	return dbcfgs
 }

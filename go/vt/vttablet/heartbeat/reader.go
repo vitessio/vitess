@@ -27,7 +27,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
@@ -55,7 +54,6 @@ type Reader struct {
 	enabled       bool
 	interval      time.Duration
 	keyspaceShard string
-	dbName        string
 	now           func() time.Time
 	errorLog      *logutil.ThrottledLogger
 
@@ -91,13 +89,11 @@ func NewReader(env tabletenv.Env) *Reader {
 	}
 }
 
-// Init does last minute initialization of db settings, such as dbName
-// and keyspaceShard
+// Init does last minute initialization of db settings, such as keyspaceShard.
 func (r *Reader) Init(target querypb.Target) {
 	if !r.enabled {
 		return
 	}
-	r.dbName = sqlescape.EscapeID(r.env.DBConfigs().SidecarDBName.Get())
 	r.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
 }
 
@@ -198,7 +194,7 @@ func (r *Reader) bindHeartbeatFetch() (string, error) {
 	bindVars := map[string]*querypb.BindVariable{
 		"ks": sqltypes.StringBindVariable(r.keyspaceShard),
 	}
-	parsed := sqlparser.BuildParsedQuery(sqlFetchMostRecentHeartbeat, r.dbName, ":ks")
+	parsed := sqlparser.BuildParsedQuery(sqlFetchMostRecentHeartbeat, "_vt", ":ks")
 	bound, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return "", err
