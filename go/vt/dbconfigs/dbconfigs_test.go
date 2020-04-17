@@ -192,7 +192,7 @@ func TestAccessors(t *testing.T) {
 		filteredParams: mysql.ConnParams{},
 		replParams:     mysql.ConnParams{},
 	}
-	dbc.DBName.Set("db")
+	dbc = dbc.WithDBName("db")
 	if got, want := dbc.AppWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.AppWithDB().DbName: %v, want %v", got, want)
 	}
