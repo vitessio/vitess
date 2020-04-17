@@ -26,6 +26,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/golang/protobuf/proto"
@@ -402,7 +404,7 @@ func (wr *Wrangler) buildTargets(ctx context.Context, targetKeyspace, workflow s
 		}
 		qr := sqltypes.Proto3ToResult(p3qr)
 		for _, row := range qr.Rows {
-			id, err := sqltypes.ToInt64(row[0])
+			id, err := evalengine.ToInt64(row[0])
 			if err != nil {
 				return nil, false, err
 			}

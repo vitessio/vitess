@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -299,7 +301,7 @@ func (ins *Insert) processGenerate(vcursor VCursor, bindVars map[string]*querypb
 		}
 		// If no rows are returned, it's an internal error, and the code
 		// must panic, which will be caught and reported.
-		insertID, err = sqltypes.ToInt64(qr.Rows[0][0])
+		insertID, err = evalengine.ToInt64(qr.Rows[0][0])
 		if err != nil {
 			return 0, err
 		}

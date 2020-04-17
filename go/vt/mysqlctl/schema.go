@@ -21,10 +21,11 @@ import (
 	"regexp"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqlescape"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
@@ -84,7 +85,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 		var dataLength uint64
 		if !row[2].IsNull() {
 			// dataLength is NULL for views, then we use 0
-			dataLength, err = sqltypes.ToUint64(row[2])
+			dataLength, err = evalengine.ToUint64(row[2])
 			if err != nil {
 				return nil, err
 			}
@@ -93,7 +94,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 		// get row count
 		var rowCount uint64
 		if !row[3].IsNull() {
-			rowCount, err = sqltypes.ToUint64(row[3])
+			rowCount, err = evalengine.ToUint64(row[3])
 			if err != nil {
 				return nil, err
 			}
@@ -214,7 +215,7 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, erro
 		}
 
 		// check the Seq_in_index is always increasing
-		seqInIndex, err := sqltypes.ToInt64(row[seqInIndexIndex])
+		seqInIndex, err := evalengine.ToInt64(row[seqInIndexIndex])
 		if err != nil {
 			return nil, err
 		}

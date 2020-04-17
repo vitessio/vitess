@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
-	"vitess.io/vitess/go/sqltypes"
-
 	"vitess.io/vitess/go/mysql"
 )
 
@@ -36,7 +36,7 @@ func TestLastInsertId(t *testing.T) {
 
 	// figure out the last inserted id before we run change anything
 	qr := exec(t, conn, "select max(id) from t1_last_insert_id")
-	oldLastID, err := sqltypes.ToUint64(qr.Rows[0][0])
+	oldLastID, err := evalengine.ToUint64(qr.Rows[0][0])
 	require.NoError(t, err)
 
 	exec(t, conn, "insert into t1_last_insert_id(id1) values(42)")
@@ -59,7 +59,7 @@ func TestLastInsertIdWithRollback(t *testing.T) {
 
 	// figure out the last inserted id before we run our tests
 	qr := exec(t, conn, "select max(id) from t1_last_insert_id")
-	oldLastID, err := sqltypes.ToUint64(qr.Rows[0][0])
+	oldLastID, err := evalengine.ToUint64(qr.Rows[0][0])
 	require.NoError(t, err)
 
 	// add row inside explicit transaction

@@ -19,34 +19,34 @@ package sqlparser
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 var ExprNotSupported = fmt.Errorf("Expr Not Supported")
 
 //Convert converts between AST expressions and executable expressions
-func Convert(e Expr) (sqltypes.Expr, error) {
+func Convert(e Expr) (evalengine.Expr, error) {
 	switch node := e.(type) {
 	case *SQLVal:
 		switch node.Type {
 		case IntVal:
-			return sqltypes.NewLiteralInt(node.Val)
+			return evalengine.NewLiteralInt(node.Val)
 		case FloatVal:
-			return sqltypes.NewLiteralFloat(node.Val)
+			return evalengine.NewLiteralFloat(node.Val)
 		case ValArg:
-			return &sqltypes.BindVariable{Key: string(node.Val[1:])}, nil
+			return &evalengine.BindVariable{Key: string(node.Val[1:])}, nil
 		}
 	case *BinaryExpr:
-		var op sqltypes.BinaryExpr
+		var op evalengine.BinaryExpr
 		switch node.Operator {
 		case PlusStr:
-			op = &sqltypes.Addition{}
+			op = &evalengine.Addition{}
 		case MinusStr:
-			op = &sqltypes.Subtraction{}
+			op = &evalengine.Subtraction{}
 		case MultStr:
-			op = &sqltypes.Multiplication{}
+			op = &evalengine.Multiplication{}
 		case DivStr:
-			op = &sqltypes.Division{}
+			op = &evalengine.Division{}
 		default:
 			return nil, ExprNotSupported
 		}
@@ -58,7 +58,7 @@ func Convert(e Expr) (sqltypes.Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &sqltypes.BinaryOp{
+		return &evalengine.BinaryOp{
 			Expr:  op,
 			Left:  left,
 			Right: right,

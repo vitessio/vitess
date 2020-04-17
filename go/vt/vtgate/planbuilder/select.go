@@ -20,7 +20,8 @@ import (
 	"errors"
 	"fmt"
 
-	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -131,7 +132,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 func tryAtVtgate(sel *sqlparser.Select) engine.Primitive {
 	if checkForDual(sel) {
 		var err error
-		exprs := make([]sqltypes.Expr, len(sel.SelectExprs))
+		exprs := make([]evalengine.Expr, len(sel.SelectExprs))
 		cols := make([]string, len(sel.SelectExprs))
 		for i, e := range sel.SelectExprs {
 			expr := e.(*sqlparser.AliasedExpr)

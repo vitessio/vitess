@@ -27,11 +27,12 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/netutil"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -145,7 +146,7 @@ func (mysqld *Mysqld) GetMysqlPort() (int32, error) {
 	if len(qr.Rows) != 1 {
 		return 0, errors.New("no port variable in mysql")
 	}
-	utemp, err := sqltypes.ToUint64(qr.Rows[0][1])
+	utemp, err := evalengine.ToUint64(qr.Rows[0][1])
 	if err != nil {
 		return 0, err
 	}

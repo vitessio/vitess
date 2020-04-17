@@ -3,13 +3,14 @@ package engine
 import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 var _ Primitive = (*Projection)(nil)
 
 type Projection struct {
 	Cols  []string
-	Exprs []sqltypes.Expr
+	Exprs []evalengine.Expr
 	Input Primitive
 	noTxNeeded
 }
@@ -32,7 +33,7 @@ func (p *Projection) Execute(vcursor VCursor, bindVars map[string]*querypb.BindV
 		return nil, err
 	}
 
-	env := sqltypes.ExpressionEnv{
+	env := evalengine.ExpressionEnv{
 		BindVars: bindVars,
 	}
 
@@ -61,7 +62,7 @@ func (p *Projection) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 		return err
 	}
 
-	env := sqltypes.ExpressionEnv{
+	env := evalengine.ExpressionEnv{
 		BindVars: bindVars,
 	}
 
@@ -94,7 +95,7 @@ func (p *Projection) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bin
 }
 
 func (p *Projection) addFields(qr *sqltypes.Result, bindVars map[string]*querypb.BindVariable) {
-	env := sqltypes.ExpressionEnv{BindVars: bindVars}
+	env := evalengine.ExpressionEnv{BindVars: bindVars}
 	for i, col := range p.Cols {
 		qr.Fields = append(qr.Fields, &querypb.Field{
 			Name: col,

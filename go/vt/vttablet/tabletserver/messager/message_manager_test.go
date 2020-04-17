@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -741,7 +743,7 @@ func TestMMGenerate(t *testing.T) {
 		t.Errorf("GenerateAckQuery query: %s, want %s", query, wantQuery)
 	}
 	bvv, _ := sqltypes.BindVariableToValue(bv["time_acked"])
-	gotAcked, _ := sqltypes.ToInt64(bvv)
+	gotAcked, _ := evalengine.ToInt64(bvv)
 	wantAcked := time.Now().UnixNano()
 	if wantAcked-gotAcked > 10e9 {
 		t.Errorf("gotAcked: %d, should be with 10s of %d", gotAcked, wantAcked)

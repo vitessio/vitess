@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
@@ -546,7 +548,7 @@ func checkValues(t *testing.T, tablet *cluster.Vttablet, keyspace string, dbname
 	assert.Equal(t, count, len(qr.Rows), fmt.Sprintf("got wrong number of rows: %d != %d", len(qr.Rows), count))
 	i := 0
 	for i < count {
-		result, _ := sqltypes.ToInt64(qr.Rows[i][0])
+		result, _ := evalengine.ToInt64(qr.Rows[i][0])
 		assert.Equal(t, int64(first+i), result, fmt.Sprintf("got wrong number of rows: %d != %d", len(qr.Rows), first+i))
 		assert.Contains(t, qr.Rows[i][1].String(), fmt.Sprintf("value %d", first+i), fmt.Sprintf("invalid msg[%d]: 'value %d' != '%s'", i, first+i, qr.Rows[i][1].String()))
 		i++

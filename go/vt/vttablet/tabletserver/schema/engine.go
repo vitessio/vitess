@@ -23,11 +23,12 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -211,7 +212,7 @@ func (se *Engine) reload(ctx context.Context) error {
 	for _, row := range tableData.Rows {
 		tableName := row[0].ToString()
 		curTables[tableName] = true
-		createTime, _ := sqltypes.ToInt64(row[2])
+		createTime, _ := evalengine.ToInt64(row[2])
 		if _, ok := se.tables[tableName]; ok && createTime < se.lastChange {
 			continue
 		}
@@ -266,7 +267,7 @@ func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, 
 	if len(tm.Rows) != 1 || len(tm.Rows[0]) != 1 || tm.Rows[0][0].IsNull() {
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unexpected result for MySQL time: %+v", tm.Rows)
 	}
-	t, err := sqltypes.ToInt64(tm.Rows[0][0])
+	t, err := evalengine.ToInt64(tm.Rows[0][0])
 	if err != nil {
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse time %v: %v", tm, err)
 	}

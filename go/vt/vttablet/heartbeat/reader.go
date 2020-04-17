@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -205,7 +207,7 @@ func parseHeartbeatResult(res *sqltypes.Result) (int64, error) {
 	if len(res.Rows) != 1 {
 		return 0, fmt.Errorf("failed to read heartbeat: writer query did not result in 1 row. Got %v", len(res.Rows))
 	}
-	ts, err := sqltypes.ToInt64(res.Rows[0][0])
+	ts, err := evalengine.ToInt64(res.Rows[0][0])
 	if err != nil {
 		return 0, err
 	}

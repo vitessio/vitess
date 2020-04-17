@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"io"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -157,7 +159,7 @@ func (l *Limit) fetchCount(bindVars map[string]*querypb.BindVariable) (int, erro
 	if err != nil {
 		return 0, err
 	}
-	num, err := sqltypes.ToUint64(resolved)
+	num, err := evalengine.ToUint64(resolved)
 	if err != nil {
 		return 0, err
 	}
@@ -176,7 +178,7 @@ func (l *Limit) fetchOffset(bindVars map[string]*querypb.BindVariable) (int, err
 	if err != nil {
 		return 0, err
 	}
-	num, err := sqltypes.ToUint64(resolved)
+	num, err := evalengine.ToUint64(resolved)
 	if err != nil {
 		return 0, err
 	}
