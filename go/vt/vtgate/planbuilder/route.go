@@ -150,7 +150,7 @@ func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *resultColumn {
 
 // MakeDistinct satisfies the builder interface.
 func (rb *route) MakeDistinct() error {
-	rb.Select.(*sqlparser.Select).Distinct = sqlparser.DistinctStr
+	rb.Select.(*sqlparser.Select).Distinct = true
 	return nil
 }
 
