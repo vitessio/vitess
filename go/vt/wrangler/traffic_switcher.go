@@ -113,11 +113,11 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		return nil, err
 	}
 
-	var sw switcher
+	var sw iswitcher
 	if dryRun {
-		sw = &switchDryRun{ts: ts, drLog: NewLogRecorder()}
+		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
 	} else {
-		sw = &switchForReal{ts: ts, wr: wr}
+		sw = &switcher{ts: ts, wr: wr}
 	}
 
 	if ts.frozen {
@@ -158,11 +158,11 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 		return 0, nil, err
 	}
 
-	var sw switcher
+	var sw iswitcher
 	if dryRun {
-		sw = &switchDryRun{ts: ts, drLog: NewLogRecorder()}
+		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
 	} else {
-		sw = &switchForReal{ts: ts, wr: wr}
+		sw = &switcher{ts: ts, wr: wr}
 	}
 
 	if ts.frozen {
@@ -299,11 +299,11 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow st
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
 		return nil, err
 	}
-	var sw switcher
+	var sw iswitcher
 	if dryRun {
-		sw = &switchDryRun{ts: ts, drLog: NewLogRecorder()}
+		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
 	} else {
-		sw = &switchForReal{ts: ts, wr: wr}
+		sw = &switcher{ts: ts, wr: wr}
 	}
 	var tctx context.Context
 	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.sourceKeyspace, "DropSources")
