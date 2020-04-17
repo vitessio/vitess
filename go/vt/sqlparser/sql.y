@@ -126,7 +126,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> DISTINCTROW
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
-%token <bytes> SQL_NO_CACHE SQL_CACHE
+%token <bytes> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS
 %left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <bytes> ON USING
 %token <empty> '(' ',' ')'
@@ -1916,12 +1916,16 @@ select_options:
     $$ = []string{$1}
   }
 | select_option select_option // TODO: figure out a way to do this recursively instead. 
-  {
+  {                           // TODO: This is a hack since I couldn't get it to work in a nicer way. I got 'conflicts: 8 shift/reduce'
     $$ = []string{$1, $2}
   }
-| select_option select_option select_option //TODO I tried and got 'conflicts: 8 shift/reduce'
+| select_option select_option select_option 
   {
     $$ = []string{$1, $2, $3}
+  }
+| select_option select_option select_option select_option 
+  {
+    $$ = []string{$1, $2, $3, $4}
   }
 
 select_option:
@@ -1944,6 +1948,10 @@ select_option:
 | STRAIGHT_JOIN
   {
     $$ = StraightJoinHint
+  }
+| SQL_CALC_FOUND_ROWS
+  {
+    $$ = SQLCalcFoundRowsStr
   }
 
 select_expression_list:

@@ -18,8 +18,9 @@ package sqlparser
 
 const (
 	// Select.Distinct
-	DistinctStr      = "distinct "
-	StraightJoinHint = "straight_join "
+	DistinctStr         = "distinct "
+	StraightJoinHint    = "straight_join "
+	SQLCalcFoundRowsStr = "sql_calc_found_rows "
 
 	// Select.Lock
 	ForUpdateStr = " for update"
