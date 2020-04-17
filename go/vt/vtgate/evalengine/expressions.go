@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"strconv"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -278,4 +279,3 @@ func evaluateByType(val *querypb.BindVariable) (EvalResult, error) {
 	}
 	return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported")
 }
-
