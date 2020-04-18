@@ -65,7 +65,13 @@ var (
 
 func TestMain(m *testing.M) {
 	flag.Parse()
+	current, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
 
+	path := current + "/wordpress.cnf"
+	os.Setenv("EXTRA_MY_CNF", path)
 	exitCode := func() int {
 		clusterInstance = cluster.NewCluster(Cell, "localhost")
 		defer clusterInstance.Teardown()
