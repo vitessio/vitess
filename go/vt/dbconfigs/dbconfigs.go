@@ -22,6 +22,7 @@ package dbconfigs
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 
 	"vitess.io/vitess/go/mysql"
@@ -209,7 +210,7 @@ func (c Connector) Host() string {
 
 // WithDBName returns a new DBConfigs with the dbname set.
 func (dbcfgs *DBConfigs) WithDBName(dbname string) *DBConfigs {
-	dbcfgs = dbcfgs.Copy()
+	dbcfgs = dbcfgs.Clone()
 	dbcfgs.dbname = dbname
 	return dbcfgs
 }
@@ -288,27 +289,33 @@ func (dbcfgs *DBConfigs) IsZero() bool {
 }
 
 func (dbcfgs *DBConfigs) String() string {
-	db := dbcfgs.Copy()
-	db.Redact()
-	out, err := yaml2.Marshal(&db)
+	out, err := yaml2.Marshal(dbcfgs.Redacted())
 	if err != nil {
 		return err.Error()
 	}
 	return string(out)
 }
 
-// Redact redacts passwords from DBConfigs.
-func (dbcfgs *DBConfigs) Redact() {
+// MarshalJSON marshals after redacting passwords.
+func (dbcfgs *DBConfigs) MarshalJSON() ([]byte, error) {
+	type nonCustom DBConfigs
+	return json.Marshal((*nonCustom)(dbcfgs.Redacted()))
+}
+
+// Redacted redacts passwords from DBConfigs.
+func (dbcfgs *DBConfigs) Redacted() *DBConfigs {
+	dbcfgs = dbcfgs.Clone()
 	dbcfgs.App.Password = "****"
 	dbcfgs.Dba.Password = "****"
 	dbcfgs.Filtered.Password = "****"
 	dbcfgs.Repl.Password = "****"
 	dbcfgs.Appdebug.Password = "****"
 	dbcfgs.Allprivs.Password = "****"
+	return dbcfgs
 }
 
-// Copy returns a copy of the DBConfig.
-func (dbcfgs *DBConfigs) Copy() *DBConfigs {
+// Clone returns a clone of the DBConfig.
+func (dbcfgs *DBConfigs) Clone() *DBConfigs {
 	result := *dbcfgs
 	return &result
 }
@@ -321,7 +328,7 @@ func (dbcfgs *DBConfigs) Copy() *DBConfigs {
 // If no per-user parameters are supplied, then the defaultSocketFile
 // is used to initialize the per-user conn params.
 func (dbcfgs *DBConfigs) Init(defaultSocketFile string) *DBConfigs {
-	dbcfgs = dbcfgs.Copy()
+	dbcfgs = dbcfgs.Clone()
 	for _, userKey := range All {
 		uc, cp := dbcfgs.getParams(userKey, dbcfgs)
 		// TODO @rafael: For ExternalRepl we need to respect the provided host / port
