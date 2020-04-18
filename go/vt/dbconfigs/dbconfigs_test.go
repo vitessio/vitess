@@ -275,17 +275,23 @@ func TestYaml(t *testing.T) {
 	}
 	gotBytes, err := yaml2.Marshal(&db)
 	require.NoError(t, err)
-	wantBytes := `allprivs: {}
+	wantBytes := `allprivs:
+  password: '****'
 app:
+  password: '****'
   useSsl: true
   user: vt_app
-appdebug: {}
+appdebug:
+  password: '****'
 dba:
+  password: '****'
   user: vt_dba
-filtered: {}
+filtered:
+  password: '****'
 flags: 20
 port: 1
-repl: {}
+repl:
+  password: '****'
 socket: a
 `
 	assert.Equal(t, wantBytes, string(gotBytes))

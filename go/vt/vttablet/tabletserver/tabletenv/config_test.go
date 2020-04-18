@@ -21,11 +21,21 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/yaml2"
 )
 
 func TestConfigParse(t *testing.T) {
 	cfg := TabletConfig{
+		DB: &dbconfigs.DBConfigs{
+			Socket: "a",
+			App: dbconfigs.UserConfig{
+				User: "b",
+			},
+			Dba: dbconfigs.UserConfig{
+				User: "c",
+			},
+		},
 		OltpReadPool: ConnPoolConfig{
 			Size:               16,
 			TimeoutSeconds:     10,
@@ -36,7 +46,23 @@ func TestConfigParse(t *testing.T) {
 	}
 	gotBytes, err := yaml2.Marshal(&cfg)
 	require.NoError(t, err)
-	wantBytes := `hotRowProtection: {}
+	wantBytes := `db:
+  allprivs:
+    password: '****'
+  app:
+	  password: '****'
+    user: b
+  appdebug:
+	  password: '****'
+  dba:
+	  password: '****'
+    user: c
+  filtered:
+	  password: '****'
+  repl:
+	  password: '****'
+  socket: a
+hotRowProtection: {}
 olapReadPool: {}
 oltp: {}
 oltpReadPool:
@@ -49,14 +75,24 @@ txPool: {}
 `
 	assert.Equal(t, wantBytes, string(gotBytes))
 
-	// Make sure TimeoutSeconds doesn't get overwritten.
-	inBytes := []byte(`oltpReadPool:
+	// Make sure things already set don't get overwritten,
+	// and thing specified do overwrite.
+	// OltpReadPool.TimeoutSeconds should not get overwritten.
+	// DB.App.User should not get overwritten.
+	// DB.Dba.User should get overwritten.
+	inBytes := []byte(`db:
+  socket: a
+  dba:
+    user: c
+oltpReadPool:
   size: 16
   idleTimeoutSeconds: 20
   prefillParallelism: 30
   maxWaiters: 40
 `)
 	gotCfg := cfg
+	gotCfg.DB = cfg.DB.Clone()
+	gotCfg.DB.Dba = dbconfigs.UserConfig{}
 	err = yaml2.Unmarshal(inBytes, &gotCfg)
 	require.NoError(t, err)
 	assert.Equal(t, cfg, gotCfg)
