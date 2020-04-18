@@ -1365,10 +1365,33 @@
     "OperatorType": "Projection",
     "Variant": "",
     "Columns": [
-      ""
+      "42"
     ],
     "Expressions": [
       "INT64(42)"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow",
+        "Variant": ""
+      }
+    ]
+  }
+}
+
+# testing SingleRow Projection with arithmetics
+"select 42+2"
+{
+  "QueryType": "SELECT",
+  "Original": "select 42+2",
+  "Instructions": {
+    "OperatorType": "Projection",
+    "Variant": "",
+    "Columns": [
+      "42 + 2"
+    ],
+    "Expressions": [
+      "INT64(42) + INT64(2)"
     ],
     "Inputs": [
       {
