@@ -18,6 +18,7 @@ package connpool
 
 import (
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -80,7 +81,10 @@ func TestConnPoolMaxWaiters(t *testing.T) {
 	require.NoError(t, err)
 
 	// waiter 1
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		c1, err := connPool.Get(context.Background())
 		assert.NoError(t, err)
 		c1.Recycle()
@@ -92,11 +96,14 @@ func TestConnPoolMaxWaiters(t *testing.T) {
 			break
 		}
 	}
+
+	// waiter 2
 	_, err = connPool.Get(context.Background())
 	assert.EqualError(t, err, "pool TestPool waiter count exceeded")
 
 	// This recycle will make waiter1 succeed.
 	dbConn.Recycle()
+	wg.Wait()
 }
 
 func TestConnPoolGetEmptyDebugConfig(t *testing.T) {
