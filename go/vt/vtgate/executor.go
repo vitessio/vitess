@@ -991,7 +991,8 @@ func (e *Executor) handleComment(sql string) (*sqltypes.Result, error) {
 // StreamExecute executes a streaming query.
 func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, callback func(*sqltypes.Result) error) (err error) {
 	logStats := NewLogStats(ctx, method, sql, bindVars)
-	logStats.StmtType = sqlparser.Preview(sql).String()
+	stmtType := sqlparser.Preview(sql)
+	logStats.StmtType = stmtType.String()
 	defer logStats.Send()
 
 	if bindVars == nil {
@@ -1000,10 +1001,22 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.resolver.resolver)
 
-	// check if this is a stream statement for messaging
-	// TODO: support keyRange syntax
-	if logStats.StmtType == sqlparser.StmtStream.String() {
+	switch stmtType {
+	case sqlparser.StmtStream:
+		// this is a stream statement for messaging
+		// TODO: support keyRange syntax
 		return e.handleMessageStream(ctx, sql, target, callback, vcursor, logStats)
+	case sqlparser.StmtSelect, sqlparser.StmtDDL, sqlparser.StmtSet, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
+		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtComment:
+		// These may or may not all work, but getPlan() should either return a plan with instructions
+		// or an error, so it's safe to try.
+		break
+	case sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback:
+		// These statements don't populate plan.Instructions. We want to make sure we don't try to
+		// dereference nil Instructions which would panic.
+		fallthrough
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported statement type for OLAP: %s", stmtType)
 	}
 
 	plan, err := e.getPlan(
