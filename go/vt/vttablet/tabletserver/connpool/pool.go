@@ -142,7 +142,7 @@ func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
 	defer span.Finish()
 
 	if cp.isCallerIDAppDebug(ctx) {
-		return NewDBConnNoPool(ctx, cp.appDebugParams, cp.dbaPool)
+		return NewDBConnNoPool(ctx, cp.appDebugParams, cp.dbaPool, cp.env.Stats())
 	}
 	p := cp.pool()
 	if p == nil {

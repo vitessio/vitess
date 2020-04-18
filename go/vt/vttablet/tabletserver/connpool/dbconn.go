@@ -84,7 +84,7 @@ func NewDBConn(ctx context.Context, cp *Pool, appParams dbconfigs.Connector) (*D
 }
 
 // NewDBConnNoPool creates a new DBConn without a pool.
-func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool) (*DBConn, error) {
+func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool, stats *tabletenv.Stats) (*DBConn, error) {
 	c, err := dbconnpool.NewDBConnection(ctx, params)
 	if err != nil {
 		return nil, err
