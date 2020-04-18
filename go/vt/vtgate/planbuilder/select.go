@@ -130,47 +130,46 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 }
 
 func tryAtVtgate(sel *sqlparser.Select) engine.Primitive {
-	if checkForDual(sel) {
-		var err error
-		exprs := make([]evalengine.Expr, len(sel.SelectExprs))
-		cols := make([]string, len(sel.SelectExprs))
-		for i, e := range sel.SelectExprs {
-			expr := e.(*sqlparser.AliasedExpr)
-			exprs[i], err = sqlparser.Convert(expr.Expr)
-			if err != nil {
-				return nil
-			}
-			cols[i] = expr.As.String()
+	dual := isOnlyDual(sel.From)
+	if !dual {
+		return nil
+	}
+
+	exprs := make([]evalengine.Expr, len(sel.SelectExprs))
+	cols := make([]string, len(sel.SelectExprs))
+	for i, e := range sel.SelectExprs {
+		expr, ok := e.(*sqlparser.AliasedExpr)
+		if !ok {
+			return nil
 		}
-		return &engine.Projection{
-			Exprs: exprs,
-			Cols:  cols,
-			Input: &engine.SingleRow{},
+		var err error
+		exprs[i], err = sqlparser.Convert(expr.Expr)
+		if err != nil {
+			return nil
+		}
+		cols[i] = expr.As.String()
+		if cols[i] == "" {
+			cols[i] = sqlparser.String(expr.Expr)
 		}
 	}
-	return nil
+	return &engine.Projection{
+		Exprs: exprs,
+		Cols:  cols,
+		Input: &engine.SingleRow{},
+	}
 }
 
-func checkForDual(sel *sqlparser.Select) bool {
-	if len(sel.From) == 1 {
-		if from, ok := sel.From[0].(*sqlparser.AliasedTableExpr); ok {
-			if tableName, ok := from.Expr.(sqlparser.TableName); ok {
-				if tableName.Name.String() == "dual" && tableName.Qualifier.IsEmpty() {
-					for _, expr := range sel.SelectExprs {
-						e, ok := expr.(*sqlparser.AliasedExpr)
-						if !ok {
-							return false
-						}
-						if _, ok := e.Expr.(*sqlparser.SQLVal); !ok {
-							return false
-						}
-					}
-					return true
-				}
-			}
-		}
+func isOnlyDual(from sqlparser.TableExprs) bool {
+	if len(from) > 1 {
+		return false
 	}
-	return false
+	table, ok := from[0].(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return false
+	}
+	tableName, ok := table.Expr.(sqlparser.TableName)
+
+	return ok && tableName.Name.String() == "dual" && tableName.Qualifier.IsEmpty()
 }
 
 // pushFilter identifies the target route for the specified bool expr,
