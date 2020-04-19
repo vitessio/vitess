@@ -162,6 +162,7 @@ require (
 	k8s.io/apimachinery v0.17.3
 	k8s.io/client-go v0.17.3
 	mvdan.cc/unparam v0.0.0-20191111180625-960b1ec0f2c2 // indirect
+	sigs.k8s.io/yaml v1.1.0
 	sourcegraph.com/sqs/pbtypes v1.0.0 // indirect
 	vitess.io/vitess/examples/are-you-alive v0.0.0-20200302220708-6b7695375ce9 // indirect
 )

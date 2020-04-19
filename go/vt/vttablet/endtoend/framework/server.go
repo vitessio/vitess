@@ -64,12 +64,12 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 
 	dbcfgs := dbconfigs.NewTestDBConfigs(connParams, connAppDebugParams, dbName)
 
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	config.StrictTableACL = true
 	config.TwoPCEnable = true
 	config.TwoPCAbandonAge = 1
 	config.TwoPCCoordinatorAddress = "fake"
-	config.EnableHotRowProtection = true
+	config.HotRowProtection.Mode = tabletenv.Enable
 
 	Target = querypb.Target{
 		Keyspace:   "vttest",

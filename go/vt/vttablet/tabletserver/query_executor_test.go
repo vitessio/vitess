@@ -1040,12 +1040,12 @@ const (
 
 // newTestQueryExecutor uses a package level variable testTabletServer defined in tabletserver_test.go
 func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb.DB) *TabletServer {
-	config := tabletenv.DefaultQsConfig
-	config.PoolSize = 100
+	config := tabletenv.NewDefaultConfig()
+	config.OltpReadPool.Size = 100
 	if flags&smallTxPool > 0 {
-		config.TransactionCap = 3
+		config.TxPool.Size = 3
 	} else {
-		config.TransactionCap = 100
+		config.TxPool.Size = 100
 	}
 	if flags&enableStrictTableACL > 0 {
 		config.StrictTableACL = true
@@ -1064,7 +1064,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 		config.TwoPCAbandonAge = 10
 	}
 	if flags&smallResultSize > 0 {
-		config.MaxResultSize = 2
+		config.Oltp.MaxRows = 2
 	}
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbconfigs := newDBConfigs(db)

@@ -97,10 +97,10 @@ func New(env tabletenv.Env) *TxSerializer {
 	return &TxSerializer{
 		env:                    env,
 		ConsolidatorCache:      sync2.NewConsolidatorCache(1000),
-		dryRun:                 config.EnableHotRowProtectionDryRun,
-		maxQueueSize:           config.HotRowProtectionMaxQueueSize,
-		maxGlobalQueueSize:     config.HotRowProtectionMaxGlobalQueueSize,
-		concurrentTransactions: config.HotRowProtectionConcurrentTransactions,
+		dryRun:                 config.HotRowProtection.Mode == tabletenv.Dryrun,
+		maxQueueSize:           config.HotRowProtection.MaxQueueSize,
+		maxGlobalQueueSize:     config.HotRowProtection.MaxGlobalQueueSize,
+		concurrentTransactions: config.HotRowProtection.MaxConcurrency,
 		waits: env.Exporter().NewCountersWithSingleLabel(
 			"TxSerializerWaits",
 			"Number of times a transaction was queued because another transaction was already in flight for the same row range",

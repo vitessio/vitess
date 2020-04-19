@@ -76,7 +76,7 @@ type explainTablet struct {
 func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 	db := fakesqldb.New(nil)
 
-	config := tabletenv.Config
+	config := tabletenv.NewCurrentConfig()
 	if opts.ExecutionMode == ModeTwoPC {
 		config.TwoPCCoordinatorAddress = "XXX"
 		config.TwoPCAbandonAge = 1.0
