@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -46,8 +48,8 @@ type (
 
 	// UserDefinedVariable implements the SetOp interface to execute user defined variables.
 	UserDefinedVariable struct {
-		Name      string
-		PlanValue sqltypes.PlanValue
+		Name string
+		Expr evalengine.Expr
 	}
 
 	// SysVarIgnore implements the SetOp interface to ignore the settings.
@@ -120,10 +122,12 @@ var _ SetOp = (*UserDefinedVariable)(nil)
 func (u *UserDefinedVariable) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type string
-		UserDefinedVariable
+		Name string
+		Expr string
 	}{
-		Type:                "UserDefinedVariable",
-		UserDefinedVariable: *u,
+		Type: "UserDefinedVariable",
+		Name: u.Name,
+		Expr: u.Expr.String(),
 	})
 
 }
@@ -135,11 +139,14 @@ func (u *UserDefinedVariable) VariableName() string {
 
 //Execute implements the SetOp interface method.
 func (u *UserDefinedVariable) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) error {
-	value, err := u.PlanValue.ResolveValue(bindVars)
+	env := evalengine.ExpressionEnv{
+		BindVars: bindVars,
+	}
+	value, err := u.Expr.Evaluate(env)
 	if err != nil {
 		return err
 	}
-	return vcursor.Session().SetUDV(u.Name, value)
+	return vcursor.Session().SetUDV(u.Name, value.Value())
 }
 
 var _ SetOp = (*SysVarIgnore)(nil)

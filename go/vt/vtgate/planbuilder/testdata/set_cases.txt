@@ -9,7 +9,7 @@
       {
         "Type": "UserDefinedVariable",
         "Name": "foo",
-        "PlanValue": 42
+        "Expr": "INT64(42)"
       }
     ]
   }
@@ -26,12 +26,35 @@
       {
         "Type": "UserDefinedVariable",
         "Name": "foo",
-        "PlanValue": 42
+        "Expr": "INT64(42)"
       },
       {
         "Type": "UserDefinedVariable",
         "Name": "bar",
-        "PlanValue": ":__vtudvfoo"
+        "Expr": ":__vtudvfoo"
+      }
+    ]
+  }
+}
+
+# set multi user defined variable with complex expression
+"set @foo = 42, @bar = @foo + 1"
+{
+  "QueryType": "SET",
+  "Original": "set @foo = 42, @bar = @foo + 1",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Variant": "",
+    "Ops": [
+      {
+        "Type": "UserDefinedVariable",
+        "Name": "foo",
+        "Expr": "INT64(42)"
+      },
+      {
+        "Type": "UserDefinedVariable",
+        "Name": "bar",
+        "Expr": ":__vtudvfoo + INT64(1)"
       }
     ]
   }

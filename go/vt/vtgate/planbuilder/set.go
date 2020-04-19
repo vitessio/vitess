@@ -44,13 +44,13 @@ func buildSetPlan(sql string, stmt *sqlparser.Set, vschema ContextVSchema) (engi
 		case sqlparser.GlobalStr:
 			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported in set: global")
 		case "":
-			pv, err := sqlparser.NewPlanValue(expr.Expr)
+			exp, err := sqlparser.Convert(expr.Expr)
 			if err != nil {
 				return nil, err
 			}
 			setOp = &engine.UserDefinedVariable{
-				Name:      expr.Name.Lowered(),
-				PlanValue: pv,
+				Name: expr.Name.Lowered(),
+				Expr: exp,
 			}
 		case sqlparser.SessionStr:
 			planFunc, ok := sysVarPlanningFunc[expr.Name.Lowered()]
