@@ -543,12 +543,13 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	db.AddQuery("rollback", &sqltypes.Result{})
 	txPool := newTxPool()
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-	id, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	id, _, _ := txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	txPool.Close()
 
 	assertErrorMatch := func(id int64, reason string) {
-		_, err = txPool.Get(id, "for query")
+		conn, err := txPool.Get(id, "for query")
 		if err == nil {
+			conn.Recycle()
 			t.Fatalf("expected error, got nil")
 		}
 		want := fmt.Sprintf("transaction %v: ended at .* \\(%v\\)", id, reason)
@@ -562,14 +563,14 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	txPool = newTxPool()
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 
-	id, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	id, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	if _, err := txPool.Commit(ctx, id); err != nil {
 		t.Fatalf("got error: %v", err)
 	}
 
 	assertErrorMatch(id, "transaction committed")
 
-	id, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	id, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	if err := txPool.Rollback(ctx, id); err != nil {
 		t.Fatalf("got error: %v", err)
 	}
@@ -582,13 +583,13 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 
-	id, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
-	time.Sleep(5 * time.Millisecond)
+	id, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	time.Sleep(20 * time.Millisecond)
 
 	assertErrorMatch(id, "exceeded timeout: 1ms")
 
 	txPool.SetTimeout(1 * time.Hour)
-	id, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	id, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	txc, err := txPool.Get(id, "for close")
 	if err != nil {
 		t.Fatalf("got error: %v", err)
