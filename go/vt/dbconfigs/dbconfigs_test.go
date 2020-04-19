@@ -183,6 +183,37 @@ func TestInit(t *testing.T) {
 	assert.Equal(t, want, dbc.dbaParams)
 }
 
+func TestUseTCP(t *testing.T) {
+	dbConfigs := DBConfigs{
+		Host:   "a",
+		Port:   1,
+		Socket: "b",
+		App: UserConfig{
+			User:   "app",
+			UseTCP: true,
+		},
+		Dba: UserConfig{
+			User: "dba",
+		},
+	}
+	dbc := dbConfigs.Init("default")
+
+	want := mysql.ConnParams{
+		Host:  "a",
+		Port:  1,
+		Uname: "app",
+	}
+	assert.Equal(t, want, dbc.appParams)
+
+	want = mysql.ConnParams{
+		Host:       "a",
+		Port:       1,
+		Uname:      "dba",
+		UnixSocket: "b",
+	}
+	assert.Equal(t, want, dbc.dbaParams)
+}
+
 func TestAccessors(t *testing.T) {
 	dbc := &DBConfigs{
 		appParams:      mysql.ConnParams{},
@@ -302,7 +333,7 @@ flags: 20
 app:
   user: vt_app
   useSsl: true
-  preferTCP: false
+  useTCP: false
 dba:
   user: vt_dba
 `)
@@ -310,7 +341,7 @@ dba:
 		Port:  1,
 		Flags: 20,
 		App: UserConfig{
-			PreferTCP: true,
+			UseTCP: true,
 		},
 		Dba: UserConfig{
 			User: "aaa",
