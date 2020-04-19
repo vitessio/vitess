@@ -103,7 +103,7 @@ func TestMain(m *testing.M) {
 
 		InitVStreamerClient(env.Dbcfgs)
 
-		playerEngine = NewEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, vrepldb)
+		playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, vrepldb)
 		if err := playerEngine.Open(context.Background()); err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
