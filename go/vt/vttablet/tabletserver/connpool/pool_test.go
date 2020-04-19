@@ -17,6 +17,8 @@ limitations under the License.
 package connpool
 
 import (
+	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -52,14 +54,11 @@ func TestConnPoolGet(t *testing.T) {
 func TestConnPoolTimeout(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	connPool := New(
-		tabletenv.NewTestEnv(nil, nil, "PoolTest"),
-		"TestPool",
-		1,
-		0,
-		10*time.Millisecond,
-		10*time.Second,
-	)
+	connPool := NewPool(tabletenv.NewTestEnv(nil, nil, "PoolTest"), "TestPool", tabletenv.ConnPoolConfig{
+		Size:               1,
+		TimeoutSeconds:     1,
+		IdleTimeoutSeconds: 10,
+	})
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	dbConn, err := connPool.Get(context.Background())
@@ -67,6 +66,44 @@ func TestConnPoolTimeout(t *testing.T) {
 	defer dbConn.Recycle()
 	_, err = connPool.Get(context.Background())
 	assert.EqualError(t, err, "resource pool timed out")
+}
+
+func TestConnPoolMaxWaiters(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	connPool := NewPool(tabletenv.NewTestEnv(nil, nil, "PoolTest"), "TestPool", tabletenv.ConnPoolConfig{
+		Size:       1,
+		MaxWaiters: 1,
+	})
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer connPool.Close()
+	dbConn, err := connPool.Get(context.Background())
+	require.NoError(t, err)
+
+	// waiter 1
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c1, err := connPool.Get(context.Background())
+		assert.NoError(t, err)
+		c1.Recycle()
+	}()
+	// Wait for the first waiter to increment count.
+	for {
+		runtime.Gosched()
+		if connPool.waiterCount.Get() == 1 {
+			break
+		}
+	}
+
+	// waiter 2
+	_, err = connPool.Get(context.Background())
+	assert.EqualError(t, err, "pool TestPool waiter count exceeded")
+
+	// This recycle will make waiter1 succeed.
+	dbConn.Recycle()
+	wg.Wait()
 }
 
 func TestConnPoolGetEmptyDebugConfig(t *testing.T) {
@@ -242,12 +279,8 @@ func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
 }
 
 func newPool() *Pool {
-	return New(
-		tabletenv.NewTestEnv(nil, nil, "PoolTest"),
-		"TestPool",
-		100,
-		0,
-		0,
-		10*time.Second,
-	)
+	return NewPool(tabletenv.NewTestEnv(nil, nil, "PoolTest"), "TestPool", tabletenv.ConnPoolConfig{
+		Size:               100,
+		IdleTimeoutSeconds: 10,
+	})
 }

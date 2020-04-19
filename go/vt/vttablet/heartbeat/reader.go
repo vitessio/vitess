@@ -72,18 +72,22 @@ type Reader struct {
 // NewReader returns a new heartbeat reader.
 func NewReader(env tabletenv.Env) *Reader {
 	config := env.Config()
-	if !config.HeartbeatEnable {
+	if config.HeartbeatIntervalMilliseconds == 0 {
 		return &Reader{}
 	}
 
+	heartbeatInterval := time.Duration(config.HeartbeatIntervalMilliseconds) * time.Millisecond
 	return &Reader{
 		env:      env,
 		enabled:  true,
 		now:      time.Now,
-		interval: config.HeartbeatInterval,
-		ticks:    timer.NewTimer(config.HeartbeatInterval),
+		interval: heartbeatInterval,
+		ticks:    timer.NewTimer(heartbeatInterval),
 		errorLog: logutil.NewThrottledLogger("HeartbeatReporter", 60*time.Second),
-		pool:     connpool.New(env, "HeartbeatReadPool", 1, 0, 0, time.Duration(config.IdleTimeout*1e9)),
+		pool: connpool.NewPool(env, "HeartbeatReadPool", tabletenv.ConnPoolConfig{
+			Size:               1,
+			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
+		}),
 	}
 }
 

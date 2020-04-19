@@ -516,7 +516,7 @@ func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
 	defer span.Finish()
 
 	start := time.Now()
-	conn, err := qre.tsv.qe.getQueryConn(ctx)
+	conn, err := qre.tsv.qe.conns.Get(ctx)
 	switch err {
 	case nil:
 		qre.logStats.WaitingForConnection += time.Since(start)
@@ -549,7 +549,7 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 		return nil, err
 	}
 	// Check tablet type.
-	if qre.tsv.qe.enableConsolidator || (qre.tsv.qe.enableConsolidatorReplicas && qre.tabletType != topodatapb.TabletType_MASTER) {
+	if qre.tsv.qe.consolidatorMode == tabletenv.Enable || (qre.tsv.qe.consolidatorMode == tabletenv.NotOnMaster && qre.tabletType != topodatapb.TabletType_MASTER) {
 		q, original := qre.tsv.qe.consolidator.Create(string(sqlWithoutComments))
 		if original {
 			defer q.Broadcast()

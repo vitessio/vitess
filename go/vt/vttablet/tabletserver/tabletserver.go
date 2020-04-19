@@ -202,7 +202,7 @@ var RegisterFunctions []func(Controller)
 
 // NewServer creates a new TabletServer based on the command line flags.
 func NewServer(name string, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
-	return NewTabletServer(name, tabletenv.Config, topoServer, alias)
+	return NewTabletServer(name, tabletenv.NewCurrentConfig(), topoServer, alias)
 }
 
 var (
@@ -212,15 +212,15 @@ var (
 
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
-func NewTabletServer(name string, config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
+func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
 	exporter := servenv.NewExporter(name, "Tablet")
 	tsv := &TabletServer{
 		exporter:               exporter,
 		stats:                  tabletenv.NewStats(exporter),
-		config:                 &config,
-		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
+		config:                 config,
+		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.Oltp.QueryTimeoutSeconds * 1e9)),
 		TerseErrors:            config.TerseErrors,
-		enableHotRowProtection: config.EnableHotRowProtection || config.EnableHotRowProtectionDryRun,
+		enableHotRowProtection: config.HotRowProtection.Mode != tabletenv.Disable,
 		checkMySQLThrottler:    sync2.NewSemaphore(1, 0),
 		streamHealthMap:        make(map[int]chan<- *querypb.StreamHealthResponse),
 		history:                history.New(10),
@@ -232,10 +232,10 @@ func NewTabletServer(name string, config tabletenv.TabletConfig, topoServer *top
 	tsv.te = NewTxEngine(tsv)
 	tsv.hw = heartbeat.NewWriter(tsv, alias)
 	tsv.hr = heartbeat.NewReader(tsv)
-	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
+	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se)
-	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, config)
+	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
@@ -1906,63 +1906,16 @@ func (tsv *TabletServer) WarnResultSize() int {
 	return int(tsv.qe.warnResultSize.Get())
 }
 
-// SetMaxDMLRows changes the max result size to the specified value.
-// This function should only be used for testing.
-func (tsv *TabletServer) SetMaxDMLRows(val int) {
-	tsv.qe.maxDMLRows.Set(int64(val))
-}
-
-// MaxDMLRows returns the max result size.
-func (tsv *TabletServer) MaxDMLRows() int {
-	return int(tsv.qe.maxDMLRows.Get())
-}
-
 // SetPassthroughDMLs changes the setting to pass through all DMLs
 // It should only be used for testing
 func (tsv *TabletServer) SetPassthroughDMLs(val bool) {
 	planbuilder.PassthroughDMLs = val
 }
 
-// SetQueryPoolWaiterCap changes the limit on the number of queries that can be
-// waiting for a connection from the pool
+// SetConsolidatorMode sets the consolidator mode.
 // This function should only be used for testing.
-func (tsv *TabletServer) SetQueryPoolWaiterCap(val int64) {
-	tsv.qe.queryPoolWaiterCap.Set(val)
-}
-
-// GetQueryPoolWaiterCap returns the limit on the number of queries that can be
-// waiting for a connection from the pool
-// This function should only be used for testing.
-func (tsv *TabletServer) GetQueryPoolWaiterCap() int64 {
-	return tsv.qe.queryPoolWaiterCap.Get()
-}
-
-// SetTxPoolWaiterCap changes the limit on the number of queries that can be
-// waiting for a connection from the pool
-// This function should only be used for testing.
-func (tsv *TabletServer) SetTxPoolWaiterCap(val int64) {
-	tsv.te.txPool.waiterCap.Set(val)
-}
-
-// GetTxPoolWaiterCap returns the limit on the number of queries that can be
-// waiting for a connection from the pool
-// This function should only be used for testing.
-func (tsv *TabletServer) GetTxPoolWaiterCap() int64 {
-	return tsv.te.txPool.waiterCap.Get()
-}
-
-// SetConsolidatorEnabled (true) will enable the query consolidator.
-// SetConsolidatorEnabled (false) will disable the query consolidator.
-// This function should only be used for testing.
-func (tsv *TabletServer) SetConsolidatorEnabled(enabled bool) {
-	tsv.qe.enableConsolidator = enabled
-}
-
-// SetConsolidatorReplicasEnabled (true) will enable the query consolidator for replicas.
-// SetConsolidatorReplicasEnabled (false) will disable the query consolidator for replicas.
-// This function should only be used for testing.
-func (tsv *TabletServer) SetConsolidatorReplicasEnabled(enabled bool) {
-	tsv.qe.enableConsolidatorReplicas = enabled
+func (tsv *TabletServer) SetConsolidatorMode(mode string) {
+	tsv.qe.consolidatorMode = mode
 }
 
 // queryAsString returns a readable version of query+bind variables.
