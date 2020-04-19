@@ -140,6 +140,7 @@ func init() {
 // Init must be called after flag.Parse, and before doing any other operations.
 func Init() {
 	// IdleTimeout is only initialized for OltpReadPool , but the other pools need to inherit the value.
+	// TODO(sougou): Make a decision on whether this should be global or per-pool.
 	currentConfig.OlapReadPool.IdleTimeoutSeconds = currentConfig.OltpReadPool.IdleTimeoutSeconds
 	currentConfig.TxPool.IdleTimeoutSeconds = currentConfig.OltpReadPool.IdleTimeoutSeconds
 
@@ -260,12 +261,6 @@ func NewCurrentConfig() *TabletConfig {
 }
 
 // NewDefaultConfig returns a new TabletConfig with pre-initialized defaults.
-// The value for StreamBufferSize was chosen after trying out a few of
-// them. Too small buffers force too many packets to be sent. Too big
-// buffers force the clients to read them in multiple chunks and make
-// memory copies.  so with the encoding overhead, this seems to work
-// great (the overhead makes the final packets on the wire about twice
-// bigger than this).
 func NewDefaultConfig() *TabletConfig {
 	return defaultConfig.Clone()
 }
@@ -356,7 +351,13 @@ var defaultConfig = TabletConfig{
 		// of them ready in MySQL and profit from a pipelining effect.
 		MaxConcurrency: 5,
 	},
-	Consolidator:                Enable,
+	Consolidator: Enable,
+	// The value for StreamBufferSize was chosen after trying out a few of
+	// them. Too small buffers force too many packets to be sent. Too big
+	// buffers force the clients to read them in multiple chunks and make
+	// memory copies.  so with the encoding overhead, this seems to work
+	// great (the overhead makes the final packets on the wire about twice
+	// bigger than this).
 	StreamBufferSize:            32 * 1024,
 	QueryCacheSize:              5000,
 	SchemaReloadIntervalSeconds: 30 * 60,

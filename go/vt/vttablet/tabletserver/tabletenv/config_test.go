@@ -95,3 +95,19 @@ txPool:
 `
 	assert.Equal(t, want, string(gotBytes))
 }
+
+func TestClone(t *testing.T) {
+	cfg1 := &TabletConfig{
+		OltpReadPool: ConnPoolConfig{
+			Size:               16,
+			TimeoutSeconds:     10,
+			IdleTimeoutSeconds: 20,
+			PrefillParallelism: 30,
+			MaxWaiters:         40,
+		},
+	}
+	cfg2 := cfg1.Clone()
+	assert.Equal(t, cfg1, cfg2)
+	cfg1.OltpReadPool.Size = 10
+	assert.NotEqual(t, cfg1, cfg2)
+}
