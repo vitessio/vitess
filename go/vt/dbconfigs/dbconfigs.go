@@ -101,10 +101,10 @@ type DBConfigs struct {
 
 // UserConfig contains user-specific configs.
 type UserConfig struct {
-	User      string `json:"user,omitempty"`
-	Password  string `json:"password,omitempty"`
-	UseSSL    bool   `json:"useSsl,omitempty"`
-	PreferTCP bool   `json:"preferTcp,omitempty"`
+	User     string `json:"user,omitempty"`
+	Password string `json:"password,omitempty"`
+	UseSSL   bool   `json:"useSsl,omitempty"`
+	UseTCP   bool   `json:"useTcp,omitempty"`
 }
 
 // RegisterFlags registers the flags for the given DBConfigFlag.
@@ -339,7 +339,9 @@ func (dbcfgs *DBConfigs) Init(defaultSocketFile string) *DBConfigs {
 		if !dbcfgs.IsZero() && userKey != ExternalRepl {
 			cp.Host = dbcfgs.Host
 			cp.Port = dbcfgs.Port
-			cp.UnixSocket = dbcfgs.Socket
+			if !uc.UseTCP {
+				cp.UnixSocket = dbcfgs.Socket
+			}
 		} else if cp.UnixSocket == "" && cp.Host == "" {
 			cp.UnixSocket = defaultSocketFile
 		}

@@ -50,17 +50,17 @@ func TestConfigParse(t *testing.T) {
   allprivs:
     password: '****'
   app:
-	  password: '****'
+    password: '****'
     user: b
   appdebug:
-	  password: '****'
+    password: '****'
   dba:
-	  password: '****'
+    password: '****'
     user: c
   filtered:
-	  password: '****'
+    password: '****'
   repl:
-	  password: '****'
+    password: '****'
   socket: a
 hotRowProtection: {}
 olapReadPool: {}
