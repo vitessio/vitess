@@ -304,7 +304,7 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 	case *sqlparser.OtherRead, *sqlparser.OtherAdmin:
 		instruction, err = buildOtherReadAndAdmin(query, vschema)
 	case *sqlparser.Set:
-		instruction, err = buildSetPlan(query, stmt, vschema)
+		instruction, err = buildSetPlan(stmt, vschema)
 	case *sqlparser.DBDDL:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Database DDL %v", sqlparser.String(stmt))
 	case *sqlparser.Show, *sqlparser.SetTransaction:

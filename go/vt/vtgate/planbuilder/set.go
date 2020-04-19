@@ -34,7 +34,7 @@ func init() {
 	sysVarPlanningFunc["sql_mode"] = buildSetOpCheckAndIgnore
 }
 
-func buildSetPlan(sql string, stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive, error) {
+func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive, error) {
 	var setOps []engine.SetOp
 	var setOp engine.SetOp
 	var err error
@@ -67,7 +67,8 @@ func buildSetPlan(sql string, stmt *sqlparser.Set, vschema ContextVSchema) (engi
 		setOps = append(setOps, setOp)
 	}
 	return &engine.Set{
-		Ops: setOps,
+		Ops:   setOps,
+		Input: &engine.SingleRow{},
 	}, nil
 }
 
