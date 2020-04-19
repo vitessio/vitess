@@ -269,7 +269,7 @@ func buildPostponeQuery(name sqlparser.TableIdent, minBackoff, maxBackoff time.D
 
 	// have backoff be +/- 33%, seeded with :time_now to be consistent in multiple usages
 	// whenever this is injected, append (:time_now, :min_backoff, :time_now)
-	baseTimeNext := "%a+FLOOR((%a<<ifnull(epoch, 0))*(-.333333 + (RAND(%a) * .666666))"
+	baseTimeNext := "(%a+FLOOR((%a<<ifnull(epoch, 0))*(-.333333 + (RAND(%a) * .666666))))"
 
 	//
 	// add sanity checks for the jittered time_next
