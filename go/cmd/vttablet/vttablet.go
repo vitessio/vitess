@@ -138,7 +138,7 @@ func main() {
 	if servenv.GRPCPort != nil {
 		gRPCPort = int32(*servenv.GRPCPort)
 	}
-	agent, err = tabletmanager.NewActionAgent(context.Background(), ts, mysqld, qsc, tabletAlias, config.DB, mycnf, int32(*servenv.Port), gRPCPort)
+	agent, err = tabletmanager.NewActionAgent(context.Background(), ts, mysqld, qsc, tabletAlias, config, mycnf, int32(*servenv.Port), gRPCPort)
 	if err != nil {
 		log.Exitf("NewActionAgent() failed: %v", err)
 	}
