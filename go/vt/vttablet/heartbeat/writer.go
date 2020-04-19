@@ -85,7 +85,7 @@ func NewWriter(env tabletenv.Env, alias topodatapb.TabletAlias) *Writer {
 		interval:    heartbeatInterval,
 		ticks:       timer.NewTimer(heartbeatInterval),
 		errorLog:    logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
-		pool: connpool.New(env, "HeartbeatWritePool", tabletenv.ConnPoolConfig{
+		pool: connpool.NewPool(env, "HeartbeatWritePool", tabletenv.ConnPoolConfig{
 			Size:               1,
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
 		}),

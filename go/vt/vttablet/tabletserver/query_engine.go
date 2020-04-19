@@ -173,8 +173,8 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 		queryRuleSources: rules.NewMap(),
 	}
 
-	qe.conns = connpool.New(env, "ConnPool", config.OltpReadPool)
-	qe.streamConns = connpool.New(env, "StreamConnPool", config.OlapReadPool)
+	qe.conns = connpool.NewPool(env, "ConnPool", config.OltpReadPool)
+	qe.streamConns = connpool.NewPool(env, "StreamConnPool", config.OlapReadPool)
 	qe.consolidatorMode = config.Consolidator
 	qe.enableQueryPlanFieldCaching = config.CacheResultFields
 	qe.consolidator = sync2.NewConsolidator()

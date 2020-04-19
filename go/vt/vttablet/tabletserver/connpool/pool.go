@@ -59,9 +59,9 @@ type Pool struct {
 	appDebugParams     dbconfigs.Connector
 }
 
-// New creates a new Pool. The name is used
+// NewPool creates a new Pool. The name is used
 // to publish stats only.
-func New(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool {
+func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool {
 	idleTimeout := time.Duration(cfg.IdleTimeoutSeconds * 1e9)
 	cp := &Pool{
 		env:                env,

@@ -72,7 +72,7 @@ func NewEngine(env tabletenv.Env) *Engine {
 		env: env,
 		// We need only one connection because the reloader is
 		// the only one that needs this.
-		conns: connpool.New(env, "", tabletenv.ConnPoolConfig{
+		conns: connpool.NewPool(env, "", tabletenv.ConnPoolConfig{
 			Size:               1,
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
 		}),
