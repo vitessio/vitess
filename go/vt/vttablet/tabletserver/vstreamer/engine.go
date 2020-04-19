@@ -156,7 +156,7 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, filter *binlogda
 		if !vse.isOpen {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
-		streamer := newVStreamer(ctx, vse.env.DBConfigs().DbaWithDB(), vse.se, startPos, filter, vse.lvschema, send)
+		streamer := newVStreamer(ctx, vse.env.DBConfigs().AppWithDB(), vse.se, startPos, filter, vse.lvschema, send)
 		idx := vse.streamIdx
 		vse.streamers[idx] = streamer
 		vse.streamIdx++
