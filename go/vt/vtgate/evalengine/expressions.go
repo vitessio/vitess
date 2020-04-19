@@ -84,7 +84,7 @@ func NewLiteralInt(val []byte) (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &LiteralFloat{evalResult{typ: sqltypes.Int64, ival: ival}}, nil
+	return &LiteralInt{evalResult{typ: sqltypes.Int64, ival: ival}}, nil
 }
 
 func NewLiteralFloat(val []byte) (Expr, error) {

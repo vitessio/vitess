@@ -17,13 +17,15 @@ limitations under the License.
 package engine
 
 import (
+	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	"github.com/stretchr/testify/require"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -38,6 +40,12 @@ func TestSetTable(t *testing.T) {
 		expectedError    string
 	}
 
+	intExpr := func(i int) evalengine.Expr {
+		s := strconv.FormatInt(int64(i), 10)
+		e, _ := evalengine.NewLiteralInt([]byte(s))
+		return e
+	}
+
 	tests := []testCase{
 		{
 			testName:         "nil set ops",
@@ -48,9 +56,7 @@ func TestSetTable(t *testing.T) {
 			setOps: []SetOp{
 				&UserDefinedVariable{
 					Name: "x",
-					PlanValue: sqltypes.PlanValue{
-						Value: sqltypes.NewInt64(42),
-					},
+					Expr: intExpr(42),
 				},
 			},
 			expectedQueryLog: []string{
@@ -141,9 +147,7 @@ func TestSetTable(t *testing.T) {
 			setOps: []SetOp{
 				&UserDefinedVariable{
 					Name: "x",
-					PlanValue: sqltypes.PlanValue{
-						Value: sqltypes.NewInt64(1),
-					},
+					Expr: intExpr(1),
 				},
 				&SysVarIgnore{
 					Name: "y",
