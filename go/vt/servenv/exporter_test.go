@@ -108,6 +108,10 @@ func TestCountersFuncWithMultiLabels(t *testing.T) {
 	ebd.NewCountersFuncWithMultiLabels("", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 2} })
 	ebd.NewCountersFuncWithMultiLabels("", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 3} })
 
+	// Ensure reuse of global var is ignored.
+	ebd.NewCountersFuncWithMultiLabels("gcfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 2} })
+	assert.Equal(t, `{"a": 1}`, expvar.Get("gcfwml").String())
+
 	ebd.NewCountersFuncWithMultiLabels("lcfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 4} })
 	assert.Equal(t, `{"i1.a": 4}`, expvar.Get("lcfwml").String())
 
@@ -131,6 +135,10 @@ func TestGaugesFuncWithMultiLabels(t *testing.T) {
 	// Ensure anonymous vars don't cause panics.
 	ebd.NewGaugesFuncWithMultiLabels("", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 2} })
 	ebd.NewGaugesFuncWithMultiLabels("", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 3} })
+
+	// Ensure reuse of global var is ignored.
+	ebd.NewGaugesFuncWithMultiLabels("ggfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 1} })
+	assert.Equal(t, `{"a": 1}`, expvar.Get("ggfwml").String())
 
 	ebd.NewGaugesFuncWithMultiLabels("lgfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 4} })
 	assert.Equal(t, `{"i1.a": 4}`, expvar.Get("lgfwml").String())
@@ -156,6 +164,11 @@ func TestCounter(t *testing.T) {
 	// Ensure anonymous vars don't cause panics.
 	ebd.NewCounter("", "")
 	ebd.NewCounter("", "")
+
+	// Ensure global var gets reused.
+	c = ebd.NewCounter("gcounter", "")
+	c.Add(1)
+	assert.Equal(t, "2", expvar.Get("gcounter").String())
 
 	c = ebd.NewCounter("lcounter", "")
 	c.Add(4)
@@ -185,6 +198,11 @@ func TestGauge(t *testing.T) {
 	ebd.NewGauge("", "")
 	ebd.NewGauge("", "")
 
+	// Ensure global var gets reused.
+	c = ebd.NewGauge("ggauge", "")
+	c.Set(2)
+	assert.Equal(t, "2", expvar.Get("ggauge").String())
+
 	c = ebd.NewGauge("lgauge", "")
 	c.Set(4)
 	assert.Equal(t, `{"i1": 4}`, expvar.Get("lgauge").String())
@@ -213,6 +231,10 @@ func TestCounterFunc(t *testing.T) {
 	ebd.NewCounterFunc("", "", func() int64 { return 2 })
 	ebd.NewCounterFunc("", "", func() int64 { return 3 })
 
+	// Ensure reuse of global var is ignored.
+	ebd.NewCounterFunc("gcf", "", func() int64 { return 2 })
+	assert.Equal(t, "1", expvar.Get("gcf").String())
+
 	ebd.NewCounterFunc("lcf", "", func() int64 { return 4 })
 	assert.Equal(t, `{"i1": 4}`, expvar.Get("lcf").String())
 
@@ -236,6 +258,10 @@ func TestGaugeFunc(t *testing.T) {
 	// Ensure anonymous vars don't cause panics.
 	ebd.NewGaugeFunc("", "", func() int64 { return 2 })
 	ebd.NewGaugeFunc("", "", func() int64 { return 3 })
+
+	// Ensure reuse of global var is ignored.
+	ebd.NewGaugeFunc("ggf", "", func() int64 { return 2 })
+	assert.Equal(t, "1", expvar.Get("ggf").String())
 
 	ebd.NewGaugeFunc("lgf", "", func() int64 { return 4 })
 	assert.Equal(t, `{"i1": 4}`, expvar.Get("lgf").String())
@@ -261,6 +287,10 @@ func TestCounterDurationFunc(t *testing.T) {
 	ebd.NewCounterDurationFunc("", "", func() time.Duration { return 2 })
 	ebd.NewCounterDurationFunc("", "", func() time.Duration { return 3 })
 
+	// Ensure reuse of global var is ignored.
+	ebd.NewCounterDurationFunc("gcduration", "", func() time.Duration { return 2 })
+	assert.Equal(t, "1", expvar.Get("gcduration").String())
+
 	ebd.NewCounterDurationFunc("lcduration", "", func() time.Duration { return 4 })
 	assert.Equal(t, `{"i1": 4}`, expvar.Get("lcduration").String())
 
@@ -284,6 +314,10 @@ func TestGaugeDurationFunc(t *testing.T) {
 	// Ensure anonymous vars don't cause panics.
 	ebd.NewGaugeDurationFunc("", "", func() time.Duration { return 2 })
 	ebd.NewGaugeDurationFunc("", "", func() time.Duration { return 3 })
+
+	// Ensure reuse of global var is ignored.
+	ebd.NewGaugeDurationFunc("ggduration", "", func() time.Duration { return 2 })
+	assert.Equal(t, "1", expvar.Get("ggduration").String())
 
 	ebd.NewGaugeDurationFunc("lgduration", "", func() time.Duration { return 4 })
 	assert.Equal(t, `{"i1": 4}`, expvar.Get("lgduration").String())
@@ -309,6 +343,11 @@ func TestCountersWithSingleLabel(t *testing.T) {
 	// Ensure anonymous vars don't cause panics.
 	ebd.NewCountersWithSingleLabel("", "", "l")
 	ebd.NewCountersWithSingleLabel("", "", "l")
+
+	// Ensure global var gets reused.
+	g = ebd.NewCountersWithSingleLabel("gcwsl", "", "l")
+	g.Add("a", 1)
+	assert.Equal(t, `{"a": 2}`, expvar.Get("gcwsl").String())
 
 	g = ebd.NewCountersWithSingleLabel("lcwsl", "", "l")
 	g.Add("a", 4)
@@ -337,6 +376,11 @@ func TestGaugesWithSingleLabel(t *testing.T) {
 	// Ensure anonymous vars don't cause panics.
 	ebd.NewGaugesWithSingleLabel("", "", "l")
 	ebd.NewGaugesWithSingleLabel("", "", "l")
+
+	// Ensure reuse of global var is ignored.
+	g = ebd.NewGaugesWithSingleLabel("ggwsl", "", "l")
+	g.Set("a", 2)
+	assert.Equal(t, `{"a": 1}`, expvar.Get("ggwsl").String())
 
 	g = ebd.NewGaugesWithSingleLabel("lgwsl", "", "l")
 	g.Set("a", 4)
@@ -367,6 +411,11 @@ func TestCountersWithMultiLabels(t *testing.T) {
 	ebd.NewCountersWithMultiLabels("", "", []string{"l"})
 	ebd.NewCountersWithMultiLabels("", "", []string{"l"})
 
+	// Ensure global var gets reused.
+	g = ebd.NewCountersWithMultiLabels("gcwml", "", []string{"l"})
+	g.Add([]string{"a"}, 1)
+	assert.Equal(t, `{"a": 2}`, expvar.Get("gcwml").String())
+
 	g = ebd.NewCountersWithMultiLabels("lcwml", "", []string{"l"})
 	g.Add([]string{"a"}, 4)
 	assert.Equal(t, `{"i1.a": 4}`, expvar.Get("lcwml").String())
@@ -394,6 +443,11 @@ func TestGaugesWithMultiLabels(t *testing.T) {
 	// Ensure anonymous vars don't cause panics.
 	ebd.NewGaugesWithMultiLabels("", "", []string{"l"})
 	ebd.NewGaugesWithMultiLabels("", "", []string{"l"})
+
+	// Ensure reuse of global var is ignored.
+	g = ebd.NewGaugesWithMultiLabels("ggwml", "", []string{"l"})
+	g.Set([]string{"a"}, 2)
+	assert.Equal(t, `{"a": 1}`, expvar.Get("ggwml").String())
 
 	g = ebd.NewGaugesWithMultiLabels("lgwml", "", []string{"l"})
 	g.Set([]string{"a"}, 4)
@@ -425,6 +479,11 @@ func TestTimings(t *testing.T) {
 	// Ensure anonymous vars don't cause panics.
 	ebd.NewTimings("", "", "l")
 	ebd.NewTimings("", "", "l")
+
+	// Ensure global var gets reused.
+	g = ebd.NewTimings("gtimings", "", "l")
+	g.Add("a", 1)
+	assert.Contains(t, expvar.Get("gtimings").String(), `"TotalCount":3`)
 
 	g = ebd.NewTimings("ltimings", "", "l")
 	g.Add("a", 1)
@@ -469,6 +528,11 @@ func TestMultiTimings(t *testing.T) {
 	ebd.NewMultiTimings("", "", []string{"l"})
 	ebd.NewMultiTimings("", "", []string{"l"})
 
+	// Ensure global var gets reused.
+	g = ebd.NewMultiTimings("gmtimings", "", []string{"l"})
+	g.Add([]string{"a"}, 1)
+	assert.Contains(t, expvar.Get("gmtimings").String(), `"TotalCount":3`)
+
 	g = ebd.NewMultiTimings("lmtimings", "", []string{"l"})
 	g.Add([]string{"a"}, 1)
 	g.Add([]string{"a"}, 1)
@@ -510,6 +574,10 @@ func TestRates(t *testing.T) {
 	ebd.NewRates("", tm, 15*60/5, 5*time.Second)
 	ebd.NewRates("", tm, 15*60/5, 5*time.Second)
 
+	// Ensure global var gets reused.
+	ebd.NewRates("grates", tm, 15*60/5, 5*time.Second)
+	assert.Equal(t, "{}", expvar.Get("grates").String())
+
 	// Ensure var gets reused.
 	rates1 := ebd.NewRates("lrates", tm, 15*60/5, 5*time.Second)
 	rates2 := ebd.NewRates("lrates", tm, 15*60/5, 5*time.Second)
@@ -531,6 +599,9 @@ func TestHistogram(t *testing.T) {
 	// Ensure anonymous vars don't cause panics.
 	ebd.NewHistogram("", "", []int64{10})
 	ebd.NewHistogram("", "", []int64{10})
+
+	// Ensure reuse of global var doesn't panic.
+	_ = ebd.NewHistogram("ghistogram", "", []int64{10})
 
 	g = ebd.NewHistogram("lhistogram", "", []int64{10})
 	g.Add(1)
@@ -555,6 +626,9 @@ func TestPublish(t *testing.T) {
 	ebd = NewExporter("i1", "label")
 	ebd.Publish("lpub", s)
 	assert.Equal(t, `{"i1": "1"}`, expvar.Get("lpub").String())
+
+	// Ensure reuse of global var doesn't panic.
+	ebd.Publish("gpub", s)
 
 	ebd = NewExporter("i2", "label")
 	ebd.Publish("lpub", s)
