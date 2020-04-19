@@ -17,6 +17,7 @@ limitations under the License.
 package messager
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"sync"
@@ -255,17 +256,55 @@ func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, pos
 	mm.purgeQuery = sqlparser.BuildParsedQuery(
 		"delete from %v where time_acked < %a limit 500", mm.name, ":time_acked")
 
-	// if a maxBackoff is set, incorporate it into the update statement
-	if mm.maxBackoff > 0 {
-		mm.postponeQuery = sqlparser.BuildParsedQuery(
-			"update %v set time_next = %a+if(%a<<ifnull(epoch, 0) > %a, %a, %a<<ifnull(epoch, 0)), epoch = ifnull(epoch, 0)+1 where id in %a and time_acked is null",
-			mm.name, ":time_now", ":min_backoff", ":max_backoff", ":max_backoff", ":min_backoff", "::ids")
-	} else {
-		mm.postponeQuery = sqlparser.BuildParsedQuery(
-			"update %v set time_next = %a+(%a<<ifnull(epoch, 0)), epoch = ifnull(epoch, 0)+1 where id in %a and time_acked is null",
-			mm.name, ":time_now", ":min_backoff", "::ids")
-	}
+	mm.postponeQuery = buildPostponeQuery(mm.name, mm.minBackoff, mm.maxBackoff)
+
 	return mm
+}
+
+func buildPostponeQuery(name sqlparser.TableIdent, minBackoff, maxBackoff time.Duration) *sqlparser.ParsedQuery {
+	var args []interface{}
+
+	buf := bytes.NewBufferString("update %v set time_next = ")
+	args = append(args, name)
+
+	// have backoff be +/- 33%, seeded with :time_now to be consistent in multiple usages
+	// whenever this is injected, append (:time_now, :min_backoff, :time_now)
+	baseTimeNext := "%a+FLOOR((%a<<ifnull(epoch, 0))*(-.333333 + (RAND(%a) * .666666))"
+
+	//
+	// add sanity checks for the jittered time_next
+	// if the jittered backoff is less than min_backoff, just set it to time_now + min_backoff
+	//
+	buf.WriteString(fmt.Sprintf("IF(%s - %%a < %%a, %%a + %%a, ", baseTimeNext))
+	// baseTimeNext - :time_now < :min_backoff
+	args = append(args, ":time_now", ":min_backoff", ":time_now", ":time_now", ":min_backoff")
+	// if it is less, then use :time_now + :min_backoff
+	args = append(args, ":time_now", ":min_backoff")
+
+	// now we are setting the false case on the above IF statement
+	// if there is no max_backoff, just use the raw jittered time_next
+	if maxBackoff == 0 {
+		buf.WriteString(baseTimeNext)
+		args = append(args, ":time_now", ":min_backoff", ":time_now")
+	} else {
+		// make sure that it doesn't exceed max_backoff
+		buf.WriteString(fmt.Sprintf("IF(%s - %%a > %%a, %%a + %%a, %s)", baseTimeNext, baseTimeNext))
+		// baseTimeNext - :time_now > :max_backoff
+		args = append(args, ":time_now", ":max_backoff", ":time_now", ":time_now", ":max_backoff")
+		// if it is greater, then use :time_now + :max_backoff
+		args = append(args, ":time_now", ":max_backoff")
+		// otherwise just use the raw jittered time_next
+		args = append(args, ":time_now", ":min_backoff", ":time_now")
+	}
+
+	// close the if statement
+	buf.WriteString(")")
+
+	// now that we've identified time_next, finish the statement
+	buf.WriteString(", epoch = ifnull(epoch, 0)+1 where id in %a and time_acked is null")
+	args = append(args, "::ids")
+
+	return sqlparser.BuildParsedQuery(buf.String(), args...)
 }
 
 // buildSelectColumnList is a convenience function that
