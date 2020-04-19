@@ -126,7 +126,7 @@ func (l *LiteralInt) Evaluate(ExpressionEnv) (EvalResult, error) {
 }
 
 //Evaluate implements the Expr interface
-func (l *LiteralFloat) Evaluate(env ExpressionEnv) (EvalResult, error) {
+func (l *LiteralFloat) Evaluate(ExpressionEnv) (EvalResult, error) {
 	return l.Val, nil
 }
 

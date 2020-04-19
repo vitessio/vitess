@@ -11,6 +11,11 @@
         "Name": "foo",
         "Expr": "INT64(42)"
       }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
     ]
   }
 }
@@ -33,6 +38,11 @@
         "Name": "bar",
         "Expr": ":__vtudvfoo"
       }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
     ]
   }
 }
@@ -44,7 +54,6 @@
   "Original": "set @foo = 42, @bar = @foo + 1",
   "Instructions": {
     "OperatorType": "Set",
-    "Variant": "",
     "Ops": [
       {
         "Type": "UserDefinedVariable",
@@ -55,6 +64,11 @@
         "Type": "UserDefinedVariable",
         "Name": "bar",
         "Expr": ":__vtudvfoo + INT64(1)"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
       }
     ]
   }
