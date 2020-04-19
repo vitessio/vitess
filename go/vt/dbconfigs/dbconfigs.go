@@ -285,7 +285,12 @@ func (dbcfgs *DBConfigs) makeParams(cp *mysql.ConnParams, withDB bool) Connector
 
 // IsZero returns true if DBConfigs was uninitialized.
 func (dbcfgs *DBConfigs) IsZero() bool {
-	return dbcfgs.Host == "" && dbcfgs.Socket == ""
+	return *dbcfgs == DBConfigs{}
+}
+
+// HasGlobalSettings returns true if DBConfigs was uninitialized.
+func (dbcfgs *DBConfigs) HasGlobalSettings() bool {
+	return dbcfgs.Host != "" || dbcfgs.Socket != ""
 }
 
 func (dbcfgs *DBConfigs) String() string {
@@ -336,7 +341,7 @@ func (dbcfgs *DBConfigs) Init(defaultSocketFile string) *DBConfigs {
 		// vreplication to connect to external mysql hosts that are not part of a vitess
 		// cluster. In the future we need to refactor all dbconfig to support custom users
 		// in a more flexible way.
-		if !dbcfgs.IsZero() && userKey != ExternalRepl {
+		if dbcfgs.HasGlobalSettings() && userKey != ExternalRepl {
 			cp.Host = dbcfgs.Host
 			cp.Port = dbcfgs.Port
 			if !uc.UseTCP {
