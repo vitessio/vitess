@@ -179,8 +179,6 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 					if dbname == "" {
 						dbname = fmt.Sprintf("vt_%v_%v", keyspace, shard)
 					}
-					// Clone dbcfgs and override SidecarDBName because there will be one for each db.
-					copydbcfgs := dbcfgs.Clone()
 
 					replicas := int(kpb.ReplicaCount)
 					if replicas == 0 {
@@ -196,7 +194,7 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 						replicas--
 
 						// create the master
-						if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_MASTER, mysqld, copydbcfgs); err != nil {
+						if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_MASTER, mysqld, dbcfgs.Clone()); err != nil {
 							return err
 						}
 						uid++
@@ -204,7 +202,7 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 
 					for i := 0; i < replicas; i++ {
 						// create a replica slave
-						if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_REPLICA, mysqld, copydbcfgs); err != nil {
+						if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_REPLICA, mysqld, dbcfgs.Clone()); err != nil {
 							return err
 						}
 						uid++
@@ -212,7 +210,7 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 
 					for i := 0; i < rdonlys; i++ {
 						// create a rdonly slave
-						if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_RDONLY, mysqld, copydbcfgs); err != nil {
+						if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_RDONLY, mysqld, dbcfgs.Clone()); err != nil {
 							return err
 						}
 						uid++
