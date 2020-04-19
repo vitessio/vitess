@@ -19,6 +19,7 @@ package evalengine
 import (
 	"bytes"
 	"fmt"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	"strconv"
@@ -353,10 +354,14 @@ func ToNative(v sqltypes.Value) (interface{}, error) {
 	return out, err
 }
 
-// newNumeric parses a value and produces an Int64, Uint64 or Float64.
+// newNumeric parses a value and produces an evalResult containing the value
 func newNumeric(v sqltypes.Value) (evalResult, error) {
 	str := v.ToString()
 	switch {
+	case v.IsBinary():
+		return evalResult{str: str, typ: sqltypes.Binary}, nil
+	case v.IsText():
+		return evalResult{str: str, typ: sqltypes.Text}, nil
 	case v.IsSigned():
 		ival, err := strconv.ParseInt(str, 10, 64)
 		if err != nil {
@@ -729,7 +734,7 @@ func castFromNumeric(v evalResult, resultType querypb.Type) sqltypes.Value {
 			}
 			return sqltypes.MakeTrusted(resultType, strconv.AppendFloat(nil, v.fval, format, -1, 64))
 		}
-	case resultType == sqltypes.VarChar || resultType == sqltypes.VarBinary:
+	case resultType == sqltypes.VarChar || resultType == sqltypes.VarBinary || resultType == sqltypes.Binary || resultType == sqltypes.Text:
 		return sqltypes.MakeTrusted(resultType, []byte(v.str))
 	}
 	return sqltypes.NULL

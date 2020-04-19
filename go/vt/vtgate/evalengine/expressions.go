@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"fmt"
 	"strconv"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -62,6 +63,7 @@ type (
 	LiteralInt   struct{ Val EvalResult }
 	LiteralFloat struct{ Val EvalResult }
 	BindVariable struct{ Key string }
+	Column       struct{ Offset int }
 	BinaryOp     struct {
 		Expr        BinaryExpr
 		Left, Right Expr
@@ -101,6 +103,7 @@ var _ Expr = (*LiteralInt)(nil)
 var _ Expr = (*LiteralFloat)(nil)
 var _ Expr = (*BindVariable)(nil)
 var _ Expr = (*BinaryOp)(nil)
+var _ Expr = (*Column)(nil)
 
 var _ BinaryExpr = (*Addition)(nil)
 var _ BinaryExpr = (*Subtraction)(nil)
@@ -137,6 +140,13 @@ func (b *BindVariable) Evaluate(env ExpressionEnv) (EvalResult, error) {
 		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Bind variable not found")
 	}
 	return evaluateByType(val)
+}
+
+//Evaluate implements the Expr interface
+func (c *Column) Evaluate(env ExpressionEnv) (EvalResult, error) {
+	value := env.Row[c.Offset]
+	numeric, err := newNumeric(value)
+	return numeric, err
 }
 
 //Evaluate implements the BinaryOp interface
@@ -194,11 +204,17 @@ func (b *BindVariable) Type(env ExpressionEnv) querypb.Type {
 }
 
 //Type implements the Expr interface
-func (l *LiteralInt) Type(_ ExpressionEnv) querypb.Type {
+func (l *LiteralInt) Type(ExpressionEnv) querypb.Type {
 	return sqltypes.Int64
 }
 
-func (l *LiteralFloat) Type(env ExpressionEnv) querypb.Type {
+//Type implements the Expr interface
+func (l *LiteralFloat) Type(ExpressionEnv) querypb.Type {
+	return sqltypes.Float64
+}
+
+//Type implements the Expr interface
+func (c *Column) Type(ExpressionEnv) querypb.Type {
 	return sqltypes.Float64
 }
 
@@ -242,6 +258,11 @@ func (l *LiteralFloat) String() string {
 	return l.Val.Value().String()
 }
 
+//String implements the Expr interface
+func (c *Column) String() string {
+	return fmt.Sprintf("[%d]", c.Offset)
+}
+
 func mergeNumericalTypes(ltype, rtype querypb.Type) querypb.Type {
 	switch ltype {
 	case sqltypes.Int64:
@@ -276,10 +297,10 @@ func evaluateByType(val *querypb.BindVariable) (EvalResult, error) {
 			fval = 0
 		}
 		return evalResult{typ: sqltypes.Float64, fval: fval}, nil
-	case sqltypes.VarChar:
+	case sqltypes.VarChar, sqltypes.Text:
 		return evalResult{typ: sqltypes.VarChar, str: string(val.Value)}, nil
 	case sqltypes.VarBinary:
 		return evalResult{typ: sqltypes.VarBinary, str: string(val.Value)}, nil
 	}
-	return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported")
+	return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %s", val.Type.String())
 }

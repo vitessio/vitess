@@ -73,3 +73,33 @@
     ]
   }
 }
+
+# set UDV to expression that can't be evaluated at vtgate
+"set @foo = CONCAT('Any','Expression','Is','Valid')"
+{
+  "QueryType": "SET",
+  "Original": "set @foo = CONCAT('Any','Expression','Is','Valid')",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "UserDefinedVariable",
+        "Name": "foo",
+        "Expr": "[0]"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "IsDML": false,
+        "Query": "select CONCAT('Any', 'Expression', 'Is', 'Valid')",
+        "SingleShardOnly": true
+      }
+    ]
+  }
+}

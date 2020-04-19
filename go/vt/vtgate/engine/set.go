@@ -87,7 +87,17 @@ func (s *Set) GetTableName() string {
 
 //Execute implements the Primitive interface method.
 func (s *Set) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
-	env := evalengine.ExpressionEnv{BindVars: bindVars}
+	input, err := s.Input.Execute(vcursor, bindVars, false)
+	if err != nil {
+		return nil, err
+	}
+	if len(input.Rows) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "should get a single row")
+	}
+	env := evalengine.ExpressionEnv{
+		BindVars: bindVars,
+		Row:      input.Rows[0],
+	}
 	for _, setOp := range s.Ops {
 		err := setOp.Execute(vcursor, env)
 		if err != nil {

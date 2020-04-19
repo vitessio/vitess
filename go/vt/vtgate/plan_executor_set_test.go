@@ -358,3 +358,21 @@ func TestPlanExecutorSetMetadata(t *testing.T) {
 	assert.Equal(t, wantqr.Fields, gotqr.Fields)
 	assert.ElementsMatch(t, wantqr.Rows, gotqr.Rows)
 }
+
+func TestSetStuff(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnvUsing(planAllTheThings)
+
+	fields := sqltypes.MakeTestFields("some", "VARBINARY")
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(
+			fields,
+			"abc",
+		),
+	})
+
+	masterSession.TargetString = "TestExecutor"
+	_, err := executorExec(executor, "set @foo = concat('a','b','c')", nil)
+	require.NoError(t, err)
+
+	utils.MustMatch(t, map[string]*querypb.BindVariable{"foo": sqltypes.StringBindVariable("abc")}, masterSession.UserDefinedVariables, "")
+}
