@@ -125,7 +125,7 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 	// the system can deadlock if all connections get moved to
 	// the TxPreparedPool.
 	te.preparedPool = NewTxPreparedPool(config.TxPool.Size - 2)
-	readPool := connpool.New(env, "TxReadPool", tabletenv.ConnPoolConfig{
+	readPool := connpool.NewPool(env, "TxReadPool", tabletenv.ConnPoolConfig{
 		Size:               3,
 		IdleTimeoutSeconds: env.Config().TxPool.IdleTimeoutSeconds,
 	})

@@ -103,8 +103,8 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 	transactionTimeout := time.Duration(config.Oltp.TxTimeoutSeconds * 1e9)
 	axp := &TxPool{
 		env:                env,
-		conns:              connpool.New(env, "TransactionPool", config.TxPool),
-		foundRowsPool:      connpool.New(env, "FoundRowsPool", config.TxPool),
+		conns:              connpool.NewPool(env, "TransactionPool", config.TxPool),
+		foundRowsPool:      connpool.NewPool(env, "FoundRowsPool", config.TxPool),
 		activePool:         pools.NewNumbered(),
 		lastID:             sync2.NewAtomicInt64(time.Now().UnixNano()),
 		transactionTimeout: sync2.NewAtomicDuration(transactionTimeout),
