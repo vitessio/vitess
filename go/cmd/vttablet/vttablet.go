@@ -90,7 +90,7 @@ func main() {
 	// and use the socket from it. If connection parameters were specified,
 	// we assume that the mysql is not local, and we skip loading mycnf.
 	// This also means that backup and restore will not be allowed.
-	if config.DB.IsZero() {
+	if !config.DB.HasGlobalSettings() {
 		var err error
 		if mycnf, err = mysqlctl.NewMycnfFromFlags(tabletAlias.Uid); err != nil {
 			log.Exitf("mycnf read failed: %v", err)

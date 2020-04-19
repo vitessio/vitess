@@ -121,7 +121,7 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	 but also relies on none of the flavor detection features being
 	 used at runtime. Currently this assumption is guaranteed true.
 	*/
-	if !dbconfigs.GlobalDBConfigs.IsZero() {
+	if dbconfigs.GlobalDBConfigs.HasGlobalSettings() {
 		log.Info("mysqld is unmanaged or remote. Skipping flavor detection")
 		return result
 	}
