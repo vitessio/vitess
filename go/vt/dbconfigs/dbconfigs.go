@@ -96,7 +96,7 @@ type DBConfigs struct {
 	allprivsParams     mysql.ConnParams
 	externalReplParams mysql.ConnParams
 
-	dbname string
+	DBName string `json:"-"`
 }
 
 // UserConfig contains user-specific configs.
@@ -208,18 +208,6 @@ func (c Connector) Host() string {
 	return c.connParams.Host
 }
 
-// WithDBName returns a new DBConfigs with the dbname set.
-func (dbcfgs *DBConfigs) WithDBName(dbname string) *DBConfigs {
-	dbcfgs = dbcfgs.Clone()
-	dbcfgs.dbname = dbname
-	return dbcfgs
-}
-
-// DBName returns the db name.
-func (dbcfgs *DBConfigs) DBName() string {
-	return dbcfgs.dbname
-}
-
 // AppWithDB returns connection parameters for app with dbname set.
 func (dbcfgs *DBConfigs) AppWithDB() Connector {
 	return dbcfgs.makeParams(&dbcfgs.appParams, true)
@@ -276,7 +264,7 @@ func (dbcfgs *DBConfigs) ExternalReplWithDB() Connector {
 func (dbcfgs *DBConfigs) makeParams(cp *mysql.ConnParams, withDB bool) Connector {
 	result := *cp
 	if withDB {
-		result.DbName = dbcfgs.dbname
+		result.DbName = dbcfgs.DBName
 	}
 	return Connector{
 		connParams: &result,
@@ -419,6 +407,6 @@ func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbname string)
 		filteredParams:     genParams,
 		replParams:         genParams,
 		externalReplParams: genParams,
-		dbname:             dbname,
+		DBName:             dbname,
 	}
 }

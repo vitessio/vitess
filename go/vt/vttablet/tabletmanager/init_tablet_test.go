@@ -182,7 +182,7 @@ func TestInitTablet(t *testing.T) {
 		TabletAlias: tabletAlias,
 		MysqlDaemon: mysqlDaemon,
 		DBConfigs:   &dbconfigs.DBConfigs{},
-		VREngine:    vreplication.NewEngine(nil, "", nil, nil, ""),
+		VREngine:    vreplication.NewTestEngine(nil, "", nil, nil, ""),
 		batchCtx:    ctx,
 		History:     history.New(historyLength),
 		_healthy:    fmt.Errorf("healthcheck not run yet"),

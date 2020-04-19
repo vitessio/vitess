@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
@@ -98,14 +99,31 @@ type journalEvent struct {
 
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
-func NewEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactory func() binlogplayer.DBClient, dbName string) *Engine {
+func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon) *Engine {
+	dbClientFactory := func() binlogplayer.DBClient {
+		return binlogplayer.NewDBClient(config.DB.FilteredWithDB())
+	}
 	vre := &Engine{
 		controllers:     make(map[int]*controller),
 		ts:              ts,
 		cell:            cell,
 		mysqld:          mysqld,
 		dbClientFactory: dbClientFactory,
-		dbName:          dbName,
+		dbName:          config.DB.DBName,
+		journaler:       make(map[string]*journalEvent),
+	}
+	return vre
+}
+
+// NewTestEngine creates a new Engine for testing.
+func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactory func() binlogplayer.DBClient, dbname string) *Engine {
+	vre := &Engine{
+		controllers:     make(map[int]*controller),
+		ts:              ts,
+		cell:            cell,
+		mysqld:          mysqld,
+		dbClientFactory: dbClientFactory,
+		dbName:          dbname,
 		journaler:       make(map[string]*journalEvent),
 	}
 	return vre
