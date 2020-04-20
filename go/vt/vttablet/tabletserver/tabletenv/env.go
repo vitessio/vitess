@@ -40,9 +40,9 @@ type testEnv struct {
 	stats    *Stats
 }
 
-// NewTestEnv creates an Env that can be used for tests.
-// CheckMySQL is a no-op.
-func NewTestEnv(config *TabletConfig, exporterName string) Env {
+// NewEnv creates an Env that can be used for tabletserver subcomponents
+// without an actual TabletServer.
+func NewEnv(config *TabletConfig, exporterName string) Env {
 	exporter := servenv.NewExporter(exporterName, "Tablet")
 	return &testEnv{
 		config:   config,

@@ -50,7 +50,7 @@ func TestStrictMode(t *testing.T) {
 	// Test default behavior.
 	config := tabletenv.NewDefaultConfig()
 	config.DB = newDBConfigs(db)
-	env := tabletenv.NewTestEnv(config, "TabletServerTest")
+	env := tabletenv.NewEnv(config, "TabletServerTest")
 	se := schema.NewEngine(env)
 	qe := NewQueryEngine(env, se)
 	qe.se.InitDBConfig(newDBConfigs(db).DbaWithDB())
@@ -280,7 +280,7 @@ func newTestQueryEngine(queryCacheSize int, idleTimeout time.Duration, strict bo
 	config.OltpReadPool.IdleTimeoutSeconds = int(idleTimeout / 1e9)
 	config.OlapReadPool.IdleTimeoutSeconds = int(idleTimeout / 1e9)
 	config.TxPool.IdleTimeoutSeconds = int(idleTimeout / 1e9)
-	env := tabletenv.NewTestEnv(config, "TabletServerTest")
+	env := tabletenv.NewEnv(config, "TabletServerTest")
 	se := schema.NewEngine(env)
 	qe := NewQueryEngine(env, se)
 	se.InitDBConfig(dbcfgs.DbaWithDB())
