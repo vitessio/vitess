@@ -340,7 +340,7 @@ var keywords = map[string]int{
 	"sqlwarning":          UNUSED,
 	"sql_big_result":      UNUSED,
 	"sql_cache":           SQL_CACHE,
-	"sql_calc_found_rows": UNUSED,
+	"sql_calc_found_rows": SQL_CALC_FOUND_ROWS,
 	"sql_no_cache":        SQL_NO_CACHE,
 	"sql_small_result":    UNUSED,
 	"ssl":                 UNUSED,

@@ -71,7 +71,7 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 
 	// Check if we can allow aggregates.
 	hasAggregates := false
-	if sel.Distinct != "" {
+	if sel.Distinct {
 		hasAggregates = true
 	} else {
 		hasAggregates = nodeHasAggregates(sel.SelectExprs)
@@ -100,7 +100,7 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	// unique vindex property, the id could come from multiple
 	// shards, which will require us to perform the grouping
 	// at the vtgate level.
-	if sel.Distinct != "" {
+	if sel.Distinct {
 		success := rb.removeOptions(func(ro *routeOption) bool {
 			for _, selectExpr := range sel.SelectExprs {
 				switch selectExpr := selectExpr.(type) {

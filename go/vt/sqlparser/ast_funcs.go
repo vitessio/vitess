@@ -508,6 +508,41 @@ func NewColIdent(str string) ColIdent {
 	}
 }
 
+//NewSelect is used to create a select statement
+func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, from TableExprs, where *Where, groupBy GroupBy, having *Where) *Select {
+	var cache *bool
+	var distinct, straightJoinHint, sqlFoundRows bool
+
+	for _, option := range selectOptions {
+		switch strings.ToLower(option) {
+		case DistinctStr:
+			distinct = true
+		case SQLCacheStr:
+			truth := true
+			cache = &truth
+		case SQLNoCacheStr:
+			truth := false
+			cache = &truth
+		case StraightJoinHint:
+			straightJoinHint = true
+		case SQLCalcFoundRowsStr:
+			sqlFoundRows = true
+		}
+	}
+	return &Select{
+		Cache:            cache,
+		Comments:         comments,
+		Distinct:         distinct,
+		StraightJoinHint: straightJoinHint,
+		SQLCalcFoundRows: sqlFoundRows,
+		SelectExprs:      exprs,
+		From:             from,
+		Where:            where,
+		GroupBy:          groupBy,
+		Having:           having,
+	}
+}
+
 // NewColIdentWithAt makes a new ColIdent.
 func NewColIdentWithAt(str string, at AtCount) ColIdent {
 	return ColIdent{
