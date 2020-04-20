@@ -268,33 +268,32 @@ func buildPostponeQuery(name sqlparser.TableIdent, minBackoff, maxBackoff time.D
 	args = append(args, name)
 
 	// have backoff be +/- 33%, seeded with :time_now to be consistent in multiple usages
-	// whenever this is injected, append (:time_now, :min_backoff, :time_now)
-	baseTimeNext := "(%a+FLOOR((%a<<ifnull(epoch, 0))*(-.333333 + (RAND(%a) * .666666))))"
+	// whenever this is injected, append (:min_backoff, :time_now)
+	jitteredBackoff := "FLOOR((%a<<ifnull(epoch, 0))*(.666666 + (RAND(%a) * .666666)))"
 
 	//
-	// add sanity checks for the jittered time_next
 	// if the jittered backoff is less than min_backoff, just set it to time_now + min_backoff
 	//
-	buf.WriteString(fmt.Sprintf("IF(%s - %%a < %%a, %%a + %%a, ", baseTimeNext))
-	// baseTimeNext - :time_now < :min_backoff
-	args = append(args, ":time_now", ":min_backoff", ":time_now", ":time_now", ":min_backoff")
+	buf.WriteString(fmt.Sprintf("IF(%s < %%a, %%a + %%a, ", jitteredBackoff))
+	// jitteredBackoff < :min_backoff
+	args = append(args, ":min_backoff", ":time_now", ":min_backoff")
 	// if it is less, then use :time_now + :min_backoff
 	args = append(args, ":time_now", ":min_backoff")
 
 	// now we are setting the false case on the above IF statement
-	// if there is no max_backoff, just use the raw jittered time_next
+	// if there is no max_backoff, just use the raw jittered backoff
 	if maxBackoff == 0 {
-		buf.WriteString(baseTimeNext)
-		args = append(args, ":time_now", ":min_backoff", ":time_now")
+		buf.WriteString(jitteredBackoff)
+		args = append(args, ":min_backoff", ":time_now")
 	} else {
 		// make sure that it doesn't exceed max_backoff
-		buf.WriteString(fmt.Sprintf("IF(%s - %%a > %%a, %%a + %%a, %s)", baseTimeNext, baseTimeNext))
-		// baseTimeNext - :time_now > :max_backoff
-		args = append(args, ":time_now", ":max_backoff", ":time_now", ":time_now", ":max_backoff")
+		buf.WriteString(fmt.Sprintf("IF(%s > %%a, %%a + %%a, %s)", jitteredBackoff, jitteredBackoff))
+		// jitteredBackoff > :max_backoff
+		args = append(args, ":min_backoff", ":time_now", ":max_backoff")
 		// if it is greater, then use :time_now + :max_backoff
 		args = append(args, ":time_now", ":max_backoff")
 		// otherwise just use the raw jittered time_next
-		args = append(args, ":time_now", ":min_backoff", ":time_now")
+		args = append(args, ":min_backoff", ":time_now")
 	}
 
 	// close the if statement
