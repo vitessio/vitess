@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -103,7 +104,11 @@ func TestMain(m *testing.M) {
 
 		InitVStreamerClient(env.Dbcfgs)
 
-		playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, vrepldb)
+		externalConfig := map[string]*dbconfigs.DBConfigs{
+			"exta": env.Dbcfgs,
+			"extb": env.Dbcfgs,
+		}
+		playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, vrepldb, externalConfig)
 		if err := playerEngine.Open(context.Background()); err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
