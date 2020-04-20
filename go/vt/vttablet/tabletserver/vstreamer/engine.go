@@ -277,6 +277,15 @@ func (vse *Engine) ServeHTTP(response http.ResponseWriter, request *http.Request
 }
 
 func (vse *Engine) setWatch() {
+	// If there's no toposerver, create an empty vschema.
+	if vse.ts == nil {
+		vse.lvschema = &localVSchema{
+			keyspace: vse.keyspace,
+			vschema:  &vindexes.VSchema{},
+		}
+		return
+	}
+
 	// WatchSrvVSchema does not return until the inner func has been called at least once.
 	vse.ts.WatchSrvVSchema(context.TODO(), vse.cell, func(v *vschemapb.SrvVSchema, err error) {
 		switch {

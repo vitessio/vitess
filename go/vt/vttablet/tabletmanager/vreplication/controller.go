@@ -222,11 +222,16 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		}
 
 		var vsClient VStreamerClient
-		if ct.source.GetExternalMysql() == "" {
-			vsClient = NewTabletVStreamerClient(tablet)
+		var err error
+		if name := ct.source.GetExternalMysql(); name != "" {
+			vsClient, err = ct.vre.ec.Get(name)
 		} else {
-			vsClient = NewMySQLVStreamerClient()
+			vsClient, err = newTabletConnector(tablet)
 		}
+		if err != nil {
+			return err
+		}
+		defer vsClient.Close(ctx)
 
 		vr := newVReplicator(ct.id, &ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre)
 		return vr.Replicate(ctx)

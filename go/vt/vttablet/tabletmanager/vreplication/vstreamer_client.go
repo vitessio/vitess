@@ -38,17 +38,13 @@ import (
 )
 
 var (
-	_      VStreamerClient = (*TabletVStreamerClient)(nil)
-	_      VStreamerClient = (*MySQLVStreamerClient)(nil)
+	//_      VStreamerClient = (*TabletVStreamerClient)(nil)
 	dbcfgs *dbconfigs.DBConfigs
 )
 
 // VStreamerClient exposes the core interface of a vstreamer
 type VStreamerClient interface {
-	// Open sets up all the environment for a vstream
-	Open(ctx context.Context) error
-	// Close closes a vstream
-	Close(ctx context.Context) error
+	Close(context.Context)
 
 	// VStream streams VReplication events based on the specified filter.
 	VStream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error

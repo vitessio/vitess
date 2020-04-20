@@ -35,10 +35,10 @@ func TestInit(t *testing.T) {
 		appParams: mysql.ConnParams{UnixSocket: "socket"},
 		dbaParams: mysql.ConnParams{Host: "host"},
 	}
-	dbc := dbConfigs.Init("default")
-	assert.Equal(t, mysql.ConnParams{UnixSocket: "socket"}, dbc.appParams)
-	assert.Equal(t, mysql.ConnParams{Host: "host"}, dbc.dbaParams)
-	assert.Equal(t, mysql.ConnParams{UnixSocket: "default"}, dbc.appdebugParams)
+	dbConfigs.Init("default")
+	assert.Equal(t, mysql.ConnParams{UnixSocket: "socket"}, dbConfigs.appParams)
+	assert.Equal(t, mysql.ConnParams{Host: "host"}, dbConfigs.dbaParams)
+	assert.Equal(t, mysql.ConnParams{UnixSocket: "default"}, dbConfigs.appdebugParams)
 
 	dbConfigs = DBConfigs{
 		Host:                       "a",
@@ -71,7 +71,7 @@ func TestInit(t *testing.T) {
 			Host: "host",
 		},
 	}
-	dbc = dbConfigs.Init("default")
+	dbConfigs.Init("default")
 
 	want := mysql.ConnParams{
 		Host:             "a",
@@ -84,7 +84,7 @@ func TestInit(t *testing.T) {
 		Flavor:           "flavor",
 		ConnectTimeoutMs: 250,
 	}
-	assert.Equal(t, want, dbc.appParams)
+	assert.Equal(t, want, dbConfigs.appParams)
 
 	want = mysql.ConnParams{
 		Host:             "a",
@@ -99,7 +99,7 @@ func TestInit(t *testing.T) {
 		SslKey:           "g",
 		ConnectTimeoutMs: 250,
 	}
-	assert.Equal(t, want, dbc.appdebugParams)
+	assert.Equal(t, want, dbConfigs.appdebugParams)
 	want = mysql.ConnParams{
 		Host:             "a",
 		Port:             1,
@@ -115,7 +115,7 @@ func TestInit(t *testing.T) {
 		SslKey:           "g",
 		ConnectTimeoutMs: 250,
 	}
-	assert.Equal(t, want, dbc.dbaParams)
+	assert.Equal(t, want, dbConfigs.dbaParams)
 
 	// Test that baseConfig does not override Charset and Flag if they're
 	// not specified.
@@ -148,7 +148,7 @@ func TestInit(t *testing.T) {
 			Flags: 2,
 		},
 	}
-	dbc = dbConfigs.Init("default")
+	dbConfigs.Init("default")
 	want = mysql.ConnParams{
 		Host:       "a",
 		Port:       1,
@@ -157,7 +157,7 @@ func TestInit(t *testing.T) {
 		UnixSocket: "b",
 		Charset:    "f",
 	}
-	assert.Equal(t, want, dbc.appParams)
+	assert.Equal(t, want, dbConfigs.appParams)
 	want = mysql.ConnParams{
 		Host:       "a",
 		Port:       1,
@@ -167,7 +167,7 @@ func TestInit(t *testing.T) {
 		SslCert:    "f",
 		SslKey:     "g",
 	}
-	assert.Equal(t, want, dbc.appdebugParams)
+	assert.Equal(t, want, dbConfigs.appdebugParams)
 	want = mysql.ConnParams{
 		Host:       "a",
 		Port:       1,
@@ -180,7 +180,7 @@ func TestInit(t *testing.T) {
 		SslCert:    "f",
 		SslKey:     "g",
 	}
-	assert.Equal(t, want, dbc.dbaParams)
+	assert.Equal(t, want, dbConfigs.dbaParams)
 }
 
 func TestUseTCP(t *testing.T) {
@@ -196,14 +196,14 @@ func TestUseTCP(t *testing.T) {
 			User: "dba",
 		},
 	}
-	dbc := dbConfigs.Init("default")
+	dbConfigs.Init("default")
 
 	want := mysql.ConnParams{
 		Host:  "a",
 		Port:  1,
 		Uname: "app",
 	}
-	assert.Equal(t, want, dbc.appParams)
+	assert.Equal(t, want, dbConfigs.appParams)
 
 	want = mysql.ConnParams{
 		Host:       "a",
@@ -211,7 +211,7 @@ func TestUseTCP(t *testing.T) {
 		Uname:      "dba",
 		UnixSocket: "b",
 	}
-	assert.Equal(t, want, dbc.dbaParams)
+	assert.Equal(t, want, dbConfigs.dbaParams)
 }
 
 func TestAccessors(t *testing.T) {
