@@ -341,6 +341,10 @@ func (vc *vcursorImpl) SetUDV(key string, value interface{}) error {
 	return nil
 }
 
+func (vc *vcursorImpl) SetSysVar(name string, expr string) {
+	vc.safeSession.SetSystemVariable(name, expr)
+}
+
 // Destination implements the ContextVSchema interface
 func (vc *vcursorImpl) Destination() key.Destination {
 	return vc.destination

@@ -47,6 +47,29 @@
   }
 }
 
+# set check and ignore plan
+"set @@sql_safe_updates = 1"
+{
+  "QueryType": "SET",
+  "Original": "set @@sql_safe_updates = 1",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Variant": "",
+    "Ops": [
+      {
+        "Type": "SysVarSet",
+        "Name": "sql_safe_updates",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": {},
+        "Expr": "1"
+      }
+    ]
+  }
+}
+
 # set plan building not supported
 "set @@innodb_strict_mode = OFF"
 "plan building not supported"

@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -34,6 +36,7 @@ var sysVarPlanningFunc = map[string]func(expr *sqlparser.SetExpr, vschema Contex
 func init() {
 	sysVarPlanningFunc["default_storage_engine"] = buildSetOpIgnore
 	sysVarPlanningFunc["sql_mode"] = buildSetOpCheckAndIgnore
+	sysVarPlanningFunc["sql_safe_updates"] = buildSetOpVarSet
 }
 
 func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive, error) {
@@ -137,10 +140,10 @@ func buildSetOpIgnore(expr *sqlparser.SetExpr, _ ContextVSchema) (engine.SetOp, 
 }
 
 func buildSetOpCheckAndIgnore(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error) {
-	keyspace, err := vschema.DefaultKeyspace()
+	keyspace, _, err := resolveDestination(vschema)
 	if err != nil {
-		//TODO: Record warning for switching plan construct.
 		if strings.HasPrefix(err.Error(), "no keyspace in database name specified") {
+			//TODO: Record warning for switching plan construct.
 			return buildSetOpIgnore(expr, vschema)
 		}
 		return nil, err
@@ -308,4 +311,31 @@ func expressionOkToDelegateToTablet(e sqlparser.Expr) bool {
 		return true
 	})
 	return valid
+}
+
+func buildSetOpVarSet(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error) {
+	keyspace, dest, err := resolveDestination(vschema)
+	if err != nil && !strings.HasPrefix(err.Error(), "no keyspace in database name specified") {
+		return nil, err
+	}
+
+	return &engine.SysVarSet{
+		Name:              expr.Name.Lowered(),
+		Keyspace:          keyspace,
+		TargetDestination: dest,
+		Expr:              sqlparser.String(expr.Expr),
+	}, nil
+}
+
+func resolveDestination(vschema ContextVSchema) (*vindexes.Keyspace, key.Destination, error) {
+	keyspace, err := vschema.DefaultKeyspace()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	dest := vschema.Destination()
+	if dest == nil {
+		dest = key.DestinationAnyShard{}
+	}
+	return keyspace, dest, nil
 }
