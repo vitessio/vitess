@@ -102,7 +102,7 @@ func (w *Writer) Init(target querypb.Target) error {
 	w.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
 
 	if target.TabletType == topodatapb.TabletType_MASTER {
-		err := w.initializeTables(w.env.DBConfigs().AppWithDB())
+		err := w.initializeTables(w.env.Config().DB.AppWithDB())
 		if err != nil {
 			w.recordError(err)
 			return err
@@ -125,7 +125,7 @@ func (w *Writer) Open() {
 		return
 	}
 	log.Info("Beginning heartbeat writes")
-	w.pool.Open(w.env.DBConfigs().AppWithDB(), w.env.DBConfigs().DbaWithDB(), w.env.DBConfigs().AppDebugWithDB())
+	w.pool.Open(w.env.Config().DB.AppWithDB(), w.env.Config().DB.DbaWithDB(), w.env.Config().DB.AppDebugWithDB())
 	w.ticks.Start(func() { w.writeHeartbeat() })
 	w.isOpen = true
 }
