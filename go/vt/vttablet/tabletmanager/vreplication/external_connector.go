@@ -42,7 +42,8 @@ var (
 
 // vstreamerClient exposes the core interface of a vstreamer
 type vstreamerClient interface {
-	Close(context.Context)
+	Open(context.Context) error
+	Close(context.Context) error
 
 	// VStream streams VReplication events based on the specified filter.
 	VStream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
@@ -114,7 +115,12 @@ func (c *mysqlConnector) shutdown() {
 	c.se.Close()
 }
 
-func (c *mysqlConnector) Close(ctx context.Context) {
+func (c *mysqlConnector) Open(ctx context.Context) error {
+	return nil
+}
+
+func (c *mysqlConnector) Close(ctx context.Context) error {
+	return nil
 }
 
 func (c *mysqlConnector) VStream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
@@ -141,8 +147,8 @@ type tabletConnector struct {
 	qs     queryservice.QueryService
 }
 
-func newTabletConnector(tablet *topodatapb.Tablet) (*tabletConnector, error) {
-	tc := &tabletConnector{
+func newTabletConnector(tablet *topodatapb.Tablet) *tabletConnector {
+	return &tabletConnector{
 		tablet: tablet,
 		target: &querypb.Target{
 			Keyspace:   tablet.Keyspace,
@@ -150,16 +156,16 @@ func newTabletConnector(tablet *topodatapb.Tablet) (*tabletConnector, error) {
 			TabletType: tablet.Type,
 		},
 	}
-	qs, err := tabletconn.GetDialer()(tc.tablet, grpcclient.FailFast(true))
-	if err != nil {
-		return nil, err
-	}
-	tc.qs = qs
-	return tc, nil
 }
 
-func (tc *tabletConnector) Close(ctx context.Context) {
-	tc.qs.Close(ctx)
+func (tc *tabletConnector) Open(ctx context.Context) error {
+	var err error
+	tc.qs, err = tabletconn.GetDialer()(tc.tablet, grpcclient.FailFast(true))
+	return err
+}
+
+func (tc *tabletConnector) Close(ctx context.Context) error {
+	return tc.qs.Close(ctx)
 }
 
 func (tc *tabletConnector) VStream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
