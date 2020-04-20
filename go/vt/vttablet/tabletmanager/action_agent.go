@@ -321,8 +321,6 @@ func NewActionAgent(
 		return nil, err
 	}
 
-	vreplication.InitVStreamerClient(agent.DBConfigs)
-
 	// The db name is set by the Start function called above
 	agent.VREngine = vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld)
 	servenv.OnTerm(agent.VREngine.Close)
