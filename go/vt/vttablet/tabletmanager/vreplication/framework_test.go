@@ -102,8 +102,6 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		InitVStreamerClient(env.Dbcfgs)
-
 		externalConfig := map[string]*dbconfigs.DBConfigs{
 			"exta": env.Dbcfgs,
 			"extb": env.Dbcfgs,

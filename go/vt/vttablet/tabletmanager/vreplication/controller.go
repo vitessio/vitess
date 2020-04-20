@@ -221,7 +221,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 			return err
 		}
 
-		var vsClient VStreamerClient
+		var vsClient vstreamerClient
 		var err error
 		if name := ct.source.GetExternalMysql(); name != "" {
 			vsClient, err = ct.vre.ec.Get(name)

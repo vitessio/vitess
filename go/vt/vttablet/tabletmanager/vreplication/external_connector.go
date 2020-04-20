@@ -35,6 +35,22 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
+var (
+	_ vstreamerClient = (*mysqlConnector)(nil)
+	_ vstreamerClient = (*tabletConnector)(nil)
+)
+
+// vstreamerClient exposes the core interface of a vstreamer
+type vstreamerClient interface {
+	Close(context.Context)
+
+	// VStream streams VReplication events based on the specified filter.
+	VStream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
+
+	// VStreamRows streams rows of a table from the specified starting point.
+	VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error
+}
+
 type externalConnector struct {
 	mu         sync.Mutex
 	dbconfigs  map[string]*dbconfigs.DBConfigs
