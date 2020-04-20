@@ -54,7 +54,7 @@ func TestConnPoolGet(t *testing.T) {
 func TestConnPoolTimeout(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	connPool := NewPool(tabletenv.NewTestEnv(nil, "PoolTest"), "TestPool", tabletenv.ConnPoolConfig{
+	connPool := NewPool(tabletenv.NewEnv(nil, "PoolTest"), "TestPool", tabletenv.ConnPoolConfig{
 		Size:               1,
 		TimeoutSeconds:     1,
 		IdleTimeoutSeconds: 10,
@@ -71,7 +71,7 @@ func TestConnPoolTimeout(t *testing.T) {
 func TestConnPoolMaxWaiters(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	connPool := NewPool(tabletenv.NewTestEnv(nil, "PoolTest"), "TestPool", tabletenv.ConnPoolConfig{
+	connPool := NewPool(tabletenv.NewEnv(nil, "PoolTest"), "TestPool", tabletenv.ConnPoolConfig{
 		Size:       1,
 		MaxWaiters: 1,
 	})
@@ -282,7 +282,7 @@ func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
 }
 
 func newPool() *Pool {
-	return NewPool(tabletenv.NewTestEnv(nil, "PoolTest"), "TestPool", tabletenv.ConnPoolConfig{
+	return NewPool(tabletenv.NewEnv(nil, "PoolTest"), "TestPool", tabletenv.ConnPoolConfig{
 		Size:               100,
 		IdleTimeoutSeconds: 10,
 	})
