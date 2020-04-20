@@ -69,7 +69,7 @@ func (ec *externalConnector) Get(name string) (*mysqlConnector, error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "external mysqlConnector %v not found", name)
 	}
 	c := &mysqlConnector{}
-	c.env = tabletenv.NewTestEnv(config, nil, name)
+	c.env = tabletenv.NewTestEnv(config, config.DB, name)
 	c.se = schema.NewEngine(c.env)
 	c.vstreamer = vstreamer.NewEngine(c.env, nil, c.se)
 	c.se.InitDBConfig(c.env.DBConfigs().DbaWithDB())

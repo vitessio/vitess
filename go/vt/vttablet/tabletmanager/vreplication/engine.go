@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -118,7 +119,7 @@ func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mys
 }
 
 // NewTestEngine creates a new Engine for testing.
-func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactory func() binlogplayer.DBClient, dbname string) *Engine {
+func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactory func() binlogplayer.DBClient, dbname string, externalConfig map[string]*dbconfigs.DBConfigs) *Engine {
 	vre := &Engine{
 		controllers:     make(map[int]*controller),
 		ts:              ts,
@@ -127,7 +128,7 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 		dbClientFactory: dbClientFactory,
 		dbName:          dbname,
 		journaler:       make(map[string]*journalEvent),
-		ec:              newExternalConnector(nil),
+		ec:              newExternalConnector(externalConfig),
 	}
 	return vre
 }
