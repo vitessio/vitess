@@ -579,6 +579,20 @@ func (r *replaceSetExprsItems) inc() {
 	*r++
 }
 
+type replaceSetTransactionCharacteristics int
+
+func (r *replaceSetTransactionCharacteristics) replace(newNode, container SQLNode) {
+	container.(*SetTransaction).Characteristics[int(*r)] = newNode.(Characteristic)
+}
+
+func (r *replaceSetTransactionCharacteristics) inc() {
+	*r++
+}
+
+func replaceSetTransactionComments(newNode, parent SQLNode) {
+	parent.(*SetTransaction).Comments = newNode.(Comments)
+}
+
 func replaceShowOnTable(newNode, parent SQLNode) {
 	parent.(*Show).OnTable = newNode.(TableName)
 }
@@ -842,6 +856,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	// (the order of the cases is alphabetical)
 	switch n := node.(type) {
 	case nil:
+	case *AccessMode:
+
 	case *AliasedExpr:
 		a.apply(node, n.As, replaceAliasedExprAs)
 		a.apply(node, n.Expr, replaceAliasedExprExpr)
@@ -1029,6 +1045,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *IsExpr:
 		a.apply(node, n.Expr, replaceIsExprExpr)
 
+	case *IsolationLevel:
+
 	case JoinCondition:
 		a.apply(node, n.On, replaceJoinConditionOn)
 		a.apply(node, n.Using, replaceJoinConditionUsing)
@@ -1157,6 +1175,15 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			a.apply(node, item, replacerRef.replace)
 			replacerRef.inc()
 		}
+
+	case *SetTransaction:
+		replacerCharacteristics := replaceSetTransactionCharacteristics(0)
+		replacerCharacteristicsB := &replacerCharacteristics
+		for _, item := range n.Characteristics {
+			a.apply(node, item, replacerCharacteristicsB.replace)
+			replacerCharacteristicsB.inc()
+		}
+		a.apply(node, n.Comments, replaceSetTransactionComments)
 
 	case *Show:
 		a.apply(node, n.OnTable, replaceShowOnTable)
