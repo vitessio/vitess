@@ -116,7 +116,7 @@ message Session {
   map<string, query.BindVariable> user_defined_variables = 13;
   
   // system_variables keeps track of all session variables set for this connection
-  map<string, query.BindVariable> system_variables = 14;
+  map<string, string> system_variables = 14;
 }
 
 // ExecuteRequest is the payload to Execute.

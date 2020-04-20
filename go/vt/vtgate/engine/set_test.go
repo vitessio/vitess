@@ -18,6 +18,7 @@ package engine
 
 import (
 	"strconv"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -180,6 +181,25 @@ func TestSetTable(t *testing.T) {
 				"1",
 			)},
 		},
+		{
+			testName: "sysvar set",
+			setOps: []SetOp{
+				&SysVarSet{
+					Name: "x",
+					Keyspace: &vindexes.Keyspace{
+						Name:    "ks",
+						Sharded: true,
+					},
+					TargetDestination: key.DestinationAnyShard{},
+					Expr:              "dummy_expr",
+				},
+			},
+			expectedQueryLog: []string{
+				`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+				`ExecuteMultiShard ks.-20: select dummy_expr from dual where false {} false false`,
+				`SysVar set with (x,dummy_expr)`,
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -203,4 +223,35 @@ func TestSetTable(t *testing.T) {
 			vc.ExpectWarnings(t, tc.expectedWarning)
 		})
 	}
+}
+
+func TestSysVarSetErr(t *testing.T) {
+
+	setOps := []SetOp{
+		&SysVarSet{
+			Name: "x",
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: true,
+			},
+			TargetDestination: key.DestinationAnyShard{},
+			Expr:              "dummy_expr",
+		},
+	}
+
+	expectedQueryLog := []string{
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+		`ExecuteMultiShard ks.-20: select dummy_expr from dual where false {} false false`,
+	}
+
+	set := &Set{
+		Ops: setOps,
+	}
+	vc := &loggingVCursor{
+		shards:         []string{"-20", "20-"},
+		multiShardErrs: []error{fmt.Errorf("error")},
+	}
+	_, err := set.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	require.EqualError(t, err, "error")
+	vc.ExpectLog(t, expectedQueryLog)
 }
