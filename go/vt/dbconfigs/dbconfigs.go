@@ -79,6 +79,7 @@ type DBConfigs struct {
 	SslKey                     string `json:"sslKey,omitempty"`
 	ServerName                 string `json:"serverName,omitempty"`
 	ConnectTimeoutMilliseconds int    `json:"connectTimeoutMilliseconds,omitempty"`
+	DBName                     string `json:"dbName,omitempty"`
 
 	App          UserConfig `json:"app,omitempty"`
 	Dba          UserConfig `json:"dba,omitempty"`
@@ -95,8 +96,6 @@ type DBConfigs struct {
 	appdebugParams     mysql.ConnParams
 	allprivsParams     mysql.ConnParams
 	externalReplParams mysql.ConnParams
-
-	DBName string `json:"-"`
 }
 
 // UserConfig contains user-specific configs.
@@ -321,8 +320,7 @@ func (dbcfgs *DBConfigs) Clone() *DBConfigs {
 // parameters. This is only for legacy support.
 // If no per-user parameters are supplied, then the defaultSocketFile
 // is used to initialize the per-user conn params.
-func (dbcfgs *DBConfigs) Init(defaultSocketFile string) *DBConfigs {
-	dbcfgs = dbcfgs.Clone()
+func (dbcfgs *DBConfigs) Init(defaultSocketFile string) {
 	for _, userKey := range All {
 		uc, cp := dbcfgs.getParams(userKey, dbcfgs)
 		// TODO @rafael: For ExternalRepl we need to respect the provided host / port
@@ -363,7 +361,6 @@ func (dbcfgs *DBConfigs) Init(defaultSocketFile string) *DBConfigs {
 	}
 
 	log.Infof("DBConfigs: %v\n", dbcfgs.String())
-	return dbcfgs
 }
 
 func (dbcfgs *DBConfigs) getParams(userKey string, dbc *DBConfigs) (*UserConfig, *mysql.ConnParams) {

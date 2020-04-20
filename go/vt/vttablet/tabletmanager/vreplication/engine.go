@@ -89,6 +89,7 @@ type Engine struct {
 	dbName          string
 
 	journaler map[string]*journalEvent
+	ec        *externalConnector
 }
 
 type journalEvent struct {
@@ -111,6 +112,7 @@ func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mys
 		dbClientFactory: dbClientFactory,
 		dbName:          config.DB.DBName,
 		journaler:       make(map[string]*journalEvent),
+		ec:              newExternalConnector(config.ExternalConnections),
 	}
 	return vre
 }
@@ -125,6 +127,7 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 		dbClientFactory: dbClientFactory,
 		dbName:          dbname,
 		journaler:       make(map[string]*journalEvent),
+		ec:              newExternalConnector(nil),
 	}
 	return vre
 }
@@ -244,6 +247,7 @@ func (vre *Engine) Close() {
 	}
 	log.Infof("Shutting down VReplication engine")
 
+	vre.ec.Close()
 	vre.cancel()
 	// We still have to wait for all controllers to stop.
 	for _, ct := range vre.controllers {

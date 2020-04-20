@@ -1,0 +1,155 @@
+/*
+Copyright 2020 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package vreplication
+
+import (
+	"sync"
+
+	"golang.org/x/net/context"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/grpcclient"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
+)
+
+type externalConnector struct {
+	mu         sync.Mutex
+	dbconfigs  map[string]*dbconfigs.DBConfigs
+	connectors map[string]*mysqlConnector
+}
+
+func newExternalConnector(dbcfgs map[string]*dbconfigs.DBConfigs) *externalConnector {
+	return &externalConnector{
+		dbconfigs:  dbcfgs,
+		connectors: make(map[string]*mysqlConnector),
+	}
+}
+
+func (ec *externalConnector) Close() {
+	for _, c := range ec.connectors {
+		c.shutdown()
+	}
+	ec.connectors = make(map[string]*mysqlConnector)
+}
+
+func (ec *externalConnector) Get(name string) (*mysqlConnector, error) {
+	ec.mu.Lock()
+	defer ec.mu.Unlock()
+	if c, ok := ec.connectors[name]; ok {
+		return c, nil
+	}
+
+	// Construct
+	config := tabletenv.NewDefaultConfig()
+	config.DB = ec.dbconfigs[name]
+	if config.DB == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "external mysqlConnector %v not found", name)
+	}
+	c := &mysqlConnector{}
+	c.env = tabletenv.NewTestEnv(config, nil, name)
+	c.se = schema.NewEngine(c.env)
+	c.vstreamer = vstreamer.NewEngine(c.env, nil, c.se)
+	c.se.InitDBConfig(c.env.DBConfigs().DbaWithDB())
+
+	// Open
+	if err := c.se.Open(); err != nil {
+		return nil, vterrors.Wrapf(err, "external mysqlConnector: %v", name)
+	}
+	c.vstreamer.Open("", "")
+
+	// Register
+	ec.connectors[name] = c
+	return c, nil
+}
+
+//-----------------------------------------------------------
+
+type mysqlConnector struct {
+	env       tabletenv.Env
+	se        *schema.Engine
+	vstreamer *vstreamer.Engine
+}
+
+func (c *mysqlConnector) shutdown() {
+	c.vstreamer.Close()
+	c.se.Close()
+}
+
+func (c *mysqlConnector) Close(ctx context.Context) {
+}
+
+func (c *mysqlConnector) VStream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	return c.vstreamer.Stream(ctx, startPos, filter, send)
+}
+
+func (c *mysqlConnector) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	var row []sqltypes.Value
+	if lastpk != nil {
+		r := sqltypes.Proto3ToResult(lastpk)
+		if len(r.Rows) != 1 {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected lastpk input: %v", lastpk)
+		}
+		row = r.Rows[0]
+	}
+	return c.vstreamer.StreamRows(ctx, query, row, send)
+}
+
+//-----------------------------------------------------------
+
+type tabletConnector struct {
+	tablet *topodatapb.Tablet
+	target *querypb.Target
+	qs     queryservice.QueryService
+}
+
+func newTabletConnector(tablet *topodatapb.Tablet) (*tabletConnector, error) {
+	tc := &tabletConnector{
+		tablet: tablet,
+		target: &querypb.Target{
+			Keyspace:   tablet.Keyspace,
+			Shard:      tablet.Shard,
+			TabletType: tablet.Type,
+		},
+	}
+	qs, err := tabletconn.GetDialer()(tc.tablet, grpcclient.FailFast(true))
+	if err != nil {
+		return nil, err
+	}
+	tc.qs = qs
+	return tc, nil
+}
+
+func (tc *tabletConnector) Close(ctx context.Context) {
+	tc.qs.Close(ctx)
+}
+
+func (tc *tabletConnector) VStream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	return tc.qs.VStream(ctx, tc.target, startPos, filter, send)
+}
+
+func (tc *tabletConnector) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	return tc.qs.VStreamRows(ctx, tc.target, query, lastpk, send)
+}
