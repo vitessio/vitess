@@ -753,7 +753,7 @@ func TestMMGenerate(t *testing.T) {
 	utils.MustMatch(t, wantids, gotids, "did not match")
 
 	query, bv = mm.GeneratePostponeQuery([]string{"1", "2"})
-	wantQuery = "update foo set time_next = IF(FLOOR((:min_backoff<<ifnull(epoch, 0))*(.666666 + (RAND(:time_now) * .666666))) < :min_backoff, :time_now + :min_backoff, FLOOR((:min_backoff<<ifnull(epoch, 0))*(.666666 + (RAND(:time_now) * .666666)))), epoch = ifnull(epoch, 0)+1 where id in ::ids and time_acked is null"
+	wantQuery = "update foo set time_next = IF(FLOOR((:min_backoff<<ifnull(epoch, 0))*(.666666 + (RAND(:time_now) * .666666))) < :min_backoff, :time_now + :min_backoff, :time_now + FLOOR((:min_backoff<<ifnull(epoch, 0))*(.666666 + (RAND(:time_now) * .666666)))), epoch = ifnull(epoch, 0)+1 where id in ::ids and time_acked is null"
 	if query != wantQuery {
 		t.Errorf("GeneratePostponeQuery query: %s, want %s", query, wantQuery)
 	}
@@ -790,7 +790,7 @@ func TestMMGenerateWithBackoff(t *testing.T) {
 	wantids := sqltypes.TestBindVariable([]interface{}{"1", "2"})
 
 	query, bv := mm.GeneratePostponeQuery([]string{"1", "2"})
-	wantQuery := "update foo set time_next = IF(FLOOR((:min_backoff<<ifnull(epoch, 0))*(.666666 + (RAND(:time_now) * .666666))) < :min_backoff, :time_now + :min_backoff, IF(FLOOR((:min_backoff<<ifnull(epoch, 0))*(.666666 + (RAND(:time_now) * .666666))) > :max_backoff, :time_now + :max_backoff, FLOOR((:min_backoff<<ifnull(epoch, 0))*(.666666 + (RAND(:time_now) * .666666))))), epoch = ifnull(epoch, 0)+1 where id in ::ids and time_acked is null"
+	wantQuery := "update foo set time_next = IF(FLOOR((:min_backoff<<ifnull(epoch, 0))*(.666666 + (RAND(:time_now) * .666666))) < :min_backoff, :time_now + :min_backoff, IF(FLOOR((:min_backoff<<ifnull(epoch, 0))*(.666666 + (RAND(:time_now) * .666666))) > :max_backoff, :time_now + :max_backoff, :time_now + FLOOR((:min_backoff<<ifnull(epoch, 0))*(.666666 + (RAND(:time_now) * .666666))))), epoch = ifnull(epoch, 0)+1 where id in ::ids and time_acked is null"
 	if query != wantQuery {
 		t.Errorf("GeneratePostponeQuery query: %s, want %s", query, wantQuery)
 	}

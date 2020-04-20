@@ -281,19 +281,19 @@ func buildPostponeQuery(name sqlparser.TableIdent, minBackoff, maxBackoff time.D
 	args = append(args, ":time_now", ":min_backoff")
 
 	// now we are setting the false case on the above IF statement
-	// if there is no max_backoff, just use the raw jittered backoff
 	if maxBackoff == 0 {
-		buf.WriteString(jitteredBackoff)
-		args = append(args, ":min_backoff", ":time_now")
+	// if there is no max_backoff, just use :time_now + jitteredBackoff
+		buf.WriteString(fmt.Sprintf("%%a + %s",jitteredBackoff))
+		args = append(args, ":time_now", ":min_backoff", ":time_now")
 	} else {
 		// make sure that it doesn't exceed max_backoff
-		buf.WriteString(fmt.Sprintf("IF(%s > %%a, %%a + %%a, %s)", jitteredBackoff, jitteredBackoff))
+		buf.WriteString(fmt.Sprintf("IF(%s > %%a, %%a + %%a, %%a + %s)", jitteredBackoff, jitteredBackoff))
 		// jitteredBackoff > :max_backoff
 		args = append(args, ":min_backoff", ":time_now", ":max_backoff")
 		// if it is greater, then use :time_now + :max_backoff
 		args = append(args, ":time_now", ":max_backoff")
-		// otherwise just use the raw jittered time_next
-		args = append(args, ":min_backoff", ":time_now")
+		// otherwise just use :time_now + jitteredBackoff
+		args = append(args, ":time_now", ":min_backoff", ":time_now")
 	}
 
 	// close the if statement
