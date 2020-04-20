@@ -225,10 +225,13 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		var err error
 		if name := ct.source.GetExternalMysql(); name != "" {
 			vsClient, err = ct.vre.ec.Get(name)
+			if err != nil {
+				return err
+			}
 		} else {
-			vsClient, err = newTabletConnector(tablet)
+			vsClient = newTabletConnector(tablet)
 		}
-		if err != nil {
+		if err := vsClient.Open(ctx); err != nil {
 			return err
 		}
 		defer vsClient.Close(ctx)
