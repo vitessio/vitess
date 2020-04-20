@@ -49,14 +49,19 @@ func VerifyQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, q
 
 func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tablet *cluster.Vttablet, restoreKSName string, shardName string, keyspaceName string, commonTabletArg []string) {
 	tablet.ValidateTabletRestart(t)
-	tm := time.Now().UTC()
-	tm.Format(time.RFC3339)
-	_, err := localCluster.VtctlProcess.ExecuteCommandWithOutput("CreateKeyspace",
-		"-keyspace_type=SNAPSHOT", "-base_keyspace="+keyspaceName,
-		"-snapshot_time", tm.Format(time.RFC3339), restoreKSName)
-	require.Nil(t, err)
-
 	replicaTabletArgs := commonTabletArg
+
+	_, err := localCluster.VtctlProcess.ExecuteCommandWithOutput("GetKeyspace", restoreKSName)
+
+	if err != nil {
+		tm := time.Now().UTC()
+		tm.Format(time.RFC3339)
+		_, err := localCluster.VtctlProcess.ExecuteCommandWithOutput("CreateKeyspace",
+			"-keyspace_type=SNAPSHOT", "-base_keyspace="+keyspaceName,
+			"-snapshot_time", tm.Format(time.RFC3339), restoreKSName)
+		require.Nil(t, err)
+	}
+
 	if UseXb {
 		replicaTabletArgs = append(replicaTabletArgs, XbArgs...)
 	}

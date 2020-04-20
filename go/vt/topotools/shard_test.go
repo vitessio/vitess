@@ -105,7 +105,8 @@ func TestGetOrCreateShard(t *testing.T) {
 	ctx := context.Background()
 
 	// Set up topology.
-	ts := memorytopo.NewServer("test_cell")
+	cell := "test_cell"
+	ts := memorytopo.NewServer(cell)
 
 	// and do massive parallel GetOrCreateShard
 	keyspace := "test_keyspace"
@@ -119,7 +120,7 @@ func TestGetOrCreateShard(t *testing.T) {
 			for j := 0; j < 100; j++ {
 				index := rand.Intn(10)
 				shard := fmt.Sprintf("%v", index)
-				si, err := ts.GetOrCreateShard(ctx, keyspace, shard)
+				si, err := ts.GetOrCreateShard(ctx, keyspace, shard, cell)
 				if err != nil {
 					t.Errorf("GetOrCreateShard(%v, %v) failed: %v", i, shard, err)
 				}
