@@ -142,6 +142,75 @@ func TestTabletVStreamerClientClose(t *testing.T) {
 	}
 }
 
+func TestTabletVStreamerClientCloseTwice(t *testing.T) {
+	tablet := addTablet(100)
+	defer deleteTablet(tablet)
+
+	type fields struct {
+		tablet *topodatapb.Tablet
+	}
+	type args struct {
+		ctx context.Context
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+		err    string
+	}{
+		{
+			name: "closes engine correctly",
+			fields: fields{
+				tablet: tablet,
+			},
+			args: args{
+				ctx: context.Background(),
+			},
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.name, func(t *testing.T) {
+			vsClient := &TabletVStreamerClient{
+				tablet: tcase.fields.tablet,
+			}
+
+			err := vsClient.Open(tcase.args.ctx)
+			if err != nil {
+				t.Errorf("Failed to Open vsClient")
+				return
+			}
+
+			// open again
+			err = vsClient.Open(tcase.args.ctx)
+			if err != nil {
+				t.Errorf("Failed to Open vsClient")
+				return
+			}
+
+			err = vsClient.Close(tcase.args.ctx)
+
+			if tcase.err != "" {
+				t.Errorf("MySQLVStreamerClient.Close() error:\n%v, want\n%v", err, tcase.err)
+			}
+
+			if !vsClient.isOpen {
+				t.Errorf("MySQLVStreamerClient.Close() should not close the connection opened by other")
+			}
+
+			err = vsClient.Close(tcase.args.ctx)
+
+			if tcase.err != "" {
+				t.Errorf("MySQLVStreamerClient.Close() error:\n%v, want\n%v", err, tcase.err)
+			}
+
+			if vsClient.isOpen {
+				t.Errorf("MySQLVStreamerClient.Close() isOpen set to true, expected false")
+			}
+		})
+	}
+}
+
 func TestTabletVStreamerClientVStream(t *testing.T) {
 	tablet := addTablet(100)
 	defer deleteTablet(tablet)
@@ -391,6 +460,83 @@ func TestMySQLVStreamerClientClose(t *testing.T) {
 			if err != nil {
 				t.Errorf("Failed to Open vsClient")
 				return
+			}
+
+			err = vsClient.Close(tcase.args.ctx)
+
+			if tcase.err != "" {
+				t.Errorf("MySQLVStreamerClient.Close() error:\n%v, want\n%v", err, tcase.err)
+			}
+
+			if vsClient.isOpen {
+				t.Errorf("MySQLVStreamerClient.Close() isOpen set to true, expected false")
+			}
+
+			if vsClient.sourceSe.IsOpen() {
+				t.Errorf("MySQLVStreamerClient.Close() expected sourceSe to be closed")
+			}
+		})
+	}
+}
+
+func TestMySQLVStreamerClientCloseTwice(t *testing.T) {
+	type fields struct {
+		isOpen           bool
+		sourceConnParams dbconfigs.Connector
+	}
+	type args struct {
+		ctx context.Context
+	}
+
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+		err    string
+	}{
+		{
+			name: "closes engine correctly",
+			fields: fields{
+				sourceConnParams: dbcfgs.ExternalReplWithDB(),
+			},
+			args: args{
+				ctx: context.Background(),
+			},
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.name, func(t *testing.T) {
+			vsClient := &MySQLVStreamerClient{
+				isOpen:           tcase.fields.isOpen,
+				sourceConnParams: tcase.fields.sourceConnParams,
+			}
+
+			err := vsClient.Open(tcase.args.ctx)
+			if err != nil {
+				t.Errorf("Failed to Open vsClient")
+				return
+			}
+
+			// open again
+			err = vsClient.Open(tcase.args.ctx)
+			if err != nil {
+				t.Errorf("Failed to Open vsClient")
+				return
+			}
+
+			err = vsClient.Close(tcase.args.ctx)
+
+			if tcase.err != "" {
+				t.Errorf("MySQLVStreamerClient.Close() error:\n%v, want\n%v", err, tcase.err)
+			}
+
+			if vsClient.isOpen {
+				t.Errorf("MySQLVStreamerClient.Close() should not close the connection opened by other")
+			}
+
+			if !vsClient.sourceSe.IsOpen() {
+				t.Errorf("MySQLVStreamerClient.Close() expected sourceSe not to be closed")
 			}
 
 			err = vsClient.Close(tcase.args.ctx)

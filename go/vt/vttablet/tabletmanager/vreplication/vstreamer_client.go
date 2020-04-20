@@ -62,7 +62,8 @@ type TabletVStreamerClient struct {
 	// mu protects isOpen, streamers, streamIdx and kschema.
 	mu sync.Mutex
 
-	isOpen bool
+	isOpen         bool
+	openConnection int32
 
 	tablet         *topodatapb.Tablet
 	target         *querypb.Target
@@ -74,7 +75,8 @@ type MySQLVStreamerClient struct {
 	// mu protects isOpen, streamers, streamIdx and kschema.
 	mu sync.Mutex
 
-	isOpen bool
+	isOpen         bool
+	openConnection int32
 
 	sourceConnParams dbconfigs.Connector
 	sourceSe         *schema.Engine
@@ -96,11 +98,11 @@ func NewTabletVStreamerClient(tablet *topodatapb.Tablet) *TabletVStreamerClient 
 func (vsClient *TabletVStreamerClient) Open(ctx context.Context) (err error) {
 	vsClient.mu.Lock()
 	defer vsClient.mu.Unlock()
-	if vsClient.isOpen {
+	vsClient.openConnection++
+	if vsClient.openConnection > 1 {
 		return nil
 	}
 	vsClient.isOpen = true
-
 	vsClient.tsQueryService, err = tabletconn.GetDialer()(vsClient.tablet, grpcclient.FailFast(true))
 	return err
 }
@@ -109,7 +111,10 @@ func (vsClient *TabletVStreamerClient) Open(ctx context.Context) (err error) {
 func (vsClient *TabletVStreamerClient) Close(ctx context.Context) (err error) {
 	vsClient.mu.Lock()
 	defer vsClient.mu.Unlock()
-	if !vsClient.isOpen {
+	if vsClient.openConnection > 0 {
+		vsClient.openConnection--
+	}
+	if vsClient.openConnection > 0 {
 		return nil
 	}
 	vsClient.isOpen = false
@@ -150,10 +155,10 @@ func NewMySQLVStreamerClient() *MySQLVStreamerClient {
 func (vsClient *MySQLVStreamerClient) Open(ctx context.Context) (err error) {
 	vsClient.mu.Lock()
 	defer vsClient.mu.Unlock()
-	if vsClient.isOpen {
+	vsClient.openConnection++
+	if vsClient.openConnection > 1 {
 		return nil
 	}
-	vsClient.isOpen = true
 
 	// Let's create all the required components by vstreamer
 
@@ -171,10 +176,12 @@ func (vsClient *MySQLVStreamerClient) Open(ctx context.Context) (err error) {
 func (vsClient *MySQLVStreamerClient) Close(ctx context.Context) (err error) {
 	vsClient.mu.Lock()
 	defer vsClient.mu.Unlock()
-	if !vsClient.isOpen {
+	if vsClient.openConnection > 0 {
+		vsClient.openConnection--
+	}
+	if vsClient.openConnection > 0 {
 		return nil
 	}
-
 	vsClient.isOpen = false
 	vsClient.sourceSe.Close()
 	return nil
