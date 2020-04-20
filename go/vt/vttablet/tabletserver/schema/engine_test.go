@@ -305,7 +305,7 @@ func newEngine(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Du
 	config.OltpReadPool.IdleTimeoutSeconds = int(idleTimeout / 1e9)
 	config.OlapReadPool.IdleTimeoutSeconds = int(idleTimeout / 1e9)
 	config.TxPool.IdleTimeoutSeconds = int(idleTimeout / 1e9)
-	se := NewEngine(tabletenv.NewTestEnv(config, "SchemaTest"))
+	se := NewEngine(tabletenv.NewEnv(config, "SchemaTest"))
 	se.InitDBConfig(newDBConfigs(db).DbaWithDB())
 	return se
 }

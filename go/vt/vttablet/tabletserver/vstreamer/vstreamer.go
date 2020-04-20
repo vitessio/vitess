@@ -32,7 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -46,17 +45,6 @@ var PacketSize = flag.Int("vstream_packet_size", 30000, "Suggested packet size f
 // set by VPlayer at slightly above 1s. This minimizes conflicts
 // between the two timeouts.
 var HeartbeatTime = 900 * time.Millisecond
-
-// VStreamer exposes an externally usable interface to vstreamer.
-type VStreamer interface {
-	Stream() error
-	Cancel()
-}
-
-// NewVStreamer returns a VStreamer.
-func NewVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) VStreamer {
-	return newVStreamer(ctx, cp, se, startPos, filter, &localVSchema{vschema: &vindexes.VSchema{}}, send)
-}
 
 // vschemaUpdateCount is for testing only.
 // vstreamer is a mutex free data structure. So, it's not safe to access its members
