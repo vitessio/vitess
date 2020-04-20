@@ -154,10 +154,11 @@ const (
 	// TransactionStr is the Name for a SET TRANSACTION statement
 	TransactionStr = "transaction"
 
-	IsolationLevelReadUncommitted = "isolation level read uncommitted"
-	IsolationLevelReadCommitted   = "isolation level read committed"
-	IsolationLevelRepeatableRead  = "isolation level repeatable read"
-	IsolationLevelSerializable    = "isolation level serializable"
+	// Transaction isolation levels
+	ReadUncommitted = "read uncommitted"
+	ReadCommitted   = "read committed"
+	RepeatableRead  = "repeatable read"
+	Serializable    = "serializable"
 
 	TxReadOnly  = "read only"
 	TxReadWrite = "read write"
