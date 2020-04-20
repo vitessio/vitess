@@ -151,3 +151,70 @@ func TestDestinationKeyspace(t *testing.T) {
 		}
 	}
 }
+
+func TestSetTarget(t *testing.T) {
+	ks1 := &vindexes.Keyspace{
+		Name:    "ks1",
+		Sharded: false,
+	}
+	ks1Schema := &vindexes.KeyspaceSchema{
+		Keyspace: ks1,
+		Tables:   nil,
+		Vindexes: nil,
+		Error:    nil,
+	}
+	ks2 := &vindexes.Keyspace{
+		Name:    "ks2",
+		Sharded: false,
+	}
+	ks2Schema := &vindexes.KeyspaceSchema{
+		Keyspace: ks2,
+		Tables:   nil,
+		Vindexes: nil,
+		Error:    nil,
+	}
+	vschemaWith2KS := &vindexes.VSchema{
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			ks1.Name: ks1Schema,
+			ks2.Name: ks2Schema,
+		}}
+
+	type testCase struct {
+		vschema       *vindexes.VSchema
+		targetString  string
+		expectedError string
+	}
+
+	tests := []testCase{{
+		vschema:      vschemaWith2KS,
+		targetString: "",
+	}, {
+		vschema:      vschemaWith2KS,
+		targetString: "ks1",
+	}, {
+		vschema:      vschemaWith2KS,
+		targetString: "ks2",
+	}, {
+		vschema:       vschemaWith2KS,
+		targetString:  "ks3",
+		expectedError: "invalid keyspace provided: ks3",
+	}, {
+		vschema:       vschemaWith2KS,
+		targetString:  "ks2@replica",
+		expectedError: "cannot change to a non-master type in the middle of a transaction: REPLICA",
+	}}
+
+	for i, tc := range tests {
+		t.Run(string(i)+"#"+tc.targetString, func(t *testing.T) {
+			vc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{InTransaction: true}), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, nil)
+			vc.vschema = tc.vschema
+			err := vc.SetTarget(tc.targetString)
+			if tc.expectedError == "" {
+				require.NoError(t, err)
+				require.Equal(t, vc.safeSession.TargetString, tc.targetString)
+			} else {
+				require.EqualError(t, err, tc.expectedError)
+			}
+		})
+	}
+}
