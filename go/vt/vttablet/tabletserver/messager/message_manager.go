@@ -282,8 +282,8 @@ func buildPostponeQuery(name sqlparser.TableIdent, minBackoff, maxBackoff time.D
 
 	// now we are setting the false case on the above IF statement
 	if maxBackoff == 0 {
-	// if there is no max_backoff, just use :time_now + jitteredBackoff
-		buf.WriteString(fmt.Sprintf("%%a + %s",jitteredBackoff))
+		// if there is no max_backoff, just use :time_now + jitteredBackoff
+		buf.WriteString(fmt.Sprintf("%%a + %s", jitteredBackoff))
 		args = append(args, ":time_now", ":min_backoff", ":time_now")
 	} else {
 		// make sure that it doesn't exceed max_backoff
