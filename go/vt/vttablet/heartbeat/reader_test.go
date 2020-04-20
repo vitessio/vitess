@@ -105,7 +105,7 @@ func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
-	tr := NewReader(tabletenv.NewTestEnv(config, nil, "ReaderTest"))
+	tr := NewReader(tabletenv.NewTestEnv(config, "ReaderTest"))
 	tr.keyspaceShard = "test:0"
 	tr.now = nowFunc
 	tr.pool.Open(dbc.AppWithDB(), dbc.DbaWithDB(), dbc.AppDebugWithDB())
