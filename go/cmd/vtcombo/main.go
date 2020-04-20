@@ -97,13 +97,13 @@ func main() {
 	servenv.Init()
 	tabletenv.Init()
 
-	dbcfgs := dbconfigs.GlobalDBConfigs.Init("")
-	mysqld := mysqlctl.NewMysqld(dbcfgs)
+	dbconfigs.GlobalDBConfigs.Init("")
+	mysqld := mysqlctl.NewMysqld(&dbconfigs.GlobalDBConfigs)
 	servenv.OnClose(mysqld.Close)
 
 	// tablets configuration and init.
 	// Send mycnf as nil because vtcombo won't do backups and restores.
-	if err := vtcombo.InitTabletMap(ts, tpb, mysqld, dbcfgs, *schemaDir, nil); err != nil {
+	if err := vtcombo.InitTabletMap(ts, tpb, mysqld, &dbconfigs.GlobalDBConfigs, *schemaDir, nil); err != nil {
 		log.Errorf("initTabletMapProto failed: %v", err)
 		exit.Return(1)
 	}
