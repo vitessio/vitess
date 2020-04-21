@@ -18,7 +18,6 @@ package vtgate
 
 import (
 	"fmt"
-	"math/rand"
 	"sort"
 	"sync"
 	"time"
@@ -105,7 +104,7 @@ func (gw *TabletGateway) RegisterStats() {
 	gw.hc.RegisterStats()
 }
 
-// StatsUpdate forwards LegacyHealthCheck updates to TabletStatsCache and MasterBuffer.
+// StatsUpdate forwards HealthCheck updates to TabletStatsCache and MasterBuffer.
 // It is part of the discovery.HealthCheckStatsListener interface.
 // TODO(deepthi): figure out how to update buffer
 //func (gw *TabletGateway) StatsUpdate(ts *discovery.LegacyTabletStats) {
@@ -205,45 +204,23 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			}
 		}
 
-		tablets := gw.hc.GetHealthyTabletStats(target.Keyspace, target.Shard, target.TabletType)
-		if len(tablets) == 0 {
-			// fail fast if there is no tablet
-			err = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no valid tablet")
-			break
-		}
-		gw.shuffleTablets(gw.localCell, tablets)
-
-		// skip tablets we tried before
-		var ts *discovery.TabletStats
-		for _, t := range tablets {
-			if _, ok := invalidTablets[t.Key]; !ok {
-				ts = &t
-				break
-			}
-		}
-		if ts == nil {
-			if err == nil {
-				// do not override error from last attempt.
-				err = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no available connection")
-			}
-			break
-		}
-
+		tabletLastUsed, conn, connErr := gw.hc.GetTabletAndConnection(target, gw.localCell, invalidTablets)
 		// execute
-		tabletLastUsed = ts.Tablet
-		conn := gw.hc.GetConnection(ts.Key)
+		if connErr != nil {
+			err = connErr
+			break
+		}
 		if conn == nil {
-			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no connection for key %v tablet %+v", ts.Key, ts.Tablet)
-			invalidTablets[ts.Key] = true
+			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no connection for target %v on attempt #%v", target, i+1)
 			continue
 		}
 
 		startTime := time.Now()
 		var canRetry bool
-		canRetry, err = inner(ctx, ts.Target, conn)
+		canRetry, err = inner(ctx, target, conn)
 		gw.updateStats(target, startTime, err)
 		if canRetry {
-			invalidTablets[ts.Key] = true
+			invalidTablets[tabletLastUsed] = true
 			continue
 		}
 		break
@@ -271,51 +248,4 @@ func (gw *TabletGateway) getStatsAggregator(target *querypb.Target) *TabletStatu
 	aggr = NewTabletStatusAggregator(target.Keyspace, target.Shard, target.TabletType, key)
 	gw.statusAggregators[key] = aggr
 	return aggr
-}
-
-func (gw *TabletGateway) shuffleTablets(cell string, tablets []discovery.TabletStats) {
-	sameCell, diffCell, sameCellMax := 0, 0, -1
-	length := len(tablets)
-
-	// move all same cell tablets to the front, this is O(n)
-	for {
-		sameCellMax = diffCell - 1
-		sameCell = gw.nextTablet(cell, tablets, sameCell, length, true)
-		diffCell = gw.nextTablet(cell, tablets, diffCell, length, false)
-		// either no more diffs or no more same cells should stop the iteration
-		if sameCell < 0 || diffCell < 0 {
-			break
-		}
-
-		if sameCell < diffCell {
-			// fast forward the `sameCell` lookup to `diffCell + 1`, `diffCell` unchanged
-			sameCell = diffCell + 1
-		} else {
-			// sameCell > diffCell, swap needed
-			tablets[sameCell], tablets[diffCell] = tablets[diffCell], tablets[sameCell]
-			sameCell++
-			diffCell++
-		}
-	}
-
-	//shuffle in same cell tablets
-	for i := sameCellMax; i > 0; i-- {
-		swap := rand.Intn(i + 1)
-		tablets[i], tablets[swap] = tablets[swap], tablets[i]
-	}
-
-	//shuffle in diff cell tablets
-	for i, diffCellMin := length-1, sameCellMax+1; i > diffCellMin; i-- {
-		swap := rand.Intn(i-sameCellMax) + diffCellMin
-		tablets[i], tablets[swap] = tablets[swap], tablets[i]
-	}
-}
-
-func (gw *TabletGateway) nextTablet(cell string, tablets []discovery.TabletStats, offset, length int, sameCell bool) int {
-	for ; offset < length; offset++ {
-		if (tablets[offset].Tablet.Alias.Cell == cell) == sameCell {
-			return offset
-		}
-	}
-	return -1
 }
