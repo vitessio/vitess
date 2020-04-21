@@ -61,7 +61,7 @@ type (
 		Name              string
 		Keyspace          *vindexes.Keyspace
 		TargetDestination key.Destination
-		CheckSysVarQuery  string
+		Expr              string
 	}
 )
 
@@ -196,12 +196,17 @@ func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, bindVars map[string]*
 	if len(rss) != 1 {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %v", svci.TargetDestination)
 	}
-	result, err := execShard(vcursor, svci.CheckSysVarQuery, bindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
+	checkSysVarQuery := fmt.Sprintf("select 1 from dual where @@%s = %s", svci.Name, svci.Expr)
+	result, err := execShard(vcursor, checkSysVarQuery, bindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
 	if err != nil {
 		return err
 	}
-	if result.RowsAffected != 1 {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Modification not allowed using set construct for: %s", svci.Name)
+	var warning *querypb.QueryWarning
+	if result.RowsAffected == 0 {
+		warning = &querypb.QueryWarning{Code: mysql.ERNotSupportedYet, Message: fmt.Sprintf("Modification not allowed using set construct for: %s", svci.Name)}
+	} else {
+		warning = &querypb.QueryWarning{Code: mysql.ERNotSupportedYet, Message: fmt.Sprintf("Ignored inapplicable SET %v = %v", svci.Name, svci.Expr)}
 	}
+	vcursor.Session().RecordWarning(warning)
 	return nil
 }

@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
 	"strings"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -104,6 +103,6 @@ func buildSetOpCheckAndIgnore(expr *sqlparser.SetExpr, vschema ContextVSchema) (
 		Name:              expr.Name.Lowered(),
 		Keyspace:          keyspace,
 		TargetDestination: dest,
-		CheckSysVarQuery:  fmt.Sprintf("select 1 from dual where @@%s = %s", expr.Name.Lowered(), buf.String()),
+		Expr:              buf.String(),
 	}, nil
 }

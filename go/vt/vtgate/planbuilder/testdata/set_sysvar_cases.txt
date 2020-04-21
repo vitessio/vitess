@@ -33,7 +33,7 @@
           "Sharded": false
         },
         "TargetDestination": {},
-        "CheckSysVarQuery": "select 1 from dual where @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER')"
+        "Expr": "concat(@@sql_mode, ',NO_AUTO_CREATE_USER')"
       }
     ]
   }
