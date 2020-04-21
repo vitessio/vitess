@@ -89,6 +89,8 @@ func skipToEnd(yylex interface{}) {
   setExprs      SetExprs
   updateExpr    *UpdateExpr
   setExpr       *SetExpr
+  characteristic Characteristic
+  characteristics []Characteristic
   colIdent      ColIdent
   tableIdent    TableIdent
   convertType   *ConvertType
@@ -124,7 +126,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> DISTINCTROW
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
-%token <bytes> SQL_NO_CACHE SQL_CACHE
+%token <bytes> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS
 %left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <bytes> ON USING
 %token <empty> '(' ',' ')'
@@ -213,17 +215,19 @@ func skipToEnd(yylex interface{}) {
 
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
-%type <statement> stream_statement insert_statement update_statement delete_statement set_statement
+%type <statement> stream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement
 %type <bytes2> comment_opt comment_list
 %type <str> union_op insert_or_replace
-%type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt
+%type <str> distinct_opt cache_opt match_option separator_opt
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
 %type <selectExpr> select_expression
+%type <strs> select_options
+%type <str> select_option
 %type <expr> expression
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
@@ -262,10 +266,12 @@ func skipToEnd(yylex interface{}) {
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
-%type <setExprs> set_list transaction_chars
+%type <setExprs> set_list
 %type <bytes> charset_or_character_set
 %type <updateExpr> update_expression
-%type <setExpr> set_expression transaction_char
+%type <setExpr> set_expression
+%type <characteristic> transaction_char
+%type <characteristics> transaction_chars
 %type <str> isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
@@ -340,6 +346,7 @@ command:
 | update_statement
 | delete_statement
 | set_statement
+| set_transaction_statement
 | create_statement
 | alter_statement
 | rename_statement
@@ -387,7 +394,7 @@ select_statement:
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, SelectExprs: SelectExprs{Nextval{Expr: $5}}, From: TableExprs{&AliasedTableExpr{Expr: $7}}}
+    $$ = NewSelect(Comments($2), SelectExprs{Nextval{Expr: $5}}, []string{$3}/*options*/, TableExprs{&AliasedTableExpr{Expr: $7}}, nil/*where*/, nil/*groupBy*/, nil/*having*/) 
   }
 
 stream_statement:
@@ -398,9 +405,10 @@ stream_statement:
 
 // base_select is an unparenthesized SELECT with no order by clause or beyond.
 base_select:
-  SELECT comment_opt cache_opt distinct_opt straight_join_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt
+//  1         2            3              4                    5             6                7           8
+  SELECT comment_opt select_options select_expression_list from_opt where_expression_opt group_by_opt having_opt
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $5, SelectExprs: $6, From: $7, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10)}
+    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*from*/, NewWhere(WhereStr, $6), GroupBy($7), NewWhere(HavingStr, $8)) 
   }
 
 union_lhs:
@@ -520,23 +528,21 @@ set_statement:
   {
     $$ = &Set{Comments: Comments($2), Exprs: $3}
   }
-| SET comment_opt set_session_or_global set_list
+
+set_transaction_statement:
+  SET comment_opt set_session_or_global TRANSACTION transaction_chars
   {
-    $$ = &Set{Comments: Comments($2), Scope: $3, Exprs: $4}
-  }
-| SET comment_opt set_session_or_global TRANSACTION transaction_chars
-  {
-    $$ = &Set{Comments: Comments($2), Scope: $3, Exprs: $5}
+    $$ = &SetTransaction{Comments: Comments($2), Scope: $3, Characteristics: $5}
   }
 | SET comment_opt TRANSACTION transaction_chars
   {
-    $$ = &Set{Comments: Comments($2), Exprs: $4}
+    $$ = &SetTransaction{Comments: Comments($2), Characteristics: $4}
   }
 
 transaction_chars:
   transaction_char
   {
-    $$ = SetExprs{$1}
+    $$ = []Characteristic{$1}
   }
 | transaction_chars ',' transaction_char
   {
@@ -546,33 +552,33 @@ transaction_chars:
 transaction_char:
   ISOLATION LEVEL isolation_level
   {
-    $$ = &SetExpr{Name: NewColIdent(TransactionStr), Expr: NewStrVal([]byte($3))}
+    $$ = &IsolationLevel{Level: string($3)}
   }
 | READ WRITE
   {
-    $$ = &SetExpr{Name: NewColIdent(TransactionStr), Expr: NewStrVal([]byte(TxReadWrite))}
+    $$ = &AccessMode{Mode: TxReadWrite}
   }
 | READ ONLY
   {
-    $$ = &SetExpr{Name: NewColIdent(TransactionStr), Expr: NewStrVal([]byte(TxReadOnly))}
+    $$ = &AccessMode{Mode: TxReadOnly}
   }
 
 isolation_level:
   REPEATABLE READ
   {
-    $$ = IsolationLevelRepeatableRead
+    $$ = RepeatableRead
   }
 | READ COMMITTED
   {
-    $$ = IsolationLevelReadCommitted
+    $$ = ReadCommitted
   }
 | READ UNCOMMITTED
   {
-    $$ = IsolationLevelReadUncommitted
+    $$ = ReadUncommitted
   }
 | SERIALIZABLE
   {
-    $$ = IsolationLevelSerializable
+    $$ = Serializable
   }
 
 set_session_or_global:
@@ -1892,15 +1898,6 @@ distinct_opt:
     $$ = DistinctStr
   }
 
-straight_join_opt:
-  {
-    $$ = ""
-  }
-| STRAIGHT_JOIN
-  {
-    $$ = StraightJoinHint
-  }
-
 select_expression_list_opt:
   {
     $$ = nil
@@ -1908,6 +1905,53 @@ select_expression_list_opt:
 | select_expression_list
   {
     $$ = $1
+  }
+
+select_options:
+  {
+    $$ = nil
+  }
+| select_option
+  {
+    $$ = []string{$1}
+  }
+| select_option select_option // TODO: figure out a way to do this recursively instead. 
+  {                           // TODO: This is a hack since I couldn't get it to work in a nicer way. I got 'conflicts: 8 shift/reduce'
+    $$ = []string{$1, $2}
+  }
+| select_option select_option select_option 
+  {
+    $$ = []string{$1, $2, $3}
+  }
+| select_option select_option select_option select_option 
+  {
+    $$ = []string{$1, $2, $3, $4}
+  }
+
+select_option:
+  SQL_NO_CACHE
+  {
+    $$ = SQLNoCacheStr
+  }
+| SQL_CACHE
+  {
+    $$ = SQLCacheStr
+  }
+| DISTINCT
+  {
+    $$ = DistinctStr
+  }
+| DISTINCTROW
+  {
+    $$ = DistinctStr
+  }
+| STRAIGHT_JOIN
+  {
+    $$ = StraightJoinHint
+  }
+| SQL_CALC_FOUND_ROWS
+  {
+    $$ = SQLCalcFoundRowsStr
   }
 
 select_expression_list:
@@ -3136,6 +3180,11 @@ set_list:
   set_expression
   {
     $$ = SetExprs{$1}
+  }
+|  set_session_or_global set_expression
+  {
+    $2.Scope = $1
+    $$ = SetExprs{$2}
   }
 | set_list ',' set_expression
   {

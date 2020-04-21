@@ -18,8 +18,9 @@ package sqlparser
 
 const (
 	// Select.Distinct
-	DistinctStr      = "distinct "
-	StraightJoinHint = "straight_join "
+	DistinctStr         = "distinct "
+	StraightJoinHint    = "straight_join "
+	SQLCalcFoundRowsStr = "sql_calc_found_rows "
 
 	// Select.Lock
 	ForUpdateStr = " for update"
@@ -154,10 +155,11 @@ const (
 	// TransactionStr is the Name for a SET TRANSACTION statement
 	TransactionStr = "transaction"
 
-	IsolationLevelReadUncommitted = "isolation level read uncommitted"
-	IsolationLevelReadCommitted   = "isolation level read committed"
-	IsolationLevelRepeatableRead  = "isolation level repeatable read"
-	IsolationLevelSerializable    = "isolation level serializable"
+	// Transaction isolation levels
+	ReadUncommitted = "read uncommitted"
+	ReadCommitted   = "read committed"
+	RepeatableRead  = "repeatable read"
+	Serializable    = "serializable"
 
 	TxReadOnly  = "read only"
 	TxReadWrite = "read write"

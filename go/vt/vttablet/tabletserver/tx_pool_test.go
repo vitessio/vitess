@@ -543,12 +543,13 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	db.AddQuery("rollback", &sqltypes.Result{})
 	txPool := newTxPool()
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-	id, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	id, _, _ := txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	txPool.Close()
 
 	assertErrorMatch := func(id int64, reason string) {
-		_, err = txPool.Get(id, "for query")
+		conn, err := txPool.Get(id, "for query")
 		if err == nil {
+			conn.Recycle()
 			t.Fatalf("expected error, got nil")
 		}
 		want := fmt.Sprintf("transaction %v: ended at .* \\(%v\\)", id, reason)
@@ -562,14 +563,14 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	txPool = newTxPool()
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 
-	id, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	id, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	if _, err := txPool.Commit(ctx, id); err != nil {
 		t.Fatalf("got error: %v", err)
 	}
 
 	assertErrorMatch(id, "transaction committed")
 
-	id, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	id, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	if err := txPool.Rollback(ctx, id); err != nil {
 		t.Fatalf("got error: %v", err)
 	}
@@ -582,13 +583,13 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 
-	id, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
-	time.Sleep(5 * time.Millisecond)
+	id, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	time.Sleep(20 * time.Millisecond)
 
 	assertErrorMatch(id, "exceeded timeout: 1ms")
 
 	txPool.SetTimeout(1 * time.Hour)
-	id, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	id, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	txc, err := txPool.Get(id, "for close")
 	if err != nil {
 		t.Fatalf("got error: %v", err)
@@ -697,12 +698,14 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 }
 
 func newTxPool() *TxPool {
-	config := tabletenv.DefaultQsConfig
-	config.TransactionCap = 300
-	config.TransactionTimeout = 30
-	config.TxPoolTimeout = 40
-	config.TxPoolWaiterCap = 500000
-	config.IdleTimeout = 30
+	config := tabletenv.NewDefaultConfig()
+	config.TxPool.Size = 300
+	config.Oltp.TxTimeoutSeconds = 30
+	config.TxPool.TimeoutSeconds = 40
+	config.TxPool.MaxWaiters = 500000
+	config.OltpReadPool.IdleTimeoutSeconds = 30
+	config.OlapReadPool.IdleTimeoutSeconds = 30
+	config.TxPool.IdleTimeoutSeconds = 30
 	limiter := &txlimiter.TxAllowAll{}
-	return NewTxPool(tabletenv.NewTestEnv(&config, nil, "TabletServerTest"), limiter)
+	return NewTxPool(tabletenv.NewTestEnv(config, nil, "TabletServerTest"), limiter)
 }

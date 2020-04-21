@@ -24,6 +24,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
+	"github.com/stretchr/testify/require"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -77,7 +81,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Single cell RDONLY migration.
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, []string{"cell1"}, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, []string{"cell1"}, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +111,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 	// So, adding routes for replica and deploying to cell2 will also cause
 	// cell2 to switch rdonly. This is a quirk that can be fixed later if necessary.
 	// TODO(sougou): check if it's worth fixing, or clearly document the quirk.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, []string{"cell2"}, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, []string{"cell2"}, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +149,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Single cell backward REPLICA migration.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, []string{"cell2"}, DirectionBackward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, []string{"cell2"}, DirectionBackward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +169,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Switch all REPLICA.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +195,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// All cells RDONLY backward migration.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionBackward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionBackward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +215,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// All cells RDONLY backward migration.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionBackward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionBackward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +229,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Can't switch master with SwitchReads.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_MASTER, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_MASTER, nil, DirectionForward, false)
 	want := "tablet type must be REPLICA or RDONLY: MASTER"
 	if err == nil || err.Error() != want {
 		t.Errorf("SwitchReads(master) err: %v, want %v", err, want)
@@ -234,7 +238,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Can't switch writes if REPLICA and RDONLY have not fully switched yet.
-	_, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
 	want = "missing tablet type specific routing, read-only traffic must be switched before switching writes"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchWrites err: %v, want %v", err, want)
@@ -245,11 +249,11 @@ func TestTableMigrateMainflow(t *testing.T) {
 	// Test SwitchWrites cancelation on failure.
 
 	// Switch all the reads first.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,7 +304,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 	}
 	cancelMigration()
 
-	_, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, true)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, true, false)
 	want = "DeadlineExceeded"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchWrites(0 timeout) err: %v, must contain %v", err, want)
@@ -405,17 +409,18 @@ func TestTableMigrateMainflow(t *testing.T) {
 		tme.dbTargetClients[1].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1, 2)", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
 		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
-
-		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
-		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
-		tme.dbTargetClients[0].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[1].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+		/*
+			tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
+			tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
+			tme.dbTargetClients[0].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
+			tme.dbTargetClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+			tme.dbTargetClients[1].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
+			tme.dbTargetClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+		*/
 	}
 	deleteTargetVReplication()
 
-	journalID, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
+	journalID, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -452,7 +457,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Single cell RDONLY migration.
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, []string{"cell1"}, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, []string{"cell1"}, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -468,7 +473,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Other cell REPLICA migration.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, []string{"cell2"}, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, []string{"cell2"}, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -484,7 +489,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Single cell backward REPLICA migration.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, []string{"cell2"}, DirectionBackward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, []string{"cell2"}, DirectionBackward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -503,7 +508,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 	// This is an extra step that does not exist in the tables test.
 	// The per-cell migration mechanism is different for tables. So, this
 	// extra step is needed to bring things in sync.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -515,7 +520,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Switch all REPLICA.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -527,7 +532,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// All cells RDONLY backward migration.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionBackward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionBackward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -539,7 +544,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Can't switch master with SwitchReads.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_MASTER, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_MASTER, nil, DirectionForward, false)
 	want := "tablet type must be REPLICA or RDONLY: MASTER"
 	if err == nil || err.Error() != want {
 		t.Errorf("SwitchReads(master) err: %v, want %v", err, want)
@@ -548,7 +553,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Can't switch writes if REPLICA and RDONLY have not fully switched yet.
-	_, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
 	want = "cannot switch MASTER away"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchWrites err: %v, want %v", err, want)
@@ -559,7 +564,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 	// Test SwitchWrites cancelation on failure.
 
 	// Switch all the reads first.
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -579,8 +584,8 @@ func TestShardMigrateMainflow(t *testing.T) {
 	checkJournals()
 
 	stopStreams := func() {
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
 	}
@@ -610,7 +615,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 	}
 	cancelMigration()
 
-	_, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, true)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, true, false)
 	want = "DeadlineExceeded"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchWrites(0 timeout) err: %v, must contain %v", err, want)
@@ -689,7 +694,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 	}
 	startReverseVReplication()
 
-	deleteTargetVReplication := func() {
+	freezeTargetVReplication := func() {
 		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
 		tme.dbTargetClients[0].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1, 2)", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
@@ -697,17 +702,10 @@ func TestShardMigrateMainflow(t *testing.T) {
 		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid2, nil)
 		tme.dbTargetClients[1].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (2)", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
-
-		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
-		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid2, nil)
-		tme.dbTargetClients[0].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[1].addQuery("delete from _vt.vreplication where id in (2)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (2)", &sqltypes.Result{}, nil)
 	}
-	deleteTargetVReplication()
+	freezeTargetVReplication()
 
-	journalID, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
+	journalID, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -726,6 +724,8 @@ func TestShardMigrateMainflow(t *testing.T) {
 	checkIsMasterServing(t, tme.ts, "ks:40-", false)
 	checkIsMasterServing(t, tme.ts, "ks:-80", true)
 	checkIsMasterServing(t, tme.ts, "ks:80-", true)
+
+	verifyQueries(t, tme.allDBClients)
 }
 
 func TestTableMigrateOneToMany(t *testing.T) {
@@ -733,14 +733,184 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	tme := newTestTableMigraterCustom(ctx, t, []string{"0"}, []string{"-80", "80-"}, "select * %s")
 	defer tme.stopTablets(t)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// checkJournals
+	tme.dbSourceClients[0].addQueryRE("select val from _vt.resharding_journal.*", &sqltypes.Result{}, nil)
+
+	waitForCatchup := func() {
+		// mi.waitForCatchup-> mi.wr.tmc.VReplicationWaitForPos
+		state := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"pos|state|message",
+			"varchar|varchar|varchar"),
+			"MariaDB/5-456-892|Running",
+		)
+		tme.dbTargetClients[0].addQuery("select pos, state, message from _vt.vreplication where id=1", state, nil)
+		tme.dbTargetClients[1].addQuery("select pos, state, message from _vt.vreplication where id=1", state, nil)
+
+		// mi.waitForCatchup-> mi.wr.tmc.VReplicationExec('Stopped')
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where id = 1", resultid1, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (1)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where id = 1", resultid1, nil)
+		tme.dbTargetClients[1].addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (1)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+	}
+	waitForCatchup()
+
+	deleteReverseReplicaion := func() {
+		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks1' and workflow = 'test_reverse'", resultid34, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+	}
+
+	createReverseVReplication := func() {
+		deleteReverseReplicaion()
+
+		tme.dbSourceClients[0].addQueryRE(`insert into _vt.vreplication.*test_reverse.*ks2.*-80.*t1.*from t1\\".*t2.*from t2\\"`, &sqltypes.Result{InsertID: 1}, nil)
+		tme.dbSourceClients[0].addQueryRE(`insert into _vt.vreplication.*test_reverse.*ks2.*80-.*t1.*from t1\\".*t2.*from t2\\"`, &sqltypes.Result{InsertID: 2}, nil)
+		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+	}
+	createReverseVReplication()
+
+	createJournals := func() {
+		journal1 := "insert into _vt.resharding_journal.*tables.*t1.*t2.*local_position.*MariaDB/5-456-892.*shard_gtids.*80.*MariaDB/5-456-893.*80.*MariaDB/5-456-893.*participants.*0"
+		tme.dbSourceClients[0].addQueryRE(journal1, &sqltypes.Result{}, nil)
+	}
+	createJournals()
+
+	freezeTargetVReplication := func() {
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid1, nil)
+		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid1, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		tme.dbTargetClients[1].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+	}
+	freezeTargetVReplication()
+
+	dropSourcesInvalid := func() {
+		tme.dbTargetClients[0].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
+	}
+	dropSourcesInvalid()
+	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", false)
+	require.Error(t, err, "Workflow has not completed, cannot DropSources")
+
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dropSourcesDryRun := func() {
+		tme.dbTargetClients[0].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
+	}
+	dropSourcesDryRun()
+
+	wantdryRunDropSources := []string{
+		"Lock keyspace ks1",
+		"Lock keyspace ks2",
+		"Dropping following tables:",
+		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1",
+		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2",
+		"Blacklisted tables t1,t2 will be removed from:",
+		"	Keyspace ks1 Shard 0 Tablet 10",
+		"Delete vreplication streams on:",
+		"	Keyspace ks2 Shard -80 Workflow test DbName vt_ks2 Tablet 20",
+		"	Keyspace ks2 Shard 80- Workflow test DbName vt_ks2 Tablet 30",
+		"Unlock keyspace ks2",
+		"Unlock keyspace ks1",
+	}
+	results, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", true)
+	require.NoError(t, err)
+	require.Empty(t, cmp.Diff(wantdryRunDropSources, *results))
+	checkBlacklist(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), []string{"t1", "t2"})
+
+	dropSources := func() {
+		tme.dbTargetClients[0].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
+		tme.tmeDB.AddQuery("drop table vt_ks1.t1", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("drop table vt_ks1.t2", &sqltypes.Result{})
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", &sqltypes.Result{}, nil) //
+		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", &sqltypes.Result{}, nil)
+		//TODO, why are the delete queries not required?!
+		//tme.dbTargetClients[0].addQuery("delete from _vt.vreplication where db_name='vt_ks2' and workflow='test'", &sqltypes.Result{}, nil)
+		//tme.dbTargetClients[1].addQuery("delete from _vt.vreplication where db_name='vt_ks2' and workflow='test'", &sqltypes.Result{}, nil)
+	}
+	dropSources()
+
+	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", false)
+	require.NoError(t, err)
+	checkBlacklist(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), nil)
+
+	verifyQueries(t, tme.allDBClients)
+}
+
+func TestTableMigrateOneToManyDryRun(t *testing.T) {
+	var err error
+	ctx := context.Background()
+	tme := newTestTableMigraterCustom(ctx, t, []string{"0"}, []string{"-80", "80-"}, "select * %s")
+	defer tme.stopTablets(t)
+
+	wantdryRunReads := []string{
+		"Lock keyspace ks1",
+		"Switch reads for tables t1,t2 to keyspace ks2",
+		"Unlock keyspace ks1",
+	}
+	wantdryRunWrites := []string{
+		"Lock keyspace ks1",
+		"Lock keyspace ks2",
+		"Stop writes on keyspace ks1, tables t1,t2:",
+		"\tKeyspace ks1, Shard 0 at Position MariaDB/5-456-892",
+		"Wait for VReplication on stopped streams to catchup for upto 1s",
+		"Create reverse replication workflow test_reverse",
+		"Create journal entries on source databases",
+		"Enable writes on keyspace ks2 tables t1,t2",
+		"Switch routing from keyspace ks1 to keyspace ks2",
+		"Following rules will be deleted:",
+		"	ks1.t1@rdonly => ks2.t1",
+		"	ks1.t1@replica => ks2.t1",
+		"	ks1.t2@rdonly => ks2.t2",
+		"	ks1.t2@replica => ks2.t2",
+		"	ks2.t1@rdonly => ks2.t1",
+		"	ks2.t1@replica => ks2.t1",
+		"	ks2.t2@rdonly => ks2.t2",
+		"	ks2.t2@replica => ks2.t2",
+		"	t1@rdonly => ks2.t1",
+		"	t1@replica => ks2.t1",
+		"	t2@rdonly => ks2.t2",
+		"	t2@replica => ks2.t2",
+		"Following rules will be added:",
+		"	ks1.t1 => ks2.t1",
+		"	ks1.t2 => ks2.t2",
+		"	t1 => ks2.t1",
+		"	t2 => ks2.t2",
+		"SwitchWrites completed, freeze and delete vreplication streams on:",
+		"	tablet 20",
+		"	tablet 30",
+		"Mark vreplication streams frozen on:",
+		"	Keyspace ks2, Shard -80, Tablet 20, Workflow test, DbName vt_ks2",
+		"	Keyspace ks2, Shard 80-, Tablet 30, Workflow test, DbName vt_ks2",
+		"Unlock keyspace ks2",
+		"Unlock keyspace ks1",
+	}
+	dryRunResults, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, true)
+	require.NoError(t, err)
+	require.Empty(t, cmp.Diff(wantdryRunReads, *dryRunResults))
+
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
+	require.NoError(t, err)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
+	require.NoError(t, err)
 
 	// checkJournals
 	tme.dbSourceClients[0].addQueryRE("select val from _vt.resharding_journal.*", &sqltypes.Result{}, nil)
@@ -804,96 +974,9 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	}
 	deleteTargetVReplication()
 
-	_, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	verifyQueries(t, tme.allDBClients)
-}
-
-func TestTableMigrateManyToOne(t *testing.T) {
-	ctx := context.Background()
-	tme := newTestTableMigraterCustom(ctx, t, []string{"-80", "80-"}, []string{"0"}, "select * %s")
-	defer tme.stopTablets(t)
-
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	checkJournals := func() {
-		tme.dbSourceClients[0].addQueryRE("select val from _vt.resharding_journal.*", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQueryRE("select val from _vt.resharding_journal.*", &sqltypes.Result{}, nil)
-	}
-	checkJournals()
-
-	waitForCatchup := func() {
-		// mi.waitForCatchup-> mi.wr.tmc.VReplicationWaitForPos
-		state := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"pos|state|message",
-			"varchar|varchar|varchar"),
-			"MariaDB/5-456-892|Running",
-		)
-		tme.dbTargetClients[0].addQuery("select pos, state, message from _vt.vreplication where id=1", state, nil)
-		tme.dbTargetClients[0].addQuery("select pos, state, message from _vt.vreplication where id=2", state, nil)
-
-		// mi.waitForCatchup-> mi.wr.tmc.VReplicationExec('Stopped')
-		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where id = 1", resultid1, nil)
-		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (1)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where id = 2", resultid2, nil)
-		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (2)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
-		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
-	}
-	waitForCatchup()
-
-	deleteReverseReplicaion := func() {
-		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks1' and workflow = 'test_reverse'", resultid3, nil)
-		tme.dbSourceClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks1' and workflow = 'test_reverse'", resultid3, nil)
-		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (3)", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("delete from _vt.vreplication where id in (3)", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (3)", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (3)", &sqltypes.Result{}, nil)
-	}
-
-	createReverseVReplication := func() {
-		deleteReverseReplicaion()
-
-		tme.dbSourceClients[0].addQueryRE(`insert into _vt.vreplication.*test_reverse.*ks2.*0.*t1.*in_keyrange.*c1.*hash.*-80.*t2.*in_keyrange.*c1.*-80`, &sqltypes.Result{InsertID: 1}, nil)
-		tme.dbSourceClients[1].addQueryRE(`insert into _vt.vreplication.*test_reverse.*ks2.*0.*t1.*in_keyrange.*c1.*hash.*80-.*t2.*in_keyrange.*c1.*80-`, &sqltypes.Result{InsertID: 1}, nil)
-		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
-		tme.dbSourceClients[1].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
-	}
-	createReverseVReplication()
-
-	createJournals := func() {
-		journal := "insert into _vt.resharding_journal.*shard_gtids.*ks2.*0.*participants.*ks1.*80.*participants.*80"
-		tme.dbSourceClients[0].addQueryRE(journal, &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQueryRE(journal, &sqltypes.Result{}, nil)
-	}
-	createJournals()
-
-	deleteTargetVReplication := func() {
-		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
-		tme.dbTargetClients[0].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1, 2)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
-		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
-
-		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
-		tme.dbTargetClients[0].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
-	}
-	deleteTargetVReplication()
-
-	_, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	verifyQueries(t, tme.allDBClients)
+	_, results, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true)
+	require.NoError(t, err)
+	require.Empty(t, cmp.Diff(wantdryRunWrites, *results))
 }
 
 // TestMigrateFailJournal tests that cancel doesn't get called after point of no return.
@@ -903,11 +986,11 @@ func TestMigrateFailJournal(t *testing.T) {
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -976,7 +1059,7 @@ func TestMigrateFailJournal(t *testing.T) {
 	tme.dbSourceClients[0].addQueryRE("insert into _vt.resharding_journal", nil, errors.New("journaling intentionally failed"))
 	tme.dbSourceClients[1].addQueryRE("insert into _vt.resharding_journal", nil, errors.New("journaling intentionally failed"))
 
-	_, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
 	want := "journaling intentionally failed"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchWrites(0 timeout) err: %v, must contain %v", err, want)
@@ -999,11 +1082,11 @@ func TestTableMigrateJournalExists(t *testing.T) {
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1036,14 +1119,7 @@ func TestTableMigrateJournalExists(t *testing.T) {
 	tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
 	tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
 
-	tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
-	tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
-	tme.dbTargetClients[0].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
-	tme.dbTargetClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
-	tme.dbTargetClients[1].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
-	tme.dbTargetClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
-
-	_, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1070,11 +1146,11 @@ func TestShardMigrateJournalExists(t *testing.T) {
 	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1106,14 +1182,7 @@ func TestShardMigrateJournalExists(t *testing.T) {
 	tme.dbTargetClients[1].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (2)", &sqltypes.Result{}, nil)
 	tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
 
-	tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
-	tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid2, nil)
-	tme.dbTargetClients[0].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
-	tme.dbTargetClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
-	tme.dbTargetClients[1].addQuery("delete from _vt.vreplication where id in (2)", &sqltypes.Result{}, nil)
-	tme.dbTargetClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (2)", &sqltypes.Result{}, nil)
-
-	_, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1136,11 +1205,11 @@ func TestTableMigrateCancel(t *testing.T) {
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1173,11 +1242,66 @@ func TestTableMigrateCancel(t *testing.T) {
 	}
 	cancelMigration()
 
-	_, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	verifyQueries(t, tme.allDBClients)
+}
+
+func TestTableMigrateCancelDryRun(t *testing.T) {
+	ctx := context.Background()
+	tme := newTestTableMigrater(ctx, t)
+	defer tme.stopTablets(t)
+
+	want := []string{
+		"Lock keyspace ks1",
+		"Lock keyspace ks2",
+		"Cancel stream migrations as requested",
+		"Unlock keyspace ks2",
+		"Unlock keyspace ks1",
+	}
+
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	checkJournals := func() {
+		tme.dbSourceClients[0].addQuery("select val from _vt.resharding_journal where id=7672494164556733923", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select val from _vt.resharding_journal where id=7672494164556733923", &sqltypes.Result{}, nil)
+	}
+	checkJournals()
+
+	deleteReverseReplicaion := func() {
+		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks1' and workflow = 'test_reverse'", resultid34, nil)
+		tme.dbSourceClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks1' and workflow = 'test_reverse'", resultid34, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+	}
+	cancelMigration := func() {
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
+		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (1, 2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (1, 2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", runningResult(1), nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 2", runningResult(2), nil)
+		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 1", runningResult(1), nil)
+		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", runningResult(2), nil)
+
+		deleteReverseReplicaion()
+	}
+	cancelMigration()
+
+	_, dryRunResults, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false, true)
+	require.NoError(t, err)
+	require.Empty(t, cmp.Diff(want, *dryRunResults))
 }
 
 func TestTableMigrateNoReverse(t *testing.T) {
@@ -1185,11 +1309,11 @@ func TestTableMigrateNoReverse(t *testing.T) {
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1268,17 +1392,10 @@ func TestTableMigrateNoReverse(t *testing.T) {
 		tme.dbTargetClients[1].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1, 2)", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
 		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
-
-		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
-		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
-		tme.dbTargetClients[0].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[1].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 	}
 	deleteTargetVReplication()
 
-	_, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1290,12 +1407,12 @@ func TestMigrateFrozen(t *testing.T) {
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1317,7 +1434,7 @@ func TestMigrateFrozen(t *testing.T) {
 	), nil)
 	tme.dbTargetClients[1].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
 
-	err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	want := "cannot switch reads while SwitchWrites is in progress"
 	if err == nil || err.Error() != want {
 		t.Errorf("SwitchReads(frozen) err: %v, want %v", err, want)
@@ -1330,18 +1447,7 @@ func TestMigrateFrozen(t *testing.T) {
 	), nil)
 	tme.dbTargetClients[1].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
 
-	deleteTargetVReplication := func() {
-		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid1, nil)
-		tme.dbTargetClients[0].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
-
-		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid1, nil)
-		tme.dbTargetClients[0].addQuery("delete from _vt.vreplication where id in (1)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1)", &sqltypes.Result{}, nil)
-	}
-	deleteTargetVReplication()
-
-	_, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, true)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1356,7 +1462,7 @@ func TestMigrateNoStreamsFound(t *testing.T) {
 	tme.dbTargetClients[0].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
 	tme.dbTargetClients[1].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	want := "no streams found in keyspace ks2 for: test"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchReads: %v, must contain %v", err, want)
@@ -1387,7 +1493,7 @@ func TestMigrateDistinctSources(t *testing.T) {
 		fmt.Sprintf("1|%v|", bls),
 	), nil)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	want := "source keyspaces are mismatched across streams"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchReads: %v, must contain %v", err, want)
@@ -1416,7 +1522,7 @@ func TestMigrateMismatchedTables(t *testing.T) {
 		nil,
 	)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	want := "table lists are mismatched across streams"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchReads: %v, must contain %v", err, want)
@@ -1430,7 +1536,7 @@ func TestTableMigrateAllShardsNotPresent(t *testing.T) {
 
 	tme.dbTargetClients[0].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	want := "mismatched shards for keyspace"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchReads: %v, must contain %v", err, want)
@@ -1484,7 +1590,7 @@ func TestMigrateNoTableWildcards(t *testing.T) {
 		fmt.Sprintf("1|%v|", bls3),
 	), nil)
 
-	err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	want := "cannot migrate streams with wild card table names"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchReads: %v, must contain %v", err, want)

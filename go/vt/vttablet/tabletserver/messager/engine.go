@@ -66,7 +66,7 @@ func NewEngine(tsv TabletService, se *schema.Engine, vs VStreamer) *Engine {
 		tsv:          tsv,
 		se:           se,
 		vs:           vs,
-		postponeSema: sync2.NewSemaphore(tsv.Config().MessagePostponeCap, 0),
+		postponeSema: sync2.NewSemaphore(tsv.Config().MessagePostponeParallelism, 0),
 		managers:     make(map[string]*messageManager),
 	}
 }

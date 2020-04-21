@@ -170,9 +170,9 @@ func TestEngineGenerate(t *testing.T) {
 }
 
 func newTestEngine(db *fakesqldb.DB) *Engine {
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := &fakeTabletServer{
-		Env: tabletenv.NewTestEnv(&config, nil, "MessagerTest"),
+		Env: tabletenv.NewTestEnv(config, nil, "MessagerTest"),
 	}
 	se := schema.NewEngine(tsv)
 	te := NewEngine(tsv, se, newFakeVStreamer())

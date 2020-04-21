@@ -317,7 +317,7 @@ func (vc *vcursorImpl) Session() engine.SessionActions {
 }
 
 func (vc *vcursorImpl) SetTarget(target string) error {
-	keyspace, tabletType, _, err := parseDestinationTarget(target, vc.vschema)
+	keyspace, tabletType, _, err := topoprotopb.ParseDestination(target, defaultTabletType)
 	if err != nil {
 		return err
 	}

@@ -40,7 +40,7 @@ import (
 //
 // Intended Usage:
 //   // Assuming topoServer is a topo.Server variable pointing to a Vitess topology server.
-//   t := CreateTxThrottlerFromTabletConfig(topoServer)
+//   t := NewTxThrottler(config, topoServer)
 //
 //   // A transaction throttler must be opened before its first use:
 //   if err := t.Open(keyspace, shard); err != nil {
@@ -71,13 +71,13 @@ type TxThrottler struct {
 	state *txThrottlerState
 }
 
-// CreateTxThrottlerFromTabletConfig tries to construct a TxThrottler from the
+// NewTxThrottler tries to construct a TxThrottler from the
 // relevant fields in the tabletenv.Config object. It returns a disabled TxThrottler if
 // any error occurs.
 // This function calls tryCreateTxThrottler that does the actual creation work
 // and returns an error if one occurred.
-func CreateTxThrottlerFromTabletConfig(topoServer *topo.Server) *TxThrottler {
-	txThrottler, err := tryCreateTxThrottler(topoServer)
+func NewTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Server) *TxThrottler {
+	txThrottler, err := tryCreateTxThrottler(config, topoServer)
 	if err != nil {
 		log.Errorf("Error creating transaction throttler. Transaction throttling will"+
 			" be disabled. Error: %v", err)
@@ -91,20 +91,20 @@ func CreateTxThrottlerFromTabletConfig(topoServer *topo.Server) *TxThrottler {
 	return txThrottler
 }
 
-func tryCreateTxThrottler(topoServer *topo.Server) (*TxThrottler, error) {
-	if !tabletenv.Config.EnableTxThrottler {
+func tryCreateTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Server) (*TxThrottler, error) {
+	if !config.EnableTxThrottler {
 		return newTxThrottler(&txThrottlerConfig{enabled: false})
 	}
 
 	var throttlerConfig throttlerdatapb.Configuration
-	if err := proto.UnmarshalText(tabletenv.Config.TxThrottlerConfig, &throttlerConfig); err != nil {
+	if err := proto.UnmarshalText(config.TxThrottlerConfig, &throttlerConfig); err != nil {
 		return nil, err
 	}
 
 	// Clone tsv.TxThrottlerHealthCheckCells so that we don't assume tsv.TxThrottlerHealthCheckCells
 	// is immutable.
-	healthCheckCells := make([]string, len(tabletenv.Config.TxThrottlerHealthCheckCells))
-	copy(healthCheckCells, tabletenv.Config.TxThrottlerHealthCheckCells)
+	healthCheckCells := make([]string, len(config.TxThrottlerHealthCheckCells))
+	copy(healthCheckCells, config.TxThrottlerHealthCheckCells)
 
 	return newTxThrottler(&txThrottlerConfig{
 		enabled:          true,

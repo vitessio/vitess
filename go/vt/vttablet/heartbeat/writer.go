@@ -73,18 +73,22 @@ type Writer struct {
 // NewWriter creates a new Writer.
 func NewWriter(env tabletenv.Env, alias topodatapb.TabletAlias) *Writer {
 	config := env.Config()
-	if !config.HeartbeatEnable {
+	if config.HeartbeatIntervalMilliseconds == 0 {
 		return &Writer{}
 	}
+	heartbeatInterval := time.Duration(config.HeartbeatIntervalMilliseconds) * time.Millisecond
 	return &Writer{
 		env:         env,
 		enabled:     true,
 		tabletAlias: alias,
 		now:         time.Now,
-		interval:    config.HeartbeatInterval,
-		ticks:       timer.NewTimer(config.HeartbeatInterval),
+		interval:    heartbeatInterval,
+		ticks:       timer.NewTimer(heartbeatInterval),
 		errorLog:    logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
-		pool:        connpool.New(env, "HeartbeatWritePool", 1, 0, 0, time.Duration(config.IdleTimeout*1e9)),
+		pool: connpool.NewPool(env, "HeartbeatWritePool", tabletenv.ConnPoolConfig{
+			Size:               1,
+			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
+		}),
 	}
 }
 
