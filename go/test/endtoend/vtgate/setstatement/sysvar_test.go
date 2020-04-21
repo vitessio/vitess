@@ -54,8 +54,8 @@ func TestSetSysVar(t *testing.T) {
 		query:        `set @@sql_mode = concat(@@sql_mode,"")`,
 		expectedRows: ``, rowsAffected: 0,
 	}, {
-		query:  `set @@sql_mode = concat(@@sql_mode,"ALLOW_INVALID_DATES")`,
-		errMsg: "Modification not allowed using set construct for: sql_mode",
+		query:           `set @@sql_mode = concat(@@sql_mode,"ALLOW_INVALID_DATES")`,
+		expectedWarning: "[[VARCHAR(\"Warning\") UINT16(1235) VARCHAR(\"Modification not allowed using set construct for: sql_mode\")]]",
 	}}
 
 	conn, err := mysql.Connect(ctx, &vtParams)

@@ -46,7 +46,7 @@ func TestSetUDV(t *testing.T) {
 		expectedRows: "", rowsAffected: 0,
 	}, {
 		query:        "select @foo, @bar, @baz",
-		expectedRows: `[[VARCHAR("abc") INT64(42) DECIMAL(30.5)]]`, rowsAffected: 1,
+		expectedRows: `[[VARBINARY("abc") INT64(42) FLOAT64(30.5)]]`, rowsAffected: 1,
 	}, {
 		query:        "insert into test(id, val1, val2, val3) values(1, @foo, null, null), (2, null, @bar, null), (3, null, null, @baz)",
 		expectedRows: ``, rowsAffected: 3,
