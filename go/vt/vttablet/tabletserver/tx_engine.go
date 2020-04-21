@@ -340,7 +340,7 @@ func (te *TxEngine) transitionTo(nextState txEngineState) error {
 // up the metadata tables.
 func (te *TxEngine) Init() error {
 	if te.twopcEnabled {
-		return te.twoPC.Init(te.env.DBConfigs().SidecarDBName.Get(), te.env.DBConfigs().DbaWithDB())
+		return te.twoPC.Init(te.env.DBConfigs().DbaWithDB())
 	}
 	return nil
 }

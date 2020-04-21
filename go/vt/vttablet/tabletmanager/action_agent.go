@@ -272,7 +272,6 @@ func NewActionAgent(
 		TabletAlias:         tabletAlias,
 		Cnf:                 mycnf,
 		MysqlDaemon:         mysqld,
-		DBConfigs:           dbcfgs,
 		History:             history.New(historyLength),
 		DemoteMasterType:    demoteMasterTabletType,
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
@@ -317,7 +316,7 @@ func NewActionAgent(
 	}
 
 	// Start will get the tablet info, and update our state from it
-	if err := agent.Start(batchCtx, mysqlHost, int32(mysqlPort), port, gRPCPort, true); err != nil {
+	if err := agent.Start(batchCtx, dbcfgs, mysqlHost, int32(mysqlPort), port, gRPCPort, true); err != nil {
 		return nil, err
 	}
 
@@ -419,7 +418,6 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		TabletAlias:         tabletAlias,
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
-		DBConfigs:           &dbconfigs.DBConfigs{},
 		VREngine:            vreplication.NewEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient, ti.DbName()),
 		History:             history.New(historyLength),
 		DemoteMasterType:    demoteMasterTabletType,
@@ -430,7 +428,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 	}
 
 	// Start will update the topology and setup services.
-	if err := agent.Start(batchCtx, "", 0, vtPort, grpcPort, false); err != nil {
+	if err := agent.Start(batchCtx, &dbconfigs.DBConfigs{}, "", 0, vtPort, grpcPort, false); err != nil {
 		panic(vterrors.Wrapf(err, "agent.Start(%v) failed", tabletAlias))
 	}
 
@@ -464,7 +462,6 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 		TabletAlias:         tabletAlias,
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
-		DBConfigs:           dbcfgs,
 		VREngine:            vreplication.NewEngine(nil, "", nil, nil, ""),
 		gotMysqlPort:        true,
 		History:             history.New(historyLength),
@@ -483,7 +480,7 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 	}
 
 	// Start the agent.
-	if err := agent.Start(batchCtx, "", 0, vtPort, grpcPort, false); err != nil {
+	if err := agent.Start(batchCtx, dbcfgs, "", 0, vtPort, grpcPort, false); err != nil {
 		panic(vterrors.Wrapf(err, "agent.Start(%v) failed", tabletAlias))
 	}
 
@@ -634,7 +631,7 @@ func (agent *ActionAgent) verifyTopology(ctx context.Context) {
 // Start validates and updates the topology records for the tablet, and performs
 // the initial state change callback to start tablet services.
 // If initUpdateStream is set, update stream service will also be registered.
-func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort, vtPort, gRPCPort int32, initUpdateStream bool) error {
+func (agent *ActionAgent) Start(ctx context.Context, dbcfgs *dbconfigs.DBConfigs, mysqlHost string, mysqlPort, vtPort, gRPCPort int32, initUpdateStream bool) error {
 	// find our hostname as fully qualified, and IP
 	hostname := *tabletHostname
 	if hostname == "" {
@@ -686,11 +683,8 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 	// Verify the topology is correct.
 	agent.verifyTopology(ctx)
 
-	// Get and fix the dbname if necessary, only for real instances.
-	if !agent.DBConfigs.IsZero() {
-		dbname := topoproto.TabletDbName(agent.initialTablet)
-		agent.DBConfigs.DBName.Set(dbname)
-	}
+	dbname := topoproto.TabletDbName(agent.initialTablet)
+	agent.DBConfigs = dbcfgs.WithDBName(dbname)
 
 	// Create and register the RPC services from UpdateStream.
 	// (it needs the dbname, so it has to be delayed up to here,

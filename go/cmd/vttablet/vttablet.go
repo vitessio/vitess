@@ -22,7 +22,6 @@ import (
 	"io/ioutil"
 
 	"golang.org/x/net/context"
-	"sigs.k8s.io/yaml"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -34,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/yaml2"
 )
 
 var (
@@ -67,12 +67,12 @@ func main() {
 		if err != nil {
 			log.Exitf("error reading config file %s: %v", *tabletConfig, err)
 		}
-		if err := yaml.Unmarshal(bytes, config); err != nil {
+		if err := yaml2.Unmarshal(bytes, config); err != nil {
 			log.Exitf("error parsing config file %s: %v", bytes, err)
 		}
-		gotBytes, _ := yaml.Marshal(config)
-		log.Infof("Loaded config file %s successfully:\n%s", *tabletConfig, gotBytes)
 	}
+	gotBytes, _ := yaml2.Marshal(config)
+	log.Infof("Loaded config file %s successfully:\n%s", *tabletConfig, gotBytes)
 
 	servenv.Init()
 
@@ -90,7 +90,7 @@ func main() {
 	// and use the socket from it. If connection parameters were specified,
 	// we assume that the mysql is not local, and we skip loading mycnf.
 	// This also means that backup and restore will not be allowed.
-	if !dbconfigs.HasConnectionParams() {
+	if !config.DB.HasGlobalSettings() {
 		var err error
 		if mycnf, err = mysqlctl.NewMycnfFromFlags(tabletAlias.Uid); err != nil {
 			log.Exitf("mycnf read failed: %v", err)
@@ -103,10 +103,7 @@ func main() {
 	// If connection parameters were specified, socketFile will be empty.
 	// Otherwise, the socketFile (read from mycnf) will be used to initialize
 	// dbconfigs.
-	dbcfgs, err := dbconfigs.Init(socketFile)
-	if err != nil {
-		log.Warning(err)
-	}
+	config.DB = config.DB.Init(socketFile)
 
 	if *tableACLConfig != "" {
 		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
@@ -133,7 +130,7 @@ func main() {
 	// Create mysqld and register the health reporter (needs to be done
 	// before initializing the agent, so the initial health check
 	// done by the agent has the right reporter)
-	mysqld := mysqlctl.NewMysqld(dbcfgs)
+	mysqld := mysqlctl.NewMysqld(config.DB)
 	servenv.OnClose(mysqld.Close)
 
 	// Depends on both query and updateStream.
@@ -141,7 +138,7 @@ func main() {
 	if servenv.GRPCPort != nil {
 		gRPCPort = int32(*servenv.GRPCPort)
 	}
-	agent, err = tabletmanager.NewActionAgent(context.Background(), ts, mysqld, qsc, tabletAlias, dbcfgs, mycnf, int32(*servenv.Port), gRPCPort)
+	agent, err = tabletmanager.NewActionAgent(context.Background(), ts, mysqld, qsc, tabletAlias, config.DB, mycnf, int32(*servenv.Port), gRPCPort)
 	if err != nil {
 		log.Exitf("NewActionAgent() failed: %v", err)
 	}

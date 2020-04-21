@@ -654,8 +654,8 @@ func TestTabletServerCreateTransaction(t *testing.T) {
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
-	db.AddQueryPattern(fmt.Sprintf("insert into `_vt`\\.dt_state\\(dtid, state, time_created\\) values \\('aa', %d,.*", int(querypb.TransactionState_PREPARE)), &sqltypes.Result{})
-	db.AddQueryPattern("insert into `_vt`\\.dt_participant\\(dtid, id, keyspace, shard\\) values \\('aa', 1,.*", &sqltypes.Result{})
+	db.AddQueryPattern(fmt.Sprintf("insert into _vt\\.dt_state\\(dtid, state, time_created\\) values \\('aa', %d,.*", int(querypb.TransactionState_PREPARE)), &sqltypes.Result{})
+	db.AddQueryPattern("insert into _vt\\.dt_participant\\(dtid, id, keyspace, shard\\) values \\('aa', 1,.*", &sqltypes.Result{})
 	err := tsv.CreateTransaction(ctx, &target, "aa", []*querypb.Target{{
 		Keyspace: "t1",
 		Shard:    "0",
@@ -670,7 +670,7 @@ func TestTabletServerStartCommit(t *testing.T) {
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
-	commitTransition := fmt.Sprintf("update `_vt`.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_COMMIT), int(querypb.TransactionState_PREPARE))
+	commitTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_COMMIT), int(querypb.TransactionState_PREPARE))
 	db.AddQuery(commitTransition, &sqltypes.Result{RowsAffected: 1})
 	txid := newTxForPrep(tsv)
 	err := tsv.StartCommit(ctx, &target, txid, "aa")
@@ -692,7 +692,7 @@ func TestTabletserverSetRollback(t *testing.T) {
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
-	rollbackTransition := fmt.Sprintf("update `_vt`.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
+	rollbackTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
 	db.AddQuery(rollbackTransition, &sqltypes.Result{RowsAffected: 1})
 	txid := newTxForPrep(tsv)
 	err := tsv.SetRollback(ctx, &target, "aa", txid)
@@ -714,7 +714,7 @@ func TestTabletServerReadTransaction(t *testing.T) {
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
-	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", &sqltypes.Result{})
 	got, err := tsv.ReadTransaction(ctx, &target, "aa")
 	require.NoError(t, err)
 	want := &querypb.TransactionMetadata{}
@@ -734,8 +734,8 @@ func TestTabletServerReadTransaction(t *testing.T) {
 			sqltypes.NewVarBinary("1"),
 		}},
 	}
-	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
-	db.AddQuery("select keyspace, shard from `_vt`.dt_participant where dtid = 'aa'", &sqltypes.Result{
+	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", txResult)
+	db.AddQuery("select keyspace, shard from _vt.dt_participant where dtid = 'aa'", &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Type: sqltypes.VarBinary},
 			{Type: sqltypes.VarBinary},
@@ -780,7 +780,7 @@ func TestTabletServerReadTransaction(t *testing.T) {
 			sqltypes.NewVarBinary("1"),
 		}},
 	}
-	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
+	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", txResult)
 	want.State = querypb.TransactionState_COMMIT
 	got, err = tsv.ReadTransaction(ctx, &target, "aa")
 	require.NoError(t, err)
@@ -800,7 +800,7 @@ func TestTabletServerReadTransaction(t *testing.T) {
 			sqltypes.NewVarBinary("1"),
 		}},
 	}
-	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
+	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", txResult)
 	want.State = querypb.TransactionState_ROLLBACK
 	got, err = tsv.ReadTransaction(ctx, &target, "aa")
 	require.NoError(t, err)
@@ -816,8 +816,8 @@ func TestTabletServerConcludeTransaction(t *testing.T) {
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
-	db.AddQuery("delete from `_vt`.dt_state where dtid = 'aa'", &sqltypes.Result{})
-	db.AddQuery("delete from `_vt`.dt_participant where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.dt_state where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.dt_participant where dtid = 'aa'", &sqltypes.Result{})
 	err := tsv.ConcludeTransaction(ctx, &target, "aa")
 	require.NoError(t, err)
 }
@@ -2551,16 +2551,16 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			RowsAffected: 1,
 		},
 		// queries for twopc
-		sqlTurnoffBinlog:                                  {},
-		fmt.Sprintf(sqlCreateSidecarDB, "`_vt`"):          {},
-		fmt.Sprintf(sqlDropLegacy1, "`_vt`"):              {},
-		fmt.Sprintf(sqlDropLegacy2, "`_vt`"):              {},
-		fmt.Sprintf(sqlDropLegacy3, "`_vt`"):              {},
-		fmt.Sprintf(sqlDropLegacy4, "`_vt`"):              {},
-		fmt.Sprintf(sqlCreateTableRedoState, "`_vt`"):     {},
-		fmt.Sprintf(sqlCreateTableRedoStatement, "`_vt`"): {},
-		fmt.Sprintf(sqlCreateTableDTState, "`_vt`"):       {},
-		fmt.Sprintf(sqlCreateTableDTParticipant, "`_vt`"): {},
+		sqlTurnoffBinlog:                                {},
+		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):          {},
+		fmt.Sprintf(sqlDropLegacy1, "_vt"):              {},
+		fmt.Sprintf(sqlDropLegacy2, "_vt"):              {},
+		fmt.Sprintf(sqlDropLegacy3, "_vt"):              {},
+		fmt.Sprintf(sqlDropLegacy4, "_vt"):              {},
+		fmt.Sprintf(sqlCreateTableRedoState, "_vt"):     {},
+		fmt.Sprintf(sqlCreateTableRedoStatement, "_vt"): {},
+		fmt.Sprintf(sqlCreateTableDTState, "_vt"):       {},
+		fmt.Sprintf(sqlCreateTableDTParticipant, "_vt"): {},
 		// queries for schema info
 		"select unix_timestamp()": {
 			Fields: []*querypb.Field{{
@@ -2647,7 +2647,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 		"begin":    {},
 		"commit":   {},
 		"rollback": {},
-		fmt.Sprintf(sqlReadAllRedo, "`_vt`", "`_vt`"): {},
+		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
 	}
 }
 

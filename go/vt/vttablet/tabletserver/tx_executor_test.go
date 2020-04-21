@@ -156,11 +156,11 @@ func TestTxExecutorCommitRedoFail(t *testing.T) {
 	defer tsv.StopService()
 	txid := newTxForPrep(tsv)
 	// Allow all additions to redo logs to succeed
-	db.AddQueryPattern("insert into `_vt`\\.redo_state.*", &sqltypes.Result{})
+	db.AddQueryPattern("insert into _vt\\.redo_state.*", &sqltypes.Result{})
 	err := txe.Prepare(txid, "bb")
 	require.NoError(t, err)
 	defer txe.RollbackPrepared("bb", 0)
-	db.AddQuery("update `_vt`.redo_state set state = 'Failed' where dtid = 'bb'", &sqltypes.Result{})
+	db.AddQuery("update _vt.redo_state set state = 'Failed' where dtid = 'bb'", &sqltypes.Result{})
 	err = txe.CommitPrepared("bb")
 	want := "is not supported"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -211,7 +211,7 @@ func TestTxExecutorRollbackRedoFail(t *testing.T) {
 	defer tsv.StopService()
 	txid := newTxForPrep(tsv)
 	// Allow all additions to redo logs to succeed
-	db.AddQueryPattern("insert into `_vt`\\.redo_state.*", &sqltypes.Result{})
+	db.AddQueryPattern("insert into _vt\\.redo_state.*", &sqltypes.Result{})
 	err := txe.Prepare(txid, "bb")
 	require.NoError(t, err)
 	err = txe.RollbackPrepared("bb", txid)
@@ -226,8 +226,8 @@ func TestExecutorCreateTransaction(t *testing.T) {
 	defer db.Close()
 	defer tsv.StopService()
 
-	db.AddQueryPattern(fmt.Sprintf("insert into `_vt`\\.dt_state\\(dtid, state, time_created\\) values \\('aa', %d,.*", int(querypb.TransactionState_PREPARE)), &sqltypes.Result{})
-	db.AddQueryPattern("insert into `_vt`\\.dt_participant\\(dtid, id, keyspace, shard\\) values \\('aa', 1,.*", &sqltypes.Result{})
+	db.AddQueryPattern(fmt.Sprintf("insert into _vt\\.dt_state\\(dtid, state, time_created\\) values \\('aa', %d,.*", int(querypb.TransactionState_PREPARE)), &sqltypes.Result{})
+	db.AddQueryPattern("insert into _vt\\.dt_participant\\(dtid, id, keyspace, shard\\) values \\('aa', 1,.*", &sqltypes.Result{})
 	err := txe.CreateTransaction("aa", []*querypb.Target{{
 		Keyspace: "t1",
 		Shard:    "0",
@@ -240,7 +240,7 @@ func TestExecutorStartCommit(t *testing.T) {
 	defer db.Close()
 	defer tsv.StopService()
 
-	commitTransition := fmt.Sprintf("update `_vt`.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_COMMIT), int(querypb.TransactionState_PREPARE))
+	commitTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_COMMIT), int(querypb.TransactionState_PREPARE))
 	db.AddQuery(commitTransition, &sqltypes.Result{RowsAffected: 1})
 	txid := newTxForPrep(tsv)
 	err := txe.StartCommit(txid, "aa")
@@ -260,7 +260,7 @@ func TestExecutorSetRollback(t *testing.T) {
 	defer db.Close()
 	defer tsv.StopService()
 
-	rollbackTransition := fmt.Sprintf("update `_vt`.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
+	rollbackTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
 	db.AddQuery(rollbackTransition, &sqltypes.Result{RowsAffected: 1})
 	txid := newTxForPrep(tsv)
 	err := txe.SetRollback("aa", txid)
@@ -280,8 +280,8 @@ func TestExecutorConcludeTransaction(t *testing.T) {
 	defer db.Close()
 	defer tsv.StopService()
 
-	db.AddQuery("delete from `_vt`.dt_state where dtid = 'aa'", &sqltypes.Result{})
-	db.AddQuery("delete from `_vt`.dt_participant where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.dt_state where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.dt_participant where dtid = 'aa'", &sqltypes.Result{})
 	err := txe.ConcludeTransaction("aa")
 	require.NoError(t, err)
 }
@@ -291,7 +291,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 	defer db.Close()
 	defer tsv.StopService()
 
-	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", &sqltypes.Result{})
 	got, err := txe.ReadTransaction("aa")
 	require.NoError(t, err)
 	want := &querypb.TransactionMetadata{}
@@ -311,8 +311,8 @@ func TestExecutorReadTransaction(t *testing.T) {
 			sqltypes.NewVarBinary("1"),
 		}},
 	}
-	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
-	db.AddQuery("select keyspace, shard from `_vt`.dt_participant where dtid = 'aa'", &sqltypes.Result{
+	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", txResult)
+	db.AddQuery("select keyspace, shard from _vt.dt_participant where dtid = 'aa'", &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Type: sqltypes.VarChar},
 			{Type: sqltypes.VarChar},
@@ -357,7 +357,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 			sqltypes.NewVarBinary("1"),
 		}},
 	}
-	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
+	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", txResult)
 	want.State = querypb.TransactionState_COMMIT
 	got, err = txe.ReadTransaction("aa")
 	require.NoError(t, err)
@@ -377,7 +377,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 			sqltypes.NewVarBinary("1"),
 		}},
 	}
-	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
+	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", txResult)
 	want.State = querypb.TransactionState_ROLLBACK
 	got, err = txe.ReadTransaction("aa")
 	require.NoError(t, err)
@@ -451,7 +451,7 @@ func TestExecutorResolveTransaction(t *testing.T) {
 	defer tsv.StopService()
 	want := "aa"
 	db.AddQueryPattern(
-		"select dtid, time_created from `_vt`\\.dt_state where time_created.*",
+		"select dtid, time_created from _vt\\.dt_state where time_created.*",
 		&sqltypes.Result{
 			Fields: []*querypb.Field{
 				{Type: sqltypes.VarChar},
@@ -525,10 +525,10 @@ func newTestTxExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fa
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool, db)
-	db.AddQueryPattern("insert into `_vt`\\.redo_state\\(dtid, state, time_created\\) values \\('aa', 1,.*", &sqltypes.Result{})
-	db.AddQueryPattern("insert into `_vt`\\.redo_statement.*", &sqltypes.Result{})
-	db.AddQuery("delete from `_vt`.redo_state where dtid = 'aa'", &sqltypes.Result{})
-	db.AddQuery("delete from `_vt`.redo_statement where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQueryPattern("insert into _vt\\.redo_state\\(dtid, state, time_created\\) values \\('aa', 1,.*", &sqltypes.Result{})
+	db.AddQueryPattern("insert into _vt\\.redo_statement.*", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.redo_state where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.redo_statement where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("update test_table set name = 2 where pk = 1 limit 10001", &sqltypes.Result{})
 	return &TxExecutor{
 		ctx:      ctx,
@@ -543,10 +543,10 @@ func newShortAgeExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool|shortTwopcAge, db)
-	db.AddQueryPattern("insert into `_vt`\\.redo_state\\(dtid, state, time_created\\) values \\('aa', 1,.*", &sqltypes.Result{})
-	db.AddQueryPattern("insert into `_vt`\\.redo_statement.*", &sqltypes.Result{})
-	db.AddQuery("delete from `_vt`.redo_state where dtid = 'aa'", &sqltypes.Result{})
-	db.AddQuery("delete from `_vt`.redo_statement where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQueryPattern("insert into _vt\\.redo_state\\(dtid, state, time_created\\) values \\('aa', 1,.*", &sqltypes.Result{})
+	db.AddQueryPattern("insert into _vt\\.redo_statement.*", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.redo_state where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.redo_statement where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("update test_table set name = 2 where pk = 1 limit 10001", &sqltypes.Result{})
 	return &TxExecutor{
 		ctx:      ctx,
