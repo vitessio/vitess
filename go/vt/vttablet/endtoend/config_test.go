@@ -47,73 +47,71 @@ func verifyIntValue(values map[string]interface{}, tag string, want int) error {
 }
 
 func TestConfigVars(t *testing.T) {
+	currentConfig := tabletenv.NewCurrentConfig()
 	vars := framework.DebugVars()
 	cases := []struct {
 		tag string
 		val int
 	}{{
 		tag: "ConnPoolAvailable",
-		val: tabletenv.Config.PoolSize,
+		val: currentConfig.OltpReadPool.Size,
 	}, {
 		tag: "ConnPoolCapacity",
-		val: tabletenv.Config.PoolSize,
+		val: currentConfig.OltpReadPool.Size,
 	}, {
 		tag: "ConnPoolIdleTimeout",
-		val: int(tabletenv.Config.IdleTimeout * 1e9),
+		val: currentConfig.OltpReadPool.IdleTimeoutSeconds * 1e9,
 	}, {
 		tag: "ConnPoolMaxCap",
-		val: tabletenv.Config.PoolSize,
-	}, {
-		tag: "MaxDMLRows",
-		val: tabletenv.Config.MaxDMLRows,
+		val: currentConfig.OltpReadPool.Size,
 	}, {
 		tag: "MaxResultSize",
-		val: tabletenv.Config.MaxResultSize,
+		val: currentConfig.Oltp.MaxRows,
 	}, {
 		tag: "WarnResultSize",
-		val: tabletenv.Config.WarnResultSize,
+		val: currentConfig.Oltp.WarnRows,
 	}, {
 		tag: "QueryCacheCapacity",
-		val: tabletenv.Config.QueryPlanCacheSize,
+		val: currentConfig.QueryCacheSize,
 	}, {
 		tag: "QueryTimeout",
-		val: int(tabletenv.Config.QueryTimeout * 1e9),
+		val: int(currentConfig.Oltp.QueryTimeoutSeconds * 1e9),
 	}, {
 		tag: "SchemaReloadTime",
-		val: int(tabletenv.Config.SchemaReloadTime * 1e9),
+		val: int(currentConfig.SchemaReloadIntervalSeconds * 1e9),
 	}, {
 		tag: "StreamBufferSize",
-		val: tabletenv.Config.StreamBufferSize,
+		val: currentConfig.StreamBufferSize,
 	}, {
 		tag: "StreamConnPoolAvailable",
-		val: tabletenv.Config.StreamPoolSize,
+		val: currentConfig.OlapReadPool.Size,
 	}, {
 		tag: "StreamConnPoolCapacity",
-		val: tabletenv.Config.StreamPoolSize,
+		val: currentConfig.OlapReadPool.Size,
 	}, {
 		tag: "StreamConnPoolIdleTimeout",
-		val: int(tabletenv.Config.IdleTimeout * 1e9),
+		val: currentConfig.OlapReadPool.IdleTimeoutSeconds * 1e9,
 	}, {
 		tag: "StreamConnPoolMaxCap",
-		val: tabletenv.Config.StreamPoolSize,
+		val: currentConfig.OlapReadPool.Size,
 	}, {
 		tag: "TransactionPoolAvailable",
-		val: tabletenv.Config.TransactionCap,
+		val: currentConfig.TxPool.Size,
 	}, {
 		tag: "TransactionPoolCapacity",
-		val: tabletenv.Config.TransactionCap,
+		val: currentConfig.TxPool.Size,
 	}, {
 		tag: "TransactionPoolIdleTimeout",
-		val: int(tabletenv.Config.IdleTimeout * 1e9),
+		val: currentConfig.TxPool.IdleTimeoutSeconds * 1e9,
 	}, {
 		tag: "TransactionPoolMaxCap",
-		val: tabletenv.Config.TransactionCap,
+		val: currentConfig.TxPool.Size,
 	}, {
 		tag: "TransactionTimeout",
-		val: int(tabletenv.Config.TransactionTimeout * 1e9),
+		val: int(currentConfig.Oltp.TxTimeoutSeconds * 1e9),
 	}}
 	for _, tcase := range cases {
-		if err := verifyIntValue(vars, tcase.tag, tcase.val); err != nil {
+		if err := verifyIntValue(vars, tcase.tag, int(tcase.val)); err != nil {
 			t.Error(err)
 		}
 	}
@@ -170,8 +168,8 @@ func TestDisableConsolidator(t *testing.T) {
 	if initial+1 != afterOne {
 		t.Errorf("expected one consolidation, but got: before consolidation count: %v; after consolidation count: %v", initial, afterOne)
 	}
-	framework.Server.SetConsolidatorEnabled(false)
-	defer framework.Server.SetConsolidatorEnabled(true)
+	framework.Server.SetConsolidatorMode(tabletenv.Disable)
+	defer framework.Server.SetConsolidatorMode(tabletenv.Enable)
 	var wg2 sync.WaitGroup
 	wg2.Add(2)
 	go func() {
@@ -208,10 +206,8 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 		t.Errorf("expected one consolidation, but got: before consolidation count: %v; after consolidation count: %v", initial, afterOne)
 	}
 
-	framework.Server.SetConsolidatorEnabled(false)
-	defer framework.Server.SetConsolidatorEnabled(true)
-	framework.Server.SetConsolidatorReplicasEnabled(true)
-	defer framework.Server.SetConsolidatorReplicasEnabled(false)
+	framework.Server.SetConsolidatorMode(tabletenv.NotOnMaster)
+	defer framework.Server.SetConsolidatorMode(tabletenv.Enable)
 
 	// master should not do query consolidation
 	var wg2 sync.WaitGroup
@@ -378,122 +374,6 @@ func TestQueryTimeout(t *testing.T) {
 		t.Error(err)
 	}
 	if err := compareIntDiff(vend, "Kills/Queries", vstart, 1); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestConnPoolWaitCap(t *testing.T) {
-	vstart := framework.DebugVars()
-
-	defer framework.Server.SetPoolSize(framework.Server.PoolSize())
-	framework.Server.SetPoolSize(1)
-
-	defer framework.Server.SetQueryPoolWaiterCap(framework.Server.GetQueryPoolWaiterCap())
-	framework.Server.SetQueryPoolWaiterCap(1)
-
-	defer framework.Server.SetTxPoolWaiterCap(framework.Server.GetTxPoolWaiterCap())
-	framework.Server.SetTxPoolWaiterCap(1)
-
-	ch := make(chan error)
-	go func() {
-		_, qerr := framework.NewClient().Execute("select sleep(0.5) from dual", nil)
-		ch <- qerr
-	}()
-	// The queries have to be different so consolidator doesn't kick in.
-	go func() {
-		_, qerr := framework.NewClient().Execute("select sleep(0.49) from dual", nil)
-		ch <- qerr
-	}()
-	go func() {
-		_, qerr := framework.NewClient().Execute("select sleep(0.48) from dual", nil)
-		ch <- qerr
-	}()
-
-	err1 := <-ch
-	err2 := <-ch
-	err3 := <-ch
-
-	if err1 == nil && err2 == nil && err3 == nil {
-		t.Errorf("all queries unexpectedly succeeded")
-	}
-	if err1 != nil && err2 != nil && err3 != nil {
-		t.Errorf("all queries unexpectedly failed")
-	}
-
-	// At least one of the queries should have failed
-	var err error
-	if err1 != nil {
-		err = err1
-	}
-	if err2 != nil {
-		err = err2
-	}
-	if err3 != nil {
-		err = err3
-	}
-
-	if code := vterrors.Code(err); code != vtrpcpb.Code_RESOURCE_EXHAUSTED {
-		t.Errorf("Error code: %v, want %v", code, vtrpcpb.Code_RESOURCE_EXHAUSTED)
-	}
-
-	wantErr := "query pool waiter count exceeded"
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Errorf("Error: %v, want %v", err, wantErr)
-	}
-
-	// Test the same thing with transactions
-	go func() {
-		client := framework.NewClient()
-		beginErr := client.Begin(false)
-		if beginErr != nil {
-			ch <- beginErr
-			return
-		}
-
-		_, qerr := client.Execute("update vitess_a set foo='bar' where eid = 123", nil)
-		client.Rollback()
-		ch <- qerr
-	}()
-	go func() {
-		client := framework.NewClient()
-		beginErr := client.Begin(false)
-		if beginErr != nil {
-			ch <- beginErr
-			return
-		}
-
-		_, qerr := client.Execute("update vitess_a set foo='bar' where eid = 456", nil)
-		client.Rollback()
-		ch <- qerr
-	}()
-
-	err1 = <-ch
-	err2 = <-ch
-
-	if err1 == nil && err2 == nil {
-		t.Errorf("both queries unexpectedly succeeded")
-	}
-	if err1 != nil && err2 != nil {
-		t.Errorf("both queries unexpectedly failed")
-	}
-
-	if err1 != nil {
-		err = err1
-	} else {
-		err = err2
-	}
-
-	if code := vterrors.Code(err); code != vtrpcpb.Code_RESOURCE_EXHAUSTED {
-		t.Errorf("Error code: %v, want %v", code, vtrpcpb.Code_RESOURCE_EXHAUSTED)
-	}
-
-	wantErr = "transaction pool waiter count exceeded"
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Errorf("Error: %v, want %v", err, wantErr)
-	}
-
-	vend := framework.DebugVars()
-	if err := compareIntDiff(vend, "Kills/Queries", vstart, 0); err != nil {
 		t.Error(err)
 	}
 }

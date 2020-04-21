@@ -17,12 +17,13 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
+	"strings"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/key"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -38,13 +39,11 @@ func buildSetPlan(sql string, stmt *sqlparser.Set, vschema ContextVSchema) (engi
 	var setOp engine.SetOp
 	var err error
 
-	if stmt.Scope == sqlparser.GlobalStr {
-		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported in set: global")
-	}
-
 	for _, expr := range stmt.Exprs {
-		switch expr.Name.AtCount() {
-		case sqlparser.SingleAt:
+		switch expr.Scope {
+		case sqlparser.GlobalStr:
+			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported in set: global")
+		case "":
 			pv, err := sqlparser.NewPlanValue(expr.Expr)
 			if err != nil {
 				return nil, err
@@ -53,7 +52,7 @@ func buildSetPlan(sql string, stmt *sqlparser.Set, vschema ContextVSchema) (engi
 				Name:      expr.Name.Lowered(),
 				PlanValue: pv,
 			}
-		case sqlparser.DoubleAt:
+		case sqlparser.SessionStr:
 			planFunc, ok := sysVarPlanningFunc[expr.Name.Lowered()]
 			if !ok {
 				return nil, ErrPlanNotSupported
@@ -85,6 +84,10 @@ func buildSetOpIgnore(expr *sqlparser.SetExpr, _ ContextVSchema) (engine.SetOp, 
 func buildSetOpCheckAndIgnore(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error) {
 	keyspace, err := vschema.DefaultKeyspace()
 	if err != nil {
+		//TODO: Record warning for switching plan construct.
+		if strings.HasPrefix(err.Error(), "no keyspace in database name specified") {
+			return buildSetOpIgnore(expr, vschema)
+		}
 		return nil, err
 	}
 
@@ -100,6 +103,6 @@ func buildSetOpCheckAndIgnore(expr *sqlparser.SetExpr, vschema ContextVSchema) (
 		Name:              expr.Name.Lowered(),
 		Keyspace:          keyspace,
 		TargetDestination: dest,
-		CheckSysVarQuery:  fmt.Sprintf("select 1 from dual where @@%s = %s", expr.Name.Lowered(), buf.String()),
+		Expr:              buf.String(),
 	}, nil
 }

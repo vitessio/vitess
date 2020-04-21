@@ -100,7 +100,7 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 	config := env.Config()
 	te := &TxEngine{
 		env:                 env,
-		shutdownGracePeriod: time.Duration(config.TxShutDownGracePeriod * 1e9),
+		shutdownGracePeriod: time.Duration(config.ShutdownGracePeriodSeconds * 1e9),
 	}
 	limiter := txlimiter.New(env)
 	te.txPool = NewTxPool(env, limiter)
@@ -124,8 +124,11 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 	// perform metadata state change operations. Without this,
 	// the system can deadlock if all connections get moved to
 	// the TxPreparedPool.
-	te.preparedPool = NewTxPreparedPool(config.TransactionCap - 2)
-	readPool := connpool.New(env, "TxReadPool", 3, 0, 0, time.Duration(config.IdleTimeout*1e9))
+	te.preparedPool = NewTxPreparedPool(config.TxPool.Size - 2)
+	readPool := connpool.NewPool(env, "TxReadPool", tabletenv.ConnPoolConfig{
+		Size:               3,
+		IdleTimeoutSeconds: env.Config().TxPool.IdleTimeoutSeconds,
+	})
 	te.twoPC = NewTwoPC(readPool)
 	te.transitionSignal = make(chan struct{})
 	// By immediately closing this channel, all state changes can simply be made blocking by issuing the

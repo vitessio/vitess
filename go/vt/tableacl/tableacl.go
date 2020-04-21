@@ -331,10 +331,11 @@ func checkHealth(acl *tableACL) error {
 
 func init() {
 	servenv.OnRun(func() {
-		if !tabletenv.Config.StrictTableACL {
+		currentConfig := tabletenv.NewCurrentConfig()
+		if !currentConfig.StrictTableACL {
 			return
 		}
-		if tabletenv.Config.EnableTableACLDryRun {
+		if currentConfig.EnableTableACLDryRun {
 			return
 		}
 		health.DefaultAggregator.RegisterSimpleCheck("tableacl", func() error { return checkHealth(&currentTableACL) })

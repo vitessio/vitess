@@ -19,8 +19,10 @@ package main
 
 import (
 	"flag"
+	"io/ioutil"
 
 	"golang.org/x/net/context"
+	"sigs.k8s.io/yaml"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -39,6 +41,7 @@ var (
 	tableACLConfig               = flag.String("table-acl-config", "", "path to table access checker config file; send SIGHUP to reload this file")
 	tableACLConfigReloadInterval = flag.Duration("table-acl-config-reload-interval", 0, "Ticker to reload ACLs")
 	tabletPath                   = flag.String("tablet-path", "", "tablet alias")
+	tabletConfig                 = flag.String("tablet_config", "", "YAML file config for tablet")
 
 	agent *tabletmanager.ActionAgent
 )
@@ -53,11 +56,23 @@ func main() {
 
 	servenv.ParseFlags("vttablet")
 
-	if err := tabletenv.VerifyConfig(); err != nil {
+	config := tabletenv.NewCurrentConfig()
+	if err := config.Verify(); err != nil {
 		log.Exitf("invalid config: %v", err)
 	}
 
 	tabletenv.Init()
+	if *tabletConfig != "" {
+		bytes, err := ioutil.ReadFile(*tabletConfig)
+		if err != nil {
+			log.Exitf("error reading config file %s: %v", *tabletConfig, err)
+		}
+		if err := yaml.Unmarshal(bytes, config); err != nil {
+			log.Exitf("error parsing config file %s: %v", bytes, err)
+		}
+		gotBytes, _ := yaml.Marshal(config)
+		log.Infof("Loaded config file %s successfully:\n%s", *tabletConfig, gotBytes)
+	}
 
 	servenv.Init()
 
@@ -102,7 +117,7 @@ func main() {
 
 	// creates and registers the query service
 	ts := topo.Open()
-	qsc := tabletserver.NewServer("", ts, *tabletAlias)
+	qsc := tabletserver.NewTabletServer("", config, ts, *tabletAlias)
 	servenv.OnRun(func() {
 		qsc.Register()
 		addStatusParts(qsc)

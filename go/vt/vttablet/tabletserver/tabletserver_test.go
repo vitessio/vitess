@@ -65,7 +65,7 @@ func TestTabletServerGetState(t *testing.T) {
 		"NOT_SERVING",
 		"SHUTTING_DOWN",
 	}
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	for i, state := range states {
 		tsv.setState(state)
@@ -83,7 +83,7 @@ func TestTabletServerAllowQueriesFailBadConn(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
 	db.EnableConnFail()
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	checkTabletServerState(t, tsv, StateNotConnected)
 	dbcfgs := newDBConfigs(db)
@@ -98,7 +98,7 @@ func TestTabletServerAllowQueriesFailBadConn(t *testing.T) {
 func TestTabletServerAllowQueries(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	checkTabletServerState(t, tsv, StateNotConnected)
 	dbcfgs := newDBConfigs(db)
@@ -121,7 +121,7 @@ func TestTabletServerAllowQueries(t *testing.T) {
 func TestTabletServerInitDBConfig(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	tsv.setState(StateServing)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -139,7 +139,7 @@ func TestTabletServerInitDBConfig(t *testing.T) {
 func TestDecideAction(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	dbcfgs := newDBConfigs(db)
@@ -229,7 +229,7 @@ func TestDecideAction(t *testing.T) {
 func TestSetServingType(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -297,7 +297,7 @@ func TestTabletServerSingleSchemaFailure(t *testing.T) {
 	}
 	db.AddQuery(mysql.BaseShowTables, want)
 
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -311,7 +311,7 @@ func TestTabletServerSingleSchemaFailure(t *testing.T) {
 func TestTabletServerCheckMysql(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -343,7 +343,7 @@ func TestTabletServerReconnect(t *testing.T) {
 	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
 	db.AddQuery("select addr from test_table where 1 != 1", &sqltypes.Result{})
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -384,7 +384,7 @@ func TestTabletServerReconnect(t *testing.T) {
 func TestTabletServerTarget(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target1 := querypb.Target{
@@ -465,7 +465,7 @@ func TestBeginOnReplica(t *testing.T) {
 	db.AddQuery("set transaction isolation level REPEATABLE READ", &sqltypes.Result{})
 	db.AddQuery("start transaction with consistent snapshot, read only", &sqltypes.Result{})
 	defer db.Close()
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target1 := querypb.Target{
@@ -825,8 +825,8 @@ func TestTabletServerConcludeTransaction(t *testing.T) {
 func TestTabletServerBeginFail(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
-	config := tabletenv.DefaultQsConfig
-	config.TransactionCap = 1
+	config := tabletenv.NewDefaultConfig()
+	config.TxPool.Size = 1
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -859,7 +859,7 @@ func TestTabletServerCommitTransaction(t *testing.T) {
 		},
 	}
 	db.AddQuery(executeSQL, executeSQLResult)
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -884,7 +884,7 @@ func TestTabletServerCommitTransaction(t *testing.T) {
 func TestTabletServerCommiRollbacktFail(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -919,7 +919,7 @@ func TestTabletServerRollback(t *testing.T) {
 		},
 	}
 	db.AddQuery(executeSQL, executeSQLResult)
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1021,7 +1021,7 @@ func TestTabletServerStreamExecute(t *testing.T) {
 	}
 	db.AddQuery(executeSQL, executeSQLResult)
 
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1053,7 +1053,7 @@ func TestTabletServerStreamExecuteComments(t *testing.T) {
 	}
 	db.AddQuery(executeSQL, executeSQLResult)
 
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1097,7 +1097,7 @@ func TestTabletServerExecuteBatch(t *testing.T) {
 
 	db.AddQuery(sql, sqlResult)
 	db.AddQuery(expandedSQL, sqlResult)
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1120,7 +1120,7 @@ func TestTabletServerExecuteBatch(t *testing.T) {
 func TestTabletServerExecuteBatchFailEmptyQueryList(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1140,7 +1140,7 @@ func TestTabletServerExecuteBatchFailEmptyQueryList(t *testing.T) {
 func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1167,7 +1167,7 @@ func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
 	defer db.Close()
 	// make "begin" query fail
 	db.AddRejectedQuery("begin", errRejected)
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1192,7 +1192,7 @@ func TestTabletServerExecuteBatchCommitFail(t *testing.T) {
 	defer db.Close()
 	// make "commit" query fail
 	db.AddRejectedQuery("commit", errRejected)
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1230,7 +1230,7 @@ func TestTabletServerExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 	db.AddRejectedQuery(sql, errRejected)
 	db.AddRejectedQuery(expandedSQL, errRejected)
 
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1261,7 +1261,7 @@ func TestTabletServerExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 func TestTabletServerExecuteBatchCallCommitWithoutABegin(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1290,7 +1290,7 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 
 	db.AddQuery(sql, sqlResult)
 	db.AddQuery(expandedSQL, sqlResult)
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1337,11 +1337,11 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	// tx2
 	db := setUpTabletServerTest(t)
 	defer db.Close()
-	config := tabletenv.DefaultQsConfig
-	config.EnableHotRowProtection = true
-	config.HotRowProtectionConcurrentTransactions = 1
+	config := tabletenv.NewDefaultConfig()
+	config.HotRowProtection.Mode = tabletenv.Enable
+	config.HotRowProtection.MaxConcurrency = 1
 	// Reduce the txpool to 2 because we should never consume more than two slots.
-	config.TransactionCap = 2
+	config.TxPool.Size = 2
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1448,11 +1448,11 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 func TestDMLQueryWithoutWhereClause(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
-	config := tabletenv.DefaultQsConfig
-	config.EnableHotRowProtection = true
-	config.HotRowProtectionConcurrentTransactions = 1
+	config := tabletenv.NewDefaultConfig()
+	config.HotRowProtection.Mode = tabletenv.Enable
+	config.HotRowProtection.MaxConcurrency = 1
 
-	config.TransactionCap = 2
+	config.TxPool.Size = 2
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1488,11 +1488,11 @@ func TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction(t *testing.T) {
 	// tx2
 	db := setUpTabletServerTest(t)
 	defer db.Close()
-	config := tabletenv.DefaultQsConfig
-	config.EnableHotRowProtection = true
-	config.HotRowProtectionConcurrentTransactions = 1
+	config := tabletenv.NewDefaultConfig()
+	config.HotRowProtection.Mode = tabletenv.Enable
+	config.HotRowProtection.MaxConcurrency = 1
 	// Reduce the txpool to 2 because we should never consume more than two slots.
-	config.TransactionCap = 2
+	config.TxPool.Size = 2
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1605,11 +1605,11 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 	// One out of the three transaction will always get serialized though.
 	db := setUpTabletServerTest(t)
 	defer db.Close()
-	config := tabletenv.DefaultQsConfig
-	config.EnableHotRowProtection = true
-	config.HotRowProtectionConcurrentTransactions = 2
+	config := tabletenv.NewDefaultConfig()
+	config.HotRowProtection.Mode = tabletenv.Enable
+	config.HotRowProtection.MaxConcurrency = 2
 	// Reduce the txpool to 2 because we should never consume more than two slots.
-	config.TransactionCap = 2
+	config.TxPool.Size = 2
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1746,10 +1746,10 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 	// to enforce an upper limit as well to protect vttablet.
 	db := setUpTabletServerTest(t)
 	defer db.Close()
-	config := tabletenv.DefaultQsConfig
-	config.EnableHotRowProtection = true
-	config.HotRowProtectionMaxQueueSize = 1
-	config.HotRowProtectionConcurrentTransactions = 1
+	config := tabletenv.NewDefaultConfig()
+	config.HotRowProtection.Mode = tabletenv.Enable
+	config.HotRowProtection.MaxQueueSize = 1
+	config.HotRowProtection.MaxConcurrency = 1
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1834,10 +1834,10 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests_ExecuteBatchAsTrans
 	// progress for the hot row i.e. we check that tx2 actually fails.
 	db := setUpTabletServerTest(t)
 	defer db.Close()
-	config := tabletenv.DefaultQsConfig
-	config.EnableHotRowProtection = true
-	config.HotRowProtectionMaxQueueSize = 1
-	config.HotRowProtectionConcurrentTransactions = 1
+	config := tabletenv.NewDefaultConfig()
+	config.HotRowProtection.Mode = tabletenv.Enable
+	config.HotRowProtection.MaxQueueSize = 1
+	config.HotRowProtection.MaxConcurrency = 1
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1926,9 +1926,9 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	// Only after that tx1 commits and finishes.
 	db := setUpTabletServerTest(t)
 	defer db.Close()
-	config := tabletenv.DefaultQsConfig
-	config.EnableHotRowProtection = true
-	config.HotRowProtectionConcurrentTransactions = 1
+	config := tabletenv.NewDefaultConfig()
+	config.HotRowProtection.Mode = tabletenv.Enable
+	config.HotRowProtection.MaxConcurrency = 1
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -2159,7 +2159,7 @@ func TestPurgeMessages(t *testing.T) {
 func TestHandleExecUnknownError(t *testing.T) {
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "TestHandleExecError")
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	defer tsv.handlePanicAndSendLogStats("select * from test_table", nil, logStats)
 	panic("unknown exec error")
@@ -2207,7 +2207,7 @@ func (tl *testLogger) getLog(i int) string {
 
 func TestHandleExecTabletError(t *testing.T) {
 	ctx := context.Background()
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	tl := newTestLogger()
 	defer tl.Close()
@@ -2231,7 +2231,7 @@ func TestHandleExecTabletError(t *testing.T) {
 
 func TestTerseErrorsNonSQLError(t *testing.T) {
 	ctx := context.Background()
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	tl := newTestLogger()
@@ -2255,7 +2255,7 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 
 func TestTerseErrorsBindVars(t *testing.T) {
 	ctx := context.Background()
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	tl := newTestLogger()
@@ -2284,7 +2284,7 @@ func TestTerseErrorsBindVars(t *testing.T) {
 
 func TestTerseErrorsNoBindVars(t *testing.T) {
 	ctx := context.Background()
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	tl := newTestLogger()
@@ -2302,7 +2302,7 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 
 func TestTruncateErrors(t *testing.T) {
 	ctx := context.Background()
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	tl := newTestLogger()
@@ -2352,7 +2352,7 @@ func TestTruncateErrors(t *testing.T) {
 
 func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	ctx := context.Background()
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	tl := newTestLogger()
@@ -2395,7 +2395,7 @@ var aclJSON2 = `{
 
 func TestACLHUP(t *testing.T) {
 	tableacl.Register("simpleacl", &simpleacl.Factory{})
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 
 	f, err := ioutil.TempFile("", "tableacl")
@@ -2447,7 +2447,7 @@ func TestACLHUP(t *testing.T) {
 func TestConfigChanges(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -2514,14 +2514,6 @@ func TestConfigChanges(t *testing.T) {
 	}
 	if val := int(tsv.qe.warnResultSize.Get()); val != newSize {
 		t.Errorf("tsv.qe.warnResultSize.Get: %d, want %d", val, newSize)
-	}
-
-	tsv.SetMaxDMLRows(newSize)
-	if val := tsv.MaxDMLRows(); val != newSize {
-		t.Errorf("MaxDMLRows: %d, want %d", val, newSize)
-	}
-	if val := int(tsv.qe.maxDMLRows.Get()); val != newSize {
-		t.Errorf("tsv.qe.maxDMLRows.Get: %d, want %d", val, newSize)
 	}
 }
 

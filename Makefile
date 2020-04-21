@@ -144,28 +144,12 @@ java_test:
 install_protoc-gen-go:
 	go install github.com/golang/protobuf/protoc-gen-go
 
-# Find protoc compiler.
-# NOTE: We are *not* using the "protoc" binary (as suggested by the grpc Go
-#       quickstart for example). Instead, we run "protoc" via the Python
-#       wrapper script which is provided by the "grpcio-tools" PyPi package.
-#       (The package includes the compiler as library, but not as binary.
-#       Therefore, we have to use the wrapper script they provide.)
-ifneq ($(wildcard $(VTROOT)/dist/grpc/usr/local/lib/python2.7/site-packages/grpc_tools/protoc.py),)
-# IMPORTANT: The next line must not be indented.
-PROTOC_COMMAND := python -m grpc_tools.protoc
-endif
-
 PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
 PROTO_GO_OUTS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/proto/$(name)/$(name).pb.go)
 
-# This rule rebuilds all the go and python files from the proto definitions for gRPC.
-proto: proto_banner $(PROTO_GO_OUTS)
-
-proto_banner:
-ifeq (,$(PROTOC_COMMAND))
-	$(error "Cannot find protoc compiler. Did bootstrap.sh succeed, and did you execute 'source dev.env'?")
-endif
+# This rule rebuilds all the go files from the proto definitions for gRPC.
+proto: $(PROTO_GO_OUTS)
 
 ifndef NOBANNER
 	echo $$(date): Compiling proto definitions

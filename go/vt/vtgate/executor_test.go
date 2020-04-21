@@ -345,7 +345,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = testQueryLog(t, logChan, "TestExecute", "SET", "set autocommit=1", 0)
+	_ = testQueryLog(t, logChan, "TestExecute", "SET", "set session autocommit = 1", 0)
 
 	// Setting autocommit=1 commits existing transaction.
 	if got, want := sbclookup.CommitCount.Get(), startCount+1; got != want {

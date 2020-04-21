@@ -314,6 +314,9 @@ var commands = []commandGroup{
 			{"MoveTables", commandMoveTables,
 				"[-cell=<cell>] [-tablet_types=<source_tablet_types>] -workflow=<workflow> <source_keyspace> <target_keyspace> <table_specs>",
 				`Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{""column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{""column": "id2", "name": "hash"}]}}`},
+			{"DropSources", commandDropSources,
+				"[-dry_run] <keyspace.workflow>",
+				"After a MoveTables or Resharding workflow cleanup unused artifacts like source tables, source shards and blacklists"},
 			{"CreateLookupVindex", commandCreateLookupVindex,
 				"[-cell=<cell>] [-tablet_types=<source_tablet_types>] <keyspace> <json_spec>",
 				`Create and backfill a lookup vindex. the json_spec must contain the vindex and colvindex specs for the new lookup.`},
@@ -339,10 +342,10 @@ var commands = []commandGroup{
 				"[-cells=c1,c2,...] [-reverse] <destination keyspace/shard> <served tablet type>",
 				"Makes the <destination keyspace/shard> serve the given type. This command also rebuilds the serving graph."},
 			{"SwitchReads", commandSwitchReads,
-				"[-cells=c1,c2,...] [-reverse] -tablet_type={replica|rdonly} <keyspace.workflow>",
+				"[-cells=c1,c2,...] [-reverse] -tablet_type={replica|rdonly} [-dry-run] <keyspace.workflow>",
 				"Switch read traffic for the specified workflow."},
 			{"SwitchWrites", commandSwitchWrites,
-				"[-filtered_replication_wait_time=30s] [-cancel] [-reverse_replication=false] <keyspace.workflow>",
+				"[-filtered_replication_wait_time=30s] [-cancel] [-reverse_replication=false] [-dry-run] <keyspace.workflow>",
 				"Switch write traffic for the specified workflow."},
 			{"CancelResharding", commandCancelResharding,
 				"<keyspace/shard>",
@@ -1620,7 +1623,12 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 
 	if !*allowEmptyVSchema {
-		err = wr.TopoServer().EnsureVSchema(ctx, keyspace)
+		cells, err := wr.TopoServer().GetKnownCells(ctx)
+		if err != nil {
+			return fmt.Errorf("GetKnownCells failed: %v", err)
+		}
+
+		err = wr.TopoServer().EnsureVSchema(ctx, keyspace, cells)
 	}
 
 	if err != nil {
@@ -1991,10 +1999,35 @@ func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFla
 	return wr.MigrateServedFrom(ctx, keyspace, shard, servedType, cells, *reverse, *filteredReplicationWaitTime)
 }
 
+func commandDropSources(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of commandDropSources and only reports the actions to be taken")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("<keyspace.workflow> is required")
+	}
+	keyspace, workflow, err := splitKeyspaceWorkflow(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	_, _, _ = dryRun, keyspace, workflow
+	dryRunResults, err := wr.DropSources(ctx, keyspace, workflow, *dryRun)
+	if err != nil {
+		return err
+	}
+	if *dryRun {
+		wr.Logger().Printf("Dry Run results for commandDropSources run at %s\nParameters: %s\n\n", time.RFC822, strings.Join(args, " "))
+		wr.Logger().Printf("%s\n", strings.Join(*dryRunResults, "\n"))
+	}
+	return nil
+}
+
 func commandSwitchReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward.")
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
 	tabletType := subFlags.String("tablet_type", "", "Tablet type (replica or rdonly)")
+	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of SwitchReads and only reports the actions to be taken")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2022,13 +2055,22 @@ func commandSwitchReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 
-	return wr.SwitchReads(ctx, keyspace, workflow, servedType, cells, direction)
+	dryRunResults, err := wr.SwitchReads(ctx, keyspace, workflow, servedType, cells, direction, *dryRun)
+	if err != nil {
+		return err
+	}
+	if *dryRun {
+		wr.Logger().Printf("Dry Run results for SwitchReads run at %s\nParameters: %s\n\n", time.RFC822, strings.Join(args, " "))
+		wr.Logger().Printf("%s\n", strings.Join(*dryRunResults, "\n"))
+	}
+	return nil
 }
 
 func commandSwitchWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations. The migration will be aborted on timeout.")
 	reverseReplication := subFlags.Bool("reverse_replication", true, "Also reverse the replication")
 	cancelMigrate := subFlags.Bool("cancel", false, "Cancel the failed migration and serve from source")
+	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of SwitchWrites and only reports the actions to be taken")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2041,11 +2083,17 @@ func commandSwitchWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 
-	journalID, err := wr.SwitchWrites(ctx, keyspace, workflow, *filteredReplicationWaitTime, *cancelMigrate, *reverseReplication)
+	journalID, dryRunResults, err := wr.SwitchWrites(ctx, keyspace, workflow, *filteredReplicationWaitTime, *cancelMigrate, *reverseReplication, *dryRun)
 	if err != nil {
 		return err
 	}
-	wr.Logger().Infof("Migration Journal ID: %v", journalID)
+	if *dryRun {
+		wr.Logger().Printf("Dry Run results for SwitchWrites run at %s\nParameters: %s\n\n", time.RFC822, strings.Join(args, " "))
+		wr.Logger().Printf("%s\n", strings.Join(*dryRunResults, "\n"))
+	} else {
+		wr.Logger().Infof("Migration Journal ID: %v", journalID)
+	}
+
 	return nil
 }
 

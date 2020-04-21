@@ -93,26 +93,21 @@ type TxPool struct {
 	txStats *servenv.TimingsWrapper
 
 	// Tracking culprits that cause tx pool full errors.
-	logMu     sync.Mutex
-	lastLog   time.Time
-	waiters   sync2.AtomicInt64
-	waiterCap sync2.AtomicInt64
+	logMu   sync.Mutex
+	lastLog time.Time
 }
 
 // NewTxPool creates a new TxPool. It's not operational until it's Open'd.
 func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 	config := env.Config()
-	transactionTimeout := time.Duration(config.TransactionTimeout * 1e9)
-	poolTimeout := time.Duration(config.TxPoolTimeout * 1e9)
+	transactionTimeout := time.Duration(config.Oltp.TxTimeoutSeconds * 1e9)
 	axp := &TxPool{
 		env:                env,
-		conns:              connpool.New(env, "TransactionPool", config.TransactionCap, config.TxPoolPrefillParallelism, poolTimeout, time.Duration(config.IdleTimeout*1e9)),
-		foundRowsPool:      connpool.New(env, "FoundRowsPool", config.FoundRowsPoolSize, config.TxPoolPrefillParallelism, poolTimeout, time.Duration(config.IdleTimeout*1e9)),
+		conns:              connpool.NewPool(env, "TransactionPool", config.TxPool),
+		foundRowsPool:      connpool.NewPool(env, "FoundRowsPool", config.TxPool),
 		activePool:         pools.NewNumbered(),
 		lastID:             sync2.NewAtomicInt64(time.Now().UnixNano()),
 		transactionTimeout: sync2.NewAtomicDuration(transactionTimeout),
-		waiterCap:          sync2.NewAtomicInt64(int64(config.TxPoolWaiterCap)),
-		waiters:            sync2.NewAtomicInt64(0),
 		ticks:              timer.NewTimer(transactionTimeout / 10),
 		limiter:            limiter,
 		txStats:            env.Exporter().NewTimings("Transactions", "Transaction stats", "operation"),
@@ -120,7 +115,6 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 	// Careful: conns also exports name+"xxx" vars,
 	// but we know it doesn't export Timeout.
 	env.Exporter().NewGaugeDurationFunc("TransactionTimeout", "Transaction timeout", axp.transactionTimeout.Get)
-	env.Exporter().NewGaugeFunc("TransactionPoolWaiters", "Transaction pool waiters", axp.waiters.Get)
 	return axp
 }
 
@@ -200,13 +194,6 @@ func (axp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (
 
 	if !axp.limiter.Get(immediateCaller, effectiveCaller) {
 		return 0, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
-	}
-
-	waiterCount := axp.waiters.Add(1)
-	defer axp.waiters.Add(-1)
-
-	if waiterCount > axp.waiterCap.Get() {
-		return 0, "", vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool waiter count exceeded")
 	}
 
 	var beginSucceeded bool

@@ -20,7 +20,6 @@ package sqlparser
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"unicode"
 
@@ -91,6 +90,15 @@ func ASTToStatementType(stmt Statement) StatementType {
 func CanNormalize(stmt Statement) bool {
 	switch stmt.(type) {
 	case *Select, *Union, *Insert, *Update, *Delete, *Set:
+		return true
+	}
+	return false
+}
+
+//IsSetStatement takes Statement and returns if the statement is set statement.
+func IsSetStatement(stmt Statement) bool {
+	switch stmt.(type) {
+	case *Set:
 		return true
 	}
 	return false
@@ -364,102 +372,4 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 		return sqltypes.PlanValue{}, nil
 	}
 	return sqltypes.PlanValue{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expression is too complex '%v'", String(node))
-}
-
-// SetKey is the extracted key from one SetExpr
-type SetKey struct {
-	Key   string
-	Scope string
-}
-
-// ExtractSetValues returns a map of key-value pairs
-// if the query is a SET statement. Values can be bool, int64 or string.
-// Since set variable names are case insensitive, all keys are returned
-// as lower case.
-func ExtractSetValues(sql string) (keyValues map[SetKey]interface{}, scope string, err error) {
-	stmt, err := Parse(sql)
-	if err != nil {
-		return nil, "", err
-	}
-	setStmt, ok := stmt.(*Set)
-	if !ok {
-		return nil, "", fmt.Errorf("ast did not yield *sqlparser.Set: %T", stmt)
-	}
-	result := make(map[SetKey]interface{})
-	for _, expr := range setStmt.Exprs {
-		var scope string
-		key := expr.Name.Lowered()
-
-		switch expr.Name.at {
-		case NoAt:
-			scope = ImplicitStr
-		case SingleAt:
-			scope = VariableStr
-		case DoubleAt:
-			switch {
-			case strings.HasPrefix(key, "global."):
-				scope = GlobalStr
-				key = strings.TrimPrefix(key, "global.")
-			case strings.HasPrefix(key, "session."):
-				scope = SessionStr
-				key = strings.TrimPrefix(key, "session.")
-			case strings.HasPrefix(key, "vitess_metadata."):
-				scope = VitessMetadataStr
-				key = strings.TrimPrefix(key, "vitess_metadata.")
-			default:
-				scope = SessionStr
-			}
-
-			// This is what correctly allows us to handle queries such as "set @@session.`autocommit`=1"
-			// it will remove backticks and double quotes that might surround the part after the first period
-			_, out := NewStringTokenizer(key).Scan()
-			key = string(out)
-		}
-
-		if setStmt.Scope != "" && scope != "" {
-			return nil, "", fmt.Errorf("unsupported in set: mixed using of variable scope")
-		}
-
-		setKey := SetKey{
-			Key:   key,
-			Scope: scope,
-		}
-
-		switch expr := expr.Expr.(type) {
-		case *SQLVal:
-			switch expr.Type {
-			case StrVal:
-				result[setKey] = strings.ToLower(string(expr.Val))
-			case IntVal:
-				num, err := strconv.ParseInt(string(expr.Val), 0, 64)
-				if err != nil {
-					return nil, "", err
-				}
-				result[setKey] = num
-			case FloatVal:
-				num, err := strconv.ParseFloat(string(expr.Val), 64)
-				if err != nil {
-					return nil, "", err
-				}
-				result[setKey] = num
-			default:
-				return nil, "", fmt.Errorf("invalid value type: %v", String(expr))
-			}
-		case BoolVal:
-			var val int64
-			if expr {
-				val = 1
-			}
-			result[setKey] = val
-		case *ColName:
-			result[setKey] = expr.Name.String()
-		case *NullVal:
-			result[setKey] = nil
-		case *Default:
-			result[setKey] = "default"
-		default:
-			return nil, "", fmt.Errorf("invalid syntax: %s", String(expr))
-		}
-	}
-	return result, strings.ToLower(setStmt.Scope), nil
 }
