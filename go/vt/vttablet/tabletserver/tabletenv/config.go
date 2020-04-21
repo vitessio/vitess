@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/throttler"
 )
@@ -39,7 +40,9 @@ const (
 )
 
 var (
-	currentConfig TabletConfig
+	currentConfig = TabletConfig{
+		DB: &dbconfigs.GlobalDBConfigs,
+	}
 
 	queryLogHandler = flag.String("query-log-stream-handler", "/debug/querylog", "URL handler for streaming queries log")
 	txLogHandler    = flag.String("transaction-log-stream-handler", "/debug/txlog", "URL handler for streaming transactions log")
@@ -185,6 +188,8 @@ func Init() {
 
 // TabletConfig contains all the configuration for query service
 type TabletConfig struct {
+	DB *dbconfigs.DBConfigs `json:"db,omitempty"`
+
 	OltpReadPool                  ConnPoolConfig         `json:"oltpReadPool,omitempty"`
 	OlapReadPool                  ConnPoolConfig         `json:"olapReadPool,omitempty"`
 	TxPool                        ConnPoolConfig         `json:"txPool,omitempty"`
@@ -268,6 +273,9 @@ func NewDefaultConfig() *TabletConfig {
 // Clone creates a clone of TabletConfig.
 func (c *TabletConfig) Clone() *TabletConfig {
 	tc := *c
+	if tc.DB != nil {
+		tc.DB = c.DB.Clone()
+	}
 	return &tc
 }
 
