@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/fakesqldb"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -54,6 +56,7 @@ type testMigraterEnv struct {
 	targetShards    []string
 	sourceKeyRanges []*topodatapb.KeyRange
 	targetKeyRanges []*topodatapb.KeyRange
+	tmeDB           *fakesqldb.DB
 }
 
 // testShardMigraterEnv has some convenience functions for adding expected queries.
@@ -76,10 +79,10 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards
-
+	tme.tmeDB = fakesqldb.New(t)
 	tabletID := 10
 	for _, shard := range sourceShards {
-		tme.sourceMasters = append(tme.sourceMasters, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_MASTER, nil, TabletKeyspaceShard(t, "ks1", shard)))
+		tme.sourceMasters = append(tme.sourceMasters, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_MASTER, tme.tmeDB, TabletKeyspaceShard(t, "ks1", shard)))
 		tabletID += 10
 
 		_, sourceKeyRange, err := topo.ValidateShardName(shard)
@@ -89,7 +92,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 		tme.sourceKeyRanges = append(tme.sourceKeyRanges, sourceKeyRange)
 	}
 	for _, shard := range targetShards {
-		tme.targetMasters = append(tme.targetMasters, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_MASTER, nil, TabletKeyspaceShard(t, "ks2", shard)))
+		tme.targetMasters = append(tme.targetMasters, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_MASTER, tme.tmeDB, TabletKeyspaceShard(t, "ks2", shard)))
 		tabletID += 10
 
 		_, targetKeyRange, err := topo.ValidateShardName(shard)
@@ -445,7 +448,7 @@ func (tme *testShardMigraterEnv) expectStartReverseVReplication() {
 	}
 }
 
-func (tme *testShardMigraterEnv) expectDeleteTargetVReplication() {
+func (tme *testShardMigraterEnv) expectFrozenTargetVReplication() {
 	// NOTE: this is not a faithful reproduction of what should happen.
 	// The ids returned are not accurate.
 	for _, dbclient := range tme.dbTargetClients {
@@ -453,7 +456,13 @@ func (tme *testShardMigraterEnv) expectDeleteTargetVReplication() {
 		dbclient.addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1, 2)", &sqltypes.Result{}, nil)
 		dbclient.addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
 		dbclient.addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+	}
+}
 
+func (tme *testShardMigraterEnv) expectDeleteTargetVReplication() {
+	// NOTE: this is not a faithful reproduction of what should happen.
+	// The ids returned are not accurate.
+	for _, dbclient := range tme.dbTargetClients {
 		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
 		dbclient.addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
 		dbclient.addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
