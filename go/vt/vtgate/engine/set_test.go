@@ -79,7 +79,7 @@ func TestSetTable(t *testing.T) {
 						Sharded: true,
 					},
 					TargetDestination: key.DestinationAnyShard{},
-					CheckSysVarQuery:  "dummy_query",
+					Expr:              "dummy_expr",
 				},
 			},
 			qr: []*sqltypes.Result{sqltypes.MakeTestResult(
@@ -91,7 +91,10 @@ func TestSetTable(t *testing.T) {
 			)},
 			expectedQueryLog: []string{
 				`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-				`ExecuteMultiShard ks.-20: dummy_query {} false false`,
+				`ExecuteMultiShard ks.-20: select 1 from dual where @@x = dummy_expr {} false false`,
+			},
+			expectedWarning: []*querypb.QueryWarning{
+				{Code: 1235, Message: "Ignored inapplicable SET x = dummy_expr"},
 			},
 		},
 		{
@@ -104,14 +107,16 @@ func TestSetTable(t *testing.T) {
 						Sharded: true,
 					},
 					TargetDestination: key.DestinationAnyShard{},
-					CheckSysVarQuery:  "dummy_query",
+					Expr:              "dummy_expr",
 				},
 			},
 			expectedQueryLog: []string{
 				`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-				`ExecuteMultiShard ks.-20: dummy_query {} false false`,
+				`ExecuteMultiShard ks.-20: select 1 from dual where @@x = dummy_expr {} false false`,
 			},
-			expectedError: "Modification not allowed using set construct for: x",
+			expectedWarning: []*querypb.QueryWarning{
+				{Code: 1235, Message: "Modification not allowed using set construct for: x"},
+			},
 		},
 		{
 			testName: "sysvar checkAndIgnore multi destination error",
@@ -123,7 +128,7 @@ func TestSetTable(t *testing.T) {
 						Sharded: true,
 					},
 					TargetDestination: key.DestinationAllShards{},
-					CheckSysVarQuery:  "dummy_query",
+					Expr:              "dummy_expr",
 				},
 			},
 			expectedQueryLog: []string{
@@ -151,16 +156,17 @@ func TestSetTable(t *testing.T) {
 						Sharded: true,
 					},
 					TargetDestination: key.DestinationAnyShard{},
-					CheckSysVarQuery:  "dummy_query",
+					Expr:              "dummy_expr",
 				},
 			},
 			expectedQueryLog: []string{
 				`UDV set with (x,INT64(1))`,
 				`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-				`ExecuteMultiShard ks.-20: dummy_query {} false false`,
+				`ExecuteMultiShard ks.-20: select 1 from dual where @@z = dummy_expr {} false false`,
 			},
 			expectedWarning: []*querypb.QueryWarning{
 				{Code: 1235, Message: "Ignored inapplicable SET y = 2"},
+				{Code: 1235, Message: "Ignored inapplicable SET z = dummy_expr"},
 			},
 			qr: []*sqltypes.Result{sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
