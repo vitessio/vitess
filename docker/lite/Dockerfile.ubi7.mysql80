@@ -1,0 +1,88 @@
+# Copyright 2019 The Vitess Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# NOTE: We have to build the Vitess binaries from scratch instead of sharing
+#       a base image because Docker Hub dropped the feature we relied upon to
+#       ensure images contain the right binaries.
+
+# Use a temporary layer for the build stage.
+FROM vitess/bootstrap:mysql80 AS builder
+
+# Allows some docker builds to disable CGO
+ARG CGO_ENABLED=0
+
+# Re-copy sources from working tree.
+COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
+
+# Build and install Vitess in a temporary output directory.
+USER vitess
+RUN make install PREFIX=/vt/install
+
+# Start over and build the final image.
+FROM registry.access.redhat.com/ubi7/ubi:latest
+
+# Install keys and dependencies
+RUN mkdir /tmp/gpg && chmod 700 /tmp/gpg && export GNUPGHOME=/tmp/gpg \
+ && yum install --setopt=alwaysprompt=no gnupg \
+ && ( gpg --keyserver keyserver.ubuntu.com --recv-keys 430BDF5C56E7C94E848EE60C1C4CBDCDCD2EFD2A 4D1BB29D63D98E422B2113B19334A25F8507EFA5 6341AB2753D78A78A7C27BB124C6A8A7F4A80EB5 A4A9406876FCBD3C456770C88C718D3B5072E1F5 \
+ ||   gpg --keyserver ha.pool.sks-keyservers.net --recv-keys 430BDF5C56E7C94E848EE60C1C4CBDCDCD2EFD2A 4D1BB29D63D98E422B2113B19334A25F8507EFA5 6341AB2753D78A78A7C27BB124C6A8A7F4A80EB5 A4A9406876FCBD3C456770C88C718D3B5072E1F5 ) \
+ && gpg --export --armor 430BDF5C56E7C94E848EE60C1C4CBDCDCD2EFD2A > ${GNUPGHOME}/RPM-GPG-KEY-Percona.1 \
+ && gpg --export --armor 4D1BB29D63D98E422B2113B19334A25F8507EFA5 > ${GNUPGHOME}/RPM-GPG-KEY-Percona.2 \
+ && gpg --export --armor 6341AB2753D78A78A7C27BB124C6A8A7F4A80EB5 > ${GNUPGHOME}/RPM-GPG-KEY-CentOS-7 \
+ && gpg --export --armor A4A9406876FCBD3C456770C88C718D3B5072E1F5 > ${GNUPGHOME}/RPM-GPG-KEY-MySQL \
+ && rpmkeys --import ${GNUPGHOME}/RPM-GPG-KEY-Percona.1 ${GNUPGHOME}/RPM-GPG-KEY-Percona.2 ${GNUPGHOME}/RPM-GPG-KEY-CentOS-7 ${GNUPGHOME}/RPM-GPG-KEY-MySQL /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release \
+ && curl -L --retry-delay 10 --retry 3 -o /tmp/mysqlrepo.rpm https://dev.mysql.com/get/mysql80-community-release-el7-3.noarch.rpm \
+ && curl -L --retry-delay 10 --retry 3 -o /tmp/perconarepo.rpm https://repo.percona.com/yum/percona-release-latest.noarch.rpm \
+ && rpmkeys --checksig /tmp/mysqlrepo.rpm /tmp/perconarepo.rpm \
+ && rpm -Uvh /tmp/mysqlrepo.rpm /tmp/perconarepo.rpm \
+ && rm -f /tmp/mysqlrepo.rpm /tmp/perconarepo.rpm
+RUN curl -L --retry-delay 10 --retry 3 -o /tmp/libev.rpm http://mirror.centos.org/centos/7/extras/x86_64/Packages/libev-4.15-7.el7.x86_64.rpm \
+ && curl -L --retry-delay 10 --retry 3 -o /tmp/gperf.rpm http://mirror.centos.org/centos/7/os/x86_64/Packages/gperftools-libs-2.6.1-1.el7.x86_64.rpm \
+ && curl -L --retry-delay 10 --retry 3 -o /tmp/numactl.rpm http://mirror.centos.org/centos/7/updates/x86_64/Packages/numactl-libs-2.0.12-3.el7_7.1.x86_64.rpm \
+ && curl -L --retry-delay 10 --retry 3 -o /tmp/sysstat.rpm http://mirror.centos.org/centos/7/updates/x86_64/Packages/sysstat-10.1.5-18.el7_7.1.x86_64.rpm \
+ && curl -L --retry-delay 10 --retry 3 -o /tmp/strace.rpm http://mirror.centos.org/centos/7/os/x86_64/Packages/strace-4.12-9.el7.x86_64.rpm \
+ && rpm -i --nodeps /tmp/libev.rpm /tmp/gperf.rpm /tmp/numactl.rpm /tmp/sysstat.rpm /tmp/strace.rpm \
+ && rm -f /tmp/libev.rpm /tmp/gperf.rpm /tmp/numactl.rpm /tmp/sysstat.rpm /tmp/strace.rpm
+RUN yum update \
+ && yum install --setopt=alwaysprompt=no --setopt=tsflags=nodocs bzip2 ca-certificates gnupg libaio libcurl \
+    jemalloc gperftools-libs procps-ng rsync wget openssl hostname curl tzdata make \
+# Can't use alwaysprompt=no here, since we need to pick up deps
+#   No way to separate key imports and accept deps separately in yum/dnf
+ && yum install -y --setopt=tsflags=nodocs --enablerepo mysql80-community --disablerepo mysql57-community \
+    mysql-community-client mysql-community-server \
+# Have to use hacks to ignore conflicts on /etc/my.cnf install
+ && mkdir -p /tmp/1 \
+ && yum install --setopt=alwaysprompt=no --downloadonly --downloaddir=/tmp/1 --enablerepo mysql80-community --disablerepo mysql57-community percona-xtrabackup-80 \
+ && rpm -Uvh --replacefiles /tmp/1/*rpm \
+ && rm -rf /tmp/1 \
+ && yum clean all \
+ && yum clean all --enablerepo mysql80-community --disablerepo mysql57-community \
+ && rm -rf /etc/my.cnf /var/lib/mysql /tmp/gpg /sbin/mysqld-debug
+
+# Set up Vitess user and directory tree.
+RUN groupadd -r vitess && useradd -r -g vitess vitess
+RUN mkdir -p /vt/vtdataroot && chown -R vitess:vitess /vt
+
+# Set up Vitess environment (just enough to run pre-built Go binaries)
+ENV VTROOT /vt/src/vitess.io/vitess
+ENV VTDATAROOT /vt/vtdataroot
+ENV PATH $VTROOT/bin:$PATH
+ENV MYSQL_FLAVOR MySQL80
+
+# Copy artifacts from builder layer.
+COPY --from=builder --chown=vitess:vitess /vt/install /vt
+
+# Create mount point for actual data (e.g. MySQL data dir)
+VOLUME /vt/vtdataroot
+USER vitess
