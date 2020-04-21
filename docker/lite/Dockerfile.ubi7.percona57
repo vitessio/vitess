@@ -62,7 +62,7 @@ RUN yum update \
  && rm -rf /etc/my.cnf /var/lib/mysql /tmp/gpg /sbin/mysqld-debug
 
 # Set up Vitess user and directory tree.
-RUN groupadd -r vitess && useradd -r -g vitess vitess
+RUN groupadd -g 1001 -r vitess && useradd -r -u 1001 -g vitess vitess
 RUN mkdir -p /vt/vtdataroot && chown -R vitess:vitess /vt
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
