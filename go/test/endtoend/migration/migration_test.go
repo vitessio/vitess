@@ -17,8 +17,10 @@ limitations under the License.
 package migration
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io/ioutil"
 	"path"
 	"strings"
 	"testing"
@@ -116,14 +118,20 @@ func TestMigration(t *testing.T) {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ListAllTablets")
 	require.NoError(t, err)
 	fmt.Printf("result:\n%v", result)
-	fmt.Printf("Commerce vttablet: %v\n", keyspaces[commerce.Name].Shards[0].Vttablets[0].VttabletProcess)
-	fmt.Printf("Commerce mysqlctl: %v\n", keyspaces[commerce.Name].Shards[0].Vttablets[0].MysqlctlProcess)
 
-	buf := &strings.Builder{}
+	buf := &bytes.Buffer{}
 	fmt.Fprintf(buf, "externalConnections:\n")
 	buildConnYaml(buf, keyspaces[legacyProduct.Name])
 	buildConnYaml(buf, keyspaces[legacyMerchant.Name])
 	fmt.Printf("%s\n", buf.String())
+	yamlFile := path.Join(clusterInstance.TmpDirectory, "external.yaml")
+	err = ioutil.WriteFile(yamlFile, buf.Bytes(), 0644)
+	require.NoError(t, err)
+	extraArgs := func(vt *cluster.VttabletProcess) {
+		vt.ExtraArgs = append(vt.ExtraArgs, "-tablet_config", yamlFile)
+	}
+	createKeyspace(t, commerce, []string{"0"}, extraArgs)
+	createKeyspace(t, customer, []string{"-80", "80-"}, extraArgs)
 }
 
 func startCluster(t *testing.T) {
@@ -136,8 +144,6 @@ func startCluster(t *testing.T) {
 
 	createKeyspace(t, legacyMerchant, []string{"0"})
 	createKeyspace(t, legacyProduct, []string{"0"})
-	createKeyspace(t, commerce, []string{"0"})
-	createKeyspace(t, customer, []string{"-80", "80-"})
 
 	err = clusterInstance.StartVtgate()
 	require.NoError(t, err)
@@ -150,10 +156,10 @@ func startCluster(t *testing.T) {
 	populate(t, "product:0", legacyProductData)
 }
 
-func createKeyspace(t *testing.T, ks cluster.Keyspace, shards []string) {
+func createKeyspace(t *testing.T, ks cluster.Keyspace, shards []string, customizers ...interface{}) {
 	t.Helper()
 
-	err := clusterInstance.StartKeyspace(ks, []string{"0"}, 1, false)
+	err := clusterInstance.StartKeyspace(ks, []string{"0"}, 1, false, customizers...)
 	require.NoError(t, err)
 	keyspaces[ks.Name] = &clusterInstance.Keyspaces[len(clusterInstance.Keyspaces)-1]
 }
@@ -174,7 +180,7 @@ func populate(t *testing.T, target, sql string) {
 	}
 }
 
-func buildConnYaml(buf *strings.Builder, ks *cluster.Keyspace) {
+func buildConnYaml(buf *bytes.Buffer, ks *cluster.Keyspace) {
 	connFormat := `  %s:
     socket: %s
     dbName: vt_%s
