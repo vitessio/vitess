@@ -28,7 +28,7 @@ import (
 )
 
 // TestTabletStatsCache tests the functionality of the LegacyTabletStatsCache class.
-func TestTabletStatsCache(t *testing.T) {
+func TestLegacyTabletStatsCache(t *testing.T) {
 	ts := memorytopo.NewServer("cell", "cell1", "cell2")
 
 	cellsAlias := &topodatapb.CellsAlias{
