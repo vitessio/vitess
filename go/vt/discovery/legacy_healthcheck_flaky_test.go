@@ -56,7 +56,7 @@ func testChecksum(t *testing.T, want, got int64) {
 	}
 }
 
-func TestHealthCheck(t *testing.T) {
+func TestLegacyHealthCheck(t *testing.T) {
 	tablet := topo.NewTablet(0, "cell", "a")
 	tablet.PortMap["vt"] = 1
 	input := make(chan *querypb.StreamHealthResponse)
@@ -243,7 +243,7 @@ func TestHealthCheck(t *testing.T) {
 	hc.Close()
 }
 
-func TestHealthCheckStreamError(t *testing.T) {
+func TestLegacyHealthCheckStreamError(t *testing.T) {
 	tablet := topo.NewTablet(0, "cell", "a")
 	tablet.PortMap["vt"] = 1
 	input := make(chan *querypb.StreamHealthResponse)
@@ -313,7 +313,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 	hc.Close()
 }
 
-func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
+func TestLegacyHealthCheckVerifiesTabletAlias(t *testing.T) {
 	t.Logf("starting")
 	tablet := topo.NewTablet(1, "cell", "a")
 	tablet.PortMap["vt"] = 1
@@ -378,9 +378,9 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 	hc.Close()
 }
 
-// TestHealthCheckCloseWaitsForGoRoutines tests that Close() waits for all Go
+// TestLegacyHealthCheckCloseWaitsForGoRoutines tests that Close() waits for all Go
 // routines to finish and the listener won't be called anymore.
-func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
+func TestLegacyHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	tablet := topo.NewTablet(0, "cell", "a")
 	tablet.PortMap["vt"] = 1
 	input := make(chan *querypb.StreamHealthResponse, 1)
@@ -476,7 +476,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	}
 }
 
-func TestHealthCheckTimeout(t *testing.T) {
+func TestLegacyHealthCheckTimeout(t *testing.T) {
 	timeout := 500 * time.Millisecond
 	tablet := topo.NewTablet(0, "cell", "a")
 	tablet.PortMap["vt"] = 1
@@ -579,7 +579,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 	hc.Close()
 }
 
-func TestTemplate(t *testing.T) {
+func TestLegacyTemplate(t *testing.T) {
 	tablet := topo.NewTablet(0, "cell", "a")
 	ts := []*LegacyTabletStats{
 		{
@@ -608,7 +608,7 @@ func TestTemplate(t *testing.T) {
 	}
 }
 
-func TestDebugURLFormatting(t *testing.T) {
+func TestLegacyDebugURLFormatting(t *testing.T) {
 	flag.Set("tablet_url_template", "https://{{.GetHostNameLevel 0}}.bastion.{{.Tablet.Alias.Cell}}.corp")
 	ParseTabletURLTemplateFromFlag()
 

@@ -19,8 +19,9 @@ package discovery
 import (
 	"sync"
 
-	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+
+	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
@@ -42,53 +43,6 @@ type tabletStatsCache struct {
 	mu sync.Mutex
 	// entries maps from keyspace/shard/tabletType to our cache.
 	entries map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry
-}
-
-// tabletStatsCacheEntry is the per keyspace/shard/tabletType
-// entry of the in-memory map for tabletStatsCache.
-type tabletStatsCacheEntry struct {
-	// mu protects the rest of this structure.
-	mu sync.Mutex
-	// all has the valid tablets, indexed by TabletToMapKey(ts.Tablet),
-	// as it is the index used by HealthCheck.
-	all map[string]*tabletStats
-	// healthy only has the healthy ones.
-	healthy []*tabletStats
-}
-
-func (e *tabletStatsCacheEntry) updateHealthyMapForMaster(ts *tabletStats) {
-	if ts.Up {
-		// We have an Up master.
-		if len(e.healthy) == 0 {
-			// We have a new Up server, just remember it.
-			e.healthy = append(e.healthy, ts)
-			return
-		}
-
-		// We already have one up server, see if we
-		// need to replace it.
-		if ts.MasterTermStartTime < e.healthy[0].MasterTermStartTime {
-			log.Warningf("not marking healthy master %s as Up for %s because its externally reparented timestamp is smaller than the highest known timestamp from previous MASTERs %s: %d < %d ",
-				topoproto.TabletAliasString(ts.Tablet.Alias),
-				topoproto.KeyspaceShardString(ts.Target.Keyspace, ts.Target.Shard),
-				topoproto.TabletAliasString(e.healthy[0].Tablet.Alias),
-				ts.MasterTermStartTime,
-				e.healthy[0].MasterTermStartTime)
-			return
-		}
-
-		// Just replace it.
-		e.healthy[0] = ts
-		return
-	}
-
-	// We have a Down master, remove it only if it's exactly the same.
-	if len(e.healthy) != 0 {
-		if ts.Key == e.healthy[0].Key {
-			// Same guy, remove it.
-			e.healthy = nil
-		}
-	}
 }
 
 func newTabletStatsCache() *tabletStatsCache {
@@ -144,6 +98,76 @@ func (tc *tabletStatsCache) getOrCreateEntry(target *querypb.Target) *tabletStat
 		t[target.TabletType] = e
 	}
 	return e
+}
+
+// tabletStatsCacheEntry is the per keyspace/shard/tabletType
+// entry of the in-memory map for tabletStatsCache.
+type tabletStatsCacheEntry struct {
+	// mu protects the rest of this structure.
+	mu sync.Mutex
+	// all has the valid tablets, indexed by TabletToMapKey(ts.Tablet),
+	// as it is the index used by HealthCheck.
+	all map[string]*tabletStats
+	// healthy only has the healthy ones.
+	healthy []*tabletStats
+}
+
+func (e *tabletStatsCacheEntry) updateHealthyMapForMaster(ts *tabletStats) {
+	if ts.Target.TabletType != topodatapb.TabletType_MASTER {
+		panic("program bug")
+	}
+	if ts.Up {
+		// We have an Up master.
+		if len(e.healthy) == 0 {
+			// We have a new Up server, just remember it.
+			e.healthy = append(e.healthy, ts)
+			return
+		}
+
+		// We already have one up server, see if we
+		// need to replace it.
+		if ts.MasterTermStartTime < e.healthy[0].MasterTermStartTime {
+			log.Warningf("not marking healthy master %s as Up for %s because its externally reparented timestamp is smaller than the highest known timestamp from previous MASTERs %s: %d < %d ",
+				topoproto.TabletAliasString(ts.Tablet.Alias),
+				topoproto.KeyspaceShardString(ts.Target.Keyspace, ts.Target.Shard),
+				topoproto.TabletAliasString(e.healthy[0].Tablet.Alias),
+				ts.MasterTermStartTime,
+				e.healthy[0].MasterTermStartTime)
+			return
+		}
+
+		// Just replace it.
+		e.healthy[0] = ts
+		return
+	}
+
+	// We have a Down master, remove it only if it's exactly the same.
+	if len(e.healthy) != 0 {
+		if ts.Key == e.healthy[0].Key {
+			// Same guy, remove it.
+			e.healthy = nil
+		}
+	}
+}
+
+func (e *tabletStatsCacheEntry) getHealthyTabletStats() []tabletStats {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	result := make([]tabletStats, len(e.healthy))
+	for i, ts := range e.healthy {
+		result[i] = *ts
+	}
+	return result
+}
+
+func (e *tabletStatsCacheEntry) getTabletStats() []tabletStats {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	result := make([]tabletStats, 0, len(e.all))
+	for _, ts := range e.all {
+		result = append(result, *ts)
+	}
+	return result
 }
 
 // ResetForTesting is for use in tests only.

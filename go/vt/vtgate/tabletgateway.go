@@ -79,7 +79,6 @@ func NewTabletGateway(ctx context.Context, serv srvtopo.Server, localCell string
 			log.Exitf("Unable to create new TabletGateway: %v", err)
 		}
 	}
-
 	hc := discovery.NewHealthCheck(ctx, *HealthCheckRetryDelay, *HealthCheckTimeout, topoServer, localCell)
 
 	gw := &TabletGateway{
@@ -90,10 +89,8 @@ func NewTabletGateway(ctx context.Context, serv srvtopo.Server, localCell string
 		statusAggregators: make(map[string]*TabletStatusAggregator),
 		buffer:            buffer.New(),
 	}
-
-	// TODO(deepthi): start healthcheck here
-	//hc.Open()
-
+	// Start the healthcheck
+	hc.Open()
 	gw.QueryService = queryservice.Wrap(nil, gw.withRetry)
 	return gw
 }
@@ -121,13 +118,11 @@ func (gw *TabletGateway) WaitForTablets(ctx context.Context, tabletTypesToWait [
 	}
 
 	// Finds the targets to look for.
-	_, err := srvtopo.FindAllTargets(ctx, gw.srvTopoServer, gw.localCell, tabletTypesToWait)
+	targets, err := srvtopo.FindAllTargets(ctx, gw.srvTopoServer, gw.localCell, tabletTypesToWait)
 	if err != nil {
 		return err
 	}
-	return nil
-	// TODO(deepthi): this needs to be implemented
-	//return gw.hc.WaitForAllServingTablets(ctx, targets)
+	return gw.hc.WaitForAllServingTablets(ctx, targets)
 }
 
 // Close shuts down underlying connections.
