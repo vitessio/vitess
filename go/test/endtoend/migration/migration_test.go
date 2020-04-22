@@ -97,6 +97,43 @@ create table orders(oid bigint, cid bigint, pid bigint, mname varchar(128), pric
 `
 )
 
+/*
+TestMigration demonstrates how to setup vreplication to import data from multiple external
+mysql sources.
+We use vitess to bring up two databases that we'll treat as external. We'll directly access
+the mysql instances instead of going through any vitess layer.
+The product database contains a product table.
+The customer database contains a customer and an orders table.
+We create a new "commerce" keyspace, which will be the target. The commerce keyspace will
+take a yaml config that defines these external sources. it will look like this:
+
+externalConnections:
+  product:
+    socket: /home/sougou/dev/src/vitess.io/vitess/vtdataroot/vtroot_15201/vt_0000000622/mysql.sock
+    dbName: vt_product
+    app:
+      user: vt_app
+    dba:
+      user: vt_dba
+  customer:
+    flavor: FilePos
+    socket: /home/sougou/dev/src/vitess.io/vitess/vtdataroot/vtroot_15201/vt_0000000620/mysql.sock
+    dbName: vt_customer
+    app:
+      user: vt_app
+    dba:
+      user: vt_dba
+
+We then execute the following vreplication inserts to initiate the import. The test uses
+three streams although only two are required. This is to show that there can exist multiple
+streams from the same source. The main difference between an external source vs a vitess
+source is that the source proto contains an "external_mysql" field instead of keyspace and shard.
+That field is the key into the externalConnections section of the input yaml.
+
+VReplicationExec: insert into _vt.vreplication (workflow, db_name, source, pos, max_tps, max_replication_lag, tablet_types, time_updated, transaction_timestamp, state) values('product', 'vt_commerce', 'filter:<rules:<match:\"product\" > > external_mysql:\"product\" ', '', 9999, 9999, 'master', 0, 0, 'Running')
+VReplicationExec: insert into _vt.vreplication (workflow, db_name, source, pos, max_tps, max_replication_lag, tablet_types, time_updated, transaction_timestamp, state) values('customer', 'vt_commerce', 'filter:<rules:<match:\"customer\" > > external_mysql:\"customer\" ', '', 9999, 9999, 'master', 0, 0, 'Running')
+VReplicationExec: insert into _vt.vreplication (workflow, db_name, source, pos, max_tps, max_replication_lag, tablet_types, time_updated, transaction_timestamp, state) values('orders', 'vt_commerce', 'filter:<rules:<match:\"orders\" > > external_mysql:\"customer\" ', '', 9999, 9999, 'master', 0, 0, 'Running')
+*/
 func TestMigration(t *testing.T) {
 	yamlFile := startCluster(t)
 	defer clusterInstance.Teardown()
@@ -117,15 +154,6 @@ func TestMigration(t *testing.T) {
 	vttablet := keyspaces["commerce"].Shards[0].Vttablets[0].VttabletProcess
 	waitForVReplicationToCatchup(t, vttablet, 1*time.Second)
 
-	vtParams = &mysql.ConnParams{
-		Host: clusterInstance.Hostname,
-		Port: clusterInstance.VtgateMySQLPort,
-	}
-	conn, err := mysql.Connect(context.Background(), vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	execQuery(t, conn, "use `commerce`")
 	testcases := []struct {
 		query  string
 		result *sqltypes.Result
@@ -155,6 +183,16 @@ func TestMigration(t *testing.T) {
 			"2|1|2|newegg|15",
 		),
 	}}
+
+	vtParams = &mysql.ConnParams{
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(context.Background(), vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	execQuery(t, conn, "use `commerce`")
 	for _, tcase := range testcases {
 		result := execQuery(t, conn, tcase.query)
 		// nil out the fields because they're too detailed.
@@ -178,7 +216,7 @@ func migrate(t *testing.T, fromdb, toks string, tables []string) {
 	query := fmt.Sprintf("insert into _vt.vreplication "+
 		"(workflow, db_name, source, pos, max_tps, max_replication_lag, tablet_types, time_updated, transaction_timestamp, state) values"+
 		"('%s', '%s', %s, '', 9999, 9999, 'master', 0, 0, 'Running')", tables[0], "vt_"+toks, sqlEscaped.String())
-	fmt.Printf("query: %s\n", query)
+	fmt.Printf("VReplicationExec: %s\n", query)
 	vttablet := keyspaces[toks].Shards[0].Vttablets[0].VttabletProcess
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("VReplicationExec", vttablet.TabletPath, query)
 	require.NoError(t, err)
@@ -196,9 +234,7 @@ func startCluster(t *testing.T) string {
 	createKeyspace(t, legacyProduct, []string{"0"})
 
 	productSocket := path.Join(keyspaces["product"].Shards[0].Vttablets[0].VttabletProcess.Directory, "mysql.sock")
-	fmt.Println("product", productSocket)
 	customerSocket := path.Join(keyspaces["customer"].Shards[0].Vttablets[0].VttabletProcess.Directory, "mysql.sock")
-	fmt.Println("customer", customerSocket)
 
 	populate(t, productSocket, legacyProductData)
 	populate(t, customerSocket, legacyCustomerData)
@@ -240,38 +276,31 @@ func populate(t *testing.T, socket, sql string) {
 	}
 }
 
-// waitForVReplicationToCatchup: copied from go/test/endtoend/vreplication/cluster.go
+// waitForVReplicationToCatchup: logic copied from go/test/endtoend/vreplication/cluster.go
 func waitForVReplicationToCatchup(t *testing.T, vttablet *cluster.VttabletProcess, duration time.Duration) {
-	queries := [3]string{
+	queries := []string{
 		`select count(*) from _vt.vreplication where pos = ''`,
 		"select count(*) from information_schema.tables where table_schema='_vt' and table_name='copy_state' limit 1;",
 		`select count(*) from _vt.copy_state`,
 	}
-	results := [3]string{"[INT64(0)]", "[INT64(1)]", "[INT64(0)]"}
-	var lastChecked time.Time
+	results := []string{"[INT64(0)]", "[INT64(1)]", "[INT64(0)]"}
 	for ind, query := range queries {
 		waitDuration := 100 * time.Millisecond
-		for duration > 0 {
-			fmt.Printf("Executing query %s on %s\n", query, vttablet.Name)
-			lastChecked = time.Now()
+		for {
 			qr, err := vttablet.QueryTablet(query, "", false)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if qr != nil && qr.Rows != nil && len(qr.Rows) > 0 && fmt.Sprintf("%v", qr.Rows[0]) == string(results[ind]) {
+			if len(qr.Rows) > 0 && fmt.Sprintf("%v", qr.Rows[0]) == string(results[ind]) {
 				break
-			} else {
-				fmt.Printf("In WaitForVReplicationToCatchup: %s %+v\n", query, qr.Rows)
 			}
 			time.Sleep(waitDuration)
 			duration -= waitDuration
-		}
-		if duration <= 0 {
-			fmt.Printf("WaitForVReplicationToCatchup timed out\n")
-			t.Fatal("WaitForVReplicationToCatchup timed out")
+			if duration <= 0 {
+				t.Fatalf("waitForVReplicationToCatchup timed out, query: %v, result: %v", query, qr)
+			}
 		}
 	}
-	fmt.Printf("WaitForVReplicationToCatchup succeeded at %v\n", lastChecked)
 }
 
 func execQuery(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
