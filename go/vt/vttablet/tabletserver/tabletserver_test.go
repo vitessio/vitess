@@ -2426,7 +2426,7 @@ func TestACLHUP(t *testing.T) {
 	}
 
 	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
-	time.Sleep(25 * time.Millisecond) // wait for signal handler
+	time.Sleep(100 * time.Millisecond) // wait for signal handler
 
 	groups2 := tableacl.GetCurrentConfig().TableGroups
 	if len(groups2) != 1 {
