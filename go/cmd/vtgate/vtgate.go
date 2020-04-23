@@ -39,8 +39,6 @@ import (
 var (
 	cell              = flag.String("cell", "test_nj", "cell to use")
 	tabletTypesToWait = flag.String("tablet_types_to_wait", "", "wait till connected for specified tablet types during Gateway initialization")
-	//TODO(deepthi): remove this and use gateway implementation as the flag. discovery => true, tablet => false
-	useLegacyHealthCheck = flag.Bool("use_legacy_health_check", true, "whether to use the legacy health check")
 )
 
 var resilientServer *srvtopo.ResilientServer
@@ -76,12 +74,14 @@ func main() {
 	}
 
 	var vtg *vtgate.VTGate
-	if *useLegacyHealthCheck {
+	if *vtgate.GatewayImplementation == vtgate.GatewayImplementationDiscovery {
+		// default value
 		legacyHealthCheck = discovery.NewLegacyHealthCheck(*vtgate.HealthCheckRetryDelay, *vtgate.HealthCheckTimeout)
 		legacyHealthCheck.RegisterStats()
 
 		vtg = vtgate.LegacyInit(context.Background(), legacyHealthCheck, resilientServer, *cell, *vtgate.RetryCount, tabletTypes)
 	} else {
+		// use new Init otherwise
 		vtg = vtgate.Init(context.Background(), resilientServer, *cell, tabletTypes)
 	}
 

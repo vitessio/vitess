@@ -862,7 +862,6 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, shr *querypb.St
 	}
 	hcc.setServingState(serving, reason)
 
-	// TODO(deepthi): do we need a copy? updateHealth should be done by HealthCheckConn, not healthCheck
 	hc.updateHealth(hcc.tabletStats.Copy(), hcc.conn)
 	return nil
 }
