@@ -185,7 +185,8 @@ func TestSetTable(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.testName, func(t *testing.T) {
 			set := &Set{
-				Ops: tc.setOps,
+				Ops:   tc.setOps,
+				Input: &SingleRow{},
 			}
 			vc := &loggingVCursor{
 				shards:  []string{"-20", "20-"},

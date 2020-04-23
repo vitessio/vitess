@@ -40,12 +40,12 @@ func Add(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 		return sqltypes.NULL, nil
 	}
 
-	lv1, err := newNumeric(v1)
+	lv1, err := newEvalResult(v1)
 	if err != nil {
 		return sqltypes.NULL, err
 	}
 
-	lv2, err := newNumeric(v2)
+	lv2, err := newEvalResult(v2)
 	if err != nil {
 		return sqltypes.NULL, err
 	}
@@ -64,12 +64,12 @@ func Subtract(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 		return sqltypes.NULL, nil
 	}
 
-	lv1, err := newNumeric(v1)
+	lv1, err := newEvalResult(v1)
 	if err != nil {
 		return sqltypes.NULL, err
 	}
 
-	lv2, err := newNumeric(v2)
+	lv2, err := newEvalResult(v2)
 	if err != nil {
 		return sqltypes.NULL, err
 	}
@@ -88,11 +88,11 @@ func Multiply(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 		return sqltypes.NULL, nil
 	}
 
-	lv1, err := newNumeric(v1)
+	lv1, err := newEvalResult(v1)
 	if err != nil {
 		return sqltypes.NULL, err
 	}
-	lv2, err := newNumeric(v2)
+	lv2, err := newEvalResult(v2)
 	if err != nil {
 		return sqltypes.NULL, err
 	}
@@ -117,12 +117,12 @@ func Divide(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 		return sqltypes.NULL, err
 	}
 
-	lv1, err := newNumeric(v1)
+	lv1, err := newEvalResult(v1)
 	if err != nil {
 		return sqltypes.NULL, err
 	}
 
-	lv2, err := newNumeric(v2)
+	lv2, err := newEvalResult(v2)
 	if err != nil {
 		return sqltypes.NULL, err
 	}
@@ -154,11 +154,11 @@ func NullsafeAdd(v1, v2 sqltypes.Value, resultType querypb.Type) sqltypes.Value 
 		v2 = sqltypes.MakeTrusted(resultType, zeroBytes)
 	}
 
-	lv1, err := newNumeric(v1)
+	lv1, err := newEvalResult(v1)
 	if err != nil {
 		return sqltypes.NULL
 	}
-	lv2, err := newNumeric(v2)
+	lv2, err := newEvalResult(v2)
 	if err != nil {
 		return sqltypes.NULL
 	}
@@ -187,11 +187,11 @@ func NullsafeCompare(v1, v2 sqltypes.Value) (int, error) {
 		return 1, nil
 	}
 	if sqltypes.IsNumber(v1.Type()) || sqltypes.IsNumber(v2.Type()) {
-		lv1, err := newNumeric(v1)
+		lv1, err := newEvalResult(v1)
 		if err != nil {
 			return 0, err
 		}
-		lv2, err := newNumeric(v2)
+		lv2, err := newEvalResult(v2)
 		if err != nil {
 			return 0, err
 		}
@@ -317,7 +317,7 @@ func ToInt64(v sqltypes.Value) (int64, error) {
 
 // ToFloat64 converts Value to float64.
 func ToFloat64(v sqltypes.Value) (float64, error) {
-	num, err := newNumeric(v)
+	num, err := newEvalResult(v)
 	if err != nil {
 		return 0, err
 	}
@@ -329,7 +329,16 @@ func ToFloat64(v sqltypes.Value) (float64, error) {
 	case sqltypes.Float64:
 		return num.fval, nil
 	}
-	panic("unreachable")
+
+	if sqltypes.IsText(num.typ) || sqltypes.IsBinary(num.typ) {
+		fval, err := strconv.ParseFloat(string(v.Raw()), 64)
+		if err != nil {
+			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+		}
+		return fval, nil
+	}
+
+	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot convert to float: %s", v.String())
 }
 
 // ToNative converts Value to a native go type.
@@ -354,42 +363,32 @@ func ToNative(v sqltypes.Value) (interface{}, error) {
 	return out, err
 }
 
-// newNumeric parses a value and produces an evalResult containing the value
-func newNumeric(v sqltypes.Value) (evalResult, error) {
-	str := v.ToString()
+// newEvalResult parses a value and produces an evalResult containing the value
+func newEvalResult(v sqltypes.Value) (evalResult, error) {
+	raw := v.Raw()
 	switch {
-	case v.IsBinary():
-		return evalResult{str: str, typ: sqltypes.Binary}, nil
-	case v.IsText():
-		return evalResult{str: str, typ: sqltypes.Text}, nil
+	case v.IsBinary() || v.IsText():
+		return evalResult{bytes: raw, typ: sqltypes.VarBinary}, nil
 	case v.IsSigned():
-		ival, err := strconv.ParseInt(str, 10, 64)
+		ival, err := strconv.ParseInt(string(raw), 10, 64)
 		if err != nil {
 			return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
 		return evalResult{ival: ival, typ: sqltypes.Int64}, nil
 	case v.IsUnsigned():
-		uval, err := strconv.ParseUint(str, 10, 64)
+		uval, err := strconv.ParseUint(string(raw), 10, 64)
 		if err != nil {
 			return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
 		return evalResult{uval: uval, typ: sqltypes.Uint64}, nil
-	case v.IsFloat():
-		fval, err := strconv.ParseFloat(str, 64)
+	case v.IsFloat() || v.Type() == sqltypes.Decimal:
+		fval, err := strconv.ParseFloat(string(raw), 64)
 		if err != nil {
 			return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
 		return evalResult{fval: fval, typ: sqltypes.Float64}, nil
 	}
-
-	// For other types, do best effort.
-	if ival, err := strconv.ParseInt(str, 10, 64); err == nil {
-		return evalResult{ival: ival, typ: sqltypes.Int64}, nil
-	}
-	if fval, err := strconv.ParseFloat(str, 64); err == nil {
-		return evalResult{fval: fval, typ: sqltypes.Float64}, nil
-	}
-	return evalResult{ival: 0, typ: sqltypes.Int64}, nil
+	return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this should not be reached. got %s", v.String())
 }
 
 // newIntegralNumeric parses a value and produces an Int64 or Uint64.
@@ -421,7 +420,7 @@ func newIntegralNumeric(v sqltypes.Value) (evalResult, error) {
 }
 
 func addNumeric(v1, v2 evalResult) evalResult {
-	v1, v2 = prioritize(v1, v2)
+	v1, v2 = makeNumericAndprioritize(v1, v2)
 	switch v1.typ {
 	case sqltypes.Int64:
 		return intPlusInt(v1.ival, v2.ival)
@@ -439,7 +438,7 @@ func addNumeric(v1, v2 evalResult) evalResult {
 }
 
 func addNumericWithError(v1, v2 evalResult) (evalResult, error) {
-	v1, v2 = prioritize(v1, v2)
+	v1, v2 = makeNumericAndprioritize(v1, v2)
 	switch v1.typ {
 	case sqltypes.Int64:
 		return intPlusIntWithError(v1.ival, v2.ival)
@@ -453,10 +452,13 @@ func addNumericWithError(v1, v2 evalResult) (evalResult, error) {
 	case sqltypes.Float64:
 		return floatPlusAny(v1.fval, v2), nil
 	}
-	panic("unreachable")
+	return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid arithmetic between: %s %s", v1.Value().String(), v2.Value().String())
+
 }
 
-func subtractNumericWithError(v1, v2 evalResult) (evalResult, error) {
+func subtractNumericWithError(i1, i2 evalResult) (evalResult, error) {
+	v1 := makeNumeric(i1)
+	v2 := makeNumeric(i2)
 	switch v1.typ {
 	case sqltypes.Int64:
 		switch v2.typ {
@@ -479,11 +481,11 @@ func subtractNumericWithError(v1, v2 evalResult) (evalResult, error) {
 	case sqltypes.Float64:
 		return floatMinusAny(v1.fval, v2), nil
 	}
-	panic("unreachable")
+	return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid arithmetic between: %s %s", v1.Value().String(), v2.Value().String())
 }
 
 func multiplyNumericWithError(v1, v2 evalResult) (evalResult, error) {
-	v1, v2 = prioritize(v1, v2)
+	v1, v2 = makeNumericAndprioritize(v1, v2)
 	switch v1.typ {
 	case sqltypes.Int64:
 		return intTimesIntWithError(v1.ival, v2.ival)
@@ -497,10 +499,13 @@ func multiplyNumericWithError(v1, v2 evalResult) (evalResult, error) {
 	case sqltypes.Float64:
 		return floatTimesAny(v1.fval, v2), nil
 	}
-	panic("unreachable")
+	return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid arithmetic between: %s %s", v1.Value().String(), v2.Value().String())
+
 }
 
-func divideNumericWithError(v1, v2 evalResult) (evalResult, error) {
+func divideNumericWithError(i1, i2 evalResult) (evalResult, error) {
+	v1 := makeNumeric(i1)
+	v2 := makeNumeric(i2)
 	switch v1.typ {
 	case sqltypes.Int64:
 		return floatDivideAnyWithError(float64(v1.ival), v2)
@@ -511,12 +516,14 @@ func divideNumericWithError(v1, v2 evalResult) (evalResult, error) {
 	case sqltypes.Float64:
 		return floatDivideAnyWithError(v1.fval, v2)
 	}
-	panic("unreachable")
+	return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid arithmetic between: %s %s", v1.Value().String(), v2.Value().String())
 }
 
-// prioritize reorders the input parameters
+// makeNumericAndprioritize reorders the input parameters
 // to be Float64, Uint64, Int64.
-func prioritize(v1, v2 evalResult) (altv1, altv2 evalResult) {
+func makeNumericAndprioritize(i1, i2 evalResult) (evalResult, evalResult) {
+	v1 := makeNumeric(i1)
+	v2 := makeNumeric(i2)
 	switch v1.typ {
 	case sqltypes.Int64:
 		if v2.typ == sqltypes.Uint64 || v2.typ == sqltypes.Float64 {
@@ -528,6 +535,19 @@ func prioritize(v1, v2 evalResult) (altv1, altv2 evalResult) {
 		}
 	}
 	return v1, v2
+}
+
+func makeNumeric(v evalResult) evalResult {
+	if sqltypes.IsNumber(v.typ) {
+		return v
+	}
+	if ival, err := strconv.ParseInt(string(v.bytes), 10, 64); err == nil {
+		return evalResult{ival: ival, typ: sqltypes.Int64}
+	}
+	if fval, err := strconv.ParseFloat(string(v.bytes), 64); err == nil {
+		return evalResult{fval: fval, typ: sqltypes.Float64}
+	}
+	return evalResult{ival: 0, typ: sqltypes.Int64}
 }
 
 func intPlusInt(v1, v2 int64) evalResult {
@@ -709,7 +729,6 @@ func castFromNumeric(v evalResult, resultType querypb.Type) sqltypes.Value {
 			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, int64(v.uval), 10))
 		case sqltypes.Float64:
 			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, int64(v.fval), 10))
-
 		}
 	case sqltypes.IsUnsigned(resultType):
 		switch v.typ {
@@ -719,7 +738,6 @@ func castFromNumeric(v evalResult, resultType querypb.Type) sqltypes.Value {
 			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, uint64(v.ival), 10))
 		case sqltypes.Float64:
 			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, uint64(v.fval), 10))
-
 		}
 	case sqltypes.IsFloat(resultType) || resultType == sqltypes.Decimal:
 		switch v.typ {
@@ -735,7 +753,7 @@ func castFromNumeric(v evalResult, resultType querypb.Type) sqltypes.Value {
 			return sqltypes.MakeTrusted(resultType, strconv.AppendFloat(nil, v.fval, format, -1, 64))
 		}
 	case resultType == sqltypes.VarChar || resultType == sqltypes.VarBinary || resultType == sqltypes.Binary || resultType == sqltypes.Text:
-		return sqltypes.MakeTrusted(resultType, []byte(v.str))
+		return sqltypes.MakeTrusted(resultType, v.bytes)
 	}
 	return sqltypes.NULL
 }
