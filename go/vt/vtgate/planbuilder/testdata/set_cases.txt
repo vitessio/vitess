@@ -103,3 +103,7 @@
     ]
   }
 }
+
+# only allow whitelisted functions
+"set @foo = BAD_FUNC()"
+"expression not supported for SET: BAD_FUNC()"

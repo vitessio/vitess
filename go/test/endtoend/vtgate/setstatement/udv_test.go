@@ -77,13 +77,10 @@ func TestSetUDV(t *testing.T) {
 		query:        "select id, val1, val2 from test where val1=@foo",
 		expectedRows: `[[INT64(1) VARCHAR("abc") INT32(42)]]`, rowsAffected: 1,
 	}, {
-		query:        "delete from test",
-		expectedRows: ``, rowsAffected: 2,
-	}, {
 		query:        "insert into test(id, val1, val2, val3) values (42, @tablet, null, null)",
 		expectedRows: ``, rowsAffected: 1,
 	}, {
-		query:        "select id, val1 from test",
+		query:        "select id, val1 from test where val1 = @tablet",
 		expectedRows: `[[INT64(42) VARCHAR("foobar")]]`, rowsAffected: 1,
 	}}
 
