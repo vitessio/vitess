@@ -17,9 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
 	"strings"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -27,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 var sysVarPlanningFunc = map[string]func(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error){}
@@ -53,14 +53,17 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 					Name: expr.Name.Lowered(),
 					Expr: exp,
 				}
-				setOps = append(setOps, setOp)
 			} else {
-				if err == sqlparser.ExprNotSupported {
-					tabletExpressions = append(tabletExpressions, expr)
-				} else {
+				if err != sqlparser.ExprNotSupported {
 					return nil, err
 				}
+				setOp = &engine.UserDefinedVariable{
+					Name: expr.Name.Lowered(),
+					Expr: &evalengine.Column{Offset: len(tabletExpressions)},
+				}
+				tabletExpressions = append(tabletExpressions, expr)
 			}
+			setOps = append(setOps, setOp)
 		case sqlparser.SessionStr:
 			planFunc, ok := sysVarPlanningFunc[expr.Name.Lowered()]
 			if !ok {
@@ -80,12 +83,11 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 	if len(tabletExpressions) == 0 {
 		input = &engine.SingleRow{}
 	} else {
-		newSetOpts, primitive, err := planTabletInput(vschema, tabletExpressions)
+		primitive, err := planTabletInput(vschema, tabletExpressions)
 		if err != nil {
 			return nil, err
 		}
 		input = primitive
-		setOps = append(setOps, newSetOpts...)
 	}
 
 	return &engine.Set{
@@ -94,10 +96,10 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 	}, nil
 }
 
-func planTabletInput(vschema ContextVSchema, tabletExpressions []*sqlparser.SetExpr) ([]engine.SetOp, engine.Primitive, error) {
+func planTabletInput(vschema ContextVSchema, tabletExpressions []*sqlparser.SetExpr) (engine.Primitive, error) {
 	keyspace, err := vschema.DefaultKeyspace()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	dest := vschema.Destination()
@@ -105,22 +107,11 @@ func planTabletInput(vschema ContextVSchema, tabletExpressions []*sqlparser.SetE
 		dest = key.DestinationAnyShard{}
 	}
 
-	var setOps []engine.SetOp
-	query := ""
-	for i, e := range tabletExpressions {
-		setOp := &engine.UserDefinedVariable{
-			Name: e.Name.Lowered(),
-			Expr: &evalengine.Column{Offset: i},
-		}
-
-		setOps = append(setOps, setOp)
-		if query == "" {
-			query = "select "
-		} else {
-			query += ", "
-		}
-		query += sqlparser.String(e.Expr)
+	var expr []string
+	for _, e := range tabletExpressions {
+		expr = append(expr, sqlparser.String(e.Expr))
 	}
+	query := fmt.Sprintf("select %s from dual", strings.Join(expr, ","))
 
 	primitive := &engine.Send{
 		Keyspace:          keyspace,
@@ -129,7 +120,7 @@ func planTabletInput(vschema ContextVSchema, tabletExpressions []*sqlparser.SetE
 		IsDML:             false,
 		SingleShardOnly:   true,
 	}
-	return setOps, primitive, nil
+	return primitive, nil
 }
 
 func buildSetOpIgnore(expr *sqlparser.SetExpr, _ ContextVSchema) (engine.SetOp, error) {
