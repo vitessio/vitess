@@ -107,7 +107,7 @@ func NewScatterConn(statsName string, txConn *TxConn, gw *TabletGateway) *Scatte
 			[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
 		txConn:  txConn,
 		gateway: gw,
-		//TODO(deepthi): we need to get ScatterConn working without using legacyHealthCheck
+		// gateway has a reference to healthCheck so we don't need this any more
 		legacyHealthCheck: nil,
 	}
 }

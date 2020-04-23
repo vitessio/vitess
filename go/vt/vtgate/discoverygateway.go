@@ -43,11 +43,12 @@ import (
 )
 
 const (
-	gatewayImplementationDiscovery = "discoverygateway"
+	// GatewayImplementationDiscovery defines the string value used as the implementation key for DiscoveryGateway
+	GatewayImplementationDiscovery = "discoverygateway"
 )
 
 func init() {
-	RegisterGatewayCreator(gatewayImplementationDiscovery, createDiscoveryGateway)
+	RegisterGatewayCreator(GatewayImplementationDiscovery, createDiscoveryGateway)
 }
 
 // DiscoveryGateway is the default Gateway implementation.

@@ -44,8 +44,6 @@ type tabletStats struct {
 	// LastError is the error we last saw when trying to get the
 	// tablet's healthcheck.
 	LastError error
-	// TODO(deepthi): No member of this struct should be accessed without holding the mutex
-	// mu sync.Mutex
 }
 
 // String is defined because we want to print a []*tabletStats array nicely.
