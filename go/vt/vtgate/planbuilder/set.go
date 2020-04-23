@@ -57,6 +57,9 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 				if err != sqlparser.ExprNotSupported {
 					return nil, err
 				}
+				if !expressionOkToDelegateToTablet(expr.Expr) {
+					return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "expression not supported for SET: %s", sqlparser.String(expr.Expr))
+				}
 				setOp = &engine.UserDefinedVariable{
 					Name: expr.Name.Lowered(),
 					Expr: &evalengine.Column{Offset: len(tabletExpressions)},
@@ -154,4 +157,25 @@ func buildSetOpCheckAndIgnore(expr *sqlparser.SetExpr, vschema ContextVSchema) (
 		TargetDestination: dest,
 		Expr:              sqlparser.String(expr.Expr),
 	}, nil
+}
+
+var validFuncs = map[string]bool{
+	"concat": true,
+}
+
+func expressionOkToDelegateToTablet(e sqlparser.Expr) bool {
+	valid := true
+	sqlparser.Rewrite(e, nil, func(cursor *sqlparser.Cursor) bool {
+		switch n := cursor.Node().(type) {
+		case *sqlparser.Subquery, *sqlparser.TimestampFuncExpr, *sqlparser.CurTimeFuncExpr:
+			valid = false
+			return false
+		case *sqlparser.FuncExpr:
+			_, ok := validFuncs[n.Name.Lowered()]
+			valid = ok
+			return ok
+		}
+		return true
+	})
+	return valid
 }
