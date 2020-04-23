@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
-
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/google/go-cmp/cmp"
@@ -81,20 +79,4 @@ func TestLastInsertIdWithRollback(t *testing.T) {
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Error(diff)
 	}
-}
-
-func TestUserDefinedVariableResolvedAtTablet(t *testing.T) {
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	// this should set the UDV foo to a value that has to be evaluated by mysqld
-	exec(t, conn, "set @foo = CONCAT('Any','Expression','Is','Valid')")
-
-	// now getting that value should return the value from the tablet
-	qr := exec(t, conn, "select @foo")
-	got := fmt.Sprintf("%v", qr.Rows)
-	want := "love"
-	utils.MustMatch(t, want, got, "didnt match")
 }

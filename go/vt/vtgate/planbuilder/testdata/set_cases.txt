@@ -97,7 +97,7 @@
         },
         "TargetDestination": "AnyShard()",
         "IsDML": false,
-        "Query": "select CONCAT('Any', 'Expression', 'Is', 'Valid')",
+        "Query": "select CONCAT('Any', 'Expression', 'Is', 'Valid') from dual",
         "SingleShardOnly": true
       }
     ]
