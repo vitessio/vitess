@@ -36,6 +36,7 @@ type ConnParams struct {
 	SslKey           string `json:"ssl_key"`
 	ServerName       string `json:"server_name"`
 	ConnectTimeoutMs uint64 `json:"connect_timeout_ms"`
+	IdleTimeoutMs    uint64 `json:"idle_timeout_ms"`
 
 	// The following is only set when the deprecated "dbname" flags are
 	// supplied and will be removed.
