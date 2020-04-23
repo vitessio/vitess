@@ -106,6 +106,9 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 		defer log.Infof("Done opening pool: '%s'", cp.name)
 	}
 
+	appParams.SetIdleTimeout(cp.idleTimeout)
+	dbaParams.SetIdleTimeout(cp.idleTimeout)
+	appDebugParams.SetIdleTimeout(cp.idleTimeout)
 	f := func(ctx context.Context) (pools.Resource, error) {
 		return NewDBConn(ctx, cp, appParams)
 	}
