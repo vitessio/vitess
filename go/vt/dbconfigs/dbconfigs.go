@@ -24,6 +24,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
@@ -218,6 +219,10 @@ func (dbcfgs *DBConfigs) WithDBName(dbname string) *DBConfigs {
 // DBName returns the db name.
 func (dbcfgs *DBConfigs) DBName() string {
 	return dbcfgs.dbname
+}
+
+func (c Connector) SetIdleTimeout(timeout time.Duration) {
+	c.connParams.IdleTimeoutMs = uint64(timeout.Milliseconds())
 }
 
 // AppWithDB returns connection parameters for app with dbname set.
