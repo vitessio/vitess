@@ -5,7 +5,6 @@
   "Original": "set @@default_storage_engine = 'DONOTCHANGEME'",
   "Instructions": {
     "OperatorType": "Set",
-    "Variant": "",
     "Ops": [
       {
         "Type": "SysVarIgnore",
@@ -23,7 +22,6 @@
   "Original": "set @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER')",
   "Instructions": {
     "OperatorType": "Set",
-    "Variant": "",
     "Ops": [
       {
         "Type": "SysVarCheckAndIgnore",

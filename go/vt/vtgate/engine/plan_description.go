@@ -52,8 +52,10 @@ func (pd PrimitiveDescription) MarshalJSON() ([]byte, error) {
 	if err := marshalAdd("", buf, "OperatorType", pd.OperatorType); err != nil {
 		return nil, err
 	}
-	if err := marshalAdd(",", buf, "Variant", pd.Variant); err != nil {
-		return nil, err
+	if pd.Variant != "" {
+		if err := marshalAdd(",", buf, "Variant", pd.Variant); err != nil {
+			return nil, err
+		}
 	}
 	if pd.Keyspace != nil {
 		if err := marshalAdd(",", buf, "Keyspace", pd.Keyspace); err != nil {

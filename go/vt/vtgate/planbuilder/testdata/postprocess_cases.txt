@@ -913,7 +913,6 @@
   "Original": "select user.col from user join user_extra limit 1",
   "Instructions": {
     "OperatorType": "Limit",
-    "Variant": "",
     "Count": 1,
     "Inputs": [
       {
@@ -957,7 +956,6 @@
   "Original": "select col from user limit 1",
   "Instructions": {
     "OperatorType": "Limit",
-    "Variant": "",
     "Count": 1,
     "Inputs": [
       {
@@ -982,7 +980,6 @@
   "Original": "select col from user limit :a",
   "Instructions": {
     "OperatorType": "Limit",
-    "Variant": "",
     "Count": null,
     "Inputs": [
       {
@@ -1007,7 +1004,6 @@
   "Original": "select * from user where (id1 = 4 AND name1 ='abc') limit 5",
   "Instructions": {
     "OperatorType": "Limit",
-    "Variant": "",
     "Count": 5,
     "Inputs": [
       {
@@ -1032,7 +1028,6 @@
   "Original": "select col from user where col in (select col1 from user) limit 1",
   "Instructions": {
     "OperatorType": "Limit",
-    "Variant": "",
     "Count": 1,
     "Inputs": [
       {

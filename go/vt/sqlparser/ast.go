@@ -210,7 +210,7 @@ type (
 		Table                  TableName
 		ShowTablesOpt          *ShowTablesOpt
 		Scope                  string
-		ShowCollationFilterOpt *Expr // TODO: this should not be a pointer
+		ShowCollationFilterOpt Expr
 	}
 
 	// Use represents a use statement.
@@ -1249,7 +1249,7 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, " on %v", node.OnTable)
 	}
 	if nodeType == "collation" && node.ShowCollationFilterOpt != nil {
-		buf.astPrintf(node, " where %v", *node.ShowCollationFilterOpt)
+		buf.astPrintf(node, " where %v", node.ShowCollationFilterOpt)
 	}
 	if nodeType == "charset" && node.ShowTablesOpt != nil {
 		buf.astPrintf(node, "%v", node.ShowTablesOpt.Filter)
