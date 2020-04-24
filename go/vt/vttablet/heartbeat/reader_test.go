@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
-	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -38,7 +37,7 @@ func TestReaderReadHeartbeat(t *testing.T) {
 	tr := newReader(db, mockNowFunc)
 	defer tr.Close()
 
-	db.AddQuery(fmt.Sprintf("SELECT ts FROM %s.heartbeat WHERE keyspaceShard='%s'", tr.dbName, tr.keyspaceShard), &sqltypes.Result{
+	db.AddQuery(fmt.Sprintf("SELECT ts FROM %s.heartbeat WHERE keyspaceShard='%s'", "_vt", tr.keyspaceShard), &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "ts", Type: sqltypes.Int64},
 		},
@@ -107,7 +106,6 @@ func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
 	tr := NewReader(tabletenv.NewTestEnv(config, nil, "ReaderTest"))
-	tr.dbName = sqlescape.EscapeID(dbc.SidecarDBName.Get())
 	tr.keyspaceShard = "test:0"
 	tr.now = nowFunc
 	tr.pool.Open(dbc.AppWithDB(), dbc.DbaWithDB(), dbc.AppDebugWithDB())

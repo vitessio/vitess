@@ -179,9 +179,8 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 					if dbname == "" {
 						dbname = fmt.Sprintf("vt_%v_%v", keyspace, shard)
 					}
-					// Copy dbcfgs and override SidecarDBName because there will be one for each db.
-					copydbcfgs := dbcfgs.Copy()
-					copydbcfgs.SidecarDBName.Set("_" + dbname)
+					// Clone dbcfgs and override SidecarDBName because there will be one for each db.
+					copydbcfgs := dbcfgs.Clone()
 
 					replicas := int(kpb.ReplicaCount)
 					if replicas == 0 {

@@ -24,32 +24,32 @@ db:
     user: vt_app      # db_app_user
     password:         # db_app_password
     useSsl: true      # db_app_use_ssl
-    preferSocket: true
+    preferTcp: false
   dba:
     user: vt_dba      # db_dba_user
     password:         # db_dba_password
     useSsl: true      # db_dba_use_ssl
-    preferSocket: true
+    preferTcp: false
   filtered:
     user: vt_filtered # db_filtered_user
     password:         # db_filtered_password
     useSsl: true      # db_filtered_use_ssl
-    preferSocket: true
+    preferTcp: false
   repl:
     user: vt_repl     # db_repl_user
     password:         # db_repl_password
     useSsl: true      # db_repl_use_ssl
-    preferSocket: true
+    preferTcp: false
   appdebug:
     user: vt_appdebug # db_appdebug_user
     password:         # db_appdebug_password
     useSsl: true      # db_appdebug_use_ssl
-    preferSocket: true
+    preferTcp: false
   allprivs:
     user: vt_allprivs # db_allprivs_user
     password:         # db_allprivs_password
     useSsl: true      # db_allprivs_use_ssl
-    preferSocket: true
+    preferTcp: false
 
 oltpReadPool:
   size: 16                 # queryserver-config-pool-size

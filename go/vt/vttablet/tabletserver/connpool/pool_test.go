@@ -86,7 +86,10 @@ func TestConnPoolMaxWaiters(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		c1, err := connPool.Get(context.Background())
-		assert.NoError(t, err)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+			return
+		}
 		c1.Recycle()
 	}()
 	// Wait for the first waiter to increment count.
