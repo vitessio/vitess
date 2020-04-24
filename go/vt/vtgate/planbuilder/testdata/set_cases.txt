@@ -5,7 +5,6 @@
   "Original": "set @foo = 42",
   "Instructions": {
     "OperatorType": "Set",
-    "Variant": "",
     "Ops": [
       {
         "Type": "UserDefinedVariable",
@@ -23,7 +22,6 @@
   "Original": "set @foo = 42, @bar = @foo",
   "Instructions": {
     "OperatorType": "Set",
-    "Variant": "",
     "Ops": [
       {
         "Type": "UserDefinedVariable",
