@@ -25,7 +25,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -60,7 +59,6 @@ type Writer struct {
 	interval      time.Duration
 	tabletAlias   topodatapb.TabletAlias
 	keyspaceShard string
-	dbName        string
 	now           func() time.Time
 	errorLog      *logutil.ThrottledLogger
 
@@ -101,7 +99,6 @@ func (w *Writer) Init(target querypb.Target) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	log.Info("Initializing heartbeat table.")
-	w.dbName = sqlescape.EscapeID(w.env.DBConfigs().SidecarDBName.Get())
 	w.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
 
 	if target.TabletType == topodatapb.TabletType_MASTER {
@@ -162,8 +159,8 @@ func (w *Writer) initializeTables(cp dbconfigs.Connector) error {
 	}
 	defer conn.Close()
 	statements := []string{
-		fmt.Sprintf(sqlCreateSidecarDB, w.dbName),
-		fmt.Sprintf(sqlCreateHeartbeatTable, w.dbName),
+		fmt.Sprintf(sqlCreateSidecarDB, "_vt"),
+		fmt.Sprintf(sqlCreateHeartbeatTable, "_vt"),
 	}
 	for _, s := range statements {
 		if _, err := conn.ExecuteFetch(s, 0, false); err != nil {
@@ -191,7 +188,7 @@ func (w *Writer) bindHeartbeatVars(query string) (string, error) {
 		"ts":  sqltypes.Int64BindVariable(w.now().UnixNano()),
 		"uid": sqltypes.Int64BindVariable(int64(w.tabletAlias.Uid)),
 	}
-	parsed := sqlparser.BuildParsedQuery(query, w.dbName, ":ts", ":uid", ":ks")
+	parsed := sqlparser.BuildParsedQuery(query, "_vt", ":ts", ":uid", ":ks")
 	bound, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return "", err
