@@ -5,7 +5,6 @@
   "Original": "select count(*), col from unsharded",
   "Instructions": {
     "OperatorType": "Send",
-    "Variant": "",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -24,7 +23,6 @@
   "Original": "update user set val = 1 where id = 18446744073709551616 and id = 1",
   "Instructions": {
     "OperatorType": "Send",
-    "Variant": "",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -43,7 +41,6 @@
   "Original": "DELETE FROM USER WHERE ID = 42",
   "Instructions": {
     "OperatorType": "Send",
-    "Variant": "",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -62,7 +59,6 @@
   "Original": "INSERT INTO USER (ID, NAME) VALUES (42, 'ms X')",
   "Instructions": {
     "OperatorType": "Send",
-    "Variant": "",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -81,7 +77,6 @@
   "Original": "insert into user(nonid) values (2)",
   "Instructions": {
     "OperatorType": "Send",
-    "Variant": "",
     "Keyspace": {
       "Name": "main",
       "Sharded": false

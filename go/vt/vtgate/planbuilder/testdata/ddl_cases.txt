@@ -5,7 +5,6 @@
   "Original": "create table t1(id bigint, primary key(id))",
   "Instructions": {
     "OperatorType": "Send",
-    "Variant": "",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -24,7 +23,6 @@
   "Original": "create table user.t1(id bigint, primary key(id))",
   "Instructions": {
     "OperatorType": "Send",
-    "Variant": "",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -43,7 +41,6 @@
   "Original": "create table a(id int)",
   "Instructions": {
     "OperatorType": "Send",
-    "Variant": "",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -66,7 +63,6 @@
   "Original": "alter table a ADD id int",
   "Instructions": {
     "OperatorType": "Send",
-    "Variant": "",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -85,7 +81,6 @@
   "Original": "alter table user.b ADD id int",
   "Instructions": {
     "OperatorType": "Send",
-    "Variant": "",
     "Keyspace": {
       "Name": "user",
       "Sharded": true

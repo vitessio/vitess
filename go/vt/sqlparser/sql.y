@@ -1640,9 +1640,7 @@ show_statement:
   }
 | SHOW COLLATION WHERE expression
   {
-    // Cannot dereference $4 directly, or else the parser stackcannot be pooled. See yyParsePooled
-    showCollationFilterOpt := $4
-    $$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
+    $$ = &Show{Type: string($2), ShowCollationFilterOpt: $4}
   }
 | SHOW VITESS_METADATA VARIABLES like_opt
   {

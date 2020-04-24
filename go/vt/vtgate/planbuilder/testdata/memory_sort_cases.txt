@@ -108,7 +108,6 @@
   "Original": "select a, b, count(*) k from user group by a order by k desc limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Variant": "",
     "Count": 10,
     "Inputs": [
       {
@@ -223,7 +222,6 @@
     "Inputs": [
       {
         "OperatorType": "Subquery",
-        "Variant": "",
         "Columns": [
           0
         ],
@@ -467,8 +465,7 @@
     "OrderBy": "2 ASC",
     "Inputs": [
       {
-        "OperatorType": "vindexfunc - not implemented",
-        "Variant": ""
+        "OperatorType": "vindexfunc - not implemented"
       }
     ]
   }
