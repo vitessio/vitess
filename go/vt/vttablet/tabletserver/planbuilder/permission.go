@@ -47,7 +47,7 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 	case *sqlparser.Delete:
 		permissions = buildTableExprsPermissions(node.TableExprs, tableacl.WRITER, permissions)
 		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
-	case *sqlparser.Set, *sqlparser.Show, *sqlparser.OtherRead:
+	case *sqlparser.Set, *sqlparser.Show, *sqlparser.OtherRead, *sqlparser.Explain:
 		// no-op
 	case *sqlparser.DDL:
 		for _, t := range node.AffectedTables() {
