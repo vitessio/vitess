@@ -172,7 +172,13 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 	}
 
 	if params.IdleTimeoutMs != 0 {
-		_, err := c.ExecuteFetch(fmt.Sprintf("SET SESSION wait_timeout = %d", params.IdleTimeoutMs / 1000), 0, false)
+		idleTimeoutSec := float64(params.IdleTimeoutMs) / 1000
+		if idleTimeoutSec*0.1 > 30 {
+			idleTimeoutSec += 30
+		} else {
+			idleTimeoutSec *= 1.1
+		}
+		_, err := c.ExecuteFetch(fmt.Sprintf("SET SESSION wait_timeout = %d", uint(idleTimeoutSec)), 0, false)
 		if err != nil {
 			return nil, err
 		}
