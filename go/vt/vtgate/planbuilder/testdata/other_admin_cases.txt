@@ -5,7 +5,6 @@
   "Original": "repair table t1,t2 quick",
   "Instructions": {
     "OperatorType": "Send",
-    "Variant": "",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -24,7 +23,6 @@
   "Original": "optimize table t1",
   "Instructions": {
     "OperatorType": "Send",
-    "Variant": "",
     "Keyspace": {
       "Name": "main",
       "Sharded": false

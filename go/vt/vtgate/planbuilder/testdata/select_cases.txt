@@ -103,7 +103,6 @@
   "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Variant": "",
     "Count": 10,
     "Inputs": [
       {
@@ -198,7 +197,6 @@
   "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Variant": "",
     "Count": 10,
     "Inputs": [
       {
@@ -412,7 +410,6 @@
   "Original": "select database() from dual",
   "Instructions": {
     "OperatorType": "Projection",
-    "Variant": "",
     "Columns": [
       "database()"
     ],
@@ -421,8 +418,7 @@
     ],
     "Inputs": [
       {
-        "OperatorType": "SingleRow",
-        "Variant": ""
+        "OperatorType": "SingleRow"
       }
     ]
   }
@@ -833,7 +829,6 @@
   "Original": "select user_id from music order by user_id limit 10, 20",
   "Instructions": {
     "OperatorType": "Limit",
-    "Variant": "",
     "Count": 20,
     "Offset": 10,
     "Inputs": [
@@ -1105,7 +1100,6 @@
   "Original": "select * from (select user.id id1, user_extra.id id2 from user join user_extra) as t",
   "Instructions": {
     "OperatorType": "Subquery",
-    "Variant": "",
     "Columns": [
       0,
       1
@@ -1363,7 +1357,6 @@
   "Original": "select 42",
   "Instructions": {
     "OperatorType": "Projection",
-    "Variant": "",
     "Columns": [
       "42"
     ],
@@ -1372,8 +1365,7 @@
     ],
     "Inputs": [
       {
-        "OperatorType": "SingleRow",
-        "Variant": ""
+        "OperatorType": "SingleRow"
       }
     ]
   }
@@ -1386,7 +1378,6 @@
   "Original": "select 42+2",
   "Instructions": {
     "OperatorType": "Projection",
-    "Variant": "",
     "Columns": [
       "42 + 2"
     ],
@@ -1395,8 +1386,7 @@
     ],
     "Inputs": [
       {
-        "OperatorType": "SingleRow",
-        "Variant": ""
+        "OperatorType": "SingleRow"
       }
     ]
   }

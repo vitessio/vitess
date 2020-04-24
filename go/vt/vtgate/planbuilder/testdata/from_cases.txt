@@ -1452,7 +1452,6 @@
     "Inputs": [
       {
         "OperatorType": "Subquery",
-        "Variant": "",
         "Columns": [
           1,
           0
@@ -1512,7 +1511,6 @@
   "Original": "select t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t",
   "Instructions": {
     "OperatorType": "Subquery",
-    "Variant": "",
     "Columns": [
       0
     ],
@@ -1575,7 +1573,6 @@
       },
       {
         "OperatorType": "Subquery",
-        "Variant": "",
         "Columns": [
           1
         ],
@@ -1984,7 +1981,6 @@
   "Original": "select id, t.id from (select user.id from user join user_extra) as t",
   "Instructions": {
     "OperatorType": "Subquery",
-    "Variant": "",
     "Columns": [
       0,
       0
@@ -2050,7 +2046,6 @@
   "Original": "select last_insert_id()",
   "Instructions": {
     "OperatorType": "Projection",
-    "Variant": "",
     "Columns": [
       "last_insert_id()"
     ],
@@ -2059,8 +2054,7 @@
     ],
     "Inputs": [
       {
-        "OperatorType": "SingleRow",
-        "Variant": ""
+        "OperatorType": "SingleRow"
       }
     ]
   }

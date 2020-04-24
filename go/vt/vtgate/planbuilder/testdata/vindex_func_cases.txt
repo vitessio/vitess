@@ -4,8 +4,7 @@
   "QueryType": "SELECT",
   "Original": "select id, keyspace_id, range_start, range_end from user_index where id = :id",
   "Instructions": {
-    "OperatorType": "vindexfunc - not implemented",
-    "Variant": ""
+    "OperatorType": "vindexfunc - not implemented"
   }
 }
 
@@ -15,8 +14,7 @@
   "QueryType": "SELECT",
   "Original": "select * from user_index where id = :id",
   "Instructions": {
-    "OperatorType": "vindexfunc - not implemented",
-    "Variant": ""
+    "OperatorType": "vindexfunc - not implemented"
   }
 }
 
@@ -26,8 +24,7 @@
   "QueryType": "SELECT",
   "Original": "select id, keyspace_id, id from user_index where id = :id",
   "Instructions": {
-    "OperatorType": "vindexfunc - not implemented",
-    "Variant": ""
+    "OperatorType": "vindexfunc - not implemented"
   }
 }
 
@@ -41,8 +38,7 @@
   "QueryType": "SELECT",
   "Original": "select id, keyspace_id, id from second_user.hash_dup where id = :id",
   "Instructions": {
-    "OperatorType": "vindexfunc - not implemented",
-    "Variant": ""
+    "OperatorType": "vindexfunc - not implemented"
   }
 }
 
@@ -58,8 +54,7 @@
     "TableName": "_unsharded",
     "Inputs": [
       {
-        "OperatorType": "vindexfunc - not implemented",
-        "Variant": ""
+        "OperatorType": "vindexfunc - not implemented"
       },
       {
         "OperatorType": "Route",
@@ -99,8 +94,7 @@
         "Table": "unsharded"
       },
       {
-        "OperatorType": "vindexfunc - not implemented",
-        "Variant": ""
+        "OperatorType": "vindexfunc - not implemented"
       }
     ]
   }
@@ -118,8 +112,7 @@
     "TableName": "_unsharded",
     "Inputs": [
       {
-        "OperatorType": "vindexfunc - not implemented",
-        "Variant": ""
+        "OperatorType": "vindexfunc - not implemented"
       },
       {
         "OperatorType": "Route",
@@ -148,8 +141,7 @@
     "TableName": "_unsharded",
     "Inputs": [
       {
-        "OperatorType": "vindexfunc - not implemented",
-        "Variant": ""
+        "OperatorType": "vindexfunc - not implemented"
       },
       {
         "OperatorType": "Route",
@@ -178,8 +170,7 @@
     "TableName": "_unsharded",
     "Inputs": [
       {
-        "OperatorType": "vindexfunc - not implemented",
-        "Variant": ""
+        "OperatorType": "vindexfunc - not implemented"
       },
       {
         "OperatorType": "Route",
