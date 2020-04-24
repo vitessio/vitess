@@ -368,6 +368,21 @@ func (q *query) VStreamResults(request *binlogdatapb.VStreamResultsRequest, stre
 	return vterrors.ToGRPC(err)
 }
 
+//ReserveExecute is part of the queryservice.QueryServer interface
+func (q *query) ReserveExecute(ctx context.Context, request *querypb.ReserveExecuteRequest) (*querypb.ReserveExecuteResponse, error) {
+	panic("implement me")
+}
+
+//ReserveRelease is part of the queryservice.QueryServer interface
+func (q *query) ReserveRelease(ctx context.Context, request *querypb.ReserveReleaseRequest) (*querypb.ReserveReleaseResponse, error) {
+	panic("implement me")
+}
+
+//ReserveBeginExecute is part of the queryservice.QueryServer interface
+func (q *query) ReserveBeginExecute(ctx context.Context, request *querypb.ReserveBeginExecuteRequest) (*querypb.ReserveBeginExecuteResponse, error) {
+	panic("implement me")
+}
+
 // Register registers the implementation on the provide gRPC Server.
 func Register(s *grpc.Server, server queryservice.QueryService) {
 	queryservicepb.RegisterQueryServer(s, &query{server})
