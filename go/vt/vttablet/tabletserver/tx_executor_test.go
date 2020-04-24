@@ -530,6 +530,7 @@ func newTestTxExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fa
 	db.AddQuery("delete from _vt.redo_state where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("delete from _vt.redo_statement where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("update test_table set name = 2 where pk = 1 limit 10001", &sqltypes.Result{})
+	db.AddQuery("set session wait_timeout = 1830", &sqltypes.Result{})
 	return &TxExecutor{
 		ctx:      ctx,
 		logStats: logStats,
