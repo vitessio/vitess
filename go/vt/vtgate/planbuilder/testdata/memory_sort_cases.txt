@@ -465,7 +465,22 @@
     "OrderBy": "2 ASC",
     "Inputs": [
       {
-        "OperatorType": "vindexfunc - not implemented"
+        "OperatorType": "VindexFunc",
+        "Variant": "VindexMap",
+        "Columns": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "Fields": {
+          "id": "VARBINARY",
+          "keyspace_id": "VARBINARY",
+          "range_end": "VARBINARY",
+          "range_start": "VARBINARY"
+        },
+        "Value": ":id",
+        "Vindex": "user_index"
       }
     ]
   }

@@ -4,7 +4,22 @@
   "QueryType": "SELECT",
   "Original": "select id, keyspace_id, range_start, range_end from user_index where id = :id",
   "Instructions": {
-    "OperatorType": "vindexfunc - not implemented"
+    "OperatorType": "VindexFunc",
+    "Variant": "VindexMap",
+    "Columns": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "Fields": {
+      "id": "VARBINARY",
+      "keyspace_id": "VARBINARY",
+      "range_end": "VARBINARY",
+      "range_start": "VARBINARY"
+    },
+    "Value": ":id",
+    "Vindex": "user_index"
   }
 }
 
@@ -14,7 +29,22 @@
   "QueryType": "SELECT",
   "Original": "select * from user_index where id = :id",
   "Instructions": {
-    "OperatorType": "vindexfunc - not implemented"
+    "OperatorType": "VindexFunc",
+    "Variant": "VindexMap",
+    "Columns": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "Fields": {
+      "id": "VARBINARY",
+      "keyspace_id": "VARBINARY",
+      "range_end": "VARBINARY",
+      "range_start": "VARBINARY"
+    },
+    "Value": ":id",
+    "Vindex": "user_index"
   }
 }
 
@@ -24,7 +54,19 @@
   "QueryType": "SELECT",
   "Original": "select id, keyspace_id, id from user_index where id = :id",
   "Instructions": {
-    "OperatorType": "vindexfunc - not implemented"
+    "OperatorType": "VindexFunc",
+    "Variant": "VindexMap",
+    "Columns": [
+      0,
+      1,
+      0
+    ],
+    "Fields": {
+      "id": "VARBINARY",
+      "keyspace_id": "VARBINARY"
+    },
+    "Value": ":id",
+    "Vindex": "user_index"
   }
 }
 
@@ -38,7 +80,19 @@
   "QueryType": "SELECT",
   "Original": "select id, keyspace_id, id from second_user.hash_dup where id = :id",
   "Instructions": {
-    "OperatorType": "vindexfunc - not implemented"
+    "OperatorType": "VindexFunc",
+    "Variant": "VindexMap",
+    "Columns": [
+      0,
+      1,
+      0
+    ],
+    "Fields": {
+      "id": "VARBINARY",
+      "keyspace_id": "VARBINARY"
+    },
+    "Value": ":id",
+    "Vindex": "hash_dup"
   }
 }
 
@@ -54,7 +108,16 @@
     "TableName": "_unsharded",
     "Inputs": [
       {
-        "OperatorType": "vindexfunc - not implemented"
+        "OperatorType": "VindexFunc",
+        "Variant": "VindexMap",
+        "Columns": [
+          1
+        ],
+        "Fields": {
+          "keyspace_id": "VARBINARY"
+        },
+        "Value": ":id",
+        "Vindex": "user_index"
       },
       {
         "OperatorType": "Route",
@@ -94,7 +157,16 @@
         "Table": "unsharded"
       },
       {
-        "OperatorType": "vindexfunc - not implemented"
+        "OperatorType": "VindexFunc",
+        "Variant": "VindexMap",
+        "Columns": [
+          1
+        ],
+        "Fields": {
+          "keyspace_id": "VARBINARY"
+        },
+        "Value": ":id",
+        "Vindex": "user_index"
       }
     ]
   }
@@ -112,7 +184,18 @@
     "TableName": "_unsharded",
     "Inputs": [
       {
-        "OperatorType": "vindexfunc - not implemented"
+        "OperatorType": "VindexFunc",
+        "Variant": "VindexMap",
+        "Columns": [
+          0,
+          1
+        ],
+        "Fields": {
+          "id": "VARBINARY",
+          "keyspace_id": "VARBINARY"
+        },
+        "Value": ":id",
+        "Vindex": "user_index"
       },
       {
         "OperatorType": "Route",
@@ -141,7 +224,18 @@
     "TableName": "_unsharded",
     "Inputs": [
       {
-        "OperatorType": "vindexfunc - not implemented"
+        "OperatorType": "VindexFunc",
+        "Variant": "VindexMap",
+        "Columns": [
+          1,
+          0
+        ],
+        "Fields": {
+          "id": "VARBINARY",
+          "keyspace_id": "VARBINARY"
+        },
+        "Value": ":id",
+        "Vindex": "user_index"
       },
       {
         "OperatorType": "Route",
@@ -170,7 +264,18 @@
     "TableName": "_unsharded",
     "Inputs": [
       {
-        "OperatorType": "vindexfunc - not implemented"
+        "OperatorType": "VindexFunc",
+        "Variant": "VindexMap",
+        "Columns": [
+          1,
+          0
+        ],
+        "Fields": {
+          "id": "VARBINARY",
+          "keyspace_id": "VARBINARY"
+        },
+        "Value": ":id",
+        "Vindex": "user_index"
       },
       {
         "OperatorType": "Route",
