@@ -97,4 +97,8 @@ service Query {
 
   // VStreamResults streams results along with the gtid of the snapshot.
   rpc VStreamResults(binlogdata.VStreamResultsRequest) returns (stream binlogdata.VStreamResultsResponse) {};
+
+  rpc ReserveExecute(query.ReserveExecuteRequest) returns (query.ReserveExecuteResponse) {};
+  rpc ReserveRelease(query.ReserveReleaseRequest) returns (query.ReserveReleaseResponse) {};
+  rpc ReserveBeginExecute(query.ReserveBeginExecuteRequest) returns (query.ReserveBeginExecuteResponse) {};
 }

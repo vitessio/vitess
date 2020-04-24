@@ -404,7 +404,33 @@ message ExecuteRequest {
   BoundQuery query = 4;
   int64 transaction_id = 5;
   ExecuteOptions options = 6;
+  int64 reserve_id = 7;
 }
+
+// ReserveExecuteRequest is the payload to ReserveExecute
+message ReserveExecuteRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  repeated BoundQuery set_statements = 4;
+  BoundQuery query = 5;
+  int64 transaction_id = 6;
+  ExecuteOptions options = 7;
+}
+
+// ReserveExecuteResponse is the returned value from Execute
+message ReserveExecuteResponse {
+  QueryResult result = 1;
+  int64 reserve_id = 2;
+}
+
+// ReserveReleaseRequest is the payload to ReserveRelease
+message ReserveReleaseRequest {
+  int64 transaction_id = 1;
+  int64 reserve_id = 2;
+}
+
+message ReserveReleaseResponse {}
 
 // ExecuteResponse is the returned value from Execute
 message ExecuteResponse {
@@ -431,6 +457,7 @@ message ExecuteBatchRequest {
   bool as_transaction = 5;
   int64 transaction_id = 6;
   ExecuteOptions options = 7;
+  int64 reserve_id = 8;
 }
 
 // ExecuteBatchResponse is the returned value from ExecuteBatch
@@ -446,6 +473,7 @@ message StreamExecuteRequest {
   BoundQuery query = 4;
   ExecuteOptions options = 5;
   int64 transaction_id = 6;
+  int64 reserve_id = 7;
 }
 
 // StreamExecuteResponse is the returned value from StreamExecute
@@ -472,6 +500,7 @@ message CommitRequest {
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   int64 transaction_id = 4;
+  int64 reserve_id = 5;
 }
 
 // CommitResponse is the returned value from Commit
@@ -483,6 +512,7 @@ message RollbackRequest {
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   int64 transaction_id = 4;
+  int64 reserve_id = 5;
 }
 
 // RollbackResponse is the returned value from Rollback
@@ -495,6 +525,7 @@ message PrepareRequest {
   Target target = 3;
   int64 transaction_id = 4;
   string dtid = 5;
+  int64 reserve_id = 6;
 }
 
 // PrepareResponse is the returned value from Prepare
@@ -518,6 +549,7 @@ message RollbackPreparedRequest {
   Target target = 3;
   int64 transaction_id = 4;
   string dtid = 5;
+  int64 reserve_id = 6;
 }
 
 // RollbackPreparedResponse is the returned value from RollbackPrepared
@@ -542,6 +574,7 @@ message StartCommitRequest {
   Target target = 3;
   int64 transaction_id = 4;
   string dtid = 5;
+  int64 reserve_id = 6;
 }
 
 // StartCommitResponse is the returned value from StartCommit
@@ -554,6 +587,7 @@ message SetRollbackRequest {
   Target target = 3;
   int64 transaction_id = 4;
   string dtid = 5;
+  int64 reserve_id = 6;
 }
 
 // SetRollbackResponse is the returned value from SetRollback
@@ -603,6 +637,30 @@ message BeginExecuteResponse {
 
   // transaction_id might be non-zero even if an error is present.
   int64 transaction_id = 3;
+}
+
+// ReserveBeginExecuteRequest is the payload to ReserveBeginExecute
+message ReserveBeginExecuteRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  repeated BoundQuery set_statements = 4;
+  BoundQuery query = 5;
+  ExecuteOptions options = 6;
+}
+
+// BeginExecuteResponse is the returned value from BeginExecute
+message ReserveBeginExecuteResponse {
+  // error contains an application level error if necessary. Note the
+  // transaction_id may be set, even when an error is returned, if the begin
+  // worked but the execute failed.
+  vtrpc.RPCError error = 1;
+  QueryResult result = 2;
+
+  // transaction_id might be non-zero even if an error is present.
+  int64 transaction_id = 3;
+  // reserve_id might be non-zero even if an error is present.
+  int64 reserve_id = 4;
 }
 
 // BeginExecuteBatchRequest is the payload to BeginExecuteBatch
