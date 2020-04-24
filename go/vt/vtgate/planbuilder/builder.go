@@ -301,7 +301,7 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 		}
 	case *sqlparser.Use:
 		instruction, err = buildUsePlan(stmt, vschema)
-	case *sqlparser.OtherRead, *sqlparser.OtherAdmin:
+	case *sqlparser.OtherRead, *sqlparser.OtherAdmin, *sqlparser.Explain:
 		instruction, err = buildOtherReadAndAdmin(query, vschema)
 	case *sqlparser.Set:
 		instruction, err = buildSetPlan(stmt, vschema)

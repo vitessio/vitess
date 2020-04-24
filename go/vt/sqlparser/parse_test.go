@@ -1379,8 +1379,19 @@ var (
 		input:  "desc foobar",
 		output: "otherread",
 	}, {
-		input:  "explain foobar",
-		output: "otherread",
+		input: "explain select * from t",
+	}, {
+		input: "explain format = tree select * from t",
+	}, {
+		input: "explain format = json select * from t",
+	}, {
+		input: "explain format = vitess select * from t",
+	}, {
+		input: "explain delete from t",
+	}, {
+		input: "explain insert into t(col1, col2) values (1, 2)",
+	}, {
+		input: "explain update t set col = 2",
 	}, {
 		input:  "truncate table foo",
 		output: "truncate table foo",

@@ -213,15 +213,19 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP SRID
 %token <bytes> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE
 
+// Explain tokens
+%token <bytes> FORMAT TREE VITESS
+
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
+%type <statement> explain_statement
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement
 %type <bytes2> comment_opt comment_list
-%type <str> union_op insert_or_replace
+%type <str> union_op insert_or_replace explain_format_opt
 %type <str> distinct_opt cache_opt match_option separator_opt
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
@@ -358,6 +362,7 @@ command:
 | begin_statement
 | commit_statement
 | rollback_statement
+| explain_statement
 | other_statement
 | flush_statement
 | /*empty*/
@@ -1688,15 +1693,15 @@ tables_or_processlist:
     $$ = string($1)
   }
 
-  extended_opt:
-    /* empty */
-    {
-      $$ = ""
-    }
+extended_opt:
+  /* empty */
+  {
+    $$ = ""
+  }
   | EXTENDED
-    {
-      $$ = "extended "
-    }
+  {
+    $$ = "extended "
+  }
 
 full_opt:
   /* empty */
@@ -1800,6 +1805,41 @@ rollback_statement:
   ROLLBACK
   {
     $$ = &Rollback{}
+  }
+
+explain_format_opt:
+  {
+    $$ = ""
+  }
+| FORMAT '=' JSON
+  {
+    $$ = JSONStr
+  }
+| FORMAT '=' TREE
+  {
+    $$ = TreeStr
+  }
+| FORMAT '=' VITESS
+  {
+    $$ = VitessStr
+  }
+
+explain_statement:
+  EXPLAIN explain_format_opt select_statement
+  {
+    $$ = &Explain{Fmt: $2, Statement: $3}
+  }
+| EXPLAIN explain_format_opt update_statement
+  {
+    $$ = &Explain{Fmt: $2, Statement: $3}
+  }
+| EXPLAIN explain_format_opt insert_statement
+  {
+    $$ = &Explain{Fmt: $2, Statement: $3}
+  }
+| EXPLAIN explain_format_opt delete_statement
+  {
+    $$ = &Explain{Fmt: $2, Statement: $3}
   }
 
 other_statement:
