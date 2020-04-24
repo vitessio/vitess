@@ -411,3 +411,7 @@
 # delete with multi-table targets
 "delete music,user from music inner join user where music.id = user.id"
 "unsupported: multi-shard or vindex write statement"
+
+# Database DDL
+"create database foo"
+"unsupported: Database DDL create database foo"
