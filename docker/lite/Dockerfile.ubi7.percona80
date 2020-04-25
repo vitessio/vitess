@@ -78,6 +78,21 @@ ENV MYSQL_FLAVOR MySQL80
 # Copy artifacts from builder layer.
 COPY --from=builder --chown=vitess:vitess /vt/install /vt
 
+RUN mkdir -p /licenses
+COPY LICENSE /licenses
+
 # Create mount point for actual data (e.g. MySQL data dir)
 VOLUME /vt/vtdataroot
 USER vitess
+
+LABEL name="Vitess Lite image - Percona Server 8.0" \
+      io.k8s.display-name="Vitess Lite image - Percona Server 8.0" \
+      maintainer="cncf-vitess-maintainers@lists.cncf.io" \
+      vendor="CNCF" \
+      version="6.0.0" \
+      release="1" \
+      summary="Vitess base container image, containing Vitess components along with Percona Server 8.0" \
+      description="Vitess base container image, containing Vitess components along with Percona Server 8.0" \
+      io.k8s.description="Vitess base container image, containing Vitess components along with Percona Server 8.0" \
+      distribution-scope="public" \
+      url="https://vitess.io"
