@@ -16,6 +16,16 @@
   }
 }
 
+# Explain Vitess statement
+"explain format=vitess select * from user"
+{
+  "QueryType": "OTHER",
+  "Original": "explain format=vitess select * from user",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+
 # Analyze statement
 "analyze table t1"
 {
