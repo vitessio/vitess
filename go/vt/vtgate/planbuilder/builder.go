@@ -275,46 +275,8 @@ func Build(query string, vschema ContextVSchema) (*engine.Plan, error) {
 var ErrPlanNotSupported = errors.New("plan building not supported")
 
 // BuildFromStmt builds a plan based on the AST provided.
-// TODO(sougou): The query input is trusted as the source
-// of the AST. Maybe this function just returns instructions
-// and engine.Plan can be built by the caller.
 func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema, bindVarNeeds sqlparser.BindVarNeeds) (*engine.Plan, error) {
-	var err error
-	var instruction engine.Primitive
-
-	switch stmt := stmt.(type) {
-	case *sqlparser.Select:
-		instruction, err = buildRoutePlan(stmt, vschema, buildSelectPlan)
-	case *sqlparser.Insert:
-		instruction, err = buildRoutePlan(stmt, vschema, buildInsertPlan)
-	case *sqlparser.Update:
-		instruction, err = buildRoutePlan(stmt, vschema, buildUpdatePlan)
-	case *sqlparser.Delete:
-		instruction, err = buildRoutePlan(stmt, vschema, buildDeletePlan)
-	case *sqlparser.Union:
-		instruction, err = buildRoutePlan(stmt, vschema, buildUnionPlan)
-	case *sqlparser.DDL:
-		if sqlparser.IsVschemaDDL(stmt) {
-			instruction, err = buildVSchemaDDLPlan(stmt, vschema)
-		} else {
-			instruction, err = buildDDLPlan(query, stmt, vschema)
-		}
-	case *sqlparser.Use:
-		instruction, err = buildUsePlan(stmt, vschema)
-	case *sqlparser.OtherRead, *sqlparser.OtherAdmin, *sqlparser.Explain:
-		instruction, err = buildOtherReadAndAdmin(query, vschema)
-	case *sqlparser.Set:
-		instruction, err = buildSetPlan(stmt, vschema)
-	case *sqlparser.DBDDL:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Database DDL %v", sqlparser.String(stmt))
-	case *sqlparser.Show, *sqlparser.SetTransaction:
-		return nil, ErrPlanNotSupported
-	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback:
-		// Empty by design. Not executed by a plan
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
-	}
-
+	instruction, err := createInstructionFor(query, stmt, vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -332,4 +294,38 @@ func buildRoutePlan(stmt sqlparser.Statement, vschema ContextVSchema, f func(sta
 		return buildPlanForBypass(stmt, vschema)
 	}
 	return f(stmt, vschema)
+}
+
+func createInstructionFor(query string, stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+	switch stmt := stmt.(type) {
+	case *sqlparser.Select:
+		return buildRoutePlan(stmt, vschema, buildSelectPlan)
+	case *sqlparser.Insert:
+		return buildRoutePlan(stmt, vschema, buildInsertPlan)
+	case *sqlparser.Update:
+		return buildRoutePlan(stmt, vschema, buildUpdatePlan)
+	case *sqlparser.Delete:
+		return buildRoutePlan(stmt, vschema, buildDeletePlan)
+	case *sqlparser.Union:
+		return buildRoutePlan(stmt, vschema, buildUnionPlan)
+	case *sqlparser.DDL:
+		if sqlparser.IsVschemaDDL(stmt) {
+			return buildVSchemaDDLPlan(stmt, vschema)
+		}
+		return buildDDLPlan(query, stmt, vschema)
+	case *sqlparser.Use:
+		return buildUsePlan(stmt, vschema)
+	case *sqlparser.OtherRead, *sqlparser.OtherAdmin, *sqlparser.Explain:
+		return buildOtherReadAndAdmin(query, vschema)
+	case *sqlparser.Set:
+		return buildSetPlan(stmt, vschema)
+	case *sqlparser.DBDDL:
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Database DDL %v", sqlparser.String(stmt))
+	case *sqlparser.Show, *sqlparser.SetTransaction:
+		return nil, ErrPlanNotSupported
+	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback:
+		// Empty by design. Not executed by a plan
+	}
+
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
 }
