@@ -181,5 +181,23 @@ func (vf *VindexFunc) buildRow(id sqltypes.Value, ksid []byte, kr *topodatapb.Ke
 }
 
 func (vf *VindexFunc) description() PrimitiveDescription {
-	return PrimitiveDescription{OperatorType: "vindexfunc - not implemented"}
+	fields := map[string]string{}
+	for _, field := range vf.Fields {
+		fields[field.Name] = field.Type.String()
+	}
+
+	other := map[string]interface{}{
+		"Fields":  fields,
+		"Columns": vf.Cols,
+		"Value":   vf.Value,
+	}
+	if vf.Vindex != nil {
+		other["Vindex"] = vf.Vindex.String()
+	}
+
+	return PrimitiveDescription{
+		OperatorType: "VindexFunc",
+		Variant:      vindexOpcodeName[vf.Opcode],
+		Other:        other,
+	}
 }
