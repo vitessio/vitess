@@ -315,7 +315,16 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return buildDDLPlan(query, stmt, vschema)
 	case *sqlparser.Use:
 		return buildUsePlan(stmt, vschema)
-	case *sqlparser.OtherRead, *sqlparser.OtherAdmin, *sqlparser.Explain:
+	case *sqlparser.Explain:
+		if stmt.Fmt == sqlparser.VitessStr {
+			innerInstruction, err := createInstructionFor(query, stmt.Statement, vschema)
+			if err != nil {
+				return nil, err
+			}
+			return buildExplainPlan(innerInstruction)
+		}
+		return buildOtherReadAndAdmin(query, vschema)
+	case *sqlparser.OtherRead, *sqlparser.OtherAdmin:
 		return buildOtherReadAndAdmin(query, vschema)
 	case *sqlparser.Set:
 		return buildSetPlan(stmt, vschema)
