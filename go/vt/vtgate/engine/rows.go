@@ -58,7 +58,7 @@ func (r *Rows) Execute(VCursor, map[string]*querypb.BindVariable, bool) (*sqltyp
 		Fields:       r.fields,
 		RowsAffected: uint64(len(r.rows)),
 		InsertID:     0,
-		Rows:         nil,
+		Rows:         r.rows,
 	}, nil
 }
 
