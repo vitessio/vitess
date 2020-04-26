@@ -1089,7 +1089,7 @@ func TestPlanExecutorOtherRead(t *testing.T) {
 
 	stmts := []string{
 		"analyze table t1",
-		"describe t1",
+		"describe select * from t1",
 		"explain select * from t1",
 	}
 

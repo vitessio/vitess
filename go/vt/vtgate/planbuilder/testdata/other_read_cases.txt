@@ -45,10 +45,10 @@
 }
 
 # Describe statement
-"describe t1"
+"describe select * from t"
 {
   "QueryType": "OTHER",
-  "Original": "describe t1",
+  "Original": "describe select * from t",
   "Instructions": {
     "OperatorType": "Send",
     "Keyspace": {
@@ -57,16 +57,16 @@
     },
     "TargetDestination": "AnyShard()",
     "IsDML": false,
-    "Query": "describe t1",
+    "Query": "describe select * from t",
     "SingleShardOnly": true
   }
 }
 
 # Desc statement
-"desc t1"
+"desc select * from t"
 {
   "QueryType": "OTHER",
-  "Original": "desc t1",
+  "Original": "desc select * from t",
   "Instructions": {
     "OperatorType": "Send",
     "Keyspace": {
@@ -75,7 +75,7 @@
     },
     "TargetDestination": "AnyShard()",
     "IsDML": false,
-    "Query": "desc t1",
+    "Query": "desc select * from t",
     "SingleShardOnly": true
   }
 }
