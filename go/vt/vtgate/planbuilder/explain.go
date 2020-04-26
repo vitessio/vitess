@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"encoding/json"
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -25,27 +24,83 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
+func extractQuery(m map[string]interface{}) string {
+	queryObj, ok := m["Query"]
+	if !ok {
+		return ""
+	}
+	query, ok := queryObj.(string)
+	if !ok {
+		return ""
+	}
+
+	return query
+}
+
 // Builds an explain-plan for the given Primitive
 func buildExplainPlan(input engine.Primitive) (engine.Primitive, error) {
-	description := engine.PrimitiveToPlanDescription(input)
+	descriptions := treeLines(engine.PrimitiveToPlanDescription(input))
 
-	indent := "  "
-	prefix := ""
-	jsonByt, err := json.MarshalIndent(description, prefix, indent)
-	if err != nil {
-		return nil, err
-	}
-
-	lines := strings.Split(string(jsonByt), "/n")
 	var rows [][]sqltypes.Value
-	for _, line := range lines {
-		rows = append(rows, []sqltypes.Value{sqltypes.NewVarChar(line)})
+	for _, line := range descriptions {
+		var targetDest string
+		if line.descr.TargetDestination != nil {
+			targetDest = line.descr.TargetDestination.String()
+		}
+		rows = append(rows, []sqltypes.Value{
+			sqltypes.NewVarChar(line.header + line.descr.OperatorType),
+			sqltypes.NewVarChar(line.descr.Variant),
+			sqltypes.NewVarChar(line.descr.Keyspace.Name),
+			sqltypes.NewVarChar(targetDest),
+			sqltypes.NewVarChar(line.descr.TargetTabletType.String()),
+			sqltypes.NewVarChar(extractQuery(line.descr.Other)),
+		})
 	}
 
-	fields := []*querypb.Field{{
-		Name: "description",
-		Type: querypb.Type_VARCHAR,
-	}}
+	fields := []*querypb.Field{
+		{Name: "operator", Type: querypb.Type_VARCHAR},
+		{Name: "variant", Type: querypb.Type_VARCHAR},
+		{Name: "keyspace", Type: querypb.Type_VARCHAR},
+		{Name: "destination", Type: querypb.Type_VARCHAR},
+		{Name: "tabletType", Type: querypb.Type_VARCHAR},
+		{Name: "query", Type: querypb.Type_VARCHAR},
+	}
 
 	return engine.NewRowsPrimitive(rows, fields), nil
+}
+
+type description struct {
+	header string
+	descr  engine.PrimitiveDescription
+}
+
+func treeLines(root engine.PrimitiveDescription) []description {
+	l := len(root.Inputs) - 1
+	output := []description{{
+		header: "",
+		descr:  root,
+	}}
+	for i, child := range root.Inputs {
+		childLines := treeLines(child)
+		var header string
+		var lastHdr string
+		if i == l {
+			header = "└─" + " "
+			lastHdr = strings.Repeat(" ", 3)
+		} else {
+			header = "├─" + " "
+			lastHdr = "│" + strings.Repeat(" ", 2)
+		}
+
+		for x, childLine := range childLines {
+			if x == 0 {
+				childLine.header = header + childLine.header
+			} else {
+				childLine.header = lastHdr + childLine.header
+			}
+
+			output = append(output, childLine)
+		}
+	}
+	return output
 }
