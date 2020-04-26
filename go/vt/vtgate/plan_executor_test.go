@@ -1090,7 +1090,7 @@ func TestPlanExecutorOtherRead(t *testing.T) {
 	stmts := []string{
 		"analyze table t1",
 		"describe t1",
-		"explain t1",
+		"explain select * from t1",
 	}
 
 	for _, stmt := range stmts {
