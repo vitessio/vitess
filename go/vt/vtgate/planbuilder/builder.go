@@ -334,6 +334,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return nil, ErrPlanNotSupported
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback:
 		// Empty by design. Not executed by a plan
+		return nil, nil
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)

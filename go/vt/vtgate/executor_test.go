@@ -1126,7 +1126,7 @@ func TestExecutorOther(t *testing.T) {
 		"show tables",
 		"analyze table t1",
 		"describe t1",
-		"explain t1",
+		"explain select * from t1",
 		"repair table t1",
 		"optimize table t1",
 	}
