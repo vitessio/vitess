@@ -286,18 +286,15 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		keyspace := parts[1]
 
 		if cell == "local" {
-			aliases, err := ts.GetCellsAliases(ctx, false)
-			if err != nil {
-				return nil, fmt.Errorf("could not fetch cell info: %v", err)
-			}
-			if len(aliases) == 0 {
-				return nil, fmt.Errorf("no local cells have been created yet")
-			}
 			if *localCell == "" {
-				// Choose a random cell.
-				for cell = range aliases {
-					break
+				cells, err := ts.GetCellInfoNames(ctx)
+				if err != nil {
+					return nil, fmt.Errorf("could not fetch cell info: %v", err)
 				}
+				if len(cells) == 0 {
+					return nil, fmt.Errorf("no local cells have been created yet")
+				}
+				cell = cells[0]
 			} else {
 				cell = *localCell
 			}
