@@ -214,7 +214,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE
 
 // Explain tokens
-%token <bytes> FORMAT TREE VITESS
+%token <bytes> FORMAT TREE VITESS TRADITIONAL
 
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
@@ -1823,6 +1823,10 @@ explain_format_opt:
 | FORMAT '=' VITESS
   {
     $$ = VitessStr
+  }
+| FORMAT '=' TRADITIONAL
+  {
+    $$ = TraditionalStr
   }
 
 explain_synonyms:
