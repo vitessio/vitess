@@ -218,7 +218,7 @@ func skipToEnd(yylex interface{}) {
 
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
-%type <statement> explain_statement
+%type <statement> explain_statement explainable_statement
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement
 %type <ddl> create_table_prefix rename_list
@@ -226,6 +226,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> begin_statement commit_statement rollback_statement
 %type <bytes2> comment_opt comment_list
 %type <str> union_op insert_or_replace explain_format_opt
+%type <bytes> explain_synonyms
 %type <str> distinct_opt cache_opt match_option separator_opt
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
@@ -1824,20 +1825,40 @@ explain_format_opt:
     $$ = VitessStr
   }
 
+explain_synonyms:
+  EXPLAIN
+  {
+    $$ = $1
+  }
+| DESCRIBE
+  {
+    $$ = $1  
+  }
+| DESC
+  {
+    $$ = $1  
+  }
+
+explainable_statement:
+  select_statement
+  {
+    $$ = $1
+  }
+| update_statement  
+  {
+    $$ = $1
+  }
+| insert_statement  
+  {
+    $$ = $1
+  }
+| delete_statement  
+  {
+    $$ = $1
+  }
+  
 explain_statement:
-  EXPLAIN explain_format_opt select_statement
-  {
-    $$ = &Explain{Fmt: $2, Statement: $3}
-  }
-| EXPLAIN explain_format_opt update_statement
-  {
-    $$ = &Explain{Fmt: $2, Statement: $3}
-  }
-| EXPLAIN explain_format_opt insert_statement
-  {
-    $$ = &Explain{Fmt: $2, Statement: $3}
-  }
-| EXPLAIN explain_format_opt delete_statement
+  explain_synonyms explain_format_opt explainable_statement
   {
     $$ = &Explain{Fmt: $2, Statement: $3}
   }

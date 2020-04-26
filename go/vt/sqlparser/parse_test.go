@@ -1373,11 +1373,11 @@ var (
 		input:  "use ks@replica",
 		output: "use `ks@replica`",
 	}, {
-		input:  "describe foobar",
-		output: "otherread",
+		input:  "describe select * from t",
+		output: "explain select * from t",
 	}, {
-		input:  "desc foobar",
-		output: "otherread",
+		input:  "desc select * from t",
+		output: "explain select * from t",
 	}, {
 		input: "explain select * from t",
 	}, {
@@ -1386,6 +1386,9 @@ var (
 		input: "explain format = json select * from t",
 	}, {
 		input: "explain format = vitess select * from t",
+	}, {
+		input:  "describe format = vitess select * from t",
+		output: "explain format = vitess select * from t",
 	}, {
 		input: "explain delete from t",
 	}, {
