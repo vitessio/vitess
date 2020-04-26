@@ -286,10 +286,21 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		keyspace := parts[1]
 
 		if cell == "local" {
-			if *localCell == "" {
-				return nil, fmt.Errorf("local cell requested, but not specified. Please set with -cell flag")
+			aliases, err := ts.GetCellsAliases(ctx, false)
+			if err != nil {
+				return nil, fmt.Errorf("could not fetch cell info: %v", err)
 			}
-			cell = *localCell
+			if len(aliases) == 0 {
+				return nil, fmt.Errorf("no local cells have been created yet")
+			}
+			if *localCell == "" {
+				// Choose a random cell.
+				for cell = range aliases {
+					break
+				}
+			} else {
+				cell = *localCell
+			}
 		}
 
 		// If a keyspace is provided then return the specified srvkeyspace.
