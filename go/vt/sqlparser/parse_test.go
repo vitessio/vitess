@@ -1381,6 +1381,8 @@ var (
 	}, {
 		input: "explain select * from t",
 	}, {
+		input: "explain format = traditional select * from t",
+	}, {
 		input: "explain format = tree select * from t",
 	}, {
 		input: "explain format = json select * from t",

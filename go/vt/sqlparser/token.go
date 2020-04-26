@@ -368,6 +368,7 @@ var keywords = map[string]int{
 	"trailing":            UNUSED,
 	"transaction":         TRANSACTION,
 	"tree":                TREE,
+	"traditional":         TRADITIONAL,
 	"trigger":             TRIGGER,
 	"true":                TRUE,
 	"truncate":            TRUNCATE,
