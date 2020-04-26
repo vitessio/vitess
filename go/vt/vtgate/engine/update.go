@@ -52,6 +52,7 @@ type Update struct {
 var updName = map[DMLOpcode]string{
 	Unsharded:     "UpdateUnsharded",
 	Equal:         "UpdateEqual",
+	In:            "UpdateIn",
 	Scatter:       "UpdateScatter",
 	ByDestination: "UpdateByDestination",
 }
@@ -86,6 +87,8 @@ func (upd *Update) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 		return upd.execUpdateUnsharded(vcursor, bindVars)
 	case Equal:
 		return upd.execUpdateEqual(vcursor, bindVars)
+	case In:
+		return upd.execUpdateIn(vcursor, bindVars)
 	case Scatter:
 		return upd.execUpdateByDestination(vcursor, bindVars, key.DestinationAllShards{})
 	case ByDestination:
@@ -135,6 +138,38 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 		}
 	}
 	return execShard(vcursor, upd.Query, bindVars, rs, true /* rollbackOnError */, true /* canAutocommit */)
+}
+
+func (upd *Update) execUpdateIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	keys, err := upd.Values[0].ResolveList(bindVars)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "execUpdateIn")
+	}
+	rss, _, err := resolveMultiShard(vcursor, upd.Vindex, upd.Keyspace, keys)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "execUpdateEqual")
+	}
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{
+			Sql:           upd.Query,
+			BindVariables: bindVars,
+		}
+	}
+
+	//if len(ksid) == 0 {
+	//	return &sqltypes.Result{}, nil
+	//}
+	if len(upd.ChangedVindexValues) != 0 {
+		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
+			return nil, vterrors.Wrap(err, "execUpdateEqual")
+		}
+	}
+	autocommit := (len(rss) == 1 || upd.MultiShardAutocommit) && vcursor.AutocommitApproval()
+	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
+	return result, vterrors.Aggregate(errs)
+
+	//return execShard(vcursor, upd.Query, bindVars, rs, true /* rollbackOnError */, true /* canAutocommit */)
 }
 
 // updateVindexEntries performs an update when a vindex is being modified
