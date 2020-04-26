@@ -68,26 +68,27 @@ type DMLOpcode int
 
 // This is the list of UpdateOpcode values.
 const (
-	// UpdateUnsharded is for routing an update statement
+	// Unsharded is for routing a dml statement
 	// to an unsharded keyspace.
 	Unsharded = DMLOpcode(iota)
-	// UpdateEqual is for routing an update statement
-	// to a single shard: Requires: A Vindex, and
-	// a single Value.
+	// Equal is for routing an dml statement to a single shard.
+	// Requires: A Vindex, and a single Value.
 	Equal
-	// UpdateScatter is for routing a scattered
-	// update statement.
+	// In is for routing an dml statement to a multi shard.
+	// Requires: A Vindex, and a multi Values.
+	In
+	// Scatter is for routing a scattered dml statement.
 	Scatter
-	// UpdateByDestination is to route explicitly to a given
-	// target destination. Is used when the query explicitly sets a target destination:
-	// in the clause:
-	// e.g: UPDATE `keyspace[-]`.x1 SET foo=1
+	// ByDestination is to route explicitly to a given target destination.
+	// Is used when the query explicitly sets a target destination:
+	// in the clause e.g: UPDATE `keyspace[-]`.x1 SET foo=1
 	ByDestination
 )
 
 var opcodeName = map[DMLOpcode]string{
 	Unsharded:     "Unsharded",
 	Equal:         "Equal",
+	In:            "In",
 	Scatter:       "Scatter",
 	ByDestination: "ByDestination",
 }
