@@ -45,7 +45,6 @@ package topo
 import (
 	"flag"
 	"fmt"
-	"strings"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -219,8 +218,8 @@ func Open() *Server {
 	if *topoGlobalServerAddress == "" && *topoImplementation != "k8s" {
 		log.Exitf("topo_global_server_address must be configured")
 	}
-	if !strings.HasPrefix(*topoGlobalRoot, "/") {
-		log.Exitf("topo_global_root must be non-empty and must begin with a '/': %v", *topoGlobalRoot)
+	if *topoGlobalRoot == "" {
+		log.Exit("topo_global_root must be non-empty")
 	}
 	ts, err := OpenServer(*topoImplementation, *topoGlobalServerAddress, *topoGlobalRoot)
 	if err != nil {
