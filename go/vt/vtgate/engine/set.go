@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -33,21 +35,22 @@ import (
 type (
 	// Set contains the instructions to perform set.
 	Set struct {
-		Ops []SetOp
+		Ops   []SetOp
+		Input Primitive
+
 		noTxNeeded
-		noInputs
 	}
 
 	// SetOp is an interface that different type of set operations implements.
 	SetOp interface {
-		Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) error
+		Execute(vcursor VCursor, env evalengine.ExpressionEnv) error
 		VariableName() string
 	}
 
 	// UserDefinedVariable implements the SetOp interface to execute user defined variables.
 	UserDefinedVariable struct {
-		Name      string
-		PlanValue sqltypes.PlanValue
+		Name string
+		Expr evalengine.Expr
 	}
 
 	// SysVarIgnore implements the SetOp interface to ignore the settings.
@@ -83,9 +86,20 @@ func (s *Set) GetTableName() string {
 }
 
 //Execute implements the Primitive interface method.
-func (s *Set) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (s *Set) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+	input, err := s.Input.Execute(vcursor, bindVars, false)
+	if err != nil {
+		return nil, err
+	}
+	if len(input.Rows) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "should get a single row")
+	}
+	env := evalengine.ExpressionEnv{
+		BindVars: bindVars,
+		Row:      input.Rows[0],
+	}
 	for _, setOp := range s.Ops {
-		err := setOp.Execute(vcursor, bindVars)
+		err := setOp.Execute(vcursor, env)
 		if err != nil {
 			return nil, err
 		}
@@ -95,12 +109,21 @@ func (s *Set) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable
 
 //StreamExecute implements the Primitive interface method.
 func (s *Set) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
-	panic("implement me")
+	result, err := s.Execute(vcursor, bindVars, wantields)
+	if err != nil {
+		return err
+	}
+	return callback(result)
 }
 
 //GetFields implements the Primitive interface method.
-func (s *Set) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	panic("implement me")
+func (s *Set) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return &sqltypes.Result{}, nil
+}
+
+//Inputs implements the Primitive interface
+func (s *Set) Inputs() []Primitive {
+	return []Primitive{s.Input}
 }
 
 func (s *Set) description() PrimitiveDescription {
@@ -120,10 +143,12 @@ var _ SetOp = (*UserDefinedVariable)(nil)
 func (u *UserDefinedVariable) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type string
-		UserDefinedVariable
+		Name string
+		Expr string
 	}{
-		Type:                "UserDefinedVariable",
-		UserDefinedVariable: *u,
+		Type: "UserDefinedVariable",
+		Name: u.Name,
+		Expr: u.Expr.String(),
 	})
 
 }
@@ -134,12 +159,12 @@ func (u *UserDefinedVariable) VariableName() string {
 }
 
 //Execute implements the SetOp interface method.
-func (u *UserDefinedVariable) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) error {
-	value, err := u.PlanValue.ResolveValue(bindVars)
+func (u *UserDefinedVariable) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
+	value, err := u.Expr.Evaluate(env)
 	if err != nil {
 		return err
 	}
-	return vcursor.Session().SetUDV(u.Name, value)
+	return vcursor.Session().SetUDV(u.Name, value.Value())
 }
 
 var _ SetOp = (*SysVarIgnore)(nil)
@@ -162,7 +187,7 @@ func (svi *SysVarIgnore) VariableName() string {
 }
 
 //Execute implements the SetOp interface method.
-func (svi *SysVarIgnore) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) error {
+func (svi *SysVarIgnore) Execute(vcursor VCursor, _ evalengine.ExpressionEnv) error {
 	vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: mysql.ERNotSupportedYet, Message: fmt.Sprintf("Ignored inapplicable SET %v = %v", svi.Name, svi.Expr)})
 	return nil
 }
@@ -187,7 +212,7 @@ func (svci *SysVarCheckAndIgnore) VariableName() string {
 }
 
 //Execute implements the SetOp interface method
-func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) error {
+func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
 	rss, _, err := vcursor.ResolveDestinations(svci.Keyspace.Name, nil, []key.Destination{svci.TargetDestination})
 	if err != nil {
 		return vterrors.Wrap(err, "SysVarCheckAndIgnore")
@@ -197,7 +222,7 @@ func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, bindVars map[string]*
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %v", svci.TargetDestination)
 	}
 	checkSysVarQuery := fmt.Sprintf("select 1 from dual where @@%s = %s", svci.Name, svci.Expr)
-	result, err := execShard(vcursor, checkSysVarQuery, bindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
+	result, err := execShard(vcursor, checkSysVarQuery, env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
 	if err != nil {
 		return err
 	}

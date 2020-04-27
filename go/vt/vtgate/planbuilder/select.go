@@ -137,8 +137,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 }
 
 func tryAtVtgate(sel *sqlparser.Select) engine.Primitive {
-	dual := isOnlyDual(sel.From)
-	if !dual {
+	if !isOnlyDual(sel.From) {
 		return nil
 	}
 
