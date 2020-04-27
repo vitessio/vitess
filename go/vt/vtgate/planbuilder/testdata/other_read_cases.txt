@@ -1,7 +1,7 @@
 # Explain statement
 "explain select * from user"
 {
-  "QueryType": "OTHER",
+  "QueryType": "EXPLAIN",
   "Original": "explain select * from user",
   "Instructions": {
     "OperatorType": "Send",
@@ -19,7 +19,7 @@
 # Explain Vitess statement
 "explain format=vitess select * from user"
 {
-  "QueryType": "OTHER",
+  "QueryType": "EXPLAIN",
   "Original": "explain format=vitess select * from user",
   "Instructions": {
     "OperatorType": "Rows"
@@ -47,7 +47,7 @@
 # Describe statement
 "describe select * from t"
 {
-  "QueryType": "OTHER",
+  "QueryType": "EXPLAIN",
   "Original": "describe select * from t",
   "Instructions": {
     "OperatorType": "Send",
@@ -65,7 +65,7 @@
 # Desc statement
 "desc select * from t"
 {
-  "QueryType": "OTHER",
+  "QueryType": "EXPLAIN",
   "Original": "desc select * from t",
   "Instructions": {
     "OperatorType": "Send",

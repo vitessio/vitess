@@ -52,6 +52,7 @@ const (
 	StmtUnknown
 	StmtComment
 	StmtPriv
+	StmtExplain
 )
 
 //ASTToStatementType returns a StatementType from an AST stmt
@@ -73,8 +74,10 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtDDL
 	case *Use:
 		return StmtUse
-	case *OtherRead, *OtherAdmin, *Explain:
+	case *OtherRead, *OtherAdmin:
 		return StmtOther
+	case *Explain:
+		return StmtExplain
 	case *Begin:
 		return StmtBegin
 	case *Commit:
@@ -158,7 +161,9 @@ func Preview(sql string) StatementType {
 		return StmtShow
 	case "use":
 		return StmtUse
-	case "analyze", "describe", "desc", "explain", "repair", "optimize":
+	case "describe", "desc", "explain":
+		return StmtExplain
+	case "analyze", "repair", "optimize":
 		return StmtOther
 	case "grant", "revoke":
 		return StmtPriv
@@ -198,6 +203,8 @@ func (s StatementType) String() string {
 		return "OTHER"
 	case StmtPriv:
 		return "PRIV"
+	case StmtExplain:
+		return "EXPLAIN"
 	default:
 		return "UNKNOWN"
 	}

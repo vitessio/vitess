@@ -219,7 +219,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		return e.handleSet(ctx, safeSession, sql, logStats)
 	case sqlparser.StmtShow:
 		return e.handleShow(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
-	case sqlparser.StmtOther:
+	case sqlparser.StmtOther, sqlparser.StmtExplain:
 		return e.handleOther(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
 	case sqlparser.StmtComment:
 		return e.handleComment(sql)
@@ -1495,7 +1495,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 	case sqlparser.StmtSelect:
 		return e.handlePrepare(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, logStats)
 	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
-		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtComment:
+		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtComment, sqlparser.StmtExplain:
 		return nil, nil
 	case sqlparser.StmtShow:
 		res, err := e.handleShow(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
