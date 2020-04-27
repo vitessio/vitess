@@ -114,6 +114,10 @@ func (r *switcher) dropTargetVReplicationStreams(ctx context.Context) error {
 	return r.ts.dropTargetVReplicationStreams(ctx)
 }
 
+func (r *switcher) dropSourceReverseVReplicationStreams(ctx context.Context) error {
+	return r.ts.dropSourceReverseVReplicationStreams(ctx)
+}
+
 func (r *switcher) logs() *[]string {
 	return nil
 }

@@ -269,11 +269,22 @@ func (dr *switcherDryRun) validateWorkflowHasCompleted(ctx context.Context) erro
 }
 
 func (dr *switcherDryRun) dropTargetVReplicationStreams(ctx context.Context) error {
-	dr.drLog.Log("Delete vreplication streams on:")
+	dr.drLog.Log("Delete vreplication streams on target:")
 	logs := make([]string, 0)
 	for _, t := range dr.ts.targets {
 		logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s Workflow %s DbName %s Tablet %d",
 			t.si.Keyspace(), t.si.ShardName(), dr.ts.workflow, t.master.DbName(), t.master.Alias.Uid))
+	}
+	dr.drLog.LogSlice(logs)
+	return nil
+}
+
+func (dr *switcherDryRun) dropSourceReverseVReplicationStreams(ctx context.Context) error {
+	dr.drLog.Log("Delete reverse vreplication streams on source:")
+	logs := make([]string, 0)
+	for _, t := range dr.ts.sources {
+		logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s Workflow %s DbName %s Tablet %d",
+			t.si.Keyspace(), t.si.ShardName(), reverseName(dr.ts.workflow), t.master.DbName(), t.master.Alias.Uid))
 	}
 	dr.drLog.LogSlice(logs)
 	return nil

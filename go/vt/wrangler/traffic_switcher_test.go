@@ -824,7 +824,9 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2",
 		"Blacklisted tables t1,t2 will be removed from:",
 		"	Keyspace ks1 Shard 0 Tablet 10",
-		"Delete vreplication streams on:",
+		"Delete reverse vreplication streams on source:",
+		"	Keyspace ks1 Shard 0 Workflow test_reverse DbName vt_ks1 Tablet 10",
+		"Delete vreplication streams on target:",
 		"	Keyspace ks2 Shard -80 Workflow test DbName vt_ks2 Tablet 20",
 		"	Keyspace ks2 Shard 80- Workflow test DbName vt_ks2 Tablet 30",
 		"Unlock keyspace ks2",
@@ -838,6 +840,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	dropSources := func() {
 		tme.dbTargetClients[0].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[1].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks1' and workflow = 'test_reverse'", &sqltypes.Result{}, nil)
 		tme.tmeDB.AddQuery("drop table vt_ks1.t1", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("drop table vt_ks1.t2", &sqltypes.Result{})
 		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", &sqltypes.Result{}, nil) //
@@ -845,6 +848,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		//TODO, why are the delete queries not required?!
 		//tme.dbTargetClients[0].addQuery("delete from _vt.vreplication where db_name='vt_ks2' and workflow='test'", &sqltypes.Result{}, nil)
 		//tme.dbTargetClients[1].addQuery("delete from _vt.vreplication where db_name='vt_ks2' and workflow='test'", &sqltypes.Result{}, nil)
+
 	}
 	dropSources()
 
