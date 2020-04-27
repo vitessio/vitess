@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -264,36 +265,37 @@ func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, pos
 func buildPostponeQuery(name sqlparser.TableIdent, minBackoff, maxBackoff time.Duration) *sqlparser.ParsedQuery {
 	var args []interface{}
 
-	buf := bytes.NewBufferString("update %v set time_next = ")
-	args = append(args, name)
+	// since messages are immediately postponed upon sending, we need to add exponential backoff on top
+	// of the ackWaitTime, otherwise messages will be resent too quickly.
+	buf := bytes.NewBufferString("update %v set time_next = %a + %a + ")
+	args = append(args, name, ":time_now", ":wait_time")
 
-	// have backoff be +/- 33%, seeded with :time_now to be consistent in multiple usages
-	// whenever this is injected, append (:min_backoff, :time_now)
-	jitteredBackoff := "FLOOR((%a<<ifnull(epoch, 0))*(.666666 + (RAND(%a) * .666666)))"
+	// have backoff be +/- 33%, whenever this is injected, append (:min_backoff, :jitter)
+	jitteredBackoff := "FLOOR((%a<<ifnull(epoch, 0)) * %a)"
 
 	//
-	// if the jittered backoff is less than min_backoff, just set it to time_now + min_backoff
+	// if the jittered backoff is less than min_backoff, just set it to :min_backoff
 	//
-	buf.WriteString(fmt.Sprintf("IF(%s < %%a, %%a + %%a, ", jitteredBackoff))
+	buf.WriteString(fmt.Sprintf("IF(%s < %%a, %%a, ", jitteredBackoff))
 	// jitteredBackoff < :min_backoff
-	args = append(args, ":min_backoff", ":time_now", ":min_backoff")
-	// if it is less, then use :time_now + :min_backoff
-	args = append(args, ":time_now", ":min_backoff")
+	args = append(args, ":min_backoff", ":jitter", ":min_backoff")
+	// if it is less, then use :min_backoff
+	args = append(args, ":min_backoff")
 
 	// now we are setting the false case on the above IF statement
 	if maxBackoff == 0 {
-		// if there is no max_backoff, just use :time_now + jitteredBackoff
-		buf.WriteString(fmt.Sprintf("%%a + %s", jitteredBackoff))
-		args = append(args, ":time_now", ":min_backoff", ":time_now")
+		// if there is no max_backoff, just use jitteredBackoff
+		buf.WriteString(jitteredBackoff)
+		args = append(args, ":min_backoff", ":jitter")
 	} else {
 		// make sure that it doesn't exceed max_backoff
-		buf.WriteString(fmt.Sprintf("IF(%s > %%a, %%a + %%a, %%a + %s)", jitteredBackoff, jitteredBackoff))
+		buf.WriteString(fmt.Sprintf("IF(%s > %%a, %%a, %s)", jitteredBackoff, jitteredBackoff))
 		// jitteredBackoff > :max_backoff
-		args = append(args, ":min_backoff", ":time_now", ":max_backoff")
-		// if it is greater, then use :time_now + :max_backoff
-		args = append(args, ":time_now", ":max_backoff")
-		// otherwise just use :time_now + jitteredBackoff
-		args = append(args, ":time_now", ":min_backoff", ":time_now")
+		args = append(args, ":min_backoff", ":jitter", ":max_backoff")
+		// if it is greater, then use :max_backoff
+		args = append(args, ":max_backoff")
+		// otherwise just use jitteredBackoff
+		args = append(args, ":min_backoff", ":jitter")
 	}
 
 	// close the if statement
@@ -847,7 +849,9 @@ func (mm *messageManager) GeneratePostponeQuery(ids []string) (string, map[strin
 
 	bvs := map[string]*querypb.BindVariable{
 		"time_now":    sqltypes.Int64BindVariable(time.Now().UnixNano()),
+		"wait_time":   sqltypes.Int64BindVariable(int64(mm.ackWaitTime)),
 		"min_backoff": sqltypes.Int64BindVariable(int64(mm.minBackoff)),
+		"jitter":      sqltypes.Float64BindVariable(.666666 + rand.Float64()*.666666),
 		"ids":         idbvs,
 	}
 
