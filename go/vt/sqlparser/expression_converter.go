@@ -35,6 +35,8 @@ func Convert(e Expr) (evalengine.Expr, error) {
 			return evalengine.NewLiteralFloat(node.Val)
 		case ValArg:
 			return &evalengine.BindVariable{Key: string(node.Val[1:])}, nil
+		case StrVal:
+			return evalengine.NewLiteralString(node.Val)
 		}
 	case *BinaryExpr:
 		var op evalengine.BinaryExpr

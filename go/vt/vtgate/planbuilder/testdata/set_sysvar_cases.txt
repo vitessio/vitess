@@ -11,6 +11,11 @@
         "Name": "default_storage_engine",
         "Expr": "'DONOTCHANGEME'"
       }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
     ]
   }
 }
@@ -32,6 +37,11 @@
         },
         "TargetDestination": {},
         "Expr": "concat(@@sql_mode, ',NO_AUTO_CREATE_USER')"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
       }
     ]
   }

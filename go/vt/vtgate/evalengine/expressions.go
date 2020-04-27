@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"fmt"
 	"strconv"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -28,11 +29,11 @@ import (
 
 type (
 	evalResult struct {
-		typ  querypb.Type
-		ival int64
-		uval uint64
-		fval float64
-		str  string
+		typ   querypb.Type
+		ival  int64
+		uval  uint64
+		fval  float64
+		bytes []byte
 	}
 	//ExpressionEnv contains the environment that the expression
 	//evaluates in, such as the current row and bindvars
@@ -59,9 +60,9 @@ type (
 	}
 
 	// Expressions
-	LiteralInt   struct{ Val EvalResult }
-	LiteralFloat struct{ Val EvalResult }
+	Literal      struct{ Val EvalResult }
 	BindVariable struct{ Key string }
+	Column       struct{ Offset int }
 	BinaryOp     struct {
 		Expr        BinaryExpr
 		Left, Right Expr
@@ -79,26 +80,33 @@ func (e EvalResult) Value() sqltypes.Value {
 	return castFromNumeric(e, e.typ)
 }
 
+//NewLiteralInt returns a literal expression
 func NewLiteralInt(val []byte) (Expr, error) {
 	ival, err := strconv.ParseInt(string(val), 10, 64)
 	if err != nil {
 		return nil, err
 	}
-	return &LiteralFloat{evalResult{typ: sqltypes.Int64, ival: ival}}, nil
+	return &Literal{evalResult{typ: sqltypes.Int64, ival: ival}}, nil
 }
 
+//NewLiteralFloat returns a literal expression
 func NewLiteralFloat(val []byte) (Expr, error) {
 	fval, err := strconv.ParseFloat(string(val), 64)
 	if err != nil {
 		return nil, err
 	}
-	return &LiteralFloat{evalResult{typ: sqltypes.Float64, fval: fval}}, nil
+	return &Literal{evalResult{typ: sqltypes.Float64, fval: fval}}, nil
 }
 
-var _ Expr = (*LiteralInt)(nil)
-var _ Expr = (*LiteralFloat)(nil)
+//NewLiteralFloat returns a literal expression
+func NewLiteralString(val []byte) (Expr, error) {
+	return &Literal{evalResult{typ: sqltypes.VarBinary, bytes: val}}, nil
+}
+
+var _ Expr = (*Literal)(nil)
 var _ Expr = (*BindVariable)(nil)
 var _ Expr = (*BinaryOp)(nil)
+var _ Expr = (*Column)(nil)
 
 var _ BinaryExpr = (*Addition)(nil)
 var _ BinaryExpr = (*Subtraction)(nil)
@@ -119,11 +127,7 @@ func (b *BinaryOp) Evaluate(env ExpressionEnv) (EvalResult, error) {
 }
 
 //Evaluate implements the Expr interface
-func (l *LiteralInt) Evaluate(ExpressionEnv) (EvalResult, error) {
-	return l.Val, nil
-}
-
-func (l *LiteralFloat) Evaluate(env ExpressionEnv) (EvalResult, error) {
+func (l *Literal) Evaluate(ExpressionEnv) (EvalResult, error) {
 	return l.Val, nil
 }
 
@@ -134,6 +138,13 @@ func (b *BindVariable) Evaluate(env ExpressionEnv) (EvalResult, error) {
 		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Bind variable not found")
 	}
 	return evaluateByType(val)
+}
+
+//Evaluate implements the Expr interface
+func (c *Column) Evaluate(env ExpressionEnv) (EvalResult, error) {
+	value := env.Row[c.Offset]
+	numeric, err := newEvalResult(value)
+	return numeric, err
 }
 
 //Evaluate implements the BinaryOp interface
@@ -191,11 +202,12 @@ func (b *BindVariable) Type(env ExpressionEnv) querypb.Type {
 }
 
 //Type implements the Expr interface
-func (l *LiteralInt) Type(_ ExpressionEnv) querypb.Type {
-	return sqltypes.Int64
+func (l *Literal) Type(ExpressionEnv) querypb.Type {
+	return l.Val.typ
 }
 
-func (l *LiteralFloat) Type(env ExpressionEnv) querypb.Type {
+//Type implements the Expr interface
+func (c *Column) Type(ExpressionEnv) querypb.Type {
 	return sqltypes.Float64
 }
 
@@ -230,12 +242,13 @@ func (b *BindVariable) String() string {
 }
 
 //String implements the Expr interface
-func (l *LiteralInt) String() string {
+func (l *Literal) String() string {
 	return l.Val.Value().String()
 }
 
-func (l *LiteralFloat) String() string {
-	return l.Val.Value().String()
+//String implements the Expr interface
+func (c *Column) String() string {
+	return fmt.Sprintf("[%d]", c.Offset)
 }
 
 func mergeNumericalTypes(ltype, rtype querypb.Type) querypb.Type {
@@ -272,10 +285,8 @@ func evaluateByType(val *querypb.BindVariable) (EvalResult, error) {
 			fval = 0
 		}
 		return evalResult{typ: sqltypes.Float64, fval: fval}, nil
-	case sqltypes.VarChar:
-		return evalResult{typ: sqltypes.VarChar, str: string(val.Value)}, nil
-	case sqltypes.VarBinary:
-		return evalResult{typ: sqltypes.VarBinary, str: string(val.Value)}, nil
+	case sqltypes.VarChar, sqltypes.Text, sqltypes.VarBinary:
+		return evalResult{typ: sqltypes.VarBinary, bytes: val.Value}, nil
 	}
-	return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported")
+	return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %s", val.Type.String())
 }
