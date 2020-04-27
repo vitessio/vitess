@@ -404,6 +404,158 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 
 }
 
+func TestUpdateIn(t *testing.T) {
+	ks := buildTestVSchema().Keyspaces["sharded"]
+	upd := &Update{DML: DML{
+		Opcode:   In,
+		Keyspace: ks.Keyspace,
+		Query:    "dummy_update",
+		Vindex:   ks.Vindexes["hash"].(vindexes.SingleColumn),
+		Values: []sqltypes.PlanValue{{
+			Values: []sqltypes.PlanValue{
+				{Value: sqltypes.NewInt64(1)},
+				{Value: sqltypes.NewInt64(2)},
+			}},
+		}},
+	}
+
+	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
+	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f)`,
+		// ResolveDestinations is hard-coded to return -20.
+		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+	})
+}
+
+func TestUpdateInChangedVindex(t *testing.T) {
+	ks := buildTestVSchema().Keyspaces["sharded"]
+	upd := &Update{
+		DML: DML{
+			Opcode:   In,
+			Keyspace: ks.Keyspace,
+			Query:    "dummy_update",
+			Vindex:   ks.Vindexes["hash"].(vindexes.SingleColumn),
+			Values: []sqltypes.PlanValue{{
+				Values: []sqltypes.PlanValue{
+					{Value: sqltypes.NewInt64(1)},
+					{Value: sqltypes.NewInt64(2)},
+				}},
+			},
+			Table:            ks.Tables["t1"],
+			OwnedVindexQuery: "dummy_subquery",
+			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
+		},
+		ChangedVindexValues: map[string]VindexValues{
+			"twocol": {
+				"c1": {Value: sqltypes.NewInt64(1)},
+				"c2": {Value: sqltypes.NewInt64(2)},
+			},
+			"onecol": {
+				"c3": {Value: sqltypes.NewInt64(3)},
+			},
+		},
+	}
+
+	results := []*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|c1|c2|c3",
+			"int64|int64|int64|int64",
+		),
+		"1|4|5|6",
+		"2|21|22|23",
+	)}
+	vc := &loggingVCursor{
+		shards:  []string{"-20", "20-"},
+		results: results,
+	}
+
+	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f)`,
+		// ResolveDestinations is hard-coded to return -20.
+		// It gets used to perform the subquery to fetch the changing column values.
+		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
+		// Those values are returned as 4,5 for twocol and 6 for onecol.
+		// 4,5 have to be replaced by 1,2 (the new values).
+		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp2(from1, from2, toc) values(:from10, :from20, :toc0) from10: type:INT64 value:"1" from20: type:INT64 value:"2" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		// 6 has to be replaced by 3.
+		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: type:INT64 value:"3" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		// 21,22 have to be replaced by 1,2 (the new values).
+		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"21" from2: type:INT64 value:"22" toc: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
+		`Execute insert into lkp2(from1, from2, toc) values(:from10, :from20, :toc0) from10: type:INT64 value:"1" from20: type:INT64 value:"2" toc0: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
+		// 23 has to be replaced by 3.
+		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"23" toc: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
+		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: type:INT64 value:"3" toc0: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
+		// Finally, the actual update, which is also sent to -20, same route as the subquery.
+		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+	})
+
+	// No rows changing
+	vc = &loggingVCursor{
+		shards: []string{"-20", "20-"},
+	}
+	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f)`,
+		// ResolveDestinations is hard-coded to return -20.
+		// It gets used to perform the subquery to fetch the changing column values.
+		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
+		// Subquery returns no rows. So, no vindexes are updated. We still pass-through the original update.
+		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+	})
+
+	// Failure case: multiple rows changing.
+	results = []*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|c1|c2|c3",
+			"int64|int64|int64|int64",
+		),
+		"1|4|5|6",
+		"1|7|8|9",
+		"2|21|22|23",
+	)}
+	vc = &loggingVCursor{
+		shards:  []string{"-20", "20-"},
+		results: results,
+	}
+	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f)`,
+		// ResolveDestinations is hard-coded to return -20.
+		// It gets used to perform the subquery to fetch the changing column values.
+		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
+		// Those values are returned as 4,5 for twocol and 6 for onecol.
+		// 4,5 have to be replaced by 1,2 (the new values).
+		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp2(from1, from2, toc) values(:from10, :from20, :toc0) from10: type:INT64 value:"1" from20: type:INT64 value:"2" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		// 6 has to be replaced by 3.
+		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: type:INT64 value:"3" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		// 7,8 have to be replaced by 1,2 (the new values).
+		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"7" from2: type:INT64 value:"8" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp2(from1, from2, toc) values(:from10, :from20, :toc0) from10: type:INT64 value:"1" from20: type:INT64 value:"2" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		// 9 has to be replaced by 3.
+		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"9" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: type:INT64 value:"3" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		// 21,22 have to be replaced by 1,2 (the new values).
+		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"21" from2: type:INT64 value:"22" toc: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
+		`Execute insert into lkp2(from1, from2, toc) values(:from10, :from20, :toc0) from10: type:INT64 value:"1" from20: type:INT64 value:"2" toc0: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
+		// 23 has to be replaced by 3.
+		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"23" toc: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
+		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: type:INT64 value:"3" toc0: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
+		// Finally, the actual update, which is also sent to -20, same route as the subquery.
+		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+	})
+
+}
+
 func TestUpdateNoStream(t *testing.T) {
 	upd := &Update{}
 	err := upd.StreamExecute(nil, nil, false, nil)
