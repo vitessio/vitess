@@ -147,7 +147,7 @@ func (upd *Update) execUpdateIn(vcursor VCursor, bindVars map[string]*querypb.Bi
 	}
 	rss, _, err := resolveMultiShard(vcursor, upd.Vindex, upd.Keyspace, keys)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "execUpdateEqual")
+		return nil, vterrors.Wrap(err, "execUpdateIn")
 	}
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {
@@ -157,19 +157,40 @@ func (upd *Update) execUpdateIn(vcursor VCursor, bindVars map[string]*querypb.Bi
 		}
 	}
 
-	//if len(ksid) == 0 {
-	//	return &sqltypes.Result{}, nil
-	//}
 	if len(upd.ChangedVindexValues) != 0 {
 		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
-			return nil, vterrors.Wrap(err, "execUpdateEqual")
+			return nil, vterrors.Wrap(err, "execUpdateIn")
 		}
 	}
 	autocommit := (len(rss) == 1 || upd.MultiShardAutocommit) && vcursor.AutocommitApproval()
 	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
 	return result, vterrors.Aggregate(errs)
+}
 
-	//return execShard(vcursor, upd.Query, bindVars, rs, true /* rollbackOnError */, true /* canAutocommit */)
+func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
+	rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{dest})
+	if err != nil {
+		return nil, vterrors.Wrap(err, "execUpdateByDestination")
+	}
+
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{
+			Sql:           upd.Query,
+			BindVariables: bindVars,
+		}
+	}
+
+	// update any owned vindexes
+	if len(upd.ChangedVindexValues) != 0 {
+		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
+			return nil, vterrors.Wrap(err, "execUpdateByDestination")
+		}
+	}
+
+	autocommit := (len(rss) == 1 || upd.MultiShardAutocommit) && vcursor.AutocommitApproval()
+	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
+	return result, vterrors.Aggregate(errs)
 }
 
 // updateVindexEntries performs an update when a vindex is being modified
@@ -232,32 +253,6 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 		}
 	}
 	return nil
-}
-
-func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{dest})
-	if err != nil {
-		return nil, vterrors.Wrap(err, "execUpdateByDestination")
-	}
-
-	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
-		queries[i] = &querypb.BoundQuery{
-			Sql:           upd.Query,
-			BindVariables: bindVars,
-		}
-	}
-
-	// update any owned vindexes
-	if len(upd.ChangedVindexValues) != 0 {
-		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
-			return nil, vterrors.Wrap(err, "execUpdateByDestination")
-		}
-	}
-
-	autocommit := (len(rss) == 1 || upd.MultiShardAutocommit) && vcursor.AutocommitApproval()
-	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
-	return result, vterrors.Aggregate(errs)
 }
 
 func (upd *Update) description() PrimitiveDescription {

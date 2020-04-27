@@ -45,6 +45,7 @@ type Delete struct {
 var delName = map[DMLOpcode]string{
 	Unsharded:     "DeleteUnsharded",
 	Equal:         "DeleteEqual",
+	In:            "DeleteIn",
 	Scatter:       "DeleteScatter",
 	ByDestination: "DeleteByDestination",
 }
@@ -79,6 +80,8 @@ func (del *Delete) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 		return del.execDeleteUnsharded(vcursor, bindVars)
 	case Equal:
 		return del.execDeleteEqual(vcursor, bindVars)
+	case In:
+		return del.execDeleteIn(vcursor, bindVars)
 	case Scatter:
 		return del.execDeleteByDestination(vcursor, bindVars, key.DestinationAllShards{})
 	case ByDestination:
@@ -131,6 +134,57 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 	return execShard(vcursor, del.Query, bindVars, rs, true /* rollbackOnError */, true /* canAutocommit */)
 }
 
+func (del *Delete) execDeleteIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	keys, err := del.Values[0].ResolveList(bindVars)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "execDeleteIn")
+	}
+	rss, _, err := resolveMultiShard(vcursor, del.Vindex, del.Keyspace, keys)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "execDeleteIn")
+	}
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{
+			Sql:           del.Query,
+			BindVariables: bindVars,
+		}
+	}
+
+	if del.OwnedVindexQuery != "" {
+		if err := del.deleteVindexEntries(vcursor, bindVars, rss); err != nil {
+			return nil, vterrors.Wrap(err, "execDeleteIn")
+		}
+	}
+	autocommit := (len(rss) == 1 || del.MultiShardAutocommit) && vcursor.AutocommitApproval()
+	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
+	return result, vterrors.Aggregate(errs)
+}
+
+func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
+	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{dest})
+	if err != nil {
+		return nil, vterrors.Wrap(err, "execDeleteScatter")
+	}
+
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{
+			Sql:           del.Query,
+			BindVariables: bindVars,
+		}
+	}
+	if len(del.Table.Owned) > 0 {
+		err = del.deleteVindexEntries(vcursor, bindVars, rss)
+		if err != nil {
+			return nil, err
+		}
+	}
+	autocommit := (len(rss) == 1 || del.MultiShardAutocommit) && vcursor.AutocommitApproval()
+	res, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
+	return res, vterrors.Aggregate(errs)
+}
+
 // deleteVindexEntries performs an delete if table owns vindex.
 // Note: the commit order may be different from the DML order because it's possible
 // for DMLs to reuse existing transactions.
@@ -171,30 +225,6 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 	}
 
 	return nil
-}
-
-func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{dest})
-	if err != nil {
-		return nil, vterrors.Wrap(err, "execDeleteScatter")
-	}
-
-	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
-		queries[i] = &querypb.BoundQuery{
-			Sql:           del.Query,
-			BindVariables: bindVars,
-		}
-	}
-	if len(del.Table.Owned) > 0 {
-		err = del.deleteVindexEntries(vcursor, bindVars, rss)
-		if err != nil {
-			return nil, err
-		}
-	}
-	autocommit := (len(rss) == 1 || del.MultiShardAutocommit) && vcursor.AutocommitApproval()
-	res, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
-	return res, vterrors.Aggregate(errs)
 }
 
 func (del *Delete) description() PrimitiveDescription {
