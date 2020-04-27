@@ -304,7 +304,7 @@ func TestDMLIn(t *testing.T) {
 	1 2 42
 	2 2 42
 	42 4 3
-	42 5 42
+	42 5 4
 
 	t3_id7_idx (id7, keyspace_id:id6):
 	42 2
@@ -320,14 +320,14 @@ func TestDMLIn(t *testing.T) {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 
-	/* delete one specific keyspace id. after this dml, the tables will contain the following:
+	/* Updating a non lookup column. after this dml, the tables will contain the following:
 	t3 (id5, id6, id7):
-	3 4 3
-	4 5 4
+	42 4 3
+	42 5 4
 
 	t3_id7_idx (id7, keyspace_id:id6):
 	3 4
-	4 5
+	42 5
 	*/
 	exec(t, conn, "delete from t3 where id6 in (2)")
 	qr = exec(t, conn, "select * from t3 where id6 = 2")

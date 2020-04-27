@@ -139,7 +139,7 @@ func (del *Delete) execDeleteIn(vcursor VCursor, bindVars map[string]*querypb.Bi
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteIn")
 	}
-	rss, _, err := resolveMultiShard(vcursor, del.Vindex, del.Keyspace, keys)
+	rss, err := resolveMultiShard(vcursor, del.Vindex, del.Keyspace, keys)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteIn")
 	}
