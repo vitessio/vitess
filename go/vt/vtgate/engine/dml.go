@@ -19,6 +19,9 @@ package engine
 import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -68,30 +71,56 @@ type DMLOpcode int
 
 // This is the list of UpdateOpcode values.
 const (
-	// UpdateUnsharded is for routing an update statement
+	// Unsharded is for routing a dml statement
 	// to an unsharded keyspace.
 	Unsharded = DMLOpcode(iota)
-	// UpdateEqual is for routing an update statement
-	// to a single shard: Requires: A Vindex, and
-	// a single Value.
+	// Equal is for routing an dml statement to a single shard.
+	// Requires: A Vindex, and a single Value.
 	Equal
-	// UpdateScatter is for routing a scattered
-	// update statement.
+	// In is for routing an dml statement to a multi shard.
+	// Requires: A Vindex, and a multi Values.
+	In
+	// Scatter is for routing a scattered dml statement.
 	Scatter
-	// UpdateByDestination is to route explicitly to a given
-	// target destination. Is used when the query explicitly sets a target destination:
-	// in the clause:
-	// e.g: UPDATE `keyspace[-]`.x1 SET foo=1
+	// ByDestination is to route explicitly to a given target destination.
+	// Is used when the query explicitly sets a target destination:
+	// in the clause e.g: UPDATE `keyspace[-]`.x1 SET foo=1
 	ByDestination
 )
 
 var opcodeName = map[DMLOpcode]string{
 	Unsharded:     "Unsharded",
 	Equal:         "Equal",
+	In:            "In",
 	Scatter:       "Scatter",
 	ByDestination: "ByDestination",
 }
 
 func (op DMLOpcode) String() string {
 	return opcodeName[op]
+}
+
+func resolveMultiValueShards(vcursor VCursor, keyspace *vindexes.Keyspace, query string, bindVars map[string]*querypb.BindVariable, pv sqltypes.PlanValue, vindex vindexes.SingleColumn) ([]*srvtopo.ResolvedShard, []*querypb.BoundQuery, error) {
+	keys, err := pv.ResolveList(bindVars)
+	if err != nil {
+		return nil, nil, vterrors.Wrap(err, "execDeleteIn")
+	}
+	rss, err := resolveMultiShard(vcursor, vindex, keyspace, keys)
+	if err != nil {
+		return nil, nil, vterrors.Wrap(err, "execDeleteIn")
+	}
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{
+			Sql:           query,
+			BindVariables: bindVars,
+		}
+	}
+	return rss, queries, nil
+}
+
+func execMultiShard(vcursor VCursor, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, multiShardAutoCommit bool) (*sqltypes.Result, error) {
+	autocommit := (len(rss) == 1 || multiShardAutoCommit) && vcursor.AutocommitApproval()
+	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
+	return result, vterrors.Aggregate(errs)
 }

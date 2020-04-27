@@ -1558,7 +1558,7 @@
   "Original": "update user_extra set val = 1 where user_id in (1, 2)",
   "Instructions": {
     "OperatorType": "Update",
-    "Variant": "Scatter",
+    "Variant": "In",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1566,7 +1566,14 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1 where user_id in (1, 2)",
-    "Table": "user_extra"
+    "Table": "user_extra",
+    "Values": [
+      [
+        1,
+        2
+      ]
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -1749,7 +1756,7 @@
   "Original": "delete from user_extra where user_id in (1, 2)",
   "Instructions": {
     "OperatorType": "Delete",
-    "Variant": "Scatter",
+    "Variant": "In",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1757,7 +1764,14 @@
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
     "Query": "delete from user_extra where user_id in (1, 2)",
-    "Table": "user_extra"
+    "Table": "user_extra",
+    "Values": [
+      [
+        1,
+        2
+      ]
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -1851,7 +1865,7 @@
   "Original": "update user set name = null where id in (1, 2, 3)",
   "Instructions": {
     "OperatorType": "Update",
-    "Variant": "Scatter",
+    "Variant": "In",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1864,7 +1878,15 @@
     "MultiShardAutocommit": false,
     "OwnedVindexQuery": "select Id, Name, Costly from user where id in (1, 2, 3) for update",
     "Query": "update user set name = null where id in (1, 2, 3)",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      [
+        1,
+        2,
+        3
+      ]
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -1923,7 +1945,7 @@
   "Original": "delete from user where id in (1, 2, 3)",
   "Instructions": {
     "OperatorType": "Delete",
-    "Variant": "Scatter",
+    "Variant": "In",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1933,7 +1955,15 @@
     "MultiShardAutocommit": false,
     "OwnedVindexQuery": "select Id, Name, Costly from user where id in (1, 2, 3) for update",
     "Query": "delete from user where id in (1, 2, 3)",
-    "Table": "user"
+    "Table": "user",
+    "Values": [
+      [
+        1,
+        2,
+        3
+      ]
+    ],
+    "Vindex": "user_index"
   }
 }
 

@@ -175,15 +175,34 @@ func TestAutocommitDeleteLookup(t *testing.T) {
 	testCommitCount(t, "sbc1", sbc1, 1)
 }
 
-// TestAutocommitDeleteMultiShard: instant-commit.
-func TestAutocommitDeleteMultiShard(t *testing.T) {
+// TestAutocommitDeleteIn: instant-commit.
+func TestAutocommitDeleteIn(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 
 	_, err := autocommitExec(executor, "delete from user_extra where user_id in (1, 2)")
 	require.NoError(t, err)
 
-	testQueries(t, "sbc1", sbc1, []*querypb.BoundQuery{{
+	testBatchQuery(t, "sbc1", sbc1, &querypb.BoundQuery{
 		Sql:           "delete from user_extra where user_id in (1, 2)",
+		BindVariables: map[string]*querypb.BindVariable{},
+	})
+	testAsTransactionCount(t, "sbc1", sbc1, 1)
+	testCommitCount(t, "sbc1", sbc1, 0)
+
+	testBatchQuery(t, "sbc2", sbc2, nil)
+	testAsTransactionCount(t, "sbc2", sbc2, 0)
+	testCommitCount(t, "sbc2", sbc2, 0)
+}
+
+// TestAutocommitDeleteMultiShard: instant-commit.
+func TestAutocommitDeleteMultiShard(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+
+	_, err := autocommitExec(executor, "delete from user_extra where user_id = user_id + 1")
+	require.NoError(t, err)
+
+	testQueries(t, "sbc1", sbc1, []*querypb.BoundQuery{{
+		Sql:           "delete from user_extra where user_id = user_id + 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}})
 	testBatchQuery(t, "sbc1", sbc1, nil)
@@ -191,30 +210,30 @@ func TestAutocommitDeleteMultiShard(t *testing.T) {
 	testCommitCount(t, "sbc1", sbc1, 1)
 
 	testQueries(t, "sbc2", sbc2, []*querypb.BoundQuery{{
-		Sql:           "delete from user_extra where user_id in (1, 2)",
+		Sql:           "delete from user_extra where user_id = user_id + 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}})
 	testBatchQuery(t, "sbc2", sbc2, nil)
 	testAsTransactionCount(t, "sbc2", sbc2, 0)
-	testCommitCount(t, "sbc1", sbc1, 1)
+	testCommitCount(t, "sbc2", sbc2, 1)
 }
 
 // TestAutocommitDeleteMultiShardAutoCommit: instant-commit.
 func TestAutocommitDeleteMultiShardAutoCommit(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 
-	_, err := autocommitExec(executor, "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id in (1, 2)")
+	_, err := autocommitExec(executor, "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id = user_id + 1")
 	require.NoError(t, err)
 
 	testBatchQuery(t, "sbc1", sbc1, &querypb.BoundQuery{
-		Sql:           "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id in (1, 2)",
+		Sql:           "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id = user_id + 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	})
 	testAsTransactionCount(t, "sbc1", sbc1, 1)
 	testCommitCount(t, "sbc1", sbc1, 0)
 
 	testBatchQuery(t, "sbc2", sbc2, &querypb.BoundQuery{
-		Sql:           "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id in (1, 2)",
+		Sql:           "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id = user_id + 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	})
 	testAsTransactionCount(t, "sbc2", sbc2, 1)

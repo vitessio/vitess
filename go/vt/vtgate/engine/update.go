@@ -52,6 +52,7 @@ type Update struct {
 var updName = map[DMLOpcode]string{
 	Unsharded:     "UpdateUnsharded",
 	Equal:         "UpdateEqual",
+	In:            "UpdateIn",
 	Scatter:       "UpdateScatter",
 	ByDestination: "UpdateByDestination",
 }
@@ -86,6 +87,8 @@ func (upd *Update) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 		return upd.execUpdateUnsharded(vcursor, bindVars)
 	case Equal:
 		return upd.execUpdateEqual(vcursor, bindVars)
+	case In:
+		return upd.execUpdateIn(vcursor, bindVars)
 	case Scatter:
 		return upd.execUpdateByDestination(vcursor, bindVars, key.DestinationAllShards{})
 	case ByDestination:
@@ -135,6 +138,42 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 		}
 	}
 	return execShard(vcursor, upd.Query, bindVars, rs, true /* rollbackOnError */, true /* canAutocommit */)
+}
+
+func (upd *Update) execUpdateIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	rss, queries, err := resolveMultiValueShards(vcursor, upd.Keyspace, upd.Query, bindVars, upd.Values[0], upd.Vindex)
+	if err != nil {
+		return nil, err
+	}
+	if len(upd.ChangedVindexValues) != 0 {
+		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
+			return nil, vterrors.Wrap(err, "execUpdateIn")
+		}
+	}
+	return execMultiShard(vcursor, rss, queries, upd.MultiShardAutocommit)
+}
+
+func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
+	rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{dest})
+	if err != nil {
+		return nil, vterrors.Wrap(err, "execUpdateByDestination")
+	}
+
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{
+			Sql:           upd.Query,
+			BindVariables: bindVars,
+		}
+	}
+
+	// update any owned vindexes
+	if len(upd.ChangedVindexValues) != 0 {
+		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
+			return nil, vterrors.Wrap(err, "execUpdateByDestination")
+		}
+	}
+	return execMultiShard(vcursor, rss, queries, upd.MultiShardAutocommit)
 }
 
 // updateVindexEntries performs an update when a vindex is being modified
@@ -197,32 +236,6 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 		}
 	}
 	return nil
-}
-
-func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{dest})
-	if err != nil {
-		return nil, vterrors.Wrap(err, "execUpdateByDestination")
-	}
-
-	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
-		queries[i] = &querypb.BoundQuery{
-			Sql:           upd.Query,
-			BindVariables: bindVars,
-		}
-	}
-
-	// update any owned vindexes
-	if len(upd.ChangedVindexValues) != 0 {
-		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
-			return nil, vterrors.Wrap(err, "execUpdateByDestination")
-		}
-	}
-
-	autocommit := (len(rss) == 1 || upd.MultiShardAutocommit) && vcursor.AutocommitApproval()
-	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
-	return result, vterrors.Aggregate(errs)
 }
 
 func (upd *Update) description() PrimitiveDescription {
