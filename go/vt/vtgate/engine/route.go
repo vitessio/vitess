@@ -483,16 +483,16 @@ func resolveSingleShard(vcursor VCursor, vindex vindexes.SingleColumn, keyspace 
 	return rss[0], ksid, nil
 }
 
-func resolveMultiShard(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vindexes.Keyspace, vindexKey []sqltypes.Value) ([]*srvtopo.ResolvedShard, []byte, error) {
+func resolveMultiShard(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vindexes.Keyspace, vindexKey []sqltypes.Value) ([]*srvtopo.ResolvedShard, error) {
 	destinations, err := vindex.Map(vcursor, vindexKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	rss, _, err := vcursor.ResolveDestinations(keyspace.Name, nil, destinations)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return rss, nil, nil
+	return rss, nil
 }
 
 func resolveKeyspaceID(vcursor VCursor, vindex vindexes.SingleColumn, vindexKey sqltypes.Value) ([]byte, error) {

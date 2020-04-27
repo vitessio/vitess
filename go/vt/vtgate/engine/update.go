@@ -145,7 +145,7 @@ func (upd *Update) execUpdateIn(vcursor VCursor, bindVars map[string]*querypb.Bi
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execUpdateIn")
 	}
-	rss, _, err := resolveMultiShard(vcursor, upd.Vindex, upd.Keyspace, keys)
+	rss, err := resolveMultiShard(vcursor, upd.Vindex, upd.Keyspace, keys)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execUpdateIn")
 	}
