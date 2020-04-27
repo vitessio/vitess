@@ -230,8 +230,10 @@ func shardCustomer(t *testing.T, testReverse bool) {
 		assert.False(t, exists)
 
 		for _, shard := range strings.Split("-80,80-", ",") {
-			expectNumberOfStreams(t, vtgateConn, "shardCustomer", "p2c", "customer:"+shard, 0)
+			expectNumberOfStreams(t, vtgateConn, "shardCustomerTargetStreams", "p2c", "customer:"+shard, 0)
 		}
+
+		expectNumberOfStreams(t, vtgateConn, "shardCustomerReverseStreams", "p2c_reverse", "product:0", 0)
 
 		var found bool
 		found, err = checkIfTableExists(t, vc, "zone1-100", "customer")
