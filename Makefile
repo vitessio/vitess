@@ -228,9 +228,17 @@ docker_lite_mysql57:
 	chmod -R o=g *
 	docker build -f docker/lite/Dockerfile.mysql57 -t vitess/lite:mysql57 .
 
+docker_lite_ubi7.mysql57:
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile.ubi7.mysql57 -t vitess/lite:ubi7.mysql57 .
+
 docker_lite_mysql80:
 	chmod -R o=g *
 	docker build -f docker/lite/Dockerfile.mysql80 -t vitess/lite:mysql80 .
+
+docker_lite_ubi7.mysql80:
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile.ubi7.mysql80 -t vitess/lite:ubi7.mysql80 .
 
 docker_lite_mariadb:
 	chmod -R o=g *
@@ -248,9 +256,17 @@ docker_lite_percona57:
 	chmod -R o=g *
 	docker build -f docker/lite/Dockerfile.percona57 -t vitess/lite:percona57 .
 
+docker_lite_ubi7.percona57:
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile.ubi7.percona57 -t vitess/lite:ubi7.percona57 .
+
 docker_lite_percona80:
 	chmod -R o=g *
 	docker build -f docker/lite/Dockerfile.percona80 -t vitess/lite:percona80 .
+
+docker_lite_ubi7.percona80:
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile.ubi7.percona80 -t vitess/lite:ubi7.percona80 .
 
 docker_lite_alpine:
 	chmod -R o=g *
