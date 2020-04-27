@@ -73,8 +73,8 @@ func commandAddCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	if !strings.HasPrefix(*root, "/") {
-		return fmt.Errorf("root must be non-empty and must begin with a '/': %v", *root)
+	if *root == "" {
+		return fmt.Errorf("root must be non-empty")
 	}
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("the <cell> argument is required for the AddCellInfo command")
