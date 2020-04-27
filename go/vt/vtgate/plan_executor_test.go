@@ -1029,11 +1029,10 @@ func TestPlanExecutorComment(t *testing.T) {
 				"1|foo",
 			),
 		},
-		// TODO (harshit): remove the comments, once set as plan is supported.
-		//{
-		//	sql: "/*!50708 set @x = 42 */",
-		//	qr:  &sqltypes.Result{},
-		//},
+		{
+			sql: "/*!50708 set @x = 42 */",
+			qr:  &sqltypes.Result{},
+		},
 	}
 
 	for _, tc := range tcs {
@@ -1115,6 +1114,21 @@ func TestPlanExecutorOtherRead(t *testing.T) {
 			}, "count did not match")
 		}
 	}
+}
+
+func TestPlanExecutorExplain(t *testing.T) {
+	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	executor.normalize = true
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	sql := "explain format = vitess select * from user"
+	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+
+	resultText := fmt.Sprintf("%v", result.Rows)
+	utils.MustMatch(t, `[[VARCHAR("Route") VARCHAR("SelectScatter") VARCHAR("TestExecutor") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("select * from user")]]`, resultText, "")
+
 }
 
 func TestPlanExecutorOtherAdmin(t *testing.T) {
