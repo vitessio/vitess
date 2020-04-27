@@ -339,6 +339,9 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow st
 			return nil, err
 		}
 	}
+	if err := sw.dropSourceReverseVReplicationStreams(ctx); err != nil {
+		return nil, err
+	}
 	if err := sw.dropTargetVReplicationStreams(ctx); err != nil {
 		return nil, err
 	}
@@ -1167,10 +1170,18 @@ func (ts *trafficSwitcher) freezeTargetVReplication(ctx context.Context) error {
 func (ts *trafficSwitcher) dropTargetVReplicationStreams(ctx context.Context) error {
 	return ts.forAllTargets(func(target *tsTarget) error {
 		ts.wr.Logger().Infof("Deleting target streams for workflow %s db_name %s", ts.workflow, target.master.DbName())
-		fmt.Printf("Delete target streams for workflow %s db_name %s tablet %d\n", ts.workflow, target.master.DbName(), target.master.Alias.Uid)
 		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(ts.workflow))
-		fmt.Println(query)
 		_, err := ts.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
+		return err
+	})
+}
+
+func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Context) error {
+	return ts.forAllSources(func(source *tsSource) error {
+		ts.wr.Logger().Infof("Deleting reverse streams for workflow %s db_name %s", ts.workflow, source.master.DbName())
+		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s",
+			encodeString(source.master.DbName()), encodeString(reverseName(ts.workflow)))
+		_, err := ts.wr.tmc.VReplicationExec(ctx, source.master.Tablet, query)
 		return err
 	})
 }
