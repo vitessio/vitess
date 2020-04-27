@@ -130,6 +130,7 @@ spec:
                 -grpc_port=15999
                 -service_map="grpc-vtctl"
                 -topo_global_root=/vitess/global
+                -proxy_tablets=true
                 {{- if eq ($cell.topologyProvider | default "") "etcd2" }}
                 -topo_implementation="etcd2"
                 -topo_global_server_address="etcd-global-client.{{ $namespace }}:2379"
