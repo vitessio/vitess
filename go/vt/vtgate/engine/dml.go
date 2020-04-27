@@ -19,6 +19,9 @@ package engine
 import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -95,4 +98,29 @@ var opcodeName = map[DMLOpcode]string{
 
 func (op DMLOpcode) String() string {
 	return opcodeName[op]
+}
+
+func resolveMultiValueShards(vcursor VCursor, keyspace *vindexes.Keyspace, query string, bindVars map[string]*querypb.BindVariable, pv sqltypes.PlanValue, vindex vindexes.SingleColumn) ([]*srvtopo.ResolvedShard, []*querypb.BoundQuery, error) {
+	keys, err := pv.ResolveList(bindVars)
+	if err != nil {
+		return nil, nil, vterrors.Wrap(err, "execDeleteIn")
+	}
+	rss, err := resolveMultiShard(vcursor, vindex, keyspace, keys)
+	if err != nil {
+		return nil, nil, vterrors.Wrap(err, "execDeleteIn")
+	}
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{
+			Sql:           query,
+			BindVariables: bindVars,
+		}
+	}
+	return rss, queries, nil
+}
+
+func execMultiShard(vcursor VCursor, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, multiShardAutoCommit bool) (*sqltypes.Result, error) {
+	autocommit := (len(rss) == 1 || multiShardAutoCommit) && vcursor.AutocommitApproval()
+	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
+	return result, vterrors.Aggregate(errs)
 }

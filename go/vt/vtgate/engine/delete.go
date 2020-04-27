@@ -135,30 +135,16 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 }
 
 func (del *Delete) execDeleteIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	keys, err := del.Values[0].ResolveList(bindVars)
+	rss, queries, err := resolveMultiValueShards(vcursor, del.Keyspace, del.Query, bindVars, del.Values[0], del.Vindex)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "execDeleteIn")
+		return nil, err
 	}
-	rss, err := resolveMultiShard(vcursor, del.Vindex, del.Keyspace, keys)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "execDeleteIn")
-	}
-	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
-		queries[i] = &querypb.BoundQuery{
-			Sql:           del.Query,
-			BindVariables: bindVars,
-		}
-	}
-
 	if del.OwnedVindexQuery != "" {
 		if err := del.deleteVindexEntries(vcursor, bindVars, rss); err != nil {
 			return nil, vterrors.Wrap(err, "execDeleteIn")
 		}
 	}
-	autocommit := (len(rss) == 1 || del.MultiShardAutocommit) && vcursor.AutocommitApproval()
-	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
-	return result, vterrors.Aggregate(errs)
+	return execMultiShard(vcursor, rss, queries, del.MultiShardAutocommit)
 }
 
 func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
@@ -180,9 +166,7 @@ func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]
 			return nil, err
 		}
 	}
-	autocommit := (len(rss) == 1 || del.MultiShardAutocommit) && vcursor.AutocommitApproval()
-	res, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
-	return res, vterrors.Aggregate(errs)
+	return execMultiShard(vcursor, rss, queries, del.MultiShardAutocommit)
 }
 
 // deleteVindexEntries performs an delete if table owns vindex.
