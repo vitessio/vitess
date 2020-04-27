@@ -409,7 +409,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 			MasterTermStartTime: t.MasterTermStartTime,
 		}
 		if *proxyTablets {
-			tab.URL = fmt.Sprintf("/vttablet/%s-%d", t.Alias.Cell, t.Alias.Uid)
+			tab.URL = fmt.Sprintf("/vttablet/%s-%d/debug/status", t.Alias.Cell, t.Alias.Uid)
 		} else {
 			tab.URL = "http://" + netutil.JoinHostPort(t.Hostname, t.PortMap["vt"])
 		}
