@@ -492,11 +492,10 @@ func (blp *BinlogPlayer) setVReplicationState(state, message string) error {
 // transaction_timestamp: timestamp of the transaction (from the master).
 // state: Running, Error or Stopped.
 // message: Reason for current state.
-func CreateVReplicationTable() []string {
-	return []string{
-		"CREATE DATABASE IF NOT EXISTS _vt",
-		"DROP TABLE IF EXISTS _vt.blp_checkpoint",
-		`CREATE TABLE IF NOT EXISTS _vt.vreplication (
+var CreateVtReplication = []string{
+	"CREATE DATABASE IF NOT EXISTS _vt",
+	"DROP TABLE IF EXISTS _vt.blp_checkpoint",
+	`CREATE TABLE IF NOT EXISTS _vt.vreplication (
   id INT AUTO_INCREMENT,
   workflow VARBINARY(1000),
   source VARBINARY(10000) NOT NULL,
@@ -513,12 +512,23 @@ func CreateVReplicationTable() []string {
   db_name VARBINARY(255) NOT NULL,
   PRIMARY KEY (id)
 ) ENGINE=InnoDB`,
-	}
 }
 
 // AlterVReplicationTable adds new columns to vreplication table
-func AlterVReplicationTable() []string {
-	return []string{"ALTER TABLE _vt.vreplication ADD COLUMN db_name VARBINARY(255) NOT NULL"}
+var AlterVReplicationTable = []string{
+	"ALTER TABLE _vt.vreplication ADD COLUMN db_name VARBINARY(255) NOT NULL",
+}
+
+var CreateVersionTable = []string{
+	"CREATE DATABASE IF NOT EXISTS _vt",
+	`CREATE TABLE IF NOT EXISTS _vt.schema_tracking (
+	  id INT AUTO_INCREMENT,
+	  pos VARBINARY(10000) NOT NULL,
+	  time_updated BIGINT(20) NOT NULL,
+	  ddl VARBINARY(1000) DEFAULT NULL,
+	  schema LONGBLOB(10000) NOT NULL,
+	  PRIMARY KEY (id)
+	) ENGINE=InnoDB`,
 }
 
 // VRSettings contains the settings of a vreplication table.
