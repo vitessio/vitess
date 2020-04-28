@@ -1379,6 +1379,9 @@ var (
 		input:  "desc select * from t",
 		output: "explain select * from t",
 	}, {
+		input:  "desc foobar",
+		output: "otherread",
+	}, {
 		input:  "explain t1",
 		output: "otherread",
 	}, {
