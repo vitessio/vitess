@@ -163,4 +163,11 @@ const (
 
 	TxReadOnly  = "read only"
 	TxReadWrite = "read write"
+
+	// Explain formats
+	TreeStr        = "tree"
+	JSONStr        = "json"
+	VitessStr      = "vitess"
+	TraditionalStr = "traditional"
+	AnalyzeStr     = "analyze"
 )
