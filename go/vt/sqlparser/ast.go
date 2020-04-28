@@ -227,6 +227,12 @@ type (
 	// Rollback represents a Rollback statement.
 	Rollback struct{}
 
+	// Explain represents an EXPLAIN statement
+	Explain struct {
+		Type      string
+		Statement Statement
+	}
+
 	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
 	// It should be used only as an indicator. It does not contain
 	// the full AST for the statement.
@@ -254,6 +260,7 @@ func (*Use) iStatement()               {}
 func (*Begin) iStatement()             {}
 func (*Commit) iStatement()            {}
 func (*Rollback) iStatement()          {}
+func (*Explain) iStatement()           {}
 func (*OtherRead) iStatement()         {}
 func (*OtherAdmin) iStatement()        {}
 func (*Select) iSelectStatement()      {}
@@ -1293,6 +1300,19 @@ func (node *Begin) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *Rollback) Format(buf *TrackedBuffer) {
 	buf.WriteString("rollback")
+}
+
+// Format formats the node.
+func (node *Explain) Format(buf *TrackedBuffer) {
+	format := ""
+	switch node.Type {
+	case "": // do nothing
+	case AnalyzeStr:
+		format = AnalyzeStr + " "
+	default:
+		format = "format = " + node.Type + " "
+	}
+	buf.astPrintf(node, "explain %s%v", format, node.Statement)
 }
 
 // Format formats the node.

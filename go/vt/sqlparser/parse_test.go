@@ -1373,14 +1373,41 @@ var (
 		input:  "use ks@replica",
 		output: "use `ks@replica`",
 	}, {
-		input:  "describe foobar",
-		output: "otherread",
+		input:  "describe select * from t",
+		output: "explain select * from t",
+	}, {
+		input:  "desc select * from t",
+		output: "explain select * from t",
 	}, {
 		input:  "desc foobar",
 		output: "otherread",
 	}, {
-		input:  "explain foobar",
+		input:  "explain t1",
 		output: "otherread",
+	}, {
+		input:  "explain t1 col",
+		output: "otherread",
+	}, {
+		input: "explain select * from t",
+	}, {
+		input: "explain format = traditional select * from t",
+	}, {
+		input: "explain analyze select * from t",
+	}, {
+		input: "explain format = tree select * from t",
+	}, {
+		input: "explain format = json select * from t",
+	}, {
+		input: "explain format = vitess select * from t",
+	}, {
+		input:  "describe format = vitess select * from t",
+		output: "explain format = vitess select * from t",
+	}, {
+		input: "explain delete from t",
+	}, {
+		input: "explain insert into t(col1, col2) values (1, 2)",
+	}, {
+		input: "explain update t set col = 2",
 	}, {
 		input:  "truncate table foo",
 		output: "truncate table foo",
@@ -1607,7 +1634,7 @@ func TestValid(t *testing.T) {
 				tcase.output = tcase.input
 			}
 			tree, err := Parse(tcase.input)
-			require.NoError(t, err)
+			require.NoError(t, err, tcase.input)
 			out := String(tree)
 			if diff := cmp.Diff(tcase.output, out); diff != "" {
 				t.Errorf("Parse(%q):\n%s", tcase.input, diff)
