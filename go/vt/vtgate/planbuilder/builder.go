@@ -316,7 +316,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 	case *sqlparser.Use:
 		return buildUsePlan(stmt, vschema)
 	case *sqlparser.Explain:
-		if stmt.Fmt == sqlparser.VitessStr {
+		if stmt.Type == sqlparser.VitessStr {
 			innerInstruction, err := createInstructionFor(query, stmt.Statement, vschema)
 			if err != nil {
 				return nil, err

@@ -1379,9 +1379,17 @@ var (
 		input:  "desc select * from t",
 		output: "explain select * from t",
 	}, {
+		input:  "explain t1",
+		output: "otherread",
+	}, {
+		input:  "explain t1 col",
+		output: "otherread",
+	}, {
 		input: "explain select * from t",
 	}, {
 		input: "explain format = traditional select * from t",
+	}, {
+		input: "explain analyze select * from t",
 	}, {
 		input: "explain format = tree select * from t",
 	}, {
@@ -1623,7 +1631,7 @@ func TestValid(t *testing.T) {
 				tcase.output = tcase.input
 			}
 			tree, err := Parse(tcase.input)
-			require.NoError(t, err)
+			require.NoError(t, err, tcase.input)
 			out := String(tree)
 			if diff := cmp.Diff(tcase.output, out); diff != "" {
 				t.Errorf("Parse(%q):\n%s", tcase.input, diff)
