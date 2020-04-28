@@ -1,34 +1,20 @@
-FROM golang:1.13-stretch
+FROM golang:1.13-buster
 
 # Install Vitess build dependencies
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    # TODO(mberlin): Group these to make it easier to understand which library actually requires them.
-    automake \
-    bison \
-    bzip2 \
-    chromium=70.0.3538.110-1~deb9u1 \
+    chromium \
     curl \
     g++ \
     git \
-    libgconf-2-4 \
-    libtool \
     make \
-    openjdk-8-jdk \
-    software-properties-common \
-    virtualenv \
     unzip \
-    xvfb \
-    zip \
-    libz-dev \
     ant \
+    maven \
+    default-jdk \
+    zip \
+    etcd \
+    software-properties-common \
     && rm -rf /var/lib/apt/lists/*
-
-# Install Maven 3.1+
-RUN mkdir -p /vt/src/vitess.io/vitess/dist && \
-    cd /vt/src/vitess.io/vitess/dist && \
-    curl -sL --connect-timeout 10 --retry 3 \
-        http://www-us.apache.org/dist/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz | tar -xz && \
-    mv apache-maven-3.3.9 maven
 
 # Set up Vitess environment (equivalent to '. dev.env')
 ENV VTROOT /vt/src/vitess.io/vitess

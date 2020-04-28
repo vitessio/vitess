@@ -2,7 +2,7 @@ FROM vitess/bootstrap:common
 
 # Install Percona 8.0
 RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keys.gnupg.net --recv-keys 9334A25F8507EFA5 && break; done \
-    && echo 'deb http://repo.percona.com/ps-80/apt stretch main' > /etc/apt/sources.list.d/percona.list && \
+    && echo 'deb http://repo.percona.com/ps-80/apt buster main' > /etc/apt/sources.list.d/percona.list && \
     { \
         echo debconf debconf/frontend select Noninteractive; \
         echo percona-server-server-8.0 percona-server-server/root_password password 'unused'; \
@@ -19,7 +19,7 @@ RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keys.gnupg.net --r
 	rsync \
 	libev4 \
 #    && rm -f /etc/apt/sources.list.d/percona.list \
-    && echo 'deb http://repo.percona.com/apt stretch main' > /etc/apt/sources.list.d/percona.list \
+    && echo 'deb http://repo.percona.com/apt buster main' > /etc/apt/sources.list.d/percona.list \
 #    { \
 #        echo debconf debconf/frontend select Noninteractive; \
 #        echo percona-server-server-8.0 percona-server-server/root_password password 'unused'; \
@@ -32,6 +32,5 @@ RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keys.gnupg.net --r
 # Bootstrap Vitess
 WORKDIR /vt/src/vitess.io/vitess
 
-ENV MYSQL_FLAVOR MySQL80
 USER vitess
 RUN ./bootstrap.sh

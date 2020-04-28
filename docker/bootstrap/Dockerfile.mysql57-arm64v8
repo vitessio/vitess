@@ -57,6 +57,6 @@ WORKDIR /vt/src/vitess.io/vitess
 COPY --from=builder /usr/local/xtrabackup/bin /usr/local/xtrabackup/bin
 COPY --from=builder /usr/local/xtrabackup/lib /usr/local/xtrabackup/lib
 ENV PATH="/usr/local/xtrabackup/bin:${PATH}"
-ENV MYSQL_FLAVOR MySQL56
+
 USER vitess
 RUN ./bootstrap.sh
