@@ -229,7 +229,7 @@ type (
 
 	// Explain represents an EXPLAIN statement
 	Explain struct {
-		Fmt       string
+		Type      string
 		Statement Statement
 	}
 
@@ -1305,8 +1305,12 @@ func (node *Rollback) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *Explain) Format(buf *TrackedBuffer) {
 	format := ""
-	if node.Fmt != "" {
-		format = "format = " + node.Fmt + " "
+	switch node.Type {
+	case "": // do nothing
+	case AnalyzeStr:
+		format = AnalyzeStr + " "
+	default:
+		format = "format = " + node.Type + " "
 	}
 	buf.astPrintf(node, "explain %s%v", format, node.Statement)
 }

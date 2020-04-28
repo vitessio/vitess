@@ -225,7 +225,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement
 %type <bytes2> comment_opt comment_list
-%type <str> union_op insert_or_replace explain_format_opt
+%type <str> union_op insert_or_replace explain_format_opt wild_opt
 %type <bytes> explain_synonyms
 %type <str> distinct_opt cache_opt match_option separator_opt
 %type <expr> like_escape_opt
@@ -1604,7 +1604,6 @@ show_statement:
     showTablesOpt := &ShowTablesOpt{DbName:$6, Filter:$7}
     $$ = &Show{Extended: string($2), Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
   }
-
 | SHOW PLUGINS
   {
     $$ = &Show{Type: string($2)}
@@ -1828,6 +1827,10 @@ explain_format_opt:
   {
     $$ = TraditionalStr
   }
+| ANALYZE
+  {
+    $$ = AnalyzeStr
+  }
 
 explain_synonyms:
   EXPLAIN
@@ -1860,27 +1863,32 @@ explainable_statement:
   {
     $$ = $1
   }
+
+wild_opt:
+  {
+    $$ = ""
+  }
+| sql_id
+  {
+    $$ = "" 
+  }
+| STRING
+  {
+    $$ = "" 
+  }
   
 explain_statement:
-  explain_synonyms explain_format_opt explainable_statement
+  explain_synonyms table_name wild_opt
   {
-    $$ = &Explain{Fmt: $2, Statement: $3}
+    $$ = &OtherRead{}
+  }
+| explain_synonyms explain_format_opt explainable_statement
+  {
+    $$ = &Explain{Type: $2, Statement: $3}
   }
 
 other_statement:
-  DESC skip_to_end
-  {
-    $$ = &OtherRead{}
-  }
-| DESCRIBE skip_to_end
-  {
-    $$ = &OtherRead{}
-  }
-| EXPLAIN skip_to_end
-  {
-    $$ = &OtherRead{}
-  }
-| REPAIR skip_to_end
+  REPAIR skip_to_end
   {
     $$ = &OtherAdmin{}
   }

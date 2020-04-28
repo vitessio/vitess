@@ -169,4 +169,5 @@ const (
 	JSONStr        = "json"
 	VitessStr      = "vitess"
 	TraditionalStr = "traditional"
+	AnalyzeStr     = "analyze"
 )
