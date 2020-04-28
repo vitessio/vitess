@@ -17,7 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
-	"fmt"
+	"strconv"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -206,7 +206,7 @@ func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {
 
 func (nz *normalizer) newName() string {
 	for {
-		newName := fmt.Sprintf("%s%d", nz.prefix, nz.counter)
+		newName := nz.prefix + strconv.Itoa(nz.counter)
 		if _, ok := nz.reserved[newName]; !ok {
 			nz.reserved[newName] = struct{}{}
 			return newName
