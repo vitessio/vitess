@@ -248,11 +248,14 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 
 	var topoWatchers []*TopologyWatcher
 	var filter TabletFilter
-	for _, c := range strings.Split(*CellsToWatch, ",") {
+	cells := strings.Split(*CellsToWatch, ",")
+	if len(cells) == 0 {
+		cells = append(cells, localCell)
+	}
+	for _, c := range cells {
 		if c == "" {
 			continue
 		}
-		// very simplistic, assumes localCell is not given as part of *CellsToWatch
 		if len(TabletFilters) > 0 {
 			if len(KeyspacesToWatch) > 0 {
 				log.Exitf("Only one of -keyspaces_to_watch and -tablet_filters may be specified at a time")
