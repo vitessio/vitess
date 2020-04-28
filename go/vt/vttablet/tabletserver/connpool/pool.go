@@ -155,7 +155,7 @@ func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
 	}
 
 	if cp.isCallerIDAppDebug(ctx) {
-		return NewDBConnNoPool(ctx, cp.appDebugParams, cp.dbaPool, cp.env.Stats())
+		return NewDBConnNoPool(ctx, cp.appDebugParams, cp.dbaPool)
 	}
 	p := cp.pool()
 	if p == nil {

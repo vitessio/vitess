@@ -31,8 +31,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 func compareTimingCounts(t *testing.T, op string, delta int64, before, after map[string]int64) {
@@ -238,7 +236,7 @@ func TestDBNoPoolConnKill(t *testing.T) {
 	connPool := newPool()
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
-	dbConn, err := NewDBConnNoPool(context.Background(), db.ConnParams(), connPool.dbaPool, tabletenv.NewStats(servenv.NewExporter("Test", "Tablet")))
+	dbConn, err := NewDBConnNoPool(context.Background(), db.ConnParams(), connPool.dbaPool)
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
