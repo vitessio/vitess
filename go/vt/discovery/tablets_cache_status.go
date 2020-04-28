@@ -19,7 +19,7 @@ type TabletsCacheStatus struct {
 }
 
 // TabletStatsList is used for sorting.
-type TabletStatsList []*tabletHealth
+type TabletStatsList []*TabletHealth
 
 // Len is part of sort.Interface.
 func (tsl TabletStatsList) Len() int {

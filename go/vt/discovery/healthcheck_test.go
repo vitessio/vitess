@@ -130,7 +130,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 
 func TestTemplate(t *testing.T) {
 	tablet := topo.NewTablet(0, "cell", "a")
-	ts := []*tabletHealth{
+	ts := []*TabletHealth{
 		{
 			Tablet:              tablet,
 			Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -161,7 +161,7 @@ func TestDebugURLFormatting(t *testing.T) {
 	ParseTabletURLTemplateFromFlag()
 
 	tablet := topo.NewTablet(0, "cell", "host.dc.domain")
-	ts := []*tabletHealth{
+	ts := []*TabletHealth{
 		{
 			Tablet:              tablet,
 			Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},

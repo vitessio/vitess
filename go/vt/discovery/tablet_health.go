@@ -17,13 +17,13 @@ import (
 
 // TabletHealth maintains the health status of a tablet. A map of this
 // structure is maintained in HealthCheckImpl.
-type tabletHealth struct {
+type TabletHealth struct {
 	mu sync.Mutex
 	// cancelFunc must be called before discarding TabletHealth.
 	// This will ensure that the associated checkConn goroutine will terminate.
 	cancelFunc context.CancelFunc
-	// conn is the connection associated with the tablet.
-	conn queryservice.QueryService
+	// Conn is the connection associated with the tablet.
+	Conn queryservice.QueryService
 	// Tablet is the tablet object that was sent to HealthCheck.AddTablet.
 	Tablet *topodata.Tablet
 	// Target is the current target as returned by the streaming
@@ -46,17 +46,17 @@ type tabletHealth struct {
 	LastError error
 }
 
-// String is defined because we want to print a []*tabletHealth array nicely.
-func (th *tabletHealth) String() string {
+// String is defined because we want to print a []*TabletHealth array nicely.
+func (th *TabletHealth) String() string {
 	th.mu.Lock()
 	defer th.mu.Unlock()
 	return fmt.Sprintf("TabletHealth{Tablet: %v,Target: %v,Up: %v,Serving: %v, MasterTermStartTime: %v, Stats: %v, LastError: %v",
 		th.Tablet, th.Target, th.Up, th.Serving, th.MasterTermStartTime, *th.Stats, th.LastError)
 }
 
-// DeepEqual compares two tabletHealth. Since we include protos, we
+// DeepEqual compares two TabletHealth. Since we include protos, we
 // need to use proto.Equal on these.
-func (th *tabletHealth) DeepEqual(other *tabletHealth) bool {
+func (th *TabletHealth) DeepEqual(other *TabletHealth) bool {
 	return proto.Equal(th.Tablet, other.Tablet) &&
 		proto.Equal(th.Target, other.Target) &&
 		th.Up == other.Up &&
@@ -68,7 +68,7 @@ func (th *tabletHealth) DeepEqual(other *tabletHealth) bool {
 }
 
 // GetTabletHostPort formats a tablet host port address.
-func (th *tabletHealth) GetTabletHostPort() string {
+func (th *TabletHealth) GetTabletHostPort() string {
 	th.mu.Lock()
 	hostname := th.Tablet.Hostname
 	vtPort := th.Tablet.PortMap["vt"]
@@ -78,7 +78,7 @@ func (th *tabletHealth) GetTabletHostPort() string {
 
 // GetHostNameLevel returns the specified hostname level. If the level does not exist it will pick the closest level.
 // This seems unused but can be utilized by certain url formatting templates. See getTabletDebugURL for more details.
-func (th *tabletHealth) GetHostNameLevel(level int) string {
+func (th *TabletHealth) GetHostNameLevel(level int) string {
 	th.mu.Lock()
 	hostname := th.Tablet.Hostname
 	th.mu.Unlock()
@@ -96,8 +96,8 @@ func (th *tabletHealth) GetHostNameLevel(level int) string {
 // getTabletDebugURL formats a debug url to the tablet.
 // It uses a format string that can be passed into the app to format
 // the debug URL to accommodate different network setups. It applies
-// the html/template string defined to a tabletHealth object. The
-// format string can refer to members and functions of tabletHealth
+// the html/template string defined to a TabletHealth object. The
+// format string can refer to members and functions of TabletHealth
 // like a regular html/template string.
 //
 // For instance given a tablet with hostname:port of host.dc.domain:22
@@ -105,20 +105,20 @@ func (th *tabletHealth) GetHostNameLevel(level int) string {
 // http://{{.GetTabletHostPort}} -> http://host.dc.domain:22
 // https://{{.Tablet.Hostname}} -> https://host.dc.domain
 // https://{{.GetHostNameLevel 0}}.bastion.corp -> https://host.bastion.corp
-func (th *tabletHealth) getTabletDebugURL() string {
+func (th *TabletHealth) getTabletDebugURL() string {
 	var buffer bytes.Buffer
 	tabletURLTemplate.Execute(&buffer, th)
 	return buffer.String()
 }
 
-func (th *tabletHealth) deleteConnLocked() {
+func (th *TabletHealth) deleteConnLocked() {
 	th.mu.Lock()
 	defer th.mu.Unlock()
 	th.Up = false
-	th.conn = nil
+	th.Conn = nil
 	th.cancelFunc()
 }
 
-func (th *tabletHealth) isHealthy() bool {
+func (th *TabletHealth) isHealthy() bool {
 	return th.Serving && th.LastError == nil && th.Stats != nil && !IsReplicationLagVeryHigh(th)
 }
