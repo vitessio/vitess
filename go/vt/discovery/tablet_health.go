@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	"github.com/golang/protobuf/proto"
@@ -47,6 +48,8 @@ type tabletHealth struct {
 
 // String is defined because we want to print a []*tabletHealth array nicely.
 func (th *tabletHealth) String() string {
+	th.mu.Lock()
+	defer th.mu.Unlock()
 	return fmt.Sprintf("TabletHealth{Tablet: %v,Target: %v,Up: %v,Serving: %v, MasterTermStartTime: %v, Stats: %v, LastError: %v",
 		th.Tablet, th.Target, th.Up, th.Serving, th.MasterTermStartTime, *th.Stats, th.LastError)
 }
@@ -66,14 +69,20 @@ func (th *tabletHealth) DeepEqual(other *tabletHealth) bool {
 
 // GetTabletHostPort formats a tablet host port address.
 func (th *tabletHealth) GetTabletHostPort() string {
+	th.mu.Lock()
+	hostname := th.Tablet.Hostname
 	vtPort := th.Tablet.PortMap["vt"]
-	return netutil.JoinHostPort(th.Tablet.Hostname, vtPort)
+	th.mu.Unlock()
+	return netutil.JoinHostPort(hostname, vtPort)
 }
 
 // GetHostNameLevel returns the specified hostname level. If the level does not exist it will pick the closest level.
 // This seems unused but can be utilized by certain url formatting templates. See getTabletDebugURL for more details.
 func (th *tabletHealth) GetHostNameLevel(level int) string {
-	chunkedHostname := strings.Split(th.Tablet.Hostname, ".")
+	th.mu.Lock()
+	hostname := th.Tablet.Hostname
+	th.mu.Unlock()
+	chunkedHostname := strings.Split(hostname, ".")
 
 	if level < 0 {
 		return chunkedHostname[0]
@@ -100,31 +109,6 @@ func (th *tabletHealth) getTabletDebugURL() string {
 	var buffer bytes.Buffer
 	tabletURLTemplate.Execute(&buffer, th)
 	return buffer.String()
-}
-
-// TrivialStatsUpdate returns true iff the old and new tabletHealth
-// haven't changed enough to warrant re-calling FilterLegacyStatsByReplicationLag.
-func (th *tabletHealth) TrivialStatsUpdate(n *tabletHealth) bool {
-	// Skip replag filter when replag remains in the low rep lag range,
-	// which should be the case majority of the time.
-	lowRepLag := lowReplicationLag.Seconds()
-	oldRepLag := float64(th.Stats.SecondsBehindMaster)
-	newRepLag := float64(n.Stats.SecondsBehindMaster)
-	if oldRepLag <= lowRepLag && newRepLag <= lowRepLag {
-		return true
-	}
-
-	// Skip replag filter when replag remains in the high rep lag range,
-	// and did not change beyond +/- 10%.
-	// when there is a high rep lag, it takes a long time for it to reduce,
-	// so it is not necessary to re-calculate every time.
-	// In that case, we won't save the new record, so we still
-	// remember the original replication lag.
-	if oldRepLag > lowRepLag && newRepLag > lowRepLag && newRepLag < oldRepLag*1.1 && newRepLag > oldRepLag*0.9 {
-		return true
-	}
-
-	return false
 }
 
 func (th *tabletHealth) deleteConnLocked() {

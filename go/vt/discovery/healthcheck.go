@@ -520,6 +520,8 @@ func (hc *HealthCheckImpl) stateChecksum() int64 {
 // notification about the tablet to downstream. To be called only on exit from
 // checkConn().
 func (hc *HealthCheckImpl) finalizeConn(hcc *healthCheckConn) {
+	hcc.tabletHealth.mu.Lock()
+	defer hcc.tabletHealth.mu.Unlock()
 	hcc.tabletHealth.Up = false
 	hcc.setServingState(false, "finalizeConn closing connection")
 	// Note: checkConn() exits only when hcc.ctx.Done() is closed. Thus it's
@@ -589,9 +591,11 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn) {
 		// This will ensure that this update prevails over any previous message that
 		// stream could have sent.
 		if timedout.Get() {
+			hcc.tabletHealth.mu.Lock()
 			hcc.tabletHealth.LastError = fmt.Errorf("healthcheck timed out (latest %v)", hcc.lastResponseTimestamp)
 			hcc.setServingState(false, hcc.tabletHealth.LastError.Error())
 			hcErrorCounters.Add([]string{hcc.tabletHealth.Target.Keyspace, hcc.tabletHealth.Target.Shard, topoproto.TabletTypeLString(hcc.tabletHealth.Target.TabletType)}, 1)
+			hcc.tabletHealth.mu.Unlock()
 		}
 
 		// Streaming RPC failed e.g. because vttablet was restarted or took too long.
@@ -616,7 +620,7 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn) {
 // from the health check connection are logged the first time,
 // but don't continue to log if the connection stays down.
 //
-// hcc.mu must be locked before calling this function
+// hcc.tabletHealth.mu must be locked before calling this function
 func (hcc *healthCheckConn) setServingState(serving bool, reason string) {
 	if !hcc.loggedServingState || (serving != hcc.tabletHealth.Serving) {
 		// Emit the log from a separate goroutine to avoid holding
@@ -636,22 +640,28 @@ func (hcc *healthCheckConn) setServingState(serving bool, reason string) {
 
 // stream streams healthcheck responses to callback.
 func (hcc *healthCheckConn) stream(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) {
+	hcc.tabletHealth.mu.Lock()
 	if hcc.tabletHealth.conn == nil {
 		conn, err := tabletconn.GetDialer()(hcc.tabletHealth.Tablet, grpcclient.FailFast(true))
 		if err != nil {
 			hcc.tabletHealth.LastError = err
+			hcc.tabletHealth.mu.Unlock()
 			return
 		}
 		hcc.tabletHealth.conn = conn
 		hcc.tabletHealth.LastError = nil
 	}
+	conn := hcc.tabletHealth.conn
+	hcc.tabletHealth.mu.Unlock()
 
-	if err := hcc.tabletHealth.conn.StreamHealth(ctx, callback); err != nil {
+	if err := conn.StreamHealth(ctx, callback); err != nil {
+		hcc.tabletHealth.mu.Lock()
 		log.Warningf("tablet %v healthcheck stream error: %v", hcc.tabletHealth.Tablet.Alias, err)
 		hcc.setServingState(false, err.Error())
 		hcc.tabletHealth.LastError = err
 		hcc.tabletHealth.conn.Close(ctx)
 		hcc.tabletHealth.conn = nil
+		hcc.tabletHealth.mu.Unlock()
 	}
 }
 
@@ -676,21 +686,32 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, shr *querypb.St
 		serving = false
 	}
 
-	// hcc.tabletHealth.Tablet.Alias.Uid may be 0 because the youtube internal mechanism uses a different
-	// code path to initialize this value. If so, we should skip this check.
-	if shr.TabletAlias != nil && hcc.tabletHealth.Tablet.Alias.Uid != 0 && !proto.Equal(shr.TabletAlias, hcc.tabletHealth.Tablet.Alias) {
+	if shr.TabletAlias != nil && !proto.Equal(shr.TabletAlias, hcc.tabletHealth.Tablet.Alias) {
 		return fmt.Errorf("health stats mismatch, tablet %+v alias does not match response alias %v", hcc.tabletHealth.Tablet, shr.TabletAlias)
 	}
 
+	hcc.tabletHealth.mu.Lock()
+	currentTablet := hcc.tabletHealth.Tablet
+	hcc.tabletHealth.mu.Unlock()
 	// In this case where a new tablet is initialized or a tablet type changes, we want to
 	// initialize the counter so the rate can be calculated correctly.
-	if hcc.tabletHealth.Target.TabletType != shr.Target.TabletType {
+	if currentTablet.Type != shr.Target.TabletType {
 		hcErrorCounters.Add([]string{shr.Target.Keyspace, shr.Target.Shard, topoproto.TabletTypeLString(shr.Target.TabletType)}, 0)
+		// hc still has this tabletHealth in the wrong target (because tabletType changed)
+		oldTargetKey := hc.keyFromTablet(currentTablet)
+		newTargetKey := hc.keyFromTarget(shr.Target)
+		tabletAlias := topoproto.TabletAliasString(currentTablet.Alias)
+		hc.mu.Lock()
+		delete(hc.entries[oldTargetKey], tabletAlias)
+		hc.entries[newTargetKey][tabletAlias] = hcc.tabletHealth
+		hc.mu.Unlock()
 	}
 
 	// Update our record, and notify downstream for tabletType and
 	// realtimeStats change.
 	hcc.lastResponseTimestamp = time.Now()
+	hcc.tabletHealth.mu.Lock()
+	defer hcc.tabletHealth.mu.Unlock()
 	hcc.tabletHealth.Target = shr.Target
 	hcc.tabletHealth.MasterTermStartTime = shr.TabletExternallyReparentedTimestamp
 	hcc.tabletHealth.Stats = shr.RealtimeStats
@@ -717,6 +738,7 @@ func (hc *HealthCheckImpl) deleteConn(tablet *topodatapb.Tablet) {
 	th, ok := ths[tabletAlias]
 	if !ok {
 		log.Warningf("Something is wrong, we have no health data for tablet: %v", tabletAlias)
+		return
 	}
 	th.deleteConnLocked()
 	delete(ths, tabletAlias)
