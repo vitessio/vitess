@@ -18,9 +18,12 @@ package vtgate
 
 import (
 	"fmt"
+	"math/rand"
 	"sort"
 	"sync"
 	"time"
+
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"golang.org/x/net/context"
 
@@ -163,9 +166,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			}
 		}
 		if !match {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-				"requested tablet type %v is not part of the allowed tablet types for this vtgate: %+v",
-				target.TabletType.String(), discovery.AllowedTabletTypes)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requested tablet type %v is not part of the allowed tablet types for this vtgate: %+v", target.TabletType.String(), discovery.AllowedTabletTypes)
 		}
 	}
 
@@ -197,14 +198,38 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			}
 		}
 
-		tabletLastUsed, conn, connErr := gw.hc.GetTabletAndConnection(target, gw.localCell, invalidTablets)
-		// execute
-		if connErr != nil {
-			err = connErr
+		tablets := gw.hc.GetHealthyTabletStats(target)
+		if len(tablets) == 0 {
+			// fail fast if there is no tablet
+			err = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no valid tablet")
 			break
 		}
+		gw.shuffleTablets(gw.localCell, tablets)
+
+		var tabletLastUsed string
+		var conn queryservice.QueryService
+		// skip tablets we tried before
+		for _, t := range tablets {
+			tabletLastUsed = topoproto.TabletAliasString(t.Tablet.Alias)
+			if _, ok := invalidTablets[tabletLastUsed]; !ok {
+				conn = t.Conn
+				break
+			} else {
+				tabletLastUsed = ""
+			}
+		}
+		if tabletLastUsed == "" {
+			if err == nil {
+				// do not override error from last attempt.
+				err = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no available connection")
+			}
+			break
+		}
+
+		// execute
 		if conn == nil {
-			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no connection for target %v on attempt #%v", target, i+1)
+			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no connection for tablet %v", tabletLastUsed)
+			invalidTablets[tabletLastUsed] = true
 			continue
 		}
 
@@ -241,4 +266,51 @@ func (gw *TabletGateway) getStatsAggregator(target *querypb.Target) *TabletStatu
 	aggr = NewTabletStatusAggregator(target.Keyspace, target.Shard, target.TabletType, key)
 	gw.statusAggregators[key] = aggr
 	return aggr
+}
+
+func (gw *TabletGateway) shuffleTablets(cell string, tablets []*discovery.TabletHealth) {
+	sameCell, diffCell, sameCellMax := 0, 0, -1
+	length := len(tablets)
+
+	// move all same cell tablets to the front, this is O(n)
+	for {
+		sameCellMax = diffCell - 1
+		sameCell = gw.nextTablet(cell, tablets, sameCell, length, true)
+		diffCell = gw.nextTablet(cell, tablets, diffCell, length, false)
+		// either no more diffs or no more same cells should stop the iteration
+		if sameCell < 0 || diffCell < 0 {
+			break
+		}
+
+		if sameCell < diffCell {
+			// fast forward the `sameCell` lookup to `diffCell + 1`, `diffCell` unchanged
+			sameCell = diffCell + 1
+		} else {
+			// sameCell > diffCell, swap needed
+			tablets[sameCell], tablets[diffCell] = tablets[diffCell], tablets[sameCell]
+			sameCell++
+			diffCell++
+		}
+	}
+
+	//shuffle in same cell tablets
+	for i := sameCellMax; i > 0; i-- {
+		swap := rand.Intn(i + 1)
+		tablets[i], tablets[swap] = tablets[swap], tablets[i]
+	}
+
+	//shuffle in diff cell tablets
+	for i, diffCellMin := length-1, sameCellMax+1; i > diffCellMin; i-- {
+		swap := rand.Intn(i-sameCellMax) + diffCellMin
+		tablets[i], tablets[swap] = tablets[swap], tablets[i]
+	}
+}
+
+func (gw *TabletGateway) nextTablet(cell string, tablets []*discovery.TabletHealth, offset, length int, sameCell bool) int {
+	for ; offset < length; offset++ {
+		if (tablets[offset].Tablet.Alias.Cell == cell) == sameCell {
+			return offset
+		}
+	}
+	return -1
 }
