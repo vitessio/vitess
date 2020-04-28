@@ -175,7 +175,7 @@ func (vre *Engine) executeFetchMaybeCreateTable(dbClient binlogplayer.DBClient, 
 
 	log.Info("Looks like the vreplication tables may not exist. Trying to recreate... ")
 	if merr.Num == mysql.ERNoSuchTable || merr.Num == mysql.ERBadDb {
-		for _, query := range binlogplayer.CreateVReplicationTable() {
+		for _, query := range binlogplayer.CreateVtReplication {
 			if _, merr := dbClient.ExecuteFetch(query, 0); merr != nil {
 				log.Warningf("Failed to ensure %s exists: %v", vreplicationTableName, merr)
 				return nil, err
@@ -188,7 +188,7 @@ func (vre *Engine) executeFetchMaybeCreateTable(dbClient binlogplayer.DBClient, 
 	}
 	if merr.Num == mysql.ERBadFieldError {
 		log.Infof("Adding column to table %s", vreplicationTableName)
-		for _, query := range binlogplayer.AlterVReplicationTable() {
+		for _, query := range binlogplayer.AlterVReplicationTable {
 			if _, merr := dbClient.ExecuteFetch(query, 0); merr != nil {
 				merr, isSQLErr := err.(*mysql.SQLError)
 				if !isSQLErr || !(merr.Num == mysql.ERDupFieldName) {

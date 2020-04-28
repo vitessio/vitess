@@ -562,7 +562,7 @@ func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
 }
 
 func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatapb.VEvent, error) {
-	cols, err := vs.buildTableColumns(id, tm)
+	cols, err := vs.buildTableColumns(tm)
 	if err != nil {
 		return nil, err
 	}
@@ -592,7 +592,7 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 	}, nil
 }
 
-func (vs *vstreamer) buildTableColumns(id uint64, tm *mysql.TableMap) ([]*querypb.Field, error) {
+func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, error) {
 	var fields []*querypb.Field
 	for i, typ := range tm.Types {
 		t, err := sqltypes.MySQLToType(int64(typ), 0)
