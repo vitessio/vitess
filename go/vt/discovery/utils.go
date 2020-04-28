@@ -16,14 +16,6 @@ limitations under the License.
 
 package discovery
 
-import (
-	"sort"
-	"strings"
-
-	"vitess.io/vitess/go/netutil"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-)
-
 // This file contains helper filter methods to process the unfiltered list of
 // tablets returned by LegacyHealthCheck.GetTabletStatsFrom*.
 // See also legacy_replicationlag.go for a more sophisicated filter used by vtgate.
@@ -44,16 +36,4 @@ func RemoveUnhealthyTablets(tabletStatsList []LegacyTabletStats) []LegacyTabletS
 		result = append(result, ts)
 	}
 	return result
-}
-
-// TabletToMapKey creates a key to the map from tablet's host and ports.
-// It should only be used in discovery and related module.
-func TabletToMapKey(tablet *topodatapb.Tablet) string {
-	parts := make([]string, 0, 1)
-	for name, port := range tablet.PortMap {
-		parts = append(parts, netutil.JoinHostPort(name, port))
-	}
-	sort.Strings(parts)
-	parts = append([]string{tablet.Hostname}, parts...)
-	return strings.Join(parts, ",")
 }

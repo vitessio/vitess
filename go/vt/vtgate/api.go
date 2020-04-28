@@ -103,7 +103,7 @@ func initAPI(ctx context.Context, hc discovery.HealthCheck) {
 			return cacheStatus, nil
 		}
 		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid health-check path: %q  expected path: / or /cell/<cell> or /keyspace/<keyspace> or /tablet/<tablet|mysql_hostname>", itemPath)
+			return nil, fmt.Errorf("invalid health-check path: %q  expected path: / or /cell/<cell> or /keyspace/<keyspace> or /tablet/mysql_hostname", itemPath)
 		}
 		value := parts[1]
 
@@ -133,7 +133,7 @@ func initAPI(ctx context.Context, hc discovery.HealthCheck) {
 				// Return a _specific tablet_
 				for _, tabletCacheStatus := range cacheStatus {
 					for _, tabletStats := range tabletCacheStatus.TabletsStats {
-						if tabletStats.Name == value || tabletStats.Tablet.MysqlHostname == value {
+						if tabletStats.Tablet.MysqlHostname == value {
 							return tabletStats, nil
 						}
 					}

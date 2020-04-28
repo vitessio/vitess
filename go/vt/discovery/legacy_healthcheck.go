@@ -65,6 +65,42 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+const (
+	// LegacyHealthCheckTemplate is the HTML code to display a TabletsCacheStatusList
+	LegacyHealthCheckTemplate = `
+<style>
+  table {
+    border-collapse: collapse;
+  }
+  td, th {
+    border: 1px solid #999;
+    padding: 0.2rem;
+  }
+</style>
+<table>
+  <tr>
+    <th colspan="5">HealthCheck Tablet Cache</th>
+  </tr>
+  <tr>
+    <th>Cell</th>
+    <th>Keyspace</th>
+    <th>Shard</th>
+    <th>TabletType</th>
+    <th>tabletStats</th>
+  </tr>
+  {{range $i, $ts := .}}
+  <tr>
+    <td>{{github_com_vitessio_vitess_vtctld_srv_cell $ts.Cell}}</td>
+    <td>{{github_com_vitessio_vitess_vtctld_srv_keyspace $ts.Cell $ts.Target.Keyspace}}</td>
+    <td>{{$ts.Target.Shard}}</td>
+    <td>{{$ts.Target.TabletType}}</td>
+    <td>{{$ts.StatusAsHTML}}</td>
+  </tr>
+  {{end}}
+</table>
+`
+)
+
 func init() {
 	// Flags are not parsed at this point and the default value of the flag (just the hostname) will be used.
 	ParseTabletURLTemplateFromFlag()
@@ -213,6 +249,21 @@ func (e *LegacyTabletStats) TrivialStatsUpdate(n *LegacyTabletStats) bool {
 	}
 
 	return false
+}
+
+// TabletRecorder is the part of the LegacyHealthCheck interface that can
+// add or remove tablets. We define it as a sub-interface here so we
+// can add filters on tablets if needed.
+type TabletRecorder interface {
+	// AddTablet adds the tablet.
+	// Name is an alternate name, like an address.
+	AddTablet(tablet *topodatapb.Tablet, name string)
+
+	// RemoveTablet removes the tablet.
+	RemoveTablet(tablet *topodatapb.Tablet)
+
+	// ReplaceTablet does an AddTablet and RemoveTablet in one call, effectively replacing the old tablet with the new.
+	ReplaceTablet(old, new *topodatapb.Tablet, name string)
 }
 
 // LegacyHealthCheck defines the interface of health checking module.
@@ -901,4 +952,16 @@ func (hc *LegacyHealthCheckImpl) Close() error {
 	hc.connsWG.Wait()
 
 	return nil
+}
+
+// TabletToMapKey creates a key to the map from tablet's host and ports.
+// It should only be used in discovery and related module.
+func TabletToMapKey(tablet *topodatapb.Tablet) string {
+	parts := make([]string, 0, 1)
+	for name, port := range tablet.PortMap {
+		parts = append(parts, netutil.JoinHostPort(name, port))
+	}
+	sort.Strings(parts)
+	parts = append([]string{tablet.Hostname}, parts...)
+	return strings.Join(parts, ",")
 }
