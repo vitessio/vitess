@@ -89,8 +89,6 @@ func NewTabletGateway(ctx context.Context, serv srvtopo.Server, localCell string
 		statusAggregators: make(map[string]*TabletStatusAggregator),
 		buffer:            buffer.New(),
 	}
-	// Start the healthcheck
-	hc.Open()
 	gw.QueryService = queryservice.Wrap(nil, gw.withRetry)
 	return gw
 }

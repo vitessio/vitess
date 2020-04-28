@@ -29,20 +29,20 @@ var (
 	minNumTablets                = flag.Int("min_number_serving_vttablets", 2, "the minimum number of vttablets that will be continue to be used even with low replication lag")
 )
 
-// IsReplicationLagHigh verifies that the given LegacyTabletStats refers to a tablet with high
+// IsReplicationLagHigh verifies that the given LegacytabletHealth refers to a tablet with high
 // replication lag, i.e. higher than the configured discovery_low_replication_lag flag.
-func IsReplicationLagHigh(tabletStats *tabletStats) bool {
-	return float64(tabletStats.Stats.SecondsBehindMaster) > lowReplicationLag.Seconds()
+func IsReplicationLagHigh(tabletHealth *tabletHealth) bool {
+	return float64(tabletHealth.Stats.SecondsBehindMaster) > lowReplicationLag.Seconds()
 }
 
-// IsReplicationLagVeryHigh verifies that the given LegacyTabletStats refers to a tablet with very high
+// IsReplicationLagVeryHigh verifies that the given LegacytabletHealth refers to a tablet with very high
 // replication lag, i.e. higher than the configured discovery_high_replication_lag_minimum_serving flag.
-func IsReplicationLagVeryHigh(tabletStats *tabletStats) bool {
-	return float64(tabletStats.Stats.SecondsBehindMaster) > highReplicationLagMinServing.Seconds()
+func IsReplicationLagVeryHigh(tabletHealth *tabletHealth) bool {
+	return float64(tabletHealth.Stats.SecondsBehindMaster) > highReplicationLagMinServing.Seconds()
 }
 
-// FilterStatsByReplicationLag filters the list of LegacyTabletStats by LegacyTabletStats.Stats.SecondsBehindMaster.
-// Note that LegacyTabletStats that is non-serving or has error is ignored.
+// FilterStatsByReplicationLag filters the list of tabletHealth by tabletHealth.Stats.SecondsBehindMaster.
+// Note that tabletHealth that is non-serving or has error is ignored.
 //
 // The simplified logic:
 // - Return tablets that have lag <= lowReplicationLag.
@@ -66,14 +66,14 @@ func IsReplicationLagVeryHigh(tabletStats *tabletStats) bool {
 //   The default for this is 2h, same as the discovery_high_replication_lag_minimum_serving here.
 // * degraded_threshold: this is only used by vttablet for display. It should match
 //   discovery_low_replication_lag here, so the vttablet status display matches what vtgate will do of it.
-func FilterStatsByReplicationLag(tabletStatsList []*tabletStats) []*tabletStats {
-	return filterStatsByLag(tabletStatsList)
+func FilterStatsByReplicationLag(tabletHealthList []*tabletHealth) []*tabletHealth {
+	return filterStatsByLag(tabletHealthList)
 }
 
-func filterStatsByLag(tabletStatsList []*tabletStats) []*tabletStats {
-	list := make([]tabletLagSnapshot, 0, len(tabletStatsList))
+func filterStatsByLag(tabletHealthList []*tabletHealth) []*tabletHealth {
+	list := make([]tabletLagSnapshot, 0, len(tabletHealthList))
 	// filter non-serving tablets and those with very high replication lag
-	for _, ts := range tabletStatsList {
+	for _, ts := range tabletHealthList {
 		if !ts.Serving || ts.LastError != nil || ts.Stats == nil || IsReplicationLagVeryHigh(ts) {
 			continue
 		}
@@ -87,7 +87,7 @@ func filterStatsByLag(tabletStatsList []*tabletStats) []*tabletStats {
 	sort.Sort(tabletLagSnapshotList(list))
 
 	// Pick those with low replication lag, but at least minNumTablets tablets regardless.
-	res := make([]*tabletStats, 0, len(list))
+	res := make([]*tabletHealth, 0, len(list))
 	for i := 0; i < len(list); i++ {
 		if !IsReplicationLagHigh(list[i].ts) || i < *minNumTablets {
 			res = append(res, list[i].ts)
@@ -97,7 +97,7 @@ func filterStatsByLag(tabletStatsList []*tabletStats) []*tabletStats {
 }
 
 type tabletLagSnapshot struct {
-	ts     *tabletStats
+	ts     *tabletHealth
 	replag uint32
 }
 type tabletLagSnapshotList []tabletLagSnapshot

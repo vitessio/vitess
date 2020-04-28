@@ -2,8 +2,11 @@ package discovery
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/netutil"
@@ -11,21 +14,17 @@ import (
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// tabletStats is returned when getting the set of tablets.
-type tabletStats struct {
-	// Key uniquely identifies that serving tablet. It is computed
-	// from the Tablet's record Hostname and PortMap. If a tablet
-	// is restarted on different ports, its Key will be different.
-	// Key is computed using the TabletToMapKey method below.
-	// key can be used in GetConnection().
-	Key string
+// TabletHealth maintains the health status of a tablet. A map of this
+// structure is maintained in HealthCheckImpl.
+type tabletHealth struct {
+	mu sync.Mutex
+	// cancelFunc must be called before discarding TabletHealth.
+	// This will ensure that the associated checkConn goroutine will terminate.
+	cancelFunc context.CancelFunc
+	// conn is the connection associated with the tablet.
+	conn queryservice.QueryService
 	// Tablet is the tablet object that was sent to HealthCheck.AddTablet.
 	Tablet *topodata.Tablet
-	// Name is an optional tag (e.g. alternative address) for the
-	// tablet.  It is supposed to represent the tablet as a task,
-	// not as a process.  For instance, it can be a
-	// cell+keyspace+shard+tabletType+taskIndex value.
-	Name string
 	// Target is the current target as returned by the streaming
 	// StreamHealth RPC.
 	Target *query.Target
@@ -46,42 +45,35 @@ type tabletStats struct {
 	LastError error
 }
 
-// String is defined because we want to print a []*tabletStats array nicely.
-func (e *tabletStats) String() string {
-	return fmt.Sprint(*e)
+// String is defined because we want to print a []*tabletHealth array nicely.
+func (th *tabletHealth) String() string {
+	return fmt.Sprintf("TabletHealth{Tablet: %v,Target: %v,Up: %v,Serving: %v, MasterTermStartTime: %v, Stats: %v, LastError: %v",
+		th.Tablet, th.Target, th.Up, th.Serving, th.MasterTermStartTime, *th.Stats, th.LastError)
 }
 
-// DeepEqual compares two tabletStats. Since we include protos, we
+// DeepEqual compares two tabletHealth. Since we include protos, we
 // need to use proto.Equal on these.
-func (e *tabletStats) DeepEqual(f *tabletStats) bool {
-	return e.Key == f.Key &&
-		proto.Equal(e.Tablet, f.Tablet) &&
-		e.Name == f.Name &&
-		proto.Equal(e.Target, f.Target) &&
-		e.Up == f.Up &&
-		e.Serving == f.Serving &&
-		e.MasterTermStartTime == f.MasterTermStartTime &&
-		proto.Equal(e.Stats, f.Stats) &&
-		((e.LastError == nil && f.LastError == nil) ||
-			(e.LastError != nil && f.LastError != nil && e.LastError.Error() == f.LastError.Error()))
-}
-
-// Copy produces a copy of tabletStats.
-func (e *tabletStats) Copy() *tabletStats {
-	ts := *e
-	return &ts
+func (th *tabletHealth) DeepEqual(other *tabletHealth) bool {
+	return proto.Equal(th.Tablet, other.Tablet) &&
+		proto.Equal(th.Target, other.Target) &&
+		th.Up == other.Up &&
+		th.Serving == other.Serving &&
+		th.MasterTermStartTime == other.MasterTermStartTime &&
+		proto.Equal(th.Stats, other.Stats) &&
+		((th.LastError == nil && other.LastError == nil) ||
+			(th.LastError != nil && other.LastError != nil && th.LastError.Error() == other.LastError.Error()))
 }
 
 // GetTabletHostPort formats a tablet host port address.
-func (e tabletStats) GetTabletHostPort() string {
-	vtPort := e.Tablet.PortMap["vt"]
-	return netutil.JoinHostPort(e.Tablet.Hostname, vtPort)
+func (th *tabletHealth) GetTabletHostPort() string {
+	vtPort := th.Tablet.PortMap["vt"]
+	return netutil.JoinHostPort(th.Tablet.Hostname, vtPort)
 }
 
 // GetHostNameLevel returns the specified hostname level. If the level does not exist it will pick the closest level.
 // This seems unused but can be utilized by certain url formatting templates. See getTabletDebugURL for more details.
-func (e tabletStats) GetHostNameLevel(level int) string {
-	chunkedHostname := strings.Split(e.Tablet.Hostname, ".")
+func (th *tabletHealth) GetHostNameLevel(level int) string {
+	chunkedHostname := strings.Split(th.Tablet.Hostname, ".")
 
 	if level < 0 {
 		return chunkedHostname[0]
@@ -95,8 +87,8 @@ func (e tabletStats) GetHostNameLevel(level int) string {
 // getTabletDebugURL formats a debug url to the tablet.
 // It uses a format string that can be passed into the app to format
 // the debug URL to accommodate different network setups. It applies
-// the html/template string defined to a tabletStats object. The
-// format string can refer to members and functions of tabletStats
+// the html/template string defined to a tabletHealth object. The
+// format string can refer to members and functions of tabletHealth
 // like a regular html/template string.
 //
 // For instance given a tablet with hostname:port of host.dc.domain:22
@@ -104,19 +96,19 @@ func (e tabletStats) GetHostNameLevel(level int) string {
 // http://{{.GetTabletHostPort}} -> http://host.dc.domain:22
 // https://{{.Tablet.Hostname}} -> https://host.dc.domain
 // https://{{.GetHostNameLevel 0}}.bastion.corp -> https://host.bastion.corp
-func (e tabletStats) getTabletDebugURL() string {
+func (th *tabletHealth) getTabletDebugURL() string {
 	var buffer bytes.Buffer
-	tabletURLTemplate.Execute(&buffer, e)
+	tabletURLTemplate.Execute(&buffer, th)
 	return buffer.String()
 }
 
-// TrivialStatsUpdate returns true iff the old and new tabletStats
+// TrivialStatsUpdate returns true iff the old and new tabletHealth
 // haven't changed enough to warrant re-calling FilterLegacyStatsByReplicationLag.
-func (e *tabletStats) TrivialStatsUpdate(n *tabletStats) bool {
+func (th *tabletHealth) TrivialStatsUpdate(n *tabletHealth) bool {
 	// Skip replag filter when replag remains in the low rep lag range,
 	// which should be the case majority of the time.
 	lowRepLag := lowReplicationLag.Seconds()
-	oldRepLag := float64(e.Stats.SecondsBehindMaster)
+	oldRepLag := float64(th.Stats.SecondsBehindMaster)
 	newRepLag := float64(n.Stats.SecondsBehindMaster)
 	if oldRepLag <= lowRepLag && newRepLag <= lowRepLag {
 		return true
@@ -133,4 +125,16 @@ func (e *tabletStats) TrivialStatsUpdate(n *tabletStats) bool {
 	}
 
 	return false
+}
+
+func (th *tabletHealth) deleteConnLocked() {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	th.Up = false
+	th.conn = nil
+	th.cancelFunc()
+}
+
+func (th *tabletHealth) isHealthy() bool {
+	return th.Serving && th.LastError == nil && th.Stats != nil && !IsReplicationLagVeryHigh(th)
 }

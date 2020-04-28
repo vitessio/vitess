@@ -598,7 +598,7 @@ func TestLegacyTemplate(t *testing.T) {
 		TabletsStats: ts,
 	}
 	templ := template.New("").Funcs(status.StatusFuncs)
-	templ, err := templ.Parse(HealthCheckTemplate)
+	templ, err := templ.Parse(LegacyHealthCheckTemplate)
 	if err != nil {
 		t.Fatalf("error parsing template: %v", err)
 	}
@@ -630,7 +630,7 @@ func TestLegacyDebugURLFormatting(t *testing.T) {
 		TabletsStats: ts,
 	}
 	templ := template.New("").Funcs(status.StatusFuncs)
-	templ, err := templ.Parse(HealthCheckTemplate)
+	templ, err := templ.Parse(LegacyHealthCheckTemplate)
 	if err != nil {
 		t.Fatalf("error parsing template: %v", err)
 	}

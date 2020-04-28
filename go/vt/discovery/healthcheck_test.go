@@ -52,7 +52,7 @@ func TestHealthCheck(t *testing.T) {
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	hc := createTestHc(ts)
 	testChecksum(t, 0, hc.stateChecksum())
-	hc.AddTablet(tablet, "")
+	hc.AddTablet(tablet)
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
 	// close healthcheck
@@ -68,7 +68,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 	fc.errCh = make(chan error)
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	hc := createTestHc(ts)
-	hc.AddTablet(tablet, "")
+	hc.AddTablet(tablet)
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
 	// close healthcheck
@@ -86,7 +86,7 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 
 	hc := createTestHc(ts)
-	hc.AddTablet(tablet, "")
+	hc.AddTablet(tablet)
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
 	// close healthcheck
@@ -105,7 +105,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 
 	hc := createTestHc(ts)
-	hc.AddTablet(tablet, "")
+	hc.AddTablet(tablet)
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
 	hc.Close()
@@ -121,7 +121,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	hc := createTestHc(ts)
 	hc.retryDelay = timeout
-	hc.AddTablet(tablet, "")
+	hc.AddTablet(tablet)
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
 	// close healthcheck
@@ -130,9 +130,8 @@ func TestHealthCheckTimeout(t *testing.T) {
 
 func TestTemplate(t *testing.T) {
 	tablet := topo.NewTablet(0, "cell", "a")
-	ts := []*tabletStats{
+	ts := []*tabletHealth{
 		{
-			Key:                 "a",
 			Tablet:              tablet,
 			Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 			Up:                  true,
@@ -162,9 +161,8 @@ func TestDebugURLFormatting(t *testing.T) {
 	ParseTabletURLTemplateFromFlag()
 
 	tablet := topo.NewTablet(0, "cell", "host.dc.domain")
-	ts := []*tabletStats{
+	ts := []*tabletHealth{
 		{
-			Key:                 "a",
 			Tablet:              tablet,
 			Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 			Up:                  true,
