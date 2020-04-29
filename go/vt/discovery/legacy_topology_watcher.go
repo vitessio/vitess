@@ -36,6 +36,13 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+// tabletInfo is used internally by the TopologyWatcher class
+type legacyTabletInfo struct {
+	alias  string
+	key    string
+	tablet *topodatapb.Tablet
+}
+
 // NewLegacyCellTabletsWatcher returns a LegacyTopologyWatcher that monitors all
 // the tablets in a cell, and starts refreshing.
 func NewLegacyCellTabletsWatcher(ctx context.Context, topoServer *topo.Server, tr LegacyTabletRecorder, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int) *LegacyTopologyWatcher {
@@ -87,7 +94,7 @@ type LegacyTopologyWatcher struct {
 	// mu protects all variables below
 	mu sync.Mutex
 	// tablets contains a map of alias -> tabletInfo for all known tablets
-	tablets map[string]*tabletInfo
+	tablets map[string]*legacyTabletInfo
 	// topoChecksum stores a crc32 of the tablets map and is exported as a metric
 	topoChecksum uint32
 	// lastRefresh records the timestamp of the last topo refresh
@@ -109,7 +116,7 @@ func NewLegacyTopologyWatcher(ctx context.Context, topoServer *topo.Server, tr L
 		refreshKnownTablets: refreshKnownTablets,
 		getTablets:          getTablets,
 		sem:                 make(chan int, topoReadConcurrency),
-		tablets:             make(map[string]*tabletInfo),
+		tablets:             make(map[string]*legacyTabletInfo),
 	}
 	tw.firstLoadChan = make(chan struct{})
 
@@ -139,8 +146,8 @@ func (tw *LegacyTopologyWatcher) watch() {
 // loadTablets reads all tablets from topology, and updates LegacyTabletRecorder.
 func (tw *LegacyTopologyWatcher) loadTablets() {
 	var wg sync.WaitGroup
-	newTablets := make(map[string]*tabletInfo)
-	replacedTablets := make(map[string]*tabletInfo)
+	newTablets := make(map[string]*legacyTabletInfo)
+	replacedTablets := make(map[string]*legacyTabletInfo)
 
 	tabletAliases, err := tw.getTablets(tw)
 	topologyWatcherOperations.Add(topologyWatcherOpListTablets, 1)
@@ -190,7 +197,7 @@ func (tw *LegacyTopologyWatcher) loadTablets() {
 			}
 			tw.mu.Lock()
 			aliasStr := topoproto.TabletAliasString(alias)
-			newTablets[aliasStr] = &tabletInfo{
+			newTablets[aliasStr] = &legacyTabletInfo{
 				alias:  aliasStr,
 				key:    TabletToMapKey(tablet.Tablet),
 				tablet: tablet.Tablet,

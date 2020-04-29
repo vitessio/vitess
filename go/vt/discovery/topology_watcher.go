@@ -56,7 +56,6 @@ var (
 // tabletInfo is used internally by the TopologyWatcher class
 type tabletInfo struct {
 	alias  string
-	key    string
 	tablet *topodatapb.Tablet
 }
 
@@ -233,7 +232,6 @@ func (tw *TopologyWatcher) loadTablets() {
 			aliasStr := topoproto.TabletAliasString(alias)
 			newTablets[aliasStr] = &tabletInfo{
 				alias:  aliasStr,
-				key:    TabletToMapKey(tablet.Tablet),
 				tablet: tablet.Tablet,
 			}
 			tw.mu.Unlock()
@@ -251,7 +249,7 @@ func (tw *TopologyWatcher) loadTablets() {
 			// replaced alias to make sure it isn't removed later.
 			found := false
 			for _, otherVal := range tw.tablets {
-				if newVal.key == otherVal.key {
+				if newVal.alias == otherVal.alias {
 					found = true
 					tw.tabletRecorder.ReplaceTablet(otherVal.tablet, newVal.tablet)
 					topologyWatcherOperations.Add(topologyWatcherOpReplaceTablet, 1)
@@ -263,7 +261,7 @@ func (tw *TopologyWatcher) loadTablets() {
 				topologyWatcherOperations.Add(topologyWatcherOpAddTablet, 1)
 			}
 
-		} else if val.key != newVal.key {
+		} else if val.alias != newVal.alias {
 			// Handle the case where the same tablet alias is now reporting
 			// a different address key.
 			replacedTablets[alias] = newVal
@@ -291,10 +289,9 @@ func (tw *TopologyWatcher) loadTablets() {
 	sort.Strings(tabletAliasStrs)
 	var buf bytes.Buffer
 	for _, alias := range tabletAliasStrs {
-		tabletInfo, ok := tw.tablets[alias]
+		_, ok := tw.tablets[alias]
 		if ok {
 			buf.WriteString(alias)
-			buf.WriteString(tabletInfo.key)
 		}
 	}
 	tw.topoChecksum = crc32.ChecksumIEEE(buf.Bytes())
