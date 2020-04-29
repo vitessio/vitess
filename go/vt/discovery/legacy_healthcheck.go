@@ -251,10 +251,10 @@ func (e *LegacyTabletStats) TrivialStatsUpdate(n *LegacyTabletStats) bool {
 	return false
 }
 
-// TabletRecorder is the part of the LegacyHealthCheck interface that can
+// LegacyTabletRecorder is the part of the LegacyHealthCheck interface that can
 // add or remove tablets. We define it as a sub-interface here so we
 // can add filters on tablets if needed.
-type TabletRecorder interface {
+type LegacyTabletRecorder interface {
 	// AddTablet adds the tablet.
 	// Name is an alternate name, like an address.
 	AddTablet(tablet *topodatapb.Tablet, name string)
@@ -278,10 +278,10 @@ type TabletRecorder interface {
 // below and pass in the Key string which is also sent to the
 // listener in each update (as it is part of LegacyTabletStats).
 type LegacyHealthCheck interface {
-	// TabletRecorder interface adds AddTablet and RemoveTablet methods.
+	// LegacyTabletRecorder interface adds AddTablet and RemoveTablet methods.
 	// AddTablet adds the tablet, and starts health check on it.
 	// RemoveTablet removes the tablet, and stops its StreamHealth RPC.
-	TabletRecorder
+	LegacyTabletRecorder
 
 	// RegisterStats registers the connection counts and checksum stats.
 	// It can only be called on one Healthcheck object per process.

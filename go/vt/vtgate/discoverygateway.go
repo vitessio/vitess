@@ -114,7 +114,7 @@ func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, se
 		if c == "" {
 			continue
 		}
-		var recorder discovery.TabletRecorder = dg.hc
+		var recorder discovery.LegacyTabletRecorder = dg.hc
 		if len(discovery.TabletFilters) > 0 {
 			if len(discovery.KeyspacesToWatch) > 0 {
 				log.Exitf("Only one of -keyspaces_to_watch and -tablet_filters may be specified at a time")
