@@ -534,3 +534,24 @@ func queryTimeout(d sqlparser.CommentDirectives) int {
 	}
 	return 0
 }
+
+// maxPayloadSize returns an int maxPayloadSize value, if set,
+// and a boolean indicating whether a maxPayloadSize value was set.
+// Otherwise, returns 0 and false.
+func maxPayloadSize(d sqlparser.CommentDirectives) (int, bool) {
+	if d == nil {
+		return 0, false
+	}
+
+	val, ok := d[sqlparser.DirectiveMaxPayloadSize]
+	if !ok {
+		return 0, ok
+	}
+
+	intVal, ok := val.(int)
+	if ok {
+		return intVal, ok
+	}
+
+	return 0, true
+}
