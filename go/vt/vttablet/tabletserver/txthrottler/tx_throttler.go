@@ -166,7 +166,7 @@ type txThrottlerState struct {
 // topology watchers and go/vt/throttler. These are provided here so that they can be overridden
 // in tests to generate mocks.
 type healthCheckFactoryFunc func() discovery.LegacyHealthCheck
-type topologyWatcherFactoryFunc func(topoServer *topo.Server, tr discovery.TabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface
+type topologyWatcherFactoryFunc func(topoServer *topo.Server, tr discovery.LegacyTabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface
 type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate, maxReplicationLag int64) (ThrottlerInterface, error)
 
 var (
@@ -181,7 +181,7 @@ func init() {
 
 func resetTxThrottlerFactories() {
 	healthCheckFactory = discovery.NewLegacyDefaultHealthCheck
-	topologyWatcherFactory = func(topoServer *topo.Server, tr discovery.TabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
+	topologyWatcherFactory = func(topoServer *topo.Server, tr discovery.LegacyTabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
 		return discovery.NewLegacyShardReplicationWatcher(context.Background(), topoServer, tr, cell, keyspace, shard, refreshInterval, topoReadConcurrency)
 	}
 	throttlerFactory = func(name, unit string, threadCount int, maxRate, maxReplicationLag int64) (ThrottlerInterface, error) {
@@ -278,7 +278,7 @@ func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard string,
 			result.topologyWatchers,
 			topologyWatcherFactory(
 				config.topoServer,
-				result.healthCheck, /* TabletRecorder */
+				result.healthCheck, /* LegacyTabletRecorder */
 				cell,
 				keyspace,
 				shard,
