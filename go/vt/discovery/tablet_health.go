@@ -54,6 +54,28 @@ func (th *TabletHealth) String() string {
 		th.Tablet, th.Target, th.Up, th.Serving, th.MasterTermStartTime, *th.Stats, th.LastError)
 }
 
+// Copy returns a copy of TabletHealth. Note that this is not really a deep copy
+// because we point to the same underlying RealtimeStats.
+// That is fine because the RealtimeStats object is never changed after creation.
+func (th *TabletHealth) Copy() *TabletHealth {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	// we have to explicitly create a new object rather than relying on assignment to make a copy for us
+	// the following doesn't work for synchronized objects
+	// t := *th
+	// return &t
+	return &TabletHealth{
+		Conn:                th.Conn,
+		Tablet:              th.Tablet,
+		Target:              th.Target,
+		Up:                  th.Up,
+		Serving:             th.Serving,
+		MasterTermStartTime: th.MasterTermStartTime,
+		Stats:               th.Stats,
+		LastError:           th.LastError,
+	}
+}
+
 // DeepEqual compares two TabletHealth. Since we include protos, we
 // need to use proto.Equal on these.
 func (th *TabletHealth) DeepEqual(other *TabletHealth) bool {

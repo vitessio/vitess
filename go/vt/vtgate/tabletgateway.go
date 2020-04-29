@@ -102,15 +102,6 @@ func (gw *TabletGateway) RegisterStats() {
 	gw.hc.RegisterStats()
 }
 
-// StatsUpdate forwards HealthCheck updates to TabletStatsCache and MasterBuffer.
-// It is part of the discovery.HealthCheckStatsListener interface.
-// TODO(deepthi): figure out how to update buffer
-//func (gw *TabletGateway) StatsUpdate(ts *discovery.LegacyTabletStats) {
-//	if ts.Target.TabletType == topodatapb.TabletType_MASTER {
-//		gw.buffer.StatsUpdate(ts)
-//	}
-//}
-
 // WaitForTablets is part of the Gateway interface.
 func (gw *TabletGateway) WaitForTablets(ctx context.Context, tabletTypesToWait []topodatapb.TabletType) error {
 	// Skip waiting for tablets if we are not told to do so.
@@ -207,27 +198,27 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		gw.shuffleTablets(gw.localCell, tablets)
 
 		var tabletLastUsed string
-		var conn queryservice.QueryService
+		var th *discovery.TabletHealth
 		// skip tablets we tried before
 		for _, t := range tablets {
 			tabletLastUsed = topoproto.TabletAliasString(t.Tablet.Alias)
 			if _, ok := invalidTablets[tabletLastUsed]; !ok {
-				conn = t.Conn
+				th = t
 				break
 			} else {
 				tabletLastUsed = ""
 			}
 		}
 		if tabletLastUsed == "" {
+			// do not override error from last attempt.
 			if err == nil {
-				// do not override error from last attempt.
 				err = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no available connection")
 			}
 			break
 		}
 
 		// execute
-		if conn == nil {
+		if th.Conn == nil {
 			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no connection for tablet %v", tabletLastUsed)
 			invalidTablets[tabletLastUsed] = true
 			continue
@@ -235,8 +226,15 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 
 		startTime := time.Now()
 		var canRetry bool
-		canRetry, err = inner(ctx, target, conn)
+		canRetry, err = inner(ctx, target, th.Conn)
 		gw.updateStats(target, startTime, err)
+
+		// if a master query succeeded and the buffer is currently buffering, end the buffering
+		if err == nil && target.TabletType == topodatapb.TabletType_MASTER && gw.buffer.WaitingForFailoverEnd(ctx, target.Keyspace, target.Shard) {
+			// notify buffer that failover has ended
+			gw.buffer.EndFailover(target, th)
+		}
+
 		if canRetry {
 			invalidTablets[tabletLastUsed] = true
 			continue
