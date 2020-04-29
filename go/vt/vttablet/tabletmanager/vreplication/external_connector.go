@@ -36,12 +36,12 @@ import (
 )
 
 var (
-	_ vstreamerClient = (*mysqlConnector)(nil)
-	_ vstreamerClient = (*tabletConnector)(nil)
+	_ VStreamerClient = (*mysqlConnector)(nil)
+	_ VStreamerClient = (*tabletConnector)(nil)
 )
 
-// vstreamerClient exposes the core interface of a vstreamer
-type vstreamerClient interface {
+// VStreamerClient exposes the core interface of a vstreamer
+type VStreamerClient interface {
 	Open(context.Context) error
 	Close(context.Context) error
 
