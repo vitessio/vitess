@@ -32,6 +32,8 @@ const (
 	DirectiveQueryTimeout = "QUERY_TIMEOUT_MS"
 	// DirectiveScatterErrorsAsWarnings enables partial success scatter select queries
 	DirectiveScatterErrorsAsWarnings = "SCATTER_ERRORS_AS_WARNINGS"
+	// DirectiveMaxPayloadSize sets a maximum payload size in bytes. Only supported for INSERTS.
+	DirectiveMaxPayloadSize = "MAX_PAYLOAD_SIZE"
 )
 
 func isNonSpace(r rune) bool {
