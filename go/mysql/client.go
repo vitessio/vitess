@@ -177,8 +177,10 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 func (c *Conn) Ping() error {
 	// This is a new command, need to reset the sequence.
 	c.sequence = 0
+	data, pos := c.startEphemeralPacketWithHeader(1)
+	data[pos] = ComPing
 
-	if err := c.writePacket([]byte{ComPing}); err != nil {
+	if err := c.writeEphemeralPacket(); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
 	}
 	data, err := c.readEphemeralPacket()
@@ -542,8 +544,7 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 		flags |= CapabilityClientConnectWithDB
 	}
 
-	data := c.startEphemeralPacket(length)
-	pos := 0
+	data, pos := c.startEphemeralPacketWithHeader(length)
 
 	// Client capability flags.
 	pos = writeUint32(data, pos, flags)
@@ -605,8 +606,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 		length++
 	}
 
-	data := c.startEphemeralPacket(length)
-	pos := 0
+	data, pos := c.startEphemeralPacketWithHeader(length)
 
 	// Client capability flags.
 	pos = writeUint32(data, pos, flags)
@@ -672,8 +672,7 @@ func parseAuthSwitchRequest(data []byte) (string, []byte, error) {
 // Returns a SQLError.
 func (c *Conn) writeClearTextPassword(params *ConnParams) error {
 	length := len(params.Pass) + 1
-	data := c.startEphemeralPacket(length)
-	pos := 0
+	data, pos := c.startEphemeralPacketWithHeader(length)
 	pos = writeNullString(data, pos, params.Pass)
 	// Sanity check.
 	if pos != len(data) {
@@ -686,8 +685,7 @@ func (c *Conn) writeClearTextPassword(params *ConnParams) error {
 // Returns a SQLError.
 func (c *Conn) writeMysqlNativePassword(params *ConnParams, salt []byte) error {
 	scrambledPassword := ScramblePassword(salt, []byte(params.Pass))
-	data := c.startEphemeralPacket(len(scrambledPassword))
-	pos := 0
+	data, pos := c.startEphemeralPacketWithHeader(len(scrambledPassword))
 	pos += copy(data[pos:], scrambledPassword)
 	// Sanity check.
 	if pos != len(data) {
