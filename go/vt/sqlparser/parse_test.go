@@ -154,6 +154,12 @@ var (
 		input:  "select /* column alias */ a b from t",
 		output: "select /* column alias */ a as b from t",
 	}, {
+		input:  "select t.Date as Date from t",
+		output: "select t.`Date` as `Date` from t",
+	}, {
+		input:  "select t.col as YeAr from t",
+		output: "select t.col as `YeAr` from t",
+	}, {
 		input: "select /* column alias with as */ a as b from t",
 	}, {
 		input: "select /* keyword column alias */ a as `By` from t",
@@ -1535,6 +1541,9 @@ var (
 	}, {
 		input:  "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
 		output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+	}, {
+		input:  "create table t (c INT NOT NULL DEFAULT 0 ON UPDATE current_timestamp() AUTO_INCREMENT COMMENT 'a comment here' UNIQUE)",
+		output: "create table t (\n\tc INT not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
 	}, {
 		// Same input with options backwards.
 		input:  "create table t (c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null)",
