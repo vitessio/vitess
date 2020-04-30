@@ -514,15 +514,41 @@ func fmtTabletAwkable(ti *topo.TabletInfo) string {
 	if shard == "" {
 		shard = "<null>"
 	}
-	return fmt.Sprintf("%v %v %v %v %v %v %v", topoproto.TabletAliasString(ti.Alias), keyspace, shard, topoproto.TabletTypeLString(ti.Type), ti.Addr(), ti.MysqlAddr(), fmtMapAwkable(ti.Tags))
+	mtst := ""
+	// special case for old master that hasn't updated topo yet
+	if ti.MasterTermStartTime != nil {
+		if ti.MasterTermStartTime.Seconds == -1 {
+			mtst = "defunct"
+		}
+		if ti.MasterTermStartTime.Seconds > 0 {
+			mtst = logutil.ProtoToTime(ti.MasterTermStartTime).Format(time.RFC3339)
+		}
+	}
+	return fmt.Sprintf("%v %v %v %v %v %v %v %v", topoproto.TabletAliasString(ti.Alias), keyspace, shard, topoproto.TabletTypeLString(ti.Type), ti.Addr(), ti.MysqlAddr(), fmtMapAwkable(ti.Tags), mtst)
 }
 
 func listTabletsByShard(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string) error {
-	tabletAliases, err := wr.TopoServer().FindAllTabletAliasesInShard(ctx, keyspace, shard)
+	tabletMap, err := wr.TopoServer().GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
-	return dumpTablets(ctx, wr, tabletAliases)
+	var trueMasterTimestamp time.Time
+	for _, ti := range tabletMap {
+		if ti.Type == topodatapb.TabletType_MASTER {
+			masterTimestamp := logutil.ProtoToTime(ti.MasterTermStartTime)
+			if masterTimestamp.After(trueMasterTimestamp) {
+				trueMasterTimestamp = masterTimestamp
+			}
+		}
+	}
+	for _, ti := range tabletMap {
+		masterTimestamp := logutil.ProtoToTime(ti.MasterTermStartTime)
+		if ti.Type == topodatapb.TabletType_MASTER && masterTimestamp.Before(trueMasterTimestamp) {
+			ti.MasterTermStartTime.Seconds = -1
+		}
+		wr.Logger().Printf("%v\n", fmtTabletAwkable(ti))
+	}
+	return nil
 }
 
 func dumpAllTablets(ctx context.Context, wr *wrangler.Wrangler, cell string) error {
@@ -530,10 +556,33 @@ func dumpAllTablets(ctx context.Context, wr *wrangler.Wrangler, cell string) err
 	if err != nil {
 		return err
 	}
+	// It is possible that an old master has not yet updated it's type in the topo
+	// In that case, replace timestamp with `defunct`
+	trueMasterTimestamps := findTrueMasterTimestamps(tablets)
 	for _, ti := range tablets {
+		key := ti.Keyspace + "." + ti.Shard
+		masterTimestamp := logutil.ProtoToTime(ti.MasterTermStartTime)
+		if ti.Type == topodatapb.TabletType_MASTER && masterTimestamp.Before(trueMasterTimestamps[key]) {
+			ti.MasterTermStartTime.Seconds = -1
+		}
 		wr.Logger().Printf("%v\n", fmtTabletAwkable(ti))
 	}
 	return nil
+}
+
+func findTrueMasterTimestamps(tablets []*topo.TabletInfo) map[string]time.Time {
+	result := make(map[string]time.Time)
+	for _, ti := range tablets {
+		key := ti.Keyspace + "." + ti.Shard
+		if v, ok := result[key]; !ok {
+			result[key] = logutil.ProtoToTime(ti.MasterTermStartTime)
+		} else {
+			if logutil.ProtoToTime(ti.MasterTermStartTime).After(v) {
+				result[key] = logutil.ProtoToTime(ti.MasterTermStartTime)
+			}
+		}
+	}
+	return result
 }
 
 func dumpTablets(ctx context.Context, wr *wrangler.Wrangler, tabletAliases []*topodatapb.TabletAlias) error {
