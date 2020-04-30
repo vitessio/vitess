@@ -199,11 +199,17 @@ func (ro *routeOption) canMergeOnFilter(pb *primitiveBuilder, rro *routeOption, 
 // the route.
 func (ro *routeOption) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
 	switch ro.eroute.Opcode {
-	case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA, engine.SelectReference:
+	// For these opcodes, a new filter will not make any difference, so we can just exit early
+	case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA, engine.SelectReference, engine.SelectNone:
 		return
 	}
 	opcode, vindex, values := ro.computePlan(pb, filter)
 	if opcode == engine.SelectScatter {
+		return
+	}
+	// If we get SelectNone in next filters, override the previous route plan.
+	if opcode == engine.SelectNone {
+		ro.updateRoute(opcode, vindex, values)
 		return
 	}
 	switch ro.eroute.Opcode {
@@ -231,7 +237,7 @@ func (ro *routeOption) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
 		}
 	case engine.SelectScatter:
 		switch opcode {
-		case engine.SelectEqualUnique, engine.SelectEqual, engine.SelectIN:
+		case engine.SelectEqualUnique, engine.SelectEqual, engine.SelectIN, engine.SelectNone:
 			ro.updateRoute(opcode, vindex, values)
 		}
 	}
@@ -253,6 +259,8 @@ func (ro *routeOption) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) 
 		case sqlparser.InStr:
 			return ro.computeINPlan(pb, node)
 		}
+	case *sqlparser.IsExpr:
+		return ro.computeISPlan(pb, node)
 	}
 	return engine.SelectScatter, nil, nil
 }
@@ -269,6 +277,9 @@ func (ro *routeOption) computeEqualPlan(pb *primitiveBuilder, comparison *sqlpar
 			return engine.SelectScatter, nil, nil
 		}
 	}
+	if sqlparser.IsNull(right) {
+		return engine.SelectNone, nil, nil
+	}
 	if !ro.exprIsValue(right) {
 		return engine.SelectScatter, nil, nil
 	}
@@ -276,6 +287,23 @@ func (ro *routeOption) computeEqualPlan(pb *primitiveBuilder, comparison *sqlpar
 		return engine.SelectEqualUnique, vindex, right
 	}
 	return engine.SelectEqual, vindex, right
+}
+
+// computeEqualPlan computes the plan for an equality constraint.
+func (ro *routeOption) computeISPlan(pb *primitiveBuilder, comparison *sqlparser.IsExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
+	// we only handle IS NULL correct. IsExpr can contain other expressions as well
+	if comparison.Operator != sqlparser.IsNullStr {
+		return engine.SelectScatter, nil, nil
+	}
+
+	vindex = ro.FindVindex(pb, comparison.Expr)
+	if vindex == nil {
+		return engine.SelectScatter, nil, nil
+	}
+	if vindex.IsUnique() {
+		return engine.SelectEqualUnique, vindex, &sqlparser.NullVal{}
+	}
+	return engine.SelectEqual, vindex, &sqlparser.NullVal{}
 }
 
 // computeINPlan computes the plan for an IN constraint.

@@ -161,6 +161,8 @@ const (
 	SelectDBA
 	// SelectReference is for fetching from a reference table.
 	SelectReference
+	// SelectNone is used for queries that always return empty values
+	SelectNone
 )
 
 var routeName = map[RouteOpcode]string{
@@ -172,6 +174,7 @@ var routeName = map[RouteOpcode]string{
 	SelectNext:        "SelectNext",
 	SelectDBA:         "SelectDBA",
 	SelectReference:   "SelectReference",
+	SelectNone:        "SelectNone",
 }
 
 var (
@@ -230,6 +233,8 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 		rss, bvs, err = route.paramsSelectEqual(vcursor, bindVars)
 	case SelectIN:
 		rss, bvs, err = route.paramsSelectIn(vcursor, bindVars)
+	case SelectNone:
+		rss, bvs, err = nil, nil, nil
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported query route: %v", route)

@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -501,6 +503,30 @@ func TestConsistentLookupUpdate(t *testing.T) {
 	require.Empty(t, qr.Rows)
 	qr = exec(t, conn, "select * from t4_id2_idx")
 	require.Empty(t, qr.Rows)
+}
+
+func TestSelectNull(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "begin")
+	exec(t, conn, "insert into t5_null_vindex(id, idx) values(1, 'a'), (2, 'b'), (3, null)")
+	exec(t, conn, "commit")
+	qr := exec(t, conn, "select id, idx from t5_null_vindex order by id")
+	utils.MustMatch(t, fmt.Sprintf("%v", qr.Rows), "[[INT64(1) VARCHAR(\"a\")] [INT64(2) VARCHAR(\"b\")] [INT64(3) NULL]]", "")
+
+	qr = exec(t, conn, "select id, idx from t5_null_vindex where idx = null")
+	require.Empty(t, qr.Rows)
+
+	qr = exec(t, conn, "select id, idx from t5_null_vindex where idx is null")
+	utils.MustMatch(t, fmt.Sprintf("%v", qr.Rows), "[[INT64(3) NULL]]", "")
+
+	qr = exec(t, conn, "select id, idx from t5_null_vindex where idx is not null order by id")
+	utils.MustMatch(t, fmt.Sprintf("%v", qr.Rows), "[[INT64(1) VARCHAR(\"a\")] [INT64(2) VARCHAR(\"b\")]]", "")
+
+	exec(t, conn, "delete from t5_null_vindex")
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
