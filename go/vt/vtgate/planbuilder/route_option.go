@@ -254,6 +254,8 @@ func (ro *routeOption) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) 
 		case sqlparser.InStr:
 			return ro.computeINPlan(pb, node)
 		}
+	case *sqlparser.IsExpr:
+		return ro.computeISPlan(pb, node)
 	}
 	return engine.SelectScatter, nil, nil
 }
@@ -280,6 +282,25 @@ func (ro *routeOption) computeEqualPlan(pb *primitiveBuilder, comparison *sqlpar
 		return engine.SelectEqualUnique, vindex, right
 	}
 	return engine.SelectEqual, vindex, right
+}
+
+// computeEqualPlan computes the plan for an equality constraint.
+func (ro *routeOption) computeISPlan(pb *primitiveBuilder, comparison *sqlparser.IsExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
+	// we only handle IS NULL correct. IsExpr can contain other expressions as well
+	if comparison.Operator != sqlparser.IsNullStr {
+		return engine.SelectScatter, nil, nil
+	}
+
+	left := comparison.Expr
+
+	vindex = ro.FindVindex(pb, left)
+	if vindex == nil {
+		return engine.SelectScatter, nil, nil
+	}
+	if vindex.IsUnique() {
+		return engine.SelectEqualUnique, vindex, &sqlparser.NullVal{}
+	}
+	return engine.SelectEqual, vindex, &sqlparser.NullVal{}
 }
 
 // computeINPlan computes the plan for an IN constraint.
