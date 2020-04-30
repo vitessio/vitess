@@ -20,6 +20,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -146,6 +148,40 @@ func TestSelectEqualUnique(t *testing.T) {
 		`StreamExecuteMulti dummy_select ks.-20: {} `,
 	})
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+}
+
+func TestSelectNone(t *testing.T) {
+	vindex, _ := vindexes.NewHash("", nil)
+	sel := NewRoute(
+		SelectNone,
+		&vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		"dummy_select",
+		"dummy_select_field",
+	)
+	sel.Vindex = vindex.(vindexes.SingleColumn)
+	sel.Values = nil
+
+	vc := &loggingVCursor{
+		shards:  []string{"-20", "20-"},
+		results: []*sqltypes.Result{},
+	}
+	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	require.Empty(t, vc.log)
+	expectResult(t, "sel.Execute", result, &sqltypes.Result{})
+
+	vc.Rewind()
+
+	result, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, true)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+		`ExecuteMultiShard ks.-20: dummy_select_field {} false false`,
+	})
+	expectResult(t, "sel.Execute", result, &sqltypes.Result{})
 }
 
 func TestSelectEqualUniqueScatter(t *testing.T) {
