@@ -1,5 +1,5 @@
 
-package tabletserver
+package schema
 
 import (
 	"fmt"
@@ -24,7 +24,7 @@ func TestSerialization(t *testing.T) {
 		},
 	}
 
-	b := ToGOB64(m)
-	newMap := FromGOB64(b)
+	b := ToGOB(m)
+	newMap := FromGOB(b)
 	fmt.Printf("%v", newMap)
 }

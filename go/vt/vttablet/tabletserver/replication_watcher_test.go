@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/test/utils"
@@ -29,13 +31,13 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-func (t *testableSubscriber) SchemaUpdated(gtid string, ddl string, timestamp int64) {
+func (t *mockSubscriber) SchemaUpdated(gtid string, ddl string, timestamp int64) {
 	t.gtids = append(t.gtids, gtid)
 	t.ddls = append(t.ddls, ddl)
 	t.timestamps = append(t.timestamps, timestamp)
 }
 
-var _ SchemaSubscriber = (*testableSubscriber)(nil)
+var _ schema.SchemaSubscriber = (*mockSubscriber)(nil)
 var _ VStreamer = (*fakeVstreamer)(nil)
 var _ tabletenv.Env = (*fakeEnv)(nil)
 
@@ -88,7 +90,7 @@ func TestReplicationWatcher(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			subscriber := &testableSubscriber{}
+			subscriber := &mockSubscriber{}
 			streamer := &fakeVstreamer{
 				events: testCase.input,
 			}
@@ -111,7 +113,7 @@ func TestReplicationWatcher(t *testing.T) {
 	}
 }
 
-type testableSubscriber struct {
+type mockSubscriber struct {
 	gtids      []string
 	ddls       []string
 	timestamps []int64

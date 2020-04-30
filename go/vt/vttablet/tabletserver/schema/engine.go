@@ -63,6 +63,7 @@ type Engine struct {
 	// and do not require locking mu.
 	conns *connpool.Pool
 	ticks *timer.Timer
+	Sh    HistorianInterface
 }
 
 // NewEngine creates a new Engine.
@@ -135,6 +136,11 @@ func (se *Engine) IsOpen() bool {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	return se.isOpen
+}
+
+// GetConnection returns a connection from the pool
+func (se *Engine) GetConnection(ctx context.Context) (*connpool.DBConn, error) {
+	return se.conns.Get(ctx)
 }
 
 // Close shuts down Engine and is idempotent.
@@ -339,6 +345,11 @@ func (se *Engine) broadcast(created, altered, dropped []string) {
 	}
 }
 
+// GetTableForPos returns the info for a table.
+func (se *Engine) GetTableForPos(tableName sqlparser.TableIdent, pos string) *Table {
+	return se.Sh.GetTableForPos(tableName, pos)
+}
+
 // GetTable returns the info for a table.
 func (se *Engine) GetTable(tableName sqlparser.TableIdent) *Table {
 	se.mu.Lock()
@@ -404,4 +415,8 @@ func (se *Engine) SetTableForTests(table *Table) {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	se.tables[table.Name.String()] = table
+}
+
+func (se *Engine) SetHistorian(sh *Historian) {
+	se.Sh = sh
 }

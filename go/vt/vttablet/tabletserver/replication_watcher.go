@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -33,11 +34,6 @@ type VStreamer interface {
 	Stream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
 }
 
-//SchemaSubscriber will get notified when the schema has been updated
-type SchemaSubscriber interface {
-	SchemaUpdated(gtid string, ddl string, timestamp int64)
-}
-
 // ReplicationWatcher is a tabletserver service that watches the
 // replication stream.  It will trigger schema reloads if a DDL
 // is encountered.
@@ -45,17 +41,18 @@ type ReplicationWatcher struct {
 	env              tabletenv.Env
 	watchReplication bool
 	vs               VStreamer
-	subscriber       SchemaSubscriber
+	subscriber       schema.SchemaSubscriber
 
 	cancel context.CancelFunc
 }
 
 // NewReplicationWatcher creates a new ReplicationWatcher.
-func NewReplicationWatcher(env tabletenv.Env, vs VStreamer, config *tabletenv.TabletConfig) *ReplicationWatcher {
+func NewReplicationWatcher(env tabletenv.Env, vs VStreamer, config *tabletenv.TabletConfig, schemaTracker schema.SchemaSubscriber) *ReplicationWatcher {
 	return &ReplicationWatcher{
 		env:              env,
 		vs:               vs,
 		watchReplication: config.WatchReplication,
+		subscriber:       schemaTracker,
 	}
 }
 
