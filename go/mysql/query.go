@@ -42,9 +42,10 @@ func (c *Conn) WriteComQuery(query string) error {
 	// This is a new command, need to reset the sequence.
 	c.sequence = 0
 
-	data := c.startEphemeralPacket(len(query) + 1)
-	data[0] = ComQuery
-	copy(data[1:], query)
+	data, pos := c.startEphemeralPacketWithHeader(len(query) + 1)
+	data[pos] = ComQuery
+	pos++
+	copy(data[pos:], query)
 	if err := c.writeEphemeralPacket(); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
@@ -55,9 +56,10 @@ func (c *Conn) WriteComQuery(query string) error {
 // Client -> Server.
 // Returns SQLError(CRServerGone) if it can't.
 func (c *Conn) writeComInitDB(db string) error {
-	data := c.startEphemeralPacket(len(db) + 1)
-	data[0] = ComInitDB
-	copy(data[1:], db)
+	data, pos := c.startEphemeralPacketWithHeader(len(db) + 1)
+	data[pos] = ComInitDB
+	pos++
+	copy(data[pos:], db)
 	if err := c.writeEphemeralPacket(); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
@@ -67,9 +69,10 @@ func (c *Conn) writeComInitDB(db string) error {
 // writeComSetOption changes the connection's capability of executing multi statements.
 // Returns SQLError(CRServerGone) if it can't.
 func (c *Conn) writeComSetOption(operation uint16) error {
-	data := c.startEphemeralPacket(16 + 1)
-	data[0] = ComSetOption
-	writeUint16(data, 1, operation)
+	data, pos := c.startEphemeralPacketWithHeader(16 + 1)
+	data[pos] = ComSetOption
+	pos++
+	writeUint16(data, pos, operation)
 	if err := c.writeEphemeralPacket(); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
@@ -861,8 +864,8 @@ func (c *Conn) parseComInitDB(data []byte) string {
 
 func (c *Conn) sendColumnCount(count uint64) error {
 	length := lenEncIntSize(count)
-	data := c.startEphemeralPacket(length)
-	writeLenEncInt(data, 0, count)
+	data, pos := c.startEphemeralPacketWithHeader(length)
+	writeLenEncInt(data, pos, count)
 	return c.writeEphemeralPacket()
 }
 
@@ -889,8 +892,7 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
 		flags = int64(field.Flags)
 	}
 
-	data := c.startEphemeralPacket(length)
-	pos := 0
+	data, pos := c.startEphemeralPacketWithHeader(length)
 
 	pos = writeLenEncString(data, pos, "def") // Always the same.
 	pos = writeLenEncString(data, pos, field.Database)
@@ -924,8 +926,7 @@ func (c *Conn) writeRow(row []sqltypes.Value) error {
 		}
 	}
 
-	data := c.startEphemeralPacket(length)
-	pos := 0
+	data, pos := c.startEphemeralPacketWithHeader(length)
 	for _, val := range row {
 		if val.IsNull() {
 			pos = writeByte(data, pos, NullValue)
@@ -934,10 +935,6 @@ func (c *Conn) writeRow(row []sqltypes.Value) error {
 			pos = writeLenEncInt(data, pos, uint64(l))
 			pos += copy(data[pos:], val.Raw())
 		}
-	}
-
-	if pos != length {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "packet row: got %v bytes but expected %v", pos, length)
 	}
 
 	return c.writeEphemeralPacket()
@@ -1012,8 +1009,7 @@ func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
 		prepare.ColumnNames = make([]string, columnCount)
 	}
 
-	data := c.startEphemeralPacket(12)
-	pos := 0
+	data, pos := c.startEphemeralPacketWithHeader(12)
 
 	pos = writeByte(data, pos, 0x00)
 	pos = writeUint32(data, pos, uint32(prepare.StatementID))
@@ -1081,8 +1077,7 @@ func (c *Conn) writeBinaryRow(fields []*querypb.Field, row []sqltypes.Value) err
 
 	length += nullBitMapLen + 1
 
-	data := c.startEphemeralPacket(length)
-	pos := 0
+	data, pos := c.startEphemeralPacketWithHeader(length)
 
 	pos = writeByte(data, pos, 0x00)
 
@@ -1103,10 +1098,6 @@ func (c *Conn) writeBinaryRow(fields []*querypb.Field, row []sqltypes.Value) err
 			}
 			pos += copy(data[pos:], v)
 		}
-	}
-
-	if pos != length {
-		return fmt.Errorf("internal error packet row: got %v bytes but expected %v", pos, length)
 	}
 
 	return c.writeEphemeralPacket()
