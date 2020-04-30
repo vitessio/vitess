@@ -1320,7 +1320,7 @@
 "select id from music where user_id = 4 and id = null"
 {
   "QueryType": "SELECT",
-  "Original": "select id from music where id = null and user_id = 4",
+  "Original": "select id from music where user_id = 4 and id = null",
   "Instructions": {
     "OperatorType": "Route",
     "Variant": "SelectNone",
@@ -1329,7 +1329,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from music where 1 != 1",
-    "Query": "select id from music where id = null and user_id = 4",
+    "Query": "select id from music where user_id = 4 and id = null",
     "Table": "music"
   }
 }

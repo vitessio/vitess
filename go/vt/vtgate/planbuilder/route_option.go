@@ -207,6 +207,11 @@ func (ro *routeOption) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
 	if opcode == engine.SelectScatter {
 		return
 	}
+	// If we get SelectNone in next filters, override the previous route plan.
+	if opcode == engine.SelectNone {
+		ro.updateRoute(opcode, vindex, values)
+		return
+	}
 	switch ro.eroute.Opcode {
 	case engine.SelectEqualUnique:
 		if opcode == engine.SelectEqualUnique && vindex.Cost() < ro.eroute.Vindex.Cost() {
