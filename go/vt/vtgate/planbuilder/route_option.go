@@ -291,9 +291,7 @@ func (ro *routeOption) computeISPlan(pb *primitiveBuilder, comparison *sqlparser
 		return engine.SelectScatter, nil, nil
 	}
 
-	left := comparison.Expr
-
-	vindex = ro.FindVindex(pb, left)
+	vindex = ro.FindVindex(pb, comparison.Expr)
 	if vindex == nil {
 		return engine.SelectScatter, nil, nil
 	}

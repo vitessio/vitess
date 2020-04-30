@@ -94,6 +94,12 @@ create table t4_id2_idx(
 	id1 bigint,
 	keyspace_id varbinary(50),
     primary key(id2, id1)
+) Engine=InnoDB;
+
+create table t5_null_vindex(
+	id bigint not null,
+	idx varchar(50),
+	primary key(id)
 ) Engine=InnoDB;`
 
 	VSchema = `
@@ -105,6 +111,9 @@ create table t4_id2_idx(
     },
     "hash": {
       "type": "hash"
+    },
+    "xxhash": {
+      "type": "xxhash"
     },
     "t1_id2_vdx": {
       "type": "consistent_lookup_unique",
@@ -222,6 +231,14 @@ create table t4_id2_idx(
         {
           "column": "id2",
           "name": "unicode_loose_md5"
+        }
+      ]
+    },
+	"t5_null_vindex": {
+      "column_vindexes": [
+        {
+          "column": "idx",
+          "name": "xxhash"
         }
       ]
     },
