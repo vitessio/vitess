@@ -199,7 +199,8 @@ func (ro *routeOption) canMergeOnFilter(pb *primitiveBuilder, rro *routeOption, 
 // the route.
 func (ro *routeOption) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
 	switch ro.eroute.Opcode {
-	case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA, engine.SelectReference:
+	// For these opcodes, a new filter will not make any difference, so we can just exit early
+	case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA, engine.SelectReference, engine.SelectNone:
 		return
 	}
 	opcode, vindex, values := ro.computePlan(pb, filter)
@@ -231,7 +232,7 @@ func (ro *routeOption) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
 		}
 	case engine.SelectScatter:
 		switch opcode {
-		case engine.SelectEqualUnique, engine.SelectEqual, engine.SelectIN:
+		case engine.SelectEqualUnique, engine.SelectEqual, engine.SelectIN, engine.SelectNone:
 			ro.updateRoute(opcode, vindex, values)
 		}
 	}
@@ -268,6 +269,9 @@ func (ro *routeOption) computeEqualPlan(pb *primitiveBuilder, comparison *sqlpar
 		if vindex == nil {
 			return engine.SelectScatter, nil, nil
 		}
+	}
+	if sqlparser.IsNull(right) {
+		return engine.SelectNone, nil, nil
 	}
 	if !ro.exprIsValue(right) {
 		return engine.SelectScatter, nil, nil
