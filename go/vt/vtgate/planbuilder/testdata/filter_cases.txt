@@ -1275,3 +1275,43 @@
     "Table": "music"
   }
 }
+
+# SELECT with IS NULL
+"select id from music where id is null"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from music where id is null",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from music where 1 != 1",
+    "Query": "select id from music where id is null",
+    "Table": "music",
+    "Values": [
+      null
+    ],
+    "Vindex": "music_user_map"
+  }
+}
+
+# SELECT with IS NOT NULL
+"select id from music where id is not null"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from music where id is not null",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from music where 1 != 1",
+    "Query": "select id from music where id is not null",
+    "Table": "music"
+  }
+}
