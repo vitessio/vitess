@@ -31,9 +31,9 @@ import (
 
 // Utility function to write sql query as packets to test parseComPrepare
 func MockQueryPackets(t *testing.T, query string) []byte {
-	data := make([]byte, len(query)+1)
+	data := make([]byte, len(query)+1+packetHeaderSize)
 	// Not sure if it makes a difference
-	pos := 0
+	pos := packetHeaderSize
 	pos = writeByte(data, pos, ComPrepare)
 	copy(data[pos:], query)
 	return data

@@ -28,8 +28,8 @@ func (c *Conn) WriteComBinlogDump(serverID uint32, binlogFilename string, binlog
 		2 + // flags
 		4 + // server-id
 		len(binlogFilename) // binlog-filename
-	data := c.startEphemeralPacket(length)
-	pos := writeByte(data, 0, ComBinlogDump)
+	data, pos := c.startEphemeralPacketWithHeader(length)
+	pos = writeByte(data, pos, ComBinlogDump)
 	pos = writeUint32(data, pos, binlogPos)
 	pos = writeUint16(data, pos, flags)
 	pos = writeUint32(data, pos, serverID)
@@ -53,8 +53,8 @@ func (c *Conn) WriteComBinlogDumpGTID(serverID uint32, binlogFilename string, bi
 		8 + // binlog-pos
 		4 + // data-size
 		len(gtidSet) // data
-	data := c.startEphemeralPacket(length)
-	pos := writeByte(data, 0, ComBinlogDumpGTID)
+	data, pos := c.startEphemeralPacketWithHeader(length)
+	pos = writeByte(data, pos, ComBinlogDumpGTID)
 	pos = writeUint16(data, pos, flags)
 	pos = writeUint32(data, pos, serverID)
 	pos = writeUint32(data, pos, uint32(len(binlogFilename)))
