@@ -106,7 +106,7 @@ func TestDiscoveryGatewayBeginExecuteBatch(t *testing.T) {
 func TestDiscoveryGatewayGetTablets(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 	dg := NewDiscoveryGateway(context.Background(), hc, nil, "local", 2)
 
 	// replica should only use local ones
@@ -206,7 +206,7 @@ func TestShuffleTablets(t *testing.T) {
 func TestDiscoveryGatewayGetTabletsInRegion(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 	ts := memorytopo.NewServer("local-west", "local-east", "local", "remote")
 	srvTopo := srvtopotest.NewPassthroughSrvTopoServer()
 	srvTopo.TopoServer = ts
@@ -236,7 +236,7 @@ func TestDiscoveryGatewayGetTabletsInRegion(t *testing.T) {
 func TestDiscoveryGatewayGetTabletsWithRegion(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 	ts := memorytopo.NewServer("local-west", "local-east", "local", "remote")
 	srvTopo := srvtopotest.NewPassthroughSrvTopoServer()
 	srvTopo.TopoServer = ts
@@ -273,7 +273,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, f func(dg *DiscoveryGateway, targ
 		Shard:      shard,
 		TabletType: tabletType,
 	}
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 	dg := NewDiscoveryGateway(context.Background(), hc, nil, "cell", 2)
 
 	// no tablet
@@ -356,7 +356,7 @@ func testDiscoveryGatewayTransact(t *testing.T, f func(dg *DiscoveryGateway, tar
 		Shard:      shard,
 		TabletType: tabletType,
 	}
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 	dg := NewDiscoveryGateway(context.Background(), hc, nil, "cell", 2)
 
 	// retry error - no retry

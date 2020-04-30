@@ -18,14 +18,14 @@ import (
 // TabletHealth maintains the health status of a tablet. A map of this
 // structure is maintained in HealthCheckImpl.
 type TabletHealth struct {
-	mu sync.Mutex
 	// cancelFunc must be called before discarding TabletHealth.
 	// This will ensure that the associated checkConn goroutine will terminate.
 	cancelFunc context.CancelFunc
-	// Conn is the connection associated with the tablet.
-	Conn queryservice.QueryService
 	// Tablet is the tablet object that was sent to HealthCheck.AddTablet.
 	Tablet *topodata.Tablet
+	mu     sync.Mutex
+	// Conn is the connection associated with the tablet.
+	Conn queryservice.QueryService
 	// Target is the current target as returned by the streaming
 	// StreamHealth RPC.
 	Target *query.Target
@@ -135,9 +135,9 @@ func (th *TabletHealth) getTabletDebugURL() string {
 
 func (th *TabletHealth) deleteConnLocked() {
 	th.mu.Lock()
-	defer th.mu.Unlock()
 	th.Up = false
 	th.Conn = nil
+	th.mu.Unlock()
 	th.cancelFunc()
 }
 

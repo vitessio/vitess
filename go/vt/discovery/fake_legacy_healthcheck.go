@@ -32,28 +32,28 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// This file contains the definitions for a FakeHealthCheck class to
+// This file contains the definitions for a FakeLegacyHealthCheck class to
 // simulate a LegacyHealthCheck module. Note it is not in a sub-package because
 // otherwise it couldn't be used in this package's tests because of
 // circular dependencies.
 
-// NewFakeHealthCheck returns the fake healthcheck object.
-func NewFakeHealthCheck() *FakeHealthCheck {
-	return &FakeHealthCheck{
-		items: make(map[string]*fhcItem),
+// NewFakeLegacyHealthCheck returns the fake healthcheck object.
+func NewFakeLegacyHealthCheck() *FakeLegacyHealthCheck {
+	return &FakeLegacyHealthCheck{
+		items: make(map[string]*flhcItem),
 	}
 }
 
-// FakeHealthCheck implements discovery.LegacyHealthCheck.
-type FakeHealthCheck struct {
+// FakeLegacyHealthCheck implements discovery.LegacyHealthCheck.
+type FakeLegacyHealthCheck struct {
 	listener LegacyHealthCheckStatsListener
 
 	// mu protects the items map
 	mu    sync.RWMutex
-	items map[string]*fhcItem
+	items map[string]*flhcItem
 }
 
-type fhcItem struct {
+type flhcItem struct {
 	ts   *LegacyTabletStats
 	conn queryservice.QueryService
 }
@@ -63,22 +63,22 @@ type fhcItem struct {
 //
 
 // RegisterStats is not implemented.
-func (fhc *FakeHealthCheck) RegisterStats() {
+func (fhc *FakeLegacyHealthCheck) RegisterStats() {
 }
 
 // SetListener is not implemented.
-func (fhc *FakeHealthCheck) SetListener(listener LegacyHealthCheckStatsListener, sendDownEvents bool) {
+func (fhc *FakeLegacyHealthCheck) SetListener(listener LegacyHealthCheckStatsListener, sendDownEvents bool) {
 	fhc.listener = listener
 }
 
 // WaitForInitialStatsUpdates is not implemented.
-func (fhc *FakeHealthCheck) WaitForInitialStatsUpdates() {
+func (fhc *FakeLegacyHealthCheck) WaitForInitialStatsUpdates() {
 }
 
 // AddTablet adds the tablet and calls the listener.
-func (fhc *FakeHealthCheck) AddTablet(tablet *topodatapb.Tablet, name string) {
+func (fhc *FakeLegacyHealthCheck) AddTablet(tablet *topodatapb.Tablet, name string) {
 	key := TabletToMapKey(tablet)
-	item := &fhcItem{
+	item := &flhcItem{
 		ts: &LegacyTabletStats{
 			Key:    key,
 			Tablet: tablet,
@@ -104,7 +104,7 @@ func (fhc *FakeHealthCheck) AddTablet(tablet *topodatapb.Tablet, name string) {
 }
 
 // RemoveTablet removes the tablet.
-func (fhc *FakeHealthCheck) RemoveTablet(tablet *topodatapb.Tablet) {
+func (fhc *FakeLegacyHealthCheck) RemoveTablet(tablet *topodatapb.Tablet) {
 	fhc.mu.Lock()
 	defer fhc.mu.Unlock()
 	key := TabletToMapKey(tablet)
@@ -123,13 +123,13 @@ func (fhc *FakeHealthCheck) RemoveTablet(tablet *topodatapb.Tablet) {
 }
 
 // ReplaceTablet removes the old tablet and adds the new.
-func (fhc *FakeHealthCheck) ReplaceTablet(old, new *topodatapb.Tablet, name string) {
+func (fhc *FakeLegacyHealthCheck) ReplaceTablet(old, new *topodatapb.Tablet, name string) {
 	fhc.RemoveTablet(old)
 	fhc.AddTablet(new, name)
 }
 
 // GetConnection returns the TabletConn of the given tablet.
-func (fhc *FakeHealthCheck) GetConnection(key string) queryservice.QueryService {
+func (fhc *FakeLegacyHealthCheck) GetConnection(key string) queryservice.QueryService {
 	fhc.mu.RLock()
 	defer fhc.mu.RUnlock()
 	if item := fhc.items[key]; item != nil {
@@ -139,7 +139,7 @@ func (fhc *FakeHealthCheck) GetConnection(key string) queryservice.QueryService 
 }
 
 // CacheStatus returns the status for each tablet
-func (fhc *FakeHealthCheck) CacheStatus() LegacyTabletsCacheStatusList {
+func (fhc *FakeLegacyHealthCheck) CacheStatus() LegacyTabletsCacheStatusList {
 	fhc.mu.Lock()
 	defer fhc.mu.Unlock()
 
@@ -156,7 +156,7 @@ func (fhc *FakeHealthCheck) CacheStatus() LegacyTabletsCacheStatusList {
 }
 
 // Close is not implemented.
-func (fhc *FakeHealthCheck) Close() error {
+func (fhc *FakeLegacyHealthCheck) Close() error {
 	return nil
 }
 
@@ -165,18 +165,18 @@ func (fhc *FakeHealthCheck) Close() error {
 //
 
 // Reset cleans up the internal state.
-func (fhc *FakeHealthCheck) Reset() {
+func (fhc *FakeLegacyHealthCheck) Reset() {
 	fhc.mu.Lock()
 	defer fhc.mu.Unlock()
 
-	fhc.items = make(map[string]*fhcItem)
+	fhc.items = make(map[string]*flhcItem)
 }
 
-// AddFakeTablet inserts a fake entry into FakeHealthCheck.
+// AddFakeTablet inserts a fake entry into FakeLegacyHealthCheck.
 // The Tablet can be talked to using the provided connection.
 // The Listener is called, as if AddTablet had been called.
 // For flexibility the connection is created via a connFactory callback
-func (fhc *FakeHealthCheck) AddFakeTablet(cell, host string, port int32, keyspace, shard string, tabletType topodatapb.TabletType, serving bool, reparentTS int64, err error, connFactory func(*topodatapb.Tablet) queryservice.QueryService) queryservice.QueryService {
+func (fhc *FakeLegacyHealthCheck) AddFakeTablet(cell, host string, port int32, keyspace, shard string, tabletType topodatapb.TabletType, serving bool, reparentTS int64, err error, connFactory func(*topodatapb.Tablet) queryservice.QueryService) queryservice.QueryService {
 	t := topo.NewTablet(0, cell, host)
 	t.Keyspace = keyspace
 	t.Shard = shard
@@ -190,7 +190,7 @@ func (fhc *FakeHealthCheck) AddFakeTablet(cell, host string, port int32, keyspac
 	defer fhc.mu.Unlock()
 	item := fhc.items[key]
 	if item == nil {
-		item = &fhcItem{
+		item = &flhcItem{
 			ts: &LegacyTabletStats{
 				Key:    key,
 				Tablet: t,
@@ -219,7 +219,7 @@ func (fhc *FakeHealthCheck) AddFakeTablet(cell, host string, port int32, keyspac
 
 // AddTestTablet adds a fake tablet for tests using the SandboxConn and returns
 // the fake connection
-func (fhc *FakeHealthCheck) AddTestTablet(cell, host string, port int32, keyspace, shard string, tabletType topodatapb.TabletType, serving bool, reparentTS int64, err error) *sandboxconn.SandboxConn {
+func (fhc *FakeLegacyHealthCheck) AddTestTablet(cell, host string, port int32, keyspace, shard string, tabletType topodatapb.TabletType, serving bool, reparentTS int64, err error) *sandboxconn.SandboxConn {
 	conn := fhc.AddFakeTablet(cell, host, port, keyspace, shard, tabletType, serving, reparentTS, err, func(tablet *topodatapb.Tablet) queryservice.QueryService {
 		return sandboxconn.NewSandboxConn(tablet)
 	})
@@ -227,7 +227,7 @@ func (fhc *FakeHealthCheck) AddTestTablet(cell, host string, port int32, keyspac
 }
 
 // GetAllTablets returns all the tablets we have.
-func (fhc *FakeHealthCheck) GetAllTablets() map[string]*topodatapb.Tablet {
+func (fhc *FakeLegacyHealthCheck) GetAllTablets() map[string]*topodatapb.Tablet {
 	res := make(map[string]*topodatapb.Tablet)
 	fhc.mu.RLock()
 	defer fhc.mu.RUnlock()

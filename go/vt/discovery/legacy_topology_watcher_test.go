@@ -29,7 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
-func checkOpCounts(t *testing.T, tw *LegacyTopologyWatcher, prevCounts, deltas map[string]int64) map[string]int64 {
+func checkLegacyOpCounts(t *testing.T, tw *LegacyTopologyWatcher, prevCounts, deltas map[string]int64) map[string]int64 {
 	t.Helper()
 	newCounts := topologyWatcherOperations.Counts()
 	for key, prevVal := range prevCounts {
@@ -49,7 +49,7 @@ func checkOpCounts(t *testing.T, tw *LegacyTopologyWatcher, prevCounts, deltas m
 	return newCounts
 }
 
-func checkChecksum(t *testing.T, tw *LegacyTopologyWatcher, want uint32) {
+func checkLegacyChecksum(t *testing.T, tw *LegacyTopologyWatcher, want uint32) {
 	t.Helper()
 	got := tw.TopoChecksum()
 	if want != got {
@@ -57,21 +57,21 @@ func checkChecksum(t *testing.T, tw *LegacyTopologyWatcher, want uint32) {
 	}
 }
 
-func TestCellTabletsWatcher(t *testing.T) {
-	checkWatcher(t, true, true)
+func TestLegacyCellTabletsWatcher(t *testing.T) {
+	checkLegacyWatcher(t, true, true)
 }
 
-func TestCellTabletsWatcherNoRefreshKnown(t *testing.T) {
-	checkWatcher(t, true, false)
+func TestLegacyCellTabletsWatcherNoRefreshKnown(t *testing.T) {
+	checkLegacyWatcher(t, true, false)
 }
 
-func TestShardReplicationWatcher(t *testing.T) {
-	checkWatcher(t, false, true)
+func TestLegacyShardReplicationWatcher(t *testing.T) {
+	checkLegacyWatcher(t, false, true)
 }
 
-func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
+func checkLegacyWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	ts := memorytopo.NewServer("aa")
-	fhc := NewFakeHealthCheck()
+	fhc := NewFakeLegacyHealthCheck()
 	logger := logutil.NewMemoryLogger()
 	topologyWatcherOperations.ZeroAll()
 	counts := topologyWatcherOperations.Counts()
@@ -88,8 +88,8 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	if err := tw.WaitForInitialTopology(); err != nil {
 		t.Fatalf("initial WaitForInitialTopology failed")
 	}
-	counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1})
-	checkChecksum(t, tw, 0)
+	counts = checkLegacyOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1})
+	checkLegacyChecksum(t, tw, 0)
 
 	// Add a tablet to the topology.
 	tablet := &topodatapb.Tablet{
@@ -108,8 +108,8 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 		t.Fatalf("CreateTablet failed: %v", err)
 	}
 	tw.loadTablets()
-	counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 1, "AddTablet": 1})
-	checkChecksum(t, tw, 1261153186)
+	counts = checkLegacyOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 1, "AddTablet": 1})
+	checkLegacyChecksum(t, tw, 1261153186)
 
 	// Check the tablet is returned by GetAllTablets().
 	allTablets := fhc.GetAllTablets()
@@ -139,11 +139,11 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	// If RefreshKnownTablets is disabled, only the new tablet is read
 	// from the topo
 	if refreshKnownTablets {
-		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "AddTablet": 1})
+		counts = checkLegacyOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "AddTablet": 1})
 	} else {
-		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 1, "AddTablet": 1})
+		counts = checkLegacyOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 1, "AddTablet": 1})
 	}
-	checkChecksum(t, tw, 832404892)
+	checkLegacyChecksum(t, tw, 832404892)
 
 	// Check the new tablet is returned by GetAllTablets().
 	allTablets = fhc.GetAllTablets()
@@ -156,11 +156,11 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	// only the list is read from the topo and the checksum doesn't change
 	tw.loadTablets()
 	if refreshKnownTablets {
-		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2})
+		counts = checkLegacyOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2})
 	} else {
-		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1})
+		counts = checkLegacyOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1})
 	}
-	checkChecksum(t, tw, 832404892)
+	checkLegacyChecksum(t, tw, 832404892)
 
 	// same tablet, different port, should update (previous
 	// one should go away, new one be added)
@@ -182,7 +182,7 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	key = TabletToMapKey(tablet)
 
 	if refreshKnownTablets {
-		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "ReplaceTablet": 1})
+		counts = checkLegacyOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "ReplaceTablet": 1})
 
 		if _, ok := allTablets[key]; !ok || len(allTablets) != 2 || !proto.Equal(allTablets[key], tablet) {
 			t.Errorf("fhc.GetAllTablets() = %+v; want %+v", allTablets, tablet)
@@ -190,9 +190,9 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 		if _, ok := allTablets[origKey]; ok {
 			t.Errorf("fhc.GetAllTablets() = %+v; don't want %v", allTablets, origKey)
 		}
-		checkChecksum(t, tw, 698548794)
+		checkLegacyChecksum(t, tw, 698548794)
 	} else {
-		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1})
+		counts = checkLegacyOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1})
 
 		if _, ok := allTablets[origKey]; !ok || len(allTablets) != 2 || !proto.Equal(allTablets[origKey], origTablet) {
 			t.Errorf("fhc.GetAllTablets() = %+v; want %+v", allTablets, origTablet)
@@ -200,7 +200,7 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 		if _, ok := allTablets[key]; ok {
 			t.Errorf("fhc.GetAllTablets() = %+v; don't want %v", allTablets, key)
 		}
-		checkChecksum(t, tw, 832404892)
+		checkLegacyChecksum(t, tw, 832404892)
 	}
 
 	// Remove the second tablet and re-add with a new uid. This should
@@ -224,11 +224,11 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	allTablets = fhc.GetAllTablets()
 
 	if refreshKnownTablets {
-		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "ReplaceTablet": 1})
-		checkChecksum(t, tw, 4097170367)
+		counts = checkLegacyOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "ReplaceTablet": 1})
+		checkLegacyChecksum(t, tw, 4097170367)
 	} else {
-		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 1, "ReplaceTablet": 1})
-		checkChecksum(t, tw, 3960185881)
+		counts = checkLegacyOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 1, "ReplaceTablet": 1})
+		checkLegacyChecksum(t, tw, 3960185881)
 	}
 	key = TabletToMapKey(tablet2)
 	if _, ok := allTablets[key]; !ok || len(allTablets) != 2 || !proto.Equal(allTablets[key], tablet2) {
@@ -258,7 +258,7 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 			t.Fatalf("UpdateTabletFields failed: %v", err)
 		}
 		tw.loadTablets()
-		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "ReplaceTablet": 2})
+		counts = checkLegacyOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "ReplaceTablet": 2})
 		allTablets = fhc.GetAllTablets()
 		key2 := TabletToMapKey(tablet2)
 		if _, ok := allTablets[key2]; !ok {
@@ -282,7 +282,7 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 			t.Fatalf("UpdateTabletFields failed: %v", err)
 		}
 		tw.loadTablets()
-		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "ReplaceTablet": 2})
+		counts = checkLegacyOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "ReplaceTablet": 2})
 	}
 
 	// Remove the tablet and check that it is detected as being gone.
@@ -294,11 +294,11 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	}
 	tw.loadTablets()
 	if refreshKnownTablets {
-		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 1, "RemoveTablet": 1})
+		counts = checkLegacyOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 1, "RemoveTablet": 1})
 	} else {
-		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "RemoveTablet": 1})
+		counts = checkLegacyOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "RemoveTablet": 1})
 	}
-	checkChecksum(t, tw, 1725545897)
+	checkLegacyChecksum(t, tw, 1725545897)
 
 	allTablets = fhc.GetAllTablets()
 	key = TabletToMapKey(tablet)
@@ -318,8 +318,8 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 		t.Fatalf("FixShardReplication failed: %v", err)
 	}
 	tw.loadTablets()
-	checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "RemoveTablet": 1})
-	checkChecksum(t, tw, 0)
+	checkLegacyOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "RemoveTablet": 1})
+	checkLegacyChecksum(t, tw, 0)
 
 	allTablets = fhc.GetAllTablets()
 	key = TabletToMapKey(tablet)
@@ -334,7 +334,7 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	tw.Stop()
 }
 
-func TestFilterByShard(t *testing.T) {
+func TestLegacyFilterByShard(t *testing.T) {
 	testcases := []struct {
 		filters  []string
 		keyspace string
@@ -431,8 +431,8 @@ var (
 	testHostName         = "testHostName"
 )
 
-func TestFilterByKeyspace(t *testing.T) {
-	hc := NewFakeHealthCheck()
+func TestLegacyFilterByKeyspace(t *testing.T) {
+	hc := NewFakeLegacyHealthCheck()
 	tr := NewLegacyFilterByKeyspace(hc, testKeyspacesToWatch)
 	ts := memorytopo.NewServer(testCell)
 	tw := NewLegacyCellTabletsWatcher(context.Background(), ts, tr, testCell, 10*time.Minute, true, 5)

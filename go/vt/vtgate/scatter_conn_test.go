@@ -119,7 +119,7 @@ func verifyScatterConnError(t *testing.T, err error, wantErr string, wantCode vt
 }
 
 func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, shards []string) (*sqltypes.Result, error)) {
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 
 	// no shard
 	s := createSandbox(name)
@@ -230,7 +230,7 @@ func TestMaxMemoryRows(t *testing.T) {
 	defer func() { *maxMemoryRows = save }()
 
 	createSandbox("TestMaxMemoryRows")
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
 	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestMaxMemoryRows", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestMaxMemoryRows", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
@@ -277,7 +277,7 @@ func TestMaxMemoryRows(t *testing.T) {
 
 func TestMultiExecs(t *testing.T) {
 	createSandbox("TestMultiExecs")
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
 	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestMultiExecs", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestMultiExecs", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
@@ -369,7 +369,7 @@ func TestMultiExecs(t *testing.T) {
 
 func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	createSandbox("TestScatterConnStreamExecuteSendError")
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
 	hc.AddTestTablet("aa", "0", 1, "TestScatterConnStreamExecuteSendError", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
@@ -389,7 +389,7 @@ func TestScatterConnStreamExecuteSendError(t *testing.T) {
 
 func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	s := createSandbox("TestScatterConnQueryNotInTransaction")
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 
 	// case 1: read query (not in transaction) followed by write query, not in the same shard.
 	hc.Reset()
@@ -543,7 +543,7 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 
 func TestScatterConnSingleDB(t *testing.T) {
 	createSandbox("TestScatterConnSingleDB")
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 
 	hc.Reset()
 	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
