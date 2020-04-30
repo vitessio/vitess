@@ -1315,3 +1315,21 @@
     "Table": "music"
   }
 }
+
+# Single table with unique vindex match and null match
+"select id from music where user_id = 4 and id = null"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from music where id = null and user_id = 4",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectNone",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from music where 1 != 1",
+    "Query": "select id from music where id = null and user_id = 4",
+    "Table": "music"
+  }
+}
