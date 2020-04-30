@@ -228,6 +228,8 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		alias:                  alias,
 	}
 	tsv.se = schema.NewEngine(tsv)
+	sh := schema.NewSchemaHistorian(tsv.se)
+	tsv.se.SetHistorian(sh)
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
 	tsv.te = NewTxEngine(tsv)
 	tsv.txController = tsv.te
@@ -236,7 +238,8 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se)
-	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config)
+	schemaTracker := schema.NewTracker(tsv.se)
+	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config, schemaTracker)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
@@ -1686,9 +1689,9 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.Real
 	target := tsv.target
 	tsv.mu.Unlock()
 	shr := &querypb.StreamHealthResponse{
-		Target:                              &target,
-		TabletAlias:                         &tsv.alias,
-		Serving:                             tsv.IsServing(),
+		Target:      &target,
+		TabletAlias: &tsv.alias,
+		Serving:     tsv.IsServing(),
 		TabletExternallyReparentedTimestamp: terTimestamp,
 		RealtimeStats:                       stats,
 	}

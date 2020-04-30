@@ -17,15 +17,21 @@ limitations under the License.
 package vstreamer
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	"vitess.io/vitess/go/mysql"
 
@@ -35,6 +41,89 @@ import (
 type testcase struct {
 	input  interface{}
 	output [][]string
+}
+
+type mockHistorian struct {
+	se                       schema.HistoryEngine
+	numVersionEventsReceived int
+	gtid                     string
+	ddl                      string
+	time_updated             int64
+	tables                   map[string]*binlogdatapb.TableMetaData
+}
+
+func newMockHistorian(se schema.HistoryEngine) *mockHistorian {
+	return &mockHistorian{se: se}
+}
+
+func (h *mockHistorian) GetTableForPos(tableName sqlparser.TableIdent, pos string) *schema.Table {
+	return nil
+}
+
+func (h *mockHistorian) RegisterVersionEvent(version *binlogdatapb.Version) {
+	h.numVersionEventsReceived++
+	h.gtid = version.Gtid
+	h.ddl = version.Ddl
+	h.time_updated = version.Timestamp
+	h.tables = make(map[string]*binlogdatapb.TableMetaData)
+	for _, table := range version.Tables.Tables {
+		h.tables[table.Name] = table
+	}
+
+}
+
+var _ schema.HistorianInterface = (*mockHistorian)(nil)
+
+func TestVersion(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	historian := newMockHistorian(engine.se)
+	engine.se.Sh = historian
+
+	execStatements(t, []string{
+		"create table _vt.schema_version(id int, pos varbinary(10000), time_updated bigint(20), ddl varchar(10000), schemax blob, primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table _vt.schema_version",
+	})
+	engine.se.Reload(context.Background())
+	tbl := &binlogdatapb.TableMetaData{
+		Name: "t1",
+		Fields: []*query.Field{
+			{Name: "id", Type: query.Type_INT64, Table: "t1", Database: "test"},
+			{Name: "i1", Type: query.Type_INT64, Table: "t1", Database: "test"},
+		},
+		Pkcolumns: []int64{0},
+	}
+	tbls := &binlogdatapb.TableMetaDataCollection{
+		Tables: []*binlogdatapb.TableMetaData{tbl},
+	}
+	blob, err := proto.Marshal(tbls)
+	if err != nil {
+		t.Fatalf("Error marshalling tables %v", err)
+	}
+	testcases := []testcase{{
+		input: []string{
+			fmt.Sprintf("insert into _vt.schema_version values(1, 'gtid1', 123, 'create table t1', %s)", encodeString(string(blob))),
+		},
+		// External table events don't get sent.
+		output: [][]string{{
+			`begin`,
+			`type:VERSION version:<timestamp:123 gtid:"gtid1" ddl:"create table t1" tables:<tables:<name:"t1" fields:<name:"id" type:INT64 table:"t1" database:"test" > fields:<name:"i1" type:INT64 table:"t1" database:"test" > pkcolumns:0 > > > `,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	runCases(t, nil, testcases, "")
+	assert.Equal(t, 1, historian.numVersionEventsReceived)
+	assert.Equal(t, 1, len(historian.tables))
+}
+
+func encodeString(in string) string {
+	buf := bytes.NewBuffer(nil)
+	sqltypes.NewVarChar(in).EncodeSQL(buf)
+	return buf.String()
 }
 
 func TestFilteredVarBinary(t *testing.T) {
@@ -1346,7 +1435,7 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 			}
 		}
 		if len(wantset) != len(evs) {
-			t.Fatalf("%v: evs\n%v, want\n%v", input, evs, wantset)
+			t.Fatalf("%v: evs\n%v, want\n%v, >> got length %d, wanted length %d", input, evs, wantset, len(evs), len(wantset))
 		}
 		for i, want := range wantset {
 			// CurrentTime is not testable.

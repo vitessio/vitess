@@ -519,18 +519,6 @@ var AlterVReplicationTable = []string{
 	"ALTER TABLE _vt.vreplication ADD COLUMN db_name VARBINARY(255) NOT NULL",
 }
 
-var CreateVersionTable = []string{
-	"CREATE DATABASE IF NOT EXISTS _vt",
-	`CREATE TABLE IF NOT EXISTS _vt.schema_tracking (
-	  id INT AUTO_INCREMENT,
-	  pos VARBINARY(10000) NOT NULL,
-	  time_updated BIGINT(20) NOT NULL,
-	  ddl VARBINARY(1000) DEFAULT NULL,
-	  schema LONGBLOB(10000) NOT NULL,
-	  PRIMARY KEY (id)
-	) ENGINE=InnoDB`,
-}
-
 // VRSettings contains the settings of a vreplication table.
 type VRSettings struct {
 	StartPos          mysql.Position
