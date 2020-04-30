@@ -29,6 +29,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/logutil"
+
 	"vitess.io/vitess/go/vt/log"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
@@ -828,6 +830,11 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 				if !ts.Serving {
 					state = "NOT_SERVING"
 				}
+				mtst := ts.Tablet.MasterTermStartTime
+				mtstStr := ""
+				if mtst != nil && mtst.Seconds > 0 {
+					mtstStr = logutil.ProtoToTime(ts.Tablet.MasterTermStartTime).Format(time.RFC3339)
+				}
 				rows = append(rows, buildVarCharRow(
 					s.Cell,
 					s.Target.Keyspace,
@@ -836,11 +843,12 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 					state,
 					topoproto.TabletAliasString(ts.Tablet.Alias),
 					ts.Tablet.Hostname,
+					mtstStr,
 				))
 			}
 		}
 		return &sqltypes.Result{
-			Fields:       buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname"),
+			Fields:       buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "MasterTermStartTime"),
 			Rows:         rows,
 			RowsAffected: uint64(len(rows)),
 		}, nil
