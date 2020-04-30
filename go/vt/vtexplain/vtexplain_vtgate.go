@@ -42,7 +42,7 @@ import (
 var (
 	explainTopo    *ExplainTopo
 	vtgateExecutor *vtgate.Executor
-	healthCheck    *discovery.FakeHealthCheck
+	healthCheck    *discovery.FakeLegacyHealthCheck
 
 	vtgateSession = &vtgatepb.Session{
 		TargetString: "",
@@ -52,7 +52,7 @@ var (
 
 func initVtgateExecutor(vSchemaStr string, opts *Options) error {
 	explainTopo = &ExplainTopo{NumShards: opts.NumShards}
-	healthCheck = discovery.NewFakeHealthCheck()
+	healthCheck = discovery.NewFakeLegacyHealthCheck()
 
 	resolver := newFakeResolver(opts, healthCheck, explainTopo, vtexplainCell)
 

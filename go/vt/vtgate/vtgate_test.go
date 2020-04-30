@@ -37,7 +37,7 @@ import (
 
 // This file uses the sandbox_test framework.
 
-var hcVTGateTest *discovery.FakeHealthCheck
+var hcVTGateTest *discovery.FakeLegacyHealthCheck
 
 var executeOptions = &querypb.ExecuteOptions{
 	IncludedFields: querypb.ExecuteOptions_TYPE_ONLY,
@@ -69,7 +69,7 @@ func init() {
 	}
 }
 `
-	hcVTGateTest = discovery.NewFakeHealthCheck()
+	hcVTGateTest = discovery.NewFakeLegacyHealthCheck()
 	*transactionMode = "MULTI"
 	// The topo.Server is used to start watching the cells described
 	// in '-cells_to_watch' command line parameter, which is

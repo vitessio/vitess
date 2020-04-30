@@ -343,7 +343,7 @@ const (
 
 func createExecutorEnvUsing(t executorType) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
 	serv := newSandboxForCells([]string{cell})
@@ -387,7 +387,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 
 func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 	s := createSandbox("TestExecutor")
 	s.VSchema = vschema
 	serv := newSandboxForCells([]string{cell})
