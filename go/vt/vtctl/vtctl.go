@@ -514,7 +514,7 @@ func fmtTabletAwkable(ti *topo.TabletInfo) string {
 	if shard == "" {
 		shard = "<null>"
 	}
-	mtst := ""
+	mtst := "<null>"
 	// special case for old master that hasn't updated topo yet
 	if ti.MasterTermStartTime != nil && ti.MasterTermStartTime.Seconds > 0 {
 		mtst = logutil.ProtoToTime(ti.MasterTermStartTime).Format(time.RFC3339)
