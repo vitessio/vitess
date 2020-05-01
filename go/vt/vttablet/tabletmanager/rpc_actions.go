@@ -64,7 +64,11 @@ func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.
 		return err
 	}
 	defer agent.unlock()
+	return agent.changeTypeLocked(ctx, tabletType)
+}
 
+// ChangeType changes the tablet type
+func (agent *ActionAgent) changeTypeLocked(ctx context.Context, tabletType topodatapb.TabletType) error {
 	// We don't want to allow multiple callers to claim a tablet as drained. There is a race that could happen during
 	// horizontal resharding where two vtworkers will try to DRAIN the same tablet. This check prevents that race from
 	// causing errors.
