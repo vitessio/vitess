@@ -24,7 +24,6 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -84,12 +83,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		}
 		originalType = tablet.Type
 		// update our type to BACKUP
-		if _, err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_BACKUP, nil); err != nil {
-			return err
-		}
-
-		// let's update our internal state (stop query service and other things)
-		if err := agent.refreshTablet(ctx, "before backup"); err != nil {
+		if err := agent.ChangeType(ctx, topodatapb.TabletType_BACKUP); err != nil {
 			return err
 		}
 	}
@@ -120,8 +114,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 
 		// Change our type back to the original value.
 		// Original type could be master so pass in a real value for masterTermStartTime
-		_, err = topotools.ChangeType(bgCtx, agent.TopoServer, tablet.Alias, originalType, tablet.Tablet.MasterTermStartTime)
-		if err != nil {
+		if err := agent.ChangeType(ctx, originalType); err != nil {
 			// failure in changing the topology type is probably worse,
 			// so returning that (we logged the snapshot error anyway)
 			if returnErr != nil {

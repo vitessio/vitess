@@ -153,12 +153,15 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 		defer wg.Done()
 		log.Infof("finalizeTabletExternallyReparented: updating tablet record for new master: %v", agent.TabletAlias)
 		// Update our own record to master if needed
+		// The internal state of agent has already been updated. No need to call RefreshState for this change.
 		_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, logutil.TimeToProto(agent.masterTermStartTime()))
 		if err != nil {
 			errs.RecordError(err)
 		}
 	}()
 
+	tmc := tmclient.NewTabletManagerClient()
+	defer tmc.Close()
 	// If TER is called twice, then oldMasterAlias is the same as agent.TabletAlias
 	if !topoproto.TabletAliasIsZero(oldMasterAlias) && !topoproto.TabletAliasEqual(oldMasterAlias, agent.TabletAlias) {
 		wg.Add(1)
@@ -170,11 +173,14 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 			// old master to be up to change its own record.
 			// Call UpdateTabletFields instead of ChangeType so that we can check the type
 			// before changing it and avoid unnecessary topo updates
-			var err error
-			oldMasterTablet, err = topotools.ChangeType(ctx, agent.TopoServer, oldMasterAlias, topodatapb.TabletType_REPLICA, nil)
+			oldti, err := agent.TopoServer.GetTablet(ctx, oldMasterAlias)
 			if err != nil {
 				errs.RecordError(err)
 				return
+			}
+			oldMasterTablet = oldti.Tablet
+			if err := tmc.ChangeType(ctx, oldMasterTablet, topodatapb.TabletType_REPLICA); err != nil {
+				log.Warningf("Error demoting old master: %v", err)
 			}
 
 			// We now know more about the old master, so add it to event data.
@@ -224,22 +230,6 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 		}
 	}()
 
-	tmc := tmclient.NewTabletManagerClient()
-	defer tmc.Close()
-	if !topoproto.TabletAliasIsZero(oldMasterAlias) && !topoproto.TabletAliasEqual(oldMasterAlias, agent.TabletAlias) && oldMasterTablet != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			// Tell the old master to re-read its tablet record and change its state.
-			// We don't need to put error into errs if this fails, but we need to wait
-			// for it to make sure that old master tablet is not stuck in the MASTER
-			// state.
-			if err := tmc.RefreshState(ctx, oldMasterTablet); err != nil {
-				log.Warningf("Error calling RefreshState on old master %v: %v", topoproto.TabletAliasString(oldMasterTablet.Alias), err)
-			}
-		}()
-	}
-
 	wg.Wait()
 	if errs.HasErrors() {
 		return errs.Error()
@@ -259,17 +249,14 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 			go func(alias *topodatapb.TabletAlias) {
 				defer wg.Done()
 				var err error
-				tab, err := topotools.ChangeType(ctx, agent.TopoServer, alias, topodatapb.TabletType_REPLICA, nil)
+				tablet, err := agent.TopoServer.GetTablet(ctx, alias)
 				if err != nil {
 					errs.RecordError(err)
 					return
 				}
-				// tab will be nil if no update was needed
-				if tab != nil {
-					log.Infof("finalizeTabletExternallyReparented: Refresh state for tablet: %v", topoproto.TabletAliasString(tab.Alias))
-					if err := tmc.RefreshState(ctx, tab); err != nil {
-						log.Warningf("Error calling RefreshState on old master %v: %v", topoproto.TabletAliasString(tab.Alias), err)
-					}
+				log.Infof("finalizeTabletExternallyReparented: Refresh state for tablet: %v", topoproto.TabletAliasString(tablet.Alias))
+				if err := tmc.ChangeType(ctx, tablet.Tablet, topodatapb.TabletType_REPLICA); err != nil {
+					log.Warningf("Error calling ChangeType on old master %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
 				}
 			}(alias)
 		}
