@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -195,6 +197,8 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 		}
 	})
 	rpcVTGate.registerDebugHealthHandler()
+	rpcVTGate.registerDebugBlockProfileRate()
+	rpcVTGate.registerDebugMutexProfileFraction()
 	err := initQueryLogger(rpcVTGate)
 	if err != nil {
 		log.Fatalf("error initializing query logger: %v", err)
@@ -217,6 +221,48 @@ func (vtg *VTGate) registerDebugHealthHandler() {
 			return
 		}
 		w.Write([]byte("ok"))
+	})
+}
+
+func (vtg *VTGate) registerDebugBlockProfileRate() {
+	http.HandleFunc("/debug/blockprofilerate", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+			acl.SendError(w, err)
+			return
+		}
+		rate, err := strconv.ParseInt(r.FormValue("rate"), 10, 32)
+		if rate < 0 || err != nil {
+			rate = 0
+		}
+		runtime.SetBlockProfileRate(int(rate))
+		log.Infof("Set block profile rate to: %d", rate)
+		w.Header().Set("Content-Type", "text/plain")
+		if err != nil {
+			w.Write([]byte("failed: block profile rate reset to 0"))
+			return
+		}
+		w.Write([]byte(fmt.Sprintf("success: block profile rate set to %d", rate)))
+	})
+}
+
+func (vtg *VTGate) registerDebugMutexProfileFraction() {
+	http.HandleFunc("/debug/mutexprofilefraction", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+			acl.SendError(w, err)
+			return
+		}
+		fraction, err := strconv.ParseInt(r.FormValue("fraction"), 10, 32)
+		if fraction < 0 || err != nil {
+			fraction = 0
+		}
+		runtime.SetMutexProfileFraction(int(fraction))
+		log.Infof("Set mutex profile fraction to: %d", fraction)
+		w.Header().Set("Content-Type", "text/plain")
+		if err != nil {
+			w.Write([]byte("failed: mutex profile fraction reset to 0"))
+			return
+		}
+		w.Write([]byte(fmt.Sprintf("success: mutex profile fraction set to %d", fraction)))
 	})
 }
 
