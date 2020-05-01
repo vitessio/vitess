@@ -192,6 +192,11 @@ func (agent *ActionAgent) ResetReplication(ctx context.Context) error {
 
 // InitMaster enables writes and returns the replication position.
 func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
+	if err := agent.lock(ctx); err != nil {
+		return "", err
+	}
+	defer agent.unlock()
+
 	// Initializing as master implies undoing any previous "do not replicate".
 	agent.setSlaveStopped(false)
 
@@ -221,7 +226,7 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 	}
 
 	// Change our type to master if not already
-	if err := agent.ChangeType(ctx, topodatapb.TabletType_MASTER); err != nil {
+	if err := agent.changeTypeLocked(ctx, topodatapb.TabletType_MASTER); err != nil {
 		return "", err
 	}
 	return mysql.EncodePosition(pos), nil
@@ -242,11 +247,16 @@ func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreat
 // InitSlave sets replication master and position, and waits for the
 // reparent_journal table entry up to context timeout
 func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
+	if err := agent.lock(ctx); err != nil {
+		return err
+	}
+	defer agent.unlock()
+
 	// If we were a master type, switch our type to replica.  This
 	// is used on the old master when using InitShardMaster with
 	// -force, and the new master is different from the old master.
 	if agent.Tablet().Type == topodatapb.TabletType_MASTER {
-		if err := agent.ChangeType(ctx, topodatapb.TabletType_REPLICA); err != nil {
+		if err := agent.changeTypeLocked(ctx, topodatapb.TabletType_REPLICA); err != nil {
 			return err
 		}
 	}
@@ -435,6 +445,11 @@ func (agent *ActionAgent) UndoDemoteMaster(ctx context.Context) error {
 // shard master.
 // Deprecated
 func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position string) (string, error) {
+	if err := agent.lock(ctx); err != nil {
+		return "", err
+	}
+	defer agent.unlock()
+
 	pos, err := mysql.DecodePosition(position)
 	if err != nil {
 		return "", err
@@ -458,7 +473,7 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 		return "", err
 	}
 
-	if err := agent.ChangeType(ctx, topodatapb.TabletType_MASTER); err != nil {
+	if err := agent.changeTypeLocked(ctx, topodatapb.TabletType_MASTER); err != nil {
 		return "", err
 	}
 
@@ -686,6 +701,11 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*rep
 
 // PromoteReplica makes the current tablet the master
 func (agent *ActionAgent) PromoteReplica(ctx context.Context) (string, error) {
+	if err := agent.lock(ctx); err != nil {
+		return "", err
+	}
+	defer agent.unlock()
+
 	pos, err := agent.MysqlDaemon.Promote(agent.hookExtraEnv())
 	if err != nil {
 		return "", err
@@ -696,7 +716,7 @@ func (agent *ActionAgent) PromoteReplica(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	if err := agent.ChangeType(ctx, topodatapb.TabletType_MASTER); err != nil {
+	if err := agent.changeTypeLocked(ctx, topodatapb.TabletType_MASTER); err != nil {
 		return "", err
 	}
 
@@ -712,6 +732,11 @@ func (agent *ActionAgent) PromoteReplica(ctx context.Context) (string, error) {
 // PromoteSlave makes the current tablet the master
 // Deprecated
 func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
+	if err := agent.lock(ctx); err != nil {
+		return "", err
+	}
+	defer agent.unlock()
+
 	pos, err := agent.MysqlDaemon.Promote(agent.hookExtraEnv())
 	if err != nil {
 		return "", err
@@ -727,7 +752,7 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	if err := agent.ChangeType(ctx, topodatapb.TabletType_MASTER); err != nil {
+	if err := agent.changeTypeLocked(ctx, topodatapb.TabletType_MASTER); err != nil {
 		return "", err
 	}
 
