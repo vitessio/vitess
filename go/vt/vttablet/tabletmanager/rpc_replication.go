@@ -192,11 +192,6 @@ func (agent *ActionAgent) ResetReplication(ctx context.Context) error {
 
 // InitMaster enables writes and returns the replication position.
 func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
-	if err := agent.lock(ctx); err != nil {
-		return "", err
-	}
-	defer agent.unlock()
-
 	// Initializing as master implies undoing any previous "do not replicate".
 	agent.setSlaveStopped(false)
 
@@ -247,10 +242,14 @@ func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreat
 // InitSlave sets replication master and position, and waits for the
 // reparent_journal table entry up to context timeout
 func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
-	if err := agent.lock(ctx); err != nil {
-		return err
+	// If we were a master type, switch our type to replica.  This
+	// is used on the old master when using InitShardMaster with
+	// -force, and the new master is different from the old master.
+	if agent.Tablet().Type == topodatapb.TabletType_MASTER {
+		if err := agent.ChangeType(ctx, topodatapb.TabletType_REPLICA); err != nil {
+			return err
+		}
 	}
-	defer agent.unlock()
 
 	pos, err := mysql.DecodePosition(position)
 	if err != nil {
@@ -279,15 +278,6 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.Tabl
 	}
 	if err := agent.MysqlDaemon.SetMaster(ctx, topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)), false /* slaveStopBefore */, true /* slaveStartAfter */); err != nil {
 		return err
-	}
-
-	// If we were a master type, switch our type to replica.  This
-	// is used on the old master when using InitShardMaster with
-	// -force, and the new master is different from the old master.
-	if agent.Tablet().Type == topodatapb.TabletType_MASTER {
-		if err := agent.ChangeType(ctx, topodatapb.TabletType_REPLICA); err != nil {
-			return err
-		}
 	}
 
 	// wait until we get the replicated row, or our context times out
@@ -445,11 +435,6 @@ func (agent *ActionAgent) UndoDemoteMaster(ctx context.Context) error {
 // shard master.
 // Deprecated
 func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position string) (string, error) {
-	if err := agent.lock(ctx); err != nil {
-		return "", err
-	}
-	defer agent.unlock()
-
 	pos, err := mysql.DecodePosition(position)
 	if err != nil {
 		return "", err
@@ -482,16 +467,7 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 
 // SlaveWasPromoted promotes a slave to master, no questions asked.
 func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
-	if err := agent.lock(ctx); err != nil {
-		return err
-	}
-	defer agent.unlock()
-
-	if err := agent.ChangeType(ctx, topodatapb.TabletType_MASTER); err != nil {
-		return err
-	}
-
-	return nil
+	return agent.ChangeType(ctx, topodatapb.TabletType_MASTER)
 }
 
 // SetMaster sets replication master, and waits for the
@@ -710,11 +686,6 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*rep
 
 // PromoteReplica makes the current tablet the master
 func (agent *ActionAgent) PromoteReplica(ctx context.Context) (string, error) {
-	if err := agent.lock(ctx); err != nil {
-		return "", err
-	}
-	defer agent.unlock()
-
 	pos, err := agent.MysqlDaemon.Promote(agent.hookExtraEnv())
 	if err != nil {
 		return "", err
@@ -741,11 +712,6 @@ func (agent *ActionAgent) PromoteReplica(ctx context.Context) (string, error) {
 // PromoteSlave makes the current tablet the master
 // Deprecated
 func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
-	if err := agent.lock(ctx); err != nil {
-		return "", err
-	}
-	defer agent.unlock()
-
 	pos, err := agent.MysqlDaemon.Promote(agent.hookExtraEnv())
 	if err != nil {
 		return "", err

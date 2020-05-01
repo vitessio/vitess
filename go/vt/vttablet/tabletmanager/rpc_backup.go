@@ -73,10 +73,6 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 
 	var originalType topodatapb.TabletType
 	if engine.ShouldDrainForBackup() {
-		if err := agent.lock(ctx); err != nil {
-			return err
-		}
-		defer agent.unlock()
 		tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 		if err != nil {
 			return err
@@ -114,7 +110,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 
 		// Change our type back to the original value.
 		// Original type could be master so pass in a real value for masterTermStartTime
-		if err := agent.ChangeType(ctx, originalType); err != nil {
+		if err := agent.ChangeType(bgCtx, originalType); err != nil {
 			// failure in changing the topology type is probably worse,
 			// so returning that (we logged the snapshot error anyway)
 			if returnErr != nil {
@@ -122,14 +118,6 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 			}
 			returnErr = err
 		}
-
-		// let's update our internal state (start query service and other things)
-		if err := agent.refreshTablet(bgCtx, "after backup"); err != nil {
-			return err
-		}
-		// and re-run health check to be sure to capture any replication delay
-		// not needed for online backups because it will continue to run per schedule
-		agent.runHealthCheckLocked()
 	}
 
 	return returnErr
