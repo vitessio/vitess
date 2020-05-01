@@ -199,7 +199,7 @@ func (ct *ColumnType) DescribeType() string {
 
 // SQLType returns the sqltypes type code for the given column
 func (ct *ColumnType) SQLType() querypb.Type {
-	switch ct.Type {
+	switch strings.ToLower(ct.Type) {
 	case keywordStrings[TINYINT]:
 		if ct.Unsigned {
 			return sqltypes.Uint8

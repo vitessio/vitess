@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strings"
 
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/sqltypes"
@@ -418,7 +419,7 @@ func init() {
 		if id == UNUSED {
 			continue
 		}
-		keywordStrings[id] = str
+		keywordStrings[id] = strings.ToLower(str)
 	}
 }
 
