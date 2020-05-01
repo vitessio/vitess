@@ -19,6 +19,9 @@ package discovery
 import (
 	"sort"
 	"sync"
+	"time"
+
+	"vitess.io/vitess/go/vt/logutil"
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -179,6 +182,8 @@ func (fhc *FakeHealthCheck) AddFakeTablet(cell, host string, port int32, keyspac
 	t.Shard = shard
 	t.Type = tabletType
 	t.PortMap["vt"] = port
+	// reparentTS only has precision to seconds
+	t.MasterTermStartTime = logutil.TimeToProto(time.Unix(reparentTS, 0))
 	key := TabletToMapKey(t)
 
 	fhc.mu.Lock()
