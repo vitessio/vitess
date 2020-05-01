@@ -86,6 +86,7 @@ require (
 	gopkg.in/asn1-ber.v1 v1.0.0-20181015200546-f715ec2f112d // indirect
 	gopkg.in/ini.v1 v1.51.0 // indirect
 	gopkg.in/ldap.v2 v2.5.0
+	gotest.tools v2.2.0+incompatible
 	honnef.co/go/tools v0.0.1-2019.2.3
 	k8s.io/apiextensions-apiserver v0.17.3
 	k8s.io/apimachinery v0.17.3
