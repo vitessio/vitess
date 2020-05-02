@@ -111,8 +111,8 @@ Started: {{.StartTime}}<br>
 Running on {{.Hostname}}<br>
 View <a href=/debug/vars>variables</a>,
      <a href=/debug/pprof>debugging profiles</a>,
-     <a href=/debug/blockprofilerate?rate=1>block profile</a>,
-     <a href=/debug/mutexprofilefraction?fraction=1>mutex profile</a>,
+     <a href="/debug/blockprofilerate?rate=1">block profile</a>,
+     <a href="/debug/mutexprofilefraction?fraction=1">mutex profile</a>,
 </div>
 </div>`
 
