@@ -91,7 +91,7 @@ func filterLegacyStatsByLag(tabletStatsList []*LegacyTabletStats) []*LegacyTable
 	}
 
 	// Sort by replication lag.
-	sort.Sort(byReplag(list))
+	sort.Sort(byLegacyReplag(list))
 
 	// Pick those with low replication lag, but at least minNumTablets tablets regardless.
 	res := make([]*LegacyTabletStats, 0, len(list))
@@ -129,10 +129,10 @@ func filterLegacyStatsByLagWithLegacyAlgorithm(tabletStatsList []*LegacyTabletSt
 	// filter those affecting "mean" lag significantly
 	// calculate mean for all tablets
 	res := make([]*LegacyTabletStats, 0, len(list))
-	m, _ := mean(list, -1)
+	m, _ := legacyMean(list, -1)
 	for i, ts := range list {
 		// calculate mean by excluding ith tablet
-		mi, _ := mean(list, i)
+		mi, _ := legacyMean(list, i)
 		if float64(mi) > float64(m)*0.7 {
 			res = append(res, ts)
 		}
@@ -167,7 +167,7 @@ func filterLegacyStatsByLagWithLegacyAlgorithm(tabletStatsList []*LegacyTabletSt
 	}
 
 	// Sort by replication lag.
-	sort.Sort(byReplag(snapshots))
+	sort.Sort(byLegacyReplag(snapshots))
 
 	// Pick the first minNumTablets tablets.
 	res = make([]*LegacyTabletStats, 0, *minNumTablets)
@@ -181,15 +181,15 @@ type legacyTabletLagSnapshot struct {
 	ts     *LegacyTabletStats
 	replag uint32
 }
-type byReplag []legacyTabletLagSnapshot
+type byLegacyReplag []legacyTabletLagSnapshot
 
-func (a byReplag) Len() int           { return len(a) }
-func (a byReplag) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a byReplag) Less(i, j int) bool { return a[i].replag < a[j].replag }
+func (a byLegacyReplag) Len() int           { return len(a) }
+func (a byLegacyReplag) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a byLegacyReplag) Less(i, j int) bool { return a[i].replag < a[j].replag }
 
 // mean calculates the mean value over the given list,
 // while excluding the item with the specified index.
-func mean(tabletStatsList []*LegacyTabletStats, idxExclude int) (uint64, error) {
+func legacyMean(tabletStatsList []*LegacyTabletStats, idxExclude int) (uint64, error) {
 	var sum uint64
 	var count uint64
 	for i, ts := range tabletStatsList {

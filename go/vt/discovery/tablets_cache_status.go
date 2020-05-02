@@ -53,9 +53,6 @@ func (tcs *TabletsCacheStatus) StatusAsHTML() template.HTML {
 		} else if !ts.Serving {
 			color = "red"
 			extra = " (Not Serving)"
-		} else if !ts.Up {
-			color = "red"
-			extra = " (Down)"
 		} else if ts.Target.TabletType == topodatapb.TabletType_MASTER {
 			extra = fmt.Sprintf(" (MasterTS: %v)", ts.MasterTermStartTime)
 		} else {

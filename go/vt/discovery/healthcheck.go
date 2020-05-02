@@ -56,7 +56,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -153,20 +152,6 @@ func init() {
 	flag.Var(&KeyspacesToWatch, "keyspaces_to_watch", "Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema")
 }
 
-// TabletRecorder is the part of the HealthCheck interface that can
-// add or remove tablets. We define it as a sub-interface here so
-// that it can be implemented by other users of TopologyWatcher
-type TabletRecorder interface {
-	// AddTablet adds the tablet.
-	AddTablet(tablet *topodatapb.Tablet)
-
-	// RemoveTablet removes the tablet.
-	RemoveTablet(tablet *topodatapb.Tablet)
-
-	// ReplaceTablet does an AddTablet and RemoveTablet in one call, effectively replacing the old tablet with the new.
-	ReplaceTablet(old, new *topodatapb.Tablet)
-}
-
 // HealthCheck defines the interface of health checking module.
 // The goal of this object is to maintain a StreamHealth RPC
 // to a lot of tablets. Tablets are added / removed by calling the
@@ -184,6 +169,12 @@ type HealthCheck interface {
 	GetHealthyTabletStats(target *querypb.Target) []*TabletHealth
 	// WaitForAllServingTablets allows vtgate to wait for all tablets to be serving before accepting requests
 	WaitForAllServingTablets(ctx context.Context, targets []*querypb.Target) error
+	// AddTablet adds the tablet.
+	AddTablet(tablet *topodatapb.Tablet)
+	// RemoveTablet removes the tablet.
+	RemoveTablet(tablet *topodatapb.Tablet)
+	// ReplaceTablet does an AddTablet and RemoveTablet in one call, effectively replacing the old tablet with the new.
+	ReplaceTablet(old, new *topodatapb.Tablet)
 }
 
 // HealthCheckImpl performs health checking and stores the results.
@@ -202,15 +193,30 @@ type HealthCheckImpl struct {
 	cell               string
 	// mu protects all the following fields.
 	mu sync.Mutex
-
+	// authoritative map of tabletHealth by alias
+	healthByAlias map[string]*TabletHealth
 	// a map keyed by keyspace.shard.tabletType
 	// contains a map of TabletHealth keyed by tablet alias for each tablet relevant to the keyspace.shard.tabletType
+	// has to be kept in sync with healthByAlias
 	healthData map[string]map[string]*TabletHealth
+	// another map keyed by keyspace.shard.tabletType, this one containing a sorted list of TabletHealth
+	// TODO(deepthi): replace with SimpleTabletHealth
+	healthy map[string][]*TabletHealth
 	// connsWG keeps track of all launched Go routines that monitor tablet connections.
 	connsWG sync.WaitGroup
 	// topology watchers that inform healthcheck of tablets being added and deleted
 	topoWatchers []*TopologyWatcher
+	// used to inform vtgate buffer when new master is detected
+	// TODO: replace this with synchronizing over a condition variable
+	masterCallback func(health *TabletHealth)
+	// cellAliases is a cache of cell aliases
+	cellAliases map[string]string
 }
+
+//type SimpleTabletHealth struct {
+//	TabletAlias string
+//	Conn        queryservice.QueryService
+//}
 
 // HealthCheckConn is a structure that lives within the scope of
 // the checkConn goroutine to maintain its internal state. Therefore,
@@ -238,7 +244,7 @@ type healthCheckConn struct {
 //   The topology server that this healthcheck object can use to retrieve cell or tablet information
 // localCell.
 //   The localCell for this healthcheck
-func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell string) HealthCheck {
+func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell string, callback func(health *TabletHealth)) HealthCheck {
 	log.Infof("loading tablets for cells: %v", *CellsToWatch)
 
 	hc := &HealthCheckImpl{
@@ -246,6 +252,10 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		cell:               localCell,
 		retryDelay:         retryDelay,
 		healthCheckTimeout: healthCheckTimeout,
+		masterCallback:     callback,
+		healthByAlias:      make(map[string]*TabletHealth),
+		healthData:         make(map[string]map[string]*TabletHealth),
+		healthy:            make(map[string][]*TabletHealth),
 	}
 	var topoWatchers []*TopologyWatcher
 	var filter TabletFilter
@@ -254,6 +264,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		cells = append(cells, localCell)
 	}
 	for _, c := range cells {
+		log.Infof("Setting up healthcheck for cell: %v", c)
 		if c == "" {
 			continue
 		}
@@ -270,7 +281,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		} else if len(KeyspacesToWatch) > 0 {
 			filter = NewFilterByKeyspace(c, KeyspacesToWatch)
 		}
-		topoWatchers = append(topoWatchers, NewCellTabletsWatcher(ctx, topoServer, hc, filter, c, *RefreshInterval, *RefreshKnownTablets, *TopoReadConcurrency))
+		topoWatchers = append(topoWatchers, NewCellTabletsWatcher(ctx, topoServer, filter, c, *RefreshInterval, *RefreshKnownTablets, *TopoReadConcurrency))
 	}
 
 	hc.topoWatchers = topoWatchers
@@ -280,10 +291,169 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 
 	// start the topo watches here
 	for _, tw := range hc.topoWatchers {
-		go tw.watchTopo()
+		go hc.watchTopo(tw)
 	}
 
 	return hc
+}
+
+func (hc *HealthCheckImpl) watchTopo(tw *TopologyWatcher) {
+	tw.wg.Add(1)
+	defer tw.wg.Done()
+	ticker := time.NewTicker(tw.refreshInterval)
+	defer ticker.Stop()
+	for {
+		hc.loadTablets(tw)
+		select {
+		case <-tw.ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func (hc *HealthCheckImpl) loadTablets(tw *TopologyWatcher) {
+	var wg sync.WaitGroup
+	newTablets := make(map[string]*tabletInfo)
+
+	// first get the list of relevant tabletAliases
+	tabletAliases, err := tw.getTablets(tw)
+	topologyWatcherOperations.Add(topologyWatcherOpListTablets, 1)
+	if err != nil {
+		topologyWatcherErrors.Add(topologyWatcherOpListTablets, 1)
+		select {
+		case <-tw.ctx.Done():
+			return
+		default:
+		}
+		log.Errorf("cannot get tablets for cell: %v: %v", tw.cell, err)
+		return
+	}
+
+	// Accumulate a list of all known alias strings to use later
+	// when sorting
+	tabletAliasStrs := make([]string, 0, len(tabletAliases))
+
+	tw.mu.Lock()
+	for _, tAlias := range tabletAliases {
+		aliasStr := topoproto.TabletAliasString(tAlias)
+		tabletAliasStrs = append(tabletAliasStrs, aliasStr)
+
+		if !tw.refreshKnownTablets {
+			// we already have a tabletInfo for this and the flag tells us to not refresh
+			if val, ok := tw.tablets[aliasStr]; ok {
+				newTablets[aliasStr] = val
+				continue
+			}
+		}
+
+		wg.Add(1)
+		go func(alias *topodatapb.TabletAlias) {
+			defer wg.Done()
+			tw.sem <- 1 // Wait for active queue to drain.
+			tablet, err := tw.topoServer.GetTablet(tw.ctx, alias)
+			topologyWatcherOperations.Add(topologyWatcherOpGetTablet, 1)
+			<-tw.sem // Done; enable next request to run
+			if err != nil {
+				topologyWatcherErrors.Add(topologyWatcherOpGetTablet, 1)
+				select {
+				case <-tw.ctx.Done():
+					return
+				default:
+				}
+				log.Errorf("cannot get tablet for alias %v: %v", alias, err)
+				return
+			}
+			if !(hc.isTabletInCell(tablet.Tablet) && (tw.tabletFilter == nil || tw.tabletFilter.IsIncluded(tablet.Tablet))) {
+				log.Errorf("loadTablets skipping tablet: %#v", tablet.Tablet)
+				return
+			}
+			tw.mu.Lock()
+			aliasStr := topoproto.TabletAliasString(alias)
+			newTablets[aliasStr] = &tabletInfo{
+				alias:  aliasStr,
+				tablet: tablet.Tablet,
+			}
+			tw.mu.Unlock()
+		}(tAlias)
+	}
+
+	tw.mu.Unlock()
+	wg.Wait()
+	tw.mu.Lock()
+
+	for alias, newVal := range newTablets {
+		// trust the alias from topo and add it if it doesn't exist
+		if val, ok := tw.tablets[alias]; !ok {
+			hc.AddTablet(newVal.tablet)
+			topologyWatcherOperations.Add(topologyWatcherOpAddTablet, 1)
+		} else {
+			// check if the host and port have changed. If yes, replace tablet
+			oldKey := TabletToMapKey(val.tablet)
+			newKey := TabletToMapKey(newVal.tablet)
+			if oldKey != newKey {
+				// This is the case where the same tablet alias is now reporting
+				// a different address key.
+				hc.ReplaceTablet(val.tablet, newVal.tablet)
+				topologyWatcherOperations.Add(topologyWatcherOpReplaceTablet, 1)
+			}
+		}
+	}
+
+	for _, val := range tw.tablets {
+		if _, ok := newTablets[val.alias]; !ok {
+			hc.RemoveTablet(val.tablet)
+			topologyWatcherOperations.Add(topologyWatcherOpRemoveTablet, 1)
+		}
+	}
+	tw.tablets = newTablets
+	if !tw.firstLoadDone {
+		tw.firstLoadDone = true
+		close(tw.firstLoadChan)
+	}
+
+	// iterate through the tablets in a stable order and compute a
+	// checksum of the tablet map
+	sort.Strings(tabletAliasStrs)
+	var buf bytes.Buffer
+	for _, alias := range tabletAliasStrs {
+		_, ok := tw.tablets[alias]
+		if ok {
+			buf.WriteString(alias)
+		}
+	}
+	tw.topoChecksum = crc32.ChecksumIEEE(buf.Bytes())
+	tw.lastRefresh = time.Now()
+
+	tw.mu.Unlock()
+
+}
+
+func (hc *HealthCheckImpl) getAliasByCell(cell string) string {
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+
+	if alias, ok := hc.cellAliases[cell]; ok {
+		return alias
+	}
+
+	alias := topo.GetAliasByCell(context.Background(), hc.ts, cell)
+	hc.cellAliases[cell] = alias
+
+	return alias
+}
+
+func (hc *HealthCheckImpl) isTabletInCell(tablet *topodatapb.Tablet) bool {
+	if tablet.Type == topodatapb.TabletType_MASTER {
+		return true
+	}
+	if tablet.Alias.Cell == hc.cell {
+		return true
+	}
+	if hc.getAliasByCell(tablet.Alias.Cell) == hc.getAliasByCell(hc.cell) {
+		return true
+	}
+	return false
 }
 
 // RegisterStats registers the connection counts stats
@@ -315,7 +485,7 @@ func (hc *HealthCheckImpl) RegisterStats() {
 // ServeHTTP is part of the http.Handler interface. It renders the current state of the discovery gateway tablet cache into json.
 func (hc *HealthCheckImpl) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	status := hc.cacheStatusMap()
+	status := hc.CacheStatus()
 	b, err := json.MarshalIndent(status, "", " ")
 	if err != nil {
 		w.Write([]byte(err.Error()))
@@ -334,7 +504,7 @@ func (hc *HealthCheckImpl) servingConnStats() map[string]int64 {
 	defer hc.mu.Unlock()
 	for key, ths := range hc.healthData {
 		for _, th := range ths {
-			if !th.Up || !th.Serving || th.LastError != nil {
+			if !th.Serving || th.LastError != nil {
 				continue
 			}
 			res[key]++
@@ -358,7 +528,7 @@ func (hc *HealthCheckImpl) stateChecksum() int64 {
 		)
 		sort.Sort(st.TabletsStats)
 		for _, ts := range st.TabletsStats {
-			fmt.Fprintf(&buf, "%v%v%v\n", ts.Up, ts.Serving, ts.MasterTermStartTime)
+			fmt.Fprintf(&buf, "%v%v\n", ts.Serving, ts.MasterTermStartTime)
 		}
 	}
 
@@ -371,7 +541,6 @@ func (hc *HealthCheckImpl) stateChecksum() int64 {
 func (hc *HealthCheckImpl) finalizeConn(hcc *healthCheckConn) {
 	hcc.tabletHealth.mu.Lock()
 	defer hcc.tabletHealth.mu.Unlock()
-	hcc.tabletHealth.Up = false
 	hcc.setServingState(false, "finalizeConn closing connection")
 	// Note: checkConn() exits only when hcc.ctx.Done() is closed. Thus it's
 	// safe to simply get Err() value here and assign to LastError.
@@ -536,15 +705,30 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, shr *querypb.St
 	}
 
 	if shr.TabletAlias != nil && !proto.Equal(shr.TabletAlias, hcc.tabletHealth.Tablet.Alias) {
+		// TabletAlias change means that the host:port has been taken over by another tablet
+		// We could cancel / exit the healthcheck for this tablet right away
+		// However, we defer it until the next topo refresh informs us of the change because that is
+		// the only way to discover the new host/port
 		return fmt.Errorf("health stats mismatch, tablet %+v alias does not match response alias %v", hcc.tabletHealth.Tablet, shr.TabletAlias)
 	}
 
 	hcc.tabletHealth.mu.Lock()
 	currentTablet := hcc.tabletHealth.Tablet
+	// check whether this is a trivial update so as to update healthy map
+	trivialNonMasterUpdate := hcc.tabletHealth.LastError == nil && hcc.tabletHealth.Serving && shr.RealtimeStats.HealthError == "" && shr.Serving &&
+		currentTablet.Type != topodatapb.TabletType_MASTER && currentTablet.Type == shr.Target.TabletType
+	isMasterUpdate := currentTablet.Type == topodatapb.TabletType_MASTER && shr.Target.TabletType == topodatapb.TabletType_MASTER
 	hcc.tabletHealth.mu.Unlock()
+
+	// hc.healthByAlias is authoritative, it should be updated
+	hc.mu.Lock()
+	tabletAlias := topoproto.TabletAliasString(hcc.tabletHealth.Tablet.Alias)
+	// this will only change the first time, but it's easiest to set it always rather than check and set
+	hc.healthByAlias[tabletAlias] = hcc.tabletHealth
+	hc.mu.Unlock()
 	// In this case where a new tablet is initialized or a tablet type changes, we want to
 	// initialize the counter so the rate can be calculated correctly.
-	if currentTablet.Type != shr.Target.TabletType {
+	if currentTablet.Type != shr.Target.TabletType || currentTablet.Keyspace != shr.Target.Keyspace || currentTablet.Shard != shr.Target.Shard {
 		hcErrorCounters.Add([]string{shr.Target.Keyspace, shr.Target.Shard, topoproto.TabletTypeLString(shr.Target.TabletType)}, 0)
 		// hc still has this TabletHealth in the wrong target (because tabletType changed)
 		oldTargetKey := hc.keyFromTablet(currentTablet)
@@ -556,8 +740,7 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, shr *querypb.St
 		hc.mu.Unlock()
 	}
 
-	// Update our record, and notify downstream for tabletType and
-	// realtimeStats change.
+	// Update our record
 	hcc.lastResponseTimestamp = time.Now()
 	hcc.tabletHealth.mu.Lock()
 	defer hcc.tabletHealth.mu.Unlock()
@@ -570,6 +753,41 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, shr *querypb.St
 		reason = "healthCheck update error: " + healthErr.Error()
 	}
 	hcc.setServingState(serving, reason)
+
+	targetKey := hc.keyFromTarget(shr.Target)
+	if !trivialNonMasterUpdate {
+		all := hc.healthData[targetKey]
+		allArray := make([]*TabletHealth, 0, len(all))
+		for _, s := range all {
+			allArray = append(allArray, s)
+		}
+		hc.healthy[targetKey] = FilterStatsByReplicationLag(allArray)
+	}
+	if isMasterUpdate {
+		if len(hc.healthy[targetKey]) == 0 {
+			hc.healthy[targetKey] = append(hc.healthy[targetKey], hcc.tabletHealth)
+		} else {
+			// We already have one up server, see if we
+			// need to replace it.
+			if hcc.tabletHealth.MasterTermStartTime < hc.healthy[targetKey][0].MasterTermStartTime {
+				log.Warningf("not marking healthy master %s as Up for %s because its MasterTermStartTime is smaller than the highest known timestamp from previous MASTERs %s: %d < %d ",
+					topoproto.TabletAliasString(currentTablet.Alias),
+					topoproto.KeyspaceShardString(currentTablet.Keyspace, currentTablet.Shard),
+					topoproto.TabletAliasString(hc.healthy[targetKey][0].Tablet.Alias),
+					hcc.tabletHealth.MasterTermStartTime,
+					hc.healthy[targetKey][0].MasterTermStartTime)
+			} else {
+				// Just replace it.
+				hc.healthy[targetKey][0] = hcc.tabletHealth
+			}
+		}
+	}
+	// and notify downstream for master change
+	if shr.Target.TabletType == topodatapb.TabletType_MASTER {
+		if hc.masterCallback != nil {
+			hc.masterCallback(hcc.tabletHealth)
+		}
+	}
 	return nil
 }
 
@@ -579,17 +797,20 @@ func (hc *HealthCheckImpl) deleteConn(tablet *topodatapb.Tablet) {
 
 	key := hc.keyFromTablet(tablet)
 	tabletAlias := topoproto.TabletAliasString(tablet.Alias)
-	ths, ok := hc.healthData[key]
-	if !ok {
-		log.Warningf("Something is wrong, we have no health data for tablet: %v's target: %v", tabletAlias, key)
-		return
-	}
-	th, ok := ths[tabletAlias]
+	// delete from authoritative map
+	th, ok := hc.healthByAlias[tabletAlias]
 	if !ok {
 		log.Warningf("Something is wrong, we have no health data for tablet: %v", tabletAlias)
 		return
 	}
 	th.deleteConnLocked()
+	delete(hc.healthByAlias, tabletAlias)
+	// delete from map by keyspace.shard.tabletType
+	ths, ok := hc.healthData[key]
+	if !ok {
+		log.Warningf("Something is wrong, we have no health data for target: %v", key)
+		return
+	}
 	delete(ths, tabletAlias)
 }
 
@@ -597,8 +818,9 @@ func (hc *HealthCheckImpl) deleteConn(tablet *topodatapb.Tablet) {
 // It does not block on making connection.
 // name is an optional tag for the tablet, e.g. an alternative address.
 func (hc *HealthCheckImpl) AddTablet(tablet *topodatapb.Tablet) {
+	log.Infof("Calling AddTablet for tablet: %v", tablet)
 	hc.mu.Lock()
-	if hc.healthData == nil {
+	if hc.healthByAlias == nil {
 		// already closed.
 		hc.mu.Unlock()
 		return
@@ -615,20 +837,24 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodatapb.Tablet) {
 			cancelFunc: cancelFunc,
 			Tablet:     tablet,
 			Target:     target,
-			Up:         true,
 		},
 	}
 
 	// add to our datastore
 	key := hc.keyFromTarget(target)
 	tabletAlias := topoproto.TabletAliasString(tablet.Alias)
+	// TODO: can this ever already exist?
+	if _, ok := hc.healthByAlias[tabletAlias]; ok {
+		log.Errorf("Program bug")
+		return
+	}
+	hc.healthByAlias[tabletAlias] = hcc.tabletHealth
 	if ths, ok := hc.healthData[key]; !ok {
 		hc.healthData[key] = make(map[string]*TabletHealth)
 		hc.healthData[key][tabletAlias] = hcc.tabletHealth
 	} else {
-		if _, ok := ths[tabletAlias]; !ok {
-			ths[tabletAlias] = hcc.tabletHealth
-		}
+		// just overwrite it if it exists already?
+		ths[tabletAlias] = hcc.tabletHealth
 	}
 
 	hc.connsWG.Add(1)
@@ -648,70 +874,29 @@ func (hc *HealthCheckImpl) ReplaceTablet(old, new *topodatapb.Tablet) {
 	hc.AddTablet(new)
 }
 
-// GetConnection returns the TabletConn of the given tablet.
-func (hc *HealthCheckImpl) GetConnection(tabletAlias string) queryservice.QueryService {
-	hc.mu.Lock()
-	defer hc.mu.Unlock()
-
-	th := hc.findTabletHealthByAlias(tabletAlias)
-	if th == nil {
-		return nil
-	}
-	return th.Conn
-}
-
-func (hc *HealthCheckImpl) findTabletHealthByAlias(alias string) *TabletHealth {
-	for _, ths := range hc.healthData {
-		for _, th := range ths {
-			if topoproto.TabletAliasString(th.Tablet.Alias) == alias {
-				return th
-			}
-		}
-	}
-	return nil
-}
-
 // CacheStatus returns a displayable version of the cache.
 func (hc *HealthCheckImpl) CacheStatus() TabletsCacheStatusList {
-	tcsMap := hc.cacheStatusMap()
-	tcsl := make(TabletsCacheStatusList, 0, len(tcsMap))
-	for _, tcs := range tcsMap {
+	tcsl := make(TabletsCacheStatusList, 0, len(hc.healthByAlias))
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+	for _, th := range hc.healthByAlias {
+		tcs := &TabletsCacheStatus{
+			Cell:   th.Tablet.Alias.Cell,
+			Target: th.Target,
+		}
 		tcsl = append(tcsl, tcs)
 	}
 	sort.Sort(tcsl)
 	return tcsl
 }
 
-func (hc *HealthCheckImpl) cacheStatusMap() map[string]*TabletsCacheStatus {
-	tcsMap := make(map[string]*TabletsCacheStatus)
-	hc.mu.Lock()
-	defer hc.mu.Unlock()
-	for _, ths := range hc.healthData {
-		for _, th := range ths {
-			key := fmt.Sprintf("%v.%v.%v.%v", th.Tablet.Alias.Cell, th.Target.Keyspace, th.Target.Shard, th.Target.TabletType.String())
-			var tcs *TabletsCacheStatus
-			var ok bool
-			if tcs, ok = tcsMap[key]; !ok {
-				tcs = &TabletsCacheStatus{
-					Cell:   th.Tablet.Alias.Cell,
-					Target: th.Target,
-				}
-				tcsMap[key] = tcs
-			}
-			tcs.TabletsStats = append(tcs.TabletsStats, th)
-		}
-	}
-	return tcsMap
-}
-
 // Close stops the healthcheck.
 func (hc *HealthCheckImpl) Close() error {
 	hc.mu.Lock()
-	for _, ths := range hc.healthData {
-		for _, th := range ths {
-			th.cancelFunc()
-		}
+	for _, th := range hc.healthByAlias {
+		th.cancelFunc()
 	}
+	hc.healthByAlias = nil
 	hc.healthData = nil
 	for _, tw := range hc.topoWatchers {
 		tw.Stop()
@@ -768,8 +953,9 @@ func (hc *HealthCheckImpl) GetHealthyTabletStats(target *querypb.Target) []*Tabl
 		log.Warningf("Can only have one master, program bug: %v", ths)
 		return result
 	}
-	for _, th := range ths {
+	for _, th := range hc.healthByAlias {
 		if th.Tablet.Type == topodatapb.TabletType_MASTER {
+			// TODO(deepthi): return SimpleHealth here
 			result = append(result, th.Copy())
 			return result
 		}
@@ -777,6 +963,8 @@ func (hc *HealthCheckImpl) GetHealthyTabletStats(target *querypb.Target) []*Tabl
 			result = append(result, th.Copy())
 		}
 	}
+	// healthy list needs to be sorted using replication lag algorithm
+	// so we might want to maintain it and update it instead of computing it here
 	return result
 }
 
@@ -786,10 +974,9 @@ func (hc *HealthCheckImpl) GetHealthyTabletStats(target *querypb.Target) []*Tabl
 // the most recent tablet of type master.
 func (hc *HealthCheckImpl) getTabletStats(target *querypb.Target) []*TabletHealth {
 	var result []*TabletHealth
-	for _, ths := range hc.healthData {
-		for _, th := range ths {
-			result = append(result, th.Copy())
-		}
+	ths := hc.healthData[hc.keyFromTarget(target)]
+	for _, th := range ths {
+		result = append(result, th.Copy())
 	}
 	return result
 }

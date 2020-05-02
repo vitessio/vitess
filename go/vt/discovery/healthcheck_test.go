@@ -134,7 +134,6 @@ func TestTemplate(t *testing.T) {
 		{
 			Tablet:              tablet,
 			Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-			Up:                  true,
 			Serving:             false,
 			Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
 			MasterTermStartTime: 0,
@@ -165,7 +164,6 @@ func TestDebugURLFormatting(t *testing.T) {
 		{
 			Tablet:              tablet,
 			Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-			Up:                  true,
 			Serving:             false,
 			Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
 			MasterTermStartTime: 0,
@@ -200,5 +198,5 @@ func tabletDialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (quer
 }
 
 func createTestHc(ts *topo.Server) *HealthCheckImpl {
-	return NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell").(*HealthCheckImpl)
+	return NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell", nil).(*HealthCheckImpl)
 }
