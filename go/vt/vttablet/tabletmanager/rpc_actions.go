@@ -94,6 +94,7 @@ func (agent *ActionAgent) changeTypeLocked(ctx context.Context, tabletType topod
 	}
 
 	// let's update our internal state (stop query service and other things)
+	// refreshTablet will runHealthCheck.
 	if err := agent.refreshTablet(ctx, "ChangeType"); err != nil {
 		return err
 	}
@@ -102,9 +103,6 @@ func (agent *ActionAgent) changeTypeLocked(ctx context.Context, tabletType topod
 	if err := agent.fixSemiSyncAndReplication(agent.Tablet().Type); err != nil {
 		return vterrors.Wrap(err, "fixSemiSyncAndReplication failed, may not ack correctly")
 	}
-
-	// and re-run health check
-	agent.runHealthCheckLocked()
 	return nil
 }
 
