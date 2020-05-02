@@ -92,8 +92,6 @@ type RPCAgent interface {
 
 	StartSlaveUntilAfter(ctx context.Context, position string, waitTime time.Duration) error
 
-	TabletExternallyReparented(ctx context.Context, externalID string) error
-
 	GetSlaves(ctx context.Context) ([]string, error)
 
 	// VReplication API

@@ -295,17 +295,6 @@ func (s *server) StartSlaveUntilAfter(ctx context.Context, request *tabletmanage
 	return response, s.agent.StartSlaveUntilAfter(ctx, request.Position, time.Duration(request.WaitTimeout))
 }
 
-func (s *server) TabletExternallyReparented(ctx context.Context, request *tabletmanagerdatapb.TabletExternallyReparentedRequest) (response *tabletmanagerdatapb.TabletExternallyReparentedResponse, err error) {
-	defer s.agent.HandleRPCPanic(ctx, "TabletExternallyReparented", request, response, false /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.TabletExternallyReparentedResponse{}
-	return response, s.agent.TabletExternallyReparented(ctx, request.ExternalId)
-}
-
-func (s *server) TabletExternallyElected(ctx context.Context, request *tabletmanagerdatapb.TabletExternallyElectedRequest) (*tabletmanagerdatapb.TabletExternallyElectedResponse, error) {
-	return &tabletmanagerdatapb.TabletExternallyElectedResponse{}, nil
-}
-
 func (s *server) GetSlaves(ctx context.Context, request *tabletmanagerdatapb.GetSlavesRequest) (response *tabletmanagerdatapb.GetSlavesResponse, err error) {
 	defer s.agent.HandleRPCPanic(ctx, "GetSlaves", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
