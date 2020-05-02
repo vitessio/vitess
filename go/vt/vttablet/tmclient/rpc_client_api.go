@@ -132,14 +132,6 @@ type TabletManagerClient interface {
 	// StartSlaveUntilAfter starts replication until after the position specified
 	StartSlaveUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, duration time.Duration) error
 
-	// TabletExternallyReparented tells a tablet it is now the master, after an
-	// external tool has already promoted the underlying mysqld to master and
-	// reparented the other mysqld servers to it.
-	//
-	// externalID is an optional string provided by the external tool that
-	// vttablet will emit in logs to facilitate cross-referencing.
-	TabletExternallyReparented(ctx context.Context, tablet *topodatapb.Tablet, externalID string) error
-
 	// GetSlaves returns the addresses of the slaves
 	GetSlaves(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error)
 
