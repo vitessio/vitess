@@ -1046,7 +1046,7 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 		}
 
 		// Make leftReplica the new MASTER.
-		tc.leftReplica.Agent.TabletExternallyReparented(ctx, "1")
+		tc.leftReplica.Agent.ChangeType(ctx, topodatapb.TabletType_MASTER)
 		t.Logf("resetting tablet back to MASTER")
 		tc.leftReplicaQs.UpdateType(topodatapb.TabletType_MASTER)
 		tc.leftReplicaQs.AddDefaultHealthResponse()

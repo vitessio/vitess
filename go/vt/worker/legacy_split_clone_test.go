@@ -487,7 +487,7 @@ func TestLegacySplitCloneV2_NoMasterAvailable(t *testing.T) {
 		}
 
 		// Make leftReplica the new MASTER.
-		tc.leftReplica.Agent.TabletExternallyReparented(ctx, "1")
+		tc.leftReplica.Agent.ChangeType(ctx, topodatapb.TabletType_MASTER)
 		tc.leftReplicaQs.UpdateType(topodatapb.TabletType_MASTER)
 		tc.leftReplicaQs.AddDefaultHealthResponse()
 		errs <- nil
