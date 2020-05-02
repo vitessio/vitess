@@ -29,8 +29,6 @@ type TabletHealth struct {
 	// Target is the current target as returned by the streaming
 	// StreamHealth RPC.
 	Target *query.Target
-	// Up describes whether the tablet is added or removed.
-	Up bool
 	// Serving describes if the tablet can be serving traffic.
 	Serving bool
 	// MasterTermStartTime is the last time at which
@@ -50,8 +48,8 @@ type TabletHealth struct {
 func (th *TabletHealth) String() string {
 	th.mu.Lock()
 	defer th.mu.Unlock()
-	return fmt.Sprintf("TabletHealth{Tablet: %v,Target: %v,Up: %v,Serving: %v, MasterTermStartTime: %v, Stats: %v, LastError: %v",
-		th.Tablet, th.Target, th.Up, th.Serving, th.MasterTermStartTime, *th.Stats, th.LastError)
+	return fmt.Sprintf("TabletHealth{Tablet: %v,Target: %v,Serving: %v, MasterTermStartTime: %v, Stats: %v, LastError: %v",
+		th.Tablet, th.Target, th.Serving, th.MasterTermStartTime, *th.Stats, th.LastError)
 }
 
 // Copy returns a copy of TabletHealth. Note that this is not really a deep copy
@@ -68,7 +66,6 @@ func (th *TabletHealth) Copy() *TabletHealth {
 		Conn:                th.Conn,
 		Tablet:              th.Tablet,
 		Target:              th.Target,
-		Up:                  th.Up,
 		Serving:             th.Serving,
 		MasterTermStartTime: th.MasterTermStartTime,
 		Stats:               th.Stats,
@@ -81,7 +78,6 @@ func (th *TabletHealth) Copy() *TabletHealth {
 func (th *TabletHealth) DeepEqual(other *TabletHealth) bool {
 	return proto.Equal(th.Tablet, other.Tablet) &&
 		proto.Equal(th.Target, other.Target) &&
-		th.Up == other.Up &&
 		th.Serving == other.Serving &&
 		th.MasterTermStartTime == other.MasterTermStartTime &&
 		proto.Equal(th.Stats, other.Stats) &&
@@ -135,7 +131,6 @@ func (th *TabletHealth) getTabletDebugURL() string {
 
 func (th *TabletHealth) deleteConnLocked() {
 	th.mu.Lock()
-	th.Up = false
 	th.Conn = nil
 	th.mu.Unlock()
 	th.cancelFunc()

@@ -18,6 +18,7 @@ package discovery
 
 import (
 	"flag"
+	"fmt"
 	"sort"
 	"time"
 )
@@ -67,7 +68,17 @@ func IsReplicationLagVeryHigh(tabletHealth *TabletHealth) bool {
 // * degraded_threshold: this is only used by vttablet for display. It should match
 //   discovery_low_replication_lag here, so the vttablet status display matches what vtgate will do of it.
 func FilterStatsByReplicationLag(tabletHealthList []*TabletHealth) []*TabletHealth {
-	return filterStatsByLag(tabletHealthList)
+	if !*legacyReplicationLagAlgorithm {
+		return filterStatsByLag(tabletHealthList)
+	}
+	res := filterStatsByLagWithLegacyAlgorithm(tabletHealthList)
+	// run the filter again if exactly one tablet is removed,
+	// and we have spare tablets.
+	if len(res) > *minNumTablets && len(res) == len(tabletHealthList)-1 {
+		res = filterStatsByLagWithLegacyAlgorithm(res)
+	}
+	return res
+
 }
 
 func filterStatsByLag(tabletHealthList []*TabletHealth) []*TabletHealth {
@@ -96,6 +107,86 @@ func filterStatsByLag(tabletHealthList []*TabletHealth) []*TabletHealth {
 	return res
 }
 
+func filterStatsByLagWithLegacyAlgorithm(tabletHealthList []*TabletHealth) []*TabletHealth {
+	list := make([]*TabletHealth, 0, len(tabletHealthList))
+	// filter non-serving tablets
+	for _, ts := range tabletHealthList {
+		if !ts.Serving || ts.LastError != nil || ts.Stats == nil {
+			continue
+		}
+		list = append(list, ts)
+	}
+	if len(list) <= 1 {
+		return list
+	}
+	// if all have low replication lag (<=30s), return all tablets.
+	allLowLag := true
+	for _, ts := range list {
+		if IsReplicationLagHigh(ts) {
+			allLowLag = false
+			break
+		}
+	}
+	if allLowLag {
+		return list
+	}
+	// filter those affecting "mean" lag significantly
+	// calculate mean for all tablets
+	res := make([]*TabletHealth, 0, len(list))
+	m, _ := mean(list, -1)
+	for i, ts := range list {
+		// calculate mean by excluding ith tablet
+		mi, _ := mean(list, i)
+		if float64(mi) > float64(m)*0.7 {
+			res = append(res, ts)
+		}
+	}
+	if len(res) >= *minNumTablets {
+		return res
+	}
+	// return at least minNumTablets tablets to avoid over loading,
+	// if there is enough tablets with replication lag < highReplicationLagMinServing.
+	// Pull the current replication lag for a stable sort.
+	snapshots := make([]tabletLagSnapshot, 0, len(list))
+	for _, ts := range list {
+		if !IsReplicationLagVeryHigh(ts) {
+			snapshots = append(snapshots, tabletLagSnapshot{
+				ts:     ts,
+				replag: ts.Stats.SecondsBehindMaster})
+		}
+	}
+	if len(snapshots) == 0 {
+		// We get here if all tablets are over the high
+		// replication lag threshold, and their lag is
+		// different enough that the 70% mean computation up
+		// there didn't find them all in a group. For
+		// instance, if *minNumTablets = 2, and we have two
+		// tablets with lag of 3h and 30h.  In that case, we
+		// just use them all.
+		for _, ts := range list {
+			snapshots = append(snapshots, tabletLagSnapshot{
+				ts:     ts,
+				replag: ts.Stats.SecondsBehindMaster})
+		}
+	}
+
+	// Sort by replication lag.
+	sort.Sort(byReplag(snapshots))
+
+	// Pick the first minNumTablets tablets.
+	res = make([]*TabletHealth, 0, *minNumTablets)
+	for i := 0; i < min(*minNumTablets, len(snapshots)); i++ {
+		res = append(res, snapshots[i].ts)
+	}
+	return res
+}
+
+type byReplag []tabletLagSnapshot
+
+func (a byReplag) Len() int           { return len(a) }
+func (a byReplag) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a byReplag) Less(i, j int) bool { return a[i].replag < a[j].replag }
+
 type tabletLagSnapshot struct {
 	ts     *TabletHealth
 	replag uint32
@@ -111,4 +202,22 @@ func min(a, b int) int {
 		return b
 	}
 	return a
+}
+
+// mean calculates the mean value over the given list,
+// while excluding the item with the specified index.
+func mean(tabletHealthList []*TabletHealth, idxExclude int) (uint64, error) {
+	var sum uint64
+	var count uint64
+	for i, ts := range tabletHealthList {
+		if i == idxExclude {
+			continue
+		}
+		sum = sum + uint64(ts.Stats.SecondsBehindMaster)
+		count++
+	}
+	if count == 0 {
+		return 0, fmt.Errorf("empty list")
+	}
+	return sum / count, nil
 }

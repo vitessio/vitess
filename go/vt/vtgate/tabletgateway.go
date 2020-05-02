@@ -82,7 +82,10 @@ func NewTabletGateway(ctx context.Context, serv srvtopo.Server, localCell string
 			log.Exitf("Unable to create new TabletGateway: %v", err)
 		}
 	}
-	hc := discovery.NewHealthCheck(ctx, *HealthCheckRetryDelay, *HealthCheckTimeout, topoServer, localCell)
+	b := buffer.New()
+	// callback to notify buffer when to end failover
+	newMasterDetected := b.NewMasterDetected
+	hc := discovery.NewHealthCheck(ctx, *HealthCheckRetryDelay, *HealthCheckTimeout, topoServer, localCell, newMasterDetected)
 
 	gw := &TabletGateway{
 		hc:                hc,
@@ -90,7 +93,7 @@ func NewTabletGateway(ctx context.Context, serv srvtopo.Server, localCell string
 		localCell:         localCell,
 		retryCount:        *RetryCount,
 		statusAggregators: make(map[string]*TabletStatusAggregator),
-		buffer:            buffer.New(),
+		buffer:            b,
 	}
 	gw.QueryService = queryservice.Wrap(nil, gw.withRetry)
 	return gw
@@ -189,6 +192,8 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			}
 		}
 
+		// instead of returning []*TabletHealth we can return a simpler struct
+		// that contains just tablet ALias and connection
 		tablets := gw.hc.GetHealthyTabletStats(target)
 		if len(tablets) == 0 {
 			// fail fast if there is no tablet
@@ -228,13 +233,6 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		var canRetry bool
 		canRetry, err = inner(ctx, target, th.Conn)
 		gw.updateStats(target, startTime, err)
-
-		// if a master query succeeded and the buffer is currently buffering, end the buffering
-		if err == nil && target.TabletType == topodatapb.TabletType_MASTER && gw.buffer.WaitingForFailoverEnd(ctx, target.Keyspace, target.Shard) {
-			// notify buffer that failover has ended
-			gw.buffer.EndFailover(target, th)
-		}
-
 		if canRetry {
 			invalidTablets[tabletLastUsed] = true
 			continue

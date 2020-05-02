@@ -32,8 +32,6 @@ import (
 	"sync"
 	"time"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sync2"
@@ -215,32 +213,17 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 	return sb.waitForFailoverEnd(ctx, keyspace, shard, err)
 }
 
-// WaitingForFailoverEnd tells us whether we are currently buffering
-// which means someone might be waiting for the failover to end
-func (b *Buffer) WaitingForFailoverEnd(ctx context.Context, keyspace, shard string) bool {
-
-	sb := b.getOrCreateBuffer(keyspace, shard)
-	if sb == nil {
-		// buffer is stopped
-		return false
-	}
-	if sb.disabled() {
-		// no buffering is enabled so nothing to do
-		return false
-	}
-
-	// only returns true if sb.state == stateBuffering
-	return sb.shouldBufferLocked(false)
-}
-
-// EndFailover tells the buffer that the failover has ended
-// so it can start retrying the buffered requests
-func (b *Buffer) EndFailover(target *querypb.Target, th *discovery.TabletHealth) {
-	if target.TabletType != topodatapb.TabletType_MASTER {
-		panic(fmt.Sprintf("BUG: non MASTER target cannot end failover: %v", target))
-	}
+// NewMasterDetected notifies the buffer to record a new master
+// and end any failover buffering that may be in progress
+func (b *Buffer) NewMasterDetected(th *discovery.TabletHealth) {
 	timestamp := th.MasterTermStartTime
-	sb := b.getOrCreateBuffer(target.Keyspace, target.Shard)
+	if timestamp == 0 {
+		// Masters where TabletExternallyReparented was never called will return 0.
+		// Ignore them.
+		return
+	}
+
+	sb := b.getOrCreateBuffer(th.Target.Keyspace, th.Target.Shard)
 	if sb == nil {
 		// Buffer is shut down. Ignore all calls.
 		return
