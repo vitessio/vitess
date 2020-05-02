@@ -63,7 +63,6 @@ type Engine struct {
 	// and do not require locking mu.
 	conns *connpool.Pool
 	ticks *timer.Timer
-	Sh    HistorianInterface
 }
 
 // NewEngine creates a new Engine.
@@ -181,6 +180,7 @@ func (se *Engine) Reload(ctx context.Context) error {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	if !se.isOpen {
+		log.Warning("Schema reload called for an engine that is not yet open")
 		return nil
 	}
 	return se.reload(ctx)
@@ -217,6 +217,7 @@ func (se *Engine) reload(ctx context.Context) error {
 	changedTables := make(map[string]*Table)
 	// created and altered contain the names of created and altered tables for broadcast.
 	var created, altered []string
+	log.Infof("In se Reload with %d tables found", len(tableData.Rows))
 	for _, row := range tableData.Rows {
 		tableName := row[0].ToString()
 		curTables[tableName] = true
@@ -345,11 +346,6 @@ func (se *Engine) broadcast(created, altered, dropped []string) {
 	}
 }
 
-// GetTableForPos returns the info for a table.
-func (se *Engine) GetTableForPos(tableName sqlparser.TableIdent, pos string) *Table {
-	return se.Sh.GetTableForPos(tableName, pos)
-}
-
 // GetTable returns the info for a table.
 func (se *Engine) GetTable(tableName sqlparser.TableIdent) *Table {
 	se.mu.Lock()
@@ -415,8 +411,4 @@ func (se *Engine) SetTableForTests(table *Table) {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	se.tables[table.Name.String()] = table
-}
-
-func (se *Engine) SetHistorian(sh *Historian) {
-	se.Sh = sh
 }

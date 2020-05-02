@@ -87,7 +87,7 @@ func (rpw *ReplicationWatcher) Process(ctx context.Context) {
 	}
 
 	for {
-		// VStreamer will reload the schema when it encounters a DDL.
+		// The tracker will reload the schema and save it into _vt.schema_tracking when the vstream encounters a DDL.
 		err := rpw.vs.Stream(ctx, "current", filter, func(events []*binlogdatapb.VEvent) error {
 			for _, event := range events {
 				if event.Type == binlogdatapb.VEventType_DDL {
