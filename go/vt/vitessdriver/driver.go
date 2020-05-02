@@ -85,7 +85,7 @@ func OpenWithConfiguration(c Configuration) (*sql.DB, error) {
 		vtgateconn.RegisterDialer(c.Protocol, grpcvtgateconn.DialWithOpts(context.TODO(), c.GRPCDialOptions...))
 	}
 
-	return sql.Open("vitess", json)
+	return sql.Open(c.DriverName, json)
 }
 
 type drv struct {
@@ -160,6 +160,12 @@ type Configuration struct {
 	//
 	// Default: none
 	GRPCDialOptions []grpc.DialOption `json:"-"`
+
+	// Driver is the name registered with the database/sql package. This override
+	// is here in case you have wrapped the driver for stats or other interceptors.
+	//
+	// Default: "vitess"
+	DriverName string `json:"-"`
 }
 
 // toJSON converts Configuration to the JSON string which is required by the
@@ -178,6 +184,10 @@ func (c *Configuration) setDefaults() {
 	// of the connection protocol and not the flag vtgateconn.VtgateProtocol
 	if c.Protocol == "" {
 		c.Protocol = "grpc"
+	}
+
+	if c.DriverName == "" {
+		c.DriverName = "vitess"
 	}
 }
 
