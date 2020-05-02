@@ -21,7 +21,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"strconv"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -61,7 +60,7 @@ type vstreamer struct {
 	cancel func()
 
 	cp       dbconfigs.Connector
-	se       *schema.Engine
+	sh       schema.Historian
 	startPos string
 	filter   *binlogdatapb.Filter
 	send     func([]*binlogdatapb.VEvent) error
@@ -87,7 +86,7 @@ type streamerPlan struct {
 
 // newVStreamer creates a new vstreamer.
 // cp: the mysql conn params.
-// se: the schema engine. The vstreamer uses it to convert the TableMap into field info.
+// sh: the schema engine. The vstreamer uses it to convert the TableMap into field info.
 // startPos: a flavor compliant position to stream from. This can also contain the special
 //   value "current", which means start from the current position.
 // filter: the list of filtering rules. If a rule has a select expression for its filter,
@@ -103,14 +102,14 @@ type streamerPlan struct {
 //   Other constructs like joins, group by, etc. are not supported.
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
-func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string,
+func newVStreamer(ctx context.Context, cp dbconfigs.Connector, sh schema.Historian, startPos string,
 	filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
 		ctx:      ctx,
 		cancel:   cancel,
 		cp:       cp,
-		se:       se,
+		sh:       sh,
 		startPos: startPos,
 		filter:   filter,
 		send:     send,
@@ -166,9 +165,9 @@ func (vs *vstreamer) Stream() error {
 		vs.pos = pos
 	}
 
-	// Ensure se is Open. If vttablet came up in a non_serving role,
+	// Ensure sh is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
-	if err := vs.se.Open(); err != nil {
+	if err := vs.sh.Open(); err != nil {
 		return wrapError(err, vs.pos)
 	}
 
@@ -447,6 +446,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				})
 			} else {
 				// If the DDL need not be sent, send a dummy OTHER event.
+				log.Infof("Not sending DDL for %s", q.SQL)
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_GTID,
 					Gtid: mysql.EncodePosition(vs.pos),
@@ -519,7 +519,13 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		if id == vs.journalTableID {
 			vevents, err = vs.processJournalEvent(vevents, plan, rows)
 		} else if id == vs.versionTableID {
-			vevents, err = vs.processVersionEvent(vevents, plan, rows)
+			log.Infof("In vstreamer registering version event")
+			vs.sh.RegisterVersionEvent()
+			vevent := &binlogdatapb.VEvent{
+				Type: binlogdatapb.VEventType_VERSION,
+			}
+			vevents = append(vevents, vevent)
+
 		} else {
 			vevents, err = vs.processRowEvent(vevents, plan, rows)
 		}
@@ -532,42 +538,6 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		vevent.CurrentTime = time.Now().UnixNano()
 	}
 	return vevents, nil
-}
-
-//TODO create common buildSpecialPlan for journal/version?
-func (vs *vstreamer) buildVersionPlan(id uint64, tm *mysql.TableMap) error {
-	conn, err := vs.cp.Connect(vs.ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	qr, err := conn.ExecuteFetch("select * from _vt.schema_version where 1 != 1", 1, true)
-	if err != nil {
-		return err
-	}
-	fields := qr.Fields
-	log.Infof(">>> buildVersionPlan fields are %v", fields)
-	if len(fields) < len(tm.Types) {
-		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema as %v", tm.Name, tm.Types, fields)
-	}
-	table := &Table{
-		Name:   "_vt.schema_version",
-		Fields: fields[:len(tm.Types)],
-	}
-	// Build a normal table plan, which means, return all rows
-	// and columns as is. Special handling is done when we actually
-	// receive the row event. We'll build a VERSION event instead.
-	plan, err := buildREPlan(table, nil, "")
-	if err != nil {
-		return err
-	}
-	vs.plans[id] = &streamerPlan{
-		Plan:     plan,
-		TableMap: tm,
-	}
-	vs.versionTableID = id
-	return nil
-
 }
 
 func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
@@ -600,6 +570,39 @@ func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
 		TableMap: tm,
 	}
 	vs.journalTableID = id
+	return nil
+}
+
+func (vs *vstreamer) buildVersionPlan(id uint64, tm *mysql.TableMap) error {
+	conn, err := vs.cp.Connect(vs.ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	qr, err := conn.ExecuteFetch("select * from _vt.schema_version where 1 != 1", 1, true)
+	if err != nil {
+		return err
+	}
+	fields := qr.Fields
+	if len(fields) < len(tm.Types) {
+		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema as %v", tm.Name, tm.Types, fields)
+	}
+	table := &Table{
+		Name:   "_vt.schema_version",
+		Fields: fields[:len(tm.Types)],
+	}
+	// Build a normal table plan, which means, return all rows
+	// and columns as is. Special handling is done when we actually
+	// receive the row event. We'll build a JOURNAL event instead.
+	plan, err := buildREPlan(table, nil, "")
+	if err != nil {
+		return err
+	}
+	vs.plans[id] = &streamerPlan{
+		Plan:     plan,
+		TableMap: tm,
+	}
+	vs.versionTableID = id
 	return nil
 }
 
@@ -647,7 +650,7 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 		})
 	}
 
-	st := vs.se.GetTable(sqlparser.NewTableIdent(tm.Name)) //GetTableForPos(sqlparser.NewTableIdent(tm.Name), vs.pos.String())
+	st := vs.sh.GetTableForPos(sqlparser.NewTableIdent(tm.Name), mysql.EncodePosition(vs.pos))
 	if st == nil {
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
 			return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
@@ -709,57 +712,6 @@ nextrow:
 				Journal: journal,
 			})
 		}
-	}
-	return vevents, nil
-}
-
-func (vs *vstreamer) processVersionEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {
-	// Get DbName
-	params, err := vs.cp.MysqlParams()
-	if err != nil {
-		return nil, err
-	}
-nextrow:
-	for _, row := range rows.Rows {
-		afterOK, afterValues, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
-		if err != nil {
-			return nil, err
-		}
-		if !afterOK {
-			// This can happen if someone manually deleted rows.
-			continue
-		}
-		// Exclude events that don't match the db_name.
-		for i, fld := range plan.fields() {
-			if fld.Name == "db_name" && afterValues[i].ToString() != params.DbName {
-				continue nextrow
-			}
-		}
-		version := &binlogdatapb.Version{}
-		for i, fld := range plan.fields() {
-			val := afterValues[i].ToString()
-			switch fld.Name {
-			case "pos":
-				version.Gtid = val
-			case "ddl":
-				version.Ddl = val
-			case "time_updated":
-				val, _ := strconv.Atoi(val)
-				version.Timestamp = int64(val)
-			case "schemax":
-				tables := &binlogdatapb.TableMetaDataCollection{}
-				log.Infof("SchemaX tables are %v", len(afterValues[i].ToBytes()))
-				if err := proto.Unmarshal(afterValues[i].ToBytes(), tables); err != nil {
-					return nil, err
-				}
-				version.Tables = tables
-			}
-		}
-		vs.se.Sh.RegisterVersionEvent(version)
-		vevents = append(vevents, &binlogdatapb.VEvent{
-			Type:    binlogdatapb.VEventType_VERSION,
-			Version: version,
-		})
 	}
 	return vevents, nil
 }

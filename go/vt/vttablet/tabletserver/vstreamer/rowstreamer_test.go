@@ -54,7 +54,7 @@ func TestStreamRowsScan(t *testing.T) {
 		"drop table t3",
 		"drop table t4",
 	})
-	engine.se.Reload(context.Background())
+	engine.sh.Reload(context.Background())
 
 	// t1: all rows
 	wantStream := []string{
@@ -198,7 +198,7 @@ func TestStreamRowsKeyRange(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.se.Reload(context.Background())
+	engine.sh.Reload(context.Background())
 
 	time.Sleep(1 * time.Second)
 
@@ -228,7 +228,7 @@ func TestStreamRowsFilterInt(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.se.Reload(context.Background())
+	engine.sh.Reload(context.Background())
 
 	time.Sleep(1 * time.Second)
 
@@ -257,7 +257,7 @@ func TestStreamRowsFilterVarBinary(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.se.Reload(context.Background())
+	engine.sh.Reload(context.Background())
 
 	time.Sleep(1 * time.Second)
 
@@ -285,7 +285,7 @@ func TestStreamRowsMultiPacket(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.se.Reload(context.Background())
+	engine.sh.Reload(context.Background())
 
 	wantStream := []string{
 		`fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id" type:INT32 > `,
@@ -313,7 +313,7 @@ func TestStreamRowsCancel(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.se.Reload(context.Background())
+	engine.sh.Reload(context.Background())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

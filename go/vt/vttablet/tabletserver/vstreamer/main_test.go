@@ -25,13 +25,17 @@ import (
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 )
 
 var (
-	engine *Engine
-	env    *testenv.Env
+	engine    *Engine
+	env       *testenv.Env
+	historian schema.Historian
+	config    *tabletenv.TabletConfig
 )
 
 func TestMain(m *testing.M) {
@@ -51,8 +55,10 @@ func TestMain(m *testing.M) {
 		defer env.Close()
 
 		// engine cannot be initialized in testenv because it introduces
-		// circular dependencies.
-		engine = NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine)
+		// circular dependencies
+		historian = schema.NewHistorian(env.SchemaEngine) //newMockHistorian
+		historian.Init(tabletpb.TabletType_MASTER)
+		engine = NewEngine(env.TabletEnv, env.SrvTopo, historian)
 		engine.Open(env.KeyspaceName, env.Cells[0])
 		defer engine.Close()
 
@@ -66,8 +72,12 @@ func customEngine(t *testing.T, modifier func(mysql.ConnParams) mysql.ConnParams
 	require.NoError(t, err)
 	modified := modifier(*original)
 	config := env.TabletEnv.Config().Clone()
+	config.WatchReplication = true
 	config.DB = dbconfigs.NewTestDBConfigs(modified, modified, modified.DbName)
-	engine := NewEngine(tabletenv.NewEnv(config, "VStreamerTest"), env.SrvTopo, env.SchemaEngine)
+	historian = schema.NewHistorian(env.SchemaEngine) //newMockHistorian
+	historian.Init(tabletpb.TabletType_MASTER)
+
+	engine := NewEngine(tabletenv.NewEnv(config, "VStreamerTest"), env.SrvTopo, historian)
 	engine.Open(env.KeyspaceName, env.Cells[0])
 	return engine
 }

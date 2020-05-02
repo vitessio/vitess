@@ -25,16 +25,16 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 )
 
-const createSchemaTrackingTable = `CREATE TABLE IF NOT EXISTS _vt.schema_tracking (
+//todo: pos as primary key, add timestamp and use instead of id and use default AND on update current_timestamp ...
+const createSchemaTrackingTable = `CREATE TABLE IF NOT EXISTS _vt.schema_version (
 		 id INT AUTO_INCREMENT,
 		  pos VARBINARY(10000) NOT NULL,
 		  time_updated BIGINT(20) NOT NULL,
 		  ddl VARBINARY(1000) DEFAULT NULL,
-		  schema longblob NOT NULL,
+		  schemax BLOB NOT NULL,
 		  PRIMARY KEY (id)
 		) ENGINE=InnoDB`
 
@@ -51,40 +51,43 @@ type SchemaSubscriber interface {
 
 var _ SchemaSubscriber = (*Tracker)(nil)
 
+// Tracker implements SchemaSubscriber and persists versions into the ddb
 type Tracker struct {
 	engine trackerEngine
 }
 
-type TableMetaData struct {
-	Name      string
-	Fields    []*querypb.Field
-	PKColumns []int
-}
-
+// NewTracker creates a Tracker, needs a SchemaEngine (which implements the trackerEngine interface)
 func NewTracker(engine trackerEngine) *Tracker {
 	return &Tracker{engine: engine}
 }
 
+// SchemaUpdated is called by a vstream when it encounters a DDL   //TODO multiple might come for same pos, ok?
 func (st *Tracker) SchemaUpdated(gtid string, ddl string, timestamp int64) {
+
+	if gtid == "" || ddl == "" {
+		log.Errorf("Got invalid gtid or ddl in SchemaUpdated")
+		return
+	}
 	ctx := context.Background()
 
 	st.engine.Reload(ctx)
-	newSchema := st.engine.GetSchema()
+	tables := st.engine.GetSchema()
 	dbSchema := &binlogdatapb.TableMetaDataCollection{
 		Tables: []*binlogdatapb.TableMetaData{},
 	}
-	blob, err := proto.Marshal(dbSchema)
-	for name, table := range newSchema {
+	for name, table := range tables {
 		t := &binlogdatapb.TableMetaData{
 			Name:   name,
 			Fields: table.Fields,
-			//Pkcolumns: table.PKColumns,
 		}
+		pks := make([]int64, 0)
+		for _, pk := range table.PKColumns {
+			pks = append(pks, int64(pk))
+		}
+		t.PKColumns = pks
 		dbSchema.Tables = append(dbSchema.Tables, t)
 	}
-	query := fmt.Sprintf("insert into _vt.schema_version "+
-		"(pos, ddl, schema, time_updated) "+
-		"values (%v, %v, %v, %d)", gtid, ddl, encodeString(string(blob)), timestamp)
+	blob, err := proto.Marshal(dbSchema)
 
 	conn, err := st.engine.GetConnection(ctx)
 	if err != nil {
@@ -97,10 +100,15 @@ func (st *Tracker) SchemaUpdated(gtid string, ddl string, timestamp int64) {
 		log.Errorf("Error creating schema_tracking table %v", err)
 		return
 	}
-	log.Infof("Inserting version for position %s", gtid)
+
+	log.Infof("Inserting version for position %s: %+v", gtid, dbSchema)
+	query := fmt.Sprintf("insert ignore into _vt.schema_version "+
+		"(pos, ddl, schemax, time_updated) "+
+		"values (%v, %v, %v, %d)", encodeString(gtid), encodeString(ddl), encodeString(string(blob)), timestamp)
+
 	_, err = conn.Exec(ctx, query, 1, false)
 	if err != nil {
-		log.Errorf("Error inserting version for position %s %v", gtid, err)
+		log.Errorf("Error inserting version for position %s, ddl %s, %v", gtid, ddl, err)
 		return
 	}
 }

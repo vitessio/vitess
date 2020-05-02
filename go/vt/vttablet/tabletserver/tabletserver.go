@@ -193,6 +193,7 @@ type TabletServer struct {
 
 	// alias is used for identifying this tabletserver in healthcheck responses.
 	alias topodatapb.TabletAlias
+	sh    schema.Historian
 }
 
 // RegisterFunctions is a list of all the
@@ -228,8 +229,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		alias:                  alias,
 	}
 	tsv.se = schema.NewEngine(tsv)
-	sh := schema.NewSchemaHistorian(tsv.se)
-	tsv.se.SetHistorian(sh)
+	tsv.sh = schema.NewHistorian(tsv.se)
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
 	tsv.te = NewTxEngine(tsv)
 	tsv.txController = tsv.te
@@ -237,7 +237,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.hr = heartbeat.NewReader(tsv)
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
-	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se)
+	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.sh)
 	schemaTracker := schema.NewTracker(tsv.se)
 	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config, schemaTracker)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
@@ -412,6 +412,7 @@ func (tsv *TabletServer) StartService(target querypb.Target, dbcfgs *dbconfigs.D
 		return err
 	}
 	_ /* state changed */, err = tsv.SetServingType(tabletType, true, nil)
+	tsv.sh.Init(tabletType)
 	return err
 }
 

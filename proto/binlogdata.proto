@@ -338,8 +338,6 @@ message VEvent {
   Journal journal = 8;
   // Dml is set if the event type is INSERT, REPLACE, UPDATE or DELETE.
   string dml = 9;
-  // Version is set if the event type is VERSION.
-  Version version = 10;
   // CurrentTime specifies the current time when the message was sent.
   // This can be used to compenssate for clock skew.
   int64 current_time = 20;
@@ -353,18 +351,6 @@ message TableMetaData {
 
 message TableMetaDataCollection {
     repeated TableMetaData tables = 1;
-}
-
-message Version {
-  // Timestamp is the binlog timestamp in seconds.
-  // The value should be ignored if 0.
-  int64 timestamp = 1;
-  // Gtid position where version was set
-  string gtid = 2;
-  // Ddl which caused this version event
-  string ddl = 3;
-  //
-  TableMetaDataCollection tables = 4;
 }
 
 // VStreamRequest is the payload for VStreamer
