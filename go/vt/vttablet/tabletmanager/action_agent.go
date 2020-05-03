@@ -184,9 +184,6 @@ type ActionAgent struct {
 	// _shardSyncCancel is the function to stop the background shard sync goroutine.
 	_shardSyncCancel context.CancelFunc
 
-	// _tablet has the Tablet record we last read from the topology server.
-	_tablet *topodatapb.Tablet
-
 	// _disallowQueryService is set to the reason we should be
 	// disallowing queries from being served. It is set from changeCallback,
 	// and used by healthcheck. If empty, we should allow queries.
@@ -230,6 +227,11 @@ type ActionAgent struct {
 	_lockTablesTimer      *time.Timer
 	// _isBackupRunning tells us whether there is a backup that is currently running
 	_isBackupRunning bool
+
+	pubMu sync.Mutex
+	// _tablet has the Tablet record we last read from the topology server.
+	tablet       *topodatapb.Tablet
+	isPublishing bool
 }
 
 // NewActionAgent creates a new ActionAgent and registers all the
@@ -488,19 +490,19 @@ func (agent *ActionAgent) registerQueryRuleSources() {
 }
 
 func (agent *ActionAgent) setTablet(tablet *topodatapb.Tablet) {
-	agent.mutex.Lock()
-	agent._tablet = proto.Clone(tablet).(*topodatapb.Tablet)
-	agent.mutex.Unlock()
+	agent.pubMu.Lock()
+	agent.tablet = proto.Clone(tablet).(*topodatapb.Tablet)
+	agent.pubMu.Unlock()
 
 	// Notify the shard sync loop that the tablet state changed.
 	agent.notifyShardSync()
 }
 
-// Tablet reads the stored Tablet from the agent, protected by mutex.
+// Tablet reads the stored Tablet from the agent.
 func (agent *ActionAgent) Tablet() *topodatapb.Tablet {
-	agent.mutex.Lock()
-	tablet := proto.Clone(agent._tablet).(*topodatapb.Tablet)
-	agent.mutex.Unlock()
+	agent.pubMu.Lock()
+	tablet := proto.Clone(agent.tablet).(*topodatapb.Tablet)
+	agent.pubMu.Unlock()
 	return tablet
 }
 
