@@ -69,9 +69,10 @@ func StatusURLPath() string {
 //-----------------------------------------------------------------
 
 var (
-	binaryName  = filepath.Base(os.Args[0])
-	hostname    string
-	serverStart = time.Now()
+	binaryName       = filepath.Base(os.Args[0])
+	hostname         string
+	serverStart      = time.Now()
+	blockProfileRate = 0
 
 	globalStatus = newStatusPage("")
 )
@@ -109,10 +110,13 @@ Started: {{.StartTime}}<br>
 </div>
 <div class=righthand>
 Running on {{.Hostname}}<br>
-View <a href=/debug/vars>variables</a>,
-     <a href=/debug/pprof>debugging profiles</a>,
-     <a href="/debug/blockprofilerate?rate=1">block profile</a>,
-     <a href="/debug/mutexprofilefraction?fraction=1">mutex profile</a>,
+View: <a href=/debug/vars>variables</a>,
+     <a href=/debug/pprof>debugging profiles</a>
+</div>
+<br>
+<div class=righthand>
+Toggle (careful!): <a href=/debug/blockprofilerate>block profiling</a>,
+     <a href=/debug/mutexprofilefraction>mutex profiling</a>
 </div>
 </div>`
 
@@ -243,45 +247,61 @@ func (sp *statusPage) reparse(sections []section) (*template.Template, error) {
 	return template.New("").Funcs(sp.funcMap).Parse(buf.String())
 }
 
+// Toggle the block profile rate to/from 100%, unless specific rate is passed in
 func registerDebugBlockProfileRate() {
 	http.HandleFunc("/debug/blockprofilerate", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 			acl.SendError(w, err)
 			return
 		}
+
 		rate, err := strconv.ParseInt(r.FormValue("rate"), 10, 32)
+		message := "block profiling enabled"
 		if rate < 0 || err != nil {
-			rate = 0
+			// We can't get the current profiling rate
+			// from runtime, so we depend on a global var
+			if blockProfileRate == 0 {
+				rate = 1
+			} else {
+				rate = 0
+				message = "block profiling disabled"
+			}
+		} else {
+			message = fmt.Sprintf("Block profiling rate set to %d", rate)
 		}
+		blockProfileRate = int(rate)
 		runtime.SetBlockProfileRate(int(rate))
 		log.Infof("Set block profile rate to: %d", rate)
 		w.Header().Set("Content-Type", "text/plain")
-		if err != nil {
-			w.Write([]byte("failed: block profile rate reset to 0"))
-			return
-		}
-		w.Write([]byte(fmt.Sprintf("success: block profile rate set to %d", rate)))
+		w.Write([]byte(message))
 	})
 }
 
+// Toggle the mutex profiling fraction to/from 100%, unless specific fraction is passed in
 func registerDebugMutexProfileFraction() {
 	http.HandleFunc("/debug/mutexprofilefraction", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 			acl.SendError(w, err)
 			return
 		}
+
+		currentFraction := runtime.SetMutexProfileFraction(-1)
 		fraction, err := strconv.ParseInt(r.FormValue("fraction"), 10, 32)
+		message := "mutex profiling enabled"
 		if fraction < 0 || err != nil {
-			fraction = 0
+			if currentFraction == 0 {
+				fraction = 1
+			} else {
+				fraction = 0
+				message = "mutex profiling disabled"
+			}
+		} else {
+			message = fmt.Sprintf("Mutex profiling set to fraction %d", fraction)
 		}
 		runtime.SetMutexProfileFraction(int(fraction))
-		log.Infof("Set mutex profile fraction to: %d", fraction)
+		log.Infof("Set mutex profiling fraction to: %d", fraction)
 		w.Header().Set("Content-Type", "text/plain")
-		if err != nil {
-			w.Write([]byte("failed: mutex profile fraction reset to 0"))
-			return
-		}
-		w.Write([]byte(fmt.Sprintf("success: mutex profile fraction set to %d", fraction)))
+		w.Write([]byte(message))
 	})
 }
 
