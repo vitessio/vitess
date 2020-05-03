@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/trace"
@@ -35,6 +36,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/events"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
@@ -51,6 +53,8 @@ var (
 	// vtgate to gracefully redirect traffic elsewhere, before we begin actually
 	// rejecting queries for that target type.
 	gracePeriod = flag.Duration("serving_state_grace_period", 0, "how long to pause after broadcasting health to vtgate, before enforcing a new serving state")
+
+	publishRetryInterval = flag.Duration("publish_retry_interval", 30*time.Second, "how long vttablet waits to retry publishing the tablet record")
 )
 
 // Query rules from blacklist
@@ -372,5 +376,61 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	// Broadcast health changes to vtgate immediately.
 	if broadcastHealth {
 		agent.broadcastHealth()
+	}
+}
+
+func (agent *ActionAgent) publishState(ctx context.Context) {
+	agent.pubMu.Lock()
+	defer agent.pubMu.Unlock()
+	// If retry is in progress, there's nothing to do.
+	if agent.isPublishing {
+		return
+	}
+	// Common code path: publish immediately.
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+	_, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
+		if err := topotools.CheckOwnership(tablet, agent.tablet); err != nil {
+			log.Error(err)
+			return topo.NewError(topo.NoUpdateNeeded, "")
+		}
+		*tablet = *proto.Clone(agent.tablet).(*topodatapb.Tablet)
+		return nil
+	})
+	if err != nil {
+		log.Errorf("Unable to publish state to topo, will keep retrying: %v", err)
+		agent.isPublishing = true
+		// Keep retrying until success.
+		go agent.retryPublish()
+	}
+}
+
+func (agent *ActionAgent) retryPublish() {
+	agent.pubMu.Lock()
+	defer func() {
+		agent.isPublishing = false
+		agent.pubMu.Unlock()
+	}()
+
+	for {
+		agent.pubMu.Unlock()
+		time.Sleep(*publishRetryInterval)
+		agent.pubMu.Lock()
+
+		ctx, cancel := context.WithTimeout(agent.batchCtx, *topo.RemoteOperationTimeout)
+		_, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
+			if err := topotools.CheckOwnership(tablet, agent.tablet); err != nil {
+				log.Error(err)
+				return topo.NewError(topo.NoUpdateNeeded, "")
+			}
+			*tablet = *proto.Clone(agent.tablet).(*topodatapb.Tablet)
+			return nil
+		})
+		cancel()
+		if err != nil {
+			log.Errorf("Unable to publish state to topo, will keep retrying: %v", err)
+			continue
+		}
+		return
 	}
 }
