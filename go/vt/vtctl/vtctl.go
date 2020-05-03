@@ -164,12 +164,12 @@ var commands = []commandGroup{
 	{
 		"Tablets", []command{
 			{"InitTablet", commandInitTablet,
-				"[-allow_update] [-allow_different_shard] [-allow_master_override] [-parent] [-db_name_override=<db name>] [-hostname=<hostname>] [-mysql_port=<port>] [-port=<port>] [-grpc_port=<port>] [-tags=tag1:value1,tag2:value2] -keyspace=<keyspace> -shard=<shard> <tablet alias> <tablet type>",
+				"DEPRECATED [-allow_update] [-allow_different_shard] [-allow_master_override] [-parent] [-db_name_override=<db name>] [-hostname=<hostname>] [-mysql_port=<port>] [-port=<port>] [-grpc_port=<port>] [-tags=tag1:value1,tag2:value2] -keyspace=<keyspace> -shard=<shard> <tablet alias> <tablet type>",
 				"Initializes a tablet in the topology.\n"},
 			{"GetTablet", commandGetTablet,
 				"<tablet alias>",
 				"Outputs a JSON structure that contains information about the Tablet."},
-			{"UpdateTabletAddrs", commandUpdateTabletAddrs,
+			{"DEPRECATED UpdateTabletAddrs", commandUpdateTabletAddrs,
 				"[-hostname <hostname>] [-ip-addr <ip addr>] [-mysql-port <mysql port>] [-vt-port <vt port>] [-grpc-port <grpc port>] <tablet alias> ",
 				"Updates the IP address and port numbers of a tablet."},
 			{"DeleteTablet", commandDeleteTablet,
