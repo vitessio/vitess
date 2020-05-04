@@ -238,8 +238,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.sh)
-	schemaTracker := schema.NewTracker(tsv.se)
-	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config, schemaTracker)
+	tsv.StartTracker()
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
@@ -261,6 +260,18 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.registerStreamQueryzHandlers()
 	tsv.registerTwopczHandler()
 	return tsv
+}
+
+// StartTracker() starts a new replication watcher
+// Exporting it allows it to be called separately in endtoend tests
+func (tsv *TabletServer) StartTracker() {
+	schemaTracker := schema.NewTracker(tsv.se)
+	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config, schemaTracker)
+	tsv.watcher.Open()
+}
+
+func (tsv *TabletServer) StopTracker() {
+	tsv.watcher.Close()
 }
 
 // Register prepares TabletServer for serving by calling
@@ -1690,9 +1701,9 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.Real
 	target := tsv.target
 	tsv.mu.Unlock()
 	shr := &querypb.StreamHealthResponse{
-		Target:      &target,
-		TabletAlias: &tsv.alias,
-		Serving:     tsv.IsServing(),
+		Target:                              &target,
+		TabletAlias:                         &tsv.alias,
+		Serving:                             tsv.IsServing(),
 		TabletExternallyReparentedTimestamp: terTimestamp,
 		RealtimeStats:                       stats,
 	}
