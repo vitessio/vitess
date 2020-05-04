@@ -37,7 +37,7 @@ func (t *mockSubscriber) SchemaUpdated(gtid string, ddl string, timestamp int64)
 	t.timestamps = append(t.timestamps, timestamp)
 }
 
-var _ schema.SchemaSubscriber = (*mockSubscriber)(nil)
+var _ schema.Subscriber = (*mockSubscriber)(nil)
 var _ VStreamer = (*fakeVstreamer)(nil)
 var _ tabletenv.Env = (*fakeEnv)(nil)
 

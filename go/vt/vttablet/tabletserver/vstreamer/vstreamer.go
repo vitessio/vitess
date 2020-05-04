@@ -217,13 +217,13 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	bufferAndTransmit := func(vevent *binlogdatapb.VEvent) error {
 		switch vevent.Type {
 		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_FIELD,
-			binlogdatapb.VEventType_JOURNAL, binlogdatapb.VEventType_VERSION:
+			binlogdatapb.VEventType_JOURNAL:
 			// We never have to send GTID, BEGIN, FIELD events on their own.
 			// A JOURNAL event is always preceded by a BEGIN and followed by a COMMIT.
 			// So, we don't have to send it right away.
 			bufferedEvents = append(bufferedEvents, vevent)
 		case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER,
-			binlogdatapb.VEventType_HEARTBEAT:
+			binlogdatapb.VEventType_HEARTBEAT, binlogdatapb.VEventType_VERSION:
 			// COMMIT, DDL, OTHER and HEARTBEAT must be immediately sent.
 			// Although unlikely, it's possible to get a HEARTBEAT in the middle
 			// of a transaction. If so, we still send the partial transaction along
