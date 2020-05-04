@@ -72,11 +72,11 @@ func TestSchemaVersioning(t *testing.T) {
 		{
 			query: "create table vitess_version (id1 int, id2 int)",
 			output: []string{
-				`gtid`,
+				`gtid`, //gtid+other => vstream current pos
 				`other`,
-				`gtid`,
+				`gtid`, //gtid+ddl => actual query
 				`type:DDL ddl:"create table vitess_version (id1 int, id2 int)" `,
-				`gtid`,
+				`gtid`, //gtid+other => insert into schema_version resulting in version+other
 				`other`,
 				`version`,
 				`gtid`,
@@ -94,7 +94,7 @@ func TestSchemaVersioning(t *testing.T) {
 			output: []string{
 				`gtid`,
 				`type:DDL ddl:"alter table vitess_version add column id3 int" `,
-				`gtid`,
+				`gtid`, //gtid+other => insert into schema_version resulting in version+other
 				`other`,
 				`version`,
 				`gtid`,
@@ -111,7 +111,7 @@ func TestSchemaVersioning(t *testing.T) {
 			output: []string{
 				`gtid`,
 				`type:DDL ddl:"alter table vitess_version modify column id3 varbinary(16)" `,
-				`gtid`,
+				`gtid`, //gtid+other => insert into schema_version resulting in version+other
 				`other`,
 				`version`,
 				`gtid`,
@@ -164,7 +164,7 @@ func TestSchemaVersioning(t *testing.T) {
 			//comment prefix required so we don't look for ddl in schema_version
 			query: "/**/alter table vitess_version add column id4 varbinary(16)",
 			output: []string{
-				`gtid`,
+				`gtid`, //no tracker, so no insert into schema_version or version event
 				`type:DDL ddl:"alter table vitess_version add column id4 varbinary(16)" `,
 			},
 		}, {
@@ -206,6 +206,7 @@ func TestSchemaVersioning(t *testing.T) {
 		}
 	}()
 
+	// playing events from the past: same events as original since historian is providing the latest schema
 	output := []string{
 		`gtid`,
 		`type:DDL ddl:"create table vitess_version (id1 int, id2 int)" `,
@@ -274,6 +275,7 @@ func TestSchemaVersioning(t *testing.T) {
 		}
 	}()
 
+	// playing events from the past: same as earlier except one below, see comments
 	output = []string{
 		`gtid`,
 		`type:DDL ddl:"create table vitess_version (id1 int, id2 int)" `,
@@ -290,6 +292,7 @@ func TestSchemaVersioning(t *testing.T) {
 		`other`,
 		`version`,
 		`gtid`,
+		/*at this point we only have latest schema so we have types (int32, int32, varbinary, varbinary) so the types don't match. Hence the @ fieldnames*/
 		`type:FIELD field_event:<table_name:"vitess_version" fields:<name:"@1" type:INT32 > fields:<name:"@2" type:INT32 > fields:<name:"@3" type:INT32 > > `,
 		`type:ROW row_event:<table_name:"vitess_version" row_changes:<after:<lengths:1 lengths:2 lengths:3 values:"220200" > > > `,
 		`gtid`,
@@ -299,6 +302,8 @@ func TestSchemaVersioning(t *testing.T) {
 		`other`,
 		`version`,
 		`gtid`,
+		/*at this point we only have latest schema so we have types (int32, int32, varbinary, varbinary),
+		  but the three fields below match the first three types in the latest, so the field names are correct*/
 		`type:FIELD field_event:<table_name:"vitess_version" fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > fields:<name:"id3" type:VARBINARY > > `,
 		`type:ROW row_event:<table_name:"vitess_version" row_changes:<after:<lengths:1 lengths:2 lengths:3 values:"330TTT" > > > `,
 		`gtid`,
