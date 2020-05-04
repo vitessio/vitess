@@ -269,6 +269,11 @@ func (ro *routeOption) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) 
 func (ro *routeOption) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
 	left := comparison.Left
 	right := comparison.Right
+
+	if sqlparser.IsNull(right) {
+		return engine.SelectNone, nil, nil
+	}
+
 	vindex = ro.FindVindex(pb, left)
 	if vindex == nil {
 		left, right = right, left
@@ -276,9 +281,6 @@ func (ro *routeOption) computeEqualPlan(pb *primitiveBuilder, comparison *sqlpar
 		if vindex == nil {
 			return engine.SelectScatter, nil, nil
 		}
-	}
-	if sqlparser.IsNull(right) {
-		return engine.SelectNone, nil, nil
 	}
 	if !ro.exprIsValue(right) {
 		return engine.SelectScatter, nil, nil
