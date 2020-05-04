@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -271,5 +273,8 @@ func TestDotTableSeq(t *testing.T) {
 
 	_, err = conn.ExecuteFetch("insert into `dotted.tablename` (c1,c2) values (10,10)", 1000, true)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "execInsertSharded: getInsertShardedRoute: duplicate entry [INT64(10) INT64(10)]")
+	mysqlErr := err.(*mysql.SQLError)
+	assert.Equal(t, 1062, mysqlErr.Num)
+	assert.Equal(t, "23000", mysqlErr.State)
+	assert.Contains(t, mysqlErr.Message, "execInsertSharded: getInsertShardedRoute: lookup.Create: Code: ALREADY_EXISTS")
 }

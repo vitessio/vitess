@@ -315,7 +315,7 @@ func TestConsistentLookupCreateThenSkipUpdate(t *testing.T) {
 func TestConsistentLookupCreateThenDupkey(t *testing.T) {
 	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
-	vc.AddResult(nil, errors.New("Duplicate entry"))
+	vc.AddResult(nil, errors.New("Duplicate entry, pass mysql error as it is"))
 	vc.AddResult(makeTestResult(1), nil)
 	vc.AddResult(makeTestResult(1), nil)
 	vc.AddResult(&sqltypes.Result{}, nil)
@@ -327,10 +327,8 @@ func TestConsistentLookupCreateThenDupkey(t *testing.T) {
 		}},
 		[][]byte{[]byte("test1")},
 		false /* ignoreMode */)
-	want := "duplicate entry"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("lookup(query fail) err: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Duplicate entry, pass mysql error as it is")
 	vc.verifyLog(t, []string{
 		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc10, :fromc20, :toc0) [{fromc10 1} {fromc20 2} {toc0 test1}] true",
 		"ExecutePre select toc from t where fromc1 = :fromc1 and fromc2 = :fromc2 for update [{fromc1 1} {fromc2 2} {toc test1}] false",
