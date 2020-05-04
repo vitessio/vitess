@@ -16,6 +16,24 @@
   }
 }
 
+# Query that always return empty
+"select id from user where someColumn = null"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where someColumn = null",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectNone",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from user where 1 != 1",
+    "Query": "select id from user where someColumn = null",
+    "Table": "user"
+  }
+}
+
 # Single table unique vindex route
 "select id from user where user.id = 5"
 {
