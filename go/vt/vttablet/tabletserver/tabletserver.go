@@ -230,6 +230,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	}
 	tsv.se = schema.NewEngine(tsv)
 	tsv.sh = schema.NewHistorian(tsv.se)
+	tsv.sh.SetTrackSchemaVersions(config.TrackSchemaVersions)
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
 	tsv.te = NewTxEngine(tsv)
 	tsv.txController = tsv.te
@@ -1927,6 +1928,11 @@ func (tsv *TabletServer) SetPassthroughDMLs(val bool) {
 // This function should only be used for testing.
 func (tsv *TabletServer) SetConsolidatorMode(mode string) {
 	tsv.qe.consolidatorMode = mode
+}
+
+// Historian returns the associated historian service
+func (tsv *TabletServer) Historian() schema.Historian {
+	return tsv.sh
 }
 
 // queryAsString returns a readable version of query+bind variables.
