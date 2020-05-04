@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 )
 
-//todo: pos as primary key, add timestamp and use instead of id and use default AND on update current_timestamp ...
 const createSchemaTrackingTable = `CREATE TABLE IF NOT EXISTS _vt.schema_version (
 		 id INT AUTO_INCREMENT,
 		  pos VARBINARY(10000) NOT NULL,
@@ -44,14 +43,14 @@ type trackerEngine interface {
 	GetSchema() map[string]*Table
 }
 
-//SchemaSubscriber will get notified when the schema has been updated
-type SchemaSubscriber interface {
+//Subscriber will get notified when the schema has been updated
+type Subscriber interface {
 	SchemaUpdated(gtid string, ddl string, timestamp int64)
 }
 
-var _ SchemaSubscriber = (*Tracker)(nil)
+var _ Subscriber = (*Tracker)(nil)
 
-// Tracker implements SchemaSubscriber and persists versions into the ddb
+// Tracker implements Subscriber and persists versions into the ddb
 type Tracker struct {
 	engine trackerEngine
 }
@@ -61,7 +60,7 @@ func NewTracker(engine trackerEngine) *Tracker {
 	return &Tracker{engine: engine}
 }
 
-// SchemaUpdated is called by a vstream when it encounters a DDL   //TODO multiple might come for same pos, ok?
+// SchemaUpdated is called by a vstream when it encounters a DDL
 func (st *Tracker) SchemaUpdated(gtid string, ddl string, timestamp int64) {
 
 	if gtid == "" || ddl == "" {
@@ -87,22 +86,21 @@ func (st *Tracker) SchemaUpdated(gtid string, ddl string, timestamp int64) {
 		t.PKColumns = pks
 		dbSchema.Tables = append(dbSchema.Tables, t)
 	}
-	blob, err := proto.Marshal(dbSchema)
+	blob, _ := proto.Marshal(dbSchema)
 
 	conn, err := st.engine.GetConnection(ctx)
 	if err != nil {
 		return
 	}
 	defer conn.Recycle()
-	log.Infof("Creating schema tracking table")
 	_, err = conn.Exec(ctx, createSchemaTrackingTable, 1, false)
 	if err != nil {
 		log.Errorf("Error creating schema_tracking table %v", err)
 		return
 	}
 
-	log.Infof("Inserting version for position %s: %+v", gtid, dbSchema)
-	query := fmt.Sprintf("insert ignore into _vt.schema_version "+
+	log.Infof("Inserting version for position %s: %s : %+v", gtid, ddl, len(dbSchema.Tables))
+	query := fmt.Sprintf("insert into _vt.schema_version "+
 		"(pos, ddl, schemax, time_updated) "+
 		"values (%v, %v, %v, %d)", encodeString(gtid), encodeString(ddl), encodeString(string(blob)), timestamp)
 

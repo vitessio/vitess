@@ -35,7 +35,6 @@ var (
 	engine    *Engine
 	env       *testenv.Env
 	historian schema.Historian
-	config    *tabletenv.TabletConfig
 )
 
 func TestMain(m *testing.M) {
@@ -56,7 +55,7 @@ func TestMain(m *testing.M) {
 
 		// engine cannot be initialized in testenv because it introduces
 		// circular dependencies
-		historian = schema.NewHistorian(env.SchemaEngine) //newMockHistorian
+		historian = schema.NewHistorian(env.SchemaEngine)
 		historian.Init(tabletpb.TabletType_MASTER)
 		engine = NewEngine(env.TabletEnv, env.SrvTopo, historian)
 		engine.Open(env.KeyspaceName, env.Cells[0])
@@ -74,7 +73,7 @@ func customEngine(t *testing.T, modifier func(mysql.ConnParams) mysql.ConnParams
 	config := env.TabletEnv.Config().Clone()
 	config.WatchReplication = true
 	config.DB = dbconfigs.NewTestDBConfigs(modified, modified, modified.DbName)
-	historian = schema.NewHistorian(env.SchemaEngine) //newMockHistorian
+	historian = schema.NewHistorian(env.SchemaEngine)
 	historian.Init(tabletpb.TabletType_MASTER)
 
 	engine := NewEngine(tabletenv.NewEnv(config, "VStreamerTest"), env.SrvTopo, historian)

@@ -18,10 +18,11 @@ package schema
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"sync"
+
+	"github.com/gogo/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -35,7 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-const GetSchemaVersions = "select id, pos, ddl, time_updated, schemax from _vt.schema_version where id >= %d order by id desc"
+const getSchemaVersions = "select id, pos, ddl, time_updated, schemax from _vt.schema_version where id >= %d order by id desc"
 
 // Historian defines the interface to reload a db schema or get the schema of a table for a given position
 type Historian interface {
@@ -59,7 +60,7 @@ type HistoryEngine interface {
 	GetSchema() map[string]*Table
 }
 
-// TODO: rename TableMetaData and TableMetaDataCollection: to TableLite and SchemaLite?
+// TODO: rename TableMetaData and TableMetaDataCollection: to MinimalSchema and MinimalTable?
 
 // TrackedSchema has the snapshot of the table at a given pos (reached by ddl)
 type TrackedSchema struct {
@@ -75,7 +76,7 @@ var _ Historian = (*HistorianSvc)(nil)
 // The schema version table is populated by the Tracker
 type HistorianSvc struct {
 	he                  HistoryEngine
-	lastId              int
+	lastID              int
 	schemas             []*TrackedSchema
 	isMaster            bool
 	mu                  sync.Mutex
@@ -106,7 +107,7 @@ func (h *HistorianSvc) readRow(row []sqltypes.Value) (*TrackedSchema, error) {
 	ddl := string(row[2].ToBytes())
 	timeUpdated, _ := evalengine.ToInt64(row[3])
 	sch := &binlogdata.TableMetaDataCollection{}
-	if err := json.Unmarshal(row[4].ToBytes(), sch); err != nil {
+	if err := proto.Unmarshal(row[4].ToBytes(), sch); err != nil {
 		return nil, err
 	}
 	log.Infof("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n", id, pos, ddl, len(sch.Tables), timeUpdated)
@@ -124,27 +125,29 @@ func (h *HistorianSvc) readRow(row []sqltypes.Value) (*TrackedSchema, error) {
 }
 
 // loadFromDB loads all rows from the schema_version table that the historian does not have as yet
-func (h *HistorianSvc) loadFromDB(ctx context.Context, lastId int) error {
+func (h *HistorianSvc) loadFromDB(ctx context.Context, lastID int) error {
 	conn, err := h.he.GetConnection(ctx)
 	if err != nil {
 		return err
 	}
 	defer conn.Recycle()
-	log.Infof("In loadFromDb for lastId %d", lastId)
-	tableData, err := conn.Exec(ctx, fmt.Sprintf(GetSchemaVersions, lastId), 1, true)
+	log.Infof("In loadFromDb for lastID %d", lastID)
+	tableData, err := conn.Exec(ctx, fmt.Sprintf(getSchemaVersions, lastID), 10000, true)
 	if err != nil {
 		log.Errorf("Error reading schema_tracking table %v", err)
 		return err
 	}
+	log.Infof("Received rows from schema_version: %v", len(tableData.Rows))
 	if len(tableData.Rows) > 0 {
-		log.Infof("Received rows from schema_version: %v", tableData.Rows)
-		trackedSchema, err := h.readRow(tableData.Rows[0])
-		if err != nil {
-			return err
-		}
 		h.mu.Lock()
 		defer h.mu.Unlock()
-		h.schemas = append(h.schemas, trackedSchema)
+		for _, row := range tableData.Rows {
+			trackedSchema, err := h.readRow(row)
+			if err != nil {
+				return err
+			}
+			h.schemas = append(h.schemas, trackedSchema)
+		}
 		h.sortSchemas()
 	}
 	return nil
@@ -168,7 +171,7 @@ func (h *HistorianSvc) Init(tabletType topodatapb.TabletType) error {
 	h.isMaster = tabletType == topodatapb.TabletType_MASTER
 	if h.isMaster {
 		h.Reload(ctx)
-		if err := h.loadFromDB(ctx, h.lastId); err != nil {
+		if err := h.loadFromDB(ctx, h.lastID); err != nil {
 			return err
 		}
 	}
@@ -187,19 +190,19 @@ func (h *HistorianSvc) reload(ctx context.Context) error {
 		return err
 	}
 	tables := map[string]*binlogdata.TableMetaData{}
-	log.Infof("Schema returned by engine is %v", h.he.GetSchema())
+	log.Infof("Schema returned by engine is %d", len(h.he.GetSchema()))
 	for _, t := range h.he.GetSchema() {
 		table := &binlogdata.TableMetaData{
 			Name:   t.Name.String(),
 			Fields: t.Fields,
 		}
-		pkc := make([]int64, 0)
+		var pkc []int64
 		for _, pk := range t.PKColumns {
 			pkc = append(pkc, int64(pk))
 		}
 		table.PKColumns = pkc
 		tables[table.Name] = table
-		log.Infof("Historian, found table %s", table.Name)
+		//log.Infof("Historian, found table %s", table.Name)
 	}
 	h.lastSchema = tables
 	return nil
@@ -223,6 +226,7 @@ func (h *HistorianSvc) GetTableForPos(tableName sqlparser.TableIdent, gtid strin
 			return t
 		}
 	}
+	h.reload(context.Background())
 	if h.lastSchema == nil {
 		return nil
 	}
@@ -239,10 +243,9 @@ func (h *HistorianSvc) getTableFromHistoryForPos(tableName sqlparser.TableIdent,
 	if idx >= len(h.schemas) || idx == 0 && !h.schemas[idx].pos.Equal(pos) {
 		log.Infof("Not found schema in cache for %s with pos %s", tableName, pos)
 		return nil
-	} else {
-		log.Infof("Found tracked schema. Looking for %s, found %s", pos, h.schemas[idx])
-		return h.schemas[idx].schema[tableName.String()]
 	}
+	log.Infof("Found tracked schema. Looking for %s, found %s", pos, h.schemas[idx])
+	return h.schemas[idx].schema[tableName.String()]
 }
 
 // RegisterVersionEvent is called by the vstream when it encounters a version event (an insert into _vt.schema_tracking)
@@ -252,7 +255,7 @@ func (h *HistorianSvc) RegisterVersionEvent() {
 		return
 	}
 	ctx := tabletenv.LocalContext()
-	if err := h.loadFromDB(ctx, h.lastId); err != nil {
-		log.Error("Error loading schema version information from database in RegisterVersionEvent(): %v", err)
+	if err := h.loadFromDB(ctx, h.lastID); err != nil {
+		log.Errorf("Error loading schema version information from database in RegisterVersionEvent(): %v", err)
 	}
 }

@@ -217,7 +217,6 @@ func (se *Engine) reload(ctx context.Context) error {
 	changedTables := make(map[string]*Table)
 	// created and altered contain the names of created and altered tables for broadcast.
 	var created, altered []string
-	log.Infof("In se Reload with %d tables found", len(tableData.Rows))
 	for _, row := range tableData.Rows {
 		tableName := row[0].ToString()
 		curTables[tableName] = true
@@ -225,8 +224,6 @@ func (se *Engine) reload(ctx context.Context) error {
 		if _, ok := se.tables[tableName]; ok && createTime < se.lastChange {
 			continue
 		}
-		log.Infof("Reading schema for table: %s", tableName)
-
 		table, err := LoadTable(conn, tableName, row[1].ToString(), row[3].ToString())
 		if err != nil {
 			rec.RecordError(err)

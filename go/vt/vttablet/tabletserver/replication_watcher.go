@@ -41,13 +41,13 @@ type ReplicationWatcher struct {
 	env              tabletenv.Env
 	watchReplication bool
 	vs               VStreamer
-	subscriber       schema.SchemaSubscriber
+	subscriber       schema.Subscriber
 
 	cancel context.CancelFunc
 }
 
 // NewReplicationWatcher creates a new ReplicationWatcher.
-func NewReplicationWatcher(env tabletenv.Env, vs VStreamer, config *tabletenv.TabletConfig, schemaTracker schema.SchemaSubscriber) *ReplicationWatcher {
+func NewReplicationWatcher(env tabletenv.Env, vs VStreamer, config *tabletenv.TabletConfig, schemaTracker schema.Subscriber) *ReplicationWatcher {
 	return &ReplicationWatcher{
 		env:              env,
 		vs:               vs,
@@ -86,12 +86,17 @@ func (rpw *ReplicationWatcher) Process(ctx context.Context) {
 		}},
 	}
 
+	var gtid string
 	for {
 		// The tracker will reload the schema and save it into _vt.schema_tracking when the vstream encounters a DDL.
 		err := rpw.vs.Stream(ctx, "current", filter, func(events []*binlogdatapb.VEvent) error {
 			for _, event := range events {
+				if event.Type == binlogdatapb.VEventType_GTID {
+					gtid = event.Gtid
+				}
 				if event.Type == binlogdatapb.VEventType_DDL {
-					rpw.subscriber.SchemaUpdated(event.Gtid, event.Ddl, event.Timestamp)
+					log.Infof("Calling schema updated for %s %s", gtid, event.Ddl)
+					rpw.subscriber.SchemaUpdated(gtid, event.Ddl, event.Timestamp)
 				}
 			}
 			return nil
