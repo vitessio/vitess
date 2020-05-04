@@ -19,8 +19,11 @@ package endtoend
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -57,10 +60,10 @@ func TestConsistentLookup(t *testing.T) {
 	exec(t, conn, "begin")
 	_, err = conn.ExecuteFetch("insert into t1(id1, id2) values(1, 4)", 1000, false)
 	exec(t, conn, "rollback")
-	want := "duplicate entry"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("second insert: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	mysqlErr := err.(*mysql.SQLError)
+	assert.Equal(t, 1062, mysqlErr.Num)
+	assert.Equal(t, "23000", mysqlErr.State)
 
 	// Simple delete.
 	exec(t, conn, "begin")

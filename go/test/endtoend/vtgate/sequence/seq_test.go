@@ -276,5 +276,5 @@ func TestDotTableSeq(t *testing.T) {
 	mysqlErr := err.(*mysql.SQLError)
 	assert.Equal(t, 1062, mysqlErr.Num)
 	assert.Equal(t, "23000", mysqlErr.State)
-	assert.Contains(t, mysqlErr.Message, "execInsertSharded: getInsertShardedRoute: lookup.Create: Code: ALREADY_EXISTS")
+	assert.Contains(t, mysqlErr.Message, "Duplicate entry")
 }
