@@ -58,6 +58,10 @@ var (
 		input:  "select - -1 from t",
 		output: "select 1 from t",
 	}, {
+		input: "select a from t",
+	}, {
+		input: "select $ from t",
+	}, {
 		input:  "select 1 from t // aa\n",
 		output: "select 1 from t",
 	}, {
@@ -2585,9 +2589,6 @@ var (
 		output       string
 		excludeMulti bool // Don't use in the ParseNext multi-statement parsing tests.
 	}{{
-		input:  "select $ from t",
-		output: "syntax error at position 9 near '$'",
-	}, {
 		input:  "select : from t",
 		output: "syntax error at position 9 near ':'",
 	}, {

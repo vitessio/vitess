@@ -19,8 +19,11 @@ package vtgate
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
 
@@ -57,10 +60,11 @@ func TestConsistentLookup(t *testing.T) {
 	exec(t, conn, "begin")
 	_, err = conn.ExecuteFetch("insert into t1(id1, id2) values(1, 4)", 1000, false)
 	exec(t, conn, "rollback")
-	want := "duplicate entry"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("second insert: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	mysqlErr := err.(*mysql.SQLError)
+	assert.Equal(t, 1062, mysqlErr.Num)
+	assert.Equal(t, "23000", mysqlErr.State)
+	assert.Contains(t, mysqlErr.Message, "Duplicate entry")
 
 	// Simple delete.
 	exec(t, conn, "begin")
@@ -501,6 +505,30 @@ func TestConsistentLookupUpdate(t *testing.T) {
 	require.Empty(t, qr.Rows)
 	qr = exec(t, conn, "select * from t4_id2_idx")
 	require.Empty(t, qr.Rows)
+}
+
+func TestSelectNull(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "begin")
+	exec(t, conn, "insert into t5_null_vindex(id, idx) values(1, 'a'), (2, 'b'), (3, null)")
+	exec(t, conn, "commit")
+	qr := exec(t, conn, "select id, idx from t5_null_vindex order by id")
+	utils.MustMatch(t, fmt.Sprintf("%v", qr.Rows), "[[INT64(1) VARCHAR(\"a\")] [INT64(2) VARCHAR(\"b\")] [INT64(3) NULL]]", "")
+
+	qr = exec(t, conn, "select id, idx from t5_null_vindex where idx = null")
+	require.Empty(t, qr.Rows)
+
+	qr = exec(t, conn, "select id, idx from t5_null_vindex where idx is null")
+	utils.MustMatch(t, fmt.Sprintf("%v", qr.Rows), "[[INT64(3) NULL]]", "")
+
+	qr = exec(t, conn, "select id, idx from t5_null_vindex where idx is not null order by id")
+	utils.MustMatch(t, fmt.Sprintf("%v", qr.Rows), "[[INT64(1) VARCHAR(\"a\")] [INT64(2) VARCHAR(\"b\")]]", "")
+
+	exec(t, conn, "delete from t5_null_vindex")
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {

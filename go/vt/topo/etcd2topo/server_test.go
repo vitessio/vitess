@@ -141,6 +141,9 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs, func
 	}
 
 	tlsConfig, err := tlsInfo.ClientConfig()
+	if err != nil {
+		t.Fatalf("failed to get tls.Config: %v", err)
+	}
 
 	var cli *clientv3.Client
 	// Create client
