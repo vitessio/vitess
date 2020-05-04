@@ -211,7 +211,7 @@ func newCLCommon(name string, m map[string]string) (*clCommon, error) {
 
 func (lu *clCommon) SetOwnerInfo(keyspace, table string, cols []sqlparser.ColIdent) error {
 	lu.keyspace = keyspace
-	lu.ownerTable = table
+	lu.ownerTable = sqlparser.String(sqlparser.NewTableIdent(table))
 	if len(cols) != len(lu.lkp.FromColumns) {
 		return fmt.Errorf("owner table column count does not match vindex %s", lu.name)
 	}

@@ -283,7 +283,7 @@ func TestConsistentLookupCreateThenUpdate(t *testing.T) {
 	vc.verifyLog(t, []string{
 		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc10, :fromc20, :toc0) [{fromc10 1} {fromc20 2} {toc0 test1}] true",
 		"ExecutePre select toc from t where fromc1 = :fromc1 and fromc2 = :fromc2 for update [{fromc1 1} {fromc2 2} {toc test1}] false",
-		"ExecuteKeyspaceID select fc1 from t1 where fc1 = :fromc1 and fc2 = :fromc2 lock in share mode [{fromc1 1} {fromc2 2} {toc test1}] false",
+		"ExecuteKeyspaceID select fc1 from `dot.t1` where fc1 = :fromc1 and fc2 = :fromc2 lock in share mode [{fromc1 1} {fromc2 2} {toc test1}] false",
 		"ExecutePre update t set toc=:toc where fromc1 = :fromc1 and fromc2 = :fromc2 [{fromc1 1} {fromc2 2} {toc test1}] true",
 	})
 }
@@ -308,7 +308,7 @@ func TestConsistentLookupCreateThenSkipUpdate(t *testing.T) {
 	vc.verifyLog(t, []string{
 		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc10, :fromc20, :toc0) [{fromc10 1} {fromc20 2} {toc0 1}] true",
 		"ExecutePre select toc from t where fromc1 = :fromc1 and fromc2 = :fromc2 for update [{fromc1 1} {fromc2 2} {toc 1}] false",
-		"ExecuteKeyspaceID select fc1 from t1 where fc1 = :fromc1 and fc2 = :fromc2 lock in share mode [{fromc1 1} {fromc2 2} {toc 1}] false",
+		"ExecuteKeyspaceID select fc1 from `dot.t1` where fc1 = :fromc1 and fc2 = :fromc2 lock in share mode [{fromc1 1} {fromc2 2} {toc 1}] false",
 	})
 }
 
@@ -334,7 +334,7 @@ func TestConsistentLookupCreateThenDupkey(t *testing.T) {
 	vc.verifyLog(t, []string{
 		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc10, :fromc20, :toc0) [{fromc10 1} {fromc20 2} {toc0 test1}] true",
 		"ExecutePre select toc from t where fromc1 = :fromc1 and fromc2 = :fromc2 for update [{fromc1 1} {fromc2 2} {toc test1}] false",
-		"ExecuteKeyspaceID select fc1 from t1 where fc1 = :fromc1 and fc2 = :fromc2 lock in share mode [{fromc1 1} {fromc2 2} {toc test1}] false",
+		"ExecuteKeyspaceID select fc1 from `dot.t1` where fc1 = :fromc1 and fc2 = :fromc2 lock in share mode [{fromc1 1} {fromc2 2} {toc test1}] false",
 	})
 }
 
@@ -499,7 +499,7 @@ func createConsistentLookup(t *testing.T, name string, writeOnly bool) SingleCol
 		sqlparser.NewColIdent("fc1"),
 		sqlparser.NewColIdent("fc2"),
 	}
-	if err := l.(WantOwnerInfo).SetOwnerInfo("ks", "t1", cols); err != nil {
+	if err := l.(WantOwnerInfo).SetOwnerInfo("ks", "dot.t1", cols); err != nil {
 		t.Fatal(err)
 	}
 	return l.(SingleColumn)
