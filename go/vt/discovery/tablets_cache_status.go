@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/gogo/protobuf/proto"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -38,6 +40,19 @@ func (tsl TabletStatsList) Swap(i, j int) {
 	tsl[i], tsl[j] = tsl[j], tsl[i]
 }
 
+func (tsl TabletStatsList) deepEqual(other TabletStatsList) bool {
+	if len(tsl) != len(other) {
+		return false
+	}
+	for i, th := range tsl {
+		o := other[i]
+		if !th.DeepEqual(o) {
+			return false
+		}
+	}
+	return true
+}
+
 // StatusAsHTML returns an HTML version of the status.
 func (tcs *TabletsCacheStatus) StatusAsHTML() template.HTML {
 	tLinks := make([]string, 0, 1)
@@ -64,6 +79,12 @@ func (tcs *TabletsCacheStatus) StatusAsHTML() template.HTML {
 	return template.HTML(strings.Join(tLinks, "<br>"))
 }
 
+func (tcs *TabletsCacheStatus) deepEqual(otcs *TabletsCacheStatus) bool {
+	return tcs.Cell == otcs.Cell &&
+		proto.Equal(tcs.Target, otcs.Target) &&
+		tcs.TabletsStats.deepEqual(otcs.TabletsStats)
+}
+
 // TabletsCacheStatusList is used for sorting.
 type TabletsCacheStatusList []*TabletsCacheStatus
 
@@ -81,4 +102,17 @@ func (tcsl TabletsCacheStatusList) Less(i, j int) bool {
 // Swap is part of sort.Interface
 func (tcsl TabletsCacheStatusList) Swap(i, j int) {
 	tcsl[i], tcsl[j] = tcsl[j], tcsl[i]
+}
+
+func (tcsl TabletsCacheStatusList) deepEqual(other TabletsCacheStatusList) bool {
+	if len(tcsl) != len(other) {
+		return false
+	}
+	for i, tcs := range tcsl {
+		otcs := other[i]
+		if !tcs.deepEqual(otcs) {
+			return false
+		}
+	}
+	return true
 }
