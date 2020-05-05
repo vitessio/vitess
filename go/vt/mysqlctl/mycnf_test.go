@@ -96,7 +96,7 @@ func NoTestMycnfHook(t *testing.T) {
 	// this is not being passed, so it should be nil
 	os.Setenv("MY_VAR", "myvalue")
 
-	dbconfigs.GlobalDBConfigs.Init(cnf.SocketFile)
+	dbconfigs.GlobalDBConfigs.InitWithSocket(cnf.SocketFile)
 	mysqld := NewMysqld(&dbconfigs.GlobalDBConfigs)
 	servenv.OnClose(mysqld.Close)
 

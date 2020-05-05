@@ -46,7 +46,7 @@ func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int32)
 		mycnf.SocketFile = mysqlSocket
 	}
 
-	dbconfigs.GlobalDBConfigs.Init(mycnf.SocketFile)
+	dbconfigs.GlobalDBConfigs.InitWithSocket(mycnf.SocketFile)
 	return NewMysqld(&dbconfigs.GlobalDBConfigs), mycnf, nil
 }
 
@@ -60,6 +60,6 @@ func OpenMysqldAndMycnf(tabletUID uint32) (*Mysqld, *Mycnf, error) {
 		return nil, nil, fmt.Errorf("couldn't read my.cnf file: %v", err)
 	}
 
-	dbconfigs.GlobalDBConfigs.Init(mycnf.SocketFile)
+	dbconfigs.GlobalDBConfigs.InitWithSocket(mycnf.SocketFile)
 	return NewMysqld(&dbconfigs.GlobalDBConfigs), mycnf, nil
 }
