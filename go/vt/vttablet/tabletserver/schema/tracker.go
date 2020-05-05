@@ -64,16 +64,16 @@ func NewTracker(engine trackerEngine) *Tracker {
 func (t *Tracker) SchemaUpdated(gtid string, ddl string, timestamp int64) error {
 
 	if gtid == "" || ddl == "" {
-		return fmt.Errorf("Got invalid gtid or ddl in SchemaUpdated")
+		return fmt.Errorf("got invalid gtid or ddl in SchemaUpdated")
 	}
 	ctx := context.Background()
 	t.engine.Reload(ctx)
 	tables := t.engine.GetSchema()
-	dbSchema := &binlogdatapb.TableMetaDataCollection{
-		Tables: []*binlogdatapb.TableMetaData{},
+	dbSchema := &binlogdatapb.MinimalSchema{
+		Tables: []*binlogdatapb.MinimalTable{},
 	}
 	for name, table := range tables {
-		t := &binlogdatapb.TableMetaData{
+		t := &binlogdatapb.MinimalTable{
 			Name:   name,
 			Fields: table.Fields,
 		}

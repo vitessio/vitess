@@ -67,7 +67,7 @@ func newMockHistorian(he schema.HistoryEngine) *mockHistorian {
 	return &sh
 }
 
-func (h *mockHistorian) GetTableForPos(tableName sqlparser.TableIdent, pos string) *binlogdatapb.TableMetaData {
+func (h *mockHistorian) GetTableForPos(tableName sqlparser.TableIdent, pos string) *binlogdatapb.MinimalTable {
 	return nil
 }
 
