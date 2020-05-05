@@ -97,7 +97,7 @@ func main() {
 	servenv.Init()
 	tabletenv.Init()
 
-	dbconfigs.GlobalDBConfigs.Init("")
+	dbconfigs.GlobalDBConfigs.InitWithSocket("")
 	mysqld := mysqlctl.NewMysqld(&dbconfigs.GlobalDBConfigs)
 	servenv.OnClose(mysqld.Close)
 

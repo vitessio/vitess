@@ -104,9 +104,9 @@ func main() {
 	// If connection parameters were specified, socketFile will be empty.
 	// Otherwise, the socketFile (read from mycnf) will be used to initialize
 	// dbconfigs.
-	config.DB.Init(socketFile)
+	config.DB.InitWithSocket(socketFile)
 	for _, cfg := range config.ExternalConnections {
-		cfg.Init("")
+		cfg.InitWithSocket("")
 	}
 
 	if *tableACLConfig != "" {

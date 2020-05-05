@@ -313,14 +313,14 @@ func (dbcfgs *DBConfigs) Clone() *DBConfigs {
 	return &result
 }
 
-// Init will initialize all the necessary connection parameters.
+// InitWithSocket will initialize all the necessary connection parameters.
 // Precedence is as follows: if UserConfig settings are set,
 // they supersede all other settings.
 // The next priority is with per-user connection
 // parameters. This is only for legacy support.
 // If no per-user parameters are supplied, then the defaultSocketFile
 // is used to initialize the per-user conn params.
-func (dbcfgs *DBConfigs) Init(defaultSocketFile string) {
+func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string) {
 	for _, userKey := range All {
 		uc, cp := dbcfgs.getParams(userKey, dbcfgs)
 		// TODO @rafael: For ExternalRepl we need to respect the provided host / port
