@@ -328,6 +328,15 @@ func NewActionAgent(
 		agent.registerQueryService()
 	})
 
+	// Update our state (need the action lock).
+	// We do this upfront to prevent this from racing with restoreFromBackup
+	// in case it gets launched.
+	if err := agent.lock(batchCtx); err != nil {
+		return nil, err
+	}
+	agent.updateState(batchCtx, agent.initialTablet, "Start")
+	agent.unlock()
+
 	// two cases then:
 	// - restoreFromBackup is set: we restore, then initHealthCheck, all
 	//   in the background
@@ -361,16 +370,6 @@ func NewActionAgent(
 				return nil, vterrors.Wrap(err, "failed to -init_populate_metadata")
 			}
 		}
-
-		// Update our state (need the action lock).
-		if err := agent.lock(batchCtx); err != nil {
-			return nil, err
-		}
-		if err := agent.refreshTablet(batchCtx, "Start"); err != nil {
-			agent.unlock()
-			return nil, err
-		}
-		agent.unlock()
 
 		// synchronously start health check if needed
 		agent.initHealthCheck()
@@ -425,9 +424,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		panic(vterrors.Wrap(err, "agent.lock() failed"))
 	}
 	defer agent.unlock()
-	if err := agent.refreshTablet(batchCtx, "Start"); err != nil {
-		panic(vterrors.Wrapf(err, "agent.refreshTablet(%v) failed", tabletAlias))
-	}
+	agent.updateState(batchCtx, agent.initialTablet, "Start")
 
 	return agent
 }
@@ -477,9 +474,7 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 		panic(vterrors.Wrap(err, "agent.lock() failed"))
 	}
 	defer agent.unlock()
-	if err := agent.refreshTablet(batchCtx, "Start"); err != nil {
-		panic(vterrors.Wrapf(err, "agent.refreshTablet(%v) failed", tabletAlias))
-	}
+	agent.updateState(batchCtx, agent.initialTablet, "Start")
 
 	return agent
 }
@@ -667,6 +662,9 @@ func (agent *ActionAgent) Start(ctx context.Context, dbcfgs *dbconfigs.DBConfigs
 	if _, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, f); err != nil {
 		return err
 	}
+
+	// Initialize masterTermStartTime
+	agent.setMasterTermStartTime(logutil.ProtoToTime(agent.initialTablet.MasterTermStartTime))
 
 	// Verify the topology is correct.
 	agent.verifyTopology(ctx)

@@ -176,6 +176,7 @@ func (agent *ActionAgent) updateState(ctx context.Context, newTablet *topodatapb
 	log.Infof("Running tablet callback because: %v", reason)
 	agent.changeCallback(ctx, oldTablet, newTablet)
 	agent.setTablet(newTablet)
+	agent.publishState(ctx)
 	event.Dispatch(&events.StateChange{
 		OldTablet: *oldTablet,
 		NewTablet: *newTablet,
