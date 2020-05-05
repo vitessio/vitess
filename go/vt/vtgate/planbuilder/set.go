@@ -162,6 +162,50 @@ func buildSetOpCheckAndIgnore(expr *sqlparser.SetExpr, vschema ContextVSchema) (
 	}, nil
 }
 
+func expressionOkToDelegateToTablet(e sqlparser.Expr) bool {
+	valid := true
+	sqlparser.Rewrite(e, nil, func(cursor *sqlparser.Cursor) bool {
+		switch n := cursor.Node().(type) {
+		case *sqlparser.Subquery, *sqlparser.TimestampFuncExpr, *sqlparser.CurTimeFuncExpr:
+			valid = false
+			return false
+		case *sqlparser.FuncExpr:
+			_, ok := validFuncs[n.Name.Lowered()]
+			valid = ok
+			return ok
+		}
+		return true
+	})
+	return valid
+}
+
+func buildSetOpVarSet(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error) {
+	keyspace, dest, err := resolveDestination(vschema)
+	if err != nil && !strings.HasPrefix(err.Error(), "no keyspace in database name specified") {
+		return nil, err
+	}
+
+	return &engine.SysVarSet{
+		Name:              expr.Name.Lowered(),
+		Keyspace:          keyspace,
+		TargetDestination: dest,
+		Expr:              sqlparser.String(expr.Expr),
+	}, nil
+}
+
+func resolveDestination(vschema ContextVSchema) (*vindexes.Keyspace, key.Destination, error) {
+	keyspace, err := vschema.DefaultKeyspace()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	dest := vschema.Destination()
+	if dest == nil {
+		dest = key.DestinationAnyShard{}
+	}
+	return keyspace, dest, nil
+}
+
 // whitelist of functions knows to be safe to pass through to mysql for evaluation
 // this list tries to not include functions that might return different results on different tablets
 var validFuncs = map[string]interface{}{
@@ -294,48 +338,4 @@ var validFuncs = map[string]interface{}{
 	"unhex":            nil,
 	"upper":            nil,
 	"weight_string":    nil,
-}
-
-func expressionOkToDelegateToTablet(e sqlparser.Expr) bool {
-	valid := true
-	sqlparser.Rewrite(e, nil, func(cursor *sqlparser.Cursor) bool {
-		switch n := cursor.Node().(type) {
-		case *sqlparser.Subquery, *sqlparser.TimestampFuncExpr, *sqlparser.CurTimeFuncExpr:
-			valid = false
-			return false
-		case *sqlparser.FuncExpr:
-			_, ok := validFuncs[n.Name.Lowered()]
-			valid = ok
-			return ok
-		}
-		return true
-	})
-	return valid
-}
-
-func buildSetOpVarSet(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error) {
-	keyspace, dest, err := resolveDestination(vschema)
-	if err != nil && !strings.HasPrefix(err.Error(), "no keyspace in database name specified") {
-		return nil, err
-	}
-
-	return &engine.SysVarSet{
-		Name:              expr.Name.Lowered(),
-		Keyspace:          keyspace,
-		TargetDestination: dest,
-		Expr:              sqlparser.String(expr.Expr),
-	}, nil
-}
-
-func resolveDestination(vschema ContextVSchema) (*vindexes.Keyspace, key.Destination, error) {
-	keyspace, err := vschema.DefaultKeyspace()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	dest := vschema.Destination()
-	if dest == nil {
-		dest = key.DestinationAnyShard{}
-	}
-	return keyspace, dest, nil
 }

@@ -54,7 +54,6 @@
   "Original": "set @@sql_safe_updates = 1",
   "Instructions": {
     "OperatorType": "Set",
-    "Variant": "",
     "Ops": [
       {
         "Type": "SysVarSet",
@@ -65,6 +64,11 @@
         },
         "TargetDestination": {},
         "Expr": "1"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
       }
     ]
   }
