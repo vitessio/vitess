@@ -65,8 +65,9 @@ func customEngine(t *testing.T, modifier func(mysql.ConnParams) mysql.ConnParams
 	original, err := env.Dbcfgs.AppWithDB().MysqlParams()
 	require.NoError(t, err)
 	modified := modifier(*original)
-	dbcfgs := dbconfigs.NewTestDBConfigs(modified, modified, modified.DbName)
-	engine := NewEngine(tabletenv.NewTestEnv(env.TabletEnv.Config(), dbcfgs, "VStreamerTest"), env.SrvTopo, env.SchemaEngine)
+	config := env.TabletEnv.Config().Clone()
+	config.DB = dbconfigs.NewTestDBConfigs(modified, modified, modified.DbName)
+	engine := NewEngine(tabletenv.NewEnv(config, "VStreamerTest"), env.SrvTopo, env.SchemaEngine)
 	engine.Open(env.KeyspaceName, env.Cells[0])
 	return engine
 }

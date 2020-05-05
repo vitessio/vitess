@@ -836,7 +836,7 @@ type fakeTabletServer struct {
 func newFakeTabletServer() *fakeTabletServer {
 	config := tabletenv.NewDefaultConfig()
 	return &fakeTabletServer{
-		Env: tabletenv.NewTestEnv(config, nil, "MessagerTest"),
+		Env: tabletenv.NewEnv(config, "MessagerTest"),
 	}
 }
 

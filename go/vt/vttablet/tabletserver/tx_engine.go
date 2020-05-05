@@ -340,7 +340,7 @@ func (te *TxEngine) transitionTo(nextState txEngineState) error {
 // up the metadata tables.
 func (te *TxEngine) Init() error {
 	if te.twopcEnabled {
-		return te.twoPC.Init(te.env.DBConfigs().DbaWithDB())
+		return te.twoPC.Init(te.env.Config().DB.DbaWithDB())
 	}
 	return nil
 }
@@ -349,10 +349,10 @@ func (te *TxEngine) Init() error {
 // all previously prepared transactions from the redo log.
 // this should only be called when the state is already locked
 func (te *TxEngine) open() {
-	te.txPool.Open(te.env.DBConfigs().AppWithDB(), te.env.DBConfigs().DbaWithDB(), te.env.DBConfigs().AppDebugWithDB())
+	te.txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
 
 	if te.twopcEnabled && te.state == AcceptingReadAndWrite {
-		te.twoPC.Open(te.env.DBConfigs())
+		te.twoPC.Open(te.env.Config().DB)
 		if err := te.prepareFromRedo(); err != nil {
 			// If this operation fails, we choose to raise an alert and
 			// continue anyway. Serving traffic is considered more important

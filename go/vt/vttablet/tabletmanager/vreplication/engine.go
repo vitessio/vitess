@@ -24,7 +24,9 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
@@ -88,6 +90,7 @@ type Engine struct {
 	dbName          string
 
 	journaler map[string]*journalEvent
+	ec        *externalConnector
 }
 
 type journalEvent struct {
@@ -98,15 +101,34 @@ type journalEvent struct {
 
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
-func NewEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactory func() binlogplayer.DBClient, dbName string) *Engine {
+func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon) *Engine {
+	dbClientFactory := func() binlogplayer.DBClient {
+		return binlogplayer.NewDBClient(config.DB.FilteredWithDB())
+	}
 	vre := &Engine{
 		controllers:     make(map[int]*controller),
 		ts:              ts,
 		cell:            cell,
 		mysqld:          mysqld,
 		dbClientFactory: dbClientFactory,
-		dbName:          dbName,
+		dbName:          config.DB.DBName,
 		journaler:       make(map[string]*journalEvent),
+		ec:              newExternalConnector(config.ExternalConnections),
+	}
+	return vre
+}
+
+// NewTestEngine creates a new Engine for testing.
+func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactory func() binlogplayer.DBClient, dbname string, externalConfig map[string]*dbconfigs.DBConfigs) *Engine {
+	vre := &Engine{
+		controllers:     make(map[int]*controller),
+		ts:              ts,
+		cell:            cell,
+		mysqld:          mysqld,
+		dbClientFactory: dbClientFactory,
+		dbName:          dbname,
+		journaler:       make(map[string]*journalEvent),
+		ec:              newExternalConnector(externalConfig),
 	}
 	return vre
 }
@@ -226,6 +248,7 @@ func (vre *Engine) Close() {
 	}
 	log.Infof("Shutting down VReplication engine")
 
+	vre.ec.Close()
 	vre.cancel()
 	// We still have to wait for all controllers to stop.
 	for _, ct := range vre.controllers {

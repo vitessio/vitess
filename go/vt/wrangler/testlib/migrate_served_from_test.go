@@ -106,7 +106,7 @@ func TestMigrateServedFrom(t *testing.T) {
 	// Override with a fake VREngine after Agent is initialized in action loop.
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	destMaster.Agent.VREngine = vreplication.NewEngine(ts, "", destMaster.FakeMysqlDaemon, dbClientFactory, dbClient.DBName())
+	destMaster.Agent.VREngine = vreplication.NewTestEngine(ts, "", destMaster.FakeMysqlDaemon, dbClientFactory, dbClient.DBName(), nil)
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	if err := destMaster.Agent.VREngine.Open(context.Background()); err != nil {
 		t.Fatal(err)

@@ -44,6 +44,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -54,7 +55,6 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/binlog"
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/health"
 	"vitess.io/vitess/go/vt/key"
@@ -67,6 +67,7 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -250,7 +251,7 @@ func NewActionAgent(
 	mysqld mysqlctl.MysqlDaemon,
 	queryServiceControl tabletserver.Controller,
 	tabletAlias *topodatapb.TabletAlias,
-	dbcfgs *dbconfigs.DBConfigs,
+	config *tabletenv.TabletConfig,
 	mycnf *mysqlctl.Mycnf,
 	port, gRPCPort int32,
 ) (agent *ActionAgent, err error) {
@@ -297,7 +298,7 @@ func NewActionAgent(
 
 	var mysqlHost string
 	var mysqlPort int32
-	if appConfig, _ := dbcfgs.AppWithDB().MysqlParams(); appConfig.Host != "" {
+	if appConfig, _ := config.DB.AppWithDB().MysqlParams(); appConfig.Host != "" {
 		mysqlHost = appConfig.Host
 		mysqlPort = int32(appConfig.Port)
 
@@ -316,19 +317,12 @@ func NewActionAgent(
 	}
 
 	// Start will get the tablet info, and update our state from it
-	if err := agent.Start(batchCtx, dbcfgs, mysqlHost, int32(mysqlPort), port, gRPCPort, true); err != nil {
+	if err := agent.Start(batchCtx, config.DB, mysqlHost, int32(mysqlPort), port, gRPCPort, true); err != nil {
 		return nil, err
 	}
 
-	vreplication.InitVStreamerClient(agent.DBConfigs)
-
 	// The db name is set by the Start function called above
-	filteredWithDBParams, _ := agent.DBConfigs.FilteredWithDB().MysqlParams()
-	agent.VREngine = vreplication.NewEngine(ts, tabletAlias.Cell, mysqld, func() binlogplayer.DBClient {
-		return binlogplayer.NewDBClient(agent.DBConfigs.FilteredWithDB())
-	},
-		filteredWithDBParams.DbName,
-	)
+	agent.VREngine = vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld)
 	servenv.OnTerm(agent.VREngine.Close)
 
 	// Run a background task to rebuild the SrvKeyspace in our cell/keyspace
@@ -418,7 +412,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		TabletAlias:         tabletAlias,
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
-		VREngine:            vreplication.NewEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient, ti.DbName()),
+		VREngine:            vreplication.NewTestEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient, ti.DbName(), nil),
 		History:             history.New(historyLength),
 		DemoteMasterType:    demoteMasterTabletType,
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
@@ -462,7 +456,7 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 		TabletAlias:         tabletAlias,
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
-		VREngine:            vreplication.NewEngine(nil, "", nil, nil, ""),
+		VREngine:            vreplication.NewTestEngine(nil, "", nil, nil, "", nil),
 		gotMysqlPort:        true,
 		History:             history.New(historyLength),
 		DemoteMasterType:    demoteMasterType,
@@ -683,8 +677,8 @@ func (agent *ActionAgent) Start(ctx context.Context, dbcfgs *dbconfigs.DBConfigs
 	// Verify the topology is correct.
 	agent.verifyTopology(ctx)
 
-	dbname := topoproto.TabletDbName(agent.initialTablet)
-	agent.DBConfigs = dbcfgs.WithDBName(dbname)
+	dbcfgs.DBName = topoproto.TabletDbName(agent.initialTablet)
+	agent.DBConfigs = dbcfgs
 
 	// Create and register the RPC services from UpdateStream.
 	// (it needs the dbname, so it has to be delayed up to here,

@@ -157,10 +157,6 @@ type TabletServer struct {
 	alsoAllow []topodatapb.TabletType
 	requests  sync.WaitGroup
 
-	// The following variables should be initialized only once
-	// before starting the tabletserver.
-	dbconfigs *dbconfigs.DBConfigs
-
 	// The following variables should only be accessed within
 	// the context of a startRequest-endRequest.
 	se        *schema.Engine
@@ -277,11 +273,6 @@ func (tsv *TabletServer) Config() *tabletenv.TabletConfig {
 	return tsv.config
 }
 
-// DBConfigs satisfies tabletenv.Env.
-func (tsv *TabletServer) DBConfigs() *dbconfigs.DBConfigs {
-	return tsv.dbconfigs
-}
-
 // Stats satisfies tabletenv.Env.
 func (tsv *TabletServer) Stats() *tabletenv.Stats {
 	return tsv.stats
@@ -359,9 +350,9 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "InitDBConfig failed, current state: %s", stateName[tsv.state])
 	}
 	tsv.target = target
-	tsv.dbconfigs = dbcfgs
+	tsv.config.DB = dbcfgs
 
-	tsv.se.InitDBConfig(tsv.dbconfigs.DbaWithDB())
+	tsv.se.InitDBConfig(tsv.config.DB.DbaWithDB())
 	return nil
 }
 
@@ -514,7 +505,7 @@ func (tsv *TabletServer) decideAction(tabletType topodatapb.TabletType, serving 
 }
 
 func (tsv *TabletServer) fullStart() (err error) {
-	c, err := dbconnpool.NewDBConnection(context.TODO(), tsv.dbconfigs.AppWithDB())
+	c, err := dbconnpool.NewDBConnection(context.TODO(), tsv.config.DB.AppWithDB())
 	if err != nil {
 		log.Errorf("error creating db app connection: %v", err)
 		return err

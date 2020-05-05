@@ -707,5 +707,5 @@ func newTxPool() *TxPool {
 	config.OlapReadPool.IdleTimeoutSeconds = 30
 	config.TxPool.IdleTimeoutSeconds = 30
 	limiter := &txlimiter.TxAllowAll{}
-	return NewTxPool(tabletenv.NewTestEnv(config, nil, "TabletServerTest"), limiter)
+	return NewTxPool(tabletenv.NewEnv(config, "TabletServerTest"), limiter)
 }
