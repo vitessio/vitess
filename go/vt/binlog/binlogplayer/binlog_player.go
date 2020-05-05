@@ -492,10 +492,11 @@ func (blp *BinlogPlayer) setVReplicationState(state, message string) error {
 // transaction_timestamp: timestamp of the transaction (from the master).
 // state: Running, Error or Stopped.
 // message: Reason for current state.
-var CreateVtReplication = []string{
-	"CREATE DATABASE IF NOT EXISTS _vt",
-	"DROP TABLE IF EXISTS _vt.blp_checkpoint",
-	`CREATE TABLE IF NOT EXISTS _vt.vreplication (
+func CreateVReplicationTable() []string {
+	return []string{
+		"CREATE DATABASE IF NOT EXISTS _vt",
+		"DROP TABLE IF EXISTS _vt.blp_checkpoint",
+		`CREATE TABLE IF NOT EXISTS _vt.vreplication (
   id INT AUTO_INCREMENT,
   workflow VARBINARY(1000),
   source VARBINARY(10000) NOT NULL,
@@ -512,6 +513,7 @@ var CreateVtReplication = []string{
   db_name VARBINARY(255) NOT NULL,
   PRIMARY KEY (id)
 ) ENGINE=InnoDB`,
+	}
 }
 
 // AlterVReplicationTable adds new columns to vreplication table
