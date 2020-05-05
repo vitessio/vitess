@@ -450,7 +450,6 @@ func TestCreateDBAndTable(t *testing.T) {
 	dbClient.ExpectRequest("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.schema_version.*", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequestRE("create table if not exists _vt.resharding_journal.*", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 
