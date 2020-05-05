@@ -343,14 +343,14 @@ message VEvent {
   int64 current_time = 20;
 }
 
-message TableMetaData {
+message MinimalTable {
     string name = 1;
     repeated query.Field fields = 2;
     repeated int64 p_k_columns = 3;
 }
 
-message TableMetaDataCollection {
-    repeated TableMetaData tables = 1;
+message MinimalSchema {
+    repeated MinimalTable tables = 1;
 }
 
 // VStreamRequest is the payload for VStreamer

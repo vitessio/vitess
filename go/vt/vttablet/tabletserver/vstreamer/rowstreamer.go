@@ -140,7 +140,7 @@ func (rs *rowStreamer) buildPlan() error {
 	return err
 }
 
-func buildPKColumns(st *binlogdatapb.TableMetaData) ([]int, error) {
+func buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, error) {
 	var pkColumns = make([]int, 0)
 	if len(st.PKColumns) == 0 {
 		pkColumns = make([]int, len(st.Fields))

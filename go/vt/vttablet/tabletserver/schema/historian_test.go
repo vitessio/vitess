@@ -29,7 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-func getTable(name string, fieldNames []string, fieldTypes []querypb.Type, pks []int64) *binlogdatapb.TableMetaData {
+func getTable(name string, fieldNames []string, fieldTypes []querypb.Type, pks []int64) *binlogdatapb.MinimalTable {
 	if name == "" || len(fieldNames) == 0 || len(fieldNames) != len(fieldTypes) || len(pks) == 0 {
 		return nil
 	}
@@ -41,7 +41,7 @@ func getTable(name string, fieldNames []string, fieldTypes []querypb.Type, pks [
 			Table: name,
 		})
 	}
-	table := &binlogdatapb.TableMetaData{
+	table := &binlogdatapb.MinimalTable{
 		Name:      name,
 		Fields:    fields,
 		PKColumns: pks,
@@ -49,12 +49,12 @@ func getTable(name string, fieldNames []string, fieldTypes []querypb.Type, pks [
 	return table
 }
 
-func getDbSchemaBlob(t *testing.T, tables map[string]*binlogdatapb.TableMetaData) string {
-	dbSchema := &binlogdatapb.TableMetaDataCollection{
-		Tables: []*binlogdatapb.TableMetaData{},
+func getDbSchemaBlob(t *testing.T, tables map[string]*binlogdatapb.MinimalTable) string {
+	dbSchema := &binlogdatapb.MinimalSchema{
+		Tables: []*binlogdatapb.MinimalTable{},
 	}
 	for name, table := range tables {
-		t := &binlogdatapb.TableMetaData{
+		t := &binlogdatapb.MinimalTable{
 			Name:   name,
 			Fields: table.Fields,
 		}
@@ -108,7 +108,7 @@ func TestHistorian(t *testing.T) {
 	}}
 
 	table := getTable("t1", []string{"id1", "id2"}, []querypb.Type{querypb.Type_INT32, querypb.Type_INT32}, []int64{0})
-	tables := make(map[string]*binlogdatapb.TableMetaData)
+	tables := make(map[string]*binlogdatapb.MinimalTable)
 	tables["t1"] = table
 	blob1 = getDbSchemaBlob(t, tables)
 	db.AddQuery("select id, pos, ddl, time_updated, schemax from _vt.schema_version where id > 0 order by id asc", &sqltypes.Result{
