@@ -103,14 +103,9 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 }
 
 func planTabletInput(vschema ContextVSchema, tabletExpressions []*sqlparser.SetExpr) (engine.Primitive, error) {
-	keyspace, err := vschema.DefaultKeyspace()
+	ks, dest, err := resolveDestination(vschema)
 	if err != nil {
 		return nil, err
-	}
-
-	dest := vschema.Destination()
-	if dest == nil {
-		dest = key.DestinationAnyShard{}
 	}
 
 	var expr []string
@@ -120,7 +115,7 @@ func planTabletInput(vschema ContextVSchema, tabletExpressions []*sqlparser.SetE
 	query := fmt.Sprintf("select %s from dual", strings.Join(expr, ","))
 
 	primitive := &engine.Send{
-		Keyspace:          keyspace,
+		Keyspace:          ks,
 		TargetDestination: dest,
 		Query:             query,
 		IsDML:             false,
@@ -140,18 +135,9 @@ func buildSetOpIgnore(expr *sqlparser.SetExpr, _ ContextVSchema) (engine.SetOp, 
 }
 
 func buildSetOpCheckAndIgnore(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error) {
-	keyspace, _, err := resolveDestination(vschema)
+	keyspace, dest, err := resolveDestination(vschema)
 	if err != nil {
-		if strings.HasPrefix(err.Error(), "no keyspace in database name specified") {
-			//TODO: Record warning for switching plan construct.
-			return buildSetOpIgnore(expr, vschema)
-		}
 		return nil, err
-	}
-
-	dest := vschema.Destination()
-	if dest == nil {
-		dest = key.DestinationAnyShard{}
 	}
 
 	return &engine.SysVarCheckAndIgnore{
@@ -180,21 +166,21 @@ func expressionOkToDelegateToTablet(e sqlparser.Expr) bool {
 }
 
 func buildSetOpVarSet(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error) {
-	keyspace, dest, err := resolveDestination(vschema)
-	if err != nil && !strings.HasPrefix(err.Error(), "no keyspace in database name specified") {
+	ks, dest, err := resolveDestination(vschema)
+	if err != nil {
 		return nil, err
 	}
 
 	return &engine.SysVarSet{
 		Name:              expr.Name.Lowered(),
-		Keyspace:          keyspace,
+		Keyspace:          ks,
 		TargetDestination: dest,
 		Expr:              sqlparser.String(expr.Expr),
 	}, nil
 }
 
 func resolveDestination(vschema ContextVSchema) (*vindexes.Keyspace, key.Destination, error) {
-	keyspace, err := vschema.DefaultKeyspace()
+	keyspace, err := vschema.AnyKeyspace()
 	if err != nil {
 		return nil, nil, err
 	}
