@@ -31,10 +31,11 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-func (t *mockSubscriber) SchemaUpdated(gtid string, ddl string, timestamp int64) {
+func (t *mockSubscriber) SchemaUpdated(gtid string, ddl string, timestamp int64) error {
 	t.gtids = append(t.gtids, gtid)
 	t.ddls = append(t.ddls, ddl)
 	t.timestamps = append(t.timestamps, timestamp)
+	return nil
 }
 
 var _ schema.Subscriber = (*mockSubscriber)(nil)

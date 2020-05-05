@@ -40,7 +40,7 @@ const getSchemaVersions = "select id, pos, ddl, time_updated, schemax from _vt.s
 
 // Historian defines the interface to reload a db schema or get the schema of a table for a given position
 type Historian interface {
-	RegisterVersionEvent()
+	RegisterVersionEvent() error
 	Reload(ctx context.Context) error
 	GetTableForPos(tableName sqlparser.TableIdent, pos string) *binlogdata.TableMetaData
 	Open() error
@@ -92,7 +92,7 @@ func (h *HistorianSvc) Reload(ctx context.Context) error {
 
 // NewHistorian creates a new historian. It expects a schema.Engine instance
 func NewHistorian(he HistoryEngine) *HistorianSvc {
-	sh := HistorianSvc{he: he, lastID: -1}
+	sh := HistorianSvc{he: he, lastID: 0}
 	return &sh
 }
 
@@ -114,7 +114,7 @@ func (h *HistorianSvc) readRow(row []sqltypes.Value) (*TrackedSchema, int64, err
 	if err := proto.Unmarshal(row[4].ToBytes(), sch); err != nil {
 		return nil, 0, err
 	}
-	log.Infof("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n", id, pos, ddl, len(sch.Tables), timeUpdated)
+	log.Infof("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n", id, mysql.EncodePosition(pos), ddl, len(sch.Tables), timeUpdated)
 
 	tables := map[string]*binlogdata.TableMetaData{}
 	for _, t := range sch.Tables {
@@ -177,7 +177,8 @@ func (h *HistorianSvc) Init(tabletType topodatapb.TabletType) error {
 	return nil
 }
 
-// Open opens the underlying schema Engine. Called directly by any user of the historian other than tabletserver which calls Init
+// Open opens the underlying schema Engine. Called directly by a user purely interested in schema.Engine functionality
+// Other users like tabletserver and tests call Init
 func (h *HistorianSvc) Open() error {
 	return h.he.Open()
 }
@@ -189,7 +190,7 @@ func (h *HistorianSvc) reload(ctx context.Context) error {
 		return err
 	}
 	tables := map[string]*binlogdata.TableMetaData{}
-	log.Infof("Schema returned by engine is %d", len(h.he.GetSchema()))
+	log.Infof("Schema returned by engine has %d tables", len(h.he.GetSchema()))
 	for _, t := range h.he.GetSchema() {
 		table := &binlogdata.TableMetaData{
 			Name:   t.Name.String(),
@@ -247,9 +248,10 @@ func (h *HistorianSvc) sortSchemas() {
 // getTableFromHistoryForPos looks in the cache for a schema for a specific gtid
 func (h *HistorianSvc) getTableFromHistoryForPos(tableName sqlparser.TableIdent, pos mysql.Position) *binlogdata.TableMetaData {
 	idx := sort.Search(len(h.schemas), func(i int) bool {
-		return !pos.AtLeast(h.schemas[i].pos)
+		log.Infof("idx %d pos %s checking pos %s equality %t less %t", i, mysql.EncodePosition(pos), mysql.EncodePosition(h.schemas[i].pos), pos.Equal(h.schemas[i].pos), !pos.AtLeast(h.schemas[i].pos))
+		return pos.Equal(h.schemas[i].pos) || !pos.AtLeast(h.schemas[i].pos)
 	})
-
+	log.Infof("Index %d: len schemas %d", idx, len(h.schemas))
 	if idx >= len(h.schemas) || idx == 0 && !pos.Equal(h.schemas[idx].pos) { // beyond the range of the cache
 		log.Infof("Not found schema in cache for %s with pos %s", tableName, pos)
 		return nil
@@ -265,12 +267,13 @@ func (h *HistorianSvc) getTableFromHistoryForPos(tableName sqlparser.TableIdent,
 
 // RegisterVersionEvent is called by the vstream when it encounters a version event (an insert into _vt.schema_tracking)
 // It triggers the historian to load the newer rows from the database to update its cache
-func (h *HistorianSvc) RegisterVersionEvent() {
+func (h *HistorianSvc) RegisterVersionEvent() error {
 	if !h.trackSchemaVersions {
-		return
+		return nil
 	}
 	ctx := tabletenv.LocalContext()
 	if err := h.loadFromDB(ctx); err != nil {
-		log.Errorf("Error loading schema version information from database in RegisterVersionEvent(): %v", err)
+		return err
 	}
+	return nil
 }

@@ -46,6 +46,10 @@ type mockHistorian struct {
 	he schema.HistoryEngine
 }
 
+func (h *mockHistorian) SetTrackSchemaVersions(val bool) {
+
+}
+
 func (h *mockHistorian) Init(tabletType topodatapb.TabletType) error {
 	return nil
 }
@@ -67,8 +71,9 @@ func (h *mockHistorian) GetTableForPos(tableName sqlparser.TableIdent, pos strin
 	return nil
 }
 
-func (h *mockHistorian) RegisterVersionEvent() {
+func (h *mockHistorian) RegisterVersionEvent() error {
 	numVersionEventsReceived++
+	return nil
 }
 
 var _ schema.Historian = (*mockHistorian)(nil)
@@ -83,14 +88,12 @@ func TestVersion(t *testing.T) {
 		engine = oldEngine
 	}()
 
-	log.Infof("Old engine is %v", engine.sh)
 	mh := newMockHistorian(env.SchemaEngine)
-	log.Infof("Mock historian is %v", mh)
 
 	engine = NewEngine(engine.env, env.SrvTopo, mh)
+
 	engine.Open(env.KeyspaceName, env.Cells[0])
 	defer engine.Close()
-	log.Infof("New engine is %v:%v", engine.sh, mh)
 
 	execStatements(t, []string{
 		"create table _vt.schema_version(id int, pos varbinary(10000), time_updated bigint(20), ddl varchar(10000), schemax blob, primary key(id))",
@@ -102,22 +105,16 @@ func TestVersion(t *testing.T) {
 	testcases := []testcase{{
 		input: []string{
 			fmt.Sprintf("insert into _vt.schema_version values(1, 'MariaDB/0-41983-20', 123, 'create table t1', 'abc')"),
-			fmt.Sprintf("insert into _vt.schema_version values(2, 'MariaDB/0-41983-22', 125, 'alter table t1', 'abc')"),
 		},
 		// External table events don't get sent.
 		output: [][]string{{
 			`begin`,
-			`type:VERSION `,
+			`type:VERSION `}, {
 			`gtid`,
-			`commit`}, {
-			`begin`,
-			`type:VERSION `,
-			`gtid`,
-			`commit`,
-		}},
+			`commit`}},
 	}}
 	runCases(t, nil, testcases, "")
-	assert.Equal(t, 2, numVersionEventsReceived)
+	assert.Equal(t, 1, numVersionEventsReceived)
 }
 
 func TestFilteredVarBinary(t *testing.T) {
@@ -1458,6 +1455,8 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 	}
 }
 
+var lastPos string
+
 func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string) <-chan []*binlogdatapb.VEvent {
 	if position == "" {
 		position = masterPosition(t)
@@ -1471,8 +1470,6 @@ func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter,
 	return ch
 }
 
-var lastPos string
-
 func vstream(ctx context.Context, t *testing.T, pos string, filter *binlogdatapb.Filter, ch chan []*binlogdatapb.VEvent) error {
 	if filter == nil {
 		filter = &binlogdatapb.Filter{
@@ -1482,18 +1479,18 @@ func vstream(ctx context.Context, t *testing.T, pos string, filter *binlogdatapb
 		}
 	}
 	return engine.Stream(ctx, pos, filter, func(evs []*binlogdatapb.VEvent) error {
-		log.Infof("Received events: %v", evs)
-		for _, ev := range evs {
-			log.Infof("Original stream: %s event found %v", ev.Type, ev)
-			if ev.Type == binlogdatapb.VEventType_GTID {
-				lastPos = ev.Gtid
-			}
-			if ev.Type == binlogdatapb.VEventType_DDL {
-				schemaTracker := schema.NewTracker(env.SchemaEngine)
-				schemaTracker.SchemaUpdated(lastPos, ev.Ddl, ev.Timestamp)
+		if t.Name() == "TestVersion" { // emulate tracker only for the version test
+			for _, ev := range evs {
+				log.Infof("Original stream: %s event found %v", ev.Type, ev)
+				if ev.Type == binlogdatapb.VEventType_GTID {
+					lastPos = ev.Gtid
+				}
+				if ev.Type == binlogdatapb.VEventType_DDL {
+					schemaTracker := schema.NewTracker(env.SchemaEngine)
+					schemaTracker.SchemaUpdated(lastPos, ev.Ddl, ev.Timestamp)
+				}
 			}
 		}
-
 		select {
 		case ch <- evs:
 		case <-ctx.Done():
