@@ -36,6 +36,7 @@ func TestJournalOneToOne(t *testing.T) {
 		"drop table t",
 		fmt.Sprintf("drop table %s.t", vrepldb),
 	})
+	env.SchemaEngine.Open()
 	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
