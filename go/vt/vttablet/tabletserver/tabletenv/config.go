@@ -190,22 +190,26 @@ func Init() {
 type TabletConfig struct {
 	DB *dbconfigs.DBConfigs `json:"db,omitempty"`
 
-	OltpReadPool                  ConnPoolConfig         `json:"oltpReadPool,omitempty"`
-	OlapReadPool                  ConnPoolConfig         `json:"olapReadPool,omitempty"`
-	TxPool                        ConnPoolConfig         `json:"txPool,omitempty"`
-	Oltp                          OltpConfig             `json:"oltp,omitempty"`
-	HotRowProtection              HotRowProtectionConfig `json:"hotRowProtection,omitempty"`
-	Consolidator                  string                 `json:"consolidator,omitempty"`
-	HeartbeatIntervalMilliseconds int                    `json:"heartbeatIntervalMilliseconds,omitempty"`
-	ShutdownGracePeriodSeconds    int                    `json:"shutdownGracePeriodSeconds,omitempty"`
-	PassthroughDML                bool                   `json:"passthroughDML,omitempty"`
-	StreamBufferSize              int                    `json:"streamBufferSize,omitempty"`
-	QueryCacheSize                int                    `json:"queryCacheSize,omitempty"`
-	SchemaReloadIntervalSeconds   int                    `json:"schemaReloadIntervalSeconds,omitempty"`
-	WatchReplication              bool                   `json:"watchReplication,omitempty"`
-	TerseErrors                   bool                   `json:"terseErrors,omitempty"`
-	MessagePostponeParallelism    int                    `json:"messagePostponeParallelism,omitempty"`
-	CacheResultFields             bool                   `json:"cacheResultFields,omitempty"`
+	OltpReadPool ConnPoolConfig `json:"oltpReadPool,omitempty"`
+	OlapReadPool ConnPoolConfig `json:"olapReadPool,omitempty"`
+	TxPool       ConnPoolConfig `json:"txPool,omitempty"`
+
+	Oltp             OltpConfig             `json:"oltp,omitempty"`
+	HotRowProtection HotRowProtectionConfig `json:"hotRowProtection,omitempty"`
+
+	Consolidator                  string `json:"consolidator,omitempty"`
+	HeartbeatIntervalMilliseconds int    `json:"heartbeatIntervalMilliseconds,omitempty"`
+	ShutdownGracePeriodSeconds    int    `json:"shutdownGracePeriodSeconds,omitempty"`
+	PassthroughDML                bool   `json:"passthroughDML,omitempty"`
+	StreamBufferSize              int    `json:"streamBufferSize,omitempty"`
+	QueryCacheSize                int    `json:"queryCacheSize,omitempty"`
+	SchemaReloadIntervalSeconds   int    `json:"schemaReloadIntervalSeconds,omitempty"`
+	WatchReplication              bool   `json:"watchReplication,omitempty"`
+	TerseErrors                   bool   `json:"terseErrors,omitempty"`
+	MessagePostponeParallelism    int    `json:"messagePostponeParallelism,omitempty"`
+	CacheResultFields             bool   `json:"cacheResultFields,omitempty"`
+
+	ExternalConnections map[string]*dbconfigs.DBConfigs `json:"externalConnections,omitempty"`
 
 	StrictTableACL          bool    `json:"-"`
 	EnableTableACLDryRun    bool    `json:"-"`

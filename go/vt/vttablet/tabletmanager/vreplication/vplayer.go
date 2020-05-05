@@ -129,12 +129,6 @@ func (vp *vplayer) play(ctx context.Context) error {
 func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, filter: %v", vp.vr.id, vp.startPos, vp.stopPos, vp.vr.source)
 
-	err = vp.vr.sourceVStreamer.Open(ctx)
-	if err != nil {
-		return fmt.Errorf("error creating vstreamer client: %v", err)
-	}
-	defer vp.vr.sourceVStreamer.Close(ctx)
-
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 

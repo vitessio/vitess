@@ -110,7 +110,7 @@ func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *Writer {
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
-	tw := NewWriter(tabletenv.NewTestEnv(config, nil, "WriterTest"), topodatapb.TabletAlias{Cell: "test", Uid: 1111})
+	tw := NewWriter(tabletenv.NewEnv(config, "WriterTest"), topodatapb.TabletAlias{Cell: "test", Uid: 1111})
 	tw.keyspaceShard = "test:0"
 	tw.now = nowFunc
 	tw.pool.Open(dbc.AppWithDB(), dbc.DbaWithDB(), dbc.AppDebugWithDB())

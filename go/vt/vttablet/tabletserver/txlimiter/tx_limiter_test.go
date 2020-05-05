@@ -47,7 +47,7 @@ func TestTxLimiter_DisabledAllowsAll(t *testing.T) {
 	config.TransactionLimitByPrincipal = false
 	config.TransactionLimitByComponent = false
 	config.TransactionLimitBySubcomponent = false
-	limiter := New(tabletenv.NewTestEnv(config, nil, "TabletServerTest"))
+	limiter := New(tabletenv.NewEnv(config, "TabletServerTest"))
 	im, ef := createCallers("", "", "", "")
 	for i := 0; i < 5; i++ {
 		if got, want := limiter.Get(im, ef), true; got != want {
@@ -69,7 +69,7 @@ func TestTxLimiter_LimitsOnlyOffendingUser(t *testing.T) {
 	config.TransactionLimitBySubcomponent = false
 
 	// This should allow 3 slots to all users
-	newlimiter := New(tabletenv.NewTestEnv(config, nil, "TabletServerTest"))
+	newlimiter := New(tabletenv.NewEnv(config, "TabletServerTest"))
 	limiter, ok := newlimiter.(*Impl)
 	if !ok {
 		t.Fatalf("New returned limiter of unexpected type: got %T, want %T", newlimiter, limiter)
@@ -135,7 +135,7 @@ func TestTxLimiterDryRun(t *testing.T) {
 	config.TransactionLimitBySubcomponent = false
 
 	// This should allow 3 slots to all users
-	newlimiter := New(tabletenv.NewTestEnv(config, nil, "TabletServerTest"))
+	newlimiter := New(tabletenv.NewEnv(config, "TabletServerTest"))
 	limiter, ok := newlimiter.(*Impl)
 	if !ok {
 		t.Fatalf("New returned limiter of unexpected type: got %T, want %T", newlimiter, limiter)

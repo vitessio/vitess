@@ -1425,7 +1425,7 @@ func masterPosition(t *testing.T) string {
 	// We use the engine's cp because there is one test that overrides
 	// the flavor to FilePos. If so, we have to obtain the position
 	// in that flavor format.
-	connParam, err := engine.env.DBConfigs().DbaWithDB().MysqlParams()
+	connParam, err := engine.env.Config().DB.DbaWithDB().MysqlParams()
 	if err != nil {
 		t.Fatal(err)
 	}

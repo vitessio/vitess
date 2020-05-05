@@ -336,7 +336,7 @@ func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
 		dbClientFactory := func() binlogplayer.DBClient { return dbclient }
 		// Replace existing engine with a new one
 		master.Agent.VREngine.Close()
-		master.Agent.VREngine = vreplication.NewEngine(tme.ts, "", master.FakeMysqlDaemon, dbClientFactory, dbclient.DBName())
+		master.Agent.VREngine = vreplication.NewTestEngine(tme.ts, "", master.FakeMysqlDaemon, dbClientFactory, dbclient.DBName(), nil)
 		if err := master.Agent.VREngine.Open(ctx); err != nil {
 			t.Fatal(err)
 		}
@@ -347,7 +347,7 @@ func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
 		dbClientFactory := func() binlogplayer.DBClient { return dbclient }
 		// Replace existing engine with a new one
 		master.Agent.VREngine.Close()
-		master.Agent.VREngine = vreplication.NewEngine(tme.ts, "", master.FakeMysqlDaemon, dbClientFactory, dbclient.DBName())
+		master.Agent.VREngine = vreplication.NewTestEngine(tme.ts, "", master.FakeMysqlDaemon, dbClientFactory, dbclient.DBName(), nil)
 		if err := master.Agent.VREngine.Open(ctx); err != nil {
 			t.Fatal(err)
 		}
