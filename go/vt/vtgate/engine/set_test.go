@@ -17,8 +17,8 @@ limitations under the License.
 package engine
 
 import (
-	"strconv"
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -245,7 +245,8 @@ func TestSysVarSetErr(t *testing.T) {
 	}
 
 	set := &Set{
-		Ops: setOps,
+		Ops:   setOps,
+		Input: &SingleRow{},
 	}
 	vc := &loggingVCursor{
 		shards:         []string{"-20", "20-"},

@@ -226,6 +226,29 @@ func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
 	return ks.Keyspace, nil
 }
 
+func (vc *vcursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
+	keyspace, err := vc.DefaultKeyspace()
+	if err == nil {
+		return keyspace, nil
+	}
+	if err != errNoKeyspace {
+		return nil, err
+	}
+
+	if len(vc.vschema.Keyspaces) == 0 {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspaces available")
+	}
+
+	// Looks for any sharded keyspace if present, otherwise take any keyspace.
+	for _, ks := range vc.vschema.Keyspaces {
+		keyspace = ks.Keyspace
+		if keyspace.Sharded {
+			return keyspace, nil
+		}
+	}
+	return keyspace, nil
+}
+
 // TargetString returns the current TargetString of the session.
 func (vc *vcursorImpl) TargetString() string {
 	return vc.safeSession.TargetString
