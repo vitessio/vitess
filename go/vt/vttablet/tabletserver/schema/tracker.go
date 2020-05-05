@@ -45,7 +45,7 @@ type trackerEngine interface {
 
 //Subscriber will get notified when the schema has been updated
 type Subscriber interface {
-	SchemaUpdated(gtid string, ddl string, timestamp int64)
+	SchemaUpdated(gtid string, ddl string, timestamp int64) error
 }
 
 var _ Subscriber = (*Tracker)(nil)
@@ -55,22 +55,20 @@ type Tracker struct {
 	engine trackerEngine
 }
 
-// NewTracker creates a Tracker, needs a SchemaEngine (which implements the trackerEngine interface)
+// NewTracker creates a Tracker, needs an Open SchemaEngine (which implements the trackerEngine interface)
 func NewTracker(engine trackerEngine) *Tracker {
 	return &Tracker{engine: engine}
 }
 
 // SchemaUpdated is called by a vstream when it encounters a DDL
-func (st *Tracker) SchemaUpdated(gtid string, ddl string, timestamp int64) {
+func (t *Tracker) SchemaUpdated(gtid string, ddl string, timestamp int64) error {
 
 	if gtid == "" || ddl == "" {
-		log.Errorf("Got invalid gtid or ddl in SchemaUpdated")
-		return
+		return fmt.Errorf("Got invalid gtid or ddl in SchemaUpdated")
 	}
 	ctx := context.Background()
-
-	st.engine.Reload(ctx)
-	tables := st.engine.GetSchema()
+	t.engine.Reload(ctx)
+	tables := t.engine.GetSchema()
 	dbSchema := &binlogdatapb.TableMetaDataCollection{
 		Tables: []*binlogdatapb.TableMetaData{},
 	}
@@ -88,17 +86,15 @@ func (st *Tracker) SchemaUpdated(gtid string, ddl string, timestamp int64) {
 	}
 	blob, _ := proto.Marshal(dbSchema)
 
-	conn, err := st.engine.GetConnection(ctx)
+	conn, err := t.engine.GetConnection(ctx)
 	if err != nil {
-		return
+		return err
 	}
 	defer conn.Recycle()
 	_, err = conn.Exec(ctx, createSchemaTrackingTable, 1, false)
 	if err != nil {
-		log.Errorf("Error creating schema_tracking table %v", err)
-		return
+		return err
 	}
-
 	log.Infof("Inserting version for position %s: %s : %+v", gtid, ddl, len(dbSchema.Tables))
 	query := fmt.Sprintf("insert into _vt.schema_version "+
 		"(pos, ddl, schemax, time_updated) "+
@@ -106,9 +102,9 @@ func (st *Tracker) SchemaUpdated(gtid string, ddl string, timestamp int64) {
 
 	_, err = conn.Exec(ctx, query, 1, false)
 	if err != nil {
-		log.Errorf("Error inserting version for position %s, ddl %s, %v", gtid, ddl, err)
-		return
+		return err
 	}
+	return nil
 }
 
 func encodeString(in string) string {

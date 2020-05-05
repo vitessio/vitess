@@ -113,7 +113,7 @@ func (rs *rowStreamer) buildPlan() error {
 	if err != nil {
 		return err
 	}
-	st := rs.sh.GetTableForPos(fromTable, "") //TODO
+	st := rs.sh.GetTableForPos(fromTable, "")
 	if st == nil {
 		return fmt.Errorf("unknown table %v in schema", fromTable)
 	}

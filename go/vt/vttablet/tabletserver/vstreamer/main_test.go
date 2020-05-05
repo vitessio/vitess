@@ -71,7 +71,6 @@ func customEngine(t *testing.T, modifier func(mysql.ConnParams) mysql.ConnParams
 	require.NoError(t, err)
 	modified := modifier(*original)
 	config := env.TabletEnv.Config().Clone()
-	config.WatchReplication = true
 	config.DB = dbconfigs.NewTestDBConfigs(modified, modified, modified.DbName)
 	historian = schema.NewHistorian(env.SchemaEngine)
 	historian.Init(tabletpb.TabletType_MASTER)
