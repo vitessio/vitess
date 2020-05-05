@@ -21,9 +21,12 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -45,18 +48,201 @@ func init() {
 
 func TestHealthCheck(t *testing.T) {
 	ts := memorytopo.NewServer("cell")
-	tablet := topo.NewTablet(0, "cell", "a")
-	tablet.PortMap["vt"] = 1
-	input := make(chan *querypb.StreamHealthResponse)
-	createFakeConn(tablet, input)
-	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	hc := createTestHc(ts)
+	tablet := topo.NewTablet(0, "cell", "a")
+	tablet.Keyspace = "k"
+	tablet.Shard = "s"
+	tablet.PortMap["vt"] = 1
+	tablet.Type = topodatapb.TabletType_REPLICA
+	tabletAlias := topoproto.TabletAliasString(tablet.Alias)
+	input := make(chan *querypb.StreamHealthResponse)
+	conn := createFakeConn(tablet, input)
+	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
+	// close healthcheck
+	defer hc.Close()
+
 	testChecksum(t, 0, hc.stateChecksum())
 	hc.AddTablet(tablet)
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
+	//	testChecksum(t, 2829991735, hc.stateChecksum())
 
-	// close healthcheck
-	hc.Close()
+	// Immediately after AddTablet() there will be the first notification.
+	want := &TabletHealth{
+		Tablet:              tablet,
+		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:             false,
+		Stats:               nil,
+		MasterTermStartTime: 0,
+	}
+	startTime := time.Now()
+	timeout := 2 * time.Second
+	for {
+		if hc.healthByAlias[tabletAlias] != nil {
+			break
+		}
+		if time.Since(startTime) > timeout {
+			t.Fatal("Timed out waiting for initial health")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias]), "Wrong tabletHealth data:\n expected: %v\n got:      %v", want, hc.healthByAlias[tabletAlias])
+
+	shr := &querypb.StreamHealthResponse{
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                             true,
+		TabletExternallyReparentedTimestamp: 0,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
+	}
+	input <- shr
+	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: REPLICA}, Serving: true, TabletExternallyReparentedTimestamp: 0, {SecondsBehindMaster: 1, CpuUsage: 0.5}}`)
+	want = &TabletHealth{
+		Tablet:              tablet,
+		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:             true,
+		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
+		MasterTermStartTime: 0,
+	}
+	startTime = time.Now()
+	lastResponseTime := hc.healthByAlias[tabletAlias].lastResponseTimestamp
+	for {
+		// Health has been updated
+		if hc.healthByAlias[tabletAlias].lastResponseTimestamp != lastResponseTime || time.Since(startTime) > timeout {
+			break
+		}
+		if time.Since(startTime) > timeout {
+			t.Fatal("Timed out waiting for health update")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias]), "Wrong tabletHealth data:\n Expected: %v\n Actual:   %v", want, hc.healthByAlias[tabletAlias])
+	targetKey := hc.keyFromTarget(want.Target)
+	ths := hc.healthData[targetKey]
+	assert.NotEmpty(t, ths, "healthData is empty")
+	assert.True(t, want.DeepEqual(ths[tabletAlias]), "healthData contains wrong tabletHealth")
+
+	tcsl := hc.CacheStatus()
+	tcslWant := TabletsCacheStatusList{{
+		Cell:   "cell",
+		Target: want.Target,
+		TabletsStats: TabletStatsList{{
+			Tablet:              tablet,
+			Target:              want.Target,
+			Serving:             true,
+			Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
+			MasterTermStartTime: 0,
+		}},
+	}}
+	assert.True(t, tcslWant.deepEqual(tcsl), "Incorrect cache status:\n Expected: %+v\n Actual:   %+v", tcslWant[0], tcsl[0])
+	//	testChecksum(t, 3487343103, hc.stateChecksum())
+
+	// TabletType changed, should get both old and new event
+	shr = &querypb.StreamHealthResponse{
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Serving:                             true,
+		TabletExternallyReparentedTimestamp: 10,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+	want = &TabletHealth{
+		Tablet: tablet,
+		Target: &querypb.Target{
+			Keyspace:   "k",
+			Shard:      "s",
+			TabletType: topodatapb.TabletType_MASTER,
+		},
+		Serving:             true,
+		Conn:                conn,
+		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		MasterTermStartTime: 10,
+	}
+	input <- shr
+	startTime = time.Now()
+	lastResponseTime = hc.healthByAlias[tabletAlias].lastResponseTimestamp
+	for {
+		// Health has been updated
+		if hc.healthByAlias[tabletAlias].lastResponseTimestamp != lastResponseTime || time.Since(startTime) > timeout {
+			break
+		}
+		if time.Since(startTime) > timeout {
+			t.Fatal("Timed out waiting for health update")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias]), "Wrong health data:\n Expected: %v\n Actual:   %v", want, hc.healthByAlias[tabletAlias])
+	//	testChecksum(t, 2773351292, hc.stateChecksum())
+
+	err := checkErrorCounter("k", "s", topodatapb.TabletType_MASTER, 0)
+	require.NoError(t, err, "error checking error counter")
+
+	// Serving & RealtimeStats changed
+	shr = &querypb.StreamHealthResponse{
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                             false,
+		TabletExternallyReparentedTimestamp: 0,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
+	}
+	want = &TabletHealth{
+		Tablet:              tablet,
+		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:             false,
+		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
+		MasterTermStartTime: 0,
+	}
+	input <- shr
+	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: REPLICA}, TabletExternallyReparentedTimestamp: 0, {SecondsBehindMaster: 1, CpuUsage: 0.3}}`)
+	startTime = time.Now()
+	lastResponseTime = hc.healthByAlias[tabletAlias].lastResponseTimestamp
+	for {
+		// Health has been updated
+		if hc.healthByAlias[tabletAlias].lastResponseTimestamp != lastResponseTime || time.Since(startTime) > timeout {
+			break
+		}
+		if time.Since(startTime) > timeout {
+			t.Fatal("Timed out waiting for health update")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias]), "Wrong health data:\n Expected: %v\n Actual:   %v", want, hc.healthByAlias[tabletAlias])
+	//	testChecksum(t, 2829991735, hc.stateChecksum())
+
+	// HealthError
+	shr = &querypb.StreamHealthResponse{
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                             true,
+		TabletExternallyReparentedTimestamp: 0,
+		RealtimeStats:                       &querypb.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
+	}
+	want = &TabletHealth{
+		Tablet:              tablet,
+		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:             false,
+		Stats:               &querypb.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
+		MasterTermStartTime: 0,
+		LastError:           fmt.Errorf("vttablet error: some error"),
+	}
+	input <- shr
+	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: REPLICA}, Serving: true, TabletExternallyReparentedTimestamp: 0, {HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3}}`)
+	startTime = time.Now()
+	lastResponseTime = hc.healthByAlias[tabletAlias].lastResponseTimestamp
+	for {
+		// Health has been updated
+		if hc.healthByAlias[tabletAlias].lastResponseTimestamp != lastResponseTime || time.Since(startTime) > timeout {
+			break
+		}
+		if time.Since(startTime) > timeout {
+			t.Fatal("Timed out waiting for health update")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias]), "Wrong health data:\n Expected: %v\n Actual:   %v", want, hc.healthByAlias[tabletAlias])
+
+	testChecksum(t, 1027934207, hc.stateChecksum()) // unchanged
+
+	// remove tablet
+	hc.deleteConn(tablet)
+	t.Logf(`hc.RemoveTablet({Host: "a", PortMap: {"vt": 1}})`)
+	assert.Nil(t, hc.healthByAlias[tabletAlias], "Wrong tablet health")
+	testChecksum(t, 0, hc.stateChecksum())
+
 }
 
 func TestHealthCheckStreamError(t *testing.T) {
@@ -146,13 +332,10 @@ func TestTemplate(t *testing.T) {
 	}
 	templ := template.New("").Funcs(status.StatusFuncs)
 	templ, err := templ.Parse(HealthCheckTemplate)
-	if err != nil {
-		t.Fatalf("error parsing template: %v", err)
-	}
+	require.Nil(t, err, "error parsing template")
 	wr := &bytes.Buffer{}
-	if err := templ.Execute(wr, []*TabletsCacheStatus{tcs}); err != nil {
-		t.Fatalf("error executing template: %v", err)
-	}
+	err = templ.Execute(wr, []*TabletsCacheStatus{tcs})
+	require.Nil(t, err, "error executing template")
 }
 
 func TestDebugURLFormatting(t *testing.T) {
@@ -176,17 +359,12 @@ func TestDebugURLFormatting(t *testing.T) {
 	}
 	templ := template.New("").Funcs(status.StatusFuncs)
 	templ, err := templ.Parse(HealthCheckTemplate)
-	if err != nil {
-		t.Fatalf("error parsing template: %v", err)
-	}
+	require.Nil(t, err, "error parsing template")
 	wr := &bytes.Buffer{}
-	if err := templ.Execute(wr, []*TabletsCacheStatus{tcs}); err != nil {
-		t.Fatalf("error executing template: %v", err)
-	}
+	err = templ.Execute(wr, []*TabletsCacheStatus{tcs})
+	require.Nil(t, err, "error executing template")
 	expectedURL := `"https://host.bastion.cell.corp"`
-	if !strings.Contains(wr.String(), expectedURL) {
-		t.Fatalf("output missing formatted URL, expectedURL: %s , output: %s", expectedURL, wr.String())
-	}
+	require.Contains(t, wr.String(), expectedURL, "output missing formatted URL")
 }
 
 func tabletDialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {

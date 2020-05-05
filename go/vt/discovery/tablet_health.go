@@ -6,8 +6,16 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
+	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/netutil"
@@ -18,6 +26,7 @@ import (
 // TabletHealth maintains the health status of a tablet. A map of this
 // structure is maintained in HealthCheckImpl.
 type TabletHealth struct {
+	ctx context.Context
 	// cancelFunc must be called before discarding TabletHealth.
 	// This will ensure that the associated checkConn goroutine will terminate.
 	cancelFunc context.CancelFunc
@@ -42,6 +51,9 @@ type TabletHealth struct {
 	// LastError is the error we last saw when trying to get the
 	// tablet's healthcheck.
 	LastError error
+	// possibly delete both these
+	loggedServingState    bool
+	lastResponseTimestamp time.Time // timestamp of the last healthcheck response
 }
 
 // String is defined because we want to print a []*TabletHealth array nicely.
@@ -138,4 +150,170 @@ func (th *TabletHealth) deleteConnLocked() {
 
 func (th *TabletHealth) isHealthy() bool {
 	return th.Serving && th.LastError == nil && th.Stats != nil && !IsReplicationLagVeryHigh(th)
+}
+
+// setServingState sets the tablet state to the given value.
+//
+// If the state changes, it logs the change so that failures
+// from the health check connection are logged the first time,
+// but don't continue to log if the connection stays down.
+//
+// th.mu must be locked before calling this function
+func (th *TabletHealth) setServingState(serving bool, reason string) {
+	if !th.loggedServingState || (serving != th.Serving) {
+		// Emit the log from a separate goroutine to avoid holding
+		// the th lock while logging is happening
+		go log.Infof("HealthCheckUpdate(Serving State): tablet: %v serving => %v for %v/%v (%v) reason: %s",
+			topotools.TabletIdent(th.Tablet),
+			serving,
+			th.Tablet.GetKeyspace(),
+			th.Tablet.GetShard(),
+			th.Target.GetTabletType(),
+			reason,
+		)
+		th.loggedServingState = true
+	}
+	th.Serving = serving
+}
+
+// stream streams healthcheck responses to callback.
+func (th *TabletHealth) stream(ctx context.Context, callback func(*query.StreamHealthResponse) error) error {
+	th.mu.Lock()
+	if th.Conn == nil {
+		conn, err := tabletconn.GetDialer()(th.Tablet, grpcclient.FailFast(true))
+		if err != nil {
+			th.LastError = err
+			th.mu.Unlock()
+			return nil
+		}
+		th.Conn = conn
+		th.LastError = nil
+	}
+	conn := th.Conn
+	th.mu.Unlock()
+
+	err := conn.StreamHealth(ctx, callback)
+	if err != nil {
+		th.mu.Lock()
+		log.Warningf("tablet %v healthcheck stream error: %v", th.Tablet.Alias, err)
+		th.setServingState(false, err.Error())
+		th.LastError = err
+		th.Conn.Close(ctx)
+		th.Conn = nil
+		th.mu.Unlock()
+	}
+	return err
+}
+
+// processResponse reads one health check response, and updates health
+func (th *TabletHealth) processResponse(hc *HealthCheckImpl, shr *query.StreamHealthResponse) error {
+	select {
+	case <-th.ctx.Done():
+		return th.ctx.Err()
+	default:
+	}
+
+	// Check for invalid data, better than panicking.
+	if shr.Target == nil || shr.RealtimeStats == nil {
+		return fmt.Errorf("health stats is not valid: %v", shr)
+	}
+
+	// an app-level error from tablet, force serving state.
+	var healthErr error
+	serving := shr.Serving
+	if shr.RealtimeStats.HealthError != "" {
+		healthErr = fmt.Errorf("vttablet error: %v", shr.RealtimeStats.HealthError)
+		serving = false
+	}
+
+	if shr.TabletAlias != nil && !proto.Equal(shr.TabletAlias, th.Tablet.Alias) {
+		// TabletAlias change means that the host:port has been taken over by another tablet
+		// We could cancel / exit the healthcheck for this tablet right away
+		// However, we defer it until the next topo refresh informs us of the change because that is
+		// the only way to discover the new host/port
+		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("health stats mismatch, tablet %+v alias does not match response alias %v", th.Tablet, shr.TabletAlias))
+		// TODO(deepthi): delete healthcheck
+	}
+
+	th.mu.Lock()
+	currentTablet := th.Tablet
+	// check whether this is a trivial update so as to update healthy map
+	trivialNonMasterUpdate := th.LastError == nil && th.Serving && shr.RealtimeStats.HealthError == "" && shr.Serving &&
+		currentTablet.Type != topodata.TabletType_MASTER && currentTablet.Type == shr.Target.TabletType
+	isMasterUpdate := currentTablet.Type == topodata.TabletType_MASTER && shr.Target.TabletType == topodata.TabletType_MASTER
+	th.mu.Unlock()
+
+	// hc.healthByAlias is authoritative, it should be updated
+	hc.mu.Lock()
+	tabletAlias := topoproto.TabletAliasString(th.Tablet.Alias)
+	// this will only change the first time, but it's easiest to set it always rather than check and set
+	hc.healthByAlias[tabletAlias] = th
+	hc.mu.Unlock()
+
+	hcErrorCounters.Add([]string{shr.Target.Keyspace, shr.Target.Shard, topoproto.TabletTypeLString(shr.Target.TabletType)}, 0)
+	if currentTablet.Type != shr.Target.TabletType || currentTablet.Keyspace != shr.Target.Keyspace || currentTablet.Shard != shr.Target.Shard {
+		// keyspace and shard are not expected to change, but just in case ...
+		// hc still has this TabletHealth in the wrong target (because tabletType changed)
+		oldTargetKey := hc.keyFromTablet(currentTablet)
+		newTargetKey := hc.keyFromTarget(shr.Target)
+		tabletAlias := topoproto.TabletAliasString(currentTablet.Alias)
+		hc.mu.Lock()
+		delete(hc.healthData[oldTargetKey], tabletAlias)
+		_, ok := hc.healthData[newTargetKey]
+		if !ok {
+			hc.healthData[newTargetKey] = make(map[string]*TabletHealth)
+		}
+		hc.healthData[newTargetKey][tabletAlias] = th
+		hc.mu.Unlock()
+	}
+
+	// Update our record
+	th.lastResponseTimestamp = time.Now()
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	th.Target = shr.Target
+	th.MasterTermStartTime = shr.TabletExternallyReparentedTimestamp
+	th.Stats = shr.RealtimeStats
+	th.LastError = healthErr
+	reason := "healthCheck update"
+	if healthErr != nil {
+		reason = "healthCheck update error: " + healthErr.Error()
+	}
+	th.setServingState(serving, reason)
+
+	targetKey := hc.keyFromTarget(shr.Target)
+	if !trivialNonMasterUpdate {
+		all := hc.healthData[targetKey]
+		allArray := make([]*TabletHealth, 0, len(all))
+		for _, s := range all {
+			allArray = append(allArray, s)
+		}
+		hc.healthy[targetKey] = FilterStatsByReplicationLag(allArray)
+	}
+	if isMasterUpdate {
+		if len(hc.healthy[targetKey]) == 0 {
+			hc.healthy[targetKey] = append(hc.healthy[targetKey], th)
+		} else {
+			// We already have one up server, see if we
+			// need to replace it.
+			if th.MasterTermStartTime < hc.healthy[targetKey][0].MasterTermStartTime {
+				log.Warningf("not marking healthy master %s as Up for %s because its MasterTermStartTime is smaller than the highest known timestamp from previous MASTERs %s: %d < %d ",
+					topoproto.TabletAliasString(currentTablet.Alias),
+					topoproto.KeyspaceShardString(currentTablet.Keyspace, currentTablet.Shard),
+					topoproto.TabletAliasString(hc.healthy[targetKey][0].Tablet.Alias),
+					th.MasterTermStartTime,
+					hc.healthy[targetKey][0].MasterTermStartTime)
+			} else {
+				// Just replace it.
+				hc.healthy[targetKey][0] = th
+			}
+		}
+	}
+	// and notify downstream for master change
+	if shr.Target.TabletType == topodata.TabletType_MASTER {
+		if hc.masterCallback != nil {
+			hc.masterCallback(th)
+		}
+	}
+	return nil
 }
