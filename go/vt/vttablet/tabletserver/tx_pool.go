@@ -185,58 +185,33 @@ func (tp *TxPool) WaitForEmpty() {
 func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Begin")
 	defer span.Finish()
-	var conn *connpool.DBConn
-	var err error
-	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
-	effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
-
-	if !tp.limiter.Get(immediateCaller, effectiveCaller) {
-		return 0, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
+	txConn, err := tp.newTxConnection(ctx, options)
+	if err != nil {
+		return 0, "", err
 	}
-
 	var beginSucceeded bool
 	defer func() {
 		if beginSucceeded {
 			return
 		}
 
-		if conn != nil {
-			conn.Recycle()
+		if txConn != nil {
+			txConn.conclude(TxRollback, "begin failed")
 		}
-		tp.limiter.Release(immediateCaller, effectiveCaller)
 	}()
-
-	if options.GetClientFoundRows() {
-		conn, err = tp.foundRowsPool.Get(ctx)
-	} else {
-		conn, err = tp.conns.Get(ctx)
-	}
-	if err != nil {
-		switch err {
-		case connpool.ErrConnPoolClosed:
-			return 0, "", err
-		case pools.ErrCtxTimeout:
-			tp.LogActive()
-			return 0, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool aborting request due to already expired context")
-		case pools.ErrTimeout:
-			tp.LogActive()
-			return 0, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool connection limit exceeded")
-		}
-		return 0, "", err
-	}
 
 	autocommitTransaction := false
 	beginQueries := ""
 	if queries, ok := txIsolations[options.GetTransactionIsolation()]; ok {
 		if queries.setIsolationLevel != "" {
-			if _, err := conn.Exec(ctx, "set transaction isolation level "+queries.setIsolationLevel, 1, false); err != nil {
+			if _, err := txConn.Exec(ctx, "set transaction isolation level "+queries.setIsolationLevel, 1, false); err != nil {
 				return 0, "", err
 			}
 
 			beginQueries = queries.setIsolationLevel + "; "
 		}
 
-		if _, err := conn.Exec(ctx, queries.openTransaction, 1, false); err != nil {
+		if _, err := txConn.Exec(ctx, queries.openTransaction, 1, false); err != nil {
 			return 0, "", err
 		}
 		beginQueries = beginQueries + queries.openTransaction
@@ -246,21 +221,109 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (i
 		return 0, "", fmt.Errorf("don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
 	}
 
-	beginSucceeded = true
-	transactionID := tp.lastID.Add(1)
-	tp.activePool.Register(
-		transactionID,
-		newTxConnection(
-			conn,
-			transactionID,
-			tp,
-			immediateCaller,
-			effectiveCaller,
-			autocommitTransaction,
-		),
+	txConn.Autocommit = autocommitTransaction
+
+	err = tp.activePool.Register(
+		txConn.TransactionID,
+		txConn,
 		options.GetWorkload() != querypb.ExecuteOptions_DBA,
 	)
-	return transactionID, beginQueries, nil
+	if err != nil {
+		return 0, "", err
+	}
+	beginSucceeded = true
+	return txConn.TransactionID, beginQueries, nil
+}
+
+func (tp *TxPool) newTxConnection(ctx context.Context, options *querypb.ExecuteOptions) (*TxConnection, error) {
+	var conn *connpool.DBConn
+	var err error
+	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
+	effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
+
+	if !tp.limiter.Get(immediateCaller, effectiveCaller) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
+	}
+
+	if options.GetClientFoundRows() {
+		conn, err = tp.foundRowsPool.Get(ctx)
+	} else {
+		conn, err = tp.conns.Get(ctx)
+	}
+	if err != nil {
+		switch err {
+		case connpool.ErrConnPoolClosed:
+			return nil, err
+		case pools.ErrCtxTimeout:
+			tp.LogActive()
+			return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool aborting request due to already expired context")
+		case pools.ErrTimeout:
+			tp.LogActive()
+			return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool connection limit exceeded")
+		}
+		return nil, err
+	}
+
+	transactionID := tp.lastID.Add(1)
+
+	return &TxConnection{
+		dbConn:            conn,
+		TransactionID:     transactionID,
+		pool:              tp,
+		StartTime:         time.Now(),
+		ImmediateCallerID: immediateCaller,
+		EffectiveCallerID: effectiveCaller,
+	}, nil
+
+}
+
+//Reserve will create a new reserved connection
+func (tp *TxPool) Reserve(ctx context.Context, options *querypb.ExecuteOptions, setStatements []string) (int64, error) {
+	span, ctx := trace.NewSpan(ctx, "TxPool.Reserve")
+	defer span.Finish()
+	txConn, err := tp.newTxConnection(ctx, options)
+	if err != nil {
+		return 0, err
+	}
+
+	txConn.dbConn.Taint()
+
+	var setSucceeded bool
+	defer func() {
+		if setSucceeded {
+			return
+		}
+
+		if txConn != nil {
+			txConn.conclude(TxKill, "reserve failed")
+		}
+	}()
+
+	for _, statement := range setStatements {
+		_, err := txConn.Exec(ctx, statement, 10, false)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	setSucceeded = true
+	txConn.reserved = true
+	tp.activePool.Register(
+		txConn.TransactionID,
+		txConn,
+		options.GetWorkload() != querypb.ExecuteOptions_DBA,
+	)
+	return txConn.TransactionID, nil
+}
+
+// Get fetches the connection associated to the transactionID.
+// You must call Recycle on TxConnection once done.
+func (tp *TxPool) Get(transactionID int64, reason string) (*TxConnection, error) {
+	v, err := tp.activePool.Get(transactionID, reason)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", transactionID, err)
+	}
+	return v.(*TxConnection), nil
 }
 
 // Commit commits the specified transaction.
@@ -284,16 +347,6 @@ func (tp *TxPool) Rollback(ctx context.Context, transactionID int64) error {
 		return err
 	}
 	return tp.localRollback(ctx, conn)
-}
-
-// Get fetches the connection associated to the transactionID.
-// You must call Recycle on TxConnection once done.
-func (tp *TxPool) Get(transactionID int64, reason string) (*TxConnection, error) {
-	v, err := tp.activePool.Get(transactionID, reason)
-	if err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", transactionID, err)
-	}
-	return v.(*TxConnection), nil
 }
 
 // LocalBegin is equivalent to Begin->Get.
@@ -393,18 +446,7 @@ type TxConnection struct {
 	ImmediateCallerID *querypb.VTGateCallerID
 	EffectiveCallerID *vtrpcpb.CallerID
 	Autocommit        bool
-}
-
-func newTxConnection(conn *connpool.DBConn, transactionID int64, pool *TxPool, immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID, autocommit bool) *TxConnection {
-	return &TxConnection{
-		dbConn:            conn,
-		TransactionID:     transactionID,
-		pool:              pool,
-		StartTime:         time.Now(),
-		ImmediateCallerID: immediate,
-		EffectiveCallerID: effective,
-		Autocommit:        autocommit,
-	}
+	reserved          bool
 }
 
 // Close closes the connection.

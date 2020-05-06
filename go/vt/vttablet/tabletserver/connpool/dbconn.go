@@ -370,3 +370,13 @@ func (dbc *DBConn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup)
 	}()
 	return done, &wg
 }
+
+// Taint will mark this connection for closing on Recycle, and stick a nil into the original pool to
+// let it know that this connection needs to be replaced with a new one
+func (dbc *DBConn) Taint() {
+	if dbc.pool == nil {
+		return
+	}
+	dbc.pool.Put(nil)
+	dbc.pool = nil
+}
