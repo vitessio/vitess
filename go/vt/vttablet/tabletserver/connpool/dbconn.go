@@ -39,16 +39,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// BinlogFormat is used for specifying the binlog format.
-type BinlogFormat int
-
-// The following constants specify the possible binlog format values.
-const (
-	BinlogFormatStatement BinlogFormat = iota
-	BinlogFormatRow
-	BinlogFormatMixed
-)
-
 // DBConn is a db connection for tabletserver.
 // It performs automatic reconnects as needed.
 // Its Execute function has a timeout that can kill
@@ -84,7 +74,7 @@ func NewDBConn(ctx context.Context, cp *Pool, appParams dbconfigs.Connector) (*D
 }
 
 // NewDBConnNoPool creates a new DBConn without a pool.
-func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool, stats *tabletenv.Stats) (*DBConn, error) {
+func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool) (*DBConn, error) {
 	c, err := dbconnpool.NewDBConnection(ctx, params)
 	if err != nil {
 		return nil, err
