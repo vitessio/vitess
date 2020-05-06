@@ -62,6 +62,9 @@ type Gateway interface {
 
 	// CacheStatus returns a list of TabletCacheStatus per shard / tablet type.
 	CacheStatus() TabletCacheStatusList
+
+	// HealthCheck returns a reference to the healthCheck being used by this gateway
+	HealthCheck() discovery.HealthCheck
 }
 
 // Creator is the factory method which can create the actual gateway object.
