@@ -23,11 +23,11 @@ import (
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// TabletHealth maintains the health status of a tablet. A map of this
+// tabletHealthCheck maintains the health status of a tablet. A map of this
 // structure is maintained in HealthCheckImpl.
-type TabletHealth struct {
+type tabletHealthCheck struct {
 	ctx context.Context
-	// cancelFunc must be called before discarding TabletHealth.
+	// cancelFunc must be called before discarding tabletHealthCheck.
 	// This will ensure that the associated checkConn goroutine will terminate.
 	cancelFunc context.CancelFunc
 	// Tablet is the tablet object that was sent to HealthCheck.AddTablet.
@@ -56,33 +56,16 @@ type TabletHealth struct {
 	lastResponseTimestamp time.Time // timestamp of the last healthcheck response
 }
 
-// String is defined because we want to print a []*TabletHealth array nicely.
-func (th *TabletHealth) String() string {
-	th.mu.Lock()
-	defer th.mu.Unlock()
-	return fmt.Sprintf("TabletHealth{Tablet: %v,Target: %v,Serving: %v, MasterTermStartTime: %v, Stats: %v, LastError: %v",
-		th.Tablet, th.Target, th.Serving, th.MasterTermStartTime, *th.Stats, th.LastError)
-}
-
-// Copy returns a copy of TabletHealth. Note that this is not really a deep copy
-// because we point to the same underlying RealtimeStats.
-// That is fine because the RealtimeStats object is never changed after creation.
-func (th *TabletHealth) Copy() *TabletHealth {
-	th.mu.Lock()
-	defer th.mu.Unlock()
-	// we have to explicitly create a new object rather than relying on assignment to make a copy for us
-	// the following doesn't work for synchronized objects
-	// t := *th
-	// return &t
-	return &TabletHealth{
-		Conn:                th.Conn,
-		Tablet:              th.Tablet,
-		Target:              th.Target,
-		Serving:             th.Serving,
-		MasterTermStartTime: th.MasterTermStartTime,
-		Stats:               th.Stats,
-		LastError:           th.LastError,
-	}
+// TabletHealth represents simple tablet health data that is returned to users of healthcheck.
+// No synchronization is required because we always return a copy.
+type TabletHealth struct {
+	Conn                queryservice.QueryService
+	Tablet              *topodata.Tablet
+	Target              *query.Target
+	Stats               *query.RealtimeStats
+	MasterTermStartTime int64
+	LastError           error
+	Serving             bool
 }
 
 // DeepEqual compares two TabletHealth. Since we include protos, we
@@ -99,19 +82,15 @@ func (th *TabletHealth) DeepEqual(other *TabletHealth) bool {
 
 // GetTabletHostPort formats a tablet host port address.
 func (th *TabletHealth) GetTabletHostPort() string {
-	th.mu.Lock()
 	hostname := th.Tablet.Hostname
 	vtPort := th.Tablet.PortMap["vt"]
-	th.mu.Unlock()
 	return netutil.JoinHostPort(hostname, vtPort)
 }
 
 // GetHostNameLevel returns the specified hostname level. If the level does not exist it will pick the closest level.
 // This seems unused but can be utilized by certain url formatting templates. See getTabletDebugURL for more details.
 func (th *TabletHealth) GetHostNameLevel(level int) string {
-	th.mu.Lock()
 	hostname := th.Tablet.Hostname
-	th.mu.Unlock()
 	chunkedHostname := strings.Split(hostname, ".")
 
 	if level < 0 {
@@ -126,8 +105,8 @@ func (th *TabletHealth) GetHostNameLevel(level int) string {
 // getTabletDebugURL formats a debug url to the tablet.
 // It uses a format string that can be passed into the app to format
 // the debug URL to accommodate different network setups. It applies
-// the html/template string defined to a TabletHealth object. The
-// format string can refer to members and functions of TabletHealth
+// the html/template string defined to a tabletHealthCheck object. The
+// format string can refer to members and functions of tabletHealthCheck
 // like a regular html/template string.
 //
 // For instance given a tablet with hostname:port of host.dc.domain:22
@@ -141,14 +120,60 @@ func (th *TabletHealth) getTabletDebugURL() string {
 	return buffer.String()
 }
 
-func (th *TabletHealth) deleteConnLocked() {
+// String is defined because we want to print a []*tabletHealthCheck array nicely.
+func (th *tabletHealthCheck) String() string {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	return fmt.Sprintf("tabletHealthCheck{Tablet: %v,Target: %v,Serving: %v, MasterTermStartTime: %v, Stats: %v, LastError: %v",
+		th.Tablet, th.Target, th.Serving, th.MasterTermStartTime, *th.Stats, th.LastError)
+}
+
+func (th *tabletHealthCheck) lastResponseTime() time.Time {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	res := th.lastResponseTimestamp
+	return res
+}
+
+// SimpleCopy returns a TabletHealth with all the necessary fields copied from tabletHealthCheck.
+// Note that this is not a deep copy because we point to the same underlying RealtimeStats.
+// That is fine because the RealtimeStats object is never changed after creation.
+func (th *tabletHealthCheck) SimpleCopy() *TabletHealth {
+	// we have to explicitly create a new object rather than relying on assignment to make a copy for us
+	// the following doesn't work for synchronized objects
+	// t := *th
+	// return &t
+	return &TabletHealth{
+		Conn:                th.Conn,
+		Tablet:              th.Tablet,
+		Target:              th.Target,
+		Stats:               th.Stats,
+		LastError:           th.LastError,
+		MasterTermStartTime: th.MasterTermStartTime,
+		Serving:             th.Serving,
+	}
+}
+
+// DeepEqual compares two tabletHealthCheck. Since we include protos, we
+// need to use proto.Equal on these.
+func (th *tabletHealthCheck) DeepEqual(other *tabletHealthCheck) bool {
+	return proto.Equal(th.Tablet, other.Tablet) &&
+		proto.Equal(th.Target, other.Target) &&
+		th.Serving == other.Serving &&
+		th.MasterTermStartTime == other.MasterTermStartTime &&
+		proto.Equal(th.Stats, other.Stats) &&
+		((th.LastError == nil && other.LastError == nil) ||
+			(th.LastError != nil && other.LastError != nil && th.LastError.Error() == other.LastError.Error()))
+}
+
+func (th *tabletHealthCheck) deleteConnLocked() {
 	th.mu.Lock()
 	th.Conn = nil
 	th.mu.Unlock()
 	th.cancelFunc()
 }
 
-func (th *TabletHealth) isHealthy() bool {
+func (th *tabletHealthCheck) isHealthy() bool {
 	return th.Serving && th.LastError == nil && th.Stats != nil && !IsReplicationLagVeryHigh(th)
 }
 
@@ -159,7 +184,7 @@ func (th *TabletHealth) isHealthy() bool {
 // but don't continue to log if the connection stays down.
 //
 // th.mu must be locked before calling this function
-func (th *TabletHealth) setServingState(serving bool, reason string) {
+func (th *tabletHealthCheck) setServingState(serving bool, reason string) {
 	if !th.loggedServingState || (serving != th.Serving) {
 		// Emit the log from a separate goroutine to avoid holding
 		// the th lock while logging is happening
@@ -177,7 +202,7 @@ func (th *TabletHealth) setServingState(serving bool, reason string) {
 }
 
 // stream streams healthcheck responses to callback.
-func (th *TabletHealth) stream(ctx context.Context, callback func(*query.StreamHealthResponse) error) error {
+func (th *tabletHealthCheck) stream(ctx context.Context, callback func(*query.StreamHealthResponse) error) error {
 	th.mu.Lock()
 	if th.Conn == nil {
 		conn, err := tabletconn.GetDialer()(th.Tablet, grpcclient.FailFast(true))
@@ -200,13 +225,15 @@ func (th *TabletHealth) stream(ctx context.Context, callback func(*query.StreamH
 		th.LastError = err
 		th.Conn.Close(ctx)
 		th.Conn = nil
+		// signal that healthCheck is now up-to-date
+		th.lastResponseTimestamp = time.Now()
 		th.mu.Unlock()
 	}
 	return err
 }
 
 // processResponse reads one health check response, and updates health
-func (th *TabletHealth) processResponse(hc *HealthCheckImpl, shr *query.StreamHealthResponse) error {
+func (th *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.StreamHealthResponse) error {
 	select {
 	case <-th.ctx.Done():
 		return th.ctx.Err()
@@ -253,7 +280,7 @@ func (th *TabletHealth) processResponse(hc *HealthCheckImpl, shr *query.StreamHe
 	hcErrorCounters.Add([]string{shr.Target.Keyspace, shr.Target.Shard, topoproto.TabletTypeLString(shr.Target.TabletType)}, 0)
 	if currentTablet.Type != shr.Target.TabletType || currentTablet.Keyspace != shr.Target.Keyspace || currentTablet.Shard != shr.Target.Shard {
 		// keyspace and shard are not expected to change, but just in case ...
-		// hc still has this TabletHealth in the wrong target (because tabletType changed)
+		// hc still has this tabletHealthCheck in the wrong target (because tabletType changed)
 		oldTargetKey := hc.keyFromTablet(currentTablet)
 		newTargetKey := hc.keyFromTarget(shr.Target)
 		tabletAlias := topoproto.TabletAliasString(currentTablet.Alias)
@@ -261,14 +288,13 @@ func (th *TabletHealth) processResponse(hc *HealthCheckImpl, shr *query.StreamHe
 		delete(hc.healthData[oldTargetKey], tabletAlias)
 		_, ok := hc.healthData[newTargetKey]
 		if !ok {
-			hc.healthData[newTargetKey] = make(map[string]*TabletHealth)
+			hc.healthData[newTargetKey] = make(map[string]*tabletHealthCheck)
 		}
 		hc.healthData[newTargetKey][tabletAlias] = th
 		hc.mu.Unlock()
 	}
 
 	// Update our record
-	th.lastResponseTimestamp = time.Now()
 	th.mu.Lock()
 	defer th.mu.Unlock()
 	th.Target = shr.Target
@@ -284,7 +310,7 @@ func (th *TabletHealth) processResponse(hc *HealthCheckImpl, shr *query.StreamHe
 	targetKey := hc.keyFromTarget(shr.Target)
 	if !trivialNonMasterUpdate {
 		all := hc.healthData[targetKey]
-		allArray := make([]*TabletHealth, 0, len(all))
+		allArray := make([]*tabletHealthCheck, 0, len(all))
 		for _, s := range all {
 			allArray = append(allArray, s)
 		}
@@ -312,8 +338,10 @@ func (th *TabletHealth) processResponse(hc *HealthCheckImpl, shr *query.StreamHe
 	// and notify downstream for master change
 	if shr.Target.TabletType == topodata.TabletType_MASTER {
 		if hc.masterCallback != nil {
-			hc.masterCallback(th)
+			hc.masterCallback(th.SimpleCopy())
 		}
 	}
+	// signal that healthCheck is now up-to-date
+	th.lastResponseTimestamp = time.Now()
 	return nil
 }

@@ -21,14 +21,14 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -46,7 +46,7 @@ func init() {
 	flag.Set("tablet_protocol", "fake_gateway")
 }
 
-func TestHealthCheck(t *testing.T) {
+func TestBasicHealthCheck(t *testing.T) {
 	ts := memorytopo.NewServer("cell")
 	hc := createTestHc(ts)
 	tablet := topo.NewTablet(0, "cell", "a")
@@ -83,9 +83,9 @@ func TestHealthCheck(t *testing.T) {
 		if time.Since(startTime) > timeout {
 			t.Fatal("Timed out waiting for initial health")
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(10 * time.Microsecond)
 	}
-	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias]), "Wrong tabletHealth data:\n expected: %v\n got:      %v", want, hc.healthByAlias[tabletAlias])
+	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias].SimpleCopy()), "Wrong tabletHealth data:\n expected: %v\n got:      %v", want, hc.healthByAlias[tabletAlias])
 
 	shr := &querypb.StreamHealthResponse{
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -103,22 +103,22 @@ func TestHealthCheck(t *testing.T) {
 		MasterTermStartTime: 0,
 	}
 	startTime = time.Now()
-	lastResponseTime := hc.healthByAlias[tabletAlias].lastResponseTimestamp
+	lastResponseTime := hc.healthByAlias[tabletAlias].lastResponseTime()
 	for {
 		// Health has been updated
-		if hc.healthByAlias[tabletAlias].lastResponseTimestamp != lastResponseTime || time.Since(startTime) > timeout {
+		if hc.healthByAlias[tabletAlias].lastResponseTime() != lastResponseTime || time.Since(startTime) > timeout {
 			break
 		}
 		if time.Since(startTime) > timeout {
 			t.Fatal("Timed out waiting for health update")
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(10 * time.Microsecond)
 	}
-	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias]), "Wrong tabletHealth data:\n Expected: %v\n Actual:   %v", want, hc.healthByAlias[tabletAlias])
+	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias].SimpleCopy()), "Wrong tabletHealth data:\n Expected: %v\n Actual:   %v", want, hc.healthByAlias[tabletAlias])
 	targetKey := hc.keyFromTarget(want.Target)
 	ths := hc.healthData[targetKey]
 	assert.NotEmpty(t, ths, "healthData is empty")
-	assert.True(t, want.DeepEqual(ths[tabletAlias]), "healthData contains wrong tabletHealth")
+	assert.True(t, want.DeepEqual(ths[tabletAlias].SimpleCopy()), "healthData contains wrong tabletHealth")
 
 	tcsl := hc.CacheStatus()
 	tcslWant := TabletsCacheStatusList{{
@@ -156,18 +156,18 @@ func TestHealthCheck(t *testing.T) {
 	}
 	input <- shr
 	startTime = time.Now()
-	lastResponseTime = hc.healthByAlias[tabletAlias].lastResponseTimestamp
+	lastResponseTime = hc.healthByAlias[tabletAlias].lastResponseTime()
 	for {
 		// Health has been updated
-		if hc.healthByAlias[tabletAlias].lastResponseTimestamp != lastResponseTime || time.Since(startTime) > timeout {
+		if hc.healthByAlias[tabletAlias].lastResponseTime() != lastResponseTime || time.Since(startTime) > timeout {
 			break
 		}
 		if time.Since(startTime) > timeout {
 			t.Fatal("Timed out waiting for health update")
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(10 * time.Microsecond)
 	}
-	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias]), "Wrong health data:\n Expected: %v\n Actual:   %v", want, hc.healthByAlias[tabletAlias])
+	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias].SimpleCopy()), "Wrong health data:\n Expected: %v\n Actual:   %v", want, hc.healthByAlias[tabletAlias])
 	//	testChecksum(t, 2773351292, hc.stateChecksum())
 
 	err := checkErrorCounter("k", "s", topodatapb.TabletType_MASTER, 0)
@@ -190,18 +190,18 @@ func TestHealthCheck(t *testing.T) {
 	input <- shr
 	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: REPLICA}, TabletExternallyReparentedTimestamp: 0, {SecondsBehindMaster: 1, CpuUsage: 0.3}}`)
 	startTime = time.Now()
-	lastResponseTime = hc.healthByAlias[tabletAlias].lastResponseTimestamp
+	lastResponseTime = hc.healthByAlias[tabletAlias].lastResponseTime()
 	for {
 		// Health has been updated
-		if hc.healthByAlias[tabletAlias].lastResponseTimestamp != lastResponseTime || time.Since(startTime) > timeout {
+		if hc.healthByAlias[tabletAlias].lastResponseTime() != lastResponseTime || time.Since(startTime) > timeout {
 			break
 		}
 		if time.Since(startTime) > timeout {
 			t.Fatal("Timed out waiting for health update")
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(10 * time.Microsecond)
 	}
-	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias]), "Wrong health data:\n Expected: %v\n Actual:   %v", want, hc.healthByAlias[tabletAlias])
+	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias].SimpleCopy()), "Wrong health data:\n Expected: %v\n Actual:   %v", want, hc.healthByAlias[tabletAlias])
 	//	testChecksum(t, 2829991735, hc.stateChecksum())
 
 	// HealthError
@@ -222,18 +222,18 @@ func TestHealthCheck(t *testing.T) {
 	input <- shr
 	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: REPLICA}, Serving: true, TabletExternallyReparentedTimestamp: 0, {HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3}}`)
 	startTime = time.Now()
-	lastResponseTime = hc.healthByAlias[tabletAlias].lastResponseTimestamp
+	lastResponseTime = hc.healthByAlias[tabletAlias].lastResponseTime()
 	for {
 		// Health has been updated
-		if hc.healthByAlias[tabletAlias].lastResponseTimestamp != lastResponseTime || time.Since(startTime) > timeout {
+		if hc.healthByAlias[tabletAlias].lastResponseTime() != lastResponseTime || time.Since(startTime) > timeout {
 			break
 		}
 		if time.Since(startTime) > timeout {
 			t.Fatal("Timed out waiting for health update")
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(10 * time.Microsecond)
 	}
-	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias]), "Wrong health data:\n Expected: %v\n Actual:   %v", want, hc.healthByAlias[tabletAlias])
+	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias].SimpleCopy()), "Wrong health data:\n Expected: %v\n Actual:   %v", want, hc.healthByAlias[tabletAlias])
 
 	testChecksum(t, 1027934207, hc.stateChecksum()) // unchanged
 
@@ -247,15 +247,90 @@ func TestHealthCheck(t *testing.T) {
 
 func TestHealthCheckStreamError(t *testing.T) {
 	ts := memorytopo.NewServer("cell")
+	hc := createTestHc(ts)
 	tablet := topo.NewTablet(0, "cell", "a")
 	tablet.PortMap["vt"] = 1
+	tabletAlias := topoproto.TabletAliasString(tablet.Alias)
 	input := make(chan *querypb.StreamHealthResponse)
 	fc := createFakeConn(tablet, input)
 	fc.errCh = make(chan error)
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
-	hc := createTestHc(ts)
 	hc.AddTablet(tablet)
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
+
+	// Immediately after AddTablet() there will be the first notification.
+	want := &tabletHealthCheck{
+		Tablet:              tablet,
+		Target:              &querypb.Target{},
+		Serving:             false,
+		MasterTermStartTime: 0,
+	}
+	startTime := time.Now()
+	timeout := 2 * time.Second
+	for {
+		if hc.healthByAlias[tabletAlias] != nil {
+			break
+		}
+		if time.Since(startTime) > timeout {
+			t.Fatal("Timed out waiting for initial health")
+		}
+		time.Sleep(10 * time.Microsecond)
+	}
+	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias]), "Wrong tabletHealth data:\n expected: %v\n got:      %v", want, hc.healthByAlias[tabletAlias])
+
+	// one tablet after receiving a StreamHealthResponse
+	shr := &querypb.StreamHealthResponse{
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                             true,
+		TabletExternallyReparentedTimestamp: 0,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+	want = &tabletHealthCheck{
+		Tablet:              tablet,
+		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:             true,
+		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		MasterTermStartTime: 0,
+	}
+	input <- shr
+	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: MASTER}, Serving: true, TabletExternallyReparentedTimestamp: 10, {SecondsBehindMaster: 1, CpuUsage: 0.2}}`)
+	startTime = time.Now()
+	lastResponseTime := hc.healthByAlias[tabletAlias].lastResponseTime()
+	for {
+		// Health has been updated
+		if hc.healthByAlias[tabletAlias].lastResponseTime() != lastResponseTime || time.Since(startTime) > timeout {
+			break
+		}
+		if time.Since(startTime) > timeout {
+			t.Fatal("Timed out waiting for health update")
+		}
+		time.Sleep(10 * time.Microsecond)
+	}
+	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias]), "Wrong tabletHealth data:\n Expected: %v\n Actual:   %v", want, hc.healthByAlias[tabletAlias])
+
+	// Stream error
+	fc.errCh <- fmt.Errorf("some stream error")
+	want = &tabletHealthCheck{
+		Tablet:              tablet,
+		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:             false,
+		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		MasterTermStartTime: 0,
+		LastError:           fmt.Errorf("some stream error"),
+	}
+	startTime = time.Now()
+	lastResponseTime = hc.healthByAlias[tabletAlias].lastResponseTime()
+	for {
+		// Health has been updated
+		if hc.healthByAlias[tabletAlias].lastResponseTime() != lastResponseTime || time.Since(startTime) > timeout {
+			break
+		}
+		if time.Since(startTime) > timeout {
+			t.Fatal("Timed out waiting for health update")
+		}
+		time.Sleep(10 * time.Microsecond)
+	}
+	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias]), "Wrong tabletHealth data:\n Expected: %v\n Actual:   %v", want, hc.healthByAlias[tabletAlias])
 
 	// close healthcheck
 	hc.Close()
@@ -266,14 +341,74 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 	t.Logf("starting")
 	tablet := topo.NewTablet(1, "cell", "a")
 	tablet.PortMap["vt"] = 1
+	tabletAlias := topoproto.TabletAliasString(tablet.Alias)
 	input := make(chan *querypb.StreamHealthResponse, 1)
-	createFakeConn(tablet, input)
-
+	fc := createFakeConn(tablet, input)
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
-
 	hc := createTestHc(ts)
 	hc.AddTablet(tablet)
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
+
+	// Immediately after AddTablet() there will be the first notification.
+	want := &tabletHealthCheck{
+		Tablet:              tablet,
+		Target:              &querypb.Target{},
+		Serving:             false,
+		MasterTermStartTime: 0,
+	}
+	startTime := time.Now()
+	timeout := 2 * time.Second
+	for {
+		if hc.healthByAlias[tabletAlias] != nil {
+			break
+		}
+		if time.Since(startTime) > timeout {
+			t.Fatal("Timed out waiting for initial health")
+		}
+		time.Sleep(10 * time.Microsecond)
+	}
+	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias]), "Wrong tabletHealth data:\n expected: %v\n got:      %v", want, hc.healthByAlias[tabletAlias])
+
+	input <- &querypb.StreamHealthResponse{
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		TabletAlias:                         &topodatapb.TabletAlias{Uid: 20, Cell: "cellb"},
+		Serving:                             true,
+		TabletExternallyReparentedTimestamp: 10,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+
+	ticker := time.NewTicker(2 * time.Second)
+	select {
+	case err := <-fc.cbErrCh:
+		t.Logf("<-fc.cbErrCh: %v", err)
+		if prefix := "health stats mismatch"; !strings.HasPrefix(err.Error(), prefix) {
+			t.Fatalf("wrong error, got %v; want prefix %v", err, prefix)
+		}
+	case <-ticker.C:
+		t.Fatalf("Timed out waiting for StreamHealth to return a health stats mismatch error")
+	}
+
+	input <- &querypb.StreamHealthResponse{
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		TabletAlias:                         &topodatapb.TabletAlias{Uid: 1, Cell: "cell"},
+		Serving:                             true,
+		TabletExternallyReparentedTimestamp: 10,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+
+	startTime = time.Now()
+	lastResponseTime := hc.healthByAlias[tabletAlias].lastResponseTime()
+	for {
+		// Health has been updated
+		if hc.healthByAlias[tabletAlias].lastResponseTime() != lastResponseTime || time.Since(startTime) > timeout {
+			break
+		}
+		if time.Since(startTime) > timeout {
+			t.Fatal("Timed out waiting for health update")
+		}
+		time.Sleep(10 * time.Microsecond)
+	}
+	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias]), "Wrong tabletHealth data:\n Expected: %v\n Actual:   %v", want, hc.healthByAlias[tabletAlias])
 
 	// close healthcheck
 	hc.Close()
@@ -283,33 +418,199 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 // routines to finish and the listener won't be called anymore.
 func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	ts := memorytopo.NewServer("cell")
+	hc := createTestHc(ts)
 	tablet := topo.NewTablet(0, "cell", "a")
 	tablet.PortMap["vt"] = 1
+	tabletAlias := topoproto.TabletAliasString(tablet.Alias)
 	input := make(chan *querypb.StreamHealthResponse, 1)
 	createFakeConn(tablet, input)
-
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
-
-	hc := createTestHc(ts)
 	hc.AddTablet(tablet)
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
+	// Immediately after AddTablet() there will be the first notification.
+	want := &tabletHealthCheck{
+		Tablet:              tablet,
+		Target:              &querypb.Target{},
+		Serving:             false,
+		MasterTermStartTime: 0,
+	}
+	startTime := time.Now()
+	timeout := 2 * time.Second
+	for {
+		if hc.healthByAlias[tabletAlias] != nil {
+			break
+		}
+		if time.Since(startTime) > timeout {
+			t.Fatal("Timed out waiting for initial health")
+		}
+		time.Sleep(10 * time.Microsecond)
+	}
+	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias]), "Wrong tabletHealth data:\n expected: %v\n got:      %v", want, hc.healthByAlias[tabletAlias])
+
+	// one tablet after receiving a StreamHealthResponse
+	shr := &querypb.StreamHealthResponse{
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                             true,
+		TabletExternallyReparentedTimestamp: 0,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+	want = &tabletHealthCheck{
+		Tablet:              tablet,
+		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:             true,
+		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		MasterTermStartTime: 0,
+	}
+	input <- shr
+	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: MASTER}, Serving: true, TabletExternallyReparentedTimestamp: 10, {SecondsBehindMaster: 1, CpuUsage: 0.2}}`)
+	startTime = time.Now()
+	lastResponseTime := hc.healthByAlias[tabletAlias].lastResponseTime()
+	for {
+		// Health has been updated
+		if hc.healthByAlias[tabletAlias].lastResponseTime() != lastResponseTime || time.Since(startTime) > timeout {
+			break
+		}
+		if time.Since(startTime) > timeout {
+			t.Fatal("Timed out waiting for health update")
+		}
+		time.Sleep(10 * time.Microsecond)
+	}
+	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias]), "Wrong tabletHealth data:\n Expected: %v\n Actual:   %v", want, hc.healthByAlias[tabletAlias])
+
+	// Change input to distinguish between stats sent before and after Close().
+	shr.TabletExternallyReparentedTimestamp = 11
+	// Close the healthcheck. Tablet connections are closed asynchronously and
+	// Close() will block until all Go routines (one per connection) are done.
 	hc.Close()
+	// Try to send more updates. They should be ignored and nothing should change
+	// Note that this code is racy by nature. If there is a regression, it should
+	// fail in some cases.
+	input <- shr
+	t.Logf(`input <- %v`, shr)
+	assert.Nil(t, hc.healthByAlias, "health data should be nil")
 }
 
 func TestHealthCheckTimeout(t *testing.T) {
 	ts := memorytopo.NewServer("cell")
+	hc := createTestHc(ts)
 	timeout := 500 * time.Millisecond
+	hc.healthCheckTimeout = 2 * timeout
 	tablet := topo.NewTablet(0, "cell", "a")
 	tablet.PortMap["vt"] = 1
+	tabletAlias := topoproto.TabletAliasString(tablet.Alias)
 	input := make(chan *querypb.StreamHealthResponse)
-	createFakeConn(tablet, input)
+	fc := createFakeConn(tablet, input)
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
-	hc := createTestHc(ts)
-	hc.retryDelay = timeout
 	hc.AddTablet(tablet)
 	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
+	// Immediately after AddTablet() there will be the first notification.
+	want := &TabletHealth{
+		Tablet:              tablet,
+		Target:              &querypb.Target{},
+		Serving:             false,
+		MasterTermStartTime: 0,
+	}
+	startTime := time.Now()
+	for {
+		if hc.healthByAlias[tabletAlias] != nil {
+			break
+		}
+		if time.Since(startTime) > timeout {
+			t.Fatal("Timed out waiting for initial health")
+		}
+		time.Sleep(10 * time.Microsecond)
+	}
+	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias].SimpleCopy()), "Wrong tabletHealth data:\n expected: %v\n got:      %v", want, hc.healthByAlias[tabletAlias])
 
+	// one tablet after receiving a StreamHealthResponse
+	shr := &querypb.StreamHealthResponse{
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                             true,
+		TabletExternallyReparentedTimestamp: 0,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+	want = &TabletHealth{
+		Tablet:              tablet,
+		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:             true,
+		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		MasterTermStartTime: 0,
+	}
+	input <- shr
+	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: MASTER}, Serving: true, TabletExternallyReparentedTimestamp: 10, {SecondsBehindMaster: 1, CpuUsage: 0.2}}`)
+	startTime = time.Now()
+	lastResponseTime := hc.healthByAlias[tabletAlias].lastResponseTime()
+	for {
+		// Health has been updated
+		if hc.healthByAlias[tabletAlias].lastResponseTime() != lastResponseTime || time.Since(startTime) > timeout {
+			break
+		}
+		if time.Since(startTime) > timeout {
+			t.Fatal("Timed out waiting for health update")
+		}
+		time.Sleep(10 * time.Microsecond)
+	}
+	assert.True(t, want.DeepEqual(hc.healthByAlias[tabletAlias].SimpleCopy()), "Wrong tabletHealth data:\n Expected: %v\n Actual:   %v", want, hc.healthByAlias[tabletAlias])
+
+	if err := checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 0); err != nil {
+		t.Errorf("%v", err)
+	}
+
+	// wait for timeout period
+	time.Sleep(hc.healthCheckTimeout + 100*time.Millisecond)
+	t.Logf(`Sleep(1.1 * timeout)`)
+	res := hc.healthByAlias[tabletAlias]
+	if res.Serving {
+		t.Errorf(`tabletHealthCheck: %+v; want not serving`, res)
+	}
+
+	if err := checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 1); err != nil {
+		t.Errorf("%v", err)
+	}
+
+	if !fc.isCanceled() {
+		t.Errorf("StreamHealth should be canceled after timeout, but is not")
+	}
+
+	// repeat the wait. It will timeout one more time trying to get the connection.
+	fc.resetCanceledFlag()
+	time.Sleep(hc.healthCheckTimeout)
+	t.Logf(`Sleep(timeout)`)
+
+	res = hc.healthByAlias[tabletAlias]
+	if res.Serving {
+		t.Errorf(`tabletHealthCheck: %+v; want not serving`, res)
+	}
+
+	if err := checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 2); err != nil {
+		t.Errorf("%v", err)
+	}
+
+	if !fc.isCanceled() {
+		t.Errorf("StreamHealth should be canceled again after timeout")
+	}
+
+	// send a healthcheck response, it should be serving again
+	fc.resetCanceledFlag()
+	input <- shr
+	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: MASTER}, Serving: true, TabletExternallyReparentedTimestamp: 10, {SecondsBehindMaster: 1, CpuUsage: 0.2}}`)
+
+	// wait for the exponential backoff to wear off and health monitoring to resume.
+	startTime = time.Now()
+	lastResponseTime = hc.healthByAlias[tabletAlias].lastResponseTime()
+	for {
+		// Health has been updated
+		if hc.healthByAlias[tabletAlias].lastResponseTime() != lastResponseTime || time.Since(startTime) > timeout {
+			break
+		}
+		if time.Since(startTime) > timeout {
+			t.Fatal("Timed out waiting for health update")
+		}
+		time.Sleep(10 * time.Microsecond)
+	}
+	res = hc.healthByAlias[tabletAlias]
+	assert.True(t, want.DeepEqual(res.SimpleCopy()), "Wrong tabletHealth data:\n Expected: %v\n Actual:   %v", want, hc.healthByAlias[tabletAlias])
 	// close healthcheck
 	hc.Close()
 }
