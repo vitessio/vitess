@@ -192,8 +192,6 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			}
 		}
 
-		// instead of returning []*TabletHealth we can return a simpler struct
-		// that contains just tablet ALias and connection
 		tablets := gw.hc.GetHealthyTabletStats(target)
 		if len(tablets) == 0 {
 			// fail fast if there is no tablet

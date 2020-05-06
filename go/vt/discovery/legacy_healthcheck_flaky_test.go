@@ -57,6 +57,7 @@ func testChecksum(t *testing.T, want, got int64) {
 }
 
 func TestLegacyHealthCheck(t *testing.T) {
+	hcErrorCounters.ResetAll()
 	tablet := topo.NewTablet(0, "cell", "a")
 	tablet.PortMap["vt"] = 1
 	input := make(chan *querypb.StreamHealthResponse)

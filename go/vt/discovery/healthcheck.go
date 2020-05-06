@@ -173,11 +173,12 @@ type HealthCheck interface {
 }
 
 // HealthCheckImpl performs health checking and stores the results.
-// It contains a map of TabletHealth objects per Target.
-// Each TabletHealth object  stores the health information for one tablet.
-// A checkConn goroutine is spawned for each TabletHealth, which is responsible for
-// keeping that TabletHealth up-to-date.
-// If checkConn terminates for any reason, it updates TabletHealth.Up as false. If a TabletHealth
+// It contains a map of tabletHealthCheck objects by Alias.
+// Each tabletHealthCheck object stores the health information for one tablet.
+// A checkConn goroutine is spawned for each tabletHealthCheck, which is responsible for
+// keeping that tabletHealthCheck up-to-date.
+// If checkConn terminates for any reason, then the corresponding tabletHealthCheck object
+// is removed from the map. When a tabletHealthCheck
 // gets removed from the map, its cancelFunc gets called, which ensures that the associated
 // checkConn goroutine eventually terminates.
 type HealthCheckImpl struct {
@@ -189,14 +190,14 @@ type HealthCheckImpl struct {
 	// mu protects all the following fields.
 	mu sync.Mutex
 	// authoritative map of tabletHealth by alias
-	healthByAlias map[string]*TabletHealth
+	healthByAlias map[string]*tabletHealthCheck
 	// a map keyed by keyspace.shard.tabletType
-	// contains a map of TabletHealth keyed by tablet alias for each tablet relevant to the keyspace.shard.tabletType
+	// contains a map of tabletHealthCheck keyed by tablet alias for each tablet relevant to the keyspace.shard.tabletType
 	// has to be kept in sync with healthByAlias
-	healthData map[string]map[string]*TabletHealth
-	// another map keyed by keyspace.shard.tabletType, this one containing a sorted list of TabletHealth
-	// TODO(deepthi): replace with SimpleTabletHealth
-	healthy map[string][]*TabletHealth
+	healthData map[string]map[string]*tabletHealthCheck
+	// another map keyed by keyspace.shard.tabletType, this one containing a sorted list of tabletHealthCheck
+	// TODO(deepthi): replace with TabletHealth
+	healthy map[string][]*tabletHealthCheck
 	// connsWG keeps track of all launched Go routines that monitor tablet connections.
 	connsWG sync.WaitGroup
 	// topology watchers that inform healthcheck of tablets being added and deleted
@@ -207,11 +208,6 @@ type HealthCheckImpl struct {
 	// cellAliases is a cache of cell aliases
 	cellAliases map[string]string
 }
-
-//type SimpleTabletHealth struct {
-//	TabletAlias string
-//	Conn        queryservice.QueryService
-//}
 
 // NewHealthCheck creates a new HealthCheck object.
 // Parameters:
@@ -226,6 +222,8 @@ type HealthCheckImpl struct {
 //   The topology server that this healthcheck object can use to retrieve cell or tablet information
 // localCell.
 //   The localCell for this healthcheck
+// callback.
+//   A function to call when there is a master change. Used to notify vtgate's buffer to stop buffering.
 func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell string, callback func(health *TabletHealth)) HealthCheck {
 	log.Infof("loading tablets for cells: %v", *CellsToWatch)
 
@@ -235,9 +233,9 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		retryDelay:         retryDelay,
 		healthCheckTimeout: healthCheckTimeout,
 		masterCallback:     callback,
-		healthByAlias:      make(map[string]*TabletHealth),
-		healthData:         make(map[string]map[string]*TabletHealth),
-		healthy:            make(map[string][]*TabletHealth),
+		healthByAlias:      make(map[string]*tabletHealthCheck),
+		healthData:         make(map[string]map[string]*tabletHealthCheck),
+		healthy:            make(map[string][]*tabletHealthCheck),
 	}
 	var topoWatchers []*TopologyWatcher
 	var filter TabletFilter
@@ -520,7 +518,7 @@ func (hc *HealthCheckImpl) stateChecksum() int64 {
 // finalizeConn closes the health checking connection and sends the final
 // notification about the tablet to downstream. To be called only on exit from
 // checkConn().
-func (hc *HealthCheckImpl) finalizeConn(th *TabletHealth) {
+func (hc *HealthCheckImpl) finalizeConn(th *tabletHealthCheck) {
 	th.mu.Lock()
 	defer th.mu.Unlock()
 	th.setServingState(false, "finalizeConn closing connection")
@@ -538,7 +536,7 @@ func (hc *HealthCheckImpl) finalizeConn(th *TabletHealth) {
 }
 
 // checkConn performs health checking on the given tablet.
-func (hc *HealthCheckImpl) checkConn(th *TabletHealth) {
+func (hc *HealthCheckImpl) checkConn(th *tabletHealthCheck) {
 	defer hc.connsWG.Done()
 	defer hc.finalizeConn(th)
 
@@ -659,7 +657,7 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,
 	}
-	th := &TabletHealth{
+	th := &tabletHealthCheck{
 		ctx:        ctx,
 		cancelFunc: cancelFunc,
 		Tablet:     tablet,
@@ -672,11 +670,12 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
 	// TODO: can this ever already exist?
 	if _, ok := hc.healthByAlias[tabletAlias]; ok {
 		log.Errorf("Program bug")
+		hc.mu.Unlock()
 		return
 	}
 	hc.healthByAlias[tabletAlias] = th
 	if ths, ok := hc.healthData[key]; !ok {
-		hc.healthData[key] = make(map[string]*TabletHealth)
+		hc.healthData[key] = make(map[string]*tabletHealthCheck)
 		hc.healthData[key][tabletAlias] = th
 	} else {
 		// just overwrite it if it exists already?
@@ -727,7 +726,7 @@ func (hc *HealthCheckImpl) cacheStatusMap() map[string]*TabletsCacheStatus {
 			}
 			tcsMap[key] = tcs
 		}
-		tcs.TabletsStats = append(tcs.TabletsStats, th)
+		tcs.TabletsStats = append(tcs.TabletsStats, th.SimpleCopy())
 		th.mu.Unlock()
 	}
 	return tcsMap
@@ -798,12 +797,11 @@ func (hc *HealthCheckImpl) GetHealthyTabletStats(target *query.Target) []*Tablet
 	}
 	for _, th := range hc.healthByAlias {
 		if th.Tablet.Type == topodata.TabletType_MASTER {
-			// TODO(deepthi): return SimpleHealth here
-			result = append(result, th.Copy())
+			result = append(result, th.SimpleCopy())
 			return result
 		}
 		if th.isHealthy() {
-			result = append(result, th.Copy())
+			result = append(result, th.SimpleCopy())
 		}
 	}
 	// healthy list needs to be sorted using replication lag algorithm
@@ -819,7 +817,7 @@ func (hc *HealthCheckImpl) getTabletStats(target *query.Target) []*TabletHealth 
 	var result []*TabletHealth
 	ths := hc.healthData[hc.keyFromTarget(target)]
 	for _, th := range ths {
-		result = append(result, th.Copy())
+		result = append(result, th.SimpleCopy())
 	}
 	return result
 }
