@@ -670,7 +670,7 @@ func TestTabletControl(t *testing.T) {
 	// now refresh the tablet state, as the resharding process would do
 	agent.RefreshState(ctx)
 
-	// QueryService changed back from SERVING to NOT_SERVING since refreshTablet()
+	// QueryService changed back from SERVING to NOT_SERVING since RefreshState()
 	// re-read the topology and saw that REPLICA is still not allowed to serve.
 	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "", 19); err != nil {
 		t.Fatal(err)
