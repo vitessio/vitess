@@ -1,3 +1,5 @@
+minikube start --cpus=8 --memory=11000 --disk-size=50g --kubernetes-version=v1.14.9
+
 kubectl apply -f operator.yaml
 kubectl apply -f 101_initial_cluster.yaml
 
@@ -29,15 +31,13 @@ vtctlclient ApplyVSchema -vschema="$(cat vschema_customer_sharded.json)" custome
 kubectl apply -f 302_new_shards.yaml
 
 # Reshard
-vtctlclient Reshard customer.cust2cust '0' '-80,80-'
+vtctlclient Reshard customer.cust2cust '-' '-80,80-'
 vtctlclient SwitchReads -tablet_type=rdonly customer.cust2cust
 vtctlclient SwitchReads -tablet_type=replica customer.cust2cust
 vtctlclient SwitchWrites customer.cust2cust
 
 # Down shard 0
-TODO
-vtctlclient DeleteShard -recursive customer/0
+kubectl apply -f 306_down_shard_0.yaml
 
 # Down cluster
-TODO
-
+kubectl delete -f 101_initial_cluster.yaml

@@ -76,7 +76,7 @@ spec:
     turndownPolicy: Immediate
     partitionings:
     - equal:
-        parts: 1
+        parts: 2
         shardTemplate:
           databaseInitScriptSecret:
             name: example-cluster-config
