@@ -76,6 +76,8 @@ spec:
               resources:
                 requests:
                   storage: 10Gi
+  updateStrategy:
+    type: Immediate
 ---
 apiVersion: v1
 kind: Secret
