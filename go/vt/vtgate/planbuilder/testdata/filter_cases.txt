@@ -1351,3 +1351,61 @@
     "Table": "music"
   }
 }
+
+# Single table with unique vindex match and IN (null)
+"select id from music where user_id = 4 and id IN (null)"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from music where user_id = 4 and id IN (null)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectNone",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from music where 1 != 1",
+    "Query": "select id from music where user_id = 4 and id in (null)",
+    "Table": "music"
+  }
+}
+
+# Single table with unique vindex match and IN (null, 1, 2)
+"select id from music where user_id = 4 and id IN (null, 1, 2)"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from music where user_id = 4 and id IN (null, 1, 2)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from music where 1 != 1",
+    "Query": "select id from music where user_id = 4 and id in (null, 1, 2)",
+    "Table": "music",
+    "Values": [
+      4
+    ],
+    "Vindex": "user_index"
+  }
+}
+
+# Single table with unique vindex match and NOT IN (null, 1, 2)
+"select id from music where user_id = 4 and id NOT IN (null, 1, 2)"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from music where user_id = 4 and id NOT IN (null, 1, 2)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectNone",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from music where 1 != 1",
+    "Query": "select id from music where user_id = 4 and id not in (null, 1, 2)",
+    "Table": "music"
+  }
+}
