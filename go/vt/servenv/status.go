@@ -223,8 +223,6 @@ func (sp *statusPage) statusHandler(w http.ResponseWriter, r *http.Request) {
 	if err := sp.tmpl.ExecuteTemplate(w, "status", data); err != nil {
 		if _, ok := err.(net.Error); !ok {
 			log.Errorf("servenv: couldn't execute template: %v", err)
-			log.Infof("template: %v", sp.tmpl)
-			log.Infof("data: %v", data)
 		}
 	}
 }

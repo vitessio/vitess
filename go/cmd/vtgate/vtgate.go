@@ -43,7 +43,6 @@ var (
 
 var resilientServer *srvtopo.ResilientServer
 var legacyHealthCheck discovery.LegacyHealthCheck
-var healthCheck discovery.HealthCheck
 
 func init() {
 	rand.Seed(time.Now().UnixNano())

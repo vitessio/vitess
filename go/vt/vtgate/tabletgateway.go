@@ -308,3 +308,8 @@ func (gw *TabletGateway) nextTablet(cell string, tablets []*discovery.TabletHeal
 	}
 	return -1
 }
+
+// HealthCheck satisfies the Gateway interface
+func (gw *TabletGateway) HealthCheck() discovery.HealthCheck {
+	return gw.hc
+}

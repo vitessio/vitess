@@ -408,3 +408,9 @@ func NewShardError(in error, target *querypb.Target, tablet *topodatapb.Tablet) 
 	}
 	return in
 }
+
+// HealthCheck should never be called on a DiscoveryGateway
+// This exists only to satisfy the interface
+func (dg *DiscoveryGateway) HealthCheck() discovery.HealthCheck {
+	return nil
+}
