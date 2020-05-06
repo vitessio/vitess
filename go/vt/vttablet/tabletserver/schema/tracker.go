@@ -62,7 +62,6 @@ func NewTracker(engine trackerEngine) *Tracker {
 
 // SchemaUpdated is called by a vstream when it encounters a DDL
 func (t *Tracker) SchemaUpdated(gtid string, ddl string, timestamp int64) error {
-
 	if gtid == "" || ddl == "" {
 		return fmt.Errorf("got invalid gtid or ddl in SchemaUpdated")
 	}

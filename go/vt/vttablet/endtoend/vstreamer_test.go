@@ -178,7 +178,7 @@ func TestSchemaVersioning(t *testing.T) {
 	}
 	runCases(ctx, t, cases, eventCh)
 	cancel()
-	log.Infof("\n\n\n=============================================== PAST EVENTS START HERE ======================\n\n\n")
+	log.Infof("\n\n\n=============================================== PAST EVENTS WITH TRACK VERSIONS START HERE ======================\n\n\n")
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 	eventCh = make(chan []*binlogdatapb.VEvent)
@@ -359,6 +359,7 @@ func expectLogs(ctx context.Context, t *testing.T, query string, eventCh chan []
 				if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
 					continue
 				}
+				// Also ignore begin/commit to reduce list of events to expect, for readability ...
 				if ev.Type == binlogdatapb.VEventType_BEGIN {
 					continue
 				}
@@ -429,6 +430,7 @@ func validateSchemaInserted(client *framework.QueryClient, ddl string) (bool, er
 	return false, fmt.Errorf("Found %d rows for gtid %s", len(qr.Rows), ddl)
 }
 
+// To avoid races between ddls and the historian refreshing its cache explicitly wait for tracker's insert to be visible
 func waitForVersionInsert(client *framework.QueryClient, ddl string) (bool, error) {
 	timeout := time.After(1000 * time.Millisecond)
 	tick := time.Tick(100 * time.Millisecond)
