@@ -328,6 +328,24 @@ func NewActionAgent(
 		agent.registerQueryService()
 	})
 
+	// optionally populate metadata records
+	if !*restoreFromBackup && *initPopulateMetadata {
+		// we use initialTablet here because it has the intended tabletType.
+		// the tablet returned by agent.Tablet() will have type UNKNOWN until
+		// we call updateState.
+		localMetadata := agent.getLocalMetadataValues(agent.initialTablet.Type)
+		if agent.Cnf != nil { // we are managing mysqld
+			// we'll use batchCtx here because we are still initializing and can't proceed unless this succeeds
+			if err := agent.MysqlDaemon.Wait(batchCtx, agent.Cnf); err != nil {
+				return nil, err
+			}
+		}
+		err := mysqlctl.PopulateMetadataTables(agent.MysqlDaemon, localMetadata, topoproto.TabletDbName(agent.initialTablet))
+		if err != nil {
+			return nil, vterrors.Wrap(err, "failed to -init_populate_metadata")
+		}
+	}
+
 	// Update our state (need the action lock).
 	// We do this upfront to prevent this from racing with restoreFromBackup
 	// in case it gets launched.
@@ -353,24 +371,6 @@ func NewActionAgent(
 			agent.initHealthCheck()
 		}()
 	} else {
-		// optionally populate metadata records
-		if *initPopulateMetadata {
-			// we use initialTablet here because it has the intended tabletType.
-			// the tablet returned by agent.Tablet() will have type UNKNOWN until we call
-			// refreshTablet
-			localMetadata := agent.getLocalMetadataValues(agent.initialTablet.Type)
-			if agent.Cnf != nil { // we are managing mysqld
-				// we'll use batchCtx here because we are still initializing and can't proceed unless this succeeds
-				if err := agent.MysqlDaemon.Wait(batchCtx, agent.Cnf); err != nil {
-					return nil, err
-				}
-			}
-			err := mysqlctl.PopulateMetadataTables(agent.MysqlDaemon, localMetadata, topoproto.TabletDbName(agent.initialTablet))
-			if err != nil {
-				return nil, vterrors.Wrap(err, "failed to -init_populate_metadata")
-			}
-		}
-
 		// synchronously start health check if needed
 		agent.initHealthCheck()
 	}
@@ -719,8 +719,7 @@ func (agent *ActionAgent) Start(ctx context.Context, dbcfgs *dbconfigs.DBConfigs
 
 	// Initialize the current tablet to match our current running
 	// state: Has most field filled in, but type is UNKNOWN.
-	// Subsequents calls to updateState or refreshTablet
-	// will then work as expected.
+	// Subsequents calls to updateState will then work as expected.
 	startingTablet := proto.Clone(agent.initialTablet).(*topodatapb.Tablet)
 	startingTablet.Type = topodatapb.TabletType_UNKNOWN
 	agent.setTablet(startingTablet)
