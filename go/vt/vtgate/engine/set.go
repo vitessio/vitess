@@ -66,6 +66,14 @@ type (
 		TargetDestination key.Destination
 		Expr              string
 	}
+
+	// SysVarSet implements the SetOp interface and will write the changes variable into the session
+	SysVarSet struct {
+		Name              string
+		Keyspace          *vindexes.Keyspace
+		TargetDestination key.Destination
+		Expr              string
+	}
 )
 
 var _ Primitive = (*Set)(nil)
@@ -233,5 +241,43 @@ func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, env evalengine.Expres
 		warning = &querypb.QueryWarning{Code: mysql.ERNotSupportedYet, Message: fmt.Sprintf("Ignored inapplicable SET %v = %v", svci.Name, svci.Expr)}
 	}
 	vcursor.Session().RecordWarning(warning)
+	return nil
+}
+
+var _ SetOp = (*SysVarSet)(nil)
+
+//MarshalJSON provides the type to SetOp for plan json
+func (svs *SysVarSet) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Type string
+		SysVarSet
+	}{
+		Type:      "SysVarSet",
+		SysVarSet: *svs,
+	})
+
+}
+
+//VariableName implements the SetOp interface method
+func (svs *SysVarSet) VariableName() string {
+	return svs.Name
+}
+
+//Execute implements the SetOp interface method
+func (svs *SysVarSet) Execute(vcursor VCursor, res evalengine.ExpressionEnv) error {
+	rss, _, err := vcursor.ResolveDestinations(svs.Keyspace.Name, nil, []key.Destination{svs.TargetDestination})
+	if err != nil {
+		return vterrors.Wrap(err, "SysVarSet")
+	}
+
+	if len(rss) != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %v", svs.TargetDestination)
+	}
+	sysVarExprValidationQuery := fmt.Sprintf("select %s from dual where false", svs.Expr)
+	_, err = execShard(vcursor, sysVarExprValidationQuery, res.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
+	if err != nil {
+		return err
+	}
+	vcursor.Session().SetSysVar(svs.Name, svs.Expr)
 	return nil
 }

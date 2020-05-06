@@ -82,7 +82,10 @@ type (
 		RecordWarning(warning *querypb.QueryWarning)
 
 		SetTarget(target string) error
+
 		SetUDV(key string, value interface{}) error
+
+		SetSysVar(name string, expr string)
 	}
 
 	// Plan represents the execution strategy for a given query.

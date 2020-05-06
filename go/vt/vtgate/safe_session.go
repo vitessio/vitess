@@ -254,3 +254,10 @@ func (session *SafeSession) SetTargetString(target string) {
 	defer session.mu.Unlock()
 	session.TargetString = target
 }
+
+//SetSystemVariable sets the system variable in th session.
+func (session *SafeSession) SetSystemVariable(name string, expr string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.SystemVariables[name] = expr
+}
