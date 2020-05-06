@@ -45,10 +45,11 @@ import (
 
 // These consts identify how a transaction was resolved.
 const (
-	TxClose    = "close"
-	TxCommit   = "commit"
-	TxRollback = "rollback"
-	TxKill     = "kill"
+	TxClose      = "close"
+	TxCommit     = "commit"
+	TxRollback   = "rollback"
+	TxKill       = "kill"
+	ConnInitFail = "initFail"
 )
 
 const txLogInterval = 1 * time.Minute
@@ -185,43 +186,31 @@ func (tp *TxPool) WaitForEmpty() {
 func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Begin")
 	defer span.Finish()
-	txConn, err := tp.newTxConnection(ctx, options)
+	beginQueries := ""
+	txConn, err := tp.newTxConnection(ctx, options, func(txConn *TxConnection) error {
+		autocommitTransaction := false
+		if queries, ok := txIsolations[options.GetTransactionIsolation()]; ok {
+			if queries.setIsolationLevel != "" {
+				if err := txConn.execWithRetry(ctx, "set transaction isolation level "+queries.setIsolationLevel, 1, false); err != nil {
+					return err
+				}
+				beginQueries = queries.setIsolationLevel + "; "
+			}
+			if err := txConn.execWithRetry(ctx, queries.openTransaction, 1, false); err != nil {
+				return err
+			}
+			beginQueries = beginQueries + queries.openTransaction
+		} else if options.GetTransactionIsolation() == querypb.ExecuteOptions_AUTOCOMMIT {
+			autocommitTransaction = true
+		} else {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
+		}
+		txConn.Autocommit = autocommitTransaction
+		return nil
+	})
 	if err != nil {
 		return 0, "", err
 	}
-	var beginSucceeded bool
-	defer func() {
-		if beginSucceeded {
-			return
-		}
-
-		if txConn != nil {
-			txConn.conclude(TxRollback, "begin failed")
-		}
-	}()
-
-	autocommitTransaction := false
-	beginQueries := ""
-	if queries, ok := txIsolations[options.GetTransactionIsolation()]; ok {
-		if queries.setIsolationLevel != "" {
-			if _, err := txConn.Exec(ctx, "set transaction isolation level "+queries.setIsolationLevel, 1, false); err != nil {
-				return 0, "", err
-			}
-
-			beginQueries = queries.setIsolationLevel + "; "
-		}
-
-		if _, err := txConn.Exec(ctx, queries.openTransaction, 1, false); err != nil {
-			return 0, "", err
-		}
-		beginQueries = beginQueries + queries.openTransaction
-	} else if options.GetTransactionIsolation() == querypb.ExecuteOptions_AUTOCOMMIT {
-		autocommitTransaction = true
-	} else {
-		return 0, "", fmt.Errorf("don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
-	}
-
-	txConn.Autocommit = autocommitTransaction
 
 	err = tp.activePool.Register(
 		txConn.TransactionID,
@@ -231,11 +220,37 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (i
 	if err != nil {
 		return 0, "", err
 	}
-	beginSucceeded = true
 	return txConn.TransactionID, beginQueries, nil
 }
 
-func (tp *TxPool) newTxConnection(ctx context.Context, options *querypb.ExecuteOptions) (*TxConnection, error) {
+//Reserve will create a new reserved connection
+func (tp *TxPool) Reserve(ctx context.Context, options *querypb.ExecuteOptions, setStatements []string) (int64, error) {
+	span, ctx := trace.NewSpan(ctx, "TxPool.Reserve")
+	defer span.Finish()
+	txConn, err := tp.newTxConnection(ctx, options, func(txConn *TxConnection) error {
+		txConn.dbConn.Taint()
+		for _, statement := range setStatements {
+			_, err := txConn.Exec(ctx, statement, 10, false)
+			if err != nil {
+				return err
+			}
+		}
+		txConn.reserved = true
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	tp.activePool.Register(
+		txConn.TransactionID,
+		txConn,
+		options.GetWorkload() != querypb.ExecuteOptions_DBA,
+	)
+	return txConn.TransactionID, nil
+}
+
+func (tp *TxPool) newTxConnection(ctx context.Context, options *querypb.ExecuteOptions, f func(*TxConnection) error) (*TxConnection, error) {
 	var conn *connpool.DBConn
 	var err error
 	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
@@ -266,54 +281,20 @@ func (tp *TxPool) newTxConnection(ctx context.Context, options *querypb.ExecuteO
 
 	transactionID := tp.lastID.Add(1)
 
-	return &TxConnection{
+	txConn := &TxConnection{
 		dbConn:            conn,
 		TransactionID:     transactionID,
 		pool:              tp,
 		StartTime:         time.Now(),
 		ImmediateCallerID: immediateCaller,
 		EffectiveCallerID: effectiveCaller,
-	}, nil
+	}
 
-}
-
-//Reserve will create a new reserved connection
-func (tp *TxPool) Reserve(ctx context.Context, options *querypb.ExecuteOptions, setStatements []string) (int64, error) {
-	span, ctx := trace.NewSpan(ctx, "TxPool.Reserve")
-	defer span.Finish()
-	txConn, err := tp.newTxConnection(ctx, options)
+	err = f(txConn)
 	if err != nil {
-		return 0, err
+		txConn.conclude(ConnInitFail, "connection init failed")
 	}
-
-	txConn.dbConn.Taint()
-
-	var setSucceeded bool
-	defer func() {
-		if setSucceeded {
-			return
-		}
-
-		if txConn != nil {
-			txConn.conclude(TxKill, "reserve failed")
-		}
-	}()
-
-	for _, statement := range setStatements {
-		_, err := txConn.Exec(ctx, statement, 10, false)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	setSucceeded = true
-	txConn.reserved = true
-	tp.activePool.Register(
-		txConn.TransactionID,
-		txConn,
-		options.GetWorkload() != querypb.ExecuteOptions_DBA,
-	)
-	return txConn.TransactionID, nil
+	return txConn, nil
 }
 
 // Get fetches the connection associated to the transactionID.
@@ -486,6 +467,16 @@ func (txc *TxConnection) BeginAgain(ctx context.Context) error {
 		return err
 	}
 	if _, err := txc.dbConn.Exec(ctx, "begin", 1, false); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (txc *TxConnection) execWithRetry(ctx context.Context, query string, maxrows int, wantfields bool) error {
+	if txc.dbConn == nil {
+		return nil
+	}
+	if _, err := txc.dbConn.Exec(ctx, query, maxrows, wantfields); err != nil {
 		return err
 	}
 	return nil
