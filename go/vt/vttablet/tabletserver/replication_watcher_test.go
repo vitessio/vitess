@@ -74,14 +74,14 @@ func TestReplicationWatcher(t *testing.T) {
 				Ddl:         "create table",
 			}, {
 				Type:        binlogdatapb.VEventType_INSERT,
-				Timestamp:   643,
-				CurrentTime: 943,
+				Timestamp:   644,
+				CurrentTime: 944,
 				Gtid:        "gtid2",
 				Ddl:         "insert",
 			}, {
 				Type:        binlogdatapb.VEventType_DDL,
-				Timestamp:   643,
-				CurrentTime: 943,
+				Timestamp:   645,
+				CurrentTime: 945,
 				Gtid:        "gtid3",
 				Ddl:         "alter table",
 			}}},
@@ -131,19 +131,19 @@ func (f *fakeEnv) CheckMySQL() {
 }
 
 func (f *fakeEnv) Config() *tabletenv.TabletConfig {
-	panic("implement me")
+	return nil
 }
 
 func (f *fakeEnv) DBConfigs() *dbconfigs.DBConfigs {
-	panic("implement me")
+	return nil
 }
 
 func (f *fakeEnv) Exporter() *servenv.Exporter {
-	panic("implement me")
+	return nil
 }
 
 func (f *fakeEnv) Stats() *tabletenv.Stats {
-	panic("implement me")
+	return nil
 }
 
 func (f *fakeEnv) LogError() {

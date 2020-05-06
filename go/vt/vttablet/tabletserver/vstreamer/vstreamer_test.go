@@ -17,6 +17,7 @@ limitations under the License.
 package vstreamer
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -25,11 +26,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -42,42 +40,6 @@ type testcase struct {
 
 var numVersionEventsReceived int
 
-type mockHistorian struct {
-	he schema.HistoryEngine
-}
-
-func (h *mockHistorian) SetTrackSchemaVersions(val bool) {
-
-}
-
-func (h *mockHistorian) Init(tabletType topodatapb.TabletType) error {
-	return nil
-}
-
-func (h *mockHistorian) Open() error {
-	return nil
-}
-
-func (h *mockHistorian) Reload(ctx context.Context) error {
-	return nil
-}
-
-func newMockHistorian(he schema.HistoryEngine) *mockHistorian {
-	sh := mockHistorian{he: he}
-	return &sh
-}
-
-func (h *mockHistorian) GetTableForPos(tableName sqlparser.TableIdent, pos string) *binlogdatapb.MinimalTable {
-	return nil
-}
-
-func (h *mockHistorian) RegisterVersionEvent() error {
-	numVersionEventsReceived++
-	return nil
-}
-
-var _ schema.Historian = (*mockHistorian)(nil)
-
 func TestVersion(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -89,9 +51,7 @@ func TestVersion(t *testing.T) {
 	}()
 
 	mh := newMockHistorian(env.SchemaEngine)
-
 	engine = NewEngine(engine.env, env.SrvTopo, mh)
-
 	engine.Open(env.KeyspaceName, env.Cells[0])
 	defer engine.Close()
 

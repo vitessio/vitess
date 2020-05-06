@@ -17,10 +17,14 @@ limitations under the License.
 package vstreamer
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"testing"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
@@ -79,3 +83,37 @@ func customEngine(t *testing.T, modifier func(mysql.ConnParams) mysql.ConnParams
 	engine.Open(env.KeyspaceName, env.Cells[0])
 	return engine
 }
+
+type mockHistorian struct {
+	he schema.HistoryEngine
+}
+
+func (h *mockHistorian) SetTrackSchemaVersions(val bool) {}
+
+func (h *mockHistorian) Init(tabletType tabletpb.TabletType) error {
+	return nil
+}
+
+func (h *mockHistorian) Open() error {
+	return nil
+}
+
+func (h *mockHistorian) Reload(ctx context.Context) error {
+	return nil
+}
+
+func newMockHistorian(he schema.HistoryEngine) *mockHistorian {
+	sh := mockHistorian{he: he}
+	return &sh
+}
+
+func (h *mockHistorian) GetTableForPos(tableName sqlparser.TableIdent, pos string) *binlogdatapb.MinimalTable {
+	return nil
+}
+
+func (h *mockHistorian) RegisterVersionEvent() error {
+	numVersionEventsReceived++
+	return nil
+}
+
+var _ schema.Historian = (*mockHistorian)(nil)
