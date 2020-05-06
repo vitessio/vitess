@@ -127,6 +127,7 @@ type ContextVSchema interface {
 	Destination() key.Destination
 	TabletType() topodatapb.TabletType
 	TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error)
+	AnyKeyspace() (*vindexes.Keyspace, error)
 }
 
 //-------------------------------------------------------------------------

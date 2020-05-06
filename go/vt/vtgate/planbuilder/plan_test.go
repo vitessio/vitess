@@ -311,6 +311,10 @@ func (vw *vschemaWrapper) DefaultKeyspace() (*vindexes.Keyspace, error) {
 	return vw.v.Keyspaces["main"].Keyspace, nil
 }
 
+func (vw *vschemaWrapper) AnyKeyspace() (*vindexes.Keyspace, error) {
+	return vw.DefaultKeyspace()
+}
+
 func (vw *vschemaWrapper) TargetString() string {
 	return "targetString"
 }
