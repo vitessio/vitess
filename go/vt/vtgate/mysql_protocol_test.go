@@ -135,18 +135,8 @@ func TestMySQLProtocolExecuteUseStatement(t *testing.T) {
 }
 
 func TestMysqlProtocolInvalidDB(t *testing.T) {
-	c, err := mysqlConnect(&mysql.ConnParams{DbName: "invalidDB"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer c.Close()
-
-	_, err = c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
-	c.Close()
-	want := "vtgate: : keyspace invalidDB not found in vschema (errno 1105) (sqlstate HY000) during query: select id from t1"
-	if err == nil || err.Error() != want {
-		t.Errorf("exec with db:\n%v, want\n%s", err, want)
-	}
+	_, err := mysqlConnect(&mysql.ConnParams{DbName: "invalidDB"})
+	require.EqualError(t, err, "vtgate: : Unknown database 'invalidDB' (errno 1049) (sqlstate 42000) (errno 1049) (sqlstate 42000)")
 }
 
 func TestMySQLProtocolClientFoundRows(t *testing.T) {
