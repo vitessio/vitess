@@ -258,6 +258,8 @@ func (ro *routeOption) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) 
 			return ro.computeEqualPlan(pb, node)
 		case sqlparser.InStr:
 			return ro.computeINPlan(pb, node)
+		case sqlparser.NotInStr:
+			return ro.computeNotInPlan(node.Right), nil, nil
 		}
 	case *sqlparser.IsExpr:
 		return ro.computeISPlan(pb, node)
@@ -316,6 +318,10 @@ func (ro *routeOption) computeINPlan(pb *primitiveBuilder, comparison *sqlparser
 	}
 	switch node := comparison.Right.(type) {
 	case sqlparser.ValTuple:
+		if len(node) == 1 && sqlparser.IsNull(node[0]) {
+			return engine.SelectNone, nil, nil
+		}
+
 		for _, n := range node {
 			if !ro.exprIsValue(n) {
 				return engine.SelectScatter, nil, nil
@@ -326,6 +332,20 @@ func (ro *routeOption) computeINPlan(pb *primitiveBuilder, comparison *sqlparser
 		return engine.SelectIN, vindex, comparison
 	}
 	return engine.SelectScatter, nil, nil
+}
+
+// computeNotInPlan looks for null values to produce a SelectNone if found
+func (*routeOption) computeNotInPlan(right sqlparser.Expr) engine.RouteOpcode {
+	switch node := right.(type) {
+	case sqlparser.ValTuple:
+		for _, n := range node {
+			if sqlparser.IsNull(n) {
+				return engine.SelectNone
+			}
+		}
+	}
+
+	return engine.SelectScatter
 }
 
 var planCost = map[engine.RouteOpcode]int{
