@@ -21,10 +21,8 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
-	"io"
 	"reflect"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -32,7 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/status"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -657,34 +654,6 @@ func (l *listener) StatsUpdate(ts *LegacyTabletStats) {
 	l.output <- ts
 }
 
-type fakeConn struct {
-	queryservice.QueryService
-	tablet *topodatapb.Tablet
-	// If fixedResult is set, the channels are not used.
-	fixedResult *querypb.StreamHealthResponse
-	// hcChan should be an unbuffered channel which holds the tablet's next health response.
-	hcChan chan *querypb.StreamHealthResponse
-	// errCh is either an unbuffered channel which holds the stream error to return, or nil.
-	errCh chan error
-	// cbErrCh is a channel which receives errors returned from the supplied callback.
-	cbErrCh chan error
-
-	mu       sync.Mutex
-	canceled bool
-}
-
-func createFakeConn(tablet *topodatapb.Tablet, c chan *querypb.StreamHealthResponse) *fakeConn {
-	key := TabletToMapKey(tablet)
-	conn := &fakeConn{
-		QueryService: fakes.ErrorQueryService,
-		tablet:       tablet,
-		hcChan:       c,
-		cbErrCh:      make(chan error, 1),
-	}
-	connMap[key] = conn
-	return conn
-}
-
 func createFixedHealthConn(tablet *topodatapb.Tablet, fixedResult *querypb.StreamHealthResponse) *fakeConn {
 	key := TabletToMapKey(tablet)
 	conn := &fakeConn{
@@ -702,59 +671,4 @@ func discoveryDialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (q
 		return qs, nil
 	}
 	return nil, fmt.Errorf("tablet %v not found", key)
-}
-
-// StreamHealth implements queryservice.QueryService.
-func (fc *fakeConn) StreamHealth(ctx context.Context, callback func(shr *querypb.StreamHealthResponse) error) error {
-	if fc.fixedResult != nil {
-		return callback(fc.fixedResult)
-	}
-	for {
-		select {
-		case shr := <-fc.hcChan:
-			if err := callback(shr); err != nil {
-				if err == io.EOF {
-					return nil
-				}
-				select {
-				case fc.cbErrCh <- err:
-				case <-ctx.Done():
-				}
-				return err
-			}
-		case err := <-fc.errCh:
-			return err
-		case <-ctx.Done():
-			fc.mu.Lock()
-			fc.canceled = true
-			fc.mu.Unlock()
-			return nil
-		}
-	}
-}
-
-func (fc *fakeConn) isCanceled() bool {
-	fc.mu.Lock()
-	defer fc.mu.Unlock()
-	return fc.canceled
-}
-
-func (fc *fakeConn) resetCanceledFlag() {
-	fc.mu.Lock()
-	defer fc.mu.Unlock()
-	fc.canceled = false
-}
-
-func checkErrorCounter(keyspace, shard string, tabletType topodatapb.TabletType, want int64) error {
-	statsKey := []string{keyspace, shard, topoproto.TabletTypeLString(tabletType)}
-	name := strings.Join(statsKey, ".")
-	got, ok := hcErrorCounters.Counts()[name]
-	if !ok {
-		return fmt.Errorf("hcErrorCounters not correctly initialized")
-	}
-	if got != want {
-		return fmt.Errorf("wrong value for hcErrorCounters got = %v, want = %v", got, want)
-	}
-
-	return nil
 }

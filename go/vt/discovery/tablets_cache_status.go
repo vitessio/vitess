@@ -73,7 +73,7 @@ func (tcs *TabletsCacheStatus) StatusAsHTML() template.HTML {
 		} else {
 			extra = fmt.Sprintf(" (RepLag: %v)", ts.Stats.SecondsBehindMaster)
 		}
-		name := ts.GetTabletHostPort()
+		name := topoproto.TabletAliasString(ts.Tablet.Alias)
 		tLinks = append(tLinks, fmt.Sprintf(`<a href="%s" style="color:%v">%v</a>%v`, ts.getTabletDebugURL(), color, name, extra))
 	}
 	return template.HTML(strings.Join(tLinks, "<br>"))

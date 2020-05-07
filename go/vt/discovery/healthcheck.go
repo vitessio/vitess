@@ -207,6 +207,37 @@ type HealthCheckImpl struct {
 	masterCallback func(health *TabletHealth)
 	// cellAliases is a cache of cell aliases
 	cellAliases map[string]string
+	// mutex to protect subscribers
+	subMu sync.Mutex
+	// subscribers
+	subscribers map[chan *TabletHealth]struct{}
+}
+
+// Subscribe adds a listener. Only used for testing right now
+func (hc *HealthCheckImpl) Subscribe() chan *TabletHealth {
+	hc.subMu.Lock()
+	defer hc.subMu.Unlock()
+	c := make(chan *TabletHealth, 2)
+	hc.subscribers[c] = struct{}{}
+	return c
+}
+
+// Unsubscribe removes a listener. Only used for testing right now
+func (hc *HealthCheckImpl) Unsubscribe(c chan *TabletHealth) {
+	hc.subMu.Lock()
+	defer hc.subMu.Unlock()
+	delete(hc.subscribers, c)
+}
+
+func (hc *HealthCheckImpl) broadcast(th *TabletHealth) {
+	hc.subMu.Lock()
+	defer hc.subMu.Unlock()
+	for c := range hc.subscribers {
+		select {
+		case c <- th:
+		default:
+		}
+	}
 }
 
 // NewHealthCheck creates a new HealthCheck object.
@@ -236,6 +267,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		healthByAlias:      make(map[string]*tabletHealthCheck),
 		healthData:         make(map[string]map[string]*tabletHealthCheck),
 		healthy:            make(map[string][]*tabletHealthCheck),
+		subscribers:        make(map[chan *TabletHealth]struct{}),
 	}
 	var topoWatchers []*TopologyWatcher
 	var filter TabletFilter
@@ -585,20 +617,25 @@ func (hc *HealthCheckImpl) checkConn(th *tabletHealthCheck) {
 		// streamCancel to make sure the watcher goroutine terminates.
 		streamCancel()
 
-		if err != nil && strings.Contains(err.Error(), "health stats mismatch") {
-			//finalizeConn will delete all data once this loop breaks
-			return
+		if err != nil {
+			if strings.Contains(err.Error(), "health stats mismatch") {
+				hc.deleteConn(th.Tablet)
+				return
+			}
+			res := th.SimpleCopy()
+			hc.broadcast(res)
 		}
 		// If there was a timeout send an error. We do this after stream has returned.
 		// This will ensure that this update prevails over any previous message that
 		// stream could have sent.
 		if timedout.Get() {
 			th.mu.Lock()
-			// get timestamp from error and put it into LastError and remove th.lastResponseTimestamp
 			th.LastError = fmt.Errorf("healthcheck timed out (latest %v)", th.lastResponseTimestamp)
 			th.setServingState(false, th.LastError.Error())
 			hcErrorCounters.Add([]string{th.Target.Keyspace, th.Target.Shard, topoproto.TabletTypeLString(th.Target.TabletType)}, 1)
+			res := th.simpleCopyLocked()
 			th.mu.Unlock()
+			hc.broadcast(res)
 		}
 
 		// Streaming RPC failed e.g. because vttablet was restarted or took too long.
@@ -626,7 +663,7 @@ func (hc *HealthCheckImpl) deleteConn(tablet *topodata.Tablet) {
 	// delete from authoritative map
 	th, ok := hc.healthByAlias[tabletAlias]
 	if !ok {
-		log.Warningf("Something is wrong, we have no health data for tablet: %v", tabletAlias)
+		log.Infof("We have no health data for tablet: %v, it might have been deleted already", tabletAlias)
 		return
 	}
 	th.deleteConnLocked()
@@ -634,7 +671,7 @@ func (hc *HealthCheckImpl) deleteConn(tablet *topodata.Tablet) {
 	// delete from map by keyspace.shard.tabletType
 	ths, ok := hc.healthData[key]
 	if !ok {
-		log.Warningf("Something is wrong, we have no health data for target: %v", key)
+		log.Warningf("We have no health data for target: %v", key)
 		return
 	}
 	delete(ths, tabletAlias)
@@ -682,6 +719,8 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
 		ths[tabletAlias] = th
 	}
 
+	res := th.SimpleCopy()
+	hc.broadcast(res)
 	hc.connsWG.Add(1)
 	hc.mu.Unlock()
 	go hc.checkConn(th)
@@ -718,7 +757,6 @@ func (hc *HealthCheckImpl) cacheStatusMap() map[string]*TabletsCacheStatus {
 		key := fmt.Sprintf("%v.%v.%v.%v", th.Tablet.Alias.Cell, th.Target.Keyspace, th.Target.Shard, th.Target.TabletType.String())
 		var tcs *TabletsCacheStatus
 		var ok bool
-		th.mu.Lock()
 		if tcs, ok = tcsMap[key]; !ok {
 			tcs = &TabletsCacheStatus{
 				Cell:   th.Tablet.Alias.Cell,
@@ -727,7 +765,6 @@ func (hc *HealthCheckImpl) cacheStatusMap() map[string]*TabletsCacheStatus {
 			tcsMap[key] = tcs
 		}
 		tcs.TabletsStats = append(tcs.TabletsStats, th.SimpleCopy())
-		th.mu.Unlock()
 	}
 	return tcsMap
 }
@@ -743,6 +780,10 @@ func (hc *HealthCheckImpl) Close() error {
 	for _, tw := range hc.topoWatchers {
 		tw.Stop()
 	}
+	for s := range hc.subscribers {
+		close(s)
+	}
+	hc.subscribers = nil
 	// Release the lock early or a pending checkHealthCheckTimeout
 	// cannot get a read lock on it.
 	hc.mu.Unlock()
