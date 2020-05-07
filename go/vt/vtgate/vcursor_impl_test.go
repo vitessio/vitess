@@ -197,7 +197,7 @@ func TestSetTarget(t *testing.T) {
 	}, {
 		vschema:       vschemaWith2KS,
 		targetString:  "ks3",
-		expectedError: "invalid keyspace provided: ks3",
+		expectedError: "Unknown database 'ks3' (errno 1049) (sqlstate 42000)",
 	}, {
 		vschema:       vschemaWith2KS,
 		targetString:  "ks2@replica",

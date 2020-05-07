@@ -207,7 +207,7 @@ func TestDirectTargetRewrites(t *testing.T) {
 	require.NoError(t, err)
 	testQueries(t, "sbclookup", sbclookup, []*querypb.BoundQuery{{
 		Sql:           "select :__vtdbname as `database()` from dual",
-		BindVariables: map[string]*querypb.BindVariable{"__vtdbname": sqltypes.StringBindVariable("TestUnsharded")},
+		BindVariables: map[string]*querypb.BindVariable{"__vtdbname": sqltypes.StringBindVariable("TestUnsharded/0@master")},
 	}})
 }
 
@@ -1038,7 +1038,7 @@ func TestExecutorUse(t *testing.T) {
 	}
 
 	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{}), "use UnexistentKeyspace", nil)
-	wantErr = "invalid keyspace provided: UnexistentKeyspace"
+	wantErr = "Unknown database 'UnexistentKeyspace' (errno 1049) (sqlstate 42000)"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("got: %v, want %v", err, wantErr)
 	}
