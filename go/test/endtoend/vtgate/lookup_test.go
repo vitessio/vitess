@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/google/go-cmp/cmp"
 
-	"vitess.io/vitess/go/test/utils"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 
@@ -516,19 +516,33 @@ func TestSelectNull(t *testing.T) {
 	exec(t, conn, "begin")
 	exec(t, conn, "insert into t5_null_vindex(id, idx) values(1, 'a'), (2, 'b'), (3, null)")
 	exec(t, conn, "commit")
-	qr := exec(t, conn, "select id, idx from t5_null_vindex order by id")
-	utils.MustMatch(t, fmt.Sprintf("%v", qr.Rows), "[[INT64(1) VARCHAR(\"a\")] [INT64(2) VARCHAR(\"b\")] [INT64(3) NULL]]", "")
 
-	qr = exec(t, conn, "select id, idx from t5_null_vindex where idx = null")
-	require.Empty(t, qr.Rows)
-
-	qr = exec(t, conn, "select id, idx from t5_null_vindex where idx is null")
-	utils.MustMatch(t, fmt.Sprintf("%v", qr.Rows), "[[INT64(3) NULL]]", "")
-
-	qr = exec(t, conn, "select id, idx from t5_null_vindex where idx is not null order by id")
-	utils.MustMatch(t, fmt.Sprintf("%v", qr.Rows), "[[INT64(1) VARCHAR(\"a\")] [INT64(2) VARCHAR(\"b\")]]", "")
+	assertMatches(t, conn, "select id, idx from t5_null_vindex order by id", "[[INT64(1) VARCHAR(\"a\")] [INT64(2) VARCHAR(\"b\")] [INT64(3) NULL]]")
+	assertIsEmpty(t, conn, "select id, idx from t5_null_vindex where idx = null")
+	assertMatches(t, conn, "select id, idx from t5_null_vindex where idx is null", "[[INT64(3) NULL]]")
+	assertMatches(t, conn, "select id, idx from t5_null_vindex where idx is not null order by id", "[[INT64(1) VARCHAR(\"a\")] [INT64(2) VARCHAR(\"b\")]]")
+	assertIsEmpty(t, conn, "select id, idx from t5_null_vindex where id IN (null)")
+	assertMatches(t, conn, "select id, idx from t5_null_vindex where id IN (1,2,null) order by id", "[[INT64(1) VARCHAR(\"a\")] [INT64(2) VARCHAR(\"b\")]]")
+	assertIsEmpty(t, conn, "select id, idx from t5_null_vindex where id NOT IN (1,null) order by id")
+	assertMatches(t, conn, "select id, idx from t5_null_vindex where id NOT IN (1,3)", "[[INT64(2) VARCHAR(\"b\")]]")
 
 	exec(t, conn, "delete from t5_null_vindex")
+}
+
+func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
+	t.Helper()
+	qr := exec(t, conn, query)
+	got := fmt.Sprintf("%v", qr.Rows)
+	diff := cmp.Diff(expected, got)
+	if diff != "" {
+		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
+	}
+}
+
+func assertIsEmpty(t *testing.T, conn *mysql.Conn, query string) {
+	t.Helper()
+	qr := exec(t, conn, query)
+	assert.Empty(t, qr.Rows)
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
