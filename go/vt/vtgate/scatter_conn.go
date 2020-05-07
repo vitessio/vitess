@@ -451,10 +451,10 @@ func (stc *ScatterConn) GetLegacyHealthCheckCacheStatus() discovery.LegacyTablet
 }
 
 // GetHealthCheckCacheStatus returns a displayable version of the HealthCheck cache.
-func (stc *ScatterConn) GetHealthCheckCacheStatus() TabletCacheStatusList {
+func (stc *ScatterConn) GetHealthCheckCacheStatus() discovery.TabletsCacheStatusList {
 	gw, ok := stc.gateway.(*TabletGateway)
 	if ok {
-		return gw.CacheStatus()
+		return gw.HealthCheck().CacheStatus()
 	}
 	return nil
 }
