@@ -312,10 +312,6 @@ func (db *DB) ConnectionClosed(c *mysql.Conn) {
 	delete(db.connections, c.ConnectionID)
 }
 
-// ComInitDB is part of the mysql.Handler interface.
-func (db *DB) ComInitDB(c *mysql.Conn, schemaName string) {
-}
-
 // ComQuery is part of the mysql.Handler interface.
 func (db *DB) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	return db.Handler.HandleQuery(c, query, callback)

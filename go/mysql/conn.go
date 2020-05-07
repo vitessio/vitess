@@ -778,10 +778,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 	case ComInitDB:
 		db := c.parseComInitDB(data)
 		c.recycleReadPacket()
-		c.schemaName = db
-		handler.ComInitDB(c, db)
-		if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
-			log.Errorf("Error writing ComInitDB result to %s: %v", c, err)
+		if err := c.execQuery(fmt.Sprintf("use `%s`", db), handler, false); err != nil {
 			return err
 		}
 	case ComQuery:

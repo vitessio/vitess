@@ -230,12 +230,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 // addNeededBindVars adds bind vars that are needed by the plan
 func (e *Executor) addNeededBindVars(bindVarNeeds sqlparser.BindVarNeeds, bindVars map[string]*querypb.BindVariable, session *SafeSession) error {
 	if bindVarNeeds.NeedDatabase {
-		keyspace, _, _, _ := e.ParseDestinationTarget(session.TargetString)
-		if keyspace == "" {
-			bindVars[sqlparser.DBVarName] = sqltypes.NullBindVariable
-		} else {
-			bindVars[sqlparser.DBVarName] = sqltypes.StringBindVariable(keyspace)
-		}
+		bindVars[sqlparser.DBVarName] = sqltypes.StringBindVariable(session.TargetString)
 	}
 
 	if bindVarNeeds.NeedLastInsertID {
