@@ -21,6 +21,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+
 	"vitess.io/vitess/go/vt/callerid"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/topotools"
@@ -345,7 +347,7 @@ func (vc *vcursorImpl) SetTarget(target string) error {
 		return err
 	}
 	if _, ok := vc.vschema.Keyspaces[keyspace]; keyspace != "" && !ok {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace provided: %s", keyspace)
+		return mysql.NewSQLError(mysql.ERBadDb, "42000", "Unknown database '%s'", keyspace)
 	}
 
 	if vc.safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {

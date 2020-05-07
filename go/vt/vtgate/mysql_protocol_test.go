@@ -118,7 +118,7 @@ func TestMySQLProtocolExecuteUseStatement(t *testing.T) {
 	// No such keyspace this will fail
 	_, err = c.ExecuteFetch("use InvalidKeyspace", 0, false)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid keyspace provided: InvalidKeyspace")
+	assert.Contains(t, err.Error(), "Unknown database 'InvalidKeyspace' (errno 1049) (sqlstate 42000)")
 
 	// That doesn't reset the vitess_target
 	qr, err = c.ExecuteFetch("show vitess_target", 1, false)

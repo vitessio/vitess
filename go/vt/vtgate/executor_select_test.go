@@ -389,7 +389,7 @@ func TestSelectDatabase(t *testing.T) {
 			{Name: "database()", Type: sqltypes.VarBinary},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewVarBinary("TestExecutor"),
+			sqltypes.NewVarBinary("TestExecutor@master"),
 		}},
 	}
 	require.NoError(t, err)
