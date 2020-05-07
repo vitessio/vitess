@@ -128,21 +128,16 @@ func (th *tabletHealthCheck) String() string {
 		th.Tablet, th.Target, th.Serving, th.MasterTermStartTime, *th.Stats, th.LastError)
 }
 
-func (th *tabletHealthCheck) lastResponseTime() time.Time {
-	th.mu.Lock()
-	defer th.mu.Unlock()
-	res := th.lastResponseTimestamp
-	return res
-}
-
 // SimpleCopy returns a TabletHealth with all the necessary fields copied from tabletHealthCheck.
 // Note that this is not a deep copy because we point to the same underlying RealtimeStats.
 // That is fine because the RealtimeStats object is never changed after creation.
 func (th *tabletHealthCheck) SimpleCopy() *TabletHealth {
-	// we have to explicitly create a new object rather than relying on assignment to make a copy for us
-	// the following doesn't work for synchronized objects
-	// t := *th
-	// return &t
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	return th.simpleCopyLocked()
+}
+
+func (th *tabletHealthCheck) simpleCopyLocked() *TabletHealth {
 	return &TabletHealth{
 		Conn:                th.Conn,
 		Tablet:              th.Tablet,
@@ -203,33 +198,42 @@ func (th *tabletHealthCheck) setServingState(serving bool, reason string) {
 
 // stream streams healthcheck responses to callback.
 func (th *tabletHealthCheck) stream(ctx context.Context, callback func(*query.StreamHealthResponse) error) error {
+	conn := th.getConnection()
+	if conn == nil {
+		// This signals the caller to retry
+		return nil
+	}
+	err := conn.StreamHealth(ctx, callback)
+	if err != nil {
+		// Depending on the specific error the caller can take action
+		th.closeConnection(ctx, err)
+	}
+	return err
+}
+
+func (th *tabletHealthCheck) getConnection() queryservice.QueryService {
 	th.mu.Lock()
+	defer th.mu.Unlock()
 	if th.Conn == nil {
 		conn, err := tabletconn.GetDialer()(th.Tablet, grpcclient.FailFast(true))
 		if err != nil {
 			th.LastError = err
-			th.mu.Unlock()
 			return nil
 		}
 		th.Conn = conn
 		th.LastError = nil
 	}
-	conn := th.Conn
-	th.mu.Unlock()
+	return th.Conn
+}
 
-	err := conn.StreamHealth(ctx, callback)
-	if err != nil {
-		th.mu.Lock()
-		log.Warningf("tablet %v healthcheck stream error: %v", th.Tablet.Alias, err)
-		th.setServingState(false, err.Error())
-		th.LastError = err
-		th.Conn.Close(ctx)
-		th.Conn = nil
-		// signal that healthCheck is now up-to-date
-		th.lastResponseTimestamp = time.Now()
-		th.mu.Unlock()
-	}
-	return err
+func (th *tabletHealthCheck) closeConnection(ctx context.Context, err error) {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	log.Warningf("tablet %v healthcheck stream error: %v", th.Tablet.Alias, err)
+	th.setServingState(false, err.Error())
+	th.LastError = err
+	_ = th.Conn.Close(ctx)
+	th.Conn = nil
 }
 
 // processResponse reads one health check response, and updates health
@@ -259,7 +263,6 @@ func (th *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.Str
 		// However, we defer it until the next topo refresh informs us of the change because that is
 		// the only way to discover the new host/port
 		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("health stats mismatch, tablet %+v alias does not match response alias %v", th.Tablet, shr.TabletAlias))
-		// TODO(deepthi): delete healthcheck
 	}
 
 	th.mu.Lock()
@@ -297,6 +300,7 @@ func (th *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.Str
 	// Update our record
 	th.mu.Lock()
 	defer th.mu.Unlock()
+	th.lastResponseTimestamp = time.Now()
 	th.Target = shr.Target
 	th.MasterTermStartTime = shr.TabletExternallyReparentedTimestamp
 	th.Stats = shr.RealtimeStats
@@ -335,13 +339,13 @@ func (th *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.Str
 			}
 		}
 	}
+
+	result := th.simpleCopyLocked()
+	hc.broadcast(result)
 	// and notify downstream for master change
-	if shr.Target.TabletType == topodata.TabletType_MASTER {
-		if hc.masterCallback != nil {
-			hc.masterCallback(th.SimpleCopy())
-		}
+	if shr.Target.TabletType == topodata.TabletType_MASTER && hc.masterCallback != nil {
+		hc.masterCallback(result)
 	}
-	// signal that healthCheck is now up-to-date
-	th.lastResponseTimestamp = time.Now()
+
 	return nil
 }
