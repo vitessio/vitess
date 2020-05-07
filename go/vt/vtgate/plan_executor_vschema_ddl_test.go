@@ -196,6 +196,74 @@ func TestPlanExecutorCreateVindexDDL(t *testing.T) {
 	}
 }
 
+func TestPlanExecutorDropVindexDDL(t *testing.T) {
+	*vschemaacl.AuthorizedDDLUsers = "%"
+	defer func() {
+		*vschemaacl.AuthorizedDDLUsers = ""
+	}()
+	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	ks := "TestExecutor"
+
+	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
+	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) {
+		vschemaUpdates <- vschema
+	})
+
+	vschema := <-vschemaUpdates
+	_, ok := vschema.Keyspaces[ks].Vindexes["test_vindex"]
+	if ok {
+		t.Fatalf("test_vindex should not exist in original vschema")
+	}
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+	stmt := "alter vschema drop vindex test_vindex"
+	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	wantErr := "vindex test_vindex does not exists in keyspace TestExecutor"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("want error %v got %v", wantErr, err)
+	}
+
+	stmt = "alter vschema drop vindex TestExecutor.test_vindex"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	wantErr = "vindex test_vindex does not exists in keyspace TestExecutor"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("want error %v got %v", wantErr, err)
+	}
+
+	//add one vindex that has never been used by the tables
+	stmt = "alter vschema create vindex test_vindex using hash"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	require.NoError(t, err)
+
+	_, vindex := waitForVindex(t, ks, "test_vindex", vschemaUpdates, executor)
+	if vindex == nil || vindex.Type != "hash" {
+		t.Errorf("updated vschema did not contain test_vindex")
+	}
+
+	//drop an existing vindex that has never been used by the tables
+	stmt = "alter vschema drop vindex TestExecutor.test_vindex"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	require.NoError(t, err)
+	vschema = <-vschemaUpdates
+	_, ok = vschema.Keyspaces[ks].Vindexes["test_vindex"]
+	if ok {
+		t.Fatalf("test_vindex should not exist after droping it")
+	}
+
+	//drop an existing vindex that is used by at least one table
+	stmt = "alter vschema drop vindex TestExecutor.keyspace_id"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	wantErr = "can not drop vindex cause keyspace_id still defined on table ksid_table"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("drop vindex still defined: %v, want %s", err, wantErr)
+	}
+	select {
+	case <-vschemaUpdates:
+		t.Error("vschema should not be updated on error")
+	default:
+	}
+}
+
 func TestPlanExecutorAddDropVschemaTableDDL(t *testing.T) {
 	*vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
