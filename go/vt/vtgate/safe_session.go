@@ -259,5 +259,8 @@ func (session *SafeSession) SetTargetString(target string) {
 func (session *SafeSession) SetSystemVariable(name string, expr string) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
+	if session.SystemVariables == nil {
+		session.SystemVariables = make(map[string]string)
+	}
 	session.SystemVariables[name] = expr
 }
