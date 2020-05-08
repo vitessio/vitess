@@ -168,6 +168,8 @@ type TabletServer struct {
 	vstreamer *vstreamer.Engine
 	messager  *messager.Engine
 
+	txState TxEngineStateMachine
+
 	// checkMySQLThrottler is used to throttle the number of
 	// requests sent to CheckMySQL.
 	checkMySQLThrottler *sync2.Semaphore
@@ -518,7 +520,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 	if err := tsv.qe.Open(); err != nil {
 		return err
 	}
-	if err := tsv.te.Init(); err != nil {
+	if err := tsv.txState.Init(); err != nil {
 		return err
 	}
 	if err := tsv.hw.Init(tsv.target); err != nil {
@@ -536,7 +538,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 	// transactional requests are not allowed. So, we can
 	// be sure that the tx pool won't change after the wait.
 	if tsv.target.TabletType == topodatapb.TabletType_MASTER {
-		tsv.te.AcceptReadWrite()
+		tsv.txState.AcceptReadWrite()
 		if err := tsv.txThrottler.Open(tsv.target.Keyspace, tsv.target.Shard); err != nil {
 			return err
 		}
@@ -544,7 +546,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.hr.Close()
 		tsv.hw.Open()
 	} else {
-		tsv.te.AcceptReadOnly()
+		tsv.txState.AcceptReadOnly()
 		tsv.messager.Close()
 		tsv.hr.Open()
 		tsv.hw.Close()
@@ -600,7 +602,7 @@ func (tsv *TabletServer) waitForShutdown() {
 	// will be allowed. They will enable the conclusion of outstanding
 	// transactions.
 	tsv.messager.Close()
-	tsv.te.StopGently()
+	tsv.txState.StopGently()
 	tsv.qe.streamQList.TerminateAll()
 	tsv.watcher.Close()
 	tsv.requests.Wait()
@@ -615,7 +617,7 @@ func (tsv *TabletServer) closeAll() {
 	tsv.vstreamer.Close()
 	tsv.hr.Close()
 	tsv.hw.Close()
-	tsv.te.StopGently()
+	tsv.txState.StopGently()
 	tsv.watcher.Close()
 	tsv.qe.Close()
 	tsv.se.Close()

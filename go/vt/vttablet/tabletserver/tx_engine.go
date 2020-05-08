@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/timer"
@@ -138,39 +140,6 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 	te.nextState = -1
 	te.state = NotServing
 	return te
-}
-
-// Stop will stop accepting any new transactions. Transactions are immediately aborted.
-func (te *TxEngine) Stop() error {
-	te.beginRequests.Wait()
-	te.stateLock.Lock()
-
-	switch te.state {
-	case NotServing:
-		// Nothing to do. We are already stopped or stopping
-		te.stateLock.Unlock()
-		return nil
-
-	case AcceptingReadAndWrite:
-		return te.transitionTo(NotServing)
-
-	case AcceptingReadOnly:
-		// We are not master, so it's safe to kill all read-only transactions
-		te.close(true)
-		te.state = NotServing
-		te.stateLock.Unlock()
-		return nil
-
-	case Transitioning:
-		te.nextState = NotServing
-		te.stateLock.Unlock()
-		te.blockUntilEndOfTransition()
-		return nil
-
-	default:
-		te.stateLock.Unlock()
-		return te.unknownStateError()
-	}
 }
 
 // AcceptReadWrite will start accepting all transactions.
@@ -564,3 +533,57 @@ func (te *TxEngine) startWatchdog() {
 func (te *TxEngine) stopWatchdog() {
 	te.ticks.Stop()
 }
+
+type (
+	ConnID            int64
+	DTID              = string
+	TransactionalConn interface {
+		Close()
+		Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
+		BeginAgain(ctx context.Context) error
+		EventTime() time.Time
+		Format() string
+	}
+	FuncWithConnection func(TransactionalConn) error
+	TransactionEngine  interface {
+		// Local transactions
+		Begin(ctx context.Context, options *querypb.ExecuteOptions, exec FuncWithConnection, connection ConnID) (ConnID, string, error)
+		Reserve(ctx context.Context, options *querypb.ExecuteOptions, setStatements []string, exec FuncWithConnection, connection ConnID) (ConnID, error)
+		Exec(ctx context.Context, connection ConnID, exec FuncWithConnection) error
+		Commit(ctx context.Context, transactionID ConnID) (string, error)
+		Rollback(ctx context.Context, transactionID ConnID) error
+
+		// 2PC Transactions
+		Prepare(transactionID ConnID, dtid DTID) error
+		CommitPrepared(dtid DTID) error
+		RollbackPrepared(dtid DTID, originalID ConnID) error
+		CreateTransaction(dtid DTID, participants []*querypb.Target) error
+		StartCommit(transactionID int64, dtid DTID) error
+		SetRollback(dtid DTID, transactionID int64) error
+		ConcludeTransaction(dtid DTID) error
+		ReadTransaction(dtid DTID) (*querypb.TransactionMetadata, error)
+		ReadTwopcInflight() (distributed []*DistributedTx, prepared, failed []*PreparedTx, err error)
+	}
+
+	//TxEngineStateMachine is used to control the state the transactional engine -
+	//whether new connections and/or transactions are allowed or not.
+	TxEngineStateMachine interface {
+		AcceptReadWrite() error
+		AcceptReadOnly() error
+		StopGently()
+		Init() error
+	}
+
+	TrustedConnection interface {
+		TransactionalConn
+		Release()
+		Commit()
+		Rollback()
+	}
+	TrustedTxEngine interface {
+		TrustedBegin(ctx context.Context, options *querypb.ExecuteOptions, connection ConnID) (TrustedConnection, string, error)
+		TrustedReserve(ctx context.Context, options *querypb.ExecuteOptions, setStatements []string, connection ConnID) (TrustedConnection, error)
+		Get(ctx context.Context, connection ConnID) (TrustedConnection, error)
+		Put(ctx context.Context, connection ConnID, conn TrustedConnection) error
+	}
+)

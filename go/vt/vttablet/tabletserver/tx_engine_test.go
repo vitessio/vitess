@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 
@@ -196,8 +198,6 @@ func changeState(te *TxEngine, state txEngineState) error {
 		return te.AcceptReadWrite()
 	case AcceptingReadOnly:
 		return te.AcceptReadOnly()
-	case NotServing:
-		return te.Stop()
 	default:
 		return fmt.Errorf("don't know how to do that: %v", state)
 	}
@@ -208,20 +208,12 @@ func TestWithInnerTests(outerT *testing.T) {
 	tests := []TestCase{
 		// Start from RW and test all single hop transitions with and without tx
 		{AcceptingReadAndWrite, []txEngineState{
-			NotServing},
-			NoTx, assertEndStateIs(NotServing)},
-
-		{AcceptingReadAndWrite, []txEngineState{
 			AcceptingReadAndWrite},
 			NoTx, assertEndStateIs(AcceptingReadAndWrite)},
 
 		{AcceptingReadAndWrite, []txEngineState{
 			AcceptingReadOnly},
 			NoTx, assertEndStateIs(AcceptingReadOnly)},
-
-		{AcceptingReadAndWrite, []txEngineState{
-			NotServing},
-			WriteAccepted, assertEndStateIs(NotServing)},
 
 		{AcceptingReadAndWrite, []txEngineState{
 			AcceptingReadAndWrite},
@@ -232,10 +224,6 @@ func TestWithInnerTests(outerT *testing.T) {
 			WriteAccepted, assertEndStateIs(AcceptingReadOnly)},
 
 		{AcceptingReadAndWrite, []txEngineState{
-			NotServing},
-			ReadOnlyAccepted, assertEndStateIs(NotServing)},
-
-		{AcceptingReadAndWrite, []txEngineState{
 			AcceptingReadAndWrite},
 			ReadOnlyAccepted, assertEndStateIs(AcceptingReadAndWrite)},
 
@@ -243,44 +231,8 @@ func TestWithInnerTests(outerT *testing.T) {
 			AcceptingReadOnly},
 			ReadOnlyAccepted, assertEndStateIs(AcceptingReadOnly)},
 
-		// Start from RW and test all transitions with and without tx, plus a concurrent Stop()
-		{AcceptingReadAndWrite, []txEngineState{
-			NotServing,
-			NotServing},
-			NoTx, assertEndStateIs(NotServing)},
-
-		{AcceptingReadAndWrite, []txEngineState{
-			AcceptingReadAndWrite,
-			NotServing},
-			NoTx, assertEndStateIs(NotServing)},
-
-		{AcceptingReadAndWrite, []txEngineState{
-			AcceptingReadOnly,
-			NotServing},
-			NoTx, assertEndStateIs(NotServing)},
-
-		{AcceptingReadAndWrite, []txEngineState{
-			NotServing,
-			NotServing},
-			WriteAccepted, assertEndStateIs(NotServing)},
-
-		{AcceptingReadAndWrite, []txEngineState{
-			AcceptingReadAndWrite,
-			NotServing},
-			WriteAccepted, assertEndStateIs(NotServing)},
-
-		{AcceptingReadAndWrite, []txEngineState{
-			AcceptingReadOnly,
-			NotServing},
-			WriteAccepted, assertEndStateIs(NotServing)},
-
 		// Start from RW and test all transitions with and without tx, plus a concurrent ReadOnly()
 		{AcceptingReadAndWrite, []txEngineState{
-			NotServing,
-			AcceptingReadOnly},
-			NoTx, assertEndStateIs(AcceptingReadOnly)},
-
-		{AcceptingReadAndWrite, []txEngineState{
 			AcceptingReadAndWrite,
 			AcceptingReadOnly},
 			NoTx, assertEndStateIs(AcceptingReadOnly)},
@@ -289,11 +241,6 @@ func TestWithInnerTests(outerT *testing.T) {
 			AcceptingReadOnly,
 			AcceptingReadOnly},
 			NoTx, assertEndStateIs(AcceptingReadOnly)},
-
-		{AcceptingReadAndWrite, []txEngineState{
-			NotServing,
-			AcceptingReadOnly},
-			WriteAccepted, assertEndStateIs(AcceptingReadOnly)},
 
 		{AcceptingReadAndWrite, []txEngineState{
 			AcceptingReadAndWrite,
@@ -306,9 +253,6 @@ func TestWithInnerTests(outerT *testing.T) {
 			WriteAccepted, assertEndStateIs(AcceptingReadOnly)},
 
 		// Start from RO and test all single hop transitions with and without tx
-		{AcceptingReadOnly, []txEngineState{
-			NotServing},
-			NoTx, assertEndStateIs(NotServing)},
 
 		{AcceptingReadOnly, []txEngineState{
 			AcceptingReadAndWrite},
@@ -319,10 +263,6 @@ func TestWithInnerTests(outerT *testing.T) {
 			NoTx, assertEndStateIs(AcceptingReadOnly)},
 
 		{AcceptingReadOnly, []txEngineState{
-			NotServing},
-			WriteRejected, assertEndStateIs(NotServing)},
-
-		{AcceptingReadOnly, []txEngineState{
 			AcceptingReadAndWrite},
 			WriteRejected, assertEndStateIs(AcceptingReadAndWrite)},
 
@@ -330,44 +270,8 @@ func TestWithInnerTests(outerT *testing.T) {
 			AcceptingReadOnly},
 			WriteRejected, assertEndStateIs(AcceptingReadOnly)},
 
-		// Start from RO and test all transitions with and without tx, plus a concurrent Stop()
-		{AcceptingReadOnly, []txEngineState{
-			NotServing,
-			NotServing},
-			NoTx, assertEndStateIs(NotServing)},
-
-		{AcceptingReadOnly, []txEngineState{
-			AcceptingReadAndWrite,
-			NotServing},
-			NoTx, assertEndStateIs(NotServing)},
-
-		{AcceptingReadOnly, []txEngineState{
-			AcceptingReadOnly,
-			NotServing},
-			NoTx, assertEndStateIs(NotServing)},
-
-		{AcceptingReadOnly, []txEngineState{
-			NotServing,
-			NotServing},
-			WriteRejected, assertEndStateIs(NotServing)},
-
-		{AcceptingReadOnly, []txEngineState{
-			AcceptingReadAndWrite,
-			NotServing},
-			WriteRejected, assertEndStateIs(NotServing)},
-
-		{AcceptingReadOnly, []txEngineState{
-			AcceptingReadOnly,
-			NotServing},
-			WriteRejected, assertEndStateIs(NotServing)},
-
 		// Start from RO and test all transitions with and without tx, plus a concurrent ReadWrite()
 		{AcceptingReadOnly, []txEngineState{
-			NotServing,
-			AcceptingReadAndWrite},
-			NoTx, assertEndStateIs(AcceptingReadAndWrite)},
-
-		{AcceptingReadOnly, []txEngineState{
 			AcceptingReadAndWrite,
 			AcceptingReadAndWrite},
 			NoTx, assertEndStateIs(AcceptingReadAndWrite)},
@@ -378,11 +282,6 @@ func TestWithInnerTests(outerT *testing.T) {
 			NoTx, assertEndStateIs(AcceptingReadAndWrite)},
 
 		{AcceptingReadOnly, []txEngineState{
-			NotServing,
-			AcceptingReadAndWrite},
-			WriteRejected, assertEndStateIs(AcceptingReadAndWrite)},
-
-		{AcceptingReadOnly, []txEngineState{
 			AcceptingReadAndWrite,
 			AcceptingReadAndWrite},
 			WriteRejected, assertEndStateIs(AcceptingReadAndWrite)},
@@ -391,13 +290,6 @@ func TestWithInnerTests(outerT *testing.T) {
 			AcceptingReadOnly,
 			AcceptingReadAndWrite},
 			WriteRejected, assertEndStateIs(AcceptingReadAndWrite)},
-
-		// Make sure that all transactions are rejected when we are not serving
-		{NotServing, []txEngineState{},
-			WriteRejected, assertEndStateIs(NotServing)},
-
-		{NotServing, []txEngineState{},
-			ReadOnlyRejected, assertEndStateIs(NotServing)},
 	}
 
 	for _, test := range tests {
@@ -409,28 +301,24 @@ func TestWithInnerTests(outerT *testing.T) {
 			defer db.Close()
 			te := setupTxEngine(db)
 
-			failIfError(t,
+			require.NoError(t,
 				changeState(te, test.startState))
 
 			switch test.tx {
 			case NoTx:
 				// nothing to do
 			case WriteAccepted:
-				failIfError(t,
+				require.NoError(t,
 					startTransaction(te, true))
 			case ReadOnlyAccepted:
-				failIfError(t,
+				require.NoError(t,
 					startTransaction(te, false))
 			case WriteRejected:
 				err := startTransaction(te, true)
-				if err == nil {
-					t.Fatalf("expected an error to be returned when opening write transaction, but got nil")
-				}
+				require.Error(t, err)
 			case ReadOnlyRejected:
 				err := startTransaction(te, false)
-				if err == nil {
-					t.Fatalf("expected an error to be returned when opening read transaction, but got nil")
-				}
+				require.Error(t, err)
 			default:
 				t.Fatalf("don't know how to [%v]", test.tx)
 			}
@@ -441,7 +329,7 @@ func TestWithInnerTests(outerT *testing.T) {
 				go func(s txEngineState) {
 					defer wg.Done()
 
-					failIfError(t,
+					require.NoError(t,
 						changeState(te, s))
 				}(newState)
 
@@ -452,7 +340,7 @@ func TestWithInnerTests(outerT *testing.T) {
 			// Let's wait for all transitions to wrap up
 			wg.Wait()
 
-			failIfError(t,
+			require.NoError(t,
 				test.stateAssertion(te.state))
 		})
 	}
@@ -466,13 +354,6 @@ func setupTxEngine(db *fakesqldb.DB) *TxEngine {
 	config.ShutdownGracePeriodSeconds = 0
 	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
 	return te
-}
-
-func failIfError(t *testing.T, err error) {
-	if err != nil {
-		t.Logf("%+v", err)
-		t.FailNow()
-	}
 }
 
 func assertEndStateIs(expected txEngineState) func(actual txEngineState) error {
