@@ -201,7 +201,6 @@ type HealthCheckImpl struct {
 	// has to be kept in sync with healthByAlias
 	healthData map[string]map[string]*tabletHealthCheck
 	// another map keyed by keyspace.shard.tabletType, this one containing a sorted list of tabletHealthCheck
-	// TODO(deepthi): replace with TabletHealth
 	healthy map[string][]*tabletHealthCheck
 	// connsWG keeps track of all launched Go routines that monitor tablet connections.
 	connsWG sync.WaitGroup
@@ -327,7 +326,7 @@ func (hc *HealthCheckImpl) RegisterStats() {
 	)
 
 	stats.NewGaugesFuncWithMultiLabels(
-		"TabletHealthections",
+		"HealthcheckConnections",
 		"the number of healthcheck connections registered",
 		[]string{"Keyspace", "ShardName", "TabletType"},
 		hc.servingConnStats)
@@ -358,13 +357,15 @@ func (hc *HealthCheckImpl) servingConnStats() map[string]int64 {
 	res := make(map[string]int64)
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
-	for key, ths := range hc.healthData {
-		for _, th := range ths {
-			if !th.Serving || th.LastError != nil {
-				continue
-			}
-			res[key]++
+	for _, th := range hc.healthByAlias {
+		th.mu.Lock()
+		if !th.Serving || th.LastError != nil {
+			th.mu.Unlock()
+			continue
 		}
+		key := fmt.Sprintf("%s.%s.%s", th.Target.Keyspace, th.Target.Shard, topoproto.TabletTypeLString(th.Target.TabletType))
+		th.mu.Unlock()
+		res[key]++
 	}
 	return res
 }
@@ -669,28 +670,11 @@ func (hc *HealthCheckImpl) topologyWatcherChecksum() int64 {
 // synchronization
 func (hc *HealthCheckImpl) GetHealthyTabletStats(target *query.Target) []*TabletHealth {
 	var result []*TabletHealth
-	// we check all tablet types in all cells because of cellAliases
-	key := hc.keyFromTarget(target)
-	ths, ok := hc.healthData[key]
-	if !ok {
-		log.Warningf("Healthcheck has no tablet health for target: %v", key)
-		return result
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+	for _, thc := range hc.healthy[hc.keyFromTarget(target)] {
+		result = append(result, thc.SimpleCopy())
 	}
-	if target.TabletType == topodata.TabletType_MASTER && len(ths) > 1 {
-		log.Warningf("Can only have one master, program bug: %v", ths)
-		return result
-	}
-	for _, th := range hc.healthByAlias {
-		if th.Tablet.Type == topodata.TabletType_MASTER {
-			result = append(result, th.SimpleCopy())
-			return result
-		}
-		if th.isHealthy() {
-			result = append(result, th.SimpleCopy())
-		}
-	}
-	// healthy list needs to be sorted using replication lag algorithm
-	// so we might want to maintain it and update it instead of computing it here
 	return result
 }
 
@@ -700,6 +684,8 @@ func (hc *HealthCheckImpl) GetHealthyTabletStats(target *query.Target) []*Tablet
 // the most recent tablet of type master.
 func (hc *HealthCheckImpl) getTabletStats(target *query.Target) []*TabletHealth {
 	var result []*TabletHealth
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
 	ths := hc.healthData[hc.keyFromTarget(target)]
 	for _, th := range ths {
 		result = append(result, th.SimpleCopy())
