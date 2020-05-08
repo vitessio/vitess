@@ -168,10 +168,6 @@ func (th *tabletHealthCheck) deleteConnLocked() {
 	th.cancelFunc()
 }
 
-func (th *tabletHealthCheck) isHealthy() bool {
-	return th.Serving && th.LastError == nil && th.Stats != nil && !IsReplicationLagVeryHigh(th)
-}
-
 // setServingState sets the tablet state to the given value.
 //
 // If the state changes, it logs the change so that failures
