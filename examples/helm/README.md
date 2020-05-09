@@ -48,4 +48,9 @@ vtctlclient SwitchWrites customer.cust2cust
 # Down shard 0
 helm upgrade vitess ../../helm/vitess/ -f 306_down_shard_0.yaml
 vtctlclient DeleteShard -recursive customer/0
+
+# Delete deployment
+helm delete vitess
+kubectl delete pvc -l "app=vitess"
+kubectl delete vitesstoponodes --all
 ```
