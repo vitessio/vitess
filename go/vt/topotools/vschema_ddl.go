@@ -71,6 +71,25 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 
 		return ks, nil
 
+	case sqlparser.DropVindexStr:
+		name := ddl.VindexSpec.Name.String()
+		if _, ok := ks.Vindexes[name]; !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s does not exists in keyspace %s", name, ksName)
+		}
+
+		for tableName, table := range ks.Tables {
+			// Make sure there isn't  a vindex with the same name left on the table.
+			for _, vindex := range table.ColumnVindexes {
+				if vindex.Name == name {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "can not drop vindex cause %s still defined on table %s", name, tableName)
+				}
+			}
+		}
+
+		delete(ks.Vindexes, name)
+
+		return ks, nil
+
 	case sqlparser.AddVschemaTableStr:
 		if ks.Sharded {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "add vschema table: unsupported on sharded keyspace %s", ksName)
