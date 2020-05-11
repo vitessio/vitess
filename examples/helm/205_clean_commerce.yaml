@@ -51,7 +51,6 @@ jobs:
     command: "ApplyRoutingRules -rules=\'{}\'"
 
 vttablet:
-  # It's generally not recommended to override this value for production usage.
   terminationGracePeriodSeconds: 1
 
 pmm:
