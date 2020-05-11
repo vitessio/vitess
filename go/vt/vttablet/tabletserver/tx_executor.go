@@ -19,6 +19,8 @@ package tabletserver
 import (
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/trace"
@@ -298,7 +300,7 @@ func (txe *TxExecutor) ReadTransaction(dtid string) (*querypb.TransactionMetadat
 }
 
 // ReadTwopcInflight returns info about all in-flight 2pc transactions.
-func (txe *TxExecutor) ReadTwopcInflight() (distributed []*DistributedTx, prepared, failed []*PreparedTx, err error) {
+func (txe *TxExecutor) ReadTwopcInflight() (distributed []*tx.DistributedTx, prepared, failed []*tx.PreparedTx, err error) {
 	if !txe.te.twopcEnabled {
 		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}

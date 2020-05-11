@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"golang.org/x/net/context"
@@ -262,15 +264,8 @@ func (tpc *TwoPC) DeleteRedo(ctx context.Context, conn *TxConnection, dtid strin
 	return err
 }
 
-// PreparedTx represents a displayable version of a prepared transaction.
-type PreparedTx struct {
-	Dtid    string
-	Queries []string
-	Time    time.Time
-}
-
 // ReadAllRedo returns all the prepared transactions from the redo logs.
-func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*PreparedTx, err error) {
+func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*tx.PreparedTx, err error) {
 	conn, err := tpc.readPool.Get(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -282,7 +277,7 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*Prepared
 		return nil, nil, err
 	}
 
-	var curTx *PreparedTx
+	var curTx *tx.PreparedTx
 	for _, row := range qr.Rows {
 		dtid := row[0].ToString()
 		if curTx == nil || dtid != curTx.Dtid {
@@ -290,7 +285,7 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*Prepared
 			// A failure in time parsing will show up as a very old time,
 			// which is harmless.
 			tm, _ := evalengine.ToInt64(row[2])
-			curTx = &PreparedTx{
+			curTx = &tx.PreparedTx{
 				Dtid: dtid,
 				Time: time.Unix(0, tm),
 			}
@@ -474,17 +469,8 @@ func (tpc *TwoPC) ReadAbandoned(ctx context.Context, abandonTime time.Time) (map
 	return txs, nil
 }
 
-// DistributedTx is similar to querypb.TransactionMetadata, but
-// is display friendly.
-type DistributedTx struct {
-	Dtid         string
-	State        string
-	Created      time.Time
-	Participants []querypb.Target
-}
-
 // ReadAllTransactions returns info about all distributed transactions.
-func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*DistributedTx, error) {
+func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*tx.DistributedTx, error) {
 	conn, err := tpc.readPool.Get(ctx)
 	if err != nil {
 		return nil, err
@@ -496,8 +482,8 @@ func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*DistributedTx, er
 		return nil, err
 	}
 
-	var curTx *DistributedTx
-	var distributed []*DistributedTx
+	var curTx *tx.DistributedTx
+	var distributed []*tx.DistributedTx
 	for _, row := range qr.Rows {
 		dtid := row[0].ToString()
 		if curTx == nil || dtid != curTx.Dtid {
@@ -515,7 +501,7 @@ func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*DistributedTx, er
 			if protostate < querypb.TransactionState_UNKNOWN || protostate > querypb.TransactionState_ROLLBACK {
 				log.Errorf("Unexpected state for dtid %s: %v.", dtid, protostate)
 			}
-			curTx = &DistributedTx{
+			curTx = &tx.DistributedTx{
 				Dtid:    dtid,
 				State:   querypb.TransactionState(st).String(),
 				Created: time.Unix(0, tm),
