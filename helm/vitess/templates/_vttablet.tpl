@@ -210,11 +210,6 @@ spec:
 - name: "init-mysql"
   image: "vitess/mysqlctld:{{$vitessTag}}"
   imagePullPolicy: IfNotPresent
-{{ if eq ($topology.deploymentType | default "prod") "test" }}
-  resources:
-    requests:
-      cpu: 10m
-{{ end }}
   volumeMounts:
     - name: vtdataroot
       mountPath: "/vtdataroot"
@@ -261,11 +256,6 @@ spec:
 - name: init-vttablet
   image: "vitess/vtctl:{{$vitessTag}}"
   imagePullPolicy: IfNotPresent
-{{ if eq ($topology.deploymentType | default "prod") "test" }}
-  resources:
-    requests:
-      cpu: 10m
-{{ end }}
   volumeMounts:
     - name: vtdataroot
       mountPath: "/vtdataroot"
