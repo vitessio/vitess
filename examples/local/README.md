@@ -21,16 +21,16 @@ mysql --table < ../common/select_commerce_data.sql
 # Initiate move tables
 vtctlclient MoveTables -workflow=commerce2customer commerce customer '{"customer":{}, "corder":{}}'
 
+# Validate
+vtctlclient VDiff customer.commerce2customer
+
 # Cut-over
 vtctlclient SwitchReads -tablet_type=rdonly customer.commerce2customer
 vtctlclient SwitchReads -tablet_type=replica customer.commerce2customer
 vtctlclient SwitchWrites customer.commerce2customer
 
 # Clean-up
-vtctlclient SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 rdonly
-vtctlclient SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 replica
-vtctlclient SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 master
-vtctlclient ApplyRoutingRules -rules='{}'
+vtctlclient DropSources customer.commerce2customer
 
 # Prepare for resharding
 ./301_customer_sharded.sh
@@ -38,6 +38,11 @@ vtctlclient ApplyRoutingRules -rules='{}'
 
 # Reshard
 vtctlclient Reshard customer.cust2cust '0' '-80,80-'
+
+# Validate
+vtctlclient VDiff customer.cust2cust
+
+# Cut-over
 vtctlclient SwitchReads -tablet_type=rdonly customer.cust2cust
 vtctlclient SwitchReads -tablet_type=replica customer.cust2cust
 vtctlclient SwitchWrites customer.cust2cust
