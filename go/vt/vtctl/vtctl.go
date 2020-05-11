@@ -55,7 +55,7 @@ COMMAND ARGUMENT DEFINITIONS
             of decimal numbers, each with optional fraction and a unit
             suffix, such as "300ms" or "1h45m". See the definition of the
             Go language's <a
-            href="http://golang.org/pkg/time/#ParseDuration">ParseDuration</a>
+            href="https://golang.org/pkg/time/#ParseDuration">ParseDuration</a>
             function for more details. Note that, in practice, the value
             should be a positively signed value.
 
