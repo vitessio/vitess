@@ -72,6 +72,10 @@ config:
     s3Secret: vitess-s3-creds
 
 topology:
+  # deploymentType can be "test" or "prod". Default is "prod".
+  # If the value is "test", then mysql is instanitated with a smaller footprint.
+  # For vttablet, additional containers like log-rotate, etc will not be brought up.
+  deploymentType: prod
   globalCell:
     topologyProvider: k8s
     etcd:
