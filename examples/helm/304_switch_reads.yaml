@@ -44,7 +44,6 @@ jobs:
     command: "SwitchReads -tablet_type=replica customer.cust2cust"
 
 vttablet:
-  # It's generally not recommended to override this value for production usage.
   terminationGracePeriodSeconds: 1
 
 pmm:
