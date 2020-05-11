@@ -1,4 +1,5 @@
 topology:
+  deploymentType: test
   cells:
     - name: "zone1"
       vtctld:
@@ -38,23 +39,9 @@ topology:
               copySchema:
                 source: "customer/0"
 
-vtctld:
-  serviceType: "NodePort"
-  resources:
-
-vtgate:
-  serviceType: "NodePort"
-  resources:
-
 vttablet:
-  mysqlSize: "prod"
-  resources:
-  mysqlResources:
   # It's generally not recommended to override this value for production usage.
   terminationGracePeriodSeconds: 1
-
-vtworker:
-  resources:
 
 pmm:
   enabled: false
