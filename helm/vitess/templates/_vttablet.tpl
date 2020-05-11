@@ -132,19 +132,26 @@ spec:
       serviceAccountName: vttablet
       terminationGracePeriodSeconds: {{ $defaultVttablet.terminationGracePeriodSeconds | default 60000000 }}
 {{ include "pod-security" . | indent 6 }}
+
+{{ if eq ($topology.deploymentType | default "prod") "prod" }}
 {{ include "vttablet-affinity" (tuple $cellClean $keyspaceClean $shardClean $cell.region) | indent 6 }}
+{{ end }}
 
       initContainers:
-{{ include "init-mysql" (tuple $vitessTag $cellClean) | indent 8 }}
-{{ include "init-vttablet" (tuple $vitessTag $cell $cellClean $namespace) | indent 8 }}
+{{ include "init-mysql" (tuple $topology $vitessTag $cellClean) | indent 8 }}
+{{ include "init-vttablet" (tuple $topology $vitessTag $cell $cellClean $namespace) | indent 8 }}
 
       containers:
 {{ include "cont-mysql" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $uid) | indent 8 }}
 {{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $defaultVtctlclient $vitessTag $uid $namespace $config $orc) | indent 8 }}
+
+{{ if eq ($topology.deploymentType | default "prod") "prod" }}
 {{ include "cont-logrotate" . | indent 8 }}
 {{ include "cont-mysql-generallog" . | indent 8 }}
 {{ include "cont-mysql-errorlog" . | indent 8 }}
 {{ include "cont-mysql-slowlog" . | indent 8 }}
+{{ end }}
+
 {{ if $pmm.enabled }}{{ include "cont-pmm-client" (tuple $pmm $namespace $keyspace) | indent 8 }}{{ end }}
 
       volumes:
@@ -196,8 +203,9 @@ spec:
 # init-container to copy binaries for mysql
 ###################################
 {{ define "init-mysql" -}}
-{{- $vitessTag := index . 0 -}}
-{{- $cellClean := index . 1 }}
+{{- $topology := index . 0 -}}
+{{- $vitessTag := index . 1 -}}
+{{- $cellClean := index . 2 }}
 
 - name: "init-mysql"
   image: "vitess/mysqlctld:{{$vitessTag}}"
@@ -239,10 +247,11 @@ spec:
 # into a 31-bit unsigned integer for use as a Vitess tablet UID.
 ###################################
 {{ define "init-vttablet" -}}
-{{- $vitessTag := index . 0 -}}
-{{- $cell := index . 1 -}}
-{{- $cellClean := index . 2 -}}
-{{- $namespace := index . 3 }}
+{{- $topology := index . 0 -}}
+{{- $vitessTag := index . 1 -}}
+{{- $cell := index . 2 -}}
+{{- $cellClean := index . 3 -}}
+{{- $namespace := index . 4 }}
 
 - name: init-vttablet
   image: "vitess/vtctl:{{$vitessTag}}"
@@ -559,7 +568,7 @@ spec:
     - |
       set -ex
 {{ include "mycnf-exec" (.extraMyCnf | default $defaultVttablet.extraMyCnf) | indent 6 }}
-{{- if eq (.mysqlSize | default $defaultVttablet.mysqlSize) "test" }}
+{{- if eq ($topology.deploymentType | default "prod") "test" }}
       export EXTRA_MY_CNF="$EXTRA_MY_CNF:/vt/config/mycnf/default-fast.cnf"
 {{- end }}
 
@@ -576,6 +585,10 @@ spec:
 
 {{- end -}}
 {{- end -}}
+
+####################################
+# Everything below here is enabled only if deploymentType is prod.
+####################################
 
 ##########################
 # run logrotate for all log files in /vtdataroot/tabletdata

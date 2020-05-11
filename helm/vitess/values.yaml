@@ -72,6 +72,10 @@ config:
     s3Secret: vitess-s3-creds
 
 topology:
+  # deploymentType can be "test" or "prod". Default is "prod".
+  # If the value is "test", then mysql is instanitated with a smaller footprint.
+  # For vttablet, additional containers like log-rotate, etc will not be brought up.
+  deploymentType: prod
   globalCell:
     topologyProvider: k8s
     etcd:
@@ -182,7 +186,7 @@ etcd:
 # Default values for vtctld resources defined in 'topology'
 vtctld:
   serviceType: ClusterIP
-  vitessTag: helm-2.0.1-0
+  vitessTag: helm-2.0.2-0
   resources:
     # requests:
     #   cpu: 100m
@@ -193,7 +197,7 @@ vtctld:
 # Default values for vtgate resources defined in 'topology'
 vtgate:
   serviceType: ClusterIP
-  vitessTag: helm-2.0.1-0
+  vitessTag: helm-2.0.2-0
   resources:
     # requests:
     #   cpu: 500m
@@ -212,13 +216,13 @@ vtgate:
 
 # Default values for vtctlclient resources defined in 'topology'
 vtctlclient:
-  vitessTag: helm-2.0.1-0
+  vitessTag: helm-2.0.2-0
   extraFlags: {}
   secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
 
 # Default values for vtworker resources defined in 'jobs'
 vtworker:
-  vitessTag: helm-2.0.1-0
+  vitessTag: helm-2.0.2-0
   extraFlags: {}
   resources:
     # requests:
@@ -229,7 +233,7 @@ vtworker:
 
 # Default values for vttablet resources defined in 'topology'
 vttablet:
-  vitessTag: helm-2.0.1-0
+  vitessTag: helm-2.0.2-0
 
   # valid values are
   # - mysql56 (for MySQL 8.0)
