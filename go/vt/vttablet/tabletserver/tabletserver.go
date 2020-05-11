@@ -29,6 +29,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/history"
@@ -168,7 +170,7 @@ type TabletServer struct {
 	vstreamer *vstreamer.Engine
 	messager  *messager.Engine
 
-	txState TxEngineStateMachine
+	txController tx.TxEngineStateMachine
 
 	// checkMySQLThrottler is used to throttle the number of
 	// requests sent to CheckMySQL.
@@ -228,6 +230,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.se = schema.NewEngine(tsv)
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
 	tsv.te = NewTxEngine(tsv)
+	tsv.txController = tsv.te
 	tsv.hw = heartbeat.NewWriter(tsv, alias)
 	tsv.hr = heartbeat.NewReader(tsv)
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
@@ -520,7 +523,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 	if err := tsv.qe.Open(); err != nil {
 		return err
 	}
-	if err := tsv.txState.Init(); err != nil {
+	if err := tsv.txController.Init(); err != nil {
 		return err
 	}
 	if err := tsv.hw.Init(tsv.target); err != nil {
@@ -538,7 +541,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 	// transactional requests are not allowed. So, we can
 	// be sure that the tx pool won't change after the wait.
 	if tsv.target.TabletType == topodatapb.TabletType_MASTER {
-		tsv.txState.AcceptReadWrite()
+		tsv.txController.AcceptReadWrite()
 		if err := tsv.txThrottler.Open(tsv.target.Keyspace, tsv.target.Shard); err != nil {
 			return err
 		}
@@ -546,7 +549,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.hr.Close()
 		tsv.hw.Open()
 	} else {
-		tsv.txState.AcceptReadOnly()
+		tsv.txController.AcceptReadOnly()
 		tsv.messager.Close()
 		tsv.hr.Open()
 		tsv.hw.Close()
@@ -602,7 +605,7 @@ func (tsv *TabletServer) waitForShutdown() {
 	// will be allowed. They will enable the conclusion of outstanding
 	// transactions.
 	tsv.messager.Close()
-	tsv.txState.StopGently()
+	tsv.txController.StopGently()
 	tsv.qe.streamQList.TerminateAll()
 	tsv.watcher.Close()
 	tsv.requests.Wait()
@@ -617,7 +620,7 @@ func (tsv *TabletServer) closeAll() {
 	tsv.vstreamer.Close()
 	tsv.hr.Close()
 	tsv.hw.Close()
-	tsv.txState.StopGently()
+	tsv.txController.StopGently()
 	tsv.watcher.Close()
 	tsv.qe.Close()
 	tsv.se.Close()
@@ -749,7 +752,7 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, opti
 				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
 			}
 			var beginSQL string
-			transactionID, beginSQL, err = tsv.te.Begin(ctx, options)
+			transactionID, beginSQL, err = tsv.te.Begin(ctx, options, tx.DoNothing)
 			logStats.TransactionID = transactionID
 
 			// Record the actual statements that were executed in the logStats.

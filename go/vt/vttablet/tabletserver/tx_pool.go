@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -134,7 +136,7 @@ func (tp *TxPool) Close() {
 	tp.ticks.Stop()
 	for _, v := range tp.activePool.GetOutdated(time.Duration(0), "for closing") {
 		conn := v.(*TxConnection)
-		log.Warningf("killing transaction for shutdown: %s", conn.Format())
+		log.Warningf("killing transaction for shutdown: %s", conn.String())
 		tp.env.Stats().InternalErrors.Add("StrayTransactions", 1)
 		conn.Close()
 		conn.conclude(TxClose, "pool closed")
@@ -166,7 +168,7 @@ func (tp *TxPool) transactionKiller() {
 	defer tp.env.LogError()
 	for _, v := range tp.activePool.GetOutdated(tp.Timeout(), "for tx killer rollback") {
 		conn := v.(*TxConnection)
-		log.Warningf("killing transaction (exceeded timeout: %v): %s", tp.Timeout(), conn.Format())
+		log.Warningf("killing transaction (exceeded timeout: %v): %s", tp.Timeout(), conn.String())
 		tp.env.Stats().KillCounters.Add("Transactions", 1)
 		conn.Close()
 		conn.conclude(TxKill, fmt.Sprintf("exceeded timeout: %v", tp.Timeout()))
@@ -183,7 +185,7 @@ func (tp *TxPool) WaitForEmpty() {
 // mode the statement will be "".
 //
 // Subsequent statements can access the connection through the transaction id.
-func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (int64, string, error) {
+func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (tx.ConnID, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Begin")
 	defer span.Finish()
 	beginQueries := ""
@@ -524,18 +526,13 @@ func (txc *TxConnection) log(conclusion string) {
 	txc.pool.env.Stats().UserTransactionTimesNs.Add([]string{username, conclusion}, int64(duration))
 	txc.pool.txStats.Add(conclusion, duration)
 	if txc.LogToFile.Get() != 0 {
-		log.Infof("Logged transaction: %s", txc.Format())
+		log.Infof("Logged transaction: %s", txc.String())
 	}
 	tabletenv.TxLogger.Send(txc)
 }
 
-// EventTime returns the time the event was created.
-func (txc *TxConnection) EventTime() time.Time {
-	return txc.EndTime
-}
-
-// Format returns a printable version of the connection info.
-func (txc *TxConnection) Format() string {
+// String returns a printable version of the connection info.
+func (txc *TxConnection) String() string {
 	return fmt.Sprintf(
 		"%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%v\t\n",
 		txc.TransactionID,

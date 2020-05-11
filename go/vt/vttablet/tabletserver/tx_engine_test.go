@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -372,6 +374,6 @@ func startTransaction(te *TxEngine, writeTransaction bool) error {
 	} else {
 		options.TransactionIsolation = querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY
 	}
-	_, _, err := te.Begin(context.Background(), options)
+	_, _, err := te.Begin(context.Background(), options, tx.DoNothing)
 	return err
 }

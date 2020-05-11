@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
@@ -409,7 +411,7 @@ func TestExecutorReadAllTransactions(t *testing.T) {
 	})
 	got, _, _, err := txe.ReadTwopcInflight()
 	require.NoError(t, err)
-	want := []*DistributedTx{{
+	want := []*tx.DistributedTx{{
 		Dtid:    "dtid0",
 		State:   "PREPARE",
 		Created: time.Unix(0, 1),
