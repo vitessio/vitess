@@ -262,11 +262,14 @@ func (th *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.Str
 	}
 
 	th.mu.Lock()
-	currentTablet := th.Tablet
+	currentTarget := th.Target
 	// check whether this is a trivial update so as to update healthy map
 	trivialNonMasterUpdate := th.LastError == nil && th.Serving && shr.RealtimeStats.HealthError == "" && shr.Serving &&
-		currentTablet.Type != topodata.TabletType_MASTER && currentTablet.Type == shr.Target.TabletType
-	isMasterUpdate := currentTablet.Type == topodata.TabletType_MASTER && shr.Target.TabletType == topodata.TabletType_MASTER
+		currentTarget.TabletType != topodata.TabletType_MASTER && currentTarget.TabletType == shr.Target.TabletType
+	isMasterUpdate := shr.Target.TabletType == topodata.TabletType_MASTER
+	// Track how often a tablet gets promoted to master. It is used for
+	// comparing against the variables in go/vtgate/buffer/variables.go.
+	isMasterChange := currentTarget.TabletType != topodata.TabletType_MASTER && shr.Target.TabletType == topodata.TabletType_MASTER
 	th.mu.Unlock()
 
 	// hc.healthByAlias is authoritative, it should be updated
@@ -277,12 +280,12 @@ func (th *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.Str
 	hc.mu.Unlock()
 
 	hcErrorCounters.Add([]string{shr.Target.Keyspace, shr.Target.Shard, topoproto.TabletTypeLString(shr.Target.TabletType)}, 0)
-	if currentTablet.Type != shr.Target.TabletType || currentTablet.Keyspace != shr.Target.Keyspace || currentTablet.Shard != shr.Target.Shard {
+	if currentTarget.TabletType != shr.Target.TabletType || currentTarget.Keyspace != shr.Target.Keyspace || currentTarget.Shard != shr.Target.Shard {
 		// keyspace and shard are not expected to change, but just in case ...
 		// hc still has this tabletHealthCheck in the wrong target (because tabletType changed)
-		oldTargetKey := hc.keyFromTablet(currentTablet)
+		oldTargetKey := hc.keyFromTarget(currentTarget)
 		newTargetKey := hc.keyFromTarget(shr.Target)
-		tabletAlias := topoproto.TabletAliasString(currentTablet.Alias)
+		tabletAlias := topoproto.TabletAliasString(shr.TabletAlias)
 		hc.mu.Lock()
 		delete(hc.healthData[oldTargetKey], tabletAlias)
 		_, ok := hc.healthData[newTargetKey]
@@ -324,8 +327,8 @@ func (th *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.Str
 			// need to replace it.
 			if th.MasterTermStartTime < hc.healthy[targetKey][0].MasterTermStartTime {
 				log.Warningf("not marking healthy master %s as Up for %s because its MasterTermStartTime is smaller than the highest known timestamp from previous MASTERs %s: %d < %d ",
-					topoproto.TabletAliasString(currentTablet.Alias),
-					topoproto.KeyspaceShardString(currentTablet.Keyspace, currentTablet.Shard),
+					topoproto.TabletAliasString(shr.TabletAlias),
+					topoproto.KeyspaceShardString(shr.Target.Keyspace, shr.Target.Shard),
 					topoproto.TabletAliasString(hc.healthy[targetKey][0].Tablet.Alias),
 					th.MasterTermStartTime,
 					hc.healthy[targetKey][0].MasterTermStartTime)
@@ -336,12 +339,16 @@ func (th *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.Str
 		}
 	}
 
+	// notify downstream for master change
 	result := th.simpleCopyLocked()
-	hc.broadcast(result)
-	// and notify downstream for master change
-	if shr.Target.TabletType == topodata.TabletType_MASTER && hc.masterCallback != nil {
-		hc.masterCallback(result)
+	if isMasterChange {
+		if hc.masterCallback != nil {
+			hc.masterCallback(result)
+		}
+		log.Errorf("Adding 1 to MasterPromoted counter for tablet: %v, shr.Tablet: %v, shr.TabletType: %v", currentTarget, topoproto.TabletAliasString(shr.TabletAlias), shr.Target.TabletType)
+		hcMasterPromotedCounters.Add([]string{shr.Target.Keyspace, shr.Target.Shard}, 1)
 	}
-
+	// broadcast to subscribers
+	hc.broadcast(result)
 	return nil
 }
