@@ -77,7 +77,7 @@ func (ap *ActivePool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connec
 // Close closes the TxPool. A closed pool can be reopened.
 func (ap *ActivePool) Close() {
 	for _, v := range ap.active.GetOutdated(time.Duration(0), "for closing") {
-		conn := v.(*TxConnection)
+		conn := v.(*DedicatedConnection)
 		log.Warningf("killing transaction for shutdown: %s", conn.String())
 		ap.env.Stats().InternalErrors.Add("StrayTransactions", 1)
 		conn.Close()
@@ -99,14 +99,14 @@ func (ap *ActivePool) AdjustLastID(id int64) {
 
 // GetOutdated returns a list of connections that are older than age.
 // It does not return any connections that are in use.
-func (ap *ActivePool) GetOutdated(age time.Duration, purpose string) []*TxConnection {
+func (ap *ActivePool) GetOutdated(age time.Duration, purpose string) []*DedicatedConnection {
 	return mapToTxConn(ap.active.GetOutdated(age, purpose))
 }
 
-func mapToTxConn(outdated []interface{}) []*TxConnection {
-	result := make([]*TxConnection, len(outdated))
+func mapToTxConn(outdated []interface{}) []*DedicatedConnection {
+	result := make([]*DedicatedConnection, len(outdated))
 	for i, el := range outdated {
-		result[i] = el.(*TxConnection)
+		result[i] = el.(*DedicatedConnection)
 	}
 	return result
 }
@@ -119,17 +119,17 @@ func (ap *ActivePool) WaitForEmpty() {
 // Get locks the connection for use. It accepts a purpose as a string.
 // If it cannot be found, it returns a "not found" error. If in use,
 // it returns a "in use: purpose" error.
-func (ap *ActivePool) Get(id int64, reason string) (*TxConnection, error) {
+func (ap *ActivePool) Get(id int64, reason string) (*DedicatedConnection, error) {
 	conn, err := ap.active.Get(id, reason)
 	if err != nil {
 		return nil, err
 	}
-	return conn.(*TxConnection), nil
+	return conn.(*DedicatedConnection), nil
 }
 
 //NewConn creates a new TxConn. It will be created from either the normal pool or
 //the found_rows pool, depending on the options provided
-func (ap *ActivePool) NewConn(ctx context.Context, options *querypb.ExecuteOptions, effectiveCaller, immediateCaller string, f func(*TxConnection) error) (*TxConnection, error) {
+func (ap *ActivePool) NewConn(ctx context.Context, options *querypb.ExecuteOptions, effectiveCaller, immediateCaller string, f func(*DedicatedConnection) error) (*DedicatedConnection, error) {
 	var conn *connpool.DBConn
 	var err error
 
@@ -144,25 +144,25 @@ func (ap *ActivePool) NewConn(ctx context.Context, options *querypb.ExecuteOptio
 
 	transactionID := ap.lastID.Add(1)
 
-	txConn := &TxConnection{
-		dbConn:        conn,
-		TransactionID: transactionID,
-		pool:          ap,
-		env:           ap.env,
+	txConn := &DedicatedConnection{
+		dbConn: conn,
+		ConnID: transactionID,
+		pool:   ap,
+		env:    ap.env,
 	}
 
 	err = f(txConn)
 	if err != nil {
-		txConn.Release(ConnInitFail)
+		txConn.Release(tx.ConnInitFail)
 		return nil, err
 	}
 	err = ap.active.Register(
-		txConn.TransactionID,
+		txConn.ConnID,
 		txConn,
 		options.GetWorkload() != querypb.ExecuteOptions_DBA,
 	)
 	if err != nil {
-		txConn.Release(ConnInitFail)
+		txConn.Release(tx.ConnInitFail)
 		return nil, err
 	}
 	return txConn, nil
@@ -183,8 +183,8 @@ func (ap *ActivePool) unregister(id tx.ConnID, reason string) {
 	ap.active.Unregister(id, reason)
 }
 
-//MarkAsInactive marks the connection as not in use at the moment
-func (ap *ActivePool) MarkAsInactive(id tx.ConnID) {
+//markAsNotInUse marks the connection as not in use at the moment
+func (ap *ActivePool) markAsNotInUse(id tx.ConnID) {
 	ap.active.Put(id)
 }
 
