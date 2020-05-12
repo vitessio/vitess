@@ -67,6 +67,7 @@ var (
 	HealthCheckRetryDelay = flag.Duration("healthcheck_retry_delay", 2*time.Millisecond, "health check retry delay")
 	// HealthCheckTimeout is the timeout on the RPC call to tablets
 	HealthCheckTimeout = flag.Duration("healthcheck_timeout", time.Minute, "the health check timeout period")
+	maxPayloadSize     = flag.Int("max_payload_size", 0, "The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
