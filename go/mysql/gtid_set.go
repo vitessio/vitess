@@ -45,6 +45,9 @@ type GTIDSet interface {
 
 	// AddGTID returns a new GTIDSet that is expanded to contain the given GTID.
 	AddGTID(GTID) GTIDSet
+
+	// Union return a union of the caller GTIDSet and the supplied GTIDSet.
+	Union(GTIDSet) GTIDSet
 }
 
 // gtidSetParsers maps flavor names to parser functions. It is used by
