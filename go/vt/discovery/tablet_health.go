@@ -310,6 +310,8 @@ func (th *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.Str
 	}
 	th.setServingState(serving, reason)
 
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
 	targetKey := hc.keyFromTarget(shr.Target)
 	if !trivialNonMasterUpdate {
 		all := hc.healthData[targetKey]
