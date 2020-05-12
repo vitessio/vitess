@@ -1869,6 +1869,28 @@ func TestGenerateCharsetRows(t *testing.T) {
 	}
 }
 
+func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
+	save := *maxPayloadSize
+	*maxPayloadSize = 5
+	defer func() { *maxPayloadSize = save }()
+
+	executor, _, _, _ := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
+	testCases := []string{
+		"select * from main1",
+		"insert into main1(id) values (1), (2)",
+		"update main1 set id=1",
+		"delete from main1 where id=1",
+	}
+	for _, query := range testCases {
+		_, err := executor.Execute(context.Background(), "TestExecutorMaxPayloadSizeExceeded", session, query, nil)
+		want := "query payload size above threshold"
+		if err == nil || err.Error() != want {
+			t.Errorf("got: %v, want %s", err, want)
+		}
+	}
+}
+
 func TestOlapSelectDatabase(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 	executor.normalize = true
