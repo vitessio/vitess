@@ -21,7 +21,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 )
 
 type (
@@ -90,8 +89,6 @@ type (
 
 		// Recycle marks the connection as not in use. The connection remains active.
 		Recycle()
-
-		DbConn() *connpool.DBConn
 	}
 )
 

@@ -23,8 +23,9 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/callerid"
+
 	"vitess.io/vitess/go/streamlog"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -52,26 +53,25 @@ func testHandler(req *http.Request, t *testing.T) {
 	}
 	txConn := &TxConnection{
 		TransactionID: 123456,
-		StartTime:     time.Now(),
-		Queries:       []string{"select * from test"},
-		Conclusion:    "unknown",
 		TxProps: &TxProperties{
-			LogToFile: sync2.AtomicBool{},
+			EffectiveCaller: callerid.NewEffectiveCallerID("effective-caller", "component", "subcomponent"),
+			ImmediateCaller: callerid.NewImmediateCallerID("immediate-caller"),
+			StartTime:       time.Now(),
+			Conclusion:      "unknown",
+			Queries:         []string{"select * from test"},
 		},
-		EffectiveCaller: "effective-caller",
-		ImmediateCaller: "immediate-caller",
 	}
-	txConn.EndTime = txConn.StartTime
+	txConn.TxProps.EndTime = txConn.TxProps.StartTime
 	response = httptest.NewRecorder()
 	tabletenv.TxLogger.Send(txConn)
 	txlogzHandler(response, req)
 	testNotRedacted(t, response)
-	txConn.EndTime = txConn.StartTime.Add(time.Duration(2) * time.Second)
+	txConn.TxProps.EndTime = txConn.TxProps.StartTime.Add(time.Duration(2) * time.Second)
 	response = httptest.NewRecorder()
 	tabletenv.TxLogger.Send(txConn)
 	txlogzHandler(response, req)
 	testNotRedacted(t, response)
-	txConn.EndTime = txConn.StartTime.Add(time.Duration(500) * time.Millisecond)
+	txConn.TxProps.EndTime = txConn.TxProps.StartTime.Add(time.Duration(500) * time.Millisecond)
 	response = httptest.NewRecorder()
 	tabletenv.TxLogger.Send(txConn)
 	txlogzHandler(response, req)

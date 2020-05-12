@@ -19,8 +19,6 @@ package tabletserver
 import (
 	"time"
 
-	"vitess.io/vitess/go/vt/servenv"
-
 	"vitess.io/vitess/go/pools"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
@@ -50,9 +48,6 @@ type ActivePool struct {
 	active        *pools.Numbered
 	lastID        sync2.AtomicInt64
 	env           tabletenv.Env
-
-	// Tracking culprits that cause tx pool full errors.
-	txStats *servenv.TimingsWrapper
 }
 
 //NewActivePool creates an ActivePool
@@ -65,7 +60,6 @@ func NewActivePool(env tabletenv.Env) *ActivePool {
 		foundRowsPool: connpool.NewPool(env, "FoundRowsPool", config.TxPool),
 		active:        pools.NewNumbered(),
 		lastID:        sync2.NewAtomicInt64(time.Now().UnixNano()),
-		txStats:       env.Exporter().NewTimings("Transactions", "Transaction stats", "operation"),
 	}
 }
 
@@ -87,7 +81,7 @@ func (ap *ActivePool) Close() {
 		log.Warningf("killing transaction for shutdown: %s", conn.String())
 		ap.env.Stats().InternalErrors.Add("StrayTransactions", 1)
 		conn.Close()
-		conn.conclude(TxClose, "pool closed")
+		conn.conclude("pool closed")
 	}
 	ap.conns.Close()
 	ap.foundRowsPool.Close()
@@ -151,14 +145,10 @@ func (ap *ActivePool) NewConn(ctx context.Context, options *querypb.ExecuteOptio
 	transactionID := ap.lastID.Add(1)
 
 	txConn := &TxConnection{
-		dbConn:          conn,
-		TransactionID:   transactionID,
-		pool:            ap,
-		StartTime:       time.Now(),
-		EffectiveCaller: effectiveCaller,
-		ImmediateCaller: immediateCaller,
-		env:             ap.env,
-		txStats:         ap.txStats,
+		dbConn:        conn,
+		TransactionID: transactionID,
+		pool:          ap,
+		env:           ap.env,
 	}
 
 	err = f(txConn)
@@ -189,7 +179,7 @@ func (ap *ActivePool) ForAllTxProperties(f func(*TxProperties)) {
 }
 
 // Unregister forgets the specified connection.  If the connection is not present, it's ignored.
-func (ap *ActivePool) Unregister(id tx.ConnID, reason string) {
+func (ap *ActivePool) unregister(id tx.ConnID, reason string) {
 	ap.active.Unregister(id, reason)
 }
 

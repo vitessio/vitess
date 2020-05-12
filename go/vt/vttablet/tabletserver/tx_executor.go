@@ -57,7 +57,7 @@ func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 	}
 
 	// If no queries were executed, we just rollback.
-	if len(conn.Queries) == 0 {
+	if len(conn.TxProps.Queries) == 0 {
 		txe.te.txPool.LocalConclude(txe.ctx, conn)
 		return nil
 	}
@@ -74,7 +74,7 @@ func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 	}
 	defer txe.te.txPool.LocalConclude(txe.ctx, localConn)
 
-	err = txe.te.twoPC.SaveRedo(txe.ctx, localConn, dtid, conn.Queries)
+	err = txe.te.twoPC.SaveRedo(txe.ctx, localConn, dtid, conn.TxProps.Queries)
 	if err != nil {
 		return err
 	}
