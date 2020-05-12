@@ -538,8 +538,8 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 		t.Fatal("ch should not fire")
 	case <-time.After(10 * time.Millisecond):
 	}
-	if tsv.te.txPool.activePool.Size() != 1 {
-		t.Errorf("len(tsv.te.txPool.activePool.Size()): %d, want 1", len(tsv.te.preparedPool.conns))
+	if tsv.te.txPool.activePool.active.Size() != 1 {
+		t.Errorf("len(tsv.te.txPool.active.Size()): %d, want 1", len(tsv.te.preparedPool.conns))
 	}
 
 	// Concluding conn2 will allow the transition to go through.
@@ -598,7 +598,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 0", v)
 	}
 
-	tsv.te.txPool.lastID.Set(1)
+	tsv.te.txPool.activePool.lastID.Set(1)
 	// Ensure we continue past errors.
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -638,7 +638,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		t.Errorf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed)
 	}
 	// Verify last id got adjusted.
-	if v := tsv.te.txPool.lastID.Get(); v != 20 {
+	if v := tsv.te.txPool.activePool.lastID.Get(); v != 20 {
 		t.Errorf("tsv.te.txPool.lastID.Get(): %d, want 20", v)
 	}
 	turnOffTxEngine()
@@ -2480,7 +2480,7 @@ func TestConfigChanges(t *testing.T) {
 	if val := tsv.TxPoolSize(); val != newSize {
 		t.Errorf("TxPoolSize: %d, want %d", val, newSize)
 	}
-	if val := int(tsv.te.txPool.conns.Capacity()); val != newSize {
+	if val := int(tsv.te.txPool.activePool.Capacity()); val != newSize {
 		t.Errorf("tsv.te.txPool.pool.Capacity: %d, want %d", val, newSize)
 	}
 

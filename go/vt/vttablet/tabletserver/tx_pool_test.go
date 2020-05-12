@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txlimiter"
 
 	"golang.org/x/net/context"
@@ -58,17 +60,13 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 		t.Errorf("beginSQL got %q want 'begin'", beginSQL)
 	}
 	txConn, err := txPool.Get(transactionID, "for query")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	txConn.RecordQuery(sql)
 	_, _ = txConn.Exec(ctx, sql, 1, true)
 	txConn.Recycle()
 
 	commitSQL, err := txPool.Commit(ctx, transactionID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	if commitSQL != "commit" {
 		t.Errorf("commitSQL got %q want 'commit'", commitSQL)
 	}
@@ -87,23 +85,17 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 	defer txPool.Close()
 	ctx := context.Background()
 	transactionID, beginSQL, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	if beginSQL != "begin" {
 		t.Errorf("beginSQL got %q want 'begin'", beginSQL)
 	}
 	txConn, err := txPool.Get(transactionID, "for query")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer txPool.Rollback(ctx, transactionID)
 	txConn.RecordQuery(sql)
 	_, err = txConn.Exec(ctx, sql, 1, true)
 	txConn.Recycle()
-	if err != nil {
-		t.Fatalf("got error: %v", err)
-	}
+	require.NoError(t, err)
 }
 
 func TestTxPoolRollbackNonBusy(t *testing.T) {
@@ -117,27 +109,21 @@ func TestTxPoolRollbackNonBusy(t *testing.T) {
 	defer txPool.Close()
 	ctx := context.Background()
 	txid1, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	_, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	conn1, err := txPool.Get(txid1, "for query")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	// This should rollback only txid2.
 	txPool.RollbackNonBusy(ctx)
-	if sz := txPool.activePool.Size(); sz != 1 {
-		t.Errorf("txPool.activePool.Size(): %d, want 1", sz)
+	if sz := txPool.activePool.active.Size(); sz != 1 {
+		t.Errorf("txPool.active.Size(): %d, want 1", sz)
 	}
 	conn1.Recycle()
 	// This should rollback txid1.
 	txPool.RollbackNonBusy(ctx)
-	if sz := txPool.activePool.Size(); sz != 0 {
-		t.Errorf("txPool.activePool.Size(): %d, want 0", sz)
+	if sz := txPool.activePool.active.Size(); sz != 0 {
+		t.Errorf("txPool.active.Size(): %d, want 0", sz)
 	}
 }
 
@@ -160,13 +146,10 @@ func TestTxPoolTransactionKillerEnforceTimeoutEnabled(t *testing.T) {
 	killCount := txPool.env.Stats().KillCounters.Counts()["Transactions"]
 
 	txWithoutTimeout, err := addQuery(ctx, sqlWithoutTimeout, txPool, querypb.ExecuteOptions_DBA)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if _, err := addQuery(ctx, sqlWithTimeout, txPool, querypb.ExecuteOptions_UNSPECIFIED); err != nil {
-		t.Fatal(err)
-	}
+	_, err = addQuery(ctx, sqlWithTimeout, txPool, querypb.ExecuteOptions_UNSPECIFIED)
+	require.NoError(t, err)
 
 	var (
 		killCountDiff int64
@@ -189,26 +172,16 @@ func TestTxPoolTransactionKillerEnforceTimeoutEnabled(t *testing.T) {
 		}
 	}
 
-	if killCountDiff > expectedKills {
-		t.Fatalf("expected only %v query to be killed, but got %v killed", expectedKills, killCountDiff)
-	}
+	require.True(t, killCountDiff > expectedKills,
+		"expected only %v query to be killed, but got %v killed", expectedKills, killCountDiff)
 
 	txPool.Rollback(ctx, txWithoutTimeout)
 	txPool.WaitForEmpty()
 
-	if got, expected := db.GetQueryCalledNum("begin"), 2; got != expected {
-		t.Fatalf("'begin' called: got=%v, expected=%v", got, expected)
-	}
-	if got, expected := db.GetQueryCalledNum(sqlWithoutTimeout), 1; got != expected {
-		t.Fatalf("'%v' called: got=%v, expected=%v", sqlWithoutTimeout, got, expected)
-	}
-	if got, expected := db.GetQueryCalledNum(sqlWithTimeout), 1; got != expected {
-		t.Fatalf("'%v' called: got=%v, expected=%v", sqlWithTimeout, got, expected)
-	}
-	if got, expected := db.GetQueryCalledNum("rollback"), 1; got != expected {
-		t.Fatalf("'rollback' called: got=%v, expected=%v", got, expected)
-	}
-
+	require.Equal(t, db.GetQueryCalledNum("begin"), 2)
+	require.Equal(t, db.GetQueryCalledNum(sqlWithoutTimeout), 1)
+	require.Equal(t, db.GetQueryCalledNum(sqlWithTimeout), 1)
+	require.Equal(t, db.GetQueryCalledNum("rollback"), 1)
 }
 func addQuery(ctx context.Context, sql string, txPool *TxPool, workload querypb.ExecuteOptions_Workload) (int64, error) {
 	transactionID, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{Workload: workload})
@@ -232,8 +205,8 @@ func TestTxPoolClientRowsFound(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	ctx := context.Background()
 
-	startNormalSize := txPool.conns.Available()
-	startFoundRowsSize := txPool.foundRowsPool.Available()
+	startNormalSize := txPool.activePool.conns.Available()
+	startFoundRowsSize := txPool.activePool.foundRowsPool.Available()
 
 	// Start a 'normal' transaction. It should take a connection
 	// for the normal 'conns' pool.
@@ -244,10 +217,10 @@ func TestTxPoolClientRowsFound(t *testing.T) {
 	if beginSQL != "begin" {
 		t.Errorf("beginSQL got %q want 'begin'", beginSQL)
 	}
-	if got, want := txPool.conns.Available(), startNormalSize-1; got != want {
+	if got, want := txPool.activePool.conns.Available(), startNormalSize-1; got != want {
 		t.Errorf("Normal pool size: %d, want %d", got, want)
 	}
-	if got, want := txPool.foundRowsPool.Available(), startFoundRowsSize; got != want {
+	if got, want := txPool.activePool.foundRowsPool.Available(), startFoundRowsSize; got != want {
 		t.Errorf("foundRows pool size: %d, want %d", got, want)
 	}
 
@@ -260,30 +233,30 @@ func TestTxPoolClientRowsFound(t *testing.T) {
 	if beginSQL != "begin" {
 		t.Errorf("beginSQL got %q want 'begin'", beginSQL)
 	}
-	if got, want := txPool.conns.Available(), startNormalSize-1; got != want {
+	if got, want := txPool.activePool.conns.Available(), startNormalSize-1; got != want {
 		t.Errorf("Normal pool size: %d, want %d", got, want)
 	}
-	if got, want := txPool.foundRowsPool.Available(), startFoundRowsSize-1; got != want {
+	if got, want := txPool.activePool.foundRowsPool.Available(), startFoundRowsSize-1; got != want {
 		t.Errorf("foundRows pool size: %d, want %d", got, want)
 	}
 
 	// Rollback the first transaction. The conn should be returned to
 	// the conns pool.
 	txPool.Rollback(ctx, id1)
-	if got, want := txPool.conns.Available(), startNormalSize; got != want {
+	if got, want := txPool.activePool.conns.Available(), startNormalSize; got != want {
 		t.Errorf("Normal pool size: %d, want %d", got, want)
 	}
-	if got, want := txPool.foundRowsPool.Available(), startFoundRowsSize-1; got != want {
+	if got, want := txPool.activePool.foundRowsPool.Available(), startFoundRowsSize-1; got != want {
 		t.Errorf("foundRows pool size: %d, want %d", got, want)
 	}
 
 	// Rollback the second transaction. The conn should be returned to
 	// the foundRows pool.
 	txPool.Rollback(ctx, id2)
-	if got, want := txPool.conns.Available(), startNormalSize; got != want {
+	if got, want := txPool.activePool.conns.Available(), startNormalSize; got != want {
 		t.Errorf("Normal pool size: %d, want %d", got, want)
 	}
-	if got, want := txPool.foundRowsPool.Available(), startFoundRowsSize; got != want {
+	if got, want := txPool.activePool.foundRowsPool.Available(), startFoundRowsSize; got != want {
 		t.Errorf("foundRows pool size: %d, want %d", got, want)
 	}
 }
@@ -434,7 +407,7 @@ func primeTxPoolWithConnection(t *testing.T) (*fakesqldb.DB, *TxPool, error) {
 	db := fakesqldb.New(t)
 	txPool := newTxPool()
 	// Set the capacity to 1 to ensure that the db connection is reused.
-	txPool.conns.SetCapacity(1)
+	txPool.activePool.conns.SetCapacity(1)
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 
 	// Run a query to trigger a database connection. That connection will be
@@ -683,18 +656,12 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 
 	// Start stray transaction.
 	_, _, err := txPool.Begin(context.Background(), &querypb.ExecuteOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// Close kills stray transaction.
 	txPool.Close()
-	if got, want := txPool.env.Stats().InternalErrors.Counts()["StrayTransactions"]-startingStray, int64(1); got != want {
-		t.Fatalf("internal error count for stray transactions not increased: got = %v, want = %v", got, want)
-	}
-	if got, want := txPool.conns.Capacity(), int64(0); got != want {
-		t.Fatalf("resource pool was not closed. capacity: got = %v, want = %v", got, want)
-	}
+	require.Equal(t, int64(1), txPool.env.Stats().InternalErrors.Counts()["StrayTransactions"]-startingStray)
+	require.Equal(t, 0, txPool.activePool.Capacity())
 }
 
 func newTxPool() *TxPool {
