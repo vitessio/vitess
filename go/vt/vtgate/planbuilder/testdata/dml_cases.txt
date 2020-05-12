@@ -667,29 +667,6 @@
   }
 }
 
-# simple insert unsharded -- within max payload size
-"insert /*vt+ MAX_PAYLOAD_SIZE=100 */ into unsharded values(1, 2)"
-{
-  "QueryType": "INSERT",
-  "Original": "insert /*vt+ MAX_PAYLOAD_SIZE=100 */ into unsharded values(1, 2)",
-  "Instructions": {
-    "OperatorType": "Insert",
-    "Variant": "Unsharded",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "TargetTabletType": "MASTER",
-    "MultiShardAutocommit": false,
-    "Query": "insert /*vt+ MAX_PAYLOAD_SIZE=100 */ into unsharded values (1, 2)",
-    "TableName": "unsharded"
-  }
-}
-
-# simple insert unsharded -- above max payload size
-"insert /*vt+ MAX_PAYLOAD_SIZE=10 */ into unsharded values(1, 2)"
-"unsupported: payload size above threshold"
-
 # simple upsert unsharded
 "insert into unsharded values(1, 2) on duplicate key update x = 3"
 {
@@ -1231,29 +1208,6 @@
     "TableName": "user"
   }
 }
-
-# insert with multiple rows sharded -- within max payload size
-"insert /*vt+ MAX_PAYLOAD_SIZE=150 */ into user(id) values (1), (2)"
-{
-  "QueryType": "INSERT",
-  "Original": "insert /*vt+ MAX_PAYLOAD_SIZE=150 */ into user(id) values (1), (2)",
-  "Instructions": {
-    "OperatorType": "Insert",
-    "Variant": "Sharded",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "TargetTabletType": "MASTER",
-    "MultiShardAutocommit": false,
-    "Query": "insert /*vt+ MAX_PAYLOAD_SIZE=150 */ into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0), (:_Id1, :_Name1, :_Costly1)",
-    "TableName": "user"
-  }
-}
-
-# insert with multiple rows sharded -- within max payload size
-"insert /*vt+ MAX_PAYLOAD_SIZE=100 */ into user(id) values (1), (2)"
-"unsupported: payload size above threshold"
 
 # insert into a vindex not allowed
 "insert into user_index(id) values(1)"
