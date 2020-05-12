@@ -44,21 +44,13 @@ import (
 )
 
 // These consts identify how a transaction was resolved.
-const (
-	TxClose      = "close"
-	TxCommit     = "commit"
-	TxRollback   = "rollback"
-	TxKill       = "kill"
-	ConnInitFail = "initFail"
-)
-
-var txResolution = map[string]string{
-	TxClose:      "closed",
-	TxCommit:     "transaction committed",
-	TxRollback:   "transaction rolled back",
-	TxKill:       "kill",
-	ConnInitFail: "initFail",
-}
+//const (
+//	TxClose      = "close"
+//	TxCommit     = "commit"
+//	TxRollback   = "rollback"
+//	TxKill       = "kill"
+//	ConnInitFail = "initFail"
+//)
 
 const txLogInterval = 1 * time.Minute
 
@@ -171,7 +163,7 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (t
 		return 0, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
 	}
 
-	txConn, err := tp.activePool.NewConn(ctx, options, callerid.GetPrincipal(effectiveCaller), callerid.GetUsername(immediateCaller), func(txConn *TxConnection) error {
+	txConn, err := tp.activePool.NewConn(ctx, options, callerid.GetPrincipal(effectiveCaller), callerid.GetUsername(immediateCaller), func(txConn *DedicatedConnection) error {
 		autocommitTransaction := false
 		if queries, ok := txIsolations[options.GetTransactionIsolation()]; ok {
 			if queries.setIsolationLevel != "" {
@@ -204,7 +196,7 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (t
 		return 0, "", err
 	}
 
-	return txConn.TransactionID, beginQueries, nil
+	return txConn.ConnID, beginQueries, nil
 }
 
 //NewTxProps creates a new TxProperties struct
@@ -222,7 +214,7 @@ func (tp *TxPool) NewTxProps(immediateCaller *querypb.VTGateCallerID, effectiveC
 func (tp *TxPool) Reserve(ctx context.Context, options *querypb.ExecuteOptions, setStatements []string) (int64, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Reserve")
 	defer span.Finish()
-	txConn, err := tp.activePool.NewConn(ctx, options, "", "", func(txConn *TxConnection) error {
+	txConn, err := tp.activePool.NewConn(ctx, options, "", "", func(txConn *DedicatedConnection) error {
 		txConn.dbConn.Taint()
 		for _, statement := range setStatements {
 			_, err := txConn.Exec(ctx, statement, 10, false)
@@ -237,12 +229,12 @@ func (tp *TxPool) Reserve(ctx context.Context, options *querypb.ExecuteOptions, 
 		return 0, err
 	}
 
-	return txConn.TransactionID, nil
+	return txConn.ConnID, nil
 }
 
 // Get fetches the connection associated to the transactionID.
 // You must call Recycle on TxConnection once done.
-func (tp *TxPool) Get(transactionID int64, reason string) (*TxConnection, error) {
+func (tp *TxPool) Get(transactionID int64, reason string) (*DedicatedConnection, error) {
 	conn, err := tp.activePool.Get(transactionID, reason)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", transactionID, err)
@@ -276,7 +268,7 @@ func (tp *TxPool) Rollback(ctx context.Context, transactionID int64) error {
 // LocalBegin is equivalent to Begin->Get.
 // It's used for executing transactions within a request. It's safe
 // to always call LocalConclude at the end.
-func (tp *TxPool) LocalBegin(ctx context.Context, options *querypb.ExecuteOptions) (*TxConnection, string, error) {
+func (tp *TxPool) LocalBegin(ctx context.Context, options *querypb.ExecuteOptions) (*DedicatedConnection, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.LocalBegin")
 	defer span.Finish()
 
@@ -289,10 +281,10 @@ func (tp *TxPool) LocalBegin(ctx context.Context, options *querypb.ExecuteOption
 }
 
 // LocalCommit is the commit function for LocalBegin.
-func (tp *TxPool) LocalCommit(ctx context.Context, txConn *TxConnection) (string, error) {
+func (tp *TxPool) LocalCommit(ctx context.Context, txConn *DedicatedConnection) (string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.LocalCommit")
 	defer span.Finish()
-	defer tp.txComplete(txConn, TxCommit)
+	defer tp.txComplete(txConn, tx.TxCommit)
 	if txConn.TxProps.Autocommit {
 		return "", nil
 	}
@@ -306,7 +298,7 @@ func (tp *TxPool) LocalCommit(ctx context.Context, txConn *TxConnection) (string
 
 // LocalConclude concludes a transaction started by LocalBegin.
 // If the transaction was not previously concluded, it's rolled back.
-func (tp *TxPool) LocalConclude(ctx context.Context, conn *TxConnection) {
+func (tp *TxPool) LocalConclude(ctx context.Context, conn *DedicatedConnection) {
 	if conn.dbConn == nil {
 		return
 	}
@@ -315,12 +307,12 @@ func (tp *TxPool) LocalConclude(ctx context.Context, conn *TxConnection) {
 	_ = tp.localRollback(ctx, conn)
 }
 
-func (tp *TxPool) localRollback(ctx context.Context, txConn *TxConnection) error {
+func (tp *TxPool) localRollback(ctx context.Context, txConn *DedicatedConnection) error {
 	if txConn.TxProps.Autocommit {
-		tp.txComplete(txConn, TxCommit)
+		tp.txComplete(txConn, tx.TxCommit)
 		return nil
 	}
-	defer tp.txComplete(txConn, TxRollback)
+	defer tp.txComplete(txConn, tx.TxRollback)
 	if _, err := txConn.Exec(ctx, "rollback", 1, false); err != nil {
 		txConn.Close()
 		return err
@@ -353,10 +345,10 @@ func (tp *TxPool) SetTimeout(timeout time.Duration) {
 	tp.ticks.SetInterval(timeout / 10)
 }
 
-func (tp *TxPool) txComplete(conn *TxConnection, reason string) {
-	tp.log(conn, txResolution[reason])
+func (tp *TxPool) txComplete(conn *DedicatedConnection, reason tx.ReleaseReason) {
+	tp.log(conn, reason.String())
 	if conn.reserved {
-		conn.renewTxConnection()
+		conn.renewConnection()
 	} else {
 		conn.Release(reason)
 	}
@@ -364,7 +356,7 @@ func (tp *TxPool) txComplete(conn *TxConnection, reason string) {
 	conn.txClean()
 }
 
-func (tp *TxPool) log(txc *TxConnection, conclusion string) {
+func (tp *TxPool) log(txc *DedicatedConnection, conclusion string) {
 	if txc.TxProps == nil {
 		return //Nothing to log as no transaction exists on this connection.
 	}
@@ -402,4 +394,9 @@ type TxProperties struct {
 	LogToFile bool
 
 	txStats *servenv.TimingsWrapper
+}
+
+// RecordQuery records the query against this transaction.
+func (tp *TxProperties) RecordQuery(query string) {
+	tp.Queries = append(tp.Queries, query)
 }

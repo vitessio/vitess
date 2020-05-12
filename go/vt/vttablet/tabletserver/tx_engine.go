@@ -425,7 +425,7 @@ outer:
 			continue
 		}
 		for _, stmt := range tx.Queries {
-			conn.RecordQuery(stmt)
+			conn.TxProps.RecordQuery(stmt)
 			_, err := conn.Exec(ctx, stmt, 1, false)
 			if err != nil {
 				allErr.RecordError(err)

@@ -60,7 +60,7 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	}
 	txConn, err := txPool.Get(transactionID, "for query")
 	require.NoError(t, err)
-	txConn.RecordQuery(sql)
+	txConn.TxProps.RecordQuery(sql)
 	_, _ = txConn.Exec(ctx, sql, 1, true)
 	txConn.Recycle()
 
@@ -91,7 +91,7 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 	txConn, err := txPool.Get(transactionID, "for query")
 	require.NoError(t, err)
 	defer txPool.Rollback(ctx, transactionID)
-	txConn.RecordQuery(sql)
+	txConn.TxProps.RecordQuery(sql)
 	_, err = txConn.Exec(ctx, sql, 1, true)
 	txConn.Recycle()
 	require.NoError(t, err)
@@ -481,7 +481,7 @@ func TestTxPoolRollbackFail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	txConn.RecordQuery(sql)
+	txConn.TxProps.RecordQuery(sql)
 	_, err = txConn.Exec(ctx, sql, 1, true)
 	txConn.Recycle()
 	if err != nil {

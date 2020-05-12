@@ -111,7 +111,7 @@ func TestTxEngineClose(t *testing.T) {
 	c.Recycle()
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		_, err := te.txPool.Get(c.TransactionID, "return")
+		_, err := te.txPool.Get(c.ConnID, "return")
 		if err != nil {
 			t.Error(err)
 		}
