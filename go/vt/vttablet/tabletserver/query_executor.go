@@ -372,11 +372,25 @@ func (qre *QueryExecutor) execDDL(conn *DedicatedConnection) (*sqltypes.Result, 
 	if err != nil {
 		return nil, err
 	}
-	err = conn.BeginAgain(qre.ctx)
+	err = qre.BeginAgain(qre.ctx, conn)
 	if err != nil {
 		return nil, err
 	}
 	return result, nil
+}
+
+// BeginAgain commits the existing transaction and begins a new one
+func (*QueryExecutor) BeginAgain(ctx context.Context, dc *DedicatedConnection) error {
+	if dc.dbConn == nil || dc.TxProps.Autocommit {
+		return nil
+	}
+	if _, err := dc.dbConn.Exec(ctx, "commit", 1, false); err != nil {
+		return err
+	}
+	if _, err := dc.dbConn.Exec(ctx, "begin", 1, false); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {

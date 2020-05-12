@@ -211,7 +211,7 @@ func (tp *TxPool) NewTxProps(immediateCaller *querypb.VTGateCallerID, effectiveC
 }
 
 //Reserve will create a new reserved connection
-func (tp *TxPool) Reserve(ctx context.Context, options *querypb.ExecuteOptions, setStatements []string) (int64, error) {
+func (tp *TxPool) Reserve(ctx context.Context, options *querypb.ExecuteOptions, setStatements []string) (tx.ConnID, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Reserve")
 	defer span.Finish()
 	txConn, err := tp.activePool.NewConn(ctx, options, "", "", func(txConn *DedicatedConnection) error {
@@ -234,31 +234,31 @@ func (tp *TxPool) Reserve(ctx context.Context, options *querypb.ExecuteOptions, 
 
 // Get fetches the connection associated to the transactionID.
 // You must call Recycle on TxConnection once done.
-func (tp *TxPool) Get(transactionID int64, reason string) (*DedicatedConnection, error) {
-	conn, err := tp.activePool.Get(transactionID, reason)
+func (tp *TxPool) Get(connID tx.ConnID, reason string) (*DedicatedConnection, error) {
+	conn, err := tp.activePool.Get(connID, reason)
 	if err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", transactionID, err)
+		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", connID, err)
 	}
 	return conn, nil
 }
 
-// Commit commits the specified transaction.
-func (tp *TxPool) Commit(ctx context.Context, transactionID int64) (string, error) {
+// Commit commits the transaction on the specified connection.
+func (tp *TxPool) Commit(ctx context.Context, connID tx.ConnID) (string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Commit")
 	defer span.Finish()
-	conn, err := tp.Get(transactionID, "for commit")
+	conn, err := tp.Get(connID, "for commit")
 	if err != nil {
 		return "", err
 	}
 	return tp.LocalCommit(ctx, conn)
 }
 
-// Rollback rolls back the specified transaction.
-func (tp *TxPool) Rollback(ctx context.Context, transactionID int64) error {
+// Rollback rolls back the transaction on the specified connection.
+func (tp *TxPool) Rollback(ctx context.Context, connID tx.ConnID) error {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Rollback")
 	defer span.Finish()
 
-	conn, err := tp.Get(transactionID, "for rollback")
+	conn, err := tp.Get(connID, "for rollback")
 	if err != nil {
 		return err
 	}

@@ -78,21 +78,6 @@ func (dc *DedicatedConnection) Exec(ctx context.Context, query string, maxrows i
 	return r, nil
 }
 
-// BeginAgain commits the existing transaction and begins a new one
-// TODO: move from this file
-func (dc *DedicatedConnection) BeginAgain(ctx context.Context) error {
-	if dc.dbConn == nil || dc.TxProps.Autocommit {
-		return nil
-	}
-	if _, err := dc.dbConn.Exec(ctx, "commit", 1, false); err != nil {
-		return err
-	}
-	if _, err := dc.dbConn.Exec(ctx, "begin", 1, false); err != nil {
-		return err
-	}
-	return nil
-}
-
 func (dc *DedicatedConnection) execWithRetry(ctx context.Context, query string, maxrows int, wantfields bool) error {
 	if dc.dbConn == nil {
 		return nil
