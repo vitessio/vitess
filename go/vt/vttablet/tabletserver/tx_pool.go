@@ -18,9 +18,10 @@ package tabletserver
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 	"time"
+
+	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/pools"
 
@@ -28,17 +29,13 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txlimiter"
 
@@ -54,6 +51,14 @@ const (
 	TxKill       = "kill"
 	ConnInitFail = "initFail"
 )
+
+var txResolution = map[string]string{
+	TxClose:      "closed",
+	TxCommit:     "transaction committed",
+	TxRollback:   "transaction rolled back",
+	TxKill:       "kill",
+	ConnInitFail: "initFail",
+}
 
 const txLogInterval = 1 * time.Minute
 
@@ -84,6 +89,7 @@ type TxPool struct {
 
 	logMu   sync.Mutex
 	lastLog time.Time
+	txStats *servenv.TimingsWrapper
 }
 
 // NewTxPool creates a new TxPool. It's not operational until it's Open'd.
@@ -96,6 +102,7 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 		transactionTimeout: sync2.NewAtomicDuration(transactionTimeout),
 		ticks:              timer.NewTimer(transactionTimeout / 10),
 		limiter:            limiter,
+		txStats:            env.Exporter().NewTimings("Transactions", "Transaction stats", "operation"),
 	}
 	// Careful: conns also exports name+"xxx" vars,
 	// but we know it doesn't export Timeout.
@@ -138,7 +145,7 @@ func (tp *TxPool) transactionKiller() {
 		log.Warningf("killing transaction (exceeded timeout: %v): %s", tp.Timeout(), conn.String())
 		tp.env.Stats().KillCounters.Add("Transactions", 1)
 		conn.Close()
-		conn.conclude(TxKill, fmt.Sprintf("exceeded timeout: %v", tp.Timeout()))
+		conn.conclude(fmt.Sprintf("exceeded timeout: %v", tp.Timeout()))
 	}
 }
 
@@ -182,8 +189,7 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (t
 		} else {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
 		}
-		txConn.Autocommit = autocommitTransaction
-		txConn.TxProps = NewTxProps()
+		txConn.TxProps = tp.NewTxProps(immediateCaller, effectiveCaller, autocommitTransaction)
 		return nil
 	})
 	if err != nil {
@@ -197,17 +203,18 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (t
 		}
 		return 0, "", err
 	}
-	txConn.shutDownTasks = append(txConn.shutDownTasks, func() {
-		tp.limiter.Release(immediateCaller, effectiveCaller)
-	})
 
 	return txConn.TransactionID, beginQueries, nil
 }
 
 //NewTxProps creates a new TxProperties struct
-func NewTxProps() *TxProperties {
+func (tp *TxPool) NewTxProps(immediateCaller *querypb.VTGateCallerID, effectiveCaller *vtrpcpb.CallerID, autocommit bool) *TxProperties {
 	return &TxProperties{
-		LogToFile: sync2.AtomicBool{},
+		StartTime:       time.Now(),
+		EffectiveCaller: effectiveCaller,
+		ImmediateCaller: immediateCaller,
+		Autocommit:      autocommit,
+		txStats:         tp.txStats,
 	}
 }
 
@@ -282,17 +289,16 @@ func (tp *TxPool) LocalBegin(ctx context.Context, options *querypb.ExecuteOption
 }
 
 // LocalCommit is the commit function for LocalBegin.
-func (tp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection) (string, error) {
+func (tp *TxPool) LocalCommit(ctx context.Context, txConn *TxConnection) (string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.LocalCommit")
 	defer span.Finish()
-	defer conn.Release(TxCommit)
-
-	if conn.Autocommit {
+	defer tp.txComplete(txConn, TxCommit)
+	if txConn.TxProps.Autocommit {
 		return "", nil
 	}
 
-	if _, err := conn.Exec(ctx, "commit", 1, false); err != nil {
-		conn.Close()
+	if _, err := txConn.Exec(ctx, "commit", 1, false); err != nil {
+		txConn.Close()
 		return "", err
 	}
 	return "commit", nil
@@ -309,14 +315,14 @@ func (tp *TxPool) LocalConclude(ctx context.Context, conn *TxConnection) {
 	_ = tp.localRollback(ctx, conn)
 }
 
-func (tp *TxPool) localRollback(ctx context.Context, conn *TxConnection) error {
-	if conn.Autocommit {
-		conn.Release(TxCommit)
+func (tp *TxPool) localRollback(ctx context.Context, txConn *TxConnection) error {
+	if txConn.TxProps.Autocommit {
+		tp.txComplete(txConn, TxCommit)
 		return nil
 	}
-	defer conn.Release(TxRollback)
-	if _, err := conn.Exec(ctx, "rollback", 1, false); err != nil {
-		conn.Close()
+	defer tp.txComplete(txConn, TxRollback)
+	if _, err := txConn.Exec(ctx, "rollback", 1, false); err != nil {
+		txConn.Close()
 		return err
 	}
 	return nil
@@ -332,7 +338,7 @@ func (tp *TxPool) LogActive() {
 	}
 	tp.lastLog = time.Now()
 	tp.activePool.ForAllTxProperties(func(props *TxProperties) {
-		props.LogToFile.Set(true)
+		props.LogToFile = true
 	})
 }
 
@@ -347,154 +353,53 @@ func (tp *TxPool) SetTimeout(timeout time.Duration) {
 	tp.ticks.SetInterval(timeout / 10)
 }
 
-//TxProperties contains all information that is related to the currently running
-//transaction on the connection
-type TxProperties struct {
-	LogToFile sync2.AtomicBool
-}
-
-// TxConnection is meant for executing transactions. It can return itself to
-// the tx pool correctly. It also does not retry statements if there
-// are failures.
-type TxConnection struct {
-	pool            *ActivePool
-	dbConn          *connpool.DBConn
-	TransactionID   int64
-	env             tabletenv.Env
-	StartTime       time.Time
-	EndTime         time.Time
-	Queries         []string
-	Conclusion      string
-	EffectiveCaller string
-	ImmediateCaller string
-
-	Autocommit bool
-	reserved   bool
-	txStats    *servenv.TimingsWrapper
-
-	TxProps *TxProperties
-
-	// these will all be called when the connection is Released()
-	shutDownTasks []func()
-}
-
-// Close closes the connection.
-func (txc *TxConnection) Close() {
-	if txc.dbConn != nil {
-		txc.dbConn.Close()
-	}
-}
-
-// Exec executes the statement for the current transaction.
-func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-	if txc.dbConn == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction was aborted: %v", txc.Conclusion)
-	}
-	r, err := txc.dbConn.ExecOnce(ctx, query, maxrows, wantfields)
-	if err != nil {
-		if mysql.IsConnErr(err) {
-			select {
-			case <-ctx.Done():
-				// If the context is done, the query was killed.
-				// So, don't trigger a mysql check.
-			default:
-				txc.env.CheckMySQL()
-			}
-		}
-		return nil, err
-	}
-	return r, nil
-}
-
-// BeginAgain commits the existing transaction and begins a new one
-func (txc *TxConnection) BeginAgain(ctx context.Context) error {
-	if txc.dbConn == nil || txc.Autocommit {
-		return nil
-	}
-	if _, err := txc.dbConn.Exec(ctx, "commit", 1, false); err != nil {
-		return err
-	}
-	if _, err := txc.dbConn.Exec(ctx, "begin", 1, false); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (txc *TxConnection) execWithRetry(ctx context.Context, query string, maxrows int, wantfields bool) error {
-	if txc.dbConn == nil {
-		return nil
-	}
-	if _, err := txc.dbConn.Exec(ctx, query, maxrows, wantfields); err != nil {
-		return err
-	}
-	return nil
-}
-
-// Recycle returns the connection to the pool. The transaction remains
-// active.
-func (txc *TxConnection) Recycle() {
-	if txc.dbConn == nil {
-		return
-	}
-	if txc.dbConn.IsClosed() {
-		txc.Release(TxClose)
+func (tp *TxPool) txComplete(conn *TxConnection, reason string) {
+	tp.log(conn, txResolution[reason])
+	if conn.reserved {
+		conn.renewTxConnection()
 	} else {
-		txc.pool.MarkAsInactive(txc.TransactionID)
+		conn.Release(reason)
 	}
+	tp.limiter.Release(conn.TxProps.ImmediateCaller, conn.TxProps.EffectiveCaller)
+	conn.txClean()
 }
 
-// RecordQuery records the query against this transaction.
-func (txc *TxConnection) RecordQuery(query string) {
-	txc.Queries = append(txc.Queries, query)
-}
-
-//Release implements the tx.TrustedConnection interface
-func (txc *TxConnection) Release(reason string) {
-	txc.conclude(reason, reason)
-}
-
-func (txc *TxConnection) conclude(conclusion, reason string) {
-	if txc.dbConn == nil {
-		return
+func (tp *TxPool) log(txc *TxConnection, conclusion string) {
+	if txc.TxProps == nil {
+		return //Nothing to log as no transaction exists on this connection.
 	}
-	txc.pool.Unregister(txc.TransactionID, reason)
-	txc.dbConn.Recycle()
-	txc.dbConn = nil
-	for _, task := range txc.shutDownTasks {
-		task()
-	}
-	txc.log(conclusion)
-}
+	txc.TxProps.Conclusion = conclusion
+	txc.TxProps.EndTime = time.Now()
 
-func (txc *TxConnection) log(conclusion string) {
-	txc.Conclusion = conclusion
-	txc.EndTime = time.Now()
-
-	username := txc.EffectiveCaller
+	username := callerid.GetPrincipal(txc.TxProps.EffectiveCaller)
 	if username == "" {
-		username = txc.ImmediateCaller
+		username = callerid.GetUsername(txc.TxProps.ImmediateCaller)
 	}
-	duration := txc.EndTime.Sub(txc.StartTime)
+	duration := txc.TxProps.EndTime.Sub(txc.TxProps.StartTime)
 	txc.env.Stats().UserTransactionCount.Add([]string{username, conclusion}, 1)
 	txc.env.Stats().UserTransactionTimesNs.Add([]string{username, conclusion}, int64(duration))
-	txc.txStats.Add(conclusion, duration)
-	if txc.TxProps != nil && txc.TxProps.LogToFile.Get() {
+	txc.TxProps.txStats.Add(conclusion, duration)
+	if txc.TxProps.LogToFile {
 		log.Infof("Logged transaction: %s", txc.String())
 	}
 	tabletenv.TxLogger.Send(txc)
 }
 
-// String returns a printable version of the connection info.
-func (txc *TxConnection) String() string {
-	return fmt.Sprintf(
-		"%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%v\t\n",
-		txc.TransactionID,
-		txc.EffectiveCaller,
-		txc.ImmediateCaller,
-		txc.StartTime.Format(time.StampMicro),
-		txc.EndTime.Format(time.StampMicro),
-		txc.EndTime.Sub(txc.StartTime).Seconds(),
-		txc.Conclusion,
-		strings.Join(txc.Queries, ";"),
-	)
+//TxProperties contains all information that is related to the currently running
+//transaction on the connection
+type TxProperties struct {
+	EffectiveCaller *vtrpcpb.CallerID
+	ImmediateCaller *querypb.VTGateCallerID
+
+	StartTime time.Time
+	EndTime   time.Time
+
+	Queries []string
+
+	Autocommit bool
+	Conclusion string
+
+	LogToFile bool
+
+	txStats *servenv.TimingsWrapper
 }
