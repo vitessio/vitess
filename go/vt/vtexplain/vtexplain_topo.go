@@ -60,7 +60,7 @@ func (et *ExplainTopo) GetTopoServer() (*topo.Server, error) {
 }
 
 // GetSrvKeyspaceNames is part of the srvtopo.Server interface.
-func (et *ExplainTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
+func (et *ExplainTopo) GetSrvKeyspaceNames(ctx context.Context, cell string, staleOK bool) ([]string, error) {
 	et.Lock.Lock()
 	defer et.Lock.Unlock()
 
