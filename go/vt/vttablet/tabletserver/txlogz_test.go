@@ -25,7 +25,6 @@ import (
 
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -52,13 +51,15 @@ func testHandler(req *http.Request, t *testing.T) {
 		t.Fatalf("should show an error page since transaction log format is invalid.")
 	}
 	txConn := &TxConnection{
-		TransactionID:     123456,
-		StartTime:         time.Now(),
-		Queries:           []string{"select * from test"},
-		Conclusion:        "unknown",
-		LogToFile:         sync2.AtomicInt32{},
-		EffectiveCallerID: callerid.NewEffectiveCallerID("effective-caller", "component", "subcomponent"),
-		ImmediateCallerID: callerid.NewImmediateCallerID("immediate-caller"),
+		TransactionID: 123456,
+		StartTime:     time.Now(),
+		Queries:       []string{"select * from test"},
+		Conclusion:    "unknown",
+		TxProps: &TxProperties{
+			LogToFile: sync2.AtomicBool{},
+		},
+		EffectiveCaller: "effective-caller",
+		ImmediateCaller: "immediate-caller",
 	}
 	txConn.EndTime = txConn.StartTime
 	response = httptest.NewRecorder()

@@ -22,12 +22,13 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/pools"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
@@ -76,24 +77,11 @@ var (
 type TxPool struct {
 	env tabletenv.Env
 
-	// conns is the 'regular' pool. By default, connections
-	// are pulled from here for starting transactions.
-	conns *connpool.Pool
-
-	// foundRowsPool is the alternate pool that creates
-	// connections with CLIENT_FOUND_ROWS flag set. A separate
-	// pool is needed because this option can only be set at
-	// connection time.
-	foundRowsPool      *connpool.Pool
-	activePool         *pools.Numbered
-	lastID             sync2.AtomicInt64
+	activePool         *ActivePool
 	transactionTimeout sync2.AtomicDuration
 	ticks              *timer.Timer
 	limiter            txlimiter.TxLimiter
 
-	txStats *servenv.TimingsWrapper
-
-	// Tracking culprits that cause tx pool full errors.
 	logMu   sync.Mutex
 	lastLog time.Time
 }
@@ -104,14 +92,10 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 	transactionTimeout := time.Duration(config.Oltp.TxTimeoutSeconds * 1e9)
 	axp := &TxPool{
 		env:                env,
-		conns:              connpool.NewPool(env, "TransactionPool", config.TxPool),
-		foundRowsPool:      connpool.NewPool(env, "FoundRowsPool", config.TxPool),
-		activePool:         pools.NewNumbered(),
-		lastID:             sync2.NewAtomicInt64(time.Now().UnixNano()),
+		activePool:         NewActivePool(env),
 		transactionTimeout: sync2.NewAtomicDuration(transactionTimeout),
 		ticks:              timer.NewTimer(transactionTimeout / 10),
 		limiter:            limiter,
-		txStats:            env.Exporter().NewTimings("Transactions", "Transaction stats", "operation"),
 	}
 	// Careful: conns also exports name+"xxx" vars,
 	// but we know it doesn't export Timeout.
@@ -122,37 +106,21 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 // Open makes the TxPool operational. This also starts the transaction killer
 // that will kill long-running transactions.
 func (tp *TxPool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
-	log.Infof("Starting transaction id: %d", tp.lastID)
-	tp.conns.Open(appParams, dbaParams, appDebugParams)
-	foundRowsParam, _ := appParams.MysqlParams()
-	foundRowsParam.EnableClientFoundRows()
-	appParams = dbconfigs.New(foundRowsParam)
-	tp.foundRowsPool.Open(appParams, dbaParams, appDebugParams)
+	tp.activePool.Open(appParams, dbaParams, appDebugParams)
 	tp.ticks.Start(func() { tp.transactionKiller() })
 }
 
 // Close closes the TxPool. A closed pool can be reopened.
 func (tp *TxPool) Close() {
 	tp.ticks.Stop()
-	for _, v := range tp.activePool.GetOutdated(time.Duration(0), "for closing") {
-		conn := v.(*TxConnection)
-		log.Warningf("killing transaction for shutdown: %s", conn.String())
-		tp.env.Stats().InternalErrors.Add("StrayTransactions", 1)
-		conn.Close()
-		conn.conclude(TxClose, "pool closed")
-	}
-	tp.conns.Close()
-	tp.foundRowsPool.Close()
+	tp.activePool.Close()
 }
 
 // AdjustLastID adjusts the last transaction id to be at least
 // as large as the input value. This will ensure that there are
 // no dtid collisions with future transactions.
 func (tp *TxPool) AdjustLastID(id int64) {
-	if current := tp.lastID.Get(); current < id {
-		log.Infof("Adjusting transaction id to: %d", id)
-		tp.lastID.Set(id)
-	}
+	tp.activePool.AdjustLastID(id)
 }
 
 // RollbackNonBusy rolls back all transactions that are not in use.
@@ -160,14 +128,13 @@ func (tp *TxPool) AdjustLastID(id int64) {
 // or in prepared state.
 func (tp *TxPool) RollbackNonBusy(ctx context.Context) {
 	for _, v := range tp.activePool.GetOutdated(time.Duration(0), "for transition") {
-		tp.LocalConclude(ctx, v.(*TxConnection))
+		tp.LocalConclude(ctx, v)
 	}
 }
 
 func (tp *TxPool) transactionKiller() {
 	defer tp.env.LogError()
-	for _, v := range tp.activePool.GetOutdated(tp.Timeout(), "for tx killer rollback") {
-		conn := v.(*TxConnection)
+	for _, conn := range tp.activePool.GetOutdated(tp.Timeout(), "for tx killer rollback") {
 		log.Warningf("killing transaction (exceeded timeout: %v): %s", tp.Timeout(), conn.String())
 		tp.env.Stats().KillCounters.Add("Transactions", 1)
 		conn.Close()
@@ -189,7 +156,15 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (t
 	span, ctx := trace.NewSpan(ctx, "TxPool.Begin")
 	defer span.Finish()
 	beginQueries := ""
-	txConn, err := tp.newTxConnection(ctx, options, func(txConn *TxConnection) error {
+
+	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
+	effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
+
+	if !tp.limiter.Get(immediateCaller, effectiveCaller) {
+		return 0, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
+	}
+
+	txConn, err := tp.activePool.NewConn(ctx, options, callerid.GetPrincipal(effectiveCaller), callerid.GetUsername(immediateCaller), func(txConn *TxConnection) error {
 		autocommitTransaction := false
 		if queries, ok := txIsolations[options.GetTransactionIsolation()]; ok {
 			if queries.setIsolationLevel != "" {
@@ -208,28 +183,39 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (t
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
 		}
 		txConn.Autocommit = autocommitTransaction
+		txConn.TxProps = NewTxProps()
 		return nil
 	})
 	if err != nil {
+		switch err {
+		case pools.ErrCtxTimeout:
+			tp.LogActive()
+			err = vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool aborting request due to already expired context")
+		case pools.ErrTimeout:
+			tp.LogActive()
+			err = vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool connection limit exceeded")
+		}
 		return 0, "", err
 	}
+	txConn.shutDownTasks = append(txConn.shutDownTasks, func() {
+		tp.limiter.Release(immediateCaller, effectiveCaller)
+	})
 
-	err = tp.activePool.Register(
-		txConn.TransactionID,
-		txConn,
-		options.GetWorkload() != querypb.ExecuteOptions_DBA,
-	)
-	if err != nil {
-		return 0, "", err
-	}
 	return txConn.TransactionID, beginQueries, nil
+}
+
+//NewTxProps creates a new TxProperties struct
+func NewTxProps() *TxProperties {
+	return &TxProperties{
+		LogToFile: sync2.AtomicBool{},
+	}
 }
 
 //Reserve will create a new reserved connection
 func (tp *TxPool) Reserve(ctx context.Context, options *querypb.ExecuteOptions, setStatements []string) (int64, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Reserve")
 	defer span.Finish()
-	txConn, err := tp.newTxConnection(ctx, options, func(txConn *TxConnection) error {
+	txConn, err := tp.activePool.NewConn(ctx, options, "", "", func(txConn *TxConnection) error {
 		txConn.dbConn.Taint()
 		for _, statement := range setStatements {
 			_, err := txConn.Exec(ctx, statement, 10, false)
@@ -244,69 +230,17 @@ func (tp *TxPool) Reserve(ctx context.Context, options *querypb.ExecuteOptions, 
 		return 0, err
 	}
 
-	tp.activePool.Register(
-		txConn.TransactionID,
-		txConn,
-		options.GetWorkload() != querypb.ExecuteOptions_DBA,
-	)
 	return txConn.TransactionID, nil
-}
-
-func (tp *TxPool) newTxConnection(ctx context.Context, options *querypb.ExecuteOptions, f func(*TxConnection) error) (*TxConnection, error) {
-	var conn *connpool.DBConn
-	var err error
-	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
-	effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
-
-	if !tp.limiter.Get(immediateCaller, effectiveCaller) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
-	}
-
-	if options.GetClientFoundRows() {
-		conn, err = tp.foundRowsPool.Get(ctx)
-	} else {
-		conn, err = tp.conns.Get(ctx)
-	}
-	if err != nil {
-		switch err {
-		case connpool.ErrConnPoolClosed:
-			return nil, err
-		case pools.ErrCtxTimeout:
-			tp.LogActive()
-			return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool aborting request due to already expired context")
-		case pools.ErrTimeout:
-			tp.LogActive()
-			return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool connection limit exceeded")
-		}
-		return nil, err
-	}
-
-	transactionID := tp.lastID.Add(1)
-
-	txConn := &TxConnection{
-		dbConn:            conn,
-		TransactionID:     transactionID,
-		pool:              tp,
-		StartTime:         time.Now(),
-		ImmediateCallerID: immediateCaller,
-		EffectiveCallerID: effectiveCaller,
-	}
-
-	err = f(txConn)
-	if err != nil {
-		txConn.conclude(ConnInitFail, "connection init failed")
-	}
-	return txConn, nil
 }
 
 // Get fetches the connection associated to the transactionID.
 // You must call Recycle on TxConnection once done.
 func (tp *TxPool) Get(transactionID int64, reason string) (*TxConnection, error) {
-	v, err := tp.activePool.Get(transactionID, reason)
+	conn, err := tp.activePool.Get(transactionID, reason)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", transactionID, err)
 	}
-	return v.(*TxConnection), nil
+	return conn, nil
 }
 
 // Commit commits the specified transaction.
@@ -351,7 +285,7 @@ func (tp *TxPool) LocalBegin(ctx context.Context, options *querypb.ExecuteOption
 func (tp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection) (string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.LocalCommit")
 	defer span.Finish()
-	defer conn.conclude(TxCommit, "transaction committed")
+	defer conn.Release(TxCommit)
 
 	if conn.Autocommit {
 		return "", nil
@@ -377,10 +311,10 @@ func (tp *TxPool) LocalConclude(ctx context.Context, conn *TxConnection) {
 
 func (tp *TxPool) localRollback(ctx context.Context, conn *TxConnection) error {
 	if conn.Autocommit {
-		conn.conclude(TxCommit, "returned to pool")
+		conn.Release(TxCommit)
 		return nil
 	}
-	defer conn.conclude(TxRollback, "transaction rolled back")
+	defer conn.Release(TxRollback)
 	if _, err := conn.Exec(ctx, "rollback", 1, false); err != nil {
 		conn.Close()
 		return err
@@ -397,10 +331,9 @@ func (tp *TxPool) LogActive() {
 		return
 	}
 	tp.lastLog = time.Now()
-	conns := tp.activePool.GetAll()
-	for _, c := range conns {
-		c.(*TxConnection).LogToFile.Set(1)
-	}
+	tp.activePool.ForAllTxProperties(func(props *TxProperties) {
+		props.LogToFile.Set(true)
+	})
 }
 
 // Timeout returns the transaction timeout.
@@ -414,22 +347,35 @@ func (tp *TxPool) SetTimeout(timeout time.Duration) {
 	tp.ticks.SetInterval(timeout / 10)
 }
 
+//TxProperties contains all information that is related to the currently running
+//transaction on the connection
+type TxProperties struct {
+	LogToFile sync2.AtomicBool
+}
+
 // TxConnection is meant for executing transactions. It can return itself to
 // the tx pool correctly. It also does not retry statements if there
 // are failures.
 type TxConnection struct {
-	dbConn            *connpool.DBConn
-	TransactionID     int64
-	pool              *TxPool
-	StartTime         time.Time
-	EndTime           time.Time
-	Queries           []string
-	Conclusion        string
-	LogToFile         sync2.AtomicInt32
-	ImmediateCallerID *querypb.VTGateCallerID
-	EffectiveCallerID *vtrpcpb.CallerID
-	Autocommit        bool
-	reserved          bool
+	pool            *ActivePool
+	dbConn          *connpool.DBConn
+	TransactionID   int64
+	env             tabletenv.Env
+	StartTime       time.Time
+	EndTime         time.Time
+	Queries         []string
+	Conclusion      string
+	EffectiveCaller string
+	ImmediateCaller string
+
+	Autocommit bool
+	reserved   bool
+	txStats    *servenv.TimingsWrapper
+
+	TxProps *TxProperties
+
+	// these will all be called when the connection is Released()
+	shutDownTasks []func()
 }
 
 // Close closes the connection.
@@ -452,7 +398,7 @@ func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wa
 				// If the context is done, the query was killed.
 				// So, don't trigger a mysql check.
 			default:
-				txc.pool.env.CheckMySQL()
+				txc.env.CheckMySQL()
 			}
 		}
 		return nil, err
@@ -491,9 +437,9 @@ func (txc *TxConnection) Recycle() {
 		return
 	}
 	if txc.dbConn.IsClosed() {
-		txc.conclude(TxClose, "closed")
+		txc.Release(TxClose)
 	} else {
-		txc.pool.activePool.Put(txc.TransactionID)
+		txc.pool.MarkAsInactive(txc.TransactionID)
 	}
 }
 
@@ -502,14 +448,21 @@ func (txc *TxConnection) RecordQuery(query string) {
 	txc.Queries = append(txc.Queries, query)
 }
 
+//Release implements the tx.TrustedConnection interface
+func (txc *TxConnection) Release(reason string) {
+	txc.conclude(reason, reason)
+}
+
 func (txc *TxConnection) conclude(conclusion, reason string) {
 	if txc.dbConn == nil {
 		return
 	}
-	txc.pool.activePool.Unregister(txc.TransactionID, reason)
+	txc.pool.Unregister(txc.TransactionID, reason)
 	txc.dbConn.Recycle()
 	txc.dbConn = nil
-	txc.pool.limiter.Release(txc.ImmediateCallerID, txc.EffectiveCallerID)
+	for _, task := range txc.shutDownTasks {
+		task()
+	}
 	txc.log(conclusion)
 }
 
@@ -517,15 +470,15 @@ func (txc *TxConnection) log(conclusion string) {
 	txc.Conclusion = conclusion
 	txc.EndTime = time.Now()
 
-	username := callerid.GetPrincipal(txc.EffectiveCallerID)
+	username := txc.EffectiveCaller
 	if username == "" {
-		username = callerid.GetUsername(txc.ImmediateCallerID)
+		username = txc.ImmediateCaller
 	}
 	duration := txc.EndTime.Sub(txc.StartTime)
-	txc.pool.env.Stats().UserTransactionCount.Add([]string{username, conclusion}, 1)
-	txc.pool.env.Stats().UserTransactionTimesNs.Add([]string{username, conclusion}, int64(duration))
-	txc.pool.txStats.Add(conclusion, duration)
-	if txc.LogToFile.Get() != 0 {
+	txc.env.Stats().UserTransactionCount.Add([]string{username, conclusion}, 1)
+	txc.env.Stats().UserTransactionTimesNs.Add([]string{username, conclusion}, int64(duration))
+	txc.txStats.Add(conclusion, duration)
+	if txc.TxProps != nil && txc.TxProps.LogToFile.Get() {
 		log.Infof("Logged transaction: %s", txc.String())
 	}
 	tabletenv.TxLogger.Send(txc)
@@ -536,8 +489,8 @@ func (txc *TxConnection) String() string {
 	return fmt.Sprintf(
 		"%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%v\t\n",
 		txc.TransactionID,
-		callerid.GetPrincipal(txc.EffectiveCallerID),
-		callerid.GetUsername(txc.ImmediateCallerID),
+		txc.EffectiveCaller,
+		txc.ImmediateCaller,
 		txc.StartTime.Format(time.StampMicro),
 		txc.EndTime.Format(time.StampMicro),
 		txc.EndTime.Sub(txc.StartTime).Seconds(),

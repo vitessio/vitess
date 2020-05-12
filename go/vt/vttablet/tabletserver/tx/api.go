@@ -21,6 +21,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 )
 
 type (
@@ -58,7 +59,6 @@ type (
 		ReadTransaction(dtid DTID) (*querypb.TransactionMetadata, error)
 		ReadTwopcInflight() (distributed []*DistributedTx, prepared, failed []*PreparedTx, err error)
 	}
-
 	//TxEngineStateMachine is used to control the state the transactional engine -
 	//whether new connections and/or transactions are allowed or not.
 	TxEngineStateMachine interface {
@@ -67,18 +67,31 @@ type (
 		AcceptReadOnly() error
 		StopGently()
 	}
+	//TrustedConnection interface {
+	//	TransactionalConn
+	//	Release()
+	//	Commit(ctx context.Context)
+	//	Rollback(ctx context.Context)
+	//}
+	//TrustedTxEngine interface {
+	//	TrustedBegin(ctx context.Context, options *querypb.ExecuteOptions, connection ConnID) (TrustedConnection, string, error)
+	//	TrustedReserve(ctx context.Context, options *querypb.ExecuteOptions, setStatements []string, connection ConnID) (TrustedConnection, error)
+	//	Get(ctx context.Context, connection ConnID) (TrustedConnection, error)
+	//	Put(ctx context.Context, connection ConnID, conn TrustedConnection) error
+	//}
 
+	//TrustedConnection is a connection where the user is trusted to clean things up
 	TrustedConnection interface {
-		TransactionalConn
-		Release()
-		Commit(ctx context.Context)
-		Rollback(ctx context.Context)
-	}
-	TrustedTxEngine interface {
-		TrustedBegin(ctx context.Context, options *querypb.ExecuteOptions, connection ConnID) (TrustedConnection, string, error)
-		TrustedReserve(ctx context.Context, options *querypb.ExecuteOptions, setStatements []string, connection ConnID) (TrustedConnection, error)
-		Get(ctx context.Context, connection ConnID) (TrustedConnection, error)
-		Put(ctx context.Context, connection ConnID, conn TrustedConnection) error
+		// Executes a query on the connection
+		Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
+
+		// Release is used after we are done with the connection and will not use it again
+		Release(reason string)
+
+		// Recycle marks the connection as not in use. The connection remains active.
+		Recycle()
+
+		DbConn() *connpool.DBConn
 	}
 )
 

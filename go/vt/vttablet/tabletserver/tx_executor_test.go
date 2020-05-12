@@ -76,9 +76,7 @@ func TestTxExecutorPrepareNotInTx(t *testing.T) {
 	defer tsv.StopService()
 	err := txe.Prepare(0, "aa")
 	want := "transaction 0: not found"
-	if err == nil || err.Error() != want {
-		t.Errorf("Prepare err: %v, want %s", err, want)
-	}
+	require.EqualError(t, err, want)
 }
 
 func TestTxExecutorPreparePoolFail(t *testing.T) {
