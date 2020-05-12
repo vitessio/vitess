@@ -115,7 +115,7 @@ func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodat
 		if vgtid.ShardGtids[0].Gtid != "current" {
 			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "for an empty keyspace, the Gtid value must be 'current': %v", vgtid)
 		}
-		keyspaces, err := vsm.toposerv.GetSrvKeyspaceNames(ctx, vsm.cell)
+		keyspaces, err := vsm.toposerv.GetSrvKeyspaceNames(ctx, vsm.cell, false)
 		if err != nil {
 			return nil, nil, err
 		}
