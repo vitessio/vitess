@@ -868,7 +868,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			}
 		}
 		if *GatewayImplementation == tabletGatewayImplementation {
-			stats := e.scatterConn.GetLegacyHealthCheckCacheStatus()
+			stats := e.scatterConn.GetHealthCheckCacheStatus()
 			for _, s := range stats {
 				for _, ts := range s.TabletsStats {
 					state := "SERVING"

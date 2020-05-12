@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -48,48 +49,33 @@ func TestVtgateProcess(t *testing.T) {
 	exec(t, conn, "insert into customer(id, email) values(1,'email1')")
 
 	qr := exec(t, conn, "select id, email from customer")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("email1")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	assert.Equal(t, fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("email1")]]`, "select returned wrong result")
+	qr = exec(t, conn, "show vitess_tablets")
+	assert.Equal(t, len(qr.Rows), 3, "wrong number of results from show")
 }
 
 func verifyVtgateVariables(t *testing.T, url string) {
 	resp, _ := http.Get(url)
-	if resp != nil && resp.StatusCode == 200 {
-		resultMap := make(map[string]interface{})
-		respByte, _ := ioutil.ReadAll(resp.Body)
-		err := json.Unmarshal(respByte, &resultMap)
-		require.Nil(t, err)
-		if resultMap["VtgateVSchemaCounts"] == nil {
-			t.Error("Vschema count should be present in variables")
-		}
-		vschemaCountMap := getMapFromJSON(resultMap, "VtgateVSchemaCounts")
-		if _, present := vschemaCountMap["Reload"]; !present {
-			t.Error("Reload count should be present in vschemacount")
-		} else if object := reflect.ValueOf(vschemaCountMap["Reload"]); object.NumField() <= 0 {
-			t.Error("Reload count should be greater than 0")
-		}
-		if _, present := vschemaCountMap["WatchError"]; present {
-			t.Error("There should not be any WatchError in VschemaCount")
-		}
-		if _, present := vschemaCountMap["Parsing"]; present {
-			t.Error("There should not be any Parsing in VschemaCount")
-		}
+	require.True(t, resp != nil && resp.StatusCode == 200, "Vtgate api url response not found")
+	resultMap := make(map[string]interface{})
+	respByte, _ := ioutil.ReadAll(resp.Body)
+	err := json.Unmarshal(respByte, &resultMap)
+	require.Nil(t, err)
+	assert.True(t, resultMap["VtgateVSchemaCounts"] != nil, "Vschema count should be present in variables")
+	vschemaCountMap := getMapFromJSON(resultMap, "VtgateVSchemaCounts")
+	_, present := vschemaCountMap["Reload"]
+	assert.True(t, present, "Reload count should be present in vschemacount")
+	object := reflect.ValueOf(vschemaCountMap["Reload"])
+	assert.True(t, object.NumField() > 0, "Reload count should be greater than 0")
+	_, present = vschemaCountMap["WatchError"]
+	assert.False(t, present, "There should not be any WatchError in VschemaCount")
+	_, present = vschemaCountMap["Parsing"]
+	assert.False(t, present, "There should not be any Parsing in VschemaCount")
 
-		if resultMap["HealthcheckConnections"] == nil {
-			t.Error("HealthcheckConnections count should be present in variables")
-		}
-
-		healthCheckConnection := getMapFromJSON(resultMap, "HealthcheckConnections")
-		if len(healthCheckConnection) <= 0 {
-			t.Error("Atleast one healthy tablet needs to be present")
-		}
-		if !isMasterTabletPresent(healthCheckConnection) {
-			t.Error("Atleast one master tablet needs to be present")
-		}
-	} else {
-		t.Error("Vtgate api url response not found")
-	}
+	assert.True(t, resultMap["HealthcheckConnections"] != nil, "HealthcheckConnections count should be present in variables")
+	healthCheckConnection := getMapFromJSON(resultMap, "HealthcheckConnections")
+	assert.True(t, len(healthCheckConnection) > 0, "Atleast one healthy tablet needs to be present")
+	assert.True(t, isMasterTabletPresent(healthCheckConnection), "Atleast one master tablet needs to be present")
 }
 
 func getMapFromJSON(JSON map[string]interface{}, key string) map[string]interface{} {
