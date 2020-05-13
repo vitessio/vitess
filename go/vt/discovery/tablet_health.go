@@ -280,9 +280,10 @@ func (th *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.Str
 	hc.mu.Unlock()
 
 	hcErrorCounters.Add([]string{shr.Target.Keyspace, shr.Target.Shard, topoproto.TabletTypeLString(shr.Target.TabletType)}, 0)
-	if currentTarget.TabletType != shr.Target.TabletType || currentTarget.Keyspace != shr.Target.Keyspace || currentTarget.Shard != shr.Target.Shard {
+	targetChanged := currentTarget.TabletType != shr.Target.TabletType || currentTarget.Keyspace != shr.Target.Keyspace || currentTarget.Shard != shr.Target.Shard
+	if targetChanged {
 		// keyspace and shard are not expected to change, but just in case ...
-		// hc still has this tabletHealthCheck in the wrong target (because tabletType changed)
+		// move this tabletHealthCheck to the correct map
 		oldTargetKey := hc.keyFromTarget(currentTarget)
 		newTargetKey := hc.keyFromTarget(shr.Target)
 		tabletAlias := topoproto.TabletAliasString(shr.TabletAlias)
@@ -313,14 +314,6 @@ func (th *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.Str
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 	targetKey := hc.keyFromTarget(shr.Target)
-	if !trivialNonMasterUpdate {
-		all := hc.healthData[targetKey]
-		allArray := make([]*tabletHealthCheck, 0, len(all))
-		for _, s := range all {
-			allArray = append(allArray, s)
-		}
-		hc.healthy[targetKey] = FilterStatsByReplicationLag(allArray)
-	}
 	if isMasterUpdate {
 		if len(hc.healthy[targetKey]) == 0 {
 			hc.healthy[targetKey] = append(hc.healthy[targetKey], th)
@@ -338,6 +331,25 @@ func (th *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.Str
 				// Just replace it.
 				hc.healthy[targetKey][0] = th
 			}
+		}
+	}
+	if !trivialNonMasterUpdate {
+		if shr.Target.TabletType != topodata.TabletType_MASTER {
+			all := hc.healthData[targetKey]
+			allArray := make([]*tabletHealthCheck, 0, len(all))
+			for _, s := range all {
+				allArray = append(allArray, s)
+			}
+			hc.healthy[targetKey] = FilterStatsByReplicationLag(allArray)
+		}
+		if targetChanged && currentTarget.TabletType != topodata.TabletType_MASTER { // also recompute old target's healthy list
+			oldTargetKey := hc.keyFromTarget(currentTarget)
+			all := hc.healthData[oldTargetKey]
+			allArray := make([]*tabletHealthCheck, 0, len(all))
+			for _, s := range all {
+				allArray = append(allArray, s)
+			}
+			hc.healthy[oldTargetKey] = FilterStatsByReplicationLag(allArray)
 		}
 	}
 
