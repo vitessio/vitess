@@ -371,13 +371,13 @@ func (set Mysql56GTIDSet) Union(other GTIDSet) GTIDSet {
 
 			activeInterval := &newIntervals[len(newIntervals)-1]
 
-			if nextInterval.end < activeInterval.end {
-				// We hit an interval whose start was after the previous intervals start, but whose
+			if nextInterval.end <= activeInterval.end {
+				// We hit an interval whose start was after or equal to the previous interval's start, but whose
 				// end is prior to the active intervals end. Skip to next interval.
 				continue
 			}
 
-			if nextInterval.start > activeInterval.end {
+			if nextInterval.start > activeInterval.end+1 {
 				// We found a gap, so we need to start a new interval.
 				newIntervals = append(newIntervals, nextInterval)
 				continue

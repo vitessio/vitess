@@ -428,7 +428,7 @@ func TestMysql56GTIDSetUnion(t *testing.T) {
 	}
 
 	set2 := Mysql56GTIDSet{
-		sid1: []interval{{20, 31}, {35, 37}, {43, 46}},
+		sid1: []interval{{20, 31}, {35, 37}, {41, 46}},
 		sid2: []interval{{3, 6}, {22, 49}, {67, 72}},
 		sid3: []interval{{1, 45}},
 	}
@@ -436,7 +436,7 @@ func TestMysql56GTIDSetUnion(t *testing.T) {
 	got := set1.Union(set2)
 
 	want := Mysql56GTIDSet{
-		sid1: []interval{{20, 31}, {35, 40}, {42, 46}},
+		sid1: []interval{{20, 31}, {35, 46}},
 		sid2: []interval{{1, 6}, {20, 50}, {60, 72}},
 		sid3: []interval{{1, 45}},
 	}
