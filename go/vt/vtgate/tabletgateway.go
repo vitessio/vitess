@@ -200,19 +200,18 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		}
 		gw.shuffleTablets(gw.localCell, tablets)
 
-		var tabletLastUsed string
 		var th *discovery.TabletHealth
 		// skip tablets we tried before
 		for _, t := range tablets {
-			tabletLastUsed = topoproto.TabletAliasString(t.Tablet.Alias)
-			if _, ok := invalidTablets[tabletLastUsed]; !ok {
+			tabletLastUsed = t.Tablet
+			if _, ok := invalidTablets[topoproto.TabletAliasString(tabletLastUsed.Alias)]; !ok {
 				th = t
 				break
 			} else {
-				tabletLastUsed = ""
+				tabletLastUsed = nil
 			}
 		}
-		if tabletLastUsed == "" {
+		if tabletLastUsed == nil {
 			// do not override error from last attempt.
 			if err == nil {
 				err = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no available connection")
@@ -223,7 +222,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		// execute
 		if th.Conn == nil {
 			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no connection for tablet %v", tabletLastUsed)
-			invalidTablets[tabletLastUsed] = true
+			invalidTablets[topoproto.TabletAliasString(tabletLastUsed.Alias)] = true
 			continue
 		}
 
@@ -232,7 +231,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		canRetry, err = inner(ctx, target, th.Conn)
 		gw.updateStats(target, startTime, err)
 		if canRetry {
-			invalidTablets[tabletLastUsed] = true
+			invalidTablets[topoproto.TabletAliasString(tabletLastUsed.Alias)] = true
 			continue
 		}
 		break
