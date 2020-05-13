@@ -71,7 +71,7 @@ func TestActivePoolForAllTxProps(t *testing.T) {
 	conn1, err := pool.Get(id1, "reason")
 	require.NoError(t, err)
 	conn1.TxProps = &TxProperties{}
-	conn1.Recycle()
+	conn1.Unblock()
 
 	id2, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, noOp)
 	require.NoError(t, err)
@@ -82,7 +82,7 @@ func TestActivePoolForAllTxProps(t *testing.T) {
 	conn3, err := pool.Get(id3, "reason")
 	conn3.TxProps = &TxProperties{}
 	require.NoError(t, err)
-	conn3.Recycle()
+	conn3.Unblock()
 
 	pool.ForAllTxProperties(func(p *TxProperties) {
 		p.LogToFile = true
