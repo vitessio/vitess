@@ -74,8 +74,8 @@ type (
 		// Release is used after we are done with the connection and will not use it again
 		Release(reason ReleaseReason)
 
-		// Recycle marks the connection as not in use. The connection remains active.
-		Recycle()
+		// Unblock marks the connection as not in use. The connection remains active.
+		Unblock()
 	}
 	ReleaseReason int
 )

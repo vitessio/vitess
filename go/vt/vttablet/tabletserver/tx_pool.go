@@ -232,9 +232,9 @@ func (tp *TxPool) Reserve(ctx context.Context, options *querypb.ExecuteOptions, 
 	return txConn, nil
 }
 
-// Get fetches the connection associated to the transactionID.
-// You must call Recycle on TxConnection once done.
-func (tp *TxPool) Get(connID tx.ConnID, reason string) (*DedicatedConnection, error) {
+// GetAndBlock fetches the connection associated to the transactionID and blocks it from concurrent use
+// You must call Unblock on TxConnection once done.
+func (tp *TxPool) GetAndBlock(connID tx.ConnID, reason string) (*DedicatedConnection, error) {
 	conn, err := tp.activePool.Get(connID, reason)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", connID, err)
@@ -246,7 +246,7 @@ func (tp *TxPool) Get(connID tx.ConnID, reason string) (*DedicatedConnection, er
 func (tp *TxPool) Commit(ctx context.Context, connID tx.ConnID) (string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Commit")
 	defer span.Finish()
-	conn, err := tp.Get(connID, "for commit")
+	conn, err := tp.GetAndBlock(connID, "for commit")
 	if err != nil {
 		return "", err
 	}
@@ -258,7 +258,7 @@ func (tp *TxPool) Rollback(ctx context.Context, connID tx.ConnID) error {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Rollback")
 	defer span.Finish()
 
-	conn, err := tp.Get(connID, "for rollback")
+	conn, err := tp.GetAndBlock(connID, "for rollback")
 	if err != nil {
 		return err
 	}
@@ -276,7 +276,7 @@ func (tp *TxPool) LocalBegin(ctx context.Context, options *querypb.ExecuteOption
 	if err != nil {
 		return nil, "", err
 	}
-	conn, err := tp.Get(transactionID, "for local query")
+	conn, err := tp.GetAndBlock(transactionID, "for local query")
 	return conn, beginSQL, err
 }
 

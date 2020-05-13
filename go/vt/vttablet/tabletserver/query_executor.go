@@ -113,11 +113,11 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 
 	if qre.transactionID != 0 {
 		// Need upfront connection for DMLs and transactions
-		conn, err := qre.tsv.te.txPool.Get(qre.transactionID, "for query")
+		conn, err := qre.tsv.te.txPool.GetAndBlock(qre.transactionID, "for query")
 		if err != nil {
 			return nil, err
 		}
-		defer conn.Recycle()
+		defer conn.Unblock()
 		return qre.txConnExec(conn)
 	}
 
@@ -232,11 +232,11 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 	// if we have a transaction id, let's use the txPool for this query
 	var conn *connpool.DBConn
 	if qre.transactionID != 0 {
-		txConn, err := qre.tsv.te.txPool.Get(qre.transactionID, "for streaming query")
+		txConn, err := qre.tsv.te.txPool.GetAndBlock(qre.transactionID, "for streaming query")
 		if err != nil {
 			return err
 		}
-		defer txConn.Recycle()
+		defer txConn.Unblock()
 		conn = txConn.dbConn
 	} else {
 		dbConn, err := qre.getStreamConn()

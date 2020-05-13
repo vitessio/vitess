@@ -36,7 +36,7 @@ import (
 
 // DedicatedConnection is used in the situations where we need a dedicated connection for a vtgate session.
 // This is used for transactions and reserved connections.
-// NOTE: After use, if must be returned either by doing a Recycle() or a Release().
+// NOTE: After use, if must be returned either by doing a Unblock() or a Release().
 type DedicatedConnection struct {
 	pool   *ActivePool
 	dbConn *connpool.DBConn
@@ -47,7 +47,7 @@ type DedicatedConnection struct {
 	TxProps  *TxProperties
 }
 
-// Close closes the underlying connection.
+// Close closes the underlying connection. When the connection is Unblocked, it will be Released
 func (dc *DedicatedConnection) Close() {
 	if dc.dbConn != nil {
 		dc.dbConn.Close()
@@ -88,8 +88,8 @@ func (dc *DedicatedConnection) execWithRetry(ctx context.Context, query string, 
 	return nil
 }
 
-// Recycle returns the connection to the pool. The connection remains active.
-func (dc *DedicatedConnection) Recycle() {
+// Unblock returns the connection to the pool. The connection remains active.
+func (dc *DedicatedConnection) Unblock() {
 	if dc.dbConn == nil {
 		return
 	}

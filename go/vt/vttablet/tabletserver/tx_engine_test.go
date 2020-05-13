@@ -64,7 +64,7 @@ func TestTxEngineClose(t *testing.T) {
 	if beginSQL != "begin" {
 		t.Errorf("beginSQL: %q, want 'begin'", beginSQL)
 	}
-	c.Recycle()
+	c.Unblock()
 	start = time.Now()
 	te.close(false)
 	if diff := time.Since(start); diff < 500*time.Millisecond {
@@ -77,7 +77,7 @@ func TestTxEngineClose(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Recycle()
+	c.Unblock()
 	start = time.Now()
 	te.close(true)
 	if diff := time.Since(start); diff > 500*time.Millisecond {
@@ -91,7 +91,7 @@ func TestTxEngineClose(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Recycle()
+	c.Unblock()
 	start = time.Now()
 	te.close(false)
 	if diff := time.Since(start); diff > 500*time.Millisecond {
@@ -108,10 +108,10 @@ func TestTxEngineClose(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Recycle()
+	c.Unblock()
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		_, err := te.txPool.Get(c.ConnID, "return")
+		_, err := te.txPool.GetAndBlock(c.ConnID, "return")
 		if err != nil {
 			t.Error(err)
 		}
