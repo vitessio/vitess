@@ -346,7 +346,7 @@ func (tp *TxPool) SetTimeout(timeout time.Duration) {
 }
 
 func (tp *TxPool) txComplete(conn *DedicatedConnection, reason tx.ReleaseReason) {
-	tp.log(conn, reason.String())
+	tp.log(conn, reason)
 	if conn.reserved {
 		conn.renewConnection()
 	} else {
@@ -356,11 +356,11 @@ func (tp *TxPool) txComplete(conn *DedicatedConnection, reason tx.ReleaseReason)
 	conn.txClean()
 }
 
-func (tp *TxPool) log(txc *DedicatedConnection, conclusion string) {
+func (tp *TxPool) log(txc *DedicatedConnection, reason tx.ReleaseReason) {
 	if txc.TxProps == nil {
 		return //Nothing to log as no transaction exists on this connection.
 	}
-	txc.TxProps.Conclusion = conclusion
+	txc.TxProps.Conclusion = reason.Name()
 	txc.TxProps.EndTime = time.Now()
 
 	username := callerid.GetPrincipal(txc.TxProps.EffectiveCaller)
@@ -368,9 +368,9 @@ func (tp *TxPool) log(txc *DedicatedConnection, conclusion string) {
 		username = callerid.GetUsername(txc.TxProps.ImmediateCaller)
 	}
 	duration := txc.TxProps.EndTime.Sub(txc.TxProps.StartTime)
-	txc.env.Stats().UserTransactionCount.Add([]string{username, conclusion}, 1)
-	txc.env.Stats().UserTransactionTimesNs.Add([]string{username, conclusion}, int64(duration))
-	txc.TxProps.txStats.Add(conclusion, duration)
+	txc.env.Stats().UserTransactionCount.Add([]string{username, reason.Name()}, 1)
+	txc.env.Stats().UserTransactionTimesNs.Add([]string{username, reason.Name()}, int64(duration))
+	txc.TxProps.txStats.Add(reason.Name(), duration)
 	if txc.TxProps.LogToFile {
 		log.Infof("Logged transaction: %s", txc.String())
 	}
