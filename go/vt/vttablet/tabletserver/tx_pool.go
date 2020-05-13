@@ -163,7 +163,7 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (t
 		return 0, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
 	}
 
-	txConn, err := tp.activePool.NewConn(ctx, options, callerid.GetPrincipal(effectiveCaller), callerid.GetUsername(immediateCaller), func(txConn *DedicatedConnection) error {
+	txConn, err := tp.activePool.NewConn(ctx, options, func(txConn *DedicatedConnection) error {
 		autocommitTransaction := false
 		if queries, ok := txIsolations[options.GetTransactionIsolation()]; ok {
 			if queries.setIsolationLevel != "" {
@@ -196,7 +196,7 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (t
 		return 0, "", err
 	}
 
-	return txConn.ConnID, beginQueries, nil
+	return txConn, beginQueries, nil
 }
 
 //NewTxProps creates a new TxProperties struct
@@ -214,7 +214,7 @@ func (tp *TxPool) NewTxProps(immediateCaller *querypb.VTGateCallerID, effectiveC
 func (tp *TxPool) Reserve(ctx context.Context, options *querypb.ExecuteOptions, setStatements []string) (tx.ConnID, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Reserve")
 	defer span.Finish()
-	txConn, err := tp.activePool.NewConn(ctx, options, "", "", func(txConn *DedicatedConnection) error {
+	txConn, err := tp.activePool.NewConn(ctx, options, func(txConn *DedicatedConnection) error {
 		txConn.dbConn.Taint()
 		for _, statement := range setStatements {
 			_, err := txConn.Exec(ctx, statement, 10, false)
@@ -229,7 +229,7 @@ func (tp *TxPool) Reserve(ctx context.Context, options *querypb.ExecuteOptions, 
 		return 0, err
 	}
 
-	return txConn.ConnID, nil
+	return txConn, nil
 }
 
 // Get fetches the connection associated to the transactionID.

@@ -197,70 +197,6 @@ func addQuery(ctx context.Context, sql string, txPool *TxPool, workload querypb.
 	return transactionID, nil
 }
 
-func TestTxPoolClientRowsFound(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	db.AddQuery("begin", &sqltypes.Result{})
-	txPool := newTxPool()
-	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-	ctx := context.Background()
-
-	startNormalSize := txPool.activePool.conns.Available()
-	startFoundRowsSize := txPool.activePool.foundRowsPool.Available()
-
-	// Start a 'normal' transaction. It should take a connection
-	// for the normal 'conns' pool.
-	id1, beginSQL, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if beginSQL != "begin" {
-		t.Errorf("beginSQL got %q want 'begin'", beginSQL)
-	}
-	if got, want := txPool.activePool.conns.Available(), startNormalSize-1; got != want {
-		t.Errorf("Normal pool size: %d, want %d", got, want)
-	}
-	if got, want := txPool.activePool.foundRowsPool.Available(), startFoundRowsSize; got != want {
-		t.Errorf("foundRows pool size: %d, want %d", got, want)
-	}
-
-	// Start a 'foundRows' transaction. It should take a connection
-	// from the foundRows pool.
-	id2, beginSQL, err := txPool.Begin(ctx, &querypb.ExecuteOptions{ClientFoundRows: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if beginSQL != "begin" {
-		t.Errorf("beginSQL got %q want 'begin'", beginSQL)
-	}
-	if got, want := txPool.activePool.conns.Available(), startNormalSize-1; got != want {
-		t.Errorf("Normal pool size: %d, want %d", got, want)
-	}
-	if got, want := txPool.activePool.foundRowsPool.Available(), startFoundRowsSize-1; got != want {
-		t.Errorf("foundRows pool size: %d, want %d", got, want)
-	}
-
-	// Rollback the first transaction. The conn should be returned to
-	// the conns pool.
-	txPool.Rollback(ctx, id1)
-	if got, want := txPool.activePool.conns.Available(), startNormalSize; got != want {
-		t.Errorf("Normal pool size: %d, want %d", got, want)
-	}
-	if got, want := txPool.activePool.foundRowsPool.Available(), startFoundRowsSize-1; got != want {
-		t.Errorf("foundRows pool size: %d, want %d", got, want)
-	}
-
-	// Rollback the second transaction. The conn should be returned to
-	// the foundRows pool.
-	txPool.Rollback(ctx, id2)
-	if got, want := txPool.activePool.conns.Available(), startNormalSize; got != want {
-		t.Errorf("Normal pool size: %d, want %d", got, want)
-	}
-	if got, want := txPool.activePool.foundRowsPool.Available(), startFoundRowsSize; got != want {
-		t.Errorf("foundRows pool size: %d, want %d", got, want)
-	}
-}
-
 func TestTxPoolTransactionIsolation(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -494,19 +430,6 @@ func TestTxPoolRollbackFail(t *testing.T) {
 	}
 }
 
-func TestTxPoolGetConnNonExistentTransaction(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	txPool := newTxPool()
-	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-	defer txPool.Close()
-	_, err := txPool.Get(12345, "for query")
-	want := "transaction 12345: not found"
-	if err == nil || err.Error() != want {
-		t.Errorf("Get: %v, want %s", err, want)
-	}
-}
-
 func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -665,6 +588,12 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 }
 
 func newTxPool() *TxPool {
+	env := newEnv("TabletServerTest")
+	limiter := &txlimiter.TxAllowAll{}
+	return NewTxPool(env, limiter)
+}
+
+func newEnv(exporterName string) tabletenv.Env {
 	config := tabletenv.NewDefaultConfig()
 	config.TxPool.Size = 300
 	config.Oltp.TxTimeoutSeconds = 30
@@ -673,6 +602,6 @@ func newTxPool() *TxPool {
 	config.OltpReadPool.IdleTimeoutSeconds = 30
 	config.OlapReadPool.IdleTimeoutSeconds = 30
 	config.TxPool.IdleTimeoutSeconds = 30
-	limiter := &txlimiter.TxAllowAll{}
-	return NewTxPool(tabletenv.NewEnv(config, "TabletServerTest"), limiter)
+	env := tabletenv.NewEnv(config, exporterName)
+	return env
 }
