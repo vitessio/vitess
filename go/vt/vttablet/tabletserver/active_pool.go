@@ -127,9 +127,9 @@ func (ap *ActivePool) Get(id int64, reason string) (*DedicatedConnection, error)
 	return conn.(*DedicatedConnection), nil
 }
 
-//NewConn creates a new TxConn. It will be created from either the normal pool or
+//NewConn creates a new DedicatedConnection. It will be created from either the normal pool or
 //the found_rows pool, depending on the options provided
-func (ap *ActivePool) NewConn(ctx context.Context, options *querypb.ExecuteOptions, effectiveCaller, immediateCaller string, f func(*DedicatedConnection) error) (*DedicatedConnection, error) {
+func (ap *ActivePool) NewConn(ctx context.Context, options *querypb.ExecuteOptions, f func(*DedicatedConnection) error) (tx.ConnID, error) {
 	var conn *connpool.DBConn
 	var err error
 
@@ -139,7 +139,7 @@ func (ap *ActivePool) NewConn(ctx context.Context, options *querypb.ExecuteOptio
 		conn, err = ap.conns.Get(ctx)
 	}
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
 	transactionID := ap.lastID.Add(1)
@@ -154,7 +154,7 @@ func (ap *ActivePool) NewConn(ctx context.Context, options *querypb.ExecuteOptio
 	err = f(txConn)
 	if err != nil {
 		txConn.Release(tx.ConnInitFail)
-		return nil, err
+		return 0, err
 	}
 	err = ap.active.Register(
 		txConn.ConnID,
@@ -163,9 +163,9 @@ func (ap *ActivePool) NewConn(ctx context.Context, options *querypb.ExecuteOptio
 	)
 	if err != nil {
 		txConn.Release(tx.ConnInitFail)
-		return nil, err
+		return 0, err
 	}
-	return txConn, nil
+	return txConn.ConnID, nil
 }
 
 //ForAllTxProperties executes a function an every connection that has a not-nil TxProperties
