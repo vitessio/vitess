@@ -363,20 +363,10 @@ func (set Mysql56GTIDSet) Union(other GTIDSet) GTIDSet {
 		var newIntervals []interval
 
 		// While our stacks have intervals to process, do work.
-		for len(s1) != 0 || len(s2) != 0 {
-			// Find which intervals list has earliest start.
-			if len(s2) == 0 || (len(s1) != 0 && s1[0].start <= s2[0].start) {
-				nextInterval = s1[0]
-				// Progress pointer since this stack has earliest.
-				s1 = s1[1:]
-			} else {
-				nextInterval = s2[0]
-				// Progress pointer since this stack has earliest.
-				s2 = s2[1:]
-			}
-
+		for popInterval(&nextInterval, &s1, &s2) {
 			if len(newIntervals) == 0 {
 				newIntervals = append(newIntervals, nextInterval)
+				continue
 			}
 
 			activeInterval := &newIntervals[len(newIntervals)-1]
@@ -481,6 +471,32 @@ func NewMysql56GTIDSetFromSIDBlock(data []byte) (Mysql56GTIDSet, error) {
 		}
 	}
 	return set, nil
+}
+
+// popInterval will look at the two pre-sorted interval stacks supplied, and if at least one of the stacks is non-empty
+// will mutate the destination interval with the next earliest interval based on start sequence.
+// popInterval will return true if we were able to pop, or false if both stacks are now empty.
+func popInterval(dst *interval, s1, s2 *[]interval) bool {
+	if s1 == nil || s2 == nil {
+		return false
+	}
+
+	if len(*s1) == 0 && len(*s2) == 0 {
+		return false
+	}
+
+	// Find which intervals list has earliest start.
+	if len(*s2) == 0 || (len(*s1) != 0 && (*s1)[0].start <= (*s2)[0].start) {
+		*dst = (*s1)[0]
+		// Progress pointer since this stack has earliest.
+		*s1 = (*s1)[1:]
+	} else {
+		*dst = (*s2)[0]
+		// Progress pointer since this stack has earliest.
+		*s2 = (*s2)[1:]
+	}
+
+	return true
 }
 
 func init() {
