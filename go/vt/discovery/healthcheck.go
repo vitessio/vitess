@@ -209,6 +209,8 @@ type HealthCheckImpl struct {
 	// used to inform vtgate buffer when new master is detected
 	// TODO: replace this with synchronizing over a condition variable
 	masterCallback func(health *TabletHealth)
+	// cellAliases is a cache of cell aliases
+	cellAliases map[string]string
 	// mutex to protect subscribers
 	subMu sync.Mutex
 	// subscribers
@@ -270,6 +272,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		healthData:         make(map[string]map[string]*tabletHealthCheck),
 		healthy:            make(map[string][]*tabletHealthCheck),
 		subscribers:        make(map[chan *TabletHealth]struct{}),
+		cellAliases:        make(map[string]string),
 	}
 	var topoWatchers []*TopologyWatcher
 	var filter TabletFilter
@@ -527,6 +530,10 @@ func (hc *HealthCheckImpl) deleteConn(tablet *topodata.Tablet) {
 // name is an optional tag for the tablet, e.g. an alternative address.
 func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
 	log.Infof("Calling AddTablet for tablet: %v", tablet)
+	// check whether we should really add this tablet
+	if !hc.isIncluded(tablet) {
+		return
+	}
 	hc.mu.Lock()
 	if hc.healthByAlias == nil {
 		// already closed.
@@ -574,6 +581,9 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
 // RemoveTablet removes the tablet, and stops the health check.
 // It does not block.
 func (hc *HealthCheckImpl) RemoveTablet(tablet *topodata.Tablet) {
+	if !hc.isIncluded(tablet) {
+		return
+	}
 	hc.deleteConn(tablet)
 }
 
@@ -762,4 +772,33 @@ func (hc *HealthCheckImpl) keyFromTarget(target *query.Target) string {
 
 func (hc *HealthCheckImpl) keyFromTablet(tablet *topodata.Tablet) string {
 	return fmt.Sprintf("%s.%s.%d", tablet.Keyspace, tablet.Shard, tablet.Type)
+}
+
+func (hc *HealthCheckImpl) getAliasByCell(cell string) string {
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+
+	if alias, ok := hc.cellAliases[cell]; ok {
+		return alias
+	}
+
+	alias := topo.GetAliasByCell(context.Background(), hc.ts, cell)
+	// Currently cell aliases have to be non-overlapping.
+	// If that changes, this will need to change to account for overlaps.
+	hc.cellAliases[cell] = alias
+
+	return alias
+}
+
+func (hc *HealthCheckImpl) isIncluded(tablet *topodata.Tablet) bool {
+	if tablet.Type == topodata.TabletType_MASTER {
+		return true
+	}
+	if tablet.Alias.Cell == hc.cell {
+		return true
+	}
+	if hc.getAliasByCell(tablet.Alias.Cell) == hc.getAliasByCell(hc.cell) {
+		return true
+	}
+	return false
 }
