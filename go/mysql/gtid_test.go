@@ -201,6 +201,7 @@ func (f fakeGTID) GTIDSet() GTIDSet          { return nil }
 
 func (fakeGTID) ContainsGTID(GTID) bool { return false }
 func (fakeGTID) Contains(GTIDSet) bool  { return false }
+func (f fakeGTID) Union(GTIDSet) GTIDSet  { return f }
 func (f fakeGTID) Equal(other GTIDSet) bool {
 	otherFake, ok := other.(fakeGTID)
 	if !ok {

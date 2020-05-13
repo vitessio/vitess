@@ -200,6 +200,41 @@ func (gtidSet MariadbGTIDSet) AddGTID(other GTID) GTIDSet {
 	return append(gtidSet, mdbOther)
 }
 
+// Union implements GTIDSet.Union(). This is a pure method, and does not mutate the caller.
+func (gtidSet MariadbGTIDSet) Union(other GTIDSet)  GTIDSet {
+	if gtidSet == nil || other == nil {
+		return gtidSet
+	}
+	mdbOther, ok := other.(MariadbGTIDSet)
+	if !ok {
+		return gtidSet
+	}
+
+	// Create a map of Domain to GTID for efficient lookup when adding.
+	mySet := make(map[uint32]*MariadbGTID, len(gtidSet) + len(mdbOther))
+	for _, gtid := range gtidSet {
+		mySet[gtid.Domain] = &gtid
+	}
+
+	for _, otherGtid := range mdbOther {
+		if myGtid, ok := mySet[otherGtid.Domain]; ok {
+			if otherGtid.Sequence > myGtid.Sequence {
+				mySet[otherGtid.Domain] = &otherGtid
+			}
+		}
+	}
+
+	gtidList := make(MariadbGTIDSet, len(mySet))
+	for _, gtid := range mySet {
+		if gtid == nil {
+			continue
+		}
+		gtidList = append(gtidList, *gtid)
+	}
+
+	return gtidList
+}
+
 func init() {
 	gtidParsers[mariadbFlavorID] = parseMariadbGTID
 	gtidSetParsers[mariadbFlavorID] = parseMariadbGTIDSet

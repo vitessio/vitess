@@ -133,6 +133,19 @@ func (gtid filePosGTID) AddGTID(other GTID) GTIDSet {
 	return filePosOther
 }
 
+// Union implements GTIDSet.Union().
+func (gtid filePosGTID) Union(other GTIDSet) GTIDSet {
+	filePosOther, ok := other.(filePosGTID)
+	if !ok {
+		return gtid
+	}
+	if filePosOther.pos > gtid.pos {
+		return filePosOther
+	}
+
+	return gtid
+}
+
 func init() {
 	gtidParsers[filePosFlavorID] = parseFilePosGTID
 	gtidSetParsers[filePosFlavorID] = parseFilePosGTIDSet
