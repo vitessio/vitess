@@ -136,14 +136,11 @@ func (gtid filePosGTID) AddGTID(other GTID) GTIDSet {
 // Union implements GTIDSet.Union().
 func (gtid filePosGTID) Union(other GTIDSet) GTIDSet {
 	filePosOther, ok := other.(filePosGTID)
-	if !ok {
+	if !ok || gtid.Contains(other) {
 		return gtid
 	}
-	if filePosOther.pos > gtid.pos {
-		return filePosOther
-	}
 
-	return gtid
+	return filePosOther
 }
 
 func init() {

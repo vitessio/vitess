@@ -230,9 +230,6 @@ func (gtidSet MariadbGTIDSet) Union(other GTIDSet)  GTIDSet {
 
 	gtidList := make(MariadbGTIDSet, 0, len(mySet))
 	for _, gtid := range mySet {
-		if gtid == nil {
-			continue
-		}
 		gtidList = append(gtidList, *gtid)
 	}
 

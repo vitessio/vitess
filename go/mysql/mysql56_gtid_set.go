@@ -348,18 +348,17 @@ func (set Mysql56GTIDSet) Union(other GTIDSet) GTIDSet {
 	// This function is not supposed to modify the original set.
 	newSet := make(Mysql56GTIDSet)
 
-	for OtherSID, otherIntervals := range mydbOther {
-		intervals, ok := set[OtherSID]
-
+	for otherSID, otherIntervals := range mydbOther {
+		intervals, ok := set[otherSID]
 		if !ok {
 			// No matching server id, so we must add it from other set.
-			newSet[OtherSID] = otherIntervals
+			newSet[otherSID] = otherIntervals
 			continue
 		}
 
 		// Found server id match between sets, so now we need to add each interval.
-		s1 := intervals[:]
-		s2 := otherIntervals[:]
+		s1 := intervals
+		s2 := otherIntervals
 		var nextInterval interval
 		var newIntervals []interval
 
@@ -398,7 +397,7 @@ func (set Mysql56GTIDSet) Union(other GTIDSet) GTIDSet {
 			activeInterval.end = nextInterval.end
 		}
 
-		newSet[OtherSID] = newIntervals
+		newSet[otherSID] = newIntervals
 	}
 
 	// Add any intervals from SIDs that exist in caller set, but don't exist in other set.
