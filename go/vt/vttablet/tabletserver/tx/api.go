@@ -92,10 +92,22 @@ func (r ReleaseReason) String() string {
 	return txResolutions[r]
 }
 
+func (r ReleaseReason) Name() string {
+	return txNames[r]
+}
+
 var txResolutions = map[ReleaseReason]string{
 	TxClose:      "closed",
 	TxCommit:     "transaction committed",
 	TxRollback:   "transaction rolled back",
+	TxKill:       "kill",
+	ConnInitFail: "initFail",
+}
+
+var txNames = map[ReleaseReason]string{
+	TxClose:      "close",
+	TxCommit:     "commit",
+	TxRollback:   "rollback",
 	TxKill:       "kill",
 	ConnInitFail: "initFail",
 }
