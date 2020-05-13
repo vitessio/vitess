@@ -19,6 +19,8 @@ package vtgate
 import (
 	"context"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
@@ -36,10 +38,10 @@ This method implements the fall back logic.
 If exA(plan execute)  is not able to plan the statement then it fall backs to exB(execute) method.
 There is no fallback for parsing errors.
 */
-func (f *fallbackExecutor) execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*query.BindVariable, logStats *LogStats) (*sqltypes.Result, error) {
-	qr, err := f.exA.execute(ctx, safeSession, sql, bindVars, logStats)
+func (f *fallbackExecutor) execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*query.BindVariable, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
+	stmtType, qr, err := f.exA.execute(ctx, safeSession, sql, bindVars, logStats)
 	if err == planbuilder.ErrPlanNotSupported {
 		return f.exB.execute(ctx, safeSession, sql, bindVars, logStats)
 	}
-	return qr, err
+	return stmtType, qr, err
 }
