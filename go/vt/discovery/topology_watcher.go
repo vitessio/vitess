@@ -89,8 +89,6 @@ type TopologyWatcher struct {
 	firstLoadDone bool
 	// firstLoadChan is closed when the initial loading of topology data is done.
 	firstLoadChan chan struct{}
-	// cellAliases is a cache of cell aliases
-	cellAliases map[string]string
 }
 
 // NewTopologyWatcher returns a TopologyWatcher that monitors all
@@ -198,7 +196,7 @@ func (tw *TopologyWatcher) loadTablets() {
 				log.Errorf("cannot get tablet for alias %v: %v", alias, err)
 				return
 			}
-			if !(tw.isTabletInCell(tablet.Tablet) && (tw.tabletFilter == nil || tw.tabletFilter.IsIncluded(tablet.Tablet))) {
+			if !(tw.tabletFilter == nil || tw.tabletFilter.IsIncluded(tablet.Tablet)) {
 				return
 			}
 			tw.mu.Lock()
@@ -260,33 +258,6 @@ func (tw *TopologyWatcher) loadTablets() {
 
 	tw.mu.Unlock()
 
-}
-
-func (tw *TopologyWatcher) getAliasByCell(cell string) string {
-	tw.mu.Lock()
-	defer tw.mu.Unlock()
-
-	if alias, ok := tw.cellAliases[cell]; ok {
-		return alias
-	}
-
-	alias := topo.GetAliasByCell(context.Background(), tw.topoServer, cell)
-	tw.cellAliases[cell] = alias
-
-	return alias
-}
-
-func (tw *TopologyWatcher) isTabletInCell(tablet *topodata.Tablet) bool {
-	if tablet.Type == topodata.TabletType_MASTER {
-		return true
-	}
-	if tablet.Alias.Cell == tw.cell {
-		return true
-	}
-	if tw.getAliasByCell(tablet.Alias.Cell) == tw.getAliasByCell(tw.cell) {
-		return true
-	}
-	return false
 }
 
 // RefreshLag returns the time since the last refresh
