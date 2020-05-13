@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -86,6 +87,15 @@ type MariadbGTID struct {
 
 // MariadbGTIDSet implements GTIDSet
 type MariadbGTIDSet []MariadbGTID
+
+// Len implements sort.Interface.
+func (s MariadbGTIDSet) Len() int { return len(s) }
+
+// Less implements sort.Interface.
+func (s MariadbGTIDSet) Less(i, j int) bool { return s[i].Domain < s[j].Domain }
+
+// Swap implements sort.Interface.
+func (s MariadbGTIDSet) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
 // String implements GTID.String().
 func (gtid MariadbGTID) String() string {
@@ -201,7 +211,7 @@ func (gtidSet MariadbGTIDSet) AddGTID(other GTID) GTIDSet {
 }
 
 // Union implements GTIDSet.Union(). This is a pure method, and does not mutate the caller.
-func (gtidSet MariadbGTIDSet) Union(other GTIDSet)  GTIDSet {
+func (gtidSet MariadbGTIDSet) Union(other GTIDSet) GTIDSet {
 	if gtidSet == nil || other == nil {
 		return gtidSet
 	}
@@ -217,7 +227,7 @@ func (gtidSet MariadbGTIDSet) Union(other GTIDSet)  GTIDSet {
 		mySet[gtid.Domain] = gtid
 	}
 
-	for i,_ := range mdbOther {
+	for i, _ := range mdbOther {
 		otherGtid := &mdbOther[i]
 		if myGtid, ok := mySet[otherGtid.Domain]; ok {
 			if otherGtid.Sequence > myGtid.Sequence {
@@ -232,6 +242,8 @@ func (gtidSet MariadbGTIDSet) Union(other GTIDSet)  GTIDSet {
 	for _, gtid := range mySet {
 		gtidList = append(gtidList, *gtid)
 	}
+
+	sort.Sort(gtidList)
 
 	return gtidList
 }
