@@ -417,6 +417,35 @@ func TestMysql56GTIDSetAddGTID(t *testing.T) {
 	}
 }
 
+func TestMysql56GTIDSetUnion(t *testing.T) {
+	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
+	sid3 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17}
+
+	set1 := Mysql56GTIDSet{
+		sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
+		sid2: []interval{{1, 5}, {20, 50}, {60, 70}},
+	}
+
+	set2 := Mysql56GTIDSet{
+		sid1: []interval{{20, 31}, {35, 37}, {43, 46}},
+		sid2: []interval{{3, 6}, {22, 49}, {67, 72}},
+		sid3: []interval{{1, 45}},
+	}
+
+	got := set1.Union(set2)
+
+	want := Mysql56GTIDSet{
+		sid1: []interval{{20, 31}, {35, 40}, {42, 46}},
+		sid2: []interval{{1, 6}, {20, 50}, {60, 72}},
+		sid3: []interval{{1, 45}},
+	}
+
+	if !got.Equal(want) {
+		t.Errorf("set1: %#v, set1.Union(%#v) = %#v, want %#v", set1, set2, got, want)
+	}
+}
+
 func TestMysql56GTIDSetSIDBlock(t *testing.T) {
 	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
