@@ -62,13 +62,11 @@ func TestHealthCheck(t *testing.T) {
 	tablet.Type = topodatapb.TabletType_REPLICA
 	input := make(chan *querypb.StreamHealthResponse)
 	conn := createFakeConn(tablet, input)
-	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 
 	// create a channel and subscribe to healthcheck
 	resultChan := hc.Subscribe()
 	testChecksum(t, 0, hc.stateChecksum())
 	hc.AddTablet(tablet)
-	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 	testChecksum(t, 1027934207, hc.stateChecksum())
 
 	// Immediately after AddTablet() there will be the first notification.
@@ -89,7 +87,6 @@ func TestHealthCheck(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
 	}
 	input <- shr
-	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: REPLICA}, Serving: true, TabletExternallyReparentedTimestamp: 0, {SecondsBehindMaster: 1, CpuUsage: 0.5}}`)
 	result = <-resultChan
 	want = &TabletHealth{
 		Tablet:              tablet,
@@ -160,7 +157,6 @@ func TestHealthCheck(t *testing.T) {
 		MasterTermStartTime: 0,
 	}
 	input <- shr
-	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: REPLICA}, TabletExternallyReparentedTimestamp: 0, {SecondsBehindMaster: 1, CpuUsage: 0.3}}`)
 	result = <-resultChan
 	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
 	testChecksum(t, 1027934207, hc.stateChecksum())
@@ -181,17 +177,13 @@ func TestHealthCheck(t *testing.T) {
 		LastError:           fmt.Errorf("vttablet error: some error"),
 	}
 	input <- shr
-	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: REPLICA}, Serving: true, TabletExternallyReparentedTimestamp: 0, {HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3}}`)
 	result = <-resultChan
 	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
-
 	testChecksum(t, 1027934207, hc.stateChecksum()) // unchanged
 
 	// remove tablet
 	hc.deleteConn(tablet)
-	t.Logf(`hc.RemoveTablet({Host: "a", PortMap: {"vt": 1}})`)
 	testChecksum(t, 0, hc.stateChecksum())
-
 }
 
 func TestHealthCheckStreamError(t *testing.T) {
@@ -205,10 +197,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 	resultChan := hc.Subscribe()
 	fc := createFakeConn(tablet, input)
 	fc.errCh = make(chan error)
-	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
-
 	hc.AddTablet(tablet)
-	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
 	// Immediately after AddTablet() there will be the first notification.
 	want := &TabletHealth{
@@ -235,7 +224,6 @@ func TestHealthCheckStreamError(t *testing.T) {
 		MasterTermStartTime: 0,
 	}
 	input <- shr
-	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: MASTER}, Serving: true, TabletExternallyReparentedTimestamp: 10, {SecondsBehindMaster: 1, CpuUsage: 0.2}}`)
 	result = <-resultChan
 	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
 
@@ -262,11 +250,9 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 	tablet.PortMap["vt"] = 1
 	input := make(chan *querypb.StreamHealthResponse, 1)
 	fc := createFakeConn(tablet, input)
-	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	resultChan := hc.Subscribe()
 
 	hc.AddTablet(tablet)
-	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
 	// Immediately after AddTablet() there will be the first notification.
 	want := &TabletHealth{
@@ -289,7 +275,6 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 	ticker := time.NewTicker(1 * time.Second)
 	select {
 	case err := <-fc.cbErrCh:
-		t.Logf("<-fc.cbErrCh: %v", err)
 		assert.Contains(t, err.Error(), "health stats mismatch", "wrong error")
 	case <-resultChan:
 		require.Fail(t, "StreamHealth should have returned a health stats mismatch error")
@@ -307,11 +292,9 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	tablet.PortMap["vt"] = 1
 	input := make(chan *querypb.StreamHealthResponse, 1)
 	createFakeConn(tablet, input)
-	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	resultChan := hc.Subscribe()
 
 	hc.AddTablet(tablet)
-	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
 	// Immediately after AddTablet() there will be the first notification.
 	want := &TabletHealth{
@@ -338,7 +321,6 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 		MasterTermStartTime: 0,
 	}
 	input <- shr
-	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: MASTER}, Serving: true, TabletExternallyReparentedTimestamp: 10, {SecondsBehindMaster: 1, CpuUsage: 0.2}}`)
 	result = <-resultChan
 	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
 
@@ -346,16 +328,13 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	shr.TabletExternallyReparentedTimestamp = 11
 	// Close the healthcheck. Tablet connections are closed asynchronously and
 	// Close() will block until all Go routines (one per connection) are done.
-	hc.Close()
+	assert.Nil(t, hc.Close(), "Close returned error")
 	// Try to send more updates. They should be ignored and nothing should change
-	// Note that this code is racy by nature. If there is a regression, it should
-	// fail in some cases.
 	input <- shr
-	t.Logf(`input <- %v`, shr)
 
 	select {
 	case result = <-resultChan:
-		assert.Nil(t, result, "healthCheck still running after Close(): listener received: %v but should not have been called", result)
+		assert.Nil(t, result, "healthCheck still running after Close(): received result: %v", result)
 	case <-time.After(1 * time.Millisecond):
 		// No response after timeout. Success.
 	}
@@ -375,11 +354,8 @@ func TestHealthCheckTimeout(t *testing.T) {
 	tablet.PortMap["vt"] = 1
 	input := make(chan *querypb.StreamHealthResponse)
 	fc := createFakeConn(tablet, input)
-	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	resultChan := hc.Subscribe()
-
 	hc.AddTablet(tablet)
-	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 	// Immediately after AddTablet() there will be the first notification.
 	want := &TabletHealth{
 		Tablet:              tablet,
@@ -405,56 +381,238 @@ func TestHealthCheckTimeout(t *testing.T) {
 		MasterTermStartTime: 0,
 	}
 	input <- shr
-	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: MASTER}, Serving: true, TabletExternallyReparentedTimestamp: 10, {SecondsBehindMaster: 1, CpuUsage: 0.2}}`)
 	result = <-resultChan
 	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
-
-	if err := checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 0); err != nil {
-		t.Errorf("%v", err)
-	}
+	assert.Nil(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 0))
 
 	// wait for timeout period
 	time.Sleep(hc.healthCheckTimeout + 100*time.Millisecond)
 	t.Logf(`Sleep(1.1 * timeout)`)
 	result = <-resultChan
-	if result.Serving {
-		t.Errorf(`tabletHealthCheck: %+v; want not serving`, result)
-	}
-
-	if err := checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 1); err != nil {
-		t.Errorf("%v", err)
-	}
-
-	if !fc.isCanceled() {
-		t.Errorf("StreamHealth should be canceled after timeout, but is not")
-	}
+	assert.False(t, result.Serving, "tabletHealthCheck: %+v; want not serving", result)
+	assert.Nil(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 1))
+	assert.True(t, fc.isCanceled(), "StreamHealth should be canceled after timeout, but is not")
 
 	// repeat the wait. It will timeout one more time trying to get the connection.
 	fc.resetCanceledFlag()
 	time.Sleep(hc.healthCheckTimeout)
-	t.Logf(`Sleep(timeout)`)
 
 	result = <-resultChan
-	if result.Serving {
-		t.Errorf(`tabletHealthCheck: %+v; want not serving`, result)
-	}
-
-	if err := checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 2); err != nil {
-		t.Errorf("%v", err)
-	}
-
-	if !fc.isCanceled() {
-		t.Errorf("StreamHealth should be canceled again after timeout")
-	}
+	assert.False(t, result.Serving, "tabletHealthCheck: %+v; want not serving", result)
+	assert.Nil(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 2))
+	assert.True(t, fc.isCanceled(), "StreamHealth should be canceled again after timeout, but is not")
 
 	// send a healthcheck response, it should be serving again
 	fc.resetCanceledFlag()
 	input <- shr
-	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: MASTER}, Serving: true, TabletExternallyReparentedTimestamp: 10, {SecondsBehindMaster: 1, CpuUsage: 0.2}}`)
 
 	// wait for the exponential backoff to wear off and health monitoring to resume.
 	result = <-resultChan
 	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
+}
+
+// TestGetHealthyTablets tests the functionality of GetHealthyTabletStats.
+func TestGetHealthyTablets(t *testing.T) {
+	ts := memorytopo.NewServer("cell")
+	hc := createTestHc(ts)
+
+	tablet := topo.NewTablet(0, "cell", "a")
+	tablet.Keyspace = "k"
+	tablet.Shard = "s"
+	tablet.PortMap["vt"] = 1
+	tablet.Type = topodatapb.TabletType_REPLICA
+	input := make(chan *querypb.StreamHealthResponse)
+	createFakeConn(tablet, input)
+
+	// create a channel and subscribe to healthcheck
+	resultChan := hc.Subscribe()
+	hc.AddTablet(tablet)
+	// there will be a first result, get and discard it
+	<-resultChan
+	// empty
+	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
+	assert.Equal(t, 0, len(a), "wrong result, expected empty list")
+
+	shr := &querypb.StreamHealthResponse{
+		TabletAlias:                         tablet.Alias,
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                             true,
+		TabletExternallyReparentedTimestamp: 0,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+	want := &TabletHealth{
+		Tablet:              tablet,
+		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:             true,
+		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		MasterTermStartTime: 0,
+	}
+	input <- shr
+	<-resultChan
+	// check it's there
+	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
+	assert.Equal(t, 1, len(a), "Wrong number of results")
+	assert.True(t, want.DeepEqual(a[0]), "unexpected result")
+
+	// update health with a change that won't change health array
+	shr = &querypb.StreamHealthResponse{
+		TabletAlias:                         tablet.Alias,
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                             true,
+		TabletExternallyReparentedTimestamp: 0,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 2, CpuUsage: 0.2},
+	}
+	input <- shr
+	// wait for result before checking
+	<-resultChan
+	// check it's there
+	want = &TabletHealth{
+		Tablet:              tablet,
+		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:             true,
+		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 2, CpuUsage: 0.2},
+		MasterTermStartTime: 0,
+	}
+	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
+	assert.Equal(t, 1, len(a), "Wrong number of results")
+	assert.True(t, want.DeepEqual(a[0]), "unexpected result")
+
+	// update stats with a change that will change health array
+	shr = &querypb.StreamHealthResponse{
+		TabletAlias:                         tablet.Alias,
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                             true,
+		TabletExternallyReparentedTimestamp: 0,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 35, CpuUsage: 0.2},
+	}
+	want = &TabletHealth{
+		Tablet:              tablet,
+		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:             true,
+		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 35, CpuUsage: 0.2},
+		MasterTermStartTime: 0,
+	}
+	input <- shr
+	// wait for result before checking
+	<-resultChan
+	// check it's there
+	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
+	assert.Equal(t, 1, len(a), "Wrong number of results")
+	assert.True(t, want.DeepEqual(a[0]), "unexpected result")
+
+	// add a second tablet
+	tablet2 := topo.NewTablet(11, "cell", "host2")
+	tablet2.Keyspace = "k"
+	tablet2.Shard = "s"
+	tablet2.PortMap["vt"] = 2
+	tablet2.Type = topodatapb.TabletType_REPLICA
+	input2 := make(chan *querypb.StreamHealthResponse)
+	createFakeConn(tablet2, input2)
+	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 2}}, c)`)
+	hc.AddTablet(tablet2)
+	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
+	// there will be a first result, get and discard it
+	<-resultChan
+
+	shr2 := &querypb.StreamHealthResponse{
+		TabletAlias:                         tablet2.Alias,
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                             true,
+		TabletExternallyReparentedTimestamp: 0,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+	}
+	want2 := &TabletHealth{
+		Tablet:              tablet2,
+		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:             true,
+		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+		MasterTermStartTime: 0,
+	}
+	input2 <- shr2
+	// wait for result
+	<-resultChan
+	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
+	assert.Equal(t, 2, len(a), "Wrong number of results")
+	if a[0].Tablet.Alias.Uid == 11 {
+		a[0], a[1] = a[1], a[0]
+	}
+	assert.True(t, want.DeepEqual(a[0]), "unexpected result")
+	assert.True(t, want2.DeepEqual(a[1]), "unexpected result")
+
+	shr2 = &querypb.StreamHealthResponse{
+		TabletAlias:                         tablet2.Alias,
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                             false,
+		TabletExternallyReparentedTimestamp: 0,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+	}
+	input2 <- shr2
+	// wait for result
+	<-resultChan
+	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
+	assert.Equal(t, 1, len(a), "Wrong number of results")
+	assert.True(t, want.DeepEqual(a[0]), "unexpected result")
+
+	// second tablet turns into a master
+	shr2 = &querypb.StreamHealthResponse{
+		TabletAlias:                         tablet2.Alias,
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Serving:                             true,
+		TabletExternallyReparentedTimestamp: 10,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 0, CpuUsage: 0.2},
+	}
+	input2 <- shr2
+	// wait for result
+	<-resultChan
+	// check we only have 1 healthy replica left
+	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
+	assert.Equal(t, 1, len(a), "Wrong number of results")
+	assert.True(t, want.DeepEqual(a[0]), "unexpected result")
+
+	want2 = &TabletHealth{
+		Tablet:              tablet2,
+		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Serving:             true,
+		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 0, CpuUsage: 0.2},
+		MasterTermStartTime: 10,
+	}
+	// check we have a master now
+	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
+	assert.Equal(t, 1, len(a), "Wrong number of results")
+	assert.True(t, want2.DeepEqual(a[0]), "unexpected result")
+
+	// reparent: old replica goes into master
+	shr = &querypb.StreamHealthResponse{
+		TabletAlias:                         tablet.Alias,
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Serving:                             true,
+		TabletExternallyReparentedTimestamp: 20,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 0, CpuUsage: 0.2},
+	}
+	input <- shr
+	<-resultChan
+	want = &TabletHealth{
+		Tablet:              tablet,
+		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Serving:             true,
+		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 0, CpuUsage: 0.2},
+		MasterTermStartTime: 20,
+	}
+
+	// check we lost all replicas, and master is new one
+	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
+	assert.Equal(t, 0, len(a), "Wrong number of results")
+	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
+	assert.Equal(t, 1, len(a), "Wrong number of results")
+	assert.True(t, want.DeepEqual(a[0]), "unexpected result")
+
+	// old master sending an old ping should be ignored
+	input2 <- shr2
+	<-resultChan
+	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
+	assert.Equal(t, 1, len(a), "Wrong number of results")
+	assert.True(t, want.DeepEqual(a[0]), "unexpected result")
+	assert.Nil(t, hc.Close(), "unexpected error")
 }
 
 func TestTemplate(t *testing.T) {
@@ -601,6 +759,5 @@ func checkErrorCounter(keyspace, shard string, tabletType topodatapb.TabletType,
 	if got != want {
 		return fmt.Errorf("wrong value for hcErrorCounters got = %v, want = %v", got, want)
 	}
-
 	return nil
 }
