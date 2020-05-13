@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"vitess.io/vitess/go/vt/topo"
 
 	"github.com/golang/protobuf/proto"
@@ -325,12 +327,10 @@ func TestExecutorAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession := &vtgatepb.Session{TargetString: "@master", InTransaction: true, FoundRows: 1}
+	wantSession := &vtgatepb.Session{TargetString: "@master", InTransaction: true, FoundRows: 1, RowCount: -1}
 	testSession := *session.Session
 	testSession.ShardSessions = nil
-	if !proto.Equal(&testSession, wantSession) {
-		t.Errorf("autocommit=0: %v, want %v", testSession, wantSession)
-	}
+	utils.MustMatch(t, wantSession, &testSession, "session does not match for autocommit=0")
 
 	logStats := testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	if logStats.CommitTime != 0 {
@@ -359,10 +359,8 @@ func TestExecutorAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master", FoundRows: 1}
-	if !proto.Equal(session.Session, wantSession) {
-		t.Errorf("autocommit=1: %v, want %v", session.Session, wantSession)
-	}
+	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master", FoundRows: 1, RowCount: 1}
+	utils.MustMatch(t, wantSession, session.Session, "session does not match for autocommit=1")
 	if got, want := sbclookup.AsTransactionCount.Get(), startCount+1; got != want {
 		t.Errorf("Commit count: %d, want %d", got, want)
 	}
@@ -388,12 +386,10 @@ func TestExecutorAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@master", FoundRows: 1}
+	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@master", FoundRows: 1, RowCount: 1}
 	testSession = *session.Session
 	testSession.ShardSessions = nil
-	if !proto.Equal(&testSession, wantSession) {
-		t.Errorf("autocommit=1: %v, want %v", &testSession, wantSession)
-	}
+	utils.MustMatch(t, wantSession, &testSession, "session does not match for autocommit=1")
 	if got, want := sbclookup.CommitCount.Get(), startCount; got != want {
 		t.Errorf("Commit count: %d, want %d", got, want)
 	}
@@ -1025,10 +1021,8 @@ func TestExecutorUse(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		wantSession := &vtgatepb.Session{Autocommit: true, TargetString: want[i]}
-		if !proto.Equal(session.Session, wantSession) {
-			t.Errorf("%s: %v, want %v", stmt, session.Session, wantSession)
-		}
+		wantSession := &vtgatepb.Session{Autocommit: true, TargetString: want[i], RowCount: -1}
+		utils.MustMatch(t, wantSession, session.Session, "session does not match")
 	}
 
 	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{}), "use 1", nil)
