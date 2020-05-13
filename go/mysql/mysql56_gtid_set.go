@@ -366,18 +366,14 @@ func (set Mysql56GTIDSet) Union(other GTIDSet) GTIDSet {
 		// While our stacks have intervals to process, do work.
 		for len(s1) != 0 || len(s2) != 0 {
 			// Find which intervals list has earliest start.
-			if intervals[0].start <= otherIntervals[0].start {
-				nextInterval = intervals[0]
-				if len(s1) != 0 {
-					// Progress pointer since this stack has earliest.
-					s1 = s1[1:]
-				}
+			if len(s2) == 0 || (len(s1) != 0 && s1[0].start <= s2[0].start) {
+				nextInterval = s1[0]
+				// Progress pointer since this stack has earliest.
+				s1 = s1[1:]
 			} else {
-				nextInterval = otherIntervals[0]
-				if len(s2) != 0 {
-					// Progress pointer since this stack has earliest.
-					s2 = s2[1:]
-				}
+				nextInterval = s2[0]
+				// Progress pointer since this stack has earliest.
+				s2 = s2[1:]
 			}
 
 			if len(newIntervals) == 0 {
