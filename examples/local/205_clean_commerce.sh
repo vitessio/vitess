@@ -19,8 +19,5 @@
 
 source ./env.sh
 
-vtctlclient SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 rdonly
-vtctlclient SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 replica
-vtctlclient SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 master
-vtctlclient ApplySchema -sql-file drop_commerce_tables.sql commerce
-vtctlclient ApplyRoutingRules -rules='{}'
+vtctlclient DropSources customer.commerce2customer
+
