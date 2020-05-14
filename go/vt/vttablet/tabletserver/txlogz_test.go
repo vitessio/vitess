@@ -51,7 +51,7 @@ func testHandler(req *http.Request, t *testing.T) {
 	if !strings.Contains(response.Body.String(), "error") {
 		t.Fatalf("should show an error page since transaction log format is invalid.")
 	}
-	txConn := &DedicatedConnection{
+	txConn := &StatefulConnection{
 		ConnID: 123456,
 		TxProps: &TxProperties{
 			EffectiveCaller: callerid.NewEffectiveCallerID("effective-caller", "component", "subcomponent"),

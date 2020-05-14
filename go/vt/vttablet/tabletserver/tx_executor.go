@@ -51,7 +51,7 @@ func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 	defer txe.te.env.Stats().QueryTimings.Record("PREPARE", time.Now())
 	txe.logStats.TransactionID = transactionID
 
-	conn, err := txe.te.txPool.GetAndBlock(transactionID, "for prepare")
+	conn, err := txe.te.txPool.GetAndLock(transactionID, "for prepare")
 	if err != nil {
 		return err
 	}
@@ -223,7 +223,7 @@ func (txe *TxExecutor) StartCommit(transactionID int64, dtid string) error {
 	defer txe.te.env.Stats().QueryTimings.Record("START_COMMIT", time.Now())
 	txe.logStats.TransactionID = transactionID
 
-	conn, err := txe.te.txPool.GetAndBlock(transactionID, "for 2pc commit")
+	conn, err := txe.te.txPool.GetAndLock(transactionID, "for 2pc commit")
 	if err != nil {
 		return err
 	}

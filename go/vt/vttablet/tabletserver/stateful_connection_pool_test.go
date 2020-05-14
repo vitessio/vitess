@@ -49,12 +49,12 @@ func TestActivePoolClientRowsFound(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, startFoundRowsSize-1, pool.conns.Available(), "foundRows pool not used")
 
-	conn, err := pool.Get(id1, "reason")
+	conn, err := pool.GetAndLock(id1, "reason")
 	require.NoError(t, err)
 	conn.Release(tx.TxClose)
 	assert.Equal(t, startNormalSize, pool.conns.Available(), "default pool not restored after release")
 
-	conn, err = pool.Get(id2, "reason")
+	conn, err = pool.GetAndLock(id2, "reason")
 	require.NoError(t, err)
 	conn.Release(tx.TxClose)
 	assert.Equal(t, startFoundRowsSize, pool.conns.Available(), "default pool not restored after release")
@@ -68,10 +68,10 @@ func TestActivePoolForAllTxProps(t *testing.T) {
 	id1, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, noOp)
 
 	require.NoError(t, err)
-	conn1, err := pool.Get(id1, "reason")
+	conn1, err := pool.GetAndLock(id1, "reason")
 	require.NoError(t, err)
 	conn1.TxProps = &TxProperties{}
-	conn1.Unblock()
+	conn1.Unlock()
 
 	id2, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, noOp)
 	require.NoError(t, err)
@@ -79,22 +79,22 @@ func TestActivePoolForAllTxProps(t *testing.T) {
 
 	id3, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, noOp)
 	require.NoError(t, err)
-	conn3, err := pool.Get(id3, "reason")
+	conn3, err := pool.GetAndLock(id3, "reason")
 	conn3.TxProps = &TxProperties{}
 	require.NoError(t, err)
-	conn3.Unblock()
+	conn3.Unlock()
 
 	pool.ForAllTxProperties(func(p *TxProperties) {
 		p.LogToFile = true
 	})
 
-	conn1, err = pool.Get(id1, "reason")
+	conn1, err = pool.GetAndLock(id1, "reason")
 	require.NoError(t, err)
 	require.True(t, conn1.TxProps.LogToFile, "connection missed")
-	conn2, err := pool.Get(id2, "reason")
+	conn2, err := pool.GetAndLock(id2, "reason")
 	require.NoError(t, err)
 	require.Nil(t, conn2.TxProps)
-	conn3, err = pool.Get(id3, "reason")
+	conn3, err = pool.GetAndLock(id3, "reason")
 	require.NoError(t, err)
 	require.True(t, conn3.TxProps.LogToFile, "connection missed")
 }
@@ -104,14 +104,14 @@ func TestActivePoolGetConnNonExistentTransaction(t *testing.T) {
 	defer db.Close()
 	pool := newActivePool()
 	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-	_, err := pool.Get(12345, "for query")
+	_, err := pool.GetAndLock(12345, "for query")
 	require.EqualError(t, err, "not found")
 }
 
-func noOp(*DedicatedConnection) error { return nil }
+func noOp(*StatefulConnection) error { return nil }
 
-func newActivePool() *ActivePool {
+func newActivePool() *StatefulConnectionPool {
 	env := newEnv("ActivePoolTest")
 
-	return NewActivePool(env)
+	return NewStatefulConnPool(env)
 }
