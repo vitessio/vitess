@@ -222,12 +222,12 @@ func (gtidSet MariadbGTIDSet) Union(other GTIDSet) GTIDSet {
 
 	// Create a map of Domain to GTID for efficient lookup when adding.
 	mySet := make(map[uint32]*MariadbGTID)
-	for i, _ := range gtidSet {
+	for i := range gtidSet {
 		gtid := &gtidSet[i]
 		mySet[gtid.Domain] = gtid
 	}
 
-	for i, _ := range mdbOther {
+	for i := range mdbOther {
 		otherGtid := &mdbOther[i]
 		if myGtid, ok := mySet[otherGtid.Domain]; ok {
 			if otherGtid.Sequence > myGtid.Sequence {
