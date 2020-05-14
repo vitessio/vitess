@@ -57,13 +57,9 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Normal close with timeout wait.
 	te.open()
-	c, beginSQL, err := te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if beginSQL != "begin" {
-		t.Errorf("beginSQL: %q, want 'begin'", beginSQL)
-	}
+	c, beginSQL, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	require.Equal(t, "begin", beginSQL)
 	c.Unlock()
 	start = time.Now()
 	te.close(false)
@@ -73,7 +69,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close.
 	te.open()
-	c, _, err = te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
+	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +83,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period.
 	te.shutdownGracePeriod = 250 * time.Millisecond
 	te.open()
-	c, _, err = te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
+	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +100,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period, but pool gets empty early.
 	te.shutdownGracePeriod = 250 * time.Millisecond
 	te.open()
-	c, _, err = te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
+	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,10 +124,8 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close, but connection is in use.
 	te.open()
-	c, _, err = te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
 	go func() {
 		time.Sleep(100 * time.Millisecond)
 		te.txPool.LocalConclude(ctx, c)

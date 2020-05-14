@@ -241,7 +241,12 @@ func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions, 
 	te.stateLock.Unlock()
 
 	defer te.beginRequests.Done()
-	return te.txPool.Begin(ctx, options)
+	conn, beginSQL, err := te.txPool.Begin(ctx, options)
+	if err != nil {
+		return 0, "", err
+	}
+	defer conn.Unlock()
+	return conn.ConnID, beginSQL, err
 }
 
 // Commit commits the specified transaction.
@@ -428,7 +433,7 @@ outer:
 		if txid > maxid {
 			maxid = txid
 		}
-		conn, _, err := te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
+		conn, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{})
 		if err != nil {
 			allErr.RecordError(err)
 			continue

@@ -150,7 +150,7 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 		qre.options = &querypb.ExecuteOptions{}
 	}
 	qre.options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
-	conn, _, err := qre.tsv.te.txPool.LocalBegin(qre.ctx, qre.options)
+	conn, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +160,7 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 }
 
 func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
-	conn, beginSQL, err := qre.tsv.te.txPool.LocalBegin(qre.ctx, qre.options)
+	conn, beginSQL, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options)
 	if err != nil {
 		return nil, err
 	}

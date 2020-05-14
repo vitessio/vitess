@@ -68,7 +68,7 @@ func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 		return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "prepare failed for transaction %d: %v", transactionID, err)
 	}
 
-	localConn, _, err := txe.te.txPool.LocalBegin(txe.ctx, &querypb.ExecuteOptions{})
+	localConn, _, err := txe.te.txPool.Begin(txe.ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		return err
 	}
@@ -130,7 +130,7 @@ func (txe *TxExecutor) CommitPrepared(dtid string) error {
 func (txe *TxExecutor) markFailed(ctx context.Context, dtid string) {
 	txe.te.env.Stats().InternalErrors.Add("TwopcCommit", 1)
 	txe.te.preparedPool.SetFailed(dtid)
-	conn, _, err := txe.te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
+	conn, _, err := txe.te.txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		log.Errorf("markFailed: Begin failed for dtid %s: %v", dtid, err)
 		return
@@ -170,7 +170,7 @@ func (txe *TxExecutor) RollbackPrepared(dtid string, originalID int64) error {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
 	defer txe.te.env.Stats().QueryTimings.Record("ROLLBACK_PREPARED", time.Now())
-	conn, _, err := txe.te.txPool.LocalBegin(txe.ctx, &querypb.ExecuteOptions{})
+	conn, _, err := txe.te.txPool.Begin(txe.ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		goto returnConn
 	}
@@ -200,7 +200,7 @@ func (txe *TxExecutor) CreateTransaction(dtid string, participants []*querypb.Ta
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
 	defer txe.te.env.Stats().QueryTimings.Record("CREATE_TRANSACTION", time.Now())
-	conn, _, err := txe.te.txPool.LocalBegin(txe.ctx, &querypb.ExecuteOptions{})
+	conn, _, err := txe.te.txPool.Begin(txe.ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		return err
 	}
@@ -250,7 +250,7 @@ func (txe *TxExecutor) SetRollback(dtid string, transactionID int64) error {
 		txe.te.txPool.Rollback(txe.ctx, transactionID)
 	}
 
-	conn, _, err := txe.te.txPool.LocalBegin(txe.ctx, &querypb.ExecuteOptions{})
+	conn, _, err := txe.te.txPool.Begin(txe.ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		return err
 	}
@@ -277,7 +277,7 @@ func (txe *TxExecutor) ConcludeTransaction(dtid string) error {
 	}
 	defer txe.te.env.Stats().QueryTimings.Record("RESOLVE", time.Now())
 
-	conn, _, err := txe.te.txPool.LocalBegin(txe.ctx, &querypb.ExecuteOptions{})
+	conn, _, err := txe.te.txPool.Begin(txe.ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		return err
 	}
