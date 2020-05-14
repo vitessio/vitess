@@ -58,17 +58,17 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	if beginSQL != "begin" {
 		t.Errorf("beginSQL got %q want 'begin'", beginSQL)
 	}
-	txConn, err := txPool.GetAndBlock(transactionID, "for query")
+	txConn, err := txPool.GetAndLock(transactionID, "for query")
 	require.NoError(t, err)
 	txConn.TxProps.RecordQuery(sql)
 	_, _ = txConn.Exec(ctx, sql, 1, true)
-	txConn.Unblock()
+	txConn.Unlock()
 
-	commitSQL, err := txPool.Commit(ctx, transactionID)
+	conn, err := txPool.GetAndLock(transactionID, "reason")
 	require.NoError(t, err)
-	if commitSQL != "commit" {
-		t.Errorf("commitSQL got %q want 'commit'", commitSQL)
-	}
+	commitSQL, err := txPool.LocalCommit(ctx, conn)
+	require.NoError(t, err)
+	require.Equal(t, "commit", commitSQL)
 }
 
 func TestTxPoolExecuteRollback(t *testing.T) {
@@ -88,12 +88,12 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 	if beginSQL != "begin" {
 		t.Errorf("beginSQL got %q want 'begin'", beginSQL)
 	}
-	txConn, err := txPool.GetAndBlock(transactionID, "for query")
+	txConn, err := txPool.GetAndLock(transactionID, "for query")
 	require.NoError(t, err)
 	defer txPool.Rollback(ctx, transactionID)
 	txConn.TxProps.RecordQuery(sql)
 	_, err = txConn.Exec(ctx, sql, 1, true)
-	txConn.Unblock()
+	txConn.Unlock()
 	require.NoError(t, err)
 }
 
@@ -111,14 +111,14 @@ func TestTxPoolRollbackNonBusy(t *testing.T) {
 	require.NoError(t, err)
 	_, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
-	conn1, err := txPool.GetAndBlock(txid1, "for query")
+	conn1, err := txPool.GetAndLock(txid1, "for query")
 	require.NoError(t, err)
 	// This should rollback only txid2.
 	txPool.RollbackNonBusy(ctx)
 	if sz := txPool.activePool.active.Size(); sz != 1 {
 		t.Errorf("txPool.active.Size(): %d, want 1", sz)
 	}
-	conn1.Unblock()
+	conn1.Unlock()
 	// This should rollback txid1.
 	txPool.RollbackNonBusy(ctx)
 	if sz := txPool.activePool.active.Size(); sz != 0 {
@@ -188,12 +188,12 @@ func addQuery(ctx context.Context, sql string, txPool *TxPool, workload querypb.
 	if err != nil {
 		return 0, err
 	}
-	txConn, err := txPool.GetAndBlock(transactionID, "for query")
+	txConn, err := txPool.GetAndLock(transactionID, "for query")
 	if err != nil {
 		return 0, err
 	}
 	txConn.Exec(ctx, sql, 1, false)
-	txConn.Unblock()
+	txConn.Unlock()
 	return transactionID, nil
 }
 
@@ -237,9 +237,7 @@ func TestTxPoolAutocommit(t *testing.T) {
 	// This test is meaningful because if txPool.Begin were to send a BEGIN statement to the connection, it will fatal
 	// because is not in the list of expected queries (i.e db.AddQuery hasn't been called).
 	txid, beginSQL, err := txPool.Begin(ctx, &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_AUTOCOMMIT})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	if beginSQL != "" {
 		t.Errorf("beginSQL got %q want ''", beginSQL)
 	}
@@ -413,13 +411,13 @@ func TestTxPoolRollbackFail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	txConn, err := txPool.GetAndBlock(transactionID, "for query")
+	txConn, err := txPool.GetAndLock(transactionID, "for query")
 	if err != nil {
 		t.Fatal(err)
 	}
 	txConn.TxProps.RecordQuery(sql)
 	_, err = txConn.Exec(ctx, sql, 1, true)
-	txConn.Unblock()
+	txConn.Unlock()
 	if err != nil {
 		t.Fatalf("got error: %v", err)
 	}
@@ -443,9 +441,9 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	txPool.Close()
 
 	assertErrorMatch := func(id int64, reason string) {
-		conn, err := txPool.GetAndBlock(id, "for query")
+		conn, err := txPool.GetAndLock(id, "for query")
 		if err == nil {
-			conn.Unblock()
+			conn.Unlock()
 			t.Fatalf("expected error, got nil")
 		}
 		want := fmt.Sprintf("transaction %v: ended at .* \\(%v\\)", id, reason)
@@ -486,13 +484,13 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 
 	txPool.SetTimeout(1 * time.Hour)
 	id, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{})
-	txc, err := txPool.GetAndBlock(id, "for close")
+	txc, err := txPool.GetAndLock(id, "for close")
 	if err != nil {
 		t.Fatalf("got error: %v", err)
 	}
 
 	txc.Close()
-	txc.Unblock()
+	txc.Unlock()
 
 	assertErrorMatch(id, "closed")
 }
@@ -522,7 +520,7 @@ func TestTxPoolExecFailDueToConnFail_Errno2006(t *testing.T) {
 	// Query is going to fail with connection error because the connection was closed.
 	sql := "alter table test_table add test_column int"
 	_, err = txConn.Exec(ctx, sql, 1, true)
-	txConn.Unblock()
+	txConn.Unlock()
 	if err == nil || !strings.Contains(err.Error(), "(errno 2006)") {
 		t.Fatalf("Exec must return connection error with MySQL errno 2006: %v", err)
 	}
@@ -559,7 +557,7 @@ func TestTxPoolExecFailDueToConnFail_Errno2013(t *testing.T) {
 	sql := "alter table test_table add test_column int"
 	db.AddQuery(sql, &sqltypes.Result{})
 	_, err = txConn.Exec(ctx, sql, 1, true)
-	txConn.Unblock()
+	txConn.Unlock()
 	if err == nil || !strings.Contains(err.Error(), "(errno 2013)") {
 		t.Fatalf("Exec must return connection error with MySQL errno 2013: %v", err)
 	}

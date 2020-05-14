@@ -33,9 +33,9 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-//ActivePool keeps track of currently and future active connections
+//StatefulConnectionPool keeps track of currently and future active connections
 //it's used whenever the session has some state that requires a dedicated connection
-type ActivePool struct {
+type StatefulConnectionPool struct {
 	// conns is the 'regular' pool. By default, connections
 	// are pulled from here for starting transactions.
 	conns *connpool.Pool
@@ -50,11 +50,11 @@ type ActivePool struct {
 	env           tabletenv.Env
 }
 
-//NewActivePool creates an ActivePool
-func NewActivePool(env tabletenv.Env) *ActivePool {
+//NewStatefulConnPool creates an ActivePool
+func NewStatefulConnPool(env tabletenv.Env) *StatefulConnectionPool {
 	config := env.Config()
 
-	return &ActivePool{
+	return &StatefulConnectionPool{
 		env:           env,
 		conns:         connpool.NewPool(env, "TransactionPool", config.TxPool),
 		foundRowsPool: connpool.NewPool(env, "FoundRowsPool", config.TxPool),
@@ -65,7 +65,7 @@ func NewActivePool(env tabletenv.Env) *ActivePool {
 
 // Open makes the TxPool operational. This also starts the transaction killer
 // that will kill long-running transactions.
-func (ap *ActivePool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
+func (ap *StatefulConnectionPool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 	log.Infof("Starting transaction id: %d", ap.lastID)
 	ap.conns.Open(appParams, dbaParams, appDebugParams)
 	foundRowsParam, _ := appParams.MysqlParams()
@@ -75,9 +75,9 @@ func (ap *ActivePool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connec
 }
 
 // Close closes the TxPool. A closed pool can be reopened.
-func (ap *ActivePool) Close() {
+func (ap *StatefulConnectionPool) Close() {
 	for _, v := range ap.active.GetOutdated(time.Duration(0), "for closing") {
-		conn := v.(*DedicatedConnection)
+		conn := v.(*StatefulConnection)
 		log.Warningf("killing transaction for shutdown: %s", conn.String())
 		ap.env.Stats().InternalErrors.Add("StrayTransactions", 1)
 		conn.Close()
@@ -90,7 +90,7 @@ func (ap *ActivePool) Close() {
 // AdjustLastID adjusts the last transaction id to be at least
 // as large as the input value. This will ensure that there are
 // no dtid collisions with future transactions.
-func (ap *ActivePool) AdjustLastID(id int64) {
+func (ap *StatefulConnectionPool) AdjustLastID(id int64) {
 	if current := ap.lastID.Get(); current < id {
 		log.Infof("Adjusting transaction id to: %d", id)
 		ap.lastID.Set(id)
@@ -99,37 +99,37 @@ func (ap *ActivePool) AdjustLastID(id int64) {
 
 // GetOutdated returns a list of connections that are older than age.
 // It does not return any connections that are in use.
-func (ap *ActivePool) GetOutdated(age time.Duration, purpose string) []*DedicatedConnection {
+func (ap *StatefulConnectionPool) GetOutdated(age time.Duration, purpose string) []*StatefulConnection {
 	return mapToTxConn(ap.active.GetOutdated(age, purpose))
 }
 
-func mapToTxConn(outdated []interface{}) []*DedicatedConnection {
-	result := make([]*DedicatedConnection, len(outdated))
+func mapToTxConn(outdated []interface{}) []*StatefulConnection {
+	result := make([]*StatefulConnection, len(outdated))
 	for i, el := range outdated {
-		result[i] = el.(*DedicatedConnection)
+		result[i] = el.(*StatefulConnection)
 	}
 	return result
 }
 
 // WaitForEmpty returns as soon as the pool becomes empty
-func (ap *ActivePool) WaitForEmpty() {
+func (ap *StatefulConnectionPool) WaitForEmpty() {
 	ap.active.WaitForEmpty()
 }
 
-// Get locks the connection for use. It accepts a purpose as a string.
+// GetAndLock locks the connection for use. It accepts a purpose as a string.
 // If it cannot be found, it returns a "not found" error. If in use,
 // it returns a "in use: purpose" error.
-func (ap *ActivePool) Get(id int64, reason string) (*DedicatedConnection, error) {
+func (ap *StatefulConnectionPool) GetAndLock(id int64, reason string) (*StatefulConnection, error) {
 	conn, err := ap.active.Get(id, reason)
 	if err != nil {
 		return nil, err
 	}
-	return conn.(*DedicatedConnection), nil
+	return conn.(*StatefulConnection), nil
 }
 
-//NewConn creates a new DedicatedConnection. It will be created from either the normal pool or
+//NewConn creates a new StatefulConnection. It will be created from either the normal pool or
 //the found_rows pool, depending on the options provided
-func (ap *ActivePool) NewConn(ctx context.Context, options *querypb.ExecuteOptions, f func(*DedicatedConnection) error) (tx.ConnID, error) {
+func (ap *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.ExecuteOptions, f func(*StatefulConnection) error) (tx.ConnID, error) {
 	var conn *connpool.DBConn
 	var err error
 
@@ -144,7 +144,7 @@ func (ap *ActivePool) NewConn(ctx context.Context, options *querypb.ExecuteOptio
 
 	transactionID := ap.lastID.Add(1)
 
-	txConn := &DedicatedConnection{
+	txConn := &StatefulConnection{
 		dbConn: conn,
 		ConnID: transactionID,
 		pool:   ap,
@@ -169,7 +169,7 @@ func (ap *ActivePool) NewConn(ctx context.Context, options *querypb.ExecuteOptio
 }
 
 //ForAllTxProperties executes a function an every connection that has a not-nil TxProperties
-func (ap *ActivePool) ForAllTxProperties(f func(*TxProperties)) {
+func (ap *StatefulConnectionPool) ForAllTxProperties(f func(*TxProperties)) {
 	for _, connection := range mapToTxConn(ap.active.GetAll()) {
 		props := connection.TxProps
 		if props != nil {
@@ -179,16 +179,16 @@ func (ap *ActivePool) ForAllTxProperties(f func(*TxProperties)) {
 }
 
 // Unregister forgets the specified connection.  If the connection is not present, it's ignored.
-func (ap *ActivePool) unregister(id tx.ConnID, reason string) {
+func (ap *StatefulConnectionPool) unregister(id tx.ConnID, reason string) {
 	ap.active.Unregister(id, reason)
 }
 
 //markAsNotInUse marks the connection as not in use at the moment
-func (ap *ActivePool) markAsNotInUse(id tx.ConnID) {
+func (ap *StatefulConnectionPool) markAsNotInUse(id tx.ConnID) {
 	ap.active.Put(id)
 }
 
 // Capacity returns the pool capacity.
-func (ap *ActivePool) Capacity() int {
+func (ap *StatefulConnectionPool) Capacity() int {
 	return int(ap.conns.Capacity())
 }

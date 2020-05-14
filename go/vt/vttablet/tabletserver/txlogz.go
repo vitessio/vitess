@@ -111,9 +111,9 @@ func txlogzHandler(w http.ResponseWriter, req *http.Request) {
 	for i := 0; i < limit; i++ {
 		select {
 		case out := <-ch:
-			txc, ok := out.(*DedicatedConnection)
+			txc, ok := out.(*StatefulConnection)
 			if !ok {
-				err := fmt.Errorf("unexpected value in %s: %#v (expecting value of type %T)", tabletenv.TxLogger.Name(), out, &DedicatedConnection{})
+				err := fmt.Errorf("unexpected value in %s: %#v (expecting value of type %T)", tabletenv.TxLogger.Name(), out, &StatefulConnection{})
 				io.WriteString(w, `<tr class="error">`)
 				io.WriteString(w, err.Error())
 				io.WriteString(w, "</tr>")
@@ -130,7 +130,7 @@ func txlogzHandler(w http.ResponseWriter, req *http.Request) {
 				level = "high"
 			}
 			tmplData := struct {
-				*DedicatedConnection
+				*StatefulConnection
 				Duration   float64
 				ColorLevel string
 			}{txc, duration, level}

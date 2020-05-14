@@ -248,7 +248,16 @@ func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions, 
 func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Commit")
 	defer span.Finish()
-	return te.txPool.Commit(ctx, transactionID)
+	conn, err := te.txPool.GetAndLock(transactionID, "for commit")
+	if err != nil {
+		return "", err
+	}
+	defer conn.Release(tx.TxCommit)
+	queries, err := te.txPool.LocalCommit(ctx, conn)
+	if err != nil {
+		return "", err
+	}
+	return queries, nil
 }
 
 // Rollback rolls back the specified transaction.

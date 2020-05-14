@@ -74,7 +74,7 @@ var (
 type TxPool struct {
 	env tabletenv.Env
 
-	activePool         *ActivePool
+	activePool         *StatefulConnectionPool
 	transactionTimeout sync2.AtomicDuration
 	ticks              *timer.Timer
 	limiter            txlimiter.TxLimiter
@@ -90,7 +90,7 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 	transactionTimeout := time.Duration(config.Oltp.TxTimeoutSeconds * 1e9)
 	axp := &TxPool{
 		env:                env,
-		activePool:         NewActivePool(env),
+		activePool:         NewStatefulConnPool(env),
 		transactionTimeout: sync2.NewAtomicDuration(transactionTimeout),
 		ticks:              timer.NewTimer(transactionTimeout / 10),
 		limiter:            limiter,
@@ -163,7 +163,7 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (t
 		return 0, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
 	}
 
-	txConn, err := tp.activePool.NewConn(ctx, options, func(txConn *DedicatedConnection) error {
+	txConn, err := tp.activePool.NewConn(ctx, options, func(txConn *StatefulConnection) error {
 		autocommitTransaction := false
 		if queries, ok := txIsolations[options.GetTransactionIsolation()]; ok {
 			if queries.setIsolationLevel != "" {
@@ -214,7 +214,7 @@ func (tp *TxPool) NewTxProps(immediateCaller *querypb.VTGateCallerID, effectiveC
 func (tp *TxPool) Reserve(ctx context.Context, options *querypb.ExecuteOptions, setStatements []string) (tx.ConnID, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Reserve")
 	defer span.Finish()
-	txConn, err := tp.activePool.NewConn(ctx, options, func(txConn *DedicatedConnection) error {
+	txConn, err := tp.activePool.NewConn(ctx, options, func(txConn *StatefulConnection) error {
 		txConn.dbConn.Taint()
 		for _, statement := range setStatements {
 			_, err := txConn.Exec(ctx, statement, 10, false)
@@ -222,7 +222,7 @@ func (tp *TxPool) Reserve(ctx context.Context, options *querypb.ExecuteOptions, 
 				return err
 			}
 		}
-		txConn.reserved = true
+		txConn.tainted = true
 		return nil
 	})
 	if err != nil {
@@ -232,10 +232,10 @@ func (tp *TxPool) Reserve(ctx context.Context, options *querypb.ExecuteOptions, 
 	return txConn, nil
 }
 
-// GetAndBlock fetches the connection associated to the transactionID and blocks it from concurrent use
-// You must call Unblock on TxConnection once done.
-func (tp *TxPool) GetAndBlock(connID tx.ConnID, reason string) (*DedicatedConnection, error) {
-	conn, err := tp.activePool.Get(connID, reason)
+// GetAndLock fetches the connection associated to the transactionID and blocks it from concurrent use
+// You must call Unlock on TxConnection once done.
+func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (*StatefulConnection, error) {
+	conn, err := tp.activePool.GetAndLock(connID, reason)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", connID, err)
 	}
@@ -246,7 +246,7 @@ func (tp *TxPool) GetAndBlock(connID tx.ConnID, reason string) (*DedicatedConnec
 func (tp *TxPool) Commit(ctx context.Context, connID tx.ConnID) (string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Commit")
 	defer span.Finish()
-	conn, err := tp.GetAndBlock(connID, "for commit")
+	conn, err := tp.GetAndLock(connID, "for commit")
 	if err != nil {
 		return "", err
 	}
@@ -258,7 +258,7 @@ func (tp *TxPool) Rollback(ctx context.Context, connID tx.ConnID) error {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Rollback")
 	defer span.Finish()
 
-	conn, err := tp.GetAndBlock(connID, "for rollback")
+	conn, err := tp.GetAndLock(connID, "for rollback")
 	if err != nil {
 		return err
 	}
@@ -268,7 +268,7 @@ func (tp *TxPool) Rollback(ctx context.Context, connID tx.ConnID) error {
 // LocalBegin is equivalent to Begin->Get.
 // It's used for executing transactions within a request. It's safe
 // to always call LocalConclude at the end.
-func (tp *TxPool) LocalBegin(ctx context.Context, options *querypb.ExecuteOptions) (*DedicatedConnection, string, error) {
+func (tp *TxPool) LocalBegin(ctx context.Context, options *querypb.ExecuteOptions) (*StatefulConnection, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.LocalBegin")
 	defer span.Finish()
 
@@ -276,12 +276,13 @@ func (tp *TxPool) LocalBegin(ctx context.Context, options *querypb.ExecuteOption
 	if err != nil {
 		return nil, "", err
 	}
-	conn, err := tp.GetAndBlock(transactionID, "for local query")
+	conn, err := tp.GetAndLock(transactionID, "for local query")
 	return conn, beginSQL, err
 }
 
-// LocalCommit is the commit function for LocalBegin.
-func (tp *TxPool) LocalCommit(ctx context.Context, txConn *DedicatedConnection) (string, error) {
+// LocalCommit commits the transaction on the connection. The connection will be either Release:ed or Unlock:ed,
+// depending on if the connection is tainted or not.
+func (tp *TxPool) LocalCommit(ctx context.Context, txConn *StatefulConnection) (string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.LocalCommit")
 	defer span.Finish()
 	defer tp.txComplete(txConn, tx.TxCommit)
@@ -298,7 +299,7 @@ func (tp *TxPool) LocalCommit(ctx context.Context, txConn *DedicatedConnection) 
 
 // LocalConclude concludes a transaction started by LocalBegin.
 // If the transaction was not previously concluded, it's rolled back.
-func (tp *TxPool) LocalConclude(ctx context.Context, conn *DedicatedConnection) {
+func (tp *TxPool) LocalConclude(ctx context.Context, conn *StatefulConnection) {
 	if conn.dbConn == nil {
 		return
 	}
@@ -307,7 +308,7 @@ func (tp *TxPool) LocalConclude(ctx context.Context, conn *DedicatedConnection) 
 	_ = tp.localRollback(ctx, conn)
 }
 
-func (tp *TxPool) localRollback(ctx context.Context, txConn *DedicatedConnection) error {
+func (tp *TxPool) localRollback(ctx context.Context, txConn *StatefulConnection) error {
 	if txConn.TxProps.Autocommit {
 		tp.txComplete(txConn, tx.TxCommit)
 		return nil
@@ -345,9 +346,9 @@ func (tp *TxPool) SetTimeout(timeout time.Duration) {
 	tp.ticks.SetInterval(timeout / 10)
 }
 
-func (tp *TxPool) txComplete(conn *DedicatedConnection, reason tx.ReleaseReason) {
+func (tp *TxPool) txComplete(conn *StatefulConnection, reason tx.ReleaseReason) {
 	tp.log(conn, reason)
-	if conn.reserved {
+	if conn.tainted {
 		conn.renewConnection()
 	} else {
 		conn.Release(reason)
@@ -356,7 +357,7 @@ func (tp *TxPool) txComplete(conn *DedicatedConnection, reason tx.ReleaseReason)
 	conn.txClean()
 }
 
-func (tp *TxPool) log(txc *DedicatedConnection, reason tx.ReleaseReason) {
+func (tp *TxPool) log(txc *StatefulConnection, reason tx.ReleaseReason) {
 	if txc.TxProps == nil {
 		return //Nothing to log as no transaction exists on this connection.
 	}

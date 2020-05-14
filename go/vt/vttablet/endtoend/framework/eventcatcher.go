@@ -44,12 +44,12 @@ func (tc *TxCatcher) Close() {
 
 // Next fetches the next captured transaction.
 // If the wait is longer than one second, it returns an error.
-func (tc *TxCatcher) Next() (*tabletserver.DedicatedConnection, error) {
+func (tc *TxCatcher) Next() (*tabletserver.StatefulConnection, error) {
 	event, err := tc.catcher.next()
 	if err != nil {
 		return nil, err
 	}
-	return event.(*tabletserver.DedicatedConnection), nil
+	return event.(*tabletserver.StatefulConnection), nil
 }
 
 // QueryCatcher allows you to capture and fetch queries that are being

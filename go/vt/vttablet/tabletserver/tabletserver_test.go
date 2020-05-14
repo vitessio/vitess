@@ -523,7 +523,7 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 	txid2, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
 	// This makes txid2 busy
-	conn2, err := tsv.te.txPool.GetAndBlock(txid2, "for query")
+	conn2, err := tsv.te.txPool.GetAndLock(txid2, "for query")
 	require.NoError(t, err)
 	ch := make(chan bool)
 	go func() {
