@@ -9,11 +9,11 @@ This document contains the summary of the commands to be run.
 ./101_initial_cluster.sh
 
 # Setup aliases
-source alias.source
+source env.sh
 
 # Insert and verify data
-mysql < ../common/insert_commerce_data.sql
-mysql --table < ../common/select_commerce_data.sql
+mysql commerce < ../common/insert_commerce_data.sql
+mysql commerce --table < ../common/select_commerce_data.sql
 
 # Bring up customer keyspace
 ./201_customer_tablets.sh

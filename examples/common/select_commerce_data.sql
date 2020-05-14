@@ -1,5 +1,3 @@
-\! echo 'Using commerce'
-use commerce;
 \! echo 'Customer'
 select * from customer;
 \! echo 'Product'

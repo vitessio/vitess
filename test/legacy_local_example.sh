@@ -30,20 +30,20 @@ unset VTROOT # ensure that the examples can run without VTROOT now.
 
 sleep 5 # Give vtgate time to really start.
 
-mysql -h 127.0.0.1 -P 15306 < ../common/insert_commerce_data.sql
-mysql -h 127.0.0.1 -P 15306 --table < ../common/select_commerce_data.sql
+mysql -h 127.0.0.1 -P 15306 commerce < ../common/insert_commerce_data.sql
+mysql -h 127.0.0.1 -P 15306 commerce --table < ../common/select_commerce_data.sql
 ./201_customer_keyspace.sh
 ./202_customer_tablets.sh
 ./203_vertical_split.sh
-mysql -h 127.0.0.1 -P 15306 --table < ../common/select_customer0_data.sql
+mysql -h 127.0.0.1 -P 15306 customer/0 --table < ../common/select_customer_data.sql
 
 ./204_vertical_migrate_replicas.sh
 ./205_vertical_migrate_master.sh
 # Expected to fail!
-mysql -h 127.0.0.1 -P 15306 --table < ../common/select_commerce_data.sql || echo "Blacklist working as expected"
+mysql -h 127.0.0.1 -P 15306 commerce --table < ../common/select_commerce_data.sql || echo "Blacklist working as expected"
 ./206_clean_commerce.sh
 # Expected to fail!
-mysql -h 127.0.0.1 -P 15306 --table < ../common/select_commerce_data.sql || echo "Tables missing as expected"
+mysql -h 127.0.0.1 -P 15306 commerce --table < ../common/select_commerce_data.sql || echo "Tables missing as expected"
 
 ./301_customer_sharded.sh
 ./302_new_shards.sh
@@ -57,15 +57,15 @@ for shard in "customer/-80" "customer/80-"; do
  done;
 done;
 
-mysql -h 127.0.0.1 -P 15306 --table < ../common/select_customer-80_data.sql
-mysql -h 127.0.0.1 -P 15306 --table < ../common/select_customer80-_data.sql
+mysql -h 127.0.0.1 -P 15306 --table customer/-80 < ../common/select_customer_data.sql
+mysql -h 127.0.0.1 -P 15306 --table customer/80- < ../common/select_customer_data.sql
 
 ./303_horizontal_split.sh
 
 ./304_migrate_replicas.sh
 ./305_migrate_master.sh
 
-mysql -h 127.0.0.1 -P 15306 --table < ../common/select_customer-80_data.sql
+mysql -h 127.0.0.1 -P 15306 --table customer/-80 < ../common/select_customer_data.sql
 
 ./401_teardown.sh
 

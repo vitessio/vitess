@@ -31,8 +31,8 @@ source ./env.sh # Required so that "mysql" works from alias
 
 sleep 5 # Give vtgate time to really start.
 
-mysql < ../common/insert_commerce_data.sql
-mysql --table < ../common/select_commerce_data.sql
+mysql commerce < ../common/insert_commerce_data.sql
+mysql commerce --table < ../common/select_commerce_data.sql
 
 ./201_customer_tablets.sh
 
@@ -51,13 +51,12 @@ sleep 3 # required for now
 
 ./204_switch_writes.sh
 
-mysql --table < ../common/select_customer0_data.sql
+mysql customer/0 --table < ../common/select_customer_data.sql
 # Expected to fail!
-mysql --table < ../common/select_commerce_data.sql || echo "Blacklist working as expected"
+mysql commerce/0 --table < ../common/select_commerce_data.sql || echo "Blacklist working as expected"
 ./205_clean_commerce.sh
 # Expected to fail!
-mysql --table < ../common/select_commerce_data.sql || echo "Tables missing as expected"
-
+mysql commerce/0 --table < ../common/select_commerce_data.sql || echo "Tables missing as expected"
 
 ./301_customer_sharded.sh
 ./302_new_shards.sh
@@ -78,8 +77,8 @@ sleep 3 # TODO: Required for now!
 ./304_switch_reads.sh
 ./305_switch_writes.sh
 
-mysql --table < ../common/select_customer-80_data.sql
-mysql --table < ../common/select_customer80-_data.sql
+mysql customer/-80 --table < ../common/select_customer_data.sql
+mysql customer/80- --table < ../common/select_customer_data.sql
 
 ./401_teardown.sh
 

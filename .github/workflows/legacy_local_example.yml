@@ -1,4 +1,4 @@
-name: local_example
+name: legacy_local_example
 on: [push, pull_request]
 jobs:
 
