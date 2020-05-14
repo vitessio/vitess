@@ -111,5 +111,3 @@ var txNames = map[ReleaseReason]string{
 	TxKill:       "kill",
 	ConnInitFail: "initFail",
 }
-
-func DoNothing(TransactionalConn) error { return nil }
