@@ -472,3 +472,65 @@ func TestMariaGTIDSetAddGTIDDifferentDomain(t *testing.T) {
 		t.Errorf("%#v.AddGTID(%#v) = %v, want %v", input1, input2, got, want)
 	}
 }
+
+func TestMariaGTIDSetUnion(t *testing.T) {
+	set1 := MariadbGTIDSet{
+		MariadbGTID{Domain: 3, Server: 1, Sequence: 1},
+		MariadbGTID{Domain: 4, Server: 1, Sequence: 2},
+		MariadbGTID{Domain: 5, Server: 1, Sequence: 3},
+	}
+	set2 := MariadbGTIDSet{
+		MariadbGTID{Domain: 3, Server: 1, Sequence: 2},
+		MariadbGTID{Domain: 4, Server: 1, Sequence: 1},
+		MariadbGTID{Domain: 5, Server: 1, Sequence: 4},
+	}
+
+	got := set1.Union(set2)
+
+	want := MariadbGTIDSet{
+		MariadbGTID{Domain: 3, Server: 1, Sequence: 2},
+		MariadbGTID{Domain: 4, Server: 1, Sequence: 2},
+		MariadbGTID{Domain: 5, Server: 1, Sequence: 4},
+	}
+
+	if !got.Equal(want) {
+		t.Errorf("set1: %#v, set1.Union(%#v) = %#v, want %#v", set1, set2, got, want)
+	}
+}
+
+func TestMariaGTIDSetUnionNewDomain(t *testing.T) {
+	set1 := MariadbGTIDSet{
+		MariadbGTID{Domain: 3, Server: 1, Sequence: 1},
+		MariadbGTID{Domain: 4, Server: 1, Sequence: 2},
+		MariadbGTID{Domain: 5, Server: 1, Sequence: 3},
+	}
+	set2 := MariadbGTIDSet{
+		MariadbGTID{Domain: 3, Server: 1, Sequence: 2},
+		MariadbGTID{Domain: 4, Server: 1, Sequence: 1},
+		MariadbGTID{Domain: 5, Server: 1, Sequence: 4},
+		MariadbGTID{Domain: 6, Server: 1, Sequence: 7},
+	}
+
+	got := set1.Union(set2)
+
+	want := MariadbGTIDSet{
+		MariadbGTID{Domain: 3, Server: 1, Sequence: 2},
+		MariadbGTID{Domain: 4, Server: 1, Sequence: 2},
+		MariadbGTID{Domain: 5, Server: 1, Sequence: 4},
+		MariadbGTID{Domain: 6, Server: 1, Sequence: 7},
+	}
+
+	if !got.Equal(want) {
+		t.Errorf("set1: %#v, set1.Union(%#v) = %#v, want %#v", set1, set2, got, want)
+	}
+
+	switch g := got.(type) {
+	case MariadbGTIDSet:
+		// Enforce order of want. Results should be sorted by domain.
+		if g[0] != want[0] || g[1] != want[1] || g[2] != want[2] || g[3] != want[3] {
+			t.Error("Set was not sorted by domain when returned.")
+		}
+	default:
+		t.Error("Union result was not of type MariadbGTIDSet.")
+	}
+}

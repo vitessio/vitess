@@ -942,7 +942,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	}
 	wg.Wait()
 
-	// Check we stil have the topology lock.
+	// Check we still have the topology lock.
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
 		return fmt.Errorf("lost topology lock, aborting: %v", err)
 	}

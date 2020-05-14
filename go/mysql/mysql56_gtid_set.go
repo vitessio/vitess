@@ -334,6 +334,75 @@ func (set Mysql56GTIDSet) AddGTID(gtid GTID) GTIDSet {
 	return newSet
 }
 
+// Union implements GTIDSet.Union().
+func (set Mysql56GTIDSet) Union(other GTIDSet) GTIDSet {
+	if set == nil && other != nil {
+		return other
+	}
+	if set == nil || other == nil {
+		return set
+	}
+	mydbOther, ok := other.(Mysql56GTIDSet)
+	if !ok {
+		return set
+	}
+
+	// Make a copy and add the new GTID in the proper place.
+	// This function is not supposed to modify the original set.
+	newSet := make(Mysql56GTIDSet)
+
+	for otherSID, otherIntervals := range mydbOther {
+		intervals, ok := set[otherSID]
+		if !ok {
+			// No matching server id, so we must add it from other set.
+			newSet[otherSID] = otherIntervals
+			continue
+		}
+
+		// Found server id match between sets, so now we need to add each interval.
+		s1 := intervals
+		s2 := otherIntervals
+		var nextInterval interval
+		var newIntervals []interval
+
+		// While our stacks have intervals to process, do work.
+		for popInterval(&nextInterval, &s1, &s2) {
+			if len(newIntervals) == 0 {
+				newIntervals = append(newIntervals, nextInterval)
+				continue
+			}
+
+			activeInterval := &newIntervals[len(newIntervals)-1]
+
+			if nextInterval.end <= activeInterval.end {
+				// We hit an interval whose start was after or equal to the previous interval's start, but whose
+				// end is prior to the active intervals end. Skip to next interval.
+				continue
+			}
+
+			if nextInterval.start > activeInterval.end+1 {
+				// We found a gap, so we need to start a new interval.
+				newIntervals = append(newIntervals, nextInterval)
+				continue
+			}
+
+			// Extend our active interval.
+			activeInterval.end = nextInterval.end
+		}
+
+		newSet[otherSID] = newIntervals
+	}
+
+	// Add any intervals from SIDs that exist in caller set, but don't exist in other set.
+	for sid, intervals := range set {
+		if _, ok := newSet[sid]; !ok {
+			newSet[sid] = intervals
+		}
+	}
+
+	return newSet
+}
+
 // SIDBlock returns the binary encoding of a MySQL 5.6 GTID set as expected
 // by internal commands that refer to an "SID block".
 //
@@ -405,6 +474,28 @@ func NewMysql56GTIDSetFromSIDBlock(data []byte) (Mysql56GTIDSet, error) {
 		}
 	}
 	return set, nil
+}
+
+// popInterval will look at the two pre-sorted interval stacks supplied, and if at least one of the stacks is non-empty
+// will mutate the destination interval with the next earliest interval based on start sequence.
+// popInterval will return true if we were able to pop, or false if both stacks are now empty.
+func popInterval(dst *interval, s1, s2 *[]interval) bool {
+	if len(*s1) == 0 && len(*s2) == 0 {
+		return false
+	}
+
+	// Find which intervals list has earliest start.
+	if len(*s2) == 0 || (len(*s1) != 0 && (*s1)[0].start <= (*s2)[0].start) {
+		*dst = (*s1)[0]
+		// Progress pointer since this stack has earliest.
+		*s1 = (*s1)[1:]
+	} else {
+		*dst = (*s2)[0]
+		// Progress pointer since this stack has earliest.
+		*s2 = (*s2)[1:]
+	}
+
+	return true
 }
 
 func init() {
