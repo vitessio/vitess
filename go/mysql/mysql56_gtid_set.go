@@ -477,10 +477,6 @@ func NewMysql56GTIDSetFromSIDBlock(data []byte) (Mysql56GTIDSet, error) {
 // will mutate the destination interval with the next earliest interval based on start sequence.
 // popInterval will return true if we were able to pop, or false if both stacks are now empty.
 func popInterval(dst *interval, s1, s2 *[]interval) bool {
-	if s1 == nil || s2 == nil {
-		return false
-	}
-
 	if len(*s1) == 0 && len(*s2) == 0 {
 		return false
 	}
