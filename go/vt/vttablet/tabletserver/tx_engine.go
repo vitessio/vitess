@@ -217,7 +217,7 @@ func (te *TxEngine) AcceptReadOnly() error {
 // statement(s) used to execute the begin (if any).
 //
 // Subsequent statements can access the connection through the transaction id.
-func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions, exec tx.FuncWithConnection) (tx.ConnID, string, error) {
+func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) (tx.ConnID, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Begin")
 	defer span.Finish()
 	te.stateLock.Lock()
@@ -425,8 +425,8 @@ func (te *TxEngine) prepareFromRedo() error {
 
 	maxid := int64(0)
 outer:
-	for _, tx := range prepared {
-		txid, err := dtids.TransactionID(tx.Dtid)
+	for _, preparedTx := range prepared {
+		txid, err := dtids.TransactionID(preparedTx.Dtid)
 		if err != nil {
 			log.Errorf("Error extracting transaction ID from ditd: %v", err)
 		}
@@ -438,7 +438,7 @@ outer:
 			allErr.RecordError(err)
 			continue
 		}
-		for _, stmt := range tx.Queries {
+		for _, stmt := range preparedTx.Queries {
 			conn.TxProps.RecordQuery(stmt)
 			_, err := conn.Exec(ctx, stmt, 1, false)
 			if err != nil {
@@ -449,21 +449,21 @@ outer:
 		}
 		// We should not use the external Prepare because
 		// we don't want to write again to the redo log.
-		err = te.preparedPool.Put(conn, tx.Dtid)
+		err = te.preparedPool.Put(conn, preparedTx.Dtid)
 		if err != nil {
 			allErr.RecordError(err)
 			continue
 		}
 	}
-	for _, tx := range failed {
-		txid, err := dtids.TransactionID(tx.Dtid)
+	for _, preparedTx := range failed {
+		txid, err := dtids.TransactionID(preparedTx.Dtid)
 		if err != nil {
 			log.Errorf("Error extracting transaction ID from ditd: %v", err)
 		}
 		if txid > maxid {
 			maxid = txid
 		}
-		te.preparedPool.SetFailed(tx.Dtid)
+		te.preparedPool.SetFailed(preparedTx.Dtid)
 	}
 	te.txPool.AdjustLastID(maxid)
 	log.Infof("Prepared %d transactions, and registered %d failures.", len(prepared), len(failed))

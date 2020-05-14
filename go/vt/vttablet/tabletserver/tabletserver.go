@@ -752,7 +752,7 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, opti
 				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
 			}
 			var beginSQL string
-			transactionID, beginSQL, err = tsv.te.Begin(ctx, options, tx.DoNothing)
+			transactionID, beginSQL, err = tsv.te.Begin(ctx, options)
 			logStats.TransactionID = transactionID
 
 			// Record the actual statements that were executed in the logStats.

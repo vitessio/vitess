@@ -43,46 +43,36 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// These consts identify how a transaction was resolved.
-//const (
-//	TxClose      = "close"
-//	TxCommit     = "commit"
-//	TxRollback   = "rollback"
-//	TxKill       = "kill"
-//	ConnInitFail = "initFail"
-//)
-
 const txLogInterval = 1 * time.Minute
 
-type queries struct {
-	setIsolationLevel string
-	openTransaction   string
+var txIsolations = map[querypb.ExecuteOptions_TransactionIsolation]queries{
+	querypb.ExecuteOptions_DEFAULT:                       {setIsolationLevel: "", openTransaction: "begin"},
+	querypb.ExecuteOptions_REPEATABLE_READ:               {setIsolationLevel: "REPEATABLE READ", openTransaction: "begin"},
+	querypb.ExecuteOptions_READ_COMMITTED:                {setIsolationLevel: "READ COMMITTED", openTransaction: "begin"},
+	querypb.ExecuteOptions_READ_UNCOMMITTED:              {setIsolationLevel: "READ UNCOMMITTED", openTransaction: "begin"},
+	querypb.ExecuteOptions_SERIALIZABLE:                  {setIsolationLevel: "SERIALIZABLE", openTransaction: "begin"},
+	querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY: {setIsolationLevel: "REPEATABLE READ", openTransaction: "start transaction with consistent snapshot, read only"},
 }
 
-var (
-	txIsolations = map[querypb.ExecuteOptions_TransactionIsolation]queries{
-		querypb.ExecuteOptions_DEFAULT:                       {setIsolationLevel: "", openTransaction: "begin"},
-		querypb.ExecuteOptions_REPEATABLE_READ:               {setIsolationLevel: "REPEATABLE READ", openTransaction: "begin"},
-		querypb.ExecuteOptions_READ_COMMITTED:                {setIsolationLevel: "READ COMMITTED", openTransaction: "begin"},
-		querypb.ExecuteOptions_READ_UNCOMMITTED:              {setIsolationLevel: "READ UNCOMMITTED", openTransaction: "begin"},
-		querypb.ExecuteOptions_SERIALIZABLE:                  {setIsolationLevel: "SERIALIZABLE", openTransaction: "begin"},
-		querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY: {setIsolationLevel: "REPEATABLE READ", openTransaction: "start transaction with consistent snapshot, read only"},
+type (
+	// TxPool is the transaction pool for the query service.
+	TxPool struct {
+		env tabletenv.Env
+
+		activePool         *StatefulConnectionPool
+		transactionTimeout sync2.AtomicDuration
+		ticks              *timer.Timer
+		limiter            txlimiter.TxLimiter
+
+		logMu   sync.Mutex
+		lastLog time.Time
+		txStats *servenv.TimingsWrapper
+	}
+	queries struct {
+		setIsolationLevel string
+		openTransaction   string
 	}
 )
-
-// TxPool is the transaction pool for the query service.
-type TxPool struct {
-	env tabletenv.Env
-
-	activePool         *StatefulConnectionPool
-	transactionTimeout sync2.AtomicDuration
-	ticks              *timer.Timer
-	limiter            txlimiter.TxLimiter
-
-	logMu   sync.Mutex
-	lastLog time.Time
-	txStats *servenv.TimingsWrapper
-}
 
 // NewTxPool creates a new TxPool. It's not operational until it's Open'd.
 func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
