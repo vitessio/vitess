@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
 )
 
@@ -20,8 +21,14 @@ func (retryer *ClosedConnectionRetryer) ShouldRetry(r *request.Request) bool {
 		return false
 	}
 
-	if r.Error != nil && strings.Contains(r.Error.Error(), "use of closed network connection") {
-		return true
+	if r.Retryable != nil {
+		return *r.Retryable
+	}
+
+	if r.Error != nil {
+		if awsErr, ok := r.Error.(awserr.Error); ok {
+			return strings.Contains(awsErr.OrigErr().Error(), "use of closed network connection")
+		}
 	}
 
 	return retryer.awsRetryer.ShouldRetry(r)
