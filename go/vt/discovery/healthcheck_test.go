@@ -415,7 +415,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 func TestGetHealthyTablets(t *testing.T) {
 	ts := memorytopo.NewServer("cell")
 	hc := createTestHc(ts)
-
+	defer hc.Close()
 	tablet := topo.NewTablet(0, "cell", "a")
 	tablet.Keyspace = "k"
 	tablet.Shard = "s"
@@ -612,7 +612,99 @@ func TestGetHealthyTablets(t *testing.T) {
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
 	assert.Equal(t, 1, len(a), "Wrong number of results")
 	assert.True(t, want.DeepEqual(a[0]), "unexpected result")
-	assert.Nil(t, hc.Close(), "unexpected error")
+}
+
+func TestAliases(t *testing.T) {
+	ts := memorytopo.NewServer("cell", "cell1", "cell2")
+	hc := createTestHc(ts)
+	defer hc.Close()
+
+	cellsAlias := &topodatapb.CellsAlias{
+		Cells: []string{"cell", "cell1"},
+	}
+	assert.Nil(t, ts.CreateCellsAlias(context.Background(), "region1", cellsAlias), "failed to create cell alias")
+	defer ts.DeleteCellsAlias(context.Background(), "region1")
+	cellsAlias = &topodatapb.CellsAlias{
+		Cells: []string{"cell2"},
+	}
+	assert.Nil(t, ts.CreateCellsAlias(context.Background(), "region2", cellsAlias), "failed to create cell alias")
+	defer ts.DeleteCellsAlias(context.Background(), "region2")
+
+	// add a tablet as replica in diff cell, same region
+	tablet := topo.NewTablet(1, "cell1", "host3")
+	tablet.Keyspace = "k"
+	tablet.Shard = "s"
+	tablet.PortMap["vt"] = 1
+	tablet.Type = topodatapb.TabletType_REPLICA
+	input := make(chan *querypb.StreamHealthResponse)
+	fc := createFakeConn(tablet, input)
+	// create a channel and subscribe to healthcheck
+	resultChan := hc.Subscribe()
+	hc.AddTablet(tablet)
+	// should get a result, but this will hang if cell alias logic is broken
+	// so wait and timeout
+	ticker := time.NewTicker(1 * time.Second)
+	select {
+	case err := <-fc.cbErrCh:
+		require.Fail(t, "Unexpected error: %v", err)
+	case <-resultChan:
+	case <-ticker.C:
+		require.Fail(t, "Timed out waiting for HealthCheck update")
+	}
+
+	shr := &querypb.StreamHealthResponse{
+		TabletAlias:                         tablet.Alias,
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                             true,
+		TabletExternallyReparentedTimestamp: 0,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+	}
+	want := &TabletHealth{
+		Tablet:              tablet,
+		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:             true,
+		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+		MasterTermStartTime: 0,
+	}
+
+	input <- shr
+	ticker = time.NewTicker(1 * time.Second)
+	select {
+	case err := <-fc.cbErrCh:
+		require.Fail(t, "Unexpected error: %v", err)
+	case <-resultChan:
+	case <-ticker.C:
+		require.Fail(t, "Timed out waiting for HealthCheck update")
+	}
+
+	// check it's there
+	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
+	assert.Equal(t, 1, len(a), "Wrong number of results")
+	assert.True(t, want.DeepEqual(a[0]), "unexpected result")
+
+	// add another tablet in a diff cell, diff region
+	tablet2 := topo.NewTablet(2, "cell2", "host4")
+	tablet2.Keyspace = "k"
+	tablet2.Shard = "s"
+	tablet2.PortMap["vt"] = 2
+	tablet2.Type = topodatapb.TabletType_REPLICA
+	input2 := make(chan *querypb.StreamHealthResponse)
+	fc = createFakeConn(tablet2, input2)
+	hc.AddTablet(tablet2)
+	// we should NOT get a result because this tablet is not of interest to us
+	ticker = time.NewTicker(1 * time.Second)
+	select {
+	case err := <-fc.cbErrCh:
+		require.Fail(t, "Unexpected error: %v", err)
+	case result := <-resultChan:
+		require.Fail(t, "Unexpected result: %v", result)
+	case <-ticker.C:
+	}
+
+	// check that we still have only tablet in healthy list
+	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
+	assert.Equal(t, 1, len(a), "Wrong number of results")
+	assert.True(t, want.DeepEqual(a[0]), "unexpected result")
 }
 
 func TestTemplate(t *testing.T) {
