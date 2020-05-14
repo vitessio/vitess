@@ -355,7 +355,6 @@ func (bs *S3BackupStorage) client() (*s3.S3, error) {
 		}
 
 		if *retryCount >= 0 {
-			awsConfig.WithMaxRetries(*retryCount)
 			awsConfig = *request.WithRetryer(&awsConfig, &ClosedConnectionRetryer{
 				awsRetryer: &client.DefaultRetryer{
 					NumMaxRetries: *retryCount,
