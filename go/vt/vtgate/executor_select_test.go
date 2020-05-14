@@ -288,6 +288,35 @@ func TestFoundRows(t *testing.T) {
 	utils.MustMatch(t, result, wantResult, "Mismatch")
 }
 
+func TestRowCount(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	executor.normalize = true
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	_, err := executorExec(executor, "select 42", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	testRowCount(t, executor, -1)
+
+	_, err = executorExec(executor, "update user set name = 'abc' where id in (42, 24)", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	testRowCount(t, executor, 2)
+}
+
+func testRowCount(t *testing.T, executor *Executor, wantRowCount int64) {
+	result, err := executorExec(executor, "select row_count()", map[string]*querypb.BindVariable{})
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "row_count()", Type: sqltypes.Int64},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(wantRowCount),
+		}},
+	}
+	require.NoError(t, err)
+	utils.MustMatch(t, result, wantResult, "Mismatch")
+}
+
 func TestSelectLastInsertIdInUnion(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true

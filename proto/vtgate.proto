@@ -117,6 +117,9 @@ message Session {
   
   // system_variables keeps track of all session variables set for this connection
   map<string, string> system_variables = 14;
+
+  // row_count keeps track of the last seen rows affected for this session
+  int64 row_count = 15;
 }
 
 // ExecuteRequest is the payload to Execute.

@@ -83,6 +83,12 @@ create table t1_last_insert_id(
 	id1 bigint,
 	primary key(id)
 ) Engine=InnoDB;
+
+create table t1_row_count(
+	id bigint not null,
+	id1 bigint,
+	primary key(id)
+) Engine=InnoDB;
 `
 
 	vschema = &vschemapb.Keyspace{
@@ -166,6 +172,12 @@ create table t1_last_insert_id(
 				Columns: []*vschemapb.Column{{
 					Name: "id1",
 					Type: sqltypes.Int64,
+				}},
+			},
+			"t1_row_count": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id",
+					Name:   "hash",
 				}},
 			},
 		},
