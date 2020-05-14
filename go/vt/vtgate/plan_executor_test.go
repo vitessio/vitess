@@ -983,10 +983,8 @@ func TestPlanExecutorUse(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		wantSession := &vtgatepb.Session{Autocommit: true, TargetString: want[i]}
-		if !proto.Equal(session.Session, wantSession) {
-			t.Errorf("%s: %v, want %v", stmt, session.Session, wantSession)
-		}
+		wantSession := &vtgatepb.Session{Autocommit: true, TargetString: want[i], RowCount: -1}
+		utils.MustMatch(t, wantSession, session.Session, "session does not match")
 	}
 
 	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{}), "use 1", nil)

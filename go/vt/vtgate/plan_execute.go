@@ -81,13 +81,13 @@ func NewTestExecutor(ctx context.Context, strat func(executor *Executor) execute
 	return e
 }
 
-func (e *planExecute) execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *planExecute) execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
 	// 1: Prepare before planning and execution
 
 	// Start an implicit transaction if necessary.
 	err := e.startTxIfNecessary(ctx, safeSession)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 
 	if bindVars == nil {
@@ -97,7 +97,7 @@ func (e *planExecute) execute(ctx context.Context, safeSession *SafeSession, sql
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor, err := newVCursorImpl(ctx, safeSession, comments, e.e, logStats, e.e.vm, e.e.resolver.resolver)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 
 	// 2: Create a plan for the query
@@ -110,13 +110,13 @@ func (e *planExecute) execute(ctx context.Context, safeSession *SafeSession, sql
 		logStats,
 	)
 	if err == planbuilder.ErrPlanNotSupported {
-		return nil, err
+		return 0, nil, err
 	}
 	execStart := e.logPlanningFinished(logStats, sql)
 
 	if err != nil {
 		safeSession.ClearWarnings()
-		return nil, err
+		return 0, nil, err
 	}
 
 	if plan.Type != sqlparser.StmtShow {
@@ -127,18 +127,21 @@ func (e *planExecute) execute(ctx context.Context, safeSession *SafeSession, sql
 	// will fall through and be handled through planning
 	switch plan.Type {
 	case sqlparser.StmtBegin:
-		return e.e.handleBegin(ctx, safeSession, vcursor.tabletType, logStats)
+		qr, err := e.e.handleBegin(ctx, safeSession, vcursor.tabletType, logStats)
+		return sqlparser.StmtBegin, qr, err
 	case sqlparser.StmtCommit:
-		return e.e.handleCommit(ctx, safeSession, logStats)
+		qr, err := e.e.handleCommit(ctx, safeSession, logStats)
+		return sqlparser.StmtCommit, qr, err
 	case sqlparser.StmtRollback:
-		return e.e.handleRollback(ctx, safeSession, logStats)
+		qr, err := e.e.handleRollback(ctx, safeSession, logStats)
+		return sqlparser.StmtRollback, qr, err
 	}
 
 	// 3: Prepare for execution
 	err = e.e.addNeededBindVars(plan.BindVarNeeds, bindVars, safeSession)
 	if err != nil {
 		logStats.Error = err
-		return nil, err
+		return 0, nil, err
 	}
 
 	if plan.Instructions.NeedsTransaction() {
@@ -158,12 +161,12 @@ func (e *planExecute) startTxIfNecessary(ctx context.Context, safeSession *SafeS
 	return nil
 }
 
-func (e *planExecute) insideTransaction(ctx context.Context, safeSession *SafeSession, logStats *LogStats, f currFunc) (*sqltypes.Result, error) {
+func (e *planExecute) insideTransaction(ctx context.Context, safeSession *SafeSession, logStats *LogStats, f currFunc) (sqlparser.StatementType, *sqltypes.Result, error) {
 	mustCommit := false
 	if safeSession.Autocommit && !safeSession.InTransaction() {
 		mustCommit = true
 		if err := e.e.txConn.Begin(ctx, safeSession); err != nil {
-			return nil, err
+			return 0, nil, err
 		}
 	}
 
@@ -178,9 +181,9 @@ func (e *planExecute) insideTransaction(ctx context.Context, safeSession *SafeSe
 	safeSession.SetAutocommittable(mustCommit)
 
 	// Execute!
-	result, err := f(logStats, safeSession)
+	stmtType, result, err := f(logStats, safeSession)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 
 	if mustCommit {
@@ -190,22 +193,19 @@ func (e *planExecute) insideTransaction(ctx context.Context, safeSession *SafeSe
 
 		commitStart := time.Now()
 		if err := e.e.txConn.Commit(ctx, safeSession); err != nil {
-			return nil, err
+			return 0, nil, err
 		}
 		logStats.CommitTime = time.Since(commitStart)
 	}
-	return result, nil
+	return stmtType, result, nil
 }
 
-type currFunc func(*LogStats, *SafeSession) (*sqltypes.Result, error)
+type currFunc func(*LogStats, *SafeSession) (sqlparser.StatementType, *sqltypes.Result, error)
 
 func (e *planExecute) executePlan(ctx context.Context, plan *engine.Plan, vcursor *vcursorImpl, bindVars map[string]*querypb.BindVariable, execStart time.Time) currFunc {
-	return func(logStats *LogStats, safeSession *SafeSession) (*sqltypes.Result, error) {
+	return func(logStats *LogStats, safeSession *SafeSession) (sqlparser.StatementType, *sqltypes.Result, error) {
 		// 4: Execute!
 		qr, err := plan.Instructions.Execute(vcursor, bindVars, true)
-		if err == nil && qr != nil && qr.InsertID > 0 {
-			safeSession.LastInsertId = qr.InsertID
-		}
 
 		// 5: Log and add statistics
 		errCount := e.logExecutionEnd(logStats, execStart, plan, err, qr)
@@ -216,7 +216,7 @@ func (e *planExecute) executePlan(ctx context.Context, plan *engine.Plan, vcurso
 			_ = e.e.txConn.Rollback(ctx, safeSession)
 			err = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction rolled back due to partial DML execution: %v", err)
 		}
-		return qr, err
+		return plan.Type, qr, err
 	}
 }
 
