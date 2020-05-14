@@ -47,8 +47,10 @@ done;
 
 sleep 3 # required for now
 
-./203_switch_reads.sh
+# Validate
+vtctlclient VDiff customer.commerce2customer
 
+./203_switch_reads.sh
 ./204_switch_writes.sh
 
 mysql customer/0 --table < ../common/select_customer_data.sql
