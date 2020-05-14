@@ -210,7 +210,7 @@ func (gtidSet MariadbGTIDSet) AddGTID(other GTID) GTIDSet {
 	return append(gtidSet, mdbOther)
 }
 
-// Union implements GTIDSet.Union(). This is a pure method, and does not mutate the caller.
+// Union implements GTIDSet.Union(). This is a pure method, and does not mutate the receiver.
 func (gtidSet MariadbGTIDSet) Union(other GTIDSet) GTIDSet {
 	if gtidSet == nil || other == nil {
 		return gtidSet
