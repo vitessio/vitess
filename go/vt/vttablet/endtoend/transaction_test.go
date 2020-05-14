@@ -94,9 +94,7 @@ func TestCommit(t *testing.T) {
 	}}
 	vend := framework.DebugVars()
 	for _, expected := range expectedDiffs {
-		if err := compareIntDiff(vend, expected.tag, vstart, expected.diff); err != nil {
-			t.Error(err)
-		}
+		compareIntDiff(t, vend, expected.tag, vstart, expected.diff)
 	}
 }
 
@@ -140,9 +138,7 @@ func TestRollback(t *testing.T) {
 	}}
 	vend := framework.DebugVars()
 	for _, expected := range expectedDiffs {
-		if err := compareIntDiff(vend, expected.tag, vstart, expected.diff); err != nil {
-			t.Error(err)
-		}
+		compareIntDiff(t, vend, expected.tag, vstart, expected.diff)
 	}
 }
 
@@ -218,27 +214,19 @@ func TestTxPoolSize(t *testing.T) {
 	err := client1.Begin(false)
 	require.NoError(t, err)
 	defer client1.Rollback()
-	if err := verifyIntValue(framework.DebugVars(), "TransactionPoolAvailable", tabletenv.NewCurrentConfig().TxPool.Size-1); err != nil {
-		t.Error(err)
-	}
+	verifyIntValue(t, framework.DebugVars(), "TransactionPoolAvailable", tabletenv.NewCurrentConfig().TxPool.Size-1)
 
 	defer framework.Server.SetTxPoolSize(framework.Server.TxPoolSize())
 	framework.Server.SetTxPoolSize(1)
 	vend := framework.DebugVars()
-	if err := verifyIntValue(vend, "TransactionPoolAvailable", 0); err != nil {
-		t.Error(err)
-	}
-	if err := verifyIntValue(vend, "TransactionPoolCapacity", 1); err != nil {
-		t.Error(err)
-	}
+	verifyIntValue(t, vend, "TransactionPoolAvailable", 0)
+	verifyIntValue(t, vend, "TransactionPoolCapacity", 1)
 
 	client2 := framework.NewClient()
 	err = client2.Begin(false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "connection limit exceeded")
-	if err := compareIntDiff(framework.DebugVars(), "Errors/RESOURCE_EXHAUSTED", vstart, 1); err != nil {
-		t.Error(err)
-	}
+	compareIntDiff(t, framework.DebugVars(), "Errors/RESOURCE_EXHAUSTED", vstart, 1)
 }
 
 func TestForUpdate(t *testing.T) {
