@@ -336,6 +336,9 @@ func (set Mysql56GTIDSet) AddGTID(gtid GTID) GTIDSet {
 
 // Union implements GTIDSet.Union().
 func (set Mysql56GTIDSet) Union(other GTIDSet) GTIDSet {
+	if set == nil && other != nil {
+		return other
+	}
 	if set == nil || other == nil {
 		return set
 	}
