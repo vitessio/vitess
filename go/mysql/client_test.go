@@ -94,9 +94,9 @@ func TestConnectTimeout(t *testing.T) {
 
 	// Tests a connection timeout through params
 	ctx = context.Background()
-	paramsWithTimeout := params
+	paramsWithTimeout := *params
 	paramsWithTimeout.ConnectTimeoutMs = 1
-	_, err = Connect(ctx, paramsWithTimeout)
+	_, err = Connect(ctx, &paramsWithTimeout)
 	cancel()
 	if err != context.DeadlineExceeded {
 		t.Errorf("Was expecting context.DeadlineExceeded but got: %v", err)
