@@ -20,6 +20,7 @@ package mysql
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"time"
 
 	"golang.org/x/net/context"
@@ -153,6 +154,25 @@ func (mariadbFlavor) status(c *Conn) (SlaveStatus, error) {
 	status.Position.GTIDSet, err = parseMariadbGTIDSet(resultMap["Gtid_Slave_Pos"])
 	if err != nil {
 		return SlaveStatus{}, vterrors.Wrapf(err, "SlaveStatus can't parse MariaDB GTID (Gtid_Slave_Pos: %#v)", resultMap["Gtid_Slave_Pos"])
+	}
+	filePos, err := strconv.Atoi(resultMap["Exec_Master_Log_Pos"])
+	if err != nil {
+		return SlaveStatus{}, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", resultMap["Exec_Master_Log_Pos"])
+	}
+
+	status.FilePosition.GTIDSet = filePosGTID{
+		file: resultMap["Relay_Master_Log_File"],
+		pos:  filePos,
+	}
+
+	fileRelayPos, err := strconv.Atoi(resultMap["Relay_Log_Pos"])
+	if err != nil {
+		return SlaveStatus{}, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", resultMap["Exec_Master_Log_Pos"])
+	}
+
+	status.FileRelayLogPosition.GTIDSet = filePosGTID{
+		file: resultMap["Relay_Log_File"],
+		pos:  fileRelayPos,
 	}
 	return status, nil
 }
