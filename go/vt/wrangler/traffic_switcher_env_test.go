@@ -359,7 +359,7 @@ func (tme *testMigraterEnv) setMasterPositions() {
 	for _, master := range tme.sourceMasters {
 		master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 			GTIDSet: mysql.MariadbGTIDSet{
-				mysql.MariadbGTID{
+				5: mysql.MariadbGTID{
 					Domain:   5,
 					Server:   456,
 					Sequence: 892,
@@ -370,7 +370,7 @@ func (tme *testMigraterEnv) setMasterPositions() {
 	for _, master := range tme.targetMasters {
 		master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 			GTIDSet: mysql.MariadbGTIDSet{
-				mysql.MariadbGTID{
+				5: mysql.MariadbGTID{
 					Domain:   5,
 					Server:   456,
 					Sequence: 893,

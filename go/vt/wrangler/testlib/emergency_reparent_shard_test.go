@@ -51,7 +51,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	newMaster.FakeMysqlDaemon.Replicating = true
 	newMaster.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			2: mysql.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 456,
@@ -66,7 +66,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	}
 	newMaster.FakeMysqlDaemon.PromoteResult = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			2: mysql.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 456,
@@ -86,7 +86,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	goodReplica1.FakeMysqlDaemon.Replicating = true
 	goodReplica1.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			2: mysql.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 455,
@@ -107,7 +107,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	goodReplica2.FakeMysqlDaemon.Replicating = false
 	goodReplica2.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			2: mysql.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 454,
@@ -162,7 +162,7 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	// this server has executed upto 455, which is the highest among replicas
 	newMaster.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			2: mysql.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 455,
@@ -173,7 +173,7 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	// moreAdvancedReplica
 	newMaster.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			2: mysql.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 456,
@@ -195,7 +195,7 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	// position up to which this replica has executed is behind desired new master
 	moreAdvancedReplica.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			2: mysql.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 454,
@@ -205,7 +205,7 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	// relay log position is more advanced than desired new master
 	moreAdvancedReplica.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			2: mysql.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,

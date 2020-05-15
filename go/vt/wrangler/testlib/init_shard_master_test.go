@@ -59,7 +59,7 @@ func TestInitMasterShard(t *testing.T) {
 	// and expect to add entry in _vt.reparent_journal
 	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			5: mysql.MariadbGTID{
 				Domain:   5,
 				Server:   456,
 				Sequence: 890,
@@ -213,7 +213,7 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	// and expect to add entry in _vt.reparent_journal
 	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			5: mysql.MariadbGTID{
 				Domain:   5,
 				Server:   456,
 				Sequence: 890,

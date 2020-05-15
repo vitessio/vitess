@@ -55,7 +55,7 @@ func TestShardReplicationStatuses(t *testing.T) {
 	// master action loop (to initialize host and port)
 	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			5: mysql.MariadbGTID{
 				Domain:   5,
 				Server:   456,
 				Sequence: 892,
@@ -68,7 +68,7 @@ func TestShardReplicationStatuses(t *testing.T) {
 	// slave loop
 	slave.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			5: mysql.MariadbGTID{
 				Domain:   5,
 				Server:   456,
 				Sequence: 890,

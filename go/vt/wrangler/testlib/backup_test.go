@@ -102,7 +102,7 @@ func TestBackupRestore(t *testing.T) {
 	master.FakeMysqlDaemon.Replicating = false
 	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			2: mysql.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -121,7 +121,7 @@ func TestBackupRestore(t *testing.T) {
 	sourceTablet.FakeMysqlDaemon.Replicating = true
 	sourceTablet.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			2: mysql.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -163,7 +163,7 @@ func TestBackupRestore(t *testing.T) {
 	destTablet.FakeMysqlDaemon.Replicating = true
 	destTablet.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			2: mysql.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -274,7 +274,7 @@ func TestRestoreUnreachableMaster(t *testing.T) {
 	master.FakeMysqlDaemon.Replicating = false
 	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			2: mysql.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -292,7 +292,7 @@ func TestRestoreUnreachableMaster(t *testing.T) {
 	sourceTablet.FakeMysqlDaemon.Replicating = true
 	sourceTablet.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			2: mysql.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
@@ -323,7 +323,7 @@ func TestRestoreUnreachableMaster(t *testing.T) {
 	destTablet.FakeMysqlDaemon.Replicating = true
 	destTablet.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			2: mysql.MariadbGTID{
 				Domain:   2,
 				Server:   123,
 				Sequence: 457,
