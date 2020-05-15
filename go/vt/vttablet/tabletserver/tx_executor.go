@@ -71,21 +71,9 @@ func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 		return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "prepare failed for transaction %d: %v", transactionID, err)
 	}
 
-	localConn, _, err := txe.te.txPool.Begin(txe.ctx, &querypb.ExecuteOptions{})
-	if err != nil {
-		return err
-	}
-	defer txe.te.txPool.RollbackAndRelease(txe.ctx, localConn)
-
-	err = txe.te.twoPC.SaveRedo(txe.ctx, localConn, dtid, conn.TxProps.Queries)
-	if err != nil {
-		return err
-	}
-
-	_, err = txe.te.txPool.Commit(txe.ctx, localConn)
-	if err != nil {
-		return err
-	}
+	txe.inTransaction(func(localConn *StatefulConnection) error {
+		return txe.te.twoPC.SaveRedo(txe.ctx, localConn, dtid, conn.TxProps.Queries)
+	})
 
 	return nil
 }
@@ -173,28 +161,17 @@ func (txe *TxExecutor) RollbackPrepared(dtid string, originalID int64) error {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
 	defer txe.te.env.Stats().QueryTimings.Record("ROLLBACK_PREPARED", time.Now())
-	conn, _, err := txe.te.txPool.Begin(txe.ctx, &querypb.ExecuteOptions{})
-	if err != nil {
-		goto returnConn
-	}
-	defer txe.te.txPool.RollbackAndRelease(txe.ctx, conn)
-
-	err = txe.te.twoPC.DeleteRedo(txe.ctx, conn, dtid)
-	if err != nil {
-		goto returnConn
-	}
-
-	_, err = txe.te.txPool.Commit(txe.ctx, conn)
-
-returnConn:
-	if preparedConn := txe.te.preparedPool.FetchForRollback(dtid); preparedConn != nil {
-		txe.te.txPool.RollbackAndRelease(txe.ctx, preparedConn)
-	}
-	if originalID != 0 {
-		txe.te.Rollback(txe.ctx, originalID)
-	}
-
-	return err
+	defer func() {
+		if preparedConn := txe.te.preparedPool.FetchForRollback(dtid); preparedConn != nil {
+			txe.te.txPool.RollbackAndRelease(txe.ctx, preparedConn)
+		}
+		if originalID != 0 {
+			txe.te.Rollback(txe.ctx, originalID)
+		}
+	}()
+	return txe.inTransaction(func(conn *StatefulConnection) error {
+		return txe.te.twoPC.DeleteRedo(txe.ctx, conn, dtid)
+	})
 }
 
 // CreateTransaction creates the metadata for a 2PC transaction.
@@ -203,18 +180,9 @@ func (txe *TxExecutor) CreateTransaction(dtid string, participants []*querypb.Ta
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
 	defer txe.te.env.Stats().QueryTimings.Record("CREATE_TRANSACTION", time.Now())
-	conn, _, err := txe.te.txPool.Begin(txe.ctx, &querypb.ExecuteOptions{})
-	if err != nil {
-		return err
-	}
-	defer txe.te.txPool.RollbackAndRelease(txe.ctx, conn)
-
-	err = txe.te.twoPC.CreateTransaction(txe.ctx, conn, dtid, participants)
-	if err != nil {
-		return err
-	}
-	_, err = txe.te.txPool.Commit(txe.ctx, conn)
-	return err
+	return txe.inTransaction(func(conn *StatefulConnection) error {
+		return txe.te.twoPC.CreateTransaction(txe.ctx, conn, dtid, participants)
+	})
 }
 
 // StartCommit atomically commits the transaction along with the
@@ -253,23 +221,9 @@ func (txe *TxExecutor) SetRollback(dtid string, transactionID int64) error {
 		txe.te.Rollback(txe.ctx, transactionID)
 	}
 
-	conn, _, err := txe.te.txPool.Begin(txe.ctx, &querypb.ExecuteOptions{})
-	if err != nil {
-		return err
-	}
-	defer txe.te.txPool.RollbackAndRelease(txe.ctx, conn)
-
-	err = txe.te.twoPC.Transition(txe.ctx, conn, dtid, querypb.TransactionState_ROLLBACK)
-	if err != nil {
-		return err
-	}
-
-	_, err = txe.te.txPool.Commit(txe.ctx, conn)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return txe.inTransaction(func(conn *StatefulConnection) error {
+		return txe.te.twoPC.Transition(txe.ctx, conn, dtid, querypb.TransactionState_ROLLBACK)
+	})
 }
 
 // ConcludeTransaction deletes the 2pc transaction metadata
@@ -280,18 +234,9 @@ func (txe *TxExecutor) ConcludeTransaction(dtid string) error {
 	}
 	defer txe.te.env.Stats().QueryTimings.Record("RESOLVE", time.Now())
 
-	conn, _, err := txe.te.txPool.Begin(txe.ctx, &querypb.ExecuteOptions{})
-	if err != nil {
-		return err
-	}
-	defer txe.te.txPool.RollbackAndRelease(txe.ctx, conn)
-
-	err = txe.te.twoPC.DeleteTransaction(txe.ctx, conn, dtid)
-	if err != nil {
-		return err
-	}
-	_, err = txe.te.txPool.Commit(txe.ctx, conn)
-	return err
+	return txe.inTransaction(func(conn *StatefulConnection) error {
+		return txe.te.twoPC.DeleteTransaction(txe.ctx, conn, dtid)
+	})
 }
 
 // ReadTransaction returns the metadata for the sepcified dtid.
@@ -316,4 +261,26 @@ func (txe *TxExecutor) ReadTwopcInflight() (distributed []*tx.DistributedTx, pre
 		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Could not read redo: %v", err)
 	}
 	return distributed, prepared, failed, nil
+}
+
+func (txe *TxExecutor) inTransaction(f func(*StatefulConnection) error) error {
+	conn, _, err := txe.te.txPool.Begin(txe.ctx, &querypb.ExecuteOptions{})
+	if err != nil {
+		return err
+		//return vterrors.Wrap(err, "begin")
+	}
+	defer txe.te.txPool.RollbackAndRelease(txe.ctx, conn)
+
+	err = f(conn)
+	if err != nil {
+		return err
+		//return vterrors.Wrap(err, "inTransactionExec")
+	}
+
+	_, err = txe.te.txPool.Commit(txe.ctx, conn)
+	if err != nil {
+		return err
+		//return vterrors.Wrap(err, "commit")
+	}
+	return nil
 }
