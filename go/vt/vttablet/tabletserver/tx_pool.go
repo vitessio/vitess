@@ -117,7 +117,7 @@ func (tp *TxPool) AdjustLastID(id int64) {
 // or in prepared state.
 func (tp *TxPool) RollbackNonBusy(ctx context.Context) {
 	for _, v := range tp.activePool.GetOutdated(time.Duration(0), "for transition") {
-		tp.LocalConclude(ctx, v)
+		tp.RollbackAndRelease(ctx, v)
 	}
 }
 
@@ -157,10 +157,9 @@ func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (*StatefulConnecti
 	return conn, nil
 }
 
-// LocalCommit commits the transaction on the connection. The connection will be either Release:ed or Unlock:ed,
-// depending on if the connection is tainted or not.
-func (tp *TxPool) LocalCommit(ctx context.Context, txConn *StatefulConnection) (string, error) {
-	span, ctx := trace.NewSpan(ctx, "TxPool.LocalCommit")
+// Commit commits the transaction on the connection.
+func (tp *TxPool) Commit(ctx context.Context, txConn *StatefulConnection) (string, error) {
+	span, ctx := trace.NewSpan(ctx, "TxPool.Commit")
 	defer span.Finish()
 	defer tp.txComplete(txConn, tx.TxCommit)
 	if txConn.TxProps.Autocommit {
@@ -174,35 +173,16 @@ func (tp *TxPool) LocalCommit(ctx context.Context, txConn *StatefulConnection) (
 	return "commit", nil
 }
 
+// RollbackAndRelease rolls back the transaction on the specified connection, and releases the connection when done
+func (tp *TxPool) RollbackAndRelease(ctx context.Context, txConn *StatefulConnection) error {
+	defer txConn.Release(tx.TxRollback)
+	return tp.Rollback(ctx, txConn)
+}
+
 // Rollback rolls back the transaction on the specified connection.
-func (tp *TxPool) Rollback(ctx context.Context, connID tx.ConnID) error {
+func (tp *TxPool) Rollback(ctx context.Context, txConn *StatefulConnection) error {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Rollback")
 	defer span.Finish()
-
-	conn, err := tp.GetAndLock(connID, "for rollback")
-	if err != nil {
-		return err
-	}
-	return tp.localRollback(ctx, conn)
-}
-
-// LocalConclude concludes a transaction started by Begin.
-// If the transaction was not previously concluded, it's rolled back.
-func (tp *TxPool) LocalConclude(ctx context.Context, conn *StatefulConnection) {
-	if conn.dbConn == nil {
-		return
-	}
-	span, ctx := trace.NewSpan(ctx, "TxPool.LocalConclude")
-	defer span.Finish()
-	_ = tp.localRollback(ctx, conn)
-}
-
-func (tp *TxPool) rollbackAndRelease(ctx context.Context, txConn *StatefulConnection) error {
-	defer txConn.Release(tx.TxRollback)
-	return tp.localRollback(ctx, txConn)
-}
-
-func (tp *TxPool) localRollback(ctx context.Context, txConn *StatefulConnection) error {
 	if !txConn.IsOpen() || !txConn.IsInTransaction() {
 		return nil
 	}

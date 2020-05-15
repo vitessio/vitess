@@ -543,7 +543,7 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 	}
 
 	// Concluding conn2 will allow the transition to go through.
-	tsv.te.txPool.LocalConclude(ctx, conn2)
+	tsv.te.txPool.RollbackAndRelease(ctx, conn2)
 	<-ch
 }
 

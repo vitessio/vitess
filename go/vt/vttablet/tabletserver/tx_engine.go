@@ -258,7 +258,7 @@ func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (string, er
 		return "", err
 	}
 	defer conn.Release(tx.TxCommit)
-	queries, err := te.txPool.LocalCommit(ctx, conn)
+	queries, err := te.txPool.Commit(ctx, conn)
 	if err != nil {
 		return "", err
 	}
@@ -275,7 +275,7 @@ func (te *TxEngine) Rollback(ctx context.Context, transactionID int64) error {
 		return err
 	}
 
-	return te.txPool.rollbackAndRelease(ctx, conn)
+	return te.txPool.RollbackAndRelease(ctx, conn)
 }
 
 func (te *TxEngine) unknownStateError() error {
@@ -448,7 +448,7 @@ outer:
 			_, err := conn.Exec(ctx, stmt, 1, false)
 			if err != nil {
 				allErr.RecordError(err)
-				te.txPool.rollbackAndRelease(ctx, conn)
+				te.txPool.RollbackAndRelease(ctx, conn)
 				continue outer
 			}
 		}
@@ -492,7 +492,7 @@ func (te *TxEngine) rollbackTransactions() {
 func (te *TxEngine) rollbackPrepared() {
 	ctx := tabletenv.LocalContext()
 	for _, conn := range te.preparedPool.FetchAll() {
-		te.txPool.localRollback(ctx, conn)
+		te.txPool.Rollback(ctx, conn)
 		conn.Release(tx.TxRollback)
 	}
 }

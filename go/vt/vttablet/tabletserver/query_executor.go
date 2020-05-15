@@ -156,7 +156,7 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 	if err != nil {
 		return nil, err
 	}
-	defer qre.tsv.te.txPool.rollbackAndRelease(qre.ctx, conn)
+	defer qre.tsv.te.txPool.RollbackAndRelease(qre.ctx, conn)
 
 	return f(conn)
 }
@@ -166,7 +166,7 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*s
 	if err != nil {
 		return nil, err
 	}
-	defer qre.tsv.te.txPool.rollbackAndRelease(qre.ctx, conn)
+	defer qre.tsv.te.txPool.RollbackAndRelease(qre.ctx, conn)
 	qre.logStats.AddRewrittenSQL(beginSQL, time.Now())
 
 	result, err := f(conn)
@@ -178,13 +178,13 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*s
 		// a separate refactor because it impacts lot of code.
 		if conn.dbConn != nil {
 			defer qre.logStats.AddRewrittenSQL("rollback", time.Now())
-			qre.tsv.te.txPool.localRollback(qre.ctx, conn)
+			qre.tsv.te.txPool.Rollback(qre.ctx, conn)
 		}
 		return nil, err
 	}
 
 	defer qre.logStats.AddRewrittenSQL("commit", time.Now())
-	if _, err := qre.tsv.te.txPool.LocalCommit(qre.ctx, conn); err != nil {
+	if _, err := qre.tsv.te.txPool.Commit(qre.ctx, conn); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -498,7 +498,7 @@ func (qre *QueryExecutor) execDMLLimit(conn *StatefulConnection) (*sqltypes.Resu
 	}
 	if err := qre.verifyRowCount(int64(result.RowsAffected), maxrows); err != nil {
 		defer qre.logStats.AddRewrittenSQL("rollback", time.Now())
-		qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
+		_ = qre.tsv.te.txPool.Rollback(qre.ctx, conn)
 		return nil, err
 	}
 	return result, nil

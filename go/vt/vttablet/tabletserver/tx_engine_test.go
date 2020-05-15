@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -106,10 +108,8 @@ func TestTxEngineClose(t *testing.T) {
 	go func() {
 		time.Sleep(100 * time.Millisecond)
 		_, err := te.txPool.GetAndLock(c.ConnID, "return")
-		if err != nil {
-			t.Error(err)
-		}
-		te.txPool.LocalConclude(ctx, c)
+		assert.NoError(t, err)
+		te.txPool.RollbackAndRelease(ctx, c)
 	}()
 	start = time.Now()
 	te.close(false)
@@ -126,7 +126,7 @@ func TestTxEngineClose(t *testing.T) {
 	require.NoError(t, err)
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		te.txPool.LocalConclude(ctx, c)
+		te.txPool.RollbackAndRelease(ctx, c)
 	}()
 	start = time.Now()
 	te.close(true)
