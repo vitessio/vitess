@@ -105,7 +105,7 @@ func TestStreamerParseEventsXID(t *testing.T) {
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
 					GTIDSet: mysql.MariadbGTIDSet{
-						mysql.MariadbGTID{
+						0: mysql.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -168,7 +168,7 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
 					GTIDSet: mysql.MariadbGTIDSet{
-						mysql.MariadbGTID{
+						0: mysql.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -584,7 +584,7 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
 					GTIDSet: mysql.MariadbGTIDSet{
-						mysql.MariadbGTID{
+						0: mysql.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -602,7 +602,7 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
 					GTIDSet: mysql.MariadbGTIDSet{
-						mysql.MariadbGTID{
+						0: mysql.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -658,7 +658,7 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
 					GTIDSet: mysql.MariadbGTIDSet{
-						mysql.MariadbGTID{
+						0: mysql.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -673,7 +673,7 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
 					GTIDSet: mysql.MariadbGTIDSet{
-						mysql.MariadbGTID{
+						0: mysql.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -733,7 +733,7 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
 					GTIDSet: mysql.MariadbGTIDSet{
-						mysql.MariadbGTID{
+						0: mysql.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -748,7 +748,7 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
 					GTIDSet: mysql.MariadbGTIDSet{
-						mysql.MariadbGTID{
+						0: mysql.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -810,7 +810,7 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
 					GTIDSet: mysql.MariadbGTIDSet{
-						mysql.MariadbGTID{
+						0: mysql.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -914,7 +914,7 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
 					GTIDSet: mysql.MariadbGTIDSet{
-						mysql.MariadbGTID{
+						0: mysql.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -976,7 +976,7 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
 					GTIDSet: mysql.MariadbGTIDSet{
-						mysql.MariadbGTID{
+						0: mysql.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -1086,7 +1086,7 @@ func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 				Timestamp: 1409892744,
 				Position: mysql.EncodePosition(mysql.Position{
 					GTIDSet: mysql.MariadbGTIDSet{
-						mysql.MariadbGTID{
+						0: mysql.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 10,
@@ -1145,7 +1145,7 @@ func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 				Timestamp: 1409892744,
 				Position: mysql.EncodePosition(mysql.Position{
 					GTIDSet: mysql.MariadbGTIDSet{
-						mysql.MariadbGTID{
+						0: mysql.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 9,
