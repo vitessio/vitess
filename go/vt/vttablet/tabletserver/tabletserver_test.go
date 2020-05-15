@@ -523,7 +523,7 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 	txid2, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
 	// This makes txid2 busy
-	conn2, err := tsv.te.txPool.GetAndLock(txid2, "for query")
+	conn2, err := tsv.te.Pool().GetAndLock(txid2, "for query")
 	require.NoError(t, err)
 	ch := make(chan bool)
 	go func() {
@@ -538,12 +538,12 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 		t.Fatal("ch should not fire")
 	case <-time.After(10 * time.Millisecond):
 	}
-	if tsv.te.txPool.activePool.active.Size() != 1 {
-		t.Errorf("len(tsv.te.txPool.active.Size()): %d, want 1", len(tsv.te.preparedPool.conns))
+	if tsv.te.Pool().activePool.active.Size() != 1 {
+		t.Errorf("len(tsv.te.Pool().active.Size()): %d, want 1", len(tsv.te.preparedPool.conns))
 	}
 
 	// Concluding conn2 will allow the transition to go through.
-	tsv.te.txPool.RollbackAndRelease(ctx, conn2)
+	tsv.te.Pool().RollbackAndRelease(ctx, conn2)
 	<-ch
 }
 
@@ -598,7 +598,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 0", v)
 	}
 
-	tsv.te.txPool.activePool.lastID.Set(1)
+	tsv.te.Pool().activePool.lastID.Set(1)
 	// Ensure we continue past errors.
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -638,8 +638,8 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		t.Errorf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed)
 	}
 	// Verify last id got adjusted.
-	if v := tsv.te.txPool.activePool.lastID.Get(); v != 20 {
-		t.Errorf("tsv.te.txPool.lastID.Get(): %d, want 20", v)
+	if v := tsv.te.Pool().activePool.lastID.Get(); v != 20 {
+		t.Errorf("tsv.te.Pool().lastID.Get(): %d, want 20", v)
 	}
 	turnOffTxEngine()
 	if v := len(tsv.te.preparedPool.conns); v != 0 {
@@ -1324,7 +1324,7 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 	}, false, 0, nil); err == nil {
 		t.Fatalf("TabletServer.Execute should fail because of nested transaction")
 	}
-	tsv.te.txPool.SetTimeout(10)
+	tsv.te.Pool().SetTimeout(10)
 }
 
 func TestSerializeTransactionsSameRow(t *testing.T) {
@@ -2480,16 +2480,16 @@ func TestConfigChanges(t *testing.T) {
 	if val := tsv.TxPoolSize(); val != newSize {
 		t.Errorf("TxPoolSize: %d, want %d", val, newSize)
 	}
-	if val := int(tsv.te.txPool.activePool.Capacity()); val != newSize {
-		t.Errorf("tsv.te.txPool.pool.Capacity: %d, want %d", val, newSize)
+	if val := int(tsv.te.Pool().activePool.Capacity()); val != newSize {
+		t.Errorf("tsv.te.Pool().pool.Capacity: %d, want %d", val, newSize)
 	}
 
 	tsv.SetTxTimeout(newDuration)
 	if val := tsv.TxTimeout(); val != newDuration {
 		t.Errorf("tsv.TxTimeout: %v, want %v", val, newDuration)
 	}
-	if val := tsv.te.txPool.Timeout(); val != newDuration {
-		t.Errorf("tsv.te.txPool.Timeout: %v, want %v", val, newDuration)
+	if val := tsv.te.Pool().Timeout(); val != newDuration {
+		t.Errorf("tsv.te.Pool().Timeout: %v, want %v", val, newDuration)
 	}
 
 	tsv.SetQueryPlanCacheCap(newSize)
