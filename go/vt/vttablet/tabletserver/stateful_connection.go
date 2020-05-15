@@ -43,7 +43,6 @@ type StatefulConnection struct {
 	ConnID tx.ConnID
 	env    tabletenv.Env
 
-	tainted bool
 	TxProps *TxProperties
 }
 
@@ -52,6 +51,16 @@ func (sc *StatefulConnection) Close() {
 	if sc.dbConn != nil {
 		sc.dbConn.Close()
 	}
+}
+
+//IsOpen returns true when the connection is still operational
+func (sc *StatefulConnection) IsOpen() bool {
+	return sc.dbConn != nil
+}
+
+//IsInTransaction returns true when the connection has tx state
+func (sc *StatefulConnection) IsInTransaction() bool {
+	return sc.TxProps != nil
 }
 
 // Exec executes the statement in the dedicated connection
@@ -101,7 +110,8 @@ func (sc *StatefulConnection) Unlock() {
 	}
 }
 
-//Release implements the tx.TrustedConnection interface
+//Release is used when the connection will not be used ever again.
+//The underlying dbConn is removed so that this connection cannot be used by mistake.
 func (sc *StatefulConnection) Release(reason tx.ReleaseReason) {
 	sc.conclude(reason.String())
 }
@@ -128,10 +138,6 @@ func (sc *StatefulConnection) String() string {
 		sc.TxProps.Conclusion,
 		strings.Join(sc.TxProps.Queries, ";"),
 	)
-}
-
-func (sc *StatefulConnection) renewConnection() {
-	panic("cannot renew txconnection, reserve conn not implemented")
 }
 
 func (sc *StatefulConnection) txClean() {

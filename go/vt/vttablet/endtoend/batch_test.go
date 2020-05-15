@@ -20,12 +20,16 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 )
 
 func TestBatchRead(t *testing.T) {
+	t.Cleanup(func() {
+		testConfigVars(t)
+	})
 	client := framework.NewClient()
 	queries := []*querypb.BoundQuery{{
 		Sql:           "select * from vitess_a where id = :a",
@@ -118,16 +122,17 @@ func TestBatchRead(t *testing.T) {
 	want := []sqltypes.Result{qr1, qr2}
 
 	qrl, err := client.ExecuteBatch(queries, false)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	if !reflect.DeepEqual(qrl, want) {
 		t.Errorf("ExecueBatch: \n%#v, want \n%#v", prettyPrintArr(qrl), prettyPrintArr(want))
 	}
 }
 
 func TestBatchTransaction(t *testing.T) {
+	t.Cleanup(func() {
+		testConfigVars(t)
+	})
+
 	client := framework.NewClient()
 	queries := []*querypb.BoundQuery{{
 		Sql: "insert into vitess_test values(4, null, null, null)",
@@ -148,20 +153,14 @@ func TestBatchTransaction(t *testing.T) {
 
 	// Not in transaction, AsTransaction false
 	qrl, err := client.ExecuteBatch(queries, false)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	if !reflect.DeepEqual(qrl[1].Rows, wantRows) {
 		t.Errorf("Rows: \n%#v, want \n%#v", qrl[1].Rows, wantRows)
 	}
 
 	// Not in transaction, AsTransaction true
 	qrl, err = client.ExecuteBatch(queries, true)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	if !reflect.DeepEqual(qrl[1].Rows, wantRows) {
 		t.Errorf("Rows: \n%#v, want \n%#v", qrl[1].Rows, wantRows)
 	}
@@ -169,16 +168,10 @@ func TestBatchTransaction(t *testing.T) {
 	// In transaction, AsTransaction false
 	func() {
 		err = client.Begin(false)
-		if err != nil {
-			t.Error(err)
-			return
-		}
+		require.NoError(t, err)
 		defer client.Commit()
 		qrl, err = client.ExecuteBatch(queries, false)
-		if err != nil {
-			t.Error(err)
-			return
-		}
+		require.NoError(t, err)
 		if !reflect.DeepEqual(qrl[1].Rows, wantRows) {
 			t.Errorf("Rows: \n%#v, want \n%#v", qrl[1].Rows, wantRows)
 		}
@@ -187,15 +180,10 @@ func TestBatchTransaction(t *testing.T) {
 	// In transaction, AsTransaction true
 	func() {
 		err = client.Begin(false)
-		if err != nil {
-			t.Error(err)
-			return
-		}
+		require.NoError(t, err)
 		defer client.Rollback()
 		qrl, err = client.ExecuteBatch(queries, true)
 		want := "cannot start a new transaction in the scope of an existing one"
-		if err == nil || err.Error() != want {
-			t.Errorf("Error: %v, want %s", err, want)
-		}
+		require.EqualError(t, err, want)
 	}()
 }
