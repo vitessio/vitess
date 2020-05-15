@@ -51,7 +51,7 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 	newMaster.FakeMysqlDaemon.Replicating = true
 	newMaster.FakeMysqlDaemon.WaitMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
@@ -60,7 +60,7 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 	}
 	newMaster.FakeMysqlDaemon.PromoteResult = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   456,
 				Sequence: 991,
@@ -154,7 +154,7 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	newMaster.FakeMysqlDaemon.Replicating = true
 	newMaster.FakeMysqlDaemon.WaitMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
@@ -163,7 +163,7 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	}
 	newMaster.FakeMysqlDaemon.PromoteResult = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   456,
 				Sequence: 991,
@@ -290,7 +290,7 @@ func TestPlannedReparentShardWaitForPositionFail(t *testing.T) {
 	newMaster.FakeMysqlDaemon.Replicating = true
 	newMaster.FakeMysqlDaemon.WaitMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
@@ -299,7 +299,7 @@ func TestPlannedReparentShardWaitForPositionFail(t *testing.T) {
 	}
 	newMaster.FakeMysqlDaemon.PromoteResult = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   456,
 				Sequence: 991,
@@ -385,7 +385,7 @@ func TestPlannedReparentShardWaitForPositionTimeout(t *testing.T) {
 	newMaster.FakeMysqlDaemon.Replicating = true
 	newMaster.FakeMysqlDaemon.WaitMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
@@ -394,7 +394,7 @@ func TestPlannedReparentShardWaitForPositionTimeout(t *testing.T) {
 	}
 	newMaster.FakeMysqlDaemon.PromoteResult = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   456,
 				Sequence: 991,
@@ -475,7 +475,7 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 	master.FakeMysqlDaemon.SlaveStatusError = mysql.ErrNotSlave
 	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
@@ -540,7 +540,7 @@ func TestPlannedReparentShardRelayLogErrorStartSlave(t *testing.T) {
 	master.FakeMysqlDaemon.SlaveStatusError = mysql.ErrNotSlave
 	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
@@ -613,7 +613,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	newMaster.FakeMysqlDaemon.PromoteError = errors.New("some error")
 	newMaster.FakeMysqlDaemon.WaitMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
@@ -622,7 +622,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	}
 	newMaster.FakeMysqlDaemon.PromoteResult = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   456,
 				Sequence: 991,
@@ -739,7 +739,7 @@ func TestPlannedReparentShardSameMaster(t *testing.T) {
 	oldMaster.FakeMysqlDaemon.SlaveStatusError = mysql.ErrNotSlave
 	oldMaster.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
