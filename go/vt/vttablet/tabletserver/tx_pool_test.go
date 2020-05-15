@@ -59,7 +59,7 @@ import (
 //
 //	conn, err := txPool.GetAndLock(transactionID, "reason")
 //	require.NoError(t, err)
-//	commitSQL, err := txPool.LocalCommit(ctx, conn)
+//	commitSQL, err := txPool.Commit(ctx, conn)
 //	require.NoError(t, err)
 //	require.Equal(t, "commit", commitSQL)
 //}
