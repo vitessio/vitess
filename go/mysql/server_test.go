@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -1006,7 +1007,11 @@ func TestTLSServer(t *testing.T) {
 		t.Errorf("Unexpected output for 'ssl echo': %v", results)
 	}
 
-	checkCountForTLSVer(t, versionTLS12, 1)
+	// Find out which TLS version the connection actually used,
+	// so we can check that the corresponding counter was incremented.
+	tlsVersion := conn.conn.(*tls.Conn).ConnectionState().Version
+
+	checkCountForTLSVer(t, tlsVersionToString(tlsVersion), 1)
 	checkCountForTLSVer(t, versionNoTLS, 0)
 	conn.Close()
 
@@ -1101,7 +1106,7 @@ func checkCountForTLSVer(t *testing.T, version string, expected int64) {
 			t.Errorf("Expected connection count for version %s to be %d, got %d", version, expected, count)
 		}
 	} else {
-		t.Errorf("No count found for version %s", version)
+		t.Errorf("No count for version %s found in %v", version, connCounts)
 	}
 }
 
