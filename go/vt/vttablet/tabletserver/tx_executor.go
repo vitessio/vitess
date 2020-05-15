@@ -58,7 +58,7 @@ func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 
 	// If no queries were executed, we just rollback.
 	if len(conn.TxProps.Queries) == 0 {
-		txe.te.txPool.LocalConclude(txe.ctx, conn)
+		conn.Release(tx.ConnInitFail)
 		return nil
 	}
 
@@ -72,7 +72,7 @@ func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 	if err != nil {
 		return err
 	}
-	defer txe.te.txPool.LocalConclude(txe.ctx, localConn)
+	defer txe.te.txPool.rollbackAndRelease(txe.ctx, localConn)
 
 	err = txe.te.twoPC.SaveRedo(txe.ctx, localConn, dtid, conn.TxProps.Queries)
 	if err != nil {
@@ -105,7 +105,7 @@ func (txe *TxExecutor) CommitPrepared(dtid string) error {
 	// We have to use a context that will never give up,
 	// even if the original context expires.
 	ctx := trace.CopySpan(context.Background(), txe.ctx)
-	defer txe.te.txPool.LocalConclude(ctx, conn)
+	defer txe.te.txPool.rollbackAndRelease(ctx, conn)
 	err = txe.te.twoPC.DeleteRedo(ctx, conn, dtid)
 	if err != nil {
 		txe.markFailed(ctx, dtid)
@@ -135,7 +135,7 @@ func (txe *TxExecutor) markFailed(ctx context.Context, dtid string) {
 		log.Errorf("markFailed: Begin failed for dtid %s: %v", dtid, err)
 		return
 	}
-	defer txe.te.txPool.LocalConclude(ctx, conn)
+	defer txe.te.txPool.rollbackAndRelease(ctx, conn)
 
 	if err = txe.te.twoPC.UpdateRedo(ctx, conn, dtid, RedoStateFailed); err != nil {
 		log.Errorf("markFailed: UpdateRedo failed for dtid %s: %v", dtid, err)
@@ -174,7 +174,7 @@ func (txe *TxExecutor) RollbackPrepared(dtid string, originalID int64) error {
 	if err != nil {
 		goto returnConn
 	}
-	defer txe.te.txPool.LocalConclude(txe.ctx, conn)
+	defer txe.te.txPool.rollbackAndRelease(txe.ctx, conn)
 
 	err = txe.te.twoPC.DeleteRedo(txe.ctx, conn, dtid)
 	if err != nil {
@@ -185,10 +185,10 @@ func (txe *TxExecutor) RollbackPrepared(dtid string, originalID int64) error {
 
 returnConn:
 	if preparedConn := txe.te.preparedPool.FetchForRollback(dtid); preparedConn != nil {
-		txe.te.txPool.LocalConclude(txe.ctx, preparedConn)
+		txe.te.txPool.rollbackAndRelease(txe.ctx, preparedConn)
 	}
 	if originalID != 0 {
-		txe.te.txPool.Rollback(txe.ctx, originalID)
+		txe.te.Rollback(txe.ctx, originalID)
 	}
 
 	return err
@@ -204,7 +204,7 @@ func (txe *TxExecutor) CreateTransaction(dtid string, participants []*querypb.Ta
 	if err != nil {
 		return err
 	}
-	defer txe.te.txPool.LocalConclude(txe.ctx, conn)
+	defer txe.te.txPool.rollbackAndRelease(txe.ctx, conn)
 
 	err = txe.te.twoPC.CreateTransaction(txe.ctx, conn, dtid, participants)
 	if err != nil {
@@ -227,7 +227,7 @@ func (txe *TxExecutor) StartCommit(transactionID int64, dtid string) error {
 	if err != nil {
 		return err
 	}
-	defer txe.te.txPool.LocalConclude(txe.ctx, conn)
+	defer txe.te.txPool.rollbackAndRelease(txe.ctx, conn)
 
 	err = txe.te.twoPC.Transition(txe.ctx, conn, dtid, querypb.TransactionState_COMMIT)
 	if err != nil {
@@ -254,7 +254,7 @@ func (txe *TxExecutor) SetRollback(dtid string, transactionID int64) error {
 	if err != nil {
 		return err
 	}
-	defer txe.te.txPool.LocalConclude(txe.ctx, conn)
+	defer txe.te.txPool.rollbackAndRelease(txe.ctx, conn)
 
 	err = txe.te.twoPC.Transition(txe.ctx, conn, dtid, querypb.TransactionState_ROLLBACK)
 	if err != nil {
@@ -281,7 +281,7 @@ func (txe *TxExecutor) ConcludeTransaction(dtid string) error {
 	if err != nil {
 		return err
 	}
-	defer txe.te.txPool.LocalConclude(txe.ctx, conn)
+	defer txe.te.txPool.rollbackAndRelease(txe.ctx, conn)
 
 	err = txe.te.twoPC.DeleteTransaction(txe.ctx, conn, dtid)
 	if err != nil {

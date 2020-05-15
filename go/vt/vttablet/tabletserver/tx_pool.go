@@ -157,17 +157,6 @@ func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (*StatefulConnecti
 	return conn, nil
 }
 
-// Commit commits the transaction on the specified connection.
-func (tp *TxPool) Commit(ctx context.Context, connID tx.ConnID) (string, error) {
-	span, ctx := trace.NewSpan(ctx, "TxPool.Commit")
-	defer span.Finish()
-	conn, err := tp.GetAndLock(connID, "for commit")
-	if err != nil {
-		return "", err
-	}
-	return tp.LocalCommit(ctx, conn)
-}
-
 // LocalCommit commits the transaction on the connection. The connection will be either Release:ed or Unlock:ed,
 // depending on if the connection is tainted or not.
 func (tp *TxPool) LocalCommit(ctx context.Context, txConn *StatefulConnection) (string, error) {
@@ -195,6 +184,38 @@ func (tp *TxPool) Rollback(ctx context.Context, connID tx.ConnID) error {
 		return err
 	}
 	return tp.localRollback(ctx, conn)
+}
+
+// LocalConclude concludes a transaction started by Begin.
+// If the transaction was not previously concluded, it's rolled back.
+func (tp *TxPool) LocalConclude(ctx context.Context, conn *StatefulConnection) {
+	if conn.dbConn == nil {
+		return
+	}
+	span, ctx := trace.NewSpan(ctx, "TxPool.LocalConclude")
+	defer span.Finish()
+	_ = tp.localRollback(ctx, conn)
+}
+
+func (tp *TxPool) rollbackAndRelease(ctx context.Context, txConn *StatefulConnection) error {
+	defer txConn.Release(tx.TxRollback)
+	return tp.localRollback(ctx, txConn)
+}
+
+func (tp *TxPool) localRollback(ctx context.Context, txConn *StatefulConnection) error {
+	if !txConn.IsOpen() || !txConn.IsInTransaction() {
+		return nil
+	}
+	if txConn.TxProps.Autocommit {
+		tp.txComplete(txConn, tx.TxCommit)
+		return nil
+	}
+	defer tp.txComplete(txConn, tx.TxRollback)
+	if _, err := txConn.Exec(ctx, "rollback", 1, false); err != nil {
+		txConn.Close()
+		return err
+	}
+	return nil
 }
 
 // Begin begins a transaction, and returns the associated connection and
@@ -256,30 +277,6 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (*
 	return conn, beginQueries, nil
 }
 
-// LocalConclude concludes a transaction started by Begin.
-// If the transaction was not previously concluded, it's rolled back.
-func (tp *TxPool) LocalConclude(ctx context.Context, conn *StatefulConnection) {
-	if conn.dbConn == nil {
-		return
-	}
-	span, ctx := trace.NewSpan(ctx, "TxPool.LocalConclude")
-	defer span.Finish()
-	_ = tp.localRollback(ctx, conn)
-}
-
-func (tp *TxPool) localRollback(ctx context.Context, txConn *StatefulConnection) error {
-	if txConn.TxProps.Autocommit {
-		tp.txComplete(txConn, tx.TxCommit)
-		return nil
-	}
-	defer tp.txComplete(txConn, tx.TxRollback)
-	if _, err := txConn.Exec(ctx, "rollback", 1, false); err != nil {
-		txConn.Close()
-		return err
-	}
-	return nil
-}
-
 // LogActive causes all existing transactions to be logged when they complete.
 // The logging is throttled to no more than once every txLogInterval.
 func (tp *TxPool) LogActive() {
@@ -307,11 +304,6 @@ func (tp *TxPool) SetTimeout(timeout time.Duration) {
 
 func (tp *TxPool) txComplete(conn *StatefulConnection, reason tx.ReleaseReason) {
 	tp.log(conn, reason)
-	if conn.tainted {
-		conn.renewConnection()
-	} else {
-		conn.Release(reason)
-	}
 	tp.limiter.Release(conn.TxProps.ImmediateCaller, conn.TxProps.EffectiveCaller)
 	conn.txClean()
 }

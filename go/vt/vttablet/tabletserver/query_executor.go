@@ -150,24 +150,26 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 		qre.options = &querypb.ExecuteOptions{}
 	}
 	qre.options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
+
 	conn, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options)
+
 	if err != nil {
 		return nil, err
 	}
-	defer qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
+	defer qre.tsv.te.txPool.rollbackAndRelease(qre.ctx, conn)
 
 	return f(conn)
 }
 
-func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
+func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	conn, beginSQL, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options)
 	if err != nil {
 		return nil, err
 	}
-	defer qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
+	defer qre.tsv.te.txPool.rollbackAndRelease(qre.ctx, conn)
 	qre.logStats.AddRewrittenSQL(beginSQL, time.Now())
 
-	reply, err = f(conn)
+	result, err := f(conn)
 	if err != nil {
 		// dbConn is nil, it means the transaction was aborted.
 		// If so, we should not relog the rollback.
@@ -176,7 +178,7 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*s
 		// a separate refactor because it impacts lot of code.
 		if conn.dbConn != nil {
 			defer qre.logStats.AddRewrittenSQL("rollback", time.Now())
-			qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
+			qre.tsv.te.txPool.localRollback(qre.ctx, conn)
 		}
 		return nil, err
 	}
@@ -185,7 +187,7 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*s
 	if _, err := qre.tsv.te.txPool.LocalCommit(qre.ctx, conn); err != nil {
 		return nil, err
 	}
-	return reply, nil
+	return result, nil
 }
 
 func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result, error) {

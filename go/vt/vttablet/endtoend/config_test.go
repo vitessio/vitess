@@ -45,7 +45,7 @@ func verifyIntValue(t *testing.T, values map[string]interface{}, tag string, wan
 	require.Equal(t, want, framework.FetchInt(values, tag), tag)
 }
 
-func TestConfigVars(t *testing.T) {
+func testConfigVars(t *testing.T) {
 	currentConfig := tabletenv.NewCurrentConfig()
 	vars := framework.DebugVars()
 	cases := []struct {

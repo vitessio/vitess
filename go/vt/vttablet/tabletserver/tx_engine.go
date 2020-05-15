@@ -270,7 +270,12 @@ func (te *TxEngine) Rollback(ctx context.Context, transactionID int64) error {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Rollback")
 	defer span.Finish()
 
-	return te.txPool.Rollback(ctx, transactionID)
+	conn, err := te.txPool.GetAndLock(transactionID, "for rollback")
+	if err != nil {
+		return err
+	}
+
+	return te.txPool.rollbackAndRelease(ctx, conn)
 }
 
 func (te *TxEngine) unknownStateError() error {
@@ -443,7 +448,7 @@ outer:
 			_, err := conn.Exec(ctx, stmt, 1, false)
 			if err != nil {
 				allErr.RecordError(err)
-				te.txPool.LocalConclude(ctx, conn)
+				te.txPool.rollbackAndRelease(ctx, conn)
 				continue outer
 			}
 		}
@@ -475,10 +480,8 @@ outer:
 // This is used for transitioning from a master to a non-master
 // serving type.
 func (te *TxEngine) rollbackTransactions() {
+	te.rollbackPrepared()
 	ctx := tabletenv.LocalContext()
-	for _, c := range te.preparedPool.FetchAll() {
-		te.txPool.LocalConclude(ctx, c)
-	}
 	// The order of rollbacks is currently not material because
 	// we don't allow new statements or commits during
 	// this function. In case of any such change, this will
@@ -488,8 +491,9 @@ func (te *TxEngine) rollbackTransactions() {
 
 func (te *TxEngine) rollbackPrepared() {
 	ctx := tabletenv.LocalContext()
-	for _, c := range te.preparedPool.FetchAll() {
-		te.txPool.LocalConclude(ctx, c)
+	for _, conn := range te.preparedPool.FetchAll() {
+		te.txPool.localRollback(ctx, conn)
+		conn.Release(tx.TxRollback)
 	}
 }
 

@@ -130,6 +130,7 @@ func (sf *StatefulConnectionPool) GetAndLock(id int64, reason string) (*Stateful
 //NewConn creates a new StatefulConnection. It will be created from either the normal pool or
 //the found_rows pool, depending on the options provided
 func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.ExecuteOptions) (*StatefulConnection, error) {
+
 	var conn *connpool.DBConn
 	var err error
 
@@ -143,7 +144,6 @@ func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.
 	}
 
 	connID := sf.lastID.Add(1)
-
 	sfConn := &StatefulConnection{
 		dbConn: conn,
 		ConnID: connID,
