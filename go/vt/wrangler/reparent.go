@@ -947,26 +947,9 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		return fmt.Errorf("lost topology lock, aborting: %v", err)
 	}
 
-	// Verify masterElect is alive and has the most advanced position
-	masterElectStatus, ok := statusMap[masterElectTabletAliasStr]
-	if !ok {
-		return fmt.Errorf("couldn't get master elect %v replication position", topoproto.TabletAliasString(masterElectTabletAlias))
-	}
-	masterElectPos, err := mysql.DecodePosition(masterElectStatus.Position)
-	if err != nil {
-		return fmt.Errorf("cannot decode master elect position %v: %v", masterElectStatus.Position, err)
-	}
-	for alias, status := range statusMap {
-		if alias == masterElectTabletAliasStr {
-			continue
-		}
-		pos, err := mysql.DecodePosition(status.Position)
-		if err != nil {
-			return fmt.Errorf("cannot decode replica %v position %v: %v", alias, status.Position, err)
-		}
-		if !masterElectPos.AtLeast(pos) {
-			return fmt.Errorf("tablet %v is more advanced than master elect tablet %v: %v > %v", alias, masterElectTabletAliasStr, status.Position, masterElectStatus.Position)
-		}
+	// Bail out if the master tablet candidate is not the farthest ahead.
+	if err := wr.CheckTabletIsFarthestAhead(masterElectTabletAliasStr, statusMap); err != nil {
+		return err
 	}
 
 	// Promote the masterElect
@@ -1041,6 +1024,154 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	}
 
 	return nil
+}
+
+type replicaStatus struct {
+	replica *topo.TabletInfo
+	status  *replicationdatapb.Status
+}
+
+func (wr *Wrangler) replicaReplicationStatuses(ctx context.Context, keyspace, shard string) ([]*replicaStatus, error) {
+	replicas, err := wr.replicaTabletInfos(ctx, keyspace, shard)
+	if err != nil {
+		return nil, err
+	}
+
+	wg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+
+	result := make([]*replicaStatus, len(replicas))
+
+	for i, ti := range replicas {
+		wg.Add(1)
+		go func(i int, ti *topo.TabletInfo) {
+			defer wg.Done()
+			status, err := wr.TabletManagerClient().SlaveStatus(ctx, ti.Tablet)
+			if err != nil {
+				rec.RecordError(fmt.Errorf("SlaveStatus(%v) failed: %v", ti.AliasString(), err))
+				return
+			}
+			result[i] = &replicaStatus{
+				replica: ti,
+				status:  status,
+			}
+		}(i, ti)
+	}
+	wg.Wait()
+	return result, rec.Error()
+}
+
+func (wr *Wrangler) replicaTabletInfos(ctx context.Context, keyspace, shard string) ([]*topo.TabletInfo, error) {
+	tabletMap, err := wr.TopoServer().GetTabletMapForShard(ctx, keyspace, shard)
+	if err != nil {
+		return nil, err
+	}
+	allTablets := topotools.CopyMapValues(tabletMap, []*topo.TabletInfo{}).([]*topo.TabletInfo)
+
+	replicas := make([]*topo.TabletInfo, 0, len(allTablets))
+	// Clean up tablets so we only have replicas.
+	for _, ti := range allTablets {
+		if ti.Type == topodatapb.TabletType_REPLICA {
+			replicas = append(replicas, ti)
+		}
+	}
+
+	return replicas, nil
+}
+
+func (wr *Wrangler) CheckTabletIsFarthestAhead(tabletAliasStr string, statusMap map[string]*replicationdatapb.Status) error {
+	tabletStatus, ok := statusMap[tabletAliasStr]
+	if !ok {
+		return fmt.Errorf("couldn't get tablet %v replication position", topoproto.TabletAliasString(masterElectTabletAlias))
+	}
+	candidatePos, err := decodeAndMergePositions(tabletStatus)
+	if err != nil {
+		return fmt.Errorf("cannot decode tablet position %v: %v", tabletStatus.Position, err)
+	}
+	for alias, status := range statusMap {
+		if alias == tabletAliasStr {
+			continue
+		}
+		pos, err := decodeAndMergePositions(status)
+		if err != nil {
+			return fmt.Errorf("cannot decode and merge replica %v executed and retrieved positions %v: %v", alias, status.Position, err)
+		}
+		if !candidatePos.AtLeast(*pos) {
+			return fmt.Errorf("tablet %v is more advanced than master elect tablet %v: %v > %v", alias, masterElectTabletAliasStr, status.Position, masterElectStatus.Position)
+		}
+	}
+
+	return nil
+}
+
+// FindLatestReplica will search through the status's of the various replicas in the shard,
+// and return the tablet that is the most caught up.
+func (wr *Wrangler) FindLatestReplica(ctx context.Context, keyspace, shard string) (*topodatapb.TabletAlias, error) {
+	replicaStatuses, err := wr.replicaReplicationStatuses(ctx, keyspace, shard)
+	if err != nil {
+		log.Errorf("error getting shard replication status: %v", err)
+		return nil, err
+	}
+	// If we didn't get replicas back, then we can't determine the latest replica and should bail.
+	if len(replicaStatuses) == 0 {
+		log.Info("Didn't get back any replicas to consider for findLatestReplica.")
+		return nil, nil
+	}
+
+	// Find first valid position
+	var winningTablet *topodatapb.TabletAlias
+	winningPosition, err := findValidPosition(replicaStatuses)
+	if err != nil {
+		return nil, err
+	}
+
+	// No valid positions, so we bail.
+	if winningPosition == nil {
+		return nil, nil
+	}
+
+	for _, rs := range replicaStatuses {
+		if rs == nil || rs.status == nil {
+			continue
+		}
+		if position, err := decodeAndMergePositions(rs.status); err == nil && position != nil{
+			if position.AtLeast(*winningPosition) {
+				winningPosition = position
+				winningTablet = rs.replica.Alias
+			}
+		}
+	}
+
+	return winningTablet, nil
+}
+
+func findValidPosition(replicaStatuses []*replicaStatus) (*mysql.Position, error) {
+	var validPosition *mysql.Position
+	var err error
+	for _, rs := range replicaStatuses {
+		if rs != nil && rs.status != nil {
+			validPosition, err = decodeAndMergePositions(rs.status)
+			break
+		}
+	}
+
+	return validPosition, err
+}
+
+func decodeAndMergePositions(status *replicationdatapb.Status) (*mysql.Position, error) {
+	executedPos, err := mysql.DecodePosition(status.Position)
+	if err != nil {
+		log.Infof("Decode position failed, err: %v", err)
+		return nil, err
+	}
+	relayPos, err := mysql.DecodePosition(status.RelayLogPosition)
+	if err != nil {
+		log.Infof("Decode relay log position failed, err: %v", err)
+		return nil, err
+	}
+	unionGTID := executedPos.GTIDSet.Union(relayPos.GTIDSet)
+	winningPos := mysql.Position{GTIDSet: unionGTID}
+	return &winningPos, nil
 }
 
 // TabletExternallyReparented changes the type of new master for this shard to MASTER

@@ -24,6 +24,8 @@ import (
 // SlaveStatus holds replication information from SHOW SLAVE STATUS.
 type SlaveStatus struct {
 	Position            Position
+	// RelayLogPosition will hold the Position the relay log is at. This is NOT supported in MariaDB, and will be nil for that flavor.
+	RelayLogPosition    *Position
 	SlaveIORunning      bool
 	SlaveSQLRunning     bool
 	SecondsBehindMaster uint
@@ -40,8 +42,13 @@ func (s *SlaveStatus) SlaveRunning() bool {
 
 // SlaveStatusToProto translates a Status to proto3.
 func SlaveStatusToProto(s SlaveStatus) *replicationdatapb.Status {
+	var relayLogPosition string
+	if s.RelayLogPosition != nil {
+		relayLogPosition = EncodePosition(*s.RelayLogPosition)
+	}
 	return &replicationdatapb.Status{
 		Position:            EncodePosition(s.Position),
+		RelayLogPosition:    relayLogPosition,
 		SlaveIoRunning:      s.SlaveIORunning,
 		SlaveSqlRunning:     s.SlaveSQLRunning,
 		SecondsBehindMaster: uint32(s.SecondsBehindMaster),
@@ -57,8 +64,13 @@ func ProtoToSlaveStatus(s *replicationdatapb.Status) SlaveStatus {
 	if err != nil {
 		panic(vterrors.Wrapf(err, "cannot decode Position"))
 	}
+	relayPos, err := DecodePosition(s.RelayLogPosition)
+	if err != nil {
+		panic(vterrors.Wrapf(err, "cannot decode RelayLogPosition"))
+	}
 	return SlaveStatus{
 		Position:            pos,
+		RelayLogPosition:    &relayPos,
 		SlaveIORunning:      s.SlaveIoRunning,
 		SlaveSQLRunning:     s.SlaveSqlRunning,
 		SecondsBehindMaster: uint(s.SecondsBehindMaster),
