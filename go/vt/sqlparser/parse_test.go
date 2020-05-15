@@ -1694,6 +1694,9 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "select a, b from (select * from tbl) sort by a",
 		err:   "syntax error",
+	}, {
+		input: "/*!*/",
+		err:   "empty statement",
 	}}
 
 	for _, tcase := range invalidSQL {
