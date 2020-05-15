@@ -104,7 +104,7 @@ func (sc *StatefulConnection) Unlock() {
 		return
 	}
 	if sc.dbConn.IsClosed() {
-		sc.Release(tx.TxClose)
+		sc.conclude("unlocked closed connection")
 	} else {
 		sc.pool.markAsNotInUse(sc.ConnID)
 	}

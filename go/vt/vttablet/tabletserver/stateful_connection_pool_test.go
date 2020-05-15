@@ -49,13 +49,9 @@ func TestActivePoolClientRowsFound(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, startFoundRowsSize-1, pool.conns.Available(), "foundRows pool not used")
 
-	//conn, err := pool.GetAndLock(id1, "reason")
-	//require.NoError(t, err)
 	conn1.Release(tx.TxClose)
 	assert.Equal(t, startNormalSize, pool.conns.Available(), "default pool not restored after release")
 
-	//conn2, err = pool.GetAndLock(id2, "reason")
-	//require.NoError(t, err)
 	conn2.Release(tx.TxClose)
 	assert.Equal(t, startFoundRowsSize, pool.conns.Available(), "default pool not restored after release")
 }
