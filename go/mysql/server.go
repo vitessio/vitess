@@ -47,6 +47,7 @@ const (
 	versionTLS10      = "TLS10"
 	versionTLS11      = "TLS11"
 	versionTLS12      = "TLS12"
+	versionTLS13      = "TLS13"
 	versionTLSUnknown = "UnknownTLSVersion"
 	versionNoTLS      = "None"
 )
@@ -798,6 +799,8 @@ func tlsVersionToString(version uint16) string {
 		return versionTLS11
 	case tls.VersionTLS12:
 		return versionTLS12
+	case tls.VersionTLS13:
+		return versionTLS13
 	default:
 		return versionTLSUnknown
 	}
