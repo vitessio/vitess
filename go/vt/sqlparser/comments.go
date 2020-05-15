@@ -166,7 +166,7 @@ func hasCommentPrefix(sql string) bool {
 
 // ExtractMysqlComment extracts the version and SQL from a comment-only query
 // such as /*!50708 sql here */
-func ExtractMysqlComment(sql string) (version string, innerSQL string) {
+func ExtractMysqlComment(sql string) (string, string) {
 	sql = sql[3 : len(sql)-2]
 
 	digitCount := 0
@@ -174,8 +174,11 @@ func ExtractMysqlComment(sql string) (version string, innerSQL string) {
 		digitCount++
 		return !unicode.IsDigit(c) || digitCount == 6
 	})
-	version = sql[0:endOfVersionIndex]
-	innerSQL = strings.TrimFunc(sql[endOfVersionIndex:], unicode.IsSpace)
+	if endOfVersionIndex < 0 {
+		return "", ""
+	}
+	version := sql[0:endOfVersionIndex]
+	innerSQL := strings.TrimFunc(sql[endOfVersionIndex:], unicode.IsSpace)
 
 	return version, innerSQL
 }
