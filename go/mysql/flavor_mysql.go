@@ -19,6 +19,7 @@ package mysql
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"time"
 
 	"golang.org/x/net/context"
@@ -121,6 +122,35 @@ func (mysqlFlavor) status(c *Conn) (SlaveStatus, error) {
 	if err != nil {
 		return SlaveStatus{}, vterrors.Wrapf(err, "SlaveStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
 	}
+	relayLogGTIDSet, err := parseMysql56GTIDSet(resultMap["Retrieved_Gtid_Set"])
+	if err != nil {
+		return SlaveStatus{}, vterrors.Wrapf(err, "SlaveStatus can't parse MySQL 5.6 GTID (Retrieved_Gtid_Set: %#v)", resultMap["Retrieved_Gtid_Set"])
+	}
+	// We take the union of the executed and retrieved gtidset, because the retrieved gtidset only represents GTIDs since
+	// the relay log has been reset. To get the full Position, we need to take a union of executed GTIDSets, since these would
+	// have been in the relay log's GTIDSet in the past, prior to a reset.
+	status.RelayLogPosition.GTIDSet = status.Position.GTIDSet.Union(relayLogGTIDSet)
+
+	filePos, err := strconv.Atoi(resultMap["Exec_Master_Log_Pos"])
+	if err != nil {
+		return SlaveStatus{}, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", resultMap["Exec_Master_Log_Pos"])
+	}
+
+	status.FilePosition.GTIDSet = filePosGTID{
+		file: resultMap["Relay_Master_Log_File"],
+		pos:  filePos,
+	}
+
+	fileRelayPos, err := strconv.Atoi(resultMap["Relay_Log_Pos"])
+	if err != nil {
+		return SlaveStatus{}, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", resultMap["Exec_Master_Log_Pos"])
+	}
+
+	status.FileRelayLogPosition.GTIDSet = filePosGTID{
+		file: resultMap["Relay_Log_File"],
+		pos:  fileRelayPos,
+	}
+
 	return status, nil
 }
 
