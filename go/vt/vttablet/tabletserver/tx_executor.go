@@ -58,13 +58,16 @@ func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 
 	// If no queries were executed, we just rollback.
 	if len(conn.TxProps.Queries) == 0 {
-		conn.Release(tx.ConnInitFail)
+		conn.Release(tx.TxRollback)
 		return nil
 	}
 
 	err = txe.te.preparedPool.Put(conn, dtid)
 	if err != nil {
-		txe.te.txPool.Rollback(txe.ctx, conn)
+		err := txe.te.txPool.RollbackAndRelease(txe.ctx, conn)
+		if err != nil {
+			log.Errorf("tried to rollback, but failed with: %v", err.Error())
+		}
 		return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "prepare failed for transaction %d: %v", transactionID, err)
 	}
 

@@ -55,7 +55,9 @@ var txIsolations = map[querypb.ExecuteOptions_TransactionIsolation]queries{
 }
 
 type (
-	// TxPool is the transaction pool for the query service.
+	// TxPool does a lot of the transactional operations on StatefulConnections. It does not, with two exceptions,
+	// concern itself with a connections life cycle. The two exceptions are Begin, which creates a new StatefulConnection,
+	// and RollbackAndRelease, which does a Release after doing the rollback.
 	TxPool struct {
 		env tabletenv.Env
 
