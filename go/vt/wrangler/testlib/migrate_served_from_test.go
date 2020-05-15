@@ -82,7 +82,7 @@ func TestMigrateServedFrom(t *testing.T) {
 	// also will be asked about its replication position.
 	sourceMaster.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			5: mysql.MariadbGTID{
 				Domain:   5,
 				Server:   456,
 				Sequence: 892,

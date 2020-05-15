@@ -129,7 +129,7 @@ func TestMigrateServedTypes(t *testing.T) {
 	// also will be asked about its replication position.
 	sourceMaster.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			5: mysql.MariadbGTID{
 				Domain:   5,
 				Server:   456,
 				Sequence: 892,
@@ -336,7 +336,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	// also will be asked about its replication position.
 	source1Master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			5: mysql.MariadbGTID{
 				Domain:   5,
 				Server:   456,
 				Sequence: 892,
@@ -382,7 +382,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	// also will be asked about its replication position.
 	source2Master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			5: mysql.MariadbGTID{
 				Domain:   5,
 				Server:   456,
 				Sequence: 892,
