@@ -23,9 +23,12 @@ import (
 
 // SlaveStatus holds replication information from SHOW SLAVE STATUS.
 type SlaveStatus struct {
-	Position            Position
-	// RelayLogPosition will hold the Position the relay log is at. This is NOT supported in MariaDB, and will be nil for that flavor.
-	RelayLogPosition    *Position
+	Position Position
+	// RelayLogPosition is the Position that the replica would be at if it
+	// were to finish executing everything that's currently in its relay log.
+	// However, some MySQL flavors don't expose this information,
+	// in which case RelayLogPosition.IsZero() will be true.
+	RelayLogPosition    Position
 	SlaveIORunning      bool
 	SlaveSQLRunning     bool
 	SecondsBehindMaster uint
@@ -42,13 +45,9 @@ func (s *SlaveStatus) SlaveRunning() bool {
 
 // SlaveStatusToProto translates a Status to proto3.
 func SlaveStatusToProto(s SlaveStatus) *replicationdatapb.Status {
-	var relayLogPosition string
-	if s.RelayLogPosition != nil {
-		relayLogPosition = EncodePosition(*s.RelayLogPosition)
-	}
 	return &replicationdatapb.Status{
 		Position:            EncodePosition(s.Position),
-		RelayLogPosition:    relayLogPosition,
+		RelayLogPosition:    EncodePosition(s.RelayLogPosition),
 		SlaveIoRunning:      s.SlaveIORunning,
 		SlaveSqlRunning:     s.SlaveSQLRunning,
 		SecondsBehindMaster: uint32(s.SecondsBehindMaster),
@@ -70,7 +69,7 @@ func ProtoToSlaveStatus(s *replicationdatapb.Status) SlaveStatus {
 	}
 	return SlaveStatus{
 		Position:            pos,
-		RelayLogPosition:    &relayPos,
+		RelayLogPosition:    relayPos,
 		SlaveIORunning:      s.SlaveIoRunning,
 		SlaveSQLRunning:     s.SlaveSqlRunning,
 		SecondsBehindMaster: uint(s.SecondsBehindMaster),

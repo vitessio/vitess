@@ -160,7 +160,7 @@ VTTOP=$(VTROOT)/../../..
 $(PROTO_GO_OUTS): install_protoc-gen-go proto/*.proto
 	for name in $(PROTO_SRC_NAMES); do \
 		cd $(VTTOP)/src && \
-		$(VTROOT)/bin/protoc --go_out=plugins=grpc:. -Ivitess.io/vitess/proto vitess.io/vitess/proto/$${name}.proto && \
+		/usr/bin/protoc --go_out=plugins=grpc:. -Ivitess.io/vitess/proto vitess.io/vitess/proto/$${name}.proto && \
 		goimports -w $(VTROOT)/go/vt/proto/$${name}/$${name}.pb.go; \
 	done
 

@@ -1079,12 +1079,14 @@ func (wr *Wrangler) replicaTabletInfos(ctx context.Context, keyspace, shard stri
 	return replicas, nil
 }
 
+// CheckTabletIsFarthestAhead will take a tablet alias string, along with a statusMap of tablet alias strings to tablet Status objects,
+// and return an error if the tablet is not the farthest ahead, or otherwise return nil if it is the farthest ahead.
 func (wr *Wrangler) CheckTabletIsFarthestAhead(tabletAliasStr string, statusMap map[string]*replicationdatapb.Status) error {
 	tabletStatus, ok := statusMap[tabletAliasStr]
 	if !ok {
-		return fmt.Errorf("couldn't get tablet %v replication position", topoproto.TabletAliasString(masterElectTabletAlias))
+		return fmt.Errorf("couldn't get tablet %v replication position", tabletAliasStr)
 	}
-	candidatePos, err := decodeAndMergePositions(tabletStatus)
+	candidatePos, err := decodePosition(tabletStatus)
 	if err != nil {
 		return fmt.Errorf("cannot decode tablet position %v: %v", tabletStatus.Position, err)
 	}
@@ -1092,12 +1094,12 @@ func (wr *Wrangler) CheckTabletIsFarthestAhead(tabletAliasStr string, statusMap 
 		if alias == tabletAliasStr {
 			continue
 		}
-		pos, err := decodeAndMergePositions(status)
+		pos, err := decodePosition(status)
 		if err != nil {
 			return fmt.Errorf("cannot decode and merge replica %v executed and retrieved positions %v: %v", alias, status.Position, err)
 		}
-		if !candidatePos.AtLeast(*pos) {
-			return fmt.Errorf("tablet %v is more advanced than master elect tablet %v: %v > %v", alias, masterElectTabletAliasStr, status.Position, masterElectStatus.Position)
+		if !candidatePos.AtLeast(pos) {
+			return fmt.Errorf("tablet %v is more advanced than master elect tablet %v: %v > %v", alias, tabletAliasStr, status.Position, tabletStatus.Position)
 		}
 	}
 
@@ -1126,7 +1128,7 @@ func (wr *Wrangler) FindLatestReplica(ctx context.Context, keyspace, shard strin
 	}
 
 	// No valid positions, so we bail.
-	if winningPosition == nil {
+	if winningPosition.IsZero() {
 		return nil, nil
 	}
 
@@ -1134,8 +1136,8 @@ func (wr *Wrangler) FindLatestReplica(ctx context.Context, keyspace, shard strin
 		if rs == nil || rs.status == nil {
 			continue
 		}
-		if position, err := decodeAndMergePositions(rs.status); err == nil && position != nil{
-			if position.AtLeast(*winningPosition) {
+		if position, err := decodePosition(rs.status); err == nil && !position.IsZero() {
+			if position.AtLeast(winningPosition) {
 				winningPosition = position
 				winningTablet = rs.replica.Alias
 			}
@@ -1145,12 +1147,12 @@ func (wr *Wrangler) FindLatestReplica(ctx context.Context, keyspace, shard strin
 	return winningTablet, nil
 }
 
-func findValidPosition(replicaStatuses []*replicaStatus) (*mysql.Position, error) {
-	var validPosition *mysql.Position
+func findValidPosition(replicaStatuses []*replicaStatus) (mysql.Position, error) {
+	var validPosition mysql.Position
 	var err error
 	for _, rs := range replicaStatuses {
 		if rs != nil && rs.status != nil {
-			validPosition, err = decodeAndMergePositions(rs.status)
+			validPosition, err = decodePosition(rs.status)
 			break
 		}
 	}
@@ -1158,20 +1160,23 @@ func findValidPosition(replicaStatuses []*replicaStatus) (*mysql.Position, error
 	return validPosition, err
 }
 
-func decodeAndMergePositions(status *replicationdatapb.Status) (*mysql.Position, error) {
-	executedPos, err := mysql.DecodePosition(status.Position)
-	if err != nil {
-		log.Infof("Decode position failed, err: %v", err)
-		return nil, err
-	}
+// decodePosition is a helper that will decode the RelayLogPosition, if it's non-empty, and otherwise fall back
+// to the executed position.
+func decodePosition(status *replicationdatapb.Status) (mysql.Position, error) {
 	relayPos, err := mysql.DecodePosition(status.RelayLogPosition)
 	if err != nil {
 		log.Infof("Decode relay log position failed, err: %v", err)
-		return nil, err
+		return mysql.Position{}, err
 	}
-	unionGTID := executedPos.GTIDSet.Union(relayPos.GTIDSet)
-	winningPos := mysql.Position{GTIDSet: unionGTID}
-	return &winningPos, nil
+	if !relayPos.IsZero() {
+		return relayPos, nil
+	}
+	executedPos, err := mysql.DecodePosition(status.Position)
+	if err != nil {
+		log.Infof("Decode position failed, err: %v", err)
+		return mysql.Position{}, err
+	}
+	return executedPos, nil
 }
 
 // TabletExternallyReparented changes the type of new master for this shard to MASTER

@@ -25,6 +25,8 @@ package replicationdata;
 // and parsed into a Position and fields).
 message Status {
   string position = 1;
+  // RelayLogPosition will be empty for flavors that do not support returning the full GTIDSet from the relay log, such as MariaDB.
+  string relay_log_position = 8;
   bool slave_io_running = 2;
   bool slave_sql_running = 3;
   uint32 seconds_behind_master = 4;
