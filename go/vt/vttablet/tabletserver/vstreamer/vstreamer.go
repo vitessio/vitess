@@ -20,10 +20,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/golang/protobuf/proto"
 	"io"
 	"time"
-
-	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -73,9 +72,16 @@ type vstreamer struct {
 	versionTableID uint64
 
 	// format and pos are updated by parseEvent.
-	format mysql.BinlogFormat
-	pos    mysql.Position
+	format    mysql.BinlogFormat
+	pos       mysql.Position
+	tablePKs  []*TablePK
+	copyState map[string]*sqltypes.Result
+	vse       *Engine
+	fields    []*querypb.Field
+	pkfields  []*querypb.Field
 }
+
+type CopyState map[string][]*sqltypes.Result
 
 // streamerPlan extends the original plan to also include
 // the TableMap, which comes from the binlog. It's used
@@ -103,8 +109,7 @@ type streamerPlan struct {
 //   Other constructs like joins, group by, etc. are not supported.
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
-func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, sh schema.Historian, startPos string,
-	filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
+func newVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, sh schema.Historian, startPos string, tablePKs []*TablePK, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
 		ctx:      ctx,
@@ -118,6 +123,8 @@ func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine
 		vevents:  make(chan *localVSchema, 1),
 		vschema:  vschema,
 		plans:    make(map[uint64]*streamerPlan),
+		tablePKs: tablePKs,
+		vse: vse,
 	}
 }
 
@@ -136,27 +143,29 @@ func (vs *vstreamer) Cancel() {
 	vs.cancel()
 }
 
-// Stream streams binlog events.
-func (vs *vstreamer) Stream() error {
-	defer vs.cancel()
-
-	// Validate the request against the current position.
-	curPos, err := vs.currentPosition()
-	if err != nil {
-		return vterrors.Wrap(err, "could not obtain current position")
+func (vs *vstreamer) sendEventsForCurrentPos() error {
+	vevents := []*binlogdatapb.VEvent{{
+		Type: binlogdatapb.VEventType_GTID,
+		Gtid: mysql.EncodePosition(vs.pos),
+	}, {
+		Type: binlogdatapb.VEventType_OTHER,
+	}}
+	if err := vs.send(vevents); err != nil {
+		return wrapError(err, vs.pos)
 	}
-	if vs.startPos == "current" {
-		vs.pos = curPos
-		vevents := []*binlogdatapb.VEvent{{
-			Type: binlogdatapb.VEventType_GTID,
-			Gtid: mysql.EncodePosition(vs.pos),
-		}, {
-			Type: binlogdatapb.VEventType_OTHER,
-		}}
-		if err := vs.send(vevents); err != nil {
-			return wrapError(err, vs.pos)
+	return nil
+}
+
+func (vs *vstreamer) setStreamPosition() error {
+	if vs.startPos != "" {
+		curPos, err := vs.currentPosition()
+		if err != nil {
+			return vterrors.Wrap(err, "could not obtain current position")
 		}
-	} else {
+		if vs.startPos == "current" {
+			vs.pos = curPos
+			return nil
+		}
 		pos, err := mysql.DecodePosition(vs.startPos)
 		if err != nil {
 			return vterrors.Wrap(err, "could not decode position")
@@ -164,8 +173,38 @@ func (vs *vstreamer) Stream() error {
 		if !curPos.AtLeast(pos) {
 			return fmt.Errorf("requested position %v is ahead of current position %v", mysql.EncodePosition(pos), mysql.EncodePosition(curPos))
 		}
+		log.Infof("Setting stream position to %s", vs.pos)
 		vs.pos = pos
 	}
+	return nil
+}
+
+// Stream streams binlog events.
+func (vs *vstreamer) Stream() error {
+	defer vs.cancel()
+	ctx := context.Background()
+	defer ctx.Done()
+	log.Info("Starting Stream()")
+	if vs.pos.IsZero() && (vs.tablePKs == nil || len(vs.tablePKs) == 0) {
+		return fmt.Errorf("Stream needs atleast a position or a table to copy")
+	}
+	vs.setStreamPosition()
+	if vs.tablePKs != nil {
+		log.Info("TablePKs is not nil: starting vs.copy()")
+		if err := vs.copy(ctx); err != nil {
+			return err
+		}
+	}
+	if vs.startPos == "current" {
+		if err := vs.sendEventsForCurrentPos(); err != nil {
+			return err
+		}
+	}
+	return vs.replicate(ctx)
+}
+
+// Stream streams binlog events.
+func (vs *vstreamer) replicate(ctx context.Context) error {
 
 	// Ensure sh is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
