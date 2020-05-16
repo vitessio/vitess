@@ -1357,7 +1357,7 @@ func (tsv *TabletServer) VStream(ctx context.Context, target *querypb.Target, st
 	if err := tsv.verifyTarget(ctx, target); err != nil {
 		return err
 	}
-	return tsv.vstreamer.Stream(ctx, startPos, filter, send)
+	return tsv.vstreamer.Stream(ctx, startPos, nil, filter, send)
 }
 
 // VStreamRows streams rows from the specified starting point.
