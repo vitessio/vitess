@@ -18,6 +18,7 @@ package tabletserver
 
 import (
 	"time"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -31,7 +32,7 @@ import (
 // VStreamer defines  the functions of VStreamer
 // that the replicationWatcher needs.
 type VStreamer interface {
-	Stream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
+	Stream(ctx context.Context, startPos string, tablePKs []*vstreamer.TablePK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
 }
 
 // ReplicationWatcher is a tabletserver service that watches the
@@ -89,7 +90,7 @@ func (rpw *ReplicationWatcher) Process(ctx context.Context) {
 	var gtid string
 	for {
 		// The tracker will reload the schema and save it into _vt.schema_tracking when the vstream encounters a DDL.
-		err := rpw.vs.Stream(ctx, "current", filter, func(events []*binlogdatapb.VEvent) error {
+		err := rpw.vs.Stream(ctx, "current", nil, filter, func(events []*binlogdatapb.VEvent) error {
 			for _, event := range events {
 				if event.Type == binlogdatapb.VEventType_GTID {
 					gtid = event.Gtid

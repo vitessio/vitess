@@ -38,6 +38,12 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
+
+type TablePK struct {
+	name string
+	lastPK *sqltypes.Result //FIXME: should just allow sqltypes.Value instead of sqltypes.Result
+}
+
 // Engine is the engine for handling vreplication streaming requests.
 type Engine struct {
 	env tabletenv.Env
@@ -145,7 +151,7 @@ func (vse *Engine) vschema() *vindexes.VSchema {
 }
 
 // Stream starts a new stream.
-func (vse *Engine) Stream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*TablePK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	// Ensure vschema is initialized and the watcher is started.
 	// Starting of the watcher has to be delayed till the first call to Stream
 	// because this overhead should be incurred only if someone uses this feature.
@@ -158,7 +164,7 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, filter *binlogda
 		if !vse.isOpen {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
-		streamer := newVStreamer(ctx, vse.env.Config().DB.AppWithDB(), vse.se, vse.sh, startPos, filter, vse.lvschema, send)
+		streamer := newVStreamer(ctx, vse, vse.env.Config().DB.AppWithDB(), vse.se, vse.sh, startPos, tablePKs, filter, vse.lvschema, send)
 		idx := vse.streamIdx
 		vse.streamers[idx] = streamer
 		vse.streamIdx++

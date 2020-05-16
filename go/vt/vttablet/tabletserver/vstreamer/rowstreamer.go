@@ -137,6 +137,7 @@ func (rs *rowStreamer) buildPlan() error {
 	if err != nil {
 		return err
 	}
+	log.Infof("Rowstreamer, table plan %v, pkColumns %v, fields %v", rs.plan, rs.pkColumns, rs.plan.fields())
 	return err
 }
 
@@ -220,12 +221,13 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			Type: flds[pk].Type,
 		}
 	}
-
+	log.Infof("Before sending 0th response fields %v, pkfields %v, gtid %s", rs.plan.fields(), pkfields, gtid)
 	err = send(&binlogdatapb.VStreamRowsResponse{
 		Fields:   rs.plan.fields(),
 		Pkfields: pkfields,
 		Gtid:     gtid,
 	})
+	log.Infof("After sending 0th response")
 	if err != nil {
 		return fmt.Errorf("stream send error: %v", err)
 	}
@@ -247,7 +249,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		if row == nil {
 			break
 		}
-		// Compute lastpk here, because we'll neeed it
+		// Compute lastpk here, because we'll need it
 		// at the end after the loop exits.
 		for i, pk := range rs.pkColumns {
 			lastpk[i] = row[pk]
@@ -266,6 +268,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 
 		if byteCount >= *PacketSize {
 			response.Lastpk = sqltypes.RowToProto3(lastpk)
+			log.Infof("Before sending response of len %d, fields %v, pkfields %v", len(response.Rows), response.Fields, response.Pkfields)
 			err = send(response)
 			if err != nil {
 				return err
@@ -278,6 +281,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	}
 
 	if len(response.Rows) > 0 {
+		log.Infof("Before sending response of len %d, fields %v, pkfields %v", len(response.Rows), response.Fields, response.Pkfields)
 		response.Lastpk = sqltypes.RowToProto3(lastpk)
 		err = send(response)
 		if err != nil {
