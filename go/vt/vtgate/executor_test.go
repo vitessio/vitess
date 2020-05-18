@@ -1870,24 +1870,60 @@ func TestGenerateCharsetRows(t *testing.T) {
 }
 
 func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
-	save := *maxPayloadSize
-	*maxPayloadSize = 5
-	defer func() { *maxPayloadSize = save }()
+	saveMax := *maxPayloadSize
+	saveWarn := *warnPayloadSize
+	*maxPayloadSize = 10
+	*warnPayloadSize = 5
+	defer func() {
+		*maxPayloadSize = saveMax
+		*warnPayloadSize = saveWarn
+	}()
 
 	executor, _, _, _ := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
-	testCases := []string{
+	warningCount := warnings.Counts()["PayloadSizeExceeded"]
+	testMaxPayloadSizeExceeded := []string{
 		"select * from main1",
 		"insert into main1(id) values (1), (2)",
 		"update main1 set id=1",
 		"delete from main1 where id=1",
 	}
-	for _, query := range testCases {
+	for _, query := range testMaxPayloadSizeExceeded {
 		_, err := executor.Execute(context.Background(), "TestExecutorMaxPayloadSizeExceeded", session, query, nil)
 		want := "query payload size above threshold"
 		if err == nil || err.Error() != want {
 			t.Errorf("got: %v, want %s", err, want)
 		}
+	}
+	if got, want := warnings.Counts()["PayloadSizeExceeded"], warningCount; got != want {
+		t.Errorf("warnings count: %v, want %v", got, want)
+	}
+
+	testMaxPayloadSizeOverride := []string{
+		"select /*vt+ MAX_PAYLOAD_SIZE_OVERRIDE=1 */ * from main1",
+		"insert /*vt+ MAX_PAYLOAD_SIZE_OVERRIDE=1 */ into main1(id) values (1), (2)",
+		"update /*vt+ MAX_PAYLOAD_SIZE_OVERRIDE=1 */ main1 set id=1",
+		"delete /*vt+ MAX_PAYLOAD_SIZE_OVERRIDE=1 */ from main1 where id=1",
+	}
+	for _, query := range testMaxPayloadSizeOverride {
+		_, err := executor.Execute(context.Background(), "TestExecutorMaxPayloadSizeWithOverride", session, query, nil)
+		if err != nil {
+			t.Errorf("error should be nil - got: %v", err)
+		}
+	}
+	if got, want := warnings.Counts()["PayloadSizeExceeded"], warningCount; got != want {
+		t.Errorf("warnings count: %v, want %v", got, want)
+	}
+
+	*maxPayloadSize = 1000
+	for _, query := range testMaxPayloadSizeExceeded {
+		_, err := executor.Execute(context.Background(), "TestExecutorMaxPayloadSizeExceeded", session, query, nil)
+		if err != nil {
+			t.Errorf("error should be nil - got: %v", err)
+		}
+	}
+	if got, want := warnings.Counts()["PayloadSizeExceeded"], warningCount+4; got != want {
+		t.Errorf("warnings count: %v, want %v", got, want)
 	}
 }
 

@@ -385,3 +385,23 @@ func TestSkipQueryPlanCacheDirective(t *testing.T) {
 		t.Errorf("d.SkipQueryPlanCacheDirective(stmt) should be true")
 	}
 }
+
+func TestMaxPayloadSizeOverrideDirective(t *testing.T) {
+	testCases := []struct {
+		query    string
+		expected bool
+	}{
+		{"insert /*vt+ MAX_PAYLOAD_SIZE_OVERRIDE=1 */ into user(id) values (1), (2)", true},
+		{"insert into user(id) values (1), (2)", false},
+		{"update /*vt+ MAX_PAYLOAD_SIZE_OVERRIDE=1 */ users set name=1", true},
+		{"select /*vt+ MAX_PAYLOAD_SIZE_OVERRIDE=1 */ * from users", true},
+		{"delete /*vt+ MAX_PAYLOAD_SIZE_OVERRIDE=1 */ from users", true},
+	}
+
+	for _, test := range testCases {
+		stmt, _ := Parse(test.query)
+		if got := MaxPayloadSizeOverrideDirective(stmt); got != test.expected {
+			t.Errorf("d.MaxPayloadSizeOverrideDirective(stmt) returned %v but expected %v", got, test.expected)
+		}
+	}
+}
