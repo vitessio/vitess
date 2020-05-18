@@ -442,6 +442,44 @@ func TestExecutorAutocommit(t *testing.T) {
 	}
 }
 
+func TestExecutorShowColumns(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{TargetString: ""})
+
+	queries := []string{
+		"SHOW COLUMNS FROM `user` in `TestExecutor`",
+		"show columns from `user` in `TestExecutor`",
+		"ShOw CoLuMnS fRoM `user` iN `TestExecutor`",
+		"SHOW columns FROM `user` in `TestExecutor`",
+	}
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			_, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
+			require.NoError(t, err)
+
+			wantQueries := []*querypb.BoundQuery{{
+				Sql:           "show columns from user",
+				BindVariables: map[string]*querypb.BindVariable{},
+			}}
+
+			assert.Equal(t, wantQueries, sbc1.Queries, "sbc1.Queries")
+			assert.Empty(t, sbc1.BatchQueries, "sbc1.BatchQueries")
+			assert.Empty(t, sbc2.Queries, "sbc2.Queries")
+			assert.Empty(t, sbc2.BatchQueries, "sbc2.BatchQueries")
+			assert.Empty(t, sbclookup.Queries, "sbclookup.Queries")
+			assert.Empty(t, sbclookup.BatchQueries, "sbclookup.BatchQueries")
+
+			sbc1.Queries = nil
+			sbc2.Queries = nil
+			sbclookup.Queries = nil
+			sbc1.BatchQueries = nil
+			sbc2.BatchQueries = nil
+			sbclookup.BatchQueries = nil
+		})
+	}
+
+}
+
 func TestExecutorShow(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
