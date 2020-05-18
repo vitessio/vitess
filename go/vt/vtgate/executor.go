@@ -1283,13 +1283,14 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		return nil, err
 	}
 
-	// Normalize if possible and retry.
 	query := sql
-	if err = validatePayloadSize(query); err != nil {
-		return nil, err
-	}
 	statement := stmt
 	bindVarNeeds := sqlparser.BindVarNeeds{}
+	if !sqlparser.MaxPayloadSizeOverrideDirective(statement) && !isValidPayloadSize(query) {
+		return nil, vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "query payload size above threshold")
+	}
+
+	// Normalize if possible and retry.
 	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.IsSetStatement(stmt) {
 		parameterize := e.normalize // the public flag is called normalize
 		result, err := sqlparser.PrepareAST(stmt, bindVars, "vtg", parameterize)
@@ -1498,17 +1499,19 @@ func checkLikeOpt(likeOpt string, colNames []string) (string, error) {
 	return "", nil
 }
 
-// validatePayloadSize validates whether a query payload is above the
-// configured MaxPayloadSize threshold
-func validatePayloadSize(query string) error {
-	// If maxPayloadSize is the default value of 0, return early.
-	if *maxPayloadSize == 0 {
-		return nil
+// isValidPayloadSize validates whether a query payload is above the
+// configured MaxPayloadSize threshold. The PayloadSizeExceeded will increment
+// if the payload size exceeds the warnPayloadSize.
+
+func isValidPayloadSize(query string) bool {
+	payloadSize := len(query)
+	if *maxPayloadSize > 0 && payloadSize > *maxPayloadSize {
+		return false
 	}
-	if len(query) > *maxPayloadSize {
-		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "query payload size above threshold")
+	if *warnPayloadSize > 0 && payloadSize > *warnPayloadSize {
+		warnings.Add("PayloadSizeExceeded", 1)
 	}
-	return nil
+	return true
 }
 
 // Prepare executes a prepare statements.
