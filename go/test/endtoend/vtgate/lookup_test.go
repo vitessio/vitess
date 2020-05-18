@@ -529,6 +529,17 @@ func TestSelectNull(t *testing.T) {
 	exec(t, conn, "delete from t5_null_vindex")
 }
 
+func TestShowColumns(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	expected := `[[VARCHAR("id") TEXT("bigint(20)") VARCHAR("NO") VARCHAR("PRI") NULL VARCHAR("")] [VARCHAR("idx") TEXT("varchar(50)") VARCHAR("YES") VARCHAR("") NULL VARCHAR("")]]`
+	assertMatches(t, conn, "show columns from `t5_null_vindex` in `ks`", expected)
+	assertMatches(t, conn, "SHOW COLUMNS from `t5_null_vindex` in `ks`", expected)
+	assertMatches(t, conn, "SHOW columns FROM `t5_null_vindex` in `ks`", expected)
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
