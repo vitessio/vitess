@@ -29,7 +29,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
@@ -60,7 +59,7 @@ func TestMain(m *testing.M) {
 		// engine cannot be initialized in testenv because it introduces
 		// circular dependencies
 		historian = schema.NewHistorian(env.SchemaEngine)
-		historian.Init(tabletpb.TabletType_MASTER)
+		historian.Open()
 		engine = NewEngine(env.TabletEnv, env.SrvTopo, historian)
 		engine.Open(env.KeyspaceName, env.Cells[0])
 		defer engine.Close()
@@ -77,7 +76,7 @@ func customEngine(t *testing.T, modifier func(mysql.ConnParams) mysql.ConnParams
 	config := env.TabletEnv.Config().Clone()
 	config.DB = dbconfigs.NewTestDBConfigs(modified, modified, modified.DbName)
 	historian = schema.NewHistorian(env.SchemaEngine)
-	historian.Init(tabletpb.TabletType_MASTER)
+	historian.Open()
 
 	engine := NewEngine(tabletenv.NewEnv(config, "VStreamerTest"), env.SrvTopo, historian)
 	engine.Open(env.KeyspaceName, env.Cells[0])
@@ -90,12 +89,11 @@ type mockHistorian struct {
 
 func (h *mockHistorian) SetTrackSchemaVersions(val bool) {}
 
-func (h *mockHistorian) Init(tabletType tabletpb.TabletType) error {
+func (h *mockHistorian) Open() error {
 	return nil
 }
 
-func (h *mockHistorian) Open() error {
-	return nil
+func (h *mockHistorian) Close() {
 }
 
 func (h *mockHistorian) Reload(ctx context.Context) error {

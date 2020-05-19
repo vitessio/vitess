@@ -30,16 +30,16 @@ func TestTracker(t *testing.T) {
 	defer cancel()
 
 	tracker := NewTracker(se)
+	tracker.Open()
+
 	gtid1 := "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10"
 	ddl1 := "create table tracker_test (id int)"
 	ts1 := int64(1427325876)
 	var query string
 	query = "CREATE TABLE IF NOT EXISTS _vt.schema_version.*"
-	require.Regexp(t, ".*is not supported.*", tracker.SchemaUpdated(gtid1, ddl1, ts1))
 	db.AddQueryPattern(query, &sqltypes.Result{})
 
 	query = fmt.Sprintf("insert into _vt.schema_version.*%s.*%s.*%d.*", gtid1, regexp.QuoteMeta(ddl1), ts1)
-	require.Regexp(t, ".*is not supported.*", tracker.SchemaUpdated(gtid1, ddl1, ts1))
 	db.AddQueryPattern(query, &sqltypes.Result{})
 
 	require.NoError(t, tracker.SchemaUpdated(gtid1, ddl1, ts1))

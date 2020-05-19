@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -74,7 +73,7 @@ func TestHistorian(t *testing.T) {
 	se, db, cancel := getTestSchemaEngine(t)
 	defer cancel()
 	h := NewHistorian(se)
-	h.Init(tabletpb.TabletType_MASTER)
+	h.Open()
 
 	h.SetTrackSchemaVersions(false)
 	require.Nil(t, h.RegisterVersionEvent())
@@ -86,7 +85,6 @@ func TestHistorian(t *testing.T) {
 	require.Nil(t, h.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid1))
 	require.Equal(t, fmt.Sprintf("%v", h.GetTableForPos(sqlparser.NewTableIdent("dual"), gtid1)), `name:"dual" `)
 	h.SetTrackSchemaVersions(true)
-	require.Regexp(t, ".*not supported.*", h.RegisterVersionEvent())
 	require.Nil(t, h.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid1))
 	var blob1 string
 
