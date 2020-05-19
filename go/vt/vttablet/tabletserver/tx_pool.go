@@ -161,6 +161,9 @@ func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (*StatefulConnecti
 
 // Commit commits the transaction on the connection.
 func (tp *TxPool) Commit(ctx context.Context, txConn *StatefulConnection) (string, error) {
+	if !txConn.IsInTransaction() {
+		return "", vterrors.New(vtrpcpb.Code_INTERNAL, "not in a transaction")
+	}
 	span, ctx := trace.NewSpan(ctx, "TxPool.Commit")
 	defer span.Finish()
 	defer tp.txComplete(txConn, tx.TxCommit)
@@ -183,6 +186,9 @@ func (tp *TxPool) RollbackAndRelease(ctx context.Context, txConn *StatefulConnec
 
 // Rollback rolls back the transaction on the specified connection.
 func (tp *TxPool) Rollback(ctx context.Context, txConn *StatefulConnection) error {
+	if !txConn.IsInTransaction() {
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "not in a transaction")
+	}
 	span, ctx := trace.NewSpan(ctx, "TxPool.Rollback")
 	defer span.Finish()
 	if !txConn.IsOpen() || !txConn.IsInTransaction() {
@@ -316,21 +322,25 @@ func (tp *TxPool) log(txc *StatefulConnection, reason tx.ReleaseReason) {
 type TxProperties struct {
 	EffectiveCaller *vtrpcpb.CallerID
 	ImmediateCaller *querypb.VTGateCallerID
-
-	StartTime time.Time
-	EndTime   time.Time
-
-	Queries []string
-
-	Autocommit bool
-	Conclusion string
-
-	LogToFile bool
+	StartTime       time.Time
+	EndTime         time.Time
+	Queries         []string
+	Autocommit      bool
+	Conclusion      string
+	LogToFile       bool
 
 	txStats *servenv.TimingsWrapper
 }
 
 // RecordQuery records the query against this transaction.
 func (tp *TxProperties) RecordQuery(query string) {
+	if tp == nil {
+		return
+	}
 	tp.Queries = append(tp.Queries, query)
+}
+
+// InTransaction returns true as soon as this struct is not nil
+func (tp *TxProperties) InTransaction() bool {
+	return tp != nil
 }

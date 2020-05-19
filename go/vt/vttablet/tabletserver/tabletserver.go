@@ -958,7 +958,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 	trace.AnnotateSQL(span, sql)
 	defer span.Finish()
 
-	allowOnShutdown := (transactionID != 0)
+	allowOnShutdown := transactionID != 0
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Execute", sql, bindVariables,
@@ -1850,23 +1850,23 @@ func (tsv *TabletServer) StreamPoolSize() int {
 // SetTxPoolSize changes the tx pool size to the specified value.
 // This function should only be used for testing.
 func (tsv *TabletServer) SetTxPoolSize(val int) {
-	tsv.te.Pool().activePool.conns.SetCapacity(val)
+	tsv.te._txPool.activePool.conns.SetCapacity(val)
 }
 
 // TxPoolSize returns the tx pool size.
 func (tsv *TabletServer) TxPoolSize() int {
-	return tsv.te.Pool().activePool.Capacity()
+	return tsv.te._txPool.activePool.Capacity()
 }
 
 // SetTxTimeout changes the transaction timeout to the specified value.
 // This function should only be used for testing.
 func (tsv *TabletServer) SetTxTimeout(val time.Duration) {
-	tsv.te.Pool().SetTimeout(val)
+	tsv.te._txPool.SetTimeout(val)
 }
 
 // TxTimeout returns the transaction timeout.
 func (tsv *TabletServer) TxTimeout() time.Duration {
-	return tsv.te.Pool().Timeout()
+	return tsv.te._txPool.Timeout()
 }
 
 // SetQueryPlanCacheCap changes the pool size to the specified value.

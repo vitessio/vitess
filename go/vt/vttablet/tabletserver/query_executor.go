@@ -113,7 +113,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 
 	if qre.transactionID != 0 {
 		// Need upfront connection for DMLs and transactions
-		conn, err := qre.tsv.te.Pool().GetAndLock(qre.transactionID, "for query")
+		conn, err := qre.tsv.te._txPool.GetAndLock(qre.transactionID, "for query")
 		if err != nil {
 			return nil, err
 		}
@@ -151,22 +151,22 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 	}
 	qre.options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
 
-	conn, _, err := qre.tsv.te.Pool().Begin(qre.ctx, qre.options)
+	conn, _, err := qre.tsv.te._txPool.Begin(qre.ctx, qre.options)
 
 	if err != nil {
 		return nil, err
 	}
-	defer qre.tsv.te.Pool().RollbackAndRelease(qre.ctx, conn)
+	defer qre.tsv.te._txPool.RollbackAndRelease(qre.ctx, conn)
 
 	return f(conn)
 }
 
 func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
-	conn, beginSQL, err := qre.tsv.te.Pool().Begin(qre.ctx, qre.options)
+	conn, beginSQL, err := qre.tsv.te._txPool.Begin(qre.ctx, qre.options)
 	if err != nil {
 		return nil, err
 	}
-	defer qre.tsv.te.Pool().RollbackAndRelease(qre.ctx, conn)
+	defer qre.tsv.te._txPool.RollbackAndRelease(qre.ctx, conn)
 	qre.logStats.AddRewrittenSQL(beginSQL, time.Now())
 
 	result, err := f(conn)
@@ -176,15 +176,14 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*s
 		// TODO(sougou): these txPool functions should take the logstats
 		// and log any statements they issue. This needs to be done as
 		// a separate refactor because it impacts lot of code.
-		if conn.dbConn != nil {
+		if conn.IsInTransaction() {
 			defer qre.logStats.AddRewrittenSQL("rollback", time.Now())
-			qre.tsv.te.Pool().Rollback(qre.ctx, conn)
 		}
 		return nil, err
 	}
 
 	defer qre.logStats.AddRewrittenSQL("commit", time.Now())
-	if _, err := qre.tsv.te.Pool().Commit(qre.ctx, conn); err != nil {
+	if _, err := qre.tsv.te._txPool.Commit(qre.ctx, conn); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -234,7 +233,7 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 	// if we have a transaction id, let's use the txPool for this query
 	var conn *connpool.DBConn
 	if qre.transactionID != 0 {
-		txConn, err := qre.tsv.te.Pool().GetAndLock(qre.transactionID, "for streaming query")
+		txConn, err := qre.tsv.te._txPool.GetAndLock(qre.transactionID, "for streaming query")
 		if err != nil {
 			return err
 		}
@@ -498,7 +497,7 @@ func (qre *QueryExecutor) execDMLLimit(conn *StatefulConnection) (*sqltypes.Resu
 	}
 	if err := qre.verifyRowCount(int64(result.RowsAffected), maxrows); err != nil {
 		defer qre.logStats.AddRewrittenSQL("rollback", time.Now())
-		_ = qre.tsv.te.Pool().Rollback(qre.ctx, conn)
+		_ = qre.tsv.te._txPool.Rollback(qre.ctx, conn)
 		return nil, err
 	}
 	return result, nil
@@ -659,12 +658,12 @@ func (qre *QueryExecutor) getSelectLimit() int64 {
 	return maxRows
 }
 
-// poolConn is an abstraction for reusing code in execSQL.
-type poolConn interface {
+// executor is an abstraction for reusing code in execSQL.
+type executor interface {
 	Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
 }
 
-func (qre *QueryExecutor) execSQL(conn poolConn, sql string, wantfields bool) (*sqltypes.Result, error) {
+func (qre *QueryExecutor) execSQL(conn executor, sql string, wantfields bool) (*sqltypes.Result, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execSQL")
 	defer span.Finish()
 
