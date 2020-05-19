@@ -104,7 +104,7 @@ func (sc *StatefulConnection) Unlock() {
 		return
 	}
 	if sc.dbConn.IsClosed() {
-		sc.conclude("unlocked closed connection")
+		sc.Releasef("unlocked closed connection")
 	} else {
 		sc.pool.markAsNotInUse(sc.ConnID)
 	}
@@ -113,14 +113,16 @@ func (sc *StatefulConnection) Unlock() {
 //Release is used when the connection will not be used ever again.
 //The underlying dbConn is removed so that this connection cannot be used by mistake.
 func (sc *StatefulConnection) Release(reason tx.ReleaseReason) {
-	sc.conclude(reason.String())
+	sc.Releasef(reason.String())
 }
 
-func (sc *StatefulConnection) conclude(reason string) {
+//Releasef is used when the connection will not be used ever again.
+//The underlying dbConn is removed so that this connection cannot be used by mistake.
+func (sc *StatefulConnection) Releasef(reasonFormat string, a ...interface{}) {
 	if sc.dbConn == nil {
 		return
 	}
-	sc.pool.unregister(sc.ConnID, reason)
+	sc.pool.unregister(sc.ConnID, fmt.Sprintf(reasonFormat, a...))
 	sc.dbConn.Recycle()
 	sc.dbConn = nil
 }
