@@ -43,7 +43,7 @@ type test struct {
 
 func TestSchemaVersioning(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-
+	defer cancel()
 	tsv := framework.Server
 	origWatchReplication := tsv.Config().WatchReplication
 	tsv.Config().WatchReplication = true

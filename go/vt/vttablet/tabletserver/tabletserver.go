@@ -162,10 +162,12 @@ type TabletServer struct {
 	// The following variables should only be accessed within
 	// the context of a startRequest-endRequest.
 	se        *schema.Engine
+	sh        schema.Historian
 	qe        *QueryEngine
 	te        *TxEngine
 	hw        *heartbeat.Writer
 	hr        *heartbeat.Reader
+	tracker   *schema.Tracker
 	watcher   *ReplicationWatcher
 	vstreamer *vstreamer.Engine
 	messager  *messager.Engine
@@ -193,7 +195,6 @@ type TabletServer struct {
 
 	// alias is used for identifying this tabletserver in healthcheck responses.
 	alias topodatapb.TabletAlias
-	sh    schema.Historian
 }
 
 // RegisterFunctions is a list of all the
@@ -239,9 +240,9 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.sh)
-	tsv.StartTracker()
+	tsv.tracker = schema.NewTracker(tsv.se)
+	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config, tsv.tracker)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
-
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
 		tsv.mu.Lock()
 		defer tsv.mu.Unlock()
@@ -263,14 +264,16 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	return tsv
 }
 
-// StartTracker() starts a new replication watcher
-// Exporting it allows it to be called separately in endtoend tests
+// StartTracker starts a new replication watcher
+// Only to be used for testing
 func (tsv *TabletServer) StartTracker() {
 	schemaTracker := schema.NewTracker(tsv.se)
 	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config, schemaTracker)
 	tsv.watcher.Open()
 }
 
+// StopTracker turns the watcher off
+// Only to be used for testing
 func (tsv *TabletServer) StopTracker() {
 	tsv.watcher.Close()
 }
@@ -424,7 +427,6 @@ func (tsv *TabletServer) StartService(target querypb.Target, dbcfgs *dbconfigs.D
 		return err
 	}
 	_ /* state changed */, err = tsv.SetServingType(tabletType, true, nil)
-	tsv.sh.Init(tabletType)
 	return err
 }
 
@@ -533,8 +535,8 @@ func (tsv *TabletServer) fullStart() (err error) {
 	}
 	c.Close()
 
-	if err := tsv.se.Open(); err != nil {
-		log.Errorf("Could not load schema, but starting the query service anyways: %v", err)
+	if err := tsv.sh.Open(); err != nil {
+		log.Errorf("Could not load historian, but starting the query service anyways: %v", err)
 	}
 	if err := tsv.qe.Open(); err != nil {
 		return err
@@ -564,12 +566,17 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.messager.Open()
 		tsv.hr.Close()
 		tsv.hw.Open()
+		tsv.tracker.Open()
+		if tsv.config.TrackSchemaVersions {
+			tsv.watcher.Open()
+		}
 	} else {
 		tsv.txController.AcceptReadOnly()
 		tsv.messager.Close()
 		tsv.hr.Open()
 		tsv.hw.Close()
 		tsv.watcher.Open()
+		tsv.tracker.Close()
 
 		// Reset the sequences.
 		tsv.se.MakeNonMaster()
@@ -1702,9 +1709,10 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.Real
 	target := tsv.target
 	tsv.mu.Unlock()
 	shr := &querypb.StreamHealthResponse{
-		Target:                              &target,
-		TabletAlias:                         &tsv.alias,
-		Serving:                             tsv.IsServing(),
+		Target:      &target,
+		TabletAlias: &tsv.alias,
+		Serving:     tsv.IsServing(),
+
 		TabletExternallyReparentedTimestamp: terTimestamp,
 		RealtimeStats:                       stats,
 	}

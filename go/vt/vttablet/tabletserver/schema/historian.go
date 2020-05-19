@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -44,7 +43,7 @@ type Historian interface {
 	Reload(ctx context.Context) error
 	GetTableForPos(tableName sqlparser.TableIdent, pos string) *binlogdatapb.MinimalTable
 	Open() error
-	Init(tabletType topodatapb.TabletType) error
+	Close()
 	SetTrackSchemaVersions(val bool)
 }
 
@@ -56,6 +55,7 @@ var _ HistoryEngine = (*Engine)(nil)
 // information from the database
 type HistoryEngine interface {
 	Open() error
+	Close()
 	Reload(ctx context.Context) error
 	GetConnection(ctx context.Context) (*connpool.DBConn, error)
 	GetSchema() map[string]*Table
@@ -77,25 +77,30 @@ type HistorianSvc struct {
 	he                  HistoryEngine
 	lastID              int64
 	schemas             []*TrackedSchema
-	isMaster            bool
 	mu                  sync.Mutex
 	trackSchemaVersions bool
 	lastSchema          map[string]*binlogdatapb.MinimalTable
+	isOpen              bool
 }
 
 // Reload gets the latest schema from the database
 func (h *HistorianSvc) Reload(ctx context.Context) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	return h.reload(ctx)
 }
 
 // NewHistorian creates a new historian. It expects a schema.Engine instance
 func NewHistorian(he HistoryEngine) *HistorianSvc {
-	sh := HistorianSvc{he: he, lastID: 0}
+	sh := HistorianSvc{he: he, lastID: 0, trackSchemaVersions: true}
 	return &sh
 }
 
 // SetTrackSchemaVersions can be used to turn on/off the use of the schema_version history in the historian
+// Only used for testing
 func (h *HistorianSvc) SetTrackSchemaVersions(val bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	h.trackSchemaVersions = val
 }
 
@@ -129,8 +134,6 @@ func (h *HistorianSvc) readRow(row []sqltypes.Value) (*TrackedSchema, int64, err
 
 // loadFromDB loads all rows from the schema_version table that the historian does not have as yet
 func (h *HistorianSvc) loadFromDB(ctx context.Context) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
 	conn, err := h.he.GetConnection(ctx)
 	if err != nil {
 		return err
@@ -139,8 +142,8 @@ func (h *HistorianSvc) loadFromDB(ctx context.Context) error {
 	log.Infof("In loadFromDb for lastID %d", h.lastID)
 	tableData, err := conn.Exec(ctx, fmt.Sprintf(getSchemaVersions, h.lastID), 10000, true)
 	if err != nil {
-		log.Errorf("Error reading schema_tracking table %v", err)
-		return err
+		log.Infof("Error reading schema_tracking table %v", err)
+		return nil
 	}
 	log.Infof("Received rows from schema_version: %v", len(tableData.Rows))
 	if len(tableData.Rows) > 0 {
@@ -157,27 +160,34 @@ func (h *HistorianSvc) loadFromDB(ctx context.Context) error {
 	return nil
 }
 
-// Init needs to be called once the tablet's type is known. It also warms the cache from the db
-func (h *HistorianSvc) Init(tabletType topodatapb.TabletType) error {
-	h.Open()
-	ctx := tabletenv.LocalContext()
-	if !h.trackSchemaVersions {
+// Open opens the underlying schema Engine. Called directly by a user purely interested in schema.Engine functionality
+func (h *HistorianSvc) Open() error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.isOpen {
 		return nil
 	}
-	h.isMaster = tabletType == topodatapb.TabletType_MASTER
-	if h.isMaster {
-		h.Reload(ctx)
-		if err := h.loadFromDB(ctx); err != nil {
-			return err
-		}
+	h.he.Open()
+	ctx := tabletenv.LocalContext()
+	h.reload(ctx)
+	if err := h.loadFromDB(ctx); err != nil {
+		return err
 	}
+	h.isOpen = true
 	return nil
 }
 
-// Open opens the underlying schema Engine. Called directly by a user purely interested in schema.Engine functionality
-// Other users like tabletserver and historian tests call Init
-func (h *HistorianSvc) Open() error {
-	return h.he.Open()
+// Close closes the underlying schema engine and empties the version cache
+func (h *HistorianSvc) Close() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if !h.isOpen {
+		return
+	}
+	h.schemas = nil
+	h.he.Close()
+	h.isOpen = false
 }
 
 // reload gets the latest schema and replaces the latest copy of the schema maintained by the historian
@@ -200,14 +210,14 @@ func (h *HistorianSvc) reload(ctx context.Context) error {
 		table.PKColumns = pkc
 		tables[table.Name] = table
 	}
-	h.mu.Lock()
-	defer h.mu.Unlock()
 	h.lastSchema = tables
 	return nil
 }
 
 // GetTableForPos returns a best-effort schema for a specific gtid
 func (h *HistorianSvc) GetTableForPos(tableName sqlparser.TableIdent, gtid string) *binlogdatapb.MinimalTable {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	log.Infof("GetTableForPos called for %s with pos %s", tableName, gtid)
 	if gtid != "" {
 		pos, err := mysql.DecodePosition(gtid)
@@ -263,6 +273,8 @@ func (h *HistorianSvc) getTableFromHistoryForPos(tableName sqlparser.TableIdent,
 // RegisterVersionEvent is called by the vstream when it encounters a version event (an insert into _vt.schema_tracking)
 // It triggers the historian to load the newer rows from the database to update its cache
 func (h *HistorianSvc) RegisterVersionEvent() error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	if !h.trackSchemaVersions {
 		return nil
 	}

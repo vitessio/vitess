@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 )
 
 const createSchemaTrackingTable = `CREATE TABLE IF NOT EXISTS _vt.schema_version (
@@ -37,12 +36,6 @@ const createSchemaTrackingTable = `CREATE TABLE IF NOT EXISTS _vt.schema_version
 		  PRIMARY KEY (id)
 		) ENGINE=InnoDB`
 
-type trackerEngine interface {
-	GetConnection(ctx context.Context) (*connpool.DBConn, error)
-	Reload(ctx context.Context) error
-	GetSchema() map[string]*Table
-}
-
 //Subscriber will get notified when the schema has been updated
 type Subscriber interface {
 	SchemaUpdated(gtid string, ddl string, timestamp int64) error
@@ -52,16 +45,30 @@ var _ Subscriber = (*Tracker)(nil)
 
 // Tracker implements Subscriber and persists versions into the ddb
 type Tracker struct {
-	engine trackerEngine
+	engine  *Engine
+	enabled bool
 }
 
 // NewTracker creates a Tracker, needs an Open SchemaEngine (which implements the trackerEngine interface)
-func NewTracker(engine trackerEngine) *Tracker {
+func NewTracker(engine *Engine) *Tracker {
 	return &Tracker{engine: engine}
+}
+
+// Open enables the tracker functionality
+func (t *Tracker) Open() {
+	t.enabled = true
+}
+
+// Close disables the tracker functionality
+func (t *Tracker) Close() {
+	t.enabled = false
 }
 
 // SchemaUpdated is called by a vstream when it encounters a DDL
 func (t *Tracker) SchemaUpdated(gtid string, ddl string, timestamp int64) error {
+	if !t.enabled {
+		return nil
+	}
 	if gtid == "" || ddl == "" {
 		return fmt.Errorf("got invalid gtid or ddl in SchemaUpdated")
 	}
