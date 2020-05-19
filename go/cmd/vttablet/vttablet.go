@@ -56,12 +56,13 @@ func main() {
 
 	servenv.ParseFlags("vttablet")
 
+	tabletenv.Init()
+	// Load current config after tabletenv.Init, because it changes it.
 	config := tabletenv.NewCurrentConfig()
 	if err := config.Verify(); err != nil {
 		log.Exitf("invalid config: %v", err)
 	}
 
-	tabletenv.Init()
 	if *tabletConfig != "" {
 		bytes, err := ioutil.ReadFile(*tabletConfig)
 		if err != nil {
