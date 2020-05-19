@@ -388,7 +388,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 			return nil
 		}
 		event.DispatchUpdate(ev, "searching for master candidate")
-		masterElectTabletAlias, err = wr.chooseNewMaster(ctx, shardInfo, tabletMap, avoidMasterTabletAlias, waitReplicasTimeout)
+		masterElectTabletAlias, err = wr.ChooseNewMaster(ctx, shardInfo, tabletMap, avoidMasterTabletAlias, waitReplicasTimeout)
 		if err != nil {
 			return err
 		}
@@ -781,7 +781,7 @@ func (maxPosSearch *maxReplPosSearch) processTablet(tablet *topodatapb.Tablet) {
 		maxPosSearch.wrangler.logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", topoproto.TabletAliasString(tablet.Alias), err)
 		return
 	}
-	replPos, err := mysql.DecodePosition(status.Position)
+	replPos, err := decodePosition(status)
 	if err != nil {
 		maxPosSearch.wrangler.logger.Warningf("cannot decode slave %v position %v: %v", topoproto.TabletAliasString(tablet.Alias), status.Position, err)
 		return
@@ -795,14 +795,14 @@ func (maxPosSearch *maxReplPosSearch) processTablet(tablet *topodatapb.Tablet) {
 	maxPosSearch.maxPosLock.Unlock()
 }
 
-// chooseNewMaster finds a tablet that is going to become master after reparent. The criteria
+// ChooseNewMaster finds a tablet that is going to become master after reparent. The criteria
 // for the new master-elect are (preferably) to be in the same cell as the current master, and
 // to be different from avoidMasterTabletAlias. The tablet with the largest replication
 // position is chosen to minimize the time of catching up with the master. Note that the search
 // for largest replication position will race with transactions being executed on the master at
 // the same time, so when all tablets are roughly at the same position then the choice of the
 // new master-elect will be somewhat unpredictable.
-func (wr *Wrangler) chooseNewMaster(
+func (wr *Wrangler) ChooseNewMaster(
 	ctx context.Context,
 	shardInfo *topo.ShardInfo,
 	tabletMap map[string]*topo.TabletInfo,
@@ -1026,59 +1026,6 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	return nil
 }
 
-type replicaStatus struct {
-	replica *topo.TabletInfo
-	status  *replicationdatapb.Status
-}
-
-func (wr *Wrangler) replicaReplicationStatuses(ctx context.Context, keyspace, shard string) ([]*replicaStatus, error) {
-	replicas, err := wr.replicaTabletInfos(ctx, keyspace, shard)
-	if err != nil {
-		return nil, err
-	}
-
-	wg := sync.WaitGroup{}
-	rec := concurrency.AllErrorRecorder{}
-
-	result := make([]*replicaStatus, len(replicas))
-
-	for i, ti := range replicas {
-		wg.Add(1)
-		go func(i int, ti *topo.TabletInfo) {
-			defer wg.Done()
-			status, err := wr.TabletManagerClient().SlaveStatus(ctx, ti.Tablet)
-			if err != nil {
-				rec.RecordError(fmt.Errorf("SlaveStatus(%v) failed: %v", ti.AliasString(), err))
-				return
-			}
-			result[i] = &replicaStatus{
-				replica: ti,
-				status:  status,
-			}
-		}(i, ti)
-	}
-	wg.Wait()
-	return result, rec.Error()
-}
-
-func (wr *Wrangler) replicaTabletInfos(ctx context.Context, keyspace, shard string) ([]*topo.TabletInfo, error) {
-	tabletMap, err := wr.TopoServer().GetTabletMapForShard(ctx, keyspace, shard)
-	if err != nil {
-		return nil, err
-	}
-	allTablets := topotools.CopyMapValues(tabletMap, []*topo.TabletInfo{}).([]*topo.TabletInfo)
-
-	replicas := make([]*topo.TabletInfo, 0, len(allTablets))
-	// Clean up tablets so we only have replicas.
-	for _, ti := range allTablets {
-		if ti.Type == topodatapb.TabletType_REPLICA {
-			replicas = append(replicas, ti)
-		}
-	}
-
-	return replicas, nil
-}
-
 // CheckTabletIsFarthestAhead will take a tablet alias string, along with a statusMap of tablet alias strings to tablet Status objects,
 // and return an error if the tablet is not the farthest ahead, or otherwise return nil if it is the farthest ahead.
 func (wr *Wrangler) CheckTabletIsFarthestAhead(tabletAliasStr string, statusMap map[string]*replicationdatapb.Status) error {
@@ -1104,60 +1051,6 @@ func (wr *Wrangler) CheckTabletIsFarthestAhead(tabletAliasStr string, statusMap 
 	}
 
 	return nil
-}
-
-// FindLatestReplica will search through the status's of the various replicas in the shard,
-// and return the tablet that is the most caught up.
-func (wr *Wrangler) FindLatestReplica(ctx context.Context, keyspace, shard string) (*topodatapb.TabletAlias, error) {
-	replicaStatuses, err := wr.replicaReplicationStatuses(ctx, keyspace, shard)
-	if err != nil {
-		log.Errorf("error getting shard replication status: %v", err)
-		return nil, err
-	}
-	// If we didn't get replicas back, then we can't determine the latest replica and should bail.
-	if len(replicaStatuses) == 0 {
-		log.Info("Didn't get back any replicas to consider for findLatestReplica.")
-		return nil, nil
-	}
-
-	// Find first valid position
-	var winningTablet *topodatapb.TabletAlias
-	winningPosition, err := findValidPosition(replicaStatuses)
-	if err != nil {
-		return nil, err
-	}
-
-	// No valid positions, so we bail.
-	if winningPosition.IsZero() {
-		return nil, nil
-	}
-
-	for _, rs := range replicaStatuses {
-		if rs == nil || rs.status == nil {
-			continue
-		}
-		if position, err := decodePosition(rs.status); err == nil && !position.IsZero() {
-			if position.AtLeast(winningPosition) {
-				winningPosition = position
-				winningTablet = rs.replica.Alias
-			}
-		}
-	}
-
-	return winningTablet, nil
-}
-
-func findValidPosition(replicaStatuses []*replicaStatus) (mysql.Position, error) {
-	var validPosition mysql.Position
-	var err error
-	for _, rs := range replicaStatuses {
-		if rs != nil && rs.status != nil {
-			validPosition, err = decodePosition(rs.status)
-			break
-		}
-	}
-
-	return validPosition, err
 }
 
 // decodePosition is a helper that will decode the RelayLogPosition, if it's non-empty, and otherwise fall back
