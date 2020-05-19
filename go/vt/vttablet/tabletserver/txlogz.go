@@ -120,7 +120,7 @@ func txlogzHandler(w http.ResponseWriter, req *http.Request) {
 				log.Error(err)
 				continue
 			}
-			duration := txc.TxProps.EndTime.Sub(txc.TxProps.StartTime).Seconds()
+			duration := txc.txProps.EndTime.Sub(txc.txProps.StartTime).Seconds()
 			var level string
 			if duration < 0.1 {
 				level = "low"

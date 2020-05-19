@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
+
 	"vitess.io/vitess/go/vt/callerid"
 
 	"vitess.io/vitess/go/streamlog"
@@ -53,7 +55,7 @@ func testHandler(req *http.Request, t *testing.T) {
 	}
 	txConn := &StatefulConnection{
 		ConnID: 123456,
-		TxProps: &TxProperties{
+		txProps: &tx.Properties{
 			EffectiveCaller: callerid.NewEffectiveCallerID("effective-caller", "component", "subcomponent"),
 			ImmediateCaller: callerid.NewImmediateCallerID("immediate-caller"),
 			StartTime:       time.Now(),
@@ -61,17 +63,17 @@ func testHandler(req *http.Request, t *testing.T) {
 			Queries:         []string{"select * from test"},
 		},
 	}
-	txConn.TxProps.EndTime = txConn.TxProps.StartTime
+	txConn.txProps.EndTime = txConn.txProps.StartTime
 	response = httptest.NewRecorder()
 	tabletenv.TxLogger.Send(txConn)
 	txlogzHandler(response, req)
 	testNotRedacted(t, response)
-	txConn.TxProps.EndTime = txConn.TxProps.StartTime.Add(time.Duration(2) * time.Second)
+	txConn.txProps.EndTime = txConn.txProps.StartTime.Add(time.Duration(2) * time.Second)
 	response = httptest.NewRecorder()
 	tabletenv.TxLogger.Send(txConn)
 	txlogzHandler(response, req)
 	testNotRedacted(t, response)
-	txConn.TxProps.EndTime = txConn.TxProps.StartTime.Add(time.Duration(500) * time.Millisecond)
+	txConn.txProps.EndTime = txConn.txProps.StartTime.Add(time.Duration(500) * time.Millisecond)
 	response = httptest.NewRecorder()
 	tabletenv.TxLogger.Send(txConn)
 	txlogzHandler(response, req)

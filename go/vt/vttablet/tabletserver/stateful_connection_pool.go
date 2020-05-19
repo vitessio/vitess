@@ -165,9 +165,9 @@ func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.
 }
 
 //ForAllTxProperties executes a function an every connection that has a not-nil TxProperties
-func (sf *StatefulConnectionPool) ForAllTxProperties(f func(*TxProperties)) {
+func (sf *StatefulConnectionPool) ForAllTxProperties(f func(*tx.Properties)) {
 	for _, connection := range mapToTxConn(sf.active.GetAll()) {
-		props := connection.TxProps
+		props := connection.txProps
 		if props != nil {
 			f(props)
 		}

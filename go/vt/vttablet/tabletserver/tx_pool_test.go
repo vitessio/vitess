@@ -53,7 +53,7 @@ import (
 //	}
 //	txConn, err := txPool.GetAndLock(transactionID, "for query")
 //	require.NoError(t, err)
-//	txConn.TxProps.RecordQuery(sql)
+//	txConn.txProps.RecordQuery(sql)
 //	_, _ = txConn.Exec(ctx, sql, 1, true)
 //	txConn.Unlock()
 //
@@ -84,7 +84,7 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 	//txConn, err := txPool.GetAndLock(conn, "for query")
 	//require.NoError(t, err)
 	//defer txPool.Rollback(ctx, conn.ConnID)
-	conn.TxProps.RecordQuery(sql)
+	conn.TxProperties().RecordQuery(sql)
 	_, err = conn.Exec(ctx, sql, 1, true)
 	conn.Unlock()
 	require.NoError(t, err)
@@ -408,7 +408,7 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 //	if err != nil {
 //		t.Fatal(err)
 //	}
-//	txConn.TxProps.RecordQuery(sql)
+//	txConn.txProps.RecordQuery(sql)
 //	_, err = txConn.Exec(ctx, sql, 1, true)
 //	txConn.Unlock()
 //	if err != nil {

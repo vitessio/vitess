@@ -596,7 +596,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	if len(tsv.te.preparedPool.conns) != 1 {
 		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
 	}
-	got := tsv.te.preparedPool.conns["dtid0"].TxProps.Queries
+	got := tsv.te.preparedPool.conns["dtid0"].TxProperties().Queries
 	want := []string{"update test_table set name = 2 where pk = 1 limit 10001"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Prepared queries: %v, want %v", got, want)
@@ -636,7 +636,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	if len(tsv.te.preparedPool.conns) != 1 {
 		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
 	}
-	got = tsv.te.preparedPool.conns["a:b:10"].TxProps.Queries
+	got = tsv.te.preparedPool.conns["a:b:10"].TxProperties().Queries
 	want = []string{"update test_table set name = 2 where pk = 1 limit 10001"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Prepared queries: %v, want %v", got, want)
