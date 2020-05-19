@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/go-sql-driver/mysql"
@@ -9,12 +10,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
+	"go.uber.org/ratelimit"
+	"gopkg.in/yaml.v2"
 	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
 	"sync"
-	"time"
 	"vitess.io/vitess/examples/are-you-alive/pkg/client"
 )
 
@@ -38,10 +40,10 @@ var (
 	)
 )
 
-func writeNextRecord(environmentName string, connectionString string) error {
+func writeNextRecord(connectionString string) error {
 
 	// 1. Call monitored client
-	err := client.Write(environmentName, connectionString, maxPage)
+	err := client.Write(connectionString, maxPage)
 	if err != nil {
 		// Check to see if this is a duplicate key error.  We've seen this
 		// sometimes happen, and when it does this client app gets stuck in an
@@ -70,7 +72,7 @@ func writeNextRecord(environmentName string, connectionString string) error {
 	return nil
 }
 
-func readRandomRecord(environmentName string, connectionString string) error {
+func readRandomRecord(connectionString string) error {
 
 	// 1. Pick Random Number Between "minPage" and "maxPage"
 	if minPage == maxPage {
@@ -80,7 +82,7 @@ func readRandomRecord(environmentName string, connectionString string) error {
 	page := (rand.Int() % (maxPage - minPage)) + minPage
 
 	// 2. Read Record
-	readID, readMsg, err := client.Read(environmentName, connectionString, page)
+	readID, readMsg, err := client.Read(connectionString, page)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// This races with deletion, but if our page is greater than minPage
@@ -125,10 +127,10 @@ func readRandomRecord(environmentName string, connectionString string) error {
 	return nil
 }
 
-func runCount(environmentName string, connectionString string) error {
+func runCount(connectionString string) error {
 
 	// 1. Run Count
-	count, err := client.Count(environmentName, connectionString)
+	count, err := client.Count(connectionString)
 	if err != nil {
 		logrus.WithError(err).Error("Error counting records")
 		return err
@@ -141,7 +143,7 @@ func runCount(environmentName string, connectionString string) error {
 	return nil
 }
 
-func deleteLastRecordIfNecessary(environmentName string, connectionString string) error {
+func deleteLastRecordIfNecessary(connectionString string) error {
 
 	// 1. Compare "maxPage" - "minPage" to Desired Dataset Size
 	if (maxPage - minPage) < *datasetSize {
@@ -153,7 +155,7 @@ func deleteLastRecordIfNecessary(environmentName string, connectionString string
 	}).Debug("Deleting last record")
 
 	// 2. Delete Record If We Are Above Desired Size
-	err := client.Delete(environmentName, connectionString, minPage)
+	err := client.Delete(connectionString, minPage)
 	if err != nil {
 		logrus.WithError(err).Error("Error deleting record")
 		return err
@@ -165,33 +167,27 @@ func deleteLastRecordIfNecessary(environmentName string, connectionString string
 }
 
 var (
-	mysqlConnectionString = flag.String(
-		"mysql_connection_string", "", "Connection string for db to test")
 	prometheusMetricsAddress = flag.String(
 		"prometheus_metrics_address", ":8080", "Address on which to serve prometheus metrics")
-	debug            = flag.Bool("debug", false, "Enable debug logging")
-	useVtgate        = flag.Bool("vtgate", false, "Using vtgate (for @master and @replica)")
-	readFromReplica  = flag.Bool("replica", false, "Read from replica")
-	readFromReadOnly = flag.Bool("rdonly", false, "Read from rdonly")
-	initialize       = flag.Bool("initialize", false, "Initialize database (for testing)")
-	sleepTime        = flag.Int("delay", 1*1000*1000*1000, "Delay in nanoseconds between ops")
-	datasetSize      = flag.Int("dataset_size", 10, "Number of total records in database")
-	environmentName  = flag.String("environment_name", "prod",
-		"Environment the database is deployed in that this client is pointing at")
+	debug                   = flag.Bool("debug", false, "Enable debug logging")
+	useVtgate               = flag.Bool("vtgate", false, "Using vtgate (for @master and @replica)")
+	initialize              = flag.Bool("initialize", false, "Initialize database (for testing)")
+	datasetSize             = flag.Int("dataset_size", 10, "Number of total records in database")
+	endpointsConfigFilename = flag.String("endpoints_config", "", "Endpoint and load configuration.")
 )
 
 type runner struct {
-	connString string
-	envName    string
-	fn         func(string, string) error
-	errMessage string
-	sleepTime  time.Duration
+	connString   string
+	fn           func(string) error
+	errMessage   string
+	opsPerSecond int
 }
 
 func (r *runner) run() {
+	rl := ratelimit.New(r.opsPerSecond)
 	for {
-		time.Sleep(r.sleepTime)
-		err := r.fn(r.envName, r.connString)
+		_ = rl.Take()
+		err := r.fn(r.connString)
 		if err != nil {
 			logrus.WithError(err).Error(r.errMessage)
 		}
@@ -216,6 +212,35 @@ func runPrometheus() {
 	logrus.Fatal(http.ListenAndServe(*prometheusMetricsAddress, nil))
 }
 
+func loadEndpointsConfig(endpointsConfigFilename string) (endpointsConfig, error) {
+	if endpointsConfigFilename == "" {
+		return endpointsConfig{}, errors.New("You must pass an endpoints configuration file")
+	}
+
+	f, err := os.Open(endpointsConfigFilename)
+	if err != nil {
+		return endpointsConfig{}, err
+	}
+	defer f.Close()
+
+	var cfg endpointsConfig
+	decoder := yaml.NewDecoder(f)
+	err = decoder.Decode(&cfg)
+	if err != nil {
+		return endpointsConfig{}, err
+	}
+	return cfg, nil
+}
+
+type endpointsConfig struct {
+	Endpoints []struct {
+		ConnectionString       string `yaml:"connectionString"`
+		TargetCountsPerSecond  int    `yaml:"targetCountsPerSecond"`
+		TargetQueriesPerSecond int    `yaml:"targetQueriesPerSecond"`
+		TargetWritesPerSecond  int    `yaml:"targetWritesPerSecond"`
+	} `yaml:"endpoints"`
+}
+
 func main() {
 
 	// 0. Handle Arguments
@@ -224,24 +249,31 @@ func main() {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 	logrus.WithFields(logrus.Fields{
-		"mysqlConnectionString":    *mysqlConnectionString,
+		"endpointsConfigFilename":  *endpointsConfigFilename,
 		"prometheusMetricsAddress": *prometheusMetricsAddress,
 		"debug":                    *debug,
 	}).Debug("Command line arguments")
 
-	connectionString := ""
-	if *mysqlConnectionString != "" {
-		connectionString = *mysqlConnectionString
-	} else if os.Getenv("MYSQL_CONN_STRING") != "" {
-		connectionString = os.Getenv("MYSQL_CONN_STRING")
+	var endpoints endpointsConfig
+	endpoints, err := loadEndpointsConfig(*endpointsConfigFilename)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to load endpoints config.")
+		os.Exit(1)
 	}
-	masterConnectionString := connectionString
-	replicaConnectionString := connectionString
-	rdonlyConnectionString := connectionString
-	// When using vtgate, we want to append @master and @replica to the DSN, but
-	// this will fail against normal mysql which we're using for testing.  See:
-	// https://vitess.io/docs/user-guides/faq/#how-do-i-choose-between-master-vs-replica-for-queries
-	if *useVtgate {
+
+	// 0. Set Up Prometheus Metrics
+	logrus.Info("Prometheus Go")
+	go runPrometheus()
+
+	// 1. Pass "interpolateParams"
+	for _, endpoint := range endpoints.Endpoints {
+		logrus.WithFields(logrus.Fields{
+			"connectionString":       endpoint.ConnectionString,
+			"targetCountsPerSecond":  endpoint.TargetCountsPerSecond,
+			"targetQueriesPerSecond": endpoint.TargetQueriesPerSecond,
+			"targetWritesPerSecond":  endpoint.TargetWritesPerSecond,
+		}).Info("Found endpoint configuration")
+
 		// We need to pass interpolateParams when using a vtgate because
 		// prepare is not supported.
 		//
@@ -249,101 +281,72 @@ func main() {
 		// - https://github.com/go-sql-driver/mysql/blob/master/README.md#interpolateparams
 		// - https://github.com/src-d/go-mysql-server/issues/428
 		// - https://github.com/vitessio/vitess/pull/3862
-		masterConnectionString = fmt.Sprintf("%s@master?interpolateParams=true", connectionString)
-		replicaConnectionString = fmt.Sprintf("%s@replica?interpolateParams=true", connectionString)
-		rdonlyConnectionString = fmt.Sprintf("%s@rdonly?interpolateParams=true", connectionString)
+		endpoint.ConnectionString = fmt.Sprintf("%s?interpolateParams=true", endpoint.ConnectionString)
 	}
-	fmt.Println("masterConnectionString:", masterConnectionString)
-	fmt.Println("replicaConnectionString:", replicaConnectionString)
-	fmt.Println("rdonlyConnectionString:", rdonlyConnectionString)
-
-	// 1. Set Up Prometheus Metrics
-	logrus.Info("Prometheus Go")
-	go runPrometheus()
 
 	// 2. Initialize Database
-	logrus.Info("Initializing database")
-	// For local testing, does not initialize vschema
-	if *initialize {
-		client.InitializeDatabase(*environmentName, masterConnectionString, "are_you_alive_messages")
-	}
-	client.WipeTestTable(*environmentName, masterConnectionString, "are_you_alive_messages")
+	for _, endpoint := range endpoints.Endpoints {
+		logrus.WithFields(logrus.Fields{
+			"connectionString":       endpoint.ConnectionString,
+			"targetCountsPerSecond":  endpoint.TargetCountsPerSecond,
+			"targetQueriesPerSecond": endpoint.TargetQueriesPerSecond,
+			"targetWritesPerSecond":  endpoint.TargetWritesPerSecond,
+		}).Info("Found endpoint configuration")
 
-	// 3. Start goroutines to do various things
+		if endpoint.TargetWritesPerSecond > 0 {
+			logrus.Info("Initializing database")
+			// For local testing, does not initialize vschema
+			if *initialize {
+				client.InitializeDatabase(endpoint.ConnectionString, "are_you_alive_messages")
+			}
+			client.WipeTestTable(endpoint.ConnectionString, "are_you_alive_messages")
+		}
+	}
+
+	// 3. Start Client Goroutines
 	logrus.Info("Starting client goroutines")
-	deleter := runner{
-		connString: masterConnectionString,
-		envName:    *environmentName,
-		fn:         deleteLastRecordIfNecessary,
-		errMessage: "Recieved error deleting last record",
-		sleepTime:  time.Duration(*sleepTime),
-	}
-	go deleter.run()
-	writer := runner{
-		connString: masterConnectionString,
-		envName:    *environmentName,
-		fn:         writeNextRecord,
-		errMessage: "Recieved error writing next record",
-		sleepTime:  time.Duration(*sleepTime),
-	}
-	go writer.run()
-	reader := runner{
-		connString: masterConnectionString,
-		envName:    *environmentName,
-		fn:         readRandomRecord,
-		errMessage: "Recieved error reading record",
-		sleepTime:  time.Duration(*sleepTime),
-	}
-	go reader.run()
-	counter := runner{
-		connString: masterConnectionString,
-		envName:    *environmentName,
-		fn:         runCount,
-		errMessage: "Recieved error running count",
-		sleepTime:  time.Duration(*sleepTime),
-	}
-	go counter.run()
+	for _, endpoint := range endpoints.Endpoints {
+		logrus.WithFields(logrus.Fields{
+			"connectionString":       endpoint.ConnectionString,
+			"targetCountsPerSecond":  endpoint.TargetCountsPerSecond,
+			"targetQueriesPerSecond": endpoint.TargetQueriesPerSecond,
+			"targetWritesPerSecond":  endpoint.TargetWritesPerSecond,
+		}).Info("Found endpoint configuration")
 
-	// Only bother starting a replica reader/counter if we are using a vtgate
-	// and actually are asking to do replica reads
-	if *useVtgate && *readFromReplica {
-		replicaReader := runner{
-			connString: replicaConnectionString,
-			envName:    *environmentName,
-			fn:         readRandomRecord,
-			errMessage: "Recieved error reading record from replica",
-			sleepTime:  time.Duration(*sleepTime),
+		if endpoint.TargetWritesPerSecond > 0 {
+			writer := runner{
+				connString:   endpoint.ConnectionString,
+				fn:           writeNextRecord,
+				errMessage:   "Recieved error writing next record",
+				opsPerSecond: endpoint.TargetWritesPerSecond,
+			}
+			go writer.run()
+			deleter := runner{
+				connString:   endpoint.ConnectionString,
+				fn:           deleteLastRecordIfNecessary,
+				errMessage:   "Recieved error deleting last record",
+				opsPerSecond: 100, // This is based on target "dataset_size", and will not make a query if not needed.  TODO: Actually tune this in a reasonable way after redesigning the schema?
+			}
+			go deleter.run()
 		}
-		go replicaReader.run()
-		replicaRowCounter := runner{
-			connString: replicaConnectionString,
-			envName:    *environmentName,
-			fn:         runCount,
-			errMessage: "Recieved error running count on replica",
-			sleepTime:  time.Duration(*sleepTime),
+		if endpoint.TargetQueriesPerSecond > 0 {
+			reader := runner{
+				connString:   endpoint.ConnectionString,
+				fn:           readRandomRecord,
+				errMessage:   "Recieved error reading record",
+				opsPerSecond: endpoint.TargetQueriesPerSecond,
+			}
+			go reader.run()
 		}
-		go replicaRowCounter.run()
-	}
-
-	// Only bother starting a rdonly reader/counter if we are using a vtgate and
-	// actually are asking to do rdonly reads
-	if *useVtgate && *readFromReadOnly {
-		replicaReader := runner{
-			connString: rdonlyConnectionString,
-			envName:    *environmentName,
-			fn:         readRandomRecord,
-			errMessage: "Recieved error reading record from rdonly",
-			sleepTime:  time.Duration(*sleepTime),
+		if endpoint.TargetCountsPerSecond > 0 {
+			counter := runner{
+				connString:   endpoint.ConnectionString,
+				fn:           runCount,
+				errMessage:   "Recieved error running count",
+				opsPerSecond: endpoint.TargetCountsPerSecond,
+			}
+			go counter.run()
 		}
-		go replicaReader.run()
-		replicaRowCounter := runner{
-			connString: rdonlyConnectionString,
-			envName:    *environmentName,
-			fn:         runCount,
-			errMessage: "Recieved error running count on rdonly",
-			sleepTime:  time.Duration(*sleepTime),
-		}
-		go replicaRowCounter.run()
 	}
 
 	logrus.Info("Press Ctrl+C to end\n")

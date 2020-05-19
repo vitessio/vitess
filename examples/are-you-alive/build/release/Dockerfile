@@ -1,5 +1,6 @@
-FROM golang:1.12.5 AS build
+FROM golang:1.14 AS build
 COPY . /go/src/vitess.io/vitess/examples/are-you-alive
+RUN go get vitess.io/vitess/examples/are-you-alive/cmd/are-you-alive/...
 RUN CGO_ENABLED=0 go install vitess.io/vitess/examples/are-you-alive/cmd/are-you-alive
 
 FROM debian:stretch-slim AS runtime
