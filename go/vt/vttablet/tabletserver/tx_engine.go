@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"golang.org/x/net/context"
@@ -217,7 +219,7 @@ func (te *TxEngine) AcceptReadOnly() error {
 // statement(s) used to execute the begin (if any).
 //
 // Subsequent statements can access the connection through the transaction id.
-func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) (tx.ConnID, string, error) {
+func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Begin")
 	defer span.Finish()
 	te.stateLock.Lock()
@@ -552,12 +554,34 @@ func (te *TxEngine) stopWatchdog() {
 	te.ticks.Stop()
 }
 
-//Pool returns the current tx_pool
-func (te *TxEngine) Pool() *TxPool {
-	te.stateLock.Lock()
-	defer te.stateLock.Unlock()
-	if te.state == AcceptingReadAndWrite || te.state == AcceptingReadOnly {
-		return te._txPool
-	}
-	return nil
+//Exec returns an executor that will execute queries inside the transaction identified by connID
+func (te *TxEngine) Exec(connID tx.ConnID) (executor, error) {
+	return &inTxExecutor{
+		connID: connID,
+		te:     te,
+	}, nil
 }
+
+//InTxExecutor is a just a small type used to impleme
+type inTxExecutor struct {
+	connID tx.ConnID
+	te     *TxEngine
+}
+
+//Exec implements the executor interface
+func (i *inTxExecutor) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+	span, ctx := trace.NewSpan(ctx, "TxEngine.Exec")
+	defer span.Finish()
+	conn, err := i.te._txPool.GetAndLock(i.connID, "for query")
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Unlock()
+	result, err := conn.Exec(ctx, query, maxrows, wantfields)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+var _ executor = (*inTxExecutor)(nil)

@@ -51,6 +51,7 @@ func (u *unregistered) Size() int {
 	return 1
 }
 
+//NewNumbered creates a new numbered
 func NewNumbered() *Numbered {
 	n := &Numbered{
 		resources:            make(map[int64]*numberedWrapper),
@@ -86,7 +87,7 @@ func (nu *Numbered) Register(id int64, val interface{}, enforceTimeout bool) err
 
 // Unregister forgets the specified resource.  If the resource is not present, it's ignored.
 func (nu *Numbered) Unregister(id int64, reason string) {
-	success := nu.unregister(id, reason)
+	success := nu.unregister(id)
 	if success {
 		nu.recentlyUnregistered.Set(
 			fmt.Sprintf("%v", id), &unregistered{reason: reason, timeUnregistered: time.Now()})
@@ -95,7 +96,7 @@ func (nu *Numbered) Unregister(id int64, reason string) {
 
 // unregister forgets the resource, if it exists. Returns whether or not the resource existed at
 // time of Unregister.
-func (nu *Numbered) unregister(id int64, reason string) bool {
+func (nu *Numbered) unregister(id int64) bool {
 	nu.mu.Lock()
 	defer nu.mu.Unlock()
 
@@ -199,11 +200,13 @@ func (nu *Numbered) WaitForEmpty() {
 	}
 }
 
+//StatsJSON returns stats in JSON format
 func (nu *Numbered) StatsJSON() string {
 	return fmt.Sprintf("{\"Size\": %v}", nu.Size())
 }
 
-func (nu *Numbered) Size() (size int64) {
+//Size returns the current size
+func (nu *Numbered) Size() int64 {
 	nu.mu.Lock()
 	defer nu.mu.Unlock()
 	return int64(len(nu.resources))

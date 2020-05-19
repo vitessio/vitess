@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
@@ -514,16 +516,17 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	txid1, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
-	if _, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid1, nil); err != nil {
-		t.Error(err)
-	}
-	if err = tsv.Prepare(ctx, &target, txid1, "aa"); err != nil {
-		t.Error(err)
-	}
+
+	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid1, nil)
+	require.NoError(t, err)
+
+	err = tsv.Prepare(ctx, &target, txid1, "aa")
+	require.NoError(t, err)
+
 	txid2, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
 	// This makes txid2 busy
-	conn2, err := tsv.te.Pool().GetAndLock(txid2, "for query")
+	conn2, err := tsv.te._txPool.GetAndLock(txid2, "for query")
 	require.NoError(t, err)
 	ch := make(chan bool)
 	go func() {
@@ -538,12 +541,17 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 		t.Fatal("ch should not fire")
 	case <-time.After(10 * time.Millisecond):
 	}
-	if tsv.te.Pool().activePool.active.Size() != 1 {
-		t.Errorf("len(tsv.te.Pool().active.Size()): %d, want 1", len(tsv.te.preparedPool.conns))
+	te := tsv.te
+	pool := te._txPool
+	activePool := pool.activePool
+	active := activePool.active
+	if active.Size() != 1 {
+		t.Errorf("len(tsv.te._txPool.active.Size()): %d, want 1", len(tsv.te.preparedPool.conns))
 	}
 
 	// Concluding conn2 will allow the transition to go through.
-	tsv.te.Pool().RollbackAndRelease(ctx, conn2)
+	tsv.te._txPool.RollbackAndRelease(ctx, conn2)
+	conn2.Release(tx.TxCommit)
 	<-ch
 }
 
@@ -598,7 +606,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 0", v)
 	}
 
-	tsv.te.Pool().activePool.lastID.Set(1)
+	tsv.te._txPool.activePool.lastID.Set(1)
 	// Ensure we continue past errors.
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -638,8 +646,8 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		t.Errorf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed)
 	}
 	// Verify last id got adjusted.
-	if v := tsv.te.Pool().activePool.lastID.Get(); v != 20 {
-		t.Errorf("tsv.te.Pool().lastID.Get(): %d, want 20", v)
+	if v := tsv.te._txPool.activePool.lastID.Get(); v != 20 {
+		t.Errorf("tsv.te._txPool.lastID.Get(): %d, want 20", v)
 	}
 	turnOffTxEngine()
 	if v := len(tsv.te.preparedPool.conns); v != 0 {
@@ -1324,7 +1332,7 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 	}, false, 0, nil); err == nil {
 		t.Fatalf("TabletServer.Execute should fail because of nested transaction")
 	}
-	tsv.te.Pool().SetTimeout(10)
+	tsv.te._txPool.SetTimeout(10)
 }
 
 func TestSerializeTransactionsSameRow(t *testing.T) {
@@ -2480,15 +2488,15 @@ func TestConfigChanges(t *testing.T) {
 	if val := tsv.TxPoolSize(); val != newSize {
 		t.Errorf("TxPoolSize: %d, want %d", val, newSize)
 	}
-	if val := int(tsv.te.Pool().activePool.Capacity()); val != newSize {
-		t.Errorf("tsv.te.Pool().pool.Capacity: %d, want %d", val, newSize)
+	if val := int(tsv.te._txPool.activePool.Capacity()); val != newSize {
+		t.Errorf("tsv.te._txPool.pool.Capacity: %d, want %d", val, newSize)
 	}
 
 	tsv.SetTxTimeout(newDuration)
 	if val := tsv.TxTimeout(); val != newDuration {
 		t.Errorf("tsv.TxTimeout: %v, want %v", val, newDuration)
 	}
-	if val := tsv.te.Pool().Timeout(); val != newDuration {
+	if val := tsv.te._txPool.Timeout(); val != newDuration {
 		t.Errorf("tsv.te.Pool().Timeout: %v, want %v", val, newDuration)
 	}
 

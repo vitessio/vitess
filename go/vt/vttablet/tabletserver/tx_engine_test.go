@@ -57,7 +57,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Normal close with timeout wait.
 	te.open()
-	c, beginSQL, err := te.Pool().Begin(ctx, &querypb.ExecuteOptions{})
+	c, beginSQL, err := te._txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	require.Equal(t, "begin", beginSQL)
 	c.Unlock()
@@ -69,7 +69,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close.
 	te.open()
-	c, _, err = te.Pool().Begin(ctx, &querypb.ExecuteOptions{})
+	c, _, err = te._txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period.
 	te.shutdownGracePeriod = 250 * time.Millisecond
 	te.open()
-	c, _, err = te.Pool().Begin(ctx, &querypb.ExecuteOptions{})
+	c, _, err = te._txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,16 +100,16 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period, but pool gets empty early.
 	te.shutdownGracePeriod = 250 * time.Millisecond
 	te.open()
-	c, _, err = te.Pool().Begin(ctx, &querypb.ExecuteOptions{})
+	c, _, err = te._txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	c.Unlock()
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		_, err := te.Pool().GetAndLock(c.ConnID, "return")
+		_, err := te._txPool.GetAndLock(c.ConnID, "return")
 		assert.NoError(t, err)
-		te.Pool().RollbackAndRelease(ctx, c)
+		te._txPool.RollbackAndRelease(ctx, c)
 	}()
 	start = time.Now()
 	te.close(false)
@@ -122,11 +122,11 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close, but connection is in use.
 	te.open()
-	c, _, err = te.Pool().Begin(ctx, &querypb.ExecuteOptions{})
+	c, _, err = te._txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		te.Pool().RollbackAndRelease(ctx, c)
+		te._txPool.RollbackAndRelease(ctx, c)
 	}()
 	start = time.Now()
 	te.close(true)
