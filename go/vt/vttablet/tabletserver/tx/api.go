@@ -18,9 +18,14 @@ package tx
 
 import (
 	"context"
+	"time"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 type (
@@ -66,7 +71,8 @@ type (
 		AcceptReadOnly() error
 		StopGently()
 	}
-	//TrustedConnection is a connection where the user is trusted to clean things up
+
+	//TrustedConnection is a connection where the user is trusted to clean things up after using the connection
 	TrustedConnection interface {
 		// Executes a query on the connection
 		Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
@@ -76,8 +82,41 @@ type (
 
 		// Unlock marks the connection as not in use. The connection remains active.
 		Unlock()
+
+		IsInTransaction() bool
+
+		Close()
+
+		IsOpen() bool
+
+		String() string
+
+		TxProperties() *Properties
+
+		ID() ConnID
+
+		UnderlyingdDBConn() *connpool.DBConn
+
+		CleanTxState()
+
+		Stats() *tabletenv.Stats
 	}
 	ReleaseReason int
+
+	//Properties contains all information that is related to the currently running
+	//transaction on the connection
+	Properties struct {
+		EffectiveCaller *vtrpcpb.CallerID
+		ImmediateCaller *querypb.VTGateCallerID
+		StartTime       time.Time
+		EndTime         time.Time
+		Queries         []string
+		Autocommit      bool
+		Conclusion      string
+		LogToFile       bool
+
+		Stats *servenv.TimingsWrapper
+	}
 )
 
 const (
@@ -111,3 +150,14 @@ var txNames = map[ReleaseReason]string{
 	TxKill:       "kill",
 	ConnInitFail: "initFail",
 }
+
+// RecordQuery records the query against this transaction.
+func (p *Properties) RecordQuery(query string) {
+	if p == nil {
+		return
+	}
+	p.Queries = append(p.Queries, query)
+}
+
+// InTransaction returns true as soon as this struct is not nil
+func (p *Properties) InTransaction() bool { return p != nil }

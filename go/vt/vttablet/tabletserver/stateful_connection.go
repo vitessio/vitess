@@ -43,7 +43,7 @@ type StatefulConnection struct {
 	ConnID tx.ConnID
 	env    tabletenv.Env
 
-	TxProps *TxProperties
+	txProps *tx.Properties
 }
 
 // Close closes the underlying connection. When the connection is Unblocked, it will be Released
@@ -60,14 +60,14 @@ func (sc *StatefulConnection) IsOpen() bool {
 
 //IsInTransaction returns true when the connection has tx state
 func (sc *StatefulConnection) IsInTransaction() bool {
-	return sc.TxProps != nil
+	return sc.txProps != nil
 }
 
 // Exec executes the statement in the dedicated connection
 func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	if sc.dbConn == nil {
-		if sc.TxProps != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction was aborted: %v", sc.TxProps.Conclusion)
+		if sc.txProps != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction was aborted: %v", sc.txProps.Conclusion)
 		}
 		return nil, vterrors.New(vtrpcpb.Code_ABORTED, "connection was aborted")
 	}
@@ -130,18 +130,39 @@ func (sc *StatefulConnection) String() string {
 	return fmt.Sprintf(
 		"%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%v\t\n",
 		sc.ConnID,
-		sc.TxProps.EffectiveCaller,
-		sc.TxProps.ImmediateCaller,
-		sc.TxProps.StartTime.Format(time.StampMicro),
-		sc.TxProps.EndTime.Format(time.StampMicro),
-		sc.TxProps.EndTime.Sub(sc.TxProps.StartTime).Seconds(),
-		sc.TxProps.Conclusion,
-		strings.Join(sc.TxProps.Queries, ";"),
+		sc.txProps.EffectiveCaller,
+		sc.txProps.ImmediateCaller,
+		sc.txProps.StartTime.Format(time.StampMicro),
+		sc.txProps.EndTime.Format(time.StampMicro),
+		sc.txProps.EndTime.Sub(sc.txProps.StartTime).Seconds(),
+		sc.txProps.Conclusion,
+		strings.Join(sc.txProps.Queries, ";"),
 	)
 }
 
-func (sc *StatefulConnection) txClean() {
-	sc.TxProps = nil
+//TxProperties returns the transactional properties of the connection
+func (sc *StatefulConnection) TxProperties() *tx.Properties {
+	return sc.txProps
+}
+
+//ID returns the identifier for this connection
+func (sc *StatefulConnection) ID() tx.ConnID {
+	return sc.ConnID
+}
+
+//UnderlyingdDBConn returns the underlying database connection
+func (sc *StatefulConnection) UnderlyingdDBConn() *connpool.DBConn {
+	return sc.dbConn
+}
+
+//CleanTxState cleans out the current transaction state
+func (sc *StatefulConnection) CleanTxState() {
+	sc.txProps = nil
+}
+
+//Stats implements the tx.TrustedConnection interface
+func (sc *StatefulConnection) Stats() *tabletenv.Stats {
+	return sc.env.Stats()
 }
 
 var _ tx.TrustedConnection = (*StatefulConnection)(nil)

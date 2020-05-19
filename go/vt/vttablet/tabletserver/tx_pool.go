@@ -139,19 +139,19 @@ func (tp *TxPool) WaitForEmpty() {
 }
 
 //NewTxProps creates a new TxProperties struct
-func (tp *TxPool) NewTxProps(immediateCaller *querypb.VTGateCallerID, effectiveCaller *vtrpcpb.CallerID, autocommit bool) *TxProperties {
-	return &TxProperties{
+func (tp *TxPool) NewTxProps(immediateCaller *querypb.VTGateCallerID, effectiveCaller *vtrpcpb.CallerID, autocommit bool) *tx.Properties {
+	return &tx.Properties{
 		StartTime:       time.Now(),
 		EffectiveCaller: effectiveCaller,
 		ImmediateCaller: immediateCaller,
 		Autocommit:      autocommit,
-		txStats:         tp.txStats,
+		Stats:           tp.txStats,
 	}
 }
 
 // GetAndLock fetches the connection associated to the transactionID and blocks it from concurrent use
 // You must call Unlock on TxConnection once done.
-func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (*StatefulConnection, error) {
+func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (tx.TrustedConnection, error) {
 	conn, err := tp.activePool.GetAndLock(connID, reason)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", connID, err)
@@ -160,14 +160,14 @@ func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (*StatefulConnecti
 }
 
 // Commit commits the transaction on the connection.
-func (tp *TxPool) Commit(ctx context.Context, txConn *StatefulConnection) (string, error) {
+func (tp *TxPool) Commit(ctx context.Context, txConn tx.TrustedConnection) (string, error) {
 	if !txConn.IsInTransaction() {
 		return "", vterrors.New(vtrpcpb.Code_INTERNAL, "not in a transaction")
 	}
 	span, ctx := trace.NewSpan(ctx, "TxPool.Commit")
 	defer span.Finish()
 	defer tp.txComplete(txConn, tx.TxCommit)
-	if txConn.TxProps.Autocommit {
+	if txConn.TxProperties().Autocommit {
 		return "", nil
 	}
 
@@ -179,13 +179,13 @@ func (tp *TxPool) Commit(ctx context.Context, txConn *StatefulConnection) (strin
 }
 
 // RollbackAndRelease rolls back the transaction on the specified connection, and releases the connection when done
-func (tp *TxPool) RollbackAndRelease(ctx context.Context, txConn *StatefulConnection) error {
+func (tp *TxPool) RollbackAndRelease(ctx context.Context, txConn tx.TrustedConnection) error {
 	defer txConn.Release(tx.TxRollback)
 	return tp.Rollback(ctx, txConn)
 }
 
 // Rollback rolls back the transaction on the specified connection.
-func (tp *TxPool) Rollback(ctx context.Context, txConn *StatefulConnection) error {
+func (tp *TxPool) Rollback(ctx context.Context, txConn tx.TrustedConnection) error {
 	if !txConn.IsInTransaction() {
 		return vterrors.New(vtrpcpb.Code_INTERNAL, "not in a transaction")
 	}
@@ -194,7 +194,7 @@ func (tp *TxPool) Rollback(ctx context.Context, txConn *StatefulConnection) erro
 	if !txConn.IsOpen() || !txConn.IsInTransaction() {
 		return nil
 	}
-	if txConn.TxProps.Autocommit {
+	if txConn.TxProperties().Autocommit {
 		tp.txComplete(txConn, tx.TxCommit)
 		return nil
 	}
@@ -210,7 +210,7 @@ func (tp *TxPool) Rollback(ctx context.Context, txConn *StatefulConnection) erro
 // the statements (if any) executed to initiate the transaction. In autocommit
 // mode the statement will be "".
 // The connection returned is locked for the callee and its responsibility is to unlock the connection.
-func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (*StatefulConnection, string, error) {
+func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (tx.TrustedConnection, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Begin")
 	defer span.Finish()
 	beginQueries := ""
@@ -253,7 +253,7 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (*
 		} else {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
 		}
-		conn.TxProps = tp.NewTxProps(immediateCaller, effectiveCaller, autocommitTransaction)
+		conn.txProps = tp.NewTxProps(immediateCaller, effectiveCaller, autocommitTransaction)
 		return nil
 	}()
 	if err != nil {
@@ -274,7 +274,7 @@ func (tp *TxPool) LogActive() {
 		return
 	}
 	tp.lastLog = time.Now()
-	tp.activePool.ForAllTxProperties(func(props *TxProperties) {
+	tp.activePool.ForAllTxProperties(func(props *tx.Properties) {
 		props.LogToFile = true
 	})
 }
@@ -290,57 +290,29 @@ func (tp *TxPool) SetTimeout(timeout time.Duration) {
 	tp.ticks.SetInterval(timeout / 10)
 }
 
-func (tp *TxPool) txComplete(conn *StatefulConnection, reason tx.ReleaseReason) {
+func (tp *TxPool) txComplete(conn tx.TrustedConnection, reason tx.ReleaseReason) {
 	tp.log(conn, reason)
-	tp.limiter.Release(conn.TxProps.ImmediateCaller, conn.TxProps.EffectiveCaller)
-	conn.txClean()
+	tp.limiter.Release(conn.TxProperties().ImmediateCaller, conn.TxProperties().EffectiveCaller)
+	conn.CleanTxState()
 }
 
-func (tp *TxPool) log(txc *StatefulConnection, reason tx.ReleaseReason) {
-	if txc.TxProps == nil {
+func (tp *TxPool) log(txc tx.TrustedConnection, reason tx.ReleaseReason) {
+	if txc.TxProperties() == nil {
 		return //Nothing to log as no transaction exists on this connection.
 	}
-	txc.TxProps.Conclusion = reason.Name()
-	txc.TxProps.EndTime = time.Now()
+	txc.TxProperties().Conclusion = reason.Name()
+	txc.TxProperties().EndTime = time.Now()
 
-	username := callerid.GetPrincipal(txc.TxProps.EffectiveCaller)
+	username := callerid.GetPrincipal(txc.TxProperties().EffectiveCaller)
 	if username == "" {
-		username = callerid.GetUsername(txc.TxProps.ImmediateCaller)
+		username = callerid.GetUsername(txc.TxProperties().ImmediateCaller)
 	}
-	duration := txc.TxProps.EndTime.Sub(txc.TxProps.StartTime)
-	txc.env.Stats().UserTransactionCount.Add([]string{username, reason.Name()}, 1)
-	txc.env.Stats().UserTransactionTimesNs.Add([]string{username, reason.Name()}, int64(duration))
-	txc.TxProps.txStats.Add(reason.Name(), duration)
-	if txc.TxProps.LogToFile {
+	duration := txc.TxProperties().EndTime.Sub(txc.TxProperties().StartTime)
+	txc.Stats().UserTransactionCount.Add([]string{username, reason.Name()}, 1)
+	txc.Stats().UserTransactionTimesNs.Add([]string{username, reason.Name()}, int64(duration))
+	txc.TxProperties().Stats.Add(reason.Name(), duration)
+	if txc.TxProperties().LogToFile {
 		log.Infof("Logged transaction: %s", txc.String())
 	}
 	tabletenv.TxLogger.Send(txc)
-}
-
-//TxProperties contains all information that is related to the currently running
-//transaction on the connection
-type TxProperties struct {
-	EffectiveCaller *vtrpcpb.CallerID
-	ImmediateCaller *querypb.VTGateCallerID
-	StartTime       time.Time
-	EndTime         time.Time
-	Queries         []string
-	Autocommit      bool
-	Conclusion      string
-	LogToFile       bool
-
-	txStats *servenv.TimingsWrapper
-}
-
-// RecordQuery records the query against this transaction.
-func (tp *TxProperties) RecordQuery(query string) {
-	if tp == nil {
-		return
-	}
-	tp.Queries = append(tp.Queries, query)
-}
-
-// InTransaction returns true as soon as this struct is not nil
-func (tp *TxProperties) InTransaction() bool {
-	return tp != nil
 }

@@ -63,7 +63,7 @@ func TestActivePoolForAllTxProps(t *testing.T) {
 	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	conn1, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
-	conn1.TxProps = &TxProperties{}
+	conn1.txProps = &tx.Properties{}
 
 	conn2, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
@@ -71,15 +71,15 @@ func TestActivePoolForAllTxProps(t *testing.T) {
 
 	conn3, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
-	conn3.TxProps = &TxProperties{}
+	conn3.txProps = &tx.Properties{}
 
-	pool.ForAllTxProperties(func(p *TxProperties) {
+	pool.ForAllTxProperties(func(p *tx.Properties) {
 		p.LogToFile = true
 	})
 
-	require.True(t, conn1.TxProps.LogToFile, "connection missed")
-	require.Nil(t, conn2.TxProps)
-	require.True(t, conn3.TxProps.LogToFile, "connection missed")
+	require.True(t, conn1.txProps.LogToFile, "connection missed")
+	require.Nil(t, conn2.txProps)
+	require.True(t, conn3.txProps.LogToFile, "connection missed")
 }
 
 func TestActivePoolGetConnNonExistentTransaction(t *testing.T) {

@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 )
 
 var (
@@ -32,7 +34,7 @@ var (
 // is done by TxPool.
 type TxPreparedPool struct {
 	mu       sync.Mutex
-	conns    map[string]*StatefulConnection
+	conns    map[string]tx.TrustedConnection
 	reserved map[string]error
 	capacity int
 }
@@ -44,7 +46,7 @@ func NewTxPreparedPool(capacity int) *TxPreparedPool {
 		capacity = 0
 	}
 	return &TxPreparedPool{
-		conns:    make(map[string]*StatefulConnection, capacity),
+		conns:    make(map[string]tx.TrustedConnection, capacity),
 		reserved: make(map[string]error),
 		capacity: capacity,
 	}
@@ -52,7 +54,7 @@ func NewTxPreparedPool(capacity int) *TxPreparedPool {
 
 // Put adds the connection to the pool. It returns an error
 // if the pool is full or on duplicate key.
-func (pp *TxPreparedPool) Put(c *StatefulConnection, dtid string) error {
+func (pp *TxPreparedPool) Put(c tx.TrustedConnection, dtid string) error {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
 	if _, ok := pp.reserved[dtid]; ok {
@@ -73,7 +75,7 @@ func (pp *TxPreparedPool) Put(c *StatefulConnection, dtid string) error {
 // is in the reserved list, it means that an operator is trying
 // to resolve a previously failed commit. So, it removes the entry
 // and returns nil.
-func (pp *TxPreparedPool) FetchForRollback(dtid string) *StatefulConnection {
+func (pp *TxPreparedPool) FetchForRollback(dtid string) tx.TrustedConnection {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
 	if _, ok := pp.reserved[dtid]; ok {
@@ -92,7 +94,7 @@ func (pp *TxPreparedPool) FetchForRollback(dtid string) *StatefulConnection {
 // reserved list by calling Forget. If the commit failed, SetFailed
 // must be called. This will inform future retries that the previous
 // commit failed.
-func (pp *TxPreparedPool) FetchForCommit(dtid string) (*StatefulConnection, error) {
+func (pp *TxPreparedPool) FetchForCommit(dtid string) (tx.TrustedConnection, error) {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
 	if err, ok := pp.reserved[dtid]; ok {
@@ -123,14 +125,14 @@ func (pp *TxPreparedPool) Forget(dtid string) {
 
 // FetchAll removes all connections and returns them as a list.
 // It also forgets all reserved dtids.
-func (pp *TxPreparedPool) FetchAll() []*StatefulConnection {
+func (pp *TxPreparedPool) FetchAll() []tx.TrustedConnection {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
-	conns := make([]*StatefulConnection, 0, len(pp.conns))
+	conns := make([]tx.TrustedConnection, 0, len(pp.conns))
 	for _, c := range pp.conns {
 		conns = append(conns, c)
 	}
-	pp.conns = make(map[string]*StatefulConnection, pp.capacity)
+	pp.conns = make(map[string]tx.TrustedConnection, pp.capacity)
 	pp.reserved = make(map[string]error)
 	return conns
 }

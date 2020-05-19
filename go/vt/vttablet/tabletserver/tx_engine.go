@@ -248,7 +248,7 @@ func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) 
 		return 0, "", err
 	}
 	defer conn.Unlock()
-	return conn.ConnID, beginSQL, err
+	return conn.ID(), beginSQL, err
 }
 
 // Commit commits the specified transaction.
@@ -446,7 +446,7 @@ outer:
 			continue
 		}
 		for _, stmt := range preparedTx.Queries {
-			conn.TxProps.RecordQuery(stmt)
+			conn.TxProperties().RecordQuery(stmt)
 			_, err := conn.Exec(ctx, stmt, 1, false)
 			if err != nil {
 				allErr.RecordError(err)
