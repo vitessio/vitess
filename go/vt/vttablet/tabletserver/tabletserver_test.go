@@ -543,7 +543,7 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 	}
 	te := tsv.te
 	pool := te._txPool
-	activePool := pool.activePool
+	activePool := pool.scp
 	active := activePool.active
 	if active.Size() != 1 {
 		t.Errorf("len(tsv.te._txPool.active.Size()): %d, want 1", len(tsv.te.preparedPool.conns))
@@ -606,7 +606,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 0", v)
 	}
 
-	tsv.te._txPool.activePool.lastID.Set(1)
+	tsv.te._txPool.scp.lastID.Set(1)
 	// Ensure we continue past errors.
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -646,7 +646,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		t.Errorf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed)
 	}
 	// Verify last id got adjusted.
-	if v := tsv.te._txPool.activePool.lastID.Get(); v != 20 {
+	if v := tsv.te._txPool.scp.lastID.Get(); v != 20 {
 		t.Errorf("tsv.te._txPool.lastID.Get(): %d, want 20", v)
 	}
 	turnOffTxEngine()
@@ -2488,7 +2488,7 @@ func TestConfigChanges(t *testing.T) {
 	if val := tsv.TxPoolSize(); val != newSize {
 		t.Errorf("TxPoolSize: %d, want %d", val, newSize)
 	}
-	if val := int(tsv.te._txPool.activePool.Capacity()); val != newSize {
+	if val := int(tsv.te._txPool.scp.Capacity()); val != newSize {
 		t.Errorf("tsv.te._txPool.pool.Capacity: %d, want %d", val, newSize)
 	}
 
