@@ -59,9 +59,8 @@ type (
 	// concern itself with a connections life cycle. The two exceptions are Begin, which creates a new StatefulConnection,
 	// and RollbackAndRelease, which does a Release after doing the rollback.
 	TxPool struct {
-		env tabletenv.Env
-
-		activePool         *StatefulConnectionPool
+		env                tabletenv.Env
+		scp                *StatefulConnectionPool
 		transactionTimeout sync2.AtomicDuration
 		ticks              *timer.Timer
 		limiter            txlimiter.TxLimiter
@@ -82,7 +81,7 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 	transactionTimeout := time.Duration(config.Oltp.TxTimeoutSeconds * 1e9)
 	axp := &TxPool{
 		env:                env,
-		activePool:         NewStatefulConnPool(env),
+		scp:                NewStatefulConnPool(env),
 		transactionTimeout: sync2.NewAtomicDuration(transactionTimeout),
 		ticks:              timer.NewTimer(transactionTimeout / 10),
 		limiter:            limiter,
@@ -97,35 +96,35 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 // Open makes the TxPool operational. This also starts the transaction killer
 // that will kill long-running transactions.
 func (tp *TxPool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
-	tp.activePool.Open(appParams, dbaParams, appDebugParams)
+	tp.scp.Open(appParams, dbaParams, appDebugParams)
 	tp.ticks.Start(func() { tp.transactionKiller() })
 }
 
 // Close closes the TxPool. A closed pool can be reopened.
 func (tp *TxPool) Close() {
 	tp.ticks.Stop()
-	tp.activePool.Close()
+	tp.scp.Close()
 }
 
 // AdjustLastID adjusts the last transaction id to be at least
 // as large as the input value. This will ensure that there are
 // no dtid collisions with future transactions.
 func (tp *TxPool) AdjustLastID(id int64) {
-	tp.activePool.AdjustLastID(id)
+	tp.scp.AdjustLastID(id)
 }
 
 // RollbackNonBusy rolls back all transactions that are not in use.
 // Transactions can be in use for situations like executing statements
 // or in prepared state.
 func (tp *TxPool) RollbackNonBusy(ctx context.Context) {
-	for _, v := range tp.activePool.GetOutdated(time.Duration(0), "for transition") {
+	for _, v := range tp.scp.GetOutdated(time.Duration(0), "for transition") {
 		tp.RollbackAndRelease(ctx, v)
 	}
 }
 
 func (tp *TxPool) transactionKiller() {
 	defer tp.env.LogError()
-	for _, conn := range tp.activePool.GetOutdated(tp.Timeout(), "for tx killer rollback") {
+	for _, conn := range tp.scp.GetOutdated(tp.Timeout(), "for tx killer rollback") {
 		log.Warningf("killing transaction (exceeded timeout: %v): %s", tp.Timeout(), conn.String())
 		tp.env.Stats().KillCounters.Add("Transactions", 1)
 		conn.Close()
@@ -135,7 +134,7 @@ func (tp *TxPool) transactionKiller() {
 
 // WaitForEmpty waits until all active transactions are completed.
 func (tp *TxPool) WaitForEmpty() {
-	tp.activePool.WaitForEmpty()
+	tp.scp.WaitForEmpty()
 }
 
 //NewTxProps creates a new TxProperties struct
@@ -152,7 +151,7 @@ func (tp *TxPool) NewTxProps(immediateCaller *querypb.VTGateCallerID, effectiveC
 // GetAndLock fetches the connection associated to the transactionID and blocks it from concurrent use
 // You must call Unlock on TxConnection once done.
 func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (tx.TrustedConnection, error) {
-	conn, err := tp.activePool.GetAndLock(connID, reason)
+	conn, err := tp.scp.GetAndLock(connID, reason)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", connID, err)
 	}
@@ -222,7 +221,7 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (t
 		return nil, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
 	}
 
-	conn, err := tp.activePool.NewConn(ctx, options)
+	conn, err := tp.scp.NewConn(ctx, options)
 	if err != nil {
 		switch err {
 		case pools.ErrCtxTimeout:
@@ -274,7 +273,7 @@ func (tp *TxPool) LogActive() {
 		return
 	}
 	tp.lastLog = time.Now()
-	tp.activePool.ForAllTxProperties(func(props *tx.Properties) {
+	tp.scp.ForAllTxProperties(func(props *tx.Properties) {
 		props.LogToFile = true
 	})
 }

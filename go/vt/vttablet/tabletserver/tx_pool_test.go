@@ -108,13 +108,13 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 //	require.NoError(t, err)
 //	// This should rollback only txid2.
 //	txPool.RollbackNonBusy(ctx)
-//	if sz := txPool.activePool.active.Size(); sz != 1 {
+//	if sz := txPool.scp.active.Size(); sz != 1 {
 //		t.Errorf("txPool.active.Size(): %d, want 1", sz)
 //	}
 //	conn1.Unlock()
 //	// This should rollback txid1.
 //	txPool.RollbackNonBusy(ctx)
-//	if sz := txPool.activePool.active.Size(); sz != 0 {
+//	if sz := txPool.scp.active.Size(); sz != 0 {
 //		t.Errorf("txPool.active.Size(): %d, want 0", sz)
 //	}
 //}
@@ -334,7 +334,7 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 //	db := fakesqldb.New(t)
 //	txPool := newTxPool()
 //	// Set the capacity to 1 to ensure that the db connection is reused.
-//	txPool.activePool.conns.SetCapacity(1)
+//	txPool.scp.conns.SetCapacity(1)
 //	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 //
 //	// Run a query to trigger a database connection. That connection will be
@@ -575,7 +575,7 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 //	// Close kills stray transaction.
 //	txPool.Close()
 //	require.Equal(t, int64(1), txPool.env.Stats().InternalErrors.Counts()["StrayTransactions"]-startingStray)
-//	require.Equal(t, 0, txPool.activePool.Capacity())
+//	require.Equal(t, 0, txPool.scp.Capacity())
 //}
 
 func newTxPool() *TxPool {
