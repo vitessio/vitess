@@ -1120,13 +1120,24 @@ func TestPlanExecutorExplain(t *testing.T) {
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	sql := "explain format = vitess select * from user"
-	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	bindVars := map[string]*querypb.BindVariable{}
+	result, err := executorExec(executor, "explain format = vitess select * from user", bindVars)
 	require.NoError(t, err)
 
-	resultText := fmt.Sprintf("%v", result.Rows)
-	utils.MustMatch(t, `[[VARCHAR("Route") VARCHAR("SelectScatter") VARCHAR("TestExecutor") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("select * from user")]]`, resultText, "")
+	require.Equal(t,
+		`[[VARCHAR("Route") VARCHAR("SelectScatter") VARCHAR("TestExecutor") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("select * from user")]]`,
+		fmt.Sprintf("%v", result.Rows))
 
+	result, err = executorExec(executor, "explain format = vitess select 42", bindVars)
+	require.NoError(t, err)
+	expected :=
+		`[[VARCHAR("Projection") VARCHAR("") VARCHAR("") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("")] ` +
+			`[VARCHAR("└─ SingleRow") VARCHAR("") VARCHAR("") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("")]]`
+	require.Equal(t,
+		`[[VARCHAR("Projection") VARCHAR("") VARCHAR("") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("")] `+
+			`[VARCHAR("└─ SingleRow") VARCHAR("") VARCHAR("") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("")]]`,
+		expected,
+		fmt.Sprintf("%v", result.Rows), fmt.Sprintf("%v", result.Rows))
 }
 
 func TestPlanExecutorOtherAdmin(t *testing.T) {

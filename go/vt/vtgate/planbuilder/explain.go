@@ -47,13 +47,18 @@ func buildExplainPlan(input engine.Primitive) (engine.Primitive, error) {
 		if line.descr.TargetDestination != nil {
 			targetDest = line.descr.TargetDestination.String()
 		}
+		keyspaceName := ""
+		if line.descr.Keyspace != nil {
+			keyspaceName = line.descr.Keyspace.Name
+		}
+
 		rows = append(rows, []sqltypes.Value{
-			sqltypes.NewVarChar(line.header + line.descr.OperatorType),
-			sqltypes.NewVarChar(line.descr.Variant),
-			sqltypes.NewVarChar(line.descr.Keyspace.Name),
-			sqltypes.NewVarChar(targetDest),
-			sqltypes.NewVarChar(line.descr.TargetTabletType.String()),
-			sqltypes.NewVarChar(extractQuery(line.descr.Other)),
+			sqltypes.NewVarChar(line.header + line.descr.OperatorType), // operator
+			sqltypes.NewVarChar(line.descr.Variant),                    // variant
+			sqltypes.NewVarChar(keyspaceName),                          // keyspace
+			sqltypes.NewVarChar(targetDest),                            // destination
+			sqltypes.NewVarChar(line.descr.TargetTabletType.String()),  // tabletType
+			sqltypes.NewVarChar(extractQuery(line.descr.Other)),        // query
 		})
 	}
 
