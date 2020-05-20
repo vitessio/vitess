@@ -207,7 +207,6 @@ func (flv *filePosFlavor) status(c *Conn) (SlaveStatus, error) {
 		file: resultMap["Relay_Master_Log_File"],
 		pos:  pos,
 	}
-
 	return status, nil
 }
 
