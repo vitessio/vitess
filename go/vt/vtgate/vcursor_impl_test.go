@@ -138,7 +138,7 @@ func TestDestinationKeyspace(t *testing.T) {
 	}}
 
 	for _, tc := range tests {
-		impl, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString}), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, nil)
+		impl, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString}), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil)
 		impl.vschema = tc.vschema
 		dest, keyspace, tabletType, err := impl.TargetDestination(tc.qualifier)
 		if tc.expectedError == "" {
@@ -206,7 +206,7 @@ func TestSetTarget(t *testing.T) {
 
 	for i, tc := range tests {
 		t.Run(string(i)+"#"+tc.targetString, func(t *testing.T) {
-			vc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{InTransaction: true}), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, nil)
+			vc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{InTransaction: true}), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil)
 			vc.vschema = tc.vschema
 			err := vc.SetTarget(tc.targetString)
 			if tc.expectedError == "" {
