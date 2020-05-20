@@ -874,6 +874,7 @@ func (wr *Wrangler) FindMasterCandidates(
 		waitReplicasTimeout: waitReplicasTimeout,
 		waitGroup:           sync.WaitGroup{},
 		statusLock:          sync.Mutex{},
+		tabletReplInfos:     make([]*replicationInfo, 0, len(tabletMap)),
 	}
 	for _, tabletInfo := range tabletMap {
 		if tabletInfo.Tablet.Type != topodatapb.TabletType_REPLICA {
