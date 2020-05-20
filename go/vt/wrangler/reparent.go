@@ -23,6 +23,7 @@ This file handles the reparenting operations.
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -388,7 +389,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 			return nil
 		}
 		event.DispatchUpdate(ev, "searching for master candidate")
-		masterElectTabletAlias, err = wr.ChooseNewMaster(ctx, shardInfo, tabletMap, avoidMasterTabletAlias, waitReplicasTimeout)
+		masterElectTabletAlias, err = wr.chooseNewMaster(ctx, shardInfo, tabletMap, avoidMasterTabletAlias, waitReplicasTimeout)
 		if err != nil {
 			return err
 		}
@@ -757,88 +758,149 @@ func (wr *Wrangler) findCurrentMaster(tabletMap map[string]*topo.TabletInfo) *to
 	return currentMaster
 }
 
-// maxReplPosSearch is a struct helping to search for a tablet with the largest replication
-// position querying status from all tablets in parallel.
-type maxReplPosSearch struct {
+// tabletReplInfoAggregator is a struct that can be used to get all tablets replication positions tied to their aliases concurrently.
+// It allows for a sorting of the retrieved replication infos, based on position, such that the earliest members
+// of the sorted list have the largest replication position.
+type tabletReplInfoAggregator struct {
 	wrangler            *Wrangler
 	ctx                 context.Context
 	waitReplicasTimeout time.Duration
 	waitGroup           sync.WaitGroup
-	maxPosLock          sync.Mutex
-	maxPos              mysql.Position
-	maxPosTablet        *topodatapb.Tablet
+	statusLock          sync.Mutex
+	tabletReplInfos     []*replicationInfo
 }
 
-func (maxPosSearch *maxReplPosSearch) processTablet(tablet *topodatapb.Tablet) {
-	defer maxPosSearch.waitGroup.Done()
-	maxPosSearch.wrangler.logger.Infof("getting replication position from %v", topoproto.TabletAliasString(tablet.Alias))
+type replicationInfo struct {
+	alias    *topodatapb.TabletAlias
+	position mysql.Position
+}
 
-	slaveStatusCtx, cancelSlaveStatus := context.WithTimeout(maxPosSearch.ctx, maxPosSearch.waitReplicasTimeout)
+func (t *tabletReplInfoAggregator) processTablet(tablet *topodatapb.Tablet) {
+	defer t.waitGroup.Done()
+	t.wrangler.logger.Infof("getting replication position from %v", topoproto.TabletAliasString(tablet.Alias))
+
+	slaveStatusCtx, cancelSlaveStatus := context.WithTimeout(t.ctx, t.waitReplicasTimeout)
 	defer cancelSlaveStatus()
 
-	status, err := maxPosSearch.wrangler.tmc.SlaveStatus(slaveStatusCtx, tablet)
+	status, err := t.wrangler.tmc.SlaveStatus(slaveStatusCtx, tablet)
 	if err != nil {
-		maxPosSearch.wrangler.logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", topoproto.TabletAliasString(tablet.Alias), err)
+		t.wrangler.logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", topoproto.TabletAliasString(tablet.Alias), err)
 		return
 	}
 	replPos, err := decodePosition(status)
 	if err != nil {
-		maxPosSearch.wrangler.logger.Warningf("cannot decode slave %v position %v: %v", topoproto.TabletAliasString(tablet.Alias), status.Position, err)
+		t.wrangler.logger.Warningf("cannot decode slave %v position %v: %v", topoproto.TabletAliasString(tablet.Alias), status.Position, err)
 		return
 	}
 
-	maxPosSearch.maxPosLock.Lock()
-	if maxPosSearch.maxPosTablet == nil || !maxPosSearch.maxPos.AtLeast(replPos) {
-		maxPosSearch.maxPos = replPos
-		maxPosSearch.maxPosTablet = tablet
-	}
-	maxPosSearch.maxPosLock.Unlock()
+	t.statusLock.Lock()
+	t.tabletReplInfos = append(t.tabletReplInfos, &replicationInfo{
+		alias:    tablet.Alias,
+		position: replPos,
+	})
+	t.statusLock.Unlock()
 }
 
-// ChooseNewMaster finds a tablet that is going to become master after reparent. The criteria
-// for the new master-elect are (preferably) to be in the same cell as the current master, and
-// to be different from avoidMasterTabletAlias. The tablet with the largest replication
+// unpackTabletAliases will turn a []*replicationInfo from the tabletReplInfos field into an []*TabletAlias.
+func (t *tabletReplInfoAggregator) unpackTabletAliases() []*topodatapb.TabletAlias {
+	t.statusLock.Lock()
+	tabletAliases := make([]*topodatapb.TabletAlias, 0, len(t.tabletReplInfos))
+
+	for i := range t.tabletReplInfos {
+		tabletAliases = append(tabletAliases, t.tabletReplInfos[i].alias)
+	}
+	t.statusLock.Unlock()
+
+	return tabletAliases
+}
+
+func (t *tabletReplInfoAggregator) Len() int {
+	return len(t.tabletReplInfos)
+}
+func (t *tabletReplInfoAggregator) Swap(i, j int) {
+	t.tabletReplInfos[i], t.tabletReplInfos[j] = t.tabletReplInfos[j], t.tabletReplInfos[i]
+}
+func (t *tabletReplInfoAggregator) Less(i, j int) bool {
+	return !t.tabletReplInfos[i].position.AtLeast(t.tabletReplInfos[j].position)
+}
+
+// chooseNewMaster finds a tablet that is going to become master after reparent. The criteria
+// for the new master-elect are to be in the same cell as the current master, and
+// to be different from avoidMasterTabletAlias, if supplied. The tablet with the largest replication
 // position is chosen to minimize the time of catching up with the master. Note that the search
 // for largest replication position will race with transactions being executed on the master at
 // the same time, so when all tablets are roughly at the same position then the choice of the
 // new master-elect will be somewhat unpredictable.
-func (wr *Wrangler) ChooseNewMaster(
+func (wr *Wrangler) chooseNewMaster(
 	ctx context.Context,
 	shardInfo *topo.ShardInfo,
 	tabletMap map[string]*topo.TabletInfo,
 	avoidMasterTabletAlias *topodatapb.TabletAlias,
 	waitReplicasTimeout time.Duration) (*topodatapb.TabletAlias, error) {
-
-	if avoidMasterTabletAlias == nil {
-		return nil, fmt.Errorf("tablet to avoid for reparent is not provided, cannot choose new master")
+	candidates, err := wr.FindMasterCandidates(ctx, tabletMap, waitReplicasTimeout)
+	if err != nil {
+		return nil, err
 	}
+
 	var masterCell string
 	if shardInfo.MasterAlias != nil {
 		masterCell = shardInfo.MasterAlias.Cell
 	}
 
-	maxPosSearch := maxReplPosSearch{
+	// Filter out avoidMasterTabletAlias, if it exists in the candidates list, and also filter out
+	// any candidates that aren't in the master tablets cell.
+	filteredCandidates := make([]*topodatapb.TabletAlias, 0, len(candidates))
+	for i := range candidates {
+		if candidates[i] != avoidMasterTabletAlias && candidates[i].Cell == masterCell {
+			filteredCandidates = append(filteredCandidates, candidates[i])
+		}
+	}
+
+	if len(filteredCandidates) == 0 {
+		return nil, nil
+	}
+	return filteredCandidates[0], nil
+}
+
+// FindMasterCandidates will look at all of the tablets in the supplied tabletMap, and return a list of tabletAliases that
+// are all caught up. This means that all of the returned TabletAliases will have the same replication position.
+func (wr *Wrangler) FindMasterCandidates(
+	ctx context.Context,
+	tabletMap map[string]*topo.TabletInfo,
+	waitReplicasTimeout time.Duration) ([]*topodatapb.TabletAlias, error) {
+	aggregator := &tabletReplInfoAggregator{
 		wrangler:            wr,
 		ctx:                 ctx,
 		waitReplicasTimeout: waitReplicasTimeout,
 		waitGroup:           sync.WaitGroup{},
-		maxPosLock:          sync.Mutex{},
+		statusLock:          sync.Mutex{},
 	}
 	for _, tabletInfo := range tabletMap {
-		if (masterCell != "" && tabletInfo.Alias.Cell != masterCell) ||
-			topoproto.TabletAliasEqual(tabletInfo.Alias, avoidMasterTabletAlias) ||
-			tabletInfo.Tablet.Type != topodatapb.TabletType_REPLICA {
+		if tabletInfo.Tablet.Type != topodatapb.TabletType_REPLICA {
 			continue
 		}
-		maxPosSearch.waitGroup.Add(1)
-		go maxPosSearch.processTablet(tabletInfo.Tablet)
+		aggregator.waitGroup.Add(1)
+		go aggregator.processTablet(tabletInfo.Tablet)
 	}
-	maxPosSearch.waitGroup.Wait()
+	aggregator.waitGroup.Wait()
 
-	if maxPosSearch.maxPosTablet == nil {
-		return nil, nil
+	sort.Sort(aggregator)
+
+	if len(aggregator.tabletReplInfos) < 2 {
+		// Either 1 result, or 0. Regardless, we can return the list at this point as we don't need to
+		// filter out tablets that aren't fully caught up.
+		return aggregator.unpackTabletAliases(), nil
 	}
-	return maxPosSearch.maxPosTablet.Alias, nil
+
+	for i := 1; i < len(aggregator.tabletReplInfos); i++ {
+		if aggregator.Less(i, i-1) {
+			// We found the first one that isn't fully caught up. Remove this and all further list items.
+			aggregator.tabletReplInfos = aggregator.tabletReplInfos[0:i]
+			break
+		}
+	}
+
+	return aggregator.unpackTabletAliases(), nil
 }
 
 // EmergencyReparentShard will make the provided tablet the master for
