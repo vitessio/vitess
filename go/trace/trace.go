@@ -147,8 +147,9 @@ func StartTracing(serviceName string) io.Closer {
 	}
 
 	currentTracer = tracer
-
-	log.Infof("successfully started tracing with [%s]", *tracingServer)
+	if *tracingServer != "noop" {
+		log.Infof("successfully started tracing with [%s]", *tracingServer)
+	}
 
 	return closer
 }
