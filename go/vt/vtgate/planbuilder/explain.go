@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -52,6 +54,11 @@ func buildExplainPlan(input engine.Primitive) (engine.Primitive, error) {
 			keyspaceName = line.descr.Keyspace.Name
 		}
 
+		other, err := commaSeparatedString(line.descr.Other)
+		if err != nil {
+			return nil, err
+		}
+
 		rows = append(rows, []sqltypes.Value{
 			sqltypes.NewVarChar(line.header + line.descr.OperatorType), // operator
 			sqltypes.NewVarChar(line.descr.Variant),                    // variant
@@ -59,6 +66,7 @@ func buildExplainPlan(input engine.Primitive) (engine.Primitive, error) {
 			sqltypes.NewVarChar(targetDest),                            // destination
 			sqltypes.NewVarChar(line.descr.TargetTabletType.String()),  // tabletType
 			sqltypes.NewVarChar(extractQuery(line.descr.Other)),        // query
+			sqltypes.NewVarChar(other),                                 // other
 		})
 	}
 
@@ -69,9 +77,22 @@ func buildExplainPlan(input engine.Primitive) (engine.Primitive, error) {
 		{Name: "destination", Type: querypb.Type_VARCHAR},
 		{Name: "tabletType", Type: querypb.Type_VARCHAR},
 		{Name: "query", Type: querypb.Type_VARCHAR},
+		{Name: "other", Type: querypb.Type_VARCHAR},
 	}
 
 	return engine.NewRowsPrimitive(rows, fields), nil
+}
+
+func commaSeparatedString(other map[string]interface{}) (string, error) {
+	var vals []string
+	for k, v := range other {
+		value, err := json.Marshal(v)
+		if err != nil {
+			return "", err
+		}
+		vals = append(vals, fmt.Sprintf("%s=%s", k, string(value)))
+	}
+	return strings.Join(vals, ","), nil
 }
 
 type description struct {
