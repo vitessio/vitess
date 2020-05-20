@@ -64,7 +64,6 @@ func buildExplainPlan(input engine.Primitive) (engine.Primitive, error) {
 			sqltypes.NewVarChar(line.descr.Variant),                    // variant
 			sqltypes.NewVarChar(keyspaceName),                          // keyspace
 			sqltypes.NewVarChar(targetDest),                            // destination
-			sqltypes.NewVarChar(line.descr.TargetTabletType.String()),  // tabletType
 			sqltypes.NewVarChar(extractQuery(line.descr.Other)),        // query
 			sqltypes.NewVarChar(other),                                 // other
 		})
@@ -75,7 +74,6 @@ func buildExplainPlan(input engine.Primitive) (engine.Primitive, error) {
 		{Name: "variant", Type: querypb.Type_VARCHAR},
 		{Name: "keyspace", Type: querypb.Type_VARCHAR},
 		{Name: "destination", Type: querypb.Type_VARCHAR},
-		{Name: "tabletType", Type: querypb.Type_VARCHAR},
 		{Name: "query", Type: querypb.Type_VARCHAR},
 		{Name: "other", Type: querypb.Type_VARCHAR},
 	}
