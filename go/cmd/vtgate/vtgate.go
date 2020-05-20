@@ -89,5 +89,11 @@ func main() {
 		discovery.ParseTabletURLTemplateFromFlag()
 		addStatusParts(vtg)
 	})
+	servenv.OnClose(func() {
+		_ = vtg.Gateway().Close(context.Background())
+		if legacyHealthCheck != nil {
+			_ = legacyHealthCheck.Close()
+		}
+	})
 	servenv.RunDefault()
 }

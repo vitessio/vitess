@@ -64,7 +64,7 @@ type Gateway interface {
 	CacheStatus() TabletCacheStatusList
 
 	// HealthCheck returns a reference to the healthCheck being used by this gateway
-	HealthCheck() discovery.HealthCheck
+	HealthCheck() *discovery.HealthCheck
 }
 
 // Creator is the factory method which can create the actual gateway object.

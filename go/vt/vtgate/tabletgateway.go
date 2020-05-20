@@ -52,7 +52,7 @@ func init() {
 // This implementation uses the new healthcheck module.
 type TabletGateway struct {
 	queryservice.QueryService
-	hc            discovery.HealthCheck
+	hc            *discovery.HealthCheck
 	srvTopoServer srvtopo.Server
 	localCell     string
 	retryCount    int
@@ -309,6 +309,6 @@ func (gw *TabletGateway) nextTablet(cell string, tablets []*discovery.TabletHeal
 }
 
 // HealthCheck satisfies the Gateway interface
-func (gw *TabletGateway) HealthCheck() discovery.HealthCheck {
+func (gw *TabletGateway) HealthCheck() *discovery.HealthCheck {
 	return gw.hc
 }

@@ -81,6 +81,7 @@ func TestHealthCheck(t *testing.T) {
 	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
 
 	shr := &querypb.StreamHealthResponse{
+		TabletAlias:                         tablet.Alias,
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 0,
@@ -116,6 +117,7 @@ func TestHealthCheck(t *testing.T) {
 
 	// TabletType changed, should get both old and new event
 	shr = &querypb.StreamHealthResponse{
+		TabletAlias:                         tablet.Alias,
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 10,
@@ -144,6 +146,7 @@ func TestHealthCheck(t *testing.T) {
 
 	// Serving & RealtimeStats changed
 	shr = &querypb.StreamHealthResponse{
+		TabletAlias:                         tablet.Alias,
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             false,
 		TabletExternallyReparentedTimestamp: 0,
@@ -163,6 +166,7 @@ func TestHealthCheck(t *testing.T) {
 
 	// HealthError
 	shr = &querypb.StreamHealthResponse{
+		TabletAlias:                         tablet.Alias,
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 0,
@@ -182,7 +186,7 @@ func TestHealthCheck(t *testing.T) {
 	testChecksum(t, 1027934207, hc.stateChecksum()) // unchanged
 
 	// remove tablet
-	hc.deleteConn(tablet)
+	hc.deleteTablet(tablet)
 	testChecksum(t, 0, hc.stateChecksum())
 }
 
@@ -211,6 +215,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 
 	// one tablet after receiving a StreamHealthResponse
 	shr := &querypb.StreamHealthResponse{
+		TabletAlias:                         tablet.Alias,
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 0,
@@ -308,6 +313,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 
 	// one tablet after receiving a StreamHealthResponse
 	shr := &querypb.StreamHealthResponse{
+		TabletAlias:                         tablet.Alias,
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 0,
@@ -368,6 +374,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 
 	// one tablet after receiving a StreamHealthResponse
 	shr := &querypb.StreamHealthResponse{
+		TabletAlias:                         tablet.Alias,
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 0,
@@ -768,8 +775,8 @@ func tabletDialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (quer
 	return nil, fmt.Errorf("tablet %v not found", key)
 }
 
-func createTestHc(ts *topo.Server) *HealthCheckImpl {
-	return NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell", nil).(*HealthCheckImpl)
+func createTestHc(ts *topo.Server) *HealthCheck {
+	return NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell", nil)
 }
 
 type fakeConn struct {
