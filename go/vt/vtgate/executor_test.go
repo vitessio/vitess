@@ -2312,3 +2312,21 @@ func TestGenerateCharsetRows(t *testing.T) {
 		})
 	}
 }
+
+func TestOlapSelectDatabase(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	executor.normalize = true
+
+	session := &vtgatepb.Session{Autocommit: true}
+
+	sql := `select database()`
+	target := querypb.Target{}
+	cbInvoked := false
+	cb := func(r *sqltypes.Result) error {
+		cbInvoked = true
+		return nil
+	}
+	err := executor.StreamExecute(context.Background(), "TestExecute", NewSafeSession(session), sql, nil, target, cb)
+	assert.NoError(t, err)
+	assert.True(t, cbInvoked)
+}
