@@ -17,7 +17,13 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
+	"fmt"
 	"testing"
+	"time"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"gotest.tools/assert"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
@@ -77,6 +83,10 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 	err = txPool.Rollback(ctx, conn)
 	require.NoError(t, err)
 
+	// try rolling back again. this should fail
+	_, err = txPool.Commit(ctx, conn)
+	require.EqualError(t, err, "not in a transaction")
+
 	conn.Release(tx.TxRollback)
 	assert.Equal(t, "begin;rollback", db.QueryLog())
 }
@@ -85,11 +95,12 @@ func TestTxPoolRollbackNonBusy(t *testing.T) {
 	db, txPool, closer := setup(t)
 	defer closer()
 
+	// start two transactions, and mark one of them as unused
 	conn1, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	conn2, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
-	conn2.Unlock()
+	conn2.Unlock() // this marks conn2 as NonBusy
 
 	// This should rollback only txid2.
 	txPool.RollbackNonBusy(ctx)
@@ -207,32 +218,30 @@ func TestTxPoolAutocommit(t *testing.T) {
 	_, err = txPool.Commit(ctx, conn1)
 	require.NoError(t, err)
 	conn1.Release(tx.TxCommit)
+
+	// finally, we should only see the query, no begin/commit
 	assert.Equal(t, query, db.QueryLog())
 }
 
-//// TestTxPoolBeginWithPoolConnectionError_TransientErrno2006 tests the case
-//// where we see a transient errno 2006 e.g. because MySQL killed the
-//// db connection. DBConn.Exec() is going to reconnect and retry automatically
-//// due to this connection error and the BEGIN will succeed.
-//func TestTxPoolBeginWithPoolConnectionError_Errno2006_Transient(t *testing.T) {
-//	db, txPool, err := primeTxPoolWithConnection(t)
-//	require.NoError(t, err)
-//	defer db.Close()
-//	defer txPool.Close()
-//
-//	// Close the connection on the server side.
-//	db.CloseAllConnections()
-//	err = db.WaitForClose(2 * time.Second)
-//	require.NoError(t, err)
-//
-//	txConn, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
-//	require.NoError(t, err, )
-//	if err != nil {
-//		t.Fatalf("Begin should have succeeded after the retry in DBConn.Exec(): %v", err)
-//	}
-//	txPool.LocalConclude(ctx, txConn)
-//}
-//
+// TestTxPoolBeginWithPoolConnectionError_TransientErrno2006 tests the case
+// where we see a transient errno 2006 e.g. because MySQL killed the
+// db connection. DBConn.Exec() is going to reconnect and retry automatically
+// due to this connection error and the BEGIN will succeed.
+func TestTxPoolBeginWithPoolConnectionError_Errno2006_Transient(t *testing.T) {
+	db, txPool := primeTxPoolWithConnection(t)
+	defer db.Close()
+	defer txPool.Close()
+
+	// Close the connection on the server side.
+	db.CloseAllConnections()
+	err := db.WaitForClose(2 * time.Second)
+	require.NoError(t, err)
+
+	txConn, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err, "Begin should have succeeded after the retry in DBConn.Exec()")
+	txConn.Release(tx.TxCommit)
+}
+
 //// TestTxPoolBeginWithPoolConnectionError_Errno2006_Permanent tests the case
 //// where a transient errno 2006 is followed by permanent connection rejections.
 //// For example, if all open connections are killed and new connections are
@@ -291,167 +300,122 @@ func TestTxPoolAutocommit(t *testing.T) {
 //		t.Errorf("wrong error code for Begin error: got = %v, want = %v", got, want)
 //	}
 //}
-//
-//// primeTxPoolWithConnection is a helper function. It reconstructs the
-//// scenario where future transactions are going to reuse an open db connection.
-//func primeTxPoolWithConnection(t *testing.T) (*fakesqldb.DB, *TxPool, error) {
-//	db := fakesqldb.New(t)
-//	txPool := newTxPool()
-//	// Set the capacity to 1 to ensure that the db connection is reused.
-//	txPool.scp.conns.SetCapacity(1)
-//	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-//
-//	// Run a query to trigger a database connection. That connection will be
-//	// reused by subsequent transactions.
-//	db.AddQuery("begin", &sqltypes.Result{})
-//	db.AddQuery("rollback", &sqltypes.Result{})
-//	ctx := context.Background()
-//	txConn, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
-//	if err != nil {
-//		return nil, nil, err
-//	}
-//	txPool.LocalConclude(ctx, txConn)
-//
-//	return db, txPool, nil
-//}
-//
-//func TestTxPoolBeginWithError(t *testing.T) {
-//	db := fakesqldb.New(t)
-//	defer db.Close()
-//	db.AddRejectedQuery("begin", errRejected)
-//	txPool := newTxPool()
-//	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-//	defer txPool.Close()
-//	ctx := context.Background()
-//	_, _, err := txPool.begin(ctx, &querypb.ExecuteOptions{})
-//	want := "error: rejected"
-//	if err == nil || !strings.Contains(err.Error(), want) {
-//		t.Errorf("Begin: %v, want %s", err, want)
-//	}
-//	if got, want := vterrors.Code(err), vtrpcpb.Code_UNKNOWN; got != want {
-//		t.Errorf("wrong error code for Begin error: got = %v, want = %v", got, want)
-//	}
-//}
-//
-//func TestTxPoolCancelledContextError(t *testing.T) {
-//	db := fakesqldb.New(t)
-//	defer db.Close()
-//	db.AddRejectedQuery("begin", errRejected)
-//	txPool := newTxPool()
-//	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-//	defer txPool.Close()
-//	ctx, cancel := context.WithCancel(context.Background())
-//	cancel()
-//	_, _, err := txPool.begin(ctx, &querypb.ExecuteOptions{})
-//	want := "transaction pool aborting request due to already expired context"
-//	if err == nil || !strings.Contains(err.Error(), want) {
-//		t.Errorf("Unexpected error: %v, want %s", err, want)
-//	}
-//	if got, want := vterrors.Code(err), vtrpcpb.Code_RESOURCE_EXHAUSTED; got != want {
-//		t.Errorf("wrong error code error: got = %v, want = %v", got, want)
-//	}
-//}
-//
-//func TestTxPoolRollbackFail(t *testing.T) {
-//	sql := "alter table test_table add test_column int"
-//	db := fakesqldb.New(t)
-//	defer db.Close()
-//	db.AddQuery(sql, &sqltypes.Result{})
-//	db.AddQuery("begin", &sqltypes.Result{})
-//	db.AddRejectedQuery("rollback", errRejected)
-//
-//	txPool := newTxPool()
-//	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-//	defer txPool.Close()
-//	ctx := context.Background()
-//	transactionID, _, err := txPool.begin(ctx, &querypb.ExecuteOptions{})
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//	txConn, err := txPool.GetAndLock(transactionID, "for query")
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//	txConn.txProps.RecordQuery(sql)
-//	_, err = txConn.Exec(ctx, sql, 1, true)
-//	txConn.Unlock()
-//	if err != nil {
-//		t.Fatalf("got error: %v", err)
-//	}
-//	err = txPool.Rollback(ctx, transactionID)
-//	want := "error: rejected"
-//	if err == nil || !strings.Contains(err.Error(), want) {
-//		t.Errorf("Begin: %v, want %s", err, want)
-//	}
-//}
-//
-//func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
-//	db := fakesqldb.New(t)
-//	defer db.Close()
-//	ctx := context.Background()
-//	db.AddQuery("begin", &sqltypes.Result{})
-//	db.AddQuery("commit", &sqltypes.Result{})
-//	db.AddQuery("rollback", &sqltypes.Result{})
-//	txPool := newTxPool()
-//	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-//	id, _, _ := txPool.begin(ctx, &querypb.ExecuteOptions{})
-//	txPool.Close()
-//
-//	assertErrorMatch := func(id int64, reason string) {
-//		conn, err := txPool.GetAndLock(id, "for query")
-//		if err == nil {
-//			conn.Unlock()
-//			t.Fatalf("expected error, got nil")
-//		}
-//		want := fmt.Sprintf("transaction %v: ended at .* \\(%v\\)", id, reason)
-//		if m, _ := regexp.MatchString(want, err.Error()); !m {
-//			t.Errorf("Get: \n%v\n, want match \n%s\n", err, want)
-//		}
-//	}
-//
-//	assertErrorMatch(id, "pool closed")
-//
-//	txPool = newTxPool()
-//	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-//
-//	id, _, _ = txPool.begin(ctx, &querypb.ExecuteOptions{})
-//	if _, err := txPool.Commit(ctx, id); err != nil {
-//		t.Fatalf("got error: %v", err)
-//	}
-//
-//	assertErrorMatch(id, "transaction committed")
-//
-//	id, _, _ = txPool.begin(ctx, &querypb.ExecuteOptions{})
-//	if err := txPool.Rollback(ctx, id); err != nil {
-//		t.Fatalf("got error: %v", err)
-//	}
-//
-//	assertErrorMatch(id, "transaction rolled back")
-//
-//	txPool.Close()
-//	txPool = newTxPool()
-//	txPool.SetTimeout(1 * time.Millisecond)
-//	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-//	defer txPool.Close()
-//
-//	id, _, _ = txPool.begin(ctx, &querypb.ExecuteOptions{})
-//	time.Sleep(20 * time.Millisecond)
-//
-//	assertErrorMatch(id, "exceeded timeout: 1ms")
-//
-//	txPool.SetTimeout(1 * time.Hour)
-//	id, _, _ = txPool.begin(ctx, &querypb.ExecuteOptions{})
-//	txc, err := txPool.GetAndLock(id, "for close")
-//	if err != nil {
-//		t.Fatalf("got error: %v", err)
-//	}
-//
-//	txc.Close()
-//	txc.Unlock()
-//
-//	assertErrorMatch(id, "closed")
-//}
-//
+
+// primeTxPoolWithConnection is a helper function. It reconstructs the
+// scenario where future transactions are going to reuse an open db connection.
+func primeTxPoolWithConnection(t *testing.T) (*fakesqldb.DB, *TxPool) {
+	t.Helper()
+	db := fakesqldb.New(t)
+	txPool := newTxPool()
+	// Set the capacity to 1 to ensure that the db connection is reused.
+	txPool.scp.conns.SetCapacity(1)
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+
+	// Run a query to trigger a database connection. That connection will be
+	// reused by subsequent transactions.
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("rollback", &sqltypes.Result{})
+	txConn, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	txConn.Release(tx.TxCommit)
+
+	return db, txPool
+}
+
+func TestTxPoolBeginWithError(t *testing.T) {
+	db, txPool, closer := setup(t)
+	defer closer()
+	db.AddRejectedQuery("begin", errRejected)
+	_, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "error: rejected")
+	require.Equal(t, vtrpcpb.Code_UNKNOWN, vterrors.Code(err), "wrong error code for Begin error")
+}
+
+func TestTxPoolCancelledContextError(t *testing.T) {
+	// given
+	db, txPool, closer := setup(t)
+	defer closer()
+	ctx, cancel := context.WithCancel(ctx)
+	cancel()
+
+	// when
+	_, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+
+	// then
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "transaction pool aborting request due to already expired context")
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+	require.Empty(t, db.QueryLog())
+}
+
+func TestTxPoolRollbackFailIsPassedThrough(t *testing.T) {
+	sql := "alter table test_table add test_column int"
+	db, txPool, closer := setup(t)
+	defer closer()
+	db.AddRejectedQuery("rollback", errRejected)
+
+	conn1, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+
+	_, err = conn1.Exec(ctx, sql, 1, true)
+	require.NoError(t, err)
+
+	// rollback is refused by the underlying db and the error is passed on
+	err = txPool.Rollback(ctx, conn1)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "error: rejected")
+
+	conn1.Unlock()
+}
+
+func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
+	db, txPool, _ := setup(t)
+	defer db.Close()
+	conn1, _, _ := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	id := conn1.ID()
+	conn1.Unlock()
+	txPool.Close()
+
+	assertErrorMatch := func(id int64, reason string) {
+		conn, err := txPool.GetAndLock(id, "for query")
+		if err == nil { //
+			conn.Releasef("fail")
+			t.Errorf("expected to get an error")
+			return
+		}
+
+		want := fmt.Sprintf("transaction %v: ended at .* \\(%v\\)", id, reason)
+		require.Regexp(t, want, err.Error())
+	}
+
+	assertErrorMatch(id, "pool closed")
+
+	txPool = newTxPool()
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+
+	conn1, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	id = conn1.ID()
+	_, err := txPool.Commit(ctx, conn1)
+	require.NoError(t, err)
+
+	conn1.Releasef("transaction committed")
+
+	assertErrorMatch(id, "transaction committed")
+
+	txPool = newTxPool()
+	txPool.SetTimeout(1 * time.Millisecond)
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer txPool.Close()
+
+	conn1, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	conn1.Unlock()
+	id = conn1.ID()
+	time.Sleep(20 * time.Millisecond)
+
+	assertErrorMatch(id, "exceeded timeout: 1ms")
+}
+
 //func TestTxPoolExecFailDueToConnFail_Errno2006(t *testing.T) {
 //	db := fakesqldb.New(t)
 //	defer db.Close()
@@ -522,25 +486,22 @@ func TestTxPoolAutocommit(t *testing.T) {
 //		t.Errorf("wrong error code for Exec error: got = %v, want = %v", got, want)
 //	}
 //}
-//
-//func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
-//	db := fakesqldb.New(t)
-//	defer db.Close()
-//	db.AddQuery("begin", &sqltypes.Result{})
-//
-//	txPool := newTxPool()
-//	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-//	startingStray := txPool.env.Stats().InternalErrors.Counts()["StrayTransactions"]
-//
-//	// Start stray transaction.
-//	_, _, err := txPool.begin(context.Background(), &querypb.ExecuteOptions{})
-//	require.NoError(t, err)
-//
-//	// Close kills stray transaction.
-//	txPool.Close()
-//	require.Equal(t, int64(1), txPool.env.Stats().InternalErrors.Counts()["StrayTransactions"]-startingStray)
-//	require.Equal(t, 0, txPool.scp.Capacity())
-//}
+
+func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
+	_, txPool, closer := setup(t)
+	defer closer()
+
+	startingStray := txPool.env.Stats().InternalErrors.Counts()["StrayTransactions"]
+
+	// Start stray transaction.
+	_, _, err := txPool.Begin(context.Background(), &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+
+	// Close kills stray transaction.
+	txPool.Close()
+	require.Equal(t, int64(1), txPool.env.Stats().InternalErrors.Counts()["StrayTransactions"]-startingStray)
+	require.Equal(t, 0, txPool.scp.Capacity())
+}
 
 func newTxPool() *TxPool {
 	env := newEnv("TabletServerTest")
