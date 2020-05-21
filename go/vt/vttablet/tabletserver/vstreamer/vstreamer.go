@@ -20,9 +20,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/golang/protobuf/proto"
 	"io"
 	"time"
+
+	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -72,15 +73,20 @@ type vstreamer struct {
 	versionTableID uint64
 
 	// format and pos are updated by parseEvent.
-	format    mysql.BinlogFormat
-	pos       mysql.Position
+	format mysql.BinlogFormat
+	pos    mysql.Position
+
+	//VSCopy
 	tablePKs  []*TablePK
 	copyState map[string]*sqltypes.Result
 	vse       *Engine
-	fields    []*querypb.Field
-	pkfields  []*querypb.Field
+
+	fields              []*querypb.Field
+	pkfields            []*querypb.Field
+	secondsBehindMaster int64 //TODO
 }
 
+// CopyState contains the last PK for tables to be copied
 type CopyState map[string][]*sqltypes.Result
 
 // streamerPlan extends the original plan to also include
@@ -111,6 +117,7 @@ type streamerPlan struct {
 // send: callback function to send events.
 func newVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, sh schema.Historian, startPos string, tablePKs []*TablePK, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
+	//init copy state
 	return &vstreamer{
 		ctx:      ctx,
 		cancel:   cancel,
@@ -124,7 +131,7 @@ func newVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *
 		vschema:  vschema,
 		plans:    make(map[uint64]*streamerPlan),
 		tablePKs: tablePKs,
-		vse: vse,
+		vse:      vse,
 	}
 }
 
@@ -184,11 +191,14 @@ func (vs *vstreamer) Stream() error {
 	defer vs.cancel()
 	ctx := context.Background()
 	defer ctx.Done()
-	log.Info("Starting Stream()")
+	log.Info("Starting Stream() with startPos %s", vs.startPos)
+	if err := vs.setStreamPosition(); err != nil {
+		return err
+	}
+	//startpos validation for tablepk != nil
 	if vs.pos.IsZero() && (vs.tablePKs == nil || len(vs.tablePKs) == 0) {
 		return fmt.Errorf("Stream needs atleast a position or a table to copy")
 	}
-	vs.setStreamPosition()
 	if vs.tablePKs != nil {
 		log.Info("TablePKs is not nil: starting vs.copy()")
 		if err := vs.copy(ctx); err != nil {
@@ -205,9 +215,9 @@ func (vs *vstreamer) Stream() error {
 
 // Stream streams binlog events.
 func (vs *vstreamer) replicate(ctx context.Context) error {
-
+	log.Infof("In replicate with pos %s", vs.pos)
 	// Ensure sh is Open. If vttablet came up in a non_serving role,
-	// the schema engine may not have been initialized.
+	// the historian may not have been initialized.
 	if err := vs.sh.Open(); err != nil {
 		return wrapError(err, vs.pos)
 	}
@@ -237,6 +247,7 @@ func (vs *vstreamer) currentPosition() (mysql.Position, error) {
 
 // parseEvents parses and sends events.
 func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.BinlogEvent) error {
+	log.Infof("In parse events")
 	// bufferAndTransmit uses bufferedEvents and curSize to buffer events.
 	var (
 		bufferedEvents []*binlogdatapb.VEvent
