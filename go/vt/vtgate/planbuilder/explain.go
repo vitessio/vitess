@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -43,7 +44,12 @@ func extractQuery(m map[string]interface{}) string {
 func buildExplainPlan(input engine.Primitive) (engine.Primitive, error) {
 	descriptions := treeLines(engine.PrimitiveToPlanDescription(input))
 
-	var rows [][]sqltypes.Value
+	var rows [][]string
+	columns := []string{"operator", "variant", "keyspace", "destination", "query", "other"}
+	
+	// this variable is used to filter out columns that have no content
+	hasContent := make([]bool, len(columns))
+	
 	for _, line := range descriptions {
 		var targetDest string
 		if line.descr.TargetDestination != nil {
@@ -59,26 +65,49 @@ func buildExplainPlan(input engine.Primitive) (engine.Primitive, error) {
 			return nil, err
 		}
 
-		rows = append(rows, []sqltypes.Value{
-			sqltypes.NewVarChar(line.header + line.descr.OperatorType), // operator
-			sqltypes.NewVarChar(line.descr.Variant),                    // variant
-			sqltypes.NewVarChar(keyspaceName),                          // keyspace
-			sqltypes.NewVarChar(targetDest),                            // destination
-			sqltypes.NewVarChar(extractQuery(line.descr.Other)),        // query
-			sqltypes.NewVarChar(other),                                 // other
-		})
+		row := []string{
+			line.header + line.descr.OperatorType, // operator
+			line.descr.Variant,                    // variant
+			keyspaceName,                          // keyspace
+			targetDest,                            // destination
+			extractQuery(line.descr.Other),        // query
+			other,                                 // other
+		}
+
+		for i, s := range row {
+			if s != "" {
+				hasContent[i] = true
+			}
+		}
+
+		rows = append(rows, row)
 	}
 
-	fields := []*querypb.Field{
-		{Name: "operator", Type: querypb.Type_VARCHAR},
-		{Name: "variant", Type: querypb.Type_VARCHAR},
-		{Name: "keyspace", Type: querypb.Type_VARCHAR},
-		{Name: "destination", Type: querypb.Type_VARCHAR},
-		{Name: "query", Type: querypb.Type_VARCHAR},
-		{Name: "other", Type: querypb.Type_VARCHAR},
-	}
+	return engine.NewRowsPrimitive(filterOutColumns(rows, hasContent), filterOutFields(columns, hasContent)), nil
+}
 
-	return engine.NewRowsPrimitive(rows, fields), nil
+func filterOutFields(columns []string, hasContent []bool) []*querypb.Field {
+	var fields []*querypb.Field
+	for i, c := range columns {
+		if hasContent[i] {
+			fields = append(fields, &querypb.Field{Name: c, Type: querypb.Type_VARCHAR})
+		}
+	}
+	return fields
+}
+
+func filterOutColumns(rowsIn [][]string, hasContent []bool) [][]sqltypes.Value {
+	var outputRows [][]sqltypes.Value
+	for _, currentRow := range rowsIn {
+		var currentOut []sqltypes.Value
+		for i, value := range currentRow {
+			if hasContent[i] {
+				currentOut = append(currentOut, sqltypes.NewVarChar(value))
+			}
+		}
+		outputRows = append(outputRows, currentOut)
+	}
+	return outputRows
 }
 
 func commaSeparatedString(other map[string]interface{}) (string, error) {
@@ -90,6 +119,7 @@ func commaSeparatedString(other map[string]interface{}) (string, error) {
 		}
 		vals = append(vals, fmt.Sprintf("%s=%s", k, string(value)))
 	}
+	sort.Strings(vals)
 	return strings.Join(vals, ","), nil
 }
 

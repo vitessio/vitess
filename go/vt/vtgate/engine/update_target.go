@@ -36,7 +36,7 @@ type UpdateTarget struct {
 	noTxNeeded
 }
 
-func (updTarget *UpdateTarget) description() PrimitiveDescription {
+func (updTarget *UpdateTarget) Description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "UpdateTarget",
 		Other:        map[string]interface{}{"target": updTarget.Target},

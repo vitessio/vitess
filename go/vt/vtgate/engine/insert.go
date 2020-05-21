@@ -168,7 +168,7 @@ func (code InsertOpcode) MarshalJSON() ([]byte, error) {
 	return json.Marshal(insName[code])
 }
 
-// RouteType returns a description of the query routing type used by the primitive
+// RouteType returns a Description of the query routing type used by the primitive
 func (ins *Insert) RouteType() string {
 	return insName[ins.Opcode]
 }
@@ -584,7 +584,7 @@ func insertVarName(col sqlparser.ColIdent, rowNum int) string {
 	return "_" + col.CompliantName() + strconv.Itoa(rowNum)
 }
 
-func (ins *Insert) description() PrimitiveDescription {
+func (ins *Insert) Description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Query":                ins.Query,
 		"TableName":            ins.GetTableName(),

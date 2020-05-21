@@ -26,7 +26,7 @@ import (
 )
 
 func TestSubqueryExecute(t *testing.T) {
-	prim := &fakePrimitive{
+	prim := &FakePrimitive{
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -67,7 +67,7 @@ func TestSubqueryExecute(t *testing.T) {
 	))
 
 	// Error case.
-	sq.Subquery = &fakePrimitive{
+	sq.Subquery = &FakePrimitive{
 		sendErr: errors.New("err"),
 	}
 	_, err = sq.Execute(nil, bv, true)
@@ -75,7 +75,7 @@ func TestSubqueryExecute(t *testing.T) {
 }
 
 func TestSubqueryStreamExecute(t *testing.T) {
-	prim := &fakePrimitive{
+	prim := &FakePrimitive{
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -116,7 +116,7 @@ func TestSubqueryStreamExecute(t *testing.T) {
 	))
 
 	// Error case.
-	sq.Subquery = &fakePrimitive{
+	sq.Subquery = &FakePrimitive{
 		sendErr: errors.New("err"),
 	}
 	_, err = wrapStreamExecute(sq, nil, bv, true)
@@ -124,7 +124,7 @@ func TestSubqueryStreamExecute(t *testing.T) {
 }
 
 func TestSubqueryGetFields(t *testing.T) {
-	prim := &fakePrimitive{
+	prim := &FakePrimitive{
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -163,7 +163,7 @@ func TestSubqueryGetFields(t *testing.T) {
 	))
 
 	// Error case.
-	sq.Subquery = &fakePrimitive{
+	sq.Subquery = &FakePrimitive{
 		sendErr: errors.New("err"),
 	}
 	_, err = sq.GetFields(nil, bv)

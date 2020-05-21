@@ -187,7 +187,7 @@ func (code RouteOpcode) MarshalJSON() ([]byte, error) {
 	return json.Marshal(routeName[code])
 }
 
-// RouteType returns a description of the query routing type used by the primitive
+// RouteType returns a Description of the query routing type used by the primitive
 func (route *Route) RouteType() string {
 	return routeName[route.Opcode]
 }
@@ -553,7 +553,7 @@ func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) 
 	return shardVars
 }
 
-func (route *Route) description() PrimitiveDescription {
+func (route *Route) Description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Query":      route.Query,
 		"Table":      route.TableName,

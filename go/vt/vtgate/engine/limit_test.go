@@ -38,7 +38,7 @@ func TestLimitExecute(t *testing.T) {
 		"b|2",
 		"c|3",
 	)
-	fp := &fakePrimitive{
+	fp := &FakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 
@@ -72,7 +72,7 @@ func TestLimitExecute(t *testing.T) {
 		"b|2",
 		"c|3",
 	)
-	fp = &fakePrimitive{
+	fp = &FakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 	l = &Limit{
@@ -93,7 +93,7 @@ func TestLimitExecute(t *testing.T) {
 		"b|2",
 		"c|3",
 	)
-	fp = &fakePrimitive{
+	fp = &FakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 	l = &Limit{
@@ -119,7 +119,7 @@ func TestLimitExecute(t *testing.T) {
 		"b|2",
 		"c|3",
 	)
-	fp = &fakePrimitive{
+	fp = &FakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 	l = &Limit{
@@ -149,7 +149,7 @@ func TestLimitOffsetExecute(t *testing.T) {
 		"c|5",
 		"c|6",
 	)
-	fp := &fakePrimitive{
+	fp := &FakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 
@@ -182,7 +182,7 @@ func TestLimitOffsetExecute(t *testing.T) {
 		"c|5",
 		"c|6",
 	)
-	fp = &fakePrimitive{
+	fp = &FakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 
@@ -212,7 +212,7 @@ func TestLimitOffsetExecute(t *testing.T) {
 		"c|5",
 		"c|6",
 	)
-	fp = &fakePrimitive{
+	fp = &FakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 
@@ -241,7 +241,7 @@ func TestLimitOffsetExecute(t *testing.T) {
 		"c|5",
 		"c|6",
 	)
-	fp = &fakePrimitive{
+	fp = &FakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 
@@ -273,7 +273,7 @@ func TestLimitOffsetExecute(t *testing.T) {
 		"c|5",
 		"c|6",
 	)
-	fp = &fakePrimitive{
+	fp = &FakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 
@@ -302,7 +302,7 @@ func TestLimitOffsetExecute(t *testing.T) {
 		"c|5",
 		"c|6",
 	)
-	fp = &fakePrimitive{
+	fp = &FakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 
@@ -331,7 +331,7 @@ func TestLimitOffsetExecute(t *testing.T) {
 		"z|2",
 	)
 
-	fp = &fakePrimitive{
+	fp = &FakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 
@@ -359,7 +359,7 @@ func TestLimitStreamExecute(t *testing.T) {
 		"b|2",
 		"c|3",
 	)
-	fp := &fakePrimitive{
+	fp := &FakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 
@@ -439,7 +439,7 @@ func TestLimitGetFields(t *testing.T) {
 			"int64|varchar",
 		),
 	)
-	fp := &fakePrimitive{results: []*sqltypes.Result{result}}
+	fp := &FakePrimitive{results: []*sqltypes.Result{result}}
 
 	l := &Limit{Input: fp}
 
@@ -452,7 +452,7 @@ func TestLimitGetFields(t *testing.T) {
 
 func TestLimitInputFail(t *testing.T) {
 	bindVars := make(map[string]*querypb.BindVariable)
-	fp := &fakePrimitive{sendErr: errors.New("input fail")}
+	fp := &FakePrimitive{sendErr: errors.New("input fail")}
 
 	l := &Limit{Count: int64PlanValue(1), Input: fp}
 

@@ -130,7 +130,7 @@ func (code AggregateOpcode) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
 }
 
-// RouteType returns a description of the query routing type used by the primitive
+// RouteType returns a Description of the query routing type used by the primitive
 func (oa *OrderedAggregate) RouteType() string {
 	return oa.Input.RouteType()
 }
@@ -417,7 +417,7 @@ func intToString(i interface{}) string {
 	return strconv.Itoa(i.(int))
 }
 
-func (oa *OrderedAggregate) description() PrimitiveDescription {
+func (oa *OrderedAggregate) Description() PrimitiveDescription {
 	aggregates := GenericJoin(oa.Aggregates, aggregateParamsToString)
 	groupBy := GenericJoin(oa.Keys, intToString)
 	other := map[string]interface{}{

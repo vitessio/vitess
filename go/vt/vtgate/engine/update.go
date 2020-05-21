@@ -57,7 +57,7 @@ var updName = map[DMLOpcode]string{
 	ByDestination: "UpdateByDestination",
 }
 
-// RouteType returns a description of the query routing type used by the primitive
+// RouteType returns a Description of the query routing type used by the primitive
 func (upd *Update) RouteType() string {
 	return updName[upd.Opcode]
 }
@@ -238,7 +238,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 	return nil
 }
 
-func (upd *Update) description() PrimitiveDescription {
+func (upd *Update) Description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Query":                upd.Query,
 		"Table":                upd.GetTableName(),

@@ -44,7 +44,7 @@ type MemorySort struct {
 	TruncateColumnCount int `json:",omitempty"`
 }
 
-// RouteType returns a description of the query routing type used by the primitive.
+// RouteType returns a Description of the query routing type used by the primitive.
 func (ms *MemorySort) RouteType() string {
 	return ms.Input.RouteType()
 }
@@ -174,7 +174,7 @@ func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int
 	return count, nil
 }
 
-func (ms *MemorySort) description() PrimitiveDescription {
+func (ms *MemorySort) Description() PrimitiveDescription {
 	orderByIndexes := GenericJoin(ms.OrderBy, orderByParamsToString)
 	value := ms.UpperLimit.Value
 	other := map[string]interface{}{"OrderBy": orderByIndexes}

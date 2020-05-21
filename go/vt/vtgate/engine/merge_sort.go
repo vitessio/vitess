@@ -158,7 +158,7 @@ func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 	return nil
 }
 
-func (ms *MergeSort) description() PrimitiveDescription {
+func (ms *MergeSort) Description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"OrderBy": ms.OrderBy,
 	}

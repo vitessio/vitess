@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -29,6 +30,12 @@ import (
 
 func TestAggregateTypes(t *testing.T) {
 	defer cluster.PanicHandler(t)
+
+	fmt.Println(vtParams.Port)
+	for {
+		time.Sleep(1 * time.Second)
+	}
+
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)

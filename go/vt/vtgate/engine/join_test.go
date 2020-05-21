@@ -26,7 +26,7 @@ import (
 )
 
 func TestJoinExecute(t *testing.T) {
-	leftPrim := &fakePrimitive{
+	leftPrim := &FakePrimitive{
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -43,7 +43,7 @@ func TestJoinExecute(t *testing.T) {
 		"col4|col5|col6",
 		"int64|varchar|varchar",
 	)
-	rightPrim := &fakePrimitive{
+	rightPrim := &FakePrimitive{
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(
 				rightFields,
@@ -131,7 +131,7 @@ func TestJoinExecuteMaxMemoryRows(t *testing.T) {
 	testMaxMemoryRows = 3
 	defer func() { testMaxMemoryRows = save }()
 
-	leftPrim := &fakePrimitive{
+	leftPrim := &FakePrimitive{
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -148,7 +148,7 @@ func TestJoinExecuteMaxMemoryRows(t *testing.T) {
 		"col4|col5|col6",
 		"int64|varchar|varchar",
 	)
-	rightPrim := &fakePrimitive{
+	rightPrim := &FakePrimitive{
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(
 				rightFields,
@@ -187,7 +187,7 @@ func TestJoinExecuteMaxMemoryRows(t *testing.T) {
 }
 
 func TestJoinExecuteNoResult(t *testing.T) {
-	leftPrim := &fakePrimitive{
+	leftPrim := &FakePrimitive{
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -201,7 +201,7 @@ func TestJoinExecuteNoResult(t *testing.T) {
 		"col4|col5|col6",
 		"int64|varchar|varchar",
 	)
-	rightPrim := &fakePrimitive{
+	rightPrim := &FakePrimitive{
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(
 				rightFields,
@@ -240,7 +240,7 @@ func TestJoinExecuteNoResult(t *testing.T) {
 
 func TestJoinExecuteErrors(t *testing.T) {
 	// Error on left query
-	leftPrim := &fakePrimitive{
+	leftPrim := &FakePrimitive{
 		sendErr: errors.New("left err"),
 	}
 
@@ -252,7 +252,7 @@ func TestJoinExecuteErrors(t *testing.T) {
 	expectError(t, "jn.Execute", err, "left err")
 
 	// Error on right query
-	leftPrim = &fakePrimitive{
+	leftPrim = &FakePrimitive{
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -265,7 +265,7 @@ func TestJoinExecuteErrors(t *testing.T) {
 			),
 		},
 	}
-	rightPrim := &fakePrimitive{
+	rightPrim := &FakePrimitive{
 		sendErr: errors.New("right err"),
 	}
 
@@ -282,7 +282,7 @@ func TestJoinExecuteErrors(t *testing.T) {
 	expectError(t, "jn.Execute", err, "right err")
 
 	// Error on right getfields
-	leftPrim = &fakePrimitive{
+	leftPrim = &FakePrimitive{
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -292,7 +292,7 @@ func TestJoinExecuteErrors(t *testing.T) {
 			),
 		},
 	}
-	rightPrim = &fakePrimitive{
+	rightPrim = &FakePrimitive{
 		sendErr: errors.New("right err"),
 	}
 
@@ -310,7 +310,7 @@ func TestJoinExecuteErrors(t *testing.T) {
 }
 
 func TestJoinStreamExecute(t *testing.T) {
-	leftPrim := &fakePrimitive{
+	leftPrim := &FakePrimitive{
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -327,7 +327,7 @@ func TestJoinStreamExecute(t *testing.T) {
 		"col4|col5|col6",
 		"int64|varchar|varchar",
 	)
-	rightPrim := &fakePrimitive{
+	rightPrim := &FakePrimitive{
 		results: []*sqltypes.Result{
 			// First right query will always be a GetFields.
 			sqltypes.MakeTestResult(
@@ -416,7 +416,7 @@ func TestJoinStreamExecute(t *testing.T) {
 }
 
 func TestGetFields(t *testing.T) {
-	leftPrim := &fakePrimitive{
+	leftPrim := &FakePrimitive{
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -430,7 +430,7 @@ func TestGetFields(t *testing.T) {
 		"col4|col5|col6",
 		"int64|varchar|varchar",
 	)
-	rightPrim := &fakePrimitive{
+	rightPrim := &FakePrimitive{
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(
 				rightFields,
@@ -468,10 +468,10 @@ func TestGetFields(t *testing.T) {
 }
 
 func TestGetFieldsErrors(t *testing.T) {
-	leftPrim := &fakePrimitive{
+	leftPrim := &FakePrimitive{
 		sendErr: errors.New("left err"),
 	}
-	rightPrim := &fakePrimitive{
+	rightPrim := &FakePrimitive{
 		sendErr: errors.New("right err"),
 	}
 
@@ -487,7 +487,7 @@ func TestGetFieldsErrors(t *testing.T) {
 	_, err := jn.GetFields(nil, map[string]*querypb.BindVariable{})
 	expectError(t, "jn.GetFields", err, "left err")
 
-	jn.Left = &fakePrimitive{
+	jn.Left = &FakePrimitive{
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(

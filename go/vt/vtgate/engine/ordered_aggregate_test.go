@@ -34,7 +34,7 @@ func TestOrderedAggregateExecute(t *testing.T) {
 		"col|count(*)",
 		"varbinary|decimal",
 	)
-	fp := &fakePrimitive{
+	fp := &FakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			fields,
 			"a|1",
@@ -68,7 +68,7 @@ func TestOrderedAggregateExecute(t *testing.T) {
 
 func TestOrderedAggregateExecuteTruncate(t *testing.T) {
 	assert := assert.New(t)
-	fp := &fakePrimitive{
+	fp := &FakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"col|count(*)|weight_string(col)",
@@ -113,7 +113,7 @@ func TestOrderedAggregateStreamExecute(t *testing.T) {
 		"col|count(*)",
 		"varbinary|decimal",
 	)
-	fp := &fakePrimitive{
+	fp := &FakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			fields,
 			"a|1",
@@ -153,7 +153,7 @@ func TestOrderedAggregateStreamExecute(t *testing.T) {
 
 func TestOrderedAggregateStreamExecuteTruncate(t *testing.T) {
 	assert := assert.New(t)
-	fp := &fakePrimitive{
+	fp := &FakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"col|count(*)|weight_string(col)",
@@ -206,7 +206,7 @@ func TestOrderedAggregateGetFields(t *testing.T) {
 			"varbinary|decimal",
 		),
 	)
-	fp := &fakePrimitive{results: []*sqltypes.Result{input}}
+	fp := &FakePrimitive{results: []*sqltypes.Result{input}}
 
 	oa := &OrderedAggregate{Input: fp}
 
@@ -223,7 +223,7 @@ func TestOrderedAggregateGetFieldsTruncate(t *testing.T) {
 			"varchar|decimal|varbinary",
 		),
 	)
-	fp := &fakePrimitive{results: []*sqltypes.Result{result}}
+	fp := &FakePrimitive{results: []*sqltypes.Result{result}}
 
 	oa := &OrderedAggregate{
 		TruncateColumnCount: 2,
@@ -242,7 +242,7 @@ func TestOrderedAggregateGetFieldsTruncate(t *testing.T) {
 }
 
 func TestOrderedAggregateInputFail(t *testing.T) {
-	fp := &fakePrimitive{sendErr: errors.New("input fail")}
+	fp := &FakePrimitive{sendErr: errors.New("input fail")}
 
 	oa := &OrderedAggregate{Input: fp}
 
@@ -264,7 +264,7 @@ func TestOrderedAggregateInputFail(t *testing.T) {
 
 func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
 	assert := assert.New(t)
-	fp := &fakePrimitive{
+	fp := &FakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"col1|col2|count(*)",
@@ -340,7 +340,7 @@ func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
 
 func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
 	assert := assert.New(t)
-	fp := &fakePrimitive{
+	fp := &FakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"col1|col2|count(*)",
@@ -428,7 +428,7 @@ func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
 
 func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 	assert := assert.New(t)
-	fp := &fakePrimitive{
+	fp := &FakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"col1|col2|sum(col3)",
@@ -503,7 +503,7 @@ func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 }
 
 func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
-	fp := &fakePrimitive{
+	fp := &FakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"col1|col2",
@@ -544,7 +544,7 @@ func TestOrderedAggregateKeysFail(t *testing.T) {
 		"col|count(*)",
 		"varchar|decimal",
 	)
-	fp := &fakePrimitive{
+	fp := &FakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			fields,
 			"a|1",
@@ -577,7 +577,7 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 		"col|count(*)",
 		"varbinary|decimal",
 	)
-	fp := &fakePrimitive{
+	fp := &FakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			fields,
 			"a|1",
@@ -702,7 +702,7 @@ func TestNoInputAndNoGroupingKeys(outer *testing.T) {
 	for _, test := range testCases {
 		outer.Run(test.name, func(t *testing.T) {
 			assert := assert.New(t)
-			fp := &fakePrimitive{
+			fp := &FakePrimitive{
 				results: []*sqltypes.Result{sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields(
 						"col1",

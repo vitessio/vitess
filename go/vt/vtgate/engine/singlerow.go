@@ -29,7 +29,7 @@ type SingleRow struct {
 	noTxNeeded
 }
 
-// RouteType returns a description of the query routing type used by the primitive
+// RouteType returns a Description of the query routing type used by the primitive
 func (s *SingleRow) RouteType() string {
 	return ""
 }
@@ -75,7 +75,7 @@ func (s *SingleRow) GetFields(vcursor VCursor, bindVars map[string]*query.BindVa
 	return &sqltypes.Result{}, nil
 }
 
-func (s *SingleRow) description() PrimitiveDescription {
+func (s *SingleRow) Description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "SingleRow",
 	}

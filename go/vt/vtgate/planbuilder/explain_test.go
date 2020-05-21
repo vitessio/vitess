@@ -17,10 +17,12 @@ limitations under the License.
 package planbuilder
 
 import (
+	"golang.org/x/tools/go/ssa/interp/testdata/src/fmt"
 	"strings"
 	"testing"
-
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -142,10 +144,92 @@ func TestThreeNodes(t *testing.T) {
 	utils.MustMatch(t, want, output, "")
 }
 
+func TestFilteringOfColumns(t *testing.T) {
+
+	type Descr = engine.PrimitiveDescription
+
+	a := Descr{
+		OperatorType:      "x",
+		Variant:           "",
+		Keyspace:          nil,
+		TargetDestination: nil,
+		Other:             nil,
+	}
+	b := Descr{
+		OperatorType:      "",
+		Variant:           "x",
+		Keyspace:          nil,
+		TargetDestination: nil,
+		TargetTabletType:  0,
+		Other:             nil,
+	}
+	c := Descr{
+		OperatorType:      "",
+		Variant:           "",
+		Keyspace:          nil,
+		TargetDestination: nil,
+		TargetTabletType:  0,
+		Other:             nil,
+	}
+
+	in := &fakePrimitive{
+		descr:  a,
+		inputs: []Descr{b, c},
+	}
+	fmt.Println(in)
+}
+
 func toString(descriptions []description) string {
 	output := ""
 	for _, d := range descriptions {
 		output += d.header + d.descr.OperatorType + "\n"
 	}
 	return strings.Trim(output, " \n\t")
+}
+
+var _ engine.Primitive = (*fakePrimitive)(nil)
+
+type fakePrimitive struct {
+	descr  engine.PrimitiveDescription
+	inputs []engine.PrimitiveDescription
+}
+
+func (f *fakePrimitive) Description() engine.PrimitiveDescription {
+	return f.descr
+}
+
+func (f *fakePrimitive) RouteType() string {
+	panic("implement me")
+}
+
+func (f *fakePrimitive) GetKeyspaceName() string {
+	panic("implement me")
+}
+
+func (f *fakePrimitive) GetTableName() string {
+	panic("implement me")
+}
+
+func (f *fakePrimitive) Execute(vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	panic("implement me")
+}
+
+func (f *fakePrimitive) StreamExecute(vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
+	panic("implement me")
+}
+
+func (f *fakePrimitive) GetFields(vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	panic("implement me")
+}
+
+func (f *fakePrimitive) NeedsTransaction() bool {
+	panic("implement me")
+}
+
+func (f *fakePrimitive) Inputs() []engine.Primitive {
+	panic("implement me")
+}
+
+func (f *fakePrimitive) description() engine.PrimitiveDescription {
+	panic("implement me")
 }

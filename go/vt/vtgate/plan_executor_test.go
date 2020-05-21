@@ -1124,20 +1124,16 @@ func TestPlanExecutorExplain(t *testing.T) {
 	result, err := executorExec(executor, "explain format = vitess select * from user", bindVars)
 	require.NoError(t, err)
 
-	require.Equal(t,
-		`[[VARCHAR("Route") VARCHAR("SelectScatter") VARCHAR("TestExecutor") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("select * from user") VARCHAR("Query=\"select * from user\",Table=\"user\",FieldQuery=\"select * from user where 1 != 1\"")]]`,
+	assert.Equal(t,
+		`[[VARCHAR("Route") VARCHAR("SelectScatter") VARCHAR("TestExecutor") VARCHAR("select * from user") VARCHAR("FieldQuery=\"select * from user where 1 != 1\",Query=\"select * from user\",Table=\"user\"")]]`,
 		fmt.Sprintf("%v", result.Rows))
 
 	result, err = executorExec(executor, "explain format = vitess select 42", bindVars)
 	require.NoError(t, err)
-	expected :=
-		`[[VARCHAR("Projection") VARCHAR("") VARCHAR("") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("")] ` +
-			`[VARCHAR("└─ SingleRow") VARCHAR("") VARCHAR("") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("")]]`
-	require.Equal(t,
-		`[[VARCHAR("Projection") VARCHAR("") VARCHAR("") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("")] `+
-			`[VARCHAR("└─ SingleRow") VARCHAR("") VARCHAR("") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("")]]`,
-		expected,
-		fmt.Sprintf("%v", result.Rows), fmt.Sprintf("%v", result.Rows))
+	assert.Equal(t,
+		`[[VARCHAR("Projection") VARCHAR("Columns=[\"42\"],Expressions=[\"INT64(42)\"]")] `+
+			`[VARCHAR("Projection") VARCHAR("Columns=[\"42\"],Expressions=[\"INT64(42)\"]") VARCHAR("└─ SingleRow") VARCHAR("")]]`,
+		fmt.Sprintf("%v", result.Rows))
 }
 
 func TestPlanExecutorOtherAdmin(t *testing.T) {

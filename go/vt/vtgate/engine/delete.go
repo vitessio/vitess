@@ -50,7 +50,7 @@ var delName = map[DMLOpcode]string{
 	ByDestination: "DeleteByDestination",
 }
 
-// RouteType returns a description of the query routing type used by the primitive
+// RouteType returns a Description of the query routing type used by the primitive
 func (del *Delete) RouteType() string {
 	return delName[del.Opcode]
 }
@@ -211,7 +211,7 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 	return nil
 }
 
-func (del *Delete) description() PrimitiveDescription {
+func (del *Delete) Description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Query":                del.Query,
 		"Table":                del.GetTableName(),

@@ -46,7 +46,7 @@ func (ps *PulloutSubquery) Inputs() []Primitive {
 	return []Primitive{ps.Subquery, ps.Underlying}
 }
 
-// RouteType returns a description of the query routing type used by the primitive
+// RouteType returns a Description of the query routing type used by the primitive
 func (ps *PulloutSubquery) RouteType() string {
 	return ps.Opcode.String()
 }
@@ -160,7 +160,7 @@ func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*qu
 	return combinedVars, nil
 }
 
-func (ps *PulloutSubquery) description() PrimitiveDescription {
+func (ps *PulloutSubquery) Description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "Subquery",
 		Variant:      ps.Opcode.String(),

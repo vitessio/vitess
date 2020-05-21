@@ -31,7 +31,7 @@ func TestMemorySortExecute(t *testing.T) {
 		"c1|c2",
 		"varbinary|decimal",
 	)
-	fp := &fakePrimitive{
+	fp := &FakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			fields,
 			"a|1",
@@ -95,7 +95,7 @@ func TestMemorySortStreamExecute(t *testing.T) {
 		"c1|c2",
 		"varbinary|decimal",
 	)
-	fp := &fakePrimitive{
+	fp := &FakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			fields,
 			"a|1",
@@ -171,7 +171,7 @@ func TestMemorySortGetFields(t *testing.T) {
 			"int64|varchar",
 		),
 	)
-	fp := &fakePrimitive{results: []*sqltypes.Result{result}}
+	fp := &FakePrimitive{results: []*sqltypes.Result{result}}
 
 	ms := &MemorySort{Input: fp}
 
@@ -189,7 +189,7 @@ func TestMemorySortExecuteTruncate(t *testing.T) {
 		"c1|c2|c3",
 		"varbinary|decimal|int64",
 	)
-	fp := &fakePrimitive{
+	fp := &FakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			fields,
 			"a|1|1",
@@ -231,7 +231,7 @@ func TestMemorySortStreamExecuteTruncate(t *testing.T) {
 		"c1|c2|c3",
 		"varbinary|decimal|int64",
 	)
-	fp := &fakePrimitive{
+	fp := &FakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			fields,
 			"a|1|1",
@@ -277,7 +277,7 @@ func TestMemorySortMultiColumn(t *testing.T) {
 		"c1|c2",
 		"varbinary|decimal",
 	)
-	fp := &fakePrimitive{
+	fp := &FakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			fields,
 			"a|1",
@@ -348,7 +348,7 @@ func TestMemorySortMaxMemoryRows(t *testing.T) {
 		"c1|c2",
 		"varbinary|decimal",
 	)
-	fp := &fakePrimitive{
+	fp := &FakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			fields,
 			"a|1",
@@ -380,7 +380,7 @@ func TestMemorySortExecuteNoVarChar(t *testing.T) {
 		"c1|c2",
 		"varchar|decimal",
 	)
-	fp := &fakePrimitive{
+	fp := &FakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			fields,
 			"a|1",

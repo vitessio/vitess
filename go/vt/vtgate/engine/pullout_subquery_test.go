@@ -39,7 +39,7 @@ func TestPulloutSubqueryValueGood(t *testing.T) {
 		),
 		"1",
 	)
-	sfp := &fakePrimitive{
+	sfp := &FakePrimitive{
 		results: []*sqltypes.Result{sqResult},
 	}
 	underlyingResult := sqltypes.MakeTestResult(
@@ -49,7 +49,7 @@ func TestPulloutSubqueryValueGood(t *testing.T) {
 		),
 		"0",
 	)
-	ufp := &fakePrimitive{
+	ufp := &FakePrimitive{
 		results: []*sqltypes.Result{underlyingResult},
 	}
 	ps := &PulloutSubquery{
@@ -73,10 +73,10 @@ func TestPulloutSubqueryValueNone(t *testing.T) {
 			"int64",
 		),
 	)
-	sfp := &fakePrimitive{
+	sfp := &FakePrimitive{
 		results: []*sqltypes.Result{sqResult},
 	}
-	ufp := &fakePrimitive{}
+	ufp := &FakePrimitive{}
 	ps := &PulloutSubquery{
 		Opcode:         PulloutValue,
 		SubqueryResult: "sq",
@@ -99,7 +99,7 @@ func TestPulloutSubqueryValueBadColumns(t *testing.T) {
 		),
 		"1|1",
 	)
-	sfp := &fakePrimitive{
+	sfp := &FakePrimitive{
 		results: []*sqltypes.Result{sqResult},
 	}
 	ps := &PulloutSubquery{
@@ -121,7 +121,7 @@ func TestPulloutSubqueryValueBadRows(t *testing.T) {
 		"1",
 		"2",
 	)
-	sfp := &fakePrimitive{
+	sfp := &FakePrimitive{
 		results: []*sqltypes.Result{sqResult},
 	}
 	ps := &PulloutSubquery{
@@ -143,10 +143,10 @@ func TestPulloutSubqueryInNotinGood(t *testing.T) {
 		"1",
 		"2",
 	)
-	sfp := &fakePrimitive{
+	sfp := &FakePrimitive{
 		results: []*sqltypes.Result{sqResult},
 	}
-	ufp := &fakePrimitive{}
+	ufp := &FakePrimitive{}
 	ps := &PulloutSubquery{
 		Opcode:         PulloutIn,
 		SubqueryResult: "sq",
@@ -179,10 +179,10 @@ func TestPulloutSubqueryInNone(t *testing.T) {
 			"int64",
 		),
 	)
-	sfp := &fakePrimitive{
+	sfp := &FakePrimitive{
 		results: []*sqltypes.Result{sqResult},
 	}
-	ufp := &fakePrimitive{}
+	ufp := &FakePrimitive{}
 	ps := &PulloutSubquery{
 		Opcode:         PulloutIn,
 		SubqueryResult: "sq",
@@ -206,7 +206,7 @@ func TestPulloutSubqueryInBadColumns(t *testing.T) {
 		),
 		"1|1",
 	)
-	sfp := &fakePrimitive{
+	sfp := &FakePrimitive{
 		results: []*sqltypes.Result{sqResult},
 	}
 	ps := &PulloutSubquery{
@@ -227,10 +227,10 @@ func TestPulloutSubqueryExists(t *testing.T) {
 		),
 		"1",
 	)
-	sfp := &fakePrimitive{
+	sfp := &FakePrimitive{
 		results: []*sqltypes.Result{sqResult},
 	}
-	ufp := &fakePrimitive{}
+	ufp := &FakePrimitive{}
 	ps := &PulloutSubquery{
 		Opcode:     PulloutExists,
 		HasValues:  "has_values",
@@ -252,10 +252,10 @@ func TestPulloutSubqueryExistsNone(t *testing.T) {
 			"int64",
 		),
 	)
-	sfp := &fakePrimitive{
+	sfp := &FakePrimitive{
 		results: []*sqltypes.Result{sqResult},
 	}
-	ufp := &fakePrimitive{}
+	ufp := &FakePrimitive{}
 	ps := &PulloutSubquery{
 		Opcode:     PulloutExists,
 		HasValues:  "has_values",
@@ -271,7 +271,7 @@ func TestPulloutSubqueryExistsNone(t *testing.T) {
 }
 
 func TestPulloutSubqueryError(t *testing.T) {
-	sfp := &fakePrimitive{
+	sfp := &FakePrimitive{
 		sendErr: errors.New("err"),
 	}
 	ps := &PulloutSubquery{
@@ -295,7 +295,7 @@ func TestPulloutSubqueryStream(t *testing.T) {
 		),
 		"1",
 	)
-	sfp := &fakePrimitive{
+	sfp := &FakePrimitive{
 		results: []*sqltypes.Result{sqResult},
 	}
 	underlyingResult := sqltypes.MakeTestResult(
@@ -305,7 +305,7 @@ func TestPulloutSubqueryStream(t *testing.T) {
 		),
 		"0",
 	)
-	ufp := &fakePrimitive{
+	ufp := &FakePrimitive{
 		results: []*sqltypes.Result{underlyingResult},
 	}
 	ps := &PulloutSubquery{
@@ -326,7 +326,7 @@ func TestPulloutSubqueryGetFields(t *testing.T) {
 	bindVars := map[string]*querypb.BindVariable{
 		"aa": sqltypes.Int64BindVariable(1),
 	}
-	ufp := &fakePrimitive{}
+	ufp := &FakePrimitive{}
 	ps := &PulloutSubquery{
 		Opcode:         PulloutValue,
 		SubqueryResult: "sq",

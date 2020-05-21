@@ -38,7 +38,7 @@ type AlterVSchema struct {
 	noInputs
 }
 
-func (v *AlterVSchema) description() PrimitiveDescription {
+func (v *AlterVSchema) Description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "AlterVSchema",
 		Keyspace:     v.Keyspace,

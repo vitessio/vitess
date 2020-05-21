@@ -126,9 +126,9 @@ type (
 		// The inputs to this Primitive
 		Inputs() []Primitive
 
-		// description is the description, sans the inputs, of this Primitive.
-		// to get the plan description with all children, use PrimitiveToPlanDescription()
-		description() PrimitiveDescription
+		// Description is the Description, sans the inputs, of this Primitive.
+		// to get the plan Description with all children, use PrimitiveToPlanDescription()
+		Description() PrimitiveDescription
 	}
 
 	// noInputs default implementation for Primitives that are leaves

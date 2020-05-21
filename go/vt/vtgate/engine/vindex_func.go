@@ -69,7 +69,7 @@ func (code VindexOpcode) MarshalJSON() ([]byte, error) {
 	return json.Marshal(vindexOpcodeName[code])
 }
 
-// RouteType returns a description of the query routing type used by the primitive
+// RouteType returns a Description of the query routing type used by the primitive
 func (vf *VindexFunc) RouteType() string {
 	return vindexOpcodeName[vf.Opcode]
 }
@@ -180,7 +180,7 @@ func (vf *VindexFunc) buildRow(id sqltypes.Value, ksid []byte, kr *topodatapb.Ke
 	return row
 }
 
-func (vf *VindexFunc) description() PrimitiveDescription {
+func (vf *VindexFunc) Description() PrimitiveDescription {
 	fields := map[string]string{}
 	for _, field := range vf.Fields {
 		fields[field.Name] = field.Type.String()

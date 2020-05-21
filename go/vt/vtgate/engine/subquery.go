@@ -35,7 +35,7 @@ func (sq *Subquery) NeedsTransaction() bool {
 	return sq.Subquery.NeedsTransaction()
 }
 
-// RouteType returns a description of the query routing type used by the primitive
+// RouteType returns a Description of the query routing type used by the primitive
 func (sq *Subquery) RouteType() string {
 	return sq.Subquery.RouteType()
 }
@@ -107,7 +107,7 @@ func (sq *Subquery) buildFields(inner *sqltypes.Result) []*querypb.Field {
 	return fields
 }
 
-func (sq *Subquery) description() PrimitiveDescription {
+func (sq *Subquery) Description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Columns": sq.Cols,
 	}

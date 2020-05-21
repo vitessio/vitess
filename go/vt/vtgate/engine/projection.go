@@ -108,7 +108,7 @@ func (p *Projection) Inputs() []Primitive {
 	return []Primitive{p.Input}
 }
 
-func (p *Projection) description() PrimitiveDescription {
+func (p *Projection) Description() PrimitiveDescription {
 	var exprs []string
 	for _, e := range p.Exprs {
 		exprs = append(exprs, e.String())
