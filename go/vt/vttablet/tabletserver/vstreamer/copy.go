@@ -5,11 +5,16 @@ import (
 	"fmt"
 	"io"
 	"time"
+
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
+
+type unified struct {
+}
 
 func (vs *vstreamer) initCopyState() error {
 	if len(vs.tablePKs) == 0 {
@@ -32,7 +37,7 @@ func (vs *vstreamer) copy(ctx context.Context) error {
 
 	for len(vs.copyState) > 0 {
 		var tableName string
-		for k, _ := range vs.copyState {
+		for k := range vs.copyState {
 			tableName = k
 			break
 		}
@@ -109,10 +114,10 @@ func (vs *vstreamer) sendFieldEvent(ctx context.Context, gtid string, fieldEvent
 func (vs *vstreamer) sendEventsForRows(ctx context.Context, tableName string, rows *binlogdatapb.VStreamRowsResponse) error {
 	var evs []*binlogdatapb.VEvent
 	for i, row := range rows.Rows {
+		//begin, rows, copystate, commit
 		log.Infof("ROW %d : %v", i+1, row)
 		ev := &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_ROW,
-			Gtid: rows.Gtid,
 			RowEvent: &binlogdatapb.RowEvent{
 				TableName: tableName,
 				RowChanges: []*binlogdatapb.RowChange{{
@@ -151,7 +156,8 @@ func (vs *vstreamer) copyTable(ctx context.Context, tableName string) error {
 			}
 			vs.fields = rows.Fields
 			vs.pkfields = rows.Pkfields
-			vs.sendFieldEvent(ctx, rows.Gtid, fieldEvent)
+			vs.sendFieldEvent(ctx, rows.Gtid, fieldEvent) //FIXME: gtid should be different for each row
+			vs.pos, _ = mysql.DecodePosition(rows.Gtid)   //FIXME
 		}
 		log.Infof("After batch of rows is sent 1, lastpk is %v, %s, %s", rows.Lastpk, rows.Pkfields, rows.Fields)
 		if len(rows.Rows) == 0 {
@@ -185,5 +191,5 @@ func (vs *vstreamer) copyTable(ctx context.Context, tableName string) error {
 }
 
 func (vs *vstreamer) getSecondsBehindMaster() int64 {
-	return 0
+	return 0 //FIXME
 }
