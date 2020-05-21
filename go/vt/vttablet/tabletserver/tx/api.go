@@ -82,6 +82,9 @@ type (
 		// Release is used after we are done with the connection and will not use it again
 		Release(reason ReleaseReason)
 
+		// Releasef is used after we are done with the connection and will not use it again
+		Releasef(format string, params ...interface{})
+
 		// Unlock marks the connection as not in use. The connection remains active.
 		Unlock()
 
