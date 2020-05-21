@@ -76,18 +76,20 @@ func newTestMaterializerEnv(t *testing.T, ms *vtctldatapb.MaterializeSettings, s
 	}
 
 	for _, ts := range ms.TableSettings {
-		tablename := ts.TargetTable
+		tableName := ts.TargetTable
 		table, err := sqlparser.TableFromStatement(ts.SourceExpression)
 		if err == nil {
-			tablename = table.Name.String()
+			tableName = table.Name.String()
 		}
-		env.tmc.schema[ms.SourceKeyspace+"."+tablename] = &tabletmanagerdatapb.SchemaDefinition{
+		env.tmc.schema[ms.SourceKeyspace+"."+tableName] = &tabletmanagerdatapb.SchemaDefinition{
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
-				Schema: fmt.Sprintf("%s_schema", tablename),
+				Name:   tableName,
+				Schema: fmt.Sprintf("%s_schema", tableName),
 			}},
 		}
 		env.tmc.schema[ms.TargetKeyspace+"."+ts.TargetTable] = &tabletmanagerdatapb.SchemaDefinition{
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+				Name:   ts.TargetTable,
 				Schema: fmt.Sprintf("%s_schema", ts.TargetTable),
 			}},
 		}
@@ -169,11 +171,16 @@ func newTestMaterializerTMClient() *testMaterializerTMClient {
 }
 
 func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
-	key := tablet.Keyspace + "." + tables[0]
-	if tmc.schema[key] == nil {
-		return &tabletmanagerdatapb.SchemaDefinition{}, nil
+	schemaDefn := &tabletmanagerdatapb.SchemaDefinition{}
+	for _, table := range tables {
+		key := tablet.Keyspace + "." + table
+		tableDefn := tmc.schema[key]
+		if tableDefn == nil {
+			continue
+		}
+		schemaDefn.TableDefinitions = append(schemaDefn.TableDefinitions, tableDefn.TableDefinitions...)
 	}
-	return tmc.schema[key], nil
+	return schemaDefn, nil
 }
 
 func (tmc *testMaterializerTMClient) expectVRQuery(tabletID int, query string, result *sqltypes.Result) {

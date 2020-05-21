@@ -22,6 +22,7 @@ import (
 	"sync"
 	"text/template"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/gogo/protobuf/proto"
@@ -49,6 +50,10 @@ type materializer struct {
 	sourceShards  []*topo.ShardInfo
 	targetShards  []*topo.ShardInfo
 }
+
+const (
+	createDDLAsCopy = "copy"
+)
 
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs, cell, tabletTypes string) error {
@@ -112,7 +117,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		ms.TableSettings = append(ms.TableSettings, &vtctldatapb.TableMaterializeSettings{
 			TargetTable:      table,
 			SourceExpression: buf.String(),
-			CreateDdl:        "copy",
+			CreateDdl:        createDDLAsCopy,
 		})
 	}
 	return wr.Materialize(ctx, ms)
@@ -583,46 +588,107 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 }
 
 func (mz *materializer) deploySchema(ctx context.Context) error {
+
 	return mz.forAllTargets(func(target *topo.ShardInfo) error {
+		needsCopy := false
+		copyTables := map[string]bool{}
+		targetTables := map[string]bool{}
+
 		for _, ts := range mz.ms.TableSettings {
-			tableSchema, err := mz.wr.GetSchema(ctx, target.MasterAlias, []string{ts.TargetTable}, nil, false)
+			targetTables[ts.TargetTable] = true
+
+			if ts.CreateDdl == createDDLAsCopy {
+				needsCopy = true
+				copyTables[ts.TargetTable] = true
+			}
+		}
+
+		// Check for all desired tables in target.
+		hasTargetTable := map[string]bool{}
+		{
+			tableList := make([]string, 0, len(targetTables))
+			for table := range targetTables {
+				tableList = append(tableList, table)
+			}
+
+			targetSchema, err := mz.wr.GetSchema(ctx, target.MasterAlias, tableList, nil, false)
 			if err != nil {
 				return err
 			}
-			if len(tableSchema.TableDefinitions) != 0 {
+
+			for _, td := range targetSchema.TableDefinitions {
+				hasTargetTable[td.Name] = true
+			}
+		}
+
+		// Check for all source table schemas that need copying.
+		tableDDL := map[string]string{}
+		if needsCopy {
+			sourceMaster := mz.sourceShards[0].MasterAlias
+			if sourceMaster == nil {
+				return fmt.Errorf("source shard must have a master for copying schema: %v", mz.sourceShards[0].ShardName())
+			}
+
+			tableList := make([]string, 0, len(copyTables))
+			for table := range copyTables {
+				tableList = append(tableList, table)
+			}
+
+			log.Infof("copy: getting table schemas from source master: %+v...", tableList)
+			var err error
+			sourceSchema, err := mz.wr.GetSchema(ctx, sourceMaster, tableList, nil, false)
+			if err != nil {
+				return err
+			}
+
+			// Check for any missing tables in schema after accounting for returned TableDefinitions.
+			missingTables := copyTables
+			for _, td := range sourceSchema.TableDefinitions {
+				tableDDL[td.Name] = td.Schema
+
+				delete(missingTables, td.Name)
+			}
+
+			if len(missingTables) > 0 {
+				var tableList []string
+				for table := range missingTables {
+					tableList = append(tableList, table)
+				}
+
+				return fmt.Errorf("copy: source tables do not exist: %+v.", tableList)
+			}
+		}
+
+		for _, ts := range mz.ms.TableSettings {
+			if hasTargetTable[ts.TargetTable] {
 				// Table already exists.
 				continue
 			}
 			if ts.CreateDdl == "" {
 				return fmt.Errorf("target table %v does not exist and there is no create ddl defined", ts.TargetTable)
 			}
-			createddl := ts.CreateDdl
-			if createddl == "copy" {
-				sourceTableName, err := sqlparser.TableFromStatement(ts.SourceExpression)
-				if err != nil {
-					return err
+			createDDL := ts.CreateDdl
+			if createDDL == createDDLAsCopy {
+				if ts.SourceExpression != "" {
+					// Check for table if non-empty SourceExpression.
+					sourceTableName, err := sqlparser.TableFromStatement(ts.SourceExpression)
+					if err != nil {
+						return err
+					}
+					if sourceTableName.Name.String() != ts.TargetTable {
+						return fmt.Errorf("source and target table names must match for copying schema: %v vs %v", sqlparser.String(sourceTableName), ts.TargetTable)
+					}
 				}
-				if sourceTableName.Name.String() != ts.TargetTable {
-					return fmt.Errorf("source and target table names must match for copying schema: %v vs %v", sqlparser.String(sourceTableName), ts.TargetTable)
-				}
-				sourceMaster := mz.sourceShards[0].MasterAlias
-				if sourceMaster == nil {
-					return fmt.Errorf("source shard must have a master for copying schema: %v", mz.sourceShards[0].ShardName())
-				}
-				sourceSchema, err := mz.wr.GetSchema(ctx, sourceMaster, []string{ts.TargetTable}, nil, false)
-				if err != nil {
-					return err
-				}
-				if len(sourceSchema.TableDefinitions) == 0 {
-					return fmt.Errorf("source table %v does not exist", ts.TargetTable)
-				}
-				createddl = sourceSchema.TableDefinitions[0].Schema
+
+				createDDL = tableDDL[ts.TargetTable]
 			}
+
 			targetTablet, err := mz.wr.ts.GetTablet(ctx, target.MasterAlias)
 			if err != nil {
 				return err
 			}
-			if _, err := mz.wr.tmc.ExecuteFetchAsDba(ctx, targetTablet.Tablet, false, []byte(createddl), 0, false, true); err != nil {
+
+			if _, err := mz.wr.tmc.ExecuteFetchAsDba(ctx, targetTablet.Tablet, false, []byte(createDDL), 0, false, true); err != nil {
 				return err
 			}
 		}
@@ -644,45 +710,48 @@ func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
 			rule := &binlogdatapb.Rule{
 				Match: ts.TargetTable,
 			}
-			// Validate the query.
-			stmt, err := sqlparser.Parse(ts.SourceExpression)
-			if err != nil {
-				return "", err
-			}
-			sel, ok := stmt.(*sqlparser.Select)
-			if !ok {
-				return "", fmt.Errorf("unrecognized statement: %s", ts.SourceExpression)
-			}
-			if mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
-				cv, err := vindexes.FindBestColVindex(mz.targetVSchema.Tables[ts.TargetTable])
+
+			if ts.SourceExpression != "" {
+				// Validate non-empty query.
+				stmt, err := sqlparser.Parse(ts.SourceExpression)
 				if err != nil {
 					return "", err
 				}
-				mappedCols := make([]*sqlparser.ColName, 0, len(cv.Columns))
-				for _, col := range cv.Columns {
-					colName, err := matchColInSelect(col, sel)
+				sel, ok := stmt.(*sqlparser.Select)
+				if !ok {
+					return "", fmt.Errorf("unrecognized statement: %s", ts.SourceExpression)
+				}
+				if mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
+					cv, err := vindexes.FindBestColVindex(mz.targetVSchema.Tables[ts.TargetTable])
 					if err != nil {
 						return "", err
 					}
-					mappedCols = append(mappedCols, colName)
+					mappedCols := make([]*sqlparser.ColName, 0, len(cv.Columns))
+					for _, col := range cv.Columns {
+						colName, err := matchColInSelect(col, sel)
+						if err != nil {
+							return "", err
+						}
+						mappedCols = append(mappedCols, colName)
+					}
+					subExprs := make(sqlparser.SelectExprs, 0, len(mappedCols)+2)
+					for _, mappedCol := range mappedCols {
+						subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: mappedCol})
+					}
+					vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
+					subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte(vindexName))})
+					subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte("{{.keyrange}}"))})
+					sel.Where = &sqlparser.Where{
+						Type: sqlparser.WhereStr,
+						Expr: &sqlparser.FuncExpr{
+							Name:  sqlparser.NewColIdent("in_keyrange"),
+							Exprs: subExprs,
+						},
+					}
+					rule.Filter = sqlparser.String(sel)
+				} else {
+					rule.Filter = ts.SourceExpression
 				}
-				subExprs := make(sqlparser.SelectExprs, 0, len(mappedCols)+2)
-				for _, mappedCol := range mappedCols {
-					subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: mappedCol})
-				}
-				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte(vindexName))})
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte("{{.keyrange}}"))})
-				sel.Where = &sqlparser.Where{
-					Type: sqlparser.WhereStr,
-					Expr: &sqlparser.FuncExpr{
-						Name:  sqlparser.NewColIdent("in_keyrange"),
-						Exprs: subExprs,
-					},
-				}
-				rule.Filter = sqlparser.String(sel)
-			} else {
-				rule.Filter = ts.SourceExpression
 			}
 			bls.Filter.Rules = append(bls.Filter.Rules, rule)
 		}

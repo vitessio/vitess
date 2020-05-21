@@ -1970,7 +1970,7 @@ func TestMaterializerTableMismatch(t *testing.T) {
 	delete(env.tmc.schema, "targetks.t1")
 
 	err := env.wr.Materialize(context.Background(), ms)
-	assert.EqualError(t, err, "source and target table names must match for copying schema: t2 vs t1")
+	assert.EqualError(t, err, "copy: source tables do not exist: [t1].")
 }
 
 func TestMaterializerNoSourceTable(t *testing.T) {
@@ -1991,7 +1991,7 @@ func TestMaterializerNoSourceTable(t *testing.T) {
 	delete(env.tmc.schema, "sourceks.t1")
 
 	err := env.wr.Materialize(context.Background(), ms)
-	assert.EqualError(t, err, "source table t1 does not exist")
+	assert.EqualError(t, err, "copy: source tables do not exist: [t1].")
 }
 
 func TestMaterializerSyntaxError(t *testing.T) {
