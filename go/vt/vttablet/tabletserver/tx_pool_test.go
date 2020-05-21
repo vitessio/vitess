@@ -36,7 +36,7 @@ import (
 )
 
 func TestTxPoolExecuteCommit(t *testing.T) {
-	sql := "update test_column set x=1 where 1!=1"
+	sql := "select 'this is a query'"
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery(sql, &sqltypes.Result{})
@@ -47,29 +47,40 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
+
+	// begin a transaction and then return the connection
 	conn, beginSQL, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, "begin", beginSQL)
 	id := conn.ID()
 	conn.Unlock()
 
-	conn2, err := txPool.GetAndLock(id, "for query")
+	// get the connection and execute a query on it
+	conn2, err := txPool.GetAndLock(id, "")
 	require.NoError(t, err)
 	_, _ = conn2.Exec(ctx, sql, 1, true)
 	conn2.Unlock()
 
-	commitSQL, err := txPool.Commit(ctx, conn)
+	// get the connection again and now commit it
+	conn3, err := txPool.GetAndLock(id, "")
 	require.NoError(t, err)
-	conn.Release(tx.TxCommit)
 
+	commitSQL, err := txPool.Commit(ctx, conn3)
+	require.NoError(t, err)
 	require.Equal(t, "commit", commitSQL)
+
+	// try committing again. this should fail
+	_, err = txPool.Commit(ctx, conn)
+	require.EqualError(t, err, "not in a transaction")
+
+	// wrap everything up and assert
+	assert.Equal(t, "begin;select 'this is a query';commit", db.QueryLog())
+	conn3.Release(tx.TxCommit)
 }
 
 func TestTxPoolExecuteRollback(t *testing.T) {
-	sql := "alter table test_table add test_column int"
 	db := fakesqldb.New(t)
 	defer db.Close()
-	db.AddQuery(sql, &sqltypes.Result{})
 	db.AddQuery("begin", &sqltypes.Result{})
 	db.AddQuery("rollback", &sqltypes.Result{})
 
@@ -77,18 +88,14 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
-	conn, beginSQL, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	conn, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
-	if beginSQL != "begin" {
-		t.Errorf("beginSQL got %q want 'begin'", beginSQL)
-	}
-	//txConn, err := txPool.GetAndLock(conn, "for query")
-	//require.NoError(t, err)
-	//defer txPool.Rollback(ctx, conn.ConnID)
-	conn.TxProperties().RecordQuery(sql)
-	_, err = conn.Exec(ctx, sql, 1, true)
-	conn.Unlock()
+
+	err = txPool.Rollback(ctx, conn)
 	require.NoError(t, err)
+
+	conn.Release(tx.TxRollback)
+	assert.Equal(t, "begin;rollback", db.QueryLog())
 }
 
 //func TestTxPoolRollbackNonBusy(t *testing.T) {
