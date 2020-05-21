@@ -23,14 +23,15 @@ import (
 	"strings"
 	"testing"
 	"time"
+
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -112,7 +113,9 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 		"create table t1(id11 int, id12 int, primary key(id11))",
 		"create table t2(id21 int, id22 int, primary key(id21))",
 	})
+	log.Infof("Pos at start: %s", masterPosition(t))
 	insertLotsOfData(t, 10)
+	log.Infof("Pos after bulk insert: %s", masterPosition(t))
 	defer execStatements(t, []string{
 		"drop table t1",
 		"drop table t2",
@@ -150,9 +153,6 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 		})
 	*/
 
-	var expected []string
-	{
-	}
 	t1FieldEvent := []string{"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > "}
 	t1Events := []string{}
 	t2Events := []string{"type:FIELD field_event:<table_name:\"t2\" fields:<name:\"id21\" type:INT32 > fields:<name:\"id22\" type:INT32 > > "}
@@ -162,26 +162,34 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 		t2Events = append(t2Events,
 			fmt.Sprintf("type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:%d lengths:%d values:\"%d%d\" > > > ", len(strconv.Itoa(i)), len(strconv.Itoa(i*20)), i, i*20))
 	}
-	expected = append(expected, t1Events...)
-	//expected = append(expected, t2Events...)
-	t1Events = append(t1Events, "type:ROW row_event:<row_changes:<after:<lengths:3 lengths:4 values:\"1011010\" > > > ")
 
-	expected = append(expected,
-		[]string{
-			"begin",
-			"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > ",
-			"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:3 lengths:4 values:\"1011010\" > > > ",
-			"gtid",
-			"commit",
-		}...)
-	testcases := []testcase{{
-		input: []string{
-			"insert into t1 values (101, 1010)",
+	insertEvents := []string{
+		"begin",
+		"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > ",
+		"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:3 lengths:4 values:\"1011010\" > > > ",
+		"gtid",
+		"commit"}
+	testcases := []testcase{
+		{
+			input:  []string{},
+			output: [][]string{t1FieldEvent, t1Events},
 		},
-		output: [][]string{t1FieldEvent, t1Events},
-	}}
+		{
+			input: []string{
+				"insert into t1 values (101, 1010)",
+			},
+			output: [][]string{insertEvents},
+		},
+		{
+			input: []string{
+				"insert into t2 values (101, 2020)",
+			},
+			output: [][]string{{"begin", "gtid", "commit"}},
+		},
+	}
 
 	runCases(t, filter, testcases, "", tablePKs)
+	log.Infof("Pos at end of test: %s", masterPosition(t))
 }
 
 func TestFilteredVarBinary(t *testing.T) {
@@ -1525,14 +1533,15 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 var lastPos string
 
 func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string, tablePKs []*TablePK) <-chan []*binlogdatapb.VEvent {
-	if position == "" && tablePKs == nil {
+	if position == "" && len(tablePKs) == 0 {
 		position = masterPosition(t)
 	}
 
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {
 		defer close(ch)
-		_ = vstream(ctx, t, position, tablePKs, filter, ch)
+		err := vstream(ctx, t, position, tablePKs, filter, ch)
+		require.Nil(t, err)
 	}()
 	return ch
 }
