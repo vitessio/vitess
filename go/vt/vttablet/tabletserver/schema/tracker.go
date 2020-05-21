@@ -56,19 +56,23 @@ func NewTracker(engine *Engine) *Tracker {
 
 // Open enables the tracker functionality
 func (t *Tracker) Open() {
+	log.Info("Enabling tracker")
 	t.enabled = true
 }
 
 // Close disables the tracker functionality
 func (t *Tracker) Close() {
+	log.Info("Disabling tracker")
 	t.enabled = false
 }
 
 // SchemaUpdated is called by a vstream when it encounters a DDL
 func (t *Tracker) SchemaUpdated(gtid string, ddl string, timestamp int64) error {
 	if !t.enabled {
+		log.Infof("Tracker not enabled, ignoring SchemaUpdated event")
 		return nil
 	}
+	log.Infof("Processing SchemaUpdated event for gtid %s, ddl %s", gtid, ddl)
 	if gtid == "" || ddl == "" {
 		return fmt.Errorf("got invalid gtid or ddl in SchemaUpdated")
 	}

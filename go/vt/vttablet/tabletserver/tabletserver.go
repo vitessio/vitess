@@ -267,15 +267,20 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 // StartTracker starts a new replication watcher
 // Only to be used for testing
 func (tsv *TabletServer) StartTracker() {
-	schemaTracker := schema.NewTracker(tsv.se)
-	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config, schemaTracker)
+	tsv.config.TrackSchemaVersions = true
+	tsv.config.WatchReplication = true
+	tsv.tracker.Open()
+	//need to close and reopen watcher since it is already opened in the tsv init and is idempotent ...
+	tsv.watcher.Close()
+	tsv.watcher.watchReplication = true
 	tsv.watcher.Open()
 }
 
 // StopTracker turns the watcher off
 // Only to be used for testing
 func (tsv *TabletServer) StopTracker() {
-	tsv.watcher.Close()
+	tsv.config.TrackSchemaVersions = false
+	tsv.tracker.Close()
 }
 
 // Register prepares TabletServer for serving by calling
@@ -566,8 +571,10 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.messager.Open()
 		tsv.hr.Close()
 		tsv.hw.Open()
+		log.Info("Opening tracker, trackschemaversions is %t", tsv.config.TrackSchemaVersions)
 		tsv.tracker.Open()
 		if tsv.config.TrackSchemaVersions {
+			log.Info("Starting watcher")
 			tsv.watcher.Open()
 		}
 	} else {
