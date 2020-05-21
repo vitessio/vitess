@@ -26,8 +26,6 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txlimiter"
 
-	"golang.org/x/net/context"
-
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -36,22 +34,14 @@ import (
 )
 
 func TestTxPoolExecuteCommit(t *testing.T) {
+	db, txPool, closer := setup(t)
+	defer closer()
+
 	sql := "select 'this is a query'"
-	db := fakesqldb.New(t)
-	defer db.Close()
-	db.AddQuery(sql, &sqltypes.Result{})
-	db.AddQuery("begin", &sqltypes.Result{})
-	db.AddQuery("commit", &sqltypes.Result{})
-
-	txPool := newTxPool()
-	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-	defer txPool.Close()
-	ctx := context.Background()
-
 	// begin a transaction and then return the connection
-	conn, beginSQL, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	conn, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
-	assert.Equal(t, "begin", beginSQL)
+
 	id := conn.ID()
 	conn.Unlock()
 
@@ -65,29 +55,22 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	conn3, err := txPool.GetAndLock(id, "")
 	require.NoError(t, err)
 
-	commitSQL, err := txPool.Commit(ctx, conn3)
+	_, err = txPool.Commit(ctx, conn3)
 	require.NoError(t, err)
-	require.Equal(t, "commit", commitSQL)
 
 	// try committing again. this should fail
 	_, err = txPool.Commit(ctx, conn)
 	require.EqualError(t, err, "not in a transaction")
 
 	// wrap everything up and assert
-	assert.Equal(t, "begin;select 'this is a query';commit", db.QueryLog())
+	assert.Equal(t, "begin;"+sql+";commit", db.QueryLog())
 	conn3.Release(tx.TxCommit)
 }
 
 func TestTxPoolExecuteRollback(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	db.AddQuery("begin", &sqltypes.Result{})
-	db.AddQuery("rollback", &sqltypes.Result{})
+	db, txPool, closer := setup(t)
+	defer closer()
 
-	txPool := newTxPool()
-	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-	defer txPool.Close()
-	ctx := context.Background()
 	conn, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 
@@ -98,34 +81,31 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 	assert.Equal(t, "begin;rollback", db.QueryLog())
 }
 
-//func TestTxPoolRollbackNonBusy(t *testing.T) {
-//	db := fakesqldb.New(t)
-//	defer db.Close()
-//	db.AddQuery("begin", &sqltypes.Result{})
-//	db.AddQuery("rollback", &sqltypes.Result{})
-//
-//	txPool := newTxPool()
-//	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-//	defer txPool.Close()
-//	ctx := context.Background()
-//	txid1, _, err := txPool.begin(ctx, &querypb.ExecuteOptions{})
-//	require.NoError(t, err)
-//	_, _, err = txPool.begin(ctx, &querypb.ExecuteOptions{})
-//	require.NoError(t, err)
-//	conn1, err := txPool.GetAndLock(txid1, "for query")
-//	require.NoError(t, err)
-//	// This should rollback only txid2.
-//	txPool.RollbackNonBusy(ctx)
-//	if sz := txPool.scp.active.Size(); sz != 1 {
-//		t.Errorf("txPool.active.Size(): %d, want 1", sz)
-//	}
-//	conn1.Unlock()
-//	// This should rollback txid1.
-//	txPool.RollbackNonBusy(ctx)
-//	if sz := txPool.scp.active.Size(); sz != 0 {
-//		t.Errorf("txPool.active.Size(): %d, want 0", sz)
-//	}
-//}
+func TestTxPoolRollbackNonBusy(t *testing.T) {
+	db, txPool, closer := setup(t)
+	defer closer()
+
+	conn1, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	conn2, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	conn2.Unlock()
+
+	// This should rollback only txid2.
+	txPool.RollbackNonBusy(ctx)
+
+	// committing tx1 should not be an issue
+	_, err = txPool.Commit(ctx, conn1)
+	require.NoError(t, err)
+
+	// Trying to get back to conn2 should not work since the transaction has been rolled back
+	_, err = txPool.GetAndLock(conn2.ID(), "")
+	require.Error(t, err)
+
+	conn1.Release(tx.TxCommit)
+	assert.Equal(t, "begin;begin;rollback;commit", db.QueryLog())
+}
+
 //
 //func TestTxPoolTransactionKillerEnforceTimeoutEnabled(t *testing.T) {
 //	t.Skip("you are so slow")
@@ -198,79 +178,55 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 //	return transactionID, nil
 //}
 //
-//func TestTxPoolTransactionIsolation(t *testing.T) {
-//	db := fakesqldb.New(t)
-//	defer db.Close()
-//	db.AddQuery("begin", &sqltypes.Result{})
-//	txPool := newTxPool()
-//	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-//	ctx := context.Background()
-//
-//	// Start a transaction with default. It should not change isolation.
-//	_, beginSQL, err := txPool.begin(ctx, &querypb.ExecuteOptions{})
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//	if beginSQL != "begin" {
-//		t.Errorf("beginSQL got %q want 'begin'", beginSQL)
-//	}
-//
-//	db.AddQuery("set transaction isolation level READ COMMITTED", &sqltypes.Result{})
-//	_, beginSQL, err = txPool.begin(ctx, &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_READ_COMMITTED})
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//	wantBeginSQL := "READ COMMITTED; begin"
-//	if beginSQL != wantBeginSQL {
-//		t.Errorf("beginSQL got %q want %q", beginSQL, wantBeginSQL)
-//	}
-//}
-//
-//func TestTxPoolAutocommit(t *testing.T) {
-//	db := fakesqldb.New(t)
-//	defer db.Close()
-//	txPool := newTxPool()
-//	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-//	ctx := context.Background()
-//
-//	// Start a transaction with autocommit. This will ensure that the executor does not send begin/commit statements
-//	// to mysql.
-//	// This test is meaningful because if txPool.Begin were to send a BEGIN statement to the connection, it will fatal
-//	// because is not in the list of expected queries (i.e db.AddQuery hasn't been called).
-//	txid, beginSQL, err := txPool.begin(ctx, &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_AUTOCOMMIT})
-//	require.NoError(t, err)
-//	if beginSQL != "" {
-//		t.Errorf("beginSQL got %q want ''", beginSQL)
-//	}
-//	commitSQL, err := txPool.Commit(ctx, txid)
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//	if commitSQL != "" {
-//		t.Errorf("commitSQL got %q want ''", commitSQL)
-//	}
-//}
-//
+func TestTxPoolTransactionIsolation(t *testing.T) {
+	db, txPool, closer := setup(t)
+	defer closer()
+
+	c2, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_READ_COMMITTED})
+	require.NoError(t, err)
+	c2.Release(tx.TxClose)
+
+	assert.Equal(t, "set transaction isolation level read committed;begin", db.QueryLog())
+}
+
+func TestTxPoolAutocommit(t *testing.T) {
+	db, txPool, closer := setup(t)
+	defer closer()
+
+	// Start a transaction with autocommit. This will ensure that the executor does not send begin/commit statements
+	// to mysql.
+	// This test is meaningful because if txPool.Begin were to send a BEGIN statement to the connection, it will fatal
+	// because is not in the list of expected queries (i.e db.AddQuery hasn't been called).
+	conn1, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_AUTOCOMMIT})
+	require.NoError(t, err)
+
+	// run a query to see it in the query log
+	query := "select 3"
+	conn1.Exec(ctx, query, 1, false)
+
+	_, err = txPool.Commit(ctx, conn1)
+	require.NoError(t, err)
+	conn1.Release(tx.TxCommit)
+	assert.Equal(t, query, db.QueryLog())
+}
+
 //// TestTxPoolBeginWithPoolConnectionError_TransientErrno2006 tests the case
 //// where we see a transient errno 2006 e.g. because MySQL killed the
 //// db connection. DBConn.Exec() is going to reconnect and retry automatically
 //// due to this connection error and the BEGIN will succeed.
 //func TestTxPoolBeginWithPoolConnectionError_Errno2006_Transient(t *testing.T) {
 //	db, txPool, err := primeTxPoolWithConnection(t)
-//	if err != nil {
-//		t.Fatal(err)
-//	}
+//	require.NoError(t, err)
 //	defer db.Close()
 //	defer txPool.Close()
 //
 //	// Close the connection on the server side.
 //	db.CloseAllConnections()
-//	if err := db.WaitForClose(2 * time.Second); err != nil {
-//		t.Fatal(err)
-//	}
+//	err = db.WaitForClose(2 * time.Second)
+//	require.NoError(t, err)
 //
-//	ctx := context.Background()
 //	txConn, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+//	require.NoError(t, err, )
 //	if err != nil {
 //		t.Fatalf("Begin should have succeeded after the retry in DBConn.Exec(): %v", err)
 //	}
@@ -603,4 +559,17 @@ func newEnv(exporterName string) tabletenv.Env {
 	config.TxPool.IdleTimeoutSeconds = 30
 	env := tabletenv.NewEnv(config, exporterName)
 	return env
+}
+
+func setup(t *testing.T) (*fakesqldb.DB, *TxPool, func()) {
+	db := fakesqldb.New(t)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+
+	txPool := newTxPool()
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+
+	return db, txPool, func() {
+		txPool.Close()
+		db.Close()
+	}
 }
