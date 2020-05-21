@@ -45,12 +45,6 @@ func TestSchemaVersioning(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	tsv := framework.Server
-	origWatchReplication := tsv.Config().WatchReplication
-	tsv.Config().WatchReplication = true
-	defer func() {
-		tsv.Config().WatchReplication = origWatchReplication
-
-	}()
 	tsv.Historian().SetTrackSchemaVersions(true)
 	tsv.StartTracker()
 	srvTopo := srvtopo.NewResilientServer(framework.TopoServer, "SchemaVersionE2ETestTopo")
