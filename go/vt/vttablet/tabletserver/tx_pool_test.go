@@ -19,6 +19,9 @@ package tabletserver
 import (
 	"testing"
 
+	"gotest.tools/assert"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txlimiter"
@@ -32,37 +35,35 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-//func TestTxPoolExecuteCommit(t *testing.T) {
-//	sql := "update test_column set x=1 where 1!=1"
-//	db := fakesqldb.New(t)
-//	defer db.Close()
-//	db.AddQuery(sql, &sqltypes.Result{})
-//	db.AddQuery("begin", &sqltypes.Result{})
-//	db.AddQuery("commit", &sqltypes.Result{})
-//
-//	txPool := newTxPool()
-//	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-//	defer txPool.Close()
-//	ctx := context.Background()
-//	transactionID, beginSQL, err := txPool.begin(ctx, &querypb.ExecuteOptions{})
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//	if beginSQL != "begin" {
-//		t.Errorf("beginSQL got %q want 'begin'", beginSQL)
-//	}
-//	txConn, err := txPool.GetAndLock(transactionID, "for query")
-//	require.NoError(t, err)
-//	txConn.txProps.RecordQuery(sql)
-//	_, _ = txConn.Exec(ctx, sql, 1, true)
-//	txConn.Unlock()
-//
-//	conn, err := txPool.GetAndLock(transactionID, "reason")
-//	require.NoError(t, err)
-//	commitSQL, err := txPool.Commit(ctx, conn)
-//	require.NoError(t, err)
-//	require.Equal(t, "commit", commitSQL)
-//}
+func TestTxPoolExecuteCommit(t *testing.T) {
+	sql := "update test_column set x=1 where 1!=1"
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery(sql, &sqltypes.Result{})
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("commit", &sqltypes.Result{})
+
+	txPool := newTxPool()
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer txPool.Close()
+	ctx := context.Background()
+	conn, beginSQL, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, "begin", beginSQL)
+	id := conn.ID()
+	conn.Unlock()
+
+	conn2, err := txPool.GetAndLock(id, "for query")
+	require.NoError(t, err)
+	_, _ = conn2.Exec(ctx, sql, 1, true)
+	conn2.Unlock()
+
+	commitSQL, err := txPool.Commit(ctx, conn)
+	require.NoError(t, err)
+	conn.Release(tx.TxCommit)
+
+	require.Equal(t, "commit", commitSQL)
+}
 
 func TestTxPoolExecuteRollback(t *testing.T) {
 	sql := "alter table test_table add test_column int"

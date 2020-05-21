@@ -18,6 +18,8 @@ package tx
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -161,3 +163,21 @@ func (p *Properties) RecordQuery(query string) {
 
 // InTransaction returns true as soon as this struct is not nil
 func (p *Properties) InTransaction() bool { return p != nil }
+
+// String returns a printable version of the transaction
+func (p *Properties) String() string {
+	if p == nil {
+		return ""
+	}
+
+	return fmt.Sprintf(
+		"'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%v\t\n",
+		p.EffectiveCaller,
+		p.ImmediateCaller,
+		p.StartTime.Format(time.StampMicro),
+		p.EndTime.Format(time.StampMicro),
+		p.EndTime.Sub(p.StartTime).Seconds(),
+		p.Conclusion,
+		strings.Join(p.Queries, ";"),
+	)
+}

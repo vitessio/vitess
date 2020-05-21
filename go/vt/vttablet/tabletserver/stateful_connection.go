@@ -18,8 +18,6 @@ package tabletserver
 
 import (
 	"fmt"
-	"strings"
-	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -130,15 +128,9 @@ func (sc *StatefulConnection) Releasef(reasonFormat string, a ...interface{}) {
 // String returns a printable version of the connection info.
 func (sc *StatefulConnection) String() string {
 	return fmt.Sprintf(
-		"%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%v\t\n",
+		"%v\t%s",
 		sc.ConnID,
-		sc.txProps.EffectiveCaller,
-		sc.txProps.ImmediateCaller,
-		sc.txProps.StartTime.Format(time.StampMicro),
-		sc.txProps.EndTime.Format(time.StampMicro),
-		sc.txProps.EndTime.Sub(sc.txProps.StartTime).Seconds(),
-		sc.txProps.Conclusion,
-		strings.Join(sc.txProps.Queries, ";"),
+		sc.txProps.String(),
 	)
 }
 

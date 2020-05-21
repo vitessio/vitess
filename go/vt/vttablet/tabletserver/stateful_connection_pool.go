@@ -78,7 +78,11 @@ func (sf *StatefulConnectionPool) Open(appParams, dbaParams, appDebugParams dbco
 func (sf *StatefulConnectionPool) Close() {
 	for _, v := range sf.active.GetOutdated(time.Duration(0), "for closing") {
 		conn := v.(*StatefulConnection)
-		log.Warningf("killing transaction for shutdown: %s", conn.String())
+		thing := "connection"
+		if conn.IsInTransaction() {
+			thing = "transaction"
+		}
+		log.Warningf("killing %s for shutdown: %s", thing, conn.String())
 		sf.env.Stats().InternalErrors.Add("StrayTransactions", 1)
 		conn.Close()
 		conn.Releasef("pool closed")
