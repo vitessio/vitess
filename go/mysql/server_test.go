@@ -957,7 +957,7 @@ func TestTLSServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
-	l.TLSConfig = serverConfig
+	l.TLSConfig.Store(serverConfig)
 	go l.Accept()
 
 	// Setup the right parameters.
@@ -1063,7 +1063,7 @@ func TestTLSRequired(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
-	l.TLSConfig = serverConfig
+	l.TLSConfig.Store(serverConfig)
 	l.RequireSecureTransport = true
 	go l.Accept()
 

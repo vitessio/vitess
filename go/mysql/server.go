@@ -22,6 +22,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	proxyproto "github.com/pires/go-proxyproto"
@@ -139,7 +140,8 @@ type Listener struct {
 
 	// TLSConfig is the server TLS config. If set, we will advertise
 	// that we support SSL.
-	TLSConfig *tls.Config
+	// atomic value stores *tls.Config
+	TLSConfig atomic.Value
 
 	// AllowClearTextWithoutTLS needs to be set for the
 	// mysql_clear_password authentication method to be accepted
@@ -292,7 +294,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	defer connCount.Add(-1)
 
 	// First build and send the server handshake packet.
-	salt, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, l.TLSConfig != nil)
+	salt, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, l.TLSConfig.Load() != nil)
 	if err != nil {
 		if err != io.EOF {
 			log.Errorf("Cannot send HandshakeV10 packet to %s: %v", c, err)
@@ -638,9 +640,9 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	pos += 23
 
 	// Check for SSL.
-	if firstTime && l.TLSConfig != nil && clientFlags&CapabilityClientSSL > 0 {
+	if firstTime && l.TLSConfig.Load() != nil && clientFlags&CapabilityClientSSL > 0 {
 		// Need to switch to TLS, and then re-read the packet.
-		conn := tls.Server(c.conn, l.TLSConfig)
+		conn := tls.Server(c.conn, l.TLSConfig.Load().(*tls.Config))
 		c.conn = conn
 		c.bufferedReader.Reset(conn)
 		c.Capabilities |= CapabilityClientSSL
