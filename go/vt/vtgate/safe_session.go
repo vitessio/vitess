@@ -151,7 +151,7 @@ func (session *SafeSession) InTransaction() bool {
 }
 
 // Find returns the transactionId, if any, for a session
-func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.TabletType) int64 {
+func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.TabletType) (transactionID int64, alias *topodatapb.TabletAlias) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	sessions := session.ShardSessions
@@ -163,10 +163,10 @@ func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.T
 	}
 	for _, shardSession := range sessions {
 		if keyspace == shardSession.Target.Keyspace && tabletType == shardSession.Target.TabletType && shard == shardSession.Target.Shard {
-			return shardSession.TransactionId
+			return shardSession.TransactionId, shardSession.TabletAlias
 		}
 	}
-	return 0
+	return 0, nil
 }
 
 // Append adds a new ShardSession

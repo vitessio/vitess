@@ -85,7 +85,7 @@ func (client *QueryClient) Begin(clientFoundRows bool) error {
 	if clientFoundRows {
 		options = &querypb.ExecuteOptions{ClientFoundRows: clientFoundRows}
 	}
-	transactionID, err := client.server.Begin(client.ctx, &client.target, options)
+	transactionID, _, err := client.server.Begin(client.ctx, &client.target, options)
 	if err != nil {
 		return err
 	}
@@ -164,7 +164,7 @@ func (client *QueryClient) BeginExecute(query string, bindvars map[string]*query
 	if client.transactionID != 0 {
 		return nil, errors.New("already in transaction")
 	}
-	qr, transactionID, err := client.server.BeginExecute(
+	qr, transactionID, _, err := client.server.BeginExecute(
 		client.ctx,
 		&client.target,
 		query,

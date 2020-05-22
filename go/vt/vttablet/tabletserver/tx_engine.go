@@ -260,11 +260,12 @@ func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) 
 		return 0, "", vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "tx engine can't accept new transactions in state %v", te.state)
 	}
 
-	isWriteTransaction := options == nil || options.TransactionIsolation != querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY
-	if te.state == AcceptingReadOnly && isWriteTransaction {
-		te.stateLock.Unlock()
-		return 0, "", vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "tx engine can only accept read-only transactions in current state")
-	}
+	// TODO(deepthi): Can this be deleted now that we do allow replica transactions?
+	//isWriteTransaction := options == nil || options.TransactionIsolation != querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY
+	//if te.state == AcceptingReadOnly && isWriteTransaction {
+	//	te.stateLock.Unlock()
+	//	return 0, "", vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "tx engine can only accept read-only transactions in current state")
+	//}
 
 	// By Add() to beginRequests, we block others from initiating state
 	// changes until we have finished adding this transaction

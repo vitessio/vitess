@@ -229,8 +229,10 @@ func TestQueryExecutorPlans(t *testing.T) {
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 
 			// Test inside a transaction.
-			txid, err := tsv.Begin(ctx, &tsv.target, nil)
+			txid, alias, err := tsv.Begin(ctx, &tsv.target, nil)
 			require.NoError(t, err)
+			require.NotNil(t, alias, "alias should not be nil")
+			assert.Equal(t, tsv.alias, *alias, "Wrong alias returned by Begin")
 			defer tsv.Commit(ctx, &tsv.target, txid)
 
 			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
@@ -293,8 +295,10 @@ func TestQueryExecutorSelectImpossible(t *testing.T) {
 			assert.Equal(t, tcase.resultWant, got, tcase.input)
 			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, tcase.input)
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
-			txid, err := tsv.Begin(ctx, &tsv.target, nil)
+			txid, alias, err := tsv.Begin(ctx, &tsv.target, nil)
 			require.NoError(t, err)
+			require.NotNil(t, alias, "alias should not be nil")
+			assert.Equal(t, tsv.alias, *alias, "Wrong tablet alias from Begin")
 			defer tsv.Commit(ctx, &tsv.target, txid)
 
 			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
@@ -399,8 +403,10 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 
 			// Test inside a transaction.
-			txid, err := tsv.Begin(ctx, &tsv.target, nil)
+			txid, alias, err := tsv.Begin(ctx, &tsv.target, nil)
 			require.NoError(t, err)
+			require.NotNil(t, alias, "alias should not be nil")
+			assert.Equal(t, tsv.alias, *alias, "Wrong tablet alias from Begin")
 			defer tsv.Commit(ctx, &tsv.target, txid)
 
 			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
@@ -1074,7 +1080,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 }
 
 func newTransaction(tsv *TabletServer, options *querypb.ExecuteOptions) int64 {
-	transactionID, err := tsv.Begin(context.Background(), &tsv.target, options)
+	transactionID, _, err := tsv.Begin(context.Background(), &tsv.target, options)
 	if err != nil {
 		panic(vterrors.Wrap(err, "failed to start a transaction"))
 	}

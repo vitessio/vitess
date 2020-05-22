@@ -288,14 +288,14 @@ func TestMultiExecs(t *testing.T) {
 				Keyspace: "TestMultiExecs",
 				Shard:    "0",
 			},
-			QueryService: sbc0,
+			Gateway: sbc0,
 		},
 		{
 			Target: &querypb.Target{
 				Keyspace: "TestMultiExecs",
 				Shard:    "1",
 			},
-			QueryService: sbc1,
+			Gateway: sbc1,
 		},
 	}
 	queries := []*querypb.BoundQuery{
@@ -338,14 +338,14 @@ func TestMultiExecs(t *testing.T) {
 				Keyspace: "TestMultiExecs",
 				Shard:    "0",
 			},
-			QueryService: sbc0,
+			Gateway: sbc0,
 		},
 		{
 			Target: &querypb.Target{
 				Keyspace: "TestMultiExecs",
 				Shard:    "1",
 			},
-			QueryService: sbc1,
+			Gateway: sbc1,
 		},
 	}
 	bvs := []map[string]*querypb.BindVariable{
@@ -420,6 +420,7 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 				TabletType: topodatapb.TabletType_REPLICA,
 			},
 			TransactionId: 1,
+			TabletAlias:   sbc0.Tablet().Alias,
 		}},
 	}
 	if !proto.Equal(&wantSession, session.Session) {
@@ -470,6 +471,7 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 				TabletType: topodatapb.TabletType_REPLICA,
 			},
 			TransactionId: 1,
+			TabletAlias:   sbc0.Tablet().Alias,
 		}},
 	}
 	if !proto.Equal(&wantSession, session.Session) {
@@ -520,6 +522,7 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 				TabletType: topodatapb.TabletType_REPLICA,
 			},
 			TransactionId: 1,
+			TabletAlias:   sbc0.Tablet().Alias,
 		}},
 	}
 	if !proto.Equal(&wantSession, session.Session) {

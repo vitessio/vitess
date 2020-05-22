@@ -139,10 +139,11 @@ func newVCursorImpl(ctx context.Context, safeSession *SafeSession, marginComment
 		return nil, err
 	}
 
+	// TODO(deepthi): is it safe to remove this code block?
 	// Check for transaction to be only application in master.
-	if safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", tabletType)
-	}
+	//if safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {
+	//	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", tabletType)
+	//}
 
 	return &vcursorImpl{
 		ctx:            ctx,

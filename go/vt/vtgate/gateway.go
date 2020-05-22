@@ -65,6 +65,9 @@ type Gateway interface {
 
 	// HealthCheck returns a reference to the healthCheck being used by this gateway
 	HealthCheck() *discovery.HealthCheck
+
+	// TabletByAlias returns a QueryService
+	QueryServiceByAlias(alias *topodatapb.TabletAlias) (queryservice.QueryService, error)
 }
 
 // Creator is the factory method which can create the actual gateway object.

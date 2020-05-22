@@ -81,6 +81,7 @@ func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
 func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error {
 	if err := txc.runSessions(session.PreSessions, func(s *vtgatepb.Session_ShardSession) error {
 		defer func() { s.TransactionId = 0 }()
+		// TODO(deepthi): this Commit needs to happen on the right tablet (that the transactionID belongs to)
 		return txc.gateway.Commit(ctx, s.Target, s.TransactionId)
 	}); err != nil {
 		_ = txc.Rollback(ctx, session)
