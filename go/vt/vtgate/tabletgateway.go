@@ -95,18 +95,24 @@ func NewTabletGateway(ctx context.Context, serv srvtopo.Server, localCell string
 	// subscribe to healthcheck updates so that buffer can be notified if needed
 	// we run this in a separate goroutine so that normal processing doesn't need to block
 	hcChan := hc.Subscribe()
+	bufferCtx, bufferCancel := context.WithCancel(ctx)
 	go func(ctx context.Context, c chan *discovery.TabletHealth, buffer *buffer.Buffer) {
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case result := <-hcChan:
+				if result == nil {
+					// If result is nil it must mean the channel has been closed. Stop goroutine in that case
+					bufferCancel()
+					return
+				}
 				if result.Target.TabletType == topodatapb.TabletType_MASTER {
 					buffer.ProcessMasterHealth(result)
 				}
 			}
 		}
-	}(ctx, hcChan, gw.buffer)
+	}(bufferCtx, hcChan, gw.buffer)
 	gw.QueryService = queryservice.Wrap(nil, gw.withRetry)
 	return gw
 }
