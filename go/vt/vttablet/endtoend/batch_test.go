@@ -27,9 +27,6 @@ import (
 )
 
 func TestBatchRead(t *testing.T) {
-	t.Cleanup(func() {
-		testConfigVars(t)
-	})
 	client := framework.NewClient()
 	queries := []*querypb.BoundQuery{{
 		Sql:           "select * from vitess_a where id = :a",
@@ -129,9 +126,6 @@ func TestBatchRead(t *testing.T) {
 }
 
 func TestBatchTransaction(t *testing.T) {
-	t.Cleanup(func() {
-		testConfigVars(t)
-	})
 
 	client := framework.NewClient()
 	queries := []*querypb.BoundQuery{{
