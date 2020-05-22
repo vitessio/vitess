@@ -91,6 +91,46 @@ func TestActivePoolGetConnNonExistentTransaction(t *testing.T) {
 	require.EqualError(t, err, "not found")
 }
 
+func TestExecWithAbortedCtx(t *testing.T) {
+	ctx, cancel := context.WithCancel(ctx)
+	db := fakesqldb.New(t)
+	defer db.Close()
+	pool := newActivePool()
+	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	conn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	cancel()
+	_, err = conn.Exec(ctx, "", 0, false)
+	require.Error(t, err)
+}
+
+func TestExecWithDbconnClosed(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	pool := newActivePool()
+	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	conn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	conn.Close()
+
+	_, err = conn.Exec(ctx, "", 0, false)
+	require.EqualError(t, err, "connection was aborted")
+}
+
+func TestExecWithDbconnClosedHavingTx(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	pool := newActivePool()
+	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	conn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	conn.txProps = &tx.Properties{Conclusion: "foobar"}
+	conn.Close()
+
+	_, err = conn.Exec(ctx, "", 0, false)
+	require.EqualError(t, err, "transaction was aborted: foobar")
+}
+
 func newActivePool() *StatefulConnectionPool {
 	env := newEnv("ActivePoolTest")
 
