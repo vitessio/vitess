@@ -149,7 +149,7 @@ func (tp *TxPool) NewTxProps(immediateCaller *querypb.VTGateCallerID, effectiveC
 
 // GetAndLock fetches the connection associated to the transactionID and blocks it from concurrent use
 // You must call Unlock on TxConnection once done.
-func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (tx.TrustedConnection, error) {
+func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (tx.IStatefulConnection, error) {
 	conn, err := tp.scp.GetAndLock(connID, reason)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", connID, err)
@@ -158,7 +158,7 @@ func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (tx.TrustedConnect
 }
 
 // Commit commits the transaction on the connection.
-func (tp *TxPool) Commit(ctx context.Context, txConn tx.TrustedConnection) (string, error) {
+func (tp *TxPool) Commit(ctx context.Context, txConn tx.IStatefulConnection) (string, error) {
 	if !txConn.IsInTransaction() {
 		return "", vterrors.New(vtrpcpb.Code_INTERNAL, "not in a transaction")
 	}
@@ -177,19 +177,16 @@ func (tp *TxPool) Commit(ctx context.Context, txConn tx.TrustedConnection) (stri
 }
 
 // RollbackAndRelease rolls back the transaction on the specified connection, and releases the connection when done
-func (tp *TxPool) RollbackAndRelease(ctx context.Context, txConn tx.TrustedConnection) error {
+func (tp *TxPool) RollbackAndRelease(ctx context.Context, txConn tx.IStatefulConnection) error {
 	defer txConn.Release(tx.TxRollback)
 	return tp.Rollback(ctx, txConn)
 }
 
 // Rollback rolls back the transaction on the specified connection.
-func (tp *TxPool) Rollback(ctx context.Context, txConn tx.TrustedConnection) error {
-	if !txConn.IsInTransaction() {
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "not in a transaction")
-	}
+func (tp *TxPool) Rollback(ctx context.Context, txConn tx.IStatefulConnection) error {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Rollback")
 	defer span.Finish()
-	if !txConn.IsOpen() || !txConn.IsInTransaction() {
+	if txConn.IsClosed() || !txConn.IsInTransaction() {
 		return nil
 	}
 	if txConn.TxProperties().Autocommit {
@@ -208,7 +205,7 @@ func (tp *TxPool) Rollback(ctx context.Context, txConn tx.TrustedConnection) err
 // the statements (if any) executed to initiate the transaction. In autocommit
 // mode the statement will be "".
 // The connection returned is locked for the callee and its responsibility is to unlock the connection.
-func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (tx.TrustedConnection, string, error) {
+func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (tx.IStatefulConnection, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Begin")
 	defer span.Finish()
 	beginQueries := ""
@@ -288,13 +285,13 @@ func (tp *TxPool) SetTimeout(timeout time.Duration) {
 	tp.ticks.SetInterval(timeout / 10)
 }
 
-func (tp *TxPool) txComplete(conn tx.TrustedConnection, reason tx.ReleaseReason) {
+func (tp *TxPool) txComplete(conn tx.IStatefulConnection, reason tx.ReleaseReason) {
 	tp.log(conn, reason)
 	tp.limiter.Release(conn.TxProperties().ImmediateCaller, conn.TxProperties().EffectiveCaller)
 	conn.CleanTxState()
 }
 
-func (tp *TxPool) log(txc tx.TrustedConnection, reason tx.ReleaseReason) {
+func (tp *TxPool) log(txc tx.IStatefulConnection, reason tx.ReleaseReason) {
 	if txc.TxProperties() == nil {
 		return //Nothing to log as no transaction exists on this connection.
 	}

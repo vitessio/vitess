@@ -170,7 +170,7 @@ type TabletServer struct {
 	vstreamer *vstreamer.Engine
 	messager  *messager.Engine
 
-	txController tx.TxEngineStateMachine
+	txController tx.EngineStateMachine
 
 	// checkMySQLThrottler is used to throttle the number of
 	// requests sent to CheckMySQL.

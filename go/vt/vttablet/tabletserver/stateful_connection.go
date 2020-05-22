@@ -51,9 +51,9 @@ func (sc *StatefulConnection) Close() {
 	}
 }
 
-//IsOpen returns true when the connection is still operational
-func (sc *StatefulConnection) IsOpen() bool {
-	return sc.dbConn != nil
+//IsClosed returns true when the connection is still operational
+func (sc *StatefulConnection) IsClosed() bool {
+	return sc.dbConn == nil || sc.dbConn.IsClosed()
 }
 
 //IsInTransaction returns true when the connection has tx state
@@ -63,8 +63,8 @@ func (sc *StatefulConnection) IsInTransaction() bool {
 
 // Exec executes the statement in the dedicated connection
 func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-	if sc.dbConn == nil {
-		if sc.txProps != nil {
+	if sc.IsClosed() {
+		if sc.IsInTransaction() {
 			return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction was aborted: %v", sc.txProps.Conclusion)
 		}
 		return nil, vterrors.New(vtrpcpb.Code_ABORTED, "connection was aborted")
@@ -86,7 +86,7 @@ func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows in
 }
 
 func (sc *StatefulConnection) execWithRetry(ctx context.Context, query string, maxrows int, wantfields bool) error {
-	if sc.dbConn == nil {
+	if sc.IsClosed() {
 		return nil
 	}
 	if _, err := sc.dbConn.Exec(ctx, query, maxrows, wantfields); err != nil {
@@ -154,9 +154,9 @@ func (sc *StatefulConnection) CleanTxState() {
 	sc.txProps = nil
 }
 
-//Stats implements the tx.TrustedConnection interface
+//Stats implements the tx.IStatefulConnection interface
 func (sc *StatefulConnection) Stats() *tabletenv.Stats {
 	return sc.env.Stats()
 }
 
-var _ tx.TrustedConnection = (*StatefulConnection)(nil)
+var _ tx.IStatefulConnection = (*StatefulConnection)(nil)

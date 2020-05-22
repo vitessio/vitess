@@ -79,16 +79,33 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 
 	conn, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
+	defer conn.Release(tx.TxRollback)
 
 	err = txPool.Rollback(ctx, conn)
 	require.NoError(t, err)
 
-	// try rolling back again. this should fail
-	_, err = txPool.Commit(ctx, conn)
-	require.EqualError(t, err, "not in a transaction")
+	// try rolling back again, this should be no-op.
+	err = txPool.Rollback(ctx, conn)
+	require.NoError(t, err, "not in a transaction")
 
-	conn.Release(tx.TxRollback)
 	assert.Equal(t, "begin;rollback", db.QueryLog())
+}
+
+func TestTxPoolExecuteRollbackOnClosedConn(t *testing.T) {
+	db, txPool, closer := setup(t)
+	defer closer()
+
+	conn, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	defer conn.Release(tx.TxRollback)
+
+	conn.Close()
+
+	// rollback should not be logged.
+	err = txPool.Rollback(ctx, conn)
+	require.NoError(t, err)
+
+	assert.Equal(t, "begin", db.QueryLog())
 }
 
 func TestTxPoolRollbackNonBusy(t *testing.T) {
@@ -349,6 +366,31 @@ func TestTxPoolCancelledContextError(t *testing.T) {
 	require.Empty(t, db.QueryLog())
 }
 
+func TestTxPoolWaitTimeoutError(t *testing.T) {
+	env := newEnv("TabletServerTest")
+	env.Config().TxPool.Size = 1
+	env.Config().TxPool.MaxWaiters = 0
+	env.Config().TxPool.TimeoutSeconds = 1
+	// given
+	db, txPool, closer := setupWithEnv(t, env)
+	defer closer()
+
+	// lock the only connection in the pool.
+	conn, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	defer conn.Unlock()
+
+	// try locking one more connection.
+	_, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+
+	// then
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "transaction pool connection limit exceeded")
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+	require.Equal(t, "begin", db.QueryLog())
+	require.True(t, conn.TxProperties().LogToFile)
+}
+
 func TestTxPoolRollbackFailIsPassedThrough(t *testing.T) {
 	sql := "alter table test_table add test_column int"
 	db, txPool, closer := setup(t)
@@ -494,8 +536,9 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 	startingStray := txPool.env.Stats().InternalErrors.Counts()["StrayTransactions"]
 
 	// Start stray transaction.
-	_, _, err := txPool.Begin(context.Background(), &querypb.ExecuteOptions{})
+	conn, _, err := txPool.Begin(context.Background(), &querypb.ExecuteOptions{})
 	require.NoError(t, err)
+	conn.Unlock()
 
 	// Close kills stray transaction.
 	txPool.Close()
@@ -504,7 +547,10 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 }
 
 func newTxPool() *TxPool {
-	env := newEnv("TabletServerTest")
+	return newTxPoolWithEnv(newEnv("TabletServerTest"))
+}
+
+func newTxPoolWithEnv(env tabletenv.Env) *TxPool {
 	limiter := &txlimiter.TxAllowAll{}
 	return NewTxPool(env, limiter)
 }
@@ -527,6 +573,19 @@ func setup(t *testing.T) (*fakesqldb.DB, *TxPool, func()) {
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 
 	txPool := newTxPool()
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+
+	return db, txPool, func() {
+		txPool.Close()
+		db.Close()
+	}
+}
+
+func setupWithEnv(t *testing.T, env tabletenv.Env) (*fakesqldb.DB, *TxPool, func()) {
+	db := fakesqldb.New(t)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+
+	txPool := newTxPoolWithEnv(env)
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 
 	return db, txPool, func() {

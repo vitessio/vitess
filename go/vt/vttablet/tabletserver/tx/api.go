@@ -31,51 +31,23 @@ import (
 )
 
 type (
-	ConnID            = int64
-	DTID              = string
-	TransactionalConn interface {
-		// Executes a query inside the scope of the transaction
-		Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
+	// ConnID as type int64
+	ConnID = int64
 
-		// Should not be needed
-		BeginAgain(ctx context.Context) error
+	//DTID as type string
+	DTID = string
 
-		// String returns a printable version of the connection info.
-		String() string
-	}
-	FuncWithConnection func(TransactionalConn) error
-	TransactionEngine  interface {
-		// Local transactions
-		Begin(ctx context.Context, options *querypb.ExecuteOptions, exec FuncWithConnection) (ConnID, string, error)
-		ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, exec FuncWithConnection, connection ConnID) (ConnID, string, error)
-		Reserve(ctx context.Context, options *querypb.ExecuteOptions, setStatements []string, exec FuncWithConnection, connection ConnID) (ConnID, error)
-
-		Exec(ctx context.Context, connection ConnID, exec FuncWithConnection) error
-		Commit(ctx context.Context, transactionID ConnID) (string, ConnID, error)
-		Rollback(ctx context.Context, transactionID ConnID) (ConnID, error)
-
-		// 2PC Transactions
-		Prepare(transactionID ConnID, dtid DTID) error
-		CommitPrepared(dtid DTID) error
-		RollbackPrepared(dtid DTID, originalID ConnID) error
-		CreateTransaction(dtid DTID, participants []*querypb.Target) error
-		StartCommit(transactionID ConnID, dtid DTID) error
-		SetRollback(dtid DTID, transactionID ConnID) error
-		ConcludeTransaction(dtid DTID) error
-		ReadTransaction(dtid DTID) (*querypb.TransactionMetadata, error)
-		ReadTwopcInflight() (distributed []*DistributedTx, prepared, failed []*PreparedTx, err error)
-	}
-	//TxEngineStateMachine is used to control the state the transactional engine -
+	//EngineStateMachine is used to control the state the transactional engine -
 	//whether new connections and/or transactions are allowed or not.
-	TxEngineStateMachine interface {
+	EngineStateMachine interface {
 		Init() error
 		AcceptReadWrite() error
 		AcceptReadOnly() error
 		StopGently()
 	}
 
-	//TrustedConnection is a connection where the user is trusted to clean things up after using the connection
-	TrustedConnection interface {
+	//IStatefulConnection is a connection where the user is trusted to clean things up after using the connection
+	IStatefulConnection interface {
 		// Executes a query on the connection
 		Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
 
@@ -92,7 +64,7 @@ type (
 
 		Close()
 
-		IsOpen() bool
+		IsClosed() bool
 
 		String() string
 
@@ -106,6 +78,8 @@ type (
 
 		Stats() *tabletenv.Stats
 	}
+
+	// ReleaseReason as type int
 	ReleaseReason int
 
 	//Properties contains all information that is related to the currently running
@@ -125,10 +99,19 @@ type (
 )
 
 const (
+	// TxClose - connection released on close.
 	TxClose ReleaseReason = iota
+
+	// TxCommit - connection released on commit.
 	TxCommit
+
+	// TxRollback - connection released on rollback.
 	TxRollback
+
+	// TxKill - connection released on tx kill.
 	TxKill
+
+	// ConnInitFail - connection released on failed to start tx.
 	ConnInitFail
 )
 
@@ -136,6 +119,7 @@ func (r ReleaseReason) String() string {
 	return txResolutions[r]
 }
 
+//Name return the name of enum.
 func (r ReleaseReason) Name() string {
 	return txNames[r]
 }
