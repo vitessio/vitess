@@ -13,35 +13,32 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-type unified struct {
-}
-
-func (vs *vstreamer) initCopyState() error {
-	if len(vs.tablePKs) == 0 {
+func (uvs *uvstreamer) initCopyState() error {
+	if len(uvs.tablePKs) == 0 {
 		return nil
 	}
 
 	copyState := make(map[string]*sqltypes.Result)
-	for _, tablePK := range vs.tablePKs {
+	for _, tablePK := range uvs.tablePKs {
 		copyState[tablePK.name] = tablePK.lastPK
 	}
-	vs.copyState = copyState //FIXME mutex
+	uvs.copyState = copyState //FIXME mutex
 	return nil
 }
 
-func (vs *vstreamer) copy(ctx context.Context) error {
-	if err := vs.initCopyState(); err != nil {
+func (uvs *uvstreamer) copy(ctx context.Context) error {
+	if err := uvs.initCopyState(); err != nil {
 		return err
 	}
-	log.Infof("Inited copy state to %v", vs.copyState)
+	log.Infof("Inited copy state to %v", uvs.copyState)
 
-	for len(vs.copyState) > 0 {
+	for len(uvs.copyState) > 0 {
 		var tableName string
-		for k := range vs.copyState {
+		for k := range uvs.copyState {
 			tableName = k
 			break
 		}
-		if err := vs.catchupAndCopy(ctx, tableName); err != nil {
+		if err := uvs.catchupAndCopy(ctx, tableName); err != nil {
 			return err
 		}
 	}
@@ -49,14 +46,14 @@ func (vs *vstreamer) copy(ctx context.Context) error {
 	return nil
 }
 
-func (vs *vstreamer) catchupAndCopy(ctx context.Context, tableName string) error {
+func (uvs *uvstreamer) catchupAndCopy(ctx context.Context, tableName string) error {
 	log.Infof("catchupAndCopy for %s", tableName)
-	if !vs.pos.IsZero() {
-		if err := vs.catchup(ctx); err != nil {
+	if !uvs.vs.pos.IsZero() {
+		if err := uvs.catchup(ctx); err != nil {
 			return err
 		}
 	}
-	return vs.copyTable(ctx, tableName)
+	return uvs.copyTable(ctx, tableName)
 }
 
 const (
@@ -64,14 +61,14 @@ const (
 	replicaLagTolerance = 0
 )
 
-func (vs *vstreamer) catchup(ctx context.Context) error {
+func (uvs *uvstreamer) catchup(ctx context.Context) error {
 	log.Infof("starting catchup ...")
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	errch := make(chan error, 1)
 	go func() {
-		errch <- vs.replicate(ctx) //FIXME: can be more efficient? currently creating new slave each time
+		errch <- uvs.vs.replicate(ctx) //FIXME: can be more efficient? currently creating new slave each time
 	}()
 
 	// Wait for catchup.
@@ -79,7 +76,7 @@ func (vs *vstreamer) catchup(ctx context.Context) error {
 	defer tkr.Stop()
 	seconds := int64(replicaLagTolerance / time.Second)
 	for {
-		sbm := vs.getSecondsBehindMaster()
+		sbm := uvs.getSecondsBehindMaster()
 		if sbm < seconds {
 			cancel()
 			// Make sure vplayer returns before returning.
@@ -100,18 +97,18 @@ func (vs *vstreamer) catchup(ctx context.Context) error {
 		}
 	}
 }
-func (vs *vstreamer) sendFieldEvent(ctx context.Context, gtid string, fieldEvent *binlogdatapb.FieldEvent) error {
+func (uvs *uvstreamer) sendFieldEvent(ctx context.Context, gtid string, fieldEvent *binlogdatapb.FieldEvent) error {
 	ev := &binlogdatapb.VEvent{
 		Type:       binlogdatapb.VEventType_FIELD,
 		Gtid:       "",
 		FieldEvent: fieldEvent,
 	}
 	log.Infof("Sending field event %v", fieldEvent)
-	vs.send([]*binlogdatapb.VEvent{ev})
+	uvs.send([]*binlogdatapb.VEvent{ev})
 	return nil
 
 }
-func (vs *vstreamer) sendEventsForRows(ctx context.Context, tableName string, rows *binlogdatapb.VStreamRowsResponse) error {
+func (uvs *uvstreamer) sendEventsForRows(ctx context.Context, tableName string, rows *binlogdatapb.VStreamRowsResponse) error {
 	var evs []*binlogdatapb.VEvent
 	for i, row := range rows.Rows {
 		//begin, rows, copystate, commit
@@ -128,24 +125,25 @@ func (vs *vstreamer) sendEventsForRows(ctx context.Context, tableName string, ro
 		}
 		evs = append(evs, ev)
 	}
-	vs.send(evs)
+	uvs.send(evs)
 	return nil
 }
 
 //TODO figure out how table plan is got from source
-func (vs *vstreamer) copyTable(ctx context.Context, tableName string) error {
+func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 	var err error
 	var newLastPK *sqltypes.Result
-	log.Infof("Starting copyTable for %s, PK %v", tableName, vs.copyState[tableName].Rows[0])
+	log.Infof("Starting copyTable for %s, PK %v", tableName, uvs.copyState[tableName].Rows[0])
 	//TODO: need to "filter" filter by tablename in case of multiple filters per table? or just validate matching filters to tablepk map at start?
 	//FIXME: getting first filter ... for POC
-	err = vs.vse.StreamRows(ctx, vs.filter.Rules[0].Filter, vs.copyState[tableName].Rows[0], func(rows *binlogdatapb.VStreamRowsResponse) error {
+	err = uvs.vse.StreamRows(ctx, uvs.filter.Rules[0].Filter, uvs.copyState[tableName].Rows[0], func(rows *binlogdatapb.VStreamRowsResponse) error {
 		select {
 		case <-ctx.Done():
 			return io.EOF
 		default:
 		}
-		if vs.fields == nil {
+		if uvs.fields == nil {
+			//TODO add fast forward
 			if len(rows.Fields) == 0 {
 				return fmt.Errorf("expecting field event first, got: %v", rows)
 			}
@@ -154,24 +152,24 @@ func (vs *vstreamer) copyTable(ctx context.Context, tableName string) error {
 				TableName: tableName,
 				Fields:    rows.Fields,
 			}
-			vs.fields = rows.Fields
-			vs.pkfields = rows.Pkfields
-			vs.sendFieldEvent(ctx, rows.Gtid, fieldEvent) //FIXME: gtid should be different for each row
-			vs.pos, _ = mysql.DecodePosition(rows.Gtid)   //FIXME
+			uvs.fields = rows.Fields
+			uvs.pkfields = rows.Pkfields
+			uvs.sendFieldEvent(ctx, rows.Gtid, fieldEvent)  //FIXME: gtid should be different for each row
+			uvs.vs.pos, _ = mysql.DecodePosition(rows.Gtid) //FIXME
 		}
 		log.Infof("After batch of rows is sent 1, lastpk is %v, %s, %s", rows.Lastpk, rows.Pkfields, rows.Fields)
 		if len(rows.Rows) == 0 {
 			return nil
 		}
 
-		vs.sendEventsForRows(ctx, rows.Gtid, rows)
+		uvs.sendEventsForRows(ctx, rows.Gtid, rows)
 		log.Infof("After batch of rows is sent 2, lastpk is %v, %s, %s", rows.Lastpk, rows.Pkfields, rows.Fields)
 
-		newLastPK = sqltypes.CustomProto3ToResult(vs.pkfields, &querypb.QueryResult{
-			Fields: vs.fields,
+		newLastPK = sqltypes.CustomProto3ToResult(uvs.pkfields, &querypb.QueryResult{
+			Fields: uvs.fields,
 			Rows:   []*querypb.Row{rows.Lastpk},
 		})
-		vs.copyState[tableName] = newLastPK
+		uvs.copyState[tableName] = newLastPK
 		log.Infof("NewLastPK: %v", newLastPK)
 		return nil
 	})
@@ -186,10 +184,10 @@ func (vs *vstreamer) copyTable(ctx context.Context, tableName string) error {
 		return err
 	}
 	log.Infof("Copy of %v finished at lastpk: %v", tableName, newLastPK)
-	delete(vs.copyState, tableName)
+	delete(uvs.copyState, tableName)
 	return nil
 }
 
-func (vs *vstreamer) getSecondsBehindMaster() int64 {
+func (uvs *uvstreamer) getSecondsBehindMaster() int64 {
 	return 0 //FIXME
 }

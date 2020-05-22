@@ -76,14 +76,7 @@ type vstreamer struct {
 	format mysql.BinlogFormat
 	pos    mysql.Position
 
-	//VSCopy
-	tablePKs  []*TablePK
-	copyState map[string]*sqltypes.Result
-	vse       *Engine
-
-	fields              []*querypb.Field
-	pkfields            []*querypb.Field
-	secondsBehindMaster int64 //TODO
+	inited bool
 }
 
 // CopyState contains the last PK for tables to be copied
@@ -115,7 +108,7 @@ type streamerPlan struct {
 //   Other constructs like joins, group by, etc. are not supported.
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
-func newVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, sh schema.Historian, startPos string, tablePKs []*TablePK, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
+func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, sh schema.Historian, startPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	//init copy state
 	return &vstreamer{
@@ -130,8 +123,6 @@ func newVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *
 		vevents:  make(chan *localVSchema, 1),
 		vschema:  vschema,
 		plans:    make(map[uint64]*streamerPlan),
-		tablePKs: tablePKs,
-		vse:      vse,
 	}
 }
 
@@ -150,6 +141,17 @@ func (vs *vstreamer) Cancel() {
 	vs.cancel()
 }
 
+func (vs *vstreamer) Init() error {
+	if vs.inited {
+		return nil
+	}
+	if err := vs.setStreamPosition(); err != nil {
+		return err
+	}
+	vs.inited = true
+	return nil
+}
+
 func (vs *vstreamer) sendEventsForCurrentPos() error {
 	vevents := []*binlogdatapb.VEvent{{
 		Type: binlogdatapb.VEventType_GTID,
@@ -157,6 +159,7 @@ func (vs *vstreamer) sendEventsForCurrentPos() error {
 	}, {
 		Type: binlogdatapb.VEventType_OTHER,
 	}}
+	log.Infof("Sending events for current pos")
 	if err := vs.send(vevents); err != nil {
 		return wrapError(err, vs.pos)
 	}
@@ -192,16 +195,8 @@ func (vs *vstreamer) Stream() error {
 	ctx := context.Background()
 	defer ctx.Done()
 	log.Info("Starting Stream() with startPos %s", vs.startPos)
-	if err := vs.setStreamPosition(); err != nil {
-		return err
-	}
-	//startpos validation for tablepk != nil
-	if vs.pos.IsZero() && (vs.tablePKs == nil || len(vs.tablePKs) == 0) {
-		return fmt.Errorf("Stream needs atleast a position or a table to copy")
-	}
-	if vs.tablePKs != nil {
-		log.Info("TablePKs is not nil: starting vs.copy()")
-		if err := vs.copy(ctx); err != nil {
+	if !vs.inited {
+		if err := vs.Init(); err != nil {
 			return err
 		}
 	}
