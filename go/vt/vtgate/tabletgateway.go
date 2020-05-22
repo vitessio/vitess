@@ -82,10 +82,7 @@ func NewTabletGateway(ctx context.Context, serv srvtopo.Server, localCell string
 			log.Exitf("Unable to create new TabletGateway: %v", err)
 		}
 	}
-	b := buffer.New()
-	// callback to notify buffer when to end failover
-	newMasterDetected := b.NewMasterDetected
-	hc := discovery.NewHealthCheck(ctx, *HealthCheckRetryDelay, *HealthCheckTimeout, topoServer, localCell, newMasterDetected)
+	hc := discovery.NewHealthCheck(ctx, *HealthCheckRetryDelay, *HealthCheckTimeout, topoServer, localCell)
 
 	gw := &TabletGateway{
 		hc:                hc,
@@ -93,8 +90,23 @@ func NewTabletGateway(ctx context.Context, serv srvtopo.Server, localCell string
 		localCell:         localCell,
 		retryCount:        *RetryCount,
 		statusAggregators: make(map[string]*TabletStatusAggregator),
-		buffer:            b,
+		buffer:            buffer.New(),
 	}
+	// subscribe to healthcheck updates so that buffer can be notified if needed
+	// we run this in a separate goroutine so that normal processing doesn't need to block
+	hcChan := hc.Subscribe()
+	go func(ctx context.Context, c chan *discovery.TabletHealth, buffer *buffer.Buffer) {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case result := <-hcChan:
+				if result.Target.TabletType == topodatapb.TabletType_MASTER {
+					buffer.ProcessMasterHealth(result)
+				}
+			}
+		}
+	}(ctx, hcChan, gw.buffer)
 	gw.QueryService = queryservice.Wrap(nil, gw.withRetry)
 	return gw
 }

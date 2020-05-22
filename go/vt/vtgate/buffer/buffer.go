@@ -213,9 +213,12 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 	return sb.waitForFailoverEnd(ctx, keyspace, shard, err)
 }
 
-// NewMasterDetected notifies the buffer to record a new master
+// ProcessMasterHealth notifies the buffer to record a new master
 // and end any failover buffering that may be in progress
-func (b *Buffer) NewMasterDetected(th *discovery.TabletHealth) {
+func (b *Buffer) ProcessMasterHealth(th *discovery.TabletHealth) {
+	if th.Target.TabletType != topodatapb.TabletType_MASTER {
+		panic(fmt.Sprintf("BUG: non MASTER TabletHealth object must not be forwarded: %#v", th))
+	}
 	timestamp := th.MasterTermStartTime
 	if timestamp == 0 {
 		// Masters where TabletExternallyReparented was never called will return 0.

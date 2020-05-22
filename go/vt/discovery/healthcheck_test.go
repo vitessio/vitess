@@ -776,7 +776,7 @@ func tabletDialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (quer
 }
 
 func createTestHc(ts *topo.Server) *HealthCheck {
-	return NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell", nil)
+	return NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell")
 }
 
 type fakeConn struct {
