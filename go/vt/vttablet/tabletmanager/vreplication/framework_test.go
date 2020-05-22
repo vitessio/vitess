@@ -232,7 +232,7 @@ func (ftc *fakeTabletConn) VStream(ctx context.Context, target *querypb.Target, 
 	if vstreamHook != nil {
 		vstreamHook(ctx)
 	}
-	return streamerEngine.Stream(ctx, startPos, filter, send)
+	return streamerEngine.Stream(ctx, startPos, nil, filter, send)
 }
 
 // vstreamRowsHook allows you to do work just before calling VStreamRows.
