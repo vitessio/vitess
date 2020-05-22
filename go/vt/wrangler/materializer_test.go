@@ -1953,7 +1953,27 @@ func TestMaterializerNoSourceMaster(t *testing.T) {
 	assert.EqualError(t, err, "source shard must have a master for copying schema: 0")
 }
 
-func TestMaterializerTableMismatch(t *testing.T) {
+func TestMaterializerTableMismatchNonCopy(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "workflow",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t2",
+			CreateDdl:        "",
+		}},
+	}
+	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	defer env.close()
+
+	delete(env.tmc.schema, "targetks.t1")
+
+	err := env.wr.Materialize(context.Background(), ms)
+	assert.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
+}
+
+func TestMaterializerTableMismatchCopy(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
 		SourceKeyspace: "sourceks",
