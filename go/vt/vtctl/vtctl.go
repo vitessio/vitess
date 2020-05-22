@@ -391,7 +391,7 @@ var commands = []commandGroup{
 				"[-concurrency=10] [-include_master=false] <keyspace>",
 				"Reloads the schema on all the tablets in a keyspace."},
 			{"ValidateSchemaShard", commandValidateSchemaShard,
-				"[-exclude_tables=''] [-include-views] <keyspace/shard>",
+				"[-exclude_tables=''] [-include-views] [-allow-empty] <keyspace/shard>",
 				"Validates that the master schema matches all of the slaves."},
 			{"ValidateSchemaKeyspace", commandValidateSchemaKeyspace,
 				"[-exclude_tables=''] [-include-views] <keyspace name>",
@@ -2257,6 +2257,7 @@ func commandValidateSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subF
 func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/")
 	includeViews := subFlags.Bool("include-views", false, "Includes views in the validation")
+	allowEmpty := subFlags.Bool("allow-empty", false, "Allow empty shards when validating")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2269,7 +2270,7 @@ func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, s
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	return wr.ValidateSchemaKeyspace(ctx, keyspace, excludeTableArray, *includeViews)
+	return wr.ValidateSchemaKeyspace(ctx, keyspace, excludeTableArray, *includeViews, *allowEmpty)
 }
 
 func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
