@@ -190,9 +190,6 @@ type HealthCheck struct {
 	connsWG sync.WaitGroup
 	// topology watchers that inform healthcheck of tablets being added and deleted
 	topoWatchers []*TopologyWatcher
-	// used to inform vtgate buffer when new master is detected
-	// TODO: buffer should subscribe to healthcheck instead of setting a callback
-	masterCallback func(health *TabletHealth)
 	// cellAliases is a cache of cell aliases
 	cellAliases map[string]string
 	// mutex to protect subscribers
@@ -216,7 +213,7 @@ type HealthCheck struct {
 //   The localCell for this healthcheck
 // callback.
 //   A function to call when there is a master change. Used to notify vtgate's buffer to stop buffering.
-func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell string, callback func(health *TabletHealth)) *HealthCheck {
+func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell string) *HealthCheck {
 	log.Infof("loading tablets for cells: %v", *CellsToWatch)
 
 	hc := &HealthCheck{
@@ -224,7 +221,6 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		cell:               localCell,
 		retryDelay:         retryDelay,
 		healthCheckTimeout: healthCheckTimeout,
-		masterCallback:     callback,
 		healthByAlias:      make(map[string]*tabletHealthCheck),
 		healthData:         make(map[string]map[string]*tabletHealthCheck),
 		healthy:            make(map[string][]*tabletHealthCheck),
@@ -429,9 +425,6 @@ func (hc *HealthCheck) updateHealth(th *tabletHealthCheck, shr *query.StreamHeal
 	}
 	result := th.SimpleCopy()
 	if isMasterChange {
-		if hc.masterCallback != nil {
-			hc.masterCallback(result)
-		}
 		log.Errorf("Adding 1 to MasterPromoted counter for tablet: %v, shr.Tablet: %v, shr.TabletType: %v", currentTarget, topoproto.TabletAliasString(shr.TabletAlias), shr.Target.TabletType)
 		hcMasterPromotedCounters.Add([]string{shr.Target.Keyspace, shr.Target.Shard}, 1)
 	}

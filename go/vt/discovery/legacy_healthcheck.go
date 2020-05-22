@@ -297,7 +297,7 @@ type LegacyHealthCheck interface {
 	// listener before any tablets are added to the healthcheck.
 	SetListener(listener LegacyHealthCheckStatsListener, sendDownEvents bool)
 	// WaitForInitialStatsUpdates waits until all tablets added via
-	// AddTablet() call were propagated to the listener via corresponding
+	// AddTablet() call were propagated to the listener via correspondingdiscovert
 	// StatsUpdate() calls. Note that code path from AddTablet() to
 	// corresponding StatsUpdate() is asynchronous but not cancelable, thus
 	// this function is also non-cancelable and can't return error. Also
