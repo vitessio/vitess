@@ -18,6 +18,7 @@ package messager
 
 import (
 	"sync"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 
 	"golang.org/x/net/context"
@@ -45,7 +46,7 @@ type TabletService interface {
 // VStreamer defines  the functions of VStreamer
 // that the messager needs.
 type VStreamer interface {
-	Stream(ctx context.Context, startPos string, tablePKs []*vstreamer.TablePK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
+	Stream(ctx context.Context, startPos string, tablePKs []*vstreamer.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
 	StreamResults(ctx context.Context, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error
 }
 

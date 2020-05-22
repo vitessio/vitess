@@ -135,8 +135,8 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 		}},
 	}
 
-	var tablePKs []*TablePK
-	tablePKs = append(tablePKs, &TablePK{
+	var tablePKs []*TableLastPK
+	tablePKs = append(tablePKs, &TableLastPK{
 		name: "t1",
 		lastPK: &sqltypes.Result{
 			Fields: []*query.Field{{Name: "id11", Type: query.Type_INT32}},
@@ -144,7 +144,7 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 		},
 	})
 	/*
-		tablePKs = append(tablePKs, &TablePK{
+		tablePKs = append(tablePKs, &TableLastPK{
 			name:   "t2",
 			lastPK: &sqltypes.Result{
 				Fields:       []*query.Field{{Name: "i211", Type: query.Type_INT32}},
@@ -1443,7 +1443,7 @@ func TestFilteredMultipleWhere(t *testing.T) {
 	runCases(t, filter, testcases, "", nil)
 }
 
-func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string, tablePK []*TablePK) {
+func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string, tablePK []*TableLastPK) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1532,7 +1532,7 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 
 var lastPos string
 
-func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string, tablePKs []*TablePK) <-chan []*binlogdatapb.VEvent {
+func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string, tablePKs []*TableLastPK) <-chan []*binlogdatapb.VEvent {
 	if position == "" && len(tablePKs) == 0 {
 		position = masterPosition(t)
 	}
@@ -1546,7 +1546,7 @@ func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter,
 	return ch
 }
 
-func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*TablePK, filter *binlogdatapb.Filter, ch chan []*binlogdatapb.VEvent) error {
+func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*TableLastPK, filter *binlogdatapb.Filter, ch chan []*binlogdatapb.VEvent) error {
 	if filter == nil {
 		filter = &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
