@@ -71,7 +71,7 @@ func TestDiscoveryGatewayExecuteStream(t *testing.T) {
 
 func TestDiscoveryGatewayBegin(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
-		_, err := dg.Begin(context.Background(), target, nil)
+		_, _, err := dg.Begin(context.Background(), target, nil)
 		return err
 	})
 }
@@ -90,7 +90,7 @@ func TestDiscoveryGatewayRollback(t *testing.T) {
 
 func TestDiscoveryGatewayBeginExecute(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
-		_, _, err := dg.BeginExecute(context.Background(), target, "query", nil, nil)
+		_, _, _, err := dg.BeginExecute(context.Background(), target, "query", nil, nil)
 		return err
 	})
 }
@@ -98,7 +98,7 @@ func TestDiscoveryGatewayBeginExecute(t *testing.T) {
 func TestDiscoveryGatewayBeginExecuteBatch(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
 		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
-		_, _, err := dg.BeginExecuteBatch(context.Background(), target, queries, false, nil)
+		_, _, _, err := dg.BeginExecuteBatch(context.Background(), target, queries, false, nil)
 		return err
 	})
 }

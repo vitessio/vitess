@@ -117,6 +117,11 @@ func NewTabletGateway(ctx context.Context, serv srvtopo.Server, localCell string
 	return gw
 }
 
+// QueryServiceByAlias satisfies the Gateway interface
+func (gw *TabletGateway) QueryServiceByAlias(alias *topodatapb.TabletAlias) (queryservice.QueryService, error) {
+	return gw.hc.GetConnection(alias)
+}
+
 // RegisterStats registers the stats to export the lag since the last refresh
 // and the checksum of the topology
 func (gw *TabletGateway) RegisterStats() {

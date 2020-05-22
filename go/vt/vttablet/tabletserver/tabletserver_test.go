@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
@@ -484,12 +485,13 @@ func TestBeginOnReplica(t *testing.T) {
 	options := querypb.ExecuteOptions{
 		TransactionIsolation: querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY,
 	}
-	txID, err := tsv.Begin(ctx, &target1, &options)
+	txID, alias, err := tsv.Begin(ctx, &target1, &options)
 
 	if err != nil {
 		t.Errorf("err: %v, failed to create read only tx on replica", err)
 	}
-
+	require.NotNil(t, alias, "alias should not be nil")
+	assert.Equal(t, tsv.alias, *alias, "Wrong tablet alias from Begin")
 	err = tsv.Rollback(ctx, &target1, txID)
 	if err != nil {
 		t.Errorf("err: %v, failed to rollback read only tx", err)
@@ -499,7 +501,7 @@ func TestBeginOnReplica(t *testing.T) {
 	options = querypb.ExecuteOptions{
 		TransactionIsolation: querypb.ExecuteOptions_DEFAULT,
 	}
-	_, err = tsv.Begin(ctx, &target1, &options)
+	_, _, err = tsv.Begin(ctx, &target1, &options)
 
 	if err == nil {
 		t.Error("expected write tx to be refused")
@@ -512,7 +514,7 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 	defer db.Close()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	txid1, err := tsv.Begin(ctx, &target, nil)
+	txid1, _, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
 	if _, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid1, nil); err != nil {
 		t.Error(err)
@@ -520,7 +522,7 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 	if err = tsv.Prepare(ctx, &target, txid1, "aa"); err != nil {
 		t.Error(err)
 	}
-	txid2, err := tsv.Begin(ctx, &target, nil)
+	txid2, _, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
 	// This makes txid2 busy
 	conn2, err := tsv.te.txPool.Get(txid2, "for query")
@@ -805,6 +807,7 @@ func TestTabletServerReadTransaction(t *testing.T) {
 	got, err = tsv.ReadTransaction(ctx, &target, "aa")
 	require.NoError(t, err)
 	if !proto.Equal(got, want) {
+
 		t.Errorf("ReadTransaction: %v, want %v", got, want)
 	}
 }
@@ -838,7 +841,7 @@ func TestTabletServerBeginFail(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
 	defer cancel()
 	tsv.Begin(ctx, &target, nil)
-	_, err = tsv.Begin(ctx, &target, nil)
+	_, _, err = tsv.Begin(ctx, &target, nil)
 	want := "transaction pool aborting request due to already expired context"
 	if err == nil || err.Error() != want {
 		t.Fatalf("Begin err: %v, want %v", err, want)
@@ -869,7 +872,7 @@ func TestTabletServerCommitTransaction(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	transactionID, err := tsv.Begin(ctx, &target, nil)
+	transactionID, _, err := tsv.Begin(ctx, &target, nil)
 	if err != nil {
 		t.Fatalf("call TabletServer.Begin failed: %v", err)
 	}
@@ -929,7 +932,7 @@ func TestTabletServerRollback(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	transactionID, err := tsv.Begin(ctx, &target, nil)
+	transactionID, _, err := tsv.Begin(ctx, &target, nil)
 	if err != nil {
 		t.Fatalf("call TabletServer.Begin failed: %v", err)
 	}
@@ -948,7 +951,7 @@ func TestTabletServerPrepare(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	transactionID, err := tsv.Begin(ctx, &target, nil)
+	transactionID, _, err := tsv.Begin(ctx, &target, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -968,7 +971,7 @@ func TestTabletServerCommitPrepared(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	transactionID, err := tsv.Begin(ctx, &target, nil)
+	transactionID, _, err := tsv.Begin(ctx, &target, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -991,7 +994,7 @@ func TestTabletServerRollbackPrepared(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	transactionID, err := tsv.Begin(ctx, &target, nil)
+	transactionID, _, err := tsv.Begin(ctx, &target, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1391,7 +1394,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		_, tx1, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
+		_, tx1, _, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
@@ -1406,7 +1409,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 		defer wg.Done()
 
 		<-tx1Started
-		_, tx2, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, nil)
+		_, tx2, _, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q2, err)
 		}
@@ -1426,7 +1429,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 		defer wg.Done()
 
 		<-tx1Started
-		_, tx3, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, nil)
+		_, tx3, _, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}
@@ -1464,7 +1467,7 @@ func TestDMLQueryWithoutWhereClause(t *testing.T) {
 	db.AddQuery(q+" limit 10001", &sqltypes.Result{})
 
 	ctx := context.Background()
-	_, txid, err := tsv.BeginExecute(ctx, &target, q, nil, nil)
+	_, txid, _, err := tsv.BeginExecute(ctx, &target, q, nil, nil)
 	require.NoError(t, err)
 	err = tsv.Commit(ctx, &target, txid)
 	require.NoError(t, err)
@@ -1654,7 +1657,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		_, tx1, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
+		_, tx1, _, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
@@ -1673,7 +1676,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 		// In that case, we would see less than 3 pending transactions.
 		<-tx1Started
 
-		_, tx2, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, nil)
+		_, tx2, _, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q2, err)
 		}
@@ -1692,7 +1695,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 		// In that case, we would see less than 3 pending transactions.
 		<-tx1Started
 
-		_, tx3, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, nil)
+		_, tx3, _, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}
@@ -1792,7 +1795,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		_, tx1, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
+		_, tx1, _, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
@@ -1808,7 +1811,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 		defer close(tx2Failed)
 
 		<-tx1Started
-		_, _, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, nil)
+		_, _, _, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, nil)
 		if err == nil || vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED || err.Error() != "hot row protection: too many queued transactions (1 >= 1) for the same row (table + WHERE clause: 'test_table where pk = 1 and name = 1')" {
 			t.Errorf("tx2 should have failed because there are too many pending requests: %v", err)
 		}
@@ -1977,7 +1980,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		_, tx1, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
+		_, tx1, _, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
@@ -1997,7 +2000,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 		// Wait until tx1 has started to make the test deterministic.
 		<-tx1Started
 
-		_, _, err := tsv.BeginExecute(ctxTx2, &target, q2, bvTx2, nil)
+		_, _, _, err := tsv.BeginExecute(ctxTx2, &target, q2, bvTx2, nil)
 		if err == nil || vterrors.Code(err) != vtrpcpb.Code_CANCELED || err.Error() != "context canceled" {
 			t.Errorf("tx2 should have failed because the context was canceled: %v", err)
 		}
@@ -2014,7 +2017,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 			t.Error(err)
 		}
 
-		_, tx3, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, nil)
+		_, tx3, _, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}

@@ -43,7 +43,7 @@ func TestVtgateProcess(t *testing.T) {
 	defer conn.Close()
 
 	exec(t, conn, "insert into customer(id, email) values(1,'email1')")
-
+	_ = exec(t, conn, "begin")
 	qr := exec(t, conn, "select id, email from customer")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("email1")]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)

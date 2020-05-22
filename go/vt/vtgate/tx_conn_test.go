@@ -80,6 +80,7 @@ func TestTxConnCommitSuccess(t *testing.T) {
 				TabletType: topodatapb.TabletType_MASTER,
 			},
 			TransactionId: 1,
+			TabletAlias:   sbc0.Tablet().Alias,
 		}},
 	}
 	if !proto.Equal(session.Session, &wantSession) {
@@ -95,6 +96,7 @@ func TestTxConnCommitSuccess(t *testing.T) {
 				TabletType: topodatapb.TabletType_MASTER,
 			},
 			TransactionId: 1,
+			TabletAlias:   sbc0.Tablet().Alias,
 		}, {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
@@ -102,6 +104,7 @@ func TestTxConnCommitSuccess(t *testing.T) {
 				TabletType: topodatapb.TabletType_MASTER,
 			},
 			TransactionId: 1,
+			TabletAlias:   sbc0.Tablet().Alias,
 		}},
 	}
 	if !proto.Equal(session.Session, &wantSession) {
@@ -263,6 +266,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 				TabletType: topodatapb.TabletType_MASTER,
 			},
 			TransactionId: 1,
+			TabletAlias:   sbc0.Tablet().Alias,
 		}},
 	}
 	if !proto.Equal(session.Session, &wantSession) {
@@ -280,6 +284,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 				TabletType: topodatapb.TabletType_MASTER,
 			},
 			TransactionId: 2,
+			TabletAlias:   sbc0.Tablet().Alias,
 		}},
 		ShardSessions: []*vtgatepb.Session_ShardSession{{
 			Target: &querypb.Target{
@@ -288,6 +293,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 				TabletType: topodatapb.TabletType_MASTER,
 			},
 			TransactionId: 1,
+			TabletAlias:   sbc0.Tablet().Alias,
 		}},
 	}
 	if !proto.Equal(session.Session, &wantSession) {
@@ -305,6 +311,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 				TabletType: topodatapb.TabletType_MASTER,
 			},
 			TransactionId: 2,
+			TabletAlias:   sbc0.Tablet().Alias,
 		}},
 		ShardSessions: []*vtgatepb.Session_ShardSession{{
 			Target: &querypb.Target{
@@ -313,6 +320,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 				TabletType: topodatapb.TabletType_MASTER,
 			},
 			TransactionId: 1,
+			TabletAlias:   sbc0.Tablet().Alias,
 		}},
 		PostSessions: []*vtgatepb.Session_ShardSession{{
 			Target: &querypb.Target{
@@ -321,6 +329,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 				TabletType: topodatapb.TabletType_MASTER,
 			},
 			TransactionId: 1,
+			TabletAlias:   sbc0.Tablet().Alias,
 		}},
 	}
 	if !proto.Equal(session.Session, &wantSession) {

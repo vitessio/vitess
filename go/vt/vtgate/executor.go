@@ -207,9 +207,10 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		return 0, nil, err
 	}
 
-	if safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
-		return 0, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", destTabletType)
-	}
+	// TODO(deepthi): we should check for the right condition that allows transactions
+	//if safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
+	//	return 0, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "executor.execute: transactions are supported only for master tablet types, current type: %v", destTabletType)
+	//}
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
 	}
@@ -279,9 +280,6 @@ func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession
 }
 
 func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
-	if destTabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", destTabletType)
-	}
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	err := e.txConn.Begin(ctx, safeSession)
@@ -1517,7 +1515,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 	}
 
 	if safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", destTabletType)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "executor.prepare: transactions are supported only for master tablet types, current type: %v", destTabletType)
 	}
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)

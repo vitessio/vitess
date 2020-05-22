@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
+
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
@@ -126,9 +128,9 @@ func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string,
 const BeginTransactionID int64 = 9990
 
 // Begin is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, error) {
+func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, *topodatapb.TabletAlias, error) {
 	if f.HasBeginError {
-		return 0, f.TabletError
+		return 0, nil, f.TabletError
 	}
 	if f.Panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -137,7 +139,8 @@ func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, op
 	if !proto.Equal(options, TestExecuteOptions) {
 		f.t.Errorf("invalid Execute.ExecuteOptions: got %v expected %v", options, TestExecuteOptions)
 	}
-	return BeginTransactionID, nil
+	// TODO(deepthi): what alias should we actually return here?
+	return BeginTransactionID, nil, nil
 }
 
 // CommitTransactionID is a test transaction id for Commit.
@@ -564,25 +567,27 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Tar
 }
 
 // BeginExecute combines Begin and Execute.
-func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
-	transactionID, err := f.Begin(ctx, target, options)
+func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	transactionID, _, err := f.Begin(ctx, target, options)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 
+	// TODO(deepthi): what alias should we actually return here?
 	result, err := f.Execute(ctx, target, sql, bindVariables, transactionID, options)
-	return result, transactionID, err
+	return result, transactionID, nil, err
 }
 
 // BeginExecuteBatch combines Begin and ExecuteBatch.
-func (f *FakeQueryService) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
-	transactionID, err := f.Begin(ctx, target, options)
+func (f *FakeQueryService) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	transactionID, _, err := f.Begin(ctx, target, options)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 
+	// TODO(deepthi): what alias should we actually return here?
 	results, err := f.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
-	return results, transactionID, err
+	return results, transactionID, nil, err
 }
 
 var (
@@ -695,6 +700,11 @@ func (f *FakeQueryService) VStreamRows(ctx context.Context, target *querypb.Targ
 
 // VStreamResults is part of the QueryService interface.
 func (f *FakeQueryService) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
+	panic("not implemented")
+}
+
+// QueryServiceByAlias satisfies the Gateway interface
+func (f *FakeQueryService) QueryServiceByAlias(_ *topodatapb.TabletAlias) (queryservice.QueryService, error) {
 	panic("not implemented")
 }
 

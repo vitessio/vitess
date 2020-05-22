@@ -36,7 +36,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
-func TestVtgateProcess(t *testing.T) {
+func TestVtgateHealthCheck(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
@@ -46,12 +46,8 @@ func TestVtgateProcess(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
-	exec(t, conn, "insert into customer(id, email) values(1,'email1')")
-
-	qr := exec(t, conn, "select id, email from customer")
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("email1")]]`, "select returned wrong result")
-	qr = exec(t, conn, "show vitess_tablets")
-	assert.Equal(t, len(qr.Rows), 3, "wrong number of results from show")
+	qr := exec(t, conn, "show vitess_tablets")
+	assert.Equal(t, 3, len(qr.Rows), "wrong number of results from show")
 }
 
 func verifyVtgateVariables(t *testing.T, url string) {
@@ -76,6 +72,46 @@ func verifyVtgateVariables(t *testing.T, url string) {
 	healthCheckConnection := getMapFromJSON(resultMap, "HealthcheckConnections")
 	assert.True(t, len(healthCheckConnection) > 0, "Atleast one healthy tablet needs to be present")
 	assert.True(t, isMasterTabletPresent(healthCheckConnection), "Atleast one master tablet needs to be present")
+}
+
+func TestReplicaTransactions(t *testing.T) {
+	// TODO(deepthi): this test seems to depend on previous test. Fix tearDown so that tests are independent
+	defer cluster.PanicHandler(t)
+	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
+	time.Sleep(2 * time.Second)
+	ctx := context.Background()
+	masterConn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	replicaConn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer masterConn.Close()
+	defer replicaConn.Close()
+
+	// insert a row using master
+	exec(t, masterConn, "insert into customer(id, email) values(1,'email1')")
+	// select using a replica
+	_ = exec(t, replicaConn, "use @replica")
+	qr := exec(t, replicaConn, "select id, email from customer")
+	// no data expected
+	assert.Equal(t, `[[INT64(1) VARCHAR("email1")]]`, fmt.Sprintf("%v", qr.Rows), "select returned wrong result")
+	// begin transaction on replica
+	_ = exec(t, replicaConn, "begin")
+	// insert more data on master
+	exec(t, masterConn, "insert into customer(id, email) values(2,'email2')")
+	// replica doesn't see new row because it hasn't been committed
+	qr = exec(t, replicaConn, "select id, email from customer")
+	assert.Equal(t, `[[INT64(1) VARCHAR("email1")]]`, fmt.Sprintf("%v", qr.Rows), "select returned wrong result")
+	// commit on master
+	_ = exec(t, masterConn, "commit")
+	// replica still doesn't see new row because it is in a transaction
+	qr = exec(t, replicaConn, "select id, email from customer")
+	assert.Equal(t, `[[INT64(1) VARCHAR("email1")]]`, fmt.Sprintf("%v", qr.Rows), "select returned wrong result")
+	// close transaction on replica
+	//_ = exec(t, replicaConn, "rollback")
+	// replica should now see new row
+	//qr = exec(t, replicaConn, "select id, email from customer")
+	//assert.Equal(t, `[[INT64(2) VARCHAR("email2")],[INT64(3) VARCHAR("email3")]]`, fmt.Sprintf("%v", qr.Rows), "select returned wrong result")
+
 }
 
 func getMapFromJSON(JSON map[string]interface{}, key string) map[string]interface{} {
