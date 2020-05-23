@@ -64,7 +64,6 @@ func TestMain(m *testing.M) {
 
 	exitCode := func() int {
 		clusterInstance = cluster.NewCluster(cell, "localhost")
-		clusterInstance.VtGateExtraArgs = []string{"-gateway_implementation", "tabletgateway"}
 		clusterInstance.VtTabletExtraArgs = []string{"-health_check_interval", "1s"}
 		defer clusterInstance.Teardown()
 
@@ -86,7 +85,11 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		err = clusterInstance.StartVtgate()
+		vtgateInstance := clusterInstance.GetVtgateInstance()
+		// ensure it is torn down during cluster TearDown
+		clusterInstance.VtgateProcess = *vtgateInstance
+		vtgateInstance.GatewayImplementation = "tabletgateway"
+		err = vtgateInstance.Setup()
 		if err != nil {
 			return 1
 		}
