@@ -84,9 +84,10 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		// Start vtgate
 		vtgateInstance := clusterInstance.GetVtgateInstance()
+		// set the gateway we want to use
 		vtgateInstance.GatewayImplementation = "tabletgateway"
+		// Start vtgate
 		err = vtgateInstance.Setup()
 		if err != nil {
 			return 1

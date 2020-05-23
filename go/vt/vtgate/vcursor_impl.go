@@ -139,11 +139,11 @@ func newVCursorImpl(ctx context.Context, safeSession *SafeSession, marginComment
 		return nil, err
 	}
 
-	// TODO(deepthi): is it safe to remove this code block?
+	// TODO(deepthi): we should check for the right condition to allow transactions
 	// Check for transaction to be only application in master.
-	//if safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {
-	//	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", tabletType)
-	//}
+	if *GatewayImplementation == GatewayImplementationDiscovery && safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "newVCursorImpl: transactions are supported only for master tablet types, current type: %v", tabletType)
+	}
 
 	return &vcursorImpl{
 		ctx:            ctx,
