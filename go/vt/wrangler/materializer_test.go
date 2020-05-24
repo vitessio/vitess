@@ -1418,15 +1418,23 @@ func TestMaterializerOneToOne(t *testing.T) {
 		Workflow:       "workflow",
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "select * from t1",
-			CreateDdl:        "t1ddl",
-		}, {
-			TargetTable:      "t2",
-			SourceExpression: "select * from t3",
-			CreateDdl:        "t2ddl",
-		}},
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{
+			{
+				TargetTable:      "t1",
+				SourceExpression: "select * from t1",
+				CreateDdl:        "t1ddl",
+			},
+			{
+				TargetTable:      "t2",
+				SourceExpression: "select * from t3",
+				CreateDdl:        "t2ddl",
+			},
+			{
+				TargetTable:      "t4",
+				SourceExpression: "", // empty
+				CreateDdl:        "t4ddl",
+			},
+		},
 	}
 	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -1434,8 +1442,16 @@ func TestMaterializerOneToOne(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"0\\" filter:<rules:<match:\\"t1\\" filter:\\"select.*t1\\" > rules:<match:\\"t2\\" filter:\\"select.*t3\\" > > ', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks'\)`+
-			eol,
+			`\(`+
+			`'workflow', `+
+			(`'keyspace:\\"sourceks\\" shard:\\"0\\" `+
+				`filter:<`+
+				`rules:<match:\\"t1\\" filter:\\"select.*t1\\" > `+
+				`rules:<match:\\"t2\\" filter:\\"select.*t3\\" > `+
+				`rules:<match:\\"t4\\" > `+
+				`> ', `)+
+			`'', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks'`+
+			`\)`+eol,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
