@@ -74,6 +74,12 @@ func verifyVtgateVariables(t *testing.T, url string) {
 	assert.True(t, isMasterTabletPresent(healthCheckConnection), "Atleast one master tablet needs to be present")
 }
 
+/*
+-begin on replica should explicitly say read only
+-tabletserver planner should stop dml (if easy and reasonable)
+-vtgate planbuilder should not send dml to replicas
+*/
+
 func TestReplicaTransactions(t *testing.T) {
 	// TODO(deepthi): this test seems to depend on previous test. Fix tearDown so that tests are independent
 	defer cluster.PanicHandler(t)
@@ -81,37 +87,35 @@ func TestReplicaTransactions(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	ctx := context.Background()
 	masterConn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	replicaConn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer masterConn.Close()
 	defer replicaConn.Close()
 
 	// insert a row using master
 	exec(t, masterConn, "insert into customer(id, email) values(1,'email1')")
-	// select using a replica
+
+	time.Sleep(1 * time.Second)
+
+	// after a short pause, SELECT the data inside a tx on a replica
 	_ = exec(t, replicaConn, "use @replica")
-	qr := exec(t, replicaConn, "select id, email from customer")
-	// no data expected
-	assert.Equal(t, `[[INT64(1) VARCHAR("email1")]]`, fmt.Sprintf("%v", qr.Rows), "select returned wrong result")
 	// begin transaction on replica
 	_ = exec(t, replicaConn, "begin")
+	qr := exec(t, replicaConn, "select id, email from customer")
+	assert.Equal(t, `[[INT64(1) VARCHAR("email1")]]`, fmt.Sprintf("%v", qr.Rows), "select returned wrong result")
+
 	// insert more data on master
 	exec(t, masterConn, "insert into customer(id, email) values(2,'email2')")
-	// replica doesn't see new row because it hasn't been committed
-	qr = exec(t, replicaConn, "select id, email from customer")
-	assert.Equal(t, `[[INT64(1) VARCHAR("email1")]]`, fmt.Sprintf("%v", qr.Rows), "select returned wrong result")
-	// commit on master
-	_ = exec(t, masterConn, "commit")
-	// replica still doesn't see new row because it is in a transaction
-	qr = exec(t, replicaConn, "select id, email from customer")
-	assert.Equal(t, `[[INT64(1) VARCHAR("email1")]]`, fmt.Sprintf("%v", qr.Rows), "select returned wrong result")
-	// close transaction on replica
-	//_ = exec(t, replicaConn, "rollback")
-	// replica should now see new row
-	//qr = exec(t, replicaConn, "select id, email from customer")
-	//assert.Equal(t, `[[INT64(2) VARCHAR("email2")],[INT64(3) VARCHAR("email3")]]`, fmt.Sprintf("%v", qr.Rows), "select returned wrong result")
 
+	// replica doesn't see new row because it is in a transaction
+	qr2 := exec(t, replicaConn, "select id, email from customer")
+	assert.Equal(t, qr.Rows, qr2.Rows)
+
+	// replica should see new row after closing the transaction
+	_ = exec(t, replicaConn, "commit")
+	qr3 := exec(t, replicaConn, "select id, email from customer")
+	assert.Equal(t, `[[INT64(1) VARCHAR("email1")] [INT64(2) VARCHAR("email2")]]`, fmt.Sprintf("%v", qr3.Rows), "we are not seeing the updates after closing the replica transaction")
 }
 
 func getMapFromJSON(JSON map[string]interface{}, key string) map[string]interface{} {
