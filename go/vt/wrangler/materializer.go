@@ -681,48 +681,55 @@ func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
 				Match: ts.TargetTable,
 			}
 
-			if ts.SourceExpression != "" {
-				// Validate non-empty query.
-				stmt, err := sqlparser.Parse(ts.SourceExpression)
+			if ts.SourceExpression == "" {
+				bls.Filter.Rules = append(bls.Filter.Rules, rule)
+				continue
+			}
+
+			// Validate non-empty query.
+			stmt, err := sqlparser.Parse(ts.SourceExpression)
+			if err != nil {
+				return "", err
+			}
+			sel, ok := stmt.(*sqlparser.Select)
+			if !ok {
+				return "", fmt.Errorf("unrecognized statement: %s", ts.SourceExpression)
+			}
+
+			filter := ts.SourceExpression
+			if mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
+				cv, err := vindexes.FindBestColVindex(mz.targetVSchema.Tables[ts.TargetTable])
 				if err != nil {
 					return "", err
 				}
-				sel, ok := stmt.(*sqlparser.Select)
-				if !ok {
-					return "", fmt.Errorf("unrecognized statement: %s", ts.SourceExpression)
-				}
-				if mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
-					cv, err := vindexes.FindBestColVindex(mz.targetVSchema.Tables[ts.TargetTable])
+				mappedCols := make([]*sqlparser.ColName, 0, len(cv.Columns))
+				for _, col := range cv.Columns {
+					colName, err := matchColInSelect(col, sel)
 					if err != nil {
 						return "", err
 					}
-					mappedCols := make([]*sqlparser.ColName, 0, len(cv.Columns))
-					for _, col := range cv.Columns {
-						colName, err := matchColInSelect(col, sel)
-						if err != nil {
-							return "", err
-						}
-						mappedCols = append(mappedCols, colName)
-					}
-					subExprs := make(sqlparser.SelectExprs, 0, len(mappedCols)+2)
-					for _, mappedCol := range mappedCols {
-						subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: mappedCol})
-					}
-					vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
-					subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte(vindexName))})
-					subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte("{{.keyrange}}"))})
-					sel.Where = &sqlparser.Where{
-						Type: sqlparser.WhereStr,
-						Expr: &sqlparser.FuncExpr{
-							Name:  sqlparser.NewColIdent("in_keyrange"),
-							Exprs: subExprs,
-						},
-					}
-					rule.Filter = sqlparser.String(sel)
-				} else {
-					rule.Filter = ts.SourceExpression
+					mappedCols = append(mappedCols, colName)
 				}
+				subExprs := make(sqlparser.SelectExprs, 0, len(mappedCols)+2)
+				for _, mappedCol := range mappedCols {
+					subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: mappedCol})
+				}
+				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
+				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte(vindexName))})
+				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte("{{.keyrange}}"))})
+				sel.Where = &sqlparser.Where{
+					Type: sqlparser.WhereStr,
+					Expr: &sqlparser.FuncExpr{
+						Name:  sqlparser.NewColIdent("in_keyrange"),
+						Exprs: subExprs,
+					},
+				}
+
+				filter = sqlparser.String(sel)
 			}
+
+			rule.Filter = filter
+
 			bls.Filter.Rules = append(bls.Filter.Rules, rule)
 		}
 		ig.AddRow(mz.ms.Workflow, bls, "", mz.ms.Cell, mz.ms.TabletTypes)
