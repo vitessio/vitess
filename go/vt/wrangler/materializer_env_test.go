@@ -19,6 +19,7 @@ package wrangler
 import (
 	"fmt"
 	"regexp"
+	"strings"
 	"sync"
 	"testing"
 
@@ -173,6 +174,17 @@ func newTestMaterializerTMClient() *testMaterializerTMClient {
 func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	schemaDefn := &tabletmanagerdatapb.SchemaDefinition{}
 	for _, table := range tables {
+		// TODO: Add generalized regexps if needed for test purposes.
+		if table == "/.*/" {
+			// Special case of all tables in keyspace.
+			for key, tableDefn := range tmc.schema {
+				if strings.HasPrefix(key, tablet.Keyspace+".") {
+					schemaDefn.TableDefinitions = append(schemaDefn.TableDefinitions, tableDefn.TableDefinitions...)
+				}
+			}
+			break
+		}
+
 		key := tablet.Keyspace + "." + table
 		tableDefn := tmc.schema[key]
 		if tableDefn == nil {
