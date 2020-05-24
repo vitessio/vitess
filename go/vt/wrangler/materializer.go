@@ -22,6 +22,7 @@ import (
 	"sync"
 	"text/template"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/gogo/protobuf/proto"
@@ -49,6 +50,10 @@ type materializer struct {
 	sourceShards  []*topo.ShardInfo
 	targetShards  []*topo.ShardInfo
 }
+
+const (
+	createDDLAsCopy = "copy"
+)
 
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs, cell, tabletTypes string) error {
@@ -112,7 +117,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		ms.TableSettings = append(ms.TableSettings, &vtctldatapb.TableMaterializeSettings{
 			TargetTable:      table,
 			SourceExpression: buf.String(),
-			CreateDdl:        "copy",
+			CreateDdl:        createDDLAsCopy,
 		})
 	}
 	return wr.Materialize(ctx, ms)
@@ -583,46 +588,77 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 }
 
 func (mz *materializer) deploySchema(ctx context.Context) error {
+
 	return mz.forAllTargets(func(target *topo.ShardInfo) error {
-		for _, ts := range mz.ms.TableSettings {
-			tableSchema, err := mz.wr.GetSchema(ctx, target.MasterAlias, []string{ts.TargetTable}, nil, false)
+		allTables := []string{"/.*/"}
+
+		hasTargetTable := map[string]bool{}
+		{
+			targetSchema, err := mz.wr.GetSchema(ctx, target.MasterAlias, allTables, nil, false)
 			if err != nil {
 				return err
 			}
-			if len(tableSchema.TableDefinitions) != 0 {
+
+			for _, td := range targetSchema.TableDefinitions {
+				hasTargetTable[td.Name] = true
+			}
+		}
+
+		sourceDDL := map[string]string{}
+		{
+			sourceMaster := mz.sourceShards[0].MasterAlias
+			if sourceMaster == nil {
+				return fmt.Errorf("source shard must have a master for copying schema: %v", mz.sourceShards[0].ShardName())
+			}
+
+			log.Infof("getting table schemas from source master...")
+			var err error
+			sourceSchema, err := mz.wr.GetSchema(ctx, sourceMaster, allTables, nil, false)
+			if err != nil {
+				return err
+			}
+
+			for _, td := range sourceSchema.TableDefinitions {
+				sourceDDL[td.Name] = td.Schema
+			}
+		}
+
+		for _, ts := range mz.ms.TableSettings {
+			if hasTargetTable[ts.TargetTable] {
 				// Table already exists.
 				continue
 			}
 			if ts.CreateDdl == "" {
 				return fmt.Errorf("target table %v does not exist and there is no create ddl defined", ts.TargetTable)
 			}
-			createddl := ts.CreateDdl
-			if createddl == "copy" {
-				sourceTableName, err := sqlparser.TableFromStatement(ts.SourceExpression)
-				if err != nil {
-					return err
+			createDDL := ts.CreateDdl
+			if createDDL == createDDLAsCopy {
+				if ts.SourceExpression != "" {
+					// Check for table if non-empty SourceExpression.
+					sourceTableName, err := sqlparser.TableFromStatement(ts.SourceExpression)
+					if err != nil {
+						return err
+					}
+					if sourceTableName.Name.String() != ts.TargetTable {
+						return fmt.Errorf("source and target table names must match for copying schema: %v vs %v", sqlparser.String(sourceTableName), ts.TargetTable)
+
+					}
+
 				}
-				if sourceTableName.Name.String() != ts.TargetTable {
-					return fmt.Errorf("source and target table names must match for copying schema: %v vs %v", sqlparser.String(sourceTableName), ts.TargetTable)
-				}
-				sourceMaster := mz.sourceShards[0].MasterAlias
-				if sourceMaster == nil {
-					return fmt.Errorf("source shard must have a master for copying schema: %v", mz.sourceShards[0].ShardName())
-				}
-				sourceSchema, err := mz.wr.GetSchema(ctx, sourceMaster, []string{ts.TargetTable}, nil, false)
-				if err != nil {
-					return err
-				}
-				if len(sourceSchema.TableDefinitions) == 0 {
+
+				ddl, ok := sourceDDL[ts.TargetTable]
+				if !ok {
 					return fmt.Errorf("source table %v does not exist", ts.TargetTable)
 				}
-				createddl = sourceSchema.TableDefinitions[0].Schema
+				createDDL = ddl
 			}
+
 			targetTablet, err := mz.wr.ts.GetTablet(ctx, target.MasterAlias)
 			if err != nil {
 				return err
 			}
-			if _, err := mz.wr.tmc.ExecuteFetchAsDba(ctx, targetTablet.Tablet, false, []byte(createddl), 0, false, true); err != nil {
+
+			if _, err := mz.wr.tmc.ExecuteFetchAsDba(ctx, targetTablet.Tablet, false, []byte(createDDL), 0, false, true); err != nil {
 				return err
 			}
 		}
@@ -644,7 +680,13 @@ func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
 			rule := &binlogdatapb.Rule{
 				Match: ts.TargetTable,
 			}
-			// Validate the query.
+
+			if ts.SourceExpression == "" {
+				bls.Filter.Rules = append(bls.Filter.Rules, rule)
+				continue
+			}
+
+			// Validate non-empty query.
 			stmt, err := sqlparser.Parse(ts.SourceExpression)
 			if err != nil {
 				return "", err
@@ -653,6 +695,8 @@ func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
 			if !ok {
 				return "", fmt.Errorf("unrecognized statement: %s", ts.SourceExpression)
 			}
+
+			filter := ts.SourceExpression
 			if mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
 				cv, err := vindexes.FindBestColVindex(mz.targetVSchema.Tables[ts.TargetTable])
 				if err != nil {
@@ -680,10 +724,12 @@ func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
 						Exprs: subExprs,
 					},
 				}
-				rule.Filter = sqlparser.String(sel)
-			} else {
-				rule.Filter = ts.SourceExpression
+
+				filter = sqlparser.String(sel)
 			}
+
+			rule.Filter = filter
+
 			bls.Filter.Rules = append(bls.Filter.Rules, rule)
 		}
 		ig.AddRow(mz.ms.Workflow, bls, "", mz.ms.Cell, mz.ms.TabletTypes)
