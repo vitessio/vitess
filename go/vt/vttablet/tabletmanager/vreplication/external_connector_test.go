@@ -60,14 +60,14 @@ func TestExternalConnectorCopy(t *testing.T) {
 	}
 	cancel1 := startExternalVReplication(t, bls1, "")
 
-	expectDBClientQueries(t, []string{
+	expectDBClientAndVreplicationQueries(t, []string{
 		"begin",
 		"insert into tab1(id,val) values (1,'a'), (2,'b')",
 		"/update _vt.copy_state",
 		"commit",
 		"/delete from _vt.copy_state",
 		"/update _vt.vreplication set state='Running'",
-	})
+	}, "")
 	execStatements(t, []string{"insert into tab1 values(3, 'c')"})
 	expectDBClientQueries(t, []string{
 		"begin",
@@ -80,7 +80,6 @@ func TestExternalConnectorCopy(t *testing.T) {
 
 	// Check that only one connector was created.
 	assert.Equal(t, 1, len(playerEngine.ec.connectors))
-
 	filter2 := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "tab2",
@@ -93,14 +92,14 @@ func TestExternalConnectorCopy(t *testing.T) {
 	}
 	cancel2 := startExternalVReplication(t, bls2, "")
 
-	expectDBClientQueries(t, []string{
+	expectDBClientAndVreplicationQueries(t, []string{
 		"begin",
 		"insert into tab2(id,val) values (1,'a'), (2,'b')",
 		"/update _vt.copy_state",
 		"commit",
 		"/delete from _vt.copy_state",
 		"/update _vt.vreplication set state='Running'",
-	})
+	}, "")
 	cancel2()
 
 	// Check that only one connector was created.
@@ -118,14 +117,14 @@ func TestExternalConnectorCopy(t *testing.T) {
 	}
 	cancel3 := startExternalVReplication(t, bls3, "")
 
-	expectDBClientQueries(t, []string{
+	expectDBClientAndVreplicationQueries(t, []string{
 		"begin",
 		"insert into tab3(id,val) values (1,'a'), (2,'b')",
 		"/update _vt.copy_state",
 		"commit",
 		"/delete from _vt.copy_state",
 		"/update _vt.vreplication set state='Running'",
-	})
+	}, "")
 	cancel3()
 
 	// Check that there now two connectors.
@@ -160,13 +159,37 @@ func TestExternalConnectorPlay(t *testing.T) {
 		"insert into tab1 values(1, 'a'), (2, 'b')",
 	})
 
-	expectDBClientQueries(t, []string{
+	expectDBClientAndVreplicationQueries(t, []string{
 		"begin",
 		"insert into tab1(id,val) values (1,'a')",
 		"insert into tab1(id,val) values (2,'b')",
 		"/update _vt.vreplication set pos=",
 		"commit",
-	})
+	}, pos)
+}
+
+func expectDBClientAndVreplicationQueries(t *testing.T, queries []string, pos string) {
+	t.Helper()
+	vrepQueries := getExpectedVreplicationQueries(t, pos)
+	expectedQueries := append(vrepQueries, queries...)
+	expectDBClientQueries(t, expectedQueries)
+}
+
+func getExpectedVreplicationQueries(t *testing.T, pos string) []string {
+	if pos == "" {
+		return []string{
+			"/insert into _vt.vreplication",
+			"begin",
+			"/insert into _vt.copy_state",
+			"/update _vt.vreplication set state='Copying'",
+			"commit",
+			"/update _vt.vreplication set pos=",
+		}
+	}
+	return []string{
+		"/insert into _vt.vreplication",
+		"/update _vt.vreplication set state='Running'",
+	}
 }
 
 func startExternalVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string) (cancelr func()) {
@@ -174,21 +197,6 @@ func startExternalVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if pos == "" {
-		expectDBClientQueries(t, []string{
-			"/insert into _vt.vreplication",
-			"begin",
-			"/insert into _vt.copy_state",
-			"/update _vt.vreplication set state='Copying'",
-			"commit",
-			"/update _vt.vreplication set pos=",
-		})
-	} else {
-		expectDBClientQueries(t, []string{
-			"/insert into _vt.vreplication",
-			"/update _vt.vreplication set state='Running'",
-		})
 	}
 	return func() {
 		t.Helper()
