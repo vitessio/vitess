@@ -590,28 +590,11 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 func (mz *materializer) deploySchema(ctx context.Context) error {
 
 	return mz.forAllTargets(func(target *topo.ShardInfo) error {
-		needsCopy := false
-		copyTables := map[string]bool{}
-		targetTables := map[string]bool{}
+		allTables := []string{"/.*/"}
 
-		for _, ts := range mz.ms.TableSettings {
-			targetTables[ts.TargetTable] = true
-
-			if ts.CreateDdl == createDDLAsCopy {
-				needsCopy = true
-				copyTables[ts.TargetTable] = true
-			}
-		}
-
-		// Check for all desired tables in target.
 		hasTargetTable := map[string]bool{}
 		{
-			tableList := make([]string, 0, len(targetTables))
-			for table := range targetTables {
-				tableList = append(tableList, table)
-			}
-
-			targetSchema, err := mz.wr.GetSchema(ctx, target.MasterAlias, tableList, nil, false)
+			targetSchema, err := mz.wr.GetSchema(ctx, target.MasterAlias, allTables, nil, false)
 			if err != nil {
 				return err
 			}
@@ -621,41 +604,22 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			}
 		}
 
-		// Check for all source table schemas that need copying.
-		tableDDL := map[string]string{}
-		if needsCopy {
+		sourceDDL := map[string]string{}
+		{
 			sourceMaster := mz.sourceShards[0].MasterAlias
 			if sourceMaster == nil {
 				return fmt.Errorf("source shard must have a master for copying schema: %v", mz.sourceShards[0].ShardName())
 			}
 
-			tableList := make([]string, 0, len(copyTables))
-			for table := range copyTables {
-				tableList = append(tableList, table)
-			}
-
-			log.Infof("copy: getting table schemas from source master: %+v...", tableList)
+			log.Infof("getting table schemas from source master...")
 			var err error
-			sourceSchema, err := mz.wr.GetSchema(ctx, sourceMaster, tableList, nil, false)
+			sourceSchema, err := mz.wr.GetSchema(ctx, sourceMaster, allTables, nil, false)
 			if err != nil {
 				return err
 			}
 
-			// Check for any missing tables in schema after accounting for returned TableDefinitions.
-			missingTables := copyTables
 			for _, td := range sourceSchema.TableDefinitions {
-				tableDDL[td.Name] = td.Schema
-
-				delete(missingTables, td.Name)
-			}
-
-			if len(missingTables) > 0 {
-				var tableList []string
-				for table := range missingTables {
-					tableList = append(tableList, table)
-				}
-
-				return fmt.Errorf("copy: source tables do not exist: %+v.", tableList)
+				sourceDDL[td.Name] = td.Schema
 			}
 		}
 
@@ -677,10 +641,16 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 					}
 					if sourceTableName.Name.String() != ts.TargetTable {
 						return fmt.Errorf("source and target table names must match for copying schema: %v vs %v", sqlparser.String(sourceTableName), ts.TargetTable)
+
 					}
+
 				}
 
-				createDDL = tableDDL[ts.TargetTable]
+				ddl, ok := sourceDDL[ts.TargetTable]
+				if !ok {
+					return fmt.Errorf("source table %v does not exist", ts.TargetTable)
+				}
+				createDDL = ddl
 			}
 
 			targetTablet, err := mz.wr.ts.GetTablet(ctx, target.MasterAlias)
