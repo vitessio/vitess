@@ -21,8 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/sqltypes"
-
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"golang.org/x/net/context"
@@ -94,7 +92,7 @@ type TxEngine struct {
 	abandonAge          time.Duration
 	ticks               *timer.Timer
 
-	_txPool      *TxPool
+	txPool       *TxPool
 	preparedPool *TxPreparedPool
 	twoPC        *TwoPC
 }
@@ -107,7 +105,7 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 		shutdownGracePeriod: time.Duration(config.ShutdownGracePeriodSeconds * 1e9),
 	}
 	limiter := txlimiter.New(env)
-	te._txPool = NewTxPool(env, limiter)
+	te.txPool = NewTxPool(env, limiter)
 	te.twopcEnabled = config.TwoPCEnable
 	if te.twopcEnabled {
 		if config.TwoPCCoordinatorAddress == "" {
@@ -243,7 +241,7 @@ func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) 
 	te.stateLock.Unlock()
 
 	defer te.beginRequests.Done()
-	conn, beginSQL, err := te._txPool.Begin(ctx, options)
+	conn, beginSQL, err := te.txPool.Begin(ctx, options)
 	if err != nil {
 		return 0, "", err
 	}
@@ -255,12 +253,12 @@ func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) 
 func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Commit")
 	defer span.Finish()
-	conn, err := te._txPool.GetAndLock(transactionID, "for commit")
+	conn, err := te.txPool.GetAndLock(transactionID, "for commit")
 	if err != nil {
 		return "", err
 	}
 	defer conn.Release(tx.TxCommit)
-	queries, err := te._txPool.Commit(ctx, conn)
+	queries, err := te.txPool.Commit(ctx, conn)
 	if err != nil {
 		return "", err
 	}
@@ -272,12 +270,12 @@ func (te *TxEngine) Rollback(ctx context.Context, transactionID int64) error {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Rollback")
 	defer span.Finish()
 
-	conn, err := te._txPool.GetAndLock(transactionID, "for rollback")
+	conn, err := te.txPool.GetAndLock(transactionID, "for rollback")
 	if err != nil {
 		return err
 	}
-
-	return te._txPool.RollbackAndRelease(ctx, conn)
+	defer conn.Release(tx.TxRollback)
+	return te.txPool.Rollback(ctx, conn)
 }
 
 func (te *TxEngine) unknownStateError() error {
@@ -339,7 +337,7 @@ func (te *TxEngine) Init() error {
 // all previously prepared transactions from the redo log.
 // this should only be called when the state is already locked
 func (te *TxEngine) open() {
-	te._txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
+	te.txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
 
 	if te.twopcEnabled && te.state == AcceptingReadAndWrite {
 		te.twoPC.Open(te.env.Config().DB)
@@ -408,19 +406,19 @@ func (te *TxEngine) close(immediate bool) {
 			log.Info("Transactions completed before grace period: shutting down.")
 		}
 	}()
-	te._txPool.WaitForEmpty()
+	te.txPool.WaitForEmpty()
 	// If the goroutine is still running, signal that it can exit.
 	close(poolEmpty)
 	// Make sure the goroutine has returned.
 	<-rollbackDone
 
-	te._txPool.Close()
+	te.txPool.Close()
 	te.twoPC.Close()
 }
 
 // prepareFromRedo replays and prepares the transactions
 // from the redo log, loads previously failed transactions
-// into the reserved list, and adjusts the _txPool LastID
+// into the reserved list, and adjusts the txPool LastID
 // to ensure there are no future collisions.
 func (te *TxEngine) prepareFromRedo() error {
 	ctx := tabletenv.LocalContext()
@@ -440,7 +438,7 @@ outer:
 		if txid > maxid {
 			maxid = txid
 		}
-		conn, _, err := te._txPool.Begin(ctx, &querypb.ExecuteOptions{})
+		conn, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{})
 		if err != nil {
 			allErr.RecordError(err)
 			continue
@@ -450,7 +448,7 @@ outer:
 			_, err := conn.Exec(ctx, stmt, 1, false)
 			if err != nil {
 				allErr.RecordError(err)
-				te._txPool.RollbackAndRelease(ctx, conn)
+				te.txPool.RollbackAndRelease(ctx, conn)
 				continue outer
 			}
 		}
@@ -472,7 +470,7 @@ outer:
 		}
 		te.preparedPool.SetFailed(preparedTx.Dtid)
 	}
-	te._txPool.AdjustLastID(maxid)
+	te.txPool.AdjustLastID(maxid)
 	log.Infof("Prepared %d transactions, and registered %d failures.", len(prepared), len(failed))
 	return allErr.Error()
 }
@@ -488,13 +486,13 @@ func (te *TxEngine) rollbackTransactions() {
 	// we don't allow new statements or commits during
 	// this function. In case of any such change, this will
 	// have to be revisited.
-	te._txPool.RollbackNonBusy(ctx)
+	te.txPool.RollbackNonBusy(ctx)
 }
 
 func (te *TxEngine) rollbackPrepared() {
 	ctx := tabletenv.LocalContext()
 	for _, conn := range te.preparedPool.FetchAll() {
-		te._txPool.Rollback(ctx, conn)
+		te.txPool.Rollback(ctx, conn)
 		conn.Release(tx.TxRollback)
 	}
 }
@@ -553,35 +551,3 @@ func (te *TxEngine) startWatchdog() {
 func (te *TxEngine) stopWatchdog() {
 	te.ticks.Stop()
 }
-
-//Exec returns an executor that will execute queries inside the transaction identified by connID
-func (te *TxEngine) Exec(connID tx.ConnID) (executor, error) {
-	return &inTxExecutor{
-		connID: connID,
-		te:     te,
-	}, nil
-}
-
-//InTxExecutor is a just a small type used to impleme
-type inTxExecutor struct {
-	connID tx.ConnID
-	te     *TxEngine
-}
-
-//Exec implements the executor interface
-func (i *inTxExecutor) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-	span, ctx := trace.NewSpan(ctx, "TxEngine.Exec")
-	defer span.Finish()
-	conn, err := i.te._txPool.GetAndLock(i.connID, "for query")
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Unlock()
-	result, err := conn.Exec(ctx, query, maxrows, wantfields)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-var _ executor = (*inTxExecutor)(nil)

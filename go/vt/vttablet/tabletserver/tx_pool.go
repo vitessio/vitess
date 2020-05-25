@@ -177,9 +177,12 @@ func (tp *TxPool) Commit(ctx context.Context, txConn tx.IStatefulConnection) (st
 }
 
 // RollbackAndRelease rolls back the transaction on the specified connection, and releases the connection when done
-func (tp *TxPool) RollbackAndRelease(ctx context.Context, txConn tx.IStatefulConnection) error {
+func (tp *TxPool) RollbackAndRelease(ctx context.Context, txConn tx.IStatefulConnection) {
 	defer txConn.Release(tx.TxRollback)
-	return tp.Rollback(ctx, txConn)
+	rollbackError := tp.Rollback(ctx, txConn)
+	if rollbackError != nil {
+		log.Errorf("tried to rollback, but failed with: %v", rollbackError.Error())
+	}
 }
 
 // Rollback rolls back the transaction on the specified connection.
