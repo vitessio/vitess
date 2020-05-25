@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
@@ -514,16 +516,17 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	txid1, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
-	if _, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid1, nil); err != nil {
-		t.Error(err)
-	}
-	if err = tsv.Prepare(ctx, &target, txid1, "aa"); err != nil {
-		t.Error(err)
-	}
+
+	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid1, nil)
+	require.NoError(t, err)
+
+	err = tsv.Prepare(ctx, &target, txid1, "aa")
+	require.NoError(t, err)
+
 	txid2, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
 	// This makes txid2 busy
-	conn2, err := tsv.te.txPool.Get(txid2, "for query")
+	conn2, err := tsv.te.txPool.GetAndLock(txid2, "for query")
 	require.NoError(t, err)
 	ch := make(chan bool)
 	go func() {
@@ -538,12 +541,10 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 		t.Fatal("ch should not fire")
 	case <-time.After(10 * time.Millisecond):
 	}
-	if tsv.te.txPool.activePool.Size() != 1 {
-		t.Errorf("len(tsv.te.txPool.activePool.Size()): %d, want 1", len(tsv.te.preparedPool.conns))
-	}
+	assert.Equal(t, int64(1), tsv.te.txPool.scp.active.Size(), "tsv.te.txPool.scp.active.Size(): ")
 
 	// Concluding conn2 will allow the transition to go through.
-	tsv.te.txPool.LocalConclude(ctx, conn2)
+	tsv.te.txPool.RollbackAndRelease(ctx, conn2)
 	<-ch
 }
 
@@ -588,7 +589,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	if len(tsv.te.preparedPool.conns) != 1 {
 		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
 	}
-	got := tsv.te.preparedPool.conns["dtid0"].Queries
+	got := tsv.te.preparedPool.conns["dtid0"].TxProperties().Queries
 	want := []string{"update test_table set name = 2 where pk = 1 limit 10001"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Prepared queries: %v, want %v", got, want)
@@ -598,7 +599,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 0", v)
 	}
 
-	tsv.te.txPool.lastID.Set(1)
+	tsv.te.txPool.scp.lastID.Set(1)
 	// Ensure we continue past errors.
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -628,7 +629,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	if len(tsv.te.preparedPool.conns) != 1 {
 		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
 	}
-	got = tsv.te.preparedPool.conns["a:b:10"].Queries
+	got = tsv.te.preparedPool.conns["a:b:10"].TxProperties().Queries
 	want = []string{"update test_table set name = 2 where pk = 1 limit 10001"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Prepared queries: %v, want %v", got, want)
@@ -638,7 +639,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		t.Errorf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed)
 	}
 	// Verify last id got adjusted.
-	if v := tsv.te.txPool.lastID.Get(); v != 20 {
+	if v := tsv.te.txPool.scp.lastID.Get(); v != 20 {
 		t.Errorf("tsv.te.txPool.lastID.Get(): %d, want 20", v)
 	}
 	turnOffTxEngine()
@@ -2480,7 +2481,7 @@ func TestConfigChanges(t *testing.T) {
 	if val := tsv.TxPoolSize(); val != newSize {
 		t.Errorf("TxPoolSize: %d, want %d", val, newSize)
 	}
-	if val := int(tsv.te.txPool.conns.Capacity()); val != newSize {
+	if val := int(tsv.te.txPool.scp.Capacity()); val != newSize {
 		t.Errorf("tsv.te.txPool.pool.Capacity: %d, want %d", val, newSize)
 	}
 
@@ -2489,7 +2490,7 @@ func TestConfigChanges(t *testing.T) {
 		t.Errorf("tsv.TxTimeout: %v, want %v", val, newDuration)
 	}
 	if val := tsv.te.txPool.Timeout(); val != newDuration {
-		t.Errorf("tsv.te.txPool.Timeout: %v, want %v", val, newDuration)
+		t.Errorf("tsv.te.Pool().Timeout: %v, want %v", val, newDuration)
 	}
 
 	tsv.SetQueryPlanCacheCap(newSize)
