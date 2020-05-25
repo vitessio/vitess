@@ -972,7 +972,8 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 				return nil
 			}
 
-			fieldSent := false
+			fieldNotSent := true
+			rowsNotSent := true
 			// sendFinished is set if the response should just be an OK packet.
 			sendFinished := false
 			prepare := c.PrepareData[stmtID]
@@ -982,8 +983,12 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 					return io.EOF
 				}
 
-				if !fieldSent {
-					fieldSent = true
+				if qr != nil && qr.Rows != nil && len(qr.Rows) > 0 {
+					rowsNotSent = false
+				}
+
+				if fieldNotSent {
+					fieldNotSent = false
 
 					if len(qr.Fields) == 0 {
 						sendFinished = true
@@ -999,9 +1004,9 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			})
 
 			// If no field was sent, we expect an error.
-			if !fieldSent {
-				// This is just a failsafe. Should never happen.
-				if err == nil || err == io.EOF {
+			if fieldNotSent {
+				// If field is not sent, then no rows should also be sent.
+				if (err == nil || err == io.EOF) && rowsNotSent {
 					err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
 				}
 				if werr := c.writeErrorPacketFromError(err); werr != nil {
@@ -1128,7 +1133,8 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 }
 
 func (c *Conn) execQuery(query string, handler Handler, more bool) error {
-	fieldSent := false
+	fieldNotSent := true
+	rowsNotSent := true
 	// sendFinished is set if the response should just be an OK packet.
 	sendFinished := false
 
@@ -1142,8 +1148,12 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) error {
 			return io.EOF
 		}
 
-		if !fieldSent {
-			fieldSent = true
+		if qr != nil && qr.Rows != nil && len(qr.Rows) > 0 {
+			rowsNotSent = false
+		}
+
+		if fieldNotSent {
+			fieldNotSent = false
 
 			if len(qr.Fields) == 0 {
 				sendFinished = true
@@ -1165,9 +1175,9 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) error {
 	})
 
 	// If no field was sent, we expect an error.
-	if !fieldSent {
-		// This is just a failsafe. Should never happen.
-		if err == nil || err == io.EOF {
+	if fieldNotSent {
+		// If field is not sent, then no rows should also be sent.
+		if (err == nil || err == io.EOF) && rowsNotSent {
 			err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
 		}
 		if werr := c.writeErrorPacketFromError(err); werr != nil {
