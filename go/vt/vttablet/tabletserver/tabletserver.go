@@ -1850,23 +1850,23 @@ func (tsv *TabletServer) StreamPoolSize() int {
 // SetTxPoolSize changes the tx pool size to the specified value.
 // This function should only be used for testing.
 func (tsv *TabletServer) SetTxPoolSize(val int) {
-	tsv.te._txPool.scp.conns.SetCapacity(val)
+	tsv.te.txPool.scp.conns.SetCapacity(val)
 }
 
 // TxPoolSize returns the tx pool size.
 func (tsv *TabletServer) TxPoolSize() int {
-	return tsv.te._txPool.scp.Capacity()
+	return tsv.te.txPool.scp.Capacity()
 }
 
 // SetTxTimeout changes the transaction timeout to the specified value.
 // This function should only be used for testing.
 func (tsv *TabletServer) SetTxTimeout(val time.Duration) {
-	tsv.te._txPool.SetTimeout(val)
+	tsv.te.txPool.SetTimeout(val)
 }
 
 // TxTimeout returns the transaction timeout.
 func (tsv *TabletServer) TxTimeout() time.Duration {
-	return tsv.te._txPool.Timeout()
+	return tsv.te.txPool.Timeout()
 }
 
 // SetQueryPlanCacheCap changes the pool size to the specified value.

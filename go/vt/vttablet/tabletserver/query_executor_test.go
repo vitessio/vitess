@@ -420,7 +420,7 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 				return
 			}
 			// Ensure transaction was rolled back.
-			conn, err := tsv.te._txPool.GetAndLock(txid, "")
+			conn, err := tsv.te.txPool.GetAndLock(txid, "")
 			require.NoError(t, err)
 			defer conn.Release(tx.TxClose)
 

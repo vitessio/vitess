@@ -115,7 +115,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 
 	if qre.transactionID != 0 {
 		// Need upfront connection for DMLs and transactions
-		conn, err := qre.tsv.te._txPool.GetAndLock(qre.transactionID, "for query")
+		conn, err := qre.tsv.te.txPool.GetAndLock(qre.transactionID, "for query")
 		if err != nil {
 			return nil, err
 		}
@@ -153,22 +153,22 @@ func (qre *QueryExecutor) execAutocommit(f func(conn tx.IStatefulConnection) (*s
 	}
 	qre.options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
 
-	conn, _, err := qre.tsv.te._txPool.Begin(qre.ctx, qre.options)
+	conn, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options)
 
 	if err != nil {
 		return nil, err
 	}
-	defer qre.tsv.te._txPool.RollbackAndRelease(qre.ctx, conn)
+	defer qre.tsv.te.txPool.RollbackAndRelease(qre.ctx, conn)
 
 	return f(conn)
 }
 
 func (qre *QueryExecutor) execAsTransaction(f func(conn tx.IStatefulConnection) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
-	conn, beginSQL, err := qre.tsv.te._txPool.Begin(qre.ctx, qre.options)
+	conn, beginSQL, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options)
 	if err != nil {
 		return nil, err
 	}
-	defer qre.tsv.te._txPool.RollbackAndRelease(qre.ctx, conn)
+	defer qre.tsv.te.txPool.RollbackAndRelease(qre.ctx, conn)
 	qre.logStats.AddRewrittenSQL(beginSQL, time.Now())
 
 	result, err := f(conn)
@@ -185,7 +185,7 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn tx.IStatefulConnection) 
 	}
 
 	defer qre.logStats.AddRewrittenSQL("commit", time.Now())
-	if _, err := qre.tsv.te._txPool.Commit(qre.ctx, conn); err != nil {
+	if _, err := qre.tsv.te.txPool.Commit(qre.ctx, conn); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -235,7 +235,7 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 	// if we have a transaction id, let's use the txPool for this query
 	var conn *connpool.DBConn
 	if qre.transactionID != 0 {
-		txConn, err := qre.tsv.te._txPool.GetAndLock(qre.transactionID, "for streaming query")
+		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.transactionID, "for streaming query")
 		if err != nil {
 			return err
 		}
@@ -499,7 +499,7 @@ func (qre *QueryExecutor) execDMLLimit(conn tx.IStatefulConnection) (*sqltypes.R
 	}
 	if err := qre.verifyRowCount(int64(result.RowsAffected), maxrows); err != nil {
 		defer qre.logStats.AddRewrittenSQL("rollback", time.Now())
-		_ = qre.tsv.te._txPool.Rollback(qre.ctx, conn)
+		_ = qre.tsv.te.txPool.Rollback(qre.ctx, conn)
 		return nil, err
 	}
 	return result, nil
