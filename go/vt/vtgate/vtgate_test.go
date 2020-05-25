@@ -71,6 +71,8 @@ func init() {
 `
 	hcVTGateTest = discovery.NewFakeLegacyHealthCheck()
 	*transactionMode = "MULTI"
+	// Use legacy gateway until we can rewrite these tests to use new tabletgateway
+	*GatewayImplementation = GatewayImplementationDiscovery
 	// The topo.Server is used to start watching the cells described
 	// in '-cells_to_watch' command line parameter, which is
 	// empty by default. So it's unused in this test, set to nil.
