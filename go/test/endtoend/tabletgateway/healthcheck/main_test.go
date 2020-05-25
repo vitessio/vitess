@@ -86,13 +86,13 @@ func TestMain(m *testing.M) {
 
 		// Start vtgate
 		vtgateInstance := clusterInstance.GetVtgateInstance()
-		// ensure it is torn down during cluster TearDown
-		clusterInstance.VtgateProcess = *vtgateInstance
 		vtgateInstance.GatewayImplementation = "tabletgateway"
 		err = vtgateInstance.Setup()
 		if err != nil {
 			return 1
 		}
+		// ensure it is torn down during cluster TearDown
+		clusterInstance.VtgateProcess = *vtgateInstance
 		vtParams = mysql.ConnParams{
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
