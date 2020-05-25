@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -42,12 +44,8 @@ func TestFilterByReplicationLagUnhealthy(t *testing.T) {
 		Stats:   &querypb.RealtimeStats{},
 	}
 	got := FilterStatsByReplicationLag([]*tabletHealthCheck{ts1, ts2})
-	if len(got) != 1 {
-		t.Errorf("len(FilterStatsByReplicationLag([{Tablet: {Uid: 1}, Serving: true}, {Tablet: {Uid: 2}, Serving: false}])) = %v, want 1", len(got))
-	}
-	if len(got) > 0 && !got[0].DeepEqual(ts1) {
-		t.Errorf("FilterStatsByReplicationLag([{Tablet: {Uid: 1}, Serving: true}, {Tablet: {Uid: 2}, Serving: false}]) = %+v, want %+v", got[0], ts1)
-	}
+	want := []*tabletHealthCheck{ts1}
+	mustMatch(t, want, got, "FilterStatsByReplicationLag")
 }
 
 func TestFilterByReplicationLag(t *testing.T) {
@@ -151,9 +149,9 @@ func TestFilterByReplicationLagThreeTabletMin(t *testing.T) {
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 11 * 60},
 	}
 	got := FilterStatsByReplicationLag([]*tabletHealthCheck{ts1, ts2, ts3, ts4})
-	if len(got) != 3 || !got[0].DeepEqual(ts1) || !got[1].DeepEqual(ts2) || !got[2].DeepEqual(ts3) {
-		t.Errorf("FilterStatsByReplicationLag([1s, 1s, 10m, 11m]) = %+v, want [1s, 1s, 10m]", got)
-	}
+	want := []*tabletHealthCheck{ts1, ts2, ts3}
+	mustMatch(t, want, got, "FilterStatsByReplicationLag")
+
 	// lags of (11m, 10m, 1s, 1s) - reordered tablets returns the same 3 items where the slightly delayed one that is returned is the 10m and 11m ones.
 	ts1 = &tabletHealthCheck{
 		Tablet:  topo.NewTablet(1, "cell", "host1"),
@@ -176,9 +174,8 @@ func TestFilterByReplicationLagThreeTabletMin(t *testing.T) {
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
 	}
 	got = FilterStatsByReplicationLag([]*tabletHealthCheck{ts1, ts2, ts3, ts4})
-	if len(got) != 3 || !got[0].DeepEqual(ts3) || !got[1].DeepEqual(ts4) || !got[2].DeepEqual(ts2) {
-		t.Errorf("FilterStatsByReplicationLag([1s, 1s, 10m, 11m]) = %+v, want [1s, 1s, 10m]", got)
-	}
+	want = []*tabletHealthCheck{ts3, ts4, ts2}
+	mustMatch(t, want, got, "FilterStatsByReplicationLag")
 	// Reset to the default
 	testSetMinNumTablets(2)
 }
@@ -198,9 +195,9 @@ func TestFilterStatsByReplicationLagOneTabletMin(t *testing.T) {
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 100 * 60},
 	}
 	got := FilterStatsByReplicationLag([]*tabletHealthCheck{ts1, ts2})
-	if len(got) != 1 || !got[0].DeepEqual(ts1) {
-		t.Errorf("FilterStatsByReplicationLag([1s, 100m]) = %+v, want [1s]", got)
-	}
+	want := []*tabletHealthCheck{ts1}
+	mustMatch(t, want, got, "FilterStatsByReplicationLag")
+
 	// lags of (1m, 100m) - return only healthy tablet if that is all that is healthy enough.
 	ts1 = &tabletHealthCheck{
 		Tablet:  topo.NewTablet(1, "cell", "host1"),
@@ -213,9 +210,15 @@ func TestFilterStatsByReplicationLagOneTabletMin(t *testing.T) {
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 100 * 60},
 	}
 	got = FilterStatsByReplicationLag([]*tabletHealthCheck{ts1, ts2})
-	if len(got) != 1 || !got[0].DeepEqual(ts1) {
-		t.Errorf("FilterStatsByReplicationLag([1m, 100m]) = %+v, want [1m]", got)
-	}
+	want = []*tabletHealthCheck{ts1}
+	mustMatch(t, want, got, "FilterStatsByReplicationLag")
 	// Reset to the default
 	testSetMinNumTablets(2)
 }
+
+var mustMatch = utils.MustMatchFn(
+	[]interface{}{ // types with unexported fields
+		tabletHealthCheck{},
+	},
+	[]string{".mu"}, // ignored fields
+)

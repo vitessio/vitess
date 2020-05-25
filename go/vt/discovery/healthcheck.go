@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2020 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -277,9 +277,9 @@ func (hc *HealthCheck) AddTablet(tablet *topodata.Tablet) {
 		return
 	}
 	hc.mu.Lock()
+	defer hc.mu.Unlock()
 	if hc.healthByAlias == nil {
 		// already closed.
-		hc.mu.Unlock()
 		return
 	}
 	ctx, cancelFunc := context.WithCancel(context.Background())
@@ -301,7 +301,6 @@ func (hc *HealthCheck) AddTablet(tablet *topodata.Tablet) {
 	// TODO: can this ever already exist?
 	if _, ok := hc.healthByAlias[tabletAlias]; ok {
 		log.Errorf("Program bug")
-		hc.mu.Unlock()
 		return
 	}
 	hc.healthByAlias[tabletAlias] = th
@@ -316,7 +315,6 @@ func (hc *HealthCheck) AddTablet(tablet *topodata.Tablet) {
 	res := th.SimpleCopy()
 	hc.broadcast(res)
 	hc.connsWG.Add(1)
-	hc.mu.Unlock()
 	go th.checkConn(hc)
 }
 
