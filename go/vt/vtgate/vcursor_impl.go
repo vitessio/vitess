@@ -129,11 +129,7 @@ func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL
 // the query and supply it here. Trailing comments are typically sent by the application for various reasons,
 // including as identifying markers. So, they have to be added back to all queries that are executed
 // on behalf of the original query.
-func newVCursorImpl(ctx context.Context, safeSession *SafeSession, marginComments sqlparser.MarginComments, executor *Executor, logStats *LogStats, vm VSchemaOperator, resolver *srvtopo.Resolver) (*vcursorImpl, error) {
-	vschema, err := vm.GetCurrentVschema()
-	if err != nil {
-		return nil, err
-	}
+func newVCursorImpl(ctx context.Context, safeSession *SafeSession, marginComments sqlparser.MarginComments, executor *Executor, logStats *LogStats, vm VSchemaOperator, vschema *vindexes.VSchema, resolver *srvtopo.Resolver) (*vcursorImpl, error) {
 	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema)
 	if err != nil {
 		return nil, err
