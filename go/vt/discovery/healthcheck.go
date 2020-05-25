@@ -611,13 +611,11 @@ func (hc *HealthCheck) waitForTablets(ctx context.Context, targets []*query.Targ
 // GetConnection returns the TabletConn of the given tablet.
 func (hc *HealthCheck) GetConnection(alias *topodata.TabletAlias) (queryservice.QueryService, error) {
 	hc.mu.Lock()
-	th := hc.healthByAlias[topoproto.TabletAliasString(alias)]
+	th := hc.healthByAlias[tabletAliasString(topoproto.TabletAliasString(alias))]
 	hc.mu.Unlock()
 	if th == nil {
 		return nil, vterrors.New(vtrpc.Code_NOT_FOUND, fmt.Sprintf("No TabletHealth available for alias: %v", alias))
 	}
-	th.mu.Lock()
-	defer th.mu.Unlock()
 	return th.Conn, nil
 }
 
