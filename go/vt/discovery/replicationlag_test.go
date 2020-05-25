@@ -33,18 +33,18 @@ func testSetMinNumTablets(newMin int) {
 
 func TestFilterByReplicationLagUnhealthy(t *testing.T) {
 	// 1 healthy serving tablet, 1 not healhty
-	ts1 := &tabletHealthCheck{
+	ts1 := &TabletHealth{
 		Tablet:  topo.NewTablet(1, "cell", "host1"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{},
 	}
-	ts2 := &tabletHealthCheck{
+	ts2 := &TabletHealth{
 		Tablet:  topo.NewTablet(2, "cell", "host2"),
 		Serving: false,
 		Stats:   &querypb.RealtimeStats{},
 	}
-	got := FilterStatsByReplicationLag([]*tabletHealthCheck{ts1, ts2})
-	want := []*tabletHealthCheck{ts1}
+	got := FilterStatsByReplicationLag([]*TabletHealth{ts1, ts2})
+	want := []*TabletHealth{ts1}
 	mustMatch(t, want, got, "FilterStatsByReplicationLag")
 }
 
@@ -100,9 +100,9 @@ func TestFilterByReplicationLag(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		lts := make([]*tabletHealthCheck, len(tc.input))
+		lts := make([]*TabletHealth, len(tc.input))
 		for i, lag := range tc.input {
-			lts[i] = &tabletHealthCheck{
+			lts[i] = &TabletHealth{
 				Tablet:  topo.NewTablet(uint32(i+1), "cell", fmt.Sprintf("host-%vs-behind", lag)),
 				Serving: true,
 				Stats:   &querypb.RealtimeStats{SecondsBehindMaster: lag},
@@ -128,53 +128,53 @@ func TestFilterByReplicationLagThreeTabletMin(t *testing.T) {
 	// Use at least 3 tablets if possible
 	testSetMinNumTablets(3)
 	// lags of (1s, 1s, 10m, 11m) - returns at least32 items where the slightly delayed ones that are returned are the 10m and 11m ones.
-	ts1 := &tabletHealthCheck{
+	ts1 := &TabletHealth{
 		Tablet:  topo.NewTablet(1, "cell", "host1"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
 	}
-	ts2 := &tabletHealthCheck{
+	ts2 := &TabletHealth{
 		Tablet:  topo.NewTablet(2, "cell", "host2"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
 	}
-	ts3 := &tabletHealthCheck{
+	ts3 := &TabletHealth{
 		Tablet:  topo.NewTablet(3, "cell", "host3"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 10 * 60},
 	}
-	ts4 := &tabletHealthCheck{
+	ts4 := &TabletHealth{
 		Tablet:  topo.NewTablet(4, "cell", "host4"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 11 * 60},
 	}
-	got := FilterStatsByReplicationLag([]*tabletHealthCheck{ts1, ts2, ts3, ts4})
-	want := []*tabletHealthCheck{ts1, ts2, ts3}
+	got := FilterStatsByReplicationLag([]*TabletHealth{ts1, ts2, ts3, ts4})
+	want := []*TabletHealth{ts1, ts2, ts3}
 	mustMatch(t, want, got, "FilterStatsByReplicationLag")
 
 	// lags of (11m, 10m, 1s, 1s) - reordered tablets returns the same 3 items where the slightly delayed one that is returned is the 10m and 11m ones.
-	ts1 = &tabletHealthCheck{
+	ts1 = &TabletHealth{
 		Tablet:  topo.NewTablet(1, "cell", "host1"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 11 * 60},
 	}
-	ts2 = &tabletHealthCheck{
+	ts2 = &TabletHealth{
 		Tablet:  topo.NewTablet(2, "cell", "host2"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 10 * 60},
 	}
-	ts3 = &tabletHealthCheck{
+	ts3 = &TabletHealth{
 		Tablet:  topo.NewTablet(3, "cell", "host3"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
 	}
-	ts4 = &tabletHealthCheck{
+	ts4 = &TabletHealth{
 		Tablet:  topo.NewTablet(4, "cell", "host4"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
 	}
-	got = FilterStatsByReplicationLag([]*tabletHealthCheck{ts1, ts2, ts3, ts4})
-	want = []*tabletHealthCheck{ts3, ts4, ts2}
+	got = FilterStatsByReplicationLag([]*TabletHealth{ts1, ts2, ts3, ts4})
+	want = []*TabletHealth{ts3, ts4, ts2}
 	mustMatch(t, want, got, "FilterStatsByReplicationLag")
 	// Reset to the default
 	testSetMinNumTablets(2)
@@ -184,41 +184,34 @@ func TestFilterStatsByReplicationLagOneTabletMin(t *testing.T) {
 	// Use at least 1 tablets if possible
 	testSetMinNumTablets(1)
 	// lags of (1s, 100m) - return only healthy tablet if that is all that is available.
-	ts1 := &tabletHealthCheck{
+	ts1 := &TabletHealth{
 		Tablet:  topo.NewTablet(1, "cell", "host1"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
 	}
-	ts2 := &tabletHealthCheck{
+	ts2 := &TabletHealth{
 		Tablet:  topo.NewTablet(2, "cell", "host2"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 100 * 60},
 	}
-	got := FilterStatsByReplicationLag([]*tabletHealthCheck{ts1, ts2})
-	want := []*tabletHealthCheck{ts1}
+	got := FilterStatsByReplicationLag([]*TabletHealth{ts1, ts2})
+	want := []*TabletHealth{ts1}
 	mustMatch(t, want, got, "FilterStatsByReplicationLag")
 
 	// lags of (1m, 100m) - return only healthy tablet if that is all that is healthy enough.
-	ts1 = &tabletHealthCheck{
+	ts1 = &TabletHealth{
 		Tablet:  topo.NewTablet(1, "cell", "host1"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1 * 60},
 	}
-	ts2 = &tabletHealthCheck{
+	ts2 = &TabletHealth{
 		Tablet:  topo.NewTablet(2, "cell", "host2"),
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 100 * 60},
 	}
-	got = FilterStatsByReplicationLag([]*tabletHealthCheck{ts1, ts2})
-	want = []*tabletHealthCheck{ts1}
-	mustMatch(t, want, got, "FilterStatsByReplicationLag")
+	got = FilterStatsByReplicationLag([]*TabletHealth{ts1, ts2})
+	want = []*TabletHealth{ts1}
+	utils.MustMatch(t, want, got, "FilterStatsByReplicationLag")
 	// Reset to the default
 	testSetMinNumTablets(2)
 }
-
-var mustMatch = utils.MustMatchFn(
-	[]interface{}{ // types with unexported fields
-		tabletHealthCheck{},
-	},
-	[]string{".mu"}, // ignored fields
-)

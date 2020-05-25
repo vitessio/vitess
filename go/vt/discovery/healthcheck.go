@@ -157,6 +157,9 @@ type TabletRecorder interface {
 	ReplaceTablet(old, new *topodata.Tablet)
 }
 
+type keyspaceShardTabletType string
+type tabletAliasString string
+
 // HealthCheck performs health checking and stores the results.
 // The goal of this object is to maintain a StreamHealth RPC
 // to a lot of tablets. Tablets are added / removed by calling the
@@ -179,13 +182,13 @@ type HealthCheck struct {
 	// mu protects all the following fields.
 	mu sync.Mutex
 	// authoritative map of tabletHealth by alias
-	healthByAlias map[string]*tabletHealthCheck
+	healthByAlias map[tabletAliasString]*tabletHealthCheck
 	// a map keyed by keyspace.shard.tabletType
-	// contains a map of tabletHealthCheck keyed by tablet alias for each tablet relevant to the keyspace.shard.tabletType
+	// contains a map of TabletHealth keyed by tablet alias for each tablet relevant to the keyspace.shard.tabletType
 	// has to be kept in sync with healthByAlias
-	healthData map[string]map[string]*tabletHealthCheck
-	// another map keyed by keyspace.shard.tabletType, this one containing a sorted list of tabletHealthCheck
-	healthy map[string][]*tabletHealthCheck
+	healthData map[keyspaceShardTabletType]map[tabletAliasString]*TabletHealth
+	// another map keyed by keyspace.shard.tabletType, this one containing a sorted list of TabletHealth
+	healthy map[keyspaceShardTabletType][]*TabletHealth
 	// connsWG keeps track of all launched Go routines that monitor tablet connections.
 	connsWG sync.WaitGroup
 	// topology watchers that inform healthcheck of tablets being added and deleted
@@ -221,9 +224,9 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		cell:               localCell,
 		retryDelay:         retryDelay,
 		healthCheckTimeout: healthCheckTimeout,
-		healthByAlias:      make(map[string]*tabletHealthCheck),
-		healthData:         make(map[string]map[string]*tabletHealthCheck),
-		healthy:            make(map[string][]*tabletHealthCheck),
+		healthByAlias:      make(map[tabletAliasString]*tabletHealthCheck),
+		healthData:         make(map[keyspaceShardTabletType]map[tabletAliasString]*TabletHealth),
+		healthy:            make(map[keyspaceShardTabletType][]*TabletHealth),
 		subscribers:        make(map[chan *TabletHealth]struct{}),
 		cellAliases:        make(map[string]string),
 	}
@@ -288,7 +291,7 @@ func (hc *HealthCheck) AddTablet(tablet *topodata.Tablet) {
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,
 	}
-	th := &tabletHealthCheck{
+	thc := &tabletHealthCheck{
 		ctx:        ctx,
 		cancelFunc: cancelFunc,
 		Tablet:     tablet,
@@ -298,24 +301,24 @@ func (hc *HealthCheck) AddTablet(tablet *topodata.Tablet) {
 	// add to our datastore
 	key := hc.keyFromTarget(target)
 	tabletAlias := topoproto.TabletAliasString(tablet.Alias)
-	// TODO: can this ever already exist?
-	if _, ok := hc.healthByAlias[tabletAlias]; ok {
-		log.Errorf("Program bug")
+	if _, ok := hc.healthByAlias[tabletAliasString(tabletAlias)]; ok {
+		// We should not add a tablet that we already have
+		log.Errorf("Program bug: tried to add existing tablet: %v to healthcheck", tabletAlias)
 		return
 	}
-	hc.healthByAlias[tabletAlias] = th
+	hc.healthByAlias[tabletAliasString(tabletAlias)] = thc
+	res := thc.SimpleCopy()
 	if ths, ok := hc.healthData[key]; !ok {
-		hc.healthData[key] = make(map[string]*tabletHealthCheck)
-		hc.healthData[key][tabletAlias] = th
+		hc.healthData[key] = make(map[tabletAliasString]*TabletHealth)
+		hc.healthData[key][tabletAliasString(tabletAlias)] = res
 	} else {
-		// just overwrite it if it exists already?
-		ths[tabletAlias] = th
+		// just overwrite it if it exists already
+		ths[tabletAliasString(tabletAlias)] = res
 	}
 
-	res := th.SimpleCopy()
 	hc.broadcast(res)
 	hc.connsWG.Add(1)
-	go th.checkConn(hc)
+	go thc.checkConn(hc)
 }
 
 // RemoveTablet removes the tablet, and stops the health check.
@@ -338,7 +341,7 @@ func (hc *HealthCheck) deleteTablet(tablet *topodata.Tablet) {
 	defer hc.mu.Unlock()
 
 	key := hc.keyFromTablet(tablet)
-	tabletAlias := topoproto.TabletAliasString(tablet.Alias)
+	tabletAlias := tabletAliasString(topoproto.TabletAliasString(tablet.Alias))
 	// delete from authoritative map
 	th, ok := hc.healthByAlias[tabletAlias]
 	if !ok {
@@ -358,31 +361,29 @@ func (hc *HealthCheck) deleteTablet(tablet *topodata.Tablet) {
 	delete(ths, tabletAlias)
 }
 
-func (hc *HealthCheck) updateHealth(th *tabletHealthCheck, shr *query.StreamHealthResponse, currentTarget *query.Target, trivialNonMasterUpdate bool, isMasterUpdate bool, isMasterChange bool) {
+func (hc *HealthCheck) updateHealth(th *TabletHealth, shr *query.StreamHealthResponse, currentTarget *query.Target, trivialNonMasterUpdate bool, isMasterUpdate bool, isMasterChange bool) {
 	// hc.healthByAlias is authoritative, it should be updated
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
-	tabletAlias := topoproto.TabletAliasString(shr.TabletAlias)
-	// this will only change the first time, but it's easiest to set it always rather than check and set
-	hc.healthByAlias[tabletAlias] = th
+	tabletAlias := tabletAliasString(topoproto.TabletAliasString(shr.TabletAlias))
 
 	hcErrorCounters.Add([]string{shr.Target.Keyspace, shr.Target.Shard, topoproto.TabletTypeLString(shr.Target.TabletType)}, 0)
+	targetKey := hc.keyFromTarget(shr.Target)
 	targetChanged := currentTarget.TabletType != shr.Target.TabletType || currentTarget.Keyspace != shr.Target.Keyspace || currentTarget.Shard != shr.Target.Shard
 	if targetChanged {
 		// keyspace and shard are not expected to change, but just in case ...
 		// move this tabletHealthCheck to the correct map
 		oldTargetKey := hc.keyFromTarget(currentTarget)
-		newTargetKey := hc.keyFromTarget(shr.Target)
 		delete(hc.healthData[oldTargetKey], tabletAlias)
-		_, ok := hc.healthData[newTargetKey]
+		_, ok := hc.healthData[targetKey]
 		if !ok {
-			hc.healthData[newTargetKey] = make(map[string]*tabletHealthCheck)
+			hc.healthData[targetKey] = make(map[tabletAliasString]*TabletHealth)
 		}
-		hc.healthData[newTargetKey][tabletAlias] = th
 	}
+	// add it to the map by target
+	hc.healthData[targetKey][tabletAlias] = th
 
-	targetKey := hc.keyFromTarget(shr.Target)
 	if isMasterUpdate {
 		if len(hc.healthy[targetKey]) == 0 {
 			hc.healthy[targetKey] = append(hc.healthy[targetKey], th)
@@ -405,7 +406,7 @@ func (hc *HealthCheck) updateHealth(th *tabletHealthCheck, shr *query.StreamHeal
 	if !trivialNonMasterUpdate {
 		if shr.Target.TabletType != topodata.TabletType_MASTER {
 			all := hc.healthData[targetKey]
-			allArray := make([]*tabletHealthCheck, 0, len(all))
+			allArray := make([]*TabletHealth, 0, len(all))
 			for _, s := range all {
 				allArray = append(allArray, s)
 			}
@@ -414,20 +415,19 @@ func (hc *HealthCheck) updateHealth(th *tabletHealthCheck, shr *query.StreamHeal
 		if targetChanged && currentTarget.TabletType != topodata.TabletType_MASTER { // also recompute old target's healthy list
 			oldTargetKey := hc.keyFromTarget(currentTarget)
 			all := hc.healthData[oldTargetKey]
-			allArray := make([]*tabletHealthCheck, 0, len(all))
+			allArray := make([]*TabletHealth, 0, len(all))
 			for _, s := range all {
 				allArray = append(allArray, s)
 			}
 			hc.healthy[oldTargetKey] = FilterStatsByReplicationLag(allArray)
 		}
 	}
-	result := th.SimpleCopy()
 	if isMasterChange {
 		log.Errorf("Adding 1 to MasterPromoted counter for tablet: %v, shr.Tablet: %v, shr.TabletType: %v", currentTarget, topoproto.TabletAliasString(shr.TabletAlias), shr.Target.TabletType)
 		hcMasterPromotedCounters.Add([]string{shr.Target.Keyspace, shr.Target.Shard}, 1)
 	}
 	// broadcast to subscribers
-	hc.broadcast(result)
+	hc.broadcast(th)
 
 }
 
@@ -525,10 +525,7 @@ func (hc *HealthCheck) GetHealthyTabletStats(target *query.Target) []*TabletHeal
 	var result []*TabletHealth
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
-	for _, thc := range hc.healthy[hc.keyFromTarget(target)] {
-		result = append(result, thc.SimpleCopy())
-	}
-	return result
+	return append(result, hc.healthy[hc.keyFromTarget(target)]...)
 }
 
 // getTabletStats returns all tablets for the given target.
@@ -541,7 +538,7 @@ func (hc *HealthCheck) getTabletStats(target *query.Target) []*TabletHealth {
 	defer hc.mu.Unlock()
 	ths := hc.healthData[hc.keyFromTarget(target)]
 	for _, th := range ths {
-		result = append(result, th.SimpleCopy())
+		result = append(result, th)
 	}
 	return result
 }
@@ -578,13 +575,13 @@ func (hc *HealthCheck) waitForTablets(ctx context.Context, targets []*query.Targ
 				continue
 			}
 
-			var stats []*TabletHealth
+			var tabletHealths []*TabletHealth
 			if requireServing {
-				stats = hc.GetHealthyTabletStats(target)
+				tabletHealths = hc.GetHealthyTabletStats(target)
 			} else {
-				stats = hc.getTabletStats(target)
+				tabletHealths = hc.getTabletStats(target)
 			}
-			if len(stats) == 0 {
+			if len(tabletHealths) == 0 {
 				allPresent = false
 			} else {
 				targets[i] = nil
@@ -609,12 +606,12 @@ func (hc *HealthCheck) waitForTablets(ctx context.Context, targets []*query.Targ
 
 // Target includes cell which we ignore here
 // because tabletStatsCache is intended to be per-cell
-func (hc *HealthCheck) keyFromTarget(target *query.Target) string {
-	return fmt.Sprintf("%s.%s.%d", target.Keyspace, target.Shard, target.TabletType)
+func (hc *HealthCheck) keyFromTarget(target *query.Target) keyspaceShardTabletType {
+	return keyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType)))
 }
 
-func (hc *HealthCheck) keyFromTablet(tablet *topodata.Tablet) string {
-	return fmt.Sprintf("%s.%s.%d", tablet.Keyspace, tablet.Shard, tablet.Type)
+func (hc *HealthCheck) keyFromTablet(tablet *topodata.Tablet) keyspaceShardTabletType {
+	return keyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", tablet.Keyspace, tablet.Shard, topoproto.TabletTypeLString(tablet.Type)))
 }
 
 func (hc *HealthCheck) getAliasByCell(cell string) string {
@@ -714,15 +711,12 @@ func (hc *HealthCheck) servingConnStats() map[string]int64 {
 	res := make(map[string]int64)
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
-	for _, th := range hc.healthByAlias {
-		th.mu.Lock()
-		if !th.Serving || th.LastError != nil {
-			th.mu.Unlock()
-			continue
+	for key, ths := range hc.healthData {
+		for _, th := range ths {
+			if th.Serving && th.LastError == nil {
+				res[string(key)]++
+			}
 		}
-		key := fmt.Sprintf("%s.%s.%s", th.Target.Keyspace, th.Target.Shard, topoproto.TabletTypeLString(th.Target.TabletType))
-		th.mu.Unlock()
-		res[key]++
 	}
 	return res
 }

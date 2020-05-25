@@ -842,8 +842,8 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 	case "vitess_tablets":
 		var rows [][]sqltypes.Value
 		if *GatewayImplementation == GatewayImplementationDiscovery {
-			stats := e.scatterConn.GetLegacyHealthCheckCacheStatus()
-			for _, s := range stats {
+			status := e.scatterConn.GetLegacyHealthCheckCacheStatus()
+			for _, s := range status {
 				for _, ts := range s.TabletsStats {
 					state := "SERVING"
 					if !ts.Serving {
@@ -868,8 +868,8 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			}
 		}
 		if *GatewayImplementation == tabletGatewayImplementation {
-			stats := e.scatterConn.GetHealthCheckCacheStatus()
-			for _, s := range stats {
+			status := e.scatterConn.GetHealthCheckCacheStatus()
+			for _, s := range status {
 				for _, ts := range s.TabletsStats {
 					state := "SERVING"
 					if !ts.Serving {

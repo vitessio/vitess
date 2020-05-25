@@ -928,8 +928,8 @@ func (hc *LegacyHealthCheckImpl) cacheStatusMap() map[string]*LegacyTabletsCache
 			}
 			tcsMap[key] = tcs
 		}
-		stats := th.latestTabletStats
-		tcs.TabletsStats = append(tcs.TabletsStats, &stats)
+		tabletStats := th.latestTabletStats
+		tcs.TabletsStats = append(tcs.TabletsStats, &tabletStats)
 	}
 	return tcsMap
 }

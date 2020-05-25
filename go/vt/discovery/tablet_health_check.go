@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"vitess.io/vitess/go/sync2"
@@ -48,7 +47,6 @@ type tabletHealthCheck struct {
 	cancelFunc context.CancelFunc
 	// Tablet is the tablet object that was sent to HealthCheck.AddTablet.
 	Tablet *topodata.Tablet
-	mu     sync.Mutex
 	// Conn is the connection associated with the tablet.
 	Conn queryservice.QueryService
 	// Target is the current target as returned by the streaming
@@ -73,31 +71,23 @@ type tabletHealthCheck struct {
 }
 
 // String is defined because we want to print a []*tabletHealthCheck array nicely.
-func (th *tabletHealthCheck) String() string {
-	th.mu.Lock()
-	defer th.mu.Unlock()
+func (thc *tabletHealthCheck) String() string {
 	return fmt.Sprintf("tabletHealthCheck{Tablet: %v,Target: %v,Serving: %v, MasterTermStartTime: %v, Stats: %v, LastError: %v",
-		th.Tablet, th.Target, th.Serving, th.MasterTermStartTime, *th.Stats, th.LastError)
+		thc.Tablet, thc.Target, thc.Serving, thc.MasterTermStartTime, *thc.Stats, thc.LastError)
 }
 
 // SimpleCopy returns a TabletHealth with all the necessary fields copied from tabletHealthCheck.
 // Note that this is not a deep copy because we point to the same underlying RealtimeStats.
 // That is fine because the RealtimeStats object is never changed after creation.
-func (th *tabletHealthCheck) SimpleCopy() *TabletHealth {
-	th.mu.Lock()
-	defer th.mu.Unlock()
-	return th.simpleCopyLocked()
-}
-
-func (th *tabletHealthCheck) simpleCopyLocked() *TabletHealth {
+func (thc *tabletHealthCheck) SimpleCopy() *TabletHealth {
 	return &TabletHealth{
-		Conn:                th.Conn,
-		Tablet:              th.Tablet,
-		Target:              th.Target,
-		Stats:               th.Stats,
-		LastError:           th.LastError,
-		MasterTermStartTime: th.MasterTermStartTime,
-		Serving:             th.Serving,
+		Conn:                thc.Conn,
+		Tablet:              thc.Tablet,
+		Target:              thc.Target,
+		Stats:               thc.Stats,
+		LastError:           thc.LastError,
+		MasterTermStartTime: thc.MasterTermStartTime,
+		Serving:             thc.Serving,
 	}
 }
 
@@ -107,27 +97,27 @@ func (th *tabletHealthCheck) simpleCopyLocked() *TabletHealth {
 // from the health check connection are logged the first time,
 // but don't continue to log if the connection stays down.
 //
-// th.mu must be locked before calling this function
-func (th *tabletHealthCheck) setServingState(serving bool, reason string) {
-	if !th.loggedServingState || (serving != th.Serving) {
+// thc.mu must be locked before calling this function
+func (thc *tabletHealthCheck) setServingState(serving bool, reason string) {
+	if !thc.loggedServingState || (serving != thc.Serving) {
 		// Emit the log from a separate goroutine to avoid holding
 		// the th lock while logging is happening
 		go log.Infof("HealthCheckUpdate(Serving State): tablet: %v serving => %v for %v/%v (%v) reason: %s",
-			topotools.TabletIdent(th.Tablet),
+			topotools.TabletIdent(thc.Tablet),
 			serving,
-			th.Tablet.GetKeyspace(),
-			th.Tablet.GetShard(),
-			th.Target.GetTabletType(),
+			thc.Tablet.GetKeyspace(),
+			thc.Tablet.GetShard(),
+			thc.Target.GetTabletType(),
 			reason,
 		)
-		th.loggedServingState = true
+		thc.loggedServingState = true
 	}
-	th.Serving = serving
+	thc.Serving = serving
 }
 
 // stream streams healthcheck responses to callback.
-func (th *tabletHealthCheck) stream(ctx context.Context, callback func(*query.StreamHealthResponse) error) error {
-	conn := th.getConnection()
+func (thc *tabletHealthCheck) stream(ctx context.Context, callback func(*query.StreamHealthResponse) error) error {
+	conn := thc.getConnection()
 	if conn == nil {
 		// This signals the caller to retry
 		return nil
@@ -135,31 +125,29 @@ func (th *tabletHealthCheck) stream(ctx context.Context, callback func(*query.St
 	err := conn.StreamHealth(ctx, callback)
 	if err != nil {
 		// Depending on the specific error the caller can take action
-		th.closeConnection(ctx, err)
+		thc.closeConnection(ctx, err)
 	}
 	return err
 }
 
-func (th *tabletHealthCheck) getConnection() queryservice.QueryService {
-	th.mu.Lock()
-	defer th.mu.Unlock()
-	if th.Conn == nil {
-		conn, err := tabletconn.GetDialer()(th.Tablet, grpcclient.FailFast(true))
+func (thc *tabletHealthCheck) getConnection() queryservice.QueryService {
+	if thc.Conn == nil {
+		conn, err := tabletconn.GetDialer()(thc.Tablet, grpcclient.FailFast(true))
 		if err != nil {
-			th.LastError = err
+			thc.LastError = err
 			return nil
 		}
-		th.Conn = conn
-		th.LastError = nil
+		thc.Conn = conn
+		thc.LastError = nil
 	}
-	return th.Conn
+	return thc.Conn
 }
 
 // processResponse reads one health check response, and updates health
-func (th *tabletHealthCheck) processResponse(hc *HealthCheck, shr *query.StreamHealthResponse) error {
+func (thc *tabletHealthCheck) processResponse(hc *HealthCheck, shr *query.StreamHealthResponse) error {
 	select {
-	case <-th.ctx.Done():
-		return th.ctx.Err()
+	case <-thc.ctx.Done():
+		return thc.ctx.Err()
 	default:
 	}
 
@@ -176,45 +164,73 @@ func (th *tabletHealthCheck) processResponse(hc *HealthCheck, shr *query.StreamH
 		serving = false
 	}
 
-	if shr.TabletAlias != nil && !proto.Equal(shr.TabletAlias, th.Tablet.Alias) {
+	if shr.TabletAlias != nil && !proto.Equal(shr.TabletAlias, thc.Tablet.Alias) {
 		// TabletAlias change means that the host:port has been taken over by another tablet
-		// We could cancel / exit the healthcheck for this tablet right away
-		// However, we defer it until the next topo refresh informs us of the change because that is
-		// the only way to discover the new host/port
-		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("health stats mismatch, tablet %+v alias does not match response alias %v", th.Tablet, shr.TabletAlias))
+		// We cancel / exit the healthcheck for this tablet right away
+		// With the next topo refresh we will get a new tablet with the new host/port
+		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("health stats mismatch, tablet %+v alias does not match response alias %v", thc.Tablet, shr.TabletAlias))
 	}
 
-	th.mu.Lock()
-	currentTarget := th.Target
+	currentTarget := thc.Target
 	// check whether this is a trivial update so as to update healthy map
-	trivialNonMasterUpdate := th.LastError == nil && th.Serving && shr.RealtimeStats.HealthError == "" && shr.Serving &&
-		currentTarget.TabletType != topodata.TabletType_MASTER && currentTarget.TabletType == shr.Target.TabletType
+	trivialNonMasterUpdate := thc.LastError == nil && thc.Serving && shr.RealtimeStats.HealthError == "" && shr.Serving &&
+		currentTarget.TabletType != topodata.TabletType_MASTER && currentTarget.TabletType == shr.Target.TabletType && thc.isTrivialReplagChange(shr.RealtimeStats)
 	isMasterUpdate := shr.Target.TabletType == topodata.TabletType_MASTER
-	isMasterChange := th.Target.TabletType != topodata.TabletType_MASTER && shr.Target.TabletType == topodata.TabletType_MASTER
-	th.lastResponseTimestamp = time.Now()
-	th.Target = shr.Target
-	th.MasterTermStartTime = shr.TabletExternallyReparentedTimestamp
-	th.Stats = shr.RealtimeStats
-	th.LastError = healthErr
+	isMasterChange := thc.Target.TabletType != topodata.TabletType_MASTER && shr.Target.TabletType == topodata.TabletType_MASTER
+	thc.lastResponseTimestamp = time.Now()
+	thc.Target = shr.Target
+	thc.MasterTermStartTime = shr.TabletExternallyReparentedTimestamp
+	thc.Stats = shr.RealtimeStats
+	thc.LastError = healthErr
 	reason := "healthCheck update"
 	if healthErr != nil {
 		reason = "healthCheck update error: " + healthErr.Error()
 	}
-	th.setServingState(serving, reason)
-	th.mu.Unlock()
+	thc.setServingState(serving, reason)
+
 	// notify downstream for master change
-	hc.updateHealth(th, shr, currentTarget, trivialNonMasterUpdate, isMasterUpdate, isMasterChange)
+	hc.updateHealth(thc.SimpleCopy(), shr, currentTarget, trivialNonMasterUpdate, isMasterUpdate, isMasterChange)
 	return nil
 }
 
+// isTrivialReplagChange returns true iff the old and new RealtimeStats
+// haven't changed enough to warrant re-calling FilterLegacyStatsByReplicationLag.
+func (thc *tabletHealthCheck) isTrivialReplagChange(newStats *query.RealtimeStats) bool {
+	// first time always return false
+	if thc.Stats == nil {
+		return false
+	}
+	// Skip replag filter when replag remains in the low rep lag range,
+	// which should be the case majority of the time.
+	lowRepLag := lowReplicationLag.Seconds()
+	oldRepLag := float64(thc.Stats.SecondsBehindMaster)
+	newRepLag := float64(newStats.SecondsBehindMaster)
+	if oldRepLag <= lowRepLag && newRepLag <= lowRepLag {
+		return true
+	}
+	// Skip replag filter when replag remains in the high rep lag range,
+	// and did not change beyond +/- 10%.
+	// when there is a high rep lag, it takes a long time for it to reduce,
+	// so it is not necessary to re-calculate every time.
+	// In that case, we won't save the new record, so we still
+	// remember the original replication lag.
+	if oldRepLag > lowRepLag && newRepLag > lowRepLag && newRepLag < oldRepLag*1.1 && newRepLag > oldRepLag*0.9 {
+		return true
+	}
+	return false
+}
+
 // checkConn performs health checking on the given tablet.
-func (th *tabletHealthCheck) checkConn(hc *HealthCheck) {
-	defer hc.connsWG.Done()
-	defer th.finalizeConn()
+func (thc *tabletHealthCheck) checkConn(hc *HealthCheck) {
+	defer func() {
+		// TODO(deepthi): We should ensure any return from this func calls the equivalent of hc.deleteTablet
+		thc.finalizeConn()
+		hc.connsWG.Done()
+	}()
 
 	retryDelay := hc.retryDelay
 	for {
-		streamCtx, streamCancel := context.WithCancel(th.ctx)
+		streamCtx, streamCancel := context.WithCancel(thc.ctx)
 
 		// Setup a watcher that restarts the timer every time an update is received.
 		// If a timeout occurs for a serving tablet, we make it non-serving and send
@@ -243,7 +259,7 @@ func (th *tabletHealthCheck) checkConn(hc *HealthCheck) {
 		}()
 
 		// Read stream health responses.
-		err := th.stream(streamCtx, func(shr *query.StreamHealthResponse) error {
+		err := thc.stream(streamCtx, func(shr *query.StreamHealthResponse) error {
 			// We received a message. Reset the back-off.
 			retryDelay = hc.retryDelay
 			// Don't block on send to avoid deadlocks.
@@ -251,7 +267,7 @@ func (th *tabletHealthCheck) checkConn(hc *HealthCheck) {
 			case servingStatus <- shr.Serving:
 			default:
 			}
-			return th.processResponse(hc, shr)
+			return thc.processResponse(hc, shr)
 		})
 
 		// streamCancel to make sure the watcher goroutine terminates.
@@ -259,29 +275,26 @@ func (th *tabletHealthCheck) checkConn(hc *HealthCheck) {
 
 		if err != nil {
 			if strings.Contains(err.Error(), "health stats mismatch") {
-				hc.deleteTablet(th.Tablet)
+				hc.deleteTablet(thc.Tablet)
 				return
 			}
-			res := th.SimpleCopy()
+			res := thc.SimpleCopy()
 			hc.broadcast(res)
 		}
 		// If there was a timeout send an error. We do this after stream has returned.
 		// This will ensure that this update prevails over any previous message that
 		// stream could have sent.
 		if timedout.Get() {
-			th.mu.Lock()
-			th.LastError = fmt.Errorf("healthcheck timed out (latest %v)", th.lastResponseTimestamp)
-			th.setServingState(false, th.LastError.Error())
-			hcErrorCounters.Add([]string{th.Target.Keyspace, th.Target.Shard, topoproto.TabletTypeLString(th.Target.TabletType)}, 1)
-			res := th.simpleCopyLocked()
-			th.mu.Unlock()
-			hc.broadcast(res)
+			thc.LastError = fmt.Errorf("healthcheck timed out (latest %v)", thc.lastResponseTimestamp)
+			thc.setServingState(false, thc.LastError.Error())
+			hcErrorCounters.Add([]string{thc.Target.Keyspace, thc.Target.Shard, topoproto.TabletTypeLString(thc.Target.TabletType)}, 1)
+			hc.broadcast(thc.SimpleCopy())
 		}
 
 		// Streaming RPC failed e.g. because vttablet was restarted or took too long.
 		// Sleep until the next retry is up or the context is done/canceled.
 		select {
-		case <-th.ctx.Done():
+		case <-thc.ctx.Done():
 			return
 		case <-time.After(retryDelay):
 			// Exponentially back-off to prevent tight-loop.
@@ -294,31 +307,27 @@ func (th *tabletHealthCheck) checkConn(hc *HealthCheck) {
 	}
 }
 
-func (th *tabletHealthCheck) closeConnection(ctx context.Context, err error) {
-	th.mu.Lock()
-	defer th.mu.Unlock()
-	log.Warningf("tablet %v healthcheck stream error: %v", th.Tablet.Alias, err)
-	th.setServingState(false, err.Error())
-	th.LastError = err
-	_ = th.Conn.Close(ctx)
-	th.Conn = nil
+func (thc *tabletHealthCheck) closeConnection(ctx context.Context, err error) {
+	log.Warningf("tablet %v healthcheck stream error: %v", thc.Tablet.Alias, err)
+	thc.setServingState(false, err.Error())
+	thc.LastError = err
+	_ = thc.Conn.Close(ctx)
+	thc.Conn = nil
 }
 
 // finalizeConn closes the health checking connection.
 // To be called only on exit from checkConn().
-func (th *tabletHealthCheck) finalizeConn() {
-	th.mu.Lock()
-	defer th.mu.Unlock()
-	th.setServingState(false, "finalizeConn closing connection")
-	// Note: checkConn() exits only when th.ctx.Done() is closed. Thus it's
+func (thc *tabletHealthCheck) finalizeConn() {
+	thc.setServingState(false, "finalizeConn closing connection")
+	// Note: checkConn() exits only when thc.ctx.Done() is closed. Thus it's
 	// safe to simply get Err() value here and assign to LastError.
-	th.LastError = th.ctx.Err()
-	if th.Conn != nil {
-		// Don't use th.ctx because it's already closed.
+	thc.LastError = thc.ctx.Err()
+	if thc.Conn != nil {
+		// Don't use thc.ctx because it's already closed.
 		// Use a separate context, and add a timeout to prevent unbounded waits.
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_ = th.Conn.Close(ctx)
-		th.Conn = nil
+		_ = thc.Conn.Close(ctx)
+		thc.Conn = nil
 	}
 }

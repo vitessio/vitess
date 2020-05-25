@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 
 	"github.com/stretchr/testify/assert"
@@ -78,7 +79,7 @@ func TestHealthCheck(t *testing.T) {
 		MasterTermStartTime: 0,
 	}
 	result := <-resultChan
-	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
+	mustMatch(t, want, result, "Wrong TabletHealth data")
 
 	shr := &querypb.StreamHealthResponse{
 		TabletAlias:                         tablet.Alias,
@@ -97,7 +98,7 @@ func TestHealthCheck(t *testing.T) {
 		MasterTermStartTime: 0,
 	}
 	// create a context with timeout and select on it and channel
-	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
+	mustMatch(t, want, result, "Wrong TabletHealth data")
 
 	tcsl := hc.CacheStatus()
 	tcslWant := TabletsCacheStatusList{{
@@ -138,7 +139,7 @@ func TestHealthCheck(t *testing.T) {
 	input <- shr
 	result = <-resultChan
 
-	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
+	mustMatch(t, want, result, "Wrong TabletHealth data")
 	testChecksum(t, 1780128002, hc.stateChecksum())
 
 	err := checkErrorCounter("k", "s", topodatapb.TabletType_MASTER, 0)
@@ -161,7 +162,7 @@ func TestHealthCheck(t *testing.T) {
 	}
 	input <- shr
 	result = <-resultChan
-	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
+	mustMatch(t, want, result, "Wrong TabletHealth data")
 	testChecksum(t, 1027934207, hc.stateChecksum())
 
 	// HealthError
@@ -182,6 +183,7 @@ func TestHealthCheck(t *testing.T) {
 	}
 	input <- shr
 	result = <-resultChan
+	//TODO: figure out how to compare objects that contain errors using utils.MustMatch
 	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
 	testChecksum(t, 1027934207, hc.stateChecksum()) // unchanged
 
@@ -211,7 +213,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 		MasterTermStartTime: 0,
 	}
 	result := <-resultChan
-	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
+	mustMatch(t, want, result, "Wrong TabletHealth data")
 
 	// one tablet after receiving a StreamHealthResponse
 	shr := &querypb.StreamHealthResponse{
@@ -230,7 +232,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 	}
 	input <- shr
 	result = <-resultChan
-	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
+	mustMatch(t, want, result, "Wrong TabletHealth data")
 
 	// Stream error
 	fc.errCh <- fmt.Errorf("some stream error")
@@ -243,6 +245,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 		LastError:           fmt.Errorf("some stream error"),
 	}
 	result = <-resultChan
+	//TODO: figure out how to compare objects that contain errors using utils.MustMatch
 	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
 }
 
@@ -267,7 +270,7 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 		MasterTermStartTime: 0,
 	}
 	result := <-resultChan
-	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
+	mustMatch(t, want, result, "Wrong TabletHealth data")
 
 	input <- &querypb.StreamHealthResponse{
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
@@ -309,7 +312,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 		MasterTermStartTime: 0,
 	}
 	result := <-resultChan
-	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
+	mustMatch(t, want, result, "Wrong TabletHealth data")
 
 	// one tablet after receiving a StreamHealthResponse
 	shr := &querypb.StreamHealthResponse{
@@ -328,7 +331,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	}
 	input <- shr
 	result = <-resultChan
-	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
+	mustMatch(t, want, result, "Wrong TabletHealth data")
 
 	// Change input to distinguish between stats sent before and after Close().
 	shr.TabletExternallyReparentedTimestamp = 11
@@ -370,7 +373,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 		MasterTermStartTime: 0,
 	}
 	result := <-resultChan
-	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
+	mustMatch(t, want, result, "Wrong TabletHealth data")
 
 	// one tablet after receiving a StreamHealthResponse
 	shr := &querypb.StreamHealthResponse{
@@ -389,7 +392,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 	}
 	input <- shr
 	result = <-resultChan
-	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
+	mustMatch(t, want, result, "Wrong TabletHealth data")
 	assert.Nil(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 0))
 
 	// wait for timeout period
@@ -415,7 +418,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 
 	// wait for the exponential backoff to wear off and health monitoring to resume.
 	result = <-resultChan
-	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
+	mustMatch(t, want, result, "Wrong TabletHealth data")
 }
 
 // TestGetHealthyTablets tests the functionality of GetHealthyTabletStats.
@@ -438,7 +441,7 @@ func TestGetHealthyTablets(t *testing.T) {
 	<-resultChan
 	// empty
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
-	assert.Equal(t, 0, len(a), "wrong result, expected empty list")
+	assert.Empty(t, a, "wrong result, expected empty list")
 
 	shr := &querypb.StreamHealthResponse{
 		TabletAlias:                         tablet.Alias,
@@ -447,19 +450,18 @@ func TestGetHealthyTablets(t *testing.T) {
 		TabletExternallyReparentedTimestamp: 0,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
-	want := &TabletHealth{
+	want := []*TabletHealth{{
 		Tablet:              tablet,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:             true,
 		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 		MasterTermStartTime: 0,
-	}
+	}}
 	input <- shr
 	<-resultChan
 	// check it's there
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
-	assert.Equal(t, 1, len(a), "Wrong number of results")
-	assert.True(t, want.DeepEqual(a[0]), "unexpected result")
+	mustMatch(t, want, a, "unexpected result")
 
 	// update health with a change that won't change health array
 	shr = &querypb.StreamHealthResponse{
@@ -473,16 +475,8 @@ func TestGetHealthyTablets(t *testing.T) {
 	// wait for result before checking
 	<-resultChan
 	// check it's there
-	want = &TabletHealth{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:             true,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 2, CpuUsage: 0.2},
-		MasterTermStartTime: 0,
-	}
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
-	assert.Equal(t, 1, len(a), "Wrong number of results")
-	assert.True(t, want.DeepEqual(a[0]), "unexpected result")
+	mustMatch(t, want, a, "unexpected result")
 
 	// update stats with a change that will change health array
 	shr = &querypb.StreamHealthResponse{
@@ -492,20 +486,19 @@ func TestGetHealthyTablets(t *testing.T) {
 		TabletExternallyReparentedTimestamp: 0,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 35, CpuUsage: 0.2},
 	}
-	want = &TabletHealth{
+	want = []*TabletHealth{{
 		Tablet:              tablet,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:             true,
 		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 35, CpuUsage: 0.2},
 		MasterTermStartTime: 0,
-	}
+	}}
 	input <- shr
 	// wait for result before checking
 	<-resultChan
 	// check it's there
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
-	assert.Equal(t, 1, len(a), "Wrong number of results")
-	assert.True(t, want.DeepEqual(a[0]), "unexpected result")
+	mustMatch(t, want, a, "unexpected result")
 
 	// add a second tablet
 	tablet2 := topo.NewTablet(11, "cell", "host2")
@@ -528,13 +521,19 @@ func TestGetHealthyTablets(t *testing.T) {
 		TabletExternallyReparentedTimestamp: 0,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
 	}
-	want2 := &TabletHealth{
+	want2 := []*TabletHealth{{
+		Tablet:              tablet,
+		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:             true,
+		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 35, CpuUsage: 0.2},
+		MasterTermStartTime: 0,
+	}, {
 		Tablet:              tablet2,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:             true,
 		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
 		MasterTermStartTime: 0,
-	}
+	}}
 	input2 <- shr2
 	// wait for result
 	<-resultChan
@@ -543,8 +542,7 @@ func TestGetHealthyTablets(t *testing.T) {
 	if a[0].Tablet.Alias.Uid == 11 {
 		a[0], a[1] = a[1], a[0]
 	}
-	assert.True(t, want.DeepEqual(a[0]), "unexpected result")
-	assert.True(t, want2.DeepEqual(a[1]), "unexpected result")
+	mustMatch(t, want2, a, "unexpected result")
 
 	shr2 = &querypb.StreamHealthResponse{
 		TabletAlias:                         tablet2.Alias,
@@ -558,7 +556,6 @@ func TestGetHealthyTablets(t *testing.T) {
 	<-resultChan
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
 	assert.Equal(t, 1, len(a), "Wrong number of results")
-	assert.True(t, want.DeepEqual(a[0]), "unexpected result")
 
 	// second tablet turns into a master
 	shr2 = &querypb.StreamHealthResponse{
@@ -573,20 +570,18 @@ func TestGetHealthyTablets(t *testing.T) {
 	<-resultChan
 	// check we only have 1 healthy replica left
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
-	assert.Equal(t, 1, len(a), "Wrong number of results")
-	assert.True(t, want.DeepEqual(a[0]), "unexpected result")
+	mustMatch(t, want, a, "unexpected result")
 
-	want2 = &TabletHealth{
+	want2 = []*TabletHealth{{
 		Tablet:              tablet2,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Serving:             true,
 		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 0, CpuUsage: 0.2},
 		MasterTermStartTime: 10,
-	}
+	}}
 	// check we have a master now
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
-	assert.Equal(t, 1, len(a), "Wrong number of results")
-	assert.True(t, want2.DeepEqual(a[0]), "unexpected result")
+	mustMatch(t, want2, a, "unexpected result")
 
 	// reparent: old replica goes into master
 	shr = &querypb.StreamHealthResponse{
@@ -598,27 +593,25 @@ func TestGetHealthyTablets(t *testing.T) {
 	}
 	input <- shr
 	<-resultChan
-	want = &TabletHealth{
+	want = []*TabletHealth{{
 		Tablet:              tablet,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Serving:             true,
 		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 0, CpuUsage: 0.2},
 		MasterTermStartTime: 20,
-	}
+	}}
 
 	// check we lost all replicas, and master is new one
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
-	assert.Equal(t, 0, len(a), "Wrong number of results")
+	assert.Empty(t, a, "Wrong number of results")
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
-	assert.Equal(t, 1, len(a), "Wrong number of results")
-	assert.True(t, want.DeepEqual(a[0]), "unexpected result")
+	mustMatch(t, want, a, "unexpected result")
 
 	// old master sending an old ping should be ignored
 	input2 <- shr2
 	<-resultChan
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
-	assert.Equal(t, 1, len(a), "Wrong number of results")
-	assert.True(t, want.DeepEqual(a[0]), "unexpected result")
+	mustMatch(t, want, a, "unexpected result")
 }
 
 func TestAliases(t *testing.T) {
@@ -666,13 +659,13 @@ func TestAliases(t *testing.T) {
 		TabletExternallyReparentedTimestamp: 0,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
 	}
-	want := &TabletHealth{
+	want := []*TabletHealth{{
 		Tablet:              tablet,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:             true,
 		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
 		MasterTermStartTime: 0,
-	}
+	}}
 
 	input <- shr
 	ticker = time.NewTicker(1 * time.Second)
@@ -686,8 +679,7 @@ func TestAliases(t *testing.T) {
 
 	// check it's there
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
-	assert.Equal(t, 1, len(a), "Wrong number of results")
-	assert.True(t, want.DeepEqual(a[0]), "unexpected result")
+	mustMatch(t, want, a, "Wrong TabletHealth data")
 
 	// add another tablet in a diff cell, diff region
 	tablet2 := topo.NewTablet(2, "cell2", "host4")
@@ -710,8 +702,7 @@ func TestAliases(t *testing.T) {
 
 	// check that we still have only tablet in healthy list
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
-	assert.Equal(t, 1, len(a), "Wrong number of results")
-	assert.True(t, want.DeepEqual(a[0]), "unexpected result")
+	mustMatch(t, want, a, "Wrong TabletHealth data")
 }
 
 func TestTemplate(t *testing.T) {
@@ -767,7 +758,7 @@ func TestDebugURLFormatting(t *testing.T) {
 	require.Contains(t, wr.String(), expectedURL, "output missing formatted URL")
 }
 
-func tabletDialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+func tabletDialer(tablet *topodatapb.Tablet, _ grpcclient.FailFast) (queryservice.QueryService, error) {
 	key := TabletToMapKey(tablet)
 	if qs, ok := connMap[key]; ok {
 		return qs, nil
@@ -860,3 +851,10 @@ func checkErrorCounter(keyspace, shard string, tabletType topodatapb.TabletType,
 	}
 	return nil
 }
+
+var mustMatch = utils.MustMatchFn(
+	[]interface{}{ // types with unexported fields
+		TabletHealth{},
+	},
+	[]string{".Conn"}, // ignored fields
+)
