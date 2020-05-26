@@ -466,8 +466,10 @@ func TestBeginOnReplica(t *testing.T) {
 	options = querypb.ExecuteOptions{
 		TransactionIsolation: querypb.ExecuteOptions_DEFAULT,
 	}
-	_, _, err = tsv.Begin(ctx, &target1, &options)
-	require.Error(t, err, "expected write tx to be refused")
+	txID, _, err = tsv.Begin(ctx, &target1, &options)
+	require.NoError(t, err, "expected write tx to be allowed")
+	err = tsv.Rollback(ctx, &target1, txID)
+	require.NoError(t, err)
 }
 
 func TestTabletServerMasterToReplica(t *testing.T) {
