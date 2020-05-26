@@ -56,7 +56,7 @@ func TestPlanExecutorSetUDV(t *testing.T) {
 		out *vtgatepb.Session
 		err string
 	}{{
-		in:  "set @foo = 'bar'",
+		in:  "set @FOO = 'bar'",
 		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"}), Autocommit: true},
 	}, {
 		in:  "set @foo = 2",
