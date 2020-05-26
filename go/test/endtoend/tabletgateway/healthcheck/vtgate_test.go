@@ -95,8 +95,7 @@ func TestReplicaTransactions(t *testing.T) {
 
 	// insert a row using master
 	exec(t, masterConn, "insert into customer(id, email) values(1,'email1')")
-
-	time.Sleep(1 * time.Second)
+	time.Sleep(1 * time.Second) // we sleep for a bit to make sure that the replication catches up
 
 	// after a short pause, SELECT the data inside a tx on a replica
 	_ = exec(t, replicaConn, "use @replica")
@@ -107,6 +106,7 @@ func TestReplicaTransactions(t *testing.T) {
 
 	// insert more data on master
 	exec(t, masterConn, "insert into customer(id, email) values(2,'email2')")
+	time.Sleep(1 * time.Second)
 
 	// replica doesn't see new row because it is in a transaction
 	qr2 := exec(t, replicaConn, "select id, email from customer")
@@ -114,6 +114,7 @@ func TestReplicaTransactions(t *testing.T) {
 
 	// replica should see new row after closing the transaction
 	_ = exec(t, replicaConn, "commit")
+
 	qr3 := exec(t, replicaConn, "select id, email from customer")
 	assert.Equal(t, `[[INT64(1) VARCHAR("email1")] [INT64(2) VARCHAR("email2")]]`, fmt.Sprintf("%v", qr3.Rows), "we are not seeing the updates after closing the replica transaction")
 }
