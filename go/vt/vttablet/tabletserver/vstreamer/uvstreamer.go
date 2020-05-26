@@ -3,6 +3,7 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"io"
 	"sort"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 )
+
+var uvstreamerTestMode = false // Only used for testing
 
 type tablePlan struct {
 	tablePK *TableLastPK
@@ -48,7 +51,7 @@ type uvstreamer struct {
 	pos mysql.Position
 
 	// fast forward uses this to stop replicating upto the point of the last snapshot
-	stopPos string
+	stopPos mysql.Position
 
 	// lastTimestampNs is the last timestamp seen so far.
 	lastTimestampNs int64
@@ -57,10 +60,11 @@ type uvstreamer struct {
 	secondsBehindMaster int64
 
 	config *uvstreamerConfig
+
+	vs *vstreamer //last vstreamer created in uvstreamer: FIXME currently used only for setting vschema, find another way?
 }
 
 type uvstreamerConfig struct {
-	MaxRows           int64 //todo ??
 	MaxReplicationLag time.Duration
 	CatchupRetryTime  time.Duration
 }
@@ -108,21 +112,28 @@ func (uvs *uvstreamer) Cancel() {
 	uvs.cancel()
 }
 
-func (uvs *uvstreamer) filterEvents(evs []*binlogdatapb.VEvent) ([]*binlogdatapb.VEvent, error) {
+func (uvs *uvstreamer) filterEvents(evs []*binlogdatapb.VEvent) []*binlogdatapb.VEvent {
+	if len(uvs.plans) == 0 {
+		return evs
+	}
 	var evs2 []*binlogdatapb.VEvent
 	var tableName string
 	var shouldSend bool
+
 	for _, ev := range evs {
 		shouldSend = false
+		tableName = ""
 		switch ev.Type {
 		case binlogdatapb.VEventType_ROW:
 			tableName = ev.RowEvent.TableName
 		case binlogdatapb.VEventType_FIELD:
 			tableName = ev.FieldEvent.TableName
+		case binlogdatapb.VEventType_HEARTBEAT:
+			shouldSend = false
 		default:
-			tableName = ""
+			shouldSend = true
 		}
-		if tableName != "" {
+		if !shouldSend && tableName != "" {
 			shouldSend = true
 			_, ok := uvs.plans[tableName]
 			if ok && uvs.plans[tableName].tablePK.lastPK.Rows[0] == nil {
@@ -136,7 +147,7 @@ func (uvs *uvstreamer) filterEvents(evs []*binlogdatapb.VEvent) ([]*binlogdatapb
 			//log.Infof("shouldSend: filtering out %v", ev.String())
 		}
 	}
-	return evs2, nil
+	return evs2
 }
 
 func (uvs *uvstreamer) send2(evs []*binlogdatapb.VEvent) error {
@@ -149,14 +160,28 @@ func (uvs *uvstreamer) send2(evs []*binlogdatapb.VEvent) error {
 	}
 	behind := time.Now().UnixNano() - uvs.lastTimestampNs
 	uvs.secondsBehindMaster = behind / 1e9
-	log.Infof("sbm set to %d", uvs.secondsBehindMaster)
+	//log.Infof("sbm set to %d", uvs.secondsBehindMaster)
+	var evs2 []*binlogdatapb.VEvent
 	if len(uvs.plans) > 0 {
-		evs, _ = uvs.filterEvents(evs)
+		evs2 = uvs.filterEvents(evs)
 	}
-	return uvs.send(evs)
+	err := uvs.send(evs2)
+	if err != nil && err != io.EOF {
+		return err
+	}
+	for _, ev := range evs2 {
+		if ev.Type == binlogdatapb.VEventType_GTID {
+			uvs.pos, _ = mysql.DecodePosition(ev.Gtid)
+			if !uvs.stopPos.IsZero() && uvs.pos.AtLeast(uvs.stopPos) {
+				err = io.EOF
+			}
+		}
+	}
+	return err
 }
 
 func (uvs *uvstreamer) sendEventsForCurrentPos() error {
+	log.Infof("sendEventsForCurrentPos")
 	vevents := []*binlogdatapb.VEvent{{
 		Type: binlogdatapb.VEventType_GTID,
 		Gtid: mysql.EncodePosition(uvs.pos),
@@ -177,6 +202,7 @@ func (uvs *uvstreamer) setStreamPosition() error {
 		}
 		if uvs.startPos == "current" {
 			uvs.pos = curPos
+			uvs.sendEventsForCurrentPos()
 			return nil
 		}
 		pos, err := mysql.DecodePosition(uvs.startPos)
@@ -226,26 +252,22 @@ func (uvs *uvstreamer) Stream() error {
 			Gtid: mysql.EncodePosition(uvs.pos),
 		}
 		uvs.send([]*binlogdatapb.VEvent{ev})
+		uvs.sendTestEvent("Copy Done")
 	}
 	log.Infof("Starting replicate in uvstreamer.Stream()")
-	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, uvs.sh, mysql.EncodePosition(uvs.pos), uvs.stopPos, uvs.filter, uvs.vschema, uvs.send)
+	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, uvs.sh, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos), uvs.filter, uvs.vschema, uvs.send)
 
 	return vs.Stream()
 }
 
 // SetVSchema updates the vstreamer against the new vschema.
 func (uvs *uvstreamer) SetVSchema(vschema *localVSchema) {
+	log.Infof("SetVSchema called")
 	uvs.vschema = vschema
-	//FIXME: #sugu need to pass it on to running vstreamer
-}
-
-func (uvs *uvstreamer) setPos(pos mysql.Position) {
-	uvs.pos = pos
-	ev := &binlogdatapb.VEvent{
-		Type: binlogdatapb.VEventType_GTID,
-		Gtid: mysql.EncodePosition(pos),
+	if uvs.vs != nil {
+		log.Infof("vs.SetVSchema called")
+		uvs.vs.SetVSchema(vschema)
 	}
-	uvs.send([]*binlogdatapb.VEvent{ev})
 }
 
 func (uvs *uvstreamer) setCopyState(tableName string, lastPK *sqltypes.Result) {
@@ -261,6 +283,18 @@ func (uvs *uvstreamer) setCopyState(tableName string, lastPK *sqltypes.Result) {
 	ev := &binlogdatapb.VEvent{
 		Type:        binlogdatapb.VEventType_LASTPK,
 		LastPKEvent: lastPKEvent,
+	}
+	uvs.send([]*binlogdatapb.VEvent{ev})
+}
+
+// dummy event sent only in test mode
+func (uvs *uvstreamer) sendTestEvent(msg string) {
+	if !uvstreamerTestMode {
+		return
+	}
+	ev := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_OTHER,
+		Gtid: msg,
 	}
 	uvs.send([]*binlogdatapb.VEvent{ev})
 }

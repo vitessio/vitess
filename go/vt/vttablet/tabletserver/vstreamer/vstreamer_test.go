@@ -108,7 +108,6 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-
 	execStatements(t, []string{
 		"create table t1(id11 int, id12 int, primary key(id11))",
 		"create table t2(id21 int, id22 int, primary key(id21))",
@@ -161,12 +160,10 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	t2Events := []string{}
 	for i := 1; i <= 10; i++ {
 		t1Events = append(t1Events,
-			fmt.Sprintf("type:ROW row_event:<row_changes:<after:<lengths:%d lengths:%d values:\"%d%d\" > > > ", len(strconv.Itoa(i)), len(strconv.Itoa(i*10)), i, i*10))
+			fmt.Sprintf("type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:%d lengths:%d values:\"%d%d\" > > > ", len(strconv.Itoa(i)), len(strconv.Itoa(i*10)), i, i*10))
 		t2Events = append(t2Events,
-			fmt.Sprintf("type:ROW row_event:<row_changes:<after:<lengths:%d lengths:%d values:\"%d%d\" > > > ", len(strconv.Itoa(i)), len(strconv.Itoa(i*20)), i, i*20))
+			fmt.Sprintf("type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:%d lengths:%d values:\"%d%d\" > > > ", len(strconv.Itoa(i)), len(strconv.Itoa(i*20)), i, i*20))
 	}
-	t1Events = append(t1Events, "gtid")
-	t2Events = append(t2Events, "gtid")
 
 	insertEvents1 := []string{
 		"begin",
@@ -180,11 +177,13 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 		"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:3 lengths:4 values:\"2022020\" > > > ",
 		"gtid",
 		"commit"}
+
 	testcases := []testcase{
 		{
 			input:  []string{},
-			output: [][]string{t1FieldEvent, t1Events, t2FieldEvent, t2Events},
+			output: [][]string{t1FieldEvent, t1Events, {"lastpk"}, t2FieldEvent, t2Events, {"lastpk"}, {"gtid"}},
 		},
+
 		{
 			input: []string{
 				"insert into t1 values (101, 1010)",
@@ -516,6 +515,8 @@ func TestREKeyRange(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
+	// Needed for this test to run if run standalone
+	engine.watcherOnce.Do(engine.setWatch)
 
 	execStatements(t, []string{
 		"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
@@ -1527,6 +1528,10 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 				if evs[i].Type != binlogdatapb.VEventType_GTID {
 					t.Fatalf("%v (%d): event: %v, want gtid", input, i, evs[i])
 				}
+			case "lastpk":
+				if evs[i].Type != binlogdatapb.VEventType_LASTPK {
+					t.Fatalf("%v (%d): event: %v, want lastpk", input, i, evs[i])
+				}
 			case "commit":
 				if evs[i].Type != binlogdatapb.VEventType_COMMIT {
 					t.Fatalf("%v (%d): event: %v, want commit", input, i, evs[i])
@@ -1552,7 +1557,9 @@ func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter,
 	go func() {
 		defer close(ch)
 		err := vstream(ctx, t, position, tablePKs, filter, ch)
-		require.Nil(t, err)
+		if len(tablePKs) == 0 {
+			require.Nil(t, err)
+		}
 	}()
 	return ch
 }
@@ -1626,11 +1633,9 @@ func setVSchema(t *testing.T, vschema string) {
 	t.Helper()
 
 	curCount := engine.vschemaUpdates.Get()
-
 	if err := env.SetVSchema(vschema); err != nil {
 		t.Fatal(err)
 	}
-
 	// Wait for curCount to go up.
 	updated := false
 	for i := 0; i < 10; i++ {

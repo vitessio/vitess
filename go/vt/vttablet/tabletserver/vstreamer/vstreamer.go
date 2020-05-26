@@ -131,14 +131,15 @@ func (vs *vstreamer) SetVSchema(vschema *localVSchema) {
 	// that thread, which helps us avoid mutexes to update the plans.
 	select {
 	case vs.vevents <- vschema:
+		log.Infof("VSchema sent to vs.vevents")
 	case <-vs.ctx.Done():
+		log.Infof("COntext as done in setVSchema")
 	}
 }
 
 // Cancel stops the streaming.
 func (vs *vstreamer) Cancel() {
 	log.Infof("vstreamer context is being cancelled")
-
 	vs.cancel()
 }
 
@@ -278,6 +279,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 			vevents, err := vs.parseEvent(ev)
 			if err != nil {
+				log.Infof("parseEvent returned error %v", err)
 				return err
 			}
 			for _, vevent := range vevents {
@@ -288,13 +290,10 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 					return fmt.Errorf("error sending event: %v", err)
 				}
 			}
-			stopPos, _ := mysql.DecodePosition(vs.stopPos)
-			if !stopPos.IsZero() && vs.pos.AtLeast(stopPos) {
-				return io.EOF
-			}
-
 		case vs.vschema = <-vs.vevents:
+			log.Infof("Received vschema in vs.vevents")
 			if err := vs.rebuildPlans(); err != nil {
+				log.Infof("Error rebuilding plans %v", err)
 				return err
 			}
 			// Increment this counter for testing.
