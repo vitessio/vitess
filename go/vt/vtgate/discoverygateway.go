@@ -47,6 +47,11 @@ const (
 	GatewayImplementationDiscovery = "discoverygateway"
 )
 
+//LegacyHealthCheckEnabled returns true when legacy
+func LegacyHealthCheckEnabled() bool {
+	return *GatewayImplementation == GatewayImplementationDiscovery
+}
+
 func init() {
 	RegisterGatewayCreator(GatewayImplementationDiscovery, createDiscoveryGateway)
 }

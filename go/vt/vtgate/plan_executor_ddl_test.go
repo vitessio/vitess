@@ -32,7 +32,7 @@ func TestPlanExecutorDDL(t *testing.T) {
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	executor, sbc1, sbc2, sbclookup := createExecutorEnvUsing(planAllTheThings)
+	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnvUsing(planAllTheThings)
 
 	type cnts struct {
 		Sbc1Cnt      int64
@@ -117,7 +117,7 @@ func TestPlanExecutorDDL(t *testing.T) {
 }
 
 func TestPlanPassthroughDDL(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnvUsing(planAllTheThings)
+	executor, sbc1, sbc2, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 	masterSession.TargetString = "TestExecutor"
 
 	_, err := executorExec(executor, "/* leading */ create table passthrough_ddl (\n\tcol bigint default 123\n) /* trailing */", nil)

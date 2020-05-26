@@ -133,7 +133,7 @@ func TestPlanExecutorAlterVSchemaKeyspace(t *testing.T) {
 	defer func() {
 		*vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 2)
@@ -160,7 +160,7 @@ func TestPlanExecutorCreateVindexDDL(t *testing.T) {
 	defer func() {
 		*vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 	ks := "TestExecutor"
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
@@ -201,7 +201,7 @@ func TestPlanExecutorDropVindexDDL(t *testing.T) {
 	defer func() {
 		*vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 	ks := "TestExecutor"
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
@@ -269,7 +269,7 @@ func TestPlanExecutorAddDropVschemaTableDDL(t *testing.T) {
 	defer func() {
 		*vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnvUsing(planAllTheThings)
+	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnvUsing(planAllTheThings)
 	ks := KsTestUnsharded
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
@@ -325,7 +325,7 @@ func TestPlanExecutorAddSequenceDDL(t *testing.T) {
 	defer func() {
 		*vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 	ks := KsTestUnsharded
 
 	vschema := executor.vm.GetCurrentSrvVschema()
@@ -385,7 +385,7 @@ func TestPlanExecutorAddDropVindexDDL(t *testing.T) {
 	defer func() {
 		*vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnvUsing(planAllTheThings)
+	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnvUsing(planAllTheThings)
 	ks := "TestExecutor"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
@@ -715,7 +715,7 @@ func TestPlanExecutorAddDropVindexDDL(t *testing.T) {
 
 func TestPlanExecutorVindexDDLACL(t *testing.T) {
 	//t.Skip("not yet planned")
-	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 	ks := "TestExecutor"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
 

@@ -70,8 +70,8 @@ type shardActionFunc func(rs *srvtopo.ResolvedShard, i int) error
 // the results and errors for the caller.
 type shardActionTransactionFunc func(rs *srvtopo.ResolvedShard, i int, shouldBegin bool, transactionID int64, alias *topodatapb.TabletAlias) (int64, *topodatapb.TabletAlias, error)
 
-// LegacyNewScatterConn creates a new ScatterConn.
-func LegacyNewScatterConn(statsName string, txConn *TxConn, gw Gateway, hc discovery.LegacyHealthCheck) *ScatterConn {
+// NewLegacyScatterConn creates a new ScatterConn.
+func NewLegacyScatterConn(statsName string, txConn *TxConn, gw Gateway, hc discovery.LegacyHealthCheck) *ScatterConn {
 	tabletCallErrorCountStatsName := ""
 	if statsName != "" {
 		tabletCallErrorCountStatsName = statsName + "ErrorCount"
@@ -174,7 +174,7 @@ func (stc *ScatterConn) Execute(
 				innerqr, transactionID, alias, err = rs.Gateway.BeginExecute(ctx, rs.Target, query, bindVars, options)
 			default:
 				var qs queryservice.QueryService
-				if *GatewayImplementation == GatewayImplementationDiscovery || transactionID == 0 {
+				if LegacyHealthCheckEnabled() || transactionID == 0 {
 					qs = rs.Gateway
 				} else {
 					qs, err = rs.Gateway.QueryServiceByAlias(alias)
@@ -248,7 +248,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				innerqr, transactionID, alias, err = rs.Gateway.BeginExecute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, opts)
 			default:
 				var qs queryservice.QueryService
-				if *GatewayImplementation == GatewayImplementationDiscovery || transactionID == 0 {
+				if LegacyHealthCheckEnabled() || transactionID == 0 {
 					qs = rs.Gateway
 				} else {
 					qs, err = rs.Gateway.QueryServiceByAlias(alias)
