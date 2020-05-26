@@ -144,7 +144,7 @@ func (thc *tabletHealthCheck) getConnection() queryservice.QueryService {
 }
 
 // processResponse reads one health check response, and updates health
-func (thc *tabletHealthCheck) processResponse(hc *HealthCheck, shr *query.StreamHealthResponse) error {
+func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.StreamHealthResponse) error {
 	select {
 	case <-thc.ctx.Done():
 		return thc.ctx.Err()
@@ -221,7 +221,7 @@ func (thc *tabletHealthCheck) isTrivialReplagChange(newStats *query.RealtimeStat
 }
 
 // checkConn performs health checking on the given tablet.
-func (thc *tabletHealthCheck) checkConn(hc *HealthCheck) {
+func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 	defer func() {
 		// TODO(deepthi): We should ensure any return from this func calls the equivalent of hc.deleteTablet
 		thc.finalizeConn()

@@ -63,8 +63,8 @@ type Gateway interface {
 	// CacheStatus returns a list of TabletCacheStatus per shard / tablet type.
 	CacheStatus() TabletCacheStatusList
 
-	// HealthCheck returns a reference to the healthCheck being used by this gateway
-	HealthCheck() *discovery.HealthCheck
+	// TabletsCacheStatus returns a displayable version of the health check cache.
+	TabletsCacheStatus() discovery.TabletsCacheStatusList
 
 	// TabletByAlias returns a QueryService
 	QueryServiceByAlias(alias *topodatapb.TabletAlias) (queryservice.QueryService, error)
