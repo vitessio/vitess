@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -73,10 +72,9 @@ type vstreamer struct {
 	versionTableID uint64
 
 	// format and pos are updated by parseEvent.
-	format mysql.BinlogFormat
-	pos    mysql.Position
-
-	inited bool
+	format  mysql.BinlogFormat
+	pos     mysql.Position
+	stopPos string
 }
 
 // CopyState contains the last PK for tables to be copied
@@ -108,7 +106,7 @@ type streamerPlan struct {
 //   Other constructs like joins, group by, etc. are not supported.
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
-func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, sh schema.Historian, startPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
+func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, sh schema.Historian, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	//init copy state
 	return &vstreamer{
@@ -118,6 +116,7 @@ func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine
 		se:       se,
 		sh:       sh,
 		startPos: startPos,
+		stopPos:  stopPos,
 		filter:   filter,
 		send:     send,
 		vevents:  make(chan *localVSchema, 1),
@@ -138,73 +137,22 @@ func (vs *vstreamer) SetVSchema(vschema *localVSchema) {
 
 // Cancel stops the streaming.
 func (vs *vstreamer) Cancel() {
+	log.Infof("vstreamer context is being cancelled")
+
 	vs.cancel()
-}
-
-func (vs *vstreamer) Init() error {
-	if vs.inited {
-		return nil
-	}
-	if err := vs.setStreamPosition(); err != nil {
-		return err
-	}
-	vs.inited = true
-	return nil
-}
-
-func (vs *vstreamer) sendEventsForCurrentPos() error {
-	vevents := []*binlogdatapb.VEvent{{
-		Type: binlogdatapb.VEventType_GTID,
-		Gtid: mysql.EncodePosition(vs.pos),
-	}, {
-		Type: binlogdatapb.VEventType_OTHER,
-	}}
-	log.Infof("Sending events for current pos")
-	if err := vs.send(vevents); err != nil {
-		return wrapError(err, vs.pos)
-	}
-	return nil
-}
-
-func (vs *vstreamer) setStreamPosition() error {
-	if vs.startPos != "" {
-		curPos, err := vs.currentPosition()
-		if err != nil {
-			return vterrors.Wrap(err, "could not obtain current position")
-		}
-		if vs.startPos == "current" {
-			vs.pos = curPos
-			return nil
-		}
-		pos, err := mysql.DecodePosition(vs.startPos)
-		if err != nil {
-			return vterrors.Wrap(err, "could not decode position")
-		}
-		if !curPos.AtLeast(pos) {
-			return fmt.Errorf("requested position %v is ahead of current position %v", mysql.EncodePosition(pos), mysql.EncodePosition(curPos))
-		}
-		log.Infof("Setting stream position to %s", vs.pos)
-		vs.pos = pos
-	}
-	return nil
 }
 
 // Stream streams binlog events.
 func (vs *vstreamer) Stream() error {
-	defer vs.cancel()
+	//defer vs.cancel()
 	ctx := context.Background()
 	defer ctx.Done()
-	log.Info("Starting Stream() with startPos %s", vs.startPos)
-	if !vs.inited {
-		if err := vs.Init(); err != nil {
-			return err
-		}
+	log.Infof("Starting Stream() with startPos %s", vs.startPos)
+	pos, err := mysql.DecodePosition(vs.startPos)
+	if err != nil {
+		return err
 	}
-	if vs.startPos == "current" {
-		if err := vs.sendEventsForCurrentPos(); err != nil {
-			return err
-		}
-	}
+	vs.pos = pos
 	return vs.replicate(ctx)
 }
 
@@ -229,15 +177,6 @@ func (vs *vstreamer) replicate(ctx context.Context) error {
 	}
 	err = vs.parseEvents(vs.ctx, events)
 	return wrapError(err, vs.pos)
-}
-
-func (vs *vstreamer) currentPosition() (mysql.Position, error) {
-	conn, err := vs.cp.Connect(vs.ctx)
-	if err != nil {
-		return mysql.Position{}, err
-	}
-	defer conn.Close()
-	return conn.MasterPosition()
 }
 
 // parseEvents parses and sends events.
@@ -349,6 +288,11 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 					return fmt.Errorf("error sending event: %v", err)
 				}
 			}
+			stopPos, _ := mysql.DecodePosition(vs.stopPos)
+			if !stopPos.IsZero() && vs.pos.AtLeast(stopPos) {
+				return io.EOF
+			}
+
 		case vs.vschema = <-vs.vevents:
 			if err := vs.rebuildPlans(); err != nil {
 				return err
@@ -426,7 +370,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				Type: binlogdatapb.VEventType_BEGIN,
 			})
 		}
-		vs.pos = mysql.AppendGTID(vs.pos, gtid)
+		vs.pos = mysql.AppendGTID(vs.pos, gtid) //TODO: #sugu why Append?
 	case ev.IsXID():
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_GTID,
