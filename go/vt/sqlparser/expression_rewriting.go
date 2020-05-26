@@ -17,6 +17,8 @@ limitations under the License.
 package sqlparser
 
 import (
+	"strings"
+
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -155,7 +157,7 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 		er.funcRewrite(cursor, node)
 	case *ColName:
 		if node.Name.at == SingleAt {
-			cursor.Replace(bindVarExpression(UserDefinedVariableName + node.Name.CompliantName()))
+			cursor.Replace(bindVarExpression(UserDefinedVariableName + strings.ToLower(node.Name.CompliantName())))
 			er.needBindVarFor(UserDefinedVariableName)
 		}
 	}
