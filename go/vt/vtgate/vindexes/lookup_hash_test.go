@@ -220,15 +220,22 @@ func TestLookupHashCreate(t *testing.T) {
 		t.Errorf("vc.queries length: %v, want %v", got, want)
 	}
 
+	err = lookuphash.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NULL}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
+	want := "lookup.Create: input has null values: row: 0, col: 0"
+	if err == nil || err.Error() != want {
+		t.Errorf("lookuphash.Create(NULL) err: %v, want %s", err, want)
+	}
+
 	vc.queries = nil
+	lookuphash.(*LookupHash).lkp.IgnoreNulls = true
 	err = lookuphash.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NULL}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
 	require.NoError(t, err)
-	if got, want := len(vc.queries), 1; got != want {
+	if got, want := len(vc.queries), 0; got != want {
 		t.Errorf("vc.queries length: %v, want %v", got, want)
 	}
 
 	err = lookuphash.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("bogus")}, false /* ignoreMode */)
-	want := "lookup.Create.vunhash: invalid keyspace id: 626f677573"
+	want = "lookup.Create.vunhash: invalid keyspace id: 626f677573"
 	if err == nil || err.Error() != want {
 		t.Errorf("lookuphash.Create(bogus) err: %v, want %s", err, want)
 	}
