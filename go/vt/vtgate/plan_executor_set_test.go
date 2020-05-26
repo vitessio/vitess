@@ -49,7 +49,7 @@ func createMap(keys []string, values []interface{}) map[string]*querypb.BindVari
 }
 
 func TestPlanExecutorSetUDV(t *testing.T) {
-	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 
 	testcases := []struct {
 		in  string
@@ -80,7 +80,7 @@ func TestPlanExecutorSetUDV(t *testing.T) {
 
 func TestPlanExecutorSetSystemVar(t *testing.T) {
 	t.Skip("Planning for system variables is not done yet")
-	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 
 	testcases := []struct {
 		in  string
@@ -303,7 +303,7 @@ func TestPlanExecutorSetSystemVar(t *testing.T) {
 
 func TestPlanExecutorSetMetadata(t *testing.T) {
 	t.Skip("planning for vitess metadata is not supported yet")
-	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
 
 	set := "set @@vitess_metadata.app_keyspace_v1= '1'"
@@ -315,7 +315,7 @@ func TestPlanExecutorSetMetadata(t *testing.T) {
 		*vschemaacl.AuthorizedDDLUsers = ""
 	}()
 
-	executor, _, _, _ = createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, _ = createLegacyExecutorEnvUsing(planAllTheThings)
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
 
 	set = "set @@vitess_metadata.app_keyspace_v1= '1'"
@@ -360,7 +360,7 @@ func TestPlanExecutorSetMetadata(t *testing.T) {
 }
 
 func TestSetUDVFromTabletInput(t *testing.T) {
-	executor, sbc1, _, _ := createExecutorEnvUsing(planAllTheThings)
+	executor, sbc1, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 
 	fields := sqltypes.MakeTestFields("some", "VARBINARY")
 	sbc1.SetResults([]*sqltypes.Result{

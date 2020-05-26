@@ -123,7 +123,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 
 	// no shard
 	s := createSandbox(name)
-	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sc := newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
 	qr, err := f(sc, nil)
 	if qr.RowsAffected != 0 {
 		t.Errorf("want 0, got %v", qr.RowsAffected)
@@ -134,7 +134,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 
 	// single shard
 	s.Reset()
-	sc = newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sc = newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
 	sbc := hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = f(sc, []string{"0"})
@@ -151,7 +151,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	// two shards
 	s.Reset()
 	hc.Reset()
-	sc = newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sc = newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
 	sbc0 := hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
@@ -171,7 +171,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	// two shards with different errors
 	s.Reset()
 	hc.Reset()
-	sc = newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sc = newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
 	sbc0 = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
@@ -192,7 +192,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	// duplicate shards
 	s.Reset()
 	hc.Reset()
-	sc = newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sc = newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
 	sbc = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	_, _ = f(sc, []string{"0", "0"})
 	// Ensure that we executed only once.
@@ -203,7 +203,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	// no errors
 	s.Reset()
 	hc.Reset()
-	sc = newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sc = newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
 	sbc0 = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 	qr, err = f(sc, []string{"0", "1"})
@@ -231,7 +231,7 @@ func TestMaxMemoryRows(t *testing.T) {
 
 	createSandbox("TestMaxMemoryRows")
 	hc := discovery.NewFakeLegacyHealthCheck()
-	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sc := newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
 	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestMaxMemoryRows", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestMaxMemoryRows", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 
@@ -278,7 +278,7 @@ func TestMaxMemoryRows(t *testing.T) {
 func TestMultiExecs(t *testing.T) {
 	createSandbox("TestMultiExecs")
 	hc := discovery.NewFakeLegacyHealthCheck()
-	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sc := newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
 	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestMultiExecs", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestMultiExecs", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 
@@ -370,7 +370,7 @@ func TestMultiExecs(t *testing.T) {
 func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	createSandbox("TestScatterConnStreamExecuteSendError")
 	hc := discovery.NewFakeLegacyHealthCheck()
-	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sc := newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
 	hc.AddTestTablet("aa", "0", 1, "TestScatterConnStreamExecuteSendError", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
 	rss, err := res.ResolveDestination(context.Background(), "TestScatterConnStreamExecuteSendError", topodatapb.TabletType_REPLICA, key.DestinationShard("0"))
@@ -393,7 +393,7 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 
 	// case 1: read query (not in transaction) followed by write query, not in the same shard.
 	hc.Reset()
-	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sc := newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
 	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestScatterConnQueryNotInTransaction", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestScatterConnQueryNotInTransaction", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 
@@ -444,7 +444,7 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	// case 2: write query followed by read query (not in transaction), not in the same shard.
 	s.Reset()
 	hc.Reset()
-	sc = newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sc = newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
 	sbc0 = hc.AddTestTablet("aa", "0", 1, "TestScatterConnQueryNotInTransaction", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "1", 1, "TestScatterConnQueryNotInTransaction", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
@@ -495,7 +495,7 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	// case 3: write query followed by read query, in the same shard.
 	s.Reset()
 	hc.Reset()
-	sc = newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sc = newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
 	sbc0 = hc.AddTestTablet("aa", "0", 1, "TestScatterConnQueryNotInTransaction", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "1", 1, "TestScatterConnQueryNotInTransaction", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
@@ -549,7 +549,7 @@ func TestScatterConnSingleDB(t *testing.T) {
 	hc := discovery.NewFakeLegacyHealthCheck()
 
 	hc.Reset()
-	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sc := newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
 	hc.AddTestTablet("aa", "0", 1, "TestScatterConnSingleDB", "0", topodatapb.TabletType_MASTER, true, 1, nil)
 	hc.AddTestTablet("aa", "1", 1, "TestScatterConnSingleDB", "1", topodatapb.TabletType_MASTER, true, 1, nil)
 
@@ -651,11 +651,11 @@ func TestAppendResult(t *testing.T) {
 	}
 }
 
-func newTestScatterConn(hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string) *ScatterConn {
+func newTestLegacyScatterConn(hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string) *ScatterConn {
 	// The topo.Server is used to start watching the cells described
 	// in '-cells_to_watch' command line parameter, which is
 	// empty by default. So it's unused in this test, set to nil.
-	gw := GatewayCreator()(context.Background(), hc, serv, cell, 3)
+	gw := GatewayCreator()(ctx, hc, serv, cell, 3)
 	tc := NewTxConn(gw, vtgatepb.TransactionMode_TWOPC)
-	return LegacyNewScatterConn("", tc, gw, hc)
+	return NewLegacyScatterConn("", tc, gw, hc)
 }

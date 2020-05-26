@@ -208,7 +208,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	}
 
 	// TODO(deepthi): we should check for the right condition that allows transactions
-	if *GatewayImplementation == GatewayImplementationDiscovery && safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
+	if LegacyHealthCheckEnabled() && safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
 		return 0, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Executor.execute: transactions are supported only for master tablet types, current type: %v", destTabletType)
 	}
 	if bindVars == nil {
@@ -838,64 +838,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			RowsAffected: uint64(len(rows)),
 		}, nil
 	case "vitess_tablets":
-		var rows [][]sqltypes.Value
-		if *GatewayImplementation == GatewayImplementationDiscovery {
-			status := e.scatterConn.GetLegacyHealthCheckCacheStatus()
-			for _, s := range status {
-				for _, ts := range s.TabletsStats {
-					state := "SERVING"
-					if !ts.Serving {
-						state = "NOT_SERVING"
-					}
-					mtst := ts.Tablet.MasterTermStartTime
-					mtstStr := ""
-					if mtst != nil && mtst.Seconds > 0 {
-						mtstStr = logutil.ProtoToTime(ts.Tablet.MasterTermStartTime).Format(time.RFC3339)
-					}
-					rows = append(rows, buildVarCharRow(
-						s.Cell,
-						s.Target.Keyspace,
-						s.Target.Shard,
-						ts.Target.TabletType.String(),
-						state,
-						topoproto.TabletAliasString(ts.Tablet.Alias),
-						ts.Tablet.Hostname,
-						mtstStr,
-					))
-				}
-			}
-		}
-		if *GatewayImplementation == tabletGatewayImplementation {
-			status := e.scatterConn.GetHealthCheckCacheStatus()
-			for _, s := range status {
-				for _, ts := range s.TabletsStats {
-					state := "SERVING"
-					if !ts.Serving {
-						state = "NOT_SERVING"
-					}
-					mtst := ts.Tablet.MasterTermStartTime
-					mtstStr := ""
-					if mtst != nil && mtst.Seconds > 0 {
-						mtstStr = logutil.ProtoToTime(ts.Tablet.MasterTermStartTime).Format(time.RFC3339)
-					}
-					rows = append(rows, buildVarCharRow(
-						s.Cell,
-						s.Target.Keyspace,
-						s.Target.Shard,
-						ts.Target.TabletType.String(),
-						state,
-						topoproto.TabletAliasString(ts.Tablet.Alias),
-						ts.Tablet.Hostname,
-						mtstStr,
-					))
-				}
-			}
-		}
-		return &sqltypes.Result{
-			Fields:       buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "MasterTermStartTime"),
-			Rows:         rows,
-			RowsAffected: uint64(len(rows)),
-		}, nil
+		return e.showTablets()
 	case "vitess_target":
 		var rows [][]sqltypes.Value
 		rows = append(rows, buildVarCharRow(safeSession.TargetString))
@@ -1040,6 +983,66 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 
 	// Any other show statement is passed through
 	return e.handleOther(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
+}
+
+func (e *Executor) showTablets() (*sqltypes.Result, error) {
+	var rows [][]sqltypes.Value
+	if LegacyHealthCheckEnabled() {
+		status := e.scatterConn.GetLegacyHealthCheckCacheStatus()
+		for _, s := range status {
+			for _, ts := range s.TabletsStats {
+				state := "SERVING"
+				if !ts.Serving {
+					state = "NOT_SERVING"
+				}
+				mtst := ts.Tablet.MasterTermStartTime
+				mtstStr := ""
+				if mtst != nil && mtst.Seconds > 0 {
+					mtstStr = logutil.ProtoToTime(ts.Tablet.MasterTermStartTime).Format(time.RFC3339)
+				}
+				rows = append(rows, buildVarCharRow(
+					s.Cell,
+					s.Target.Keyspace,
+					s.Target.Shard,
+					ts.Target.TabletType.String(),
+					state,
+					topoproto.TabletAliasString(ts.Tablet.Alias),
+					ts.Tablet.Hostname,
+					mtstStr,
+				))
+			}
+		}
+	} else {
+		status := e.scatterConn.GetHealthCheckCacheStatus()
+		for _, s := range status {
+			for _, ts := range s.TabletsStats {
+				state := "SERVING"
+				if !ts.Serving {
+					state = "NOT_SERVING"
+				}
+				mtst := ts.Tablet.MasterTermStartTime
+				mtstStr := ""
+				if mtst != nil && mtst.Seconds > 0 {
+					mtstStr = logutil.ProtoToTime(ts.Tablet.MasterTermStartTime).Format(time.RFC3339)
+				}
+				rows = append(rows, buildVarCharRow(
+					s.Cell,
+					s.Target.Keyspace,
+					s.Target.Shard,
+					ts.Target.TabletType.String(),
+					state,
+					topoproto.TabletAliasString(ts.Tablet.Alias),
+					ts.Tablet.Hostname,
+					mtstStr,
+				))
+			}
+		}
+	}
+	return &sqltypes.Result{
+		Fields:       buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "MasterTermStartTime"),
+		Rows:         rows,
+		RowsAffected: uint64(len(rows)),
+	}, nil
 }
 
 func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {

@@ -52,7 +52,7 @@ func TestPlanExecutorResultsExceeded(t *testing.T) {
 	*warnMemoryRows = 3
 	defer func() { *warnMemoryRows = save }()
 
-	executor, _, _, sbclookup := createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, sbclookup := createLegacyExecutorEnvUsing(planAllTheThings)
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
 
 	initial := warnings.Counts()["ResultsExceeded"]
@@ -78,40 +78,27 @@ func TestPlanExecutorResultsExceeded(t *testing.T) {
 	}
 }
 
-func TestPlanExecutorTransactionsNoAutoCommit(t *testing.T) {
-	////t.Skip("not support yet")
-	executor, _, _, sbclookup := createExecutorEnvUsing(planAllTheThings)
+func TestPlanLegacyHealthCheckExecutorTransactionsNoAutoCommit(t *testing.T) {
+	executor, _, _, sbclookup := createLegacyExecutorEnvUsing(planAllTheThings)
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
 
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
 	// begin.
-	_, err := executor.Execute(context.Background(), "TestExecute", session, "begin", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err := executor.Execute(ctx, "TestExecute", session, "begin", nil)
+	require.NoError(t, err)
 	wantSession := &vtgatepb.Session{InTransaction: true, TargetString: "@master"}
-	if !proto.Equal(session.Session, wantSession) {
-		t.Errorf("begin: %v, want %v", session.Session, wantSession)
-	}
-	if commitCount := sbclookup.CommitCount.Get(); commitCount != 0 {
-		t.Errorf("want 0, got %d", commitCount)
-	}
+	utils.MustMatch(t, wantSession, session.Session, "session")
+	assert.EqualValues(t, 0, sbclookup.CommitCount.Get(), "commit count")
 	logStats := testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
-	if logStats.CommitTime != 0 {
-		t.Errorf("logstats: expected zero CommitTime")
-	}
+	assert.EqualValues(t, 0, logStats.CommitTime, "logstats: expected zero CommitTime")
 
 	// commit.
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "select id from main1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
+	require.NoError(t, err)
 	logStats = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
-	if logStats.CommitTime != 0 {
-		t.Errorf("logstats: expected zero CommitTime")
-	}
+	assert.EqualValues(t, 0, logStats.CommitTime, "logstats: expected zero CommitTime")
 
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "commit", nil)
 	if err != nil {
@@ -130,25 +117,15 @@ func TestPlanExecutorTransactionsNoAutoCommit(t *testing.T) {
 	}
 
 	// rollback.
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "begin", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "select id from main1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "rollback", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
+	require.NoError(t, err)
+	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
+	require.NoError(t, err)
+	_, err = executor.Execute(ctx, "TestExecute", session, "rollback", nil)
+	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{TargetString: "@master"}
-	if !proto.Equal(session.Session, wantSession) {
-		t.Errorf("begin: %v, want %v", session.Session, wantSession)
-	}
-	if rollbackCount := sbclookup.RollbackCount.Get(); rollbackCount != 1 {
-		t.Errorf("want 1, got %d", rollbackCount)
-	}
+	utils.MustMatch(t, wantSession, session.Session, "session")
+	assert.EqualValues(t, 1, sbclookup.RollbackCount.Get(), "rollback count")
 	_ = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
 	_ = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	logStats = testQueryLog(t, logChan, "TestExecute", "ROLLBACK", "rollback", 1)
@@ -157,10 +134,8 @@ func TestPlanExecutorTransactionsNoAutoCommit(t *testing.T) {
 	}
 
 	// rollback doesn't emit a logstats record when it doesn't do anything
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "rollback", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err = executor.Execute(ctx, "TestExecute", session, "rollback", nil)
+	require.NoError(t, err)
 	logStats = getQueryLog(logChan)
 	if logStats != nil {
 		t.Errorf("logstats: expected no record for no-op rollback, got %v", logStats)
@@ -168,22 +143,20 @@ func TestPlanExecutorTransactionsNoAutoCommit(t *testing.T) {
 
 	// Prevent transactions on non-master.
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "@replica", InTransaction: true})
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "select id from main1", nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
+	require.Error(t, err)
 	want := "transactions are supported only for master tablet types, current type: REPLICA"
-	if err == nil || err.Error() != want {
-		t.Errorf("Execute(@replica, in_transaction) err: %v, want %s", err, want)
-	}
+	require.Contains(t, err.Error(), want)
 
 	// Prevent begin on non-master.
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "@replica"})
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "begin", nil)
-	if err == nil || err.Error() != want {
-		t.Errorf("Execute(@replica, in_transaction) err: %v, want %s", err, want)
-	}
+	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), want)
 
 	// Prevent use of non-master if in_transaction is on.
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "@master", InTransaction: true})
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "use @replica", nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, "use @replica", nil)
 	want = "cannot change to a non-master type in the middle of a transaction: REPLICA"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute(@replica, in_transaction) err: %v, want %s", err, want)
@@ -191,7 +164,7 @@ func TestPlanExecutorTransactionsNoAutoCommit(t *testing.T) {
 }
 
 func TestPlanDirectTargetRewrites(t *testing.T) {
-	executor, _, _, sbclookup := createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, sbclookup := createLegacyExecutorEnvUsing(planAllTheThings)
 	executor.normalize = true
 
 	session := &vtgatepb.Session{
@@ -210,7 +183,7 @@ func TestPlanDirectTargetRewrites(t *testing.T) {
 }
 
 func TestPlanExecutorTransactionsAutoCommit(t *testing.T) {
-	executor, _, _, sbclookup := createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, sbclookup := createLegacyExecutorEnvUsing(planAllTheThings)
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
 
 	logChan := QueryLogger.Subscribe("Test")
@@ -285,7 +258,7 @@ func TestPlanExecutorDeleteMetadata(t *testing.T) {
 		*vschemaacl.AuthorizedDDLUsers = ""
 	}()
 
-	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
 
 	set := "set @@vitess_metadata.app_v1= '1'"
@@ -313,7 +286,7 @@ func TestPlanExecutorDeleteMetadata(t *testing.T) {
 
 func TestPlanExecutorAutocommit(t *testing.T) {
 	t.Skip("not support yet")
-	executor, _, _, sbclookup := createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, sbclookup := createLegacyExecutorEnvUsing(planAllTheThings)
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
 
 	logChan := QueryLogger.Subscribe("Test")
@@ -447,7 +420,7 @@ func TestPlanExecutorAutocommit(t *testing.T) {
 }
 
 func TestPlanExecutorClearsWarnings(t *testing.T) {
-	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 	session := NewSafeSession(&vtgatepb.Session{
 		Warnings: []*querypb.QueryWarning{{Code: 234, Message: "oh noes"}},
 	})
@@ -458,7 +431,7 @@ func TestPlanExecutorClearsWarnings(t *testing.T) {
 
 func TestPlanExecutorShow(t *testing.T) {
 	t.Skip("not support yet")
-	executor, _, _, sbclookup := createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, sbclookup := createLegacyExecutorEnvUsing(planAllTheThings)
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
 
 	for _, query := range []string{"show databases", "show vitess_keyspaces", "show keyspaces", "show DATABASES"} {
@@ -967,7 +940,7 @@ func TestPlanExecutorShow(t *testing.T) {
 
 func TestPlanExecutorUse(t *testing.T) {
 	//t.Skip("not support yet")
-	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 	session := NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "@master"})
 
 	stmts := []string{
@@ -1001,7 +974,7 @@ func TestPlanExecutorUse(t *testing.T) {
 }
 
 func TestPlanExecutorComment(t *testing.T) {
-	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 
 	var tcs = []struct {
 		sql string
@@ -1043,7 +1016,7 @@ func TestPlanExecutorComment(t *testing.T) {
 }
 
 func TestPlanExecutorOtherRead(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup := createExecutorEnvUsing(planAllTheThings)
+	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnvUsing(planAllTheThings)
 
 	type cnts struct {
 		Sbc1Cnt      int64
@@ -1115,7 +1088,7 @@ func TestPlanExecutorOtherRead(t *testing.T) {
 }
 
 func TestPlanExecutorExplain(t *testing.T) {
-	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 	executor.normalize = true
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -1130,7 +1103,7 @@ func TestPlanExecutorExplain(t *testing.T) {
 }
 
 func TestPlanExecutorOtherAdmin(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup := createExecutorEnvUsing(planAllTheThings)
+	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnvUsing(planAllTheThings)
 
 	type cnts struct {
 		Sbc1Cnt      int64
@@ -1204,7 +1177,7 @@ func TestPlanExecutorOtherAdmin(t *testing.T) {
 }
 
 func TestPlanExecutorUnrecognized(t *testing.T) {
-	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{}), "invalid statement", nil)
 	require.Error(t, err, "unrecognized statement: invalid statement'")
 }
@@ -1212,7 +1185,7 @@ func TestPlanExecutorUnrecognized(t *testing.T) {
 // TestVSchemaStats makes sure the building and displaying of the
 // VSchemaStats works.
 func TestPlanVSchemaStats(t *testing.T) {
-	r, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	r, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 
 	stats := r.VSchemaStats()
 
@@ -1233,7 +1206,7 @@ func TestPlanVSchemaStats(t *testing.T) {
 }
 
 func TestPlanGetPlanUnnormalized(t *testing.T) {
-	r, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	r, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 	emptyvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.resolver.resolver)
 	unshardedvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.resolver.resolver)
 
@@ -1292,7 +1265,7 @@ func TestPlanGetPlanUnnormalized(t *testing.T) {
 }
 
 func TestPlanGetPlanCacheUnnormalized(t *testing.T) {
-	r, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	r, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 	emptyvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.resolver.resolver)
 	query1 := "select * from music_user_map where id = 1"
 	logStats1 := NewLogStats(context.Background(), "Test", "", nil)
@@ -1317,7 +1290,7 @@ func TestPlanGetPlanCacheUnnormalized(t *testing.T) {
 	}
 
 	// Skip cache using directive
-	r, _, _, _ = createExecutorEnvUsing(planAllTheThings)
+	r, _, _, _ = createLegacyExecutorEnvUsing(planAllTheThings)
 	unshardedvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.resolver.resolver)
 
 	query1 = "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
@@ -1337,7 +1310,7 @@ func TestPlanGetPlanCacheUnnormalized(t *testing.T) {
 }
 
 func TestPlanGetPlanCacheNormalized(t *testing.T) {
-	r, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	r, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 	r.normalize = true
 	emptyvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.resolver.resolver)
 	query1 := "select * from music_user_map where id = 1"
@@ -1362,7 +1335,7 @@ func TestPlanGetPlanCacheNormalized(t *testing.T) {
 	}
 
 	// Skip cache using directive
-	r, _, _, _ = createExecutorEnvUsing(planAllTheThings)
+	r, _, _, _ = createLegacyExecutorEnvUsing(planAllTheThings)
 	r.normalize = true
 	unshardedvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.resolver.resolver)
 
@@ -1383,7 +1356,7 @@ func TestPlanGetPlanCacheNormalized(t *testing.T) {
 }
 
 func TestPlanGetPlanNormalized(t *testing.T) {
-	r, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	r, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 	r.normalize = true
 	emptyvc, _ := createVcursorImpl(r, "@unknown")
 	unshardedvc, _ := createVcursorImpl(r, KsTestUnsharded+"@unknown")
@@ -1480,7 +1453,7 @@ func createVcursorImpl(r *Executor, targetString string) (*vcursorImpl, error) {
 }
 
 func TestPlanParseEmptyTargetSingleKeyspace(t *testing.T) {
-	r, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	r, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 	altVSchema := &vindexes.VSchema{
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			KsTestUnsharded: r.vschema.Keyspaces[KsTestUnsharded],
@@ -1502,7 +1475,7 @@ func TestPlanParseEmptyTargetSingleKeyspace(t *testing.T) {
 }
 
 func TestPlanParseEmptyTargetMultiKeyspace(t *testing.T) {
-	r, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	r, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 	altVSchema := &vindexes.VSchema{
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			KsTestUnsharded: r.vschema.Keyspaces[KsTestUnsharded],
@@ -1525,7 +1498,7 @@ func TestPlanParseEmptyTargetMultiKeyspace(t *testing.T) {
 }
 
 func TestPlanParseTargetSingleKeyspace(t *testing.T) {
-	r, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	r, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 	altVSchema := &vindexes.VSchema{
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			KsTestUnsharded: r.vschema.Keyspaces[KsTestUnsharded],
@@ -1550,7 +1523,7 @@ func TestPlanDebugVSchema(t *testing.T) {
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/debug/vschema", nil)
 
-	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
+	executor, _, _, _ := createLegacyExecutorEnvUsing(planAllTheThings)
 	executor.ServeHTTP(resp, req)
 	v := make(map[string]interface{})
 	if err := json.Unmarshal(resp.Body.Bytes(), &v); err != nil {
