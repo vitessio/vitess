@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
@@ -13,34 +14,14 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-func (uvs *uvstreamer) initCopyState() error {
-	if len(uvs.tablePKs) == 0 {
-		return nil
-	}
-
-	copyState := make(map[string]*sqltypes.Result)
-	for _, tablePK := range uvs.tablePKs {
-		copyState[tablePK.name] = tablePK.lastPK
-	}
-	uvs.copyState = copyState //FIXME mutex
-	return nil
-}
-
 func (uvs *uvstreamer) copy(ctx context.Context) error {
-	if err := uvs.initCopyState(); err != nil {
-		return err
-	}
-	log.Infof("Inited copy state to %v", uvs.copyState)
-
-	for len(uvs.copyState) > 0 {
-		var tableName string
-		for k := range uvs.copyState {
-			tableName = k
-			break
-		}
+	for len(uvs.tablesToCopy) > 0 {
+		tableName := uvs.tablesToCopy[0]
+		log.Infof("Copystate not empty starting catchupAndCopy on table %s", tableName)
 		if err := uvs.catchupAndCopy(ctx, tableName); err != nil {
 			return err
 		}
+		//time.Sleep(2*time.Second) //FIXME for debugging
 	}
 	log.Info("No tables left to copy")
 	return nil
@@ -48,36 +29,40 @@ func (uvs *uvstreamer) copy(ctx context.Context) error {
 
 func (uvs *uvstreamer) catchupAndCopy(ctx context.Context, tableName string) error {
 	log.Infof("catchupAndCopy for %s", tableName)
-	if !uvs.vs.pos.IsZero() {
+	if !uvs.pos.IsZero() {
 		if err := uvs.catchup(ctx); err != nil {
+			log.Infof("catchupAndCopy: catchup returned %v", err)
 			return err
 		}
 	}
+
+	log.Infof("catchupAndCopy: before copyTable %s", tableName)
+	uvs.fields = nil
 	return uvs.copyTable(ctx, tableName)
 }
 
-const (
-	waitRetryTime       = 1
-	replicaLagTolerance = 0
-)
-
 func (uvs *uvstreamer) catchup(ctx context.Context) error {
 	log.Infof("starting catchup ...")
+	uvs.secondsBehindMaster = math.MaxInt64
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-
 	errch := make(chan error, 1)
 	go func() {
-		errch <- uvs.vs.replicate(ctx) //FIXME: can be more efficient? currently creating new slave each time
+		startPos := mysql.EncodePosition(uvs.pos)
+		vs := newVStreamer(ctx, uvs.cp, uvs.se, uvs.sh, startPos, "", uvs.filter, uvs.vschema, uvs.send2)
+		errch <- vs.Stream()
+		log.Infof("catchup vs.stream returned with vs.pos %s", vs.pos.String())
 	}()
 
 	// Wait for catchup.
-	tkr := time.NewTicker(waitRetryTime)
+	tkr := time.NewTicker(uvs.config.CatchupRetryTime)
 	defer tkr.Stop()
-	seconds := int64(replicaLagTolerance / time.Second)
+	seconds := int64(uvs.config.MaxReplicationLag / time.Second)
 	for {
-		sbm := uvs.getSecondsBehindMaster()
-		if sbm < seconds {
+		sbm := uvs.secondsBehindMaster //TODO #sugu
+		log.Infof("Checking sbm %d vs config %d", sbm, seconds)
+		if sbm <= seconds {
+			log.Infof("Canceling context because lag is %d:%d", sbm, seconds)
 			cancel()
 			// Make sure vplayer returns before returning.
 			<-errch
@@ -97,22 +82,22 @@ func (uvs *uvstreamer) catchup(ctx context.Context) error {
 		}
 	}
 }
+
 func (uvs *uvstreamer) sendFieldEvent(ctx context.Context, gtid string, fieldEvent *binlogdatapb.FieldEvent) error {
 	ev := &binlogdatapb.VEvent{
 		Type:       binlogdatapb.VEventType_FIELD,
-		Gtid:       "",
 		FieldEvent: fieldEvent,
 	}
-	log.Infof("Sending field event %v", fieldEvent)
+	log.Infof("Sending field event %v, gtid is %s", fieldEvent, gtid)
 	uvs.send([]*binlogdatapb.VEvent{ev})
+	uvs.pos, _ = mysql.DecodePosition(gtid)
 	return nil
 
 }
+
 func (uvs *uvstreamer) sendEventsForRows(ctx context.Context, tableName string, rows *binlogdatapb.VStreamRowsResponse) error {
 	var evs []*binlogdatapb.VEvent
-	for i, row := range rows.Rows {
-		//begin, rows, copystate, commit
-		log.Infof("ROW %d : %v", i+1, row)
+	for _, row := range rows.Rows {
 		ev := &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_ROW,
 			RowEvent: &binlogdatapb.RowEvent{
@@ -129,65 +114,72 @@ func (uvs *uvstreamer) sendEventsForRows(ctx context.Context, tableName string, 
 	return nil
 }
 
-//TODO figure out how table plan is got from source
 func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	var err error
 	var newLastPK *sqltypes.Result
-	log.Infof("Starting copyTable for %s, PK %v", tableName, uvs.copyState[tableName].Rows[0])
-	//TODO: need to "filter" filter by tablename in case of multiple filters per table? or just validate matching filters to tablepk map at start?
-	//FIXME: getting first filter ... for POC
-	err = uvs.vse.StreamRows(ctx, uvs.filter.Rules[0].Filter, uvs.copyState[tableName].Rows[0], func(rows *binlogdatapb.VStreamRowsResponse) error {
+	lastPK := uvs.plans[tableName].tablePK.lastPK.Rows[0]
+	filter := uvs.plans[tableName].rule.Filter
+	log.Infof("Starting copyTable for %s, PK %v", tableName, lastPK)
+	//TODO: PASS and return VGTID during gtid events
+	err = uvs.vse.StreamRows(ctx, filter, lastPK, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		select {
 		case <-ctx.Done():
+			log.Infof("Returning io.EOF in StreamRows")
 			return io.EOF
 		default:
 		}
 		if uvs.fields == nil {
-			//TODO add fast forward
 			if len(rows.Fields) == 0 {
 				return fmt.Errorf("expecting field event first, got: %v", rows)
 			}
-			//FIXME: fastforward removed for now
+
+			uvs.fastForward(ctx, rows.Gtid)
+			if mysql.EncodePosition(uvs.pos) != rows.Gtid {
+				log.Errorf("Position after fastforward was %s but stopPos was %s", uvs.pos, rows.Gtid)
+			}
+
 			fieldEvent := &binlogdatapb.FieldEvent{
 				TableName: tableName,
 				Fields:    rows.Fields,
 			}
 			uvs.fields = rows.Fields
 			uvs.pkfields = rows.Pkfields
-			uvs.sendFieldEvent(ctx, rows.Gtid, fieldEvent)  //FIXME: gtid should be different for each row
-			uvs.vs.pos, _ = mysql.DecodePosition(rows.Gtid) //FIXME
+			uvs.sendFieldEvent(ctx, rows.Gtid, fieldEvent)
 		}
-		log.Infof("After batch of rows is sent 1, lastpk is %v, %s, %s", rows.Lastpk, rows.Pkfields, rows.Fields)
 		if len(rows.Rows) == 0 {
+			log.Infof("0 rows returned for table %s", tableName)
 			return nil
 		}
-
-		uvs.sendEventsForRows(ctx, rows.Gtid, rows)
-		log.Infof("After batch of rows is sent 2, lastpk is %v, %s, %s", rows.Lastpk, rows.Pkfields, rows.Fields)
+		uvs.sendEventsForRows(ctx, tableName, rows)
 
 		newLastPK = sqltypes.CustomProto3ToResult(uvs.pkfields, &querypb.QueryResult{
-			Fields: uvs.fields,
+			Fields: rows.Fields,
 			Rows:   []*querypb.Row{rows.Lastpk},
 		})
-		uvs.copyState[tableName] = newLastPK
+		uvs.setCopyState(tableName, newLastPK)
 		log.Infof("NewLastPK: %v", newLastPK)
 		return nil
 	})
 	// If there was a timeout, return without an error.
 	select {
 	case <-ctx.Done():
-		log.Infof("Copy of %v stopped at lastpk: %v", tableName, newLastPK)
-		return nil
+		log.Infof("Context done: Copy of %v stopped at lastpk: %v", tableName, newLastPK)
+		return ctx.Err()
 	default:
 	}
 	if err != nil {
 		return err
 	}
 	log.Infof("Copy of %v finished at lastpk: %v", tableName, newLastPK)
-	delete(uvs.copyState, tableName)
+	delete(uvs.plans, tableName)
+	uvs.tablesToCopy = uvs.tablesToCopy[1:]
 	return nil
 }
 
-func (uvs *uvstreamer) getSecondsBehindMaster() int64 {
-	return 0 //FIXME
+func (uvs *uvstreamer) fastForward(ctx context.Context, stopPos string) error {
+	log.Infof("starting fastForward upto pos %s", stopPos)
+	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, uvs.sh, uvs.pos.String(), stopPos, uvs.filter, uvs.vschema, uvs.send2)
+	return vs.Stream()
 }

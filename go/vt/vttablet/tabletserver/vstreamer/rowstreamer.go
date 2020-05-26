@@ -81,6 +81,7 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, sh schema.Histo
 }
 
 func (rs *rowStreamer) Cancel() {
+	log.Info("Rowstreamer Cancel() called")
 	rs.cancel()
 }
 
@@ -221,13 +222,11 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			Type: flds[pk].Type,
 		}
 	}
-	log.Infof("Before sending 0th response fields %v, pkfields %v, gtid %s", rs.plan.fields(), pkfields, gtid)
 	err = send(&binlogdatapb.VStreamRowsResponse{
 		Fields:   rs.plan.fields(),
 		Pkfields: pkfields,
 		Gtid:     gtid,
 	})
-	log.Infof("After sending 0th response")
 	if err != nil {
 		return fmt.Errorf("stream send error: %v", err)
 	}
@@ -236,8 +235,10 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	lastpk := make([]sqltypes.Value, len(rs.pkColumns))
 	byteCount := 0
 	for {
+		//log.Infof("StreamResponse for loop iteration starts")
 		select {
 		case <-rs.ctx.Done():
+			log.Infof("Stream ended because of ctx.Done")
 			return fmt.Errorf("stream ended: %v", rs.ctx.Err())
 		default:
 		}
@@ -268,9 +269,9 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 
 		if byteCount >= *PacketSize {
 			response.Lastpk = sqltypes.RowToProto3(lastpk)
-			log.Infof("Before sending response of len %d, fields %v, pkfields %v", len(response.Rows), response.Fields, response.Pkfields)
 			err = send(response)
 			if err != nil {
+				log.Infof("Rowstreamer send returned error %v", err)
 				return err
 			}
 			// empty the rows so we start over, but we keep the
@@ -281,12 +282,13 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	}
 
 	if len(response.Rows) > 0 {
-		log.Infof("Before sending response of len %d, fields %v, pkfields %v", len(response.Rows), response.Fields, response.Pkfields)
 		response.Lastpk = sqltypes.RowToProto3(lastpk)
 		err = send(response)
 		if err != nil {
 			return err
 		}
+	} else {
+		log.Infof("0 Rows found in streaming query")
 	}
 
 	return nil

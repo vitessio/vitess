@@ -102,18 +102,18 @@ func insertLotsOfData(t *testing.T, numRows int) {
 		query1,
 		query2,
 	})
-
 }
 
 func TestVStreamCopySimpleFlow(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
+
 	execStatements(t, []string{
 		"create table t1(id11 int, id12 int, primary key(id11))",
 		"create table t2(id21 int, id22 int, primary key(id21))",
 	})
-	log.Infof("Pos at start: %s", masterPosition(t))
+	log.Infof("Pos before bulk insert: %s", masterPosition(t))
 	insertLotsOfData(t, 10)
 	log.Infof("Pos after bulk insert: %s", masterPosition(t))
 	defer execStatements(t, []string{
@@ -132,6 +132,9 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "t1",
 			Filter: "select * from t1",
+		}, {
+			Match:  "t2",
+			Filter: "select * from t2",
 		}},
 	}
 
@@ -143,48 +146,56 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 			Rows:   [][]sqltypes.Value{{sqltypes.NewInt32(0)}},
 		},
 	})
-	/*
-		tablePKs = append(tablePKs, &TableLastPK{
-			name:   "t2",
-			lastPK: &sqltypes.Result{
-				Fields:       []*query.Field{{Name: "i211", Type: query.Type_INT32}},
-				Rows:         [][]sqltypes.Value{{sqltypes.NewInt32(0)}},
-			},
-		})
-	*/
+
+	tablePKs = append(tablePKs, &TableLastPK{
+		name: "t2",
+		lastPK: &sqltypes.Result{
+			Fields: []*query.Field{{Name: "id21", Type: query.Type_INT32}},
+			Rows:   [][]sqltypes.Value{{sqltypes.NewInt32(0)}},
+		},
+	})
 
 	t1FieldEvent := []string{"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > "}
+	t2FieldEvent := []string{"type:FIELD field_event:<table_name:\"t2\" fields:<name:\"id21\" type:INT32 > fields:<name:\"id22\" type:INT32 > > "}
 	t1Events := []string{}
-	t2Events := []string{"type:FIELD field_event:<table_name:\"t2\" fields:<name:\"id21\" type:INT32 > fields:<name:\"id22\" type:INT32 > > "}
+	t2Events := []string{}
 	for i := 1; i <= 10; i++ {
 		t1Events = append(t1Events,
 			fmt.Sprintf("type:ROW row_event:<row_changes:<after:<lengths:%d lengths:%d values:\"%d%d\" > > > ", len(strconv.Itoa(i)), len(strconv.Itoa(i*10)), i, i*10))
 		t2Events = append(t2Events,
-			fmt.Sprintf("type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:%d lengths:%d values:\"%d%d\" > > > ", len(strconv.Itoa(i)), len(strconv.Itoa(i*20)), i, i*20))
+			fmt.Sprintf("type:ROW row_event:<row_changes:<after:<lengths:%d lengths:%d values:\"%d%d\" > > > ", len(strconv.Itoa(i)), len(strconv.Itoa(i*20)), i, i*20))
 	}
+	t1Events = append(t1Events, "gtid")
+	t2Events = append(t2Events, "gtid")
 
-	insertEvents := []string{
+	insertEvents1 := []string{
 		"begin",
 		"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > ",
 		"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:3 lengths:4 values:\"1011010\" > > > ",
 		"gtid",
 		"commit"}
+	insertEvents2 := []string{
+		"begin",
+		"type:FIELD field_event:<table_name:\"t2\" fields:<name:\"id21\" type:INT32 > fields:<name:\"id22\" type:INT32 > > ",
+		"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:3 lengths:4 values:\"2022020\" > > > ",
+		"gtid",
+		"commit"}
 	testcases := []testcase{
 		{
 			input:  []string{},
-			output: [][]string{t1FieldEvent, t1Events},
+			output: [][]string{t1FieldEvent, t1Events, t2FieldEvent, t2Events},
 		},
 		{
 			input: []string{
 				"insert into t1 values (101, 1010)",
 			},
-			output: [][]string{insertEvents},
+			output: [][]string{insertEvents1},
 		},
 		{
 			input: []string{
-				"insert into t2 values (101, 2020)",
+				"insert into t2 values (202, 2020)",
 			},
-			output: [][]string{{"begin", "gtid", "commit"}},
+			output: [][]string{insertEvents2},
 		},
 	}
 
