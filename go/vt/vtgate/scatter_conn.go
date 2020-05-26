@@ -470,11 +470,11 @@ func (stc *ScatterConn) GetLegacyHealthCheckCacheStatus() discovery.LegacyTablet
 
 // GetHealthCheckCacheStatus returns a displayable version of the HealthCheck cache.
 func (stc *ScatterConn) GetHealthCheckCacheStatus() discovery.TabletsCacheStatusList {
-	gw, ok := stc.gateway.(*TabletGateway)
-	if ok {
-		return gw.HealthCheck().CacheStatus()
+	if LegacyHealthCheckEnabled() {
+		panic("this should never be called")
 	}
-	return nil
+
+	return stc.gateway.TabletsCacheStatus()
 }
 
 // multiGo performs the requested 'action' on the specified
