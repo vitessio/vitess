@@ -36,6 +36,7 @@ type lookupInternal struct {
 	To            string   `json:"to"`
 	Autocommit    bool     `json:"autocommit,omitempty"`
 	Upsert        bool     `json:"upsert,omitempty"`
+	IgnoreNulls   bool     `json:"ignore_nulls,omitempty"`
 	sel, ver, del string
 }
 
@@ -47,6 +48,12 @@ func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit,
 		fromColumns = append(fromColumns, strings.TrimSpace(from))
 	}
 	lkp.FromColumns = fromColumns
+
+	var err error
+	lkp.IgnoreNulls, err = boolFromMap(lookupQueryParams, "ignore_nulls")
+	if err != nil {
+		return err
+	}
 
 	lkp.Autocommit = autocommit
 	lkp.Upsert = upsert
@@ -158,15 +165,32 @@ func (lkp *lookupInternal) Create(vcursor VCursor, rowsColValues [][]sqltypes.Va
 }
 
 func (lkp *lookupInternal) createCustom(vcursor VCursor, rowsColValues [][]sqltypes.Value, toValues []sqltypes.Value, ignoreMode bool, co vtgatepb.CommitOrder) error {
-	if len(rowsColValues) == 0 {
-		// This code is unreachable. It's just a failsafe.
+	// Trim rows with null values
+	trimmedRowsCols := make([][]sqltypes.Value, 0, len(rowsColValues))
+	trimmedToValues := make([]sqltypes.Value, 0, len(toValues))
+nextRow:
+	for i, row := range rowsColValues {
+		for j, col := range row {
+			if col.IsNull() {
+				if !lkp.IgnoreNulls {
+					return fmt.Errorf("lookup.Create: input has null values: row: %d, col: %d", i, j)
+				}
+				continue nextRow
+			}
+		}
+		trimmedRowsCols = append(trimmedRowsCols, row)
+		trimmedToValues = append(trimmedToValues, toValues[i])
+	}
+	if len(trimmedRowsCols) == 0 {
 		return nil
 	}
 	// We only need to check the first row. Number of cols per row
 	// is guaranteed by the engine to be uniform.
-	if len(rowsColValues[0]) != len(lkp.FromColumns) {
-		return fmt.Errorf("lookup.Create: column vindex count does not match the columns in the lookup: %d vs %v", len(rowsColValues[0]), lkp.FromColumns)
+	if len(trimmedRowsCols[0]) != len(lkp.FromColumns) {
+		return fmt.Errorf("lookup.Create: column vindex count does not match the columns in the lookup: %d vs %v", len(trimmedRowsCols[0]), lkp.FromColumns)
 	}
+	sort.Sort(&sorter{rowsColValues: trimmedRowsCols, toValues: trimmedToValues})
+
 	buf := new(bytes.Buffer)
 	if ignoreMode {
 		fmt.Fprintf(buf, "insert ignore into %s(", lkp.Table)
@@ -178,13 +202,9 @@ func (lkp *lookupInternal) createCustom(vcursor VCursor, rowsColValues [][]sqlty
 	}
 	fmt.Fprintf(buf, "%s) values(", lkp.To)
 
-	bindVars := make(map[string]*querypb.BindVariable, 2*len(rowsColValues))
-	// Make a copy before sorting.
-	rowsColValues = append([][]sqltypes.Value(nil), rowsColValues...)
-	toValues = append([]sqltypes.Value(nil), toValues...)
-	sort.Sort(&sorter{rowsColValues: rowsColValues, toValues: toValues})
-	for rowIdx := range toValues {
-		colIds := rowsColValues[rowIdx]
+	bindVars := make(map[string]*querypb.BindVariable, 2*len(trimmedRowsCols))
+	for rowIdx := range trimmedToValues {
+		colIds := trimmedRowsCols[rowIdx]
 		if rowIdx != 0 {
 			buf.WriteString(", (")
 		}
@@ -195,7 +215,7 @@ func (lkp *lookupInternal) createCustom(vcursor VCursor, rowsColValues [][]sqlty
 		}
 		toStr := lkp.To + strconv.Itoa(rowIdx)
 		buf.WriteString(":" + toStr + ")")
-		bindVars[toStr] = sqltypes.ValueBindVariable(toValues[rowIdx])
+		bindVars[toStr] = sqltypes.ValueBindVariable(trimmedToValues[rowIdx])
 	}
 
 	if lkp.Upsert {
