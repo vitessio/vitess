@@ -51,6 +51,7 @@ func (uvs *uvstreamer) catchup(ctx context.Context) error {
 		startPos := mysql.EncodePosition(uvs.pos)
 		vs := newVStreamer(ctx, uvs.cp, uvs.se, uvs.sh, startPos, "", uvs.filter, uvs.vschema, uvs.send2)
 		errch <- vs.Stream()
+		uvs.vs = nil
 		log.Infof("catchup vs.stream returned with vs.pos %s", vs.pos.String())
 	}()
 
@@ -90,7 +91,8 @@ func (uvs *uvstreamer) sendFieldEvent(ctx context.Context, gtid string, fieldEve
 	}
 	log.Infof("Sending field event %v, gtid is %s", fieldEvent, gtid)
 	uvs.send([]*binlogdatapb.VEvent{ev})
-	uvs.pos, _ = mysql.DecodePosition(gtid)
+	pos, _ := mysql.DecodePosition(gtid)
+	uvs.pos = pos
 	return nil
 
 }
@@ -122,6 +124,8 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 	lastPK := uvs.plans[tableName].tablePK.lastPK.Rows[0]
 	filter := uvs.plans[tableName].rule.Filter
 	log.Infof("Starting copyTable for %s, PK %v", tableName, lastPK)
+	uvs.sendTestEvent(fmt.Sprintf("Copy Start %s", tableName))
+
 	//TODO: PASS and return VGTID during gtid events
 	err = uvs.vse.StreamRows(ctx, filter, lastPK, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		select {
@@ -134,8 +138,10 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 			if len(rows.Fields) == 0 {
 				return fmt.Errorf("expecting field event first, got: %v", rows)
 			}
-
-			uvs.fastForward(ctx, rows.Gtid)
+			pos, _ := mysql.DecodePosition(rows.Gtid)
+			if !uvs.pos.IsZero() && !uvs.pos.AtLeast(pos) {
+				uvs.fastForward(ctx, rows.Gtid)
+			}
 			if mysql.EncodePosition(uvs.pos) != rows.Gtid {
 				log.Errorf("Position after fastforward was %s but stopPos was %s", uvs.pos, rows.Gtid)
 			}
@@ -179,7 +185,9 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 }
 
 func (uvs *uvstreamer) fastForward(ctx context.Context, stopPos string) error {
-	log.Infof("starting fastForward upto pos %s", stopPos)
-	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, uvs.sh, uvs.pos.String(), stopPos, uvs.filter, uvs.vschema, uvs.send2)
+	log.Infof("starting fastForward from %s upto pos %s", mysql.EncodePosition(uvs.pos), stopPos)
+	uvs.stopPos, _ = mysql.DecodePosition(stopPos)
+	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, uvs.sh, mysql.EncodePosition(uvs.pos), "", uvs.filter, uvs.vschema, uvs.send2)
+	uvs.vs = vs
 	return vs.Stream()
 }
