@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
-	"sync"
 	"testing"
 	"time"
 
@@ -16,17 +15,6 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/proto/query"
 )
-
-/*
-
-	We want to test:
-
-	Copy Phase: insert at start (3 tables)
-	Catchup:
-		after 1st, before 2nd starts insert into 1st   //validate copy of 1st, catchup of 1st
-		after 2nd, before 3rd starts insert into 1st and 2nd  //validate copy of 2nd, catchup of 1st and 2nd, copy of 3rd
-
-*/
 
 const (
 	createTableQuery = "create table %s(id%d1 int, id%d2 int, primary key(id%d1))"
@@ -55,6 +43,95 @@ var testState = &state{}
 
 var positions map[string]string
 var allEvents []*binlogdatapb.VEvent
+
+var callbacks map[string]func()
+var cancelTest func()
+
+func TestVStreamCopyCompleteFlow(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancelTest = cancel
+	defer cancel()
+
+	defer execStatements(t, []string{
+		"drop table t1",
+		"drop table t2",
+		"drop table t3",
+	})
+
+	uvstreamerTestMode = true
+	defer func() { uvstreamerTestMode = false }()
+	initialize(t)
+	engine.se.Reload(context.Background())
+
+	var rules []*binlogdata.Rule
+	var tablePKs []*TableLastPK
+	for i, table := range testState.tables {
+		rules = append(rules, getRule(table))
+		tablePKs = append(tablePKs, getTablePK(table, i+1))
+	}
+	filter := &binlogdatapb.Filter{
+		Rules: rules,
+	}
+
+	callbacks["OTHER.*Copy Start t2"] = func() {
+		conn, err := env.Mysqld.GetDbaConnection()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.Close()
+
+		log.Info("Inserting row for fast forward to find, locking t2")
+		conn.ExecuteFetch("lock tables t2 write", 1, false)
+		insertRow(t, "t1", 1, numInitialRows+2)
+		log.Infof("Position after second insert into t1: %s", masterPosition(t))
+		conn.ExecuteFetch("unlock tables", 1, false)
+		log.Info("Inserted row for fast forward to find, unlocked tables")
+
+	}
+	callbacks["ROW.*t1.*12120"] = func() {
+		log.Info("Got fast forward row, unlocking t2")
+		execStatement(t, "unlock tables")
+	}
+
+	callbacks["OTHER.*Copy Done"] = func() {
+		log.Info("Got copy done, canceling context")
+		cancel()
+	}
+	startVStreamCopy(ctx, t, filter, tablePKs)
+
+	/*
+		//vstream catchup t1 and copy t2
+		insertRow(t, "t1", 1, numInitialRows+2)
+		insertRow(t, "t2", 2, numInitialRows+1)
+
+		//vstream catchup t1,t2 and copy t3
+		insertRow(t, "t1", 1, numInitialRows+2)
+		insertRow(t, "t2", 2, numInitialRows+1)
+	*/
+
+	select {
+	case <-time.After(10 * time.Second):
+		printAllEvents("Timed out")
+		t.Fatal("Timed out waiting for events")
+	case <-ctx.Done():
+		log.Infof("Received context.Done, ending test")
+	}
+	numCopyEvents := 3 /*t1,t2,t3*/ * (numInitialRows + 1 /*FieldEvent*/ + 1 /*LastPKEvent*/ + 1 /*Copy Start Other TestEvent*/)
+	numCopyEvents += 2        /* GTID + Test event after all copy is done */
+	numCatchupEvents := 5     /*t1:FIELD+ROW*/
+	numFastForwardEvents := 5 /*t1:FIELD+ROW*/
+	numExpectedEvents := numCopyEvents + numCatchupEvents + numFastForwardEvents
+	printAllEvents("End of test")
+	if len(allEvents) != numExpectedEvents {
+		t.Fatalf("Received %d events, expected %d", len(allEvents), numExpectedEvents)
+	} else {
+		log.Infof("Successfully received %d events", numExpectedEvents)
+	}
+
+}
 
 func insertMultipleRows(t *testing.T, table string, idx int, numRows int) {
 	query1 := fmt.Sprintf(bulkInsertQuery, table, idx, idx)
@@ -101,23 +178,12 @@ func initTables(t *testing.T, tables []string) {
 			fieldEvent:   getFieldEvent(table, idx),
 			insertEvents: getInsertEvents(table, idx, numInitialRows),
 		}
-		mutexName := fmt.Sprintf("%sCopy", table)
-		mutexes[mutexName] = &sync.Mutex{}
-		mutexes[mutexName].Lock()
 
 		callbacks[fmt.Sprintf("LASTPK.*%s.*%d", table, numInitialRows)] = func() {
-			log.Infof("Unlocking mutex %s, table %s", mutexName, tableName)
 			if tableName == "t1" {
 				insertRow(t, "t1", 1, numInitialRows+1)
-				positions["EOF"] = masterPosition(t)
-
-				callbacks["gtid.*"+positions["EOF"]] = func() {
-					log.Infof("Got EOF, canceling test")
-					cancelTest()
-				}
-
+				log.Infof("Position after first insert into t1: %s", masterPosition(t))
 			}
-			mutexes[mutexName].Unlock()
 		}
 	}
 	positions["afterInitialInsert"] = masterPosition(t)
@@ -126,11 +192,9 @@ func initTables(t *testing.T, tables []string) {
 
 func initialize(t *testing.T) {
 	callbacks = make(map[string]func())
-	mutexes = make(map[string]*sync.Mutex)
 	testState.tables = []string{"t1", "t2", "t3"}
 	positions = make(map[string]string)
 	initTables(t, testState.tables)
-	log.Infof("Positions are %v", positions)
 	callbacks["gtid.*"+positions["afterInitialInsert"]] = func() {
 		log.Infof("Callback: afterInitialInsert")
 	}
@@ -138,7 +202,7 @@ func initialize(t *testing.T) {
 
 func getRule(table string) *binlogdata.Rule {
 	return &binlogdata.Rule{
-		Match:  fmt.Sprintf(table),
+		Match:  table,
 		Filter: fmt.Sprintf("select * from %s", table),
 	}
 }
@@ -158,62 +222,6 @@ func insertRow(t *testing.T, table string, idx int, id int) {
 	execStatement(t, query)
 	insertEvent := fmt.Sprintf(insertEventTpl, len(strconv.Itoa(id)), len(strconv.Itoa(id*idx*10)), id, id*idx*10)
 	testState.tableInfos[table].catchupEvents = append(testState.tableInfos[table].catchupEvents, insertEvent)
-}
-
-var callbacks map[string]func()
-
-var cancelTest func()
-var mutexes map[string]*sync.Mutex
-
-func TestVStreamCopyCompleteFlow(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancelTest = cancel
-	defer cancel()
-
-	initialize(t)
-
-	var rules []*binlogdata.Rule
-	var tablePKs []*TableLastPK
-	for i, table := range testState.tables {
-		rules = append(rules, getRule(table))
-		tablePKs = append(tablePKs, getTablePK(table, i+1))
-	}
-	filter := &binlogdatapb.Filter{
-		Rules: rules,
-	}
-
-	startVStreamCopy(ctx, t, filter, tablePKs)
-
-	/*
-		//vstream catchup t1 and copy t2
-		insertRow(t, "t1", 1, numInitialRows+2)
-		insertRow(t, "t2", 2, numInitialRows+1)
-
-		//vstream catchup t1,t2 and copy t3
-		insertRow(t, "t1", 1, numInitialRows+2)
-		insertRow(t, "t2", 2, numInitialRows+1)
-	*/
-
-	select {
-	case <-time.After(10 * time.Second):
-		printAllEvents("Timed out")
-		t.Fatal("Timed out waiting for events")
-	case <-ctx.Done():
-		log.Infof("Received context.Done, ending test")
-	}
-	numCopyEvents := 3 /*t1,t2,t3*/ *(numInitialRows+1 /*FieldEvent*/ +1 /*LastPKEvent*/) + 1 /* gtid after all copy is done */
-	numCatchupEvents := 2                                                                     /*t1:FIELD+ROW*/
-	numFastForwardEvents := 0
-	numExpectedEvents := numCopyEvents + numCatchupEvents + numFastForwardEvents
-	if len(allEvents) != numExpectedEvents {
-		t.Fatalf("Received %d events, expected %d", len(allEvents), numExpectedEvents)
-	} else {
-		log.Infof("Successfully received %d events", numExpectedEvents)
-	}
-	//printAllEvents("End of test")
 }
 
 func printAllEvents(msg string) {
@@ -240,6 +248,9 @@ func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Fi
 		err := engine.Stream(ctx, pos, tablePKs, filter, func(evs []*binlogdatapb.VEvent) error {
 			//t.Logf("Received events: %v", evs)
 			for _, ev := range evs {
+				if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
+					continue
+				}
 				cb := getEventCallback(ctx, t, ev)
 				if cb != nil {
 					cb()
