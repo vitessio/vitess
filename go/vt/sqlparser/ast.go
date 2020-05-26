@@ -1685,7 +1685,9 @@ func (node *CaseExpr) Format(buf *TrackedBuffer) {
 func (node *Default) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "default")
 	if node.ColName != "" {
-		buf.astPrintf(node, "(%s)", node.ColName)
+		buf.WriteString("(")
+		formatID(buf, node.ColName, strings.ToLower(node.ColName), NoAt)
+		buf.WriteString(")")
 	}
 }
 
