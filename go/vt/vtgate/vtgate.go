@@ -346,6 +346,13 @@ handleError:
 	return nil
 }
 
+// CloseSession closes the session, rolling back any implicit transactions. This has the
+// same effect as if a "rollback" statement was executed, but does not affect the query
+// statistics.
+func (vtg *VTGate) CloseSession(ctx context.Context, session *vtgatepb.Session) error {
+	return vtg.executor.CloseSession(ctx, NewSafeSession(session))
+}
+
 // ResolveTransaction resolves the specified 2PC transaction.
 func (vtg *VTGate) ResolveTransaction(ctx context.Context, dtid string) error {
 	return formatError(vtg.txConn.Resolve(ctx, dtid))
