@@ -47,8 +47,11 @@ func TestSetUDV(t *testing.T) {
 		query:        "set @foo = 'abc', @bar = 42, @baz = 30.5, @tablet = concat('foo','bar')",
 		expectedRows: "", rowsAffected: 0,
 	}, {
-		query:        "select @foo, @bar, @baz, @tablet",
-		expectedRows: `[[VARBINARY("abc") INT64(42) FLOAT64(30.5) VARBINARY("foobar")]]`, rowsAffected: 1,
+		query:        "/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE */",
+		expectedRows: "", rowsAffected: 0,
+	}, {
+		query:        "select @foo, @bar, @baz, @tablet, @OLD_SQL_MODE",
+		expectedRows: `[[VARBINARY("abc") INT64(42) FLOAT64(30.5) VARBINARY("foobar") VARBINARY("ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION")]]`, rowsAffected: 1,
 	}, {
 		query:        "insert into test(id, val1, val2, val3) values(1, @foo, null, null), (2, null, @bar, null), (3, null, null, @baz)",
 		expectedRows: ``, rowsAffected: 3,
