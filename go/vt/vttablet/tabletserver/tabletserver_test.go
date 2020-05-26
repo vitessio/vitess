@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -70,14 +72,10 @@ func TestTabletServerGetState(t *testing.T) {
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	for i, state := range states {
 		tsv.setState(state)
-		if stateName := tsv.GetState(); stateName != names[i] {
-			t.Errorf("GetState: %s, want %s", stateName, names[i])
-		}
+		require.Equal(t, names[i], tsv.GetState(), "GetState")
 	}
 	tsv.EnterLameduck()
-	if stateName := tsv.GetState(); stateName != "NOT_SERVING" {
-		t.Errorf("GetState: %s, want NOT_SERVING", stateName)
-	}
+	require.Equal(t, "NOT_SERVING", tsv.GetState(), "GetState")
 }
 
 func TestTabletServerAllowQueriesFailBadConn(t *testing.T) {
@@ -90,9 +88,7 @@ func TestTabletServerAllowQueriesFailBadConn(t *testing.T) {
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	err := tsv.StartService(target, dbcfgs)
-	if err == nil {
-		t.Fatalf("TabletServer.StartService should fail")
-	}
+	require.Error(t, err, "TabletServer.StartService should fail")
 	checkTabletServerState(t, tsv, StateNotConnected)
 }
 
@@ -108,14 +104,11 @@ func TestTabletServerAllowQueries(t *testing.T) {
 	err := tsv.StartService(target, dbcfgs)
 	tsv.StopService()
 	want := "InitDBConfig failed"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Fatalf("TabletServer.StartService: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
 	tsv.setState(StateShuttingDown)
 	err = tsv.StartService(target, dbcfgs)
-	if err == nil {
-		t.Fatalf("TabletServer.StartService should fail")
-	}
+	require.Error(t, err, "TabletServer.StartService should fail")
 	tsv.StopService()
 }
 
@@ -129,9 +122,8 @@ func TestTabletServerInitDBConfig(t *testing.T) {
 	dbcfgs := newDBConfigs(db)
 	err := tsv.InitDBConfig(target, dbcfgs)
 	want := "InitDBConfig failed"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("InitDBConfig: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
 	tsv.setState(StateNotConnected)
 	err = tsv.InitDBConfig(target, dbcfgs)
 	require.NoError(t, err)
@@ -215,16 +207,14 @@ func TestDecideAction(t *testing.T) {
 	tsv.setState(StateTransitioning)
 	_, err = tsv.decideAction(topodatapb.TabletType_MASTER, false, nil)
 	want := "cannot SetServingType"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("decideAction: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
 
 	tsv.setState(StateShuttingDown)
 	_, err = tsv.decideAction(topodatapb.TabletType_MASTER, false, nil)
 	want = "cannot SetServingType"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("decideAction: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
 }
 
 func TestSetServingType(t *testing.T) {
@@ -318,16 +308,12 @@ func TestTabletServerCheckMysql(t *testing.T) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	err := tsv.StartService(target, dbcfgs)
 	defer tsv.StopService()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	if !tsv.isMySQLReachable() {
 		t.Error("isMySQLReachable should return true")
 	}
 	stateChanged, err := tsv.SetServingType(topodatapb.TabletType_SPARE, false, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	if stateChanged != true {
 		t.Errorf("SetServingType() should have changed the QueryService state, but did not")
 	}
@@ -398,67 +384,55 @@ func TestTabletServerTarget(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	ctx := context.Background()
 
 	// query that works
 	db.AddQuery("select * from test_table limit 1000", &sqltypes.Result{})
 	_, err = tsv.Execute(ctx, &target1, "select * from test_table limit 1000", nil, 0, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// wrong tablet type
 	target2 := proto.Clone(&target1).(*querypb.Target)
 	target2.TabletType = topodatapb.TabletType_REPLICA
 	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0, nil)
 	want := "invalid tablet type"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
 
 	// set expected target type to MASTER, but also accept REPLICA
 	tsv.SetServingType(topodatapb.TabletType_MASTER, true, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
 	_, err = tsv.Execute(ctx, &target1, "select * from test_table limit 1000", nil, 0, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// wrong keyspace
 	target2 = proto.Clone(&target1).(*querypb.Target)
 	target2.Keyspace = "bad"
 	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0, nil)
 	want = "invalid keyspace bad"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
 
 	// wrong shard
 	target2 = proto.Clone(&target1).(*querypb.Target)
 	target2.Shard = "bad"
 	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0, nil)
 	want = "invalid shard bad"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
 
 	// no target
 	_, err = tsv.Execute(ctx, nil, "select * from test_table limit 1000", nil, 0, nil)
 	want = "No target"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
 
 	// Disallow all if service is stopped.
 	tsv.StopService()
 	_, err = tsv.Execute(ctx, &target1, "select * from test_table limit 1000", nil, 0, nil)
 	want = "operation not allowed in state NOT_SERVING"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
 }
 
 func TestBeginOnReplica(t *testing.T) {
@@ -475,55 +449,41 @@ func TestBeginOnReplica(t *testing.T) {
 		TabletType: topodatapb.TabletType_REPLICA,
 	}
 	err := tsv.StartService(target1, dbcfgs)
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer tsv.StopService()
 
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
-	ctx := context.Background()
 	options := querypb.ExecuteOptions{
 		TransactionIsolation: querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY,
 	}
 	txID, alias, err := tsv.Begin(ctx, &target1, &options)
-
-	if err != nil {
-		t.Errorf("err: %v, failed to create read only tx on replica", err)
-	}
-	require.NotNil(t, alias, "alias should not be nil")
+	require.NoError(t, err, "failed to create read only tx on replica")
 	assert.Equal(t, tsv.alias, *alias, "Wrong tablet alias from Begin")
 	err = tsv.Rollback(ctx, &target1, txID)
-	if err != nil {
-		t.Errorf("err: %v, failed to rollback read only tx", err)
-	}
+	require.NoError(t, err, "failed to rollback read only tx")
 
 	// test that RW transactions are refused
 	options = querypb.ExecuteOptions{
 		TransactionIsolation: querypb.ExecuteOptions_DEFAULT,
 	}
 	_, _, err = tsv.Begin(ctx, &target1, &options)
-
-	if err == nil {
-		t.Error("expected write tx to be refused")
-	}
+	require.Error(t, err, "expected write tx to be refused")
 }
 
 func TestTabletServerMasterToReplica(t *testing.T) {
 	// Reuse code from tx_executor_test.
 	_, tsv, db := newTestTxExecutor(t)
 	defer db.Close()
-	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	txid1, _, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
-	if _, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid1, nil); err != nil {
-		t.Error(err)
-	}
-	if err = tsv.Prepare(ctx, &target, txid1, "aa"); err != nil {
-		t.Error(err)
-	}
+	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid1, nil)
+	require.NoError(t, err)
+	err = tsv.Prepare(ctx, &target, txid1, "aa")
+	require.NoError(t, err)
 	txid2, _, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
+
 	// This makes txid2 busy
 	conn2, err := tsv.te.txPool.Get(txid2, "for query")
 	require.NoError(t, err)
@@ -540,9 +500,7 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 		t.Fatal("ch should not fire")
 	case <-time.After(10 * time.Millisecond):
 	}
-	if tsv.te.txPool.activePool.Size() != 1 {
-		t.Errorf("len(tsv.te.txPool.activePool.Size()): %d, want 1", len(tsv.te.preparedPool.conns))
-	}
+	require.EqualValues(t, 1, tsv.te.txPool.activePool.Size(), "tsv.te.txPool.activePool.Size()")
 
 	// Concluding conn2 will allow the transition to go through.
 	tsv.te.txPool.LocalConclude(ctx, conn2)
@@ -567,9 +525,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{})
 	turnOnTxEngine()
-	if len(tsv.te.preparedPool.conns) != 0 {
-		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 0", len(tsv.te.preparedPool.conns))
-	}
+	assert.Empty(t, tsv.te.preparedPool.conns, "tsv.te.preparedPool.conns")
 	turnOffTxEngine()
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
@@ -587,18 +543,12 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		}},
 	})
 	turnOnTxEngine()
-	if len(tsv.te.preparedPool.conns) != 1 {
-		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
-	}
+	assert.EqualValues(t, 1, len(tsv.te.preparedPool.conns), "len(tsv.te.preparedPool.conns)")
 	got := tsv.te.preparedPool.conns["dtid0"].Queries
 	want := []string{"update test_table set name = 2 where pk = 1 limit 10001"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Prepared queries: %v, want %v", got, want)
-	}
+	utils.MustMatch(t, want, got, "Prepared queries")
 	turnOffTxEngine()
-	if v := len(tsv.te.preparedPool.conns); v != 0 {
-		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 0", v)
-	}
+	assert.Empty(t, tsv.te.preparedPool.conns, "tsv.te.preparedPool.conns")
 
 	tsv.te.txPool.lastID.Set(1)
 	// Ensure we continue past errors.
@@ -627,33 +577,24 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		}},
 	})
 	turnOnTxEngine()
-	if len(tsv.te.preparedPool.conns) != 1 {
-		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
-	}
+	assert.EqualValues(t, 1, len(tsv.te.preparedPool.conns), "len(tsv.te.preparedPool.conns)")
 	got = tsv.te.preparedPool.conns["a:b:10"].Queries
 	want = []string{"update test_table set name = 2 where pk = 1 limit 10001"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Prepared queries: %v, want %v", got, want)
-	}
+	utils.MustMatch(t, want, got, "Prepared queries")
 	wantFailed := map[string]error{"a:b:20": errPrepFailed}
 	if !reflect.DeepEqual(tsv.te.preparedPool.reserved, wantFailed) {
 		t.Errorf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed)
 	}
 	// Verify last id got adjusted.
-	if v := tsv.te.txPool.lastID.Get(); v != 20 {
-		t.Errorf("tsv.te.txPool.lastID.Get(): %d, want 20", v)
-	}
+	assert.EqualValues(t, 20, tsv.te.txPool.lastID.Get(), "tsv.te.txPool.lastID.Get()")
 	turnOffTxEngine()
-	if v := len(tsv.te.preparedPool.conns); v != 0 {
-		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 0", v)
-	}
+	assert.Empty(t, tsv.te.preparedPool.conns, "tsv.te.preparedPool.conns")
 }
 
 func TestTabletServerCreateTransaction(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
 	defer db.Close()
 	defer tsv.StopService()
-	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
 	db.AddQueryPattern(fmt.Sprintf("insert into _vt\\.dt_state\\(dtid, state, time_created\\) values \\('aa', %d,.*", int(querypb.TransactionState_PREPARE)), &sqltypes.Result{})
@@ -669,7 +610,6 @@ func TestTabletServerStartCommit(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
 	defer db.Close()
 	defer tsv.StopService()
-	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
 	commitTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_COMMIT), int(querypb.TransactionState_PREPARE))
@@ -681,17 +621,13 @@ func TestTabletServerStartCommit(t *testing.T) {
 	db.AddQuery(commitTransition, &sqltypes.Result{})
 	txid = newTxForPrep(tsv)
 	err = tsv.StartCommit(ctx, &target, txid, "aa")
-	want := "could not transition to COMMIT: aa"
-	if err == nil || err.Error() != want {
-		t.Errorf("Prepare err: %v, want %s", err, want)
-	}
+	assert.EqualError(t, err, "could not transition to COMMIT: aa", "Prepare err")
 }
 
 func TestTabletserverSetRollback(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
 	defer db.Close()
 	defer tsv.StopService()
-	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
 	rollbackTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
@@ -703,26 +639,20 @@ func TestTabletserverSetRollback(t *testing.T) {
 	db.AddQuery(rollbackTransition, &sqltypes.Result{})
 	txid = newTxForPrep(tsv)
 	err = tsv.SetRollback(ctx, &target, "aa", txid)
-	want := "could not transition to ROLLBACK: aa"
-	if err == nil || err.Error() != want {
-		t.Errorf("Prepare err: %v, want %s", err, want)
-	}
+	assert.EqualError(t, err, "could not transition to ROLLBACK: aa", "Prepare err")
 }
 
 func TestTabletServerReadTransaction(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
 	defer db.Close()
 	defer tsv.StopService()
-	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
 	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", &sqltypes.Result{})
 	got, err := tsv.ReadTransaction(ctx, &target, "aa")
 	require.NoError(t, err)
 	want := &querypb.TransactionMetadata{}
-	if !proto.Equal(got, want) {
-		t.Errorf("ReadTransaction: %v, want %v", got, want)
-	}
+	utils.MustMatch(t, want, got, "ReadTransaction")
 
 	txResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -766,9 +696,7 @@ func TestTabletServerReadTransaction(t *testing.T) {
 			TabletType: topodatapb.TabletType_MASTER,
 		}},
 	}
-	if !proto.Equal(got, want) {
-		t.Errorf("ReadTransaction: %v, want %v", got, want)
-	}
+	utils.MustMatch(t, want, got, "ReadTransaction")
 
 	txResult = &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -786,9 +714,7 @@ func TestTabletServerReadTransaction(t *testing.T) {
 	want.State = querypb.TransactionState_COMMIT
 	got, err = tsv.ReadTransaction(ctx, &target, "aa")
 	require.NoError(t, err)
-	if !proto.Equal(got, want) {
-		t.Errorf("ReadTransaction: %v, want %v", got, want)
-	}
+	utils.MustMatch(t, want, got, "ReadTransaction")
 
 	txResult = &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -806,17 +732,13 @@ func TestTabletServerReadTransaction(t *testing.T) {
 	want.State = querypb.TransactionState_ROLLBACK
 	got, err = tsv.ReadTransaction(ctx, &target, "aa")
 	require.NoError(t, err)
-	if !proto.Equal(got, want) {
-
-		t.Errorf("ReadTransaction: %v, want %v", got, want)
-	}
+	utils.MustMatch(t, want, got, "ReadTransaction")
 }
 
 func TestTabletServerConcludeTransaction(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
 	defer db.Close()
 	defer tsv.StopService()
-	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
 	db.AddQuery("delete from _vt.dt_state where dtid = 'aa'", &sqltypes.Result{})
@@ -834,18 +756,13 @@ func TestTabletServerBeginFail(t *testing.T) {
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	err := tsv.StartService(target, dbcfgs)
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer tsv.StopService()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
 	defer cancel()
 	tsv.Begin(ctx, &target, nil)
 	_, _, err = tsv.Begin(ctx, &target, nil)
-	want := "transaction pool aborting request due to already expired context"
-	if err == nil || err.Error() != want {
-		t.Fatalf("Begin err: %v, want %v", err, want)
-	}
+	require.EqualError(t, err, "transaction pool aborting request due to already expired context", "Begin err")
 }
 
 func TestTabletServerCommitTransaction(t *testing.T) {
@@ -871,7 +788,6 @@ func TestTabletServerCommitTransaction(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	ctx := context.Background()
 	transactionID, _, err := tsv.Begin(ctx, &target, nil)
 	if err != nil {
 		t.Fatalf("call TabletServer.Begin failed: %v", err)
@@ -896,7 +812,6 @@ func TestTabletServerCommiRollbacktFail(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	ctx := context.Background()
 	err = tsv.Commit(ctx, &target, -1)
 	want := "transaction -1: not found"
 	if err == nil || err.Error() != want {
@@ -931,7 +846,6 @@ func TestTabletServerRollback(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	ctx := context.Background()
 	transactionID, _, err := tsv.Begin(ctx, &target, nil)
 	if err != nil {
 		t.Fatalf("call TabletServer.Begin failed: %v", err)
@@ -949,19 +863,14 @@ func TestTabletServerPrepare(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
 	defer db.Close()
 	defer tsv.StopService()
-	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	transactionID, _, err := tsv.Begin(ctx, &target, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, nil); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, nil)
+	require.NoError(t, err)
 	defer tsv.RollbackPrepared(ctx, &target, "aa", 0)
-	if err := tsv.Prepare(ctx, &target, transactionID, "aa"); err != nil {
-		t.Fatal(err)
-	}
+	err = tsv.Prepare(ctx, &target, transactionID, "aa")
+	require.NoError(t, err)
 }
 
 func TestTabletServerCommitPrepared(t *testing.T) {
@@ -969,22 +878,16 @@ func TestTabletServerCommitPrepared(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
 	defer db.Close()
 	defer tsv.StopService()
-	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	transactionID, _, err := tsv.Begin(ctx, &target, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, nil); err != nil {
-		t.Fatal(err)
-	}
-	if err := tsv.Prepare(ctx, &target, transactionID, "aa"); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, nil)
+	require.NoError(t, err)
+	err = tsv.Prepare(ctx, &target, transactionID, "aa")
+	require.NoError(t, err)
 	defer tsv.RollbackPrepared(ctx, &target, "aa", 0)
-	if err := tsv.CommitPrepared(ctx, &target, "aa"); err != nil {
-		t.Fatal(err)
-	}
+	err = tsv.CommitPrepared(ctx, &target, "aa")
+	require.NoError(t, err)
 }
 
 func TestTabletServerRollbackPrepared(t *testing.T) {
@@ -992,21 +895,15 @@ func TestTabletServerRollbackPrepared(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
 	defer db.Close()
 	defer tsv.StopService()
-	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	transactionID, _, err := tsv.Begin(ctx, &target, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, nil); err != nil {
-		t.Fatal(err)
-	}
-	if err := tsv.Prepare(ctx, &target, transactionID, "aa"); err != nil {
-		t.Fatal(err)
-	}
-	if err := tsv.RollbackPrepared(ctx, &target, "aa", transactionID); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, nil)
+	require.NoError(t, err)
+	err = tsv.Prepare(ctx, &target, transactionID, "aa")
+	require.NoError(t, err)
+	err = tsv.RollbackPrepared(ctx, &target, "aa", transactionID)
+	require.NoError(t, err)
 }
 
 func TestTabletServerStreamExecute(t *testing.T) {
@@ -1033,7 +930,6 @@ func TestTabletServerStreamExecute(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	ctx := context.Background()
 	callback := func(*sqltypes.Result) error { return nil }
 	if err := tsv.StreamExecute(ctx, &target, executeSQL, nil, 0, nil, callback); err != nil {
 		t.Fatalf("TabletServer.StreamExecute should success: %s, but get error: %v",
@@ -1065,7 +961,6 @@ func TestTabletServerStreamExecuteComments(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	ctx := context.Background()
 	callback := func(*sqltypes.Result) error { return nil }
 
 	ch := tabletenv.StatsLogger.Subscribe("test stats logging")
@@ -1109,7 +1004,6 @@ func TestTabletServerExecuteBatch(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	ctx := context.Background()
 	if _, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{
 		{
 			Sql:           sql,
@@ -1132,12 +1026,10 @@ func TestTabletServerExecuteBatchFailEmptyQueryList(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	ctx := context.Background()
 	_, err = tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{}, false, 0, nil)
 	want := "Empty query list"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("ExecuteBatch: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
 }
 
 func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
@@ -1152,7 +1044,6 @@ func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	ctx := context.Background()
 	_, err = tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
 		{
 			Sql:           "begin",
@@ -1160,9 +1051,8 @@ func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
 		},
 	}, true, 1, nil)
 	want := "cannot start a new transaction"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("ExecuteBatch: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
 }
 
 func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
@@ -1179,7 +1069,6 @@ func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	ctx := context.Background()
 	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
 		{
 			Sql:           "begin",
@@ -1204,7 +1093,6 @@ func TestTabletServerExecuteBatchCommitFail(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	ctx := context.Background()
 	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
 		{
 			Sql:           "begin",
@@ -1242,7 +1130,6 @@ func TestTabletServerExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	ctx := context.Background()
 	if db.GetQueryCalledNum("rollback") != 0 {
 		t.Fatalf("rollback should not be executed.")
 	}
@@ -1273,7 +1160,6 @@ func TestTabletServerExecuteBatchCallCommitWithoutABegin(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	ctx := context.Background()
 	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
 		{
 			Sql:           "commit",
@@ -1302,7 +1188,6 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	ctx := context.Background()
 	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
 		{
 			Sql:           "begin",
@@ -1386,7 +1271,6 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 		})
 
 	// Run all three transactions.
-	ctx := context.Background()
 	wg := sync.WaitGroup{}
 
 	// tx1.
@@ -1466,7 +1350,6 @@ func TestDMLQueryWithoutWhereClause(t *testing.T) {
 
 	db.AddQuery(q+" limit 10001", &sqltypes.Result{})
 
-	ctx := context.Background()
 	_, txid, _, err := tsv.BeginExecute(ctx, &target, q, nil, nil)
 	require.NoError(t, err)
 	err = tsv.Commit(ctx, &target, txid)
@@ -1535,7 +1418,6 @@ func TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction(t *testing.T) {
 		})
 
 	// Run all three transactions.
-	ctx := context.Background()
 	wg := sync.WaitGroup{}
 
 	// tx1.
@@ -1649,7 +1531,6 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 		})
 
 	// Run all three transactions.
-	ctx := context.Background()
 	wg := sync.WaitGroup{}
 
 	// tx1.
@@ -1712,9 +1593,8 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 	// transactions via db.SetBeforeFunc() for the same reason as mentioned
 	// in TestSerializeTransactionsSameRow: The MySQL C client does not seem
 	// to allow more than connection attempt at a time.
-	if err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and name = 1", 3); err != nil {
-		t.Fatal(err)
-	}
+	err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and name = 1", 3)
+	require.NoError(t, err)
 	close(allQueriesPending)
 
 	wg.Wait()
@@ -1787,7 +1667,6 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 		})
 
 	// Run the two transactions.
-	ctx := context.Background()
 	wg := sync.WaitGroup{}
 
 	// tx1.
@@ -1875,7 +1754,6 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests_ExecuteBatchAsTrans
 		})
 
 	// Run the two transactions.
-	ctx := context.Background()
 	wg := sync.WaitGroup{}
 
 	// tx1.
@@ -1972,7 +1850,6 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 		})
 
 	// Run the two transactions.
-	ctx := context.Background()
 	wg := sync.WaitGroup{}
 
 	// tx1.
@@ -2028,9 +1905,8 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	}()
 
 	// Wait until tx1, 2 and 3 are pending.
-	if err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and name = 1", 3); err != nil {
-		t.Fatal(err)
-	}
+	err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and name = 1", 3)
+	require.NoError(t, err)
 	// Now unblock tx2 and cancel it.
 	cancelTx2()
 
@@ -2047,7 +1923,6 @@ func TestMessageStream(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
 	defer db.Close()
 	defer tsv.StopService()
-	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
 	err := tsv.MessageStream(ctx, &target, "nomsg", func(qr *sqltypes.Result) error {
@@ -2064,9 +1939,7 @@ func TestMessageStream(t *testing.T) {
 		called = true
 		return io.EOF
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	if !called {
 		t.Fatal("callback was not called for MessageStream")
 	}
@@ -2076,7 +1949,6 @@ func TestMessageAck(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
 	defer db.Close()
 	defer tsv.StopService()
-	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
 	ids := []*querypb.Value{{
@@ -2094,9 +1966,8 @@ func TestMessageAck(t *testing.T) {
 
 	_, err = tsv.MessageAck(ctx, &target, "msg", ids)
 	want = "query: 'update msg set time_acked"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("tsv.MessageAck(invalid):\n%v, want\n%s", err, want)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
 
 	db.AddQueryPattern("update msg set time_acked = .*", &sqltypes.Result{RowsAffected: 1})
 	count, err := tsv.MessageAck(ctx, &target, "msg", ids)
@@ -2110,7 +1981,6 @@ func TestRescheduleMessages(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
 	defer db.Close()
 	defer tsv.StopService()
-	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
 	_, err := tsv.PostponeMessages(ctx, &target, "nonmsg", []string{"1", "2"})
@@ -2121,9 +1991,8 @@ func TestRescheduleMessages(t *testing.T) {
 
 	_, err = tsv.PostponeMessages(ctx, &target, "msg", []string{"1", "2"})
 	want = "query: 'update msg set time_next"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("tsv.PostponeMessages(invalid):\n%v, want\n%s", err, want)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
 	db.AddQueryPattern("update msg set time_next = .*", &sqltypes.Result{RowsAffected: 1})
 	count, err := tsv.PostponeMessages(ctx, &target, "msg", []string{"1", "2"})
 	require.NoError(t, err)
@@ -2136,7 +2005,6 @@ func TestPurgeMessages(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
 	defer db.Close()
 	defer tsv.StopService()
-	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
 	_, err := tsv.PurgeMessages(ctx, &target, "nonmsg", 0)
@@ -2147,9 +2015,8 @@ func TestPurgeMessages(t *testing.T) {
 
 	_, err = tsv.PurgeMessages(ctx, &target, "msg", 0)
 	want = "query: 'delete from msg where time_acked"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("tsv.PurgeMessages(invalid):\n%v, want\n%s", err, want)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
 
 	db.AddQuery("delete from msg where time_acked < 3 limit 500", &sqltypes.Result{RowsAffected: 1})
 	count, err := tsv.PurgeMessages(ctx, &target, "msg", 3)
@@ -2160,7 +2027,6 @@ func TestPurgeMessages(t *testing.T) {
 }
 
 func TestHandleExecUnknownError(t *testing.T) {
-	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "TestHandleExecError")
 	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
@@ -2209,7 +2075,6 @@ func (tl *testLogger) getLog(i int) string {
 }
 
 func TestHandleExecTabletError(t *testing.T) {
-	ctx := context.Background()
 	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	tl := newTestLogger()
@@ -2221,11 +2086,9 @@ func TestHandleExecTabletError(t *testing.T) {
 		vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tablet error"),
 		nil,
 	)
-	fmt.Println(">>>>>" + err.Error())
 	want := "tablet error"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("got `%v`, want '%s'", err, want)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
 	want = "Sql: \"select * from test_table\", BindVars: {}"
 	if !strings.Contains(tl.getLog(0), want) {
 		t.Errorf("error log %s, want '%s'", tl.getLog(0), want)
@@ -2233,7 +2096,6 @@ func TestHandleExecTabletError(t *testing.T) {
 }
 
 func TestTerseErrorsNonSQLError(t *testing.T) {
-	ctx := context.Background()
 	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
@@ -2247,9 +2109,8 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 		nil,
 	)
 	want := "tablet error"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("%v, want '%s'", err, want)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
 	want = "Sql: \"select * from test_table\", BindVars: {}"
 	if !strings.Contains(tl.getLog(0), want) {
 		t.Errorf("error log %s, want '%s'", tl.getLog(0), want)
@@ -2257,7 +2118,6 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 }
 
 func TestTerseErrorsBindVars(t *testing.T) {
-	ctx := context.Background()
 	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
@@ -2286,7 +2146,6 @@ func TestTerseErrorsBindVars(t *testing.T) {
 }
 
 func TestTerseErrorsNoBindVars(t *testing.T) {
-	ctx := context.Background()
 	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
@@ -2294,9 +2153,8 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 	defer tl.Close()
 	err := tsv.convertAndLogError(ctx, "", nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "sensitive message"), nil)
 	want := "sensitive message"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("%v, want '%s'", err, want)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
 	want = "Sql: \"\", BindVars: {}"
 	if !strings.Contains(tl.getLog(0), want) {
 		t.Errorf("error log '%s', want '%s'", tl.getLog(0), want)
@@ -2304,7 +2162,6 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 }
 
 func TestTruncateErrors(t *testing.T) {
-	ctx := context.Background()
 	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
@@ -2354,7 +2211,6 @@ func TestTruncateErrors(t *testing.T) {
 }
 
 func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
-	ctx := context.Background()
 	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
@@ -2370,9 +2226,7 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	}
 
 	// errors during failover aren't logged at all
-	if len(tl.logs) != 0 {
-		t.Errorf("unexpected error log during failover")
-	}
+	require.Empty(t, tl.logs, "unexpected error log during failover")
 }
 
 var aclJSON1 = `{
@@ -2402,17 +2256,13 @@ func TestACLHUP(t *testing.T) {
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 
 	f, err := ioutil.TempFile("", "tableacl")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer os.Remove(f.Name())
 
-	if _, err := io.WriteString(f, aclJSON1); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
+	_, err = io.WriteString(f, aclJSON1)
+	require.NoError(t, err)
+	err = f.Close()
+	require.NoError(t, err)
 
 	tsv.InitACL(f.Name(), true, 0)
 
@@ -2421,12 +2271,10 @@ func TestACLHUP(t *testing.T) {
 		t.Fatalf("Expected name 'group01', got '%s'", name1)
 	}
 
-	if f, err = os.Create(f.Name()); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = io.WriteString(f, aclJSON2); err != nil {
-		t.Fatal(err)
-	}
+	f, err = os.Create(f.Name())
+	require.NoError(t, err)
+	_, err = io.WriteString(f, aclJSON2)
+	require.NoError(t, err)
 
 	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
 	time.Sleep(100 * time.Millisecond) // wait for signal handler
@@ -2657,3 +2505,5 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }
+
+var ctx = context.Background()
