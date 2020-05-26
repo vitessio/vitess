@@ -328,7 +328,7 @@ func (vse *Engine) setWatch() {
 		b, _ := json.MarshalIndent(vschema, "", "  ")
 		log.V(2).Infof("Updated vschema: %s", b)
 		for _, s := range vse.streamers {
-			s.vs.SetVSchema(vse.lvschema)
+			s.SetVSchema(vse.lvschema)
 		}
 		vse.vschemaUpdates.Add(1)
 	})
