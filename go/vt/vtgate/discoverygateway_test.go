@@ -37,23 +37,23 @@ import (
 )
 
 func TestDiscoveryGatewayExecute(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, func(dg *discoveryGateway, target *querypb.Target) error {
+	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
 		_, err := dg.Execute(context.Background(), target, "query", nil, 0, nil)
 		return err
 	})
-	testDiscoveryGatewayTransact(t, func(dg *discoveryGateway, target *querypb.Target) error {
+	testDiscoveryGatewayTransact(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
 		_, err := dg.Execute(context.Background(), target, "query", nil, 1, nil)
 		return err
 	})
 }
 
 func TestDiscoveryGatewayExecuteBatch(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, func(dg *discoveryGateway, target *querypb.Target) error {
+	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
 		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
 		_, err := dg.ExecuteBatch(context.Background(), target, queries, false, 0, nil)
 		return err
 	})
-	testDiscoveryGatewayTransact(t, func(dg *discoveryGateway, target *querypb.Target) error {
+	testDiscoveryGatewayTransact(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
 		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
 		_, err := dg.ExecuteBatch(context.Background(), target, queries, false, 1, nil)
 		return err
@@ -61,7 +61,7 @@ func TestDiscoveryGatewayExecuteBatch(t *testing.T) {
 }
 
 func TestDiscoveryGatewayExecuteStream(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, func(dg *discoveryGateway, target *querypb.Target) error {
+	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
 		err := dg.StreamExecute(context.Background(), target, "query", nil, 0, nil, func(qr *sqltypes.Result) error {
 			return nil
 		})
@@ -70,33 +70,33 @@ func TestDiscoveryGatewayExecuteStream(t *testing.T) {
 }
 
 func TestDiscoveryGatewayBegin(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, func(dg *discoveryGateway, target *querypb.Target) error {
+	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
 		_, err := dg.Begin(context.Background(), target, nil)
 		return err
 	})
 }
 
 func TestDiscoveryGatewayCommit(t *testing.T) {
-	testDiscoveryGatewayTransact(t, func(dg *discoveryGateway, target *querypb.Target) error {
+	testDiscoveryGatewayTransact(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
 		return dg.Commit(context.Background(), target, 1)
 	})
 }
 
 func TestDiscoveryGatewayRollback(t *testing.T) {
-	testDiscoveryGatewayTransact(t, func(dg *discoveryGateway, target *querypb.Target) error {
+	testDiscoveryGatewayTransact(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
 		return dg.Rollback(context.Background(), target, 1)
 	})
 }
 
 func TestDiscoveryGatewayBeginExecute(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, func(dg *discoveryGateway, target *querypb.Target) error {
+	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
 		_, _, err := dg.BeginExecute(context.Background(), target, "query", nil, nil)
 		return err
 	})
 }
 
 func TestDiscoveryGatewayBeginExecuteBatch(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, func(dg *discoveryGateway, target *querypb.Target) error {
+	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
 		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
 		_, _, err := dg.BeginExecuteBatch(context.Background(), target, queries, false, nil)
 		return err
@@ -106,7 +106,7 @@ func TestDiscoveryGatewayBeginExecuteBatch(t *testing.T) {
 func TestDiscoveryGatewayGetTablets(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 	dg := NewDiscoveryGateway(context.Background(), hc, nil, "local", 2)
 
 	// replica should only use local ones
@@ -131,7 +131,7 @@ func TestDiscoveryGatewayGetTablets(t *testing.T) {
 }
 
 func TestShuffleTablets(t *testing.T) {
-	ts1 := discovery.TabletStats{
+	ts1 := discovery.LegacyTabletStats{
 		Key:     "t1",
 		Tablet:  topo.NewTablet(10, "cell1", "host1"),
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -140,7 +140,7 @@ func TestShuffleTablets(t *testing.T) {
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 
-	ts2 := discovery.TabletStats{
+	ts2 := discovery.LegacyTabletStats{
 		Key:     "t2",
 		Tablet:  topo.NewTablet(10, "cell1", "host2"),
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -149,7 +149,7 @@ func TestShuffleTablets(t *testing.T) {
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 
-	ts3 := discovery.TabletStats{
+	ts3 := discovery.LegacyTabletStats{
 		Key:     "t3",
 		Tablet:  topo.NewTablet(10, "cell2", "host3"),
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -158,7 +158,7 @@ func TestShuffleTablets(t *testing.T) {
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 
-	ts4 := discovery.TabletStats{
+	ts4 := discovery.LegacyTabletStats{
 		Key:     "t4",
 		Tablet:  topo.NewTablet(10, "cell2", "host4"),
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -167,9 +167,9 @@ func TestShuffleTablets(t *testing.T) {
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 
-	sameCellTablets := []discovery.TabletStats{ts1, ts2}
-	diffCellTablets := []discovery.TabletStats{ts3, ts4}
-	mixedTablets := []discovery.TabletStats{ts1, ts2, ts3, ts4}
+	sameCellTablets := []discovery.LegacyTabletStats{ts1, ts2}
+	diffCellTablets := []discovery.LegacyTabletStats{ts3, ts4}
+	mixedTablets := []discovery.LegacyTabletStats{ts1, ts2, ts3, ts4}
 	// repeat shuffling 10 times and every time the same cell tablets should be in the front
 	for i := 0; i < 10; i++ {
 		shuffleTablets("cell1", sameCellTablets)
@@ -206,7 +206,7 @@ func TestShuffleTablets(t *testing.T) {
 func TestDiscoveryGatewayGetTabletsInRegion(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 	ts := memorytopo.NewServer("local-west", "local-east", "local", "remote")
 	srvTopo := srvtopotest.NewPassthroughSrvTopoServer()
 	srvTopo.TopoServer = ts
@@ -236,7 +236,7 @@ func TestDiscoveryGatewayGetTabletsInRegion(t *testing.T) {
 func TestDiscoveryGatewayGetTabletsWithRegion(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 	ts := memorytopo.NewServer("local-west", "local-east", "local", "remote")
 	srvTopo := srvtopotest.NewPassthroughSrvTopoServer()
 	srvTopo.TopoServer = ts
@@ -264,7 +264,7 @@ func TestDiscoveryGatewayGetTabletsWithRegion(t *testing.T) {
 	}
 }
 
-func testDiscoveryGatewayGeneric(t *testing.T, f func(dg *discoveryGateway, target *querypb.Target) error) {
+func testDiscoveryGatewayGeneric(t *testing.T, f func(dg *DiscoveryGateway, target *querypb.Target) error) {
 	keyspace := "ks"
 	shard := "0"
 	tabletType := topodatapb.TabletType_REPLICA
@@ -273,7 +273,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, f func(dg *discoveryGateway, targ
 		Shard:      shard,
 		TabletType: tabletType,
 	}
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 	dg := NewDiscoveryGateway(context.Background(), hc, nil, "cell", 2)
 
 	// no tablet
@@ -347,7 +347,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, f func(dg *discoveryGateway, targ
 	}
 }
 
-func testDiscoveryGatewayTransact(t *testing.T, f func(dg *discoveryGateway, target *querypb.Target) error) {
+func testDiscoveryGatewayTransact(t *testing.T, f func(dg *DiscoveryGateway, target *querypb.Target) error) {
 	keyspace := "ks"
 	shard := "0"
 	tabletType := topodatapb.TabletType_REPLICA
@@ -356,7 +356,7 @@ func testDiscoveryGatewayTransact(t *testing.T, f func(dg *discoveryGateway, tar
 		Shard:      shard,
 		TabletType: tabletType,
 	}
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 	dg := NewDiscoveryGateway(context.Background(), hc, nil, "cell", 2)
 
 	// retry error - no retry

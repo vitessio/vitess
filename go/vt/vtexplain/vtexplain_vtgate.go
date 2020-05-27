@@ -42,7 +42,7 @@ import (
 var (
 	explainTopo    *ExplainTopo
 	vtgateExecutor *vtgate.Executor
-	healthCheck    *discovery.FakeHealthCheck
+	healthCheck    *discovery.FakeLegacyHealthCheck
 
 	vtgateSession = &vtgatepb.Session{
 		TargetString: "",
@@ -52,7 +52,7 @@ var (
 
 func initVtgateExecutor(vSchemaStr string, opts *Options) error {
 	explainTopo = &ExplainTopo{NumShards: opts.NumShards}
-	healthCheck = discovery.NewFakeHealthCheck()
+	healthCheck = discovery.NewFakeLegacyHealthCheck()
 
 	resolver := newFakeResolver(opts, healthCheck, explainTopo, vtexplainCell)
 
@@ -70,7 +70,7 @@ func initVtgateExecutor(vSchemaStr string, opts *Options) error {
 	return nil
 }
 
-func newFakeResolver(opts *Options, hc discovery.HealthCheck, serv srvtopo.Server, cell string) *vtgate.Resolver {
+func newFakeResolver(opts *Options, hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string) *vtgate.Resolver {
 	ctx := context.Background()
 	gw := vtgate.GatewayCreator()(ctx, hc, serv, cell, 3)
 	gw.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
@@ -80,7 +80,7 @@ func newFakeResolver(opts *Options, hc discovery.HealthCheck, serv srvtopo.Serve
 		txMode = vtgatepb.TransactionMode_TWOPC
 	}
 	tc := vtgate.NewTxConn(gw, txMode)
-	sc := vtgate.NewScatterConn("", tc, gw, hc)
+	sc := vtgate.LegacyNewScatterConn("", tc, gw, hc)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	return vtgate.NewResolver(srvResolver, serv, cell, sc)
 }

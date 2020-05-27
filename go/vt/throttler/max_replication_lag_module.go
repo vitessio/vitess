@@ -54,7 +54,7 @@ const (
 // i.e. we'll ignore lag records with lower lag from other replicas while we're
 // waiting for the next record of this replica under test.
 type replicaUnderTest struct {
-	// key holds the discovery.TabletStats.Key value for the replica.
+	// key holds the discovery.LegacyTabletStats.Key value for the replica.
 	key        string
 	alias      string
 	tabletType topodatapb.TabletType
@@ -114,7 +114,7 @@ type MaxReplicationLagModule struct {
 	// max rate calculation has changed. The field is immutable (set in Start().)
 	rateUpdateChan chan<- struct{}
 
-	// lagRecords buffers the replication lag records received by the HealthCheck
+	// lagRecords buffers the replication lag records received by the LegacyHealthCheck
 	// listener. ProcessRecords() will process them.
 	lagRecords chan replicationLagRecord
 	wg         sync.WaitGroup
@@ -240,7 +240,7 @@ func (m *MaxReplicationLagModule) resetConfiguration() {
 }
 
 // RecordReplicationLag records the current replication lag for processing.
-func (m *MaxReplicationLagModule) RecordReplicationLag(t time.Time, ts *discovery.TabletStats) {
+func (m *MaxReplicationLagModule) RecordReplicationLag(t time.Time, ts *discovery.LegacyTabletStats) {
 	m.mutableConfigMu.Lock()
 	if m.mutableConfig.MaxReplicationLagSec == ReplicationLagModuleDisabled {
 		m.mutableConfigMu.Unlock()
@@ -248,7 +248,7 @@ func (m *MaxReplicationLagModule) RecordReplicationLag(t time.Time, ts *discover
 	}
 	m.mutableConfigMu.Unlock()
 
-	// Buffer data point for now to unblock the HealthCheck listener and process
+	// Buffer data point for now to unblock the LegacyHealthCheck listener and process
 	// it asynchronously in ProcessRecords().
 	m.lagRecords <- replicationLagRecord{t, *ts}
 }
@@ -404,7 +404,7 @@ func (m *MaxReplicationLagModule) clearReplicaUnderTest(now time.Time, testedSta
 		return true, "it is no longer actively tracked"
 	}
 	if lr.LastError != nil {
-		// LastError is set i.e. HealthCheck module cannot connect and the cached
+		// LastError is set i.e. LegacyHealthCheck module cannot connect and the cached
 		// data for the replica might be outdated.
 		return true, "it has LastError set i.e. is no longer correctly tracked"
 	}
