@@ -62,8 +62,8 @@ type HealthCheck interface {
 	// It will return an error if it can't read the necessary topology records.
 	WaitForAllServingTablets(ctx context.Context, targets []*querypb.Target) error
 
-	// GetConnection returns the TabletConn of the given tablet.
-	GetConnection(alias *topodatapb.TabletAlias) (queryservice.QueryService, error)
+	// TabletConnection returns the TabletConn of the given tablet.
+	TabletConnection(alias *topodatapb.TabletAlias) (queryservice.QueryService, error)
 
 	// RegisterStats registers the connection counts stats
 	RegisterStats()
@@ -149,7 +149,7 @@ func NewTabletGateway(ctx context.Context, serv srvtopo.Server, localCell string
 
 // QueryServiceByAlias satisfies the Gateway interface
 func (gw *TabletGateway) QueryServiceByAlias(alias *topodatapb.TabletAlias) (queryservice.QueryService, error) {
-	return gw.hc.GetConnection(alias)
+	return gw.hc.TabletConnection(alias)
 }
 
 // RegisterStats registers the stats to export the lag since the last refresh

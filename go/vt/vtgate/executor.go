@@ -207,8 +207,8 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		return 0, nil, err
 	}
 
-	// TODO(deepthi): we should check for the right condition that allows transactions
-	if LegacyHealthCheckEnabled() && safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
+	// Legacy gateway allows transactions only on MASTER
+	if UsingLegacyGateway() && safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
 		return 0, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Executor.execute: transactions are supported only for master tablet types, current type: %v", destTabletType)
 	}
 	if bindVars == nil {
@@ -987,7 +987,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 
 func (e *Executor) showTablets() (*sqltypes.Result, error) {
 	var rows [][]sqltypes.Value
-	if LegacyHealthCheckEnabled() {
+	if UsingLegacyGateway() {
 		status := e.scatterConn.GetLegacyHealthCheckCacheStatus()
 		for _, s := range status {
 			for _, ts := range s.TabletsStats {

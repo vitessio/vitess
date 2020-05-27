@@ -111,8 +111,8 @@ func (fhc *FakeHealthCheck) ReplaceTablet(old, new *topodatapb.Tablet) {
 	fhc.AddTablet(new)
 }
 
-// GetConnection returns the TabletConn of the given tablet.
-func (fhc *FakeHealthCheck) GetConnection(key string) queryservice.QueryService {
+// TabletConnection returns the TabletConn of the given tablet.
+func (fhc *FakeHealthCheck) TabletConnection(key string) queryservice.QueryService {
 	fhc.mu.RLock()
 	defer fhc.mu.RUnlock()
 	if item := fhc.items[key]; item != nil {

@@ -174,7 +174,7 @@ func (stc *ScatterConn) Execute(
 				innerqr, transactionID, alias, err = rs.Gateway.BeginExecute(ctx, rs.Target, query, bindVars, options)
 			default:
 				var qs queryservice.QueryService
-				if LegacyHealthCheckEnabled() || transactionID == 0 {
+				if UsingLegacyGateway() || transactionID == 0 {
 					qs = rs.Gateway
 				} else {
 					qs, err = rs.Gateway.QueryServiceByAlias(alias)
@@ -248,7 +248,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				innerqr, transactionID, alias, err = rs.Gateway.BeginExecute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, opts)
 			default:
 				var qs queryservice.QueryService
-				if LegacyHealthCheckEnabled() || transactionID == 0 {
+				if UsingLegacyGateway() || transactionID == 0 {
 					qs = rs.Gateway
 				} else {
 					qs, err = rs.Gateway.QueryServiceByAlias(alias)
@@ -470,7 +470,7 @@ func (stc *ScatterConn) GetLegacyHealthCheckCacheStatus() discovery.LegacyTablet
 
 // GetHealthCheckCacheStatus returns a displayable version of the HealthCheck cache.
 func (stc *ScatterConn) GetHealthCheckCacheStatus() discovery.TabletsCacheStatusList {
-	if LegacyHealthCheckEnabled() {
+	if UsingLegacyGateway() {
 		panic("this should never be called")
 	}
 
