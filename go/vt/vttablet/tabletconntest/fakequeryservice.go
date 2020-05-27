@@ -666,14 +666,16 @@ var TestStreamHealthStreamHealthResponse = &querypb.StreamHealthResponse{
 		Shard:      "test_shard",
 		TabletType: topodatapb.TabletType_RDONLY,
 	},
-	Serving:                             true,
+	Serving: true,
+
 	TabletExternallyReparentedTimestamp: 1234589,
+
 	RealtimeStats: &querypb.RealtimeStats{
+		CpuUsage:                               1.0,
 		HealthError:                            "random error",
 		SecondsBehindMaster:                    234,
 		BinlogPlayersCount:                     1,
 		SecondsBehindMasterFilteredReplication: 2,
-		CpuUsage:                               1.0,
 	},
 }
 
@@ -697,7 +699,7 @@ func (f *FakeQueryService) StreamHealth(ctx context.Context, callback func(*quer
 }
 
 // VStream is part of the queryservice.QueryService interface
-func (f *FakeQueryService) VStream(ctx context.Context, target *querypb.Target, position string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (f *FakeQueryService) VStream(ctx context.Context, target *querypb.Target, position string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	panic("not implemented")
 }
 

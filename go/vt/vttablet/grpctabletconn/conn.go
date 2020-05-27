@@ -598,7 +598,7 @@ func (conn *gRPCQueryClient) StreamHealth(ctx context.Context, callback func(*qu
 }
 
 // VStream starts a VReplication stream.
-func (conn *gRPCQueryClient) VStream(ctx context.Context, target *querypb.Target, position string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (conn *gRPCQueryClient) VStream(ctx context.Context, target *querypb.Target, position string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	stream, err := func() (queryservicepb.Query_VStreamClient, error) {
 		conn.mu.RLock()
 		defer conn.mu.RUnlock()
@@ -612,6 +612,7 @@ func (conn *gRPCQueryClient) VStream(ctx context.Context, target *querypb.Target
 			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 			Position:          position,
 			Filter:            filter,
+			TableLastPKs:      tablePKs,
 		}
 		stream, err := conn.c.VStream(ctx, req)
 		if err != nil {

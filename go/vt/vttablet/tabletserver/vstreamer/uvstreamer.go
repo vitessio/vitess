@@ -21,7 +21,7 @@ import (
 var uvstreamerTestMode = false // Only used for testing
 
 type tablePlan struct {
-	tablePK *TableLastPK
+	tablePK *binlogdatapb.TableLastPK
 	rule    *binlogdatapb.Rule
 }
 
@@ -69,7 +69,7 @@ type uvstreamerConfig struct {
 	CatchupRetryTime  time.Duration
 }
 
-func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, sh schema.Historian, startPos string, tablePKs []*TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *uvstreamer {
+func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, sh schema.Historian, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *uvstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	config := &uvstreamerConfig{
 		MaxReplicationLag: 1 * time.Nanosecond,
@@ -98,8 +98,8 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 			uvs.plans[rule.Match] = plan //TODO: only handles actual table name now, no regular expressions
 		}
 		for _, tablePK := range tablePKs {
-			uvs.plans[tablePK.name].tablePK = tablePK
-			uvs.tablesToCopy = append(uvs.tablesToCopy, tablePK.name)
+			uvs.plans[tablePK.TableName].tablePK = tablePK
+			uvs.tablesToCopy = append(uvs.tablesToCopy, tablePK.TableName)
 		}
 		sort.Strings(uvs.tablesToCopy)
 	}
@@ -136,16 +136,16 @@ func (uvs *uvstreamer) filterEvents(evs []*binlogdatapb.VEvent) []*binlogdatapb.
 		if !shouldSend && tableName != "" {
 			shouldSend = true
 			_, ok := uvs.plans[tableName]
-			if ok && uvs.plans[tableName].tablePK.lastPK.Rows[0] == nil {
+			if ok && uvs.plans[tableName].tablePK == nil {
 				shouldSend = false
 			}
 		}
 		if shouldSend {
 			evs2 = append(evs2, ev)
 			//log.Infof("shouldSend: sending %v table %s", ev.String(), tableName)
-		} else {
-			//log.Infof("shouldSend: filtering out %v", ev.String())
 		}
+		//log.Infof("shouldSend: filtering out %v", ev.String())
+
 	}
 	return evs2
 }
@@ -231,7 +231,7 @@ func (uvs *uvstreamer) init() error {
 		return err
 	} //startpos validation for tablepk != nil
 	if uvs.pos.IsZero() && (len(uvs.plans) == 0) {
-		return fmt.Errorf("Stream needs atleast a position or a table to copy")
+		return fmt.Errorf("Stream needs a position or a table to copy")
 	}
 	return nil
 }
@@ -271,8 +271,8 @@ func (uvs *uvstreamer) SetVSchema(vschema *localVSchema) {
 }
 
 func (uvs *uvstreamer) setCopyState(tableName string, lastPK *sqltypes.Result) {
-	uvs.plans[tableName].tablePK.lastPK = lastPK
 	qr := sqltypes.ResultToProto3(lastPK)
+	uvs.plans[tableName].tablePK.Lastpk = qr
 	lastPKEvent := &binlogdatapb.LastPKEvent{
 		TableLastPK: &binlogdatapb.TableLastPK{
 			TableName: tableName,
