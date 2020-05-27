@@ -155,25 +155,28 @@ func (mariadbFlavor) status(c *Conn) (SlaveStatus, error) {
 	if err != nil {
 		return SlaveStatus{}, vterrors.Wrapf(err, "SlaveStatus can't parse MariaDB GTID (Gtid_Slave_Pos: %#v)", resultMap["Gtid_Slave_Pos"])
 	}
-	filePos, err := strconv.Atoi(resultMap["Exec_Master_Log_Pos"])
-	if err != nil && resultMap["Exec_Master_Log_Pos"] != "" {
+
+	execMasterLogPosStr := resultMap["Exec_Master_Log_Pos"]
+	filePos, err := strconv.Atoi(execMasterLogPosStr)
+	if err != nil && execMasterLogPosStr != "" {
 		return SlaveStatus{}, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", resultMap["Exec_Master_Log_Pos"])
 	}
-	file := resultMap["Exec_Master_Log_Pos"]
-	if file != "" {
+	file := resultMap["Relay_Master_Log_File"]
+	if file != "" && execMasterLogPosStr != "" {
 		status.FilePosition.GTIDSet = filePosGTID{
 			file: file,
 			pos:  filePos,
 		}
 	}
 
-	fileRelayPos, err := strconv.Atoi(resultMap["Read_Master_Log_Pos"])
-	if err != nil && resultMap["Read_Master_Log_Pos"] != "" {
+	readMasterLogPosStr := resultMap["Read_Master_Log_Pos"]
+	fileRelayPos, err := strconv.Atoi(readMasterLogPosStr)
+	if err != nil && readMasterLogPosStr != "" {
 		return SlaveStatus{}, fmt.Errorf("invalid ReadMasterLogPos GTID (%v): expecting pos to be an integer", resultMap["Read_Master_Log_Pos"])
 	}
 	file = resultMap["Master_Log_File"]
 
-	if file != "" {
+	if file != "" && readMasterLogPosStr != "" {
 		status.FileRelayLogPosition.GTIDSet = filePosGTID{
 			file: file,
 			pos:  fileRelayPos,

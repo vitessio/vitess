@@ -131,24 +131,32 @@ func (mysqlFlavor) status(c *Conn) (SlaveStatus, error) {
 	// have been in the relay log's GTIDSet in the past, prior to a reset.
 	status.RelayLogPosition.GTIDSet = status.Position.GTIDSet.Union(relayLogGTIDSet)
 
-	filePos, err := strconv.Atoi(resultMap["Exec_Master_Log_Pos"])
-	if err != nil {
+	execMasterLogFilePos := resultMap["Exec_Master_Log_Pos"]
+	filePos, err := strconv.Atoi(execMasterLogFilePos)
+	if err != nil && execMasterLogFilePos != "" {
 		return SlaveStatus{}, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", resultMap["Exec_Master_Log_Pos"])
 	}
+	file := resultMap["Relay_Master_Log_File"]
 
-	status.FilePosition.GTIDSet = filePosGTID{
-		file: resultMap["Relay_Master_Log_File"],
-		pos:  filePos,
+	if execMasterLogFilePos != "" && file != "" {
+		status.FilePosition.GTIDSet = filePosGTID{
+			file: file,
+			pos:  filePos,
+		}
 	}
 
-	fileRelayPos, err := strconv.Atoi(resultMap["Relay_Log_Pos"])
-	if err != nil {
-		return SlaveStatus{}, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", resultMap["Exec_Master_Log_Pos"])
+	readMasterLogPosStr := resultMap["Read_Master_Log_Pos"]
+	fileRelayPos, err := strconv.Atoi(readMasterLogPosStr)
+	if err != nil && readMasterLogPosStr != "" {
+		return SlaveStatus{}, fmt.Errorf("invalid ReadMasterLogPos GTID (%v): expecting pos to be an integer", resultMap["Read_Master_Log_Pos"])
 	}
+	file = resultMap["Master_Log_File"]
 
-	status.FileRelayLogPosition.GTIDSet = filePosGTID{
-		file: resultMap["Relay_Log_File"],
-		pos:  fileRelayPos,
+	if file != "" && readMasterLogPosStr != "" {
+		status.FileRelayLogPosition.GTIDSet = filePosGTID{
+			file: file,
+			pos:  fileRelayPos,
+		}
 	}
 
 	return status, nil
