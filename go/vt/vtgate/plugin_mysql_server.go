@@ -334,6 +334,31 @@ var mysqlUnixListener *mysql.Listener
 var sigChan chan os.Signal
 var vtgateHandle *vtgateHandler
 
+// initTLSConfig inits tls config for the given mysql listener
+func initTLSConfig(mysqlListener *mysql.Listener, mysqlSslCert, mysqlSslKey, mysqlSslCa string, mysqlServerRequireSecureTransport bool) error {
+	serverConfig, err := vttls.ServerConfig(mysqlSslCert, mysqlSslKey, mysqlSslCa)
+	if err != nil {
+		log.Exitf("grpcutils.TLSServerConfig failed: %v", err)
+		return err
+	}
+	mysqlListener.TLSConfig.Store(serverConfig)
+	mysqlListener.RequireSecureTransport = mysqlServerRequireSecureTransport
+	sigChan = make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGHUP)
+	go func() {
+		for range sigChan {
+			serverConfig, err := vttls.ServerConfig(mysqlSslCert, mysqlSslKey, mysqlSslCa)
+			if err != nil {
+				log.Errorf("grpcutils.TLSServerConfig failed: %v", err)
+			} else {
+				log.Info("grpcutils.TLSServerConfig updated")
+				mysqlListener.TLSConfig.Store(serverConfig)
+			}
+		}
+	}()
+	return nil
+}
+
 // initiMySQLProtocol starts the mysql protocol.
 // It should be called only once in a process.
 func initMySQLProtocol() {
@@ -378,26 +403,7 @@ func initMySQLProtocol() {
 			mysqlListener.ServerVersion = *mysqlServerVersion
 		}
 		if *mysqlSslCert != "" && *mysqlSslKey != "" {
-			serverConfig, err := vttls.ServerConfig(*mysqlSslCert, *mysqlSslKey, *mysqlSslCa)
-			if err != nil {
-				log.Exitf("grpcutils.TLSServerConfig failed: %v", err)
-				return
-			}
-			mysqlListener.TLSConfig.Store(serverConfig)
-			mysqlListener.RequireSecureTransport = *mysqlServerRequireSecureTransport
-			sigChan = make(chan os.Signal, 1)
-			signal.Notify(sigChan, syscall.SIGHUP)
-			go func() {
-				for range sigChan {
-					serverConfig, err := vttls.ServerConfig(*mysqlSslCert, *mysqlSslKey, *mysqlSslCa)
-					if err != nil {
-						log.Errorf("grpcutils.TLSServerConfig failed: %v", err)
-					} else {
-						log.Info("grpcutils.TLSServerConfig updated")
-						mysqlListener.TLSConfig.Store(serverConfig)
-					}
-				}
-			}()
+			initTLSConfig(mysqlListener, *mysqlSslCert, *mysqlSslKey, *mysqlSslCa, *mysqlServerRequireSecureTransport)
 		}
 		mysqlListener.AllowClearTextWithoutTLS.Set(*mysqlAllowClearTextWithoutTLS)
 		// Check for the connection threshold
