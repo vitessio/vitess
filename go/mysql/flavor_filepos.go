@@ -198,25 +198,37 @@ func (flv *filePosFlavor) status(c *Conn) (SlaveStatus, error) {
 	}
 
 	status := parseSlaveStatus(resultMap)
-	pos, err := strconv.Atoi(resultMap["Exec_Master_Log_Pos"])
-	if err != nil {
+
+	execMasterLogPosStr := resultMap["Exec_Master_Log_Pos"]
+	filePos, err := strconv.Atoi(execMasterLogPosStr)
+	if err != nil && execMasterLogPosStr != "" {
 		return SlaveStatus{}, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", resultMap["Exec_Master_Log_Pos"])
 	}
-
-	status.Position.GTIDSet = filePosGTID{
-		file: resultMap["Relay_Master_Log_File"],
-		pos:  pos,
+	file := resultMap["Relay_Master_Log_File"]
+	if file != "" && execMasterLogPosStr != "" {
+		status.Position.GTIDSet = filePosGTID{
+			file: file,
+			pos:  filePos,
+		}
 	}
 
-	relayPos, err := strconv.Atoi(resultMap["Relay_Log_Pos"])
-	if err != nil {
+	readMasterLogPosStr := resultMap["Read_Master_Log_Pos"]
+	relayPos, err := strconv.Atoi(readMasterLogPosStr)
+	if err != nil && readMasterLogPosStr != "" {
 		return SlaveStatus{}, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", resultMap["Exec_Master_Log_Pos"])
 	}
+	file = resultMap["Master_Log_File"]
 
-	status.RelayLogPosition.GTIDSet = filePosGTID{
-		file: resultMap["Relay_Log_File"],
-		pos:  relayPos,
+	if readMasterLogPosStr != "" && file != "" {
+		status.RelayLogPosition.GTIDSet = filePosGTID{
+			file: resultMap["Master_Log_File"],
+			pos:  relayPos,
+		}
 	}
+
+	status.FilePosition = status.Position
+	status.FileRelayLogPosition = status.RelayLogPosition
+
 	return status, nil
 }
 
