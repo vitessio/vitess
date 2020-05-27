@@ -116,13 +116,34 @@ func (uvs *uvstreamer) sendEventsForRows(ctx context.Context, tableName string, 
 	return nil
 }
 
+func getLastPKFromQR(qr *querypb.QueryResult) []sqltypes.Value {
+	var lastPK []sqltypes.Value
+	r := sqltypes.Proto3ToResult(qr)
+	if len(r.Rows) != 1 {
+		log.Errorf("unexpected lastpk input: %v", qr)
+		return nil
+	}
+	lastPK = r.Rows[0]
+	return lastPK
+}
+
+func getQRFromLastPK(fields []*querypb.Field, lastPK []sqltypes.Value) *querypb.QueryResult {
+	row := sqltypes.RowToProto3(lastPK)
+	qr := &querypb.QueryResult{
+		Fields: fields,
+		Rows:   []*querypb.Row{row},
+	}
+	return qr
+}
+
 func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var err error
 	var newLastPK *sqltypes.Result
-	lastPK := uvs.plans[tableName].tablePK.lastPK.Rows[0]
+	lastPK := getLastPKFromQR(uvs.plans[tableName].tablePK.Lastpk)
 	filter := uvs.plans[tableName].rule.Filter
+
 	log.Infof("Starting copyTable for %s, PK %v", tableName, lastPK)
 	uvs.sendTestEvent(fmt.Sprintf("Copy Start %s", tableName))
 
@@ -141,9 +162,9 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 			pos, _ := mysql.DecodePosition(rows.Gtid)
 			if !uvs.pos.IsZero() && !uvs.pos.AtLeast(pos) {
 				uvs.fastForward(ctx, rows.Gtid)
-			}
-			if mysql.EncodePosition(uvs.pos) != rows.Gtid {
-				log.Errorf("Position after fastforward was %s but stopPos was %s", uvs.pos, rows.Gtid)
+				if mysql.EncodePosition(uvs.pos) != rows.Gtid {
+					log.Errorf("Position after fastforward was %s but stopPos was %s", uvs.pos, rows.Gtid)
+				}
 			}
 
 			fieldEvent := &binlogdatapb.FieldEvent{
@@ -155,9 +176,10 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 			uvs.sendFieldEvent(ctx, rows.Gtid, fieldEvent)
 		}
 		if len(rows.Rows) == 0 {
-			log.Infof("0 rows returned for table %s", tableName)
+			//log.Infof("0 rows returned for table %s", tableName)
 			return nil
 		}
+
 		uvs.sendEventsForRows(ctx, tableName, rows)
 
 		newLastPK = sqltypes.CustomProto3ToResult(uvs.pkfields, &querypb.QueryResult{

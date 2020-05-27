@@ -23,11 +23,9 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -137,22 +135,9 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 		}},
 	}
 
-	var tablePKs []*TableLastPK
-	tablePKs = append(tablePKs, &TableLastPK{
-		name: "t1",
-		lastPK: &sqltypes.Result{
-			Fields: []*query.Field{{Name: "id11", Type: query.Type_INT32}},
-			Rows:   [][]sqltypes.Value{{sqltypes.NewInt32(0)}},
-		},
-	})
-
-	tablePKs = append(tablePKs, &TableLastPK{
-		name: "t2",
-		lastPK: &sqltypes.Result{
-			Fields: []*query.Field{{Name: "id21", Type: query.Type_INT32}},
-			Rows:   [][]sqltypes.Value{{sqltypes.NewInt32(0)}},
-		},
-	})
+	var tablePKs []*binlogdatapb.TableLastPK
+	tablePKs = append(tablePKs, getTablePK("t1", 1))
+	tablePKs = append(tablePKs, getTablePK("t2", 2))
 
 	t1FieldEvent := []string{"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > "}
 	t2FieldEvent := []string{"type:FIELD field_event:<table_name:\"t2\" fields:<name:\"id21\" type:INT32 > fields:<name:\"id22\" type:INT32 > > "}
@@ -1455,7 +1440,7 @@ func TestFilteredMultipleWhere(t *testing.T) {
 	runCases(t, filter, testcases, "", nil)
 }
 
-func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string, tablePK []*TableLastPK) {
+func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string, tablePK []*binlogdatapb.TableLastPK) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1548,7 +1533,7 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 
 var lastPos string
 
-func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string, tablePKs []*TableLastPK) <-chan []*binlogdatapb.VEvent {
+func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string, tablePKs []*binlogdatapb.TableLastPK) <-chan []*binlogdatapb.VEvent {
 	if position == "" && len(tablePKs) == 0 {
 		position = masterPosition(t)
 	}
@@ -1564,7 +1549,7 @@ func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter,
 	return ch
 }
 
-func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*TableLastPK, filter *binlogdatapb.Filter, ch chan []*binlogdatapb.VEvent) error {
+func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter,  ch chan []*binlogdatapb.VEvent) error {
 	if filter == nil {
 		filter = &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{

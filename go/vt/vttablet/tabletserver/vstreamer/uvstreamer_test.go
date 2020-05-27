@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/proto/binlogdata"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/proto/query"
+
+	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/vt/log"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 const (
@@ -66,8 +66,8 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	initialize(t)
 	engine.se.Reload(context.Background())
 
-	var rules []*binlogdata.Rule
-	var tablePKs []*TableLastPK
+	var rules []*binlogdatapb.Rule
+	var tablePKs []*binlogdatapb.TableLastPK
 	for i, table := range testState.tables {
 		rules = append(rules, getRule(table))
 		tablePKs = append(tablePKs, getTablePK(table, i+1))
@@ -200,20 +200,20 @@ func initialize(t *testing.T) {
 	}
 }
 
-func getRule(table string) *binlogdata.Rule {
-	return &binlogdata.Rule{
+func getRule(table string) *binlogdatapb.Rule {
+	return &binlogdatapb.Rule{
 		Match:  table,
 		Filter: fmt.Sprintf("select * from %s", table),
 	}
 }
 
-func getTablePK(table string, idx int) *TableLastPK {
-	return &TableLastPK{
-		name: table,
-		lastPK: &sqltypes.Result{
-			Fields: []*query.Field{{Name: fmt.Sprintf("id%d1", idx), Type: query.Type_INT32}},
-			Rows:   [][]sqltypes.Value{{sqltypes.NewInt32(0)}},
-		},
+func getTablePK(table string, idx int) *binlogdatapb.TableLastPK {
+	fields := []*query.Field{{Name: fmt.Sprintf("id%d1", idx), Type: query.Type_INT32}}
+
+	lastPK := []sqltypes.Value{sqltypes.NewInt32(0)}
+	return &binlogdatapb.TableLastPK{
+		TableName: table,
+		Lastpk:    getQRFromLastPK(fields, lastPK),
 	}
 }
 
@@ -242,7 +242,7 @@ func getEventCallback(ctx context.Context, t *testing.T, event *binlogdatapb.VEv
 	return nil
 }
 
-func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, tablePKs []*TableLastPK) {
+func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, tablePKs []*binlogdatapb.TableLastPK) {
 	pos := ""
 	go func() {
 		err := engine.Stream(ctx, pos, tablePKs, filter, func(evs []*binlogdatapb.VEvent) error {

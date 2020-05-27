@@ -1,8 +1,7 @@
 /*
 Copyright 2019 The Vitess Authors.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
+
 You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
@@ -150,6 +149,8 @@ func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodat
 			newvgtid.ShardGtids = append(newvgtid.ShardGtids, sgtid)
 		}
 	}
+	//TODO add tablepk validations
+
 	return newvgtid, filter, nil
 }
 
@@ -212,7 +213,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected number or shards: %v", rss)
 		}
 		// Safe to access sgtid.Gtid here (because it can't change until streaming begins).
-		err = rss[0].Gateway.VStream(ctx, rss[0].Target, sgtid.Gtid, vs.filter, func(events []*binlogdatapb.VEvent) error {
+		err = rss[0].Gateway.VStream(ctx, rss[0].Target, sgtid.Gtid, sgtid.TablePKs, vs.filter, func(events []*binlogdatapb.VEvent) error {
 			// We received a valid event. Reset error count.
 			errCount = 0
 
@@ -250,6 +251,16 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					}
 					eventss = nil
 					sendevents = nil
+				case binlogdatapb.VEventType_LASTPK:
+					// don't send lastpk, sent as part of vgtid
+					if len(eventss) > 0 {
+						if err := vs.sendAll(sgtid, eventss); err != nil {
+							return err
+						}
+						eventss = nil
+						sendevents = nil
+					}
+
 				case binlogdatapb.VEventType_HEARTBEAT:
 					// Remove all heartbeat events for now.
 					// Otherwise they can accumulate indefinitely if there are no real events.
