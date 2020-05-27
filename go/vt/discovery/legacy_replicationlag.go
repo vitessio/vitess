@@ -17,13 +17,8 @@ limitations under the License.
 package discovery
 
 import (
-	"flag"
 	"fmt"
 	"sort"
-)
-
-var (
-	legacyReplicationLagAlgorithm = flag.Bool("legacy_replication_lag_algorithm", true, "use the legacy algorithm when selecting the vttablets for serving")
 )
 
 // LegacyIsReplicationLagHigh verifies that the given LegacyTabletStats refers to a tablet with high

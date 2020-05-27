@@ -17,11 +17,12 @@ limitations under the License.
 package endtoend
 
 import (
-	"fmt"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -33,88 +34,15 @@ import (
 )
 
 // compareIntDiff returns an error if end[tag] != start[tag]+diff.
-func compareIntDiff(end map[string]interface{}, tag string, start map[string]interface{}, diff int) error {
-	return verifyIntValue(end, tag, framework.FetchInt(start, tag)+diff)
+func compareIntDiff(t *testing.T, end map[string]interface{}, tag string, start map[string]interface{}, diff int) {
+	t.Helper()
+	verifyIntValue(t, end, tag, framework.FetchInt(start, tag)+diff)
 }
 
 // verifyIntValue returns an error if values[tag] != want.
-func verifyIntValue(values map[string]interface{}, tag string, want int) error {
-	got := framework.FetchInt(values, tag)
-	if got != want {
-		return fmt.Errorf("%s: %d, want %d", tag, got, want)
-	}
-	return nil
-}
-
-func TestConfigVars(t *testing.T) {
-	currentConfig := tabletenv.NewCurrentConfig()
-	vars := framework.DebugVars()
-	cases := []struct {
-		tag string
-		val int
-	}{{
-		tag: "ConnPoolAvailable",
-		val: currentConfig.OltpReadPool.Size,
-	}, {
-		tag: "ConnPoolCapacity",
-		val: currentConfig.OltpReadPool.Size,
-	}, {
-		tag: "ConnPoolIdleTimeout",
-		val: currentConfig.OltpReadPool.IdleTimeoutSeconds * 1e9,
-	}, {
-		tag: "ConnPoolMaxCap",
-		val: currentConfig.OltpReadPool.Size,
-	}, {
-		tag: "MaxResultSize",
-		val: currentConfig.Oltp.MaxRows,
-	}, {
-		tag: "WarnResultSize",
-		val: currentConfig.Oltp.WarnRows,
-	}, {
-		tag: "QueryCacheCapacity",
-		val: currentConfig.QueryCacheSize,
-	}, {
-		tag: "QueryTimeout",
-		val: int(currentConfig.Oltp.QueryTimeoutSeconds * 1e9),
-	}, {
-		tag: "SchemaReloadTime",
-		val: int(currentConfig.SchemaReloadIntervalSeconds * 1e9),
-	}, {
-		tag: "StreamBufferSize",
-		val: currentConfig.StreamBufferSize,
-	}, {
-		tag: "StreamConnPoolAvailable",
-		val: currentConfig.OlapReadPool.Size,
-	}, {
-		tag: "StreamConnPoolCapacity",
-		val: currentConfig.OlapReadPool.Size,
-	}, {
-		tag: "StreamConnPoolIdleTimeout",
-		val: currentConfig.OlapReadPool.IdleTimeoutSeconds * 1e9,
-	}, {
-		tag: "StreamConnPoolMaxCap",
-		val: currentConfig.OlapReadPool.Size,
-	}, {
-		tag: "TransactionPoolAvailable",
-		val: currentConfig.TxPool.Size,
-	}, {
-		tag: "TransactionPoolCapacity",
-		val: currentConfig.TxPool.Size,
-	}, {
-		tag: "TransactionPoolIdleTimeout",
-		val: currentConfig.TxPool.IdleTimeoutSeconds * 1e9,
-	}, {
-		tag: "TransactionPoolMaxCap",
-		val: currentConfig.TxPool.Size,
-	}, {
-		tag: "TransactionTimeout",
-		val: int(currentConfig.Oltp.TxTimeoutSeconds * 1e9),
-	}}
-	for _, tcase := range cases {
-		if err := verifyIntValue(vars, tcase.tag, int(tcase.val)); err != nil {
-			t.Error(err)
-		}
-	}
+func verifyIntValue(t *testing.T, values map[string]interface{}, tag string, want int) {
+	t.Helper()
+	require.Equal(t, want, framework.FetchInt(values, tag), tag)
 }
 
 func TestPoolSize(t *testing.T) {
@@ -122,9 +50,7 @@ func TestPoolSize(t *testing.T) {
 	framework.Server.SetPoolSize(1)
 
 	vstart := framework.DebugVars()
-	if err := verifyIntValue(vstart, "ConnPoolCapacity", 1); err != nil {
-		t.Error(err)
-	}
+	verifyIntValue(t, vstart, "ConnPoolCapacity", 1)
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -270,34 +196,19 @@ func TestQueryPlanCache(t *testing.T) {
 	_, _ = client.Execute("select * from vitess_test where intval=:ival1", bindVars)
 	_, _ = client.Execute("select * from vitess_test where intval=:ival2", bindVars)
 	vend := framework.DebugVars()
-	if err := verifyIntValue(vend, "QueryCacheLength", 1); err != nil {
-		t.Error(err)
-	}
-	if err := verifyIntValue(vend, "QueryCacheSize", 1); err != nil {
-		t.Error(err)
-	}
-	if err := verifyIntValue(vend, "QueryCacheCapacity", 1); err != nil {
-		t.Error(err)
-	}
+	verifyIntValue(t, vend, "QueryCacheLength", 1)
+	verifyIntValue(t, vend, "QueryCacheSize", 1)
+	verifyIntValue(t, vend, "QueryCacheCapacity", 1)
 
 	framework.Server.SetQueryPlanCacheCap(10)
 	_, _ = client.Execute("select * from vitess_test where intval=:ival1", bindVars)
 	vend = framework.DebugVars()
-	if err := verifyIntValue(vend, "QueryCacheLength", 2); err != nil {
-		t.Error(err)
-	}
-	if err := verifyIntValue(vend, "QueryCacheSize", 2); err != nil {
-		t.Error(err)
-	}
-
+	verifyIntValue(t, vend, "QueryCacheLength", 2)
+	verifyIntValue(t, vend, "QueryCacheSize", 2)
 	_, _ = client.Execute("select * from vitess_test where intval=1", bindVars)
 	vend = framework.DebugVars()
-	if err := verifyIntValue(vend, "QueryCacheLength", 3); err != nil {
-		t.Error(err)
-	}
-	if err := verifyIntValue(vend, "QueryCacheSize", 3); err != nil {
-		t.Error(err)
-	}
+	verifyIntValue(t, vend, "QueryCacheLength", 3)
+	verifyIntValue(t, vend, "QueryCacheSize", 3)
 }
 
 func TestMaxResultSize(t *testing.T) {
@@ -311,10 +222,7 @@ func TestMaxResultSize(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, must start with %s", err, want)
 	}
-	if err := verifyIntValue(framework.DebugVars(), "MaxResultSize", 2); err != nil {
-		t.Error(err)
-	}
-
+	verifyIntValue(t, framework.DebugVars(), "MaxResultSize", 2)
 	framework.Server.SetMaxResultSize(10)
 	_, err = client.Execute(query, nil)
 	if err != nil {
@@ -337,10 +245,7 @@ func TestWarnResultSize(t *testing.T) {
 		t.Errorf("Warnings.ResultsExceeded counter should have increased by 1, instead got %v", exceededCountDiff)
 	}
 
-	if err := verifyIntValue(framework.DebugVars(), "WarnResultSize", 2); err != nil {
-		t.Error(err)
-	}
-
+	verifyIntValue(t, framework.DebugVars(), "WarnResultSize", 2)
 	framework.Server.SetWarnResultSize(10)
 	_, _ = client.Execute(query, nil)
 	newerWarningsResultsExceededCount := framework.FetchInt(framework.DebugVars(), "Warnings/ResultsExceeded")
@@ -370,10 +275,6 @@ func TestQueryTimeout(t *testing.T) {
 		t.Errorf("Error code: %v, want %v", code, vtrpcpb.Code_ABORTED)
 	}
 	vend := framework.DebugVars()
-	if err := verifyIntValue(vend, "QueryTimeout", int(100*time.Millisecond)); err != nil {
-		t.Error(err)
-	}
-	if err := compareIntDiff(vend, "Kills/Queries", vstart, 1); err != nil {
-		t.Error(err)
-	}
+	verifyIntValue(t, vend, "QueryTimeout", int(100*time.Millisecond))
+	compareIntDiff(t, vend, "Kills/Queries", vstart, 1)
 }

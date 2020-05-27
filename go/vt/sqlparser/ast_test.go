@@ -792,3 +792,9 @@ func TestTypeConversion(t *testing.T) {
 	ct2 := &ColumnType{Type: "bigint"}
 	assert.Equal(t, ct1.SQLType(), ct2.SQLType())
 }
+
+func TestDefaultStatus(t *testing.T) {
+	assert.Equal(t,
+		String(&Default{ColName: "status"}),
+		"default(`status`)")
+}

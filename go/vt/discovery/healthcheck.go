@@ -477,18 +477,20 @@ func (hc *HealthCheckImpl) cacheStatusMap() map[string]*TabletsCacheStatus {
 	tcsMap := make(map[string]*TabletsCacheStatus)
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
-	for _, th := range hc.healthByAlias {
-		key := fmt.Sprintf("%v.%v.%v.%v", th.Tablet.Alias.Cell, th.Target.Keyspace, th.Target.Shard, th.Target.TabletType.String())
-		var tcs *TabletsCacheStatus
-		var ok bool
-		if tcs, ok = tcsMap[key]; !ok {
-			tcs = &TabletsCacheStatus{
-				Cell:   th.Tablet.Alias.Cell,
-				Target: th.Target,
+	for _, ths := range hc.healthData {
+		for _, th := range ths {
+			key := fmt.Sprintf("%v.%v.%v.%v", th.Tablet.Alias.Cell, th.Target.Keyspace, th.Target.Shard, th.Target.TabletType.String())
+			var tcs *TabletsCacheStatus
+			var ok bool
+			if tcs, ok = tcsMap[key]; !ok {
+				tcs = &TabletsCacheStatus{
+					Cell:   th.Tablet.Alias.Cell,
+					Target: th.Target,
+				}
+				tcsMap[key] = tcs
 			}
-			tcsMap[key] = tcs
+			tcs.TabletsStats = append(tcs.TabletsStats, th)
 		}
-		tcs.TabletsStats = append(tcs.TabletsStats, th.SimpleCopy())
 	}
 	return tcsMap
 }
