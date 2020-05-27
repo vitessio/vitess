@@ -73,16 +73,16 @@ func (p *singleTabletProvider) description() string {
 }
 
 // shardTabletProvider returns a random healthy RDONLY tablet for a given
-// keyspace and shard. It uses the HealthCheck module to retrieve the tablets.
+// keyspace and shard. It uses the LegacyHealthCheck module to retrieve the tablets.
 type shardTabletProvider struct {
-	tsc        *discovery.TabletStatsCache
+	tsc        *discovery.LegacyTabletStatsCache
 	tracker    *TabletTracker
 	keyspace   string
 	shard      string
 	tabletType topodatapb.TabletType
 }
 
-func newShardTabletProvider(tsc *discovery.TabletStatsCache, tracker *TabletTracker, keyspace, shard string, tabletType topodatapb.TabletType) *shardTabletProvider {
+func newShardTabletProvider(tsc *discovery.LegacyTabletStatsCache, tracker *TabletTracker, keyspace, shard string, tabletType topodatapb.TabletType) *shardTabletProvider {
 	return &shardTabletProvider{tsc, tracker, keyspace, shard, tabletType}
 }
 

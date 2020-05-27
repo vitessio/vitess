@@ -38,8 +38,8 @@ func TestWaitForTablets(t *testing.T) {
 	input := make(chan *querypb.StreamHealthResponse)
 	createFakeConn(tablet, input)
 
-	hc := NewHealthCheck(1*time.Millisecond, 1*time.Hour)
-	tsc := NewTabletStatsCache(hc, nil, "cell")
+	hc := NewLegacyHealthCheck(1*time.Millisecond, 1*time.Hour)
+	tsc := NewLegacyTabletStatsCache(hc, nil, "cell")
 	hc.AddTablet(tablet, "")
 
 	// this should time out

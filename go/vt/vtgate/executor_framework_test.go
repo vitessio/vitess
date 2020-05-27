@@ -342,8 +342,10 @@ const (
 )
 
 func createExecutorEnvUsing(t executorType) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
+	// Use legacy gateway until we can rewrite these tests to use new tabletgateway
+	*GatewayImplementation = GatewayImplementationDiscovery
 	cell := "aa"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
 	serv := newSandboxForCells([]string{cell})
@@ -387,7 +389,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 
 func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 	s := createSandbox("TestExecutor")
 	s.VSchema = vschema
 	serv := newSandboxForCells([]string{cell})
@@ -576,7 +578,7 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 	return logStats
 }
 
-func newTestResolver(hc discovery.HealthCheck, serv srvtopo.Server, cell string) *Resolver {
+func newTestResolver(hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string) *Resolver {
 	sc := newTestScatterConn(hc, serv, cell)
 	srvResolver := srvtopo.NewResolver(serv, sc.gateway, cell)
 	return NewResolver(srvResolver, serv, cell, sc)

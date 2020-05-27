@@ -88,7 +88,7 @@ type Buffer struct {
 	// In particular, it is used to serialize the following Go routines:
 	// - 1. Requests which may buffer (RLock, can be run in parallel)
 	// - 2. Request which starts buffering (based on the seen error)
-	// - 3. HealthCheck listener ("StatsUpdate") which stops buffering
+	// - 3. LegacyHealthCheck listener ("StatsUpdate") which stops buffering
 	// - 4. Timer which may stop buffering after -buffer_max_failover_duration
 	mu sync.RWMutex
 	// buffers holds a shardBuffer object per shard, even if no failover is in
@@ -213,12 +213,33 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 	return sb.waitForFailoverEnd(ctx, keyspace, shard, err)
 }
 
+// ProcessMasterHealth notifies the buffer to record a new master
+// and end any failover buffering that may be in progress
+func (b *Buffer) ProcessMasterHealth(th *discovery.TabletHealth) {
+	if th.Target.TabletType != topodatapb.TabletType_MASTER {
+		panic(fmt.Sprintf("BUG: non MASTER TabletHealth object must not be forwarded: %#v", th))
+	}
+	timestamp := th.MasterTermStartTime
+	if timestamp == 0 {
+		// Masters where TabletExternallyReparented was never called will return 0.
+		// Ignore them.
+		return
+	}
+
+	sb := b.getOrCreateBuffer(th.Target.Keyspace, th.Target.Shard)
+	if sb == nil {
+		// Buffer is shut down. Ignore all calls.
+		return
+	}
+	sb.recordExternallyReparentedTimestamp(timestamp, th.Tablet.Alias)
+}
+
 // StatsUpdate keeps track of the "tablet_externally_reparented_timestamp" of
 // each master. This way we can detect the end of a failover.
-// It is part of the discovery.HealthCheckStatsListener interface.
-func (b *Buffer) StatsUpdate(ts *discovery.TabletStats) {
+// It is part of the discovery.LegacyHealthCheckStatsListener interface.
+func (b *Buffer) StatsUpdate(ts *discovery.LegacyTabletStats) {
 	if ts.Target.TabletType != topodatapb.TabletType_MASTER {
-		panic(fmt.Sprintf("BUG: non MASTER TabletStats object must not be forwarded: %#v", ts))
+		panic(fmt.Sprintf("BUG: non MASTER LegacyTabletStats object must not be forwarded: %#v", ts))
 	}
 
 	timestamp := ts.TabletExternallyReparentedTimestamp

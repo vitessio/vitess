@@ -43,7 +43,7 @@ func addStatusParts(vtg *vtgate.VTGate) {
 	servenv.AddStatusPart("Gateway Status", vtgate.StatusTemplate, func() interface{} {
 		return vtg.GetGatewayCacheStatus()
 	})
-	servenv.AddStatusPart("Health Check Cache", discovery.HealthCheckTemplate, func() interface{} {
+	servenv.AddStatusPart("Health Check Cache", discovery.LegacyHealthCheckTemplate, func() interface{} {
 		return healthCheck.CacheStatus()
 	})
 }

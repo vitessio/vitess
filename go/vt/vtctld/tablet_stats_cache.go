@@ -66,7 +66,7 @@ type heatmap struct {
 	YGridLines []float64
 }
 
-type byTabletUID []*discovery.TabletStats
+type byTabletUID []*discovery.LegacyTabletStats
 
 func (a byTabletUID) Len() int           { return len(a) }
 func (a byTabletUID) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
@@ -78,18 +78,18 @@ var availableTabletTypes = []topodatapb.TabletType{topodatapb.TabletType_MASTER,
 
 // tabletStatsCache holds the most recent status update received for
 // each tablet. The tablets are indexed by uid, so it is different
-// than discovery.TabletStatsCache.
+// than discovery.LegacyTabletStatsCache.
 type tabletStatsCache struct {
 	// mu guards access to the fields below.
 	mu sync.Mutex
-	// statuses keeps a map of TabletStats.
+	// statuses keeps a map of LegacyTabletStats.
 	// The first key is the keyspace, the second key is the shard,
 	// the third key is the cell, the last key is the tabletType.
 	// The keys are strings to allow exposing this map as a JSON object in api.go.
-	statuses map[string]map[string]map[string]map[topodatapb.TabletType][]*discovery.TabletStats
+	statuses map[string]map[string]map[string]map[topodatapb.TabletType][]*discovery.LegacyTabletStats
 	// statusesByAlias is a copy of statuses and will be updated simultaneously.
 	// The first key is the string representation of the tablet alias.
-	statusesByAlias map[string]*discovery.TabletStats
+	statusesByAlias map[string]*discovery.LegacyTabletStats
 }
 
 type topologyInfo struct {
@@ -100,14 +100,14 @@ type topologyInfo struct {
 
 func newTabletStatsCache() *tabletStatsCache {
 	return &tabletStatsCache{
-		statuses:        make(map[string]map[string]map[string]map[topodatapb.TabletType][]*discovery.TabletStats),
-		statusesByAlias: make(map[string]*discovery.TabletStats),
+		statuses:        make(map[string]map[string]map[string]map[topodatapb.TabletType][]*discovery.LegacyTabletStats),
+		statusesByAlias: make(map[string]*discovery.LegacyTabletStats),
 	}
 }
 
-// StatsUpdate is part of the discovery.HealthCheckStatsListener interface.
-// Upon receiving a new TabletStats, it updates the two maps in tablet_stats_cache.
-func (c *tabletStatsCache) StatsUpdate(stats *discovery.TabletStats) {
+// StatsUpdate is part of the discovery.LegacyHealthCheckStatsListener interface.
+// Upon receiving a new LegacyTabletStats, it updates the two maps in tablet_stats_cache.
+func (c *tabletStatsCache) StatsUpdate(stats *discovery.LegacyTabletStats) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -133,25 +133,25 @@ func (c *tabletStatsCache) StatsUpdate(stats *discovery.TabletStats) {
 		// Tablet isn't tracked yet so just add it.
 		_, ok := c.statuses[keyspace]
 		if !ok {
-			shards := make(map[string]map[string]map[topodatapb.TabletType][]*discovery.TabletStats)
+			shards := make(map[string]map[string]map[topodatapb.TabletType][]*discovery.LegacyTabletStats)
 			c.statuses[keyspace] = shards
 		}
 
 		_, ok = c.statuses[keyspace][shard]
 		if !ok {
-			cells := make(map[string]map[topodatapb.TabletType][]*discovery.TabletStats)
+			cells := make(map[string]map[topodatapb.TabletType][]*discovery.LegacyTabletStats)
 			c.statuses[keyspace][shard] = cells
 		}
 
 		_, ok = c.statuses[keyspace][shard][cell]
 		if !ok {
-			types := make(map[topodatapb.TabletType][]*discovery.TabletStats)
+			types := make(map[topodatapb.TabletType][]*discovery.LegacyTabletStats)
 			c.statuses[keyspace][shard][cell] = types
 		}
 
 		_, ok = c.statuses[keyspace][shard][cell][tabletType]
 		if !ok {
-			tablets := make([]*discovery.TabletStats, 0)
+			tablets := make([]*discovery.LegacyTabletStats, 0)
 			c.statuses[keyspace][shard][cell][tabletType] = tablets
 		}
 
@@ -165,13 +165,13 @@ func (c *tabletStatsCache) StatsUpdate(stats *discovery.TabletStats) {
 	*ts = *stats
 }
 
-func tabletToMapKey(stats *discovery.TabletStats) string {
+func tabletToMapKey(stats *discovery.LegacyTabletStats) string {
 	return stats.Tablet.Alias.String()
 }
 
 // remove takes in an array and returns it with the specified element removed
 // (leaves the array unchanged if element isn't in the array).
-func remove(tablets []*discovery.TabletStats, tabletAlias *topodatapb.TabletAlias) []*discovery.TabletStats {
+func remove(tablets []*discovery.LegacyTabletStats, tabletAlias *topodatapb.TabletAlias) []*discovery.LegacyTabletStats {
 	filteredTablets := tablets[:0]
 	for _, tablet := range tablets {
 		if !topoproto.TabletAliasEqual(tablet.Tablet.Alias, tabletAlias) {
@@ -312,7 +312,7 @@ func (c *tabletStatsCache) heatmapData(selectedKeyspace, selectedCell, selectedT
 	defer c.mu.Unlock()
 
 	// Get the metric data.
-	var metricFunc func(stats *discovery.TabletStats) float64
+	var metricFunc func(stats *discovery.LegacyTabletStats) float64
 	switch selectedMetric {
 	case "lag":
 		metricFunc = replicationLag
@@ -399,7 +399,7 @@ func (c *tabletStatsCache) heatmapData(selectedKeyspace, selectedCell, selectedT
 	return heatmaps, nil
 }
 
-func (c *tabletStatsCache) unaggregatedData(keyspace, cell, selectedType string, metricFunc func(stats *discovery.TabletStats) float64) ([][]float64, [][]*topodatapb.TabletAlias, yLabel) {
+func (c *tabletStatsCache) unaggregatedData(keyspace, cell, selectedType string, metricFunc func(stats *discovery.LegacyTabletStats) float64) ([][]float64, [][]*topodatapb.TabletAlias, yLabel) {
 	// This loop goes through every nested label (in this case, tablet type).
 	var cellData [][]float64
 	var cellAliases [][]*topodatapb.TabletAlias
@@ -459,7 +459,7 @@ func (c *tabletStatsCache) unaggregatedData(keyspace, cell, selectedType string,
 
 // aggregatedData gets heatmapData by taking the average of the metric value of all tablets within the keyspace and cell of the
 // specified type (or from all types if 'all' was selected).
-func (c *tabletStatsCache) aggregatedData(keyspace, cell, selectedType, selectedMetric string, metricFunc func(stats *discovery.TabletStats) float64) ([][]float64, [][]*topodatapb.TabletAlias, yLabel) {
+func (c *tabletStatsCache) aggregatedData(keyspace, cell, selectedType, selectedMetric string, metricFunc func(stats *discovery.LegacyTabletStats) float64) ([][]float64, [][]*topodatapb.TabletAlias, yLabel) {
 	shards := c.shards(keyspace)
 	tabletTypes := c.tabletTypesLocked(keyspace, cell, selectedType)
 
@@ -508,18 +508,18 @@ func (c *tabletStatsCache) aggregatedData(keyspace, cell, selectedType, selected
 	return cellData, nil, cellLabel
 }
 
-func (c *tabletStatsCache) tabletStats(tabletAlias *topodatapb.TabletAlias) (discovery.TabletStats, error) {
+func (c *tabletStatsCache) tabletStats(tabletAlias *topodatapb.TabletAlias) (discovery.LegacyTabletStats, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	ts, ok := c.statusesByAlias[tabletAlias.String()]
 	if !ok {
-		return discovery.TabletStats{}, fmt.Errorf("could not find tablet: %v", tabletAlias)
+		return discovery.LegacyTabletStats{}, fmt.Errorf("could not find tablet: %v", tabletAlias)
 	}
 	return *ts, nil
 }
 
-func health(stat *discovery.TabletStats) float64 {
+func health(stat *discovery.LegacyTabletStats) float64 {
 	// The tablet is unhealthy if there is an health error.
 	if stat.Stats.HealthError != "" {
 		return tabletUnhealthy
@@ -548,13 +548,13 @@ func health(stat *discovery.TabletStats) float64 {
 	return tabletHealthy
 }
 
-func replicationLag(stat *discovery.TabletStats) float64 {
+func replicationLag(stat *discovery.LegacyTabletStats) float64 {
 	return float64(stat.Stats.SecondsBehindMaster)
 }
 
-func qps(stat *discovery.TabletStats) float64 {
+func qps(stat *discovery.LegacyTabletStats) float64 {
 	return stat.Stats.Qps
 }
 
 // compile-time interface check
-var _ discovery.HealthCheckStatsListener = (*tabletStatsCache)(nil)
+var _ discovery.LegacyHealthCheckStatsListener = (*tabletStatsCache)(nil)

@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -34,18 +33,13 @@ import (
 // a query targeted to a keyspace/shard/tablet_type and send it off.
 
 var (
-	implementation       = flag.String("gateway_implementation", "discoverygateway", "The implementation of gateway")
-	initialTabletTimeout = flag.Duration("gateway_initial_tablet_timeout", 30*time.Second, "At startup, the gateway will wait up to that duration to get one tablet per keyspace/shard/tablettype")
-
-	// KeyspacesToWatch - if provided this specifies which keyspaces should be
-	// visible to a vtgate. By default the vtgate will allow access to any
-	// keyspace.
-	KeyspacesToWatch flagutil.StringListValue
+	// GatewayImplementation allows you to choose which gateway to use for vtgate routing. Defaults to discoverygateway, other option is tabletgateway
+	GatewayImplementation = flag.String("gateway_implementation", "tabletgateway", "Allowed values: discoverygateway (deprecated), tabletgateway (default)")
+	initialTabletTimeout  = flag.Duration("gateway_initial_tablet_timeout", 30*time.Second, "At startup, the gateway will wait up to that duration to get one tablet per keyspace/shard/tablettype")
+	// RetryCount is the number of times a query will be retried on error
+	// Make this unexported after DiscoveryGateway is deprecated
+	RetryCount = flag.Int("retry-count", 2, "retry count")
 )
-
-func init() {
-	flag.Var(&KeyspacesToWatch, "keyspaces_to_watch", "Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema")
-}
 
 // A Gateway is the query processing module for each shard,
 // which is used by ScatterConn.
@@ -68,10 +62,13 @@ type Gateway interface {
 
 	// CacheStatus returns a list of TabletCacheStatus per shard / tablet type.
 	CacheStatus() TabletCacheStatusList
+
+	// HealthCheck returns a reference to the healthCheck being used by this gateway
+	HealthCheck() *discovery.HealthCheck
 }
 
 // Creator is the factory method which can create the actual gateway object.
-type Creator func(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cell string, retryCount int) Gateway
+type Creator func(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string, retryCount int) Gateway
 
 var creators = make(map[string]Creator)
 
@@ -85,9 +82,9 @@ func RegisterGatewayCreator(name string, gc Creator) {
 
 // GatewayCreator returns the Creator specified by the gateway_implementation flag.
 func GatewayCreator() Creator {
-	gc, ok := creators[*implementation]
+	gc, ok := creators[*GatewayImplementation]
 	if !ok {
-		log.Exitf("No gateway registered as %s", *implementation)
+		log.Exitf("No gateway registered as %s", *GatewayImplementation)
 	}
 	return gc
 }

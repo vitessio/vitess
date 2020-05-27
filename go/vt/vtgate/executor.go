@@ -841,28 +841,56 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		}, nil
 	case "vitess_tablets":
 		var rows [][]sqltypes.Value
-		stats := e.scatterConn.healthCheck.CacheStatus()
-		for _, s := range stats {
-			for _, ts := range s.TabletsStats {
-				state := "SERVING"
-				if !ts.Serving {
-					state = "NOT_SERVING"
+		if *GatewayImplementation == GatewayImplementationDiscovery {
+			status := e.scatterConn.GetLegacyHealthCheckCacheStatus()
+			for _, s := range status {
+				for _, ts := range s.TabletsStats {
+					state := "SERVING"
+					if !ts.Serving {
+						state = "NOT_SERVING"
+					}
+					mtst := ts.Tablet.MasterTermStartTime
+					mtstStr := ""
+					if mtst != nil && mtst.Seconds > 0 {
+						mtstStr = logutil.ProtoToTime(ts.Tablet.MasterTermStartTime).Format(time.RFC3339)
+					}
+					rows = append(rows, buildVarCharRow(
+						s.Cell,
+						s.Target.Keyspace,
+						s.Target.Shard,
+						ts.Target.TabletType.String(),
+						state,
+						topoproto.TabletAliasString(ts.Tablet.Alias),
+						ts.Tablet.Hostname,
+						mtstStr,
+					))
 				}
-				mtst := ts.Tablet.MasterTermStartTime
-				mtstStr := ""
-				if mtst != nil && mtst.Seconds > 0 {
-					mtstStr = logutil.ProtoToTime(ts.Tablet.MasterTermStartTime).Format(time.RFC3339)
+			}
+		}
+		if *GatewayImplementation == tabletGatewayImplementation {
+			status := e.scatterConn.GetHealthCheckCacheStatus()
+			for _, s := range status {
+				for _, ts := range s.TabletsStats {
+					state := "SERVING"
+					if !ts.Serving {
+						state = "NOT_SERVING"
+					}
+					mtst := ts.Tablet.MasterTermStartTime
+					mtstStr := ""
+					if mtst != nil && mtst.Seconds > 0 {
+						mtstStr = logutil.ProtoToTime(ts.Tablet.MasterTermStartTime).Format(time.RFC3339)
+					}
+					rows = append(rows, buildVarCharRow(
+						s.Cell,
+						s.Target.Keyspace,
+						s.Target.Shard,
+						ts.Target.TabletType.String(),
+						state,
+						topoproto.TabletAliasString(ts.Tablet.Alias),
+						ts.Tablet.Hostname,
+						mtstStr,
+					))
 				}
-				rows = append(rows, buildVarCharRow(
-					s.Cell,
-					s.Target.Keyspace,
-					s.Target.Shard,
-					ts.Target.TabletType.String(),
-					state,
-					topoproto.TabletAliasString(ts.Tablet.Alias),
-					ts.Tablet.Hostname,
-					mtstStr,
-				))
 			}
 		}
 		return &sqltypes.Result{

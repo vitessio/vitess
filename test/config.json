@@ -324,6 +324,33 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"tabletgateway_buffer": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/tabletgateway/buffer"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 14,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"tabletgateway_cellalias": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/tabletgateway/cellalias"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 14,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"tabletgateway_healthcheck": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/tabletgateway/healthcheck"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 14,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"tabletmanager": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager"],

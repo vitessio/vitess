@@ -21,10 +21,8 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
-	"io"
 	"reflect"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -32,7 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/status"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -56,21 +53,22 @@ func testChecksum(t *testing.T, want, got int64) {
 	}
 }
 
-func TestHealthCheck(t *testing.T) {
+func TestLegacyHealthCheck(t *testing.T) {
+	hcErrorCounters.ResetAll()
 	tablet := topo.NewTablet(0, "cell", "a")
 	tablet.PortMap["vt"] = 1
 	input := make(chan *querypb.StreamHealthResponse)
 	createFakeConn(tablet, input)
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	l := newListener()
-	hc := NewHealthCheck(1*time.Millisecond, time.Hour).(*HealthCheckImpl)
+	hc := NewLegacyHealthCheck(1*time.Millisecond, time.Hour).(*LegacyHealthCheckImpl)
 	hc.SetListener(l, true)
 	testChecksum(t, 0, hc.stateChecksum())
 	hc.AddTablet(tablet, "")
-	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
+	t.Logf(`hc = LegacyHealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
 	// Immediately after AddTablet() there will be the first notification.
-	want := &TabletStats{
+	want := &LegacyTabletStats{
 		Key:     "a,vt:1",
 		Tablet:  tablet,
 		Target:  &querypb.Target{},
@@ -90,7 +88,7 @@ func TestHealthCheck(t *testing.T) {
 		TabletExternallyReparentedTimestamp: 10,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
-	want = &TabletStats{
+	want = &LegacyTabletStats{
 		Key:                                 "a,vt:1",
 		Tablet:                              tablet,
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
@@ -112,10 +110,10 @@ func TestHealthCheck(t *testing.T) {
 	}
 
 	tcsl := hc.CacheStatus()
-	tcslWant := TabletsCacheStatusList{{
+	tcslWant := LegacyTabletsCacheStatusList{{
 		Cell:   "cell",
 		Target: &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-		TabletsStats: TabletStatsList{{
+		TabletsStats: LegacyTabletStatsList{{
 			Key:                                 "a,vt:1",
 			Tablet:                              tablet,
 			Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
@@ -139,7 +137,7 @@ func TestHealthCheck(t *testing.T) {
 	}
 	input <- shr
 	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: REPLICA}, Serving: true, TabletExternallyReparentedTimestamp: 0, {SecondsBehindMaster: 1, CpuUsage: 0.5}}`)
-	want = &TabletStats{
+	want = &LegacyTabletStats{
 		Key:                                 "a,vt:1",
 		Tablet:                              tablet,
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
@@ -152,7 +150,7 @@ func TestHealthCheck(t *testing.T) {
 	if !reflect.DeepEqual(res, want) {
 		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
 	}
-	want = &TabletStats{
+	want = &LegacyTabletStats{
 		Key:                                 "a,vt:1",
 		Tablet:                              tablet,
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -178,7 +176,7 @@ func TestHealthCheck(t *testing.T) {
 		TabletExternallyReparentedTimestamp: 0,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
 	}
-	want = &TabletStats{
+	want = &LegacyTabletStats{
 		Key:                                 "a,vt:1",
 		Tablet:                              tablet,
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -202,7 +200,7 @@ func TestHealthCheck(t *testing.T) {
 		TabletExternallyReparentedTimestamp: 0,
 		RealtimeStats:                       &querypb.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
 	}
-	want = &TabletStats{
+	want = &LegacyTabletStats{
 		Key:                                 "a,vt:1",
 		Tablet:                              tablet,
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -223,7 +221,7 @@ func TestHealthCheck(t *testing.T) {
 	// remove tablet
 	hc.deleteConn(tablet)
 	t.Logf(`hc.RemoveTablet({Host: "a", PortMap: {"vt": 1}})`)
-	want = &TabletStats{
+	want = &LegacyTabletStats{
 		Key:                                 "a,vt:1",
 		Tablet:                              tablet,
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -243,7 +241,7 @@ func TestHealthCheck(t *testing.T) {
 	hc.Close()
 }
 
-func TestHealthCheckStreamError(t *testing.T) {
+func TestLegacyHealthCheckStreamError(t *testing.T) {
 	tablet := topo.NewTablet(0, "cell", "a")
 	tablet.PortMap["vt"] = 1
 	input := make(chan *querypb.StreamHealthResponse)
@@ -251,13 +249,13 @@ func TestHealthCheckStreamError(t *testing.T) {
 	fc.errCh = make(chan error)
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	l := newListener()
-	hc := NewHealthCheck(1*time.Millisecond, time.Hour).(*HealthCheckImpl)
+	hc := NewLegacyHealthCheck(1*time.Millisecond, time.Hour).(*LegacyHealthCheckImpl)
 	hc.SetListener(l, true)
 	hc.AddTablet(tablet, "")
-	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
+	t.Logf(`hc = LegacyHealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
 	// Immediately after AddTablet() there will be the first notification.
-	want := &TabletStats{
+	want := &LegacyTabletStats{
 		Key:     "a,vt:1",
 		Tablet:  tablet,
 		Target:  &querypb.Target{},
@@ -276,7 +274,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 		TabletExternallyReparentedTimestamp: 0,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
-	want = &TabletStats{
+	want = &LegacyTabletStats{
 		Key:                                 "a,vt:1",
 		Tablet:                              tablet,
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -294,7 +292,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 
 	// Stream error
 	fc.errCh <- fmt.Errorf("some stream error")
-	want = &TabletStats{
+	want = &LegacyTabletStats{
 		Key:                                 "a,vt:1",
 		Tablet:                              tablet,
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -313,7 +311,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 	hc.Close()
 }
 
-func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
+func TestLegacyHealthCheckVerifiesTabletAlias(t *testing.T) {
 	t.Logf("starting")
 	tablet := topo.NewTablet(1, "cell", "a")
 	tablet.PortMap["vt"] = 1
@@ -323,13 +321,13 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 
 	l := newListener()
-	hc := NewHealthCheck(1*time.Millisecond, time.Hour).(*HealthCheckImpl)
+	hc := NewLegacyHealthCheck(1*time.Millisecond, time.Hour).(*LegacyHealthCheckImpl)
 	hc.SetListener(l, false)
 	hc.AddTablet(tablet, "")
-	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
+	t.Logf(`hc = LegacyHealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
 	// Immediately after AddTablet() there will be the first notification.
-	want := &TabletStats{
+	want := &LegacyTabletStats{
 		Key:     "a,vt:1",
 		Tablet:  tablet,
 		Target:  &querypb.Target{},
@@ -378,9 +376,9 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 	hc.Close()
 }
 
-// TestHealthCheckCloseWaitsForGoRoutines tests that Close() waits for all Go
+// TestLegacyHealthCheckCloseWaitsForGoRoutines tests that Close() waits for all Go
 // routines to finish and the listener won't be called anymore.
-func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
+func TestLegacyHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	tablet := topo.NewTablet(0, "cell", "a")
 	tablet.PortMap["vt"] = 1
 	input := make(chan *querypb.StreamHealthResponse, 1)
@@ -389,13 +387,13 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 
 	l := newListener()
-	hc := NewHealthCheck(1*time.Millisecond, time.Hour).(*HealthCheckImpl)
+	hc := NewLegacyHealthCheck(1*time.Millisecond, time.Hour).(*LegacyHealthCheckImpl)
 	hc.SetListener(l, false)
 	hc.AddTablet(tablet, "")
-	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
+	t.Logf(`hc = LegacyHealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
 	// Immediately after AddTablet() there will be the first notification.
-	want := &TabletStats{
+	want := &LegacyTabletStats{
 		Key:     "a,vt:1",
 		Tablet:  tablet,
 		Target:  &querypb.Target{},
@@ -414,7 +412,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 		TabletExternallyReparentedTimestamp: 10,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
-	want = &TabletStats{
+	want = &LegacyTabletStats{
 		Key:                                 "a,vt:1",
 		Tablet:                              tablet,
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
@@ -452,7 +450,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	select {
 	case res = <-l.output:
 		if res.TabletExternallyReparentedTimestamp == 10 && res.LastError == context.Canceled {
-			// HealthCheck repeats the previous stats if there is an error.
+			// LegacyHealthCheck repeats the previous stats if there is an error.
 			// This is expected.
 			break
 		}
@@ -476,7 +474,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	}
 }
 
-func TestHealthCheckTimeout(t *testing.T) {
+func TestLegacyHealthCheckTimeout(t *testing.T) {
 	timeout := 500 * time.Millisecond
 	tablet := topo.NewTablet(0, "cell", "a")
 	tablet.PortMap["vt"] = 1
@@ -484,13 +482,13 @@ func TestHealthCheckTimeout(t *testing.T) {
 	fc := createFakeConn(tablet, input)
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	l := newListener()
-	hc := NewHealthCheck(1*time.Millisecond, timeout).(*HealthCheckImpl)
+	hc := NewLegacyHealthCheck(1*time.Millisecond, timeout).(*LegacyHealthCheckImpl)
 	hc.SetListener(l, false)
 	hc.AddTablet(tablet, "")
-	t.Logf(`hc = HealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
+	t.Logf(`hc = LegacyHealthCheck(); hc.AddTablet({Host: "a", PortMap: {"vt": 1}}, "")`)
 
 	// Immediately after AddTablet() there will be the first notification.
-	want := &TabletStats{
+	want := &LegacyTabletStats{
 		Key:     "a,vt:1",
 		Tablet:  tablet,
 		Target:  &querypb.Target{},
@@ -509,7 +507,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 		TabletExternallyReparentedTimestamp: 10,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
-	want = &TabletStats{
+	want = &LegacyTabletStats{
 		Key:                                 "a,vt:1",
 		Tablet:                              tablet,
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
@@ -579,9 +577,9 @@ func TestHealthCheckTimeout(t *testing.T) {
 	hc.Close()
 }
 
-func TestTemplate(t *testing.T) {
+func TestLegacyTemplate(t *testing.T) {
 	tablet := topo.NewTablet(0, "cell", "a")
-	ts := []*TabletStats{
+	ts := []*LegacyTabletStats{
 		{
 			Key:                                 "a",
 			Tablet:                              tablet,
@@ -592,28 +590,28 @@ func TestTemplate(t *testing.T) {
 			TabletExternallyReparentedTimestamp: 0,
 		},
 	}
-	tcs := &TabletsCacheStatus{
+	tcs := &LegacyTabletsCacheStatus{
 		Cell:         "cell",
 		Target:       &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		TabletsStats: ts,
 	}
 	templ := template.New("").Funcs(status.StatusFuncs)
-	templ, err := templ.Parse(HealthCheckTemplate)
+	templ, err := templ.Parse(LegacyHealthCheckTemplate)
 	if err != nil {
 		t.Fatalf("error parsing template: %v", err)
 	}
 	wr := &bytes.Buffer{}
-	if err := templ.Execute(wr, []*TabletsCacheStatus{tcs}); err != nil {
+	if err := templ.Execute(wr, []*LegacyTabletsCacheStatus{tcs}); err != nil {
 		t.Fatalf("error executing template: %v", err)
 	}
 }
 
-func TestDebugURLFormatting(t *testing.T) {
+func TestLegacyDebugURLFormatting(t *testing.T) {
 	flag.Set("tablet_url_template", "https://{{.GetHostNameLevel 0}}.bastion.{{.Tablet.Alias.Cell}}.corp")
 	ParseTabletURLTemplateFromFlag()
 
 	tablet := topo.NewTablet(0, "cell", "host.dc.domain")
-	ts := []*TabletStats{
+	ts := []*LegacyTabletStats{
 		{
 			Key:                                 "a",
 			Tablet:                              tablet,
@@ -624,18 +622,18 @@ func TestDebugURLFormatting(t *testing.T) {
 			TabletExternallyReparentedTimestamp: 0,
 		},
 	}
-	tcs := &TabletsCacheStatus{
+	tcs := &LegacyTabletsCacheStatus{
 		Cell:         "cell",
 		Target:       &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		TabletsStats: ts,
 	}
 	templ := template.New("").Funcs(status.StatusFuncs)
-	templ, err := templ.Parse(HealthCheckTemplate)
+	templ, err := templ.Parse(LegacyHealthCheckTemplate)
 	if err != nil {
 		t.Fatalf("error parsing template: %v", err)
 	}
 	wr := &bytes.Buffer{}
-	if err := templ.Execute(wr, []*TabletsCacheStatus{tcs}); err != nil {
+	if err := templ.Execute(wr, []*LegacyTabletsCacheStatus{tcs}); err != nil {
 		t.Fatalf("error executing template: %v", err)
 	}
 	expectedURL := `"https://host.bastion.cell.corp"`
@@ -645,43 +643,15 @@ func TestDebugURLFormatting(t *testing.T) {
 }
 
 type listener struct {
-	output chan *TabletStats
+	output chan *LegacyTabletStats
 }
 
 func newListener() *listener {
-	return &listener{output: make(chan *TabletStats, 2)}
+	return &listener{output: make(chan *LegacyTabletStats, 2)}
 }
 
-func (l *listener) StatsUpdate(ts *TabletStats) {
+func (l *listener) StatsUpdate(ts *LegacyTabletStats) {
 	l.output <- ts
-}
-
-type fakeConn struct {
-	queryservice.QueryService
-	tablet *topodatapb.Tablet
-	// If fixedResult is set, the channels are not used.
-	fixedResult *querypb.StreamHealthResponse
-	// hcChan should be an unbuffered channel which holds the tablet's next health response.
-	hcChan chan *querypb.StreamHealthResponse
-	// errCh is either an unbuffered channel which holds the stream error to return, or nil.
-	errCh chan error
-	// cbErrCh is a channel which receives errors returned from the supplied callback.
-	cbErrCh chan error
-
-	mu       sync.Mutex
-	canceled bool
-}
-
-func createFakeConn(tablet *topodatapb.Tablet, c chan *querypb.StreamHealthResponse) *fakeConn {
-	key := TabletToMapKey(tablet)
-	conn := &fakeConn{
-		QueryService: fakes.ErrorQueryService,
-		tablet:       tablet,
-		hcChan:       c,
-		cbErrCh:      make(chan error, 1),
-	}
-	connMap[key] = conn
-	return conn
 }
 
 func createFixedHealthConn(tablet *topodatapb.Tablet, fixedResult *querypb.StreamHealthResponse) *fakeConn {
@@ -701,59 +671,4 @@ func discoveryDialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (q
 		return qs, nil
 	}
 	return nil, fmt.Errorf("tablet %v not found", key)
-}
-
-// StreamHealth implements queryservice.QueryService.
-func (fc *fakeConn) StreamHealth(ctx context.Context, callback func(shr *querypb.StreamHealthResponse) error) error {
-	if fc.fixedResult != nil {
-		return callback(fc.fixedResult)
-	}
-	for {
-		select {
-		case shr := <-fc.hcChan:
-			if err := callback(shr); err != nil {
-				if err == io.EOF {
-					return nil
-				}
-				select {
-				case fc.cbErrCh <- err:
-				case <-ctx.Done():
-				}
-				return err
-			}
-		case err := <-fc.errCh:
-			return err
-		case <-ctx.Done():
-			fc.mu.Lock()
-			fc.canceled = true
-			fc.mu.Unlock()
-			return nil
-		}
-	}
-}
-
-func (fc *fakeConn) isCanceled() bool {
-	fc.mu.Lock()
-	defer fc.mu.Unlock()
-	return fc.canceled
-}
-
-func (fc *fakeConn) resetCanceledFlag() {
-	fc.mu.Lock()
-	defer fc.mu.Unlock()
-	fc.canceled = false
-}
-
-func checkErrorCounter(keyspace, shard string, tabletType topodatapb.TabletType, want int64) error {
-	statsKey := []string{keyspace, shard, topoproto.TabletTypeLString(tabletType)}
-	name := strings.Join(statsKey, ".")
-	got, ok := hcErrorCounters.Counts()[name]
-	if !ok {
-		return fmt.Errorf("hcErrorCounters not correctly initialized")
-	}
-	if got != want {
-		return fmt.Errorf("wrong value for hcErrorCounters got = %v, want = %v", got, want)
-	}
-
-	return nil
 }
