@@ -344,7 +344,7 @@ func (sbc *SandboxConn) AddVStreamEvents(events []*binlogdatapb.VEvent, err erro
 }
 
 // VStream is part of the QueryService interface.
-func (sbc *SandboxConn) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (sbc *SandboxConn) VStream(ctx context.Context, target *querypb.Target, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	if sbc.StartPos != "" && sbc.StartPos != startPos {
 		return fmt.Errorf("startPos(%v): %v, want %v", target, startPos, sbc.StartPos)
 	}

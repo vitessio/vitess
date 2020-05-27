@@ -19,10 +19,14 @@ package endtoend
 import (
 	"context"
 	"fmt"
+	"io"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/proto/query"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -30,25 +34,32 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
-func TestVStream(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
+func initialize(ctx context.Context, t *testing.T) (*vtgateconn.VTGateConn, *mysql.Conn, *mysql.Conn, func()) {
 	gconn, err := vtgateconn.Dial(ctx, grpcAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer gconn.Close()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
 	mconn, err := mysql.Connect(ctx, &mysqlParams)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	close := func() {
+		gconn.Close()
+		conn.Close()
+		mconn.Close()
+	}
+	return gconn, conn, mconn, close
+}
+func TestVStream(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	gconn, conn, mconn, closeConnections := initialize(ctx, t)
+	defer closeConnections()
 
 	mpos, err := mconn.MasterPosition()
 	if err != nil {
@@ -127,4 +138,89 @@ func TestVStream(t *testing.T) {
 		}
 	}
 	cancel()
+}
+
+func TestVStreamCopyNoPos(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	gconn, conn, mconn, closeConnections := initialize(ctx, t)
+	defer closeConnections()
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: "ks",
+			Shard:    "-80",
+			Gtid:     "",
+		}},
+	}
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*/",
+		}},
+	}
+	reader, err := gconn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter)
+	_, _ = conn, mconn
+	if err != nil {
+		t.Fatal(err)
+	}
+	require.NotNil(t, reader)
+	events, err := reader.Recv()
+	require.Errorf(t, err, "Stream needs a position or a table to copy")
+	require.Nil(t, events)
+
+	cancel()
+}
+
+func TestVStreamCopyBasic(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	gconn, conn, mconn, closeConnections := initialize(ctx, t)
+	defer closeConnections()
+
+	_, err := conn.ExecuteFetch("insert into t1(id1,id2) values(1,1), (2,2), (3,3), (4,4), (5,5), (6,6), (7,7), (8,8)", 1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lastPK := sqltypes.Result{
+		Fields: []*query.Field{{Name: "id1", Type: query.Type_INT32}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt32(0)}},
+	}
+	qr := sqltypes.ResultToProto3(&lastPK)
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: "ks",
+			Shard:    "-80",
+			Gtid:     "",
+			TablePKs: []*binlogdatapb.TableLastPK{{
+				TableName: "t1",
+				Lastpk:    qr,
+			},
+			},
+		}},
+	}
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
+	}
+	reader, err := gconn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter)
+	_, _ = conn, mconn
+	if err != nil {
+		t.Fatal(err)
+	}
+	require.NotNil(t, reader)
+	for {
+		e, err := reader.Recv()
+		switch err {
+		case nil:
+			log.Infof("Received Events\n%v\n", e)
+		case io.EOF:
+			log.Infof("stream ended\n")
+			cancel()
+		default:
+			t.Fatalf("remote error: %v\n", err)
+		}
+	}
 }

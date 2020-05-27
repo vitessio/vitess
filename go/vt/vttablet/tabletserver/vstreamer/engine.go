@@ -38,12 +38,6 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
-// TableLastPK records the lastPK seen during the copy phase for a table
-type TableLastPK struct {
-	name   string
-	lastPK *sqltypes.Result
-}
-
 // Engine is the engine for handling vreplication streaming requests.
 type Engine struct {
 	env tabletenv.Env
@@ -151,7 +145,7 @@ func (vse *Engine) vschema() *vindexes.VSchema {
 }
 
 // Stream starts a new stream.
-func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	// Ensure vschema is initialized and the watcher is started.
 	// Starting of the watcher has to be delayed till the first call to Stream
 	// because this overhead should be incurred only if someone uses this feature.

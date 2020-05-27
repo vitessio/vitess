@@ -23,6 +23,8 @@ import (
 	"os"
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttest"
@@ -207,9 +209,13 @@ func TestMain(m *testing.M) {
 		defer os.RemoveAll(cfg.SchemaDir)
 
 		cfg.TabletHostName = *tabletHostName
-
+		env, err := vttest.NewLocalTestEnvWithDirectory("", 9000, "/tmp/vttest")
+		if err != nil {
+			log.Errorf("err is %v", err)
+		}
 		cluster = &vttest.LocalCluster{
 			Config: cfg,
+			Env:    env,
 		}
 		if err := cluster.Setup(); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
@@ -217,7 +223,6 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 		defer cluster.TearDown()
-
 		vtParams = mysql.ConnParams{
 			Host: "localhost",
 			Port: cluster.Env.PortForProtocol("vtcombo_mysql_port", ""),

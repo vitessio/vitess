@@ -341,7 +341,7 @@ func (q *query) VStream(request *binlogdatapb.VStreamRequest, stream queryservic
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	err = q.server.VStream(ctx, request.Target, request.Position, request.Filter, func(events []*binlogdatapb.VEvent) error {
+	err = q.server.VStream(ctx, request.Target, request.Position, request.TableLastPKs, request.Filter, func(events []*binlogdatapb.VEvent) error {
 		return stream.Send(&binlogdatapb.VStreamResponse{
 			Events: events,
 		})
