@@ -104,8 +104,10 @@ func TestReplicaTransactions(t *testing.T) {
 	qr := exec(t, replicaConn, "select id, email from customer")
 	assert.Equal(t, `[[INT64(1) VARCHAR("email1")]]`, fmt.Sprintf("%v", qr.Rows), "select returned wrong result")
 
-	// insert more data on master
+	// insert more data on master using a transaction
+	_ = exec(t, masterConn, "begin")
 	exec(t, masterConn, "insert into customer(id, email) values(2,'email2')")
+	_ = exec(t, masterConn, "commit")
 	time.Sleep(1 * time.Second)
 
 	// replica doesn't see new row because it is in a transaction

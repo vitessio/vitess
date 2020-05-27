@@ -47,8 +47,8 @@ const (
 	GatewayImplementationDiscovery = "discoverygateway"
 )
 
-//LegacyHealthCheckEnabled returns true when legacy
-func LegacyHealthCheckEnabled() bool {
+//UsingLegacyGateway returns true when legacy
+func UsingLegacyGateway() bool {
 	return *GatewayImplementation == GatewayImplementationDiscovery
 }
 

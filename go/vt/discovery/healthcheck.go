@@ -608,15 +608,15 @@ func (hc *HealthCheckImpl) waitForTablets(ctx context.Context, targets []*query.
 	}
 }
 
-// GetConnection returns the TabletConn of the given tablet.
-func (hc *HealthCheckImpl) GetConnection(alias *topodata.TabletAlias) (queryservice.QueryService, error) {
+// TabletConnection returns the Connection to a given tablet.
+func (hc *HealthCheckImpl) TabletConnection(alias *topodata.TabletAlias) (queryservice.QueryService, error) {
 	hc.mu.Lock()
-	th := hc.healthByAlias[tabletAliasString(topoproto.TabletAliasString(alias))]
+	thc := hc.healthByAlias[tabletAliasString(topoproto.TabletAliasString(alias))]
 	hc.mu.Unlock()
-	if th == nil {
+	if thc == nil {
 		return nil, vterrors.New(vtrpc.Code_NOT_FOUND, fmt.Sprintf("No TabletHealth available for alias: %v", alias))
 	}
-	return th.Conn, nil
+	return thc.Connection(), nil
 }
 
 // Target includes cell which we ignore here
