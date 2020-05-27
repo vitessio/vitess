@@ -245,6 +245,9 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, changes []string) ([]
 	initialCopySQL += "DROP DATABASE IF EXISTS _vt_preflight;\n"
 	initialCopySQL += "CREATE DATABASE _vt_preflight;\n"
 	initialCopySQL += "USE _vt_preflight;\n"
+	// We're not smart enough to create the tables in a foreign-key-compatible way,
+	// so we temporarily disable foreign key checks while adding the existing tables.
+	initialCopySQL += "SET foreign_key_checks = 0;\n"
 	for _, td := range originalSchema.TableDefinitions {
 		if td.Type == tmutils.TableBaseTable {
 			initialCopySQL += td.Schema + ";\n"
