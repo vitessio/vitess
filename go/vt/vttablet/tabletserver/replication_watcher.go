@@ -19,8 +19,6 @@ package tabletserver
 import (
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
-
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
@@ -33,7 +31,7 @@ import (
 // VStreamer defines  the functions of VStreamer
 // that the replicationWatcher needs.
 type VStreamer interface {
-	Stream(ctx context.Context, startPos string, tablePKs []*vstreamer.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
+	Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
 }
 
 // ReplicationWatcher is a tabletserver service that watches the

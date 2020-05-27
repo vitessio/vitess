@@ -365,6 +365,7 @@ message VStreamRequest {
 
   string position = 4;
   Filter filter = 5;
+  repeated TableLastPK table_last_p_ks = 6;
 }
 
 // VStreamResponse is the response from VStreamer
