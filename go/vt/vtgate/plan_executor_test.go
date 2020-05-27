@@ -156,8 +156,8 @@ func TestPlanExecutorTransactionsNoAutoCommit(t *testing.T) {
 		t.Errorf("logstats: expected non-zero CommitTime")
 	}
 
-	// rollback doesn't emit a logstats record when it doesn't do anything
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "rollback", nil)
+	// CloseSession doesn't log anything
+	err = executor.CloseSession(context.Background(), session)
 	if err != nil {
 		t.Fatal(err)
 	}
