@@ -168,12 +168,7 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 		warnings.Add("ResultsExceeded", 1)
 	}
 
-	// The mysql plugin runs an implicit rollback whenever a connection closes.
-	// To avoid spamming the log with no-op rollback records, ignore it if
-	// it was a no-op record (i.e. didn't issue any queries)
-	if !(logStats.StmtType == "ROLLBACK" && logStats.ShardQueries == 0) {
-		logStats.Send()
-	}
+	logStats.Send()
 	return result, err
 }
 
@@ -308,9 +303,15 @@ func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession,
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
 	e.updateQueryCounts("Rollback", "", "", int64(logStats.ShardQueries))
-	err := e.txConn.Rollback(ctx, safeSession)
+	err := e.CloseSession(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
 	return &sqltypes.Result{}, err
+}
+
+// CloseSession closes the current transaction, if any. It is called both for explicit "rollback"
+// statements and implicitly when the mysql server closes the connection.
+func (e *Executor) CloseSession(ctx context.Context, safeSession *SafeSession) error {
+	return e.txConn.Rollback(ctx, safeSession)
 }
 
 func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) (*sqltypes.Result, error) {
