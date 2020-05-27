@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -48,7 +50,7 @@ func TestReadAllRedo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var want []*PreparedTx
+	var want []*tx.PreparedTx
 	if !reflect.DeepEqual(prepared, want) {
 		t.Errorf("ReadAllRedo: %s, want %s", jsonStr(prepared), jsonStr(want))
 	}
@@ -74,7 +76,7 @@ func TestReadAllRedo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = []*PreparedTx{{
+	want = []*tx.PreparedTx{{
 		Dtid:    "dtid0",
 		Queries: []string{"stmt01"},
 		Time:    time.Unix(0, 1),
@@ -109,7 +111,7 @@ func TestReadAllRedo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = []*PreparedTx{{
+	want = []*tx.PreparedTx{{
 		Dtid:    "dtid0",
 		Queries: []string{"stmt01", "stmt02"},
 		Time:    time.Unix(0, 1),
@@ -149,7 +151,7 @@ func TestReadAllRedo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = []*PreparedTx{{
+	want = []*tx.PreparedTx{{
 		Dtid:    "dtid0",
 		Queries: []string{"stmt01", "stmt02"},
 		Time:    time.Unix(0, 1),
@@ -208,7 +210,7 @@ func TestReadAllRedo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = []*PreparedTx{{
+	want = []*tx.PreparedTx{{
 		Dtid:    "dtid0",
 		Queries: []string{"stmt01", "stmt02"},
 		Time:    time.Unix(0, 1),
@@ -220,7 +222,7 @@ func TestReadAllRedo(t *testing.T) {
 	if !reflect.DeepEqual(prepared, want) {
 		t.Errorf("ReadAllRedo: %s, want %s", jsonStr(prepared), jsonStr(want))
 	}
-	wantFailed := []*PreparedTx{{
+	wantFailed := []*tx.PreparedTx{{
 		Dtid:    "dtid1",
 		Queries: []string{"stmt11"},
 		Time:    time.Unix(0, 1),
@@ -252,7 +254,7 @@ func TestReadAllTransactions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var want []*DistributedTx
+	var want []*tx.DistributedTx
 	if !reflect.DeepEqual(distributed, want) {
 		t.Errorf("ReadAllTransactions: %s, want %s", jsonStr(distributed), jsonStr(want))
 	}
@@ -277,7 +279,7 @@ func TestReadAllTransactions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = []*DistributedTx{{
+	want = []*tx.DistributedTx{{
 		Dtid:    "dtid0",
 		State:   "PREPARE",
 		Created: time.Unix(0, 1),
@@ -316,7 +318,7 @@ func TestReadAllTransactions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = []*DistributedTx{{
+	want = []*tx.DistributedTx{{
 		Dtid:    "dtid0",
 		State:   "PREPARE",
 		Created: time.Unix(0, 1),
@@ -364,7 +366,7 @@ func TestReadAllTransactions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = []*DistributedTx{{
+	want = []*tx.DistributedTx{{
 		Dtid:    "dtid0",
 		State:   "PREPARE",
 		Created: time.Unix(0, 1),

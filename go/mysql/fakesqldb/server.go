@@ -98,6 +98,8 @@ type DB struct {
 	patternData []exprResult
 	// queryCalled keeps track of how many times a query was called.
 	queryCalled map[string]int
+	// querylog keeps track of all called queries
+	querylog []string
 
 	// This next set of fields is used when ordering of the queries matters.
 
@@ -340,6 +342,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	db.queryCalled[key]++
+	db.querylog = append(db.querylog, key)
 
 	// Check if we should close the connection and provoke errno 2013.
 	if db.shouldClose {
@@ -521,6 +524,11 @@ func (db *DB) GetQueryCalledNum(query string) int {
 		return 0
 	}
 	return num
+}
+
+//QueryLog returns the query log in a semicomma separated string
+func (db *DB) QueryLog() string {
+	return strings.Join(db.querylog, ";")
 }
 
 // EnableConnFail makes connection to this fake DB fail.

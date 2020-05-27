@@ -108,7 +108,7 @@ func (vh *vtgateHandler) ComResetConnection(c *mysql.Conn) {
 	if session.InTransaction {
 		defer atomic.AddInt32(&busyConnections, -1)
 	}
-	_, _, err := vh.vtg.Execute(ctx, session, "rollback", make(map[string]*querypb.BindVariable))
+	err := vh.vtg.CloseSession(ctx, session)
 	if err != nil {
 		log.Errorf("Error happened in transaction rollback: %v", err)
 	}
@@ -134,7 +134,7 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	if session.InTransaction {
 		defer atomic.AddInt32(&busyConnections, -1)
 	}
-	_, _, _ = vh.vtg.Execute(ctx, session, "rollback", make(map[string]*querypb.BindVariable))
+	_ = vh.vtg.CloseSession(ctx, session)
 }
 
 // Regexp to extract parent span id over the sql query

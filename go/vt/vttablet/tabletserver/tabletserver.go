@@ -29,6 +29,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/history"
@@ -168,6 +170,8 @@ type TabletServer struct {
 	vstreamer *vstreamer.Engine
 	messager  *messager.Engine
 
+	txController tx.EngineStateMachine
+
 	// checkMySQLThrottler is used to throttle the number of
 	// requests sent to CheckMySQL.
 	checkMySQLThrottler *sync2.Semaphore
@@ -226,6 +230,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.se = schema.NewEngine(tsv)
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
 	tsv.te = NewTxEngine(tsv)
+	tsv.txController = tsv.te
 	tsv.hw = heartbeat.NewWriter(tsv, alias)
 	tsv.hr = heartbeat.NewReader(tsv)
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
@@ -518,7 +523,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 	if err := tsv.qe.Open(); err != nil {
 		return err
 	}
-	if err := tsv.te.Init(); err != nil {
+	if err := tsv.txController.Init(); err != nil {
 		return err
 	}
 	if err := tsv.hw.Init(tsv.target); err != nil {
@@ -536,7 +541,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 	// transactional requests are not allowed. So, we can
 	// be sure that the tx pool won't change after the wait.
 	if tsv.target.TabletType == topodatapb.TabletType_MASTER {
-		tsv.te.AcceptReadWrite()
+		tsv.txController.AcceptReadWrite()
 		if err := tsv.txThrottler.Open(tsv.target.Keyspace, tsv.target.Shard); err != nil {
 			return err
 		}
@@ -544,7 +549,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.hr.Close()
 		tsv.hw.Open()
 	} else {
-		tsv.te.AcceptReadOnly()
+		tsv.txController.AcceptReadOnly()
 		tsv.messager.Close()
 		tsv.hr.Open()
 		tsv.hw.Close()
@@ -600,7 +605,7 @@ func (tsv *TabletServer) waitForShutdown() {
 	// will be allowed. They will enable the conclusion of outstanding
 	// transactions.
 	tsv.messager.Close()
-	tsv.te.StopGently()
+	tsv.txController.StopGently()
 	tsv.qe.streamQList.TerminateAll()
 	tsv.watcher.Close()
 	tsv.requests.Wait()
@@ -615,7 +620,7 @@ func (tsv *TabletServer) closeAll() {
 	tsv.vstreamer.Close()
 	tsv.hr.Close()
 	tsv.hw.Close()
-	tsv.te.StopGently()
+	tsv.txController.StopGently()
 	tsv.watcher.Close()
 	tsv.qe.Close()
 	tsv.se.Close()
@@ -953,7 +958,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 	trace.AnnotateSQL(span, sql)
 	defer span.Finish()
 
-	allowOnShutdown := (transactionID != 0)
+	allowOnShutdown := transactionID != 0
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Execute", sql, bindVariables,
@@ -1845,12 +1850,12 @@ func (tsv *TabletServer) StreamPoolSize() int {
 // SetTxPoolSize changes the tx pool size to the specified value.
 // This function should only be used for testing.
 func (tsv *TabletServer) SetTxPoolSize(val int) {
-	tsv.te.txPool.conns.SetCapacity(val)
+	tsv.te.txPool.scp.conns.SetCapacity(val)
 }
 
 // TxPoolSize returns the tx pool size.
 func (tsv *TabletServer) TxPoolSize() int {
-	return int(tsv.te.txPool.conns.Capacity())
+	return tsv.te.txPool.scp.Capacity()
 }
 
 // SetTxTimeout changes the transaction timeout to the specified value.

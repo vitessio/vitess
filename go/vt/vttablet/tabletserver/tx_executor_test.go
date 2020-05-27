@@ -20,9 +20,10 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
@@ -46,9 +47,7 @@ func TestTxExecutorEmptyPrepare(t *testing.T) {
 	err := txe.Prepare(txid, "aa")
 	require.NoError(t, err)
 	// Nothing should be prepared.
-	if len(txe.te.preparedPool.conns) != 0 {
-		t.Errorf("len(txe.te.preparedPool.conns): %d, want 0", len(txe.te.preparedPool.conns))
-	}
+	require.Empty(t, txe.te.preparedPool.conns, "txe.te.preparedPool.conns")
 }
 
 func TestTxExecutorPrepare(t *testing.T) {
@@ -73,10 +72,7 @@ func TestTxExecutorPrepareNotInTx(t *testing.T) {
 	defer db.Close()
 	defer tsv.StopService()
 	err := txe.Prepare(0, "aa")
-	want := "transaction 0: not found"
-	if err == nil || err.Error() != want {
-		t.Errorf("Prepare err: %v, want %s", err, want)
-	}
+	require.EqualError(t, err, "transaction 0: not found")
 }
 
 func TestTxExecutorPreparePoolFail(t *testing.T) {
@@ -89,10 +85,8 @@ func TestTxExecutorPreparePoolFail(t *testing.T) {
 	require.NoError(t, err)
 	defer txe.RollbackPrepared("aa", 0)
 	err = txe.Prepare(txid2, "bb")
-	want := "prepared transactions exceeded limit"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Prepare err: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "prepared transactions exceeded limit")
 }
 
 func TestTxExecutorPrepareRedoBeginFail(t *testing.T) {
@@ -103,10 +97,8 @@ func TestTxExecutorPrepareRedoBeginFail(t *testing.T) {
 	db.AddRejectedQuery("begin", errors.New("begin fail"))
 	err := txe.Prepare(txid, "aa")
 	defer txe.RollbackPrepared("aa", 0)
-	want := "begin fail"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Prepare err: %v, want %s", err, want)
-	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "begin fail")
 }
 
 func TestTxExecutorPrepareRedoFail(t *testing.T) {
@@ -116,10 +108,8 @@ func TestTxExecutorPrepareRedoFail(t *testing.T) {
 	txid := newTxForPrep(tsv)
 	err := txe.Prepare(txid, "bb")
 	defer txe.RollbackPrepared("bb", 0)
-	want := "is not supported"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Prepare err: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "is not supported")
 }
 
 func TestTxExecutorPrepareRedoCommitFail(t *testing.T) {
@@ -130,10 +120,8 @@ func TestTxExecutorPrepareRedoCommitFail(t *testing.T) {
 	db.AddRejectedQuery("commit", errors.New("commit fail"))
 	err := txe.Prepare(txid, "aa")
 	defer txe.RollbackPrepared("aa", 0)
-	want := "commit fail"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Prepare err: %v, want %s", err, want)
-	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "commit fail")
 }
 
 func TestTxExecutorCommit(t *testing.T) {
@@ -162,16 +150,12 @@ func TestTxExecutorCommitRedoFail(t *testing.T) {
 	defer txe.RollbackPrepared("bb", 0)
 	db.AddQuery("update _vt.redo_state set state = 'Failed' where dtid = 'bb'", &sqltypes.Result{})
 	err = txe.CommitPrepared("bb")
-	want := "is not supported"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("txe.CommitPrepared err: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "is not supported")
 	// A retry should fail differently.
 	err = txe.CommitPrepared("bb")
-	want = "cannot commit dtid bb, state: failed"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("txe.CommitPrepared err: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot commit dtid bb, state: failed")
 }
 
 func TestTxExecutorCommitRedoCommitFail(t *testing.T) {
@@ -184,10 +168,8 @@ func TestTxExecutorCommitRedoCommitFail(t *testing.T) {
 	defer txe.RollbackPrepared("aa", 0)
 	db.AddRejectedQuery("commit", errors.New("commit fail"))
 	err = txe.CommitPrepared("aa")
-	want := "commit fail"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Prepare err: %v, want %s", err, want)
-	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "commit fail")
 }
 
 func TestTxExecutorRollbackBeginFail(t *testing.T) {
@@ -199,10 +181,8 @@ func TestTxExecutorRollbackBeginFail(t *testing.T) {
 	require.NoError(t, err)
 	db.AddRejectedQuery("begin", errors.New("begin fail"))
 	err = txe.RollbackPrepared("aa", txid)
-	want := "begin fail"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Prepare err: %v, want %s", err, want)
-	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "begin fail")
 }
 
 func TestTxExecutorRollbackRedoFail(t *testing.T) {
@@ -215,10 +195,8 @@ func TestTxExecutorRollbackRedoFail(t *testing.T) {
 	err := txe.Prepare(txid, "bb")
 	require.NoError(t, err)
 	err = txe.RollbackPrepared("bb", txid)
-	want := "is not supported"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Prepare err: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "is not supported")
 }
 
 func TestExecutorCreateTransaction(t *testing.T) {
@@ -249,10 +227,8 @@ func TestExecutorStartCommit(t *testing.T) {
 	db.AddQuery(commitTransition, &sqltypes.Result{})
 	txid = newTxForPrep(tsv)
 	err = txe.StartCommit(txid, "aa")
-	want := "could not transition to COMMIT: aa"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Prepare err: %v, want %s", err, want)
-	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "could not transition to COMMIT: aa")
 }
 
 func TestExecutorSetRollback(t *testing.T) {
@@ -269,10 +245,8 @@ func TestExecutorSetRollback(t *testing.T) {
 	db.AddQuery(rollbackTransition, &sqltypes.Result{})
 	txid = newTxForPrep(tsv)
 	err = txe.SetRollback("aa", txid)
-	want := "could not transition to ROLLBACK: aa"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Prepare err: %v, want %s", err, want)
-	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "could not transition to ROLLBACK: aa")
 }
 
 func TestExecutorConcludeTransaction(t *testing.T) {
@@ -409,7 +383,7 @@ func TestExecutorReadAllTransactions(t *testing.T) {
 	})
 	got, _, _, err := txe.ReadTwopcInflight()
 	require.NoError(t, err)
-	want := []*DistributedTx{{
+	want := []*tx.DistributedTx{{
 		Dtid:    "dtid0",
 		State:   "PREPARE",
 		Created: time.Unix(0, 1),
@@ -514,15 +488,12 @@ func TestNoTwopc(t *testing.T) {
 	want := "2pc is not enabled"
 	for _, tc := range testcases {
 		err := tc.fun()
-		if err == nil || err.Error() != want {
-			t.Errorf("%s: %v, want %s", tc.desc, err, want)
-		}
+		require.EqualError(t, err, want)
 	}
 }
 
 func newTestTxExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest(t)
-	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool, db)
 	db.AddQueryPattern("insert into _vt\\.redo_state\\(dtid, state, time_created\\) values \\('aa', 1,.*", &sqltypes.Result{})
@@ -540,7 +511,6 @@ func newTestTxExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fa
 // newShortAgeExecutor is same as newTestTxExecutor, but shorter transaction abandon age.
 func newShortAgeExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest(t)
-	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool|shortTwopcAge, db)
 	db.AddQueryPattern("insert into _vt\\.redo_state\\(dtid, state, time_created\\) values \\('aa', 1,.*", &sqltypes.Result{})
@@ -558,7 +528,6 @@ func newShortAgeExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *
 // newNoTwopcExecutor is same as newTestTxExecutor, but 2pc disabled.
 func newNoTwopcExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest(t)
-	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, noTwopc, db)
 	return &TxExecutor{
@@ -572,7 +541,7 @@ func newNoTwopcExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *f
 func newTxForPrep(tsv *TabletServer) int64 {
 	txid := newTransaction(tsv, nil)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	_, err := tsv.Execute(context.Background(), &target, "update test_table set name = 2 where pk = 1", nil, txid, nil)
+	_, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid, nil)
 	if err != nil {
 		panic(err)
 	}

@@ -574,9 +574,10 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 					"onecol": {
 						Type: "lookup",
 						Params: map[string]string{
-							"table": "lkp1",
-							"from":  "from",
-							"to":    "toc",
+							"table":        "lkp1",
+							"from":         "from",
+							"to":           "toc",
+							"ignore_nulls": "true",
 						},
 						Owner: "t1",
 					},
@@ -636,8 +637,6 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: toc0: type:VARBINARY ` +
-			`value:"\026k@\264J\272K\326"  true`,
 		`ResolveDestinations sharded [value:"0" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		`ExecuteMultiShard sharded.20-: prefix mid1 suffix ` +
 			`{_c30: _id0: type:INT64 value:"1" } true true`,
@@ -949,9 +948,10 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 					"onecol": {
 						Type: "lookup",
 						Params: map[string]string{
-							"table": "lkp1",
-							"from":  "from",
-							"to":    "toc",
+							"table":        "lkp1",
+							"from":         "from",
+							"to":           "toc",
+							"ignore_nulls": "true",
 						},
 						Owner: "t1",
 					},
@@ -1023,8 +1023,6 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`Execute insert ignore into lkp1(from, toc) values(:from0, :toc0) from0: toc0: type:VARBINARY ` +
-			`value:"\026k@\264J\272K\326"  true`,
 		`Execute select from from lkp1 where from = :from and toc = :toc from: toc: type:VARBINARY value:"\026k@\264J\272K\326"  false`,
 		`ResolveDestinations sharded [value:"0" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		`ExecuteMultiShard sharded.-20: prefix mid1 suffix ` +

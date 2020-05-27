@@ -31,8 +31,9 @@ import (
 
 	"vitess.io/vitess/go/test/utils"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
@@ -479,6 +480,7 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	txid1, _, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
+
 	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid1, nil)
 	require.NoError(t, err)
 	err = tsv.Prepare(ctx, &target, txid1, "aa")
@@ -487,7 +489,7 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 	require.NoError(t, err)
 
 	// This makes txid2 busy
-	conn2, err := tsv.te.txPool.Get(txid2, "for query")
+	conn2, err := tsv.te.txPool.GetAndLock(txid2, "for query")
 	require.NoError(t, err)
 	ch := make(chan bool)
 	go func() {
@@ -502,10 +504,10 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 		t.Fatal("ch should not fire")
 	case <-time.After(10 * time.Millisecond):
 	}
-	require.EqualValues(t, 1, tsv.te.txPool.activePool.Size(), "tsv.te.txPool.activePool.Size()")
+	require.EqualValues(t, 1, tsv.te.txPool.scp.active.Size(), "tsv.te.txPool.scp.active.Size()")
 
 	// Concluding conn2 will allow the transition to go through.
-	tsv.te.txPool.LocalConclude(ctx, conn2)
+	tsv.te.txPool.RollbackAndRelease(ctx, conn2)
 	<-ch
 }
 
@@ -546,13 +548,13 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	})
 	turnOnTxEngine()
 	assert.EqualValues(t, 1, len(tsv.te.preparedPool.conns), "len(tsv.te.preparedPool.conns)")
-	got := tsv.te.preparedPool.conns["dtid0"].Queries
+	got := tsv.te.preparedPool.conns["dtid0"].TxProperties().Queries
 	want := []string{"update test_table set name = 2 where pk = 1 limit 10001"}
 	utils.MustMatch(t, want, got, "Prepared queries")
 	turnOffTxEngine()
 	assert.Empty(t, tsv.te.preparedPool.conns, "tsv.te.preparedPool.conns")
 
-	tsv.te.txPool.lastID.Set(1)
+	tsv.te.txPool.scp.lastID.Set(1)
 	// Ensure we continue past errors.
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -580,7 +582,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	})
 	turnOnTxEngine()
 	assert.EqualValues(t, 1, len(tsv.te.preparedPool.conns), "len(tsv.te.preparedPool.conns)")
-	got = tsv.te.preparedPool.conns["a:b:10"].Queries
+	got = tsv.te.preparedPool.conns["a:b:10"].TxProperties().Queries
 	want = []string{"update test_table set name = 2 where pk = 1 limit 10001"}
 	utils.MustMatch(t, want, got, "Prepared queries")
 	wantFailed := map[string]error{"a:b:20": errPrepFailed}
@@ -588,7 +590,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		t.Errorf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed)
 	}
 	// Verify last id got adjusted.
-	assert.EqualValues(t, 20, tsv.te.txPool.lastID.Get(), "tsv.te.txPool.lastID.Get()")
+	assert.EqualValues(t, 20, tsv.te.txPool.scp.lastID.Get(), "tsv.te.txPool.lastID.Get()")
 	turnOffTxEngine()
 	assert.Empty(t, tsv.te.preparedPool.conns, "tsv.te.preparedPool.conns")
 }
@@ -2333,7 +2335,7 @@ func TestConfigChanges(t *testing.T) {
 	if val := tsv.TxPoolSize(); val != newSize {
 		t.Errorf("TxPoolSize: %d, want %d", val, newSize)
 	}
-	if val := int(tsv.te.txPool.conns.Capacity()); val != newSize {
+	if val := int(tsv.te.txPool.scp.Capacity()); val != newSize {
 		t.Errorf("tsv.te.txPool.pool.Capacity: %d, want %d", val, newSize)
 	}
 
@@ -2342,7 +2344,7 @@ func TestConfigChanges(t *testing.T) {
 		t.Errorf("tsv.TxTimeout: %v, want %v", val, newDuration)
 	}
 	if val := tsv.te.txPool.Timeout(); val != newDuration {
-		t.Errorf("tsv.te.txPool.Timeout: %v, want %v", val, newDuration)
+		t.Errorf("tsv.te.Pool().Timeout: %v, want %v", val, newDuration)
 	}
 
 	tsv.SetQueryPlanCacheCap(newSize)
@@ -2507,5 +2509,3 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }
-
-var ctx = context.Background()
