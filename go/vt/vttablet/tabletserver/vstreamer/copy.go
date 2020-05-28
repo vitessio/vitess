@@ -85,12 +85,14 @@ func (uvs *uvstreamer) catchup(ctx context.Context) error {
 }
 
 func (uvs *uvstreamer) sendFieldEvent(ctx context.Context, gtid string, fieldEvent *binlogdatapb.FieldEvent) error {
-	ev := &binlogdatapb.VEvent{
+	evs := []*binlogdatapb.VEvent{{
+		Type: binlogdatapb.VEventType_BEGIN,
+	}, {
 		Type:       binlogdatapb.VEventType_FIELD,
 		FieldEvent: fieldEvent,
-	}
+	}}
 	log.Infof("Sending field event %v, gtid is %s", fieldEvent, gtid)
-	uvs.send([]*binlogdatapb.VEvent{ev})
+	uvs.send(evs)
 	pos, _ := mysql.DecodePosition(gtid)
 	uvs.pos = pos
 	return nil
@@ -112,6 +114,8 @@ func (uvs *uvstreamer) sendEventsForRows(ctx context.Context, tableName string, 
 		}
 		evs = append(evs, ev)
 	}
+
+	evs = append(evs, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT})
 	uvs.send(evs)
 	return nil
 }
