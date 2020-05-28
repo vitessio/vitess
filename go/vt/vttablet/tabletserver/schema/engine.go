@@ -221,7 +221,7 @@ func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
 func (se *Engine) reload(ctx context.Context) error {
 	start := time.Now()
 	defer func() {
-		log.Infof("Time taken to load the schema: %v", time.Since(start))
+		log.V(2).Infof("Time taken to load the schema: %v", time.Since(start))
 		se.env.LogError()
 	}()
 
@@ -255,6 +255,7 @@ func (se *Engine) reload(ctx context.Context) error {
 		if _, ok := se.tables[tableName]; ok && createTime < se.lastChange {
 			continue
 		}
+		log.V(2).Infof("Reading schema for table: %s", tableName)
 		table, err := LoadTable(conn, tableName, row[1].ToString(), row[3].ToString())
 		if err != nil {
 			rec.RecordError(err)

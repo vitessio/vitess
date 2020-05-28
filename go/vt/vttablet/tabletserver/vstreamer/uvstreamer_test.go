@@ -119,7 +119,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	case <-ctx.Done():
 		log.Infof("Received context.Done, ending test")
 	}
-	numCopyEvents := 3 /*t1,t2,t3*/ * (numInitialRows + 1 /*FieldEvent*/ + 1 /*LastPKEvent*/ + 1 /*Copy Start Other TestEvent*/)
+	numCopyEvents := 3 /*t1,t2,t3*/ * (numInitialRows + 1 /*FieldEvent*/ + 1 /*LastPKEvent*/ + 1 /*Copy Start Other TestEvent*/ + 2 /*begin,commit*/)
 	numCopyEvents += 2        /* GTID + Test event after all copy is done */
 	numCatchupEvents := 5     /*t1:FIELD+ROW*/
 	numFastForwardEvents := 5 /*t1:FIELD+ROW*/
