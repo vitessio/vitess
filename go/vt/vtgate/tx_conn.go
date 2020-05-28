@@ -94,7 +94,7 @@ func (txc *TxConn) commitShard(ctx context.Context, s *vtgatepb.Session_ShardSes
 	err = qs.Commit(ctx, s.Target, s.TransactionId)
 	// TransactionId should be set to 0 if the commit fails so that
 	// we rollback all others but don't attempt to rollback a failed ShardSession
-	// TODO(deepthi): testcase that fails if we change this to an unconditional defer
+	// TODO(deepthi): need a testcase that fails if we change this to an unconditional defer
 	// defer () { s.TransactionId = 0} ()
 	if err != nil {
 		s.TransactionId = 0
@@ -153,8 +153,19 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
+	var qs queryservice.QueryService
+	if UsingLegacyGateway() {
+		qs = txc.gateway
+	}
+
 	err = txc.runSessions(ctx, session.ShardSessions[1:], func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
-		return txc.gateway.Prepare(ctx, s.Target, s.TransactionId, dtid)
+		if !UsingLegacyGateway() {
+			qs, err = txc.gateway.QueryServiceByAlias(s.TabletAlias)
+			if err != nil {
+				return err
+			}
+		}
+		return qs.Prepare(ctx, s.Target, s.TransactionId, dtid)
 	})
 	if err != nil {
 		// TODO(sougou): Perform a more fine-grained cleanup
@@ -166,7 +177,15 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	err = txc.gateway.StartCommit(ctx, mmShard.Target, mmShard.TransactionId, dtid)
+	if UsingLegacyGateway() {
+		qs = txc.gateway
+	} else {
+		qs, err = txc.gateway.QueryServiceByAlias(mmShard.TabletAlias)
+		if err != nil {
+			return err
+		}
+	}
+	err = qs.StartCommit(ctx, mmShard.Target, mmShard.TransactionId, dtid)
 	if err != nil {
 		return err
 	}
@@ -228,7 +247,18 @@ func (txc *TxConn) Resolve(ctx context.Context, dtid string) error {
 	case querypb.TransactionState_PREPARE:
 		// If state is PREPARE, make a decision to rollback and
 		// fallthrough to the rollback workflow.
-		if err := txc.gateway.SetRollback(ctx, mmShard.Target, transaction.Dtid, mmShard.TransactionId); err != nil {
+		var qs queryservice.QueryService
+		var err error
+		// Direct to correct tablet
+		if UsingLegacyGateway() {
+			qs = txc.gateway
+		} else {
+			qs, err = txc.gateway.QueryServiceByAlias(mmShard.TabletAlias)
+			if err != nil {
+				return err
+			}
+		}
+		if err := qs.SetRollback(ctx, mmShard.Target, transaction.Dtid, mmShard.TransactionId); err != nil {
 			return err
 		}
 		fallthrough

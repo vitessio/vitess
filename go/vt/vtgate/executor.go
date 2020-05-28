@@ -1523,7 +1523,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 		return nil, err
 	}
 
-	if safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
+	if UsingLegacyGateway() && safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Executor.prepare: transactions are supported only for master tablet types, current type: %v", destTabletType)
 	}
 	if bindVars == nil {
