@@ -540,6 +540,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 	}
 	c.Close()
 
+	// sh opens and closes se
 	if err := tsv.sh.Open(); err != nil {
 		log.Errorf("Could not load historian, but starting the query service anyways: %v", err)
 	}

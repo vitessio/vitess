@@ -29,13 +29,15 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 const getSchemaVersions = "select id, pos, ddl, time_updated, schemax from _vt.schema_version where id > %d order by id asc"
+
+// vl defines the glog verbosity level for the package
+const vl = 10
 
 // Historian defines the interface to reload a db schema or get the schema of a table for a given position
 type Historian interface {
@@ -45,20 +47,6 @@ type Historian interface {
 	Open() error
 	Close()
 	SetTrackSchemaVersions(val bool)
-}
-
-// HistoryEngine exposes only those schema.Engine APIs that are needed by the HistorianSvc
-// We define an interface to facilitate a mock for testing
-var _ HistoryEngine = (*Engine)(nil)
-
-// HistoryEngine defines the interface which is implemented by schema.Engine for the historian to get current schema
-// information from the database
-type HistoryEngine interface {
-	Open() error
-	Close()
-	Reload(ctx context.Context) error
-	GetConnection(ctx context.Context) (*connpool.DBConn, error)
-	GetSchema() map[string]*Table
 }
 
 // TrackedSchema has the snapshot of the table at a given pos (reached by ddl)
@@ -74,7 +62,7 @@ var _ Historian = (*HistorianSvc)(nil)
 // and supplying a schema for a specific version by loading the cached values from the schema_version table
 // The schema version table is populated by the Tracker
 type HistorianSvc struct {
-	he                  HistoryEngine
+	se                  *Engine
 	lastID              int64
 	schemas             []*TrackedSchema
 	mu                  sync.Mutex
@@ -91,8 +79,8 @@ func (h *HistorianSvc) Reload(ctx context.Context) error {
 }
 
 // NewHistorian creates a new historian. It expects a schema.Engine instance
-func NewHistorian(he HistoryEngine) *HistorianSvc {
-	sh := HistorianSvc{he: he, lastID: 0, trackSchemaVersions: true}
+func NewHistorian(se *Engine) *HistorianSvc {
+	sh := HistorianSvc{se: se, lastID: 0, trackSchemaVersions: true}
 	return &sh
 }
 
@@ -112,12 +100,15 @@ func (h *HistorianSvc) readRow(row []sqltypes.Value) (*TrackedSchema, int64, err
 		return nil, 0, err
 	}
 	ddl := string(row[2].ToBytes())
-	timeUpdated, _ := evalengine.ToInt64(row[3])
+	timeUpdated, err := evalengine.ToInt64(row[3])
+	if err != nil {
+		return nil, 0, err
+	}
 	sch := &binlogdatapb.MinimalSchema{}
 	if err := proto.Unmarshal(row[4].ToBytes(), sch); err != nil {
 		return nil, 0, err
 	}
-	log.Infof("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n",
+	log.V(vl).Infof("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n",
 		id, mysql.EncodePosition(pos), ddl, len(sch.Tables), timeUpdated)
 
 	tables := map[string]*binlogdatapb.MinimalTable{}
@@ -133,30 +124,27 @@ func (h *HistorianSvc) readRow(row []sqltypes.Value) (*TrackedSchema, int64, err
 }
 
 // loadFromDB loads all rows from the schema_version table that the historian does not have as yet
+// caller should have locked h.mu
 func (h *HistorianSvc) loadFromDB(ctx context.Context) error {
-	conn, err := h.he.GetConnection(ctx)
+	conn, err := h.se.GetConnection(ctx)
 	if err != nil {
 		return err
 	}
 	defer conn.Recycle()
-	log.Infof("In loadFromDb for lastID %d", h.lastID)
 	tableData, err := conn.Exec(ctx, fmt.Sprintf(getSchemaVersions, h.lastID), 10000, true)
 	if err != nil {
-		log.Infof("Error reading schema_tracking table %v", err)
+		log.Infof("Error reading schema_tracking table %v, will operate with the latest available schema", err)
 		return nil
 	}
-	log.Infof("Received rows from schema_version: %v", len(tableData.Rows))
-	if len(tableData.Rows) > 0 {
-		for _, row := range tableData.Rows {
-			trackedSchema, id, err := h.readRow(row)
-			if err != nil {
-				return err
-			}
-			h.schemas = append(h.schemas, trackedSchema)
-			h.lastID = id
+	for _, row := range tableData.Rows {
+		trackedSchema, id, err := h.readRow(row)
+		if err != nil {
+			return err
 		}
-		h.sortSchemas()
+		h.schemas = append(h.schemas, trackedSchema)
+		h.lastID = id
 	}
+	h.sortSchemas()
 	return nil
 }
 
@@ -167,7 +155,7 @@ func (h *HistorianSvc) Open() error {
 	if h.isOpen {
 		return nil
 	}
-	h.he.Open()
+	h.se.Open()
 	ctx := tabletenv.LocalContext()
 	h.reload(ctx)
 	if err := h.loadFromDB(ctx); err != nil {
@@ -186,19 +174,17 @@ func (h *HistorianSvc) Close() {
 		return
 	}
 	h.schemas = nil
-	h.he.Close()
+	h.se.Close()
 	h.isOpen = false
 }
 
 // reload gets the latest schema and replaces the latest copy of the schema maintained by the historian
 func (h *HistorianSvc) reload(ctx context.Context) error {
-	log.Info("In historian reload")
-	if err := h.he.Reload(ctx); err != nil {
+	if err := h.se.Reload(ctx); err != nil {
 		return err
 	}
 	tables := map[string]*binlogdatapb.MinimalTable{}
-	log.Infof("Schema returned by engine has %d tables", len(h.he.GetSchema()))
-	for _, t := range h.he.GetSchema() {
+	for _, t := range h.se.GetSchema() {
 		table := &binlogdatapb.MinimalTable{
 			Name:   t.Name.String(),
 			Fields: t.Fields,
@@ -218,7 +204,7 @@ func (h *HistorianSvc) reload(ctx context.Context) error {
 func (h *HistorianSvc) GetTableForPos(tableName sqlparser.TableIdent, gtid string) *binlogdatapb.MinimalTable {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	log.Infof("GetTableForPos called for %s with pos %s", tableName, gtid)
+	log.V(vl).Infof("GetTableForPos called for %s with pos %s", tableName, gtid)
 	if gtid != "" {
 		pos, err := mysql.DecodePosition(gtid)
 		if err != nil {
@@ -230,7 +216,7 @@ func (h *HistorianSvc) GetTableForPos(tableName sqlparser.TableIdent, gtid strin
 			t = h.getTableFromHistoryForPos(tableName, pos)
 		}
 		if t != nil {
-			log.Infof("Returning table %s from history for pos %s, schema %s", tableName, gtid, t)
+			log.V(vl).Infof("Returning table %s from history for pos %s, schema %s", tableName, gtid, t)
 			return t
 		}
 	}
@@ -238,23 +224,20 @@ func (h *HistorianSvc) GetTableForPos(tableName sqlparser.TableIdent, gtid strin
 	if h.lastSchema == nil {
 		return nil
 	}
-	log.Infof("Returning table %s from latest schema for pos %s, schema %s", tableName, gtid, h.lastSchema[tableName.String()])
+	log.V(vl).Infof("Returning table %s from latest schema for pos %s, schema %s", tableName, gtid, h.lastSchema[tableName.String()])
 	return h.lastSchema[tableName.String()]
 }
 
 // sortSchemas sorts entries in ascending order of gtid, ex: 40,44,48
 func (h *HistorianSvc) sortSchemas() {
-	log.Infof("In sortSchemas with len %d", len(h.schemas))
 	sort.Slice(h.schemas, func(i int, j int) bool {
 		return h.schemas[j].pos.AtLeast(h.schemas[i].pos)
 	})
-	log.Infof("Ending sortSchemas with len %d", len(h.schemas))
 }
 
 // getTableFromHistoryForPos looks in the cache for a schema for a specific gtid
 func (h *HistorianSvc) getTableFromHistoryForPos(tableName sqlparser.TableIdent, pos mysql.Position) *binlogdatapb.MinimalTable {
 	idx := sort.Search(len(h.schemas), func(i int) bool {
-		// log.Infof("idx %d pos %s checking pos %s equality %t less %t", i, mysql.EncodePosition(pos), mysql.EncodePosition(h.schemas[i].pos), pos.Equal(h.schemas[i].pos), !pos.AtLeast(h.schemas[i].pos))
 		return pos.Equal(h.schemas[i].pos) || !pos.AtLeast(h.schemas[i].pos)
 	})
 	if idx >= len(h.schemas) || idx == 0 && !pos.Equal(h.schemas[idx].pos) { // beyond the range of the cache
@@ -262,11 +245,9 @@ func (h *HistorianSvc) getTableFromHistoryForPos(tableName sqlparser.TableIdent,
 		return nil
 	}
 	if pos.Equal(h.schemas[idx].pos) { //exact match to a cache entry
-		log.Infof("Found tracked schema for pos %s, ddl %s", pos, h.schemas[idx].ddl)
 		return h.schemas[idx].schema[tableName.String()]
 	}
 	//not an exact match, so based on our sort algo idx is one less than found: from 40,44,48 : 43 < 44 but we want 40
-	log.Infof("Found tracked schema for pos %s, ddl %s", pos, h.schemas[idx-1].ddl)
 	return h.schemas[idx-1].schema[tableName.String()]
 }
 
