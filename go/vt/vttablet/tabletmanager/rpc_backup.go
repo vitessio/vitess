@@ -24,7 +24,6 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -78,18 +77,14 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 			return err
 		}
 		defer agent.unlock()
+
 		tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 		if err != nil {
 			return err
 		}
 		originalType = tablet.Type
 		// update our type to BACKUP
-		if _, err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_BACKUP, nil); err != nil {
-			return err
-		}
-
-		// let's update our internal state (stop query service and other things)
-		if err := agent.refreshTablet(ctx, "before backup"); err != nil {
+		if err := agent.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP); err != nil {
 			return err
 		}
 	}
@@ -120,8 +115,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 
 		// Change our type back to the original value.
 		// Original type could be master so pass in a real value for masterTermStartTime
-		_, err = topotools.ChangeType(bgCtx, agent.TopoServer, tablet.Alias, originalType, tablet.Tablet.MasterTermStartTime)
-		if err != nil {
+		if err := agent.changeTypeLocked(bgCtx, originalType); err != nil {
 			// failure in changing the topology type is probably worse,
 			// so returning that (we logged the snapshot error anyway)
 			if returnErr != nil {
@@ -129,14 +123,6 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 			}
 			returnErr = err
 		}
-
-		// let's update our internal state (start query service and other things)
-		if err := agent.refreshTablet(bgCtx, "after backup"); err != nil {
-			return err
-		}
-		// and re-run health check to be sure to capture any replication delay
-		// not needed for online backups because it will continue to run per schedule
-		agent.runHealthCheckLocked()
 	}
 
 	return returnErr
