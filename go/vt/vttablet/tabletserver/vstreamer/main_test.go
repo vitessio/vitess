@@ -84,7 +84,7 @@ func customEngine(t *testing.T, modifier func(mysql.ConnParams) mysql.ConnParams
 }
 
 type mockHistorian struct {
-	he schema.HistoryEngine
+	se *schema.Engine
 }
 
 func (h *mockHistorian) SetTrackSchemaVersions(val bool) {}
@@ -100,8 +100,8 @@ func (h *mockHistorian) Reload(ctx context.Context) error {
 	return nil
 }
 
-func newMockHistorian(he schema.HistoryEngine) *mockHistorian {
-	sh := mockHistorian{he: he}
+func newMockHistorian(se *schema.Engine) *mockHistorian {
+	sh := mockHistorian{se: se}
 	return &sh
 }
 

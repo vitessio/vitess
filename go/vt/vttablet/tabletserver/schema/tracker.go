@@ -56,13 +56,11 @@ func NewTracker(engine *Engine) *Tracker {
 
 // Open enables the tracker functionality
 func (t *Tracker) Open() {
-	log.Info("Enabling tracker")
 	t.enabled = true
 }
 
 // Close disables the tracker functionality
 func (t *Tracker) Close() {
-	log.Info("Disabling tracker")
 	t.enabled = false
 }
 
@@ -72,7 +70,7 @@ func (t *Tracker) SchemaUpdated(gtid string, ddl string, timestamp int64) error 
 		log.Infof("Tracker not enabled, ignoring SchemaUpdated event")
 		return nil
 	}
-	log.Infof("Processing SchemaUpdated event for gtid %s, ddl %s", gtid, ddl)
+	log.V(vl).Infof("Processing SchemaUpdated event for gtid %s, ddl %s", gtid, ddl)
 	if gtid == "" || ddl == "" {
 		return fmt.Errorf("got invalid gtid or ddl in SchemaUpdated")
 	}
@@ -105,7 +103,6 @@ func (t *Tracker) SchemaUpdated(gtid string, ddl string, timestamp int64) error 
 	if err != nil {
 		return err
 	}
-	log.Infof("Inserting version for position %s: %s : %+v", gtid, ddl, len(dbSchema.Tables))
 	query := fmt.Sprintf("insert into _vt.schema_version "+
 		"(pos, ddl, schemax, time_updated) "+
 		"values (%v, %v, %v, %d)", encodeString(gtid), encodeString(ddl), encodeString(string(blob)), timestamp)
