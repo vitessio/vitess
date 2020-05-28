@@ -131,7 +131,8 @@ func TestTxConnCommitOrderFailure1(t *testing.T) {
 	wantSession := vtgatepb.Session{}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
 	assert.EqualValues(t, 1, sbc0.CommitCount.Get(), "sbc0.CommitCount")
-	assert.EqualValues(t, 1, sbc0.RollbackCount.Get(), "sbc0.RollbackCount")
+	// When the commit fails, we try to clean up by issuing a rollback
+	assert.EqualValues(t, 2, sbc0.RollbackCount.Get(), "sbc0.RollbackCount")
 	assert.EqualValues(t, 1, sbc1.RollbackCount.Get(), "sbc1.RollbackCount")
 }
 
@@ -155,15 +156,15 @@ func TestTxConnCommitOrderFailure2(t *testing.T) {
 
 	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	err := sc.txConn.Commit(ctx, session)
-	want := "INVALID_ARGUMENT error"
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), want, "Commit")
+	assert.Contains(t, err.Error(), "INVALID_ARGUMENT error", "Commit")
 
 	wantSession := vtgatepb.Session{}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
 	assert.EqualValues(t, 1, sbc0.CommitCount.Get(), "sbc0.CommitCount")
-	assert.EqualValues(t, 1, sbc0.RollbackCount.Get(), "sbc0.RollbackCount")
-	assert.EqualValues(t, 1, sbc1.RollbackCount.Get(), "sbc1.RollbackCount")
+	assert.EqualValues(t, 1, sbc1.CommitCount.Get(), "sbc1.CommitCount")
+	// When the commit fails, we try to clean up by issuing a rollback
+	assert.EqualValues(t, 2, sbc1.RollbackCount.Get(), "sbc1.RollbackCount")
 }
 
 func TestTxConnCommitOrderFailure3(t *testing.T) {
