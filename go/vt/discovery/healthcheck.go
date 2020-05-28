@@ -616,7 +616,8 @@ func (hc *HealthCheckImpl) TabletConnection(alias *topodata.TabletAlias) (querys
 	thc := hc.healthByAlias[tabletAliasString(topoproto.TabletAliasString(alias))]
 	hc.mu.Unlock()
 	if thc == nil {
-		return nil, vterrors.New(vtrpc.Code_NOT_FOUND, fmt.Sprintf("No TabletHealth available for alias: %v", alias))
+		//TODO: test that throws this error
+		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet: %v is either down or nonexistent", alias)
 	}
 	return thc.Connection(), nil
 }
