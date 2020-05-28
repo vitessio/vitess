@@ -91,15 +91,12 @@ func (txc *TxConn) commitShard(ctx context.Context, s *vtgatepb.Session_ShardSes
 			return err
 		}
 	}
-	// TODO(deepthi): TransactionId should be set to 0 only if the commit succeeded
-	//defer func() { s.TransactionId = 0 }()
-	// this change causes two test failures
-	// --- FAIL: TestTxConnCommitOrderFailure1 (0.00s)
-	//    tx_conn_test.go:162: sbc0.rollbackCount: 2, want 1
-	//--- FAIL: TestTxConnCommitOrderFailure2 (0.00s)
-	//    tx_conn_test.go:205: sbc1.rollbackCount: 2, want 1
 	err = qs.Commit(ctx, s.Target, s.TransactionId)
-	if err == nil {
+	// TransactionId should be set to 0 if the commit fails so that
+	// we rollback all others but don't attempt to rollback a failed ShardSession
+	// TODO(deepthi): testcase that fails if we change this to an unconditional defer
+	// defer () { s.TransactionId = 0} ()
+	if err != nil {
 		s.TransactionId = 0
 	}
 	return err
@@ -109,6 +106,11 @@ func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error
 	if err := txc.runSessions(ctx, session.PreSessions, txc.commitShard); err != nil {
 		_ = txc.Rollback(ctx, session)
 		return err
+	}
+
+	// Close all PreSessions
+	for _, shardSession := range session.PreSessions {
+		shardSession.TransactionId = 0
 	}
 
 	// Retain backward compatibility on commit order for the normal session.
