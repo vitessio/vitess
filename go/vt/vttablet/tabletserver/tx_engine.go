@@ -235,7 +235,7 @@ func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) 
 	te.stateLock.Unlock()
 
 	defer te.beginRequests.Done()
-	conn, beginSQL, err := te.txPool.Begin(ctx, options)
+	conn, beginSQL, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly)
 	if err != nil {
 		return 0, "", err
 	}
@@ -432,7 +432,7 @@ outer:
 		if txid > maxid {
 			maxid = txid
 		}
-		conn, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{})
+		conn, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false)
 		if err != nil {
 			allErr.RecordError(err)
 			continue

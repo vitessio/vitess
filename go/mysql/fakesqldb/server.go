@@ -531,6 +531,11 @@ func (db *DB) QueryLog() string {
 	return strings.Join(db.querylog, ";")
 }
 
+//ResetQueryLog resets the query log
+func (db *DB) ResetQueryLog() {
+	db.querylog = nil
+}
+
 // EnableConnFail makes connection to this fake DB fail.
 func (db *DB) EnableConnFail() {
 	db.mu.Lock()
