@@ -251,15 +251,9 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					}
 					eventss = nil
 					sendevents = nil
-				case binlogdatapb.VEventType_LASTPK:
+				case binlogdatapb.VEventType_LASTPK, binlogdatapb.VEventType_GTID:
 					// don't send lastpk, sent as part of vgtid
-					if len(eventss) > 0 {
-						if err := vs.sendAll(sgtid, eventss); err != nil {
-							return err
-						}
-						eventss = nil
-						sendevents = nil
-					}
+					vs.sendAll(sgtid, [][]*binlogdatapb.VEvent{{event}})
 
 				case binlogdatapb.VEventType_HEARTBEAT:
 					// Remove all heartbeat events for now.
