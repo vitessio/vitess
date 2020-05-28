@@ -200,6 +200,10 @@ func (gw *TabletGateway) CacheStatus() TabletCacheStatusList {
 // re-resolve and retry.
 func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, _ queryservice.QueryService,
 	_ string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
+	// for transactions, we connect to a specific tablet instead of letting gateway choose one
+	if inTransaction {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "gateway's query service can only be used for non-transactional queries")
+	}
 	var tabletLastUsed *topodatapb.Tablet
 	var err error
 	invalidTablets := make(map[string]bool)

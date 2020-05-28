@@ -243,6 +243,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 
 			switch {
 			case autocommit:
+				// tansactionID and alias are not used by this call, it is one round trip
 				innerqr, err = stc.executeAutocommit(ctx, rs, queries[i].Sql, queries[i].BindVariables, opts)
 			case shouldBegin:
 				innerqr, transactionID, alias, err = rs.Gateway.BeginExecute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, opts)

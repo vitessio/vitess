@@ -119,6 +119,33 @@ func TestReplicaTransactions(t *testing.T) {
 
 	qr3 := exec(t, replicaConn, "select id, email from customer")
 	assert.Equal(t, `[[INT64(1) VARCHAR("email1")] [INT64(2) VARCHAR("email2")]]`, fmt.Sprintf("%v", qr3.Rows), "we are not seeing the updates after closing the replica transaction")
+
+	// bring down the tablet and try to select again
+	// Error: ERROR 1105 (HY000): vtgate: http://localhost:15001/: vttablet: rpc error: code = Unavailable desc = all SubConns are in TransientFailure,
+	// latest connection error: connection error: desc = "transport: Error while dialing dial tcp 127.0.1.1:16101: connect: connection refused"
+
+	//mysql> select id from customer;
+	//ERROR 1105 (HY000): vtgate: http://deepthi-ThinkPad:15001/: vttablet: rpc error: code = Unavailable desc = all SubConns are in TransientFailure, latest connection error: connection error: desc = "transport: Error while dialing dial tcp 127.0.1.1:16101: connect: connection refused"
+	//mysql> commit;
+	//ERROR 1105 (HY000): vtgate: http://deepthi-ThinkPad:15001/: target: commerce.0.replica: vttablet: Connection Closed
+	//mysql> select id from customer;
+	//ERROR 1105 (HY000): vtgate: http://deepthi-ThinkPad:15001/: target: commerce.0.replica: vttablet: Connection Closed
+	//mysql> use @replica;
+	//Database changed
+	//mysql> select id from customer;
+	//ERROR 1105 (HY000): vtgate: http://deepthi-ThinkPad:15001/: target: commerce.0.replica: vttablet: Connection Closed
+
+	//mysql> use @replica;
+	//Reading table information for completion of table and column names
+	//You can turn off this feature to get a quicker startup with -A
+	//
+	//Database changed
+	//mysql> begin;
+	//Query OK, 0 rows affected (0.00 sec)
+	// mysql> insert into customer (email) values('f@d.com');
+	// ERROR 1290 (HY000): vtgate: http://deepthi-ThinkPad:15001/: execInsertUnsharded: vttablet: rpc error: code = FailedPrecondition desc = The MySQL server is running with the --read-only option so it cannot execute this statement (errno 1290) (sqlstate HY000) (CallerID: userData1): Sql: "insert into customer(email) values (:vtg1)", BindVars: {vtg1: "type:VARBINARY value:\"f@d.com\" "}
+	// TODO(deepthi): expecting a different error here:
+	//
 }
 
 func getMapFromJSON(JSON map[string]interface{}, key string) map[string]interface{} {

@@ -850,7 +850,7 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 			Keyspace: "0",
 		},
 	}}
-	err := txc.runSessions(input, func(s *vtgatepb.Session_ShardSession) error {
+	err := txc.runSessions(context.Background(), input, func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "err %s", s.Target.Keyspace)
 	})
 	want := "err 0"
@@ -867,7 +867,7 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 			Keyspace: "1",
 		},
 	}}
-	err = txc.runSessions(input, func(s *vtgatepb.Session_ShardSession) error {
+	err = txc.runSessions(context.Background(), input, func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "err %s", s.Target.Keyspace)
 	})
 	want = "err 0\nerr 1"
@@ -879,7 +879,7 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 		t.Errorf("Error code: %v, want %v", code, wantCode)
 	}
 
-	err = txc.runSessions(input, func(s *vtgatepb.Session_ShardSession) error {
+	err = txc.runSessions(context.Background(), input, func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
 		return nil
 	})
 	require.NoError(t, err)
