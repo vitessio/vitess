@@ -139,8 +139,8 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	tablePKs = append(tablePKs, getTablePK("t1", 1))
 	tablePKs = append(tablePKs, getTablePK("t2", 2))
 
-	t1FieldEvent := []string{"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > "}
-	t2FieldEvent := []string{"type:FIELD field_event:<table_name:\"t2\" fields:<name:\"id21\" type:INT32 > fields:<name:\"id22\" type:INT32 > > "}
+	t1FieldEvent := []string{"begin", "type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > "}
+	t2FieldEvent := []string{"begin", "type:FIELD field_event:<table_name:\"t2\" fields:<name:\"id21\" type:INT32 > fields:<name:\"id22\" type:INT32 > > "}
 	t1Events := []string{}
 	t2Events := []string{}
 	for i := 1; i <= 10; i++ {
@@ -149,6 +149,8 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 		t2Events = append(t2Events,
 			fmt.Sprintf("type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:%d lengths:%d values:\"%d%d\" > > > ", len(strconv.Itoa(i)), len(strconv.Itoa(i*20)), i, i*20))
 	}
+	t1Events = append(t1Events, "commit")
+	t2Events = append(t2Events, "commit")
 
 	insertEvents1 := []string{
 		"begin",

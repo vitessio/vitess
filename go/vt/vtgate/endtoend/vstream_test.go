@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -187,18 +188,25 @@ func TestVStreamCopyBasic(t *testing.T) {
 		Rows:   [][]sqltypes.Value{{sqltypes.NewInt32(0)}},
 	}
 	qr := sqltypes.ResultToProto3(&lastPK)
-	vgtid := &binlogdatapb.VGtid{
-		ShardGtids: []*binlogdatapb.ShardGtid{{
-			Keyspace: "ks",
-			Shard:    "-80",
-			Gtid:     "",
-			TablePKs: []*binlogdatapb.TableLastPK{{
-				TableName: "t1",
-				Lastpk:    qr,
-			},
-			},
-		}},
-	}
+	tablePKs := []*binlogdatapb.TableLastPK{{
+		TableName: "t1",
+		Lastpk:    qr,
+	}}
+	var shardGtids []*binlogdatapb.ShardGtid
+	var vgtid = &binlogdatapb.VGtid{}
+	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
+		Keyspace: "ks",
+		Shard:    "-80",
+		Gtid:     "",
+		TablePKs: tablePKs,
+	})
+	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
+		Keyspace: "ks",
+		Shard:    "80-",
+		Gtid:     "",
+		TablePKs: tablePKs,
+	})
+	vgtid.ShardGtids = shardGtids
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "t1",
@@ -211,16 +219,35 @@ func TestVStreamCopyBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 	require.NotNil(t, reader)
+	var evs []*binlogdatapb.VEvent
 	for {
 		e, err := reader.Recv()
 		switch err {
 		case nil:
-			log.Infof("Received Events\n%v\n", e)
+			evs = append(evs, e...)
+			printEvents(evs)
 		case io.EOF:
 			log.Infof("stream ended\n")
 			cancel()
 		default:
+			log.Errorf("Returned err %v", err)
 			t.Fatalf("remote error: %v\n", err)
 		}
 	}
+}
+
+var printMu sync.Mutex
+
+func printEvents(evs []*binlogdatapb.VEvent) {
+	printMu.Lock()
+	defer printMu.Unlock()
+	if len(evs) == 0 {
+		return
+	}
+	s := "\n===START===" + "\n"
+	for i, ev := range evs {
+		s += fmt.Sprintf("Event %d; %v\n", i, ev)
+	}
+	s += "===END===" + "\n"
+	log.Infof("%s", s)
 }
