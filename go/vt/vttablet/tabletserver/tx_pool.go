@@ -208,18 +208,33 @@ func (tp *TxPool) Rollback(ctx context.Context, txConn tx.IStatefulConnection) e
 // the statements (if any) executed to initiate the transaction. In autocommit
 // mode the statement will be "".
 // The connection returned is locked for the callee and its responsibility is to unlock the connection.
-func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (tx.IStatefulConnection, string, error) {
+func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool) (tx.IStatefulConnection, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Begin")
 	defer span.Finish()
-	beginQueries := ""
 
 	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
 	effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
-
 	if !tp.limiter.Get(immediateCaller, effectiveCaller) {
 		return nil, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
 	}
 
+	conn, err := tp.createConn(ctx, options)
+	if err != nil {
+		return nil, "", err
+	}
+	beginQueries, autocommit, err := createTransaction(ctx, options, conn, readOnly)
+	if err != nil {
+		conn.Close()
+		conn.Release(tx.ConnInitFail)
+		return nil, "", err
+	}
+
+	conn.txProps = tp.NewTxProps(immediateCaller, effectiveCaller, autocommit)
+
+	return conn, beginQueries, nil
+}
+
+func (tp *TxPool) createConn(ctx context.Context, options *querypb.ExecuteOptions) (*StatefulConnection, error) {
 	conn, err := tp.scp.NewConn(ctx, options)
 	if err != nil {
 		switch err {
@@ -230,37 +245,39 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (t
 			tp.LogActive()
 			err = vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool connection limit exceeded")
 		}
-		return nil, "", err
+		return nil, err
 	}
-	err = func() error {
-		autocommitTransaction := false
-		if queries, ok := txIsolations[options.GetTransactionIsolation()]; ok {
-			if queries.setIsolationLevel != "" {
-				txQuery := "set transaction isolation level " + queries.setIsolationLevel
-				if err := conn.execWithRetry(ctx, txQuery, 1, false); err != nil {
-					return vterrors.Wrap(err, txQuery)
-				}
-				beginQueries = queries.setIsolationLevel + "; "
+	return conn, nil
+}
+
+func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, conn *StatefulConnection, readOnly bool) (string, bool, error) {
+	beginQueries := ""
+
+	autocommitTransaction := false
+	if queries, ok := txIsolations[options.GetTransactionIsolation()]; ok {
+		if queries.setIsolationLevel != "" {
+			txQuery := "set transaction isolation level " + queries.setIsolationLevel
+			if err := conn.execWithRetry(ctx, txQuery, 1, false); err != nil {
+				return "", false, vterrors.Wrap(err, txQuery)
 			}
-			if err := conn.execWithRetry(ctx, queries.openTransaction, 1, false); err != nil {
-				return vterrors.Wrap(err, queries.openTransaction)
-			}
-			beginQueries = beginQueries + queries.openTransaction
-		} else if options.GetTransactionIsolation() == querypb.ExecuteOptions_AUTOCOMMIT {
-			autocommitTransaction = true
-		} else {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
+			beginQueries = queries.setIsolationLevel + "; "
 		}
-		conn.txProps = tp.NewTxProps(immediateCaller, effectiveCaller, autocommitTransaction)
-		return nil
-	}()
-	if err != nil {
-		conn.Close()
-		conn.Release(tx.ConnInitFail)
-		return nil, "", err
+		beginSQL := queries.openTransaction
+		if readOnly &&
+			options.GetTransactionIsolation() != querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY {
+			beginSQL = "start transaction read only"
+		}
+		if err := conn.execWithRetry(ctx, beginSQL, 1, false); err != nil {
+			return "", false, vterrors.Wrap(err, beginSQL)
+		}
+		beginQueries = beginQueries + beginSQL
+	} else if options.GetTransactionIsolation() == querypb.ExecuteOptions_AUTOCOMMIT {
+		autocommitTransaction = true
+	} else {
+		return "", false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
 	}
 
-	return conn, beginQueries, nil
+	return beginQueries, autocommitTransaction, nil
 }
 
 // LogActive causes all existing transactions to be logged when they complete.

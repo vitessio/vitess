@@ -438,8 +438,7 @@ func TestTabletServerTarget(t *testing.T) {
 
 func TestBeginOnReplica(t *testing.T) {
 	db := setUpTabletServerTest(t)
-	db.AddQuery("set transaction isolation level REPEATABLE READ", &sqltypes.Result{})
-	db.AddQuery("start transaction with consistent snapshot, read only", &sqltypes.Result{})
+	db.AddQueryPattern(".*", &sqltypes.Result{})
 	defer db.Close()
 	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
@@ -463,10 +462,8 @@ func TestBeginOnReplica(t *testing.T) {
 	err = tsv.Rollback(ctx, &target1, txID)
 	require.NoError(t, err, "failed to rollback read only tx")
 
-	// test that RW transactions are refused
-	options = querypb.ExecuteOptions{
-		TransactionIsolation: querypb.ExecuteOptions_DEFAULT,
-	}
+	// test that we can still create transactions even in read-only mode
+	options = querypb.ExecuteOptions{}
 	txID, _, err = tsv.Begin(ctx, &target1, &options)
 	require.NoError(t, err, "expected write tx to be allowed")
 	err = tsv.Rollback(ctx, &target1, txID)
