@@ -421,12 +421,6 @@ func NewShardError(in error, target *querypb.Target, tablet *topodatapb.Tablet) 
 	return in
 }
 
-// HealthCheck should never be called on a DiscoveryGateway
-// This exists only to satisfy the interface
-func (dg *DiscoveryGateway) HealthCheck() *discovery.HealthCheckImpl {
-	return nil
-}
-
 // QueryServiceByAlias satisfies the Gateway interface
 func (dg *DiscoveryGateway) QueryServiceByAlias(_ *topodatapb.TabletAlias) (queryservice.QueryService, error) {
 	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Unimplemented")
