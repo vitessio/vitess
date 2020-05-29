@@ -51,26 +51,27 @@ func TestVtgateHealthCheck(t *testing.T) {
 }
 
 func verifyVtgateVariables(t *testing.T, url string) {
-	resp, _ := http.Get(url)
-	require.True(t, resp != nil && resp.StatusCode == 200, "Vtgate api url response not found")
+	resp, err := http.Get(url)
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode, "Vtgate api url response not found")
+
 	resultMap := make(map[string]interface{})
 	respByte, _ := ioutil.ReadAll(resp.Body)
-	err := json.Unmarshal(respByte, &resultMap)
-	require.Nil(t, err)
-	assert.True(t, resultMap["VtgateVSchemaCounts"] != nil, "Vschema count should be present in variables")
-	vschemaCountMap := getMapFromJSON(resultMap, "VtgateVSchemaCounts")
-	_, present := vschemaCountMap["Reload"]
-	assert.True(t, present, "Reload count should be present in vschemacount")
-	object := reflect.ValueOf(vschemaCountMap["Reload"])
-	assert.True(t, object.NumField() > 0, "Reload count should be greater than 0")
-	_, present = vschemaCountMap["WatchError"]
-	assert.False(t, present, "There should not be any WatchError in VschemaCount")
-	_, present = vschemaCountMap["Parsing"]
-	assert.False(t, present, "There should not be any Parsing in VschemaCount")
+	err = json.Unmarshal(respByte, &resultMap)
+	require.NoError(t, err)
+	assert.Contains(t, resultMap, "VtgateVSchemaCounts", "Vschema count should be present in variables")
 
-	assert.True(t, resultMap["HealthcheckConnections"] != nil, "HealthcheckConnections count should be present in variables")
+	vschemaCountMap := getMapFromJSON(resultMap, "VtgateVSchemaCounts")
+	assert.Contains(t, vschemaCountMap, "Reload", "Reload count should be present in vschemacount")
+
+	object := reflect.ValueOf(vschemaCountMap["Reload"])
+	assert.Greater(t, object.NumField(), 0, "Reload count should be greater than 0")
+	assert.NotContains(t, vschemaCountMap, "WatchError", "There should not be any WatchError in VschemaCount")
+	assert.NotContains(t, vschemaCountMap, "Parsing", "There should not be any Parsing in VschemaCount")
+	assert.Contains(t, resultMap, "HealthcheckConnections", "HealthcheckConnections count should be present in variables")
+
 	healthCheckConnection := getMapFromJSON(resultMap, "HealthcheckConnections")
-	assert.True(t, len(healthCheckConnection) > 0, "Atleast one healthy tablet needs to be present")
+	assert.NotEmpty(t, healthCheckConnection, "Atleast one healthy tablet needs to be present")
 	assert.True(t, isMasterTabletPresent(healthCheckConnection), "Atleast one master tablet needs to be present")
 }
 
@@ -182,9 +183,9 @@ func exec(t *testing.T, conn *mysql.Conn, query string, expectError string) *sql
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	if expectError == "" {
-		require.Nil(t, err)
+		require.NoError(t, err)
 	} else {
-		require.NotNil(t, err, "error should not be nil")
+		require.Error(t, err, "error should not be nil")
 		assert.Contains(t, err.Error(), expectError, "Unexpected error")
 	}
 	return qr
