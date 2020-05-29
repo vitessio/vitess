@@ -21,8 +21,6 @@ import (
 	"sort"
 	"time"
 
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -119,8 +117,9 @@ func (upd *Update) execUpdateUnsharded(vcursor VCursor, bindVars map[string]*que
 	if len(rss) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
 	}
-	if rss[0].Target.TabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "execUpdateUnsharded: supported only for master tablet type, current type: %v", topoproto.TabletTypeLString(rss[0].Target.TabletType))
+	err = allowOnlyMaster(rss...)
+	if err != nil {
+		return nil, err
 	}
 	return execShard(vcursor, upd.Query, bindVars, rss[0], true, true /* canAutocommit */)
 }
@@ -134,8 +133,9 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execUpdateEqual")
 	}
-	if rs.Target.TabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "execUpdateEqual: supported only for master tablet type, current type: %v", topoproto.TabletTypeLString(rs.Target.TabletType))
+	err = allowOnlyMaster(rs)
+	if err != nil {
+		return nil, err
 	}
 	if len(ksid) == 0 {
 		return &sqltypes.Result{}, nil
@@ -153,9 +153,9 @@ func (upd *Update) execUpdateIn(vcursor VCursor, bindVars map[string]*querypb.Bi
 	if err != nil {
 		return nil, err
 	}
-	// we can check the first element because they should all have the same target
-	if rss[0].Target.TabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "execUpdateIn: supported only for master tablet type, current type: %v", topoproto.TabletTypeLString(rss[0].Target.TabletType))
+	err = allowOnlyMaster(rss...)
+	if err != nil {
+		return nil, err
 	}
 	if len(upd.ChangedVindexValues) != 0 {
 		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
@@ -170,9 +170,9 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execUpdateByDestination")
 	}
-	// we can check the first element because they should all have the same target
-	if rss[0].Target.TabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "execUpdateByDestination: supported only for master tablet type, current type: %v", topoproto.TabletTypeLString(rss[0].Target.TabletType))
+	err = allowOnlyMaster(rss...)
+	if err != nil {
+		return nil, err
 	}
 
 	queries := make([]*querypb.BoundQuery, len(rss))
