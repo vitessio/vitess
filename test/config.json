@@ -342,9 +342,9 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"tabletgateway_healthcheck": {
+		"tabletgateway": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/tabletgateway/healthcheck"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/tabletgateway"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 14,
