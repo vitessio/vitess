@@ -123,21 +123,6 @@ func TestReplicaTransactions(t *testing.T) {
 	// since we can't do INSERT/DELETE/UPDATE, commit and rollback both just close the transaction
 	exec(t, replicaConn, "rollback", "")
 
-	// bring down the tablet and try to select again
-	// Error: ERROR 1105 (HY000): vtgate: http://localhost:15001/: vttablet: rpc error: code = Unavailable desc = all SubConns are in TransientFailure,
-	// latest connection error: connection error: desc = "transport: Error while dialing dial tcp 127.0.1.1:16101: connect: connection refused"
-
-	//mysql> select id from customer;
-	//ERROR 1105 (HY000): vtgate: http://deepthi-ThinkPad:15001/: vttablet: rpc error: code = Unavailable desc = all SubConns are in TransientFailure, latest connection error: connection error: desc = "transport: Error while dialing dial tcp 127.0.1.1:16101: connect: connection refused"
-	//mysql> commit;
-	//ERROR 1105 (HY000): vtgate: http://deepthi-ThinkPad:15001/: target: commerce.0.replica: vttablet: Connection Closed
-	//mysql> select id from customer;
-	//ERROR 1105 (HY000): vtgate: http://deepthi-ThinkPad:15001/: target: commerce.0.replica: vttablet: Connection Closed
-	//mysql> use @replica;
-	//Database changed
-	//mysql> select id from customer;
-	//ERROR 1105 (HY000): vtgate: http://deepthi-ThinkPad:15001/: target: commerce.0.replica: vttablet: Connection Closed
-
 	// begin transaction on replica
 	exec(t, replicaConn, "begin", "")
 	// try to delete a row, should fail
@@ -156,6 +141,29 @@ func TestReplicaTransactions(t *testing.T) {
 	exec(t, replicaConn, "insert into customer(id, email) values(1,'email1')", "supported only for master tablet type, current type: replica")
 	// call rollback just for fun
 	exec(t, replicaConn, "rollback", "")
+
+	// start another transaction
+	exec(t, replicaConn, "begin", "")
+	exec(t, replicaConn, "select id, email from customer", "")
+	// bring down the tablet and try to select again
+	replicaTablet := clusterInstance.Keyspaces[0].Shards[0].Replica()
+	// this gives us a "signal: killed" error, ignore it
+	_ = replicaTablet.VttabletProcess.TearDown()
+	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
+	time.Sleep(2 * time.Second)
+	exec(t, replicaConn, "select id, email from customer", "is either down or nonexistent")
+
+	// bring up tablet again
+	// query using same transaction will fail
+	_ = replicaTablet.VttabletProcess.Setup()
+	exec(t, replicaConn, "select id, email from customer", "not found")
+	exec(t, replicaConn, "commit", "")
+	// create a new connection, should be able to query again
+	replicaConn, err = mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	exec(t, replicaConn, "begin", "")
+	qr4 := exec(t, replicaConn, "select id, email from customer", "")
+	assert.Equal(t, `[[INT64(1) VARCHAR("email1")] [INT64(2) VARCHAR("email2")]]`, fmt.Sprintf("%v", qr4.Rows), "we are not able to reconnect after restart")
 }
 
 func getMapFromJSON(JSON map[string]interface{}, key string) map[string]interface{} {
