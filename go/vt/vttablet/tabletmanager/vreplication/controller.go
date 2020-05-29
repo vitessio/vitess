@@ -199,7 +199,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	switch {
 	case len(ct.source.Tables) > 0:
 		// Table names can have search patterns. Resolve them against the schema.
-		tables, err := mysqlctl.ResolveTables(ct.mysqld, dbClient.DBName(), ct.source.Tables)
+		tables, err := mysqlctl.ResolveTables(ctx, ct.mysqld, dbClient.DBName(), ct.source.Tables)
 		if err != nil {
 			return vterrors.Wrap(err, "failed to resolve table names")
 		}

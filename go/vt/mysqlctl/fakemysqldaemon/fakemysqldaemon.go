@@ -435,7 +435,7 @@ func (fmd *FakeMysqlDaemon) CheckSuperQueryList() error {
 }
 
 // GetSchema is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (fmd *FakeMysqlDaemon) GetSchema(ctx context.Context, dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	if fmd.SchemaFunc != nil {
 		return fmd.SchemaFunc()
 	}
@@ -446,17 +446,17 @@ func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []str
 }
 
 // GetColumns is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetColumns(dbName, table string) ([]*querypb.Field, []string, error) {
+func (fmd *FakeMysqlDaemon) GetColumns(ctx context.Context, dbName, table string) ([]*querypb.Field, []string, error) {
 	return []*querypb.Field{}, []string{}, nil
 }
 
 // GetPrimaryKeyColumns is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetPrimaryKeyColumns(dbName, table string) ([]string, error) {
+func (fmd *FakeMysqlDaemon) GetPrimaryKeyColumns(ctx context.Context, dbName, table string) ([]string, error) {
 	return []string{}, nil
 }
 
 // PreflightSchemaChange is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) PreflightSchemaChange(dbName string, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
+func (fmd *FakeMysqlDaemon) PreflightSchemaChange(ctx context.Context, dbName string, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
 	if fmd.PreflightSchemaChangeResult == nil {
 		return nil, fmt.Errorf("no preflight result defined")
 	}
@@ -464,7 +464,7 @@ func (fmd *FakeMysqlDaemon) PreflightSchemaChange(dbName string, changes []strin
 }
 
 // ApplySchemaChange is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) ApplySchemaChange(dbName string, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
+func (fmd *FakeMysqlDaemon) ApplySchemaChange(ctx context.Context, dbName string, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
 	if fmd.ApplySchemaChangeResult == nil {
 		return nil, fmt.Errorf("no apply schema defined")
 	}
