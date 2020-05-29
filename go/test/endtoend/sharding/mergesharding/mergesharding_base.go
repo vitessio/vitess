@@ -115,21 +115,21 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.Nil(t, err)
 
 	// Defining all the tablets
-	shard0Master := clusterInstance.GetVttabletInstance("replica", 0, "")
-	shard0Replica := clusterInstance.GetVttabletInstance("replica", 0, "")
-	shard0Rdonly := clusterInstance.GetVttabletInstance("rdonly", 0, "")
+	shard0Master := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard0Replica := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard0Rdonly := clusterInstance.NewVttabletInstance("rdonly", 0, "")
 
-	shard1Master := clusterInstance.GetVttabletInstance("replica", 0, "")
-	shard1Replica := clusterInstance.GetVttabletInstance("replica", 0, "")
-	shard1Rdonly := clusterInstance.GetVttabletInstance("rdonly", 0, "")
+	shard1Master := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard1Replica := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard1Rdonly := clusterInstance.NewVttabletInstance("rdonly", 0, "")
 
-	shard2Master := clusterInstance.GetVttabletInstance("replica", 0, "")
-	shard2Replica := clusterInstance.GetVttabletInstance("replica", 0, "")
-	shard2Rdonly := clusterInstance.GetVttabletInstance("rdonly", 0, "")
+	shard2Master := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard2Replica := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard2Rdonly := clusterInstance.NewVttabletInstance("rdonly", 0, "")
 
-	shard3Master := clusterInstance.GetVttabletInstance("replica", 0, "")
-	shard3Replica := clusterInstance.GetVttabletInstance("replica", 0, "")
-	shard3Rdonly := clusterInstance.GetVttabletInstance("rdonly", 0, "")
+	shard3Master := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard3Replica := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard3Rdonly := clusterInstance.NewVttabletInstance("rdonly", 0, "")
 
 	shard0.Vttablets = []*cluster.Vttablet{shard0Master, shard0Replica, shard0Rdonly}
 	shard1.Vttablets = []*cluster.Vttablet{shard1Master, shard1Replica, shard1Rdonly}

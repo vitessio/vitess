@@ -114,8 +114,8 @@ func TestMainImpl(m *testing.M) {
 			if i == 0 {
 				tabletType = "master"
 			}
-			tablet := localCluster.GetVttabletInstance(tabletType, 0, cell)
-			tablet.VttabletProcess = localCluster.GetVtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
+			tablet := localCluster.NewVttabletInstance(tabletType, 0, cell)
+			tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
 			tablet.VttabletProcess.DbPassword = dbPassword
 			tablet.VttabletProcess.ExtraArgs = commonTabletArg
 			if recovery.UseXb {
@@ -274,7 +274,7 @@ func TestRecoveryImpl(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, "msgx1", fmt.Sprintf("%s", qr.Rows[0][0].ToBytes()))
 
-	vtgateInstance := localCluster.GetVtgateInstance()
+	vtgateInstance := localCluster.NewVtgateInstance()
 	vtgateInstance.TabletTypesToWait = "REPLICA"
 	err = vtgateInstance.Setup()
 	localCluster.VtgateGrpcPort = vtgateInstance.GrpcPort

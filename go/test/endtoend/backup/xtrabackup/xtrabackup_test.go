@@ -24,5 +24,5 @@ import (
 
 // TestXtraBackup - tests the backup using xtrabackup
 func TestXtrabackup(t *testing.T) {
-	backup.TestBackup(t, backup.ExtraBackup, "tar", 0)
+	backup.TestBackup(t, backup.XtraBackup, "tar", 0)
 }
