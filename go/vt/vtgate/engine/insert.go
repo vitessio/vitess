@@ -23,8 +23,6 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -229,8 +227,9 @@ func (ins *Insert) execInsertUnsharded(vcursor VCursor, bindVars map[string]*que
 	if len(rss) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
 	}
-	if rss[0].Target.TabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "execInsertUnsharded: supported only for master tablet type, current type: %v", topoproto.TabletTypeLString(rss[0].Target.TabletType))
+	err = allowOnlyMaster(rss...)
+	if err != nil {
+		return nil, err
 	}
 	result, err := execShard(vcursor, ins.Query, bindVars, rss[0], true, true /* canAutocommit */)
 	if err != nil {
@@ -258,9 +257,9 @@ func (ins *Insert) execInsertSharded(vcursor VCursor, bindVars map[string]*query
 	}
 
 	autocommit := (len(rss) == 1 || ins.MultiShardAutocommit) && vcursor.AutocommitApproval()
-	// we can check the first element because they should all have the same target
-	if rss[0].Target.TabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "execInsertSharded: supported only for master tablet type, current type: %v", topoproto.TabletTypeLString(rss[0].Target.TabletType))
+	err = allowOnlyMaster(rss...)
+	if err != nil {
+		return nil, err
 	}
 	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
 	if errs != nil {
