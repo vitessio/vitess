@@ -1096,13 +1096,13 @@ func (mysqld *Mysqld) GetAppConnection(ctx context.Context) (*dbconnpool.PooledD
 }
 
 // GetDbaConnection creates a new DBConnection.
-func (mysqld *Mysqld) GetDbaConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(context.TODO(), mysqld.dbcfgs.DbaConnector())
+func (mysqld *Mysqld) GetDbaConnection(ctx context.Context) (*dbconnpool.DBConnection, error) {
+	return dbconnpool.NewDBConnection(ctx, mysqld.dbcfgs.DbaConnector())
 }
 
 // GetAllPrivsConnection creates a new DBConnection.
-func (mysqld *Mysqld) GetAllPrivsConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(context.TODO(), mysqld.dbcfgs.AllPrivsWithDB())
+func (mysqld *Mysqld) GetAllPrivsConnection(ctx context.Context) (*dbconnpool.DBConnection, error) {
+	return dbconnpool.NewDBConnection(ctx, mysqld.dbcfgs.AllPrivsWithDB())
 }
 
 // Close will close this instance of Mysqld. It will wait for all dba
