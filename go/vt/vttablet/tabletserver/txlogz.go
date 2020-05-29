@@ -120,29 +120,33 @@ func txlogzHandler(w http.ResponseWriter, req *http.Request) {
 				log.Error(err)
 				continue
 			}
-			props := txc.txProps
 			// not all StatefulConnections contain transactions
-			if props != nil {
-				var level string
-				duration := props.EndTime.Sub(props.StartTime).Seconds()
-				if duration < 0.1 {
-					level = "low"
-				} else if duration < 1.0 {
-					level = "medium"
-				} else {
-					level = "high"
-				}
-				tmplData := struct {
-					*StatefulConnection
-					Duration   float64
-					ColorLevel string
-				}{txc, duration, level}
-				if err := txlogzTmpl.Execute(w, tmplData); err != nil {
-					log.Errorf("txlogz: couldn't execute template: %v", err)
-				}
+			if txc.txProps != nil {
+				writeTransactionData(w, txc)
 			}
 		case <-tmr.C:
 			return
 		}
+	}
+}
+
+func writeTransactionData(w http.ResponseWriter, txc *StatefulConnection) {
+	props := txc.txProps
+	var level string
+	duration := props.EndTime.Sub(props.StartTime).Seconds()
+	if duration < 0.1 {
+		level = "low"
+	} else if duration < 1.0 {
+		level = "medium"
+	} else {
+		level = "high"
+	}
+	tmplData := struct {
+		*StatefulConnection
+		Duration   float64
+		ColorLevel string
+	}{txc, duration, level}
+	if err := txlogzTmpl.Execute(w, tmplData); err != nil {
+		log.Errorf("txlogz: couldn't execute template: %v", err)
 	}
 }
