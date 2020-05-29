@@ -383,6 +383,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 func (agent *ActionAgent) publishState(ctx context.Context) {
 	agent.pubMu.Lock()
 	defer agent.pubMu.Unlock()
+	log.Infof("Publishing state: %v", agent.tablet)
 	// If retry is in progress, there's nothing to do.
 	if agent.isPublishing {
 		return
@@ -414,10 +415,8 @@ func (agent *ActionAgent) retryPublish() {
 	}()
 
 	for {
-		agent.pubMu.Unlock()
-		time.Sleep(*publishRetryInterval)
-		agent.pubMu.Lock()
-
+		// Retry immediately the first time because the previous failure might have been
+		// due to an expired context.
 		ctx, cancel := context.WithTimeout(agent.batchCtx, *topo.RemoteOperationTimeout)
 		_, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
 			if err := topotools.CheckOwnership(tablet, agent.tablet); err != nil {
@@ -430,8 +429,12 @@ func (agent *ActionAgent) retryPublish() {
 		cancel()
 		if err != nil {
 			log.Errorf("Unable to publish state to topo, will keep retrying: %v", err)
+			agent.pubMu.Unlock()
+			time.Sleep(*publishRetryInterval)
+			agent.pubMu.Lock()
 			continue
 		}
+		log.Infof("Published state: %v", agent.tablet)
 		return
 	}
 }
