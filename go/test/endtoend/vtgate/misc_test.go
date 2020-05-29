@@ -19,9 +19,8 @@ package vtgate
 import (
 	"context"
 	"fmt"
-	"testing"
-
 	"github.com/google/go-cmp/cmp"
+	"testing"
 
 	"github.com/stretchr/testify/assert"
 
@@ -529,6 +528,16 @@ func TestSelectNull(t *testing.T) {
 	exec(t, conn, "delete from t5_null_vindex")
 }
 
+func TestDoStatement(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "do 1")
+	exec(t, conn, "do 'a', 1+2,database()")
+}
+
 func TestShowColumns(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
@@ -559,6 +568,6 @@ func assertIsEmpty(t *testing.T, conn *mysql.Conn, query string) {
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	return qr
 }
