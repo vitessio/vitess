@@ -30,7 +30,7 @@ import (
 func TestFallbackSecurityPolicy(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
-	mTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
+	mTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	//Init Tablets
 	err := clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)
@@ -89,7 +89,7 @@ func assertAllowedURLTest(t *testing.T, url string) {
 func TestDenyAllSecurityPolicy(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
-	mTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
+	mTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	//Init Tablets
 	err := clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)
@@ -125,7 +125,7 @@ func TestDenyAllSecurityPolicy(t *testing.T) {
 func TestReadOnlySecurityPolicy(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
-	mTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
+	mTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	//Init Tablets
 	err := clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)

@@ -303,13 +303,14 @@ func clusterSetUp(t *testing.T) (int, error) {
 		}
 		for i := 0; i < 2; i++ {
 			// instantiate vttablet object with reserved ports
-			tablet := clusterInstance.GetVttabletInstance("replica", 0, cell)
+			tablet := clusterInstance.NewVttabletInstance("replica", 0, cell)
 
 			// Start Mysqlctl process
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
 			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
 				return 1, err
 			} else {
+				// ignore golint warning, we need the else block to use proc
 				mysqlProcesses = append(mysqlProcesses, proc)
 			}
 			// start vttablet process

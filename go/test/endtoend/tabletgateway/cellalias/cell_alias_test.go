@@ -118,13 +118,13 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		shard1Master = localCluster.GetVttabletInstance("master", 0, "")
-		shard1Replica = localCluster.GetVttabletInstance("replica", 0, cell2)
-		shard1Rdonly = localCluster.GetVttabletInstance("rdonly", 0, cell2)
+		shard1Master = localCluster.NewVttabletInstance("master", 0, "")
+		shard1Replica = localCluster.NewVttabletInstance("replica", 0, cell2)
+		shard1Rdonly = localCluster.NewVttabletInstance("rdonly", 0, cell2)
 
-		shard2Master = localCluster.GetVttabletInstance("master", 0, "")
-		shard2Replica = localCluster.GetVttabletInstance("replica", 0, cell2)
-		shard2Rdonly = localCluster.GetVttabletInstance("rdonly", 0, cell2)
+		shard2Master = localCluster.NewVttabletInstance("master", 0, "")
+		shard2Replica = localCluster.NewVttabletInstance("replica", 0, cell2)
+		shard2Rdonly = localCluster.NewVttabletInstance("rdonly", 0, cell2)
 
 		var mysqlProcs []*exec.Cmd
 		for _, tablet := range []*cluster.Vttablet{shard1Master, shard1Replica, shard1Rdonly, shard2Master, shard2Replica, shard2Rdonly} {
@@ -265,7 +265,7 @@ func TestAlias(t *testing.T) {
 		"region_east_coast")
 	require.Nil(t, err)
 
-	vtgateInstance := localCluster.GetVtgateInstance()
+	vtgateInstance := localCluster.NewVtgateInstance()
 	vtgateInstance.CellsToWatch = allCells
 	vtgateInstance.TabletTypesToWait = "MASTER,REPLICA"
 	vtgateInstance.GatewayImplementation = "tabletgateway"

@@ -75,7 +75,7 @@ type VttabletProcess struct {
 	exit chan error
 }
 
-// Setup starts vtctld process with required arguements
+// Setup starts vttablet process with required arguements
 func (vttablet *VttabletProcess) Setup() (err error) {
 
 	vttablet.proc = exec.Command(
