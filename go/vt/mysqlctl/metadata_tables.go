@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
@@ -70,7 +71,7 @@ func PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string,
 	log.Infof("Populating _vt.local_metadata table...")
 
 	// Get a non-pooled DBA connection.
-	conn, err := mysqld.GetDbaConnection()
+	conn, err := mysqld.GetDbaConnection(context.TODO())
 	if err != nil {
 		return err
 	}

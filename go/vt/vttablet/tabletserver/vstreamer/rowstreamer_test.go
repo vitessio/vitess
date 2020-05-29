@@ -151,7 +151,7 @@ func TestStreamRowsUnicode(t *testing.T) {
 	defer engine.Close()
 
 	// We need a latin1 connection.
-	conn, err := env.Mysqld.GetDbaConnection()
+	conn, err := env.Mysqld.GetDbaConnection(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

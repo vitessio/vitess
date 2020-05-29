@@ -45,7 +45,7 @@ func (agent *ActionAgent) LockTables(ctx context.Context) error {
 		return errors.New("tables already locked on this tablet")
 	}
 
-	conn, err := agent.MysqlDaemon.GetDbaConnection()
+	conn, err := agent.MysqlDaemon.GetDbaConnection(ctx)
 	if err != nil {
 		return err
 	}
