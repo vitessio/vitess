@@ -171,10 +171,12 @@ func (mysqld *Mysqld) killConnection(connID int64) error {
 		// It might be because the connection pool is exhausted,
 		// because some connections need to be killed!
 		// Try to open a new connection without the pool.
-		killConn, connErr = mysqld.GetDbaConnection()
+		conn, connErr := mysqld.GetDbaConnection()
 		if connErr != nil {
 			return connErr
 		}
+		defer conn.Close()
+		killConn = conn
 	}
 
 	_, err := killConn.ExecuteFetch(fmt.Sprintf("kill %d", connID), 10000, false)
