@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/topo/topoproto"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -110,6 +112,10 @@ func (del *Delete) execDeleteUnsharded(vcursor VCursor, bindVars map[string]*que
 	if len(rss) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
 	}
+	// we can check the first element because they should all have the same target
+	if rss[0].Target.TabletType != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "execDeleteUnsharded: supported only for master tablet type, current type: %v", topoproto.TabletTypeLString(rss[0].Target.TabletType))
+	}
 	return execShard(vcursor, del.Query, bindVars, rss[0], true, true /* canAutocommit */)
 }
 
@@ -121,6 +127,9 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 	rs, ksid, err := resolveSingleShard(vcursor, del.Vindex, del.Keyspace, key)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteEqual")
+	}
+	if rs.Target.TabletType != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "execDeleteEqual: supported only for master tablet type, current type: %v", topoproto.TabletTypeLString(rs.Target.TabletType))
 	}
 	if len(ksid) == 0 {
 		return &sqltypes.Result{}, nil
@@ -139,6 +148,10 @@ func (del *Delete) execDeleteIn(vcursor VCursor, bindVars map[string]*querypb.Bi
 	if err != nil {
 		return nil, err
 	}
+	// we can check the first element because they should all have the same target
+	if rss[0].Target.TabletType != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "execDeleteIn: supported only for master tablet type, current type: %v", topoproto.TabletTypeLString(rss[0].Target.TabletType))
+	}
 	if del.OwnedVindexQuery != "" {
 		if err := del.deleteVindexEntries(vcursor, bindVars, rss); err != nil {
 			return nil, vterrors.Wrap(err, "execDeleteIn")
@@ -151,6 +164,10 @@ func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]
 	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{dest})
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteScatter")
+	}
+	// we can check the first element because they should all have the same target
+	if rss[0].Target.TabletType != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "execDeleteByDestination: supported only for master tablet type, current type: %v", topoproto.TabletTypeLString(rss[0].Target.TabletType))
 	}
 
 	queries := make([]*querypb.BoundQuery, len(rss))
