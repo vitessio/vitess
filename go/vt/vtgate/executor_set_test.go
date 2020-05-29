@@ -184,6 +184,18 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set character_set_results=null",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
+		in:  "set character_set_results='binary'",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set character_set_results='utf8'",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set character_set_results='utf8mb4'",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set character_set_results='latin1'",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
 		in:  "set character_set_results='abcd'",
 		err: "disallowed value for character_set_results: abcd",
 	}, {
