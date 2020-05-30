@@ -72,6 +72,8 @@ func initVtgateExecutor(vSchemaStr string, opts *Options) error {
 
 func newFakeResolver(opts *Options, hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string) *vtgate.Resolver {
 	ctx := context.Background()
+	// Use old gateway implementation for now; since our tablets are not real
+	*vtgate.GatewayImplementation = vtgate.GatewayImplementationDiscovery
 	gw := vtgate.GatewayCreator()(ctx, hc, serv, cell, 3)
 	gw.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
 
