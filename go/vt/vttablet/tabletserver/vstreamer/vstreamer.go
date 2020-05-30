@@ -60,6 +60,7 @@ type vstreamer struct {
 	cancel func()
 
 	cp       dbconfigs.Connector
+	se       *schema.Engine
 	sh       schema.Historian
 	startPos string
 	filter   *binlogdatapb.Filter
@@ -102,13 +103,14 @@ type streamerPlan struct {
 //   Other constructs like joins, group by, etc. are not supported.
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
-func newVStreamer(ctx context.Context, cp dbconfigs.Connector, sh schema.Historian, startPos string,
+func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, sh schema.Historian, startPos string,
 	filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
 		ctx:      ctx,
 		cancel:   cancel,
 		cp:       cp,
+		se:       se,
 		sh:       sh,
 		startPos: startPos,
 		filter:   filter,
@@ -454,6 +456,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 					Type: binlogdatapb.VEventType_OTHER,
 				})
 			}
+			vs.se.ReloadAt(context.Background(), vs.pos)
 		case sqlparser.StmtOther, sqlparser.StmtPriv:
 			// These are either:
 			// 1) DBA statements like REPAIR that can be ignored.
@@ -476,9 +479,11 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		// A schema change will result in a change in table id, which
 		// will generate a new plan and FIELD event.
 		id := ev.TableID(vs.format)
+
 		if _, ok := vs.plans[id]; ok {
 			return nil, nil
 		}
+
 		tm, err := ev.TableMap(vs.format)
 		if err != nil {
 			return nil, err
@@ -494,6 +499,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			vs.plans[id] = nil
 			return nil, nil
 		}
+
 		vevent, err := vs.buildTablePlan(id, tm)
 		if err != nil {
 			return nil, err

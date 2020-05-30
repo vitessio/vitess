@@ -60,7 +60,7 @@ func TestMain(m *testing.M) {
 		// circular dependencies
 		historian = schema.NewHistorian(env.SchemaEngine)
 		historian.Open()
-		engine = NewEngine(env.TabletEnv, env.SrvTopo, historian)
+		engine = NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine, historian)
 		engine.Open(env.KeyspaceName, env.Cells[0])
 		defer engine.Close()
 
@@ -75,10 +75,8 @@ func customEngine(t *testing.T, modifier func(mysql.ConnParams) mysql.ConnParams
 	modified := modifier(*original)
 	config := env.TabletEnv.Config().Clone()
 	config.DB = dbconfigs.NewTestDBConfigs(modified, modified, modified.DbName)
-	historian = schema.NewHistorian(env.SchemaEngine)
-	historian.Open()
 
-	engine := NewEngine(tabletenv.NewEnv(config, "VStreamerTest"), env.SrvTopo, historian)
+	engine := NewEngine(tabletenv.NewEnv(config, "VStreamerTest"), env.SrvTopo, env.SchemaEngine, historian)
 	engine.Open(env.KeyspaceName, env.Cells[0])
 	return engine
 }

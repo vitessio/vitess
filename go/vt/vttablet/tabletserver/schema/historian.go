@@ -23,7 +23,6 @@ import (
 	"sync"
 
 	"github.com/gogo/protobuf/proto"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
@@ -42,7 +41,6 @@ const vl = 10
 // Historian defines the interface to reload a db schema or get the schema of a table for a given position
 type Historian interface {
 	RegisterVersionEvent() error
-	Reload(ctx context.Context) error
 	GetTableForPos(tableName sqlparser.TableIdent, pos string) *binlogdatapb.MinimalTable
 	Open() error
 	Close()
@@ -67,15 +65,8 @@ type HistorianSvc struct {
 	schemas             []*TrackedSchema
 	mu                  sync.Mutex
 	trackSchemaVersions bool
-	lastSchema          map[string]*binlogdatapb.MinimalTable
+	latestSchema        map[string]*binlogdatapb.MinimalTable
 	isOpen              bool
-}
-
-// Reload gets the latest schema from the database
-func (h *HistorianSvc) Reload(ctx context.Context) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return h.reload(ctx)
 }
 
 // NewHistorian creates a new historian. It expects a schema.Engine instance
@@ -155,12 +146,16 @@ func (h *HistorianSvc) Open() error {
 	if h.isOpen {
 		return nil
 	}
-	h.se.Open()
+	if err := h.se.Open(); err != nil {
+		return err
+	}
 	ctx := tabletenv.LocalContext()
-	h.reload(ctx)
+	h.reload()
 	if err := h.loadFromDB(ctx); err != nil {
 		return err
 	}
+	h.se.RegisterNotifier("historian", h.schemaChanged)
+
 	h.isOpen = true
 	return nil
 }
@@ -174,17 +169,15 @@ func (h *HistorianSvc) Close() {
 		return
 	}
 	h.schemas = nil
+	h.se.UnregisterNotifier("historian")
 	h.se.Close()
 	h.isOpen = false
 }
 
-// reload gets the latest schema and replaces the latest copy of the schema maintained by the historian
-func (h *HistorianSvc) reload(ctx context.Context) error {
-	if err := h.se.Reload(ctx); err != nil {
-		return err
-	}
-	tables := map[string]*binlogdatapb.MinimalTable{}
-	for _, t := range h.se.GetSchema() {
+// convert from schema table representation to minimal tables and store as latestSchema
+func (h *HistorianSvc) storeLatest(tables map[string]*Table) {
+	minTables := make(map[string]*binlogdatapb.MinimalTable)
+	for _, t := range tables {
 		table := &binlogdatapb.MinimalTable{
 			Name:   t.Name.String(),
 			Fields: t.Fields,
@@ -194,17 +187,33 @@ func (h *HistorianSvc) reload(ctx context.Context) error {
 			pkc = append(pkc, int64(pk))
 		}
 		table.PKColumns = pkc
-		tables[table.Name] = table
+		minTables[table.Name] = table
 	}
-	h.lastSchema = tables
-	return nil
+	h.latestSchema = minTables
+}
+
+// reload gets the latest schema and replaces the latest copy of the schema maintained by the historian
+// caller should lock h.mu
+func (h *HistorianSvc) reload() {
+	h.storeLatest(h.se.tables)
+}
+
+// schema notifier callback
+func (h *HistorianSvc) schemaChanged(tables map[string]*Table, _, _, _ []string) {
+	if !h.isOpen {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.storeLatest(tables)
 }
 
 // GetTableForPos returns a best-effort schema for a specific gtid
 func (h *HistorianSvc) GetTableForPos(tableName sqlparser.TableIdent, gtid string) *binlogdatapb.MinimalTable {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	log.V(vl).Infof("GetTableForPos called for %s with pos %s", tableName, gtid)
+
+	log.V(2).Infof("GetTableForPos called for %s with pos %s", tableName, gtid)
 	if gtid != "" {
 		pos, err := mysql.DecodePosition(gtid)
 		if err != nil {
@@ -216,16 +225,18 @@ func (h *HistorianSvc) GetTableForPos(tableName sqlparser.TableIdent, gtid strin
 			t = h.getTableFromHistoryForPos(tableName, pos)
 		}
 		if t != nil {
-			log.V(vl).Infof("Returning table %s from history for pos %s, schema %s", tableName, gtid, t)
+			log.V(2).Infof("Returning table %s from history for pos %s, schema %s", tableName, gtid, t)
 			return t
 		}
 	}
-	h.reload(context.Background())
-	if h.lastSchema == nil {
-		return nil
+	if h.latestSchema == nil || h.latestSchema[tableName.String()] == nil {
+		h.reload()
+		if h.latestSchema == nil {
+			return nil
+		}
 	}
-	log.V(vl).Infof("Returning table %s from latest schema for pos %s, schema %s", tableName, gtid, h.lastSchema[tableName.String()])
-	return h.lastSchema[tableName.String()]
+	log.V(2).Infof("Returning table %s from latest schema for pos %s, schema %s", tableName, gtid, h.latestSchema[tableName.String()])
+	return h.latestSchema[tableName.String()]
 }
 
 // sortSchemas sorts entries in ascending order of gtid, ex: 40,44,48
@@ -241,7 +252,7 @@ func (h *HistorianSvc) getTableFromHistoryForPos(tableName sqlparser.TableIdent,
 		return pos.Equal(h.schemas[i].pos) || !pos.AtLeast(h.schemas[i].pos)
 	})
 	if idx >= len(h.schemas) || idx == 0 && !pos.Equal(h.schemas[idx].pos) { // beyond the range of the cache
-		log.Infof("Not found schema in cache for %s with pos %s", tableName, pos)
+		log.Infof("Schema not found in cache for %s with pos %s", tableName, pos)
 		return nil
 	}
 	if pos.Equal(h.schemas[idx].pos) { //exact match to a cache entry

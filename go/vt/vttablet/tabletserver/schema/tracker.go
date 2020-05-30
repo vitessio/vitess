@@ -70,12 +70,13 @@ func (t *Tracker) SchemaUpdated(gtid string, ddl string, timestamp int64) error 
 		log.Infof("Tracker not enabled, ignoring SchemaUpdated event")
 		return nil
 	}
-	log.V(vl).Infof("Processing SchemaUpdated event for gtid %s, ddl %s", gtid, ddl)
+	log.Infof("Processing SchemaUpdated event for gtid %s, ddl %s", gtid, ddl)
 	if gtid == "" || ddl == "" {
 		return fmt.Errorf("got invalid gtid or ddl in SchemaUpdated")
 	}
 	ctx := context.Background()
-	t.engine.Reload(ctx)
+
+	// Engine will have reloaded the schema because vstream will reload it on a DDL
 	tables := t.engine.GetSchema()
 	dbSchema := &binlogdatapb.MinimalSchema{
 		Tables: []*binlogdatapb.MinimalTable{},

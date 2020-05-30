@@ -282,6 +282,13 @@ var tableACLConfig = `{
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]
+    },
+    {
+      "name": "historian_test1",
+      "table_names_or_prefixes": ["historian_test1"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
     }
   ]
 }`

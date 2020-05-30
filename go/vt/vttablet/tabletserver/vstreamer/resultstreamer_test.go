@@ -36,7 +36,7 @@ func TestStreamResults(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	query := "select id, val from t1 order by id"
 	wantStream := []string{
