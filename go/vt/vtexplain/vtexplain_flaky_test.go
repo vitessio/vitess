@@ -24,8 +24,6 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/vt/vtgate"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 )
@@ -42,8 +40,6 @@ func defaultTestOpts() *Options {
 }
 
 func initTest(mode string, opts *Options, t *testing.T) {
-	// Use legacy gateway until we can rewrite these tests to use new tabletgateway
-	*vtgate.GatewayImplementation = vtgate.GatewayImplementationDiscovery
 	schema, err := ioutil.ReadFile("testdata/test-schema.sql")
 	require.NoError(t, err)
 
