@@ -48,13 +48,15 @@ func TestStreamRowsScan(t *testing.T) {
 		"create table t4(id1 int, id2 int, id3 int, val varbinary(128), primary key(id1, id2, id3))",
 		"insert into t4 values (1, 2, 3, 'aaa'), (2, 3, 4, 'bbb')",
 	})
+
 	defer execStatements(t, []string{
 		"drop table t1",
 		"drop table t2",
 		"drop table t3",
 		"drop table t4",
 	})
-	engine.sh.Reload(context.Background())
+
+	engine.se.Reload(context.Background())
 
 	// t1: all rows
 	wantStream := []string{
@@ -137,19 +139,22 @@ func TestStreamRowsUnicode(t *testing.T) {
 	execStatements(t, []string{
 		"create table t1(id int, val varchar(128) COLLATE utf8_unicode_ci, primary key(id))",
 	})
+
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
 
 	// Use an engine with latin1 charset.
 	savedEngine := engine
-	defer func() { engine = savedEngine }()
+	defer func() {
+		engine = savedEngine
+	}()
 	engine = customEngine(t, func(in mysql.ConnParams) mysql.ConnParams {
 		in.Charset = "latin1"
 		return in
 	})
 	defer engine.Close()
-
+	engine.se.Reload(context.Background())
 	// We need a latin1 connection.
 	conn, err := env.Mysqld.GetDbaConnection()
 	if err != nil {
@@ -195,10 +200,11 @@ func TestStreamRowsKeyRange(t *testing.T) {
 		"create table t1(id1 int, val varbinary(128), primary key(id1))",
 		"insert into t1 values (1, 'aaa'), (6, 'bbb')",
 	})
+
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	time.Sleep(1 * time.Second)
 
@@ -225,10 +231,11 @@ func TestStreamRowsFilterInt(t *testing.T) {
 		"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
 		"insert into t1 values (1, 100, 'aaa'), (2, 200, 'bbb'), (3, 200, 'ccc'), (4, 100, 'ddd'), (5, 200, 'eee')",
 	})
+
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	time.Sleep(1 * time.Second)
 
@@ -254,10 +261,11 @@ func TestStreamRowsFilterVarBinary(t *testing.T) {
 		"create table t1(id1 int, val varbinary(128), primary key(id1))",
 		"insert into t1 values (1,'kepler'), (2, 'newton'), (3, 'newton'), (4, 'kepler'), (5, 'newton'), (6, 'kepler')",
 	})
+
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	time.Sleep(1 * time.Second)
 
@@ -282,10 +290,11 @@ func TestStreamRowsMultiPacket(t *testing.T) {
 		"create table t1(id int, val varbinary(128), primary key(id))",
 		"insert into t1 values (1, '234'), (2, '6789'), (3, '1'), (4, '2345678901'), (5, '2')",
 	})
+
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	wantStream := []string{
 		`fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id" type:INT32 > `,
@@ -310,10 +319,11 @@ func TestStreamRowsCancel(t *testing.T) {
 		"create table t1(id int, val varbinary(128), primary key(id))",
 		"insert into t1 values (1, '234567890'), (2, '234')",
 	})
+
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

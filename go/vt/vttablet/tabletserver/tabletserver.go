@@ -239,7 +239,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.hr = heartbeat.NewReader(tsv)
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
-	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.sh)
+	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.sh)
 	tsv.tracker = schema.NewTracker(tsv.se)
 	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config, tsv.tracker)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)

@@ -51,7 +51,7 @@ func TestVersion(t *testing.T) {
 	}()
 
 	mh := newMockHistorian(env.SchemaEngine)
-	engine = NewEngine(engine.env, env.SrvTopo, mh)
+	engine = NewEngine(engine.env, env.SrvTopo, env.SchemaEngine, mh)
 	engine.Open(env.KeyspaceName, env.Cells[0])
 	defer engine.Close()
 
@@ -61,7 +61,7 @@ func TestVersion(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table _vt.schema_version",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 	testcases := []testcase{{
 		input: []string{
 			fmt.Sprintf("insert into _vt.schema_version values(1, 'MariaDB/0-41983-20', 123, 'create table t1', 'abc')"),
@@ -88,7 +88,7 @@ func TestFilteredVarBinary(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -141,7 +141,7 @@ func TestFilteredInt(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -196,7 +196,7 @@ func TestStatements(t *testing.T) {
 		"drop table stream1",
 		"drop table stream2",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	testcases := []testcase{{
 		input: []string{
@@ -290,7 +290,7 @@ func TestOther(t *testing.T) {
 		"drop table stream1",
 		"drop table stream2",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	testcases := []string{
 		"repair table stream2",
@@ -357,7 +357,7 @@ func TestRegexp(t *testing.T) {
 		"drop table yes_stream",
 		"drop table no_stream",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -397,7 +397,7 @@ func TestREKeyRange(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	setVSchema(t, shardedVSchema)
 	defer env.SetVSchema("{}")
@@ -487,7 +487,7 @@ func TestInKeyRangeMultiColumn(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	setVSchema(t, multicolumnVSchema)
 	defer env.SetVSchema("{}")
@@ -542,7 +542,7 @@ func TestREMultiColumnVindex(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	setVSchema(t, multicolumnVSchema)
 	defer env.SetVSchema("{}")
@@ -596,7 +596,7 @@ func TestSelectFilter(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -652,7 +652,7 @@ func TestDDLAddColumn(t *testing.T) {
 		"insert into ddl_test2 values(2, 'bbb', 'ccc')",
 		"commit",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -718,7 +718,7 @@ func TestDDLDropColumn(t *testing.T) {
 		"alter table ddl_test2 drop column val2",
 		"insert into ddl_test2 values(2, 'bbb')",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -773,7 +773,7 @@ func TestBuffering(t *testing.T) {
 
 	execStatement(t, "create table packet_test(id int, val varbinary(128), primary key(id))")
 	defer execStatement(t, "drop table packet_test")
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	testcases := []testcase{{
 		// All rows in one packet.
@@ -885,7 +885,7 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table vitess_test_new",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 	testcases := []testcase{{
 		input: []string{
 			"insert into vitess_test_new values(2, 'abc')",
@@ -932,7 +932,7 @@ func TestTypes(t *testing.T) {
 		"drop table vitess_misc",
 		"drop table vitess_null",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	testcases := []testcase{{
 		input: []string{
@@ -1065,7 +1065,7 @@ func TestJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer execStatement(t, "drop table vitess_json")
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	testcases := []testcase{{
 		input: []string{
@@ -1094,7 +1094,7 @@ func TestExternalTable(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop database external",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	testcases := []testcase{{
 		input: []string{
@@ -1123,7 +1123,7 @@ func TestJournal(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table _vt.resharding_journal",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	journal1 := &binlogdatapb.Journal{
 		Id:            1,
@@ -1163,7 +1163,7 @@ func TestMinimalMode(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	// Record position before the next few statements.
 	pos := masterPosition(t)
@@ -1199,7 +1199,7 @@ func TestStatementMode(t *testing.T) {
 		"create table stream2(id int, val varbinary(128), primary key(id))",
 	})
 
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	defer execStatements(t, []string{
 		"drop table stream1",
@@ -1254,7 +1254,7 @@ func TestNoFutureGTID(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table stream1",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	pos := masterPosition(t)
 	t.Logf("current position: %v", pos)
@@ -1293,7 +1293,7 @@ func TestFilteredMultipleWhere(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.sh.Reload(context.Background())
+	engine.se.Reload(context.Background())
 
 	setVSchema(t, shardedVSchema)
 	defer env.SetVSchema("{}")

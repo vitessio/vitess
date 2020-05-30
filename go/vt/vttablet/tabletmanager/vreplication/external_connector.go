@@ -89,7 +89,7 @@ func (ec *externalConnector) Get(name string) (*mysqlConnector, error) {
 	c.env = tabletenv.NewEnv(config, name)
 	c.se = schema.NewEngine(c.env)
 	sh := schema.NewHistorian(c.se)
-	c.vstreamer = vstreamer.NewEngine(c.env, nil, sh)
+	c.vstreamer = vstreamer.NewEngine(c.env, nil, c.se, sh)
 	c.se.InitDBConfig(c.env.Config().DB.DbaWithDB())
 
 	// Open
