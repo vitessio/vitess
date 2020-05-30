@@ -72,7 +72,9 @@ func initVtgateExecutor(vSchemaStr string, opts *Options) error {
 
 func newFakeResolver(opts *Options, hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string) *vtgate.Resolver {
 	ctx := context.Background()
-	gw := vtgate.GatewayCreator()(ctx, hc, serv, cell, 3)
+	// change this back after fixing vtexplain to work with new healthcheck
+	// gw := vtgate.GatewayCreator()(ctx, hc, serv, cell, 3)
+	gw := vtgate.NewDiscoveryGateway(ctx, hc, serv, cell, 3)
 	gw.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
 
 	txMode := vtgatepb.TransactionMode_MULTI
