@@ -79,7 +79,6 @@ func TestPlanExecutorResultsExceeded(t *testing.T) {
 }
 
 func TestPlanExecutorTransactionsNoAutoCommit(t *testing.T) {
-	////t.Skip("not support yet")
 	executor, _, _, sbclookup := createExecutorEnvUsing(planAllTheThings)
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
 
@@ -966,7 +965,6 @@ func TestPlanExecutorShow(t *testing.T) {
 }
 
 func TestPlanExecutorUse(t *testing.T) {
-	//t.Skip("not support yet")
 	executor, _, _, _ := createExecutorEnvUsing(planAllTheThings)
 	session := NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "@master"})
 
@@ -1088,6 +1086,7 @@ func TestPlanExecutorOtherRead(t *testing.T) {
 		"analyze table t1",
 		"describe select * from t1",
 		"explain select * from t1",
+		"do 1",
 	}
 
 	for _, stmt := range stmts {

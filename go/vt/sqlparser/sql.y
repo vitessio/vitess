@@ -122,7 +122,7 @@ func skipToEnd(yylex interface{}) {
 %token LEX_ERROR
 %left <bytes> UNION
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
-%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS
+%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO
 %token <bytes> DISTINCTROW
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
@@ -220,7 +220,7 @@ func skipToEnd(yylex interface{}) {
 %type <selStmt> select_statement base_select union_lhs union_rhs
 %type <statement> explain_statement explainable_statement
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
-%type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement
+%type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement
@@ -366,6 +366,7 @@ command:
 | explain_statement
 | other_statement
 | flush_statement
+| do_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -383,6 +384,12 @@ id_or_var:
 | AT_AT_ID
   {
     $$ = NewColIdentWithAt(string($1), DoubleAt)
+  }
+
+do_statement:
+  DO expression_list
+  {
+    $$ = &OtherAdmin{}
   }
 
 select_statement:
