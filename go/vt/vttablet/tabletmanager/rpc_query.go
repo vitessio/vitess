@@ -27,7 +27,7 @@ import (
 // ExecuteFetchAsDba will execute the given query, possibly disabling binlogs and reload schema.
 func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
 	// get a connection
-	conn, err := agent.MysqlDaemon.GetDbaConnection()
+	conn, err := agent.MysqlDaemon.GetDbaConnection(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query []byte, d
 // ExecuteFetchAsAllPrivs will execute the given query, possibly reloading schema.
 func (agent *ActionAgent) ExecuteFetchAsAllPrivs(ctx context.Context, query []byte, dbName string, maxrows int, reloadSchema bool) (*querypb.QueryResult, error) {
 	// get a connection
-	conn, err := agent.MysqlDaemon.GetAllPrivsConnection()
+	conn, err := agent.MysqlDaemon.GetAllPrivsConnection(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -78,9 +78,9 @@ type MysqlDaemon interface {
 	// GetAppConnection returns a app connection to be able to talk to the database.
 	GetAppConnection(ctx context.Context) (*dbconnpool.PooledDBConnection, error)
 	// GetDbaConnection returns a dba connection.
-	GetDbaConnection() (*dbconnpool.DBConnection, error)
+	GetDbaConnection(ctx context.Context) (*dbconnpool.DBConnection, error)
 	// GetAllPrivsConnection returns an allprivs connection (for user with all privileges except SUPER).
-	GetAllPrivsConnection() (*dbconnpool.DBConnection, error)
+	GetAllPrivsConnection(ctx context.Context) (*dbconnpool.DBConnection, error)
 
 	// ExecuteSuperQueryList executes a list of queries, no result
 	ExecuteSuperQueryList(ctx context.Context, queryList []string) error

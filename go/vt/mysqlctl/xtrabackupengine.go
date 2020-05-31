@@ -129,7 +129,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "xtrabackupUser must be specified.")
 	}
 	// use a mysql connection to detect flavor at runtime
-	conn, err := params.Mysqld.GetDbaConnection()
+	conn, err := params.Mysqld.GetDbaConnection(ctx)
 	if conn != nil && err == nil {
 		defer conn.Close()
 	}
