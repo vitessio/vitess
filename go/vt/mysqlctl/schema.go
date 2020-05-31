@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -44,6 +45,15 @@ func (mysqld *Mysqld) executeSchemaCommands(sql string) error {
 	}
 
 	return mysqld.executeMysqlScript(params, strings.NewReader(sql))
+}
+
+// tableList returns an IN clause "('t1', 't2'...) for a list of tables."
+func tableListSql(tables []string) string {
+	if len(tables) == 0 {
+		return "()"
+	}
+
+	return "('" + strings.Join(tables, "', '") + "')"
 }
 
 // GetSchema returns the schema for database for tables listed in
@@ -75,10 +85,20 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 		return sd, nil
 	}
 
+	filter, err := tmutils.NewTableFilter(tables, excludeTables, includeViews)
+	if err != nil {
+		return nil, err
+	}
+
 	sd.TableDefinitions = make([]*tabletmanagerdatapb.TableDefinition, 0, len(qr.Rows))
+	tdMap := map[string]*tabletmanagerdatapb.TableDefinition{}
 	for _, row := range qr.Rows {
 		tableName := row[0].ToString()
 		tableType := row[1].ToString()
+
+		if !filter.Includes(tableName, tableType) {
+			continue
+		}
 
 		// compute dataLength
 		var dataLength uint64
@@ -99,49 +119,119 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 			}
 		}
 
-		qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE TABLE %s.%s", backtickDBName, sqlescape.EscapeID(tableName)))
-		if fetchErr != nil {
-			return nil, fetchErr
+		td := &tabletmanagerdatapb.TableDefinition{
+			Name:       tableName,
+			Type:       tableType,
+			DataLength: dataLength,
+			RowCount:   rowCount,
 		}
-		if len(qr.Rows) == 0 {
-			return nil, fmt.Errorf("empty create table statement for %v", tableName)
-		}
-
-		// Normalize & remove auto_increment because it changes on every insert
-		// FIXME(alainjobart) find a way to share this with
-		// vt/tabletserver/table_info.go:162
-		norm := qr.Rows[0][1].ToString()
-		norm = autoIncr.ReplaceAllLiteralString(norm, "")
-		if tableType == tmutils.TableView {
-			// Views will have the dbname in there, replace it
-			// with {{.DatabaseName}}
-			norm = strings.Replace(norm, backtickDBName, "{{.DatabaseName}}", -1)
-		}
-
-		td := &tabletmanagerdatapb.TableDefinition{}
-		td.Name = tableName
-		td.Schema = norm
-
-		td.Fields, td.Columns, err = mysqld.GetColumns(ctx, dbName, tableName)
-		if err != nil {
-			return nil, err
-		}
-		td.PrimaryKeyColumns, err = mysqld.GetPrimaryKeyColumns(ctx, dbName, tableName)
-		if err != nil {
-			return nil, err
-		}
-		td.Type = tableType
-		td.DataLength = dataLength
-		td.RowCount = rowCount
 		sd.TableDefinitions = append(sd.TableDefinitions, td)
+		tdMap[tableName] = td
 	}
 
-	sd, err = tmutils.FilterTables(sd, tables, excludeTables, includeViews)
+	log.Infof("mysqld GetSchema: GetPrimaryKeyColumns")
+	tableNames := make([]string, 0, len(tdMap))
+	for tableName := range tdMap {
+		tableNames = append(tableNames, tableName)
+	}
+	colMap, err := mysqld.getPrimaryKeyColumns(ctx, dbName, tableNames...)
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("mysqld GetSchema: GetPrimaryKeyColumns done")
+	for tableName, td := range tdMap {
+		td.PrimaryKeyColumns = colMap[tableName]
+	}
+
+	log.Infof("mysqld GetSchema: Collecting all table schemas")
+	resChan := make(chan *schemaResult, 100)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	for tableName := range tdMap {
+		wg.Add(1)
+		go func(tableName, tableType string) {
+			res := mysqld.collectSchema(ctx, dbName, tableName, tableType)
+			resChan <- res
+		}(tableName, tdMap[tableName].Type)
+	}
+	wg.Wait()
+	close(resChan)
+
+	for res := range resChan {
+		if res.err != nil {
+			cancel()
+			return nil, res.err
+		}
+
+		td := tdMap[res.tableName]
+		td.Fields = res.fields
+		td.Columns = res.columns
+		td.Schema = res.schema
+	}
+	log.Infof("mysqld GetSchema: Collecting all table schemas done")
+
 	tmutils.GenerateSchemaVersion(sd)
 	return sd, nil
+}
+
+type schemaResult struct {
+	tableName string
+	fields    []*querypb.Field
+	columns   []string
+	schema    string
+	err       error
+}
+
+func (mysqld *Mysqld) collectSchema(ctx context.Context, dbName, tableName, tableType string) *schemaResult {
+	fields, columns, err := mysqld.GetColumns(ctx, dbName, tableName)
+	if err != nil {
+		return &schemaResult{
+			tableName: tableName,
+			err:       err,
+		}
+	}
+
+	schema, err := mysqld.normalizedSchema(ctx, dbName, tableName, tableType)
+	if err != nil {
+		return &schemaResult{
+			tableName: tableName,
+			err:       err,
+		}
+	}
+
+	return &schemaResult{
+		tableName: tableName,
+		fields:    fields,
+		columns:   columns,
+		schema:    schema,
+		err:       err,
+	}
+}
+
+func (mysqld *Mysqld) normalizedSchema(ctx context.Context, dbName, tableName, tableType string) (string, error) {
+	backtickDBName := sqlescape.EscapeID(dbName)
+	qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE TABLE %s.%s", dbName, sqlescape.EscapeID(tableName)))
+	if fetchErr != nil {
+		return "", fetchErr
+	}
+	if len(qr.Rows) == 0 {
+		return "", fmt.Errorf("empty create table statement for %v", tableName)
+	}
+
+	// Normalize & remove auto_increment because it changes on every insert
+	// FIXME(alainjobart) find a way to share this with
+	// vt/tabletserver/table_info.go:162
+	norm := qr.Rows[0][1].ToString()
+	norm = autoIncr.ReplaceAllLiteralString(norm, "")
+	if tableType == tmutils.TableView {
+		// Views will have the dbname in there, replace it
+		// with {{.DatabaseName}}
+		norm = strings.Replace(norm, backtickDBName, "{{.DatabaseName}}", -1)
+	}
+
+	return norm, nil
 }
 
 // ResolveTables returns a list of actual tables+views matching a list
@@ -166,11 +256,11 @@ func (mysqld *Mysqld) GetColumns(ctx context.Context, dbName, table string) ([]*
 	}
 	defer conn.Recycle()
 
-	sql := fmt.Sprintf("SELECT * FROM %s.%s WHERE 1=0", sqlescape.EscapeID(dbName), sqlescape.EscapeID(table))
-	qr, err := mysqld.executeFetchContext(ctx, conn, sql, 0, true)
+	qr, err := conn.ExecuteFetch(fmt.Sprintf("SELECT * FROM %s.%s WHERE 1=0", sqlescape.EscapeID(dbName), sqlescape.EscapeID(table)), 0, true)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	columns := make([]string, len(qr.Fields))
 	for i, field := range qr.Fields {
 		columns[i] = field.Name
@@ -181,55 +271,47 @@ func (mysqld *Mysqld) GetColumns(ctx context.Context, dbName, table string) ([]*
 
 // GetPrimaryKeyColumns returns the primary key columns of table.
 func (mysqld *Mysqld) GetPrimaryKeyColumns(ctx context.Context, dbName, table string) ([]string, error) {
+	cs, err := mysqld.getPrimaryKeyColumns(ctx, dbName, table)
+	if err != nil {
+		return nil, err
+	}
+
+	return cs[dbName], nil
+}
+
+func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, tables ...string) (map[string][]string, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Recycle()
 
-	sql := fmt.Sprintf("SHOW INDEX FROM %s.%s", sqlescape.EscapeID(dbName), sqlescape.EscapeID(table))
-	qr, err := mysqld.executeFetchContext(ctx, conn, sql, 100, true)
+	tableList := tableListSql(tables)
+	sql := fmt.Sprintf(`
+		SELECT table_name, ordinal_position, column_name
+		FROM information_schema.key_column_usage
+		WHERE table_schema = '%s'
+			AND table_name IN %s
+			AND constraint_name='PRIMARY'
+		ORDER BY table_name, ordinal_position`, dbName, tableList)
+	qr, err := conn.ExecuteFetch(sql, len(tables)*100, true)
 	if err != nil {
 		return nil, err
 	}
-	keyNameIndex := -1
-	seqInIndexIndex := -1
-	columnNameIndex := -1
-	for i, field := range qr.Fields {
-		switch field.Name {
-		case "Key_name":
-			keyNameIndex = i
-		case "Seq_in_index":
-			seqInIndexIndex = i
-		case "Column_name":
-			columnNameIndex = i
-		}
-	}
-	if keyNameIndex == -1 || seqInIndexIndex == -1 || columnNameIndex == -1 {
-		return nil, fmt.Errorf("unknown columns in 'show index' result: %v", qr.Fields)
-	}
 
-	columns := make([]string, 0, 5)
-	var expectedIndex int64 = 1
+	colMap := map[string][]string{}
 	for _, row := range qr.Rows {
-		// skip non-primary keys
-		if row[keyNameIndex].ToString() != "PRIMARY" {
-			continue
+		tableName := row[0].ToString()
+
+		columns, ok := colMap[tableName]
+		if !ok {
+			columns = make([]string, 0, 5)
+			colMap[tableName] = columns
 		}
 
-		// check the Seq_in_index is always increasing
-		seqInIndex, err := evalengine.ToInt64(row[seqInIndexIndex])
-		if err != nil {
-			return nil, err
-		}
-		if seqInIndex != expectedIndex {
-			return nil, fmt.Errorf("unexpected index: %v != %v", seqInIndex, expectedIndex)
-		}
-		expectedIndex++
-
-		columns = append(columns, row[columnNameIndex].ToString())
+		columns = append(columns, row[2].ToString())
 	}
-	return columns, err
+	return colMap, err
 }
 
 // PreflightSchemaChange checks the schema changes in "changes" by applying them
