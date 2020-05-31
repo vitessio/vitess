@@ -558,7 +558,7 @@ func handleSessionSetting(ctx context.Context, name string, session *SafeSession
 	case "character_set_results":
 		// This is a statement that mysql-connector-j sends at the beginning. We return a canned response for it.
 		switch value {
-		case nil, "utf8", "utf8mb4", "latin1":
+		case nil, "binary", "utf8", "utf8mb4", "latin1":
 		default:
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed value for character_set_results: %v", value)
 		}
