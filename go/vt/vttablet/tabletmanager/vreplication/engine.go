@@ -188,7 +188,7 @@ func (vre *Engine) executeFetchMaybeCreateTable(dbClient binlogplayer.DBClient, 
 	}
 	if merr.Num == mysql.ERBadFieldError {
 		log.Infof("Adding column to table %s", vreplicationTableName)
-		for _, query := range binlogplayer.AlterVReplicationTable() {
+		for _, query := range binlogplayer.AlterVReplicationTable {
 			if _, merr := dbClient.ExecuteFetch(query, 0); merr != nil {
 				merr, isSQLErr := err.(*mysql.SQLError)
 				if !isSQLErr || !(merr.Num == mysql.ERDupFieldName) {

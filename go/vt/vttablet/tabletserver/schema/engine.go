@@ -57,7 +57,9 @@ type Engine struct {
 	tables     map[string]*Table
 	lastChange int64
 	reloadTime time.Duration
-	notifiers  map[string]notifier
+	//the position at which the schema was last loaded. it is only used in conjunction with ReloadAt
+	reloadAtPos mysql.Position
+	notifiers   map[string]notifier
 
 	// The following fields have their own synchronization
 	// and do not require locking mu.
@@ -137,6 +139,11 @@ func (se *Engine) IsOpen() bool {
 	return se.isOpen
 }
 
+// GetConnection returns a connection from the pool
+func (se *Engine) GetConnection(ctx context.Context) (*connpool.DBConn, error) {
+	return se.conns.Get(ctx)
+}
+
 // Close shuts down Engine and is idempotent.
 // It can be re-opened after Close.
 func (se *Engine) Close() {
@@ -172,12 +179,29 @@ func (se *Engine) MakeNonMaster() {
 // Reload reloads the schema info from the db.
 // Any tables that have changed since the last load are updated.
 func (se *Engine) Reload(ctx context.Context) error {
+	return se.ReloadAt(ctx, mysql.Position{})
+}
+
+// ReloadAt reloads the schema info from the db.
+// Any tables that have changed since the last load are updated.
+// It maintains the position at which the schema was reloaded and if the same position is provided
+// (say by multiple vstreams) it returns the cached schema. In case of a newer or empty pos it always reloads the schema
+func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	if !se.isOpen {
+		log.Warning("Schema reload called for an engine that is not yet open")
 		return nil
 	}
-	return se.reload(ctx)
+	if !pos.IsZero() && se.reloadAtPos.AtLeast(pos) {
+		log.V(2).Infof("ReloadAt: found cached schema at %s", mysql.EncodePosition(pos))
+		return nil
+	}
+	if err := se.reload(ctx); err != nil {
+		return err
+	}
+	se.reloadAtPos = pos
+	return nil
 }
 
 // reload reloads the schema. It can also be used to initialize it.
@@ -218,8 +242,6 @@ func (se *Engine) reload(ctx context.Context) error {
 		if _, ok := se.tables[tableName]; ok && createTime < se.lastChange {
 			continue
 		}
-		log.Infof("Reading schema for table: %s", tableName)
-
 		table, err := LoadTable(conn, tableName, row[1].ToString(), row[3].ToString())
 		if err != nil {
 			rec.RecordError(err)
@@ -256,7 +278,6 @@ func (se *Engine) reload(ctx context.Context) error {
 		se.tables[k] = t
 	}
 	se.lastChange = curTime
-
 	se.broadcast(created, altered, dropped)
 	return nil
 }

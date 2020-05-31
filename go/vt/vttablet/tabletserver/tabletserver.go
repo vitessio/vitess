@@ -162,10 +162,12 @@ type TabletServer struct {
 	// The following variables should only be accessed within
 	// the context of a startRequest-endRequest.
 	se        *schema.Engine
+	sh        schema.Historian
 	qe        *QueryEngine
 	te        *TxEngine
 	hw        *heartbeat.Writer
 	hr        *heartbeat.Reader
+	tracker   *schema.Tracker
 	watcher   *ReplicationWatcher
 	vstreamer *vstreamer.Engine
 	messager  *messager.Engine
@@ -228,6 +230,8 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		alias:                  alias,
 	}
 	tsv.se = schema.NewEngine(tsv)
+	tsv.sh = schema.NewHistorian(tsv.se)
+	tsv.sh.SetTrackSchemaVersions(config.TrackSchemaVersions)
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
 	tsv.te = NewTxEngine(tsv)
 	tsv.txController = tsv.te
@@ -235,10 +239,10 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.hr = heartbeat.NewReader(tsv)
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
-	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se)
-	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config)
+	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.sh)
+	tsv.tracker = schema.NewTracker(tsv.se)
+	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config, tsv.tracker)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
-
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
 		tsv.mu.Lock()
 		defer tsv.mu.Unlock()
@@ -258,6 +262,25 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.registerStreamQueryzHandlers()
 	tsv.registerTwopczHandler()
 	return tsv
+}
+
+// StartTracker starts a new replication watcher
+// Only to be used for testing
+func (tsv *TabletServer) StartTracker() {
+	tsv.config.TrackSchemaVersions = true
+	tsv.config.WatchReplication = true
+	tsv.tracker.Open()
+	//need to close and reopen watcher since it is already opened in the tsv init and is idempotent ...
+	tsv.watcher.Close()
+	tsv.watcher.watchReplication = true
+	tsv.watcher.Open()
+}
+
+// StopTracker turns the watcher off
+// Only to be used for testing
+func (tsv *TabletServer) StopTracker() {
+	tsv.config.TrackSchemaVersions = false
+	tsv.tracker.Close()
 }
 
 // Register prepares TabletServer for serving by calling
@@ -517,8 +540,9 @@ func (tsv *TabletServer) fullStart() (err error) {
 	}
 	c.Close()
 
-	if err := tsv.se.Open(); err != nil {
-		log.Errorf("Could not load schema, but starting the query service anyways: %v", err)
+	// sh opens and closes se
+	if err := tsv.sh.Open(); err != nil {
+		log.Errorf("Could not load historian, but starting the query service anyways: %v", err)
 	}
 	if err := tsv.qe.Open(); err != nil {
 		return err
@@ -548,12 +572,19 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.messager.Open()
 		tsv.hr.Close()
 		tsv.hw.Open()
+		log.Info("Opening tracker, trackschemaversions is %t", tsv.config.TrackSchemaVersions)
+		tsv.tracker.Open()
+		if tsv.config.TrackSchemaVersions {
+			log.Info("Starting watcher")
+			tsv.watcher.Open()
+		}
 	} else {
 		tsv.txController.AcceptReadOnly()
 		tsv.messager.Close()
 		tsv.hr.Open()
 		tsv.hw.Close()
 		tsv.watcher.Open()
+		tsv.tracker.Close()
 
 		// Reset the sequences.
 		tsv.se.MakeNonMaster()
@@ -1686,9 +1717,10 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.Real
 	target := tsv.target
 	tsv.mu.Unlock()
 	shr := &querypb.StreamHealthResponse{
-		Target:                              &target,
-		TabletAlias:                         &tsv.alias,
-		Serving:                             tsv.IsServing(),
+		Target:      &target,
+		TabletAlias: &tsv.alias,
+		Serving:     tsv.IsServing(),
+
 		TabletExternallyReparentedTimestamp: terTimestamp,
 		RealtimeStats:                       stats,
 	}
@@ -1912,6 +1944,11 @@ func (tsv *TabletServer) SetPassthroughDMLs(val bool) {
 // This function should only be used for testing.
 func (tsv *TabletServer) SetConsolidatorMode(mode string) {
 	tsv.qe.consolidatorMode = mode
+}
+
+// Historian returns the associated historian service
+func (tsv *TabletServer) Historian() schema.Historian {
+	return tsv.sh
 }
 
 // queryAsString returns a readable version of query+bind variables.

@@ -292,6 +292,10 @@ func TestRPCTabletExternallyReparentedFailedOldMaster(t *testing.T) {
 		"START SLAVE",
 	}
 
+	// On the oldMaster, we expect a ChangeType to REPLICA.
+	oldMaster.StartActionLoop(t, wr)
+	defer oldMaster.StopActionLoop(t)
+
 	// On the good slave, we will respond to
 	// TabletActionSlaveWasRestarted.
 	goodSlave.StartActionLoop(t, wr)
@@ -472,6 +476,10 @@ func TestRPCTabletExternallyReparentedFailedImpostorMaster(t *testing.T) {
 	// TabletActionSlaveWasRestarted.
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
+
+	// On the bad slave, we expect a ChangeType to REPLICA.
+	badSlave.StartActionLoop(t, wr)
+	defer badSlave.StopActionLoop(t)
 
 	// The reparent should work as expected here
 	tmc := tmclient.NewTabletManagerClient()
