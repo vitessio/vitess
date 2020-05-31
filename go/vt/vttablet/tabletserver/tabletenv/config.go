@@ -168,7 +168,7 @@ func Init() {
 	}
 
 	if enableHeartbeat {
-		currentConfig.HeartbeatIntervalMilliseconds = int(heartbeatInterval / time.Millisecond)
+		currentConfig.HeartbeatIntervalSeconds = float64(heartbeatInterval) / float64(time.Millisecond)
 	}
 
 	switch *streamlog.QueryLogFormat {
@@ -198,18 +198,18 @@ type TabletConfig struct {
 	Oltp             OltpConfig             `json:"oltp,omitempty"`
 	HotRowProtection HotRowProtectionConfig `json:"hotRowProtection,omitempty"`
 
-	Consolidator                  string  `json:"consolidator,omitempty"`
-	HeartbeatIntervalMilliseconds int     `json:"heartbeatIntervalMilliseconds,omitempty"`
-	ShutdownGracePeriodSeconds    float64 `json:"shutdownGracePeriodSeconds,omitempty"`
-	PassthroughDML                bool    `json:"passthroughDML,omitempty"`
-	StreamBufferSize              int     `json:"streamBufferSize,omitempty"`
-	QueryCacheSize                int     `json:"queryCacheSize,omitempty"`
-	SchemaReloadIntervalSeconds   float64 `json:"schemaReloadIntervalSeconds,omitempty"`
-	WatchReplication              bool    `json:"watchReplication,omitempty"`
-	TrackSchemaVersions           bool    `json:"trackSchemaVersions,omitempty"`
-	TerseErrors                   bool    `json:"terseErrors,omitempty"`
-	MessagePostponeParallelism    int     `json:"messagePostponeParallelism,omitempty"`
-	CacheResultFields             bool    `json:"cacheResultFields,omitempty"`
+	Consolidator                string  `json:"consolidator,omitempty"`
+	HeartbeatIntervalSeconds    float64 `json:"heartbeatIntervalSeconds,omitempty"`
+	ShutdownGracePeriodSeconds  float64 `json:"shutdownGracePeriodSeconds,omitempty"`
+	PassthroughDML              bool    `json:"passthroughDML,omitempty"`
+	StreamBufferSize            int     `json:"streamBufferSize,omitempty"`
+	QueryCacheSize              int     `json:"queryCacheSize,omitempty"`
+	SchemaReloadIntervalSeconds float64 `json:"schemaReloadIntervalSeconds,omitempty"`
+	WatchReplication            bool    `json:"watchReplication,omitempty"`
+	TrackSchemaVersions         bool    `json:"trackSchemaVersions,omitempty"`
+	TerseErrors                 bool    `json:"terseErrors,omitempty"`
+	MessagePostponeParallelism  int     `json:"messagePostponeParallelism,omitempty"`
+	CacheResultFields           bool    `json:"cacheResultFields,omitempty"`
 
 	ExternalConnections map[string]*dbconfigs.DBConfigs `json:"externalConnections,omitempty"`
 
