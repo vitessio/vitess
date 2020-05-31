@@ -17,6 +17,7 @@ limitations under the License.
 package vstreamer
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -25,9 +26,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -35,6 +36,45 @@ import (
 type testcase struct {
 	input  interface{}
 	output [][]string
+}
+
+var numVersionEventsReceived int
+
+func TestVersion(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	oldEngine := engine
+	defer func() {
+		engine = oldEngine
+	}()
+
+	mh := newMockHistorian(env.SchemaEngine)
+	engine = NewEngine(engine.env, env.SrvTopo, env.SchemaEngine, mh)
+	engine.Open(env.KeyspaceName, env.Cells[0])
+	defer engine.Close()
+
+	execStatements(t, []string{
+		"create table _vt.schema_version(id int, pos varbinary(10000), time_updated bigint(20), ddl varchar(10000), schemax blob, primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table _vt.schema_version",
+	})
+	engine.se.Reload(context.Background())
+	testcases := []testcase{{
+		input: []string{
+			fmt.Sprintf("insert into _vt.schema_version values(1, 'MariaDB/0-41983-20', 123, 'create table t1', 'abc')"),
+		},
+		// External table events don't get sent.
+		output: [][]string{{
+			`begin`,
+			`type:VERSION `}, {
+			`gtid`,
+			`commit`}},
+	}}
+	runCases(t, nil, testcases, "")
+	assert.Equal(t, 1, numVersionEventsReceived)
 }
 
 func TestFilteredVarBinary(t *testing.T) {
@@ -1297,6 +1337,7 @@ func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, p
 	// If position is 'current', we wait for a heartbeat to be
 	// sure the vstreamer has started.
 	if position == "current" {
+		log.Infof("Starting stream with current position")
 		expectLog(ctx, t, "current pos", ch, [][]string{{`gtid`, `type:OTHER `}})
 	}
 
@@ -1327,7 +1368,7 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 			select {
 			case allevs, ok := <-ch:
 				if !ok {
-					t.Fatal("stream ended early")
+					t.Fatal("expectLog: not ok, stream ended early")
 				}
 				for _, ev := range allevs {
 					// Ignore spurious heartbeats that can happen on slow machines.
@@ -1337,16 +1378,16 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 					evs = append(evs, ev)
 				}
 			case <-ctx.Done():
-				t.Fatal("stream ended early")
+				t.Fatalf("expectLog: Done(), stream ended early")
 			case <-timer.C:
-				t.Fatalf("timed out waiting for events: %v", wantset)
+				t.Fatalf("expectLog: timed out waiting for events: %v", wantset)
 			}
 			if len(evs) != 0 {
 				break
 			}
 		}
 		if len(wantset) != len(evs) {
-			t.Fatalf("%v: evs\n%v, want\n%v", input, evs, wantset)
+			t.Fatalf("%v: evs\n%v, want\n%v, >> got length %d, wanted length %d", input, evs, wantset, len(evs), len(wantset))
 		}
 		for i, want := range wantset {
 			// CurrentTime is not testable.
@@ -1374,6 +1415,8 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 	}
 }
 
+var lastPos string
+
 func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string) <-chan []*binlogdatapb.VEvent {
 	if position == "" {
 		position = masterPosition(t)
@@ -1396,11 +1439,22 @@ func vstream(ctx context.Context, t *testing.T, pos string, filter *binlogdatapb
 		}
 	}
 	return engine.Stream(ctx, pos, filter, func(evs []*binlogdatapb.VEvent) error {
-		t.Logf("Received events: %v", evs)
+		if t.Name() == "TestVersion" { // emulate tracker only for the version test
+			for _, ev := range evs {
+				log.Infof("Original stream: %s event found %v", ev.Type, ev)
+				if ev.Type == binlogdatapb.VEventType_GTID {
+					lastPos = ev.Gtid
+				}
+				if ev.Type == binlogdatapb.VEventType_DDL {
+					schemaTracker := schema.NewTracker(env.SchemaEngine)
+					schemaTracker.SchemaUpdated(lastPos, ev.Ddl, ev.Timestamp)
+				}
+			}
+		}
 		select {
 		case ch <- evs:
 		case <-ctx.Done():
-			return fmt.Errorf("stream ended early")
+			return fmt.Errorf("engine.Stream Done() stream ended early")
 		}
 		return nil
 	})
@@ -1414,7 +1468,6 @@ func execStatement(t *testing.T, query string) {
 }
 
 func execStatements(t *testing.T, queries []string) {
-	t.Helper()
 	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
 		t.Fatal(err)
 	}

@@ -230,6 +230,7 @@ enum VEventType {
   // GTIDs.
   VGTID = 15;
   JOURNAL = 16;
+  VERSION = 17;
 }
 
 // RowChange represents one row change.
@@ -342,6 +343,16 @@ message VEvent {
   int64 current_time = 20;
 }
 
+message MinimalTable {
+    string name = 1;
+    repeated query.Field fields = 2;
+    repeated int64 p_k_columns = 3;
+}
+
+message MinimalSchema {
+    repeated MinimalTable tables = 1;
+}
+
 // VStreamRequest is the payload for VStreamer
 message VStreamRequest {
   vtrpc.CallerID effective_caller_id = 1;
@@ -377,6 +388,7 @@ message VStreamRowsResponse {
 }
 
 // VStreamResultsRequest is the payload for VStreamResults
+// The ids match VStreamRows, in case we decide to merge the two.
 // The ids match VStreamRows, in case we decide to merge the two.
 message VStreamResultsRequest {
   vtrpc.CallerID effective_caller_id = 1;

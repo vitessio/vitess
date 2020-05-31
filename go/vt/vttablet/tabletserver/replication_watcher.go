@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -40,16 +41,18 @@ type ReplicationWatcher struct {
 	env              tabletenv.Env
 	watchReplication bool
 	vs               VStreamer
+	subscriber       schema.Subscriber
 
 	cancel context.CancelFunc
 }
 
 // NewReplicationWatcher creates a new ReplicationWatcher.
-func NewReplicationWatcher(env tabletenv.Env, vs VStreamer, config *tabletenv.TabletConfig) *ReplicationWatcher {
+func NewReplicationWatcher(env tabletenv.Env, vs VStreamer, config *tabletenv.TabletConfig, schemaTracker schema.Subscriber) *ReplicationWatcher {
 	return &ReplicationWatcher{
 		env:              env,
 		vs:               vs,
 		watchReplication: config.WatchReplication,
+		subscriber:       schemaTracker,
 	}
 }
 
@@ -83,9 +86,19 @@ func (rpw *ReplicationWatcher) Process(ctx context.Context) {
 		}},
 	}
 
+	var gtid string
 	for {
-		// VStreamer will reload the schema when it encounters a DDL.
+		// The tracker will reload the schema and save it into _vt.schema_tracking when the vstream encounters a DDL.
 		err := rpw.vs.Stream(ctx, "current", filter, func(events []*binlogdatapb.VEvent) error {
+			for _, event := range events {
+				if event.Type == binlogdatapb.VEventType_GTID {
+					gtid = event.Gtid
+				}
+				if event.Type == binlogdatapb.VEventType_DDL {
+					log.Infof("Calling schema updated for %s %s", gtid, event.Ddl)
+					rpw.subscriber.SchemaUpdated(gtid, event.Ddl, event.Timestamp)
+				}
+			}
 			return nil
 		})
 		select {
