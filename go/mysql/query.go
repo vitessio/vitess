@@ -1087,7 +1087,7 @@ func (c *Conn) writeBinaryRow(fields []*querypb.Field, row []sqltypes.Value) err
 
 	for i, val := range row {
 		if val.IsNull() {
-			bytePos := (i+2)/8 + 1
+			bytePos := (i+2)/8 + 1 + packetHeaderSize
 			bitPos := (i + 2) % 8
 			data[bytePos] |= 1 << uint(bitPos)
 		} else {
