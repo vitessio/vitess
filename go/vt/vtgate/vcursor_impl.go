@@ -99,6 +99,10 @@ type vcursorImpl struct {
 	vm                    VSchemaOperator
 }
 
+func (vc *vcursorImpl) GetKeyspace() string {
+	return vc.keyspace
+}
+
 func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
 	srvVschema := vc.vm.GetCurrentSrvVschema()
 	if srvVschema == nil {

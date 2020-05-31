@@ -59,6 +59,8 @@ func newVindexFunc(alias sqlparser.TableName, vindex vindexes.SingleColumn) (*vi
 	t.addColumn(sqlparser.NewColIdent("keyspace_id"), &column{origin: vf})
 	t.addColumn(sqlparser.NewColIdent("range_start"), &column{origin: vf})
 	t.addColumn(sqlparser.NewColIdent("range_end"), &column{origin: vf})
+	t.addColumn(sqlparser.NewColIdent("hex(keyspace_id)"), &column{origin: vf})
+	t.addColumn(sqlparser.NewColIdent("shard"), &column{origin: vf})
 	t.isAuthoritative = true
 
 	st := newSymtab()

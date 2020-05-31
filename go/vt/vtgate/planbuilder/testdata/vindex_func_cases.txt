@@ -35,13 +35,17 @@
       0,
       1,
       2,
-      3
+      3,
+      4,
+      5
     ],
     "Fields": {
+      "hex(keyspace_id)": "VARBINARY",
       "id": "VARBINARY",
       "keyspace_id": "VARBINARY",
       "range_end": "VARBINARY",
-      "range_start": "VARBINARY"
+      "range_start": "VARBINARY",
+      "shard": "VARBINARY"
     },
     "Value": ":id",
     "Vindex": "user_index"
