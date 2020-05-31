@@ -69,6 +69,10 @@ func (t noopVCursor) MaxMemoryRows() int {
 	return testMaxMemoryRows
 }
 
+func (t noopVCursor) GetKeyspace() string {
+	return ""
+}
+
 func (t noopVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc {
 	return func() {}
 }
@@ -153,6 +157,10 @@ func (f *loggingVCursor) Context() context.Context {
 
 func (f *loggingVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc {
 	return func() {}
+}
+
+func (f *loggingVCursor) GetKeyspace() string {
+	return ""
 }
 
 func (f *loggingVCursor) RecordWarning(warning *querypb.QueryWarning) {

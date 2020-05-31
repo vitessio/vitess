@@ -49,6 +49,7 @@ type (
 		// Context returns the context of the current request.
 		Context() context.Context
 
+		GetKeyspace() string
 		// MaxMemoryRows returns the maxMemoryRows flag value.
 		MaxMemoryRows() int
 
