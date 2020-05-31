@@ -23,6 +23,7 @@ import (
 	"text/template"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/gogo/protobuf/proto"
@@ -594,10 +595,12 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 
 		hasTargetTable := map[string]bool{}
 		{
+			log.Infof("getting table schemas from target master %v...", target.MasterAlias)
 			targetSchema, err := mz.wr.GetSchema(ctx, target.MasterAlias, allTables, nil, false)
 			if err != nil {
 				return err
 			}
+			log.Infof("got table schemas from target master %v.", target.MasterAlias)
 
 			for _, td := range targetSchema.TableDefinitions {
 				hasTargetTable[td.Name] = true
@@ -611,18 +614,25 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				return fmt.Errorf("source shard must have a master for copying schema: %v", mz.sourceShards[0].ShardName())
 			}
 
-			log.Infof("getting table schemas from source master...")
+			log.Infof("getting table schemas from source master %v...", sourceMaster)
 			var err error
 			sourceSchema, err := mz.wr.GetSchema(ctx, sourceMaster, allTables, nil, false)
 			if err != nil {
 				return err
 			}
+			log.Infof("got table schemas from source master %v.", sourceMaster)
 
 			for _, td := range sourceSchema.TableDefinitions {
 				sourceDDL[td.Name] = td.Schema
 			}
 		}
 
+		targetTablet, err := mz.wr.ts.GetTablet(ctx, target.MasterAlias)
+		if err != nil {
+			return err
+		}
+
+		applyDDLs := []string{}
 		for _, ts := range mz.ms.TableSettings {
 			if hasTargetTable[ts.TargetTable] {
 				// Table already exists.
@@ -653,15 +663,25 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				createDDL = ddl
 			}
 
-			targetTablet, err := mz.wr.ts.GetTablet(ctx, target.MasterAlias)
+			applyDDLs = append(applyDDLs, createDDL)
+		}
+
+		if len(applyDDLs) > 0 {
+
+			sql := strings.Join(applyDDLs, ";\n")
+
+			log.Infof("applying schema to target tablet %v...", target.MasterAlias)
+			_, err = mz.wr.tmc.ApplySchema(ctx, targetTablet.Tablet, &tmutils.SchemaChange{
+				SQL:              sql,
+				Force:            false,
+				AllowReplication: false,
+			})
 			if err != nil {
 				return err
 			}
-
-			if _, err := mz.wr.tmc.ExecuteFetchAsDba(ctx, targetTablet.Tablet, false, []byte(createDDL), 0, false, true); err != nil {
-				return err
-			}
+			log.Infof("applied schema to target tablet %v.", target.MasterAlias)
 		}
+
 		return nil
 	})
 }
