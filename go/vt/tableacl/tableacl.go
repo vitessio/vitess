@@ -117,7 +117,7 @@ func (tacl *tableACL) init(configFile string, aclCB func()) error {
 	}
 	config := &tableaclpb.Config{}
 	if err := proto.Unmarshal(data, config); err != nil {
-		log.Infof("unable to parse tableACL config file as a protobuf file: %v", err)
+		log.Infof("unable to parse tableACL config file as a protobuf file: %v, will try as json", err)
 		// try to parse tableacl as json file
 		if jsonErr := json2.Unmarshal(data, config); jsonErr != nil {
 			log.Infof("unable to parse tableACL config file as a json file: %v", jsonErr)
