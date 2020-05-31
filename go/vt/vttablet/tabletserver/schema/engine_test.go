@@ -132,7 +132,6 @@ func TestOpenAndReload(t *testing.T) {
 		}
 	}
 	se.RegisterNotifier("test", notifier)
-
 	err := se.Reload(context.Background())
 	require.NoError(t, err)
 
@@ -159,6 +158,50 @@ func TestOpenAndReload(t *testing.T) {
 		PKColumns: []int{0},
 	}
 	delete(want, "msg")
+	assert.Equal(t, want, se.GetSchema())
+
+	//ReloadAt tests
+	pos1, err := mysql.DecodePosition("MariaDB/0-41983-20")
+	require.NoError(t, err)
+	pos2, err := mysql.DecodePosition("MariaDB/0-41983-40")
+	require.NoError(t, err)
+	se.UnregisterNotifier("test")
+
+	err = se.ReloadAt(context.Background(), mysql.Position{})
+	require.NoError(t, err)
+	assert.Equal(t, want, se.GetSchema())
+
+	err = se.ReloadAt(context.Background(), pos1)
+	require.NoError(t, err)
+	assert.Equal(t, want, se.GetSchema())
+
+	// delete table test_table_03
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("test_table_01", false, ""),
+			mysql.BaseShowTablesRow("test_table_02", false, ""),
+			// test_table_04 will in spite of older timestamp because it doesn't exist yet.
+			mysql.BaseShowTablesRow("test_table_04", false, ""),
+			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+		},
+	})
+	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
+		Fields: mysql.ShowPrimaryFields,
+		Rows: [][]sqltypes.Value{
+			mysql.ShowPrimaryRow("test_table_01", "pk"),
+			mysql.ShowPrimaryRow("test_table_02", "pk"),
+			mysql.ShowPrimaryRow("test_table_04", "pk"),
+			mysql.ShowPrimaryRow("seq", "id"),
+		},
+	})
+	err = se.ReloadAt(context.Background(), pos1)
+	require.NoError(t, err)
+	assert.Equal(t, want, se.GetSchema())
+
+	delete(want, "test_table_03")
+	err = se.ReloadAt(context.Background(), pos2)
+	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
 }
 

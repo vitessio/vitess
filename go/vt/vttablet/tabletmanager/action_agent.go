@@ -160,10 +160,6 @@ type ActionAgent struct {
 	// instead of asking mysqld what port it's serving on.
 	mysqlAdvertisePort int32
 
-	// initReplication remembers whether an action has initialized
-	// replication.  It is protected by actionMutex.
-	initReplication bool
-
 	// initialTablet remembers the state of the tablet record at startup.
 	// It can be used to notice, for example, if another tablet has taken
 	// over the record.

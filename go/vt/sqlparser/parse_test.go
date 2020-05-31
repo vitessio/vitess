@@ -1630,6 +1630,12 @@ var (
 	}, {
 		input:  "SHOW EXTENDED INDEXES IN `AO_E8B6CC_PROJECT_MAPPING` IN `jiradb`",
 		output: "show extended indexes from AO_E8B6CC_PROJECT_MAPPING from jiradb",
+	}, {
+		input:  "do 1",
+		output: "otheradmin",
+	}, {
+		input:  "do funcCall(), 2 = 1, 3 + 1",
+		output: "otheradmin",
 	}}
 )
 

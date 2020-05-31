@@ -64,6 +64,7 @@ type Engine struct {
 	// The following members are initialized once at the beginning.
 	ts       srvtopo.Server
 	se       *schema.Engine
+	sh       schema.Historian
 	keyspace string
 	cell     string
 
@@ -74,7 +75,7 @@ type Engine struct {
 // NewEngine creates a new Engine.
 // Initialization sequence is: NewEngine->InitDBConfig->Open.
 // Open and Close can be called multiple times and are idempotent.
-func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine) *Engine {
+func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, sh schema.Historian) *Engine {
 	vse := &Engine{
 		env:             env,
 		streamers:       make(map[int]*vstreamer),
@@ -83,6 +84,7 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine) *Engine 
 		lvschema:        &localVSchema{vschema: &vindexes.VSchema{}},
 		ts:              ts,
 		se:              se,
+		sh:              sh,
 		vschemaErrors:   env.Exporter().NewCounter("VSchemaErrors", "Count of VSchema errors"),
 		vschemaUpdates:  env.Exporter().NewCounter("VSchemaUpdates", "Count of VSchema updates. Does not include errors"),
 	}
@@ -156,7 +158,7 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, filter *binlogda
 		if !vse.isOpen {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
-		streamer := newVStreamer(ctx, vse.env.Config().DB.AppWithDB(), vse.se, startPos, filter, vse.lvschema, send)
+		streamer := newVStreamer(ctx, vse.env.Config().DB.AppWithDB(), vse.se, vse.sh, startPos, filter, vse.lvschema, send)
 		idx := vse.streamIdx
 		vse.streamers[idx] = streamer
 		vse.streamIdx++
@@ -196,7 +198,7 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 		if !vse.isOpen {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
-		rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.AppWithDB(), vse.se, query, lastpk, vse.lvschema, send)
+		rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.AppWithDB(), vse.sh, query, lastpk, vse.lvschema, send)
 		idx := vse.streamIdx
 		vse.rowStreamers[idx] = rowStreamer
 		vse.streamIdx++
@@ -318,7 +320,7 @@ func (vse *Engine) setWatch() {
 			vschema:  vschema,
 		}
 		b, _ := json.MarshalIndent(vschema, "", "  ")
-		log.Infof("Updated vschema: %s", b)
+		log.V(2).Infof("Updated vschema: %s", b)
 		for _, s := range vse.streamers {
 			s.SetVSchema(vse.lvschema)
 		}

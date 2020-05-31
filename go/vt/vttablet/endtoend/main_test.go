@@ -268,6 +268,27 @@ var tableACLConfig = `{
       "table_names_or_prefixes": ["vitess_test_debuguser"],
       "readers": ["dev", "vt_appdebug"],
       "writers": ["dev", "vt_appdebug"]
+    },
+    {
+      "name": "version",
+      "table_names_or_prefixes": ["vitess_version"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "schema_version",
+      "table_names_or_prefixes": ["schema_version"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "historian_test1",
+      "table_names_or_prefixes": ["historian_test1"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
     }
   ]
 }`

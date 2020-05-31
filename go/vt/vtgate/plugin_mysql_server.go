@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/signal"
 	"regexp"
 	"strings"
 	"sync"
@@ -330,8 +331,33 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 
 var mysqlListener *mysql.Listener
 var mysqlUnixListener *mysql.Listener
-
+var sigChan chan os.Signal
 var vtgateHandle *vtgateHandler
+
+// initTLSConfig inits tls config for the given mysql listener
+func initTLSConfig(mysqlListener *mysql.Listener, mysqlSslCert, mysqlSslKey, mysqlSslCa string, mysqlServerRequireSecureTransport bool) error {
+	serverConfig, err := vttls.ServerConfig(mysqlSslCert, mysqlSslKey, mysqlSslCa)
+	if err != nil {
+		log.Exitf("grpcutils.TLSServerConfig failed: %v", err)
+		return err
+	}
+	mysqlListener.TLSConfig.Store(serverConfig)
+	mysqlListener.RequireSecureTransport = mysqlServerRequireSecureTransport
+	sigChan = make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGHUP)
+	go func() {
+		for range sigChan {
+			serverConfig, err := vttls.ServerConfig(mysqlSslCert, mysqlSslKey, mysqlSslCa)
+			if err != nil {
+				log.Errorf("grpcutils.TLSServerConfig failed: %v", err)
+			} else {
+				log.Info("grpcutils.TLSServerConfig updated")
+				mysqlListener.TLSConfig.Store(serverConfig)
+			}
+		}
+	}()
+	return nil
+}
 
 // initiMySQLProtocol starts the mysql protocol.
 // It should be called only once in a process.
@@ -377,12 +403,7 @@ func initMySQLProtocol() {
 			mysqlListener.ServerVersion = *mysqlServerVersion
 		}
 		if *mysqlSslCert != "" && *mysqlSslKey != "" {
-			mysqlListener.TLSConfig, err = vttls.ServerConfig(*mysqlSslCert, *mysqlSslKey, *mysqlSslCa)
-			if err != nil {
-				log.Exitf("grpcutils.TLSServerConfig failed: %v", err)
-				return
-			}
-			mysqlListener.RequireSecureTransport = *mysqlServerRequireSecureTransport
+			initTLSConfig(mysqlListener, *mysqlSslCert, *mysqlSslKey, *mysqlSslCa, *mysqlServerRequireSecureTransport)
 		}
 		mysqlListener.AllowClearTextWithoutTLS.Set(*mysqlAllowClearTextWithoutTLS)
 		// Check for the connection threshold
@@ -448,6 +469,9 @@ func shutdownMysqlProtocolAndDrain() {
 	if mysqlUnixListener != nil {
 		mysqlUnixListener.Close()
 		mysqlUnixListener = nil
+	}
+	if sigChan != nil {
+		signal.Stop(sigChan)
 	}
 
 	if atomic.LoadInt32(&busyConnections) > 0 {
