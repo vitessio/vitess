@@ -29,7 +29,7 @@ message Status {
   string relay_log_position = 8;
   string file_position = 9;
   string file_relay_log_position = 10;
-  string master_server_id = 11;
+  uint32 master_server_id = 11;
   bool slave_io_running = 2;
   bool slave_sql_running = 3;
   uint32 seconds_behind_master = 4;

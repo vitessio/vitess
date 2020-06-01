@@ -31,6 +31,7 @@ type SlaveStatus struct {
 	RelayLogPosition     Position
 	FilePosition         Position
 	FileRelayLogPosition Position
+	MasterServerID       uint
 	SlaveIORunning       bool
 	SlaveSQLRunning      bool
 	SecondsBehindMaster  uint
@@ -52,6 +53,7 @@ func SlaveStatusToProto(s SlaveStatus) *replicationdatapb.Status {
 		RelayLogPosition:     EncodePosition(s.RelayLogPosition),
 		FilePosition:         EncodePosition(s.FilePosition),
 		FileRelayLogPosition: EncodePosition(s.FileRelayLogPosition),
+		MasterServerId:       uint32(s.MasterServerID),
 		SlaveIoRunning:       s.SlaveIORunning,
 		SlaveSqlRunning:      s.SlaveSQLRunning,
 		SecondsBehindMaster:  uint32(s.SecondsBehindMaster),
@@ -84,6 +86,7 @@ func ProtoToSlaveStatus(s *replicationdatapb.Status) SlaveStatus {
 		RelayLogPosition:     relayPos,
 		FilePosition:         filePos,
 		FileRelayLogPosition: fileRelayPos,
+		MasterServerID:       uint(s.MasterServerId),
 		SlaveIORunning:       s.SlaveIoRunning,
 		SlaveSQLRunning:      s.SlaveSqlRunning,
 		SecondsBehindMaster:  uint(s.SecondsBehindMaster),
