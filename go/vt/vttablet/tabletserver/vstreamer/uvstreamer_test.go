@@ -1,10 +1,42 @@
+/*
+Copyright 2020 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+/*
+TestVStreamCopyCompleteFlow tests a complete happy VStream Copy flow: copy/catchup/fastforward/replicate
+Three tables t1, t2, t3 are copied. Initially 10 (numInitialRows) rows are inserted into each.
+To avoid races in testing we send additional events when *uvstreamerTestMode* is set to true. These are used in
+conjunction with callbacks to do additional crud at precise points of the flow to test the different paths
+We intercept the vstreamer send callback to look for specific events and invoke these test callbacks.
+Fast forward requires tables to be locked briefly to get a snapshot: the test uses this knowledge to hold a lock
+on the table in order to insert rows for fastforward to find.
+
+The flow is as follows:
+	t1: copy phase, 10 rows.
+	t2: copy phase to start. Test event is sent, intercepted and a row in inserted into t1
+    t1: fastforward finds this event
+
+*/
+
 package vstreamer
 
 import (
 	"context"
 	"fmt"
 	"regexp"
-	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,18 +57,8 @@ const (
 	numInitialRows   = 10
 )
 
-type tableInfo struct {
-	name              string
-	fieldEvent        string
-	insertEvents      []string
-	catchupEvents     []string
-	fastForwardEvents []string
-}
-
 type state struct {
-	tables          []string
-	tableInfos      map[string]*tableInfo
-	replicateEvents []string
+	tables []string
 }
 
 var testState = &state{}
@@ -45,14 +67,12 @@ var positions map[string]string
 var allEvents []*binlogdatapb.VEvent
 
 var callbacks map[string]func()
-var cancelTest func()
 
 func TestVStreamCopyCompleteFlow(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	cancelTest = cancel
 	defer cancel()
 
 	defer execStatements(t, []string{
@@ -76,6 +96,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 		Rules: rules,
 	}
 
+	// Test event called after t1 copy is complete
 	callbacks["OTHER.*Copy Start t2"] = func() {
 		conn, err := env.Mysqld.GetDbaConnection()
 		if err != nil {
@@ -119,7 +140,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	case <-ctx.Done():
 		log.Infof("Received context.Done, ending test")
 	}
-	numCopyEvents := 3 /*t1,t2,t3*/ * (numInitialRows + 1 /*FieldEvent*/ + 1 /*LastPKEvent*/ + 1 /*Copy Start Other TestEvent*/ + 2 /*begin,commit*/)
+	numCopyEvents := 3 /*t1,t2,t3*/ * (numInitialRows + 1 /*FieldEvent*/ + 1 /*LastPKEvent*/ + 1 /*TestEvent: Copy Start*/ + 2 /*begin,commit*/ + 3 /* LastPK Completed*/)
 	numCopyEvents += 2        /* GTID + Test event after all copy is done */
 	numCatchupEvents := 5     /*t1:FIELD+ROW*/
 	numFastForwardEvents := 5 /*t1:FIELD+ROW*/
@@ -130,7 +151,22 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	} else {
 		log.Infof("Successfully received %d events", numExpectedEvents)
 	}
+	validateReceivedEvents(t)
 
+}
+
+func validateReceivedEvents(t *testing.T) {
+	if len(allEvents) != len(expectedEvents) {
+		t.Fatalf("Received events not equal to expected events, wanted %d, got %d", len(expectedEvents), len(allEvents))
+	}
+	for i, ev := range allEvents {
+		ev.Timestamp = 0
+		got := ev.String()
+		want := expectedEvents[i]
+		if !strings.HasPrefix(got, want) {
+			t.Fatalf("Event %d did not match, want %s, got %s", i, want, got)
+		}
+	}
 }
 
 func insertMultipleRows(t *testing.T, table string, idx int, numRows int) {
@@ -146,23 +182,8 @@ func insertMultipleRows(t *testing.T, table string, idx int, numRows int) {
 	execStatement(t, query1)
 }
 
-func getFieldEvent(table string, idx int) string {
-	return fmt.Sprintf(fieldEventTpl, table, idx, idx)
-}
-
-func getInsertEvents(table string, idx int, numRows int) []string {
-	var events []string
-	for i := 1; i <= numRows; i++ {
-		events = append(events,
-			fmt.Sprintf(insertEventTpl, len(strconv.Itoa(i)), len(strconv.Itoa(i*idx*10)), i, i*idx*10))
-	}
-	events = append(events, "gtid")
-	return events
-}
-
 func initTables(t *testing.T, tables []string) {
 	var idx int
-	tableInfos := make(map[string]*tableInfo)
 	positions["start"] = masterPosition(t)
 	for i, table := range tables {
 		idx = i + 1
@@ -173,11 +194,6 @@ func initTables(t *testing.T, tables []string) {
 		idx = i + 1
 		insertMultipleRows(t, table, idx, numInitialRows)
 		positions[fmt.Sprintf("%sBulkInsert", table)] = masterPosition(t)
-		tableInfos[table] = &tableInfo{
-			name:         table,
-			fieldEvent:   getFieldEvent(table, idx),
-			insertEvents: getInsertEvents(table, idx, numInitialRows),
-		}
 
 		callbacks[fmt.Sprintf("LASTPK.*%s.*%d", table, numInitialRows)] = func() {
 			if tableName == "t1" {
@@ -187,7 +203,6 @@ func initTables(t *testing.T, tables []string) {
 		}
 	}
 	positions["afterInitialInsert"] = masterPosition(t)
-	testState.tableInfos = tableInfos
 }
 
 func initialize(t *testing.T) {
@@ -220,8 +235,6 @@ func getTablePK(table string, idx int) *binlogdatapb.TableLastPK {
 func insertRow(t *testing.T, table string, idx int, id int) {
 	query := fmt.Sprintf(insertQuery, table, idx, idx, id, id*idx*10)
 	execStatement(t, query)
-	insertEvent := fmt.Sprintf(insertEventTpl, len(strconv.Itoa(id)), len(strconv.Itoa(id*idx*10)), id, id*idx*10)
-	testState.tableInfos[table].catchupEvents = append(testState.tableInfos[table].catchupEvents, insertEvent)
 }
 
 func printAllEvents(msg string) {
@@ -261,4 +274,73 @@ func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Fi
 		})
 		require.Nil(t, err)
 	}()
+}
+
+var expectedEvents = []string{
+	"type:OTHER gtid:\"Copy Start t1\"",
+	"type:BEGIN",
+	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > ",
+	"type:GTID",
+	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:2 values:\"110\" > > > ",
+	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:2 values:\"220\" > > > ",
+	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:2 values:\"330\" > > > ",
+	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:2 values:\"440\" > > > ",
+	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:2 values:\"550\" > > > ",
+	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:2 values:\"660\" > > > ",
+	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:2 values:\"770\" > > > ",
+	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:2 values:\"880\" > > > ",
+	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:2 values:\"990\" > > > ",
+	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:2 lengths:3 values:\"10100\" > > > ",
+	"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t1\" lastpk:<rows:<lengths:2 values:\"10\" > > > > ",
+	"type:COMMIT",
+	"type:BEGIN",
+	"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t1\" > completed:true > ",
+	"type:COMMIT",
+	"type:BEGIN",
+	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > ",
+	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:2 lengths:3 values:\"11110\" > > > ",
+	"type:GTID",
+	"type:COMMIT",
+	"type:OTHER gtid:\"Copy Start t2\"",
+	"type:BEGIN",
+	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > ",
+	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:2 lengths:3 values:\"12120\" > > > ",
+	"type:GTID",
+	"type:COMMIT",
+	"type:BEGIN",
+	"type:FIELD field_event:<table_name:\"t2\" fields:<name:\"id21\" type:INT32 > fields:<name:\"id22\" type:INT32 > > ",
+	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:2 values:\"120\" > > > ",
+	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:2 values:\"240\" > > > ",
+	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:2 values:\"360\" > > > ",
+	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:2 values:\"480\" > > > ",
+	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:3 values:\"5100\" > > > ",
+	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:3 values:\"6120\" > > > ",
+	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:3 values:\"7140\" > > > ",
+	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:3 values:\"8160\" > > > ",
+	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:3 values:\"9180\" > > > ",
+	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:2 lengths:3 values:\"10200\" > > > ",
+	"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t2\" lastpk:<rows:<lengths:2 values:\"10\" > > > > ",
+	"type:COMMIT",
+	"type:BEGIN",
+	"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t2\" > completed:true > ",
+	"type:COMMIT",
+	"type:OTHER gtid:\"Copy Start t3\"",
+	"type:BEGIN",
+	"type:FIELD field_event:<table_name:\"t3\" fields:<name:\"id31\" type:INT32 > fields:<name:\"id32\" type:INT32 > > ",
+	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:2 values:\"130\" > > > ",
+	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:2 values:\"260\" > > > ",
+	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:2 values:\"390\" > > > ",
+	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:3 values:\"4120\" > > > ",
+	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:3 values:\"5150\" > > > ",
+	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:3 values:\"6180\" > > > ",
+	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:3 values:\"7210\" > > > ",
+	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:3 values:\"8240\" > > > ",
+	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:3 values:\"9270\" > > > ",
+	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:2 lengths:3 values:\"10300\" > > > ",
+	"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t3\" lastpk:<rows:<lengths:2 values:\"10\" > > > > ",
+	"type:COMMIT",
+	"type:BEGIN",
+	"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t3\" > completed:true > ",
+	"type:COMMIT",
+	"type:OTHER gtid:\"Copy Done\"",
 }

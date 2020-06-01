@@ -149,8 +149,8 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 		t2Events = append(t2Events,
 			fmt.Sprintf("type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:%d lengths:%d values:\"%d%d\" > > > ", len(strconv.Itoa(i)), len(strconv.Itoa(i*20)), i, i*20))
 	}
-	t1Events = append(t1Events, "commit")
-	t2Events = append(t2Events, "commit")
+	t1Events = append(t1Events, "lastpk", "commit")
+	t2Events = append(t2Events, "lastpk", "commit")
 
 	insertEvents1 := []string{
 		"begin",
@@ -168,7 +168,7 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	testcases := []testcase{
 		{
 			input:  []string{},
-			output: [][]string{t1FieldEvent, t1Events, {"lastpk"}, t2FieldEvent, t2Events, {"lastpk"}, {"gtid"}},
+			output: [][]string{t1FieldEvent, {"gtid"}, t1Events, {"begin", "lastpk", "commit"}, t2FieldEvent, t2Events, {"begin", "lastpk", "commit"}},
 		},
 
 		{
