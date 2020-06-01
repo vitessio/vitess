@@ -197,10 +197,7 @@ func (set Mysql56GTIDSet) ContainsGTID(gtid GTID) bool {
 
 // Contains implements GTIDSet.
 func (set Mysql56GTIDSet) Contains(other GTIDSet) bool {
-	if other == nil {
-		return true
-	}
-	if set == nil {
+	if set == nil || other == nil {
 		return false
 	}
 
