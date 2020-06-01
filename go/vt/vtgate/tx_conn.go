@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"sync"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	"golang.org/x/net/context"
@@ -80,16 +82,20 @@ func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
 	return txc.commitNormal(ctx, session)
 }
 
+func (txc *TxConn) queryService(alias *topodatapb.TabletAlias) (queryservice.QueryService, error) {
+	qs, _ := txc.gateway.(*DiscoveryGateway)
+	if qs != nil {
+		return qs, nil
+	}
+	return txc.gateway.QueryServiceByAlias(alias)
+}
+
 func (txc *TxConn) commitShard(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
 	var qs queryservice.QueryService
 	var err error
-	if UsingLegacyGateway() {
-		qs = txc.gateway
-	} else {
-		qs, err = txc.gateway.QueryServiceByAlias(s.TabletAlias)
-		if err != nil {
-			return err
-		}
+	qs, err = txc.queryService(s.TabletAlias)
+	if err != nil {
+		return err
 	}
 	err = qs.Commit(ctx, s.Target, s.TransactionId)
 	// TransactionId should be set to 0 if the commit fails so that
@@ -153,17 +159,12 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	var qs queryservice.QueryService
-	if UsingLegacyGateway() {
-		qs = txc.gateway
-	}
-
 	err = txc.runSessions(ctx, session.ShardSessions[1:], func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
-		if !UsingLegacyGateway() {
-			qs, err = txc.gateway.QueryServiceByAlias(s.TabletAlias)
-			if err != nil {
-				return err
-			}
+		var qs queryservice.QueryService
+		var err error
+		qs, err = txc.queryService(s.TabletAlias)
+		if err != nil {
+			return err
 		}
 		return qs.Prepare(ctx, s.Target, s.TransactionId, dtid)
 	})
@@ -177,13 +178,9 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	if UsingLegacyGateway() {
-		qs = txc.gateway
-	} else {
-		qs, err = txc.gateway.QueryServiceByAlias(mmShard.TabletAlias)
-		if err != nil {
-			return err
-		}
+	qs, err := txc.queryService(mmShard.TabletAlias)
+	if err != nil {
+		return err
 	}
 	err = qs.StartCommit(ctx, mmShard.Target, mmShard.TransactionId, dtid)
 	if err != nil {
@@ -214,15 +211,9 @@ func (txc *TxConn) Rollback(ctx context.Context, session *SafeSession) error {
 		if s.TransactionId == 0 {
 			return nil
 		}
-		var qs queryservice.QueryService
-		var err error
-		if UsingLegacyGateway() {
-			qs = txc.gateway
-		} else {
-			qs, err = txc.gateway.QueryServiceByAlias(s.TabletAlias)
-			if err != nil {
-				return err
-			}
+		qs, err := txc.queryService(s.TabletAlias)
+		if err != nil {
+			return err
 		}
 		return qs.Rollback(ctx, s.Target, s.TransactionId)
 	})
@@ -247,16 +238,9 @@ func (txc *TxConn) Resolve(ctx context.Context, dtid string) error {
 	case querypb.TransactionState_PREPARE:
 		// If state is PREPARE, make a decision to rollback and
 		// fallthrough to the rollback workflow.
-		var qs queryservice.QueryService
-		var err error
-		// Direct to correct tablet
-		if UsingLegacyGateway() {
-			qs = txc.gateway
-		} else {
-			qs, err = txc.gateway.QueryServiceByAlias(mmShard.TabletAlias)
-			if err != nil {
-				return err
-			}
+		qs, err := txc.queryService(mmShard.TabletAlias)
+		if err != nil {
+			return err
 		}
 		if err := qs.SetRollback(ctx, mmShard.Target, transaction.Dtid, mmShard.TransactionId); err != nil {
 			return err
