@@ -240,6 +240,10 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 		}
 
 		for _, alias := range aliases {
+			// Don't diff schemas for self
+			if referenceAlias == alias {
+				continue
+			}
 			wg.Add(1)
 			go wr.diffSchema(ctx, referenceSchema, referenceAlias, alias, excludeTables, includeViews, &wg, &er)
 		}
