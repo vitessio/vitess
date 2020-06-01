@@ -111,7 +111,10 @@ func (gtid filePosGTID) Contains(other GTIDSet) bool {
 	if other == nil {
 		return true
 	}
-	filePosOther, _ := other.(filePosGTID)
+	filePosOther, ok := other.(filePosGTID)
+	if !ok {
+		return false
+	}
 	return gtid.ContainsGTID(filePosOther)
 }
 
