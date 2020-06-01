@@ -391,10 +391,10 @@ var commands = []commandGroup{
 				"[-concurrency=10] [-include_master=false] <keyspace>",
 				"Reloads the schema on all the tablets in a keyspace."},
 			{"ValidateSchemaShard", commandValidateSchemaShard,
-				"[-exclude_tables=''] [-include-views] [-allow-empty] <keyspace/shard>",
+				"[-exclude_tables=''] [-include-views] <keyspace/shard>",
 				"Validates that the master schema matches all of the slaves."},
 			{"ValidateSchemaKeyspace", commandValidateSchemaKeyspace,
-				"[-exclude_tables=''] [-include-views] <keyspace name>",
+				"[-exclude_tables=''] [-include-views] [-skip-no-master] <keyspace name>",
 				"Validates that the master schema from shard 0 matches the schema on all of the other tablets in the keyspace."},
 			{"ApplySchema", commandApplySchema,
 				"[-allow_long_unavailability] [-wait_slave_timeout=10s] {-sql=<sql> || -sql-file=<filename>} <keyspace>",
@@ -2257,7 +2257,7 @@ func commandValidateSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subF
 func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/")
 	includeViews := subFlags.Bool("include-views", false, "Includes views in the validation")
-	allowEmpty := subFlags.Bool("allow-empty", false, "Allow empty shards when validating")
+	skipNoMaster := subFlags.Bool("skip-no-master", false, "Skip shards that don't have master when performing validation")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2270,7 +2270,7 @@ func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, s
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	return wr.ValidateSchemaKeyspace(ctx, keyspace, excludeTableArray, *includeViews, *allowEmpty)
+	return wr.ValidateSchemaKeyspace(ctx, keyspace, excludeTableArray, *includeViews, *skipNoMaster)
 }
 
 func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
