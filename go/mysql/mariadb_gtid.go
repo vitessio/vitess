@@ -164,6 +164,9 @@ func (gtidSet MariadbGTIDSet) Contains(other GTIDSet) bool {
 	if other == nil {
 		return true
 	}
+	if gtidSet == nil {
+		return false
+	}
 	mdbOther, ok := other.(MariadbGTIDSet)
 	if !ok {
 		return false
