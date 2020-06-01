@@ -1,3 +1,19 @@
+/*
+Copyright 2020 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vstreamer
 
 import (
@@ -10,7 +26,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -54,9 +69,7 @@ type uvstreamer struct {
 	stopPos mysql.Position
 
 	// lastTimestampNs is the last timestamp seen so far.
-	lastTimestampNs int64
-	// timeOffsetNs keeps track of the clock difference with respect to source tablet.
-	timeOffsetNs        int64
+	lastTimestampNs     int64
 	secondsBehindMaster int64
 
 	config *uvstreamerConfig
@@ -247,11 +260,6 @@ func (uvs *uvstreamer) Stream() error {
 			log.Infof("uvstreamer.Stream() copy returned with err %s", err)
 			return err
 		}
-		ev := &binlogdatapb.VEvent{
-			Type: binlogdatapb.VEventType_GTID,
-			Gtid: mysql.EncodePosition(uvs.pos),
-		}
-		uvs.send([]*binlogdatapb.VEvent{ev})
 		uvs.sendTestEvent("Copy Done")
 	}
 	log.Infof("Starting replicate in uvstreamer.Stream()")
@@ -270,21 +278,9 @@ func (uvs *uvstreamer) SetVSchema(vschema *localVSchema) {
 	}
 }
 
-func (uvs *uvstreamer) setCopyState(tableName string, lastPK *sqltypes.Result) {
-	qr := sqltypes.ResultToProto3(lastPK)
+func (uvs *uvstreamer) setCopyState(tableName string, qr *querypb.QueryResult) {
 	uvs.plans[tableName].tablePK.Lastpk = qr
-	lastPKEvent := &binlogdatapb.LastPKEvent{
-		TableLastPK: &binlogdatapb.TableLastPK{
-			TableName: tableName,
-			Lastpk:    qr,
-		},
-		Completed: false,
-	}
-	ev := &binlogdatapb.VEvent{
-		Type:        binlogdatapb.VEventType_LASTPK,
-		LastPKEvent: lastPKEvent,
-	}
-	uvs.send([]*binlogdatapb.VEvent{ev})
+
 }
 
 // dummy event sent only in test mode
@@ -297,4 +293,61 @@ func (uvs *uvstreamer) sendTestEvent(msg string) {
 		Gtid: msg,
 	}
 	uvs.send([]*binlogdatapb.VEvent{ev})
+}
+
+func (uvs *uvstreamer) copyComplete(tableName string) error {
+
+	evs := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_BEGIN},
+		{
+			Type: binlogdatapb.VEventType_LASTPK,
+			LastPKEvent: &binlogdatapb.LastPKEvent{
+				TableLastPK: &binlogdatapb.TableLastPK{
+					TableName: tableName,
+					Lastpk:    nil,
+				},
+				Completed: true,
+			},
+		},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}
+	if err := uvs.send(evs); err != nil {
+		return err
+	}
+
+	delete(uvs.plans, tableName)
+	uvs.tablesToCopy = uvs.tablesToCopy[1:]
+	return nil
+}
+
+func (uvs *uvstreamer) setPosition(gtid string, isInTx bool) error {
+	if gtid == "" {
+		return fmt.Errorf("empty gtid passed to setPosition")
+	}
+	pos, err := mysql.DecodePosition(gtid)
+	if err != nil {
+		return err
+	}
+	if pos.Equal(uvs.pos) {
+		return nil
+	}
+	gtidEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_GTID,
+		Gtid: gtid,
+	}
+	log.Infof("Sending gtid event for %s", gtid)
+
+	var evs []*binlogdatapb.VEvent
+	if !isInTx {
+		evs = append(evs, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_BEGIN})
+	}
+	evs = append(evs, gtidEvent)
+	if !isInTx {
+		evs = append(evs, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT})
+	}
+	if err := uvs.send(evs); err != nil {
+		return err
+	}
+	uvs.pos = pos
+	return nil
 }

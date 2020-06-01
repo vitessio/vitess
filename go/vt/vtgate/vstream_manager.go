@@ -251,10 +251,6 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					}
 					eventss = nil
 					sendevents = nil
-				case binlogdatapb.VEventType_LASTPK, binlogdatapb.VEventType_GTID:
-					// don't send lastpk, sent as part of vgtid
-					vs.sendAll(sgtid, [][]*binlogdatapb.VEvent{{event}})
-
 				case binlogdatapb.VEventType_HEARTBEAT:
 					// Remove all heartbeat events for now.
 					// Otherwise they can accumulate indefinitely if there are no real events.
@@ -320,6 +316,30 @@ func (vs *vstream) sendAll(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdat
 			if event.Type == binlogdatapb.VEventType_GTID {
 				// Update the VGtid and send that instead.
 				sgtid.Gtid = event.Gtid
+				events[j] = &binlogdatapb.VEvent{
+					Type:  binlogdatapb.VEventType_VGTID,
+					Vgtid: proto.Clone(vs.vgtid).(*binlogdatapb.VGtid),
+				}
+			} else if event.Type == binlogdatapb.VEventType_LASTPK {
+				var foundIndex = -1
+				eventTablePK := event.LastPKEvent.TableLastPK
+				for idx, pk := range sgtid.TablePKs {
+					if pk.TableName == eventTablePK.TableName {
+						foundIndex = idx
+						break
+					}
+				}
+				if foundIndex == -1 {
+					return fmt.Errorf("corresponding tablePK not found in svgtid for lastPKEvent : %v", event.LastPKEvent)
+				}
+				if event.LastPKEvent.Completed {
+					// remove tablepk from sgtid
+					sgtid.TablePKs[foundIndex] = sgtid.TablePKs[len(sgtid.TablePKs)-1]
+					sgtid.TablePKs[len(sgtid.TablePKs)-1] = nil
+					sgtid.TablePKs = sgtid.TablePKs[:len(sgtid.TablePKs)-1]
+				} else {
+					sgtid.TablePKs[foundIndex] = eventTablePK
+				}
 				events[j] = &binlogdatapb.VEvent{
 					Type:  binlogdatapb.VEventType_VGTID,
 					Vgtid: proto.Clone(vs.vgtid).(*binlogdatapb.VGtid),
