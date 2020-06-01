@@ -65,7 +65,7 @@ func (fhc *FakeHealthCheck) RegisterStats() {
 func (fhc *FakeHealthCheck) WaitForInitialStatsUpdates() {
 }
 
-// AddTablet adds the tablet and calls the listener.
+// AddTablet adds the tablet.
 func (fhc *FakeHealthCheck) AddTablet(tablet *topodatapb.Tablet) {
 	key := TabletToMapKey(tablet)
 	item := &fhcItem{

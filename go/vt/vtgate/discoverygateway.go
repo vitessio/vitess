@@ -423,5 +423,5 @@ func NewShardError(in error, target *querypb.Target, tablet *topodatapb.Tablet) 
 
 // QueryServiceByAlias satisfies the Gateway interface
 func (dg *DiscoveryGateway) QueryServiceByAlias(_ *topodatapb.TabletAlias) (queryservice.QueryService, error) {
-	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Unimplemented")
+	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "DiscoveryGateway does not implement QueryServiceByAlias")
 }
