@@ -173,12 +173,6 @@ func (rp *Position) UnmarshalJSON(buf []byte) error {
 // Comparable returns whether the receiver is comparable to the supplied position, based on whether one
 // of the two positions contains the other.
 func (rp *Position) Comparable(other Position) bool {
-	if rp.GTIDSet == nil || other.GTIDSet == nil {
-		// If either set is nil, then we can't presume to know the flavor of the sets, and therefore
-		// can't compare them.
-		return false
-	}
-
 	return rp.GTIDSet.Contains(other.GTIDSet) || other.GTIDSet.Contains(rp.GTIDSet)
 }
 
