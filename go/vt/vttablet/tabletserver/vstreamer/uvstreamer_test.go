@@ -98,7 +98,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 
 	// Test event called after t1 copy is complete
 	callbacks["OTHER.*Copy Start t2"] = func() {
-		conn, err := env.Mysqld.GetDbaConnection()
+		conn, err := env.Mysqld.GetDbaConnection(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}

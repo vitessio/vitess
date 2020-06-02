@@ -149,7 +149,7 @@ func (f *fakeEnv) Stats() *tabletenv.Stats {
 func (f *fakeEnv) LogError() {
 }
 
-func (f *fakeVstreamer) Stream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (f *fakeVstreamer) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	f.called = true
 	for _, events := range f.events {
 		err := send(events)
