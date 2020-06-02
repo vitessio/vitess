@@ -1613,6 +1613,15 @@ func TestKeyDestRangeQuery(t *testing.T) {
 	masterSession.TargetString = ""
 }
 
+func assertQueriesContain(t *testing.T, sql, sbcName string, sbc *sandboxconn.SandboxConn) {
+	t.Helper()
+	expectedQuery := []*querypb.BoundQuery{{
+		Sql:           sql,
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	testQueries(t, sbcName, sbc, expectedQuery)
+}
+
 // Prepared statement tests
 func TestUpdateEqualWithPrepare(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
