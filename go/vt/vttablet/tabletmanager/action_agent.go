@@ -136,26 +136,6 @@ type ActionAgent struct {
 	// to have the actionMutex have it.
 	actionMutexLocked bool
 
-	// waitingForMysql is set to true if mysql is not up when we
-	// start. That way, we only log once that we're waiting for
-	// mysql.  It is protected by actionMutex.
-	waitingForMysql bool
-
-	// gotMysqlPort is set when we got the current MySQL port and
-	// successfully saved it into the topology. That way we don't
-	// keep writing to the topology server on every heartbeat, but we
-	// know to try again if we fail to get it.
-	// We clear it when the tablet goes from unhealthy to healthy,
-	// so we are sure to get the up-to-date version in case of
-	// a MySQL server restart.
-	// It is protected by actionMutex.
-	gotMysqlPort bool
-
-	// mysqlAdvertisePort is the port to publish for our own mysqld in the
-	// tablet record. If this is greater than 0, we simply advertise this value
-	// instead of asking mysqld what port it's serving on.
-	mysqlAdvertisePort int32
-
 	// initialTablet remembers the state of the tablet record at startup.
 	// It can be used to notice, for example, if another tablet has taken
 	// over the record.
@@ -295,18 +275,13 @@ func NewActionAgent(
 	if appConfig, _ := config.DB.AppWithDB().MysqlParams(); appConfig.Host != "" {
 		mysqlHost = appConfig.Host
 		mysqlPort = int32(appConfig.Port)
-
-		// Remember this port as the advertise port. When we're connecting over
-		// host:port, it doesn't make sense to ask mysqld for its port after
-		// connecting. We should just tell others to use the same port we were
-		// told to use, in case it's a proxy.
-		agent.mysqlAdvertisePort = mysqlPort
 	} else {
 		// Assume unix socket was specified and try to get the port from mysqld
 		var err error
 		mysqlPort, err = mysqld.GetMysqlPort()
 		if err != nil {
-			log.Warningf("Cannot get current mysql port, will try to get it later: %v", err)
+			// We start this loop in Start, after the tablet record ports have been initialized.
+			log.Warningf("Cannot get current mysql port, will keep retrying every %v: %v", *publishRetryInterval, err)
 		}
 	}
 
@@ -448,7 +423,6 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
 		VREngine:            vreplication.NewTestEngine(nil, "", nil, nil, "", nil),
-		gotMysqlPort:        true,
 		History:             history.New(historyLength),
 		DemoteMasterType:    demoteMasterType,
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
@@ -638,17 +612,12 @@ func (agent *ActionAgent) Start(ctx context.Context, dbcfgs *dbconfigs.DBConfigs
 		if tablet.PortMap == nil {
 			tablet.PortMap = make(map[string]int32)
 		}
-		if mysqlPort != 0 {
-			// only overwrite mysql port if we know it, otherwise
-			// leave it as is.
-			tablet.MysqlPort = int32(mysqlPort)
-		}
+		tablet.MysqlPort = int32(mysqlPort)
 		if vtPort != 0 {
 			tablet.PortMap["vt"] = vtPort
 		} else {
 			delete(tablet.PortMap, "vt")
 		}
-		delete(tablet.PortMap, "vts")
 		if gRPCPort != 0 {
 			tablet.PortMap["grpc"] = gRPCPort
 		} else {
@@ -724,6 +693,16 @@ func (agent *ActionAgent) Start(ctx context.Context, dbcfgs *dbconfigs.DBConfigs
 	startingTablet.Type = topodatapb.TabletType_UNKNOWN
 	agent.setTablet(startingTablet)
 
+	// If mysql port was not specified, we have to discover it.
+	// This should be started after agent.tablet is initialized.
+	if mysqlPort == 0 {
+		// We send the publishRetryInterval as input parameter to
+		// avoid races in tests.
+		// TODO(sougou): undo this after proper shutdown procedure
+		// has been implemented for this goroutine.
+		go agent.findMysqlPort(*publishRetryInterval)
+	}
+
 	// Start a background goroutine to watch and update the shard record,
 	// to make sure it and our tablet record are in sync.
 	agent.startShardSync()
@@ -782,80 +761,6 @@ func (agent *ActionAgent) Stop() {
 // hookExtraEnv returns the map to pass to local hooks
 func (agent *ActionAgent) hookExtraEnv() map[string]string {
 	return map[string]string{"TABLET_ALIAS": topoproto.TabletAliasString(agent.TabletAlias)}
-}
-
-// checkTabletMysqlPort will check the mysql port for the tablet is good,
-// and if not will try to update it. It returns the modified Tablet record,
-// if it was updated successfully in the topology server.
-//
-// We use the agent.waitingForMysql flag to log only the first
-// error we get when trying to get the port from MySQL, and store it in the
-// topology. That way we don't spam the logs.
-//
-// The actionMutex lock must be held when calling this function.
-func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topodatapb.Tablet) *topodatapb.Tablet {
-	agent.checkLock()
-
-	var mport int32
-
-	// If we have stored an advertise port, just assume that.
-	// Otherwise, ask mysqld (presumably over unix socket) what its port is.
-	if agent.mysqlAdvertisePort > 0 {
-		mport = agent.mysqlAdvertisePort
-	} else {
-		var err error
-		mport, err = agent.MysqlDaemon.GetMysqlPort()
-		if err != nil {
-			// Only log the first time, so we don't spam the logs.
-			if !agent.waitingForMysql {
-				log.Warningf("Cannot get current mysql port, not checking it (will retry at healthcheck interval): %v", err)
-				agent.waitingForMysql = true
-			}
-			return nil
-		}
-	}
-
-	if mport == tablet.MysqlPort {
-		// The topology record contains the right port.
-		// Remember we successfully checked it, and that we're
-		// not waiting on MySQL to start any more.
-		agent.gotMysqlPort = true
-		agent.waitingForMysql = false
-		return nil
-	}
-
-	// Update the port in the topology. Use a shorter timeout, so if
-	// the topo server is busy / throttling us, we don't hang forever here.
-	// The healthcheck go routine will try again next time.
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	if !agent.waitingForMysql {
-		log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", tablet.MysqlPort, mport)
-	}
-	newTablet, err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
-		if err := topotools.CheckOwnership(agent.initialTablet, tablet); err != nil {
-			return err
-		}
-		t.MysqlPort = mport
-		return nil
-	})
-	if err != nil {
-		if !agent.waitingForMysql {
-			// After this, we will try again on every
-			// heartbeat to go through this code, but we
-			// won't log it.
-			log.Warningf("Failed to update tablet record, may use old mysql port: %v", err)
-			agent.waitingForMysql = true
-		}
-		return nil
-	}
-
-	// Update worked, return the new record, so the agent can save it.
-	// This should not happen often, so we can log it.
-	log.Infof("MySQL port has changed from %v to %v, successfully updated the tablet record in topology", tablet.MysqlPort, mport)
-	agent.gotMysqlPort = true
-	agent.waitingForMysql = false
-	return newTablet
 }
 
 // withRetry will exponentially back off and retry a function upon
