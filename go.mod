@@ -47,6 +47,7 @@ require (
 	github.com/krishicks/yaml-patch v0.0.10
 	github.com/magiconair/properties v1.8.1
 	github.com/minio/minio-go v0.0.0-20190131015406-c8a261de75c1
+	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.0 // indirect
 	github.com/olekukonko/tablewriter v0.0.0-20170122224234-a0225b3f23b5
 	github.com/onsi/ginkgo v1.10.3 // indirect
