@@ -283,7 +283,7 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.Tabl
 	if err := agent.MysqlDaemon.SetSlavePosition(ctx, pos); err != nil {
 		return err
 	}
-	if err := agent.MysqlDaemon.SetMaster(ctx, topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)), false /* slaveStopBefore */, true /* slaveStartAfter */); err != nil {
+	if err := agent.MysqlDaemon.SetMaster(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), false /* slaveStopBefore */, true /* slaveStartAfter */); err != nil {
 		return err
 	}
 
@@ -577,8 +577,8 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 	if err != nil {
 		return err
 	}
-	masterHost := topoproto.MysqlHostname(parent.Tablet)
-	masterPort := int(topoproto.MysqlPort(parent.Tablet))
+	masterHost := parent.Tablet.MysqlHostname
+	masterPort := int(parent.Tablet.MysqlPort)
 	if status.MasterHost != masterHost || status.MasterPort != masterPort {
 		// This handles both changing the address and starting replication.
 		if err := agent.MysqlDaemon.SetMaster(ctx, masterHost, masterPort, wasReplicating, shouldbeReplicating); err != nil {

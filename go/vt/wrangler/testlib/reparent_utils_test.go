@@ -75,8 +75,8 @@ func TestShardReplicationStatuses(t *testing.T) {
 			},
 		},
 	}
-	slave.FakeMysqlDaemon.CurrentMasterHost = topoproto.MysqlHostname(master.Tablet)
-	slave.FakeMysqlDaemon.CurrentMasterPort = int(topoproto.MysqlPort(master.Tablet))
+	slave.FakeMysqlDaemon.CurrentMasterHost = master.Tablet.MysqlHostname
+	slave.FakeMysqlDaemon.CurrentMasterPort = int(master.Tablet.MysqlPort)
 	slave.StartActionLoop(t, wr)
 	defer slave.StopActionLoop(t)
 
