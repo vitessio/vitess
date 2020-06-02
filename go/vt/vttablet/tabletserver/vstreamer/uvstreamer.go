@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"sync"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
@@ -71,6 +72,7 @@ type uvstreamer struct {
 	// lastTimestampNs is the last timestamp seen so far.
 	lastTimestampNs     int64
 	secondsBehindMaster int64
+	mu                  sync.Mutex
 
 	config *uvstreamerConfig
 
@@ -172,7 +174,7 @@ func (uvs *uvstreamer) send2(evs []*binlogdatapb.VEvent) error {
 		uvs.lastTimestampNs = ev.Timestamp * 1e9
 	}
 	behind := time.Now().UnixNano() - uvs.lastTimestampNs
-	uvs.secondsBehindMaster = behind / 1e9
+	uvs.setSecondsBehindMaster(behind / 1e9)
 	//log.Infof("sbm set to %d", uvs.secondsBehindMaster)
 	var evs2 []*binlogdatapb.VEvent
 	if len(uvs.plans) > 0 {
@@ -350,4 +352,16 @@ func (uvs *uvstreamer) setPosition(gtid string, isInTx bool) error {
 	}
 	uvs.pos = pos
 	return nil
+}
+
+func (uvs *uvstreamer) getSecondsBehindMaster() int64 {
+	uvs.mu.Lock()
+	defer uvs.mu.Unlock()
+	return uvs.secondsBehindMaster
+}
+
+func (uvs *uvstreamer) setSecondsBehindMaster(sbm int64) {
+	uvs.mu.Lock()
+	defer uvs.mu.Unlock()
+	uvs.secondsBehindMaster = sbm
 }
