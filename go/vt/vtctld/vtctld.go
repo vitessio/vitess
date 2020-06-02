@@ -59,7 +59,7 @@ func InitVtctld(ts *topo.Server) {
 
 	actionRepo.RegisterKeyspaceAction("ValidateSchemaKeyspace",
 		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
-			return "", wr.ValidateSchemaKeyspace(ctx, keyspace, nil, false)
+			return "", wr.ValidateSchemaKeyspace(ctx, keyspace, nil, false, false)
 		})
 
 	actionRepo.RegisterKeyspaceAction("ValidateVersionKeyspace",

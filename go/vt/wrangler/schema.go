@@ -186,7 +186,7 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 
 // ValidateSchemaKeyspace will diff the schema from all the tablets in
 // the keyspace.
-func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string, excludeTables []string, includeViews bool) error {
+func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string, excludeTables []string, includeViews, skipNoMaster bool) error {
 	// find all the shards
 	shards, err := wr.ts.GetShardNames(ctx, keyspace)
 	if err != nil {
@@ -202,42 +202,15 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 		return wr.ValidateSchemaShard(ctx, keyspace, shards[0], excludeTables, includeViews)
 	}
 
-	// find the reference schema using the first shard's master
-	si, err := wr.ts.GetShard(ctx, keyspace, shards[0])
-	if err != nil {
-		return fmt.Errorf("GetShard(%v, %v) failed: %v", keyspace, shards[0], err)
-	}
-	if !si.HasMaster() {
-		return fmt.Errorf("no master in shard %v/%v", keyspace, shards[0])
-	}
-	referenceAlias := si.MasterAlias
-	log.Infof("Gathering schema for reference master %v", topoproto.TabletAliasString(referenceAlias))
-	referenceSchema, err := wr.GetSchema(ctx, referenceAlias, nil, excludeTables, includeViews)
-	if err != nil {
-		return fmt.Errorf("GetSchema(%v, nil, %v, %v) failed: %v", referenceAlias, excludeTables, includeViews, err)
-	}
+	var referenceSchema *tabletmanagerdatapb.SchemaDefinition
+	var referenceAlias *topodatapb.TabletAlias
 
 	// then diff with all other tablets everywhere
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 
-	// first diff the slaves in the reference shard 0
-	aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, keyspace, shards[0])
-	if err != nil {
-		return fmt.Errorf("FindAllTabletAliasesInShard(%v, %v) failed: %v", keyspace, shards[0], err)
-	}
-
-	for _, alias := range aliases {
-		if topoproto.TabletAliasEqual(alias, si.MasterAlias) {
-			continue
-		}
-
-		wg.Add(1)
-		go wr.diffSchema(ctx, referenceSchema, referenceAlias, alias, excludeTables, includeViews, &wg, &er)
-	}
-
 	// then diffs all tablets in the other shards
-	for _, shard := range shards[1:] {
+	for _, shard := range shards[0:] {
 		si, err := wr.ts.GetShard(ctx, keyspace, shard)
 		if err != nil {
 			er.RecordError(fmt.Errorf("GetShard(%v, %v) failed: %v", keyspace, shard, err))
@@ -245,8 +218,19 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 		}
 
 		if !si.HasMaster() {
-			er.RecordError(fmt.Errorf("no master in shard %v/%v", keyspace, shard))
+			if !skipNoMaster {
+				er.RecordError(fmt.Errorf("no master in shard %v/%v", keyspace, shard))
+			}
 			continue
+		}
+
+		if referenceSchema == nil {
+			referenceAlias = si.MasterAlias
+			log.Infof("Gathering schema for reference master %v", topoproto.TabletAliasString(referenceAlias))
+			referenceSchema, err = wr.GetSchema(ctx, referenceAlias, nil, excludeTables, includeViews)
+			if err != nil {
+				return fmt.Errorf("GetSchema(%v, nil, %v, %v) failed: %v", referenceAlias, excludeTables, includeViews, err)
+			}
 		}
 
 		aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
@@ -256,6 +240,10 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 		}
 
 		for _, alias := range aliases {
+			// Don't diff schemas for self
+			if referenceAlias == alias {
+				continue
+			}
 			wg.Add(1)
 			go wr.diffSchema(ctx, referenceSchema, referenceAlias, alias, excludeTables, includeViews, &wg, &er)
 		}
