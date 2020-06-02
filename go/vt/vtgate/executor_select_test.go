@@ -52,6 +52,7 @@ func TestSelectNext(t *testing.T) {
 		Sql:           query,
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)},
 	}}
+
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries:\n%v, want\n%v\n", sbclookup.Queries, wantQueries)
 	}
@@ -228,21 +229,20 @@ func TestSelectLastInsertId(t *testing.T) {
 	defer QueryLogger.Unsubscribe(logChan)
 
 	sql := "select last_insert_id()"
-	masterSession.LastInsertId = 42
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "last_insert_id()", Type: sqltypes.Uint64},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewUint64(42),
+			sqltypes.NewUint64(52),
 		}},
 	}
 	require.NoError(t, err)
 	utils.MustMatch(t, result, wantResult, "Mismatch")
 }
 
-func TestSelectUserDefinedVariable(t *testing.T) {
+func TestSelectUserDefindVariable(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 	executor.normalize = true
 	logChan := QueryLogger.Subscribe("Test")
