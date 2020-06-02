@@ -27,6 +27,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/health"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
@@ -156,7 +157,7 @@ func createTestAgent(ctx context.Context, t *testing.T, preStart func(*ActionAge
 		t.Fatalf("CreateTablet failed: %v", err)
 	}
 
-	mysqlDaemon := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+	mysqlDaemon := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(-1)}
 	agent := NewTestActionAgent(ctx, ts, tabletAlias, port, 0, mysqlDaemon, preStart)
 
 	agent.HealthReporter = &fakeHealthCheck{}
@@ -192,8 +193,7 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 		t.Errorf("UpdateStream should be running")
 	}
 
-	// first health check, should keep us as replica and serving,
-	// and update the mysql port to 3306
+	// First health check, should keep us as replica and serving.
 	before := time.Now()
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 12 * time.Second
 	agent.runHealthCheck()
@@ -203,12 +203,6 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	}
 	if ti.Type != topodatapb.TabletType_REPLICA {
 		t.Errorf("First health check failed to go to replica: %v", ti.Type)
-	}
-	if port := ti.Tablet.MysqlPort; port != 3306 {
-		t.Errorf("First health check failed to update mysql port: %v", port)
-	}
-	if !agent.gotMysqlPort {
-		t.Errorf("Healthcheck didn't record it updated the MySQL port.")
 	}
 	if !agent.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should be running")
