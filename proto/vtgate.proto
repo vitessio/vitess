@@ -116,6 +116,7 @@ message Session {
   map<string, query.BindVariable> user_defined_variables = 13;
   
   // system_variables keeps track of all session variables set for this connection
+  // TODO: systay should we keep this so we can apply it ordered? 
   map<string, string> system_variables = 14;
 
   // row_count keeps track of the last seen rows affected for this session

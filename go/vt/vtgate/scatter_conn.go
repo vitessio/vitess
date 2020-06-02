@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -141,7 +140,6 @@ func (stc *ScatterConn) Execute(
 	query string,
 	bindVars map[string]*querypb.BindVariable,
 	rss []*srvtopo.ResolvedShard,
-	tabletType topodatapb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
 	options *querypb.ExecuteOptions,
@@ -156,7 +154,6 @@ func (stc *ScatterConn) Execute(
 		ctx,
 		"Execute",
 		rss,
-		tabletType,
 		session,
 		notInTransaction,
 		func(rs *srvtopo.ResolvedShard, i int, shouldBegin bool, transactionID int64) (int64, error) {
@@ -204,7 +201,6 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	ctx context.Context,
 	rss []*srvtopo.ResolvedShard,
 	queries []*querypb.BoundQuery,
-	tabletType topodatapb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
 	autocommit bool,
@@ -218,7 +214,6 @@ func (stc *ScatterConn) ExecuteMultiShard(
 		ctx,
 		"Execute",
 		rss,
-		tabletType,
 		session,
 		notInTransaction,
 		func(rs *srvtopo.ResolvedShard, i int, shouldBegin bool, transactionID int64) (int64, error) {
@@ -301,7 +296,6 @@ func (stc *ScatterConn) StreamExecute(
 	query string,
 	bindVars map[string]*querypb.BindVariable,
 	rss []*srvtopo.ResolvedShard,
-	tabletType topodatapb.TabletType,
 	options *querypb.ExecuteOptions,
 	callback func(reply *sqltypes.Result) error,
 ) error {
@@ -310,7 +304,7 @@ func (stc *ScatterConn) StreamExecute(
 	var mu sync.Mutex
 	fieldSent := false
 
-	allErrors := stc.multiGo(ctx, "StreamExecute", rss, tabletType, func(rs *srvtopo.ResolvedShard, i int) error {
+	allErrors := stc.multiGo("StreamExecute", rss, func(rs *srvtopo.ResolvedShard, i int) error {
 		return rs.QueryService.StreamExecute(ctx, rs.Target, query, bindVars, 0, options, func(qr *sqltypes.Result) error {
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
@@ -328,7 +322,6 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	query string,
 	rss []*srvtopo.ResolvedShard,
 	bindVars []map[string]*querypb.BindVariable,
-	tabletType topodatapb.TabletType,
 	options *querypb.ExecuteOptions,
 	callback func(reply *sqltypes.Result) error,
 ) error {
@@ -336,7 +329,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	var mu sync.Mutex
 	fieldSent := false
 
-	allErrors := stc.multiGo(ctx, "StreamExecute", rss, tabletType, func(rs *srvtopo.ResolvedShard, i int) error {
+	allErrors := stc.multiGo("StreamExecute", rss, func(rs *srvtopo.ResolvedShard, i int) error {
 		return rs.QueryService.StreamExecute(ctx, rs.Target, query, bindVars[i], 0, options, func(qr *sqltypes.Result) error {
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
@@ -390,7 +383,7 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, rss []*srvtopo.Resolv
 	var mu sync.Mutex
 	fieldSent := false
 	lastErrors := newTimeTracker()
-	allErrors := stc.multiGo(ctx, "MessageStream", rss, topodatapb.TabletType_MASTER, func(rs *srvtopo.ResolvedShard, i int) error {
+	allErrors := stc.multiGo("MessageStream", rss, func(rs *srvtopo.ResolvedShard, i int) error {
 		// This loop handles the case where a reparent happens, which can cause
 		// an individual stream to end. If we don't succeed on the retries for
 		// messageStreamGracePeriod, we abort and return an error.
@@ -463,10 +456,8 @@ func (stc *ScatterConn) GetHealthCheckCacheStatus() discovery.TabletsCacheStatus
 // shards in parallel. This does not handle any transaction state.
 // The action function must match the shardActionFunc2 signature.
 func (stc *ScatterConn) multiGo(
-	ctx context.Context,
 	name string,
 	rss []*srvtopo.ResolvedShard,
-	tabletType topodatapb.TabletType,
 	action shardActionFunc,
 ) (allErrors *concurrency.AllErrorRecorder) {
 	allErrors = new(concurrency.AllErrorRecorder)
@@ -515,7 +506,6 @@ func (stc *ScatterConn) multiGoTransaction(
 	ctx context.Context,
 	name string,
 	rss []*srvtopo.ResolvedShard,
-	tabletType topodatapb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
 	action shardActionTransactionFunc,
@@ -544,25 +534,23 @@ func (stc *ScatterConn) multiGoTransaction(
 		}
 	}
 
-	var wg sync.WaitGroup
 	if numShards == 1 {
 		// only one shard, do it synchronously.
 		for i, rs := range rss {
 			oneShard(rs, i)
-			goto end
 		}
+	} else {
+		var wg sync.WaitGroup
+		for i, rs := range rss {
+			wg.Add(1)
+			go func(rs *srvtopo.ResolvedShard, i int) {
+				defer wg.Done()
+				oneShard(rs, i)
+			}(rs, i)
+		}
+		wg.Wait()
 	}
 
-	for i, rs := range rss {
-		wg.Add(1)
-		go func(rs *srvtopo.ResolvedShard, i int) {
-			defer wg.Done()
-			oneShard(rs, i)
-		}(rs, i)
-	}
-	wg.Wait()
-
-end:
 	if session.MustRollback() {
 		stc.txConn.Rollback(ctx, session)
 	}
