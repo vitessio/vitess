@@ -149,14 +149,6 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 	}
 	tablet := ti.Tablet
 
-	// Also refresh the MySQL port, to be sure it's correct.
-	// Note if this run doesn't succeed, the healthcheck go routine
-	// will try again.
-	agent.gotMysqlPort = false
-	agent.waitingForMysql = false
-	if updatedTablet := agent.checkTabletMysqlPort(ctx, tablet); updatedTablet != nil {
-		tablet = updatedTablet
-	}
 	// Also refresh masterTermStartTime
 	agent.setMasterTermStartTime(logutil.ProtoToTime(tablet.MasterTermStartTime))
 	agent.updateState(ctx, tablet, reason)
@@ -433,6 +425,22 @@ func (agent *ActionAgent) retryPublish() {
 			continue
 		}
 		log.Infof("Published state: %v", agent.tablet)
+		return
+	}
+}
+
+func (agent *ActionAgent) findMysqlPort(retryInterval time.Duration) {
+	for {
+		time.Sleep(retryInterval)
+		mport, err := agent.MysqlDaemon.GetMysqlPort()
+		if err != nil {
+			continue
+		}
+		log.Infof("Identified mysql port: %v", mport)
+		agent.pubMu.Lock()
+		agent.tablet.MysqlPort = mport
+		agent.pubMu.Unlock()
+		agent.publishState(agent.batchCtx)
 		return
 	}
 }

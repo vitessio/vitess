@@ -239,18 +239,6 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 			// changed because we'll broadcast the latest health
 			// status after this immediately anyway.
 			_ /* state changed */, healthErr = agent.QueryServiceControl.SetServingType(tablet.Type, true, nil)
-
-			if healthErr == nil {
-				// We were unhealthy, are now healthy,
-				// make sure we have the right mysql port.
-				// Also make sure to display any error message.
-				agent.gotMysqlPort = false
-				agent.waitingForMysql = false
-				if updatedTablet := agent.checkTabletMysqlPort(agent.batchCtx, tablet); updatedTablet != nil {
-					agent.setTablet(updatedTablet)
-					tablet = updatedTablet
-				}
-			}
 		}
 	} else {
 		if isServing {
@@ -298,14 +286,6 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 	record.Error = healthErr
 	record.ReplicationDelay = replicationDelay
 	agent.History.Add(record)
-
-	// Try to figure out the mysql port if we don't have it yet.
-	if !agent.gotMysqlPort {
-		if updatedTablet := agent.checkTabletMysqlPort(agent.batchCtx, tablet); updatedTablet != nil {
-			agent.setTablet(updatedTablet)
-			tablet = updatedTablet
-		}
-	}
 
 	// remember our health status
 	agent.mutex.Lock()
