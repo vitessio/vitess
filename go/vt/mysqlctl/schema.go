@@ -90,8 +90,21 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 		return nil, err
 	}
 
-	sd.TableDefinitions = make([]*tabletmanagerdatapb.TableDefinition, 0, len(qr.Rows))
-	tdMap := map[string]*tabletmanagerdatapb.TableDefinition{}
+	type schemaResult struct {
+		idx int
+		err error
+
+		td *tabletmanagerdatapb.TableDefinition
+	}
+
+	resChan := make(chan *schemaResult, 100)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	var wg sync.WaitGroup
+
+	tableNames := make([]string, 0, len(qr.Rows))
+	i := 0
 	for _, row := range qr.Rows {
 		tableName := row[0].ToString()
 		tableType := row[1].ToString()
@@ -99,6 +112,8 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 		if !filter.Includes(tableName, tableType) {
 			continue
 		}
+
+		tableNames = append(tableNames, tableName)
 
 		// compute dataLength
 		var dataLength uint64
@@ -119,95 +134,85 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 			}
 		}
 
-		td := &tabletmanagerdatapb.TableDefinition{
-			Name:       tableName,
-			Type:       tableType,
-			DataLength: dataLength,
-			RowCount:   rowCount,
-		}
-		sd.TableDefinitions = append(sd.TableDefinitions, td)
-		tdMap[tableName] = td
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+
+			fields, columns, schema, err := mysqld.collectSchema(ctx, dbName, tableName, tableType)
+			if err != nil {
+				resChan <- &schemaResult{
+					idx: idx,
+					err: err,
+				}
+				return
+			}
+
+			resChan <- &schemaResult{
+				idx: idx,
+				td: &tabletmanagerdatapb.TableDefinition{
+					Name:       tableName,
+					Type:       tableType,
+					DataLength: dataLength,
+					RowCount:   rowCount,
+					Fields:     fields,
+					Columns:    columns,
+					Schema:     schema,
+				},
+			}
+		}(i)
+
+		i++
 	}
 
-	log.Infof("mysqld GetSchema: GetPrimaryKeyColumns")
-	tableNames := make([]string, 0, len(tdMap))
-	for tableName := range tdMap {
-		tableNames = append(tableNames, tableName)
-	}
-	colMap, err := mysqld.getPrimaryKeyColumns(ctx, dbName, tableNames...)
-	if err != nil {
-		return nil, err
-	}
-	log.Infof("mysqld GetSchema: GetPrimaryKeyColumns done")
-	for tableName, td := range tdMap {
-		td.PrimaryKeyColumns = colMap[tableName]
+	go func() {
+		wg.Wait()
+		close(resChan)
+	}()
+
+	colMap := map[string][]string{}
+	if len(tableNames) > 0 {
+		log.Infof("mysqld GetSchema: GetPrimaryKeyColumns")
+		var err error
+		colMap, err = mysqld.getPrimaryKeyColumns(ctx, dbName, tableNames...)
+		if err != nil {
+			return nil, err
+		}
+		log.Infof("mysqld GetSchema: GetPrimaryKeyColumns done")
 	}
 
 	log.Infof("mysqld GetSchema: Collecting all table schemas")
-	resChan := make(chan *schemaResult, 100)
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	var wg sync.WaitGroup
-	for tableName := range tdMap {
-		wg.Add(1)
-		go func(tableName, tableType string) {
-			res := mysqld.collectSchema(ctx, dbName, tableName, tableType)
-			resChan <- res
-		}(tableName, tdMap[tableName].Type)
-	}
-	wg.Wait()
-	close(resChan)
-
+	tds := make([]*tabletmanagerdatapb.TableDefinition, 0, i)
 	for res := range resChan {
 		if res.err != nil {
 			cancel()
 			return nil, res.err
 		}
 
-		td := tdMap[res.tableName]
-		td.Fields = res.fields
-		td.Columns = res.columns
-		td.Schema = res.schema
+		td := res.td
+		td.PrimaryKeyColumns = colMap[td.Name]
+
+		tds[res.idx] = res.td
 	}
 	log.Infof("mysqld GetSchema: Collecting all table schemas done")
+
+	sd.TableDefinitions = tds
 
 	tmutils.GenerateSchemaVersion(sd)
 	return sd, nil
 }
 
-type schemaResult struct {
-	tableName string
-	fields    []*querypb.Field
-	columns   []string
-	schema    string
-	err       error
-}
-
-func (mysqld *Mysqld) collectSchema(ctx context.Context, dbName, tableName, tableType string) *schemaResult {
+func (mysqld *Mysqld) collectSchema(ctx context.Context, dbName, tableName, tableType string) ([]*querypb.Field, []string, string, error) {
 	fields, columns, err := mysqld.GetColumns(ctx, dbName, tableName)
 	if err != nil {
-		return &schemaResult{
-			tableName: tableName,
-			err:       err,
-		}
+		return nil, nil, "", err
 	}
 
 	schema, err := mysqld.normalizedSchema(ctx, dbName, tableName, tableType)
 	if err != nil {
-		return &schemaResult{
-			tableName: tableName,
-			err:       err,
-		}
+		return nil, nil, "", err
 	}
 
-	return &schemaResult{
-		tableName: tableName,
-		fields:    fields,
-		columns:   columns,
-		schema:    schema,
-		err:       err,
-	}
+	return fields, columns, schema, nil
 }
 
 func (mysqld *Mysqld) normalizedSchema(ctx context.Context, dbName, tableName, tableType string) (string, error) {
