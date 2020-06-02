@@ -24,10 +24,13 @@ Fast forward requires tables to be locked briefly to get a snapshot: the test us
 on the table in order to insert rows for fastforward to find.
 
 The flow is as follows:
-	t1: copy phase, 10 rows.
-	t2: copy phase to start. Test event is sent, intercepted and a row in inserted into t1
-    t1: fastforward finds this event
-
+	t1: copy phase, 10 rows. The lastpk event is intercepted and a row is inserted into t1 to be found in catchup
+	t1/t2: catchup phase finds inserted row in t1
+	t2: copy phase to start. Test event is sent, intercepted, we lock t2 to block t2's copy, and a row is inserted into t1 and then unlock
+	t2: fastforward finds t1 event
+	t2: copy starts
+	t2: copy complete
+	all tables copied, Copy Complete test event sent, vstream context is cancelled
 */
 
 package vstreamer
@@ -52,8 +55,6 @@ const (
 	createTableQuery = "create table %s(id%d1 int, id%d2 int, primary key(id%d1))"
 	bulkInsertQuery  = "insert into %s (id%d1, id%d2) values "
 	insertQuery      = "insert into %s (id%d1, id%d2) values (%d, %d)"
-	fieldEventTpl    = "type:FIELD field_event:<table_name:\"%s\" fields:<name:\"id%d1\" type:INT32 > fields:<name:\"id%d2\" type:INT32 > > "
-	insertEventTpl   = "type:ROW row_event:<row_changes:<after:<lengths:%d lengths:%d values:\"%d%d\" > > > "
 	numInitialRows   = 10
 )
 
@@ -112,13 +113,9 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 		log.Info("Inserted row for fast forward to find, unlocked tables")
 
 	}
-	callbacks["ROW.*t1.*12120"] = func() {
-		log.Info("Got fast forward row, unlocking t2")
-		execStatement(t, "unlock tables")
-	}
 
 	callbacks["OTHER.*Copy Done"] = func() {
-		log.Info("Got copy done, canceling context")
+		log.Info("Copy done, canceling context")
 		cancel()
 	}
 	startVStreamCopy(ctx, t, filter, tablePKs)
@@ -147,6 +144,10 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	numExpectedEvents := numCopyEvents + numCatchupEvents + numFastForwardEvents
 	printAllEvents("End of test")
 	if len(allEvents) != numExpectedEvents {
+		log.Errorf("Received %d events, expected %d", len(allEvents), numExpectedEvents)
+		for _, ev := range allEvents {
+			log.Errorf("\t%s", ev)
+		}
 		t.Fatalf("Received %d events, expected %d", len(allEvents), numExpectedEvents)
 	} else {
 		log.Infof("Successfully received %d events", numExpectedEvents)
