@@ -264,7 +264,7 @@ func (uvs *uvstreamer) Stream() error {
 	}
 	log.Infof("Starting replicate in uvstreamer.Stream()")
 	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, uvs.sh, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos), uvs.filter, uvs.vschema, uvs.send)
-
+	uvs.vs = vs
 	return vs.Stream()
 }
 

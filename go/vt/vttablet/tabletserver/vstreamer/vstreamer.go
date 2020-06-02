@@ -133,7 +133,7 @@ func (vs *vstreamer) SetVSchema(vschema *localVSchema) {
 	case vs.vevents <- vschema:
 		log.Infof("VSchema sent to vs.vevents")
 	case <-vs.ctx.Done():
-		log.Infof("COntext as done in setVSchema")
+		log.Infof("ctx.Done() in setVSchema")
 	}
 }
 
