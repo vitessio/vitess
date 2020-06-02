@@ -91,7 +91,7 @@ func NewTableFilter(tables, excludeTables []string, includeViews bool) (*TableFi
 	if len(tables) > 0 {
 		f.filterTables = true
 		for _, table := range tables {
-			if strings.HasPrefix(table, "/") && strings.HasSuffix(table, "/") {
+			if strings.HasPrefix(table, "/") {
 				table = strings.Trim(table, "/")
 				re, err := regexp.Compile(table)
 				if err != nil {
@@ -108,7 +108,7 @@ func NewTableFilter(tables, excludeTables []string, includeViews bool) (*TableFi
 	if len(excludeTables) > 0 {
 		f.filterExcludeTables = true
 		for _, table := range excludeTables {
-			if strings.HasPrefix(table, "/") && strings.HasSuffix(table, "/") {
+			if strings.HasPrefix(table, "/") {
 				table = strings.Trim(table, "/")
 				re, err := regexp.Compile(table)
 				if err != nil {
