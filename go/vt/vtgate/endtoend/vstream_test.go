@@ -225,6 +225,10 @@ func TestVStreamCopyBasic(t *testing.T) {
 		switch err {
 		case nil:
 			evs = append(evs, e...)
+			if len(evs) == 24 { //FIXME: add logic / check for actual events, note they may not be in order
+				t.Logf("TestVStreamCopyBasic was successful")
+				return
+			}
 			printEvents(evs)
 		case io.EOF:
 			log.Infof("stream ended\n")
