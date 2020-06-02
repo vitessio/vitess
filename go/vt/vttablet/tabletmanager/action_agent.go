@@ -641,7 +641,7 @@ func (agent *ActionAgent) Start(ctx context.Context, dbcfgs *dbconfigs.DBConfigs
 		if mysqlPort != 0 {
 			// only overwrite mysql port if we know it, otherwise
 			// leave it as is.
-			topoproto.SetMysqlPort(tablet, int32(mysqlPort))
+			tablet.MysqlPort = int32(mysqlPort)
 		}
 		if vtPort != 0 {
 			tablet.PortMap["vt"] = vtPort
@@ -815,7 +815,7 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 		}
 	}
 
-	if mport == topoproto.MysqlPort(tablet) {
+	if mport == tablet.MysqlPort {
 		// The topology record contains the right port.
 		// Remember we successfully checked it, and that we're
 		// not waiting on MySQL to start any more.
@@ -830,13 +830,13 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	if !agent.waitingForMysql {
-		log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", topoproto.MysqlPort(tablet), mport)
+		log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", tablet.MysqlPort, mport)
 	}
 	newTablet, err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
 		if err := topotools.CheckOwnership(agent.initialTablet, tablet); err != nil {
 			return err
 		}
-		topoproto.SetMysqlPort(t, mport)
+		t.MysqlPort = mport
 		return nil
 	})
 	if err != nil {
@@ -852,7 +852,7 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 
 	// Update worked, return the new record, so the agent can save it.
 	// This should not happen often, so we can log it.
-	log.Infof("MySQL port has changed from %v to %v, successfully updated the tablet record in topology", topoproto.MysqlPort(tablet), mport)
+	log.Infof("MySQL port has changed from %v to %v, successfully updated the tablet record in topology", tablet.MysqlPort, mport)
 	agent.gotMysqlPort = true
 	agent.waitingForMysql = false
 	return newTablet

@@ -561,8 +561,8 @@ func TestPlannedReparentShardRelayLogErrorStartSlave(t *testing.T) {
 	goodReplica1.FakeMysqlDaemon.Replicating = true
 	goodReplica1.FakeMysqlDaemon.SlaveIORunning = false
 	goodReplica1.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
-	goodReplica1.FakeMysqlDaemon.CurrentMasterHost = topoproto.MysqlHostname(master.Tablet)
-	goodReplica1.FakeMysqlDaemon.CurrentMasterPort = int(topoproto.MysqlPort(master.Tablet))
+	goodReplica1.FakeMysqlDaemon.CurrentMasterHost = master.Tablet.MysqlHostname
+	goodReplica1.FakeMysqlDaemon.CurrentMasterPort = int(master.Tablet.MysqlPort)
 	// simulate error that will trigger a call to RestartSlave
 	goodReplica1.FakeMysqlDaemon.StartSlaveError = errors.New("Slave failed to initialize relay log info structure from the repository")
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{

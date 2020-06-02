@@ -758,7 +758,7 @@ func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		tablet.PortMap["vt"] = int32(*port)
 	}
 	if *mysqlPort != 0 {
-		topoproto.SetMysqlPort(tablet, int32(*mysqlPort))
+		tablet.MysqlPort = int32(*mysqlPort)
 	}
 	if *grpcPort != 0 {
 		tablet.PortMap["grpc"] = int32(*grpcPort)
@@ -824,7 +824,7 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 				tablet.PortMap["grpc"] = int32(*grpcPort)
 			}
 			if *mysqlPort != 0 {
-				topoproto.SetMysqlPort(tablet, int32(*mysqlPort))
+				tablet.MysqlPort = int32(*mysqlPort)
 			}
 		}
 		return nil

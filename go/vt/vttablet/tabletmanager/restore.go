@@ -213,7 +213,7 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos mysql.Positi
 	}
 
 	// Set master and start slave.
-	if err := agent.MysqlDaemon.SetMaster(ctx, topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)), false /* slaveStopBefore */, true /* slaveStartAfter */); err != nil {
+	if err := agent.MysqlDaemon.SetMaster(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), false /* slaveStopBefore */, true /* slaveStartAfter */); err != nil {
 		return vterrors.Wrap(err, "MysqlDaemon.SetMaster failed")
 	}
 
