@@ -30,7 +30,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/grpctmserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
@@ -119,7 +118,7 @@ func newFakeTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, tabletTy
 		Shard:    "0",
 		Type:     tabletType,
 	}
-	topoproto.SetMysqlPort(tablet, mysqlPort)
+	tablet.MysqlPort = mysqlPort
 	for _, option := range options {
 		option(tablet)
 	}

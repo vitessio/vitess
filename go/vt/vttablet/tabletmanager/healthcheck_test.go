@@ -204,7 +204,7 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	if ti.Type != topodatapb.TabletType_REPLICA {
 		t.Errorf("First health check failed to go to replica: %v", ti.Type)
 	}
-	if port := topoproto.MysqlPort(ti.Tablet); port != 3306 {
+	if port := ti.Tablet.MysqlPort; port != 3306 {
 		t.Errorf("First health check failed to update mysql port: %v", port)
 	}
 	if !agent.gotMysqlPort {
