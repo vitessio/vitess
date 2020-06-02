@@ -75,7 +75,7 @@ func (uvs *uvstreamer) catchupAndCopy(ctx context.Context, tableName string) err
 
 func (uvs *uvstreamer) catchup(ctx context.Context) error {
 	log.Infof("starting catchup ...")
-	uvs.secondsBehindMaster = math.MaxInt64
+	uvs.setSecondsBehindMaster(math.MaxInt64)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	errch := make(chan error, 1)
@@ -92,7 +92,7 @@ func (uvs *uvstreamer) catchup(ctx context.Context) error {
 	defer tkr.Stop()
 	seconds := int64(uvs.config.MaxReplicationLag / time.Second)
 	for {
-		sbm := uvs.secondsBehindMaster //TODO #sugu
+		sbm := uvs.getSecondsBehindMaster()
 		log.Infof("Checking sbm %d vs config %d", sbm, seconds)
 		if sbm <= seconds {
 			log.Infof("Canceling context because lag is %d:%d", sbm, seconds)

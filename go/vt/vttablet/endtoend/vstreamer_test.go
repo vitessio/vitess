@@ -77,7 +77,7 @@ func TestHistorianSchemaUpdate(t *testing.T) {
 		return nil
 	}
 	go func() {
-		if err := tsv.VStream(ctx, target, "current", filter, send); err != nil {
+		if err := tsv.VStream(ctx, target, "current", nil, filter, send); err != nil {
 			fmt.Printf("Error in tsv.VStream: %v", err)
 			t.Error(err)
 		}
@@ -198,7 +198,7 @@ func TestSchemaVersioning(t *testing.T) {
 	}
 	go func() {
 		defer close(eventCh)
-		if err := tsv.VStream(ctx, target, "current", filter, send); err != nil {
+		if err := tsv.VStream(ctx, target, "current", nil, filter, send); err != nil {
 			fmt.Printf("Error in tsv.VStream: %v", err)
 			t.Error(err)
 		}
@@ -248,7 +248,7 @@ func TestSchemaVersioning(t *testing.T) {
 	}
 	go func() {
 		defer close(eventCh)
-		if err := tsv.VStream(ctx, target, startPos, filter, send); err != nil {
+		if err := tsv.VStream(ctx, target, startPos, nil, filter, send); err != nil {
 			fmt.Printf("Error in tsv.VStream: %v", err)
 			t.Error(err)
 		}
@@ -317,7 +317,7 @@ func TestSchemaVersioning(t *testing.T) {
 	}
 	go func() {
 		defer close(eventCh)
-		if err := tsv.VStream(ctx, target, startPos, filter, send); err != nil {
+		if err := tsv.VStream(ctx, target, startPos, nil, filter, send); err != nil {
 			fmt.Printf("Error in tsv.VStream: %v", err)
 			t.Error(err)
 		}
