@@ -23,6 +23,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	"vitess.io/vitess/go/vt/log"
@@ -784,7 +785,7 @@ func TestDDLAddColumn(t *testing.T) {
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {
 		defer close(ch)
-		if err := vstream(ctx, t, pos, nil, filter,ch); err != nil {
+		if err := vstream(ctx, t, pos, nil, filter, ch); err != nil {
 			t.Error(err)
 		}
 	}()
@@ -1551,7 +1552,7 @@ func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter,
 	return ch
 }
 
-func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter,  ch chan []*binlogdatapb.VEvent) error {
+func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, ch chan []*binlogdatapb.VEvent) error {
 	if filter == nil {
 		filter = &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
