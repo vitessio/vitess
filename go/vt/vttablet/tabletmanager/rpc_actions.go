@@ -94,7 +94,7 @@ func (agent *ActionAgent) changeTypeLocked(ctx context.Context, tabletType topod
 	}
 
 	// let's update our internal state (stop query service and other things)
-	// refreshTablet will runHealthCheck.
+	// refreshTablet will invoke broadcastHealth if needed.
 	if err := agent.refreshTablet(ctx, "ChangeType"); err != nil {
 		return err
 	}
