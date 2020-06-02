@@ -674,7 +674,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			_, err = mz.wr.tmc.ApplySchema(ctx, targetTablet.Tablet, &tmutils.SchemaChange{
 				SQL:              sql,
 				Force:            false,
-				AllowReplication: false,
+				AllowReplication: true,
 			})
 			if err != nil {
 				return err
