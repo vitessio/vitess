@@ -132,13 +132,13 @@ func (mysqlFlavor) status(c *Conn) (SlaveStatus, error) {
 	status.RelayLogPosition.GTIDSet = status.Position.GTIDSet.Union(relayLogGTIDSet)
 
 	execMasterLogFilePos := resultMap["Exec_Master_Log_Pos"]
-	filePos, err := strconv.Atoi(execMasterLogFilePos)
-	if err != nil && execMasterLogFilePos != "" {
-		return SlaveStatus{}, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", resultMap["Exec_Master_Log_Pos"])
-	}
 	file := resultMap["Relay_Master_Log_File"]
-
 	if execMasterLogFilePos != "" && file != "" {
+		filePos, err := strconv.Atoi(execMasterLogFilePos)
+		if err != nil {
+			return SlaveStatus{}, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", execMasterLogFilePos)
+		}
+
 		status.FilePosition.GTIDSet = filePosGTID{
 			file: file,
 			pos:  filePos,
@@ -146,13 +146,13 @@ func (mysqlFlavor) status(c *Conn) (SlaveStatus, error) {
 	}
 
 	readMasterLogPosStr := resultMap["Read_Master_Log_Pos"]
-	fileRelayPos, err := strconv.Atoi(readMasterLogPosStr)
-	if err != nil && readMasterLogPosStr != "" {
-		return SlaveStatus{}, fmt.Errorf("invalid ReadMasterLogPos GTID (%v): expecting pos to be an integer", resultMap["Read_Master_Log_Pos"])
-	}
 	file = resultMap["Master_Log_File"]
-
 	if file != "" && readMasterLogPosStr != "" {
+		fileRelayPos, err := strconv.Atoi(readMasterLogPosStr)
+		if err != nil {
+			return SlaveStatus{}, fmt.Errorf("invalid ReadMasterLogPos GTID (%v): expecting pos to be an integer", readMasterLogPosStr)
+		}
+
 		status.FileRelayLogPosition.GTIDSet = filePosGTID{
 			file: file,
 			pos:  fileRelayPos,
