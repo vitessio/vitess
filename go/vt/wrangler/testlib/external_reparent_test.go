@@ -220,7 +220,7 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	// On the elected master, we will respond to
 	// TabletActionSlaveWasPromoted, so we need a MysqlDaemon
 	// that returns no master, and the new port (as returned by mysql)
-	newMaster.FakeMysqlDaemon.MysqlPort = 3303
+	newMaster.FakeMysqlDaemon.MysqlPort.Set(3303)
 	newMaster.StartActionLoop(t, wr)
 	defer newMaster.StopActionLoop(t)
 

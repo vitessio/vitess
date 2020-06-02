@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 )
 
 func TestPublishState(t *testing.T) {
@@ -69,4 +70,28 @@ func TestPublishState(t *testing.T) {
 	ttablet, err = agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, tab2, ttablet.Tablet)
+}
+
+func TestFindMysqlPort(t *testing.T) {
+	defer func(saved time.Duration) { *publishRetryInterval = saved }(*publishRetryInterval)
+	*publishRetryInterval = 1 * time.Millisecond
+
+	ctx := context.Background()
+	agent := createTestAgent(ctx, t, nil)
+	ttablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+	require.NoError(t, err)
+	assert.Equal(t, ttablet.MysqlPort, int32(0))
+
+	agent.pubMu.Lock()
+	agent.MysqlDaemon.(*fakemysqldaemon.FakeMysqlDaemon).MysqlPort.Set(3306)
+	agent.pubMu.Unlock()
+	for i := 0; i < 10; i++ {
+		ttablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+		require.NoError(t, err)
+		if ttablet.MysqlPort == 3306 {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	assert.Fail(t, "mysql port was not updated")
 }
