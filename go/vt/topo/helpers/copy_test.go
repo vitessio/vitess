@@ -23,7 +23,6 @@ import (
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -60,7 +59,7 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 		DbNameOverride: "",
 		KeyRange:       nil,
 	}
-	topoproto.SetMysqlPort(tablet1, 3306)
+	tablet1.MysqlPort = 3306
 	if err := fromTS.CreateTablet(ctx, tablet1); err != nil {
 		t.Fatalf("cannot create master tablet: %v", err)
 	}
@@ -82,7 +81,7 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 		DbNameOverride: "",
 		KeyRange:       nil,
 	}
-	topoproto.SetMysqlPort(tablet2, 3306)
+	tablet2.MysqlPort = 3306
 	if err := fromTS.CreateTablet(ctx, tablet2); err != nil {
 		t.Fatalf("cannot create slave tablet: %v", err)
 	}

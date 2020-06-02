@@ -184,7 +184,7 @@ func (ti *TabletInfo) Addr() string {
 
 // MysqlAddr returns hostname:mysql port.
 func (ti *TabletInfo) MysqlAddr() string {
-	return netutil.JoinHostPort(topoproto.MysqlHostname(ti.Tablet), topoproto.MysqlPort(ti.Tablet))
+	return netutil.JoinHostPort(ti.Tablet.MysqlHostname, ti.Tablet.MysqlPort)
 }
 
 // DbName is usually implied by keyspace. Having the shard information in the

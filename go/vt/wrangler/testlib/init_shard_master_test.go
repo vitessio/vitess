@@ -272,7 +272,7 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	// on purpose
 	badSlave.FakeMysqlDaemon.ReadOnly = true
 	badSlave.FakeMysqlDaemon.SetSlavePositionPos = master.FakeMysqlDaemon.CurrentMasterPosition
-	badSlave.FakeMysqlDaemon.SetMasterInput = fmt.Sprintf("%v:%v", "", topoproto.MysqlPort(master.Tablet))
+	badSlave.FakeMysqlDaemon.SetMasterInput = fmt.Sprintf("%v:%v", "", master.Tablet.MysqlPort)
 	badSlave.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET ALL REPLICATION",
 		"FAKE SET SLAVE POSITION",

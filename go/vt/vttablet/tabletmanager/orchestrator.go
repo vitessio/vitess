@@ -164,11 +164,11 @@ func (orc *orcClient) InActiveShardRecovery(tablet *topodatapb.Tablet) (bool, er
 }
 
 func mysqlHostPort(tablet *topodatapb.Tablet) (host, port string, err error) {
-	mysqlPort := int(topoproto.MysqlPort(tablet))
+	mysqlPort := int(tablet.MysqlPort)
 	if mysqlPort == 0 {
 		return "", "", fmt.Errorf("MySQL port is unknown for tablet %v (mysqld may not be running yet)", topoproto.TabletAliasString(tablet.Alias))
 	}
-	return topoproto.MysqlHostname(tablet), strconv.Itoa(mysqlPort), nil
+	return tablet.MysqlHostname, strconv.Itoa(mysqlPort), nil
 }
 
 // apiGet calls the given Orchestrator API endpoint.
