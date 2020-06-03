@@ -38,7 +38,7 @@ type GTIDSet interface {
 	ContainsGTID(GTID) bool
 
 	// Contains returns true if the set is a superset of another set. All implementations should return false if
-	// other GTIDSet is nil.
+	// other GTIDSet is not the right concrete type for that flavor.
 	Contains(GTIDSet) bool
 
 	// Equal returns true if the set is equal to another set.
