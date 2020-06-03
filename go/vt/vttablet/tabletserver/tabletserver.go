@@ -692,6 +692,7 @@ func (tsv *TabletServer) IsHealthy() error {
 			"/* health */ select 1 from dual",
 			nil,
 			0,
+			0,
 			nil,
 		)
 		return err
@@ -984,7 +985,7 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 }
 
 // Execute executes the query and returns the result as response.
-func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
+func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, connectionID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
 	span, ctx := trace.NewSpan(ctx, "TabletServer.Execute")
 	trace.AnnotateSQL(span, sql)
 	defer span.Finish()
@@ -1133,7 +1134,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	}
 	results = make([]sqltypes.Result, 0, len(queries))
 	for _, bound := range queries {
-		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, transactionID, options)
+		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, transactionID, 0, options)
 		if err != nil {
 			return nil, err
 		}
@@ -1150,7 +1151,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 }
 
 // BeginExecute combines Begin and Execute.
-func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, connectionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	if tsv.enableHotRowProtection {
 		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
 		if err != nil {
@@ -1166,7 +1167,7 @@ func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Targe
 		return nil, 0, nil, err
 	}
 
-	result, err := tsv.Execute(ctx, target, sql, bindVariables, transactionID, options)
+	result, err := tsv.Execute(ctx, target, sql, bindVariables, transactionID, connectionID, options)
 	return result, transactionID, alias, err
 }
 
@@ -1317,6 +1318,37 @@ func (tsv *TabletServer) PurgeMessages(ctx context.Context, target *querypb.Targ
 	})
 }
 
+func (tsv *TabletServer) reserveConnection(ctx context.Context, target *querypb.Target, transactionID int64, options *querypb.ExecuteOptions) (connectionID int64, err error) {
+	panic("implement me")
+}
+
+func (tsv *TabletServer) releaseConnection(ctx context.Context, target *querypb.Target, connectionID int64) (err error) {
+	panic("implement me")
+}
+
+// ReserveExecute reserves a connection and then executes sql on it
+func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+	reservedConnID, err := tsv.reserveConnection(ctx, target, transactionID, options)
+	if err != nil {
+		return &sqltypes.Result{}, err
+	}
+	return tsv.Execute(ctx, target, sql, bindVariables, transactionID, reservedConnID, options)
+}
+
+// ReserveBeginExecute performs a reserve following by BeginExecute
+func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	reservedConnID, err := tsv.reserveConnection(ctx, target, 0, options)
+	if err != nil {
+		return &sqltypes.Result{}, 0, nil, err
+	}
+	return tsv.BeginExecute(ctx, target, sql, bindVariables, reservedConnID, options)
+}
+
+// ReserveRelease releases a reserved connection
+func (tsv *TabletServer) ReserveRelease(ctx context.Context, target *querypb.Target, connectionID int64) error {
+	return tsv.releaseConnection(ctx, target, connectionID)
+}
+
 func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, queryGenerator func() (string, map[string]*querypb.BindVariable, error)) (count int64, err error) {
 	if err = tsv.startRequest(ctx, target, false /* allowOnShutdown */); err != nil {
 		return 0, err
@@ -1340,7 +1372,8 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 			tsv.Rollback(ctx, target, transactionID)
 		}
 	}()
-	qr, err := tsv.Execute(ctx, target, query, bv, transactionID, nil)
+	// TODO(deepthi):  are we sure connectionID can be passed as 0 here?
+	qr, err := tsv.Execute(ctx, target, query, bv, transactionID, 0, nil)
 	if err != nil {
 		return 0, err
 	}

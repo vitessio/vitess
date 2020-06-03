@@ -37,6 +37,7 @@ type QueryClient struct {
 	target        querypb.Target
 	server        *tabletserver.TabletServer
 	transactionID int64
+	connectionID  int64
 }
 
 // NewClient creates a new client for Server.
@@ -169,6 +170,7 @@ func (client *QueryClient) BeginExecute(query string, bindvars map[string]*query
 		&client.target,
 		query,
 		bindvars,
+		client.connectionID,
 		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 	)
 	if err != nil {
@@ -186,6 +188,7 @@ func (client *QueryClient) ExecuteWithOptions(query string, bindvars map[string]
 		query,
 		bindvars,
 		client.transactionID,
+		client.connectionID,
 		options,
 	)
 }

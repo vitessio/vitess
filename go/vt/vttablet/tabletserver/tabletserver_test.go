@@ -344,12 +344,12 @@ func TestTabletServerReconnect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TabletServer.StartService should success but get error: %v", err)
 	}
-	_, err = tsv.Execute(context.Background(), &target, query, nil, 0, nil)
+	_, err = tsv.Execute(context.Background(), &target, query, nil, 0, 0, nil)
 	require.NoError(t, err)
 
 	// make mysql conn fail
 	db.Close()
-	_, err = tsv.Execute(context.Background(), &target, query, nil, 0, nil)
+	_, err = tsv.Execute(context.Background(), &target, query, nil, 0, 0, nil)
 	if err == nil {
 		t.Error("Execute: want error, got nil")
 	}
@@ -365,7 +365,7 @@ func TestTabletServerReconnect(t *testing.T) {
 	dbcfgs = newDBConfigs(db)
 	err = tsv.StartService(target, dbcfgs)
 	require.NoError(t, err)
-	_, err = tsv.Execute(context.Background(), &target, query, nil, 0, nil)
+	_, err = tsv.Execute(context.Background(), &target, query, nil, 0, 0, nil)
 	require.NoError(t, err)
 }
 
@@ -388,28 +388,28 @@ func TestTabletServerTarget(t *testing.T) {
 
 	// query that works
 	db.AddQuery("select * from test_table limit 1000", &sqltypes.Result{})
-	_, err = tsv.Execute(ctx, &target1, "select * from test_table limit 1000", nil, 0, nil)
+	_, err = tsv.Execute(ctx, &target1, "select * from test_table limit 1000", nil, 0, 0, nil)
 	require.NoError(t, err)
 
 	// wrong tablet type
 	target2 := proto.Clone(&target1).(*querypb.Target)
 	target2.TabletType = topodatapb.TabletType_REPLICA
-	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0, nil)
+	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0, 0, nil)
 	want := "invalid tablet type"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
 
 	// set expected target type to MASTER, but also accept REPLICA
 	tsv.SetServingType(topodatapb.TabletType_MASTER, true, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
-	_, err = tsv.Execute(ctx, &target1, "select * from test_table limit 1000", nil, 0, nil)
+	_, err = tsv.Execute(ctx, &target1, "select * from test_table limit 1000", nil, 0, 0, nil)
 	require.NoError(t, err)
-	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0, nil)
+	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0, 0, nil)
 	require.NoError(t, err)
 
 	// wrong keyspace
 	target2 = proto.Clone(&target1).(*querypb.Target)
 	target2.Keyspace = "bad"
-	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0, nil)
+	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0, 0, nil)
 	want = "invalid keyspace bad"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
@@ -417,20 +417,20 @@ func TestTabletServerTarget(t *testing.T) {
 	// wrong shard
 	target2 = proto.Clone(&target1).(*querypb.Target)
 	target2.Shard = "bad"
-	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0, nil)
+	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0, 0, nil)
 	want = "invalid shard bad"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
 
 	// no target
-	_, err = tsv.Execute(ctx, nil, "select * from test_table limit 1000", nil, 0, nil)
+	_, err = tsv.Execute(ctx, nil, "select * from test_table limit 1000", nil, 0, 0, nil)
 	want = "No target"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
 
 	// Disallow all if service is stopped.
 	tsv.StopService()
-	_, err = tsv.Execute(ctx, &target1, "select * from test_table limit 1000", nil, 0, nil)
+	_, err = tsv.Execute(ctx, &target1, "select * from test_table limit 1000", nil, 0, 0, nil)
 	want = "operation not allowed in state NOT_SERVING"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
@@ -478,7 +478,7 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 	txid1, _, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
 
-	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid1, nil)
+	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid1, 0, nil)
 	require.NoError(t, err)
 	err = tsv.Prepare(ctx, &target, txid1, "aa")
 	require.NoError(t, err)
@@ -793,7 +793,7 @@ func TestTabletServerCommitTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("call TabletServer.Begin failed: %v", err)
 	}
-	if _, err := tsv.Execute(ctx, &target, executeSQL, nil, transactionID, nil); err != nil {
+	if _, err := tsv.Execute(ctx, &target, executeSQL, nil, transactionID, 0, nil); err != nil {
 		t.Fatalf("failed to execute query: %s: %s", executeSQL, err)
 	}
 	if err := tsv.Commit(ctx, &target, transactionID); err != nil {
@@ -851,7 +851,7 @@ func TestTabletServerRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("call TabletServer.Begin failed: %v", err)
 	}
-	if _, err := tsv.Execute(ctx, &target, executeSQL, nil, transactionID, nil); err != nil {
+	if _, err := tsv.Execute(ctx, &target, executeSQL, nil, transactionID, 0, nil); err != nil {
 		t.Fatalf("failed to execute query: %s: %v", executeSQL, err)
 	}
 	if err := tsv.Rollback(ctx, &target, transactionID); err != nil {
@@ -867,7 +867,7 @@ func TestTabletServerPrepare(t *testing.T) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	transactionID, _, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
-	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, nil)
+	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, 0, nil)
 	require.NoError(t, err)
 	defer tsv.RollbackPrepared(ctx, &target, "aa", 0)
 	err = tsv.Prepare(ctx, &target, transactionID, "aa")
@@ -882,7 +882,7 @@ func TestTabletServerCommitPrepared(t *testing.T) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	transactionID, _, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
-	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, nil)
+	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, 0, nil)
 	require.NoError(t, err)
 	err = tsv.Prepare(ctx, &target, transactionID, "aa")
 	require.NoError(t, err)
@@ -899,7 +899,7 @@ func TestTabletServerRollbackPrepared(t *testing.T) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	transactionID, _, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
-	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, nil)
+	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, 0, nil)
 	require.NoError(t, err)
 	err = tsv.Prepare(ctx, &target, transactionID, "aa")
 	require.NoError(t, err)
@@ -1279,7 +1279,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		_, tx1, _, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
+		_, tx1, _, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, 0, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
@@ -1294,7 +1294,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 		defer wg.Done()
 
 		<-tx1Started
-		_, tx2, _, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, nil)
+		_, tx2, _, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, 0, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q2, err)
 		}
@@ -1314,7 +1314,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 		defer wg.Done()
 
 		<-tx1Started
-		_, tx3, _, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, nil)
+		_, tx3, _, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, 0, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}
@@ -1351,7 +1351,7 @@ func TestDMLQueryWithoutWhereClause(t *testing.T) {
 
 	db.AddQuery(q+" limit 10001", &sqltypes.Result{})
 
-	_, txid, _, err := tsv.BeginExecute(ctx, &target, q, nil, nil)
+	_, txid, _, err := tsv.BeginExecute(ctx, &target, q, nil, 0, nil)
 	require.NoError(t, err)
 	err = tsv.Commit(ctx, &target, txid)
 	require.NoError(t, err)
@@ -1539,7 +1539,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		_, tx1, _, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
+		_, tx1, _, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, 0, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
@@ -1558,7 +1558,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 		// In that case, we would see less than 3 pending transactions.
 		<-tx1Started
 
-		_, tx2, _, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, nil)
+		_, tx2, _, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, 0, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q2, err)
 		}
@@ -1577,7 +1577,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 		// In that case, we would see less than 3 pending transactions.
 		<-tx1Started
 
-		_, tx3, _, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, nil)
+		_, tx3, _, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, 0, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}
@@ -1675,7 +1675,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		_, tx1, _, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
+		_, tx1, _, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, 0, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
@@ -1691,7 +1691,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 		defer close(tx2Failed)
 
 		<-tx1Started
-		_, _, _, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, nil)
+		_, _, _, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, 0, nil)
 		if err == nil || vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED || err.Error() != "hot row protection: too many queued transactions (1 >= 1) for the same row (table + WHERE clause: 'test_table where pk = 1 and name = 1')" {
 			t.Errorf("tx2 should have failed because there are too many pending requests: %v", err)
 		}
@@ -1858,7 +1858,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		_, tx1, _, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
+		_, tx1, _, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, 0, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
@@ -1878,7 +1878,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 		// Wait until tx1 has started to make the test deterministic.
 		<-tx1Started
 
-		_, _, _, err := tsv.BeginExecute(ctxTx2, &target, q2, bvTx2, nil)
+		_, _, _, err := tsv.BeginExecute(ctxTx2, &target, q2, bvTx2, 0, nil)
 		if err == nil || vterrors.Code(err) != vtrpcpb.Code_CANCELED || err.Error() != "context canceled" {
 			t.Errorf("tx2 should have failed because the context was canceled: %v", err)
 		}
@@ -1895,7 +1895,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 			t.Error(err)
 		}
 
-		_, tx3, _, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, nil)
+		_, tx3, _, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, 0, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}

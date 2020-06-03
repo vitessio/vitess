@@ -306,9 +306,9 @@ type internalTabletConn struct {
 
 // Execute is part of queryservice.QueryService
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (itc *internalTabletConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, connectionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	bindVars = sqltypes.CopyBindVariables(bindVars)
-	reply, err := itc.tablet.qsc.QueryService().Execute(ctx, target, query, bindVars, transactionID, options)
+	reply, err := itc.tablet.qsc.QueryService().Execute(ctx, target, query, bindVars, transactionID, connectionID, options)
 	if err != nil {
 		return nil, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 	}
@@ -410,12 +410,12 @@ func (itc *internalTabletConn) ReadTransaction(ctx context.Context, target *quer
 }
 
 // BeginExecute is part of queryservice.QueryService
-func (itc *internalTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (itc *internalTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, connectionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	transactionID, alias, err := itc.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, nil, err
 	}
-	result, err := itc.Execute(ctx, target, query, bindVars, transactionID, options)
+	result, err := itc.Execute(ctx, target, query, bindVars, transactionID, connectionID, options)
 	return result, transactionID, alias, err
 }
 
@@ -439,6 +439,34 @@ func (itc *internalTabletConn) MessageStream(ctx context.Context, target *queryp
 func (itc *internalTabletConn) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (int64, error) {
 	count, err := itc.tablet.qsc.QueryService().MessageAck(ctx, target, name, ids)
 	return count, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+}
+
+// ReserveExecute is part of queryservice.QueryService
+// We need to copy the bind variables as tablet server will change them.
+func (itc *internalTabletConn) ReserveExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, connectionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+	bindVars = sqltypes.CopyBindVariables(bindVars)
+	reply, err := itc.tablet.qsc.QueryService().ReserveExecute(ctx, target, query, bindVars, connectionID, options)
+	if err != nil {
+		return nil, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+	}
+	return reply, nil
+}
+
+// ReserveBeginExecute is part of queryservice.QueryService
+// We need to copy the bind variables as tablet server will change them.
+func (itc *internalTabletConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	bindVars = sqltypes.CopyBindVariables(bindVars)
+	reply, transactionID, alias, err := itc.tablet.qsc.QueryService().ReserveBeginExecute(ctx, target, query, bindVars, options)
+	if err != nil {
+		return nil, 0, nil, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+	}
+	return reply, transactionID, alias, nil
+}
+
+// ReserveRelease is part of queryservice.QueryService
+// We need to copy the bind variables as tablet server will change them.
+func (itc *internalTabletConn) ReserveRelease(ctx context.Context, target *querypb.Target, connectionID int64) error {
+	return itc.tablet.qsc.QueryService().ReserveRelease(ctx, target, connectionID)
 }
 
 // Handle panic is part of the QueryService interface.

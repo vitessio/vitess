@@ -165,11 +165,11 @@ func (ws *wrappedService) ReadTransaction(ctx context.Context, target *querypb.T
 	return metadata, err
 }
 
-func (ws *wrappedService) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (qr *sqltypes.Result, err error) {
+func (ws *wrappedService) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, connectionID int64, options *querypb.ExecuteOptions) (qr *sqltypes.Result, err error) {
 	inTransaction := (transactionID != 0)
 	err = ws.wrapper(ctx, target, ws.impl, "Execute", inTransaction, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
-		qr, innerErr = conn.Execute(ctx, target, query, bindVars, transactionID, options)
+		qr, innerErr = conn.Execute(ctx, target, query, bindVars, transactionID, connectionID, options)
 		// You cannot retry if you're in a transaction.
 		retryable := canRetry(ctx, innerErr) && (!inTransaction)
 		return retryable, innerErr
@@ -202,10 +202,10 @@ func (ws *wrappedService) ExecuteBatch(ctx context.Context, target *querypb.Targ
 	return qrs, err
 }
 
-func (ws *wrappedService) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (qr *sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
+func (ws *wrappedService) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, connectionID int64, options *querypb.ExecuteOptions) (qr *sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
 	err = ws.wrapper(ctx, target, ws.impl, "BeginExecute", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
-		qr, transactionID, alias, innerErr = conn.BeginExecute(ctx, target, query, bindVars, options)
+		qr, transactionID, alias, innerErr = conn.BeginExecute(ctx, target, query, bindVars, connectionID, options)
 		return canRetry(ctx, innerErr), innerErr
 	})
 	return qr, transactionID, alias, err
@@ -234,6 +234,35 @@ func (ws *wrappedService) MessageAck(ctx context.Context, target *querypb.Target
 		return canRetry(ctx, innerErr), innerErr
 	})
 	return count, err
+}
+
+func (ws *wrappedService) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (qr *sqltypes.Result, err error) {
+	inTransaction := (transactionID != 0)
+	err = ws.wrapper(ctx, target, ws.impl, "ReserveExecute", inTransaction, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
+		var innerErr error
+		qr, innerErr = conn.ReserveExecute(ctx, target, sql, bindVariables, transactionID, options)
+		// You cannot retry if you're in a transaction.
+		retryable := canRetry(ctx, innerErr) && (!inTransaction)
+		return retryable, innerErr
+	})
+	return qr, err
+
+}
+
+func (ws *wrappedService) ReserveBeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (qr *sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
+	err = ws.wrapper(ctx, target, ws.impl, "ReserveBeginExecute", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
+		var innerErr error
+		qr, transactionID, alias, innerErr = conn.ReserveBeginExecute(ctx, target, sql, bindVariables, options)
+		return canRetry(ctx, innerErr), innerErr
+	})
+	return qr, transactionID, alias, err
+}
+
+func (ws *wrappedService) ReserveRelease(ctx context.Context, target *querypb.Target, connectionID int64) error {
+	return ws.wrapper(ctx, target, ws.impl, "ReserveRelease", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
+		innerErr := conn.ReserveRelease(ctx, target, connectionID)
+		return canRetry(ctx, innerErr), innerErr
+	})
 }
 
 func (ws *wrappedService) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
