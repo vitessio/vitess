@@ -172,9 +172,9 @@ func (mariadbFlavor) status(c *Conn) (SlaveStatus, error) {
 
 	readMasterLogPosStr := resultMap["Read_Master_Log_Pos"]
 	file = resultMap["Master_Log_File"]
-	if file != "" {
+	if file != "" && readMasterLogPosStr != "" {
 		fileRelayPos, err := strconv.Atoi(readMasterLogPosStr)
-		if err != nil && readMasterLogPosStr != "" {
+		if err != nil {
 			return SlaveStatus{}, fmt.Errorf("invalid ReadMasterLogPos GTID (%v): expecting pos to be an integer", readMasterLogPosStr)
 		}
 
