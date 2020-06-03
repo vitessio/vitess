@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
@@ -250,16 +252,13 @@ func TestMaxMemoryRows(t *testing.T) {
 	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
 	rss, _, err := res.ResolveDestinations(ctx, "TestMaxMemoryRows", topodatapb.TabletType_REPLICA, nil,
 		[]key.Destination{key.DestinationShard("0"), key.DestinationShard("1")})
-	if err != nil {
-		t.Fatalf("ResolveDestination(0) failed: %v", err)
-	}
+	require.NoError(t, err)
+
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 
 	_, err = sc.Execute(ctx, "query1", nil, rss, session, true, nil, false)
 	want := "in-memory row count exceeded allowed limit of 3"
-	if err == nil || err.Error() != want {
-		t.Errorf("Execute(): %v, want %v", err, want)
-	}
+	assert.EqualError(t, err, want)
 
 	queries := []*querypb.BoundQuery{{
 		Sql:           "query1",
@@ -269,10 +268,7 @@ func TestMaxMemoryRows(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	_, errs := sc.ExecuteMultiShard(ctx, rss, queries, session, false, false)
-	err = errs[0]
-	if err == nil || err.Error() != want {
-		t.Errorf("Execute(): %v, want %v", err, want)
-	}
+	assert.EqualError(t, errs[0], want)
 }
 
 func TestMultiExecs(t *testing.T) {
@@ -499,19 +495,18 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	sbc0 = hc.AddTestTablet("aa", "0", 1, "TestScatterConnQueryNotInTransaction", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "1", 1, "TestScatterConnQueryNotInTransaction", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	noTxSession := NewSafeSession(&vtgatepb.Session{InTransaction: false})
 
 	res = srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
 	rss0, err = res.ResolveDestination(ctx, "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("0"))
-	if err != nil {
-		t.Fatalf("ResolveDestination(0) failed: %v", err)
-	}
+	require.NoError(t, err)
 	rss1, err = res.ResolveDestination(ctx, "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShards([]string{"0", "1"}))
-	if err != nil {
-		t.Fatalf("ResolveDestination(1) failed: %v", err)
-	}
+	require.NoError(t, err)
 
-	sc.Execute(ctx, "query1", nil, rss0, session, false, nil, false)
-	sc.Execute(ctx, "query1", nil, rss1, session, true, nil, false)
+	_, err = sc.Execute(ctx, "query1", nil, rss0, session, false, nil, false)
+	require.NoError(t, err)
+	_, err = sc.Execute(ctx, "query1", nil, rss1, noTxSession, true, nil, false)
+	require.NoError(t, err)
 
 	wantSession = vtgatepb.Session{
 		InTransaction: true,
@@ -528,13 +523,13 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	if !proto.Equal(&wantSession, session.Session) {
 		t.Errorf("want\n%+v\ngot\n%+v", wantSession, *session.Session)
 	}
-	sc.txConn.Commit(ctx, session)
-	{
-		execCount0 := sbc0.ExecCount.Get()
-		execCount1 := sbc1.ExecCount.Get()
-		if execCount0 != 2 || execCount1 != 1 {
-			t.Errorf("want 2/1, got %d/%d", execCount0, execCount1)
-		}
+	err = sc.txConn.Commit(ctx, session)
+	require.NoError(t, err)
+
+	execCount0 := sbc0.ExecCount.Get()
+	execCount1 := sbc1.ExecCount.Get()
+	if execCount0 != 2 || execCount1 != 1 {
+		t.Errorf("want 2/1, got %d/%d", execCount0, execCount1)
 	}
 	if commitCount := sbc0.CommitCount.Get(); commitCount != 1 {
 		t.Errorf("want 1, got %d", commitCount)

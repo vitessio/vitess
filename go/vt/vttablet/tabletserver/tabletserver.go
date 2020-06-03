@@ -1089,7 +1089,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 		}
 	}
 
-	allowOnShutdown := (transactionID != 0)
+	allowOnShutdown := transactionID != 0
 	// TODO(sougou): Convert startRequest/endRequest pattern to use wrapper
 	// function tsv.execRequest() instead.
 	// Note that below we always return "err" right away and do not call

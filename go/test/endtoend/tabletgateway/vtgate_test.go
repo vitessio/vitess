@@ -75,11 +75,20 @@ func verifyVtgateVariables(t *testing.T, url string) {
 	assert.True(t, isMasterTabletPresent(healthCheckConnection), "Atleast one master tablet needs to be present")
 }
 
-/*
--begin on replica should explicitly say read only
--tabletserver planner should stop dml (if easy and reasonable)
--vtgate planbuilder should not send dml to replicas
-*/
+func retryNTimes(t *testing.T, maxRetries int, f func() bool) {
+	i := 0
+	for {
+		res := f()
+		if res {
+			return
+		}
+		if i > maxRetries {
+			t.Fatalf("retried %d times and failed", maxRetries)
+			return
+		}
+		i++
+	}
+}
 
 func TestReplicaTransactions(t *testing.T) {
 	// TODO(deepthi): this test seems to depend on previous test. Fix tearDown so that tests are independent
@@ -89,39 +98,56 @@ func TestReplicaTransactions(t *testing.T) {
 	ctx := context.Background()
 	masterConn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
+	defer masterConn.Close()
+
 	replicaConn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
-	defer masterConn.Close()
 	defer replicaConn.Close()
+
+	replicaConn2, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer replicaConn2.Close()
+
+	fetchAllCustomers := "select id, email from customer"
+	checkCustomerRows := func(expectedRows int) func() bool {
+		return func() bool {
+			result := exec(t, replicaConn2, fetchAllCustomers, "")
+			return len(result.Rows) == expectedRows
+		}
+	}
+
+	// point the replica connections to the replica target
+	exec(t, replicaConn, "use @replica", "")
+	exec(t, replicaConn2, "use @replica", "")
 
 	// insert a row using master
 	exec(t, masterConn, "insert into customer(id, email) values(1,'email1')", "")
-	time.Sleep(1 * time.Second) // we sleep for a bit to make sure that the replication catches up
+
+	// we'll run this query a number of times, and then give up if the row count never reaches this value
+	retryNTimes(t, 10 /*maxRetries*/, checkCustomerRows(1))
 
 	// after a short pause, SELECT the data inside a tx on a replica
-	exec(t, replicaConn, "use @replica", "")
 	// begin transaction on replica
 	exec(t, replicaConn, "begin", "")
-	qr := exec(t, replicaConn, "select id, email from customer", "")
+	qr := exec(t, replicaConn, fetchAllCustomers, "")
 	assert.Equal(t, `[[INT64(1) VARCHAR("email1")]]`, fmt.Sprintf("%v", qr.Rows), "select returned wrong result")
 
 	// insert more data on master using a transaction
 	exec(t, masterConn, "begin", "")
 	exec(t, masterConn, "insert into customer(id, email) values(2,'email2')", "")
 	exec(t, masterConn, "commit", "")
-	time.Sleep(1 * time.Second)
+
+	retryNTimes(t, 10 /*maxRetries*/, checkCustomerRows(2))
 
 	// replica doesn't see new row because it is in a transaction
-	qr2 := exec(t, replicaConn, "select id, email from customer", "")
+	qr2 := exec(t, replicaConn, fetchAllCustomers, "")
 	assert.Equal(t, qr.Rows, qr2.Rows)
 
 	// replica should see new row after closing the transaction
 	exec(t, replicaConn, "commit", "")
 
-	qr3 := exec(t, replicaConn, "select id, email from customer", "")
+	qr3 := exec(t, replicaConn, fetchAllCustomers, "")
 	assert.Equal(t, `[[INT64(1) VARCHAR("email1")] [INT64(2) VARCHAR("email2")]]`, fmt.Sprintf("%v", qr3.Rows), "we are not seeing the updates after closing the replica transaction")
-	// since we can't do INSERT/DELETE/UPDATE, commit and rollback both just close the transaction
-	exec(t, replicaConn, "rollback", "")
 
 	// begin transaction on replica
 	exec(t, replicaConn, "begin", "")
@@ -144,25 +170,25 @@ func TestReplicaTransactions(t *testing.T) {
 
 	// start another transaction
 	exec(t, replicaConn, "begin", "")
-	exec(t, replicaConn, "select id, email from customer", "")
+	exec(t, replicaConn, fetchAllCustomers, "")
 	// bring down the tablet and try to select again
 	replicaTablet := clusterInstance.Keyspaces[0].Shards[0].Replica()
 	// this gives us a "signal: killed" error, ignore it
 	_ = replicaTablet.VttabletProcess.TearDown()
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
-	exec(t, replicaConn, "select id, email from customer", "is either down or nonexistent")
+	exec(t, replicaConn, fetchAllCustomers, "is either down or nonexistent")
 
 	// bring up tablet again
 	// query using same transaction will fail
 	_ = replicaTablet.VttabletProcess.Setup()
-	exec(t, replicaConn, "select id, email from customer", "not found")
+	exec(t, replicaConn, fetchAllCustomers, "not found")
 	exec(t, replicaConn, "commit", "")
 	// create a new connection, should be able to query again
 	replicaConn, err = mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	exec(t, replicaConn, "begin", "")
-	qr4 := exec(t, replicaConn, "select id, email from customer", "")
+	qr4 := exec(t, replicaConn, fetchAllCustomers, "")
 	assert.Equal(t, `[[INT64(1) VARCHAR("email1")] [INT64(2) VARCHAR("email2")]]`, fmt.Sprintf("%v", qr4.Rows), "we are not able to reconnect after restart")
 }
 

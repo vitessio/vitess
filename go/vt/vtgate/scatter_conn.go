@@ -21,6 +21,7 @@ import (
 	"io"
 	"sync"
 	"time"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -173,6 +174,10 @@ func (stc *ScatterConn) Execute(
 			default:
 				var qs queryservice.QueryService
 				_, usingLegacy := rs.Gateway.(*DiscoveryGateway)
+				if transactionID != 0 && usingLegacy && rs.Target.TabletType != topodatapb.TabletType_MASTER {
+					return 0, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "replica transactions not supported using the legacy healthcheck")
+				}
+
 				if usingLegacy || transactionID == 0 {
 					qs = rs.Gateway
 				} else {
