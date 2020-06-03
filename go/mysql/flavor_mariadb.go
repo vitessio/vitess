@@ -20,10 +20,10 @@ package mysql
 import (
 	"fmt"
 	"io"
-	"strconv"
 	"time"
 
 	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -154,34 +154,6 @@ func (mariadbFlavor) status(c *Conn) (SlaveStatus, error) {
 	status.Position.GTIDSet, err = parseMariadbGTIDSet(resultMap["Gtid_Slave_Pos"])
 	if err != nil {
 		return SlaveStatus{}, vterrors.Wrapf(err, "SlaveStatus can't parse MariaDB GTID (Gtid_Slave_Pos: %#v)", resultMap["Gtid_Slave_Pos"])
-	}
-
-	execMasterLogPosStr := resultMap["Exec_Master_Log_Pos"]
-	file := resultMap["Relay_Master_Log_File"]
-	if file != "" && execMasterLogPosStr != "" {
-		filePos, err := strconv.Atoi(execMasterLogPosStr)
-		if err != nil {
-			return SlaveStatus{}, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", execMasterLogPosStr)
-		}
-
-		status.FilePosition.GTIDSet = filePosGTID{
-			file: file,
-			pos:  filePos,
-		}
-	}
-
-	readMasterLogPosStr := resultMap["Read_Master_Log_Pos"]
-	file = resultMap["Master_Log_File"]
-	if file != "" && readMasterLogPosStr != "" {
-		fileRelayPos, err := strconv.Atoi(readMasterLogPosStr)
-		if err != nil {
-			return SlaveStatus{}, fmt.Errorf("invalid ReadMasterLogPos GTID (%v): expecting pos to be an integer", readMasterLogPosStr)
-		}
-
-		status.FileRelayLogPosition.GTIDSet = filePosGTID{
-			file: file,
-			pos:  fileRelayPos,
-		}
 	}
 
 	return status, nil
