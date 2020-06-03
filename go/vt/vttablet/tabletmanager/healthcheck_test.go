@@ -717,13 +717,12 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Run TER to turn us into a proper master, wait for it to finish.
+	// Change to master.
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 19 * time.Second
-	if err := agent.TabletExternallyReparented(ctx, "unused_id"); err != nil {
+	if err := agent.ChangeType(ctx, topodatapb.TabletType_MASTER); err != nil {
 		t.Fatalf("TabletExternallyReparented failed: %v", err)
 	}
-	<-agent.finalizeReparentCtx.Done()
-	// It is not enough to wait for finalizeReparentCtx to be done, we have to wait for shard_sync to finish
+	// Wait for shard_sync to finish
 	startTime := time.Now()
 	for {
 		if time.Since(startTime) > 10*time.Second /* timeout */ {

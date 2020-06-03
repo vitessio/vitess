@@ -818,26 +818,6 @@ func agentRPCTestStartSlavePanic(ctx context.Context, t *testing.T, client tmcli
 	expectHandleRPCPanic(t, "StartSlave", true /*verbose*/, err)
 }
 
-var testTabletExternallyReparentedCalled = false
-
-func (fra *fakeRPCAgent) TabletExternallyReparented(ctx context.Context, externalID string) error {
-	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
-	}
-	testTabletExternallyReparentedCalled = true
-	return nil
-}
-
-func agentRPCTestTabletExternallyReparented(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.TabletExternallyReparented(ctx, tablet, "")
-	compareError(t, "TabletExternallyReparented", err, true, testTabletExternallyReparentedCalled)
-}
-
-func agentRPCTestTabletExternallyReparentedPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.TabletExternallyReparented(ctx, tablet, "")
-	expectHandleRPCPanic(t, "TabletExternallyReparented", false /*verbose*/, err)
-}
-
 var testGetSlavesResult = []string{"slave1", "slave2"}
 
 func (fra *fakeRPCAgent) GetSlaves(ctx context.Context) ([]string, error) {
@@ -1295,7 +1275,6 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	agentRPCTestStopSlaveMinimum(ctx, t, client, tablet)
 	agentRPCTestStartSlave(ctx, t, client, tablet)
 	agentRPCTestStartSlaveUntilAfter(ctx, t, client, tablet)
-	agentRPCTestTabletExternallyReparented(ctx, t, client, tablet)
 	agentRPCTestGetSlaves(ctx, t, client, tablet)
 
 	// VReplication methods
@@ -1350,7 +1329,6 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	agentRPCTestStopSlavePanic(ctx, t, client, tablet)
 	agentRPCTestStopSlaveMinimumPanic(ctx, t, client, tablet)
 	agentRPCTestStartSlavePanic(ctx, t, client, tablet)
-	agentRPCTestTabletExternallyReparentedPanic(ctx, t, client, tablet)
 	agentRPCTestGetSlavesPanic(ctx, t, client, tablet)
 
 	// VReplication methods
