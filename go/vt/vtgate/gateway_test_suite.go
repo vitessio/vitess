@@ -43,7 +43,7 @@ import (
 
 // CreateFakeServers returns the servers to use for these tests
 func CreateFakeServers(t *testing.T) (*tabletconntest.FakeQueryService, *topo.Server, string) {
-	cell := "local"
+	cell := tabletconntest.TestCell
 
 	// the FakeServer is just slightly modified
 	f := tabletconntest.CreateFakeServer(t)
@@ -104,5 +104,6 @@ func TestSuite(t *testing.T, name string, g Gateway, f *tabletconntest.FakeQuery
 		Keyspace: tabletconntest.TestTarget.Keyspace,
 		Shard:    tabletconntest.TestTarget.Shard,
 		Type:     tabletconntest.TestTarget.TabletType,
+		Alias:    tabletconntest.TestAlias,
 	}, f, nil)
 }

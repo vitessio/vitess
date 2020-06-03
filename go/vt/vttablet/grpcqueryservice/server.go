@@ -91,14 +91,14 @@ func (q *query) Begin(ctx context.Context, request *querypb.BeginRequest) (respo
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	// ignore returned TabletAlias here, we are not sending it in the grpc response
-	transactionID, _, err := q.server.Begin(ctx, request.Target, request.Options)
+	transactionID, alias, err := q.server.Begin(ctx, request.Target, request.Options)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
 
 	return &querypb.BeginResponse{
 		TransactionId: transactionID,
+		TabletAlias:   alias,
 	}, nil
 }
 
@@ -249,14 +249,14 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	// ignore returned TabletAlias here, we are not sending it in the grpc response
-	result, transactionID, _, err := q.server.BeginExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.Options)
+	result, transactionID, alias, err := q.server.BeginExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.Options)
 	if err != nil {
 		// if we have a valid transactionID, return the error in-band
 		if transactionID != 0 {
 			return &querypb.BeginExecuteResponse{
 				Error:         vterrors.ToVTRPC(err),
 				TransactionId: transactionID,
+				TabletAlias:   alias,
 			}, nil
 		}
 		return nil, vterrors.ToGRPC(err)
@@ -264,6 +264,7 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 	return &querypb.BeginExecuteResponse{
 		Result:        sqltypes.ResultToProto3(result),
 		TransactionId: transactionID,
+		TabletAlias:   alias,
 	}, nil
 }
 
@@ -274,14 +275,14 @@ func (q *query) BeginExecuteBatch(ctx context.Context, request *querypb.BeginExe
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	// ignore returned TabletAlias here, we are not sending it in the grpc response
-	results, transactionID, _, err := q.server.BeginExecuteBatch(ctx, request.Target, request.Queries, request.AsTransaction, request.Options)
+	results, transactionID, alias, err := q.server.BeginExecuteBatch(ctx, request.Target, request.Queries, request.AsTransaction, request.Options)
 	if err != nil {
 		// if we have a valid transactionID, return the error in-band
 		if transactionID != 0 {
 			return &querypb.BeginExecuteBatchResponse{
 				Error:         vterrors.ToVTRPC(err),
 				TransactionId: transactionID,
+				TabletAlias:   alias,
 			}, nil
 		}
 		return nil, vterrors.ToGRPC(err)
@@ -289,6 +290,7 @@ func (q *query) BeginExecuteBatch(ctx context.Context, request *querypb.BeginExe
 	return &querypb.BeginExecuteBatchResponse{
 		Results:       sqltypes.ResultsToProto3(results),
 		TransactionId: transactionID,
+		TabletAlias:   alias,
 	}, nil
 }
 

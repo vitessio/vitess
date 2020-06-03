@@ -214,6 +214,10 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context, target *querypb.Target, 
 	if err != nil {
 		return 0, nil, tabletconn.ErrorFromGRPC(err)
 	}
+	// For backwards compatibility, we don't require tablet alias to be present in the response
+	// TODO(deepthi): After 7.0 change this
+	//	return br.TransactionId, br.TabletAlias, nil
+	// also assert that br.TabletAlias == conn.tablet.Alias
 	return br.TransactionId, conn.tablet.Alias, nil
 }
 
