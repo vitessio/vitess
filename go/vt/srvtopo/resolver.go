@@ -73,7 +73,7 @@ type ResolvedShard struct {
 	// Target describes the target shard.
 	Target *querypb.Target
 
-	// QueryService is the actual way to execute the query.
+	// Gateway is the way to execute a query on this shard
 	Gateway Gateway
 }
 
