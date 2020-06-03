@@ -22,17 +22,14 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -227,21 +224,7 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	// This section is similar to changeTypeLocked except that we don't
-	// invoke runHealthCheck. This is because the tabletserver cannot come
-	// up until the database is created, which happens after the replicas
-	// are pointed at this new master.
-	startTime := time.Now()
-	_, err = topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, logutil.TimeToProto(startTime))
-	if err != nil {
-		return "", err
-	}
-	// We only update agent's masterTermStartTime if we were able to update the topo.
-	// This ensures that in case of a failure, we are never in a situation where the
-	// tablet's timestamp is ahead of the topo's timestamp.
-	agent.setMasterTermStartTime(startTime)
-	// and refresh our state
-	if err := agent.refreshTablet(ctx, "InitMaster"); err != nil {
+	if err := agent.changeTypeLocked(ctx, topodatapb.TabletType_MASTER); err != nil {
 		return "", err
 	}
 	return mysql.EncodePosition(pos), nil

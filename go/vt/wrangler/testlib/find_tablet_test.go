@@ -18,7 +18,6 @@ package testlib
 
 import (
 	"testing"
-	"time"
 
 	"golang.org/x/net/context"
 
@@ -27,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -35,8 +33,6 @@ import (
 )
 
 func TestFindTablet(t *testing.T) {
-	tabletmanager.SetReparentFlags(time.Minute /* finalizeTimeout */)
-
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
