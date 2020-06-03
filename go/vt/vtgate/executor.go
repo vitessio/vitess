@@ -97,18 +97,7 @@ type Executor struct {
 	plans        *cache.LRUCache
 	vschemaStats *VSchemaStats
 
-	// this is a way for us to be able to write tests with one method,
-	// and run in production with an entierly different one
-	exec executeMethod
-
 	vm *VSchemaManager
-}
-
-// this interface is here to allow us to have two different implementations of the same method,
-// and use the legacy one in production until we are comfortable with the new code.
-// it's temporary and should be removed once we can do everything using the new planning strategy
-type executeMethod interface {
-	execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error)
 }
 
 var executorOnce sync.Once
@@ -128,10 +117,6 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 		plans:       cache.NewLRUCache(queryPlanCacheSize),
 		normalize:   normalize,
 		streamSize:  streamSize,
-	}
-	e.exec = &fallbackExecutor{
-		exA: &planExecute{e: e},
-		exB: e,
 	}
 
 	vschemaacl.Init()
@@ -161,7 +146,7 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 	defer span.Finish()
 
 	logStats := NewLogStats(ctx, method, sql, bindVars)
-	stmtType, result, err := e.exec.execute(ctx, safeSession, sql, bindVars, logStats)
+	stmtType, result, err := e.execute(ctx, safeSession, sql, bindVars, logStats)
 	logStats.Error = err
 	saveSessionStats(safeSession, stmtType, result, err)
 	if result != nil && len(result.Rows) > *warnMemoryRows {
@@ -190,6 +175,14 @@ func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType
 }
 
 func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
+	stmtType, qr, err := e.newExecute(ctx, safeSession, sql, bindVars, logStats)
+	if err == planbuilder.ErrPlanNotSupported {
+		return e.legacyExecute(ctx, safeSession, sql, bindVars, logStats)
+	}
+	return stmtType, qr, err
+}
+
+func (e *Executor) legacyExecute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
 	//Start an implicit transaction if necessary.
 	if !safeSession.Autocommit && !safeSession.InTransaction() {
 		if err := e.txConn.Begin(ctx, safeSession); err != nil {
@@ -1546,7 +1539,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 
 	switch stmtType {
 	case sqlparser.StmtSelect:
-		return e.handlePrepare(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, logStats)
+		return e.handlePrepare(ctx, safeSession, sql, bindVars, logStats)
 	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
 		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtComment, sqlparser.StmtExplain:
 		return nil, nil
@@ -1560,7 +1553,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
 
-func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) ([]*querypb.Field, error) {
+func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) ([]*querypb.Field, error) {
 	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver)
@@ -1596,11 +1589,11 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 }
 
 // ExecuteMultiShard implements the IExecutor interface
-func (e *Executor) ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, tabletType topodatapb.TabletType, session *SafeSession, notInTransaction bool, autocommit bool) (qr *sqltypes.Result, errs []error) {
-	return e.scatterConn.ExecuteMultiShard(ctx, rss, queries, tabletType, session, notInTransaction, autocommit)
+func (e *Executor) ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, notInTransaction bool, autocommit bool) (qr *sqltypes.Result, errs []error) {
+	return e.scatterConn.ExecuteMultiShard(ctx, rss, queries, session, notInTransaction, autocommit)
 }
 
 // StreamExecuteMulti implements the IExecutor interface
-func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
-	return e.scatterConn.StreamExecuteMulti(ctx, query, rss, vars, tabletType, options, callback)
+func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
+	return e.scatterConn.StreamExecuteMulti(ctx, query, rss, vars, options, callback)
 }

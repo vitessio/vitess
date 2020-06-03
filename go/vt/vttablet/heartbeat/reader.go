@@ -70,11 +70,11 @@ type Reader struct {
 // NewReader returns a new heartbeat reader.
 func NewReader(env tabletenv.Env) *Reader {
 	config := env.Config()
-	if config.HeartbeatIntervalMilliseconds == 0 {
+	if config.HeartbeatIntervalSeconds == 0 {
 		return &Reader{}
 	}
 
-	heartbeatInterval := time.Duration(config.HeartbeatIntervalMilliseconds) * time.Millisecond
+	heartbeatInterval := time.Duration(config.HeartbeatIntervalSeconds * 1e9)
 	return &Reader{
 		env:      env,
 		enabled:  true,

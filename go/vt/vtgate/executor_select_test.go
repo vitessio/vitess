@@ -42,7 +42,7 @@ import (
 )
 
 func TestSelectNext(t *testing.T) {
-	executor, _, _, sbclookup := createLegacyExecutorEnv()
+	executor, _, _, sbclookup := createExecutorEnv()
 
 	query := "select next :n values from user_seq"
 	bv := map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)}
@@ -52,13 +52,14 @@ func TestSelectNext(t *testing.T) {
 		Sql:           query,
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)},
 	}}
+
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries:\n%v, want\n%v\n", sbclookup.Queries, wantQueries)
 	}
 }
 
 func TestSelectDBA(t *testing.T) {
-	executor, sbc1, _, _ := createLegacyExecutorEnv()
+	executor, sbc1, _, _ := createExecutorEnv()
 
 	query := "select * from INFORMATION_SCHEMA.foo"
 	_, err := executor.Execute(
@@ -79,7 +80,7 @@ func TestSelectDBA(t *testing.T) {
 }
 
 func TestUnsharded(t *testing.T) {
-	executor, _, _, sbclookup := createLegacyExecutorEnv()
+	executor, _, _, sbclookup := createExecutorEnv()
 
 	_, err := executorExec(executor, "select id from music_user_map where id = 1", nil)
 	require.NoError(t, err)
@@ -93,7 +94,7 @@ func TestUnsharded(t *testing.T) {
 }
 
 func TestUnshardedComments(t *testing.T) {
-	executor, _, _, sbclookup := createLegacyExecutorEnv()
+	executor, _, _, sbclookup := createExecutorEnv()
 
 	_, err := executorExec(executor, "/* leading */ select id from music_user_map where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
@@ -142,7 +143,7 @@ func TestUnshardedComments(t *testing.T) {
 }
 
 func TestStreamUnsharded(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -157,7 +158,7 @@ func TestStreamUnsharded(t *testing.T) {
 }
 
 func TestStreamBuffering(t *testing.T) {
-	executor, _, _, sbclookup := createLegacyExecutorEnv()
+	executor, _, _, sbclookup := createExecutorEnv()
 
 	// This test is similar to TestStreamUnsharded except that it returns a Result > 10 bytes,
 	// such that the splitting of the Result into multiple Result responses gets tested.
@@ -222,28 +223,27 @@ func TestStreamBuffering(t *testing.T) {
 
 func TestSelectLastInsertId(t *testing.T) {
 	masterSession.LastInsertId = 52
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	executor.normalize = true
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
 	sql := "select last_insert_id()"
-	masterSession.LastInsertId = 42
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "last_insert_id()", Type: sqltypes.Uint64},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewUint64(42),
+			sqltypes.NewUint64(52),
 		}},
 	}
 	require.NoError(t, err)
 	utils.MustMatch(t, result, wantResult, "Mismatch")
 }
 
-func TestSelectUserDefinedVariable(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
+func TestSelectUserDefindVariable(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
 	executor.normalize = true
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -265,7 +265,7 @@ func TestSelectUserDefinedVariable(t *testing.T) {
 }
 
 func TestFoundRows(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	executor.normalize = true
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -289,7 +289,7 @@ func TestFoundRows(t *testing.T) {
 }
 
 func TestRowCount(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	executor.normalize = true
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -318,7 +318,7 @@ func testRowCount(t *testing.T, executor *Executor, wantRowCount int64) {
 }
 
 func TestSelectLastInsertIdInUnion(t *testing.T) {
-	executor, sbc1, _, _ := createLegacyExecutorEnv()
+	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true
 	sql := "select last_insert_id() as id union select id from user"
 	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
@@ -332,7 +332,7 @@ func TestSelectLastInsertIdInUnion(t *testing.T) {
 }
 
 func TestSelectLastInsertIdInWhere(t *testing.T) {
-	executor, _, _, lookup := createLegacyExecutorEnv()
+	executor, _, _, lookup := createExecutorEnv()
 	executor.normalize = true
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -349,7 +349,7 @@ func TestSelectLastInsertIdInWhere(t *testing.T) {
 }
 
 func TestLastInsertIDInVirtualTable(t *testing.T) {
-	executor, sbc1, _, _ := createLegacyExecutorEnv()
+	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -375,7 +375,7 @@ func TestLastInsertIDInVirtualTable(t *testing.T) {
 }
 
 func TestLastInsertIDInSubQueryExpression(t *testing.T) {
-	executor, sbc1, _, _ := createLegacyExecutorEnv()
+	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -401,7 +401,7 @@ func TestLastInsertIDInSubQueryExpression(t *testing.T) {
 }
 
 func TestSelectDatabase(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	executor.normalize = true
 	sql := "select database()"
 	newSession := *masterSession
@@ -427,7 +427,7 @@ func TestSelectDatabase(t *testing.T) {
 }
 
 func TestSelectBindvars(t *testing.T) {
-	executor, sbc1, sbc2, lookup := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, lookup := createExecutorEnv()
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -540,7 +540,7 @@ func TestSelectBindvars(t *testing.T) {
 }
 
 func TestSelectEqual(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
 	_, err := executorExec(executor, "select id from user where id = 1", nil)
 	require.NoError(t, err)
@@ -611,7 +611,7 @@ func TestSelectEqual(t *testing.T) {
 }
 
 func TestSelectDual(t *testing.T) {
-	executor, sbc1, _, lookup := createLegacyExecutorEnv()
+	executor, sbc1, _, lookup := createExecutorEnv()
 
 	_, err := executorExec(executor, "select @@aa.bb from dual", nil)
 	require.NoError(t, err)
@@ -631,7 +631,7 @@ func TestSelectDual(t *testing.T) {
 }
 
 func TestSelectComments(t *testing.T) {
-	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, _ := createExecutorEnv()
 
 	_, err := executorExec(executor, "/* leading */ select id from user where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
@@ -649,7 +649,7 @@ func TestSelectComments(t *testing.T) {
 }
 
 func TestSelectNormalize(t *testing.T) {
-	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, _ := createExecutorEnv()
 	executor.normalize = true
 
 	_, err := executorExec(executor, "/* leading */ select id from user where id = 1 /* trailing */", nil)
@@ -685,7 +685,7 @@ func TestSelectNormalize(t *testing.T) {
 }
 
 func TestSelectCaseSensitivity(t *testing.T) {
-	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, _ := createExecutorEnv()
 
 	_, err := executorExec(executor, "select Id from user where iD = 1", nil)
 	require.NoError(t, err)
@@ -703,7 +703,7 @@ func TestSelectCaseSensitivity(t *testing.T) {
 }
 
 func TestStreamSelectEqual(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 
 	sql := "select id from user where id = 1"
 	result, err := executorStream(executor, sql)
@@ -715,7 +715,7 @@ func TestStreamSelectEqual(t *testing.T) {
 }
 
 func TestSelectKeyRange(t *testing.T) {
-	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, _ := createExecutorEnv()
 
 	_, err := executorExec(executor, "select krcol_unique, krcol from keyrange_table where krcol = 1", nil)
 	require.NoError(t, err)
@@ -733,7 +733,7 @@ func TestSelectKeyRange(t *testing.T) {
 }
 
 func TestSelectKeyRangeUnique(t *testing.T) {
-	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, _ := createExecutorEnv()
 
 	_, err := executorExec(executor, "select krcol_unique, krcol from keyrange_table where krcol_unique = 1", nil)
 	require.NoError(t, err)
@@ -751,7 +751,7 @@ func TestSelectKeyRangeUnique(t *testing.T) {
 }
 
 func TestSelectIN(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
 	// Constant in IN clause is just a number, not a bind variable.
 	_, err := executorExec(executor, "select id from user where id in (1)", nil)
@@ -847,7 +847,7 @@ func TestSelectIN(t *testing.T) {
 }
 
 func TestStreamSelectIN(t *testing.T) {
-	executor, _, _, sbclookup := createLegacyExecutorEnv()
+	executor, _, _, sbclookup := createExecutorEnv()
 
 	sql := "select id from user where id in (1)"
 	result, err := executorStream(executor, sql)
@@ -892,7 +892,7 @@ func TestStreamSelectIN(t *testing.T) {
 }
 
 func TestSelectScatter(t *testing.T) {
-	// Special setup: Don't use createLegacyExecutorEnv.
+	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeLegacyHealthCheck()
 	s := createSandbox("TestExecutor")
@@ -925,7 +925,7 @@ func TestSelectScatter(t *testing.T) {
 }
 
 func TestSelectScatterPartial(t *testing.T) {
-	// Special setup: Don't use createLegacyExecutorEnv.
+	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeLegacyHealthCheck()
 	s := createSandbox("TestExecutor")
@@ -985,7 +985,7 @@ func TestSelectScatterPartial(t *testing.T) {
 }
 
 func TestStreamSelectScatter(t *testing.T) {
-	// Special setup: Don't use createLegacyExecutorEnv.
+	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeLegacyHealthCheck()
 	s := createSandbox("TestExecutor")
@@ -1022,7 +1022,7 @@ func TestStreamSelectScatter(t *testing.T) {
 
 // TestSelectScatterOrderBy will run an ORDER BY query that will scatter out to 8 shards and return the 8 rows (one per shard) sorted.
 func TestSelectScatterOrderBy(t *testing.T) {
-	// Special setup: Don't use createLegacyExecutorEnv.
+	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeLegacyHealthCheck()
 	s := createSandbox("TestExecutor")
@@ -1092,7 +1092,7 @@ func TestSelectScatterOrderBy(t *testing.T) {
 
 // TestSelectScatterOrderByVarChar will run an ORDER BY query that will scatter out to 8 shards and return the 8 rows (one per shard) sorted.
 func TestSelectScatterOrderByVarChar(t *testing.T) {
-	// Special setup: Don't use createLegacyExecutorEnv.
+	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeLegacyHealthCheck()
 	s := createSandbox("TestExecutor")
@@ -1162,7 +1162,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 }
 
 func TestStreamSelectScatterOrderBy(t *testing.T) {
-	// Special setup: Don't use createLegacyExecutorEnv.
+	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeLegacyHealthCheck()
 	s := createSandbox("TestExecutor")
@@ -1223,7 +1223,7 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 }
 
 func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
-	// Special setup: Don't use createLegacyExecutorEnv.
+	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeLegacyHealthCheck()
 	s := createSandbox("TestExecutor")
@@ -1286,7 +1286,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 
 // TestSelectScatterAggregate will run an aggregate query that will scatter out to 8 shards and return 4 aggregated rows.
 func TestSelectScatterAggregate(t *testing.T) {
-	// Special setup: Don't use createLegacyExecutorEnv.
+	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeLegacyHealthCheck()
 	s := createSandbox("TestExecutor")
@@ -1349,7 +1349,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 }
 
 func TestStreamSelectScatterAggregate(t *testing.T) {
-	// Special setup: Don't use createLegacyExecutorEnv.
+	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeLegacyHealthCheck()
 	s := createSandbox("TestExecutor")
@@ -1412,7 +1412,7 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 // TestSelectScatterLimit will run a limit query (ordered for consistency) against
 // a scatter route and verify that the limit primitive works as intended.
 func TestSelectScatterLimit(t *testing.T) {
-	// Special setup: Don't use createLegacyExecutorEnv.
+	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeLegacyHealthCheck()
 	s := createSandbox("TestExecutor")
@@ -1484,7 +1484,7 @@ func TestSelectScatterLimit(t *testing.T) {
 // TestStreamSelectScatterLimit will run a streaming limit query (ordered for consistency) against
 // a scatter route and verify that the limit primitive works as intended.
 func TestStreamSelectScatterLimit(t *testing.T) {
-	// Special setup: Don't use createLegacyExecutorEnv.
+	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeLegacyHealthCheck()
 	s := createSandbox("TestExecutor")
@@ -1554,7 +1554,7 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 // TODO(sougou): stream and non-stream testing are very similar.
 // Could reuse code,
 func TestSimpleJoin(t *testing.T) {
-	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, _ := createExecutorEnv()
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -1596,7 +1596,7 @@ func TestSimpleJoin(t *testing.T) {
 }
 
 func TestJoinComments(t *testing.T) {
-	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, _ := createExecutorEnv()
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -1622,7 +1622,7 @@ func TestJoinComments(t *testing.T) {
 }
 
 func TestSimpleJoinStream(t *testing.T) {
-	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, _ := createExecutorEnv()
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -1664,7 +1664,7 @@ func TestSimpleJoinStream(t *testing.T) {
 }
 
 func TestVarJoin(t *testing.T) {
-	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, _ := createExecutorEnv()
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -1702,7 +1702,7 @@ func TestVarJoin(t *testing.T) {
 }
 
 func TestVarJoinStream(t *testing.T) {
-	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, _ := createExecutorEnv()
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -1740,7 +1740,7 @@ func TestVarJoinStream(t *testing.T) {
 }
 
 func TestLeftJoin(t *testing.T) {
-	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, _ := createExecutorEnv()
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 	result1 := []*sqltypes.Result{{
@@ -1787,7 +1787,7 @@ func TestLeftJoin(t *testing.T) {
 }
 
 func TestLeftJoinStream(t *testing.T) {
-	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, _ := createExecutorEnv()
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
@@ -1828,7 +1828,7 @@ func TestLeftJoinStream(t *testing.T) {
 }
 
 func TestEmptyJoin(t *testing.T) {
-	executor, sbc1, _, _ := createLegacyExecutorEnv()
+	executor, sbc1, _, _ := createExecutorEnv()
 	// Empty result requires a field query for the second part of join,
 	// which is sent to shard 0.
 	sbc1.SetResults([]*sqltypes.Result{{
@@ -1866,7 +1866,7 @@ func TestEmptyJoin(t *testing.T) {
 }
 
 func TestEmptyJoinStream(t *testing.T) {
-	executor, sbc1, _, _ := createLegacyExecutorEnv()
+	executor, sbc1, _, _ := createExecutorEnv()
 	// Empty result requires a field query for the second part of join,
 	// which is sent to shard 0.
 	sbc1.SetResults([]*sqltypes.Result{{
@@ -1904,7 +1904,7 @@ func TestEmptyJoinStream(t *testing.T) {
 }
 
 func TestEmptyJoinRecursive(t *testing.T) {
-	executor, sbc1, _, _ := createLegacyExecutorEnv()
+	executor, sbc1, _, _ := createExecutorEnv()
 	// Make sure it also works recursively.
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -1950,7 +1950,7 @@ func TestEmptyJoinRecursive(t *testing.T) {
 }
 
 func TestEmptyJoinRecursiveStream(t *testing.T) {
-	executor, sbc1, _, _ := createLegacyExecutorEnv()
+	executor, sbc1, _, _ := createExecutorEnv()
 	// Make sure it also works recursively.
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -1996,7 +1996,7 @@ func TestEmptyJoinRecursiveStream(t *testing.T) {
 }
 
 func TestCrossShardSubquery(t *testing.T) {
-	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, _ := createExecutorEnv()
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
@@ -2041,7 +2041,7 @@ func TestCrossShardSubquery(t *testing.T) {
 }
 
 func TestCrossShardSubqueryStream(t *testing.T) {
-	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, _ := createExecutorEnv()
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
@@ -2085,7 +2085,7 @@ func TestCrossShardSubqueryStream(t *testing.T) {
 }
 
 func TestCrossShardSubqueryGetFields(t *testing.T) {
-	executor, sbc1, _, sbclookup := createLegacyExecutorEnv()
+	executor, sbc1, _, sbclookup := createExecutorEnv()
 	sbclookup.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "col", Type: sqltypes.Int32},
@@ -2125,7 +2125,7 @@ func TestCrossShardSubqueryGetFields(t *testing.T) {
 }
 
 func TestSelectBindvarswithPrepare(t *testing.T) {
-	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, _ := createExecutorEnv()
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 

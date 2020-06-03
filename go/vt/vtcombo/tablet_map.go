@@ -88,7 +88,7 @@ func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 	}
 	agent := tabletmanager.NewComboActionAgent(ctx, ts, alias, int32(8000+uid), int32(9000+uid), controller, dbcfgs, mysqld, keyspace, shard, dbname, strings.ToLower(initTabletType.String()))
 	if tabletType == topodatapb.TabletType_MASTER {
-		if err := agent.TabletExternallyReparented(ctx, ""); err != nil {
+		if err := agent.ChangeType(ctx, topodatapb.TabletType_MASTER); err != nil {
 			return fmt.Errorf("TabletExternallyReparented failed on master %v: %v", topoproto.TabletAliasString(alias), err)
 		}
 	}
@@ -622,10 +622,6 @@ func (itmc *internalTabletManagerClient) StartSlave(ctx context.Context, tablet 
 }
 
 func (itmc *internalTabletManagerClient) StartSlaveUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, duration time.Duration) error {
-	return fmt.Errorf("not implemented in vtcombo")
-}
-
-func (itmc *internalTabletManagerClient) TabletExternallyReparented(ctx context.Context, tablet *topodatapb.Tablet, externalID string) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
