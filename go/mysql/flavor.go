@@ -273,7 +273,7 @@ func parseSlaveStatus(fields map[string]string) SlaveStatus {
 	status.MasterConnectRetry = int(parseInt)
 	parseUint, _ := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
 	status.SecondsBehindMaster = uint(parseUint)
-	parseUint, _ = strconv.ParseUint(fields["Master_Server_Id"], 10, 32)
+	parseUint, _ = strconv.ParseUint(fields["Master_Server_Id"], 10, 0)
 	status.MasterServerID = uint(parseUint)
 
 	execMasterLogPosStr := fields["Exec_Master_Log_Pos"]
