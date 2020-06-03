@@ -57,11 +57,11 @@ var (
 const blacklistQueryRules string = "BlacklistQueryRules"
 
 // loadBlacklistRules loads and builds the blacklist query rules
-func (agent *ActionAgent) loadBlacklistRules(tablet *topodatapb.Tablet, blacklistedTables []string) (err error) {
+func (agent *ActionAgent) loadBlacklistRules(ctx context.Context, tablet *topodatapb.Tablet, blacklistedTables []string) (err error) {
 	blacklistRules := rules.New()
 	if len(blacklistedTables) > 0 {
 		// tables, first resolve wildcards
-		tables, err := mysqlctl.ResolveTables(agent.MysqlDaemon, topoproto.TabletDbName(tablet), blacklistedTables)
+		tables, err := mysqlctl.ResolveTables(ctx, agent.MysqlDaemon, topoproto.TabletDbName(tablet), blacklistedTables)
 		if err != nil {
 			return err
 		}
@@ -284,7 +284,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	}
 	agent.setServicesDesiredState(disallowQueryService, runUpdateStream)
 	if updateBlacklistedTables {
-		if err := agent.loadBlacklistRules(newTablet, blacklistedTables); err != nil {
+		if err := agent.loadBlacklistRules(ctx, newTablet, blacklistedTables); err != nil {
 			// FIXME(alainjobart) how to handle this error?
 			log.Errorf("Cannot update blacklisted tables rule: %v", err)
 		} else {

@@ -336,14 +336,9 @@ func init() {
 	*GatewayImplementation = GatewayImplementationDiscovery
 }
 
-type executorType bool
-
-const (
-	legacy           executorType = true
-	planAllTheThings executorType = false
-)
-
-func createLegacyExecutorEnvUsing(t executorType) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
+func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
+	// Use legacy gateway until we can rewrite these tests to use new tabletgateway
+	*GatewayImplementation = GatewayImplementationDiscovery
 	cell := "aa"
 	hc := discovery.NewFakeLegacyHealthCheck()
 	s := createSandbox("TestExecutor")
@@ -369,25 +364,13 @@ func createLegacyExecutorEnvUsing(t executorType) (executor *Executor, sbc1, sbc
 	bad.VSchema = badVSchema
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	switch t {
-	case legacy:
-		executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
-	case planAllTheThings:
-		f := func(executor *Executor) executeMethod {
-			return &planExecute{e: executor}
-		}
-		executor = NewTestExecutor(context.Background(), f, serv, cell, resolver, false, testBufferSize, testCacheSize)
-	}
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	return executor, sbc1, sbc2, sbclookup
 }
 
-func createLegacyExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
-	return createLegacyExecutorEnvUsing(legacy)
-}
-
-func createCustomLegacyExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
+func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
 	hc := discovery.NewFakeLegacyHealthCheck()
 	s := createSandbox("TestExecutor")

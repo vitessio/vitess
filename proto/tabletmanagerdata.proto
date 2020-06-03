@@ -311,22 +311,6 @@ message StartSlaveUntilAfterRequest {
 message StartSlaveUntilAfterResponse {
 }
 
-message TabletExternallyReparentedRequest {
-  // external_id is an string value that may be provided by an external
-  // agent for tracking purposes. The tablet will emit this string in
-  // events triggered by TabletExternallyReparented, such as VitessReparent.
-  string external_id = 1;
-}
-
-message TabletExternallyReparentedResponse {
-}
-
-message TabletExternallyElectedRequest {
-}
-
-message TabletExternallyElectedResponse {
-}
-
 message GetSlavesRequest {
 }
 

@@ -125,7 +125,7 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 }
 
 func (vr *vreplicator) replicate(ctx context.Context) error {
-	tableKeys, err := vr.buildTableKeys()
+	tableKeys, err := vr.buildTableKeys(ctx)
 	if err != nil {
 		return err
 	}
@@ -171,8 +171,8 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 	}
 }
 
-func (vr *vreplicator) buildTableKeys() (map[string][]string, error) {
-	schema, err := vr.mysqld.GetSchema(vr.dbClient.DBName(), []string{"/.*/"}, nil, false)
+func (vr *vreplicator) buildTableKeys(ctx context.Context) (map[string][]string, error) {
+	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), []string{"/.*/"}, nil, false)
 	if err != nil {
 		return nil, err
 	}

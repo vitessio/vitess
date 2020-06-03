@@ -51,6 +51,28 @@ func initTest(mode string, opts *Options, t *testing.T) {
 	require.NoError(t, err, "vtexplain Init error\n%s", string(schema))
 }
 
+func TestVTExplainWithNewHealthCheck(t *testing.T) {
+	schema, err := ioutil.ReadFile("testdata/test-healthcheck-schema.sql")
+	require.NoError(t, err)
+
+	vSchema, err := ioutil.ReadFile("testdata/test-healthcheck-vschema.json")
+	require.NoError(t, err)
+
+	opts := &Options{
+		ReplicationMode: "ROW",
+		NumShards:       2,
+		Normalize:       true,
+		StrictDDL:       true,
+		ExecutionMode:   ModeMulti,
+	}
+
+	err = Init(string(vSchema), string(schema), opts)
+	require.NoError(t, err, "vtexplain Init error\n%s", string(schema))
+
+	_, err = Run("SELECT * from t1")
+	require.NoError(t, err)
+}
+
 func testExplain(testcase string, opts *Options, t *testing.T) {
 	modes := []string{
 		ModeMulti,

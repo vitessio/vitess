@@ -68,12 +68,13 @@ type MysqlDaemon interface {
 	// Promote makes the current server master. It will not change
 	// the read_only state of the server.
 	Promote(map[string]string) (mysql.Position, error)
+
 	// Schema related methods
-	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
-	GetColumns(dbName, table string) ([]*querypb.Field, []string, error)
-	GetPrimaryKeyColumns(dbName, table string) ([]string, error)
-	PreflightSchemaChange(dbName string, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error)
-	ApplySchemaChange(dbName string, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error)
+	GetSchema(ctx context.Context, dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
+	GetColumns(ctx context.Context, dbName, table string) ([]*querypb.Field, []string, error)
+	GetPrimaryKeyColumns(ctx context.Context, dbName, table string) ([]string, error)
+	PreflightSchemaChange(ctx context.Context, dbName string, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error)
+	ApplySchemaChange(ctx context.Context, dbName string, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error)
 
 	// GetAppConnection returns a app connection to be able to talk to the database.
 	GetAppConnection(ctx context.Context) (*dbconnpool.PooledDBConnection, error)

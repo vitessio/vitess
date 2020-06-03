@@ -206,11 +206,6 @@ func (client *FakeTabletManagerClient) StartSlaveUntilAfter(ctx context.Context,
 	return nil
 }
 
-// TabletExternallyReparented is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) TabletExternallyReparented(ctx context.Context, tablet *topodatapb.Tablet, externalID string) error {
-	return nil
-}
-
 // GetSlaves is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) GetSlaves(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error) {
 	return nil, nil
