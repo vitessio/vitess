@@ -19,10 +19,10 @@ package mysql
 import (
 	"fmt"
 	"io"
-	"strconv"
 	"time"
 
 	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -130,34 +130,6 @@ func (mysqlFlavor) status(c *Conn) (SlaveStatus, error) {
 	// the relay log has been reset. To get the full Position, we need to take a union of executed GTIDSets, since these would
 	// have been in the relay log's GTIDSet in the past, prior to a reset.
 	status.RelayLogPosition.GTIDSet = status.Position.GTIDSet.Union(relayLogGTIDSet)
-
-	execMasterLogFilePos := resultMap["Exec_Master_Log_Pos"]
-	file := resultMap["Relay_Master_Log_File"]
-	if execMasterLogFilePos != "" && file != "" {
-		filePos, err := strconv.Atoi(execMasterLogFilePos)
-		if err != nil {
-			return SlaveStatus{}, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", execMasterLogFilePos)
-		}
-
-		status.FilePosition.GTIDSet = filePosGTID{
-			file: file,
-			pos:  filePos,
-		}
-	}
-
-	readMasterLogPosStr := resultMap["Read_Master_Log_Pos"]
-	file = resultMap["Master_Log_File"]
-	if file != "" && readMasterLogPosStr != "" {
-		fileRelayPos, err := strconv.Atoi(readMasterLogPosStr)
-		if err != nil {
-			return SlaveStatus{}, fmt.Errorf("invalid ReadMasterLogPos GTID (%v): expecting pos to be an integer", readMasterLogPosStr)
-		}
-
-		status.FileRelayLogPosition.GTIDSet = filePosGTID{
-			file: file,
-			pos:  fileRelayPos,
-		}
-	}
 
 	return status, nil
 }
