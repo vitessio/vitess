@@ -97,15 +97,7 @@ func (txc *TxConn) commitShard(ctx context.Context, s *vtgatepb.Session_ShardSes
 	if err != nil {
 		return err
 	}
-	err = qs.Commit(ctx, s.Target, s.TransactionId)
-	// TransactionId should be set to 0 if the commit fails so that
-	// we rollback all others but don't attempt to rollback a failed ShardSession
-	// TODO(deepthi): need a testcase that fails if we change this to an unconditional defer
-	// defer func () { s.TransactionId = 0} ()
-	if err != nil {
-		s.TransactionId = 0
-	}
-	return err
+	return qs.Commit(ctx, s.Target, s.TransactionId)
 }
 
 func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error {
