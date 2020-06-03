@@ -79,6 +79,15 @@ var TestTarget = &querypb.Target{
 	TabletType: topodatapb.TabletType_REPLICA,
 }
 
+// TestCell is the cell we use for this test (and TestGRPCDiscovery)
+var TestCell = "aa"
+
+// TestAlias is the tablet alias we use for this test (and TestGRPCDiscovery)
+var TestAlias = &topodatapb.TabletAlias{
+	Cell: TestCell,
+	Uid:  1,
+}
+
 // TestCallerID is a test caller id.
 var TestCallerID = &vtrpcpb.CallerID{
 	Principal:    "test_principal",
@@ -124,8 +133,8 @@ func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string,
 	}
 }
 
-// BeginTransactionID is a test transaction id for Begin.
-const BeginTransactionID int64 = 9990
+// beginTransactionID is a test transaction id for Begin.
+const beginTransactionID int64 = 9990
 
 // Begin is part of the queryservice.QueryService interface
 func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, *topodatapb.TabletAlias, error) {
@@ -139,12 +148,11 @@ func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, op
 	if !proto.Equal(options, TestExecuteOptions) {
 		f.t.Errorf("invalid Execute.ExecuteOptions: got %v expected %v", options, TestExecuteOptions)
 	}
-	// TODO(deepthi): what alias should we actually return here?
-	return BeginTransactionID, nil, nil
+	return beginTransactionID, nil, nil
 }
 
-// CommitTransactionID is a test transaction id for Commit.
-const CommitTransactionID int64 = 999044
+// commitTransactionID is a test transaction id for Commit.
+const commitTransactionID int64 = 999044
 
 // Commit is part of the queryservice.QueryService interface
 func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
@@ -155,14 +163,14 @@ func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, t
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "Commit", target)
-	if transactionID != CommitTransactionID {
-		f.t.Errorf("Commit: invalid TransactionId: got %v expected %v", transactionID, CommitTransactionID)
+	if transactionID != commitTransactionID {
+		f.t.Errorf("Commit: invalid TransactionId: got %v expected %v", transactionID, commitTransactionID)
 	}
 	return nil
 }
 
-// RollbackTransactionID is a test transactin id for Rollback.
-const RollbackTransactionID int64 = 999044
+// rollbackTransactionID is a test transactin id for Rollback.
+const rollbackTransactionID int64 = 999044
 
 // Rollback is part of the queryservice.QueryService interface
 func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
@@ -173,8 +181,8 @@ func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target,
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "Rollback", target)
-	if transactionID != RollbackTransactionID {
-		f.t.Errorf("Rollback: invalid TransactionId: got %v expected %v", transactionID, RollbackTransactionID)
+	if transactionID != rollbackTransactionID {
+		f.t.Errorf("Rollback: invalid TransactionId: got %v expected %v", transactionID, rollbackTransactionID)
 	}
 	return nil
 }
@@ -191,8 +199,8 @@ func (f *FakeQueryService) Prepare(ctx context.Context, target *querypb.Target, 
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "Prepare", target)
-	if transactionID != CommitTransactionID {
-		f.t.Errorf("Prepare: invalid TransactionID: got %v expected %v", transactionID, CommitTransactionID)
+	if transactionID != commitTransactionID {
+		f.t.Errorf("Prepare: invalid TransactionID: got %v expected %v", transactionID, commitTransactionID)
 	}
 	if dtid != Dtid {
 		f.t.Errorf("Prepare: invalid dtid: got %s expected %s", dtid, Dtid)
@@ -224,8 +232,8 @@ func (f *FakeQueryService) RollbackPrepared(ctx context.Context, target *querypb
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "RollbackPrepared", target)
-	if originalID != RollbackTransactionID {
-		f.t.Errorf("RollbackPrepared: invalid TransactionID: got %v expected %v", originalID, RollbackTransactionID)
+	if originalID != rollbackTransactionID {
+		f.t.Errorf("RollbackPrepared: invalid TransactionID: got %v expected %v", originalID, rollbackTransactionID)
 	}
 	if dtid != Dtid {
 		f.t.Errorf("RollbackPrepared: invalid dtid: got %s expected %s", dtid, Dtid)
@@ -282,8 +290,8 @@ func (f *FakeQueryService) StartCommit(ctx context.Context, target *querypb.Targ
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "StartCommit", target)
-	if transactionID != CommitTransactionID {
-		f.t.Errorf("StartCommit: invalid TransactionID: got %v expected %v", transactionID, CommitTransactionID)
+	if transactionID != commitTransactionID {
+		f.t.Errorf("StartCommit: invalid TransactionID: got %v expected %v", transactionID, commitTransactionID)
 	}
 	if dtid != Dtid {
 		f.t.Errorf("StartCommit: invalid dtid: got %s expected %s", dtid, Dtid)
@@ -300,8 +308,8 @@ func (f *FakeQueryService) SetRollback(ctx context.Context, target *querypb.Targ
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "SetRollback", target)
-	if transactionID != CommitTransactionID {
-		f.t.Errorf("SetRollback: invalid TransactionID: got %v expected %v", transactionID, CommitTransactionID)
+	if transactionID != commitTransactionID {
+		f.t.Errorf("SetRollback: invalid TransactionID: got %v expected %v", transactionID, commitTransactionID)
 	}
 	if dtid != Dtid {
 		f.t.Errorf("SetRollback: invalid dtid: got %s expected %s", dtid, Dtid)

@@ -25,6 +25,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
@@ -98,14 +100,14 @@ func testBegin(t *testing.T, conn queryservice.QueryService, f *FakeQueryService
 	t.Log("testBegin")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	// TODO(deepthi): should we test returned alias here?
-	transactionID, _, err := conn.Begin(ctx, TestTarget, TestExecuteOptions)
+	transactionID, alias, err := conn.Begin(ctx, TestTarget, TestExecuteOptions)
 	if err != nil {
 		t.Fatalf("Begin failed: %v", err)
 	}
-	if transactionID != BeginTransactionID {
-		t.Errorf("Unexpected result from Begin: got %v wanted %v", transactionID, BeginTransactionID)
+	if transactionID != beginTransactionID {
+		t.Errorf("Unexpected result from Begin: got %v wanted %v", transactionID, beginTransactionID)
 	}
+	assert.Equal(t, TestAlias, alias, "Unexpected tablet alias from Begin")
 }
 
 func testBeginError(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
@@ -130,7 +132,7 @@ func testCommit(t *testing.T, conn queryservice.QueryService, f *FakeQueryServic
 	t.Log("testCommit")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	err := conn.Commit(ctx, TestTarget, CommitTransactionID)
+	err := conn.Commit(ctx, TestTarget, commitTransactionID)
 	if err != nil {
 		t.Fatalf("Commit failed: %v", err)
 	}
@@ -140,7 +142,7 @@ func testCommitError(t *testing.T, conn queryservice.QueryService, f *FakeQueryS
 	t.Log("testCommitError")
 	f.HasError = true
 	testErrorHelper(t, f, "Commit", func(ctx context.Context) error {
-		return conn.Commit(ctx, TestTarget, CommitTransactionID)
+		return conn.Commit(ctx, TestTarget, commitTransactionID)
 	})
 	f.HasError = false
 }
@@ -148,7 +150,7 @@ func testCommitError(t *testing.T, conn queryservice.QueryService, f *FakeQueryS
 func testCommitPanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testCommitPanics")
 	testPanicHelper(t, f, "Commit", func(ctx context.Context) error {
-		return conn.Commit(ctx, TestTarget, CommitTransactionID)
+		return conn.Commit(ctx, TestTarget, commitTransactionID)
 	})
 }
 
@@ -156,7 +158,7 @@ func testRollback(t *testing.T, conn queryservice.QueryService, f *FakeQueryServ
 	t.Log("testRollback")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	err := conn.Rollback(ctx, TestTarget, RollbackTransactionID)
+	err := conn.Rollback(ctx, TestTarget, rollbackTransactionID)
 	if err != nil {
 		t.Fatalf("Rollback failed: %v", err)
 	}
@@ -166,7 +168,7 @@ func testRollbackError(t *testing.T, conn queryservice.QueryService, f *FakeQuer
 	t.Log("testRollbackError")
 	f.HasError = true
 	testErrorHelper(t, f, "Rollback", func(ctx context.Context) error {
-		return conn.Rollback(ctx, TestTarget, CommitTransactionID)
+		return conn.Rollback(ctx, TestTarget, commitTransactionID)
 	})
 	f.HasError = false
 }
@@ -174,7 +176,7 @@ func testRollbackError(t *testing.T, conn queryservice.QueryService, f *FakeQuer
 func testRollbackPanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testRollbackPanics")
 	testPanicHelper(t, f, "Rollback", func(ctx context.Context) error {
-		return conn.Rollback(ctx, TestTarget, RollbackTransactionID)
+		return conn.Rollback(ctx, TestTarget, rollbackTransactionID)
 	})
 }
 
@@ -182,7 +184,7 @@ func testPrepare(t *testing.T, conn queryservice.QueryService, f *FakeQueryServi
 	t.Log("testPrepare")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	err := conn.Prepare(ctx, TestTarget, CommitTransactionID, Dtid)
+	err := conn.Prepare(ctx, TestTarget, commitTransactionID, Dtid)
 	if err != nil {
 		t.Fatalf("Prepare failed: %v", err)
 	}
@@ -192,7 +194,7 @@ func testPrepareError(t *testing.T, conn queryservice.QueryService, f *FakeQuery
 	t.Log("testPrepareError")
 	f.HasError = true
 	testErrorHelper(t, f, "Prepare", func(ctx context.Context) error {
-		return conn.Prepare(ctx, TestTarget, CommitTransactionID, Dtid)
+		return conn.Prepare(ctx, TestTarget, commitTransactionID, Dtid)
 	})
 	f.HasError = false
 }
@@ -200,7 +202,7 @@ func testPrepareError(t *testing.T, conn queryservice.QueryService, f *FakeQuery
 func testPreparePanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testPreparePanics")
 	testPanicHelper(t, f, "Prepare", func(ctx context.Context) error {
-		return conn.Prepare(ctx, TestTarget, CommitTransactionID, Dtid)
+		return conn.Prepare(ctx, TestTarget, commitTransactionID, Dtid)
 	})
 }
 
@@ -234,7 +236,7 @@ func testRollbackPrepared(t *testing.T, conn queryservice.QueryService, f *FakeQ
 	t.Log("testRollbackPrepared")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	err := conn.RollbackPrepared(ctx, TestTarget, Dtid, RollbackTransactionID)
+	err := conn.RollbackPrepared(ctx, TestTarget, Dtid, rollbackTransactionID)
 	if err != nil {
 		t.Fatalf("RollbackPrepared failed: %v", err)
 	}
@@ -244,7 +246,7 @@ func testRollbackPreparedError(t *testing.T, conn queryservice.QueryService, f *
 	t.Log("testRollbackPreparedError")
 	f.HasError = true
 	testErrorHelper(t, f, "RollbackPrepared", func(ctx context.Context) error {
-		return conn.RollbackPrepared(ctx, TestTarget, Dtid, RollbackTransactionID)
+		return conn.RollbackPrepared(ctx, TestTarget, Dtid, rollbackTransactionID)
 	})
 	f.HasError = false
 }
@@ -252,7 +254,7 @@ func testRollbackPreparedError(t *testing.T, conn queryservice.QueryService, f *
 func testRollbackPreparedPanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testRollbackPreparedPanics")
 	testPanicHelper(t, f, "RollbackPrepared", func(ctx context.Context) error {
-		return conn.RollbackPrepared(ctx, TestTarget, Dtid, RollbackTransactionID)
+		return conn.RollbackPrepared(ctx, TestTarget, Dtid, rollbackTransactionID)
 	})
 }
 
@@ -286,7 +288,7 @@ func testStartCommit(t *testing.T, conn queryservice.QueryService, f *FakeQueryS
 	t.Log("testStartCommit")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	err := conn.StartCommit(ctx, TestTarget, CommitTransactionID, Dtid)
+	err := conn.StartCommit(ctx, TestTarget, commitTransactionID, Dtid)
 	if err != nil {
 		t.Fatalf("StartCommit failed: %v", err)
 	}
@@ -296,7 +298,7 @@ func testStartCommitError(t *testing.T, conn queryservice.QueryService, f *FakeQ
 	t.Log("testStartCommitError")
 	f.HasError = true
 	testErrorHelper(t, f, "StartCommit", func(ctx context.Context) error {
-		return conn.StartCommit(ctx, TestTarget, CommitTransactionID, Dtid)
+		return conn.StartCommit(ctx, TestTarget, commitTransactionID, Dtid)
 	})
 	f.HasError = false
 }
@@ -304,7 +306,7 @@ func testStartCommitError(t *testing.T, conn queryservice.QueryService, f *FakeQ
 func testStartCommitPanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testStartCommitPanics")
 	testPanicHelper(t, f, "StartCommit", func(ctx context.Context) error {
-		return conn.StartCommit(ctx, TestTarget, CommitTransactionID, Dtid)
+		return conn.StartCommit(ctx, TestTarget, commitTransactionID, Dtid)
 	})
 }
 
@@ -312,7 +314,7 @@ func testSetRollback(t *testing.T, conn queryservice.QueryService, f *FakeQueryS
 	t.Log("testSetRollback")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	err := conn.SetRollback(ctx, TestTarget, Dtid, RollbackTransactionID)
+	err := conn.SetRollback(ctx, TestTarget, Dtid, rollbackTransactionID)
 	if err != nil {
 		t.Fatalf("SetRollback failed: %v", err)
 	}
@@ -322,7 +324,7 @@ func testSetRollbackError(t *testing.T, conn queryservice.QueryService, f *FakeQ
 	t.Log("testSetRollbackError")
 	f.HasError = true
 	testErrorHelper(t, f, "SetRollback", func(ctx context.Context) error {
-		return conn.SetRollback(ctx, TestTarget, Dtid, RollbackTransactionID)
+		return conn.SetRollback(ctx, TestTarget, Dtid, rollbackTransactionID)
 	})
 	f.HasError = false
 }
@@ -330,7 +332,7 @@ func testSetRollbackError(t *testing.T, conn queryservice.QueryService, f *FakeQ
 func testSetRollbackPanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testSetRollbackPanics")
 	testPanicHelper(t, f, "SetRollback", func(ctx context.Context) error {
-		return conn.SetRollback(ctx, TestTarget, Dtid, RollbackTransactionID)
+		return conn.SetRollback(ctx, TestTarget, Dtid, rollbackTransactionID)
 	})
 }
 
@@ -425,19 +427,20 @@ func testExecutePanics(t *testing.T, conn queryservice.QueryService, f *FakeQuer
 
 func testBeginExecute(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testBeginExecute")
-	f.ExpectedTransactionID = BeginTransactionID
+	f.ExpectedTransactionID = beginTransactionID
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	qr, transactionID, _, err := conn.BeginExecute(ctx, TestTarget, ExecuteQuery, ExecuteBindVars, TestExecuteOptions)
+	qr, transactionID, alias, err := conn.BeginExecute(ctx, TestTarget, ExecuteQuery, ExecuteBindVars, TestExecuteOptions)
 	if err != nil {
 		t.Fatalf("BeginExecute failed: %v", err)
 	}
-	if transactionID != BeginTransactionID {
-		t.Errorf("Unexpected result from BeginExecute: got %v wanted %v", transactionID, BeginTransactionID)
+	if transactionID != beginTransactionID {
+		t.Errorf("Unexpected result from BeginExecute: got %v wanted %v", transactionID, beginTransactionID)
 	}
 	if !qr.Equal(&ExecuteQueryResult) {
 		t.Errorf("Unexpected result from BeginExecute: got %v wanted %v", qr, ExecuteQueryResult)
 	}
+	assert.Equal(t, TestAlias, alias, "Unexpected tablet alias from Begin")
 }
 
 func testBeginExecuteErrorInBegin(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
@@ -459,8 +462,8 @@ func testBeginExecuteErrorInExecute(t *testing.T, conn queryservice.QueryService
 	testErrorHelper(t, f, "BeginExecute.Execute", func(ctx context.Context) error {
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
 		_, transactionID, _, err := conn.BeginExecute(ctx, TestTarget, ExecuteQuery, ExecuteBindVars, TestExecuteOptions)
-		if transactionID != BeginTransactionID {
-			t.Errorf("Unexpected transactionID from BeginExecute: got %v wanted %v", transactionID, BeginTransactionID)
+		if transactionID != beginTransactionID {
+			t.Errorf("Unexpected transactionID from BeginExecute: got %v wanted %v", transactionID, beginTransactionID)
 		}
 		return err
 	})
@@ -609,19 +612,20 @@ func testExecuteBatchPanics(t *testing.T, conn queryservice.QueryService, f *Fak
 
 func testBeginExecuteBatch(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testBeginExecuteBatch")
-	f.ExpectedTransactionID = BeginTransactionID
+	f.ExpectedTransactionID = beginTransactionID
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	qrl, transactionID, _, err := conn.BeginExecuteBatch(ctx, TestTarget, ExecuteBatchQueries, true, TestExecuteOptions)
+	qrl, transactionID, alias, err := conn.BeginExecuteBatch(ctx, TestTarget, ExecuteBatchQueries, true, TestExecuteOptions)
 	if err != nil {
 		t.Fatalf("BeginExecuteBatch failed: %v", err)
 	}
-	if transactionID != BeginTransactionID {
-		t.Errorf("Unexpected result from BeginExecuteBatch: got %v wanted %v", transactionID, BeginTransactionID)
+	if transactionID != beginTransactionID {
+		t.Errorf("Unexpected result from BeginExecuteBatch: got %v wanted %v", transactionID, beginTransactionID)
 	}
 	if !sqltypes.ResultsEqual(qrl, ExecuteBatchQueryResultList) {
 		t.Errorf("Unexpected result from ExecuteBatch: got %v wanted %v", qrl, ExecuteBatchQueryResultList)
 	}
+	assert.Equal(t, TestAlias, alias, "Unexpected tablet alias from Begin")
 }
 
 func testBeginExecuteBatchErrorInBegin(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
@@ -643,8 +647,8 @@ func testBeginExecuteBatchErrorInExecuteBatch(t *testing.T, conn queryservice.Qu
 	testErrorHelper(t, f, "BeginExecute.ExecuteBatch", func(ctx context.Context) error {
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
 		_, transactionID, _, err := conn.BeginExecuteBatch(ctx, TestTarget, ExecuteBatchQueries, true, TestExecuteOptions)
-		if transactionID != BeginTransactionID {
-			t.Errorf("Unexpected transactionID from BeginExecuteBatch: got %v wanted %v", transactionID, BeginTransactionID)
+		if transactionID != beginTransactionID {
+			t.Errorf("Unexpected transactionID from BeginExecuteBatch: got %v wanted %v", transactionID, beginTransactionID)
 		}
 		return err
 	})

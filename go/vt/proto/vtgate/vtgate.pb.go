@@ -143,6 +143,7 @@ type Session struct {
 	// user_defined_variables contains all the @variables defined for this session
 	UserDefinedVariables map[string]*query.BindVariable `protobuf:"bytes,13,rep,name=user_defined_variables,json=userDefinedVariables,proto3" json:"user_defined_variables,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	// system_variables keeps track of all session variables set for this connection
+	// TODO: systay should we keep this so we can apply it ordered?
 	SystemVariables map[string]string `protobuf:"bytes,14,rep,name=system_variables,json=systemVariables,proto3" json:"system_variables,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	// row_count keeps track of the last seen rows affected for this session
 	RowCount             int64    `protobuf:"varint,15,opt,name=row_count,json=rowCount,proto3" json:"row_count,omitempty"`

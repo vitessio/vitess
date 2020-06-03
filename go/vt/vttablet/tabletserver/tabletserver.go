@@ -1118,6 +1118,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	}
 
 	if asTransaction {
+		// We ignore the return alias because this transaction only exists in the scope of this call
 		transactionID, _, err = tsv.Begin(ctx, target, options)
 		if err != nil {
 			return nil, err
