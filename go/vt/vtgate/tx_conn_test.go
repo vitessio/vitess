@@ -134,7 +134,7 @@ func TestTxConnCommitOrderFailure1(t *testing.T) {
 	// first commit failed so we don't try to commit the second shard
 	assert.EqualValues(t, 0, sbc1.CommitCount.Get(), "sbc1.CommitCount")
 	// When the commit fails, we try to clean up by issuing a rollback
-	assert.EqualValues(t, 1, sbc0.RollbackCount.Get(), "sbc0.RollbackCount")
+	assert.EqualValues(t, 2, sbc0.RollbackCount.Get(), "sbc0.RollbackCount")
 	assert.EqualValues(t, 1, sbc1.RollbackCount.Get(), "sbc1.RollbackCount")
 }
 
@@ -167,7 +167,7 @@ func TestTxConnCommitOrderFailure2(t *testing.T) {
 	assert.EqualValues(t, 1, sbc1.CommitCount.Get(), "sbc1.CommitCount")
 	// When the commit fails, we try to clean up by issuing a rollback
 	assert.EqualValues(t, 0, sbc0.RollbackCount.Get(), "sbc0.RollbackCount")
-	assert.EqualValues(t, 1, sbc1.RollbackCount.Get(), "sbc1.RollbackCount")
+	assert.EqualValues(t, 2, sbc1.RollbackCount.Get(), "sbc1.RollbackCount")
 }
 
 func TestTxConnCommitOrderFailure3(t *testing.T) {
