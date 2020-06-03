@@ -40,7 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-var emitStats = flag.Bool("emit_stats", false, "true iff we should emit stats to push-based monitoring/stats backends")
+var emitStats = flag.Bool("emit_stats", false, "If set, emit stats to push-based monitoring and stats backends")
 var statsEmitPeriod = flag.Duration("stats_emit_period", time.Duration(60*time.Second), "Interval between emitting stats to all registered backends")
 var statsBackend = flag.String("stats_backend", "", "The name of the registered push-based monitoring/stats backend to use")
 var combineDimensions = flag.String("stats_combine_dimensions", "", `List of dimensions to be combined into a single "all" value in exported stats vars`)
