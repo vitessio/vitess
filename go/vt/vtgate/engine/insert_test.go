@@ -177,7 +177,7 @@ func TestInsertShardedSimple(t *testing.T) {
 		`ResolveDestinations sharded [value:"0" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		// Row 2 will go to -20, rows 1 & 3 will go to 20-
 		`ExecuteMultiShard ` +
-			`sharded.20-: prefix mid1 suffix {_id0: type:INT64 value:"1" } ` +
+			`sharded.20-: prefix mid1 suffix {_id_0: type:INT64 value:"1" } ` +
 			`true true`,
 	})
 
@@ -216,8 +216,8 @@ func TestInsertShardedSimple(t *testing.T) {
 		`ResolveDestinations sharded [value:"0"  value:"1"  value:"2" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		// Row 2 will go to -20, rows 1 & 3 will go to 20-
 		`ExecuteMultiShard ` +
-			`sharded.20-: prefix mid1, mid3 suffix {_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
-			`sharded.-20: prefix mid2 suffix {_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
+			`sharded.20-: prefix mid1, mid3 suffix {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3" } ` +
+			`sharded.-20: prefix mid2 suffix {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3" } ` +
 			`true false`,
 	})
 
@@ -258,8 +258,8 @@ func TestInsertShardedSimple(t *testing.T) {
 		`ResolveDestinations sharded [value:"0"  value:"1"  value:"2" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		// Row 2 will go to -20, rows 1 & 3 will go to 20-
 		`ExecuteMultiShard ` +
-			`sharded.20-: prefix mid1, mid3 suffix {_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
-			`sharded.-20: prefix mid2 suffix {_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
+			`sharded.20-: prefix mid1, mid3 suffix {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3" } ` +
+			`sharded.-20: prefix mid2 suffix {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3" } ` +
 			`true true`,
 	})
 }
@@ -412,10 +412,10 @@ func TestInsertShardedGenerate(t *testing.T) {
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix mid1, mid3 suffix ` +
 			`{__seq0: type:INT64 value:"1" __seq1: type:INT64 value:"2" __seq2: type:INT64 value:"2" ` +
-			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
+			`_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3" } ` +
 			`sharded.-20: prefix mid2 suffix ` +
 			`{__seq0: type:INT64 value:"1" __seq1: type:INT64 value:"2" __seq2: type:INT64 value:"2" ` +
-			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
+			`_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3" } ` +
 			`true false`,
 	})
 
@@ -549,15 +549,15 @@ func TestInsertShardedOwned(t *testing.T) {
 		`ResolveDestinations sharded [value:"0"  value:"1"  value:"2" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix mid1, mid3 suffix ` +
-			`{_c10: type:INT64 value:"4" _c11: type:INT64 value:"5" _c12: type:INT64 value:"6" ` +
-			`_c20: type:INT64 value:"7" _c21: type:INT64 value:"8" _c22: type:INT64 value:"9" ` +
-			`_c30: type:INT64 value:"10" _c31: type:INT64 value:"11" _c32: type:INT64 value:"12" ` +
-			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
+			`{_c1_0: type:INT64 value:"4" _c1_1: type:INT64 value:"5" _c1_2: type:INT64 value:"6" ` +
+			`_c2_0: type:INT64 value:"7" _c2_1: type:INT64 value:"8" _c2_2: type:INT64 value:"9" ` +
+			`_c3_0: type:INT64 value:"10" _c3_1: type:INT64 value:"11" _c3_2: type:INT64 value:"12" ` +
+			`_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3" } ` +
 			`sharded.-20: prefix mid2 suffix ` +
-			`{_c10: type:INT64 value:"4" _c11: type:INT64 value:"5" _c12: type:INT64 value:"6" ` +
-			`_c20: type:INT64 value:"7" _c21: type:INT64 value:"8" _c22: type:INT64 value:"9" ` +
-			`_c30: type:INT64 value:"10" _c31: type:INT64 value:"11" _c32: type:INT64 value:"12" ` +
-			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
+			`{_c1_0: type:INT64 value:"4" _c1_1: type:INT64 value:"5" _c1_2: type:INT64 value:"6" ` +
+			`_c2_0: type:INT64 value:"7" _c2_1: type:INT64 value:"8" _c2_2: type:INT64 value:"9" ` +
+			`_c3_0: type:INT64 value:"10" _c3_1: type:INT64 value:"11" _c3_2: type:INT64 value:"12" ` +
+			`_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3" } ` +
 			`true false`,
 	})
 }
@@ -640,7 +640,7 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 			`value:"\026k@\264J\272K\326"  true`,
 		`ResolveDestinations sharded [value:"0" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		`ExecuteMultiShard sharded.20-: prefix mid1 suffix ` +
-			`{_c30: _id0: type:INT64 value:"1" } true true`,
+			`{_c3_0: _id_0: type:INT64 value:"1" } true true`,
 	})
 }
 
@@ -737,11 +737,11 @@ func TestInsertShardedGeo(t *testing.T) {
 			`keyspace_id0: type:VARBINARY value:"\001\026k@\264J\272K\326" keyspace_id1: type:VARBINARY value:"\377\026k@\264J\272K\326"  true`,
 		`ResolveDestinations sharded [value:"0"  value:"1" ] Destinations:DestinationKeyspaceID(01166b40b44aba4bd6),DestinationKeyspaceID(ff166b40b44aba4bd6)`,
 		`ExecuteMultiShard sharded.20-: prefix mid1 suffix ` +
-			`{_id0: type:INT64 value:"1" _id1: type:INT64 value:"1" ` +
-			`_region0: type:INT64 value:"1" _region1: type:INT64 value:"255" } ` +
+			`{_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"1" ` +
+			`_region_0: type:INT64 value:"1" _region_1: type:INT64 value:"255" } ` +
 			`sharded.-20: prefix mid2 suffix ` +
-			`{_id0: type:INT64 value:"1" _id1: type:INT64 value:"1" ` +
-			`_region0: type:INT64 value:"1" _region1: type:INT64 value:"255" } ` +
+			`{_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"1" ` +
+			`_region_0: type:INT64 value:"1" _region_1: type:INT64 value:"255" } ` +
 			`true false`,
 	})
 }
@@ -924,15 +924,15 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 		// Bind vars for rows 2 & 3 may be missing because they were not sent.
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix mid1 suffix ` +
-			`{_c10: type:INT64 value:"5" _c13: type:INT64 value:"8" ` +
-			`_c20: type:INT64 value:"9" _c23: type:INT64 value:"12" ` +
-			`_c30: type:INT64 value:"13" _c33: type:INT64 value:"16" ` +
-			`_id0: type:INT64 value:"1" _id3: type:INT64 value:"4" } ` +
+			`{_c1_0: type:INT64 value:"5" _c1_3: type:INT64 value:"8" ` +
+			`_c2_0: type:INT64 value:"9" _c2_3: type:INT64 value:"12" ` +
+			`_c3_0: type:INT64 value:"13" _c3_3: type:INT64 value:"16" ` +
+			`_id_0: type:INT64 value:"1" _id_3: type:INT64 value:"4" } ` +
 			`sharded.-20: prefix mid4 suffix ` +
-			`{_c10: type:INT64 value:"5" _c13: type:INT64 value:"8" ` +
-			`_c20: type:INT64 value:"9" _c23: type:INT64 value:"12" ` +
-			`_c30: type:INT64 value:"13" _c33: type:INT64 value:"16" ` +
-			`_id0: type:INT64 value:"1" _id3: type:INT64 value:"4" } ` +
+			`{_c1_0: type:INT64 value:"5" _c1_3: type:INT64 value:"8" ` +
+			`_c2_0: type:INT64 value:"9" _c2_3: type:INT64 value:"12" ` +
+			`_c3_0: type:INT64 value:"13" _c3_3: type:INT64 value:"16" ` +
+			`_id_0: type:INT64 value:"1" _id_3: type:INT64 value:"4" } ` +
 			`true false`,
 	})
 }
@@ -1028,7 +1028,7 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 		`Execute select from from lkp1 where from = :from and toc = :toc from: toc: type:VARBINARY value:"\026k@\264J\272K\326"  false`,
 		`ResolveDestinations sharded [value:"0" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		`ExecuteMultiShard sharded.-20: prefix mid1 suffix ` +
-			`{_c30: _id0: type:INT64 value:"1" } true true`,
+			`{_c3_0: _id_0: type:INT64 value:"1" } true true`,
 	})
 }
 
@@ -1174,15 +1174,15 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 		`ResolveDestinations sharded [value:"0"  value:"1"  value:"2" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix mid1, mid3 suffix ` +
-			`{_c10: type:INT64 value:"4" _c11: type:INT64 value:"5" _c12: type:INT64 value:"6" ` +
-			`_c20: type:INT64 value:"7" _c21: type:INT64 value:"8" _c22: type:INT64 value:"9" ` +
-			`_c30: type:INT64 value:"10" _c31: type:INT64 value:"11" _c32: type:INT64 value:"12" ` +
-			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
+			`{_c1_0: type:INT64 value:"4" _c1_1: type:INT64 value:"5" _c1_2: type:INT64 value:"6" ` +
+			`_c2_0: type:INT64 value:"7" _c2_1: type:INT64 value:"8" _c2_2: type:INT64 value:"9" ` +
+			`_c3_0: type:INT64 value:"10" _c3_1: type:INT64 value:"11" _c3_2: type:INT64 value:"12" ` +
+			`_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3" } ` +
 			`sharded.-20: prefix mid2 suffix ` +
-			`{_c10: type:INT64 value:"4" _c11: type:INT64 value:"5" _c12: type:INT64 value:"6" ` +
-			`_c20: type:INT64 value:"7" _c21: type:INT64 value:"8" _c22: type:INT64 value:"9" ` +
-			`_c30: type:INT64 value:"10" _c31: type:INT64 value:"11" _c32: type:INT64 value:"12" ` +
-			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
+			`{_c1_0: type:INT64 value:"4" _c1_1: type:INT64 value:"5" _c1_2: type:INT64 value:"6" ` +
+			`_c2_0: type:INT64 value:"7" _c2_1: type:INT64 value:"8" _c2_2: type:INT64 value:"9" ` +
+			`_c3_0: type:INT64 value:"10" _c3_1: type:INT64 value:"11" _c3_2: type:INT64 value:"12" ` +
+			`_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3" } ` +
 			`true false`,
 	})
 }
@@ -1292,11 +1292,11 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 		`ResolveDestinations sharded [value:"0"  value:"2" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix mid1 suffix ` +
-			`{_c30: type:INT64 value:"10" _c32: type:INT64 value:"12" ` +
-			`_id0: type:INT64 value:"1" _id2: type:INT64 value:"3" } ` +
+			`{_c3_0: type:INT64 value:"10" _c3_2: type:INT64 value:"12" ` +
+			`_id_0: type:INT64 value:"1" _id_2: type:INT64 value:"3" } ` +
 			`sharded.-20: prefix mid3 suffix ` +
-			`{_c30: type:INT64 value:"10" _c32: type:INT64 value:"12" ` +
-			`_id0: type:INT64 value:"1" _id2: type:INT64 value:"3" } ` +
+			`{_c3_0: type:INT64 value:"10" _c3_2: type:INT64 value:"12" ` +
+			`_id_0: type:INT64 value:"1" _id_2: type:INT64 value:"3" } ` +
 			`true false`,
 	})
 }
@@ -1500,15 +1500,15 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 		`ResolveDestinations sharded [value:"0"  value:"1"  value:"2" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix mid1, mid3 suffix ` +
-			`{_c10: type:UINT64 value:"1" _c11: type:UINT64 value:"2" _c12: type:UINT64 value:"3" ` +
-			`_c20: _c21: _c22: ` +
-			`_c30: type:UINT64 value:"1" _c31: type:UINT64 value:"2" _c32: type:UINT64 value:"3" ` +
-			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
+			`{_c1_0: type:UINT64 value:"1" _c1_1: type:UINT64 value:"2" _c1_2: type:UINT64 value:"3" ` +
+			`_c2_0: _c2_1: _c2_2: ` +
+			`_c3_0: type:UINT64 value:"1" _c3_1: type:UINT64 value:"2" _c3_2: type:UINT64 value:"3" ` +
+			`_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3" } ` +
 			`sharded.-20: prefix mid2 suffix ` +
-			`{_c10: type:UINT64 value:"1" _c11: type:UINT64 value:"2" _c12: type:UINT64 value:"3" ` +
-			`_c20: _c21: _c22: ` +
-			`_c30: type:UINT64 value:"1" _c31: type:UINT64 value:"2" _c32: type:UINT64 value:"3" ` +
-			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
+			`{_c1_0: type:UINT64 value:"1" _c1_1: type:UINT64 value:"2" _c1_2: type:UINT64 value:"3" ` +
+			`_c2_0: _c2_1: _c2_2: ` +
+			`_c3_0: type:UINT64 value:"1" _c3_1: type:UINT64 value:"2" _c3_2: type:UINT64 value:"3" ` +
+			`_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3" } ` +
 			`true false`,
 	})
 }
