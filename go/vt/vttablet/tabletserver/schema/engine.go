@@ -221,7 +221,7 @@ func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
 func (se *Engine) reload(ctx context.Context) error {
 	start := time.Now()
 	defer func() {
-		log.V(2).Infof("Time taken to load the schema: %v", time.Since(start))
+		log.Infof("Time taken to load the schema: %v", time.Since(start))
 		se.env.LogError()
 	}()
 

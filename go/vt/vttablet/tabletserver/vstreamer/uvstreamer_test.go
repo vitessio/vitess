@@ -24,13 +24,20 @@ Fast forward requires tables to be locked briefly to get a snapshot: the test us
 on the table in order to insert rows for fastforward to find.
 
 The flow is as follows:
-	t1: copy phase, 10 rows. The lastpk event is intercepted and a row is inserted into t1 to be found in catchup
+	t1: copy phase, 10 rows.
+		The lastpk event is intercepted
+		A row is inserted into t1 to be found in catchup
+		A row is inserted into t2 which will be an empty transaction during t1 catchup but will be found in t2 copy
 	t1/t2: catchup phase finds inserted row in t1
 	t2: copy phase to start. Test event is sent, intercepted, we lock t2 to block t2's copy, and a row is inserted into t1 and then unlock
 	t2: fastforward finds t1 event
 	t2: copy starts
 	t2: copy complete
-	all tables copied, Copy Complete test event sent, vstream context is cancelled
+	t3: copy phase to start. Test event is sent, intercepted, we lock t3 to block t3's copy, and two rows are, one each into t1 and t2 and then unlock
+	t3: fastforward finds t1 and t2 events
+	t3: copy starts
+	t3: copy complete, all tables copied, Copy Complete test event sent, insert 3 rows, one each into t1/t2/t3
+	replicate: finds the 3 inserts, context is cancelled after last expected row callback and its commit, vstream context is cancelled
 */
 
 package vstreamer
@@ -114,21 +121,56 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 
 	}
 
-	callbacks["OTHER.*Copy Done"] = func() {
-		log.Info("Copy done, canceling context")
-		cancel()
+	callbacks["OTHER.*Copy Start t3"] = func() {
+		conn, err := env.Mysqld.GetDbaConnection(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.Close()
+
+		log.Info("Inserting row for fast forward to find, locking t3")
+		conn.ExecuteFetch("lock tables t3 write", 1, false)
+		insertRow(t, "t1", 1, numInitialRows+3)
+		insertRow(t, "t2", 2, numInitialRows+2)
+		log.Infof("Position after third insert into t1: %s", masterPosition(t))
+		conn.ExecuteFetch("unlock tables", 1, false)
+		log.Info("Inserted rows for fast forward to find, unlocked tables")
+
 	}
+
+	callbacks["OTHER.*Copy Done"] = func() {
+		log.Info("Copy done, inserting events to stream")
+		insertRow(t, "t1", 1, numInitialRows+4)
+		insertRow(t, "t2", 2, numInitialRows+3)
+		insertRow(t, "t3", 3, numInitialRows+2)
+		insertRow(t, "t3", 3, numInitialRows+3)
+	}
+
+	numCopyEvents := 3 /*t1,t2,t3*/ * (numInitialRows + 1 /*FieldEvent*/ + 1 /*LastPKEvent*/ + 1 /*TestEvent: Copy Start*/ + 2 /*begin,commit*/ + 3 /* LastPK Completed*/)
+	numCopyEvents += 2                                       /* GTID + Test event after all copy is done */
+	numCatchupEvents := 3 * 5                                /*2 t1, 1 t2 : BEGIN+FIELD+ROW+GTID+COMMIT*/
+	numFastForwardEvents := 5                                /*t1:FIELD+ROW*/
+	numIgnored := 3                                          // empty events
+	numMisc := 1                                             /* t2 insert during t1 catchup that comes in t2 copy */
+	numReplicateEvents := 3*5 /* insert into t1/t2/t3 */ + 4 /* second insert into t3, no FieldEvent */
+	numExpectedEvents := numCopyEvents + numCatchupEvents + numFastForwardEvents + numIgnored + numMisc + numReplicateEvents
+
+	var lastRowEventSeen bool
+
+	callbacks["ROW.*t3.*13390"] = func() {
+		log.Infof("Saw last row event")
+		lastRowEventSeen = true
+	}
+
+	callbacks["COMMIT"] = func() {
+		log.Infof("Got commit, lastRowSeen is %t", lastRowEventSeen)
+		if lastRowEventSeen {
+			log.Infof("Found last row event, canceling context")
+			cancel()
+		}
+	}
+
 	startVStreamCopy(ctx, t, filter, tablePKs)
-
-	/*
-		//vstream catchup t1 and copy t2
-		insertRow(t, "t1", 1, numInitialRows+2)
-		insertRow(t, "t2", 2, numInitialRows+1)
-
-		//vstream catchup t1,t2 and copy t3
-		insertRow(t, "t1", 1, numInitialRows+2)
-		insertRow(t, "t2", 2, numInitialRows+1)
-	*/
 
 	select {
 	case <-time.After(10 * time.Second):
@@ -137,11 +179,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	case <-ctx.Done():
 		log.Infof("Received context.Done, ending test")
 	}
-	numCopyEvents := 3 /*t1,t2,t3*/ * (numInitialRows + 1 /*FieldEvent*/ + 1 /*LastPKEvent*/ + 1 /*TestEvent: Copy Start*/ + 2 /*begin,commit*/ + 3 /* LastPK Completed*/)
-	numCopyEvents += 2        /* GTID + Test event after all copy is done */
-	numCatchupEvents := 5     /*t1:FIELD+ROW*/
-	numFastForwardEvents := 5 /*t1:FIELD+ROW*/
-	numExpectedEvents := numCopyEvents + numCatchupEvents + numFastForwardEvents
+
 	printAllEvents("End of test")
 	if len(allEvents) != numExpectedEvents {
 		log.Errorf("Received %d events, expected %d", len(allEvents), numExpectedEvents)
@@ -199,7 +237,9 @@ func initTables(t *testing.T, tables []string) {
 		callbacks[fmt.Sprintf("LASTPK.*%s.*%d", table, numInitialRows)] = func() {
 			if tableName == "t1" {
 				insertRow(t, "t1", 1, numInitialRows+1)
-				log.Infof("Position after first insert into t1: %s", masterPosition(t))
+				//should result in empty commit ignored during catchup since t2 copy has not started
+				insertRow(t, "t2", 2, numInitialRows+1)
+				log.Infof("Position after first insert into t1 (and t2/t3): %s", masterPosition(t))
 			}
 		}
 	}
@@ -234,8 +274,7 @@ func getTablePK(table string, idx int) *binlogdatapb.TableLastPK {
 }
 
 func insertRow(t *testing.T, table string, idx int, id int) {
-	query := fmt.Sprintf(insertQuery, table, idx, idx, id, id*idx*10)
-	execStatement(t, query)
+	execStatement(t, fmt.Sprintf(insertQuery, table, idx, idx, id, id*idx*10))
 }
 
 func printAllEvents(msg string) {
@@ -245,11 +284,11 @@ func printAllEvents(msg string) {
 	}
 }
 
-func getEventCallback(ctx context.Context, t *testing.T, event *binlogdatapb.VEvent) func() {
+func getEventCallback(event *binlogdatapb.VEvent) func() {
 	s := fmt.Sprintf("%v", event)
 	for key, cb := range callbacks {
 		match := regexp.MustCompile(".*" + key + ".*")
-		if match.MatchString(s) {
+		if key == s || match.MatchString(s) {
 			return cb
 		}
 	}
@@ -265,7 +304,7 @@ func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Fi
 				if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
 					continue
 				}
-				cb := getEventCallback(ctx, t, ev)
+				cb := getEventCallback(ev)
 				if cb != nil {
 					cb()
 				}
@@ -302,6 +341,9 @@ var expectedEvents = []string{
 	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:2 lengths:3 values:\"11110\" > > > ",
 	"type:GTID",
 	"type:COMMIT",
+	"type:BEGIN", //empty commit for insert into t3
+	"type:GTID",
+	"type:COMMIT",
 	"type:OTHER gtid:\"Copy Start t2\"",
 	"type:BEGIN",
 	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > ",
@@ -320,12 +362,23 @@ var expectedEvents = []string{
 	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:3 values:\"8160\" > > > ",
 	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:3 values:\"9180\" > > > ",
 	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:2 lengths:3 values:\"10200\" > > > ",
-	"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t2\" lastpk:<rows:<lengths:2 values:\"10\" > > > > ",
+	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:2 lengths:3 values:\"11220\" > > > ",
+	"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t2\" lastpk:<rows:<lengths:2 values:\"11\" > > > > ",
 	"type:COMMIT",
 	"type:BEGIN",
 	"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t2\" > completed:true > ",
 	"type:COMMIT",
 	"type:OTHER gtid:\"Copy Start t3\"",
+	"type:BEGIN",
+	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > ",
+	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:2 lengths:3 values:\"13130\" > > > ",
+	"type:GTID",
+	"type:COMMIT",
+	"type:BEGIN",
+	"type:FIELD field_event:<table_name:\"t2\" fields:<name:\"id21\" type:INT32 > fields:<name:\"id22\" type:INT32 > > ",
+	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:2 lengths:3 values:\"12240\" > > > ",
+	"type:GTID",
+	"type:COMMIT",
 	"type:BEGIN",
 	"type:FIELD field_event:<table_name:\"t3\" fields:<name:\"id31\" type:INT32 > fields:<name:\"id32\" type:INT32 > > ",
 	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:2 values:\"130\" > > > ",
@@ -344,4 +397,23 @@ var expectedEvents = []string{
 	"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t3\" > completed:true > ",
 	"type:COMMIT",
 	"type:OTHER gtid:\"Copy Done\"",
+	"type:BEGIN",
+	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > ",
+	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:2 lengths:3 values:\"14140\" > > > ",
+	"type:GTID",
+	"type:COMMIT",
+	"type:BEGIN",
+	"type:FIELD field_event:<table_name:\"t2\" fields:<name:\"id21\" type:INT32 > fields:<name:\"id22\" type:INT32 > > ",
+	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:2 lengths:3 values:\"13260\" > > > ",
+	"type:GTID",
+	"type:COMMIT",
+	"type:BEGIN",
+	"type:FIELD field_event:<table_name:\"t3\" fields:<name:\"id31\" type:INT32 > fields:<name:\"id32\" type:INT32 > > ",
+	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:2 lengths:3 values:\"12360\" > > > ",
+	"type:GTID",
+	"type:COMMIT",
+	"type:BEGIN",
+	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:2 lengths:3 values:\"13390\" > > > ",
+	"type:GTID",
+	"type:COMMIT",
 }
