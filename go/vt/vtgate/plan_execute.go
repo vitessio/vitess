@@ -177,7 +177,7 @@ func (e *Executor) logExecutionEnd(logStats *LogStats, execStart time.Time, plan
 	if err != nil {
 		logStats.Error = err
 		errCount = 1
-	} else {
+	} else if qr != nil {
 		logStats.RowsAffected = qr.RowsAffected
 	}
 	return errCount

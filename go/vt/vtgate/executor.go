@@ -159,7 +159,7 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 
 func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType, result *sqltypes.Result, err error) {
 	safeSession.RowCount = -1
-	if err != nil {
+	if err != nil || result == nil {
 		return
 	}
 	safeSession.FoundRows = result.RowsAffected
