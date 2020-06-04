@@ -58,7 +58,7 @@ create table test_partitioned (
 	if err != nil {
 		t.Fatalf("parseSchema: %v", err)
 	}
-	initTabletEnvironment(ddls, defaultTestOpts())
+	initTabletEnvironment(ddls)
 
 	tablet := newTablet(defaultTestOpts(), &topodatapb.Tablet{
 		Keyspace: "test_keyspace",
@@ -124,7 +124,7 @@ create table t1 like t2;
 	if err != nil {
 		t.Fatalf("parseSchema: %v", err)
 	}
-	err = initTabletEnvironment(ddl, defaultTestOpts())
+	err = initTabletEnvironment(ddl)
 	if err.Error() != expected {
 		t.Errorf("want: %s, got %s", expected, err.Error())
 	}

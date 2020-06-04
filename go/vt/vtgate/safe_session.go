@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
@@ -150,7 +151,7 @@ func (session *SafeSession) InTransaction() bool {
 }
 
 // Find returns the transactionId and tabletAlias, if any, for a session
-func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.TabletType) (transactionID int64, alias *topodatapb.TabletAlias) {
+func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.TabletType) (transactionID int64, reservedID int64, alias *topodatapb.TabletAlias) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	sessions := session.ShardSessions
@@ -162,14 +163,15 @@ func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.T
 	}
 	for _, shardSession := range sessions {
 		if keyspace == shardSession.Target.Keyspace && tabletType == shardSession.Target.TabletType && shard == shardSession.Target.Shard {
-			return shardSession.TransactionId, shardSession.TabletAlias
+			return shardSession.TransactionId, shardSession.ReservedId, shardSession.TabletAlias
 		}
 	}
-	return 0, nil
+	return 0, 0, nil
 }
 
 // Append adds a new ShardSession
 func (session *SafeSession) Append(shardSession *vtgatepb.Session_ShardSession, txMode vtgatepb.TransactionMode) error {
+	// TODO (deepthi/systay) this should be able to be done even if not in transaction
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
@@ -261,4 +263,15 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 		session.SystemVariables = make(map[string]string)
 	}
 	session.SystemVariables[name] = expr
+}
+
+//SetSystemVarQueries returns the queries needed to set the system variables to the state expected
+func (session *SafeSession) SetSystemVarQueries() []string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	result := make([]string, len(session.SystemVariables))
+	for k, v := range session.SystemVariables {
+		result = append(result, fmt.Sprintf("SET %s = %s", k, v))
+	}
+	return result
 }

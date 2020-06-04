@@ -155,7 +155,7 @@ func Init(vSchemaStr, sqlSchema string, opts *Options) error {
 		return fmt.Errorf("parseSchema: %v", err)
 	}
 
-	err = initTabletEnvironment(parsedDDLs, opts)
+	err = initTabletEnvironment(parsedDDLs)
 	if err != nil {
 		return fmt.Errorf("initTabletEnvironment: %v", err)
 	}

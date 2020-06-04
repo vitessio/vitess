@@ -154,7 +154,7 @@ func (t *explainTablet) Rollback(ctx context.Context, target *querypb.Target, tr
 }
 
 // Execute is part of the QueryService interface.
-func (t *explainTablet) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (t *explainTablet) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
 
@@ -168,7 +168,7 @@ func (t *explainTablet) Execute(ctx context.Context, target *querypb.Target, sql
 	})
 	t.mu.Unlock()
 
-	return t.tsv.Execute(ctx, target, sql, bindVariables, transactionID, options)
+	return t.tsv.Execute(ctx, target, sql, bindVariables, transactionID, reservedID, options)
 }
 
 // Prepare is part of the QueryService interface.
@@ -248,7 +248,7 @@ func (t *explainTablet) ExecuteBatch(ctx context.Context, target *querypb.Target
 }
 
 // BeginExecute is part of the QueryService interface.
-func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
 	bindVariables = sqltypes.CopyBindVariables(bindVariables)
@@ -259,7 +259,7 @@ func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target
 	})
 	t.mu.Unlock()
 
-	return t.tsv.BeginExecute(ctx, target, sql, bindVariables, options)
+	return t.tsv.BeginExecute(ctx, target, sql, bindVariables, reservedID, options)
 }
 
 // Close is part of the QueryService interface.
@@ -267,7 +267,7 @@ func (t *explainTablet) Close(ctx context.Context) error {
 	return t.tsv.Close(ctx)
 }
 
-func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
+func initTabletEnvironment(ddls []*sqlparser.DDL) error {
 	tableColumns = make(map[string]map[string]querypb.Type)
 	schemaQueries = map[string]*sqltypes.Result{
 		"select unix_timestamp()": {
@@ -422,7 +422,7 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 }
 
 // HandleQuery implements the fakesqldb query handler interface
-func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
+func (t *explainTablet) HandleQuery(_ *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
