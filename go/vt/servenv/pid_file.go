@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -27,8 +28,6 @@ import (
 var pidFile = flag.String("pid_file", "", "If set, the process will write its pid to the named file, and delete it on graceful shutdown.")
 
 func init() {
-	pidFileCreated := false
-
 	// Create pid file after flags are parsed.
 	OnInit(func() {
 		if *pidFile == "" {
@@ -37,20 +36,21 @@ func init() {
 
 		file, err := os.OpenFile(*pidFile, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666)
 		if err != nil {
-			log.Errorf("Unable to create pid file '%s': %v", *pidFile, err)
+			log.Fatalf("Unable to create pid file '%s': %v", *pidFile, err)
 			return
 		}
-		pidFileCreated = true
-		fmt.Fprintln(file, os.Getpid())
+		pid := strconv.Itoa(os.Getpid())
+		nbytes, _ := fmt.Fprintln(file, pid)
+		if nbytes < len(pid) {
+			log.Fatalf("Unable to write pid to file '%s'\n", *pidFile)
+			return
+		}
 		file.Close()
 	})
 
 	// Remove pid file on graceful shutdown.
 	OnClose(func() {
 		if *pidFile == "" {
-			return
-		}
-		if !pidFileCreated {
 			return
 		}
 
