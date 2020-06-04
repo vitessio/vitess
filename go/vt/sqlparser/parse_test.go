@@ -944,8 +944,8 @@ var (
 		input:  "alter table a add spatial index idx (id)",
 		output: "alter table a add spatial index idx (id)",
 	}, {
-		input:  "alter table a add foreign key",
-		output: "alter table a",
+		input:  "alter table a add foreign key (x) references y(z)",
+		output: "alter table a add foreign key (x) references y (z)",
 	}, {
 		input:  "alter table a add primary key",
 		output: "alter table a",
@@ -967,8 +967,8 @@ var (
 		input:  "alter table a drop check ch_1",
 		output: "alter table a",
 	}, {
-		input:  "alter table a drop foreign key",
-		output: "alter table a",
+		input:  "alter table a drop foreign key fk_something",
+		output: "alter table a drop foreign key fk_something",
 	}, {
 		input:  "alter table a drop primary key",
 		output: "alter table a",

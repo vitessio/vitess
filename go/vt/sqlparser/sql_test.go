@@ -51,7 +51,7 @@ func TestAlterCreateIndex(t *testing.T) {
 				Columns: []*IndexColumn{
 					{Column: ColIdent{val: "bestcol"}},
 				},
-				Options: []*IndexOption{{Name: "comment", Value: &SQLVal{Type:StrVal, Val: []byte("hello world")}}},
+				Options: []*IndexOption{{Name: "COMMENT", Value: &SQLVal{Type:StrVal, Val: []byte("hello world")}}},
 			},
 		},
 		{
@@ -67,7 +67,7 @@ func TestAlterCreateIndex(t *testing.T) {
 					{Column: ColIdent{val: "ye"}},
 					{Column: ColIdent{val: "ne"}},
 				},
-				Options: []*IndexOption{{Name: "using", Using: "HASH"}},
+				Options: []*IndexOption{{Name: "USING", Using: "HASH"}},
 			},
 		},
 	}
@@ -172,7 +172,7 @@ func TestCreateIndex(t *testing.T) {
 				Columns: []*IndexColumn{
 					{Column: ColIdent{val: "bestcol"}},
 				},
-				Options: []*IndexOption{{Name: "comment", Value: &SQLVal{Type:StrVal, Val: []byte("hello world")}}},
+				Options: []*IndexOption{{Name: "COMMENT", Value: &SQLVal{Type:StrVal, Val: []byte("hello world")}}},
 			},
 		},
 		{
@@ -188,7 +188,7 @@ func TestCreateIndex(t *testing.T) {
 					{Column: ColIdent{val: "ye"}},
 					{Column: ColIdent{val: "ne"}},
 				},
-				Options: []*IndexOption{{Name: "using", Using: "HASH"}},
+				Options: []*IndexOption{{Name: "USING", Using: "HASH"}},
 			},
 		},
 	}
@@ -280,6 +280,289 @@ func TestShowIndex(t *testing.T) {
 	}
 }
 
+func TestCreateForeignKey(t *testing.T) {
+	tests := []testForeignKeyStruct{
+		{
+			`CREATE TABLE child (
+				id INT,
+				parent_id INT,
+				FOREIGN KEY (parent_id)
+					REFERENCES parent(id)
+			)`,
+			[]*ConstraintDefinition{
+				{
+					Name: "",
+					Details: &ForeignKeyDefinition{
+						Source: Columns{{val: "parent_id"}},
+						ReferencedTable: TableName{Name: TableIdent{v: "parent"}},
+						ReferencedColumns: Columns{{val: "id"}},
+						OnUpdate: DefaultAction,
+						OnDelete: DefaultAction,
+					},
+				},
+			},
+		},
+		{
+			`CREATE TABLE child (
+				id INT,
+				parent_id INT,
+				INDEX par_ind (parent_id),
+				FOREIGN KEY (parent_id)
+					REFERENCES parent(id)
+					ON UPDATE RESTRICT ON DELETE CASCADE
+			)`,
+			[]*ConstraintDefinition{
+				{
+					Name: "",
+					Details: &ForeignKeyDefinition{
+						Source: Columns{{val: "parent_id"}},
+						ReferencedTable: TableName{Name: TableIdent{v: "parent"}},
+						ReferencedColumns: Columns{{val: "id"}},
+						OnUpdate: Restrict,
+						OnDelete: Cascade,
+					},
+				},
+			},
+		},
+		{
+			`CREATE TABLE child (
+				id INT,
+				parent_id INT,
+				INDEX par_ind (parent_id),
+				FOREIGN KEY (parent_id)
+					REFERENCES parent(id)
+					ON DELETE NO ACTION ON UPDATE SET DEFAULT
+			)`,
+			[]*ConstraintDefinition{
+				{
+					Name: "",
+					Details: &ForeignKeyDefinition{
+						Source: Columns{{val: "parent_id"}},
+						ReferencedTable: TableName{Name: TableIdent{v: "parent"}},
+						ReferencedColumns: Columns{{val: "id"}},
+						OnUpdate: SetDefault,
+						OnDelete: NoAction,
+					},
+				},
+			},
+		},
+		{
+			`CREATE TABLE child (
+				id INT,
+				parent_id INT,
+				INDEX par_ind (parent_id),
+				FOREIGN KEY (parent_id)
+					REFERENCES parent(id)
+					ON DELETE CASCADE
+			)`,
+			[]*ConstraintDefinition{
+				{
+					Name: "",
+					Details: &ForeignKeyDefinition{
+						Source: Columns{{val: "parent_id"}},
+						ReferencedTable: TableName{Name: TableIdent{v: "parent"}},
+						ReferencedColumns: Columns{{val: "id"}},
+						OnUpdate: DefaultAction,
+						OnDelete: Cascade,
+					},
+				},
+			},
+		},
+		{
+			`CREATE TABLE child (
+				id INT,
+				parent_id INT,
+				INDEX par_ind (parent_id),
+				FOREIGN KEY (parent_id)
+					REFERENCES parent(id)
+					ON UPDATE SET NULL
+			)`,
+			[]*ConstraintDefinition{
+				{
+					Name: "",
+					Details: &ForeignKeyDefinition{
+						Source: Columns{{val: "parent_id"}},
+						ReferencedTable: TableName{Name: TableIdent{v: "parent"}},
+						ReferencedColumns: Columns{{val: "id"}},
+						OnUpdate: SetNull,
+						OnDelete: DefaultAction,
+					},
+				},
+			},
+		},
+		{
+			`CREATE TABLE child (
+				id INT,
+				parents_id INT,
+				parents_sub_id INT,
+				INDEX par_ind (parents_id, parents_sub_id),
+				CONSTRAINT fk_parents FOREIGN KEY (parents_id, parents_sub_id)
+					REFERENCES parents(id, sub_id)
+			)`,
+			[]*ConstraintDefinition{
+				{
+					Name: "fk_parents",
+					Details: &ForeignKeyDefinition{
+						Source: Columns{{val: "parents_id"}, {val: "parents_sub_id"}},
+						ReferencedTable: TableName{Name: TableIdent{v: "parents"}},
+						ReferencedColumns: Columns{{val: "id"}, {val: "sub_id"}},
+						OnUpdate: DefaultAction,
+						OnDelete: DefaultAction,
+					},
+				},
+			},
+		},
+	}
+
+	testForeignKey(t, tests, AddStr)
+}
+
+func TestAlterAddForeignKey(t *testing.T) {
+	tests := []testForeignKeyStruct{
+		{
+			`ALTER TABLE child ADD
+				FOREIGN KEY (parent_id)
+					REFERENCES parent(id)`,
+			[]*ConstraintDefinition{
+				{
+					Name: "",
+					Details: &ForeignKeyDefinition{
+						Source: Columns{{val: "parent_id"}},
+						ReferencedTable: TableName{Name: TableIdent{v: "parent"}},
+						ReferencedColumns: Columns{{val: "id"}},
+						OnUpdate: DefaultAction,
+						OnDelete: DefaultAction,
+					},
+				},
+			},
+		},
+		{
+			`ALTER TABLE child ADD
+				FOREIGN KEY (parent_id)
+					REFERENCES parent(id)
+					ON UPDATE RESTRICT ON DELETE CASCADE`,
+			[]*ConstraintDefinition{
+				{
+					Name: "",
+					Details: &ForeignKeyDefinition{
+						Source: Columns{{val: "parent_id"}},
+						ReferencedTable: TableName{Name: TableIdent{v: "parent"}},
+						ReferencedColumns: Columns{{val: "id"}},
+						OnUpdate: Restrict,
+						OnDelete: Cascade,
+					},
+				},
+			},
+		},
+		{
+			`ALTER TABLE child ADD
+				FOREIGN KEY (parent_id)
+					REFERENCES parent(id)
+					ON DELETE NO ACTION ON UPDATE SET DEFAULT`,
+			[]*ConstraintDefinition{
+				{
+					Name: "",
+					Details: &ForeignKeyDefinition{
+						Source: Columns{{val: "parent_id"}},
+						ReferencedTable: TableName{Name: TableIdent{v: "parent"}},
+						ReferencedColumns: Columns{{val: "id"}},
+						OnUpdate: SetDefault,
+						OnDelete: NoAction,
+					},
+				},
+			},
+		},
+		{
+			`ALTER TABLE child ADD
+				FOREIGN KEY (parent_id)
+					REFERENCES parent(id)
+					ON DELETE CASCADE`,
+			[]*ConstraintDefinition{
+				{
+					Name: "",
+					Details: &ForeignKeyDefinition{
+						Source: Columns{{val: "parent_id"}},
+						ReferencedTable: TableName{Name: TableIdent{v: "parent"}},
+						ReferencedColumns: Columns{{val: "id"}},
+						OnUpdate: DefaultAction,
+						OnDelete: Cascade,
+					},
+				},
+			},
+		},
+		{
+			`ALTER TABLE child ADD
+				FOREIGN KEY (parent_id)
+					REFERENCES parent(id)
+					ON UPDATE SET NULL`,
+			[]*ConstraintDefinition{
+				{
+					Name: "",
+					Details: &ForeignKeyDefinition{
+						Source: Columns{{val: "parent_id"}},
+						ReferencedTable: TableName{Name: TableIdent{v: "parent"}},
+						ReferencedColumns: Columns{{val: "id"}},
+						OnUpdate: SetNull,
+						OnDelete: DefaultAction,
+					},
+				},
+			},
+		},
+		{
+			`ALTER TABLE child ADD
+				CONSTRAINT fk_parents FOREIGN KEY (parents_id, parents_sub_id)
+					REFERENCES parents(id, sub_id)`,
+			[]*ConstraintDefinition{
+				{
+					Name: "fk_parents",
+					Details: &ForeignKeyDefinition{
+						Source: Columns{{val: "parents_id"}, {val: "parents_sub_id"}},
+						ReferencedTable: TableName{Name: TableIdent{v: "parents"}},
+						ReferencedColumns: Columns{{val: "id"}, {val: "sub_id"}},
+						OnUpdate: DefaultAction,
+						OnDelete: DefaultAction,
+					},
+				},
+			},
+		},
+	}
+
+	testForeignKey(t, tests, AddStr)
+}
+
+func TestAlterDropForeignKey(t *testing.T) {
+	tests := []testForeignKeyStruct{
+		{
+			`ALTER TABLE child DROP FOREIGN KEY fk_parent_id`,
+			[]*ConstraintDefinition{{
+				Name: "fk_parent_id",
+				Details: &ForeignKeyDefinition{
+					Source: Columns{},
+					ReferencedTable: TableName{},
+					ReferencedColumns: Columns{},
+					OnUpdate: DefaultAction,
+					OnDelete: DefaultAction,
+				},
+			}},
+		},
+		{
+			`ALTER TABLE child DROP FOREIGN KEY random_foreign_key_name`,
+			[]*ConstraintDefinition{{
+				Name: "random_foreign_key_name",
+				Details: &ForeignKeyDefinition{
+					Source: Columns{},
+					ReferencedTable: TableName{},
+					ReferencedColumns: Columns{},
+					OnUpdate: DefaultAction,
+					OnDelete: DefaultAction,
+				},
+			}},
+		},
+	}
+
+	testForeignKey(t, tests, DropStr)
+}
+
 type testIndexStruct struct {
 	statement string
 	resTable  TableName
@@ -295,6 +578,45 @@ func testIndex(t *testing.T, tests []testIndexStruct) {
 			assert.Equal(t, AlterStr, ddlRes.Action)
 			assert.Equal(t, test.resTable, ddlRes.Table)
 			assert.Equal(t, test.res, ddlRes.IndexSpec)
+		})
+	}
+}
+
+type testForeignKeyStruct struct {
+	statement string
+	res       []*ConstraintDefinition
+}
+func testForeignKey(t *testing.T, tests []testForeignKeyStruct, expectedConstraintAction string) {
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%v", test.statement), func(t *testing.T) {
+			res, err := Parse(test.statement)
+			require.NoError(t, err)
+			ddlRes, ok := res.(*DDL)
+			require.True(t, ok)
+			require.NotNil(t, ddlRes.TableSpec)
+			require.Equal(t, len(test.res), len(ddlRes.TableSpec.Constraints))
+			require.Equal(t, expectedConstraintAction, ddlRes.ConstraintAction)
+			for i := range test.res {
+				require.NotNil(t, ddlRes.TableSpec.Constraints[i])
+				require.NotNil(t, ddlRes.TableSpec.Constraints[i].Details)
+				assert.Equal(t, test.res[i].Name, ddlRes.TableSpec.Constraints[i].Name)
+				fkDefinition, ok := ddlRes.TableSpec.Constraints[i].Details.(*ForeignKeyDefinition)
+				require.True(t, ok)
+				testFkDefinition := test.res[i].Details.(*ForeignKeyDefinition)
+				if assert.Equal(t, len(testFkDefinition.Source), len(fkDefinition.Source)) {
+					for i := range testFkDefinition.Source {
+						assert.Equal(t, testFkDefinition.Source[i].val, fkDefinition.Source[i].val)
+					}
+				}
+				assert.Equal(t, testFkDefinition.ReferencedTable.Name.v, fkDefinition.ReferencedTable.Name.v)
+				if assert.Equal(t, len(testFkDefinition.ReferencedColumns), len(fkDefinition.ReferencedColumns)) {
+					for i := range testFkDefinition.ReferencedColumns {
+						assert.Equal(t, testFkDefinition.ReferencedColumns[i].val, fkDefinition.ReferencedColumns[i].val)
+					}
+				}
+				assert.Equal(t, testFkDefinition.OnUpdate, fkDefinition.OnUpdate)
+				assert.Equal(t, testFkDefinition.OnDelete, fkDefinition.OnDelete)
+			}
 		})
 	}
 }

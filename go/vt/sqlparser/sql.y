@@ -329,6 +329,7 @@ func skipToEnd(yylex interface{}) {
 %type <colIdent> vindex_type vindex_type_opt
 %type <bytes> ignored_alter_object_type
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
+%type <str> constraint_symbol_opt
 
 %start any_command
 
@@ -606,6 +607,9 @@ create_statement:
   create_table_prefix table_spec
   {
     $1.TableSpec = $2
+    if len($1.TableSpec.Constraints) > 0 {
+      $1.ConstraintAction = AddStr
+    }
     $$ = $1
   }
 | create_table_prefix create_like
@@ -1362,6 +1366,10 @@ constraint_info:
   {
     $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnDelete: $11, OnUpdate: $12}
   }
+| FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_update fk_on_delete
+  {
+    $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnDelete: $12, OnUpdate: $11}
+  }
 
 from_or_in:
   FROM
@@ -1463,6 +1471,15 @@ table_opt_value:
     $$ = string($1)
   }
 
+constraint_symbol_opt:
+  {
+    $$ = ""
+  }
+| CONSTRAINT ID
+  {
+    $$ = string($2)
+  }
+
 alter_statement:
   alter_table_statement
 | alter_view_statement
@@ -1512,9 +1529,9 @@ alter_table_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $7,  Using: $8, Columns: $10, Options: $12}}
   }
-| ALTER ignore_opt TABLE table_name ADD constraint index_or_key sql_id using_opt '(' index_column_list ')' index_option_list_opt
+| ALTER ignore_opt TABLE table_name ADD constraint_symbol_opt constraint index_or_key sql_id using_opt '(' index_column_list ')' index_option_list_opt
   {
-    $$ = &DDL{Action: AlterStr, Table: $4, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $8, Type: $6, Using: $9, Columns: $11, Options: $13}}
+    $$ = &DDL{Action: AlterStr, Table: $4, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $9, Type: $7, Using: $10, Columns: $12, Options: $14}}
   }
 | ALTER ignore_opt TABLE table_name DROP index_or_key sql_id
   {
@@ -1540,6 +1557,17 @@ alter_table_statement:
 | ALTER ignore_opt TABLE table_name partition_operation
   {
     $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
+  }
+| ALTER ignore_opt TABLE table_name ADD constraint_definition
+  {
+    ddl := &DDL{Action: AlterStr, ConstraintAction: AddStr, Table: $4, TableSpec: &TableSpec{}}
+    ddl.TableSpec.AddConstraint($6)
+    $$ = ddl
+  }
+| ALTER ignore_opt TABLE table_name DROP FOREIGN KEY ID
+  {
+    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, Table: $4, TableSpec: &TableSpec{Constraints:
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($8), Details: &ForeignKeyDefinition{}}}}}
   }
 
 column_order_opt:

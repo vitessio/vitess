@@ -729,6 +729,9 @@ type DDL struct {
 	// Set for column alter statements
 	ColumnAction string
 
+	// Set for constraint alter statements
+	ConstraintAction string
+
 	// Set for column add / drop / rename statements
 	Column ColIdent
 
@@ -886,6 +889,20 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			buf.Myprintf("%s table %v %s column %v to %v", node.Action, node.Table, node.ColumnAction, node.Column, node.ToColumn)
 		} else if node.IndexSpec != nil {
 			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.IndexSpec)
+		} else if node.ConstraintAction == AddStr && node.TableSpec != nil && len(node.TableSpec.Constraints) == 1 {
+			fkDef, ok := node.TableSpec.Constraints[0].Details.(*ForeignKeyDefinition)
+			if ok {
+				buf.Myprintf("%s table %v add %v", node.Action, node.Table, fkDef)
+			} else {
+				buf.Myprintf("%s table %v", node.Action, node.Table)
+			}
+		} else if node.ConstraintAction == DropStr && node.TableSpec != nil && len(node.TableSpec.Constraints) == 1 {
+			_, ok := node.TableSpec.Constraints[0].Details.(*ForeignKeyDefinition)
+			if ok {
+				buf.Myprintf("%s table %v drop foreign key %s", node.Action, node.Table, node.TableSpec.Constraints[0].Name)
+			} else {
+				buf.Myprintf("%s table %v", node.Action, node.Table)
+			}
 		} else {
 			buf.Myprintf("%s table %v", node.Action, node.Table)
 		}
@@ -1720,7 +1737,7 @@ func (a ReferenceAction) Format(buf *TrackedBuffer) {
 	}
 }
 
-// ForeignKeyDefinition describes a foreign key in a CREATE TABLE statement
+// ForeignKeyDefinition describes a foreign key
 type ForeignKeyDefinition struct {
 	Source            Columns
 	ReferencedTable   TableName
