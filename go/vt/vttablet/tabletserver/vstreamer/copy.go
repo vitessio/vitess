@@ -14,22 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/*
-TestVStreamCopyCompleteFlow tests a complete happy VStream Copy flow: copy/catchup/fastforward/replicate
-Three tables t1, t2, t3 are copied. Initially 10 (numInitialRows) rows are inserted into each.
-To avoid races in testing we send additional events when *uvstreamerTestMode* is set to true. These are used in
-conjunction with callbacks to do additional crud at precise points of the flow to test the different paths
-We intercept the vstreamer send callback to look for specific events and invoke these test callbacks.
-Fast forward requires tables to be locked briefly to get a snapshot: the test uses this knowledge to hold a lock
-on the table in order to insert rows for fastforward to find.
-
-The flow is as follows:
-	t1: copy phase, 10 rows.
-	t2: copy phase to start. Test event is sent, intercepted and a row in inserted into t1
-    t1: fastforward finds this event
-
-*/
-
 package vstreamer
 
 import (
@@ -46,6 +30,8 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+// starts the copy phase for the first table in the (sorted) list.
+// can be continuing the copy of a partially completed table or start a new one
 func (uvs *uvstreamer) copy(ctx context.Context) error {
 	for len(uvs.tablesToCopy) > 0 {
 		tableName := uvs.tablesToCopy[0]
@@ -53,12 +39,12 @@ func (uvs *uvstreamer) copy(ctx context.Context) error {
 		if err := uvs.catchupAndCopy(ctx, tableName); err != nil {
 			return err
 		}
-		//time.Sleep(2*time.Second) //FIXME for debugging
 	}
 	log.Info("No tables left to copy")
 	return nil
 }
 
+// first does a catchup for tables already fully or partially copied (upto last pk)
 func (uvs *uvstreamer) catchupAndCopy(ctx context.Context, tableName string) error {
 	log.Infof("catchupAndCopy for %s", tableName)
 	if !uvs.pos.IsZero() {
@@ -67,12 +53,12 @@ func (uvs *uvstreamer) catchupAndCopy(ctx context.Context, tableName string) err
 			return err
 		}
 	}
-
 	log.Infof("catchupAndCopy: before copyTable %s", tableName)
 	uvs.fields = nil
 	return uvs.copyTable(ctx, tableName)
 }
 
+// catchup on events for tables already fully or partially copied (upto last pk) until replication lag is small
 func (uvs *uvstreamer) catchup(ctx context.Context) error {
 	log.Infof("starting catchup ...")
 	uvs.setSecondsBehindMaster(math.MaxInt64)
@@ -116,6 +102,7 @@ func (uvs *uvstreamer) catchup(ctx context.Context) error {
 	}
 }
 
+// field event is sent for every new rowevent or set of rowevents
 func (uvs *uvstreamer) sendFieldEvent(ctx context.Context, gtid string, fieldEvent *binlogdatapb.FieldEvent) error {
 	evs := []*binlogdatapb.VEvent{{
 		Type: binlogdatapb.VEventType_BEGIN,
@@ -130,7 +117,6 @@ func (uvs *uvstreamer) sendFieldEvent(ctx context.Context, gtid string, fieldEve
 		return err
 	}
 	return nil
-
 }
 
 // send one RowEvent per row, followed by a LastPK (merged in VTGate with vgtid)
@@ -172,6 +158,7 @@ func (uvs *uvstreamer) sendEventsForRows(ctx context.Context, tableName string, 
 	return nil
 }
 
+// converts lastpk from proto to value
 func getLastPKFromQR(qr *querypb.QueryResult) []sqltypes.Value {
 	var lastPK []sqltypes.Value
 	r := sqltypes.Proto3ToResult(qr)
@@ -183,6 +170,7 @@ func getLastPKFromQR(qr *querypb.QueryResult) []sqltypes.Value {
 	return lastPK
 }
 
+// converts lastpk from value to proto
 func getQRFromLastPK(fields []*querypb.Field, lastPK []sqltypes.Value) *querypb.QueryResult {
 	row := sqltypes.RowToProto3(lastPK)
 	qr := &querypb.QueryResult{
@@ -192,6 +180,7 @@ func getQRFromLastPK(fields []*querypb.Field, lastPK []sqltypes.Value) *querypb.
 	return qr
 }
 
+// gets batch of rows to copy. size of batch is determined by max packetsize
 func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -278,6 +267,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 	return nil
 }
 
+// processes events between when a table was caught up and when a snapshot is taken for streaming a batch of rows
 func (uvs *uvstreamer) fastForward(stopPos string) error {
 	log.Infof("starting fastForward from %s upto pos %s", mysql.EncodePosition(uvs.pos), stopPos)
 	uvs.stopPos, _ = mysql.DecodePosition(stopPos)
