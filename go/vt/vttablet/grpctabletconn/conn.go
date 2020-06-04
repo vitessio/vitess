@@ -89,7 +89,7 @@ func DialTablet(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (querys
 }
 
 // Execute sends the query to VTTablet.
-func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -106,6 +106,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target
 		},
 		TransactionId: transactionID,
 		Options:       options,
+		ReservedId:    reservedID,
 	}
 	er, err := conn.c.Execute(ctx, req)
 	if err != nil {
@@ -440,7 +441,7 @@ func (conn *gRPCQueryClient) ReadTransaction(ctx context.Context, target *queryp
 }
 
 // BeginExecute starts a transaction and runs an Execute.
-func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (result *sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
+func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -455,7 +456,8 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 			Sql:           query,
 			BindVariables: bindVars,
 		},
-		Options: options,
+		Options:    options,
+		ReservedId: reservedID,
 	}
 	reply, err := conn.c.BeginExecute(ctx, req)
 	if err != nil {
@@ -595,6 +597,87 @@ func (conn *gRPCQueryClient) StreamHealth(ctx context.Context, callback func(*qu
 			return err
 		}
 	}
+}
+
+// ReserveExecute calls the ReserveExecute RPC on VTTablet.
+func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, preQueries []string) (*sqltypes.Result, int64, error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return nil, 0, tabletconn.ConnClosed
+	}
+
+	req := &querypb.ReserveExecuteRequest{
+		Target:            target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Query: &querypb.BoundQuery{
+			Sql:           query,
+			BindVariables: bindVars,
+		},
+		TransactionId: transactionID,
+		Options:       options,
+		PreQueries:    preQueries,
+	}
+	er, err := conn.c.ReserveExecute(ctx, req)
+	if err != nil {
+		return nil, 0, tabletconn.ErrorFromGRPC(err)
+	}
+	return sqltypes.Proto3ToResult(er.Result), er.ReservedId, nil
+}
+
+// ReserveBeginExecute reserves a connection, starts a transaction and runs an Execute.
+func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, preQueries []string) (result *sqltypes.Result, transactionID, reservedID int64, alias *topodatapb.TabletAlias, err error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return nil, 0, 0, nil, tabletconn.ConnClosed
+	}
+
+	req := &querypb.ReserveBeginExecuteRequest{
+		Target:            target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Query: &querypb.BoundQuery{
+			Sql:           query,
+			BindVariables: bindVars,
+		},
+		Options:    options,
+		PreQueries: preQueries,
+	}
+	reply, err := conn.c.ReserveBeginExecute(ctx, req)
+	if err != nil {
+		return nil, 0, 0, nil, tabletconn.ErrorFromGRPC(err)
+	}
+	if reply.Error != nil {
+		return nil, reply.TransactionId, reply.ReservedId, conn.tablet.Alias, tabletconn.ErrorFromVTRPC(reply.Error)
+	}
+	return sqltypes.Proto3ToResult(reply.Result), reply.TransactionId, reply.ReservedId, conn.tablet.Alias, nil
+}
+
+// ReserveTransactionRelease releases the reserved connection and closes the transaction.
+func (conn *gRPCQueryClient) ReserveTransactionRelease(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return tabletconn.ConnClosed
+	}
+
+	req := &querypb.ReserveTransactionReleaseRequest{
+		Target:            target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		TransactionId:     transactionID,
+		ReservedId:        reservedID,
+	}
+	reply, err := conn.c.ReserveTransactionRelease(ctx, req)
+	if err != nil {
+		return tabletconn.ErrorFromGRPC(err)
+	}
+	if reply.Error != nil {
+		return tabletconn.ErrorFromVTRPC(reply.Error)
+	}
+	return nil
 }
 
 // VStream starts a VReplication stream.

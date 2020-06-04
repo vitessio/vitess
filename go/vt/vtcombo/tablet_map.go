@@ -306,9 +306,9 @@ type internalTabletConn struct {
 
 // Execute is part of queryservice.QueryService
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, connectionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (itc *internalTabletConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	bindVars = sqltypes.CopyBindVariables(bindVars)
-	reply, err := itc.tablet.qsc.QueryService().Execute(ctx, target, query, bindVars, transactionID, connectionID, options)
+	reply, err := itc.tablet.qsc.QueryService().Execute(ctx, target, query, bindVars, transactionID, reservedID, options)
 	if err != nil {
 		return nil, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 	}
@@ -410,12 +410,12 @@ func (itc *internalTabletConn) ReadTransaction(ctx context.Context, target *quer
 }
 
 // BeginExecute is part of queryservice.QueryService
-func (itc *internalTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, connectionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (itc *internalTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	transactionID, alias, err := itc.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, nil, err
 	}
-	result, err := itc.Execute(ctx, target, query, bindVars, transactionID, connectionID, options)
+	result, err := itc.Execute(ctx, target, query, bindVars, transactionID, reservedID, options)
 	return result, transactionID, alias, err
 }
 
@@ -443,30 +443,30 @@ func (itc *internalTabletConn) MessageAck(ctx context.Context, target *querypb.T
 
 // ReserveExecute is part of queryservice.QueryService
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) ReserveExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, connectionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (itc *internalTabletConn) ReserveExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, preQueries []string) (*sqltypes.Result, int64, error) {
 	bindVars = sqltypes.CopyBindVariables(bindVars)
-	reply, err := itc.tablet.qsc.QueryService().ReserveExecute(ctx, target, query, bindVars, connectionID, options)
+	reply, rID, err := itc.tablet.qsc.QueryService().ReserveExecute(ctx, target, query, bindVars, reservedID, options, preQueries)
 	if err != nil {
-		return nil, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+		return nil, 0, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 	}
-	return reply, nil
+	return reply, rID, nil
 }
 
 // ReserveBeginExecute is part of queryservice.QueryService
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (itc *internalTabletConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, preQueries []string) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
 	bindVars = sqltypes.CopyBindVariables(bindVars)
-	reply, transactionID, alias, err := itc.tablet.qsc.QueryService().ReserveBeginExecute(ctx, target, query, bindVars, options)
+	reply, transactionID, reservedID, alias, err := itc.tablet.qsc.QueryService().ReserveBeginExecute(ctx, target, query, bindVars, options, preQueries)
 	if err != nil {
-		return nil, 0, nil, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+		return nil, 0, 0, nil, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 	}
-	return reply, transactionID, alias, nil
+	return reply, transactionID, reservedID, alias, nil
 }
 
 // ReserveRelease is part of queryservice.QueryService
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) ReserveRelease(ctx context.Context, target *querypb.Target, connectionID int64) error {
-	return itc.tablet.qsc.QueryService().ReserveRelease(ctx, target, connectionID)
+func (itc *internalTabletConn) ReserveTransactionRelease(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
+	return itc.tablet.qsc.QueryService().ReserveTransactionRelease(ctx, target, transactionID, reservedID)
 }
 
 // Handle panic is part of the QueryService interface.

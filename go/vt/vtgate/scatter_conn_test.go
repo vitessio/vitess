@@ -560,17 +560,8 @@ func TestScatterConnSingleDB(t *testing.T) {
 
 	want := "multi-db transaction attempted"
 
-	// SingleDb (legacy)
-	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, SingleDb: true})
-	_, err = sc.Execute(ctx, "query1", nil, rss0, session, false, nil, false)
-	require.NoError(t, err)
-	_, err = sc.Execute(ctx, "query1", nil, rss1, session, false, nil, false)
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Multi DB exec: %v, must contain %s", err, want)
-	}
-
 	// TransactionMode_SINGLE in session
-	session = NewSafeSession(&vtgatepb.Session{InTransaction: true, TransactionMode: vtgatepb.TransactionMode_SINGLE})
+	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, TransactionMode: vtgatepb.TransactionMode_SINGLE})
 	_, err = sc.Execute(ctx, "query1", nil, rss0, session, false, nil, false)
 	require.NoError(t, err)
 	_, err = sc.Execute(ctx, "query1", nil, rss1, session, false, nil, false)

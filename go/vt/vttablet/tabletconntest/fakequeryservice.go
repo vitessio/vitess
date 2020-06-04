@@ -60,6 +60,8 @@ type FakeQueryService struct {
 	StreamHealthResponse *querypb.StreamHealthResponse
 }
 
+var _ queryservice.QueryService = (*FakeQueryService)(nil)
+
 // Close is a no-op.
 func (f *FakeQueryService) Close(ctx context.Context) error {
 	return nil
@@ -366,6 +368,9 @@ var ExecuteBindVars = map[string]*querypb.BindVariable{
 // ExecuteTransactionID is a test transaction id.
 const ExecuteTransactionID int64 = 678
 
+// ReserveConnectionID is a test reserved connection id.
+const ReserveConnectionID int64 = 933
+
 // ExecuteQueryResult is a test query result.
 var ExecuteQueryResult = sqltypes.Result{
 	Fields: []*querypb.Field{
@@ -393,7 +398,7 @@ var ExecuteQueryResult = sqltypes.Result{
 }
 
 // Execute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	if f.HasError {
 		return nil, f.TabletError
 	}
@@ -575,14 +580,14 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Tar
 }
 
 // BeginExecute combines Begin and Execute.
-func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	transactionID, _, err := f.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, nil, err
 	}
 
 	// TODO(deepthi): what alias should we actually return here?
-	result, err := f.Execute(ctx, target, sql, bindVariables, transactionID, options)
+	result, err := f.Execute(ctx, target, sql, bindVariables, transactionID, reservedID, options)
 	return result, transactionID, nil, err
 }
 
@@ -596,6 +601,21 @@ func (f *FakeQueryService) BeginExecuteBatch(ctx context.Context, target *queryp
 	// TODO(deepthi): what alias should we actually return here?
 	results, err := f.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
 	return results, transactionID, nil, err
+}
+
+//ReserveExecute implements QueryService interface
+func (f *FakeQueryService) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, preQueries []string) (*sqltypes.Result, int64, error) {
+	panic("implement me")
+}
+
+//ReserveBeginExecute implements QueryService interface
+func (f *FakeQueryService) ReserveBeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, preQueries []string) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
+	panic("implement me")
+}
+
+//ReserveTransactionRelease implements QueryService interface
+func (f *FakeQueryService) ReserveTransactionRelease(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
+	panic("implement me")
 }
 
 var (

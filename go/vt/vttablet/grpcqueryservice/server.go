@@ -44,7 +44,7 @@ func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (r
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options)
+	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -249,7 +249,7 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	result, transactionID, alias, err := q.server.BeginExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.Options)
+	result, transactionID, alias, err := q.server.BeginExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options)
 	if err != nil {
 		// if we have a valid transactionID, return the error in-band
 		if transactionID != 0 {
@@ -325,6 +325,56 @@ func (q *query) MessageAck(ctx context.Context, request *querypb.MessageAckReque
 			RowsAffected: uint64(count),
 		},
 	}, nil
+}
+
+// ReserveExecute is part of the queryservice.QueryServer interface
+func (q *query) ReserveExecute(ctx context.Context, request *querypb.ReserveExecuteRequest) (response *querypb.ReserveExecuteResponse, err error) {
+	defer q.server.HandlePanic(&err)
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	result, reservedID, err := q.server.ReserveExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, request.PreQueries)
+	if err != nil {
+		return nil, vterrors.ToGRPC(err)
+	}
+	return &querypb.ReserveExecuteResponse{
+		Result:     sqltypes.ResultToProto3(result),
+		ReservedId: reservedID,
+	}, nil
+}
+
+// ReserveBeginExecute is part of the queryservice.QueryServer interface
+func (q *query) ReserveBeginExecute(ctx context.Context, request *querypb.ReserveBeginExecuteRequest) (response *querypb.ReserveBeginExecuteResponse, err error) {
+	defer q.server.HandlePanic(&err)
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	result, transactionID, reservedID, alias, err := q.server.ReserveBeginExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.Options, request.PreQueries)
+	if err != nil {
+		return nil, vterrors.ToGRPC(err)
+	}
+	return &querypb.ReserveBeginExecuteResponse{
+		Result:        sqltypes.ResultToProto3(result),
+		TransactionId: transactionID,
+		ReservedId:    reservedID,
+		TabletAlias:   alias,
+	}, nil
+}
+
+// ReserveTransactionRelease is part of the queryservice.QueryServer interface
+func (q *query) ReserveTransactionRelease(ctx context.Context, request *querypb.ReserveTransactionReleaseRequest) (response *querypb.ReserveTransactionReleaseResponse, err error) {
+	defer q.server.HandlePanic(&err)
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	err = q.server.ReserveTransactionRelease(ctx, request.Target, request.TransactionId, request.ReservedId)
+	if err != nil {
+		return nil, vterrors.ToGRPC(err)
+	}
+	return &querypb.ReserveTransactionReleaseResponse{}, nil
 }
 
 // StreamHealth is part of the queryservice.QueryServer interface

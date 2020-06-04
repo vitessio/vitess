@@ -96,7 +96,7 @@ type SandboxConn struct {
 	TransactionID sync2.AtomicInt64
 
 	// connection id generator
-	ConnectionID sync2.AtomicInt64
+	reservedID sync2.AtomicInt64
 }
 
 var _ queryservice.QueryService = (*SandboxConn)(nil) // compile-time interface check
@@ -126,7 +126,7 @@ func (sbc *SandboxConn) SetResults(r []*sqltypes.Result) {
 }
 
 // Execute is part of the QueryService interface.
-func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, connectionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]*querypb.BindVariable)
 	for k, v := range bindVars {
@@ -196,7 +196,7 @@ func (sbc *SandboxConn) reserveConnection(ctx context.Context, target *querypb.T
 	if err != nil {
 		return 0, err
 	}
-	return sbc.ConnectionID.Add(1), nil
+	return sbc.reservedID.Add(1), nil
 }
 
 // Commit is part of the QueryService interface.
@@ -299,36 +299,41 @@ func (sbc *SandboxConn) ReadTransaction(ctx context.Context, target *querypb.Tar
 }
 
 // BeginExecute is part of the QueryService interface.
-func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, connectionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	transactionID, alias, err := sbc.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, nil, err
 	}
-	result, err := sbc.Execute(ctx, target, query, bindVars, transactionID, connectionID, options)
+	result, err := sbc.Execute(ctx, target, query, bindVars, transactionID, reservedID, options)
 	return result, transactionID, alias, err
 }
 
 // ReserveBeginExecute is part of the QueryService interface.
-func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, preQueries []string) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
 	reservedConnID, err := sbc.reserveConnection(ctx, target, 0, options)
+	// TODO(systay): fake execute preQueries
 	if err != nil {
-		return &sqltypes.Result{}, 0, nil, err
+		return &sqltypes.Result{}, 0, 0, nil, err
 	}
-	return sbc.BeginExecute(ctx, target, query, bindVars, reservedConnID, options)
+	qr, txID, alias, err := sbc.BeginExecute(ctx, target, query, bindVars, reservedConnID, options)
+	//TODO(systay): do we need special handling if err != nil
+	return qr, txID, reservedConnID, alias, err
 }
 
-// ReserveRelease is part of the QueryService interface.
-func (sbc *SandboxConn) ReserveRelease(ctx context.Context, target *querypb.Target, connectionID int64) error {
+// ReserveTransactionRelease is part of the QueryService interface.
+func (sbc *SandboxConn) ReserveTransactionRelease(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
 	return nil
 }
 
 // ReserveExecute is part of the QueryService interface.
-func (sbc *SandboxConn) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
-	reservedConnID, err := sbc.reserveConnection(ctx, target, transactionID, options)
+func (sbc *SandboxConn) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, preQueries []string) (qr *sqltypes.Result, reservedID int64, err error) {
+	reservedID, err = sbc.reserveConnection(ctx, target, transactionID, options)
+	// TODO(systay): fake execute preQueries
 	if err != nil {
-		return &sqltypes.Result{}, err
+		return &sqltypes.Result{}, 0, err
 	}
-	return sbc.Execute(ctx, target, sql, bindVariables, transactionID, reservedConnID, options)
+	qr, err = sbc.Execute(ctx, target, sql, bindVariables, transactionID, reservedID, options)
+	return qr, reservedID, err
 }
 
 // BeginExecuteBatch is part of the QueryService interface.

@@ -775,6 +775,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 	switch data[0] {
 	case ComQuit:
+		// TODO(systay): send a message through to all shards to clean up
 		c.recycleReadPacket()
 		return errors.New("ComQuit")
 	case ComInitDB:

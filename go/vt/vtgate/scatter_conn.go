@@ -184,6 +184,8 @@ func (stc *ScatterConn) Execute(
 					qs, err = rs.Gateway.QueryServiceByAlias(alias)
 				}
 				if err == nil {
+					//TODO(systay): get reservedID from same place as transactionID and pass here
+					// probably transactionInfo
 					innerqr, err = qs.Execute(ctx, rs.Target, query, bindVars, transactionID, options)
 				}
 			}

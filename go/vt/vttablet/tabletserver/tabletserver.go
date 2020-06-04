@@ -985,7 +985,7 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 }
 
 // Execute executes the query and returns the result as response.
-func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, connectionID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
+func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
 	span, ctx := trace.NewSpan(ctx, "TabletServer.Execute")
 	trace.AnnotateSQL(span, sql)
 	defer span.Finish()
@@ -1151,7 +1151,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 }
 
 // BeginExecute combines Begin and Execute.
-func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, connectionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	if tsv.enableHotRowProtection {
 		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
 		if err != nil {
@@ -1167,7 +1167,7 @@ func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Targe
 		return nil, 0, nil, err
 	}
 
-	result, err := tsv.Execute(ctx, target, sql, bindVariables, transactionID, connectionID, options)
+	result, err := tsv.Execute(ctx, target, sql, bindVariables, transactionID, reservedID, options)
 	return result, transactionID, alias, err
 }
 
@@ -1318,35 +1318,42 @@ func (tsv *TabletServer) PurgeMessages(ctx context.Context, target *querypb.Targ
 	})
 }
 
-func (tsv *TabletServer) reserveConnection(ctx context.Context, target *querypb.Target, transactionID int64, options *querypb.ExecuteOptions) (connectionID int64, err error) {
+// placeholder. actual reserve logic to be implemented in TxEngine
+func (tsv *TabletServer) reserveConnection(ctx context.Context, target *querypb.Target, transactionID int64, options *querypb.ExecuteOptions) (reservedID int64, err error) {
 	panic("implement me")
 }
 
-func (tsv *TabletServer) releaseConnection(ctx context.Context, target *querypb.Target, connectionID int64) (err error) {
+// placeholder. actual release logic to be implemented in TxEngine
+func (tsv *TabletServer) releaseConnection(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) (err error) {
 	panic("implement me")
 }
 
 // ReserveExecute reserves a connection and then executes sql on it
-func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, preQueries []string) (*sqltypes.Result, int64, error) {
 	reservedConnID, err := tsv.reserveConnection(ctx, target, transactionID, options)
 	if err != nil {
-		return &sqltypes.Result{}, err
+		return &sqltypes.Result{}, 0, err
 	}
-	return tsv.Execute(ctx, target, sql, bindVariables, transactionID, reservedConnID, options)
+	// TODO(systay): execute preQueries
+	qr, err := tsv.Execute(ctx, target, sql, bindVariables, transactionID, reservedConnID, options)
+	return qr, reservedConnID, err
 }
 
 // ReserveBeginExecute performs a reserve following by BeginExecute
-func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, preQueries []string) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
 	reservedConnID, err := tsv.reserveConnection(ctx, target, 0, options)
 	if err != nil {
-		return &sqltypes.Result{}, 0, nil, err
+		return &sqltypes.Result{}, 0, 0, nil, err
 	}
-	return tsv.BeginExecute(ctx, target, sql, bindVariables, reservedConnID, options)
+	// TODO(systay): execute preQueries
+	qr, txID, alias, err := tsv.BeginExecute(ctx, target, sql, bindVariables, reservedConnID, options)
+	// TODO(systay): special handling for err != nil?
+	return qr, txID, reservedConnID, alias, err
 }
 
-// ReserveRelease releases a reserved connection
-func (tsv *TabletServer) ReserveRelease(ctx context.Context, target *querypb.Target, connectionID int64) error {
-	return tsv.releaseConnection(ctx, target, connectionID)
+// ReserveTransactionRelease releases a reserved connection
+func (tsv *TabletServer) ReserveTransactionRelease(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
+	return tsv.releaseConnection(ctx, target, transactionID, reservedID)
 }
 
 func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, queryGenerator func() (string, map[string]*querypb.BindVariable, error)) (count int64, err error) {
@@ -1372,7 +1379,7 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 			tsv.Rollback(ctx, target, transactionID)
 		}
 	}()
-	// TODO(deepthi):  are we sure connectionID can be passed as 0 here?
+	// TODO(deepthi):  are we sure reservedID can be passed as 0 here?
 	qr, err := tsv.Execute(ctx, target, query, bv, transactionID, 0, nil)
 	if err != nil {
 		return 0, err
