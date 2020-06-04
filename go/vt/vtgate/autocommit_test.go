@@ -248,9 +248,9 @@ func TestAutocommitInsertSharded(t *testing.T) {
 	require.NoError(t, err)
 
 	testBatchQuery(t, "sbc1", sbc1, &querypb.BoundQuery{
-		Sql: "insert into user_extra(user_id, v) values (:_user_id0, 2)",
+		Sql: "insert into user_extra(user_id, v) values (:_user_id_0, 2)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"_user_id0": sqltypes.Int64BindVariable(1),
+			"_user_id_0": sqltypes.Int64BindVariable(1),
 		},
 	})
 	testAsTransactionCount(t, "sbc1", sbc1, 1)
@@ -279,11 +279,11 @@ func TestAutocommitInsertLookup(t *testing.T) {
 	testCommitCount(t, "sbclookup", sbclookup, 1)
 
 	testQueries(t, "sbc1", sbc1, []*querypb.BoundQuery{{
-		Sql: "insert into user(id, v, name) values (:_Id0, 2, :_name0)",
+		Sql: "insert into user(id, v, name) values (:_Id_0, 2, :_name_0)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"_Id0":   sqltypes.Int64BindVariable(1),
-			"_name0": sqltypes.BytesBindVariable([]byte("myname")),
-			"__seq0": sqltypes.Int64BindVariable(1),
+			"_Id_0":   sqltypes.Int64BindVariable(1),
+			"_name_0": sqltypes.BytesBindVariable([]byte("myname")),
+			"__seq0":  sqltypes.Int64BindVariable(1),
 		},
 	}})
 	testAsTransactionCount(t, "sbc1", sbc1, 0)
@@ -298,20 +298,20 @@ func TestAutocommitInsertMultishardAutoCommit(t *testing.T) {
 	require.NoError(t, err)
 
 	testBatchQuery(t, "sbc1", sbc1, &querypb.BoundQuery{
-		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id0, 2)",
+		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id_0, 2)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"_user_id0": sqltypes.Int64BindVariable(1),
-			"_user_id1": sqltypes.Int64BindVariable(3),
+			"_user_id_0": sqltypes.Int64BindVariable(1),
+			"_user_id_1": sqltypes.Int64BindVariable(3),
 		},
 	})
 	testAsTransactionCount(t, "sbc1", sbc1, 1)
 	testCommitCount(t, "sbc1", sbc1, 0)
 
 	testBatchQuery(t, "sbc2", sbc2, &querypb.BoundQuery{
-		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id1, 4)",
+		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id_1, 4)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"_user_id0": sqltypes.Int64BindVariable(1),
-			"_user_id1": sqltypes.Int64BindVariable(3),
+			"_user_id_0": sqltypes.Int64BindVariable(1),
+			"_user_id_1": sqltypes.Int64BindVariable(3),
 		},
 	})
 	testAsTransactionCount(t, "sbc2", sbc2, 1)
@@ -330,10 +330,10 @@ func TestAutocommitInsertMultishardAutoCommit(t *testing.T) {
 	testCommitCount(t, "sbc1", sbc1, 0)
 
 	testBatchQuery(t, "sbc2", sbc2, &querypb.BoundQuery{
-		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id1, 4)",
+		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (:_user_id_1, 4)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"_user_id0": sqltypes.Int64BindVariable(1),
-			"_user_id1": sqltypes.Int64BindVariable(3),
+			"_user_id_0": sqltypes.Int64BindVariable(1),
+			"_user_id_1": sqltypes.Int64BindVariable(3),
 		},
 	})
 	testAsTransactionCount(t, "sbc2", sbc2, 1)
@@ -348,20 +348,20 @@ func TestAutocommitInsertMultishard(t *testing.T) {
 	require.NoError(t, err)
 
 	testQueries(t, "sbc1", sbc1, []*querypb.BoundQuery{{
-		Sql: "insert into user_extra(user_id, v) values (:_user_id0, 2)",
+		Sql: "insert into user_extra(user_id, v) values (:_user_id_0, 2)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"_user_id0": sqltypes.Int64BindVariable(1),
-			"_user_id1": sqltypes.Int64BindVariable(3),
+			"_user_id_0": sqltypes.Int64BindVariable(1),
+			"_user_id_1": sqltypes.Int64BindVariable(3),
 		},
 	}})
 	testAsTransactionCount(t, "sbc1", sbc1, 0)
 	testCommitCount(t, "sbc1", sbc1, 1)
 
 	testQueries(t, "sbc2", sbc2, []*querypb.BoundQuery{{
-		Sql: "insert into user_extra(user_id, v) values (:_user_id1, 4)",
+		Sql: "insert into user_extra(user_id, v) values (:_user_id_1, 4)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"_user_id0": sqltypes.Int64BindVariable(1),
-			"_user_id1": sqltypes.Int64BindVariable(3),
+			"_user_id_0": sqltypes.Int64BindVariable(1),
+			"_user_id_1": sqltypes.Int64BindVariable(3),
 		},
 	}})
 	testAsTransactionCount(t, "sbc2", sbc2, 0)
