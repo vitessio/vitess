@@ -127,6 +127,7 @@ func (uvs *uvstreamer) Cancel() {
 	uvs.cancel()
 }
 
+// during copy phase only send streaming events (during catchup/fastforward) for pks already seen
 func (uvs *uvstreamer) filterEvents(evs []*binlogdatapb.VEvent) []*binlogdatapb.VEvent {
 	if len(uvs.plans) == 0 {
 		return evs
@@ -151,20 +152,18 @@ func (uvs *uvstreamer) filterEvents(evs []*binlogdatapb.VEvent) []*binlogdatapb.
 		if !shouldSend && tableName != "" {
 			shouldSend = true
 			_, ok := uvs.plans[tableName]
-			if ok && uvs.plans[tableName].tablePK == nil {
+			if ok {
 				shouldSend = false
 			}
 		}
 		if shouldSend {
 			evs2 = append(evs2, ev)
-			//log.Infof("shouldSend: sending %v table %s", ev.String(), tableName)
 		}
-		//log.Infof("shouldSend: filtering out %v", ev.String())
-
 	}
 	return evs2
 }
 
+// wraps the send parameter and filters events. called by fastforward/catchup
 func (uvs *uvstreamer) send2(evs []*binlogdatapb.VEvent) error {
 	if len(evs) == 0 {
 		return nil
@@ -209,7 +208,7 @@ func (uvs *uvstreamer) sendEventsForCurrentPos() error {
 	return nil
 }
 
-func (uvs *uvstreamer) setStreamPosition() error {
+func (uvs *uvstreamer) setStreamStartPosition() error {
 	if uvs.startPos != "" {
 		curPos, err := uvs.currentPosition()
 		if err != nil {
@@ -217,7 +216,9 @@ func (uvs *uvstreamer) setStreamPosition() error {
 		}
 		if uvs.startPos == "current" {
 			uvs.pos = curPos
-			uvs.sendEventsForCurrentPos()
+			if err := uvs.sendEventsForCurrentPos(); err != nil {
+				return err
+			}
 			return nil
 		}
 		pos, err := mysql.DecodePosition(uvs.startPos)
@@ -242,7 +243,7 @@ func (uvs *uvstreamer) currentPosition() (mysql.Position, error) {
 	return conn.MasterPosition()
 }
 func (uvs *uvstreamer) init() error {
-	if err := uvs.setStreamPosition(); err != nil {
+	if err := uvs.setStreamStartPosition(); err != nil {
 		return err
 	} //startpos validation for tablepk != nil
 	if uvs.pos.IsZero() && (len(uvs.plans) == 0) {
@@ -282,7 +283,6 @@ func (uvs *uvstreamer) SetVSchema(vschema *localVSchema) {
 
 func (uvs *uvstreamer) setCopyState(tableName string, qr *querypb.QueryResult) {
 	uvs.plans[tableName].tablePK.Lastpk = qr
-
 }
 
 // dummy event sent only in test mode
@@ -294,11 +294,12 @@ func (uvs *uvstreamer) sendTestEvent(msg string) {
 		Type: binlogdatapb.VEventType_OTHER,
 		Gtid: msg,
 	}
-	uvs.send([]*binlogdatapb.VEvent{ev})
+	if err := uvs.send([]*binlogdatapb.VEvent{ev}); err != nil {
+		return
+	}
 }
 
 func (uvs *uvstreamer) copyComplete(tableName string) error {
-
 	evs := []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_BEGIN},
 		{
