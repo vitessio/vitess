@@ -173,7 +173,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	startVStreamCopy(ctx, t, filter, tablePKs)
 
 	select {
-	case <-time.After(10 * time.Second):
+	case <-time.After(5 * time.Second):
 		printAllEvents("Timed out")
 		t.Fatal("Timed out waiting for events")
 	case <-ctx.Done():

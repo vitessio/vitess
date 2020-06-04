@@ -218,6 +218,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	numExpectedEvents := 2 /* num shards */ * (9 /* begin/field/vgtid:pos/4 rowevents/vgitd: lastpk/commit) */ + 3 /* begin/vgtid/commit for completed table */)
 	require.NotNil(t, reader)
 	var evs []*binlogdatapb.VEvent
 	for {
@@ -225,11 +226,11 @@ func TestVStreamCopyBasic(t *testing.T) {
 		switch err {
 		case nil:
 			evs = append(evs, e...)
-			if len(evs) == 24 { //FIXME: add logic / check for actual events, note they may not be in order
+			if len(evs) == numExpectedEvents {
 				t.Logf("TestVStreamCopyBasic was successful")
 				return
 			}
-			printEvents(evs)
+			printEvents(evs) // for debugging ci failures
 		case io.EOF:
 			log.Infof("stream ended\n")
 			cancel()
