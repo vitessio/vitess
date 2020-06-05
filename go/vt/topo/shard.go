@@ -342,7 +342,7 @@ func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard, cell st
 
 	// make sure a valid vschema has been loaded
 	log.Info("EnsureVSchema %s/%s", keyspace, shard)
-	if err = ts.EnsureVSchema(ctx, keyspace, []string{cell}); err != nil {
+	if err = ts.EnsureVSchema(ctx, keyspace); err != nil {
 		return nil, vterrors.Wrapf(err, "EnsureVSchema(%v) failed", keyspace)
 	}
 
