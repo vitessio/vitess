@@ -681,6 +681,7 @@ message ReserveExecuteResponse {
   vtrpc.RPCError error = 1;
   QueryResult result = 2;
   int64 reserved_id = 3;
+  topodata.TabletAlias tablet_alias = 4;
 }
 
 // ReserveBeginExecuteRequest is the payload to ReserveBeginExecute

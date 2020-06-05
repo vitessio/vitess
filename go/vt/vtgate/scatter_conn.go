@@ -198,6 +198,18 @@ func (stc *ScatterConn) executeOne(
 			return 0, 0, nil, nil, err
 		}
 		return transactionID, reservedID, alias, innerqr, nil
+	case info.shouldBegin:
+		innerqr, transactionID, alias, err := rs.Gateway.BeginExecute(ctx, rs.Target, query, bv, info.reserveID, opts)
+		if err != nil {
+			return 0, 0, nil, nil, err
+		}
+		return transactionID, info.reserveID, alias, innerqr, nil
+	case info.shouldReserve:
+		innerqr, reservedID, alias, err := rs.Gateway.ReserveExecute(ctx, rs.Target, query, bv, info.transactionID, opts, session.SetSystemVarQueries())
+		if err != nil {
+			return 0, 0, nil, nil, err
+		}
+		return info.transactionID, reservedID, alias, innerqr, nil
 	default:
 		var qs queryservice.QueryService
 		_, usingLegacy := rs.Gateway.(*DiscoveryGateway)
@@ -498,7 +510,7 @@ func (stc *ScatterConn) multiGoTxOrReserve(
 
 		connInfo := txAndReservedInfo(rs.Target, session, notInTransaction, needReserved)
 		query, bindVars := query(shardIdx)
-		transactionID, reservedID, alias, result, err := stc.executeOne(ctx, rs, connInfo, query, bindVars, autocommit, session, options)
+		transactionID, reservedID, alias, innerResult, err := stc.executeOne(ctx, rs, connInfo, query, bindVars, autocommit, session, options)
 		if err != nil {
 			stc.handleError(err, statsKey, session)
 			errors[shardIdx] = err
@@ -517,7 +529,7 @@ func (stc *ScatterConn) multiGoTxOrReserve(
 		defer mu.Unlock()
 		// Don't append more rows if row count is exceeded.
 		if len(result.Rows) <= *maxMemoryRows {
-			result.AppendResult(result)
+			result.AppendResult(innerResult)
 		}
 	}
 

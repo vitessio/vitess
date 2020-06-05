@@ -443,13 +443,13 @@ func (itc *internalTabletConn) MessageAck(ctx context.Context, target *querypb.T
 
 // ReserveExecute is part of queryservice.QueryService
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) ReserveExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, preQueries []string) (*sqltypes.Result, int64, error) {
+func (itc *internalTabletConn) ReserveExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, preQueries []string) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	bindVars = sqltypes.CopyBindVariables(bindVars)
-	reply, rID, err := itc.tablet.qsc.QueryService().ReserveExecute(ctx, target, query, bindVars, reservedID, options, preQueries)
+	reply, rID, alias, err := itc.tablet.qsc.QueryService().ReserveExecute(ctx, target, query, bindVars, reservedID, options, preQueries)
 	if err != nil {
-		return nil, 0, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+		return nil, 0, nil, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 	}
-	return reply, rID, nil
+	return reply, rID, alias, nil
 }
 
 // ReserveBeginExecute is part of queryservice.QueryService

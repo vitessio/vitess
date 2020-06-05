@@ -334,13 +334,14 @@ func (q *query) ReserveExecute(ctx context.Context, request *querypb.ReserveExec
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	result, reservedID, err := q.server.ReserveExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, request.PreQueries)
+	result, reservedID, alias, err := q.server.ReserveExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, request.PreQueries)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
 	return &querypb.ReserveExecuteResponse{
-		Result:     sqltypes.ResultToProto3(result),
-		ReservedId: reservedID,
+		Result:      sqltypes.ResultToProto3(result),
+		ReservedId:  reservedID,
+		TabletAlias: alias,
 	}, nil
 }
 

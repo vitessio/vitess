@@ -96,7 +96,7 @@ type QueryService interface {
 	MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error
 	MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (count int64, err error)
 
-	ReserveExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, preQueries []string) (*sqltypes.Result, int64, error)
+	ReserveExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, preQueries []string) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error)
 	ReserveBeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, preQueries []string) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error)
 	ReserveTransactionRelease(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error
 

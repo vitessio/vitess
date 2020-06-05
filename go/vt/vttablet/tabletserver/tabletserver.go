@@ -1319,7 +1319,7 @@ func (tsv *TabletServer) PurgeMessages(ctx context.Context, target *querypb.Targ
 }
 
 // placeholder. actual reserve logic to be implemented in TxEngine
-func (tsv *TabletServer) reserveConnection(ctx context.Context, target *querypb.Target, transactionID int64, options *querypb.ExecuteOptions) (reservedID int64, err error) {
+func (tsv *TabletServer) reserveConnection(ctx context.Context, target *querypb.Target, transactionID int64, options *querypb.ExecuteOptions) (int64, *topodatapb.TabletAlias, error) {
 	panic("implement me")
 }
 
@@ -1329,21 +1329,21 @@ func (tsv *TabletServer) releaseConnection(ctx context.Context, target *querypb.
 }
 
 // ReserveExecute reserves a connection and then executes sql on it
-func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, preQueries []string) (*sqltypes.Result, int64, error) {
-	reservedConnID, err := tsv.reserveConnection(ctx, target, transactionID, options)
+func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, preQueries []string) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	reservedConnID, alias, err := tsv.reserveConnection(ctx, target, transactionID, options)
 	if err != nil {
-		return &sqltypes.Result{}, 0, err
+		return nil, 0, nil, err
 	}
 	// TODO(systay): execute preQueries
 	qr, err := tsv.Execute(ctx, target, sql, bindVariables, transactionID, reservedConnID, options)
-	return qr, reservedConnID, err
+	return qr, reservedConnID, alias, err
 }
 
 // ReserveBeginExecute performs a reserve following by BeginExecute
 func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, preQueries []string) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
-	reservedConnID, err := tsv.reserveConnection(ctx, target, 0, options)
+	reservedConnID, _, err := tsv.reserveConnection(ctx, target, 0, options)
 	if err != nil {
-		return &sqltypes.Result{}, 0, 0, nil, err
+		return nil, 0, 0, nil, err
 	}
 	// TODO(systay): execute preQueries
 	qr, txID, alias, err := tsv.BeginExecute(ctx, target, sql, bindVariables, reservedConnID, options)

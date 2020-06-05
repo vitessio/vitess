@@ -236,16 +236,16 @@ func (ws *wrappedService) MessageAck(ctx context.Context, target *querypb.Target
 	return count, err
 }
 
-func (ws *wrappedService) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, preQueries []string) (qr *sqltypes.Result, reservedID int64, err error) {
-	inTransaction := (transactionID != 0)
+func (ws *wrappedService) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, preQueries []string) (qr *sqltypes.Result, reservedID int64, alias *topodatapb.TabletAlias, err error) {
+	inTransaction := transactionID != 0
 	err = ws.wrapper(ctx, target, ws.impl, "ReserveExecute", inTransaction, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
-		qr, reservedID, innerErr = conn.ReserveExecute(ctx, target, sql, bindVariables, transactionID, options, preQueries)
+		qr, reservedID, alias, innerErr = conn.ReserveExecute(ctx, target, sql, bindVariables, transactionID, options, preQueries)
 		// You cannot retry if you're in a transaction.
 		retryable := canRetry(ctx, innerErr) && (!inTransaction)
 		return retryable, innerErr
 	})
-	return qr, reservedID, err
+	return qr, reservedID, alias, err
 
 }
 

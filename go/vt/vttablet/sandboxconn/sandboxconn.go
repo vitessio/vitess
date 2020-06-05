@@ -190,13 +190,13 @@ func (sbc *SandboxConn) Begin(ctx context.Context, target *querypb.Target, optio
 	return sbc.TransactionID.Add(1), sbc.tablet.Alias, nil
 }
 
-func (sbc *SandboxConn) reserveConnection(ctx context.Context, target *querypb.Target, transactionID int64, options *querypb.ExecuteOptions) (int64, error) {
+func (sbc *SandboxConn) reserveConnection(ctx context.Context, target *querypb.Target, transactionID int64, options *querypb.ExecuteOptions) (int64, *topodatapb.TabletAlias, error) {
 	sbc.ReserveCount.Add(1)
 	err := sbc.getError()
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
-	return sbc.reservedID.Add(1), nil
+	return sbc.reservedID.Add(1), sbc.tablet.Alias, nil
 }
 
 // Commit is part of the QueryService interface.
@@ -310,7 +310,7 @@ func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target
 
 // ReserveBeginExecute is part of the QueryService interface.
 func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, preQueries []string) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
-	reservedConnID, err := sbc.reserveConnection(ctx, target, 0, options)
+	reservedConnID, _, err := sbc.reserveConnection(ctx, target, 0, options)
 	// TODO(systay): fake execute preQueries
 	if err != nil {
 		return &sqltypes.Result{}, 0, 0, nil, err
@@ -326,14 +326,14 @@ func (sbc *SandboxConn) ReserveTransactionRelease(ctx context.Context, target *q
 }
 
 // ReserveExecute is part of the QueryService interface.
-func (sbc *SandboxConn) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, preQueries []string) (qr *sqltypes.Result, reservedID int64, err error) {
-	reservedID, err = sbc.reserveConnection(ctx, target, transactionID, options)
+func (sbc *SandboxConn) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, preQueries []string) (qr *sqltypes.Result, reservedID int64, alias *topodatapb.TabletAlias, err error) {
+	reservedID, alias, err = sbc.reserveConnection(ctx, target, transactionID, options)
 	// TODO(systay): fake execute preQueries
 	if err != nil {
-		return &sqltypes.Result{}, 0, err
+		return nil, 0, nil, err
 	}
 	qr, err = sbc.Execute(ctx, target, sql, bindVariables, transactionID, reservedID, options)
-	return qr, reservedID, err
+	return qr, reservedID, alias, err
 }
 
 // BeginExecuteBatch is part of the QueryService interface.
