@@ -195,8 +195,9 @@ func (e *Executor) legacyExecute(ctx context.Context, safeSession *SafeSession, 
 		return 0, nil, err
 	}
 
-	if safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
-		return 0, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", destTabletType)
+	// Legacy gateway allows transactions only on MASTER
+	if UsingLegacyGateway() && safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
+		return 0, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Executor.execute: transactions are supported only for master tablet types, current type: %v", destTabletType)
 	}
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
@@ -267,9 +268,6 @@ func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession
 }
 
 func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
-	if destTabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", destTabletType)
-	}
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	err := e.txConn.Begin(ctx, safeSession)
@@ -834,64 +832,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			RowsAffected: uint64(len(rows)),
 		}, nil
 	case "vitess_tablets":
-		var rows [][]sqltypes.Value
-		if *GatewayImplementation == GatewayImplementationDiscovery {
-			status := e.scatterConn.GetLegacyHealthCheckCacheStatus()
-			for _, s := range status {
-				for _, ts := range s.TabletsStats {
-					state := "SERVING"
-					if !ts.Serving {
-						state = "NOT_SERVING"
-					}
-					mtst := ts.Tablet.MasterTermStartTime
-					mtstStr := ""
-					if mtst != nil && mtst.Seconds > 0 {
-						mtstStr = logutil.ProtoToTime(ts.Tablet.MasterTermStartTime).Format(time.RFC3339)
-					}
-					rows = append(rows, buildVarCharRow(
-						s.Cell,
-						s.Target.Keyspace,
-						s.Target.Shard,
-						ts.Target.TabletType.String(),
-						state,
-						topoproto.TabletAliasString(ts.Tablet.Alias),
-						ts.Tablet.Hostname,
-						mtstStr,
-					))
-				}
-			}
-		}
-		if *GatewayImplementation == tabletGatewayImplementation {
-			status := e.scatterConn.GetHealthCheckCacheStatus()
-			for _, s := range status {
-				for _, ts := range s.TabletsStats {
-					state := "SERVING"
-					if !ts.Serving {
-						state = "NOT_SERVING"
-					}
-					mtst := ts.Tablet.MasterTermStartTime
-					mtstStr := ""
-					if mtst != nil && mtst.Seconds > 0 {
-						mtstStr = logutil.ProtoToTime(ts.Tablet.MasterTermStartTime).Format(time.RFC3339)
-					}
-					rows = append(rows, buildVarCharRow(
-						s.Cell,
-						s.Target.Keyspace,
-						s.Target.Shard,
-						ts.Target.TabletType.String(),
-						state,
-						topoproto.TabletAliasString(ts.Tablet.Alias),
-						ts.Tablet.Hostname,
-						mtstStr,
-					))
-				}
-			}
-		}
-		return &sqltypes.Result{
-			Fields:       buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "MasterTermStartTime"),
-			Rows:         rows,
-			RowsAffected: uint64(len(rows)),
-		}, nil
+		return e.showTablets()
 	case "vitess_target":
 		var rows [][]sqltypes.Value
 		rows = append(rows, buildVarCharRow(safeSession.TargetString))
@@ -1036,6 +977,66 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 
 	// Any other show statement is passed through
 	return e.handleOther(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
+}
+
+func (e *Executor) showTablets() (*sqltypes.Result, error) {
+	var rows [][]sqltypes.Value
+	if UsingLegacyGateway() {
+		status := e.scatterConn.GetLegacyHealthCheckCacheStatus()
+		for _, s := range status {
+			for _, ts := range s.TabletsStats {
+				state := "SERVING"
+				if !ts.Serving {
+					state = "NOT_SERVING"
+				}
+				mtst := ts.Tablet.MasterTermStartTime
+				mtstStr := ""
+				if mtst != nil && mtst.Seconds > 0 {
+					mtstStr = logutil.ProtoToTime(ts.Tablet.MasterTermStartTime).Format(time.RFC3339)
+				}
+				rows = append(rows, buildVarCharRow(
+					s.Cell,
+					s.Target.Keyspace,
+					s.Target.Shard,
+					ts.Target.TabletType.String(),
+					state,
+					topoproto.TabletAliasString(ts.Tablet.Alias),
+					ts.Tablet.Hostname,
+					mtstStr,
+				))
+			}
+		}
+	} else {
+		status := e.scatterConn.GetHealthCheckCacheStatus()
+		for _, s := range status {
+			for _, ts := range s.TabletsStats {
+				state := "SERVING"
+				if !ts.Serving {
+					state = "NOT_SERVING"
+				}
+				mtst := ts.Tablet.MasterTermStartTime
+				mtstStr := ""
+				if mtst != nil && mtst.Seconds > 0 {
+					mtstStr = logutil.ProtoToTime(ts.Tablet.MasterTermStartTime).Format(time.RFC3339)
+				}
+				rows = append(rows, buildVarCharRow(
+					s.Cell,
+					s.Target.Keyspace,
+					s.Target.Shard,
+					ts.Target.TabletType.String(),
+					state,
+					topoproto.TabletAliasString(ts.Tablet.Alias),
+					ts.Tablet.Hostname,
+					mtstStr,
+				))
+			}
+		}
+	}
+	return &sqltypes.Result{
+		Fields:       buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "MasterTermStartTime"),
+		Rows:         rows,
+		RowsAffected: uint64(len(rows)),
+	}, nil
 }
 
 func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
@@ -1515,8 +1516,8 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 		return nil, err
 	}
 
-	if safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", destTabletType)
+	if UsingLegacyGateway() && safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Executor.prepare: transactions are supported only for master tablet types, current type: %v", destTabletType)
 	}
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)

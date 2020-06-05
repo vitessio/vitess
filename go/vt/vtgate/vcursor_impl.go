@@ -135,9 +135,9 @@ func newVCursorImpl(ctx context.Context, safeSession *SafeSession, marginComment
 		return nil, err
 	}
 
-	// Check for transaction to be only application in master.
-	if safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", tabletType)
+	// With DiscoveryGateway transactions are only allowed on master.
+	if UsingLegacyGateway() && safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "newVCursorImpl: transactions are supported only for master tablet types, current type: %v", tabletType)
 	}
 
 	return &vcursorImpl{

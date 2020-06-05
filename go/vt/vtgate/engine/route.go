@@ -23,6 +23,9 @@ import (
 	"strconv"
 	"time"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/mysql"
@@ -551,6 +554,15 @@ func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) 
 		shardVars[i] = newbv
 	}
 	return shardVars
+}
+
+func allowOnlyMaster(rss ...*srvtopo.ResolvedShard) error {
+	for _, rs := range rss {
+		if rs != nil && rs.Target.TabletType != topodatapb.TabletType_MASTER {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "supported only for master tablet type, current type: %v", topoproto.TabletTypeLString(rs.Target.TabletType))
+		}
+	}
+	return nil
 }
 
 func (route *Route) description() PrimitiveDescription {

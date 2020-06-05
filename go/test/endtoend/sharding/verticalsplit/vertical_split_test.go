@@ -670,11 +670,11 @@ func initializeCluster() (int, error) {
 			tabletUID := clusterInstance.GetAndReserveTabletUID()
 			var tablet *cluster.Vttablet
 			if i == 0 {
-				tablet = clusterInstance.GetVttabletInstance("replica", tabletUID, cellj)
+				tablet = clusterInstance.NewVttabletInstance("replica", tabletUID, cellj)
 			} else if i == 1 {
-				tablet = clusterInstance.GetVttabletInstance("replica", tabletUID, cellj)
+				tablet = clusterInstance.NewVttabletInstance("replica", tabletUID, cellj)
 			} else {
-				tablet = clusterInstance.GetVttabletInstance("rdonly", tabletUID, cellj)
+				tablet = clusterInstance.NewVttabletInstance("rdonly", tabletUID, cellj)
 			}
 			// Start Mysqlctl process
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)

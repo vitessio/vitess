@@ -93,17 +93,17 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		tablet62344 = clusterInstance.GetVttabletInstance("replica", 62344, "")
-		tablet62044 = clusterInstance.GetVttabletInstance("replica", 62044, "")
-		tablet41983 = clusterInstance.GetVttabletInstance("replica", 41983, "")
-		tablet31981 = clusterInstance.GetVttabletInstance("replica", 31981, cell2)
+		tablet62344 = clusterInstance.NewVttabletInstance("replica", 62344, "")
+		tablet62044 = clusterInstance.NewVttabletInstance("replica", 62044, "")
+		tablet41983 = clusterInstance.NewVttabletInstance("replica", 41983, "")
+		tablet31981 = clusterInstance.NewVttabletInstance("replica", 31981, cell2)
 
 		shard0 := &cluster.Shard{Name: shardName}
 		shard0.Vttablets = []*cluster.Vttablet{tablet62344, tablet62044, tablet41983, tablet31981}
 
 		// Initiate shard1 - required for ranged based reparenting
-		masterTablet = clusterInstance.GetVttabletInstance("replica", 0, "")
-		replicaTablet = clusterInstance.GetVttabletInstance("replica", 0, "")
+		masterTablet = clusterInstance.NewVttabletInstance("replica", 0, "")
+		replicaTablet = clusterInstance.NewVttabletInstance("replica", 0, "")
 
 		shard1 := &cluster.Shard{Name: shard1Name}
 		shard1.Vttablets = []*cluster.Vttablet{masterTablet, replicaTablet}
@@ -127,6 +127,7 @@ func TestMain(m *testing.M) {
 				if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
 					return 1
 				} else {
+					// ignore golint warning, we need the else block to use proc
 					mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 				}
 			}

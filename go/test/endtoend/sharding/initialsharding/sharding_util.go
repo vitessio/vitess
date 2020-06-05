@@ -145,11 +145,11 @@ func initClusterForInitialSharding(keyspaceName string, shardNames []string, tot
 			// instantiate vttablet object with reserved ports
 			var tablet *cluster.Vttablet
 			if i == totalTabletsRequired-1 && rdonly {
-				tablet = ClusterInstance.GetVttabletInstance("rdonly", 0, "")
+				tablet = ClusterInstance.NewVttabletInstance("rdonly", 0, "")
 			} else if i == 0 {
-				tablet = ClusterInstance.GetVttabletInstance("master", 0, "")
+				tablet = ClusterInstance.NewVttabletInstance("master", 0, "")
 			} else {
-				tablet = ClusterInstance.GetVttabletInstance("replica", 0, "")
+				tablet = ClusterInstance.NewVttabletInstance("replica", 0, "")
 			}
 			// Start Mysqlctl process
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, ClusterInstance.TmpDirectory)
@@ -163,6 +163,7 @@ func initClusterForInitialSharding(keyspaceName string, shardNames []string, tot
 				if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
 					return
 				} else {
+					// ignore golint warning, we need the else block to use proc
 					mysqlProcesses = append(mysqlProcesses, proc)
 				}
 			} else { // Since we'll be using mysql procs of keyspace-1 for ks-2, resetting this to 0
@@ -320,7 +321,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	for _, vttablet := range shard1.Vttablets {
 		_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("ReloadSchema", vttablet.Alias)
 	}
-	vtgateInstance := ClusterInstance.GetVtgateInstance()
+	vtgateInstance := ClusterInstance.NewVtgateInstance()
 	vtgateInstance.PidFile = path.Join(ClusterInstance.TmpDirectory, fmt.Sprintf("vtgate-%s.pid", keyspaceName))
 	vtgateInstance.MySQLServerSocketPath = path.Join(ClusterInstance.TmpDirectory, fmt.Sprintf("mysql-%s.sock", keyspaceName))
 	vtgateInstance.ExtraArgs = []string{"-retry-count", fmt.Sprintf("%d", 2), "-tablet_protocol", "grpc", "-normalize_queries", "-tablet_refresh_interval", "2s"}

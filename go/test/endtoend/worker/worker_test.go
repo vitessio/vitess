@@ -560,15 +560,15 @@ func initializeCluster(t *testing.T, onlyTopo bool) (int, error) {
 	}
 
 	// Defining all the tablets
-	master = localCluster.GetVttabletInstance("replica", 0, "")
-	replica1 = localCluster.GetVttabletInstance("replica", 0, "")
-	rdOnly1 = localCluster.GetVttabletInstance("rdonly", 0, "")
-	shard0Master = localCluster.GetVttabletInstance("replica", 0, "")
-	shard0Replica = localCluster.GetVttabletInstance("replica", 0, "")
-	shard0RdOnly1 = localCluster.GetVttabletInstance("rdonly", 0, "")
-	shard1Master = localCluster.GetVttabletInstance("replica", 0, "")
-	shard1Replica = localCluster.GetVttabletInstance("replica", 0, "")
-	shard1RdOnly1 = localCluster.GetVttabletInstance("rdonly", 0, "")
+	master = localCluster.NewVttabletInstance("replica", 0, "")
+	replica1 = localCluster.NewVttabletInstance("replica", 0, "")
+	rdOnly1 = localCluster.NewVttabletInstance("rdonly", 0, "")
+	shard0Master = localCluster.NewVttabletInstance("replica", 0, "")
+	shard0Replica = localCluster.NewVttabletInstance("replica", 0, "")
+	shard0RdOnly1 = localCluster.NewVttabletInstance("rdonly", 0, "")
+	shard1Master = localCluster.NewVttabletInstance("replica", 0, "")
+	shard1Replica = localCluster.NewVttabletInstance("replica", 0, "")
+	shard1RdOnly1 = localCluster.NewVttabletInstance("rdonly", 0, "")
 
 	shard.Vttablets = []*cluster.Vttablet{master, replica1, rdOnly1}
 	shard0.Vttablets = []*cluster.Vttablet{shard0Master, shard0Replica, shard0RdOnly1}

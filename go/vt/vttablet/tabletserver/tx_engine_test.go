@@ -57,7 +57,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Normal close with timeout wait.
 	te.open()
-	c, beginSQL, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	c, beginSQL, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false)
 	require.NoError(t, err)
 	require.Equal(t, "begin", beginSQL)
 	c.Unlock()
@@ -69,7 +69,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close.
 	te.open()
-	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period.
 	te.shutdownGracePeriod = 250 * time.Millisecond
 	te.open()
-	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period, but pool gets empty early.
 	te.shutdownGracePeriod = 250 * time.Millisecond
 	te.open()
-	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close, but connection is in use.
 	te.open()
-	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false)
 	require.NoError(t, err)
 	go func() {
 		time.Sleep(100 * time.Millisecond)
@@ -136,6 +136,30 @@ func TestTxEngineClose(t *testing.T) {
 	if diff := time.Since(start); diff < 100*time.Millisecond {
 		t.Errorf("Close time: %v, must be over 0.1", diff)
 	}
+}
+
+func TestTxEngineBegin(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	config := tabletenv.NewDefaultConfig()
+	config.DB = newDBConfigs(db)
+	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
+	te.AcceptReadOnly()
+	tx1, _, err := te.Begin(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	_, err = te.Commit(ctx, tx1)
+	require.NoError(t, err)
+	require.Equal(t, "start transaction read only;commit", db.QueryLog())
+	db.ResetQueryLog()
+
+	te.AcceptReadWrite()
+	tx2, _, err := te.Begin(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	_, err = te.Commit(ctx, tx2)
+	require.NoError(t, err)
+	require.Equal(t, "begin;commit", db.QueryLog())
+
 }
 
 type TxType int

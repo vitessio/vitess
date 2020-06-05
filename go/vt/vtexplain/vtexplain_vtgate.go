@@ -82,7 +82,7 @@ func newFakeResolver(opts *Options, hc discovery.LegacyHealthCheck, serv srvtopo
 		txMode = vtgatepb.TransactionMode_TWOPC
 	}
 	tc := vtgate.NewTxConn(gw, txMode)
-	sc := vtgate.LegacyNewScatterConn("", tc, gw, hc)
+	sc := vtgate.NewLegacyScatterConn("", tc, gw, hc)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	return vtgate.NewResolver(srvResolver, serv, cell, sc)
 }

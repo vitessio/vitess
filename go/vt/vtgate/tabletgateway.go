@@ -48,11 +48,42 @@ func init() {
 	RegisterGatewayCreator(tabletGatewayImplementation, createTabletGateway)
 }
 
+//HealthCheck declares what the TabletGateway needs from the HealthCheck
+type HealthCheck interface {
+	// CacheStatus returns a displayable version of the health check cache.
+	CacheStatus() discovery.TabletsCacheStatusList
+
+	// Close stops the healthcheck.
+	Close() error
+
+	// WaitForAllServingTablets waits for at least one healthy serving tablet in
+	// each given target before returning.
+	// It will return ctx.Err() if the context is canceled.
+	// It will return an error if it can't read the necessary topology records.
+	WaitForAllServingTablets(ctx context.Context, targets []*querypb.Target) error
+
+	// TabletConnection returns the TabletConn of the given tablet.
+	TabletConnection(alias *topodatapb.TabletAlias) (queryservice.QueryService, error)
+
+	// RegisterStats registers the connection counts stats
+	RegisterStats()
+
+	// GetHealthyTabletStats returns only the healthy tablets.
+	// The returned array is owned by the caller.
+	// For TabletType_MASTER, this will only return at most one entry,
+	// the most recent tablet of type master.
+	// This returns a copy of the data so that callers can access without
+	// synchronization
+	GetHealthyTabletStats(target *querypb.Target) []*discovery.TabletHealth
+}
+
+var _ HealthCheck = (*discovery.HealthCheckImpl)(nil)
+
 // TabletGateway implements the Gateway interface.
 // This implementation uses the new healthcheck module.
 type TabletGateway struct {
 	queryservice.QueryService
-	hc            *discovery.HealthCheck
+	hc            HealthCheck
 	srvTopoServer srvtopo.Server
 	localCell     string
 	retryCount    int
@@ -67,8 +98,7 @@ type TabletGateway struct {
 	buffer *buffer.Buffer
 }
 
-func createTabletGateway(ctx context.Context, unused discovery.LegacyHealthCheck, serv srvtopo.Server,
-	cell string, unused2 int) Gateway {
+func createTabletGateway(ctx context.Context, _ discovery.LegacyHealthCheck, serv srvtopo.Server, cell string, _ int) Gateway {
 	return NewTabletGateway(ctx, serv, cell)
 }
 
@@ -117,6 +147,11 @@ func NewTabletGateway(ctx context.Context, serv srvtopo.Server, localCell string
 	return gw
 }
 
+// QueryServiceByAlias satisfies the Gateway interface
+func (gw *TabletGateway) QueryServiceByAlias(alias *topodatapb.TabletAlias) (queryservice.QueryService, error) {
+	return gw.hc.TabletConnection(alias)
+}
+
 // RegisterStats registers the stats to export the lag since the last refresh
 // and the checksum of the topology
 func (gw *TabletGateway) RegisterStats() {
@@ -140,7 +175,7 @@ func (gw *TabletGateway) WaitForTablets(ctx context.Context, tabletTypesToWait [
 
 // Close shuts down underlying connections.
 // This function hides the inner implementation.
-func (gw *TabletGateway) Close(ctx context.Context) error {
+func (gw *TabletGateway) Close(_ context.Context) error {
 	gw.buffer.Shutdown()
 	return gw.hc.Close()
 }
@@ -163,8 +198,12 @@ func (gw *TabletGateway) CacheStatus() TabletCacheStatusList {
 // the middle of a transaction. While returning the error check if it maybe a result of
 // a resharding event, and set the re-resolve bit and let the upper layers
 // re-resolve and retry.
-func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, unused queryservice.QueryService,
-	name string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
+func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, _ queryservice.QueryService,
+	_ string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
+	// for transactions, we connect to a specific tablet instead of letting gateway choose one
+	if inTransaction {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "gateway's query service can only be used for non-transactional queries")
+	}
 	var tabletLastUsed *topodatapb.Tablet
 	var err error
 	invalidTablets := make(map[string]bool)
@@ -238,7 +277,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		}
 
 		// execute
-		if th.Conn == nil {
+		if th == nil || th.Conn == nil {
 			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no connection for tablet %v", tabletLastUsed)
 			invalidTablets[topoproto.TabletAliasString(tabletLastUsed.Alias)] = true
 			continue
@@ -326,7 +365,7 @@ func (gw *TabletGateway) nextTablet(cell string, tablets []*discovery.TabletHeal
 	return -1
 }
 
-// HealthCheck satisfies the Gateway interface
-func (gw *TabletGateway) HealthCheck() *discovery.HealthCheck {
-	return gw.hc
+// TabletsCacheStatus returns a displayable version of the health check cache.
+func (gw *TabletGateway) TabletsCacheStatus() discovery.TabletsCacheStatusList {
+	return gw.hc.CacheStatus()
 }

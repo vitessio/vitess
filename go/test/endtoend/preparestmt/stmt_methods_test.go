@@ -90,14 +90,27 @@ func TestInsertUpdateDelete(t *testing.T) {
 	// Validate a datetime field (with micros)
 	assert.Equal(t, time.Date(2009, 5, 5, 0, 0, 0, 50000, location), data[0].DateTimeMicros)
 
+	testReplica(t)
 	// testing record update
 	updateRecord(t, dbo)
 
 	// testing record deletion
 	deleteRecord(t, dbo)
 
-	// testing recontion and deleted data validation
+	// testing reconnection and deleted data validation
 	reconnectAndTest(t)
+}
+
+func testReplica(t *testing.T) {
+	replicaConn := Connect(t, "")
+	require.NotNil(t, replicaConn, "unable to connect")
+	_, err := replicaConn.Exec("use @replica")
+	require.NoError(t, err)
+	tx, err := replicaConn.Begin()
+	require.NoError(t, err, "error creating replica transaction")
+	data := selectWhereWithTx(t, tx, "id = ?", testingID)
+	assert.Equal(t, fmt.Sprintf("%d21", testingID), data[0].Msg)
+	require.NoError(t, tx.Commit())
 }
 
 // testcount validates inserted rows count with expected count.

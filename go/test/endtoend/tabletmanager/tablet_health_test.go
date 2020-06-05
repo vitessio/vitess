@@ -54,7 +54,7 @@ func TestTabletReshuffle(t *testing.T) {
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	//Create new tablet
-	rTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
+	rTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	//Init Tablets
 	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
@@ -98,7 +98,7 @@ func TestHealthCheck(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
-	rTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
+	rTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	// Start Mysql Processes and return connection
 	replicaConn, err := cluster.StartMySQLAndGetConnection(ctx, rTablet, username, clusterInstance.TmpDirectory)
@@ -261,7 +261,7 @@ func TestIgnoreHealthError(t *testing.T) {
 	}
 
 	// Start mysql process
-	tablet := clusterInstance.GetVttabletInstance("replica", 0, "")
+	tablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 	tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
 	err := tablet.MysqlctlProcess.Start()
 	require.Nil(t, err)
@@ -326,8 +326,8 @@ func TestNoMysqlHealthCheck(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
-	rTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
-	mTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
+	rTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
+	mTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	// Start Mysql Processes and return connection
 	masterConn, err := cluster.StartMySQLAndGetConnection(ctx, mTablet, username, clusterInstance.TmpDirectory)
