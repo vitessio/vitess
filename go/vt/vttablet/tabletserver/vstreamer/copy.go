@@ -160,6 +160,9 @@ func (uvs *uvstreamer) sendEventsForRows(ctx context.Context, tableName string, 
 
 // converts lastpk from proto to value
 func getLastPKFromQR(qr *querypb.QueryResult) []sqltypes.Value {
+	if qr == nil {
+		return nil
+	}
 	var lastPK []sqltypes.Value
 	r := sqltypes.Proto3ToResult(qr)
 	if len(r.Rows) != 1 {
@@ -215,7 +218,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 					return err
 				}
 			} else {
-				log.Infof("Not starting fastforward pos is %s, uvs.pos is %s, rows.gtid %s", pos, uvs.pos, rows.Gtid)
+				log.V(2).Infof("Not starting fastforward pos is %s, uvs.pos is %s, rows.gtid %s", pos, uvs.pos, rows.Gtid)
 			}
 
 			fieldEvent := &binlogdatapb.FieldEvent{
@@ -230,7 +233,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 			}
 		}
 		if len(rows.Rows) == 0 {
-			log.Infof("0 rows returned for table %s", tableName)
+			log.V(2).Infof("0 rows returned for table %s", tableName)
 			return nil
 		}
 
@@ -246,7 +249,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 		}
 
 		uvs.setCopyState(tableName, qrLastPK)
-		log.Infof("NewLastPK: %v", qrLastPK)
+		log.V(2).Infof("NewLastPK: %v", qrLastPK)
 		return nil
 	})
 	if err != nil {

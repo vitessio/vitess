@@ -20,17 +20,20 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 )
 
@@ -46,20 +49,21 @@ type uvstreamer struct {
 	cancel func()
 
 	// input parameters
-	vse      *Engine
-	send     func([]*binlogdatapb.VEvent) error
-	cp       dbconfigs.Connector
-	se       *schema.Engine
-	sh       schema.Historian
-	startPos string
-	filter   *binlogdatapb.Filter
-	vschema  *localVSchema
+	vse        *Engine
+	send       func([]*binlogdatapb.VEvent) error
+	cp         dbconfigs.Connector
+	se         *schema.Engine
+	sh         schema.Historian
+	startPos   string
+	filter     *binlogdatapb.Filter
+	inTablePKs []*binlogdatapb.TableLastPK
+	vschema    *localVSchema
 
-	//map holds tables remaining to be fully copied, it is depleted as each table gets completely copied
+	// map holds tables remaining to be fully copied, it is depleted as each table gets completely copied
 	plans        map[string]*tablePlan
 	tablesToCopy []string
 
-	//changes for each table being copied
+	// changes for each table being copied
 	fields   []*querypb.Field
 	pkfields []*querypb.Field
 
@@ -91,35 +95,129 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 		CatchupRetryTime:  1 * time.Second,
 	}
 	uvs := &uvstreamer{
-		ctx:      ctx,
-		cancel:   cancel,
-		vse:      vse,
-		send:     send,
-		cp:       cp,
-		se:       se,
-		sh:       sh,
-		startPos: startPos,
-		filter:   filter,
-		vschema:  vschema,
-		config:   config,
+		ctx:        ctx,
+		cancel:     cancel,
+		vse:        vse,
+		send:       send,
+		cp:         cp,
+		se:         se,
+		sh:         sh,
+		startPos:   startPos,
+		filter:     filter,
+		vschema:    vschema,
+		config:     config,
+		inTablePKs: tablePKs,
 	}
-	if len(tablePKs) > 0 {
-		uvs.plans = make(map[string]*tablePlan)
-		for _, rule := range filter.Rules {
-			plan := &tablePlan{
-				tablePK: nil,
-				rule:    rule,
-			}
-			uvs.plans[rule.Match] = plan //TODO: only handles actual table name now, no regular expressions
-		}
-		for _, tablePK := range tablePKs {
-			uvs.plans[tablePK.TableName].tablePK = tablePK
-			uvs.tablesToCopy = append(uvs.tablesToCopy, tablePK.TableName)
-		}
-		sort.Strings(uvs.tablesToCopy)
-	}
-	//TODO table pk validations
+
 	return uvs
+}
+
+// buildTablePlan identifies the tables for the copy phase and creates the plans which consist of the lastPK seen
+// for a table and its Rule (for filtering purposes by the vstreamer engine)
+// it can be called
+//		the first time, with just the filter and an empty pos
+//		during a restart, with both the filter and list of TableLastPK from the vgtid
+func (uvs *uvstreamer) buildTablePlan() error {
+
+	uvs.plans = make(map[string]*tablePlan)
+	tableLastPKs := make(map[string]*binlogdatapb.TableLastPK)
+	for _, tablePK := range uvs.inTablePKs {
+		tableLastPKs[tablePK.TableName] = tablePK
+	}
+	if err := uvs.se.Reload(uvs.ctx); err != nil {
+		return err
+	}
+	tables := uvs.se.GetSchema()
+	for range tables {
+		for _, rule := range uvs.filter.Rules {
+			if !strings.HasPrefix(rule.Match, "/") {
+				_, ok := tables[rule.Match]
+				if !ok {
+					return fmt.Errorf("table %s is not present in the database", rule.Match)
+				}
+			}
+		}
+	}
+	for tableName := range tables {
+		rule, err := matchTable(tableName, uvs.filter, tables)
+		if err != nil {
+			return err
+		}
+		if rule == nil {
+			continue
+		}
+		plan := &tablePlan{
+			tablePK: nil,
+			rule: &binlogdatapb.Rule{
+				Filter: rule.Filter,
+				Match:  rule.Match,
+			},
+		}
+		tablePK, ok := tableLastPKs[tableName]
+		if !ok {
+			tablePK = &binlogdatapb.TableLastPK{
+				TableName: tableName,
+				Lastpk:    nil,
+			}
+		}
+		plan.tablePK = tablePK
+		uvs.plans[tableName] = plan
+		uvs.tablesToCopy = append(uvs.tablesToCopy, tableName)
+
+	}
+	sort.Strings(uvs.tablesToCopy)
+	return nil
+}
+
+// check which rule matches table, validate table is in schema
+func matchTable(tableName string, filter *binlogdatapb.Filter, tables map[string]*schema.Table) (*binlogdatapb.Rule, error) {
+	if tableName == "dual" {
+		return nil, nil
+	}
+	found := false
+	for _, rule := range filter.Rules {
+
+		switch {
+		case tableName == rule.Match:
+			found = true
+		case strings.HasPrefix(rule.Match, "/"):
+			expr := strings.Trim(rule.Match, "/")
+			result, err := regexp.MatchString(expr, tableName)
+			if err != nil {
+				return nil, err
+			}
+			if !result {
+				continue
+			}
+			found = true
+		}
+		if found {
+			return &binlogdatapb.Rule{
+				Match:  tableName,
+				Filter: getQuery(tableName, rule.Filter),
+			}, nil
+		}
+	}
+
+	return nil, nil
+}
+
+// generate equivalent select statement if filter is empty or a keyrange.
+func getQuery(tableName string, filter string) string {
+	log.Infof("getQuery %s %s", tableName, filter)
+	query := filter
+	switch {
+	case filter == "":
+		buf := sqlparser.NewTrackedBuffer(nil)
+		buf.Myprintf("select * from %v", sqlparser.NewTableIdent(tableName))
+		query = buf.String()
+	case key.IsKeyRange(filter):
+		buf := sqlparser.NewTrackedBuffer(nil)
+		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrVal([]byte(filter)))
+		query = buf.String()
+	}
+	log.Infof("getQuery returning %s for  %s %s", query, tableName, filter)
+	return query
 }
 
 func (uvs *uvstreamer) Cancel() {
@@ -209,28 +307,26 @@ func (uvs *uvstreamer) sendEventsForCurrentPos() error {
 }
 
 func (uvs *uvstreamer) setStreamStartPosition() error {
-	if uvs.startPos != "" {
-		curPos, err := uvs.currentPosition()
-		if err != nil {
-			return vterrors.Wrap(err, "could not obtain current position")
-		}
-		if uvs.startPos == "current" {
-			uvs.pos = curPos
-			if err := uvs.sendEventsForCurrentPos(); err != nil {
-				return err
-			}
-			return nil
-		}
-		pos, err := mysql.DecodePosition(uvs.startPos)
-		if err != nil {
-			return vterrors.Wrap(err, "could not decode position")
-		}
-		if !curPos.AtLeast(pos) {
-			return fmt.Errorf("requested position %v is ahead of current position %v", mysql.EncodePosition(pos), mysql.EncodePosition(curPos))
-		}
-		log.Infof("Setting stream position to %s", uvs.pos)
-		uvs.pos = pos
+	curPos, err := uvs.currentPosition()
+	if err != nil {
+		return vterrors.Wrap(err, "could not obtain current position")
 	}
+	if uvs.startPos == "current" {
+		uvs.pos = curPos
+		if err := uvs.sendEventsForCurrentPos(); err != nil {
+			return err
+		}
+		return nil
+	}
+	pos, err := mysql.DecodePosition(uvs.startPos)
+	if err != nil {
+		return vterrors.Wrap(err, "could not decode position")
+	}
+	if !curPos.AtLeast(pos) {
+		return fmt.Errorf("requested position %v is ahead of current position %v", mysql.EncodePosition(pos), mysql.EncodePosition(curPos))
+	}
+	log.Infof("Setting stream position to %s", uvs.pos)
+	uvs.pos = pos
 	return nil
 }
 
@@ -242,18 +338,27 @@ func (uvs *uvstreamer) currentPosition() (mysql.Position, error) {
 	defer conn.Close()
 	return conn.MasterPosition()
 }
+
 func (uvs *uvstreamer) init() error {
-	if err := uvs.setStreamStartPosition(); err != nil {
-		return err
-	} //startpos validation for tablepk != nil
+	if uvs.startPos != "" {
+		if err := uvs.setStreamStartPosition(); err != nil {
+			return err
+		}
+	} else if uvs.startPos == "" || len(uvs.inTablePKs) > 0 {
+		if err := uvs.buildTablePlan(); err != nil {
+			return err
+		}
+	}
+
 	if uvs.pos.IsZero() && (len(uvs.plans) == 0) {
-		return fmt.Errorf("Stream needs a position or a table to copy")
+		return fmt.Errorf("stream needs a position or a table to copy")
 	}
 	return nil
 }
 
 // Stream streams binlog events.
 func (uvs *uvstreamer) Stream() error {
+	log.Info("Stream() called")
 	if err := uvs.init(); err != nil {
 		return err
 	}

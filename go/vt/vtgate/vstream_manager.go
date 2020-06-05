@@ -330,15 +330,18 @@ func (vs *vstream) sendAll(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdat
 					}
 				}
 				if foundIndex == -1 {
-					return fmt.Errorf("corresponding tablePK not found in svgtid for lastPKEvent : %v", event.LastPKEvent)
-				}
-				if event.LastPKEvent.Completed {
-					// remove tablepk from sgtid
-					sgtid.TablePKs[foundIndex] = sgtid.TablePKs[len(sgtid.TablePKs)-1]
-					sgtid.TablePKs[len(sgtid.TablePKs)-1] = nil
-					sgtid.TablePKs = sgtid.TablePKs[:len(sgtid.TablePKs)-1]
+					if !event.LastPKEvent.Completed {
+						sgtid.TablePKs = append(sgtid.TablePKs, eventTablePK)
+					}
 				} else {
-					sgtid.TablePKs[foundIndex] = eventTablePK
+					if event.LastPKEvent.Completed {
+						// remove tablepk from sgtid
+						sgtid.TablePKs[foundIndex] = sgtid.TablePKs[len(sgtid.TablePKs)-1]
+						sgtid.TablePKs[len(sgtid.TablePKs)-1] = nil
+						sgtid.TablePKs = sgtid.TablePKs[:len(sgtid.TablePKs)-1]
+					} else {
+						sgtid.TablePKs[foundIndex] = eventTablePK
+					}
 				}
 				events[j] = &binlogdatapb.VEvent{
 					Type:  binlogdatapb.VEventType_VGTID,

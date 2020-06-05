@@ -50,6 +50,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/dbconfigs"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/query"
 
@@ -76,6 +78,91 @@ var allEvents []*binlogdatapb.VEvent
 
 var callbacks map[string]func()
 
+func TestVStreamCopyFilterValidations(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	defer execStatements(t, []string{
+		"drop table t1",
+		"drop table t2a",
+		"drop table t2b",
+	})
+
+	execStatements(t, []string{
+		"create table t1(id11 int, id12 int, primary key(id11))",
+		"create table t2a(id21 int, id22 int, primary key(id21))",
+		"create table t2b(id21 int, id22 int, primary key(id21))",
+	})
+
+	var getUVStreamer = func(filter *binlogdatapb.Filter, tablePKs []*binlogdatapb.TableLastPK) *uvstreamer {
+		uvs := &uvstreamer{
+			ctx:        ctx,
+			cancel:     cancel,
+			vse:        nil,
+			send:       nil,
+			cp:         dbconfigs.Connector{},
+			se:         engine.se,
+			sh:         engine.sh,
+			startPos:   "",
+			filter:     filter,
+			vschema:    nil,
+			config:     nil,
+			inTablePKs: tablePKs,
+		}
+		return uvs
+	}
+	var testFilter = func(rules []*binlogdatapb.Rule, tablePKs []*binlogdatapb.TableLastPK, expected []string, err string) {
+		uvs := getUVStreamer(&binlogdatapb.Filter{Rules: rules}, tablePKs)
+		if err == "" {
+			require.NoError(t, uvs.init())
+		} else {
+			require.Error(t, uvs.init(), err)
+			return
+		}
+		require.Equal(t, len(expected), len(uvs.plans))
+		for _, tableName := range expected {
+			require.True(t, uvs.plans[tableName].tablePK.TableName == tableName)
+			if tablePKs == nil {
+				require.Nil(t, uvs.plans[tableName].tablePK.Lastpk)
+			}
+		}
+		for _, pk := range tablePKs {
+			require.Equal(t, uvs.plans[pk.TableName].tablePK, pk)
+		}
+	}
+
+	type TestCase struct {
+		rules    []*binlogdatapb.Rule
+		tablePKs []*binlogdatapb.TableLastPK
+		expected []string
+		err      string
+	}
+
+	var testCases []*TestCase
+
+	testCases = append(testCases, &TestCase{[]*binlogdatapb.Rule{{Match: "t1"}}, nil, []string{"t1"}, ""})
+	testCases = append(testCases, &TestCase{[]*binlogdatapb.Rule{{Match: "t2a"}, {Match: "t1"}}, nil, []string{"t1", "t2a"}, ""})
+	testCases = append(testCases, &TestCase{[]*binlogdatapb.Rule{{Match: "/.*"}}, nil, []string{"t1", "t2a", "t2b"}, ""})
+	testCases = append(testCases, &TestCase{[]*binlogdatapb.Rule{{Match: "/t2.*"}}, nil, []string{"t2a", "t2b"}, ""})
+
+	tablePKs := []*binlogdatapb.TableLastPK{{
+		TableName: "t1",
+		Lastpk:    getQRFromLastPK([]*query.Field{{Name: "id11", Type: query.Type_INT32}}, []sqltypes.Value{sqltypes.NewInt32(10)}),
+	}}
+	testCases = append(testCases, &TestCase{[]*binlogdatapb.Rule{{Match: "t1"}}, tablePKs, []string{"t1"}, ""})
+
+	testCases = append(testCases, &TestCase{[]*binlogdatapb.Rule{{Match: "/.*"}, {Match: "xyz"}}, nil, []string{""}, "table xyz is not present in the database"})
+	testCases = append(testCases, &TestCase{[]*binlogdatapb.Rule{{Match: "/x.*"}}, nil, []string{""}, "stream needs a position or a table to copy"})
+
+	for _, tc := range testCases {
+		log.Infof("Running %v", tc.rules)
+		testFilter(tc.rules, tc.tablePKs, tc.expected, tc.err)
+	}
+}
+
 func TestVStreamCopyCompleteFlow(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -92,7 +179,9 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	uvstreamerTestMode = true
 	defer func() { uvstreamerTestMode = false }()
 	initialize(t)
-	engine.se.Reload(context.Background())
+	if err := engine.se.Reload(context.Background()); err != nil {
+		t.Fatal("Error reloading schema")
+	}
 
 	var rules []*binlogdatapb.Rule
 	var tablePKs []*binlogdatapb.TableLastPK

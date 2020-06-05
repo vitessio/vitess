@@ -222,6 +222,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			Type: flds[pk].Type,
 		}
 	}
+
 	err = send(&binlogdatapb.VStreamRowsResponse{
 		Fields:   rs.plan.fields(),
 		Pkfields: pkfields,
@@ -287,8 +288,6 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		if err != nil {
 			return err
 		}
-	} else {
-		log.Infof("0 Rows found in streaming query")
 	}
 
 	return nil
