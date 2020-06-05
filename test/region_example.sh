@@ -27,8 +27,6 @@ unset VTROOT # ensure that the examples can run without VTROOT now.
 
 source ./env.sh # Required so that "mysql" works from alias
 
-sed -i 's/user\/my-vitess/runner\/work\/vitess\/vitess/g' main_vschema.json #set correct path to countries.json
-
 ./101_initial_cluster.sh
 
 sleep 5 # Give vtgate time to really start.
