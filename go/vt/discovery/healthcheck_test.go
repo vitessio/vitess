@@ -766,7 +766,7 @@ func tabletDialer(tablet *topodatapb.Tablet, _ grpcclient.FailFast) (queryservic
 	return nil, fmt.Errorf("tablet %v not found", key)
 }
 
-func createTestHc(ts *topo.Server) *HealthCheck {
+func createTestHc(ts *topo.Server) *HealthCheckImpl {
 	return NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell")
 }
 

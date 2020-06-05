@@ -332,6 +332,8 @@ func newKeyRangeLookuperUnique(name string, params map[string]string) (vindexes.
 func init() {
 	vindexes.Register("keyrange_lookuper", newKeyRangeLookuper)
 	vindexes.Register("keyrange_lookuper_unique", newKeyRangeLookuperUnique)
+	// Use legacy gateway until we can rewrite these tests to use new tabletgateway
+	*GatewayImplementation = GatewayImplementationDiscovery
 }
 
 func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
@@ -342,7 +344,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
 	serv := newSandboxForCells([]string{cell})
-	resolver := newTestResolver(hc, serv, cell)
+	resolver := newTestLegacyResolver(hc, serv, cell)
 	sbc1 = hc.AddTestTablet(cell, "-20", 1, "TestExecutor", "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestExecutor", "40-60", topodatapb.TabletType_MASTER, true, 1, nil)
 	// Create these connections so scatter queries don't fail.
@@ -374,7 +376,7 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 	s := createSandbox("TestExecutor")
 	s.VSchema = vschema
 	serv := newSandboxForCells([]string{cell})
-	resolver := newTestResolver(hc, serv, cell)
+	resolver := newTestLegacyResolver(hc, serv, cell)
 	sbc1 = hc.AddTestTablet(cell, "-20", 1, "TestExecutor", "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestExecutor", "40-60", topodatapb.TabletType_MASTER, true, 1, nil)
 
@@ -559,8 +561,8 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 	return logStats
 }
 
-func newTestResolver(hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string) *Resolver {
-	sc := newTestScatterConn(hc, serv, cell)
+func newTestLegacyResolver(hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string) *Resolver {
+	sc := newTestLegacyScatterConn(hc, serv, cell)
 	srvResolver := srvtopo.NewResolver(serv, sc.gateway, cell)
 	return NewResolver(srvResolver, serv, cell, sc)
 }

@@ -21,6 +21,9 @@ import (
 	"sort"
 	"testing"
 	"time"
+	"vitess.io/vitess/go/vt/callerid"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
 	"context"
 
@@ -706,4 +709,56 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	if !reflect.DeepEqual(gotCount, wantCount) {
 		t.Errorf("Exec %s: %v, want %v", "", gotCount, wantCount)
 	}
+}
+
+func TestPlanExecutorVindexDDLACL(t *testing.T) {
+	//t.Skip("not yet planned")
+	executor, _, _, _ := createExecutorEnv()
+	ks := "TestExecutor"
+	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+
+	ctxRedUser := callerid.NewContext(context.Background(), &vtrpcpb.CallerID{}, &querypb.VTGateCallerID{Username: "redUser"})
+	ctxBlueUser := callerid.NewContext(context.Background(), &vtrpcpb.CallerID{}, &querypb.VTGateCallerID{Username: "blueUser"})
+
+	// test that by default no users can perform the operation
+	stmt := "alter vschema create vindex test_hash using hash"
+	authErr := "not authorized to perform vschema operations"
+	_, err := executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
+	if err == nil || err.Error() != authErr {
+		t.Errorf("expected error '%s' got '%v'", authErr, err)
+	}
+
+	_, err = executor.Execute(ctxBlueUser, "TestExecute", session, stmt, nil)
+	if err == nil || err.Error() != authErr {
+		t.Errorf("expected error '%s' got '%v'", authErr, err)
+	}
+
+	// test when all users are enabled
+	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.Init()
+	_, err = executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Errorf("unexpected error '%v'", err)
+	}
+	stmt = "alter vschema create vindex test_hash2 using hash"
+	_, err = executor.Execute(ctxBlueUser, "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Errorf("unexpected error '%v'", err)
+	}
+
+	// test when only one user is enabled
+	*vschemaacl.AuthorizedDDLUsers = "orangeUser, blueUser, greenUser"
+	vschemaacl.Init()
+	_, err = executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
+	if err == nil || err.Error() != authErr {
+		t.Errorf("expected error '%s' got '%v'", authErr, err)
+	}
+	stmt = "alter vschema create vindex test_hash3 using hash"
+	_, err = executor.Execute(ctxBlueUser, "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Errorf("unexpected error '%v'", err)
+	}
+
+	// restore the disallowed state
+	*vschemaacl.AuthorizedDDLUsers = ""
 }

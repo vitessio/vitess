@@ -207,7 +207,7 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		log.Fatalf("error initializing query logger: %v", err)
 	}
 
-	initAPI(ctx, gw.hc)
+	initAPI(gw.hc)
 
 	return rpcVTGate
 }
@@ -498,7 +498,7 @@ func LegacyInit(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtop
 
 	tc := NewTxConn(gw, getTxMode())
 	// ScatterConn depends on TxConn to perform forced rollbacks.
-	sc := LegacyNewScatterConn("VttabletCall", tc, gw, hc)
+	sc := NewLegacyScatterConn("VttabletCall", tc, gw, hc)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
@@ -546,7 +546,7 @@ func LegacyInit(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtop
 		log.Fatalf("error initializing query logger: %v", err)
 	}
 
-	legacyInitAPI(ctx, hc)
+	legacyInitAPI(hc)
 
 	return rpcVTGate
 }

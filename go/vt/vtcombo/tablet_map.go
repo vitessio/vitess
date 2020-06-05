@@ -341,12 +341,12 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, target *queryp
 }
 
 // Begin is part of queryservice.QueryService
-func (itc *internalTabletConn) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, error) {
-	transactionID, err := itc.tablet.qsc.QueryService().Begin(ctx, target, options)
+func (itc *internalTabletConn) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, *topodatapb.TabletAlias, error) {
+	transactionID, alias, err := itc.tablet.qsc.QueryService().Begin(ctx, target, options)
 	if err != nil {
-		return 0, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+		return 0, nil, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 	}
-	return transactionID, nil
+	return transactionID, alias, nil
 }
 
 // Commit is part of queryservice.QueryService
@@ -410,23 +410,23 @@ func (itc *internalTabletConn) ReadTransaction(ctx context.Context, target *quer
 }
 
 // BeginExecute is part of queryservice.QueryService
-func (itc *internalTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
-	transactionID, err := itc.Begin(ctx, target, options)
+func (itc *internalTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	transactionID, alias, err := itc.Begin(ctx, target, options)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 	result, err := itc.Execute(ctx, target, query, bindVars, transactionID, options)
-	return result, transactionID, err
+	return result, transactionID, alias, err
 }
 
 // BeginExecuteBatch is part of queryservice.QueryService
-func (itc *internalTabletConn) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
-	transactionID, err := itc.Begin(ctx, target, options)
+func (itc *internalTabletConn) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	transactionID, alias, err := itc.Begin(ctx, target, options)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 	results, err := itc.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
-	return results, transactionID, err
+	return results, transactionID, alias, err
 }
 
 // MessageStream is part of queryservice.QueryService

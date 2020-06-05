@@ -72,6 +72,7 @@ message Session {
   message ShardSession {
     query.Target target = 1;
     int64 transaction_id = 2;
+    topodata.TabletAlias tablet_alias = 3;
   }
   // shard_sessions keep track of per-shard transaction info.
   repeated ShardSession shard_sessions = 2;

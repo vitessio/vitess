@@ -197,11 +197,11 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.
 }
 
 // Begin starts a transaction.
-func (conn *gRPCQueryClient) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (transactionID int64, err error) {
+func (conn *gRPCQueryClient) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (transactionID int64, alias *topodatapb.TabletAlias, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
-		return 0, tabletconn.ConnClosed
+		return 0, nil, tabletconn.ConnClosed
 	}
 
 	req := &querypb.BeginRequest{
@@ -212,9 +212,13 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context, target *querypb.Target, 
 	}
 	br, err := conn.c.Begin(ctx, req)
 	if err != nil {
-		return 0, tabletconn.ErrorFromGRPC(err)
+		return 0, nil, tabletconn.ErrorFromGRPC(err)
 	}
-	return br.TransactionId, nil
+	// For backwards compatibility, we don't require tablet alias to be present in the response
+	// TODO(deepthi): After 7.0 change this
+	//	return br.TransactionId, br.TabletAlias, nil
+	// also assert that br.TabletAlias == conn.tablet.Alias
+	return br.TransactionId, conn.tablet.Alias, nil
 }
 
 // Commit commits the ongoing transaction.
@@ -436,11 +440,11 @@ func (conn *gRPCQueryClient) ReadTransaction(ctx context.Context, target *queryp
 }
 
 // BeginExecute starts a transaction and runs an Execute.
-func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (result *sqltypes.Result, transactionID int64, err error) {
+func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (result *sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
-		return nil, 0, tabletconn.ConnClosed
+		return nil, 0, nil, tabletconn.ConnClosed
 	}
 
 	req := &querypb.BeginExecuteRequest{
@@ -455,20 +459,20 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 	}
 	reply, err := conn.c.BeginExecute(ctx, req)
 	if err != nil {
-		return nil, 0, tabletconn.ErrorFromGRPC(err)
+		return nil, 0, nil, tabletconn.ErrorFromGRPC(err)
 	}
 	if reply.Error != nil {
-		return nil, reply.TransactionId, tabletconn.ErrorFromVTRPC(reply.Error)
+		return nil, reply.TransactionId, conn.tablet.Alias, tabletconn.ErrorFromVTRPC(reply.Error)
 	}
-	return sqltypes.Proto3ToResult(reply.Result), reply.TransactionId, nil
+	return sqltypes.Proto3ToResult(reply.Result), reply.TransactionId, conn.tablet.Alias, nil
 }
 
 // BeginExecuteBatch starts a transaction and runs an ExecuteBatch.
-func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) (results []sqltypes.Result, transactionID int64, err error) {
+func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) (results []sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
-		return nil, 0, tabletconn.ConnClosed
+		return nil, 0, nil, tabletconn.ConnClosed
 	}
 
 	req := &querypb.BeginExecuteBatchRequest{
@@ -482,12 +486,12 @@ func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, target *quer
 
 	reply, err := conn.c.BeginExecuteBatch(ctx, req)
 	if err != nil {
-		return nil, 0, tabletconn.ErrorFromGRPC(err)
+		return nil, 0, nil, tabletconn.ErrorFromGRPC(err)
 	}
 	if reply.Error != nil {
-		return nil, reply.TransactionId, tabletconn.ErrorFromVTRPC(reply.Error)
+		return nil, reply.TransactionId, conn.tablet.Alias, tabletconn.ErrorFromVTRPC(reply.Error)
 	}
-	return sqltypes.Proto3ToResults(reply.Results), reply.TransactionId, nil
+	return sqltypes.Proto3ToResults(reply.Results), reply.TransactionId, conn.tablet.Alias, nil
 }
 
 // MessageStream streams messages.

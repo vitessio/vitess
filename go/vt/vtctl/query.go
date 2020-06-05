@@ -276,7 +276,7 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	}
 	defer conn.Close(ctx)
 
-	transactionID, err := conn.Begin(ctx, &querypb.Target{
+	transactionID, _, err := conn.Begin(ctx, &querypb.Target{
 		Keyspace:   tabletInfo.Tablet.Keyspace,
 		Shard:      tabletInfo.Tablet.Shard,
 		TabletType: tabletInfo.Tablet.Type,

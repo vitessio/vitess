@@ -185,14 +185,6 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		// add extra arguments
-		clusterInstance.VtGateExtraArgs = []string{
-			"-mysql_auth_server_impl", "static",
-			"-mysql_server_query_timeout", "1s",
-			"-mysql_auth_server_static_file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
-			"-mysql_server_version", "8.0.16-7",
-		}
-
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
 			Name:      keyspaceName,
@@ -202,10 +194,23 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
+		vtgateInstance := clusterInstance.NewVtgateInstance()
+		// set the gateway and other params we want to use
+		vtgateInstance.GatewayImplementation = "tabletgateway"
+		vtgateInstance.MySQLAuthServerImpl = "static"
+		// add extra arguments
+		vtgateInstance.ExtraArgs = []string{
+			"-mysql_server_query_timeout", "1s",
+			"-mysql_auth_server_static_file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
+			"-mysql_server_version", "8.0.16-7",
+		}
+
 		// Start vtgate
-		if err := clusterInstance.StartVtgate(); err != nil {
+		if err := vtgateInstance.Setup(); err != nil {
 			return 1, err
 		}
+		// ensure it is torn down during cluster TearDown
+		clusterInstance.VtgateProcess = *vtgateInstance
 
 		dbInfo.Host = clusterInstance.Hostname
 		dbInfo.Port = uint(clusterInstance.VtgateMySQLPort)
@@ -286,6 +291,28 @@ func selectWhere(t *testing.T, dbo *sql.DB, where string, params ...interface{})
 
 	// execute query
 	r, err := dbo.Query(qry, params...)
+	require.Nil(t, err)
+
+	// prepare result
+	for r.Next() {
+		var t tableData
+		r.Scan(&t.Msg, &t.Data, &t.TextCol, &t.DateTime, &t.DateTimeMicros)
+		out = append(out, t)
+	}
+	return out
+}
+
+// selectWhereWithTx select the row corresponding to the where condition.
+func selectWhereWithTx(t *testing.T, tx *sql.Tx, where string, params ...interface{}) []tableData {
+	var out []tableData
+	// prepare query
+	qry := "SELECT msg, data, text_col, t_datetime, t_datetime_micros FROM " + tableName
+	if where != "" {
+		qry += " WHERE (" + where + ")"
+	}
+
+	// execute query
+	r, err := tx.Query(qry, params...)
 	require.Nil(t, err)
 
 	// prepare result

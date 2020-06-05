@@ -242,6 +242,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			tabletUID := cluster.GetAndReserveTabletUID()
 			tablet := &Vttablet{
 				TabletUID: tabletUID,
+				Type:      "replica",
 				HTTPPort:  cluster.GetAndReservePort(),
 				GrpcPort:  cluster.GetAndReservePort(),
 				MySQLPort: cluster.GetAndReservePort(),
@@ -407,15 +408,15 @@ func (cluster *LocalProcessCluster) LaunchCluster(keyspace *Keyspace, shards []S
 
 // StartVtgate starts vtgate
 func (cluster *LocalProcessCluster) StartVtgate() (err error) {
-	vtgateInstance := *cluster.GetVtgateInstance()
+	vtgateInstance := *cluster.NewVtgateInstance()
 	cluster.VtgateProcess = vtgateInstance
 	log.Infof("Starting vtgate on port %d", vtgateInstance.Port)
 	log.Infof("Vtgate started, connect to mysql using : mysql -h 127.0.0.1 -P %d", cluster.VtgateMySQLPort)
 	return cluster.VtgateProcess.Setup()
 }
 
-// GetVtgateInstance returns an instance of vtgateprocess
-func (cluster *LocalProcessCluster) GetVtgateInstance() *VtgateProcess {
+// NewVtgateInstance returns an instance of vtgateprocess
+func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 	vtgateHTTPPort := cluster.GetAndReservePort()
 	vtgateGrpcPort := cluster.GetAndReservePort()
 	cluster.VtgateMySQLPort = cluster.GetAndReservePort()
@@ -647,8 +648,8 @@ func getVtStartPort() int {
 	return DefaultStartPort
 }
 
-// GetVttabletInstance creates a new vttablet object
-func (cluster *LocalProcessCluster) GetVttabletInstance(tabletType string, UID int, cell string) *Vttablet {
+// NewVttabletInstance creates a new vttablet object
+func (cluster *LocalProcessCluster) NewVttabletInstance(tabletType string, UID int, cell string) *Vttablet {
 	if UID == 0 {
 		UID = cluster.GetAndReserveTabletUID()
 	}
@@ -666,8 +667,8 @@ func (cluster *LocalProcessCluster) GetVttabletInstance(tabletType string, UID i
 	}
 }
 
-// GetVtprocessInstanceFromVttablet creates a new vttablet object
-func (cluster *LocalProcessCluster) GetVtprocessInstanceFromVttablet(tablet *Vttablet, shardName string, ksName string) *VttabletProcess {
+// VtprocessInstanceFromVttablet creates a new vttablet object
+func (cluster *LocalProcessCluster) VtprocessInstanceFromVttablet(tablet *Vttablet, shardName string, ksName string) *VttabletProcess {
 	return VttabletProcessInstance(tablet.HTTPPort,
 		tablet.GrpcPort,
 		tablet.TabletUID,
