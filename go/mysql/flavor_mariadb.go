@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -155,7 +154,6 @@ func (mariadbFlavor) status(c *Conn) (SlaveStatus, error) {
 	if err != nil {
 		return SlaveStatus{}, vterrors.Wrapf(err, "SlaveStatus can't parse MariaDB GTID (Gtid_Slave_Pos: %#v)", resultMap["Gtid_Slave_Pos"])
 	}
-
 	return status, nil
 }
 
