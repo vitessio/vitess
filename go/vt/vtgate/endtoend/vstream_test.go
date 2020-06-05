@@ -185,7 +185,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 
 	lastPK := sqltypes.Result{
 		Fields: []*query.Field{{Name: "id1", Type: query.Type_INT32}},
-		Rows:   [][]sqltypes.Value{{sqltypes.NewInt32(0)}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt32(4)}},
 	}
 	qr := sqltypes.ResultToProto3(&lastPK)
 	tablePKs := []*binlogdatapb.TableLastPK{{
@@ -218,7 +218,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	numExpectedEvents := 2 /* num shards */ * (9 /* begin/field/vgtid:pos/4 rowevents/vgitd: lastpk/commit) */ + 3 /* begin/vgtid/commit for completed table */)
+	numExpectedEvents := 2 /* num shards */ * (7 /* begin/field/vgtid:pos/2 rowevents avg/vgitd: lastpk/commit) */ + 3 /* begin/vgtid/commit for completed table */)
 	require.NotNil(t, reader)
 	var evs []*binlogdatapb.VEvent
 	for {
