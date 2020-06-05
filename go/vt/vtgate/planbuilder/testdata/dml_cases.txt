@@ -719,7 +719,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into music(user_id, id) values (:_user_id0, :_id0) on duplicate key update user_id = values(user_id)",
+    "Query": "insert into music(user_id, id) values (:_user_id_0, :_id_0) on duplicate key update user_id = values(user_id)",
     "TableName": "music"
   }
 }
@@ -738,7 +738,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into music(user_id, id) values (:_user_id0, :_id0), (:_user_id1, :_id1) on duplicate key update user_id = values(user_id)",
+    "Query": "insert into music(user_id, id) values (:_user_id_0, :_id_0), (:_user_id_1, :_id_1) on duplicate key update user_id = values(user_id)",
     "TableName": "music"
   }
 }
@@ -894,7 +894,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
+    "Query": "insert into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -917,7 +917,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id0, 2, 3)",
+    "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id_0, 2, 3)",
     "TableName": "authoritative"
   }
 }
@@ -940,7 +940,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
+    "Query": "insert into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -959,7 +959,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert ignore into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
+    "Query": "insert ignore into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -978,7 +978,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0) on duplicate key update col = 2",
+    "Query": "insert into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0) on duplicate key update col = 2",
     "TableName": "user"
   }
 }
@@ -997,7 +997,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
+    "Query": "insert into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -1016,7 +1016,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(nonid, id, Name, Costly) values (2, :_Id0, :_Name0, :_Costly0)",
+    "Query": "insert into user(nonid, id, Name, Costly) values (2, :_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -1035,7 +1035,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(id, nonid, Name, Costly) values (:_Id0, 2, :_Name0, :_Costly0)",
+    "Query": "insert into user(id, nonid, Name, Costly) values (:_Id_0, 2, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -1054,7 +1054,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(nonid, id, Name, Costly) values (true, :_Id0, :_Name0, :_Costly0)",
+    "Query": "insert into user(nonid, id, Name, Costly) values (true, :_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -1073,7 +1073,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(nonid, name, id, Costly) values (2, :_Name0, :_Id0, :_Costly0)",
+    "Query": "insert into user(nonid, name, id, Costly) values (2, :_Name_0, :_Id_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -1092,7 +1092,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user_extra(nonid, extra_id, user_id) values (2, :__seq0, :_user_id0)",
+    "Query": "insert into user_extra(nonid, extra_id, user_id) values (2, :__seq0, :_user_id_0)",
     "TableName": "user_extra"
   }
 }
@@ -1111,7 +1111,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into `weird``name`(`a``b*c`, `b*c`) values (:_a_b_c0, 2)",
+    "Query": "insert into `weird``name`(`a``b*c`, `b*c`) values (:_a_b_c_0, 2)",
     "TableName": "weird`name"
   }
 }
@@ -1165,7 +1165,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0), (:_Id1, :_Name1, :_Costly1)",
+    "Query": "insert into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
     "TableName": "user"
   }
 }
@@ -1184,7 +1184,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0), (:_Id1, :_Name1, :_Costly1)",
+    "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
     "QueryTimeout": 1,
     "TableName": "user"
   }
@@ -1204,7 +1204,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": true,
-    "Query": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0), (:_Id1, :_Name1, :_Costly1)",
+    "Query": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
     "TableName": "user"
   }
 }
@@ -1330,7 +1330,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a0, :_column_b0, :_column_c0, :_kid0)",
+    "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a_0, :_column_b_0, :_column_c_0, :_kid_0)",
     "TableName": "multicolvin"
   }
 }
@@ -1349,7 +1349,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into overlap_vindex(kid, column_a, column_b) values (:_kid0, :_column_a0, 3)",
+    "Query": "insert into overlap_vindex(kid, column_a, column_b) values (:_kid_0, :_column_a_0, 3)",
     "TableName": "overlap_vindex"
   }
 }
@@ -1368,7 +1368,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a0, :_column_b0, :_column_c0, :_kid0), (:_column_a1, :_column_b1, :_column_c1, :_kid1)",
+    "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a_0, :_column_b_0, :_column_c_0, :_kid_0), (:_column_a_1, :_column_b_1, :_column_c_1, :_kid_1)",
     "TableName": "multicolvin"
   }
 }

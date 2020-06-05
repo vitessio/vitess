@@ -171,10 +171,9 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 	for _, colVindex := range eins.Table.ColumnVindexes {
 		for _, col := range colVindex.Columns {
 			colNum := findOrAddColumn(ins, col)
-			// swap bind variables
-			baseName := ":_" + col.CompliantName()
 			for rowNum, row := range rows {
-				row[colNum] = sqlparser.NewValArg([]byte(baseName + strconv.Itoa(rowNum)))
+				name := ":" + engine.InsertVarName(col, rowNum)
+				row[colNum] = sqlparser.NewValArg([]byte(name))
 			}
 		}
 	}
