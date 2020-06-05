@@ -19,8 +19,10 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -186,8 +188,103 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 		},
 	}
 
-	runCases(t, filter, testcases, "", tablePKs)
+	runCases(t, filter, testcases, "vscopy", tablePKs)
 	log.Infof("Pos at end of test: %s", masterPosition(t))
+}
+
+func TestVStreamCopyWithDifferentFilters(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	execStatements(t, []string{
+		"create table t1(id1 int, id2 int, id3 int, primary key(id1))",
+		"create table t2a(id1 int, id2 int, primary key(id1))",
+		"create table t2b(id1 varchar(20), id2 int, primary key(id1))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		"drop table t2a",
+		"drop table t2b",
+	})
+	engine.se.Reload(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/t2.*",
+		}, {
+			Match:  "t1",
+			Filter: "select id1, id2 from t1",
+		}},
+	}
+
+	execStatements(t, []string{
+		"insert into t1(id1, id2, id3) values (1, 2, 3)",
+		"insert into t2a(id1, id2) values (1, 4)",
+		"insert into t2b(id1, id2) values ('b', 6)",
+		"insert into t2b(id1, id2) values ('a', 5)",
+	})
+
+	var expectedEvents = []string{
+		"type:BEGIN ",
+		"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id1\" type:INT32 > fields:<name:\"id2\" type:INT32 > > ",
+		"type:GTID",
+		"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:1 values:\"12\" > > > ",
+		"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t1\" lastpk:<rows:<lengths:1 values:\"1\" > > > > ",
+		"type:COMMIT ",
+		"type:BEGIN ",
+		"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t1\" > completed:true > ",
+		"type:COMMIT ",
+		"type:BEGIN ",
+		"type:FIELD field_event:<table_name:\"t2a\" fields:<name:\"id1\" type:INT32 > fields:<name:\"id2\" type:INT32 > > ",
+		"type:ROW row_event:<table_name:\"t2a\" row_changes:<after:<lengths:1 lengths:1 values:\"14\" > > > ",
+		"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t2a\" lastpk:<rows:<lengths:1 values:\"1\" > > > > ",
+		"type:COMMIT ",
+		"type:BEGIN ",
+		"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t2a\" > completed:true > ",
+		"type:COMMIT ",
+		"type:BEGIN ",
+		"type:FIELD field_event:<table_name:\"t2b\" fields:<name:\"id1\" type:VARCHAR > fields:<name:\"id2\" type:INT32 > > ",
+		"type:ROW row_event:<table_name:\"t2b\" row_changes:<after:<lengths:1 lengths:1 values:\"a5\" > > > ",
+		"type:ROW row_event:<table_name:\"t2b\" row_changes:<after:<lengths:1 lengths:1 values:\"b6\" > > > ",
+		"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t2b\" lastpk:<rows:<lengths:1 values:\"b\" > > > > ",
+		"type:COMMIT ",
+		"type:BEGIN ",
+		"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t2b\" > completed:true > ",
+		"type:COMMIT ",
+	}
+
+	var allEvents []*binlogdatapb.VEvent
+	var wg sync.WaitGroup
+	wg.Add(1)
+	ctx2, cancel2 := context.WithDeadline(ctx, time.Now().Add(10*time.Second))
+	defer cancel2()
+	go func() {
+		defer wg.Done()
+		engine.Stream(ctx2, "", nil, filter, func(evs []*binlogdatapb.VEvent) error {
+			for _, ev := range evs {
+				if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
+					continue
+				}
+				allEvents = append(allEvents, ev)
+			}
+			if len(allEvents) == len(expectedEvents) {
+				log.Infof("Got %d events as expected", len(allEvents))
+				for i, ev := range allEvents {
+					ev.Timestamp = 0
+					got := ev.String()
+					want := expectedEvents[i]
+					if !strings.HasPrefix(got, want) {
+						t.Fatalf("Event %d did not match, want %s, got %s", i, want, got)
+					}
+				}
+
+				return io.EOF
+			}
+			return nil
+		})
+	}()
+	wg.Wait()
 }
 
 func TestFilteredVarBinary(t *testing.T) {
@@ -1537,8 +1634,11 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 var lastPos string
 
 func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string, tablePKs []*binlogdatapb.TableLastPK) <-chan []*binlogdatapb.VEvent {
-	if position == "" && len(tablePKs) == 0 {
+	if position == "" {
 		position = masterPosition(t)
+	}
+	if position == "vscopy" {
+		position = ""
 	}
 
 	ch := make(chan []*binlogdatapb.VEvent)
