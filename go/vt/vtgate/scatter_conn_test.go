@@ -19,7 +19,6 @@ package vtgate
 import (
 	"fmt"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -45,9 +44,7 @@ func TestScatterConnExecute(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnExecute", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
 		res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
 		rss, err := res.ResolveDestination(ctx, "TestScatterConnExecute", topodatapb.TabletType_REPLICA, key.DestinationShards(shards))
-		if err != nil {
-			return nil, err
-		}
+		require.NoError(t, err)
 
 		return sc.Execute(ctx, "query", nil, rss, NewSafeSession(nil), false, nil, false)
 	})
@@ -112,12 +109,8 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 // type, and error code.
 func verifyScatterConnError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.Code) {
 	t.Helper()
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("wanted error: %s, got error: %v", wantErr, err)
-	}
-	if code := vterrors.Code(err); code != wantCode {
-		t.Errorf("wanted error code: %s, got: %v", wantCode, code)
-	}
+	assert.EqualError(t, err, wantErr)
+	assert.Equal(t, wantCode, vterrors.Code(err))
 }
 
 func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, shards []string) (*sqltypes.Result, error)) {
@@ -127,11 +120,9 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	s := createSandbox(name)
 	sc := newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
 	qr, err := f(sc, nil)
+	require.NoError(t, err)
 	if qr.RowsAffected != 0 {
 		t.Errorf("want 0, got %v", qr.RowsAffected)
-	}
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
 	}
 
 	// single shard
@@ -141,14 +132,8 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = f(sc, []string{"0"})
 	want := fmt.Sprintf("target: %v.0.replica, used tablet: aa-0 (0): INVALID_ARGUMENT error", name)
-	// Verify server error string.
-	if err == nil || err.Error() != want {
-		t.Errorf("want %s, got %v", want, err)
-	}
-	// Ensure that we tried only once.
-	if execCount := sbc.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
+	require.EqualError(t, err, want)
+	assert.EqualValues(t, 1, sbc.ExecCount.Get())
 
 	// two shards
 	s.Reset()
@@ -163,12 +148,8 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	want = fmt.Sprintf("target: %v.0.replica, used tablet: aa-0 (0): INVALID_ARGUMENT error\ntarget: %v.1.replica, used tablet: aa-0 (1): INVALID_ARGUMENT error", name, name)
 	verifyScatterConnError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
 	// Ensure that we tried only once.
-	if execCount := sbc0.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
-	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
+	assert.EqualValues(t, 1, sbc0.ExecCount.Get())
+	assert.EqualValues(t, 1, sbc1.ExecCount.Get())
 
 	// two shards with different errors
 	s.Reset()
@@ -184,12 +165,8 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	// We should only surface the higher priority error code
 	verifyScatterConnError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
 	// Ensure that we tried only once.
-	if execCount := sbc0.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
-	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
+	assert.EqualValues(t, 1, sbc0.ExecCount.Get())
+	assert.EqualValues(t, 1, sbc1.ExecCount.Get())
 
 	// duplicate shards
 	s.Reset()
@@ -198,9 +175,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	sbc = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	_, _ = f(sc, []string{"0", "0"})
 	// Ensure that we executed only once.
-	if execCount := sbc.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
+	assert.EqualValues(t, 1, sbc.ExecCount.Get())
 
 	// no errors
 	s.Reset()
@@ -209,21 +184,11 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	sbc0 = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 	qr, err = f(sc, []string{"0", "1"})
-	if err != nil {
-		t.Fatalf("want nil, got %v", err)
-	}
-	if execCount := sbc0.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
-	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
-	if qr.RowsAffected != 2 {
-		t.Errorf("want 2, got %v", qr.RowsAffected)
-	}
-	if len(qr.Rows) != 2 {
-		t.Errorf("want 2, got %v", len(qr.Rows))
-	}
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, sbc0.ExecCount.Get())
+	assert.EqualValues(t, 1, sbc1.ExecCount.Get())
+	assert.EqualValues(t, 2, qr.RowsAffected)
+	assert.Equal(t, 2, len(qr.Rows))
 }
 
 func TestMaxMemoryRows(t *testing.T) {
@@ -370,17 +335,14 @@ func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	hc.AddTestTablet("aa", "0", 1, "TestScatterConnStreamExecuteSendError", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
 	rss, err := res.ResolveDestination(ctx, "TestScatterConnStreamExecuteSendError", topodatapb.TabletType_REPLICA, key.DestinationShard("0"))
-	if err != nil {
-		t.Fatalf("ResolveDestination failed: %v", err)
-	}
+	require.NoError(t, err)
 	err = sc.StreamExecute(ctx, "query", nil, rss, nil, func(*sqltypes.Result) error {
 		return fmt.Errorf("send error")
 	})
 	want := "send error"
 	// Ensure that we handle send errors.
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("got %s, must contain %v", err, want)
-	}
+	require.Error(t, err)
+	require.Contains(t, err, want)
 }
 
 func TestScatterConnQueryNotInTransaction(t *testing.T) {
@@ -395,13 +357,10 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 
 	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
 	rss0, err := res.ResolveDestination(ctx, "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("0"))
-	if err != nil {
-		t.Fatalf("ResolveDestination(0) failed: %v", err)
-	}
+	require.NoError(t, err)
+
 	rss1, err := res.ResolveDestination(ctx, "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("1"))
-	if err != nil {
-		t.Fatalf("ResolveDestination(1) failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.Execute(ctx, "query1", nil, rss0, session, true, nil, false)
@@ -447,13 +406,10 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 
 	res = srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
 	rss0, err = res.ResolveDestination(ctx, "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("0"))
-	if err != nil {
-		t.Fatalf("ResolveDestination(0) failed: %v", err)
-	}
+	require.NoError(t, err)
+
 	rss1, err = res.ResolveDestination(ctx, "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("1"))
-	if err != nil {
-		t.Fatalf("ResolveDestination(1) failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	sc.Execute(ctx, "query1", nil, rss0, session, false, nil, false)
 	sc.Execute(ctx, "query1", nil, rss1, session, true, nil, false)
@@ -550,13 +506,10 @@ func TestScatterConnSingleDB(t *testing.T) {
 
 	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
 	rss0, err := res.ResolveDestination(ctx, "TestScatterConnSingleDB", topodatapb.TabletType_MASTER, key.DestinationShard("0"))
-	if err != nil {
-		t.Fatalf("ResolveDestination(0) failed: %v", err)
-	}
+	require.NoError(t, err)
+
 	rss1, err := res.ResolveDestination(ctx, "TestScatterConnSingleDB", topodatapb.TabletType_MASTER, key.DestinationShard("1"))
-	if err != nil {
-		t.Fatalf("ResolveDestination(1) failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	want := "multi-db transaction attempted"
 
@@ -565,9 +518,8 @@ func TestScatterConnSingleDB(t *testing.T) {
 	_, err = sc.Execute(ctx, "query1", nil, rss0, session, false, nil, false)
 	require.NoError(t, err)
 	_, err = sc.Execute(ctx, "query1", nil, rss1, session, false, nil, false)
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Multi DB exec: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	require.Contains(t, err, want)
 
 	// TransactionMode_SINGLE in txconn
 	sc.txConn.mode = vtgatepb.TransactionMode_SINGLE
@@ -575,9 +527,8 @@ func TestScatterConnSingleDB(t *testing.T) {
 	_, err = sc.Execute(ctx, "query1", nil, rss0, session, false, nil, false)
 	require.NoError(t, err)
 	_, err = sc.Execute(ctx, "query1", nil, rss1, session, false, nil, false)
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Multi DB exec: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	require.Contains(t, err, want)
 
 	// TransactionMode_MULTI in txconn. Should not fail.
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
