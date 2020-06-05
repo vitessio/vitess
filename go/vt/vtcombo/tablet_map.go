@@ -108,7 +108,7 @@ func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 
 // InitTabletMap creates the action agents and associated data structures
 // for all tablets, based on the vttest proto parameter.
-func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl.MysqlDaemon, dbcfgs *dbconfigs.DBConfigs, schemaDir string, mycnf *mysqlctl.Mycnf) error {
+func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl.MysqlDaemon, dbcfgs *dbconfigs.DBConfigs, schemaDir string, mycnf *mysqlctl.Mycnf, ensureDatabase bool) error {
 	tabletMap = make(map[uint32]*tablet)
 
 	ctx := context.Background()
@@ -190,6 +190,20 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 						rdonlys = 1
 					}
 
+					if ensureDatabase {
+						// Create Database if not exist
+						conn, err := mysqld.GetDbaConnection(context.TODO())
+						if err != nil {
+							return fmt.Errorf("GetConnection failed: %v", err)
+						}
+						defer conn.Close()
+
+						_, err = conn.ExecuteFetch("CREATE DATABASE IF NOT EXISTS `"+dbname+"`", 1, false)
+						if err != nil {
+							return fmt.Errorf("Error ensuring database exists: %v", err)
+						}
+
+					}
 					if cell == tpb.Cells[0] {
 						replicas--
 
