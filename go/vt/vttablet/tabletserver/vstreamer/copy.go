@@ -35,7 +35,7 @@ import (
 func (uvs *uvstreamer) copy(ctx context.Context) error {
 	for len(uvs.tablesToCopy) > 0 {
 		tableName := uvs.tablesToCopy[0]
-		log.Infof("Copystate not empty starting catchupAndCopy on table %s", tableName)
+		log.V(2).Infof("Copystate not empty starting catchupAndCopy on table %s", tableName)
 		if err := uvs.catchupAndCopy(ctx, tableName); err != nil {
 			return err
 		}
@@ -79,7 +79,6 @@ func (uvs *uvstreamer) catchup(ctx context.Context) error {
 	seconds := int64(uvs.config.MaxReplicationLag / time.Second)
 	for {
 		sbm := uvs.getSecondsBehindMaster()
-		log.Infof("Checking sbm %d vs config %d", sbm, seconds)
 		if sbm <= seconds {
 			log.Infof("Canceling context because lag is %d:%d", sbm, seconds)
 			cancel()
@@ -110,7 +109,7 @@ func (uvs *uvstreamer) sendFieldEvent(ctx context.Context, gtid string, fieldEve
 		Type:       binlogdatapb.VEventType_FIELD,
 		FieldEvent: fieldEvent,
 	}}
-	log.Infof("Sending field event %v, gtid is %s", fieldEvent, gtid)
+	log.V(2).Infof("Sending field event %v, gtid is %s", fieldEvent, gtid)
 	uvs.send(evs)
 	if err := uvs.setPosition(gtid, true); err != nil {
 		log.Infof("setPosition returned error %v", err)
@@ -242,7 +241,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 			Rows:   []*querypb.Row{rows.Lastpk},
 		})
 		qrLastPK := sqltypes.ResultToProto3(newLastPK)
-		log.Infof("Calling sendEventForRows with gtid %s", rows.Gtid)
+		log.V(2).Infof("Calling sendEventForRows with gtid %s", rows.Gtid)
 		if err := uvs.sendEventsForRows(ctx, tableName, rows, qrLastPK); err != nil {
 			log.Infof("sendEventsForRows returned error %v", err)
 			return err
