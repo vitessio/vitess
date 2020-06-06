@@ -204,7 +204,6 @@ func matchTable(tableName string, filter *binlogdatapb.Filter, tables map[string
 
 // generate equivalent select statement if filter is empty or a keyrange.
 func getQuery(tableName string, filter string) string {
-	log.Infof("getQuery %s %s", tableName, filter)
 	query := filter
 	switch {
 	case filter == "":
@@ -216,7 +215,6 @@ func getQuery(tableName string, filter string) string {
 		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrVal([]byte(filter)))
 		query = buf.String()
 	}
-	log.Infof("getQuery returning %s for  %s %s", query, tableName, filter)
 	return query
 }
 
@@ -325,7 +323,6 @@ func (uvs *uvstreamer) setStreamStartPosition() error {
 	if !curPos.AtLeast(pos) {
 		return fmt.Errorf("requested position %v is ahead of current position %v", mysql.EncodePosition(pos), mysql.EncodePosition(curPos))
 	}
-	log.Infof("Setting stream position to %s", uvs.pos)
 	uvs.pos = pos
 	return nil
 }
@@ -370,7 +367,7 @@ func (uvs *uvstreamer) Stream() error {
 		}
 		uvs.sendTestEvent("Copy Done")
 	}
-	log.Infof("Starting replicate in uvstreamer.Stream()")
+	log.V(2).Infof("Starting replicate in uvstreamer.Stream()")
 	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, uvs.sh, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos), uvs.filter, uvs.vschema, uvs.send)
 	uvs.vs = vs
 	return vs.Stream()
@@ -378,10 +375,8 @@ func (uvs *uvstreamer) Stream() error {
 
 // SetVSchema updates the vstreamer against the new vschema.
 func (uvs *uvstreamer) SetVSchema(vschema *localVSchema) {
-	log.Infof("SetVSchema called")
 	uvs.vschema = vschema
 	if uvs.vs != nil {
-		log.Infof("vs.SetVSchema called")
 		uvs.vs.SetVSchema(vschema)
 	}
 }
@@ -443,7 +438,6 @@ func (uvs *uvstreamer) setPosition(gtid string, isInTx bool) error {
 		Type: binlogdatapb.VEventType_GTID,
 		Gtid: gtid,
 	}
-	log.Infof("Sending gtid event for %s", gtid)
 
 	var evs []*binlogdatapb.VEvent
 	if !isInTx {
