@@ -179,14 +179,15 @@ func TestInitTablet(t *testing.T) {
 	gRPCPort := int32(3456)
 	mysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(db)
 	agent := &ActionAgent{
-		TopoServer:  ts,
-		TabletAlias: tabletAlias,
-		MysqlDaemon: mysqlDaemon,
-		DBConfigs:   &dbconfigs.DBConfigs{},
-		VREngine:    vreplication.NewTestEngine(nil, "", nil, nil, "", nil),
-		batchCtx:    ctx,
-		History:     history.New(historyLength),
-		_healthy:    fmt.Errorf("healthcheck not run yet"),
+		TopoServer:     ts,
+		TabletAlias:    tabletAlias,
+		MysqlDaemon:    mysqlDaemon,
+		DBConfigs:      &dbconfigs.DBConfigs{},
+		VREngine:       vreplication.NewTestEngine(nil, "", nil, nil, "", nil),
+		batchCtx:       ctx,
+		History:        history.New(historyLength),
+		BaseTabletType: topodatapb.TabletType_REPLICA,
+		_healthy:       fmt.Errorf("healthcheck not run yet"),
 	}
 
 	// 1. Initialize the tablet as REPLICA.
@@ -197,7 +198,6 @@ func TestInitTablet(t *testing.T) {
 	*tabletHostname = "localhost"
 	*initKeyspace = "test_keyspace"
 	*initShard = "-C0"
-	*initTabletType = "replica"
 	tabletAlias = &topodatapb.TabletAlias{
 		Cell: "cell1",
 		Uid:  2,
