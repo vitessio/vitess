@@ -155,10 +155,30 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 	case err == nil:
 		// NOOP
 	case topo.IsErrType(err, topo.NoNode):
-		// try to RebuildKeyspace here but ignore errors if it fails
+		// Try to RebuildKeyspace here but ignore errors if it fails.
+		// It will fail until at least one tablet is up for every shard.
 		topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), agent.TopoServer, *initKeyspace, []string{agent.TabletAlias.Cell})
 	default:
-		return vterrors.Wrap(err, "InitTablet failed to read srvKeyspace")
+		return vterrors.Wrap(err, "InitTablet failed to read SrvKeyspace")
+	}
+
+	// Rebuild vschema graph if this is the first tablet in this keyspace/cell.
+	srvVSchema, err := agent.TopoServer.GetSrvVSchema(ctx, agent.TabletAlias.Cell)
+	switch {
+	case err == nil:
+		// Check if vschema was rebuilt after the initial creation of the keyspace.
+		if _, keyspaceExists := srvVSchema.GetKeyspaces()[*initKeyspace]; !keyspaceExists {
+			if err := agent.TopoServer.RebuildSrvVSchema(ctx, []string{agent.TabletAlias.Cell}); err != nil {
+				return vterrors.Wrap(err, "InitTablet failed to RebuildSrvVSchema")
+			}
+		}
+	case topo.IsErrType(err, topo.NoNode):
+		// There is no SrvSchema in this cell at all, so we definitely need to rebuild.
+		if err := agent.TopoServer.RebuildSrvVSchema(ctx, []string{agent.TabletAlias.Cell}); err != nil {
+			return vterrors.Wrap(err, "InitTablet failed to RebuildSrvVSchema")
+		}
+	default:
+		return vterrors.Wrap(err, "InitTablet failed to read SrvVSchema")
 	}
 
 	log.Infof("Initializing the tablet for type %v", tabletType)
