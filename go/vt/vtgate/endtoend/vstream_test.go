@@ -141,37 +141,6 @@ func TestVStream(t *testing.T) {
 	cancel()
 }
 
-func TestVStreamCopyNoPos(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	gconn, conn, mconn, closeConnections := initialize(ctx, t)
-	defer closeConnections()
-
-	vgtid := &binlogdatapb.VGtid{
-		ShardGtids: []*binlogdatapb.ShardGtid{{
-			Keyspace: "ks",
-			Shard:    "-80",
-			Gtid:     "",
-		}},
-	}
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match: "/.*/",
-		}},
-	}
-	reader, err := gconn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter)
-	_, _ = conn, mconn
-	if err != nil {
-		t.Fatal(err)
-	}
-	require.NotNil(t, reader)
-	events, err := reader.Recv()
-	require.Errorf(t, err, "Stream needs a position or a table to copy")
-	require.Nil(t, events)
-
-	cancel()
-}
-
 func TestVStreamCopyBasic(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
