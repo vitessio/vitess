@@ -53,26 +53,11 @@ func init() {
 
 // InitTablet initializes the tablet record if necessary.
 func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
-	// it should be either we have all three of init_keyspace,
-	// init_shard and init_tablet_type, or none.
-	if *initKeyspace == "" && *initShard == "" && *initTabletType == "" {
-		// not initializing the record
-		return nil
-	}
-	if *initKeyspace == "" || *initShard == "" || *initTabletType == "" {
-		return fmt.Errorf("either need all of init_keyspace, init_shard and init_tablet_type, or none")
+	if *initKeyspace == "" || *initShard == "" {
+		return fmt.Errorf("init_keyspace and init_shard must be specified")
 	}
 
-	// parse init_tablet_type
-	tabletType, err := topoproto.ParseTabletType(*initTabletType)
-	if err != nil {
-		return vterrors.Wrapf(err, "invalid init_tablet_type %v", *initTabletType)
-	}
-	if tabletType == topodatapb.TabletType_MASTER {
-		// We disallow MASTER, so we don't have to change
-		// shard.MasterAlias, and deal with the corner cases.
-		return fmt.Errorf("init_tablet_type cannot be master, use replica instead")
-	}
+	tabletType := agent.BaseTabletType
 
 	// parse and validate shard name
 	shard, keyRange, err := topo.ValidateShardName(*initShard)

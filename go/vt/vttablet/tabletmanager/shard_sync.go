@@ -195,15 +195,15 @@ func syncShardMaster(ctx context.Context, ts *topo.Server, tablet *topodatapb.Ta
 // We just directly update our tablet type to REPLICA.
 func (agent *ActionAgent) abortMasterTerm(ctx context.Context, masterAlias *topodatapb.TabletAlias) error {
 	masterAliasStr := topoproto.TabletAliasString(masterAlias)
-	log.Warningf("Another tablet (%v) has won master election. Stepping down to %v.", masterAliasStr, agent.DemoteMasterType)
+	log.Warningf("Another tablet (%v) has won master election. Stepping down to %v.", masterAliasStr, agent.BaseTabletType)
 
 	if *mysqlctl.DisableActiveReparents {
 		// Don't touch anything at the MySQL level. Just update tablet state.
 		log.Infof("Active reparents are disabled; updating tablet state only.")
 		changeTypeCtx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 		defer cancel()
-		if err := agent.ChangeType(changeTypeCtx, agent.DemoteMasterType); err != nil {
-			return vterrors.Wrapf(err, "failed to change type to %v", agent.DemoteMasterType)
+		if err := agent.ChangeType(changeTypeCtx, agent.BaseTabletType); err != nil {
+			return vterrors.Wrapf(err, "failed to change type to %v", agent.BaseTabletType)
 		}
 		return nil
 	}
