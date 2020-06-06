@@ -439,14 +439,8 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 }
 
 func TestRPCTabletExternallyReparentedDemotesMasterToConfiguredTabletType(t *testing.T) {
-	flag.Set("demote_master_type", "spare")
 	flag.Set("disable_active_reparents", "true")
-
-	// Reset back to default values
-	defer func() {
-		flag.Set("demote_master_type", "replica")
-		flag.Set("disable_active_reparents", "false")
-	}()
+	defer flag.Set("disable_active_reparents", "false")
 
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1")
@@ -458,9 +452,12 @@ func TestRPCTabletExternallyReparentedDemotesMasterToConfiguredTabletType(t *tes
 
 	oldMaster.StartActionLoop(t, wr)
 	newMaster.StartActionLoop(t, wr)
-
 	defer oldMaster.StopActionLoop(t)
 	defer newMaster.StopActionLoop(t)
+
+	// For a real Agent, this would be initialized from initTabletType.
+	oldMaster.Agent.BaseTabletType = topodatapb.TabletType_SPARE
+	newMaster.Agent.BaseTabletType = topodatapb.TabletType_SPARE
 
 	// Build keyspace graph
 	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldMaster.Tablet.Keyspace, []string{"cell1"})

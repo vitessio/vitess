@@ -82,7 +82,6 @@ const (
 
 var (
 	tabletHostname       = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
-	demoteMasterType     = flag.String("demote_master_type", "REPLICA", "the tablet type a demoted master will transition to")
 	initPopulateMetadata = flag.Bool("init_populate_metadata", false, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
 )
 
@@ -98,7 +97,9 @@ type ActionAgent struct {
 	MysqlDaemon         mysqlctl.MysqlDaemon
 	DBConfigs           *dbconfigs.DBConfigs
 	VREngine            *vreplication.Engine
-	DemoteMasterType    topodatapb.TabletType
+	// BaseTabletType is the tablet type we revert back to
+	// when we transition back from something like MASTER.
+	BaseTabletType topodatapb.TabletType
 
 	// exportStats is set only for production tablet.
 	exportStats bool
@@ -234,7 +235,7 @@ func NewActionAgent(
 		return nil, err
 	}
 
-	demoteMasterTabletType, err := validateDemoteMasterType()
+	baseTabletType, err := validateInitTabletType(*initTabletType)
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +249,7 @@ func NewActionAgent(
 		Cnf:                 mycnf,
 		MysqlDaemon:         mysqld,
 		History:             history.New(historyLength),
-		DemoteMasterType:    demoteMasterTabletType,
+		BaseTabletType:      baseTabletType,
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 		orc:                 orc,
 	}
@@ -366,11 +367,6 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		panic(vterrors.Wrap(err, "failed reading tablet"))
 	}
 
-	demoteMasterTabletType, err := validateDemoteMasterType()
-	if err != nil {
-		panic(vterrors.Wrapf(err, "failed to parse tablet type %v", demoteMasterTabletType))
-	}
-
 	agent := &ActionAgent{
 		QueryServiceControl: tabletservermock.NewController(),
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -382,7 +378,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		MysqlDaemon:         mysqlDaemon,
 		VREngine:            vreplication.NewTestEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient, ti.DbName(), nil),
 		History:             history.New(historyLength),
-		DemoteMasterType:    demoteMasterTabletType,
+		BaseTabletType:      topodatapb.TabletType_REPLICA,
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
 	if preStart != nil {
@@ -407,10 +403,10 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 // NewComboActionAgent creates an agent tailored specifically to run
 // within the vtcombo binary. It cannot be called concurrently,
 // as it changes the flags.
-func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs *dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
-	demoteMasterType, err := validateDemoteMasterType()
+func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs *dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletTypeStr string) *ActionAgent {
+	baseTabletType, err := validateInitTabletType(tabletTypeStr)
 	if err != nil {
-		panic(vterrors.Wrapf(err, "failed to parse tablet type %v", tabletType))
+		panic(err)
 	}
 
 	agent := &ActionAgent{
@@ -424,7 +420,7 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 		MysqlDaemon:         mysqlDaemon,
 		VREngine:            vreplication.NewTestEngine(nil, "", nil, nil, "", nil),
 		History:             history.New(historyLength),
-		DemoteMasterType:    demoteMasterType,
+		BaseTabletType:      baseTabletType,
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
 	agent.registerQueryRuleSources()
@@ -433,7 +429,6 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 	*initDbNameOverride = dbname
 	*initKeyspace = keyspace
 	*initShard = shard
-	*initTabletType = tabletType
 	if err := agent.InitTablet(vtPort, grpcPort); err != nil {
 		panic(vterrors.Wrap(err, "agent.InitTablet failed"))
 	}
@@ -793,16 +788,14 @@ func (agent *ActionAgent) withRetry(ctx context.Context, description string, wor
 	}
 }
 
-func validateDemoteMasterType() (topodatapb.TabletType, error) {
-	tabletType, err := topoproto.ParseTabletType(*demoteMasterType)
+func validateInitTabletType(tabletTypeStr string) (topodatapb.TabletType, error) {
+	tabletType, err := topoproto.ParseTabletType(tabletTypeStr)
 	if err != nil {
 		return topodatapb.TabletType_UNKNOWN, err
 	}
-	if tabletType != topodatapb.TabletType_SPARE && tabletType != topodatapb.TabletType_REPLICA {
-		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("invalid demote_master_type %v; can only be REPLICA or SPARE", tabletType)
+	switch tabletType {
+	case topodatapb.TabletType_SPARE, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
+		return tabletType, nil
 	}
-	if tabletType == topodatapb.TabletType_SPARE && !*mysqlctl.DisableActiveReparents {
-		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("demote to SPARE is only allowed when active reparents is disabled (set the -disable_active_reparents flag to disable)")
-	}
-	return tabletType, nil
+	return topodatapb.TabletType_UNKNOWN, fmt.Errorf("invalid init_tablet_type %v; can only be REPLICA, RDONLY or SPARE", tabletType)
 }
