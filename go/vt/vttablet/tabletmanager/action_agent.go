@@ -271,23 +271,8 @@ func NewActionAgent(
 	agent.statsTabletTypeCount = stats.NewCountersWithSingleLabel("TabletTypeCount", "Number of times the tablet changed to the labeled type", "type")
 	agent.statsBackupIsRunning = stats.NewGaugesWithMultiLabels("BackupIsRunning", "Whether a backup is running", []string{"mode"})
 
-	var mysqlHost string
-	var mysqlPort int32
-	if appConfig, _ := config.DB.AppWithDB().MysqlParams(); appConfig.Host != "" {
-		mysqlHost = appConfig.Host
-		mysqlPort = int32(appConfig.Port)
-	} else {
-		// Assume unix socket was specified and try to get the port from mysqld
-		var err error
-		mysqlPort, err = mysqld.GetMysqlPort()
-		if err != nil {
-			// We start this loop in Start, after the tablet record ports have been initialized.
-			log.Warningf("Cannot get current mysql port, will keep retrying every %v: %v", *publishRetryInterval, err)
-		}
-	}
-
 	// Start will get the tablet info, and update our state from it
-	if err := agent.Start(batchCtx, config.DB, mysqlHost, int32(mysqlPort), port, gRPCPort, true); err != nil {
+	if err := agent.Start(batchCtx, config.DB, port, gRPCPort, true); err != nil {
 		return nil, err
 	}
 
@@ -386,7 +371,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 	}
 
 	// Start will update the topology and setup services.
-	if err := agent.Start(batchCtx, &dbconfigs.DBConfigs{}, "", 0, vtPort, grpcPort, false); err != nil {
+	if err := agent.Start(batchCtx, &dbconfigs.DBConfigs{}, vtPort, grpcPort, false); err != nil {
 		panic(vterrors.Wrapf(err, "agent.Start(%v) failed", tabletAlias))
 	}
 
@@ -434,7 +419,7 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 	}
 
 	// Start the agent.
-	if err := agent.Start(batchCtx, dbcfgs, "", 0, vtPort, grpcPort, false); err != nil {
+	if err := agent.Start(batchCtx, dbcfgs, vtPort, grpcPort, false); err != nil {
 		panic(vterrors.Wrapf(err, "agent.Start(%v) failed", tabletAlias))
 	}
 
@@ -583,7 +568,7 @@ func (agent *ActionAgent) verifyTopology(ctx context.Context) {
 // Start validates and updates the topology records for the tablet, and performs
 // the initial state change callback to start tablet services.
 // If initUpdateStream is set, update stream service will also be registered.
-func (agent *ActionAgent) Start(ctx context.Context, dbcfgs *dbconfigs.DBConfigs, mysqlHost string, mysqlPort, vtPort, gRPCPort int32, initUpdateStream bool) error {
+func (agent *ActionAgent) Start(ctx context.Context, dbcfgs *dbconfigs.DBConfigs, vtPort, gRPCPort int32, initUpdateStream bool) error {
 	// find our hostname as fully qualified, and IP
 	hostname := *tabletHostname
 	if hostname == "" {
@@ -594,10 +579,22 @@ func (agent *ActionAgent) Start(ctx context.Context, dbcfgs *dbconfigs.DBConfigs
 		}
 	}
 
-	// If mysqlHost is not set, a unix socket was specified. So, assume
-	// it's the same as the current host.
-	if mysqlHost == "" {
+	var mysqlHost string
+	var mysqlPort int32
+	mysqlPortNotKnown := false
+	if appConfig, _ := dbcfgs.AppWithDB().MysqlParams(); appConfig.Host != "" {
+		mysqlHost = appConfig.Host
+		mysqlPort = int32(appConfig.Port)
+	} else {
+		// Assume unix socket was specified and try to get the port from mysqld
 		mysqlHost = hostname
+		var err error
+		mysqlPort, err = agent.MysqlDaemon.GetMysqlPort()
+		if err != nil {
+			// We start this loop in Start, after the tablet record ports have been initialized.
+			log.Warningf("Cannot get current mysql port, will keep retrying every %v: %v", *publishRetryInterval, err)
+			mysqlPortNotKnown = true
+		}
 	}
 
 	// Update bind addr for mysql and query service in the tablet node.
@@ -690,7 +687,7 @@ func (agent *ActionAgent) Start(ctx context.Context, dbcfgs *dbconfigs.DBConfigs
 
 	// If mysql port was not specified, we have to discover it.
 	// This should be started after agent.tablet is initialized.
-	if mysqlPort == 0 {
+	if mysqlPortNotKnown {
 		// We send the publishRetryInterval as input parameter to
 		// avoid races in tests.
 		// TODO(sougou): undo this after proper shutdown procedure
