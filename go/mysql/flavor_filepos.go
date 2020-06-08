@@ -197,6 +197,10 @@ func (flv *filePosFlavor) status(c *Conn) (SlaveStatus, error) {
 		return SlaveStatus{}, err
 	}
 
+	return parseFilePosSlaveStatus(resultMap)
+}
+
+func parseFilePosSlaveStatus(resultMap map[string]string) (SlaveStatus, error) {
 	status := parseSlaveStatus(resultMap)
 
 	status.Position = status.FilePosition
