@@ -59,6 +59,9 @@ type vreplicator struct {
 	// mysqld is used to fetch the local schema.
 	mysqld    mysqlctl.MysqlDaemon
 	tableKeys map[string][]string
+
+	originalFKCheckSetting    int64
+	mustResetFKCheckAfterCopy bool
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
@@ -130,7 +133,11 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		return err
 	}
 	vr.tableKeys = tableKeys
-
+	if err := vr.getSettingFKCheck(); err != nil {
+		return err
+	}
+	//defensive guard, should be a no-op since it should happen after copy is done
+	defer vr.resetFKCheckAfterCopy()
 	for {
 		select {
 		case <-ctx.Done():
@@ -152,6 +159,9 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 
 		switch {
 		case numTablesToCopy != 0:
+			if err := vr.clearFKCheck(); err != nil {
+				return err
+			}
 			if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
 				return err
 			}
@@ -160,6 +170,9 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				return err
 			}
 		default:
+			if err := vr.resetFKCheckAfterCopy(); err != nil {
+				return err
+			}
 			if vr.source.StopAfterCopy {
 				return vr.setState(binlogplayer.BlpStopped, "Stopped after copy.")
 			}
@@ -253,4 +266,41 @@ func encodeString(in string) string {
 	var buf strings.Builder
 	sqltypes.NewVarChar(in).EncodeSQL(&buf)
 	return buf.String()
+}
+
+func (vr *vreplicator) getSettingFKCheck() error {
+	qr, err := vr.dbClient.Execute("select @@foreign_key_checks;")
+	if err != nil {
+		return err
+	}
+	if qr.RowsAffected != 1 || len(qr.Fields) != 1 {
+		return fmt.Errorf("unable to select @@foreign_key_checks")
+	}
+	vr.originalFKCheckSetting, err = evalengine.ToInt64(qr.Rows[0][0])
+	if err != nil {
+		return err
+	}
+	log.Infof("originalFKCheckSetting is %d", vr.originalFKCheckSetting)
+	return nil
+}
+
+func (vr *vreplicator) resetFKCheckAfterCopy() error {
+	if vr.mustResetFKCheckAfterCopy {
+		log.Infof("Resetting FKCheck after copy")
+		if _, err := vr.dbClient.Execute("set foreign_key_checks=1;"); err != nil {
+			return err
+		}
+		vr.mustResetFKCheckAfterCopy = false
+	}
+	return nil
+}
+
+func (vr *vreplicator) clearFKCheck() error {
+	if vr.originalFKCheckSetting == 0 || vr.mustResetFKCheckAfterCopy {
+		return nil
+	}
+	log.Infof("Setting foreign_key_checks to 0 and mustResetFKCheckAfterCopy to %t", true)
+	vr.dbClient.Execute("set foreign_key_checks=0;")
+	vr.mustResetFKCheckAfterCopy = true
+	return nil
 }
