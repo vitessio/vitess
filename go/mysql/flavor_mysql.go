@@ -117,7 +117,12 @@ func (mysqlFlavor) status(c *Conn) (SlaveStatus, error) {
 		return SlaveStatus{}, err
 	}
 
+	return parseMysqlSlaveStatus(resultMap)
+}
+
+func parseMysqlSlaveStatus(resultMap map[string]string) (SlaveStatus, error) {
 	status := parseSlaveStatus(resultMap)
+	var err error
 	status.Position.GTIDSet, err = parseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
 	if err != nil {
 		return SlaveStatus{}, vterrors.Wrapf(err, "SlaveStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])

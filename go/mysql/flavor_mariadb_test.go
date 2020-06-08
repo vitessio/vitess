@@ -75,3 +75,59 @@ func TestMariadbSetMasterCommandsSSL(t *testing.T) {
 		t.Errorf("mariadbFlavor.SetMasterCommands(%#v, %#v, %#v, %#v) = %#v, want %#v", params, masterHost, masterPort, masterConnectRetry, got, want)
 	}
 }
+
+func TestMariadbRetrieveMasterServerId(t *testing.T) {
+	resultMap := map[string]string{
+		"Master_Server_Id": "1",
+	}
+
+	want := SlaveStatus{MasterServerID: 1}
+	got, err := parseMariadbSlaveStatus(resultMap)
+	if err != nil {
+		t.Error("Received an error when trying to parse resultMap.")
+	}
+	if got.MasterServerID != want.MasterServerID {
+		t.Errorf("got MasterServerID: %v; want MasterServerID: %v", got.MasterServerID, want.MasterServerID)
+	}
+}
+
+func TestMariadbRetrieveFileBasedPositions(t *testing.T) {
+	resultMap := map[string]string{
+		"Exec_Master_Log_Pos":   "1307",
+		"Relay_Master_Log_File": "master-bin.000002",
+		"Read_Master_Log_Pos":   "1308",
+		"Master_Log_File":       "master-bin.000003",
+	}
+
+	want := SlaveStatus{
+		FilePosition:         Position{GTIDSet: filePosGTID{file: "master-bin.000002", pos: 1307}},
+		FileRelayLogPosition: Position{GTIDSet: filePosGTID{file: "master-bin.000003", pos: 1308}},
+	}
+	got, err := parseMariadbSlaveStatus(resultMap)
+	if err != nil {
+		t.Error("Received an error when trying to parse resultMap.")
+	}
+	if got.FilePosition.GTIDSet != want.FilePosition.GTIDSet {
+		t.Errorf("got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet)
+	}
+	if got.FileRelayLogPosition.GTIDSet != want.FileRelayLogPosition.GTIDSet {
+		t.Errorf("got FileRelayLogPosition: %v; want FileRelayLogPosition: %v", got.FileRelayLogPosition.GTIDSet, want.FileRelayLogPosition.GTIDSet)
+	}
+}
+
+func TestMariadbShouldGetNilRelayLogPosition(t *testing.T) {
+	resultMap := map[string]string{
+		"Exec_Master_Log_Pos":   "1307",
+		"Relay_Master_Log_File": "master-bin.000002",
+		"Read_Master_Log_Pos":   "1308",
+		"Master_Log_File":       "master-bin.000003",
+		"Gtid_Slave_Pos":        "0-101-2320",
+	}
+	got, err := parseMariadbSlaveStatus(resultMap)
+	if err != nil {
+		t.Error("Received an error when trying to parse resultMap.")
+	}
+	if !got.RelayLogPosition.IsZero() {
+		t.Errorf("Got a filled in RelayLogPosition. For MariaDB we should get back nil, because MariaDB does not return the retrieved GTIDSet. got: %#v", got.RelayLogPosition)
+	}
+}
