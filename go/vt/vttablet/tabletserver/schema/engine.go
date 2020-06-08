@@ -85,10 +85,10 @@ func NewEngine(env tabletenv.Env) *Engine {
 	reloadTime := time.Duration(env.Config().SchemaReloadIntervalSeconds * 1e9)
 	se := &Engine{
 		env: env,
-		// We need only one connection because the reloader is
-		// the only one that needs this.
+		// We need two connections: one for the reloader, and one for
+		// the historian.
 		conns: connpool.NewPool(env, "", tabletenv.ConnPoolConfig{
-			Size:               1,
+			Size:               2,
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
 		}),
 		ticks:      timer.NewTimer(reloadTime),
