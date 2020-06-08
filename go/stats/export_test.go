@@ -129,3 +129,13 @@ func TestDropVariable(t *testing.T) {
 	_ = NewGaugesWithSingleLabel("dropTest", "help", "label")
 	_ = NewGaugesWithSingleLabel("dropTest", "help", "label")
 }
+
+func TestStringMapToString(t *testing.T) {
+	expected1 := "{\"aaa\": \"111\", \"bbb\": \"222\"}"
+	expected2 := "{\"bbb\": \"222\", \"aaa\": \"111\"}"
+	got := stringMapToString(map[string]string{"aaa": "111", "bbb": "222"})
+
+	if got != expected1 && got != expected2 {
+		t.Errorf("expected %v or %v, got  %v", expected1, expected2, got)
+	}
+}
