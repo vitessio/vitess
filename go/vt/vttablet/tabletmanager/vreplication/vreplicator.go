@@ -280,13 +280,12 @@ func (vr *vreplicator) getSettingFKCheck() error {
 	if err != nil {
 		return err
 	}
-	log.Infof("originalFKCheckSetting is %d", vr.originalFKCheckSetting)
 	return nil
 }
 
 func (vr *vreplicator) resetFKCheckAfterCopy() error {
 	if vr.mustResetFKCheckAfterCopy {
-		log.Infof("Resetting FKCheck after copy")
+		log.Info("Setting foreign key checks")
 		if _, err := vr.dbClient.Execute("set foreign_key_checks=1;"); err != nil {
 			return err
 		}
@@ -299,7 +298,7 @@ func (vr *vreplicator) clearFKCheck() error {
 	if vr.originalFKCheckSetting == 0 || vr.mustResetFKCheckAfterCopy {
 		return nil
 	}
-	log.Infof("Setting foreign_key_checks to 0 and mustResetFKCheckAfterCopy to %t", true)
+	log.Info("Clearing foreign key checks")
 	vr.dbClient.Execute("set foreign_key_checks=0;")
 	vr.mustResetFKCheckAfterCopy = true
 	return nil
