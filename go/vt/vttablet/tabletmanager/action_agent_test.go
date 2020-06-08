@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2020 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,20 +20,18 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/gogo/protobuf/proto"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
-
-	"github.com/golang/protobuf/proto"
-
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // Init tablet fixes replication data when safe
@@ -47,13 +45,10 @@ func TestInitTabletFixesReplicationData(t *testing.T) {
 	}
 
 	// start with a tablet record that doesn't exist
-	port := int32(1234)
-	gRPCPort := int32(3456)
-	mysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 	agent := &ActionAgent{
 		TopoServer:  ts,
 		TabletAlias: tabletAlias,
-		MysqlDaemon: mysqlDaemon,
+		MysqlDaemon: fakemysqldaemon.NewFakeMysqlDaemon(nil),
 		DBConfigs:   &dbconfigs.DBConfigs{},
 		batchCtx:    ctx,
 		History:     history.New(historyLength),
@@ -70,9 +65,15 @@ func TestInitTabletFixesReplicationData(t *testing.T) {
 		Uid:  2,
 	}
 	agent.TabletAlias = tabletAlias
-	if err := agent.InitTablet(port, gRPCPort); err != nil {
-		t.Fatalf("InitTablet(type) failed: %v", err)
-	}
+
+	tablet, err := buildTabletFromInput(tabletAlias, int32(1234), int32(3456))
+	require.NoError(t, err)
+	agent.tablet = tablet
+	_, err = agent.createKeyspaceShard(context.Background())
+	require.NoError(t, err)
+	err = agent.initTablet(context.Background())
+	require.NoError(t, err)
+
 	sri, err := ts.GetShardReplication(ctx, cell, *initKeyspace, "-c0")
 	if err != nil || len(sri.Nodes) != 1 || !proto.Equal(sri.Nodes[0].TabletAlias, tabletAlias) {
 		t.Fatalf("Created ShardReplication doesn't match: %v %v", sri, err)
@@ -80,18 +81,16 @@ func TestInitTabletFixesReplicationData(t *testing.T) {
 
 	// Remove the ShardReplication record, try to create the
 	// tablets again, make sure it's fixed.
-	if err := topo.RemoveShardReplicationRecord(ctx, ts, cell, *initKeyspace, "-c0", tabletAlias); err != nil {
-		t.Fatalf("RemoveShardReplicationRecord failed: %v", err)
-	}
+	err = topo.RemoveShardReplicationRecord(ctx, ts, cell, *initKeyspace, "-c0", tabletAlias)
+	require.NoError(t, err)
 	sri, err = ts.GetShardReplication(ctx, cell, *initKeyspace, "-c0")
 	if err != nil || len(sri.Nodes) != 0 {
 		t.Fatalf("Modifed ShardReplication doesn't match: %v %v", sri, err)
 	}
 
-	// Initialize the same tablet again, CreateTablet will fail, but it should recreate shard replication data
-	if err := agent.InitTablet(port, gRPCPort); err != nil {
-		t.Fatalf("InitTablet(type) failed: %v", err)
-	}
+	// An initTablet will recreate the shard replication data.
+	err = agent.initTablet(context.Background())
+	require.NoError(t, err)
 
 	sri, err = ts.GetShardReplication(ctx, cell, *initKeyspace, "-c0")
 	if err != nil || len(sri.Nodes) != 1 || !proto.Equal(sri.Nodes[0].TabletAlias, tabletAlias) {
@@ -112,13 +111,10 @@ func TestInitTabletDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.
 	}
 
 	// start with a tablet record that doesn't exist
-	port := int32(1234)
-	gRPCPort := int32(3456)
-	mysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 	agent := &ActionAgent{
 		TopoServer:  ts,
 		TabletAlias: tabletAlias,
-		MysqlDaemon: mysqlDaemon,
+		MysqlDaemon: fakemysqldaemon.NewFakeMysqlDaemon(nil),
 		DBConfigs:   &dbconfigs.DBConfigs{},
 		batchCtx:    ctx,
 		History:     history.New(historyLength),
@@ -135,9 +131,15 @@ func TestInitTabletDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.
 		Uid:  2,
 	}
 	agent.TabletAlias = tabletAlias
-	if err := agent.InitTablet(port, gRPCPort); err != nil {
-		t.Fatalf("InitTablet(type) failed: %v", err)
-	}
+
+	tablet, err := buildTabletFromInput(tabletAlias, int32(1234), int32(3456))
+	require.NoError(t, err)
+	agent.tablet = tablet
+	_, err = agent.createKeyspaceShard(context.Background())
+	require.NoError(t, err)
+	err = agent.initTablet(context.Background())
+	require.NoError(t, err)
+
 	tabletAliases, err := ts.FindAllTabletAliasesInShard(ctx, "test_keyspace", "-c0")
 	if err != nil {
 		t.Fatalf("Could not fetch tablet aliases for shard: %v", err)
@@ -152,9 +154,14 @@ func TestInitTabletDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.
 
 	// Try to initialize a tablet with the same uid in a different shard.
 	*initShard = "-D0"
-	if err := agent.InitTablet(port, gRPCPort); err == nil {
-		t.Fatalf("InitTablet(type) should have failed, got nil")
-	}
+	tablet, err = buildTabletFromInput(tabletAlias, int32(1234), int32(3456))
+	require.NoError(t, err)
+	agent.tablet = tablet
+	_, err = agent.createKeyspaceShard(context.Background())
+	require.NoError(t, err)
+	err = agent.initTablet(context.Background())
+	// This should fail.
+	require.Error(t, err)
 
 	if tablets, _ := ts.FindAllTabletAliasesInShard(ctx, "test_keyspace", "-d0"); len(tablets) != 0 {
 		t.Fatalf("Tablet shouldn't be added to replication data")
@@ -212,9 +219,15 @@ func TestInitTablet(t *testing.T) {
 	}
 
 	agent.TabletAlias = tabletAlias
-	if err := agent.InitTablet(port, gRPCPort); err != nil {
-		t.Fatalf("InitTablet(type) failed: %v", err)
-	}
+
+	tablet, err := buildTabletFromInput(tabletAlias, port, gRPCPort)
+	require.NoError(t, err)
+	agent.tablet = tablet
+	_, err = agent.createKeyspaceShard(context.Background())
+	require.NoError(t, err)
+	err = agent.initTablet(context.Background())
+	require.NoError(t, err)
+
 	si, err := ts.GetShard(ctx, "test_keyspace", "-c0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
@@ -265,9 +278,15 @@ func TestInitTablet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpdateShardFields failed: %v", err)
 	}
-	if err := agent.InitTablet(port, gRPCPort); err != nil {
-		t.Fatalf("InitTablet(type, healthcheck) failed: %v", err)
-	}
+
+	tablet, err = buildTabletFromInput(tabletAlias, port, gRPCPort)
+	require.NoError(t, err)
+	agent.tablet = tablet
+	_, err = agent.createKeyspaceShard(context.Background())
+	require.NoError(t, err)
+	err = agent.initTablet(context.Background())
+	require.NoError(t, err)
+
 	ti, err = ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
@@ -286,9 +305,17 @@ func TestInitTablet(t *testing.T) {
 	if err := ts.DeleteTablet(ctx, tabletAlias); err != nil {
 		t.Fatalf("DeleteTablet failed: %v", err)
 	}
-	if err := agent.InitTablet(port, gRPCPort); err != nil {
-		t.Fatalf("InitTablet(type, healthcheck) failed: %v", err)
-	}
+
+	tablet, err = buildTabletFromInput(tabletAlias, port, gRPCPort)
+	require.NoError(t, err)
+	agent.tablet = tablet
+	si, err = agent.createKeyspaceShard(context.Background())
+	require.NoError(t, err)
+	err = agent.checkMastership(ctx, si)
+	require.NoError(t, err)
+	err = agent.initTablet(context.Background())
+	require.NoError(t, err)
+
 	ti, err = ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
@@ -308,9 +335,17 @@ func TestInitTablet(t *testing.T) {
 	if err := ts.UpdateTablet(ctx, ti); err != nil {
 		t.Fatalf("UpdateTablet failed: %v", err)
 	}
-	if err := agent.InitTablet(port, gRPCPort); err != nil {
-		t.Fatalf("InitTablet(type, healthcheck) failed: %v", err)
-	}
+
+	tablet, err = buildTabletFromInput(tabletAlias, port, gRPCPort)
+	require.NoError(t, err)
+	agent.tablet = tablet
+	si, err = agent.createKeyspaceShard(context.Background())
+	require.NoError(t, err)
+	err = agent.checkMastership(ctx, si)
+	require.NoError(t, err)
+	err = agent.initTablet(context.Background())
+	require.NoError(t, err)
+
 	ti, err = ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
@@ -327,9 +362,17 @@ func TestInitTablet(t *testing.T) {
 	// (Also check db name override and tags here.)
 	*initDbNameOverride = "DBNAME"
 	initTags.Set("aaa:bbb")
-	if err := agent.InitTablet(port, gRPCPort); err != nil {
-		t.Fatalf("InitTablet(type, healthcheck) failed: %v", err)
-	}
+
+	tablet, err = buildTabletFromInput(tabletAlias, port, gRPCPort)
+	require.NoError(t, err)
+	agent.tablet = tablet
+	si, err = agent.createKeyspaceShard(context.Background())
+	require.NoError(t, err)
+	err = agent.checkMastership(ctx, si)
+	require.NoError(t, err)
+	err = agent.initTablet(context.Background())
+	require.NoError(t, err)
+
 	ti, err = ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)

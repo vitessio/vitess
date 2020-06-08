@@ -327,7 +327,7 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 
 // GetOrCreateShard will return the shard object, or create one if it doesn't
 // already exist. Note the shard creation is protected by a keyspace Lock.
-func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard, cell string) (si *ShardInfo, err error) {
+func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) (si *ShardInfo, err error) {
 	log.Info("GetShard %s/%s", keyspace, shard)
 	si, err = ts.GetShard(ctx, keyspace, shard)
 	if !IsErrType(err, NoNode) {

@@ -44,6 +44,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -83,7 +84,19 @@ const (
 var (
 	tabletHostname       = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
 	initPopulateMetadata = flag.Bool("init_populate_metadata", false, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
+
+	initKeyspace       = flag.String("init_keyspace", "", "(init parameter) keyspace to use for this tablet")
+	initShard          = flag.String("init_shard", "", "(init parameter) shard to use for this tablet")
+	initTabletType     = flag.String("init_tablet_type", "", "(init parameter) the tablet type to use for this tablet.")
+	initDbNameOverride = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>")
+	initTags           flagutil.StringMapValue
+
+	initTimeout = flag.Duration("init_timeout", 1*time.Minute, "(init parameter) timeout to use for the init phase.")
 )
+
+func init() {
+	flag.Var(&initTags, "init_tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
+}
 
 // ActionAgent is the main class for the agent.
 type ActionAgent struct {
@@ -235,7 +248,7 @@ func NewActionAgent(
 		return nil, err
 	}
 
-	baseTabletType, err := validateInitTabletType(*initTabletType)
+	tablet, err := buildTabletFromInput(tabletAlias, port, gRPCPort)
 	if err != nil {
 		return nil, err
 	}
@@ -249,10 +262,12 @@ func NewActionAgent(
 		Cnf:                 mycnf,
 		MysqlDaemon:         mysqld,
 		History:             history.New(historyLength),
-		BaseTabletType:      baseTabletType,
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 		orc:                 orc,
+		BaseTabletType:      tablet.Type,
+		tablet:              tablet,
 	}
+
 	// Sanity check for inconsistent flags
 	if agent.Cnf == nil && *restoreFromBackup {
 		return nil, fmt.Errorf("you cannot enable -restore_from_backup without a my.cnf file")
@@ -260,9 +275,17 @@ func NewActionAgent(
 
 	agent.registerQueryRuleSources()
 
-	// try to initialize the tablet if we have to
-	if err := agent.InitTablet(port, gRPCPort); err != nil {
-		return nil, vterrors.Wrap(err, "agent.InitTablet failed")
+	ctx, cancel := context.WithTimeout(agent.batchCtx, *initTimeout)
+	defer cancel()
+	si, err := agent.createKeyspaceShard(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := agent.checkMastership(ctx, si); err != nil {
+		return nil, err
+	}
+	if err := agent.initTablet(ctx); err != nil {
+		return nil, err
 	}
 
 	// Create the TabletType stats
@@ -279,10 +302,6 @@ func NewActionAgent(
 	// The db name is set by the Start function called above
 	agent.VREngine = vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld)
 	servenv.OnTerm(agent.VREngine.Close)
-
-	// Run a background task to rebuild the SrvKeyspace in our cell/keyspace
-	// if it doesn't exist yet.
-	go agent.maybeRebuildKeyspace(agent.initialTablet.Alias.Cell, agent.initialTablet.Keyspace)
 
 	// register the RPC services from the agent
 	servenv.OnRun(func() {
@@ -389,11 +408,14 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 // within the vtcombo binary. It cannot be called concurrently,
 // as it changes the flags.
 func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs *dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletTypeStr string) *ActionAgent {
-	baseTabletType, err := validateInitTabletType(tabletTypeStr)
+	*initDbNameOverride = dbname
+	*initKeyspace = keyspace
+	*initShard = shard
+	*initTabletType = tabletTypeStr
+	tablet, err := buildTabletFromInput(tabletAlias, vtPort, grpcPort)
 	if err != nil {
 		panic(err)
 	}
-
 	agent := &ActionAgent{
 		QueryServiceControl: queryServiceControl,
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -405,16 +427,23 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 		MysqlDaemon:         mysqlDaemon,
 		VREngine:            vreplication.NewTestEngine(nil, "", nil, nil, "", nil),
 		History:             history.New(historyLength),
-		BaseTabletType:      baseTabletType,
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
+		BaseTabletType:      tablet.Type,
+		tablet:              tablet,
 	}
+	agent.tablet = tablet
 	agent.registerQueryRuleSources()
 
-	// Initialize the tablet.
-	*initDbNameOverride = dbname
-	*initKeyspace = keyspace
-	*initShard = shard
-	if err := agent.InitTablet(vtPort, grpcPort); err != nil {
+	ctx, cancel := context.WithTimeout(agent.batchCtx, *initTimeout)
+	defer cancel()
+	si, err := agent.createKeyspaceShard(ctx)
+	if err != nil {
+		panic(vterrors.Wrap(err, "agent.InitTablet failed"))
+	}
+	if err := agent.checkMastership(ctx, si); err != nil {
+		panic(vterrors.Wrap(err, "agent.InitTablet failed"))
+	}
+	if err := agent.initTablet(ctx); err != nil {
 		panic(vterrors.Wrap(err, "agent.InitTablet failed"))
 	}
 
@@ -785,14 +814,184 @@ func (agent *ActionAgent) withRetry(ctx context.Context, description string, wor
 	}
 }
 
-func validateInitTabletType(tabletTypeStr string) (topodatapb.TabletType, error) {
-	tabletType, err := topoproto.ParseTabletType(tabletTypeStr)
+func buildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (*topodatapb.Tablet, error) {
+	hostname := *tabletHostname
+	if hostname == "" {
+		var err error
+		hostname, err = netutil.FullyQualifiedHostname()
+		if err != nil {
+			return nil, err
+		}
+		log.Infof("Using detected machine hostname: %v To change this, fix your machine network configuration or override it with -tablet_hostname.", hostname)
+	} else {
+		log.Infof("Using hostname: %v from -tablet_hostname flag.", hostname)
+	}
+
+	if *initKeyspace == "" || *initShard == "" {
+		return nil, fmt.Errorf("init_keyspace and init_shard must be specified")
+	}
+
+	// parse and validate shard name
+	shard, keyRange, err := topo.ValidateShardName(*initShard)
 	if err != nil {
-		return topodatapb.TabletType_UNKNOWN, err
+		return nil, vterrors.Wrapf(err, "cannot validate shard name %v", *initShard)
+	}
+
+	tabletType, err := topoproto.ParseTabletType(*initTabletType)
+	if err != nil {
+		return nil, err
 	}
 	switch tabletType {
 	case topodatapb.TabletType_SPARE, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
-		return tabletType, nil
+	default:
+		return nil, fmt.Errorf("invalid init_tablet_type %v; can only be REPLICA, RDONLY or SPARE", tabletType)
 	}
-	return topodatapb.TabletType_UNKNOWN, fmt.Errorf("invalid init_tablet_type %v; can only be REPLICA, RDONLY or SPARE", tabletType)
+
+	return &topodatapb.Tablet{
+		Alias:    alias,
+		Hostname: hostname,
+		PortMap: map[string]int32{
+			"vt":   port,
+			"grpc": grpcPort,
+		},
+		Keyspace:       *initKeyspace,
+		Shard:          shard,
+		KeyRange:       keyRange,
+		Type:           tabletType,
+		DbNameOverride: *initDbNameOverride,
+		Tags:           initTags,
+	}, nil
+}
+
+func (agent *ActionAgent) createKeyspaceShard(ctx context.Context) (*topo.ShardInfo, error) {
+	log.Infof("Reading/creating keyspace and shard records for %v/%v", agent.tablet.Keyspace, agent.tablet.Shard)
+
+	// Read the shard, create it if necessary.
+	var si *topo.ShardInfo
+	if err := agent.withRetry(ctx, "creating keyspace and shard", func() error {
+		var err error
+		si, err = agent.TopoServer.GetOrCreateShard(ctx, agent.tablet.Keyspace, agent.tablet.Shard)
+		return err
+	}); err != nil {
+		return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: cannot GetOrCreateShard shard")
+	}
+
+	// Rebuild keyspace if this the first tablet in this keyspace/cell
+	_, err := agent.TopoServer.GetSrvKeyspace(ctx, agent.TabletAlias.Cell, agent.tablet.Keyspace)
+	switch {
+	case err == nil:
+		// NOOP
+	case topo.IsErrType(err, topo.NoNode):
+		// Try to RebuildKeyspace here but ignore errors if it fails.
+		// It will fail until at least one tablet is up for every shard.
+		topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), agent.TopoServer, agent.tablet.Keyspace, []string{agent.TabletAlias.Cell})
+	default:
+		return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to read SrvKeyspace")
+	}
+
+	// Rebuild vschema graph if this is the first tablet in this keyspace/cell.
+	srvVSchema, err := agent.TopoServer.GetSrvVSchema(ctx, agent.TabletAlias.Cell)
+	switch {
+	case err == nil:
+		// Check if vschema was rebuilt after the initial creation of the keyspace.
+		if _, keyspaceExists := srvVSchema.GetKeyspaces()[agent.tablet.Keyspace]; !keyspaceExists {
+			if err := agent.TopoServer.RebuildSrvVSchema(ctx, []string{agent.TabletAlias.Cell}); err != nil {
+				return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to RebuildSrvVSchema")
+			}
+		}
+	case topo.IsErrType(err, topo.NoNode):
+		// There is no SrvSchema in this cell at all, so we definitely need to rebuild.
+		if err := agent.TopoServer.RebuildSrvVSchema(ctx, []string{agent.TabletAlias.Cell}); err != nil {
+			return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to RebuildSrvVSchema")
+		}
+	default:
+		return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to read SrvVSchema")
+	}
+	return si, nil
+}
+
+func (agent *ActionAgent) checkMastership(ctx context.Context, si *topo.ShardInfo) error {
+	if si.MasterAlias != nil && topoproto.TabletAliasEqual(si.MasterAlias, agent.TabletAlias) {
+		// We're marked as master in the shard record, which could mean the master
+		// tablet process was just restarted. However, we need to check if a new
+		// master is in the process of taking over. In that case, it will let us
+		// know by forcibly updating the old master's tablet record.
+		oldTablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+		switch {
+		case topo.IsErrType(err, topo.NoNode):
+			// There's no existing tablet record, so we can assume
+			// no one has left us a message to step down.
+			agent.tablet.Type = topodatapb.TabletType_MASTER
+			// Update the master term start time (current value is 0) because we
+			// assume that we are actually the MASTER and in case of a tiebreak,
+			// vtgate should prefer us.
+			agent.tablet.MasterTermStartTime = logutil.TimeToProto(time.Now())
+		case err == nil:
+			if oldTablet.Type == topodatapb.TabletType_MASTER {
+				// We're marked as master in the shard record,
+				// and our existing tablet record agrees.
+				agent.tablet.Type = topodatapb.TabletType_MASTER
+				agent.tablet.MasterTermStartTime = oldTablet.MasterTermStartTime
+			}
+		default:
+			return vterrors.Wrap(err, "InitTablet failed to read existing tablet record")
+		}
+	} else {
+		oldTablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+		switch {
+		case topo.IsErrType(err, topo.NoNode):
+			// There's no existing tablet record, so there is nothing to do
+		case err == nil:
+			if oldTablet.Type == topodatapb.TabletType_MASTER {
+				// Our existing tablet type is master, but the shard record does not agree.
+				// Only take over if our master_term_start_time is after what is in the shard record
+				oldMasterTermStartTime := oldTablet.GetMasterTermStartTime()
+				currentShardTime := si.GetMasterTermStartTime()
+				if oldMasterTermStartTime.After(currentShardTime) {
+					agent.tablet.Type = topodatapb.TabletType_MASTER
+					agent.tablet.MasterTermStartTime = oldTablet.MasterTermStartTime
+				}
+			}
+		default:
+			return vterrors.Wrap(err, "InitTablet failed to read existing tablet record")
+		}
+	}
+	return nil
+}
+
+func (agent *ActionAgent) initTablet(ctx context.Context) error {
+	err := agent.TopoServer.CreateTablet(ctx, agent.tablet)
+	switch {
+	case err == nil:
+		// It worked, we're good.
+	case topo.IsErrType(err, topo.NodeExists):
+		// The node already exists, will just try to update
+		// it. So we read it first.
+		oldTablet, err := agent.TopoServer.GetTablet(ctx, agent.tablet.Alias)
+		if err != nil {
+			return vterrors.Wrap(err, "InitTablet failed to read existing tablet record")
+		}
+
+		// Sanity check the keyspace and shard
+		if oldTablet.Keyspace != agent.tablet.Keyspace || oldTablet.Shard != agent.tablet.Shard {
+			return fmt.Errorf("InitTablet failed because existing tablet keyspace and shard %v/%v differ from the provided ones %v/%v", oldTablet.Keyspace, oldTablet.Shard, agent.tablet.Keyspace, agent.tablet.Shard)
+		}
+
+		// Update ShardReplication in any case, to be sure.  This is
+		// meant to fix the case when a Tablet record was created, but
+		// then the ShardReplication record was not (because for
+		// instance of a startup timeout). Upon running this code
+		// again, we want to fix ShardReplication.
+		if updateErr := topo.UpdateTabletReplicationData(ctx, agent.TopoServer, agent.tablet); updateErr != nil {
+			return vterrors.Wrap(updateErr, "UpdateTabletReplicationData failed")
+		}
+
+		// Then overwrite everything, ignoring version mismatch.
+		if err := agent.TopoServer.UpdateTablet(ctx, topo.NewTabletInfo(agent.tablet, nil)); err != nil {
+			return vterrors.Wrap(err, "UpdateTablet failed")
+		}
+	default:
+		return vterrors.Wrap(err, "CreateTablet failed")
+	}
+	return nil
 }
