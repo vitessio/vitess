@@ -79,6 +79,7 @@ func TestMariadbSetMasterCommandsSSL(t *testing.T) {
 func TestMariadbRetrieveMasterServerId(t *testing.T) {
 	resultMap := map[string]string{
 		"Master_Server_Id": "1",
+		"Gtid_Slave_Pos":   "0-101-2320",
 	}
 
 	want := SlaveStatus{MasterServerID: 1}
@@ -97,6 +98,7 @@ func TestMariadbRetrieveFileBasedPositions(t *testing.T) {
 		"Relay_Master_Log_File": "master-bin.000002",
 		"Read_Master_Log_Pos":   "1308",
 		"Master_Log_File":       "master-bin.000003",
+		"Gtid_Slave_Pos":        "0-101-2320",
 	}
 
 	want := SlaveStatus{
