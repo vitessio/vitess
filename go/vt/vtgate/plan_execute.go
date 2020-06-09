@@ -156,6 +156,9 @@ func (e *Executor) executePlan(ctx context.Context, plan *engine.Plan, vcursor *
 		qr, err := plan.Instructions.Execute(vcursor, bindVars, true)
 
 		// 5: Log and add statistics
+		logStats.Keyspace = plan.Instructions.GetKeyspaceName()
+		logStats.Table = plan.Instructions.GetTableName()
+		logStats.TabletType = vcursor.TabletType().String()
 		errCount := e.logExecutionEnd(logStats, execStart, plan, err, qr)
 		plan.AddStats(1, time.Since(logStats.StartTime), uint64(logStats.ShardQueries), logStats.RowsAffected, errCount)
 
