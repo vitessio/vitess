@@ -229,7 +229,7 @@ type ActionAgent struct {
 	_isBackupRunning bool
 
 	pubMu sync.Mutex
-	// _tablet has the Tablet record we last read from the topology server.
+	// tablet has the Tablet record we last read from the topology server.
 	tablet       *topodatapb.Tablet
 	isPublishing bool
 }
