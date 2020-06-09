@@ -31,8 +31,7 @@ all_except_endtoend_tests=$(echo "$packages_with_all_tests" | grep -v "endtoend"
 counter=0
 for pkg in $all_except_endtoend_tests
 do
-   go test -coverpkg=vitess.io/vitess/go/... -coverprofile "/tmp/unit_$counter.out" $pkg -v -p=1 || :
-   gocov convert "/tmp/unit_$counter.out" | gocov-xml > "/tmp/coverage_$counter.xml" || :
+   go test -coverpkg=Akilan1999/vitess/go/... -coverprofile "/tmp/unit_$counter.out" $pkg -v -p=1 || :
    counter=$((counter+1))
 done
 
