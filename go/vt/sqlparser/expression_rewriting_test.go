@@ -114,6 +114,11 @@ func TestRewrites(in *testing.T) {
 			expected: "select :__vtrcount as `row_count()`",
 			rowCount: true,
 		},
+		{
+			in:       "SELECT lower(database())",
+			expected: "SELECT lower(:__vtdbname) as `lower(database())`",
+			db:       true,
+		},
 	}
 
 	for _, tc := range tests {
