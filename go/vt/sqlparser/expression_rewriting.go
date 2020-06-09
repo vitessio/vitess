@@ -132,26 +132,28 @@ const (
 func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 	switch node := cursor.Node().(type) {
 	// select last_insert_id() -> select :__lastInsertId as `last_insert_id()`
-	case *AliasedExpr:
-		if node.As.IsEmpty() {
-			buf := NewTrackedBuffer(nil)
-			node.Expr.Format(buf)
-			inner := newExpressionRewriter()
-			inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
-			tmp := Rewrite(node.Expr, inner.goingDown, nil)
-			newExpr, ok := tmp.(Expr)
-			if !ok {
-				log.Errorf("failed to rewrite AST. function expected to return Expr returned a %s", String(tmp))
-				return false
+	case *Select:
+		for _, col := range node.SelectExprs {
+			aliasedExpr, ok := col.(*AliasedExpr)
+			if ok && aliasedExpr.As.IsEmpty() {
+				buf := NewTrackedBuffer(nil)
+				aliasedExpr.Expr.Format(buf)
+				inner := newExpressionRewriter()
+				inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
+				tmp := Rewrite(aliasedExpr.Expr, inner.goingDown, nil)
+				newExpr, ok := tmp.(Expr)
+				if !ok {
+					log.Errorf("failed to rewrite AST. function expected to return Expr returned a %s", String(tmp))
+					return false
+				}
+				aliasedExpr.Expr = newExpr
+				if inner.didAnythingChange() {
+					aliasedExpr.As = NewColIdent(buf.String())
+				}
+				for k := range inner.bindVars {
+					er.needBindVarFor(k)
+				}
 			}
-			node.Expr = newExpr
-			if inner.didAnythingChange() {
-				node.As = NewColIdent(buf.String())
-			}
-			for k := range inner.bindVars {
-				er.needBindVarFor(k)
-			}
-			return false
 		}
 	case *FuncExpr:
 		er.funcRewrite(cursor, node)
