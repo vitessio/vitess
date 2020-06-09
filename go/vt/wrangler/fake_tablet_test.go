@@ -17,15 +17,16 @@ limitations under the License.
 package wrangler
 
 import (
-	"fmt"
 	"net"
 	"net/http"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -105,7 +106,8 @@ func newFakeTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, tabletTy
 		t.Fatalf("uid has to be between 0 and 99: %v", uid)
 	}
 	mysqlPort := int32(3300 + uid)
-	hostname := fmt.Sprintf("%v.%d", cell, uid)
+	hostname, err := netutil.FullyQualifiedHostname()
+	require.NoError(t, err)
 	tablet := &topodatapb.Tablet{
 		Alias:         &topodatapb.TabletAlias{Cell: cell, Uid: uid},
 		Hostname:      hostname,
