@@ -273,6 +273,32 @@ func parseSlaveStatus(fields map[string]string) SlaveStatus {
 	status.MasterConnectRetry = int(parseInt)
 	parseUint, _ := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
 	status.SecondsBehindMaster = uint(parseUint)
+	parseUint, _ = strconv.ParseUint(fields["Master_Server_Id"], 10, 0)
+	status.MasterServerID = uint(parseUint)
+
+	execMasterLogPosStr := fields["Exec_Master_Log_Pos"]
+	file := fields["Relay_Master_Log_File"]
+	if file != "" && execMasterLogPosStr != "" {
+		filePos, err := strconv.Atoi(execMasterLogPosStr)
+		if err == nil {
+			status.FilePosition.GTIDSet = filePosGTID{
+				file: file,
+				pos:  filePos,
+			}
+		}
+	}
+
+	readMasterLogPosStr := fields["Read_Master_Log_Pos"]
+	file = fields["Master_Log_File"]
+	if file != "" && readMasterLogPosStr != "" {
+		fileRelayPos, err := strconv.Atoi(readMasterLogPosStr)
+		if err == nil {
+			status.FileRelayLogPosition.GTIDSet = filePosGTID{
+				file: file,
+				pos:  fileRelayPos,
+			}
+		}
+	}
 	return status
 }
 
