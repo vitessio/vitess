@@ -291,7 +291,10 @@ func (agent *ActionAgent) notifyShardSync() {
 func (agent *ActionAgent) setMasterTermStartTime(t time.Time) {
 	agent.mutex.Lock()
 	agent._masterTermStartTime = t
-	agent._replicationDelay = 0
+	// Reset replication delay ony if we're the master.
+	if !t.IsZero() {
+		agent._replicationDelay = 0
+	}
 	agent.mutex.Unlock()
 
 	// Notify the shard sync loop that the tablet state changed.

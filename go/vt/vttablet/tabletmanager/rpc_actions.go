@@ -92,6 +92,8 @@ func (agent *ActionAgent) changeTypeLocked(ctx context.Context, tabletType topod
 		// This ensures that in case of a failure, we are never in a situation where the
 		// tablet's timestamp is ahead of the topo's timestamp.
 		agent.setMasterTermStartTime(agentMasterTermStartTime)
+	} else {
+		agent.setMasterTermStartTime(time.Time{})
 	}
 
 	// updateState will invoke broadcastHealth if needed.
