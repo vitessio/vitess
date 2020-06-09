@@ -114,7 +114,7 @@ func TestMessage(t *testing.T) {
 
 	qr := exec(t, conn, "select time_next, epoch from vitess_message where id = 1")
 	next, epoch := getTimeEpoch(qr)
-	jitter = maxJitter
+	jitter += epoch * maxJitter
 	// epoch could be 0 or 1, depending on how fast the row is updated
 	switch epoch {
 	case 0:
@@ -134,7 +134,7 @@ func TestMessage(t *testing.T) {
 	require.NoError(t, err)
 	qr = exec(t, conn, "select time_next, epoch from vitess_message where id = 1")
 	next, epoch = getTimeEpoch(qr)
-	jitter += maxJitter
+	jitter += epoch * maxJitter
 	// epoch could be 1 or 2, depending on how fast the row is updated
 	switch epoch {
 	case 1:
