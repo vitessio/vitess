@@ -149,11 +149,18 @@ func (mariadbFlavor) status(c *Conn) (SlaveStatus, error) {
 		return SlaveStatus{}, err
 	}
 
+	return parseMariadbSlaveStatus(resultMap)
+}
+
+func parseMariadbSlaveStatus(resultMap map[string]string) (SlaveStatus, error) {
 	status := parseSlaveStatus(resultMap)
+
+	var err error
 	status.Position.GTIDSet, err = parseMariadbGTIDSet(resultMap["Gtid_Slave_Pos"])
 	if err != nil {
 		return SlaveStatus{}, vterrors.Wrapf(err, "SlaveStatus can't parse MariaDB GTID (Gtid_Slave_Pos: %#v)", resultMap["Gtid_Slave_Pos"])
 	}
+
 	return status, nil
 }
 

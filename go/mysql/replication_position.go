@@ -169,3 +169,23 @@ func (rp *Position) UnmarshalJSON(buf []byte) error {
 	}
 	return nil
 }
+
+// Comparable returns whether the receiver is comparable to the supplied position, based on whether one
+// of the two positions contains the other.
+func (rp *Position) Comparable(other Position) bool {
+	return rp.GTIDSet.Contains(other.GTIDSet) || other.GTIDSet.Contains(rp.GTIDSet)
+}
+
+// AllPositionsComparable returns true if all positions in the supplied list are comparable with one another, and false
+// if any are non-comparable.
+func AllPositionsComparable(positions []Position) bool {
+	for i := 0; i < len(positions); i++ {
+		for j := i + 1; j < len(positions); j++ {
+			if !positions[i].Comparable(positions[j]) {
+				return false
+			}
+		}
+	}
+
+	return true
+}
