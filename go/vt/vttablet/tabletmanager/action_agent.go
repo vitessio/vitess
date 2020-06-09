@@ -92,6 +92,9 @@ var (
 	initTags           flagutil.StringMapValue
 
 	initTimeout = flag.Duration("init_timeout", 1*time.Minute, "(init parameter) timeout to use for the init phase.")
+
+	// mysqlPortRetryInterval can be changed to speed up tests.
+	mysqlPortRetryInterval = 1 * time.Second
 )
 
 func init() {
@@ -252,6 +255,7 @@ func NewActionAgent(
 	if err != nil {
 		return nil, err
 	}
+	config.DB.DBName = topoproto.TabletDbName(tablet)
 
 	agent = &ActionAgent{
 		QueryServiceControl: queryServiceControl,
@@ -261,6 +265,7 @@ func NewActionAgent(
 		TabletAlias:         tabletAlias,
 		Cnf:                 mycnf,
 		MysqlDaemon:         mysqld,
+		DBConfigs:           config.DB,
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 		orc:                 orc,
@@ -282,6 +287,9 @@ func NewActionAgent(
 		return nil, err
 	}
 	if err := agent.checkMastership(ctx, si); err != nil {
+		return nil, err
+	}
+	if err := agent.checkMysql(ctx); err != nil {
 		return nil, err
 	}
 	if err := agent.initTablet(ctx); err != nil {
@@ -370,6 +378,10 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 	if err != nil {
 		panic(vterrors.Wrap(err, "failed reading tablet"))
 	}
+	ti.PortMap = map[string]int32{
+		"vt":   vtPort,
+		"grpc": grpcPort,
+	}
 
 	agent := &ActionAgent{
 		QueryServiceControl: tabletservermock.NewController(),
@@ -383,10 +395,15 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		VREngine:            vreplication.NewTestEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient, ti.DbName(), nil),
 		History:             history.New(historyLength),
 		BaseTabletType:      topodatapb.TabletType_REPLICA,
+		tablet:              ti.Tablet,
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
 	if preStart != nil {
 		preStart(agent)
+	}
+
+	if agent.initTablet(batchCtx); err != nil {
+		panic(err)
 	}
 
 	// Start will update the topology and setup services.
@@ -598,60 +615,8 @@ func (agent *ActionAgent) verifyTopology(ctx context.Context) {
 // the initial state change callback to start tablet services.
 // If initUpdateStream is set, update stream service will also be registered.
 func (agent *ActionAgent) Start(ctx context.Context, dbcfgs *dbconfigs.DBConfigs, vtPort, gRPCPort int32, initUpdateStream bool) error {
-	// find our hostname as fully qualified, and IP
-	hostname := *tabletHostname
-	if hostname == "" {
-		var err error
-		hostname, err = netutil.FullyQualifiedHostname()
-		if err != nil {
-			return err
-		}
-	}
-
-	var mysqlHost string
-	var mysqlPort int32
-	mysqlPortNotKnown := false
-	if appConfig, _ := dbcfgs.AppWithDB().MysqlParams(); appConfig.Host != "" {
-		mysqlHost = appConfig.Host
-		mysqlPort = int32(appConfig.Port)
-	} else {
-		// Assume unix socket was specified and try to get the port from mysqld
-		mysqlHost = hostname
-		var err error
-		mysqlPort, err = agent.MysqlDaemon.GetMysqlPort()
-		if err != nil {
-			// We start this loop in Start, after the tablet record ports have been initialized.
-			log.Warningf("Cannot get current mysql port, will keep retrying every %v: %v", *publishRetryInterval, err)
-			mysqlPortNotKnown = true
-		}
-	}
-
-	// Update bind addr for mysql and query service in the tablet node.
-	f := func(tablet *topodatapb.Tablet) error {
-		tablet.Hostname = hostname
-		tablet.MysqlHostname = mysqlHost
-		if tablet.PortMap == nil {
-			tablet.PortMap = make(map[string]int32)
-		}
-		tablet.MysqlPort = int32(mysqlPort)
-		if vtPort != 0 {
-			tablet.PortMap["vt"] = vtPort
-		} else {
-			delete(tablet.PortMap, "vt")
-		}
-		if gRPCPort != 0 {
-			tablet.PortMap["grpc"] = gRPCPort
-		} else {
-			delete(tablet.PortMap, "grpc")
-		}
-
-		// Save the original tablet for ownership tests later.
-		agent.initialTablet = tablet
-		return nil
-	}
-	if _, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, f); err != nil {
-		return err
-	}
+	// Save the original tablet for ownership tests later.
+	agent.initialTablet = agent.tablet
 
 	// Initialize masterTermStartTime
 	agent.setMasterTermStartTime(logutil.ProtoToTime(agent.initialTablet.MasterTermStartTime))
@@ -713,16 +678,6 @@ func (agent *ActionAgent) Start(ctx context.Context, dbcfgs *dbconfigs.DBConfigs
 	startingTablet := proto.Clone(agent.initialTablet).(*topodatapb.Tablet)
 	startingTablet.Type = topodatapb.TabletType_UNKNOWN
 	agent.setTablet(startingTablet)
-
-	// If mysql port was not specified, we have to discover it.
-	// This should be started after agent.tablet is initialized.
-	if mysqlPortNotKnown {
-		// We send the publishRetryInterval as input parameter to
-		// avoid races in tests.
-		// TODO(sougou): undo this after proper shutdown procedure
-		// has been implemented for this goroutine.
-		go agent.findMysqlPort(*publishRetryInterval)
-	}
 
 	// Start a background goroutine to watch and update the shard record,
 	// to make sure it and our tablet record are in sync.
@@ -959,6 +914,24 @@ func (agent *ActionAgent) checkMastership(ctx context.Context, si *topo.ShardInf
 	return nil
 }
 
+func (agent *ActionAgent) checkMysql(ctx context.Context) error {
+	if appConfig, _ := agent.DBConfigs.AppWithDB().MysqlParams(); appConfig.Host != "" {
+		agent.tablet.MysqlHostname = appConfig.Host
+		agent.tablet.MysqlPort = int32(appConfig.Port)
+	} else {
+		// Assume unix socket was specified and try to get the port from mysqld
+		agent.tablet.MysqlHostname = agent.tablet.Hostname
+		mysqlPort, err := agent.MysqlDaemon.GetMysqlPort()
+		if err != nil {
+			log.Warningf("Cannot get current mysql port, will keep retrying every %v: %v", mysqlPortRetryInterval, err)
+			go agent.findMysqlPort(mysqlPortRetryInterval)
+		} else {
+			agent.tablet.MysqlPort = mysqlPort
+		}
+	}
+	return nil
+}
+
 func (agent *ActionAgent) initTablet(ctx context.Context) error {
 	err := agent.TopoServer.CreateTablet(ctx, agent.tablet)
 	switch {
@@ -969,12 +942,12 @@ func (agent *ActionAgent) initTablet(ctx context.Context) error {
 		// it. So we read it first.
 		oldTablet, err := agent.TopoServer.GetTablet(ctx, agent.tablet.Alias)
 		if err != nil {
-			return vterrors.Wrap(err, "InitTablet failed to read existing tablet record")
+			return vterrors.Wrap(err, "initTablet failed to read existing tablet record")
 		}
 
 		// Sanity check the keyspace and shard
 		if oldTablet.Keyspace != agent.tablet.Keyspace || oldTablet.Shard != agent.tablet.Shard {
-			return fmt.Errorf("InitTablet failed because existing tablet keyspace and shard %v/%v differ from the provided ones %v/%v", oldTablet.Keyspace, oldTablet.Shard, agent.tablet.Keyspace, agent.tablet.Shard)
+			return fmt.Errorf("initTablet failed because existing tablet keyspace and shard %v/%v differ from the provided ones %v/%v", oldTablet.Keyspace, oldTablet.Shard, agent.tablet.Keyspace, agent.tablet.Shard)
 		}
 
 		// Update ShardReplication in any case, to be sure.  This is

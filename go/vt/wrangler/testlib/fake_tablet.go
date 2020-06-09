@@ -21,16 +21,17 @@ deal with topology common tasks, like fake tablets and action loops.
 package testlib
 
 import (
-	"fmt"
 	"net"
 	"net/http"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/grpctmserver"
@@ -123,7 +124,8 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 		t.Fatalf("uid has to be between 0 and 99: %v", uid)
 	}
 	mysqlPort := int32(3300 + uid)
-	hostname := fmt.Sprintf("%v.%d", cell, uid)
+	hostname, err := netutil.FullyQualifiedHostname()
+	require.NoError(t, err)
 	tablet := &topodatapb.Tablet{
 		Alias:         &topodatapb.TabletAlias{Cell: cell, Uid: uid},
 		Hostname:      hostname,
