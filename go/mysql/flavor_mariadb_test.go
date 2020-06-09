@@ -17,7 +17,11 @@ limitations under the License.
 package mysql
 
 import (
+	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMariadbSetMasterCommands(t *testing.T) {
@@ -84,12 +88,8 @@ func TestMariadbRetrieveMasterServerId(t *testing.T) {
 
 	want := SlaveStatus{MasterServerID: 1}
 	got, err := parseMariadbSlaveStatus(resultMap)
-	if err != nil {
-		t.Error("Received an error when trying to parse resultMap.")
-	}
-	if got.MasterServerID != want.MasterServerID {
-		t.Errorf("got MasterServerID: %v; want MasterServerID: %v", got.MasterServerID, want.MasterServerID)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, got.MasterServerID, want.MasterServerID, fmt.Sprintf("got MasterServerID: %v; want MasterServerID: %v", got.MasterServerID, want.MasterServerID))
 }
 
 func TestMariadbRetrieveFileBasedPositions(t *testing.T) {
@@ -106,15 +106,9 @@ func TestMariadbRetrieveFileBasedPositions(t *testing.T) {
 		FileRelayLogPosition: Position{GTIDSet: filePosGTID{file: "master-bin.000003", pos: 1308}},
 	}
 	got, err := parseMariadbSlaveStatus(resultMap)
-	if err != nil {
-		t.Error("Received an error when trying to parse resultMap.")
-	}
-	if got.FilePosition.GTIDSet != want.FilePosition.GTIDSet {
-		t.Errorf("got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet)
-	}
-	if got.FileRelayLogPosition.GTIDSet != want.FileRelayLogPosition.GTIDSet {
-		t.Errorf("got FileRelayLogPosition: %v; want FileRelayLogPosition: %v", got.FileRelayLogPosition.GTIDSet, want.FileRelayLogPosition.GTIDSet)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, got.FilePosition.GTIDSet, want.FilePosition.GTIDSet, fmt.Sprintf("got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet))
+	assert.Equal(t, got.FileRelayLogPosition.GTIDSet, want.FileRelayLogPosition.GTIDSet, fmt.Sprintf("got FileRelayLogPosition: %v; want FileRelayLogPosition: %v", got.FileRelayLogPosition.GTIDSet, want.FileRelayLogPosition.GTIDSet))
 }
 
 func TestMariadbShouldGetNilRelayLogPosition(t *testing.T) {
@@ -126,10 +120,6 @@ func TestMariadbShouldGetNilRelayLogPosition(t *testing.T) {
 		"Gtid_Slave_Pos":        "0-101-2320",
 	}
 	got, err := parseMariadbSlaveStatus(resultMap)
-	if err != nil {
-		t.Error("Received an error when trying to parse resultMap.")
-	}
-	if !got.RelayLogPosition.IsZero() {
-		t.Errorf("Got a filled in RelayLogPosition. For MariaDB we should get back nil, because MariaDB does not return the retrieved GTIDSet. got: %#v", got.RelayLogPosition)
-	}
+	require.NoError(t, err)
+	assert.Truef(t, got.RelayLogPosition.IsZero(), "Got a filled in RelayLogPosition. For MariaDB we should get back nil, because MariaDB does not return the retrieved GTIDSet. got: %#v", got.RelayLogPosition)
 }

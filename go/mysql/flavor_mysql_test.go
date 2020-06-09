@@ -16,7 +16,12 @@ limitations under the License.
 
 package mysql
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func TestMysql56SetMasterCommands(t *testing.T) {
 	params := &ConnParams{
@@ -81,12 +86,8 @@ func TestMysqlRetrieveMasterServerId(t *testing.T) {
 
 	want := SlaveStatus{MasterServerID: 1}
 	got, err := parseMysqlSlaveStatus(resultMap)
-	if err != nil {
-		t.Error("Received an error when trying to parse resultMap.")
-	}
-	if got.MasterServerID != want.MasterServerID {
-		t.Errorf("got MasterServerID: %v; want MasterServerID: %v", got.MasterServerID, want.MasterServerID)
-	}
+	require.NoError(t, err)
+	assert.Equalf(t, got.MasterServerID, want.MasterServerID, "got MasterServerID: %v; want MasterServerID: %v", got.MasterServerID, want.MasterServerID)
 }
 
 func TestMysqlRetrieveFileBasedPositions(t *testing.T) {
@@ -102,15 +103,9 @@ func TestMysqlRetrieveFileBasedPositions(t *testing.T) {
 		FileRelayLogPosition: Position{GTIDSet: filePosGTID{file: "master-bin.000003", pos: 1308}},
 	}
 	got, err := parseMysqlSlaveStatus(resultMap)
-	if err != nil {
-		t.Error("Received an error when trying to parse resultMap.")
-	}
-	if got.FilePosition.GTIDSet != want.FilePosition.GTIDSet {
-		t.Errorf("got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet)
-	}
-	if got.FileRelayLogPosition.GTIDSet != want.FileRelayLogPosition.GTIDSet {
-		t.Errorf("got FileRelayLogPosition: %v; want FileRelayLogPosition: %v", got.FileRelayLogPosition.GTIDSet, want.FileRelayLogPosition.GTIDSet)
-	}
+	require.NoError(t, err)
+	assert.Equalf(t, got.FilePosition.GTIDSet, want.FilePosition.GTIDSet, "got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet)
+	assert.Equalf(t, got.FileRelayLogPosition.GTIDSet, want.FileRelayLogPosition.GTIDSet, "got FileRelayLogPosition: %v; want FileRelayLogPosition: %v", got.FileRelayLogPosition.GTIDSet, want.FileRelayLogPosition.GTIDSet)
 }
 
 func TestMysqlShouldGetRelayLogPosition(t *testing.T) {
@@ -129,10 +124,6 @@ func TestMysqlShouldGetRelayLogPosition(t *testing.T) {
 		RelayLogPosition: Position{GTIDSet: Mysql56GTIDSet{sid: []interval{{start: 1, end: 9}}}},
 	}
 	got, err := parseMysqlSlaveStatus(resultMap)
-	if err != nil {
-		t.Error("Received an error when trying to parse resultMap.")
-	}
-	if got.RelayLogPosition.GTIDSet.String() != want.RelayLogPosition.GTIDSet.String() {
-		t.Errorf("got RelayLogPosition: %v; want RelayLogPosition: %v", got.RelayLogPosition.GTIDSet, want.RelayLogPosition.GTIDSet)
-	}
+	require.NoError(t, err)
+	assert.Equalf(t, got.RelayLogPosition.GTIDSet.String(), want.RelayLogPosition.GTIDSet.String(), "got RelayLogPosition: %v; want RelayLogPosition: %v", got.RelayLogPosition.GTIDSet, want.RelayLogPosition.GTIDSet)
 }
