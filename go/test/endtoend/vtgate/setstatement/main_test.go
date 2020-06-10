@@ -38,7 +38,14 @@ var (
 		val2 int,
 		val3 float,
 		primary key(id)
-	)Engine=InnoDB;`
+	)Engine=InnoDB;
+
+CREATE TABLE test_vdx (
+    val1 varchar(16) NOT NULL,
+    keyspace_id binary(8),
+    UNIQUE KEY (val1)
+) ENGINE=Innodb;
+`
 
 	vSchema = `
 		{	
@@ -46,7 +53,20 @@ var (
 			"vindexes": {
 				"hash_index": {
 					"type": "hash"
-				}
+				},
+				"lookup1": {
+					"type": "consistent_lookup",
+					"params": {
+						"table": "test_vdx",
+						"from": "val1",
+						"to": "keyspace_id",
+						"ignore_nulls": "true"
+					},
+					"owner": "test"
+				},
+				"unicode_vdx":{
+					"type": "unicode_loose_md5"
+                }
 			},	
 			"tables": {
 				"test":{
@@ -54,6 +74,18 @@ var (
 						{
 							"column": "id",
 							"name": "hash_index"
+						},
+						{
+							"column": "val1",
+							"name": "lookup1"
+						}
+					]
+				},
+				"test_vdx":{
+					"column_vindexes": [
+						{
+							"column": "val1",
+							"name": "unicode_vdx"
 						}
 					]
 				}
