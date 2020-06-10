@@ -30,14 +30,12 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/events"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -141,17 +139,9 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 	span.Annotate("reason", reason)
 	defer span.Finish()
 
-	// Actions should have side effects on the tablet, so reload the data.
-	ti, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
-	if err != nil {
-		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", reason, err)
-		return vterrors.Wrapf(err, "refreshTablet failed rereading tablet after %v", reason)
-	}
-	tablet := ti.Tablet
-
-	// Also refresh masterTermStartTime
-	agent.setMasterTermStartTime(logutil.ProtoToTime(tablet.MasterTermStartTime))
-	agent.updateState(ctx, tablet, reason)
+	// TODO(sougou): change this to specifically look for global topo changes.
+	tablet := agent.Tablet()
+	agent.changeCallback(ctx, tablet, tablet)
 	log.Infof("Done with post-action state refresh")
 	return nil
 }

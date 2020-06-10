@@ -533,15 +533,10 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 			return vterrors.Wrapf(err, "failed to SetReadWrite on current master %v", masterElectTabletAliasStr)
 		}
 		// The master is already the one we want according to its tablet record.
-		// Refresh it to make sure the tablet has read its record recently.
 		refreshCtx, refreshCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 		defer refreshCancel()
 
-		if err := wr.tmc.RefreshState(refreshCtx, masterElectTabletInfo.Tablet); err != nil {
-			return vterrors.Wrapf(err, "failed to RefreshState on current master %v", masterElectTabletAliasStr)
-		}
-
-		// Then get the position so we can try to fix replicas (below).
+		// Get the position so we can try to fix replicas (below).
 		rp, err := wr.tmc.MasterPosition(refreshCtx, masterElectTabletInfo.Tablet)
 		if err != nil {
 			return vterrors.Wrapf(err, "failed to get replication position of current master %v", masterElectTabletAliasStr)
