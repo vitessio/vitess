@@ -1008,7 +1008,6 @@ func (e *Executor) showTablets() (*sqltypes.Result, error) {
 			}
 		}
 	} else {
-		log.Info("DEBUG: in showTablets")
 		status := e.scatterConn.GetHealthCheckCacheStatus()
 		for _, s := range status {
 			for _, ts := range s.TabletsStats {
@@ -1021,7 +1020,6 @@ func (e *Executor) showTablets() (*sqltypes.Result, error) {
 				if mtst > 0 {
 					// this code depends on the fact that MasterTermStartTime is the seconds since epoch start
 					mtstStr = time.Unix(mtst, 0).UTC().Format(time.RFC3339)
-					log.Infof("DEBUG: MasterTermStartTime: %v", mtstStr)
 				}
 				rows = append(rows, buildVarCharRow(
 					s.Cell,
