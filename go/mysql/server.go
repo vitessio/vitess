@@ -101,7 +101,7 @@ type Handler interface {
 
 	// ComPrepare is called when a connection receives a prepared
 	// statement query.
-	ComPrepare(c *Conn, query string) ([]*querypb.Field, error)
+	ComPrepare(c *Conn, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error)
 
 	// ComStmtExecute is called when a connection receives a statement
 	// execute query.
