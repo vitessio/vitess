@@ -62,28 +62,16 @@ func (agent *ActionAgent) RestoreData(ctx context.Context, logger logutil.Logger
 }
 
 func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool) error {
-	// change type to RESTORE (using UpdateTabletFields so it's
-	// always authorized)
 	var originalType topodatapb.TabletType
-	if _, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
-		originalType = tablet.Type
-		tablet.Type = topodatapb.TabletType_RESTORE
-		return nil
-	}); err != nil {
-		return vterrors.Wrap(err, "Cannot change type to RESTORE")
-	}
-
-	// let's update our internal state (stop query service and other things)
-	if err := agent.refreshTablet(ctx, "restore from backup"); err != nil {
-		return vterrors.Wrap(err, "failed to update state before restore")
-	}
+	tablet := agent.Tablet()
+	originalType, tablet.Type = tablet.Type, topodatapb.TabletType_RESTORE
+	agent.updateState(ctx, tablet, "restore from backup")
 
 	// Try to restore. Depending on the reason for failure, we may be ok.
 	// If we're not ok, return an error and the agent will log.Fatalf,
 	// causing the process to be restarted and the restore retried.
 	// Record local metadata values based on the original type.
 	localMetadata := agent.getLocalMetadataValues(originalType)
-	tablet := agent.Tablet()
 
 	keyspace := tablet.Keyspace
 	keyspaceInfo, err := agent.TopoServer.GetKeyspace(ctx, keyspace)
@@ -157,11 +145,8 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 		// alter replication here.
 	default:
 		// If anything failed, we should reset the original tablet type
-		agent.TopoServer.UpdateTabletFields(context.Background(), tablet.Alias, func(tablet *topodatapb.Tablet) error {
-			tablet.Type = originalType
-			return nil
-		})
-		agent.refreshTablet(ctx, "failed for restore from backup")
+		tablet.Type = originalType
+		agent.updateState(ctx, tablet, "failed for restore from backup")
 		return vterrors.Wrap(err, "Can't restore backup")
 	}
 
@@ -175,17 +160,8 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	}
 
 	// Change type back to original type if we're ok to serve.
-	if _, err := agent.TopoServer.UpdateTabletFields(context.Background(), tablet.Alias, func(tablet *topodatapb.Tablet) error {
-		tablet.Type = originalType
-		return nil
-	}); err != nil {
-		return vterrors.Wrapf(err, "Cannot change type back to %v", originalType)
-	}
-
-	// let's update our internal state (start query service and other things)
-	if err := agent.refreshTablet(context.Background(), "after restore from backup"); err != nil {
-		return vterrors.Wrap(err, "failed to update state after backup")
-	}
+	tablet.Type = originalType
+	agent.updateState(ctx, tablet, "after restore from backup")
 
 	return nil
 }
