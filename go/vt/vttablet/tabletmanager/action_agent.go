@@ -95,10 +95,25 @@ var (
 
 	// mysqlPortRetryInterval can be changed to speed up tests.
 	mysqlPortRetryInterval = 1 * time.Second
+
+	// statsTabletType is set to expose the current tablet type.
+	statsTabletType *stats.String
+
+	// statsTabletTypeCount exposes the current tablet type as a label,
+	// with the value counting the occurrences of the respective tablet type.
+	// Useful for Prometheus which doesn't support exporting strings as stat values.
+	statsTabletTypeCount *stats.CountersWithSingleLabel
+
+	// statsBackupIsRunning is set to 1 (true) if a backup is running.
+	statsBackupIsRunning *stats.GaugesWithMultiLabels
 )
 
 func init() {
 	flag.Var(&initTags, "init_tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
+
+	statsTabletType = stats.NewString("TabletType")
+	statsTabletTypeCount = stats.NewCountersWithSingleLabel("TabletTypeCount", "Number of times the tablet changed to the labeled type", "type")
+	statsBackupIsRunning = stats.NewGaugesWithMultiLabels("BackupIsRunning", "Whether a backup is running", []string{"mode"})
 }
 
 // ActionAgent is the main class for the agent.
@@ -116,23 +131,6 @@ type ActionAgent struct {
 	// BaseTabletType is the tablet type we revert back to
 	// when we transition back from something like MASTER.
 	BaseTabletType topodatapb.TabletType
-
-	// exportStats is set only for production tablet.
-	exportStats bool
-
-	// statsTabletType is set to expose the current tablet type,
-	// only used if exportStats is true.
-	statsTabletType *stats.String
-
-	// statsTabletTypeCount exposes the current tablet type as a label,
-	// with the value counting the occurrences of the respective tablet type.
-	// Useful for Prometheus which doesn't support exporting strings as stat values
-	// only used if exportStats is true.
-	statsTabletTypeCount *stats.CountersWithSingleLabel
-
-	// statsBackupIsRunning is set to 1 (true) if a backup is running
-	// only used if exportStats is true
-	statsBackupIsRunning *stats.GaugesWithMultiLabels
 
 	// batchCtx is given to the agent by its creator, and should be used for
 	// any background tasks spawned by the agent.
@@ -241,10 +239,6 @@ func NewActionAgent(
 	mycnf *mysqlctl.Mycnf,
 	port, gRPCPort int32,
 ) (agent *ActionAgent, err error) {
-	orc, err := newOrcClient()
-	if err != nil {
-		return nil, err
-	}
 
 	tablet, err := buildTabletFromInput(tabletAlias, port, gRPCPort)
 	if err != nil {
@@ -263,17 +257,9 @@ func NewActionAgent(
 		DBConfigs:           config.DB,
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
-		orc:                 orc,
 		BaseTabletType:      tablet.Type,
 		tablet:              tablet,
 	}
-
-	// Sanity check for inconsistent flags
-	if agent.Cnf == nil && *restoreFromBackup {
-		return nil, fmt.Errorf("you cannot enable -restore_from_backup without a my.cnf file")
-	}
-
-	agent.registerQueryRuleSources()
 
 	ctx, cancel := context.WithTimeout(agent.batchCtx, *initTimeout)
 	defer cancel()
@@ -291,16 +277,17 @@ func NewActionAgent(
 		return nil, err
 	}
 
-	// Create the TabletType stats
-	agent.exportStats = true
-	agent.statsTabletType = stats.NewString("TabletType")
-	agent.statsTabletTypeCount = stats.NewCountersWithSingleLabel("TabletTypeCount", "Number of times the tablet changed to the labeled type", "type")
-	agent.statsBackupIsRunning = stats.NewGaugesWithMultiLabels("BackupIsRunning", "Whether a backup is running", []string{"mode"})
-
-	// Start will get the tablet info, and update our state from it
-	if err := agent.Start(batchCtx); err != nil {
-		return nil, err
+	tablet = agent.Tablet()
+	err = agent.QueryServiceControl.InitDBConfig(querypb.Target{
+		Keyspace:   tablet.Keyspace,
+		Shard:      tablet.Shard,
+		TabletType: tablet.Type,
+	}, agent.DBConfigs)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "failed to InitDBConfig")
 	}
+	agent.QueryServiceControl.RegisterQueryRuleSource(blacklistQueryRules)
+	servenv.OnRun(agent.registerQueryService)
 
 	agent.UpdateStream = binlog.NewUpdateStream(agent.TopoServer, tablet.Keyspace, agent.TabletAlias.Cell, agent.DBConfigs.DbaWithDB(), agent.QueryServiceControl.SchemaEngine())
 	servenv.OnRun(agent.UpdateStream.RegisterService)
@@ -309,44 +296,22 @@ func NewActionAgent(
 	agent.VREngine = vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld)
 	servenv.OnTerm(agent.VREngine.Close)
 
-	// register the RPC services from the agent
-	servenv.OnRun(func() {
-		agent.registerQueryService()
-	})
-
-	// optionally populate metadata records
-	if !*restoreFromBackup && *initPopulateMetadata {
-		localMetadata := agent.getLocalMetadataValues(tablet.Type)
-		if agent.Cnf != nil { // we are managing mysqld
-			// we'll use batchCtx here because we are still initializing and can't proceed unless this succeeds
-			if err := agent.MysqlDaemon.Wait(batchCtx, agent.Cnf); err != nil {
-				return nil, err
-			}
-		}
-		err := mysqlctl.PopulateMetadataTables(agent.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet))
-		if err != nil {
-			return nil, vterrors.Wrap(err, "failed to -init_populate_metadata")
-		}
+	if err := agent.handleRestore(batchCtx); err != nil {
+		return nil, err
 	}
 
-	// two cases then:
-	// - restoreFromBackup is set: we restore, then initHealthCheck, all
-	//   in the background
-	// - restoreFromBackup is not set: we initHealthCheck right away
-	if *restoreFromBackup {
-		go func() {
-			// restoreFromBackup will just be a regular action
-			// (same as if it was triggered remotely)
-			if err := agent.RestoreData(batchCtx, logutil.NewConsoleLogger(), *waitForBackupInterval, false /* deleteBeforeRestore */); err != nil {
-				log.Exitf("RestoreFromBackup failed: %v", err)
-			}
+	agent.startShardSync()
 
-			// after the restore is done, start health check
-			agent.initHealthCheck()
-		}()
-	} else {
-		// synchronously start health check if needed
-		agent.initHealthCheck()
+	agent.exportStats()
+
+	// Start periodic Orchestrator self-registration, if configured.
+	orc, err := newOrcClient()
+	if err != nil {
+		return nil, err
+	}
+	if orc != nil {
+		agent.orc = orc
+		go agent.orc.DiscoverLoop(agent)
 	}
 
 	// Temporary glue code to keep things working.
@@ -358,17 +323,20 @@ func NewActionAgent(
 	tablet = agent.Tablet()
 	agent.changeCallback(batchCtx, tablet, tablet)
 
-	// Start periodic Orchestrator self-registration, if configured.
-	if agent.orc != nil {
-		go agent.orc.DiscoverLoop(agent)
-	}
-
 	return agent, nil
 }
 
 // NewTestActionAgent creates an agent for test purposes. Only a
 // subset of features are supported now, but we'll add more over time.
-func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, mysqlDaemon mysqlctl.MysqlDaemon, preStart func(*ActionAgent)) *ActionAgent {
+func NewTestActionAgent(
+	batchCtx context.Context,
+	ts *topo.Server,
+	tabletAlias *topodatapb.TabletAlias,
+	vtPort, grpcPort int32,
+	mysqlDaemon mysqlctl.MysqlDaemon,
+	preStart func(*ActionAgent),
+) *ActionAgent {
+
 	ti, err := ts.GetTablet(batchCtx, tabletAlias)
 	if err != nil {
 		panic(vterrors.Wrap(err, "failed reading tablet"))
@@ -398,23 +366,30 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		preStart(agent)
 	}
 
+	si, err := agent.createKeyspaceShard(batchCtx)
+	if err != nil {
+		panic(err)
+	}
+	if err := agent.checkMastership(batchCtx, si); err != nil {
+		panic(err)
+	}
 	if agent.initTablet(batchCtx); err != nil {
 		panic(err)
 	}
 
-	si, err := agent.createKeyspaceShard(batchCtx)
+	tablet := agent.Tablet()
+	err = agent.QueryServiceControl.InitDBConfig(querypb.Target{
+		Keyspace:   tablet.Keyspace,
+		Shard:      tablet.Shard,
+		TabletType: tablet.Type,
+	}, agent.DBConfigs)
 	if err != nil {
-		panic(vterrors.Wrap(err, "agent.createKeyspaceShard failed"))
+		panic(err)
 	}
 
-	if err := agent.checkMastership(batchCtx, si); err != nil {
-		panic(vterrors.Wrap(err, "agent.checkMastership failed"))
-	}
-
-	// Start will update the topology and setup services.
-	if err := agent.Start(batchCtx); err != nil {
-		panic(vterrors.Wrapf(err, "agent.Start(%v) failed", tabletAlias))
-	}
+	// Start a background goroutine to watch and update the shard record,
+	// to make sure it and our tablet record are in sync.
+	agent.startShardSync()
 
 	// Temporary glue code to keep things working.
 	// TODO(sougou); remove after refactor.
@@ -422,7 +397,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		panic(err)
 	}
 	defer agent.unlock()
-	tablet := agent.Tablet()
+	tablet = agent.Tablet()
 	agent.changeCallback(batchCtx, tablet, tablet)
 
 	return agent
@@ -431,7 +406,17 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 // NewComboActionAgent creates an agent tailored specifically to run
 // within the vtcombo binary. It cannot be called concurrently,
 // as it changes the flags.
-func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs *dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletTypeStr string) *ActionAgent {
+func NewComboActionAgent(
+	batchCtx context.Context,
+	ts *topo.Server,
+	tabletAlias *topodatapb.TabletAlias,
+	vtPort, grpcPort int32,
+	queryServiceControl tabletserver.Controller,
+	dbcfgs *dbconfigs.DBConfigs,
+	mysqlDaemon mysqlctl.MysqlDaemon,
+	keyspace, shard, dbname, tabletTypeStr string,
+) *ActionAgent {
+
 	*initDbNameOverride = dbname
 	*initKeyspace = keyspace
 	*initShard = shard
@@ -457,32 +442,36 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 		BaseTabletType:      tablet.Type,
 		tablet:              tablet,
 	}
-	agent.registerQueryRuleSources()
 
 	ctx, cancel := context.WithTimeout(agent.batchCtx, *initTimeout)
 	defer cancel()
 	si, err := agent.createKeyspaceShard(ctx)
 	if err != nil {
-		panic(vterrors.Wrap(err, "agent.InitTablet failed"))
+		panic(err)
 	}
 	if err := agent.checkMastership(ctx, si); err != nil {
-		panic(vterrors.Wrap(err, "agent.InitTablet failed"))
+		panic(err)
 	}
 	if err := agent.initTablet(ctx); err != nil {
-		panic(vterrors.Wrap(err, "agent.InitTablet failed"))
+		panic(err)
 	}
 
-	// Start the agent.
-	if err := agent.Start(batchCtx); err != nil {
-		panic(vterrors.Wrapf(err, "agent.Start(%v) failed", tabletAlias))
+	tablet = agent.Tablet()
+	err = agent.QueryServiceControl.InitDBConfig(querypb.Target{
+		Keyspace:   tablet.Keyspace,
+		Shard:      tablet.Shard,
+		TabletType: tablet.Type,
+	}, agent.DBConfigs)
+	if err != nil {
+		panic(err)
 	}
+	agent.QueryServiceControl.RegisterQueryRuleSource(blacklistQueryRules)
+
+	// Start a background goroutine to watch and update the shard record,
+	// to make sure it and our tablet record are in sync.
+	agent.startShardSync()
 
 	return agent
-}
-
-// registerQueryRuleSources registers query rule sources under control of agent
-func (agent *ActionAgent) registerQueryRuleSources() {
-	agent.QueryServiceControl.RegisterQueryRuleSource(blacklistQueryRules)
 }
 
 func (agent *ActionAgent) setTablet(tablet *topodatapb.Tablet) {
@@ -612,56 +601,6 @@ func (agent *ActionAgent) setBlacklistedTables(value []string) {
 	agent.mutex.Lock()
 	agent._blacklistedTables = value
 	agent.mutex.Unlock()
-}
-
-func (agent *ActionAgent) verifyTopology(ctx context.Context) {
-	if err := topo.Validate(ctx, agent.TopoServer, agent.TabletAlias); err != nil {
-		// Don't stop, it's not serious enough, this is likely transient.
-		log.Warningf("tablet validate failed: %v %v", agent.TabletAlias, err)
-	}
-}
-
-// Start validates and updates the topology records for the tablet, and performs
-// the initial state change callback to start tablet services.
-// If initUpdateStream is set, update stream service will also be registered.
-func (agent *ActionAgent) Start(ctx context.Context) error {
-	// Save the original tablet for ownership tests later.
-	tablet := agent.Tablet()
-
-	// Verify the topology is correct.
-	agent.verifyTopology(ctx)
-
-	// initialize tablet server
-	if err := agent.QueryServiceControl.InitDBConfig(querypb.Target{
-		Keyspace:   tablet.Keyspace,
-		Shard:      tablet.Shard,
-		TabletType: tablet.Type,
-	}, agent.DBConfigs); err != nil {
-		return vterrors.Wrap(err, "failed to InitDBConfig")
-	}
-
-	// export a few static variables
-	if agent.exportStats {
-		statsKeyspace := stats.NewString("TabletKeyspace")
-		statsShard := stats.NewString("TabletShard")
-		statsKeyRangeStart := stats.NewString("TabletKeyRangeStart")
-		statsKeyRangeEnd := stats.NewString("TabletKeyRangeEnd")
-		statsAlias := stats.NewString("TabletAlias")
-
-		statsKeyspace.Set(tablet.Keyspace)
-		statsShard.Set(tablet.Shard)
-		if key.KeyRangeIsPartial(tablet.KeyRange) {
-			statsKeyRangeStart.Set(hex.EncodeToString(tablet.KeyRange.Start))
-			statsKeyRangeEnd.Set(hex.EncodeToString(tablet.KeyRange.End))
-		}
-		statsAlias.Set(topoproto.TabletAliasString(tablet.Alias))
-	}
-
-	// Start a background goroutine to watch and update the shard record,
-	// to make sure it and our tablet record are in sync.
-	agent.startShardSync()
-
-	return nil
 }
 
 // Close prepares a tablet for shutdown. First we check our tablet ownership and
@@ -960,4 +899,66 @@ func (agent *ActionAgent) initTablet(ctx context.Context) error {
 		return vterrors.Wrap(err, "CreateTablet failed")
 	}
 	return nil
+}
+
+func (agent *ActionAgent) handleRestore(ctx context.Context) error {
+	tablet := agent.Tablet()
+	// Sanity check for inconsistent flags
+	if agent.Cnf == nil && *restoreFromBackup {
+		return fmt.Errorf("you cannot enable -restore_from_backup without a my.cnf file")
+	}
+
+	// two cases then:
+	// - restoreFromBackup is set: we restore, then initHealthCheck, all
+	//   in the background
+	// - restoreFromBackup is not set: we initHealthCheck right away
+	if *restoreFromBackup {
+		go func() {
+			// restoreFromBackup will just be a regular action
+			// (same as if it was triggered remotely)
+			if err := agent.RestoreData(ctx, logutil.NewConsoleLogger(), *waitForBackupInterval, false /* deleteBeforeRestore */); err != nil {
+				log.Exitf("RestoreFromBackup failed: %v", err)
+			}
+
+			// after the restore is done, start health check
+			agent.initHealthCheck()
+		}()
+		return nil
+	}
+
+	// optionally populate metadata records
+	if *initPopulateMetadata {
+		localMetadata := agent.getLocalMetadataValues(tablet.Type)
+		if agent.Cnf != nil { // we are managing mysqld
+			// we'll use batchCtx here because we are still initializing and can't proceed unless this succeeds
+			if err := agent.MysqlDaemon.Wait(ctx, agent.Cnf); err != nil {
+				return err
+			}
+		}
+		err := mysqlctl.PopulateMetadataTables(agent.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet))
+		if err != nil {
+			return vterrors.Wrap(err, "failed to -init_populate_metadata")
+		}
+	}
+
+	// synchronously start health check if needed
+	agent.initHealthCheck()
+	return nil
+}
+
+func (agent *ActionAgent) exportStats() {
+	tablet := agent.Tablet()
+	statsKeyspace := stats.NewString("TabletKeyspace")
+	statsShard := stats.NewString("TabletShard")
+	statsKeyRangeStart := stats.NewString("TabletKeyRangeStart")
+	statsKeyRangeEnd := stats.NewString("TabletKeyRangeEnd")
+	statsAlias := stats.NewString("TabletAlias")
+
+	statsKeyspace.Set(tablet.Keyspace)
+	statsShard.Set(tablet.Shard)
+	if key.KeyRangeIsPartial(tablet.KeyRange) {
+		statsKeyRangeStart.Set(hex.EncodeToString(tablet.KeyRange.Start))
+		statsKeyRangeEnd.Set(hex.EncodeToString(tablet.KeyRange.End))
+	}
+	statsAlias.Set(topoproto.TabletAliasString(tablet.Alias))
 }

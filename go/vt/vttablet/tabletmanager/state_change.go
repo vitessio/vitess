@@ -347,11 +347,9 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	}
 
 	// Update the stats to our current type.
-	if agent.exportStats {
-		s := topoproto.TabletTypeLString(newTablet.Type)
-		agent.statsTabletType.Set(s)
-		agent.statsTabletTypeCount.Add(s, 1)
-	}
+	s := topoproto.TabletTypeLString(newTablet.Type)
+	statsTabletType.Set(s)
+	statsTabletTypeCount.Add(s, 1)
 
 	// See if we need to start or stop vreplication.
 	if newTablet.Type == topodatapb.TabletType_MASTER {

@@ -167,9 +167,7 @@ func (agent *ActionAgent) beginBackup(backupMode string) error {
 	// offline backups also run only one at a time because we take the action lock
 	// so this is not really needed in that case, however we are using it to record the state
 	agent._isBackupRunning = true
-	if agent.exportStats {
-		agent.statsBackupIsRunning.Set([]string{backupMode}, 1)
-	}
+	statsBackupIsRunning.Set([]string{backupMode}, 1)
 	return nil
 }
 
@@ -179,7 +177,5 @@ func (agent *ActionAgent) endBackup(backupMode string) {
 	agent.mutex.Lock()
 	defer agent.mutex.Unlock()
 	agent._isBackupRunning = false
-	if agent.exportStats {
-		agent.statsBackupIsRunning.Set([]string{backupMode}, 0)
-	}
+	statsBackupIsRunning.Set([]string{backupMode}, 0)
 }
