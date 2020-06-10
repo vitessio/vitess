@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -491,19 +490,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb
 	}
 	defer agent.unlock()
 
-	if err := agent.setMasterLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartSlave); err != nil {
-		return err
-	}
-
-	// Always refresh the tablet, even if we may not have changed it.
-	// It's possible that we changed it earlier but failed to refresh.
-	// Note that we do this outside setMasterLocked() because this should never
-	// be done as part of setMasterRepairReplication().
-	if err := agent.refreshTablet(ctx, "SetMaster"); err != nil {
-		return err
-	}
-
-	return nil
+	return agent.setMasterLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartSlave)
 }
 
 func (agent *ActionAgent) setMasterRepairReplication(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) (err error) {
@@ -542,16 +529,12 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 	// steps fail below.
 	// Note it is important to check for MASTER here so that we don't
 	// unintentionally change the type of RDONLY tablets
-	_, err = agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
-		if tablet.Type == topodatapb.TabletType_MASTER {
-			tablet.Type = topodatapb.TabletType_REPLICA
-			tablet.MasterTermStartTime = nil
-			return nil
-		}
-		return topo.NewError(topo.NoUpdateNeeded, agent.TabletAlias.String())
-	})
-	if err != nil {
-		return err
+	tablet := agent.Tablet()
+	if tablet.Type == topodatapb.TabletType_MASTER {
+		tablet.Type = topodatapb.TabletType_REPLICA
+		tablet.MasterTermStartTime = nil
+		agent.setMasterTermStartTime(time.Time{})
+		agent.updateState(ctx, tablet, "setMasterLocked")
 	}
 
 	// See if we were replicating at all, and should be replicating.
@@ -647,25 +630,14 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, parent *topodat
 
 	// Only change type of former MASTER tablets.
 	// Don't change type of RDONLY
-	typeChanged := false
-	if _, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
-		if tablet.Type == topodatapb.TabletType_MASTER {
-			tablet.Type = topodatapb.TabletType_REPLICA
-			tablet.MasterTermStartTime = nil
-			typeChanged = true
-			return nil
-		}
-		return topo.NewError(topo.NoUpdateNeeded, agent.TabletAlias.String())
-	}); err != nil {
-		return err
+	tablet := agent.Tablet()
+	if tablet.Type != topodatapb.TabletType_MASTER {
+		return nil
 	}
-
-	if typeChanged {
-		if err := agent.refreshTablet(ctx, "SlaveWasRestarted"); err != nil {
-			return err
-		}
-		agent.runHealthCheckLocked()
-	}
+	tablet.Type = topodatapb.TabletType_MASTER
+	tablet.MasterTermStartTime = nil
+	agent.updateState(ctx, tablet, "SlaveWasRestarted")
+	agent.runHealthCheckLocked()
 	return nil
 }
 
