@@ -23,6 +23,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -47,7 +49,7 @@ func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
-	exitcode, err := func() (int, error) {
+	exitCode := func() int {
 		clusterInstance = cluster.NewCluster(cell, hostname)
 		defer clusterInstance.Teardown()
 
@@ -55,8 +57,9 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtgateGrpcPort = clusterInstance.GetAndReservePort()
 
 		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1, err
+		err := clusterInstance.StartTopo()
+		if err != nil {
+			panic(err)
 		}
 
 		// Start keyspace
@@ -64,28 +67,25 @@ func TestMain(m *testing.M) {
 			Name:      keyspaceName,
 			SchemaSQL: sqlSchema,
 		}
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
-			return 1, err
+		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false)
+		if err != nil {
+			panic(err)
 		}
 
 		// Set a short onterm timeout so the test goes faster.
 		clusterInstance.VtGateExtraArgs = []string{"-onterm_timeout", "1s"}
-		if err := clusterInstance.StartVtgate(); err != nil {
-			return 1, err
+		err = clusterInstance.StartVtgate()
+		if err != nil {
+			panic(err)
 		}
 		vtParams = mysql.ConnParams{
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
 		}
 
-		return m.Run(), nil
+		return m.Run()
 	}()
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(1)
-	} else {
-		os.Exit(exitcode)
-	}
+	os.Exit(exitCode)
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
@@ -101,9 +101,7 @@ func TestTransactionRollBackWhenShutDown(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 
 	exec(t, conn, "insert into buffer(id, msg) values(3,'mark')")
@@ -126,9 +124,7 @@ func TestTransactionRollBackWhenShutDown(t *testing.T) {
 		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn2, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn2.Close()
 
 	vtParams = mysql.ConnParams{
@@ -141,4 +137,27 @@ func TestTransactionRollBackWhenShutDown(t *testing.T) {
 	got := fmt.Sprintf("%v", qr.Rows)
 	want = `[[INT64(3)]]`
 	assert.Equal(t, want, got)
+}
+
+func TestErrorInAutocommitSession(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "set autocommit=true")
+	exec(t, conn, "insert into buffer(id, msg) values(1,'foo')")
+	_, err = conn.ExecuteFetch("insert into buffer(id, msg) values(1,'bar')", 1, true)
+	require.Error(t, err) // this should fail with duplicate error
+	exec(t, conn, "insert into buffer(id, msg) values(2,'baz')")
+
+	conn2, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn2.Close()
+	result := exec(t, conn2, "select * from buffer order by id")
+
+	// if we have properly working autocommit code, both the successful inserts should be visible to a second
+	// connection, even if we have not done an explicit commit
+	assert.Equal(t, `[[INT64(1) VARCHAR("foo")] [INT64(2) VARCHAR("baz")]]`, fmt.Sprintf("%v", result.Rows))
 }
