@@ -59,12 +59,12 @@ var (
 // UpdateStreamControl is the interface an UpdateStream service implements
 // to bring it up or down.
 type UpdateStreamControl interface {
+	// RegisterService registers the UpdateStream service.
+	RegisterService()
 	// Enable will allow any new RPC calls
 	Enable()
-
 	// Disable will interrupt all current calls, and disallow any new call
 	Disable()
-
 	// IsEnabled returns true iff the service is enabled
 	IsEnabled() bool
 }
@@ -79,6 +79,10 @@ type UpdateStreamControlMock struct {
 // NewUpdateStreamControlMock creates a new UpdateStreamControlMock
 func NewUpdateStreamControlMock() *UpdateStreamControlMock {
 	return &UpdateStreamControlMock{}
+}
+
+// RegisterService is part of UpdateStreamControl
+func (m *UpdateStreamControlMock) RegisterService() {
 }
 
 // Enable is part of UpdateStreamControl
