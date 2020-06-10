@@ -116,6 +116,9 @@ func (e *Executor) insideTransaction(ctx context.Context, safeSession *SafeSessi
 		if err := e.txConn.Begin(ctx, safeSession); err != nil {
 			return 0, nil, err
 		}
+		// The defer acts as a failsafe. If commit was successful,
+		// the rollback will be a no-op.
+		defer e.txConn.Rollback(ctx, safeSession)
 	}
 
 	// The SetAutocommitable flag should be same as mustCommit.
@@ -135,10 +138,6 @@ func (e *Executor) insideTransaction(ctx context.Context, safeSession *SafeSessi
 	}
 
 	if mustCommit {
-		// The defer acts as a failsafe. If commit was successful,
-		// the rollback will be a no-op.
-		defer e.txConn.Rollback(ctx, safeSession)
-
 		commitStart := time.Now()
 		if err := e.txConn.Commit(ctx, safeSession); err != nil {
 			return 0, nil, err
