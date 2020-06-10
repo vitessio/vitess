@@ -533,6 +533,7 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 	if tablet.Type == topodatapb.TabletType_MASTER {
 		tablet.Type = topodatapb.TabletType_REPLICA
 		tablet.MasterTermStartTime = nil
+		agent.setMasterTermStartTime(time.Time{})
 		agent.updateState(ctx, tablet, "setMasterLocked")
 	}
 

@@ -29,8 +29,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/logutil"
-
 	"vitess.io/vitess/go/vt/log"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
@@ -991,10 +989,11 @@ func (e *Executor) showTablets() (*sqltypes.Result, error) {
 				if !ts.Serving {
 					state = "NOT_SERVING"
 				}
-				mtst := ts.Tablet.MasterTermStartTime
+				mtst := ts.TabletExternallyReparentedTimestamp
 				mtstStr := ""
-				if mtst != nil && mtst.Seconds > 0 {
-					mtstStr = logutil.ProtoToTime(ts.Tablet.MasterTermStartTime).Format(time.RFC3339)
+				if mtst > 0 {
+					// this code depends on the fact that TabletExternallyReparentedTimestamp is the seconds since epoch start
+					mtstStr = time.Unix(mtst, 0).UTC().Format(time.RFC3339)
 				}
 				rows = append(rows, buildVarCharRow(
 					s.Cell,
@@ -1016,10 +1015,11 @@ func (e *Executor) showTablets() (*sqltypes.Result, error) {
 				if !ts.Serving {
 					state = "NOT_SERVING"
 				}
-				mtst := ts.Tablet.MasterTermStartTime
+				mtst := ts.MasterTermStartTime
 				mtstStr := ""
-				if mtst != nil && mtst.Seconds > 0 {
-					mtstStr = logutil.ProtoToTime(ts.Tablet.MasterTermStartTime).Format(time.RFC3339)
+				if mtst > 0 {
+					// this code depends on the fact that MasterTermStartTime is the seconds since epoch start
+					mtstStr = time.Unix(mtst, 0).UTC().Format(time.RFC3339)
 				}
 				rows = append(rows, buildVarCharRow(
 					s.Cell,
