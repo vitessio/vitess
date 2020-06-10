@@ -504,7 +504,7 @@ func (set Mysql56GTIDSet) Difference(other GTIDSet) GTIDSet {
 			}
 
 			if iv.end > otherInterval.end {
-				// End is strictly greater. In this case we need to create an extra diff interval. We'll deal with it next round.
+				// End is strictly greater. In this case we need to create an extra diff interval. We'll deal any necessary trimming of it next round.
 				diffIntervals = append(diffIntervals, interval{start: otherInterval.end + 1, end: iv.end})
 			}
 
