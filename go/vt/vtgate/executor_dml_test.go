@@ -943,6 +943,23 @@ func TestInsertOnDupKey(t *testing.T) {
 	}
 }
 
+func TestAutocommitFail(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+
+	query := "insert into user (id) values (1)"
+	sbc1.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 1
+	masterSession.Reset()
+	masterSession.Autocommit = true
+	defer func() {
+		masterSession.Autocommit = false
+	}()
+	_, err := executorExec(executor, query, nil)
+	require.Error(t, err)
+
+	// make sure we have closed and rolled back any transactions started
+	assert.False(t, masterSession.InTransaction, "left with tx open")
+}
+
 func TestInsertComments(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
