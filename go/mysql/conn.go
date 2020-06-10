@@ -926,7 +926,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			prepare.BindVars = make(map[string]*querypb.BindVariable, paramsCount)
 		}
 
-		var bindVars = make(map[string]*querypb.BindVariable, paramsCount)
+		bindVars := make(map[string]*querypb.BindVariable, paramsCount)
 		for i := uint16(0); i < paramsCount; i++ {
 			parameterID := fmt.Sprintf("v%d", i+1)
 			bindVars[parameterID] = &querypb.BindVariable{}
