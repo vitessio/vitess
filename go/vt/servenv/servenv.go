@@ -158,6 +158,7 @@ func OnTermSync(f func()) {
 
 // fireOnTermSyncHooks returns true iff all the hooks finish before the timeout.
 func fireOnTermSyncHooks(timeout time.Duration) bool {
+	defer log.Flush()
 	log.Infof("Firing synchronous OnTermSync hooks and waiting up to %v for them", timeout)
 
 	timer := time.NewTimer(timeout)
