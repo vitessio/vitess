@@ -298,11 +298,14 @@ func NewActionAgent(
 	agent.statsBackupIsRunning = stats.NewGaugesWithMultiLabels("BackupIsRunning", "Whether a backup is running", []string{"mode"})
 
 	// Start will get the tablet info, and update our state from it
-	if err := agent.Start(batchCtx, config.DB, port, gRPCPort, true); err != nil {
+	if err := agent.Start(batchCtx); err != nil {
 		return nil, err
 	}
 
-	// The db name is set by the Start function called above
+	agent.UpdateStream = binlog.NewUpdateStream(agent.TopoServer, tablet.Keyspace, agent.TabletAlias.Cell, agent.DBConfigs.DbaWithDB(), agent.QueryServiceControl.SchemaEngine())
+	servenv.OnRun(agent.UpdateStream.RegisterService)
+	servenv.OnTerm(agent.UpdateStream.Disable)
+
 	agent.VREngine = vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld)
 	servenv.OnTerm(agent.VREngine.Close)
 
@@ -384,6 +387,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		TabletAlias:         tabletAlias,
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
+		DBConfigs:           &dbconfigs.DBConfigs{},
 		VREngine:            vreplication.NewTestEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient, ti.DbName(), nil),
 		History:             history.New(historyLength),
 		BaseTabletType:      topodatapb.TabletType_REPLICA,
@@ -398,8 +402,17 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		panic(err)
 	}
 
+	si, err := agent.createKeyspaceShard(batchCtx)
+	if err != nil {
+		panic(vterrors.Wrap(err, "agent.createKeyspaceShard failed"))
+	}
+
+	if err := agent.checkMastership(batchCtx, si); err != nil {
+		panic(vterrors.Wrap(err, "agent.checkMastership failed"))
+	}
+
 	// Start will update the topology and setup services.
-	if err := agent.Start(batchCtx, &dbconfigs.DBConfigs{}, vtPort, grpcPort, false); err != nil {
+	if err := agent.Start(batchCtx); err != nil {
 		panic(vterrors.Wrapf(err, "agent.Start(%v) failed", tabletAlias))
 	}
 
@@ -427,6 +440,7 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 	if err != nil {
 		panic(err)
 	}
+	dbcfgs.DBName = topoproto.TabletDbName(tablet)
 	agent := &ActionAgent{
 		QueryServiceControl: queryServiceControl,
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -436,6 +450,7 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 		TabletAlias:         tabletAlias,
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
+		DBConfigs:           dbcfgs,
 		VREngine:            vreplication.NewTestEngine(nil, "", nil, nil, "", nil),
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
@@ -458,7 +473,7 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 	}
 
 	// Start the agent.
-	if err := agent.Start(batchCtx, dbcfgs, vtPort, grpcPort, false); err != nil {
+	if err := agent.Start(batchCtx); err != nil {
 		panic(vterrors.Wrapf(err, "agent.Start(%v) failed", tabletAlias))
 	}
 
@@ -609,37 +624,12 @@ func (agent *ActionAgent) verifyTopology(ctx context.Context) {
 // Start validates and updates the topology records for the tablet, and performs
 // the initial state change callback to start tablet services.
 // If initUpdateStream is set, update stream service will also be registered.
-func (agent *ActionAgent) Start(ctx context.Context, dbcfgs *dbconfigs.DBConfigs, vtPort, gRPCPort int32, initUpdateStream bool) error {
+func (agent *ActionAgent) Start(ctx context.Context) error {
 	// Save the original tablet for ownership tests later.
 	tablet := agent.Tablet()
 
-	// Initialize masterTermStartTime
-	agent.setMasterTermStartTime(logutil.ProtoToTime(tablet.MasterTermStartTime))
-
 	// Verify the topology is correct.
 	agent.verifyTopology(ctx)
-
-	dbcfgs.DBName = topoproto.TabletDbName(tablet)
-	agent.DBConfigs = dbcfgs
-
-	// Create and register the RPC services from UpdateStream.
-	// (it needs the dbname, so it has to be delayed up to here,
-	// but it has to be before updateState below that may use it)
-	if initUpdateStream {
-		us := binlog.NewUpdateStream(agent.TopoServer, tablet.Keyspace, agent.TabletAlias.Cell, agent.DBConfigs.DbaWithDB(), agent.QueryServiceControl.SchemaEngine())
-		agent.UpdateStream = us
-		servenv.OnRun(func() {
-			us.RegisterService()
-		})
-	}
-	servenv.OnTerm(func() {
-		// Disable UpdateStream (if any) upon entering lameduck.
-		// We do this regardless of initUpdateStream, since agent.UpdateStream
-		// may have been set from elsewhere.
-		if agent.UpdateStream != nil {
-			agent.UpdateStream.Disable()
-		}
-	})
 
 	// initialize tablet server
 	if err := agent.QueryServiceControl.InitDBConfig(querypb.Target{
@@ -906,6 +896,7 @@ func (agent *ActionAgent) checkMastership(ctx context.Context, si *topo.ShardInf
 			return vterrors.Wrap(err, "InitTablet failed to read existing tablet record")
 		}
 	}
+	agent.setMasterTermStartTime(logutil.ProtoToTime(agent.Tablet().MasterTermStartTime))
 	return nil
 }
 
