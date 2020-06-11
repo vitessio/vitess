@@ -660,7 +660,7 @@ func createTransactions(ctx context.Context, numberOfScanners int, wr *wrangler.
 	scanners := make([]int64, numberOfScanners)
 	for i := 0; i < numberOfScanners; i++ {
 
-		tx, err := queryService.Begin(ctx, target, &query.ExecuteOptions{
+		tx, _, err := queryService.Begin(ctx, target, &query.ExecuteOptions{
 			// Make sure our tx is not killed by tx sniper
 			Workload:             query.ExecuteOptions_DBA,
 			TransactionIsolation: query.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY,

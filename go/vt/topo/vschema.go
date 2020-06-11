@@ -72,7 +72,7 @@ func (ts *Server) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.K
 }
 
 // EnsureVSchema makes sure that a vschema is present for this keyspace or creates a blank one if it is missing
-func (ts *Server) EnsureVSchema(ctx context.Context, keyspace string, cells []string) error {
+func (ts *Server) EnsureVSchema(ctx context.Context, keyspace string) error {
 	vschema, err := ts.GetVSchema(ctx, keyspace)
 	if err != nil && !IsErrType(err, NoNode) {
 		log.Info("error in getting vschema for keyspace %s: %v", keyspace, err)
@@ -87,12 +87,6 @@ func (ts *Server) EnsureVSchema(ctx context.Context, keyspace string, cells []st
 			log.Errorf("could not create blank vschema: %v", err)
 			return err
 		}
-	}
-
-	err = ts.RebuildSrvVSchema(ctx, cells)
-	if err != nil {
-		log.Errorf("could not rebuild SrvVschema after creating keyspace: %v", err)
-		return err
 	}
 	return nil
 }

@@ -23,13 +23,21 @@ import (
 
 // SlaveStatus holds replication information from SHOW SLAVE STATUS.
 type SlaveStatus struct {
-	Position            Position
-	SlaveIORunning      bool
-	SlaveSQLRunning     bool
-	SecondsBehindMaster uint
-	MasterHost          string
-	MasterPort          int
-	MasterConnectRetry  int
+	Position Position
+	// RelayLogPosition is the Position that the replica would be at if it
+	// were to finish executing everything that's currently in its relay log.
+	// However, some MySQL flavors don't expose this information,
+	// in which case RelayLogPosition.IsZero() will be true.
+	RelayLogPosition     Position
+	FilePosition         Position
+	FileRelayLogPosition Position
+	MasterServerID       uint
+	SlaveIORunning       bool
+	SlaveSQLRunning      bool
+	SecondsBehindMaster  uint
+	MasterHost           string
+	MasterPort           int
+	MasterConnectRetry   int
 }
 
 // SlaveRunning returns true iff both the Slave IO and Slave SQL threads are
@@ -41,13 +49,17 @@ func (s *SlaveStatus) SlaveRunning() bool {
 // SlaveStatusToProto translates a Status to proto3.
 func SlaveStatusToProto(s SlaveStatus) *replicationdatapb.Status {
 	return &replicationdatapb.Status{
-		Position:            EncodePosition(s.Position),
-		SlaveIoRunning:      s.SlaveIORunning,
-		SlaveSqlRunning:     s.SlaveSQLRunning,
-		SecondsBehindMaster: uint32(s.SecondsBehindMaster),
-		MasterHost:          s.MasterHost,
-		MasterPort:          int32(s.MasterPort),
-		MasterConnectRetry:  int32(s.MasterConnectRetry),
+		Position:             EncodePosition(s.Position),
+		RelayLogPosition:     EncodePosition(s.RelayLogPosition),
+		FilePosition:         EncodePosition(s.FilePosition),
+		FileRelayLogPosition: EncodePosition(s.FileRelayLogPosition),
+		MasterServerId:       uint32(s.MasterServerID),
+		SlaveIoRunning:       s.SlaveIORunning,
+		SlaveSqlRunning:      s.SlaveSQLRunning,
+		SecondsBehindMaster:  uint32(s.SecondsBehindMaster),
+		MasterHost:           s.MasterHost,
+		MasterPort:           int32(s.MasterPort),
+		MasterConnectRetry:   int32(s.MasterConnectRetry),
 	}
 }
 
@@ -57,13 +69,29 @@ func ProtoToSlaveStatus(s *replicationdatapb.Status) SlaveStatus {
 	if err != nil {
 		panic(vterrors.Wrapf(err, "cannot decode Position"))
 	}
+	relayPos, err := DecodePosition(s.RelayLogPosition)
+	if err != nil {
+		panic(vterrors.Wrapf(err, "cannot decode RelayLogPosition"))
+	}
+	filePos, err := DecodePosition(s.FilePosition)
+	if err != nil {
+		panic(vterrors.Wrapf(err, "cannot decode FilePosition"))
+	}
+	fileRelayPos, err := DecodePosition(s.FileRelayLogPosition)
+	if err != nil {
+		panic(vterrors.Wrapf(err, "cannot decode FileRelayLogPosition"))
+	}
 	return SlaveStatus{
-		Position:            pos,
-		SlaveIORunning:      s.SlaveIoRunning,
-		SlaveSQLRunning:     s.SlaveSqlRunning,
-		SecondsBehindMaster: uint(s.SecondsBehindMaster),
-		MasterHost:          s.MasterHost,
-		MasterPort:          int(s.MasterPort),
-		MasterConnectRetry:  int(s.MasterConnectRetry),
+		Position:             pos,
+		RelayLogPosition:     relayPos,
+		FilePosition:         filePos,
+		FileRelayLogPosition: fileRelayPos,
+		MasterServerID:       uint(s.MasterServerId),
+		SlaveIORunning:       s.SlaveIoRunning,
+		SlaveSQLRunning:      s.SlaveSqlRunning,
+		SecondsBehindMaster:  uint(s.SecondsBehindMaster),
+		MasterHost:           s.MasterHost,
+		MasterPort:           int(s.MasterPort),
+		MasterConnectRetry:   int(s.MasterConnectRetry),
 	}
 }

@@ -303,10 +303,20 @@ func TestMariaGTIDSetSingleContainsMultiple(t *testing.T) {
 	}
 }
 
-func TestMariaGTIDSetContainsNil(t *testing.T) {
+func TestMariaGTIDSetContainsConcreteNil(t *testing.T) {
 	input1 := MariadbGTIDSet{1: MariadbGTID{Domain: 1, Server: 2, Sequence: 123}}
-	input2 := GTIDSet(nil)
+	input2 := MariadbGTIDSet(nil)
 	want := true
+
+	if got := input1.Contains(input2); got != want {
+		t.Errorf("%#v.Contains(%#v) = %v, want %v", input1, input2, got, want)
+	}
+}
+
+func TestMariaGTIDSetFailsNil(t *testing.T) {
+	input1 := MariadbGTIDSet{6: MariadbGTID{Domain: 23, Server: 1, Sequence: 456}}
+	input2 := GTIDSet(nil)
+	want := false
 
 	if got := input1.Contains(input2); got != want {
 		t.Errorf("%#v.Contains(%#v) = %v, want %v", input1, input2, got, want)

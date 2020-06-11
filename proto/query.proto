@@ -464,6 +464,7 @@ message BeginRequest {
 // BeginResponse is the returned value from Begin
 message BeginResponse {
   int64 transaction_id = 1;
+  topodata.TabletAlias tablet_alias = 2;
 }
 
 // CommitRequest is the payload to Commit
@@ -603,6 +604,7 @@ message BeginExecuteResponse {
 
   // transaction_id might be non-zero even if an error is present.
   int64 transaction_id = 3;
+  topodata.TabletAlias tablet_alias = 4;
 }
 
 // BeginExecuteBatchRequest is the payload to BeginExecuteBatch
@@ -626,6 +628,7 @@ message BeginExecuteBatchResponse {
 
   // transaction_id might be non-zero even if an error is present.
   int64 transaction_id = 3;
+  topodata.TabletAlias tablet_alias = 4;
 }
 
 // MessageStreamRequest is the request payload for MessageStream.

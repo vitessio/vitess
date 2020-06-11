@@ -30,25 +30,16 @@ import (
 )
 
 const (
-	//
-	// ChangeSlaveTypeAction CleanerFunction
-	//
 	// ChangeSlaveTypeActionName is the name of the action to change a slave type
 	// (can be used to find such an action by name)
 	ChangeSlaveTypeActionName = "ChangeSlaveTypeAction"
-	//
-	// TabletTagAction CleanerFunction
-	//
+
 	// TabletTagActionName is the name of the Tag action
 	TabletTagActionName = "TabletTagAction"
-	//
-	// StartSlaveAction CleanerAction
-	//
+
 	// StartSlaveActionName is the name of the slave start action
 	StartSlaveActionName = "StartSlaveAction"
-	//
-	// VReplication CleanerAction
-	//
+
 	// VReplicationActionName is the name of the action to execute VReplication commands
 	VReplicationActionName = "VReplicationAction"
 )
@@ -144,25 +135,6 @@ func RecordChangeSlaveTypeAction(cleaner *Cleaner, tabletAlias *topodatapb.Table
 
 		// ask the tablet to make the change
 		return wr.tmc.ChangeType(ctx, ti.Tablet, to)
-	})
-}
-
-// RecordTabletTagAction records a new action to set / remove a tag
-// into the specified Cleaner
-func RecordTabletTagAction(cleaner *Cleaner, tabletAlias *topodatapb.TabletAlias, name, value string) {
-	cleaner.Record(TabletTagActionName, topoproto.TabletAliasString(tabletAlias), func(ctx context.Context, wr *Wrangler) error {
-		_, err := wr.TopoServer().UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
-			if tablet.Tags == nil {
-				tablet.Tags = make(map[string]string)
-			}
-			if value != "" {
-				tablet.Tags[name] = value
-			} else {
-				delete(tablet.Tags, name)
-			}
-			return nil
-		})
-		return err
 	})
 }
 

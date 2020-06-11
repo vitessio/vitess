@@ -201,24 +201,24 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.Nil(t, err)
 
 	// Defining all the tablets
-	shard0Master := clusterInstance.GetVttabletInstance("replica", 0, "")
-	shard0Replica := clusterInstance.GetVttabletInstance("replica", 0, "")
-	shard0RdonlyZ2 := clusterInstance.GetVttabletInstance("rdonly", 0, cell2)
+	shard0Master := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard0Replica := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard0RdonlyZ2 := clusterInstance.NewVttabletInstance("rdonly", 0, cell2)
 
-	shard1Master := clusterInstance.GetVttabletInstance("replica", 0, "")
-	shard1Replica1 := clusterInstance.GetVttabletInstance("replica", 0, "")
-	shard1Replica2 := clusterInstance.GetVttabletInstance("replica", 0, "")
-	shard1Rdonly := clusterInstance.GetVttabletInstance("rdonly", 0, "")
-	shard1RdonlyZ2 := clusterInstance.GetVttabletInstance("rdonly", 0, cell2)
+	shard1Master := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard1Replica1 := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard1Replica2 := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard1Rdonly := clusterInstance.NewVttabletInstance("rdonly", 0, "")
+	shard1RdonlyZ2 := clusterInstance.NewVttabletInstance("rdonly", 0, cell2)
 
-	shard2Master := clusterInstance.GetVttabletInstance("replica", 0, "")
-	shard2Replica1 := clusterInstance.GetVttabletInstance("replica", 0, "")
-	shard2Replica2 := clusterInstance.GetVttabletInstance("replica", 0, "")
-	shard2Rdonly := clusterInstance.GetVttabletInstance("rdonly", 0, "")
+	shard2Master := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard2Replica1 := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard2Replica2 := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard2Rdonly := clusterInstance.NewVttabletInstance("rdonly", 0, "")
 
-	shard3Master := clusterInstance.GetVttabletInstance("replica", 0, "")
-	shard3Replica := clusterInstance.GetVttabletInstance("replica", 0, "")
-	shard3Rdonly := clusterInstance.GetVttabletInstance("rdonly", 0, "")
+	shard3Master := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard3Replica := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard3Rdonly := clusterInstance.NewVttabletInstance("rdonly", 0, "")
 
 	shard0.Vttablets = []*cluster.Vttablet{shard0Master, shard0Replica, shard0RdonlyZ2}
 	shard1.Vttablets = []*cluster.Vttablet{shard1Master, shard1Replica1, shard1Replica2, shard1Rdonly, shard1RdonlyZ2}

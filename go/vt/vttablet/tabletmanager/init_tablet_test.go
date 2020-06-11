@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -295,7 +296,7 @@ func TestInitTablet(t *testing.T) {
 	if ti.Type != topodatapb.TabletType_MASTER {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
-	ter1 := agent._masterTermStartTime
+	ter1 := logutil.ProtoToTime(ti.Tablet.MasterTermStartTime)
 	if ter1.IsZero() {
 		t.Fatalf("MASTER tablet should have a masterTermStartTime set")
 	}
@@ -317,7 +318,7 @@ func TestInitTablet(t *testing.T) {
 	if ti.Type != topodatapb.TabletType_MASTER {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
-	ter2 := agent._masterTermStartTime
+	ter2 := logutil.ProtoToTime(ti.Tablet.MasterTermStartTime)
 	if ter2.IsZero() || !ter2.Equal(ter1) {
 		t.Fatalf("After a restart, masterTermStartTime must be equal to the previous time saved in the tablet record. Previous timestamp: %v current timestamp: %v", ter1, ter2)
 	}
@@ -342,7 +343,7 @@ func TestInitTablet(t *testing.T) {
 	if len(ti.Tags) != 1 || ti.Tags["aaa"] != "bbb" {
 		t.Errorf("wrong tablet tags: %v", ti.Tags)
 	}
-	ter3 := agent._masterTermStartTime
+	ter3 := logutil.ProtoToTime(ti.Tablet.MasterTermStartTime)
 	if ter3.IsZero() || !ter3.Equal(ter2) {
 		t.Fatalf("After a restart, masterTermStartTime must be set to the previous time saved in the tablet record. Previous timestamp: %v current timestamp: %v", ter2, ter3)
 	}

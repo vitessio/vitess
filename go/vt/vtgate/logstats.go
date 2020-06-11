@@ -39,7 +39,9 @@ import (
 type LogStats struct {
 	Ctx           context.Context
 	Method        string
-	Target        *querypb.Target
+	Keyspace      string
+	TabletType    string
+	Table         string
 	StmtType      string
 	SQL           string
 	BindVariables map[string]*querypb.BindVariable
@@ -151,9 +153,9 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	var fmtString string
 	switch *streamlog.QueryLogFormat {
 	case streamlog.QueryLogFormatText:
-		fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%.6f\t%.6f\t%.6f\t%v\t%q\t%v\t%v\t%v\t%q\t\n"
+		fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%.6f\t%.6f\t%.6f\t%v\t%q\t%v\t%v\t%v\t%q\t%q\t%q\t%q\t\n"
 	case streamlog.QueryLogFormatJSON:
-		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanTime\": %v, \"ExecuteTime\": %v, \"CommitTime\": %v, \"StmtType\": %q, \"SQL\": %q, \"BindVars\": %v, \"ShardQueries\": %v, \"RowsAffected\": %v, \"Error\": %q}\n"
+		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanTime\": %v, \"ExecuteTime\": %v, \"CommitTime\": %v, \"StmtType\": %q, \"SQL\": %q, \"BindVars\": %v, \"ShardQueries\": %v, \"RowsAffected\": %v, \"Error\": %q,  \"Keyspace\": %q, \"Table\": %q, \"TabletType\": %q}\n"
 	}
 
 	_, err := fmt.Fprintf(
@@ -176,6 +178,9 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 		stats.ShardQueries,
 		stats.RowsAffected,
 		stats.ErrorStr(),
+		stats.Keyspace,
+		stats.Table,
+		stats.TabletType,
 	)
 	return err
 }

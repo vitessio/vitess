@@ -66,10 +66,7 @@ func TestGRPCDiscovery(t *testing.T) {
 	rs := srvtopo.NewResilientServer(ts, "TestGRPCDiscovery")
 	dg := NewDiscoveryGateway(context.Background(), hc, rs, cell, 2)
 	hc.AddTablet(&topodatapb.Tablet{
-		Alias: &topodatapb.TabletAlias{
-			Cell: cell,
-			Uid:  43,
-		},
+		Alias:    tabletconntest.TestAlias,
 		Keyspace: tabletconntest.TestTarget.Keyspace,
 		Shard:    tabletconntest.TestTarget.Shard,
 		Type:     tabletconntest.TestTarget.TabletType,

@@ -31,6 +31,16 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+// A Gateway is the query processing module for each shard,
+// which is used by ScatterConn.
+type Gateway interface {
+	// the query service that this Gateway wraps around
+	queryservice.QueryService
+
+	// QueryServiceByAlias returns a QueryService
+	QueryServiceByAlias(alias *topodatapb.TabletAlias) (queryservice.QueryService, error)
+}
+
 // A Resolver can resolve keyspace ids and key ranges into ResolvedShard*
 // objects. It uses an underlying srvtopo.Server to find the topology,
 // and a TargetStats object to find the healthy destinations.
@@ -38,8 +48,8 @@ type Resolver struct {
 	// topoServ is the srvtopo.Server to use for topo queries.
 	topoServ Server
 
-	// queryService is the actual query service that will be used to execute queries.
-	queryService queryservice.QueryService
+	// gateway
+	gateway Gateway
 
 	// localCell is the local cell for the queries.
 	localCell string
@@ -50,11 +60,11 @@ type Resolver struct {
 }
 
 // NewResolver creates a new Resolver.
-func NewResolver(topoServ Server, queryService queryservice.QueryService, localCell string) *Resolver {
+func NewResolver(topoServ Server, gateway Gateway, localCell string) *Resolver {
 	return &Resolver{
-		topoServ:     topoServ,
-		queryService: queryService,
-		localCell:    localCell,
+		topoServ:  topoServ,
+		gateway:   gateway,
+		localCell: localCell,
 	}
 }
 
@@ -63,8 +73,8 @@ type ResolvedShard struct {
 	// Target describes the target shard.
 	Target *querypb.Target
 
-	// QueryService is the actual way to execute the query.
-	QueryService queryservice.QueryService
+	// Gateway is the way to execute a query on this shard
+	Gateway Gateway
 }
 
 // ResolvedShardEqual is an equality check on *ResolvedShard.
@@ -135,8 +145,8 @@ func (r *Resolver) GetAllShards(ctx context.Context, keyspace string, tabletType
 		// We would then need to read the SrvKeyspace there too.
 		target.Cell = ""
 		res[i] = &ResolvedShard{
-			Target:       target,
-			QueryService: r.queryService,
+			Target:  target,
+			Gateway: r.gateway,
 		}
 	}
 	return res, srvKeyspace, nil
@@ -194,8 +204,8 @@ func (r *Resolver) ResolveDestinations(ctx context.Context, keyspace string, tab
 				target.Cell = ""
 				s = len(result)
 				result = append(result, &ResolvedShard{
-					Target:       target,
-					QueryService: r.queryService,
+					Target:  target,
+					Gateway: r.gateway,
 				})
 				if ids != nil {
 					values = append(values, nil)

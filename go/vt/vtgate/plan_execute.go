@@ -18,15 +18,7 @@ package vtgate
 
 import (
 	"context"
-	"fmt"
-	"net/http"
 	"time"
-
-	"vitess.io/vitess/go/cache"
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
-	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -34,54 +26,10 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 )
 
-/*
-This file is a temporary construct, to allow us to have both the legacy `execute()` method and the new version
-that uses plans for most things side by side. It should be removed
-*/
-
-var _ executeMethod = (*planExecute)(nil)
-
-type planExecute struct {
-	e *Executor
-}
-
-// NewTestExecutor is only meant to be used from tests. It allows test code to inject wich `execute()` method to use
-func NewTestExecutor(ctx context.Context, strat func(executor *Executor) executeMethod, serv srvtopo.Server, cell string, resolver *Resolver, normalize bool, streamSize int, queryPlanCacheSize int64) *Executor {
-	e := &Executor{
-		serv:        serv,
-		cell:        cell,
-		resolver:    resolver,
-		scatterConn: resolver.scatterConn,
-		txConn:      resolver.scatterConn.txConn,
-		plans:       cache.NewLRUCache(queryPlanCacheSize),
-		normalize:   normalize,
-		streamSize:  streamSize,
-	}
-
-	e.exec = strat(e)
-
-	vschemaacl.Init()
-	e.vm = &VSchemaManager{e: e}
-	e.vm.watchSrvVSchema(ctx, cell)
-
-	executorOnce.Do(func() {
-		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", e.plans.Length)
-		stats.NewGaugeFunc("QueryPlanCacheSize", "Query plan cache size", e.plans.Size)
-		stats.NewGaugeFunc("QueryPlanCacheCapacity", "Query plan cache capacity", e.plans.Capacity)
-		stats.NewCounterFunc("QueryPlanCacheEvictions", "Query plan cache evictions", e.plans.Evictions)
-		stats.Publish("QueryPlanCacheOldest", stats.StringFunc(func() string {
-			return fmt.Sprintf("%v", e.plans.Oldest())
-		}))
-		http.Handle(pathQueryPlans, e)
-		http.Handle(pathScatterStats, e)
-		http.Handle(pathVSchema, e)
-	})
-	return e
-}
-
-func (e *planExecute) execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
+func (e *Executor) newExecute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
 	// 1: Prepare before planning and execution
 
 	// Start an implicit transaction if necessary.
@@ -95,13 +43,13 @@ func (e *planExecute) execute(ctx context.Context, safeSession *SafeSession, sql
 	}
 
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, err := newVCursorImpl(ctx, safeSession, comments, e.e, logStats, e.e.vm, e.e.VSchema(), e.e.resolver.resolver)
+	vcursor, err := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver)
 	if err != nil {
 		return 0, nil, err
 	}
 
 	// 2: Create a plan for the query
-	plan, err := e.e.getPlan(
+	plan, err := e.getPlan(
 		vcursor,
 		query,
 		comments,
@@ -127,18 +75,18 @@ func (e *planExecute) execute(ctx context.Context, safeSession *SafeSession, sql
 	// will fall through and be handled through planning
 	switch plan.Type {
 	case sqlparser.StmtBegin:
-		qr, err := e.e.handleBegin(ctx, safeSession, vcursor.tabletType, logStats)
+		qr, err := e.handleBegin(ctx, safeSession, vcursor.tabletType, logStats)
 		return sqlparser.StmtBegin, qr, err
 	case sqlparser.StmtCommit:
-		qr, err := e.e.handleCommit(ctx, safeSession, logStats)
+		qr, err := e.handleCommit(ctx, safeSession, logStats)
 		return sqlparser.StmtCommit, qr, err
 	case sqlparser.StmtRollback:
-		qr, err := e.e.handleRollback(ctx, safeSession, logStats)
+		qr, err := e.handleRollback(ctx, safeSession, logStats)
 		return sqlparser.StmtRollback, qr, err
 	}
 
 	// 3: Prepare for execution
-	err = e.e.addNeededBindVars(plan.BindVarNeeds, bindVars, safeSession)
+	err = e.addNeededBindVars(plan.BindVarNeeds, bindVars, safeSession)
 	if err != nil {
 		logStats.Error = err
 		return 0, nil, err
@@ -152,22 +100,25 @@ func (e *planExecute) execute(ctx context.Context, safeSession *SafeSession, sql
 	return e.executePlan(ctx, plan, vcursor, bindVars, execStart)(logStats, safeSession)
 }
 
-func (e *planExecute) startTxIfNecessary(ctx context.Context, safeSession *SafeSession) error {
+func (e *Executor) startTxIfNecessary(ctx context.Context, safeSession *SafeSession) error {
 	if !safeSession.Autocommit && !safeSession.InTransaction() {
-		if err := e.e.txConn.Begin(ctx, safeSession); err != nil {
+		if err := e.txConn.Begin(ctx, safeSession); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (e *planExecute) insideTransaction(ctx context.Context, safeSession *SafeSession, logStats *LogStats, f currFunc) (sqlparser.StatementType, *sqltypes.Result, error) {
+func (e *Executor) insideTransaction(ctx context.Context, safeSession *SafeSession, logStats *LogStats, f currFunc) (sqlparser.StatementType, *sqltypes.Result, error) {
 	mustCommit := false
 	if safeSession.Autocommit && !safeSession.InTransaction() {
 		mustCommit = true
-		if err := e.e.txConn.Begin(ctx, safeSession); err != nil {
+		if err := e.txConn.Begin(ctx, safeSession); err != nil {
 			return 0, nil, err
 		}
+		// The defer acts as a failsafe. If commit was successful,
+		// the rollback will be a no-op.
+		defer e.txConn.Rollback(ctx, safeSession)
 	}
 
 	// The SetAutocommitable flag should be same as mustCommit.
@@ -187,12 +138,8 @@ func (e *planExecute) insideTransaction(ctx context.Context, safeSession *SafeSe
 	}
 
 	if mustCommit {
-		// The defer acts as a failsafe. If commit was successful,
-		// the rollback will be a no-op.
-		defer e.e.txConn.Rollback(ctx, safeSession)
-
 		commitStart := time.Now()
-		if err := e.e.txConn.Commit(ctx, safeSession); err != nil {
+		if err := e.txConn.Commit(ctx, safeSession); err != nil {
 			return 0, nil, err
 		}
 		logStats.CommitTime = time.Since(commitStart)
@@ -202,28 +149,31 @@ func (e *planExecute) insideTransaction(ctx context.Context, safeSession *SafeSe
 
 type currFunc func(*LogStats, *SafeSession) (sqlparser.StatementType, *sqltypes.Result, error)
 
-func (e *planExecute) executePlan(ctx context.Context, plan *engine.Plan, vcursor *vcursorImpl, bindVars map[string]*querypb.BindVariable, execStart time.Time) currFunc {
+func (e *Executor) executePlan(ctx context.Context, plan *engine.Plan, vcursor *vcursorImpl, bindVars map[string]*querypb.BindVariable, execStart time.Time) currFunc {
 	return func(logStats *LogStats, safeSession *SafeSession) (sqlparser.StatementType, *sqltypes.Result, error) {
 		// 4: Execute!
 		qr, err := plan.Instructions.Execute(vcursor, bindVars, true)
 
 		// 5: Log and add statistics
+		logStats.Keyspace = plan.Instructions.GetKeyspaceName()
+		logStats.Table = plan.Instructions.GetTableName()
+		logStats.TabletType = vcursor.TabletType().String()
 		errCount := e.logExecutionEnd(logStats, execStart, plan, err, qr)
 		plan.AddStats(1, time.Since(logStats.StartTime), uint64(logStats.ShardQueries), logStats.RowsAffected, errCount)
 
 		// Check if there was partial DML execution. If so, rollback the transaction.
 		if err != nil && safeSession.InTransaction() && vcursor.rollbackOnPartialExec {
-			_ = e.e.txConn.Rollback(ctx, safeSession)
+			_ = e.txConn.Rollback(ctx, safeSession)
 			err = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction rolled back due to partial DML execution: %v", err)
 		}
 		return plan.Type, qr, err
 	}
 }
 
-func (e *planExecute) logExecutionEnd(logStats *LogStats, execStart time.Time, plan *engine.Plan, err error, qr *sqltypes.Result) uint64 {
+func (e *Executor) logExecutionEnd(logStats *LogStats, execStart time.Time, plan *engine.Plan, err error, qr *sqltypes.Result) uint64 {
 	logStats.ExecuteTime = time.Since(execStart)
 
-	e.e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
+	e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
 
 	var errCount uint64
 	if err != nil {
@@ -235,7 +185,7 @@ func (e *planExecute) logExecutionEnd(logStats *LogStats, execStart time.Time, p
 	return errCount
 }
 
-func (e *planExecute) logPlanningFinished(logStats *LogStats, sql string) time.Time {
+func (e *Executor) logPlanningFinished(logStats *LogStats, sql string) time.Time {
 	execStart := time.Now()
 	logStats.StmtType = sqlparser.Preview(sql).String()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)

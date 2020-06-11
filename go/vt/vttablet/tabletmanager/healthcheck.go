@@ -33,7 +33,6 @@ import (
 	"html/template"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/health"
 	"vitess.io/vitess/go/vt/log"
@@ -182,8 +181,8 @@ func (agent *ActionAgent) runHealthCheck() {
 func (agent *ActionAgent) runHealthCheckLocked() {
 	agent.checkLock()
 	// read the current tablet record and tablet control
+	tablet := agent.Tablet()
 	agent.mutex.Lock()
-	tablet := proto.Clone(agent._tablet).(*topodatapb.Tablet)
 	shouldBeServing := agent._disallowQueryService == ""
 	runUpdateStream := agent._enableUpdateStream
 	ignoreErrorExpr := agent._ignoreHealthErrorExpr

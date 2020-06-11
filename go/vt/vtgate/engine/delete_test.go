@@ -20,6 +20,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -38,11 +40,9 @@ func TestDeleteUnsharded(t *testing.T) {
 		},
 	}
 
-	vc := &loggingVCursor{shards: []string{"0"}}
+	vc := newDMLTestVCursor("0")
 	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: dummy_delete {} true true`,
@@ -73,11 +73,9 @@ func TestDeleteEqual(t *testing.T) {
 		},
 	}
 
-	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
+	vc := newDMLTestVCursor("-20", "20-")
 	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		`ExecuteMultiShard ks.-20: dummy_delete {} true true`,
@@ -108,11 +106,9 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 		},
 	}
 
-	vc := &loggingVCursor{shards: []string{"0"}}
+	vc := newDMLTestVCursor("0")
 	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// This lookup query will return no rows. So, the DML will not be sent anywhere.
 		`Execute select toc from lkp where from = :from from: type:INT64 value:"1"  false`,
@@ -139,7 +135,7 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 		},
 	}
 
-	vc := &loggingVCursor{shards: []string{"0"}}
+	vc := newDMLTestVCursor("0")
 	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "execDeleteEqual: cannot map vindex to unique keyspace id: DestinationKeyRange(-)")
 }
@@ -166,15 +162,12 @@ func TestDeleteOwnedVindex(t *testing.T) {
 		),
 		"1|4|5|6",
 	)}
-	vc := &loggingVCursor{
-		shards:  []string{"-20", "20-"},
-		results: results,
-	}
+
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.results = results
 
 	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		// ResolveDestinations is hard-coded to return -20.
@@ -188,13 +181,9 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	})
 
 	// No rows changing
-	vc = &loggingVCursor{
-		shards: []string{"-20", "20-"},
-	}
+	vc = newDMLTestVCursor("-20", "20-")
 	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		// ResolveDestinations is hard-coded to return -20.
@@ -213,14 +202,11 @@ func TestDeleteOwnedVindex(t *testing.T) {
 		"1|4|5|6",
 		"1|7|8|9",
 	)}
-	vc = &loggingVCursor{
-		shards:  []string{"-20", "20-"},
-		results: results,
-	}
+	vc = newDMLTestVCursor("-20", "20-")
+	vc.results = results
+
 	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		// ResolveDestinations is hard-coded to return -20.
@@ -248,11 +234,9 @@ func TestDeleteSharded(t *testing.T) {
 		},
 	}
 
-	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
+	vc := newDMLTestVCursor("-20", "20-")
 	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard sharded.-20: dummy_delete {} sharded.20-: dummy_delete {} true false`,
@@ -290,15 +274,12 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 		),
 		"1|4|5|6",
 	)}
-	vc := &loggingVCursor{
-		shards:  []string{"-20", "20-"},
-		results: results,
-	}
+
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.results = results
 
 	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
 		// ResolveDestinations is hard-coded to return -20.
@@ -312,13 +293,10 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 	})
 
 	// No rows changing
-	vc = &loggingVCursor{
-		shards: []string{"-20", "20-"},
-	}
+	vc = newDMLTestVCursor("-20", "20-")
+
 	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
 		// ResolveDestinations is hard-coded to return -20.
@@ -337,14 +315,11 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 		"1|4|5|6",
 		"1|7|8|9",
 	)}
-	vc = &loggingVCursor{
-		shards:  []string{"-20", "20-"},
-		results: results,
-	}
+	vc = newDMLTestVCursor("-20", "20-")
+	vc.results = results
+
 	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
 		// ResolveDestinations is hard-coded to return -20.

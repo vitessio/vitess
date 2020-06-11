@@ -332,16 +332,11 @@ func newKeyRangeLookuperUnique(name string, params map[string]string) (vindexes.
 func init() {
 	vindexes.Register("keyrange_lookuper", newKeyRangeLookuper)
 	vindexes.Register("keyrange_lookuper_unique", newKeyRangeLookuperUnique)
+	// Use legacy gateway until we can rewrite these tests to use new tabletgateway
+	*GatewayImplementation = GatewayImplementationDiscovery
 }
 
-type executorType bool
-
-const (
-	legacy           executorType = true
-	planAllTheThings executorType = false
-)
-
-func createExecutorEnvUsing(t executorType) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
+func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	// Use legacy gateway until we can rewrite these tests to use new tabletgateway
 	*GatewayImplementation = GatewayImplementationDiscovery
 	cell := "aa"
@@ -349,7 +344,7 @@ func createExecutorEnvUsing(t executorType) (executor *Executor, sbc1, sbc2, sbc
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
 	serv := newSandboxForCells([]string{cell})
-	resolver := newTestResolver(hc, serv, cell)
+	resolver := newTestLegacyResolver(hc, serv, cell)
 	sbc1 = hc.AddTestTablet(cell, "-20", 1, "TestExecutor", "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestExecutor", "40-60", topodatapb.TabletType_MASTER, true, 1, nil)
 	// Create these connections so scatter queries don't fail.
@@ -369,22 +364,10 @@ func createExecutorEnvUsing(t executorType) (executor *Executor, sbc1, sbc2, sbc
 	bad.VSchema = badVSchema
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	switch t {
-	case legacy:
-		executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
-	case planAllTheThings:
-		f := func(executor *Executor) executeMethod {
-			return &planExecute{e: executor}
-		}
-		executor = NewTestExecutor(context.Background(), f, serv, cell, resolver, false, testBufferSize, testCacheSize)
-	}
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	return executor, sbc1, sbc2, sbclookup
-}
-
-func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
-	return createExecutorEnvUsing(legacy)
 }
 
 func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
@@ -393,7 +376,7 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 	s := createSandbox("TestExecutor")
 	s.VSchema = vschema
 	serv := newSandboxForCells([]string{cell})
-	resolver := newTestResolver(hc, serv, cell)
+	resolver := newTestLegacyResolver(hc, serv, cell)
 	sbc1 = hc.AddTestTablet(cell, "-20", 1, "TestExecutor", "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestExecutor", "40-60", topodatapb.TabletType_MASTER, true, 1, nil)
 
@@ -578,8 +561,8 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 	return logStats
 }
 
-func newTestResolver(hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string) *Resolver {
-	sc := newTestScatterConn(hc, serv, cell)
+func newTestLegacyResolver(hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string) *Resolver {
+	sc := newTestLegacyScatterConn(hc, serv, cell)
 	srvResolver := srvtopo.NewResolver(serv, sc.gateway, cell)
 	return NewResolver(srvResolver, serv, cell, sc)
 }

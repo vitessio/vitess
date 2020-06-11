@@ -20,6 +20,10 @@ import (
 	"fmt"
 	"sync"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/concurrency"
@@ -78,29 +82,45 @@ func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
 	return txc.commitNormal(ctx, session)
 }
 
+func (txc *TxConn) queryService(alias *topodatapb.TabletAlias) (queryservice.QueryService, error) {
+	qs, _ := txc.gateway.(*DiscoveryGateway)
+	if qs != nil {
+		return qs, nil
+	}
+	return txc.gateway.QueryServiceByAlias(alias)
+}
+
+func (txc *TxConn) commitShard(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
+	var qs queryservice.QueryService
+	var err error
+	qs, err = txc.queryService(s.TabletAlias)
+	if err != nil {
+		return err
+	}
+	return qs.Commit(ctx, s.Target, s.TransactionId)
+}
+
 func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error {
-	if err := txc.runSessions(session.PreSessions, func(s *vtgatepb.Session_ShardSession) error {
-		defer func() { s.TransactionId = 0 }()
-		return txc.gateway.Commit(ctx, s.Target, s.TransactionId)
-	}); err != nil {
+	if err := txc.runSessions(ctx, session.PreSessions, txc.commitShard); err != nil {
 		_ = txc.Rollback(ctx, session)
 		return err
 	}
 
+	// Close all PreSessions
+	for _, shardSession := range session.PreSessions {
+		shardSession.TransactionId = 0
+	}
+
 	// Retain backward compatibility on commit order for the normal session.
 	for _, shardSession := range session.ShardSessions {
-		if err := txc.gateway.Commit(ctx, shardSession.Target, shardSession.TransactionId); err != nil {
-			shardSession.TransactionId = 0
+		if err := txc.commitShard(ctx, shardSession); err != nil {
 			_ = txc.Rollback(ctx, session)
 			return err
 		}
 		shardSession.TransactionId = 0
 	}
 
-	if err := txc.runSessions(session.PostSessions, func(s *vtgatepb.Session_ShardSession) error {
-		defer func() { s.TransactionId = 0 }()
-		return txc.gateway.Commit(ctx, s.Target, s.TransactionId)
-	}); err != nil {
+	if err := txc.runSessions(ctx, session.PostSessions, txc.commitShard); err != nil {
 		// If last commit fails, there will be nothing to rollback.
 		session.RecordWarning(&querypb.QueryWarning{Message: fmt.Sprintf("post-operation transaction had an error: %v", err)})
 	}
@@ -131,8 +151,14 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	err = txc.runSessions(session.ShardSessions[1:], func(s *vtgatepb.Session_ShardSession) error {
-		return txc.gateway.Prepare(ctx, s.Target, s.TransactionId, dtid)
+	err = txc.runSessions(ctx, session.ShardSessions[1:], func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
+		var qs queryservice.QueryService
+		var err error
+		qs, err = txc.queryService(s.TabletAlias)
+		if err != nil {
+			return err
+		}
+		return qs.Prepare(ctx, s.Target, s.TransactionId, dtid)
 	})
 	if err != nil {
 		// TODO(sougou): Perform a more fine-grained cleanup
@@ -144,12 +170,16 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	err = txc.gateway.StartCommit(ctx, mmShard.Target, mmShard.TransactionId, dtid)
+	qs, err := txc.queryService(mmShard.TabletAlias)
+	if err != nil {
+		return err
+	}
+	err = qs.StartCommit(ctx, mmShard.Target, mmShard.TransactionId, dtid)
 	if err != nil {
 		return err
 	}
 
-	err = txc.runSessions(session.ShardSessions[1:], func(s *vtgatepb.Session_ShardSession) error {
+	err = txc.runSessions(ctx, session.ShardSessions[1:], func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
 		return txc.gateway.CommitPrepared(ctx, s.Target, dtid)
 	})
 	if err != nil {
@@ -169,11 +199,15 @@ func (txc *TxConn) Rollback(ctx context.Context, session *SafeSession) error {
 	allsessions := append(session.PreSessions, session.ShardSessions...)
 	allsessions = append(allsessions, session.PostSessions...)
 
-	return txc.runSessions(allsessions, func(s *vtgatepb.Session_ShardSession) error {
+	return txc.runSessions(ctx, allsessions, func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
 		if s.TransactionId == 0 {
 			return nil
 		}
-		return txc.gateway.Rollback(ctx, s.Target, s.TransactionId)
+		qs, err := txc.queryService(s.TabletAlias)
+		if err != nil {
+			return err
+		}
+		return qs.Rollback(ctx, s.Target, s.TransactionId)
 	})
 }
 
@@ -196,7 +230,11 @@ func (txc *TxConn) Resolve(ctx context.Context, dtid string) error {
 	case querypb.TransactionState_PREPARE:
 		// If state is PREPARE, make a decision to rollback and
 		// fallthrough to the rollback workflow.
-		if err := txc.gateway.SetRollback(ctx, mmShard.Target, transaction.Dtid, mmShard.TransactionId); err != nil {
+		qs, err := txc.queryService(mmShard.TabletAlias)
+		if err != nil {
+			return err
+		}
+		if err := qs.SetRollback(ctx, mmShard.Target, transaction.Dtid, mmShard.TransactionId); err != nil {
 			return err
 		}
 		fallthrough
@@ -236,10 +274,10 @@ func (txc *TxConn) resumeCommit(ctx context.Context, target *querypb.Target, tra
 }
 
 // runSessions executes the action for all shardSessions in parallel and returns a consolildated error.
-func (txc *TxConn) runSessions(shardSessions []*vtgatepb.Session_ShardSession, action func(*vtgatepb.Session_ShardSession) error) error {
+func (txc *TxConn) runSessions(ctx context.Context, shardSessions []*vtgatepb.Session_ShardSession, action func(context.Context, *vtgatepb.Session_ShardSession) error) error {
 	// Fastpath.
 	if len(shardSessions) == 1 {
-		return action(shardSessions[0])
+		return action(ctx, shardSessions[0])
 	}
 
 	allErrors := new(concurrency.AllErrorRecorder)
@@ -248,7 +286,7 @@ func (txc *TxConn) runSessions(shardSessions []*vtgatepb.Session_ShardSession, a
 		wg.Add(1)
 		go func(s *vtgatepb.Session_ShardSession) {
 			defer wg.Done()
-			if err := action(s); err != nil {
+			if err := action(ctx, s); err != nil {
 				allErrors.RecordError(err)
 			}
 		}(s)

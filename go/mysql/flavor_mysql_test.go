@@ -16,7 +16,12 @@ limitations under the License.
 
 package mysql
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func TestMysql56SetMasterCommands(t *testing.T) {
 	params := &ConnParams{
@@ -72,4 +77,53 @@ func TestMysql56SetMasterCommandsSSL(t *testing.T) {
 	if got != want {
 		t.Errorf("mysqlFlavor.SetMasterCommands(%#v, %#v, %#v, %#v) = %#v, want %#v", params, masterHost, masterPort, masterConnectRetry, got, want)
 	}
+}
+
+func TestMysqlRetrieveMasterServerId(t *testing.T) {
+	resultMap := map[string]string{
+		"Master_Server_Id": "1",
+	}
+
+	want := SlaveStatus{MasterServerID: 1}
+	got, err := parseMysqlSlaveStatus(resultMap)
+	require.NoError(t, err)
+	assert.Equalf(t, got.MasterServerID, want.MasterServerID, "got MasterServerID: %v; want MasterServerID: %v", got.MasterServerID, want.MasterServerID)
+}
+
+func TestMysqlRetrieveFileBasedPositions(t *testing.T) {
+	resultMap := map[string]string{
+		"Exec_Master_Log_Pos":   "1307",
+		"Relay_Master_Log_File": "master-bin.000002",
+		"Read_Master_Log_Pos":   "1308",
+		"Master_Log_File":       "master-bin.000003",
+	}
+
+	want := SlaveStatus{
+		FilePosition:         Position{GTIDSet: filePosGTID{file: "master-bin.000002", pos: 1307}},
+		FileRelayLogPosition: Position{GTIDSet: filePosGTID{file: "master-bin.000003", pos: 1308}},
+	}
+	got, err := parseMysqlSlaveStatus(resultMap)
+	require.NoError(t, err)
+	assert.Equalf(t, got.FilePosition.GTIDSet, want.FilePosition.GTIDSet, "got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet)
+	assert.Equalf(t, got.FileRelayLogPosition.GTIDSet, want.FileRelayLogPosition.GTIDSet, "got FileRelayLogPosition: %v; want FileRelayLogPosition: %v", got.FileRelayLogPosition.GTIDSet, want.FileRelayLogPosition.GTIDSet)
+}
+
+func TestMysqlShouldGetRelayLogPosition(t *testing.T) {
+	resultMap := map[string]string{
+		"Executed_Gtid_Set":     "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+		"Retrieved_Gtid_Set":    "3e11fa47-71ca-11e1-9e33-c80aa9429562:6-9",
+		"Exec_Master_Log_Pos":   "1307",
+		"Relay_Master_Log_File": "master-bin.000002",
+		"Read_Master_Log_Pos":   "1308",
+		"Master_Log_File":       "master-bin.000003",
+	}
+
+	sid, _ := ParseSID("3e11fa47-71ca-11e1-9e33-c80aa9429562")
+	want := SlaveStatus{
+		Position:         Position{GTIDSet: Mysql56GTIDSet{sid: []interval{{start: 1, end: 5}}}},
+		RelayLogPosition: Position{GTIDSet: Mysql56GTIDSet{sid: []interval{{start: 1, end: 9}}}},
+	}
+	got, err := parseMysqlSlaveStatus(resultMap)
+	require.NoError(t, err)
+	assert.Equalf(t, got.RelayLogPosition.GTIDSet.String(), want.RelayLogPosition.GTIDSet.String(), "got RelayLogPosition: %v; want RelayLogPosition: %v", got.RelayLogPosition.GTIDSet, want.RelayLogPosition.GTIDSet)
 }

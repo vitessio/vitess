@@ -26,6 +26,7 @@ import (
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -246,4 +247,18 @@ func (tmc *testMaterializerTMClient) verifyQueries(t *testing.T) {
 			t.Errorf("tablet %v: has unreturned results: %v", tabletID, list)
 		}
 	}
+}
+
+// Note: ONLY breaks up change.SQL into individual statements and executes it. Does NOT fully implement ApplySchema.
+func (tmc *testMaterializerTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
+	stmts := strings.Split(change.SQL, ";")
+
+	for _, stmt := range stmts {
+		_, err := tmc.ExecuteFetchAsDba(ctx, tablet, false, []byte(stmt), 0, false, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return nil, nil
 }

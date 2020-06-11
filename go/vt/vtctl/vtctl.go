@@ -164,12 +164,12 @@ var commands = []commandGroup{
 	{
 		"Tablets", []command{
 			{"InitTablet", commandInitTablet,
-				"[-allow_update] [-allow_different_shard] [-allow_master_override] [-parent] [-db_name_override=<db name>] [-hostname=<hostname>] [-mysql_port=<port>] [-port=<port>] [-grpc_port=<port>] [-tags=tag1:value1,tag2:value2] -keyspace=<keyspace> -shard=<shard> <tablet alias> <tablet type>",
+				"DEPRECATED [-allow_update] [-allow_different_shard] [-allow_master_override] [-parent] [-db_name_override=<db name>] [-hostname=<hostname>] [-mysql_port=<port>] [-port=<port>] [-grpc_port=<port>] [-tags=tag1:value1,tag2:value2] -keyspace=<keyspace> -shard=<shard> <tablet alias> <tablet type>",
 				"Initializes a tablet in the topology.\n"},
 			{"GetTablet", commandGetTablet,
 				"<tablet alias>",
 				"Outputs a JSON structure that contains information about the Tablet."},
-			{"UpdateTabletAddrs", commandUpdateTabletAddrs,
+			{"DEPRECATED UpdateTabletAddrs", commandUpdateTabletAddrs,
 				"[-hostname <hostname>] [-ip-addr <ip addr>] [-mysql-port <mysql port>] [-vt-port <vt port>] [-grpc-port <grpc port>] <tablet alias> ",
 				"Updates the IP address and port numbers of a tablet."},
 			{"DeleteTablet", commandDeleteTablet,
@@ -1666,18 +1666,14 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		wr.Logger().Infof("keyspace %v already exists (ignoring error with -force)", keyspace)
 		err = nil
 	}
-
-	if !*allowEmptyVSchema {
-		cells, err := wr.TopoServer().GetKnownCells(ctx)
-		if err != nil {
-			return fmt.Errorf("GetKnownCells failed: %v", err)
-		}
-
-		err = wr.TopoServer().EnsureVSchema(ctx, keyspace, cells)
-	}
-
 	if err != nil {
 		return err
+	}
+
+	if !*allowEmptyVSchema {
+		if err := wr.TopoServer().EnsureVSchema(ctx, keyspace); err != nil {
+			return err
+		}
 	}
 
 	if ktype == topodatapb.KeyspaceType_SNAPSHOT {
@@ -1703,9 +1699,9 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 			wr.Logger().Infof("error from SaveVSchema %v:%v", vs, err)
 			return err
 		}
-		return wr.TopoServer().RebuildSrvVSchema(ctx, []string{} /* cells */)
 	}
-	return nil
+
+	return wr.TopoServer().RebuildSrvVSchema(ctx, []string{} /* cells */)
 }
 
 func commandDeleteKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

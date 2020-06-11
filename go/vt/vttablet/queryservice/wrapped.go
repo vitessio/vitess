@@ -18,6 +18,7 @@ package queryservice
 
 import (
 	"golang.org/x/net/context"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -83,13 +84,13 @@ type wrappedService struct {
 	wrapper WrapperFunc
 }
 
-func (ws *wrappedService) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (transactionID int64, err error) {
+func (ws *wrappedService) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (transactionID int64, alias *topodatapb.TabletAlias, err error) {
 	err = ws.wrapper(ctx, target, ws.impl, "Begin", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
-		transactionID, innerErr = conn.Begin(ctx, target, options)
+		transactionID, alias, innerErr = conn.Begin(ctx, target, options)
 		return canRetry(ctx, innerErr), innerErr
 	})
-	return transactionID, err
+	return transactionID, alias, err
 }
 
 func (ws *wrappedService) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
@@ -201,22 +202,22 @@ func (ws *wrappedService) ExecuteBatch(ctx context.Context, target *querypb.Targ
 	return qrs, err
 }
 
-func (ws *wrappedService) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (qr *sqltypes.Result, transactionID int64, err error) {
+func (ws *wrappedService) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (qr *sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
 	err = ws.wrapper(ctx, target, ws.impl, "BeginExecute", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
-		qr, transactionID, innerErr = conn.BeginExecute(ctx, target, query, bindVars, options)
+		qr, transactionID, alias, innerErr = conn.BeginExecute(ctx, target, query, bindVars, options)
 		return canRetry(ctx, innerErr), innerErr
 	})
-	return qr, transactionID, err
+	return qr, transactionID, alias, err
 }
 
-func (ws *wrappedService) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) (qrs []sqltypes.Result, transactionID int64, err error) {
+func (ws *wrappedService) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) (qrs []sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
 	err = ws.wrapper(ctx, target, ws.impl, "BeginExecuteBatch", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
-		qrs, transactionID, innerErr = conn.BeginExecuteBatch(ctx, target, queries, asTransaction, options)
+		qrs, transactionID, alias, innerErr = conn.BeginExecuteBatch(ctx, target, queries, asTransaction, options)
 		return canRetry(ctx, innerErr), innerErr
 	})
-	return qrs, transactionID, err
+	return qrs, transactionID, alias, err
 }
 
 func (ws *wrappedService) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error {
