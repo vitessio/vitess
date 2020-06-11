@@ -96,6 +96,8 @@ func TestSetUDV(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
+	_, err = exec(t, conn, "delete from test")
+	require.NoError(t, err)
 
 	for i, q := range queries {
 		t.Run(fmt.Sprintf("%d-%s", i, q.query), func(t *testing.T) {
