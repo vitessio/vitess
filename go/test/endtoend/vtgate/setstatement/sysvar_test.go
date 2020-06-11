@@ -39,9 +39,10 @@ func TestCharsetIntro(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	_, err = exec(t, conn, "insert into test (id,val1)values(1, _binary'abc')")
+	_, err = exec(t, conn, "delete from test")
 	require.NoError(t, err)
-
+	_, err = exec(t, conn, "insert into test (id,val1) values (666, _binary'abc')")
+	require.NoError(t, err)
 }
 
 func TestSetSysVar(t *testing.T) {
