@@ -235,9 +235,6 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	if agent.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should not be running")
 	}
-	if agent.UpdateStream.IsEnabled() {
-		t.Errorf("UpdateStream should not be running")
-	}
 	if agent._healthyTime.Sub(before) < 0 {
 		t.Errorf("runHealthCheck did not update agent._healthyTime")
 	}
@@ -359,9 +356,6 @@ func TestQueryServiceNotStarting(t *testing.T) {
 	if agent.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should not be running")
 	}
-	if agent.UpdateStream.IsEnabled() {
-		t.Errorf("UpdateStream should not be running")
-	}
 	if agent._healthyTime.Sub(before) < 0 {
 		t.Errorf("runHealthCheck did not update agent._healthyTime")
 	}
@@ -454,9 +448,6 @@ func TestQueryServiceStopped(t *testing.T) {
 	}
 	if agent.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should not be running")
-	}
-	if agent.UpdateStream.IsEnabled() {
-		t.Errorf("UpdateStream should not be running")
 	}
 	if agent._healthyTime.Sub(before) < 0 {
 		t.Errorf("runHealthCheck did not update agent._healthyTime")
@@ -610,9 +601,6 @@ func TestTabletControl(t *testing.T) {
 	}
 	if agent.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should not be running")
-	}
-	if agent.UpdateStream.IsEnabled() {
-		t.Errorf("UpdateStream should not be running")
 	}
 	if agent._healthyTime.Sub(before) < 0 {
 		t.Errorf("runHealthCheck did not update agent._healthyTime")
