@@ -39,7 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-var mysqlServerFlushDelay = flag.Duration("mysql_server_flush_delay", 100*time.Millisecond, "Delay after which buffered response will be flushed to client.")
+var mysqlServerFlushDelay = flag.Duration("mysql_server_flush_delay", 100*time.Millisecond, "Delay after which buffered response will be flushed to the client.")
 
 const (
 	// connBufferSize is how much we buffer for reading and
