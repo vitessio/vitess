@@ -93,9 +93,6 @@ var (
 
 	initTimeout = flag.Duration("init_timeout", 1*time.Minute, "(init parameter) timeout to use for the init phase.")
 
-	// mysqlPortRetryInterval can be changed to speed up tests.
-	mysqlPortRetryInterval = 1 * time.Second
-
 	// statsTabletType is set to expose the current tablet type.
 	statsTabletType *stats.String
 
@@ -106,6 +103,10 @@ var (
 
 	// statsBackupIsRunning is set to 1 (true) if a backup is running.
 	statsBackupIsRunning *stats.GaugesWithMultiLabels
+
+	// The following variables can be changed to speed up tests.
+	mysqlPortRetryInterval       = 1 * time.Second
+	rebuildKeyspaceRetryInterval = 1 * time.Second
 )
 
 func init() {
@@ -160,6 +161,10 @@ type ActionAgent struct {
 	// only hold the mutex to update the fields, nothing else.
 	mutex sync.Mutex
 
+	// _shardInfo and _srvKeyspace are cached and refreshed on RefreshState.
+	_shardInfo   *topo.ShardInfo
+	_srvKeyspace *topodatapb.SrvKeyspace
+
 	// _shardSyncChan is a channel for informing the shard sync goroutine that
 	// it should wake up and recheck the tablet state, to make sure it and the
 	// shard record are in sync.
@@ -180,12 +185,6 @@ type ActionAgent struct {
 	// It is set if the current type is not serving, if a TabletControl
 	// tells us not to serve, or if filtered replication is running.
 	_disallowQueryService string
-
-	// _enableUpdateStream is true if we should be running the
-	// UpdateStream service. Note if we can't start the query
-	// service, or if the server health check fails, we will
-	// disable UpdateStream.
-	_enableUpdateStream bool
 
 	// _blacklistedTables has the list of tables we are currently
 	// blacklisting.
@@ -263,11 +262,10 @@ func NewActionAgent(
 
 	ctx, cancel := context.WithTimeout(agent.batchCtx, *initTimeout)
 	defer cancel()
-	si, err := agent.createKeyspaceShard(ctx)
-	if err != nil {
+	if err = agent.createKeyspaceShard(ctx); err != nil {
 		return nil, err
 	}
-	if err := agent.checkMastership(ctx, si); err != nil {
+	if err := agent.checkMastership(ctx); err != nil {
 		return nil, err
 	}
 	if err := agent.checkMysql(ctx); err != nil {
@@ -366,11 +364,10 @@ func NewTestActionAgent(
 		preStart(agent)
 	}
 
-	si, err := agent.createKeyspaceShard(batchCtx)
-	if err != nil {
+	if err := agent.createKeyspaceShard(batchCtx); err != nil {
 		panic(err)
 	}
-	if err := agent.checkMastership(batchCtx, si); err != nil {
+	if err := agent.checkMastership(batchCtx); err != nil {
 		panic(err)
 	}
 	if agent.initTablet(batchCtx); err != nil {
@@ -445,11 +442,10 @@ func NewComboActionAgent(
 
 	ctx, cancel := context.WithTimeout(agent.batchCtx, *initTimeout)
 	defer cancel()
-	si, err := agent.createKeyspaceShard(ctx)
-	if err != nil {
+	if err := agent.createKeyspaceShard(ctx); err != nil {
 		panic(err)
 	}
-	if err := agent.checkMastership(ctx, si); err != nil {
+	if err := agent.checkMastership(ctx); err != nil {
 		panic(err)
 	}
 	if err := agent.initTablet(ctx); err != nil {
@@ -533,13 +529,6 @@ func (agent *ActionAgent) DisallowQueryService() string {
 	return agent._disallowQueryService
 }
 
-// EnableUpdateStream returns if we should enable update stream or not
-func (agent *ActionAgent) EnableUpdateStream() bool {
-	agent.mutex.Lock()
-	defer agent.mutex.Unlock()
-	return agent._enableUpdateStream
-}
-
 func (agent *ActionAgent) slaveStopped() bool {
 	agent.mutex.Lock()
 	defer agent.mutex.Unlock()
@@ -590,10 +579,9 @@ func (agent *ActionAgent) setSlaveStopped(slaveStopped bool) {
 	}
 }
 
-func (agent *ActionAgent) setServicesDesiredState(disallowQueryService string, enableUpdateStream bool) {
+func (agent *ActionAgent) setServicesDesiredState(disallowQueryService string) {
 	agent.mutex.Lock()
 	agent._disallowQueryService = disallowQueryService
-	agent._enableUpdateStream = enableUpdateStream
 	agent.mutex.Unlock()
 }
 
@@ -735,31 +723,32 @@ func buildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (
 	}, nil
 }
 
-func (agent *ActionAgent) createKeyspaceShard(ctx context.Context) (*topo.ShardInfo, error) {
+func (agent *ActionAgent) createKeyspaceShard(ctx context.Context) error {
+	// mutex is needed because we set _shardInfo and _srvKeyspace
+	agent.mutex.Lock()
+	defer agent.mutex.Unlock()
+
 	tablet := agent.Tablet()
 	log.Infof("Reading/creating keyspace and shard records for %v/%v", tablet.Keyspace, tablet.Shard)
 
 	// Read the shard, create it if necessary.
-	var si *topo.ShardInfo
 	if err := agent.withRetry(ctx, "creating keyspace and shard", func() error {
 		var err error
-		si, err = agent.TopoServer.GetOrCreateShard(ctx, tablet.Keyspace, tablet.Shard)
+		agent._shardInfo, err = agent.TopoServer.GetOrCreateShard(ctx, tablet.Keyspace, tablet.Shard)
 		return err
 	}); err != nil {
-		return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: cannot GetOrCreateShard shard")
+		return vterrors.Wrap(err, "createKeyspaceShard: cannot GetOrCreateShard shard")
 	}
 
 	// Rebuild keyspace if this the first tablet in this keyspace/cell
-	_, err := agent.TopoServer.GetSrvKeyspace(ctx, agent.TabletAlias.Cell, tablet.Keyspace)
+	srvKeyspace, err := agent.TopoServer.GetSrvKeyspace(ctx, agent.TabletAlias.Cell, tablet.Keyspace)
 	switch {
 	case err == nil:
-		// NOOP
+		agent._srvKeyspace = srvKeyspace
 	case topo.IsErrType(err, topo.NoNode):
-		// Try to RebuildKeyspace here but ignore errors if it fails.
-		// It will fail until at least one tablet is up for every shard.
-		topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, []string{agent.TabletAlias.Cell})
+		go agent.rebuildKeyspace(tablet.Keyspace, rebuildKeyspaceRetryInterval)
 	default:
-		return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to read SrvKeyspace")
+		return vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to read SrvKeyspace")
 	}
 
 	// Rebuild vschema graph if this is the first tablet in this keyspace/cell.
@@ -769,21 +758,25 @@ func (agent *ActionAgent) createKeyspaceShard(ctx context.Context) (*topo.ShardI
 		// Check if vschema was rebuilt after the initial creation of the keyspace.
 		if _, keyspaceExists := srvVSchema.GetKeyspaces()[tablet.Keyspace]; !keyspaceExists {
 			if err := agent.TopoServer.RebuildSrvVSchema(ctx, []string{agent.TabletAlias.Cell}); err != nil {
-				return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to RebuildSrvVSchema")
+				return vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to RebuildSrvVSchema")
 			}
 		}
 	case topo.IsErrType(err, topo.NoNode):
 		// There is no SrvSchema in this cell at all, so we definitely need to rebuild.
 		if err := agent.TopoServer.RebuildSrvVSchema(ctx, []string{agent.TabletAlias.Cell}); err != nil {
-			return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to RebuildSrvVSchema")
+			return vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to RebuildSrvVSchema")
 		}
 	default:
-		return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to read SrvVSchema")
+		return vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to read SrvVSchema")
 	}
-	return si, nil
+	return nil
 }
 
-func (agent *ActionAgent) checkMastership(ctx context.Context, si *topo.ShardInfo) error {
+func (agent *ActionAgent) checkMastership(ctx context.Context) error {
+	agent.mutex.Lock()
+	si := agent._shardInfo
+	agent.mutex.Unlock()
+
 	if si.MasterAlias != nil && topoproto.TabletAliasEqual(si.MasterAlias, agent.TabletAlias) {
 		// We're marked as master in the shard record, which could mean the master
 		// tablet process was just restarted. However, we need to check if a new

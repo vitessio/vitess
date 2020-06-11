@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -184,8 +185,6 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	defer span.Finish()
 
 	allowQuery := topo.IsRunningQueryService(newTablet.Type)
-	broadcastHealth := false
-	runUpdateStream := allowQuery
 
 	// Read the shard to get SourceShards / TabletControlMap if
 	// we're going to use it.
@@ -267,7 +266,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		disallowQueryReason = fmt.Sprintf("not a serving tablet type(%v)", newTablet.Type)
 		disallowQueryService = disallowQueryReason
 	}
-	agent.setServicesDesiredState(disallowQueryService, runUpdateStream)
+	agent.setServicesDesiredState(disallowQueryService)
 	if updateBlacklistedTables {
 		if err := agent.loadBlacklistRules(ctx, newTablet, blacklistedTables); err != nil {
 			// FIXME(alainjobart) how to handle this error?
@@ -277,6 +276,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		}
 	}
 
+	broadcastHealth := false
 	if allowQuery {
 		// Query service should be running.
 		if oldTablet.Type == topodatapb.TabletType_REPLICA &&
@@ -302,7 +302,6 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 				broadcastHealth = true
 			}
 		} else {
-			runUpdateStream = false
 			log.Errorf("Cannot start query service: %v", err)
 		}
 	} else {
@@ -330,7 +329,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	}
 
 	// UpdateStream needs to be started or stopped too.
-	if topo.IsRunningUpdateStream(newTablet.Type) && runUpdateStream {
+	if topo.IsRunningUpdateStream(newTablet.Type) {
 		agent.UpdateStream.Enable()
 	} else {
 		agent.UpdateStream.Disable()
@@ -414,6 +413,41 @@ func (agent *ActionAgent) retryPublish() {
 		}
 		log.Infof("Published state: %v", agent.tablet)
 		return
+	}
+}
+
+func (agent *ActionAgent) rebuildKeyspace(keyspace string, retryInterval time.Duration) {
+	var srvKeyspace *topodatapb.SrvKeyspace
+	defer func() {
+		log.Infof("Keyspace rebuilt: %v", keyspace)
+		agent.mutex.Lock()
+		defer agent.mutex.Unlock()
+		agent._srvKeyspace = srvKeyspace
+	}()
+
+	// RebuildKeyspace will fail until at least one tablet is up for every shard.
+	firstTime := true
+	var err error
+	for {
+		if !firstTime {
+			// If keyspace was rebuilt by someone else, we can just exit.
+			srvKeyspace, err = agent.TopoServer.GetSrvKeyspace(agent.batchCtx, agent.TabletAlias.Cell, keyspace)
+			if err == nil {
+				return
+			}
+		}
+		err = topotools.RebuildKeyspace(agent.batchCtx, logutil.NewConsoleLogger(), agent.TopoServer, keyspace, []string{agent.TabletAlias.Cell})
+		if err == nil {
+			srvKeyspace, err = agent.TopoServer.GetSrvKeyspace(agent.batchCtx, agent.TabletAlias.Cell, keyspace)
+			if err == nil {
+				return
+			}
+		}
+		if firstTime {
+			log.Warningf("rebuildKeyspace failed, will retry every %v: %v", retryInterval, err)
+		}
+		firstTime = false
+		time.Sleep(retryInterval)
 	}
 }
 

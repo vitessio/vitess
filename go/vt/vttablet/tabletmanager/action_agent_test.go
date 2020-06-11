@@ -69,7 +69,7 @@ func TestInitTabletFixesReplicationData(t *testing.T) {
 	tablet, err := buildTabletFromInput(tabletAlias, int32(1234), int32(3456))
 	require.NoError(t, err)
 	agent.tablet = tablet
-	_, err = agent.createKeyspaceShard(context.Background())
+	err = agent.createKeyspaceShard(context.Background())
 	require.NoError(t, err)
 	err = agent.initTablet(context.Background())
 	require.NoError(t, err)
@@ -135,7 +135,7 @@ func TestInitTabletDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.
 	tablet, err := buildTabletFromInput(tabletAlias, int32(1234), int32(3456))
 	require.NoError(t, err)
 	agent.tablet = tablet
-	_, err = agent.createKeyspaceShard(context.Background())
+	err = agent.createKeyspaceShard(context.Background())
 	require.NoError(t, err)
 	err = agent.initTablet(context.Background())
 	require.NoError(t, err)
@@ -157,7 +157,7 @@ func TestInitTabletDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.
 	tablet, err = buildTabletFromInput(tabletAlias, int32(1234), int32(3456))
 	require.NoError(t, err)
 	agent.tablet = tablet
-	_, err = agent.createKeyspaceShard(context.Background())
+	err = agent.createKeyspaceShard(context.Background())
 	require.NoError(t, err)
 	err = agent.initTablet(context.Background())
 	// This should fail.
@@ -223,7 +223,7 @@ func TestInitTablet(t *testing.T) {
 	tablet, err := buildTabletFromInput(tabletAlias, port, gRPCPort)
 	require.NoError(t, err)
 	agent.tablet = tablet
-	_, err = agent.createKeyspaceShard(context.Background())
+	err = agent.createKeyspaceShard(context.Background())
 	require.NoError(t, err)
 	err = agent.initTablet(context.Background())
 	require.NoError(t, err)
@@ -282,7 +282,7 @@ func TestInitTablet(t *testing.T) {
 	tablet, err = buildTabletFromInput(tabletAlias, port, gRPCPort)
 	require.NoError(t, err)
 	agent.tablet = tablet
-	_, err = agent.createKeyspaceShard(context.Background())
+	err = agent.createKeyspaceShard(context.Background())
 	require.NoError(t, err)
 	err = agent.initTablet(context.Background())
 	require.NoError(t, err)
@@ -309,9 +309,9 @@ func TestInitTablet(t *testing.T) {
 	tablet, err = buildTabletFromInput(tabletAlias, port, gRPCPort)
 	require.NoError(t, err)
 	agent.tablet = tablet
-	si, err = agent.createKeyspaceShard(context.Background())
+	err = agent.createKeyspaceShard(context.Background())
 	require.NoError(t, err)
-	err = agent.checkMastership(ctx, si)
+	err = agent.checkMastership(ctx)
 	require.NoError(t, err)
 	err = agent.initTablet(context.Background())
 	require.NoError(t, err)
@@ -339,9 +339,9 @@ func TestInitTablet(t *testing.T) {
 	tablet, err = buildTabletFromInput(tabletAlias, port, gRPCPort)
 	require.NoError(t, err)
 	agent.tablet = tablet
-	si, err = agent.createKeyspaceShard(context.Background())
+	err = agent.createKeyspaceShard(context.Background())
 	require.NoError(t, err)
-	err = agent.checkMastership(ctx, si)
+	err = agent.checkMastership(ctx)
 	require.NoError(t, err)
 	err = agent.initTablet(context.Background())
 	require.NoError(t, err)
@@ -366,9 +366,9 @@ func TestInitTablet(t *testing.T) {
 	tablet, err = buildTabletFromInput(tabletAlias, port, gRPCPort)
 	require.NoError(t, err)
 	agent.tablet = tablet
-	si, err = agent.createKeyspaceShard(context.Background())
+	err = agent.createKeyspaceShard(context.Background())
 	require.NoError(t, err)
-	err = agent.checkMastership(ctx, si)
+	err = agent.checkMastership(ctx)
 	require.NoError(t, err)
 	err = agent.initTablet(context.Background())
 	require.NoError(t, err)
