@@ -78,20 +78,20 @@ var (
 
 	// GRPCInitialConnWindowSize ServerOption that sets window size for a connection.
 	// The lower bound for window size is 64K and any value smaller than that will be ignored.
-	GRPCInitialConnWindowSize = flag.Int("grpc_server_initial_conn_window_size", 0, "grpc server initial connection window size")
+	GRPCInitialConnWindowSize = flag.Int("grpc_server_initial_conn_window_size", 0, "gRPC server initial connection window size")
 
 	// GRPCInitialWindowSize ServerOption that sets window size for stream.
 	// The lower bound for window size is 64K and any value smaller than that will be ignored.
-	GRPCInitialWindowSize = flag.Int("grpc_server_initial_window_size", 0, "grpc server initial window size")
+	GRPCInitialWindowSize = flag.Int("grpc_server_initial_window_size", 0, "gRPC server initial window size")
 
 	// EnforcementPolicy MinTime that sets the keepalive enforcement policy on the server.
 	// This is the minimum amount of time a client should wait before sending a keepalive ping.
-	GRPCKeepAliveEnforcementPolicyMinTime = flag.Duration("grpc_server_keepalive_enforcement_policy_min_time", 5*time.Minute, "grpc server minimum keepalive time")
+	GRPCKeepAliveEnforcementPolicyMinTime = flag.Duration("grpc_server_keepalive_enforcement_policy_min_time", 5*time.Minute, "gRPC server minimum keepalive time")
 
 	// EnforcementPolicy PermitWithoutStream - If true, server allows keepalive pings
 	// even when there are no active streams (RPCs). If false, and client sends ping when
 	// there are no active streams, server will send GOAWAY and close the connection.
-	GRPCKeepAliveEnforcementPolicyPermitWithoutStream = flag.Bool("grpc_server_keepalive_enforcement_policy_permit_without_stream", false, "grpc server permit client keepalive pings even when there are no active streams (RPCs)")
+	GRPCKeepAliveEnforcementPolicyPermitWithoutStream = flag.Bool("grpc_server_keepalive_enforcement_policy_permit_without_stream", false, "gRPC server permit client keepalive pings even when there are no active streams (RPCs)")
 
 	authPlugin Authenticator
 )
