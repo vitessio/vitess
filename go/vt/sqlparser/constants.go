@@ -136,6 +136,8 @@ const (
 	BinaryStr  = "binary "
 	UBinaryStr = "_binary "
 	Utf8mb4Str = "_utf8mb4 "
+	Utf8Str    = "_utf8 "
+	Latin1Str  = "_latin1 "
 
 	// this string is "character set" and this comment is required
 	CharacterSetStr = " character set"

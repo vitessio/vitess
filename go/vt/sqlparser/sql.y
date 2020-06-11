@@ -151,7 +151,7 @@ func skipToEnd(yylex interface{}) {
 %left <bytes> '^'
 %right <bytes> '~' UNARY
 %left <bytes> COLLATE
-%right <bytes> BINARY UNDERSCORE_BINARY UNDERSCORE_UTF8MB4
+%right <bytes> BINARY UNDERSCORE_BINARY UNDERSCORE_UTF8MB4 UNDERSCORE_UTF8 UNDERSCORE_LATIN1
 %right <bytes> INTERVAL
 %nonassoc <bytes> '.'
 
@@ -2605,9 +2605,17 @@ value_expression:
   {
     $$ = &UnaryExpr{Operator: UBinaryStr, Expr: $2}
   }
+| UNDERSCORE_UTF8 value_expression %prec UNARY
+  {
+    $$ = &UnaryExpr{Operator: Utf8Str, Expr: $2}
+  }
 | UNDERSCORE_UTF8MB4 value_expression %prec UNARY
   {
     $$ = &UnaryExpr{Operator: Utf8mb4Str, Expr: $2}
+  }
+| UNDERSCORE_LATIN1 value_expression %prec UNARY
+  {
+    $$ = &UnaryExpr{Operator: Latin1Str, Expr: $2}
   }
 | '+'  value_expression %prec UNARY
   {
