@@ -19,7 +19,8 @@ package grpcqueryservice
 import (
 	"google.golang.org/grpc"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
@@ -36,6 +37,8 @@ import (
 type query struct {
 	server queryservice.QueryService
 }
+
+var _ queryservicepb.QueryServer = (*query)(nil)
 
 // Execute is part of the queryservice.QueryServer interface
 func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (response *querypb.ExecuteResponse, err error) {
@@ -369,6 +372,21 @@ func (q *query) VStreamResults(request *binlogdatapb.VStreamResultsRequest, stre
 	)
 	err = q.server.VStreamResults(ctx, request.Target, request.Query, stream.Send)
 	return vterrors.ToGRPC(err)
+}
+
+//ReserveExecute implements the QueryServer interface
+func (q *query) ReserveExecute(ctx context.Context, request *querypb.ReserveExecuteRequest) (*querypb.ReserveExecuteResponse, error) {
+	panic("implement me")
+}
+
+//ReserveBeginExecute implements the QueryServer interface
+func (q *query) ReserveBeginExecute(ctx context.Context, request *querypb.ReserveBeginExecuteRequest) (*querypb.ReserveBeginExecuteResponse, error) {
+	panic("implement me")
+}
+
+//Release implements the QueryServer interface
+func (q *query) Release(ctx context.Context, request *querypb.ReleaseRequest) (*querypb.ReleaseResponse, error) {
+	panic("implement me")
 }
 
 // Register registers the implementation on the provide gRPC Server.
