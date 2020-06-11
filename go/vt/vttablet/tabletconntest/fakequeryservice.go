@@ -60,6 +60,8 @@ type FakeQueryService struct {
 	StreamHealthResponse *querypb.StreamHealthResponse
 }
 
+var _ queryservice.QueryService = (*FakeQueryService)(nil)
+
 // Close is a no-op.
 func (f *FakeQueryService) Close(ctx context.Context) error {
 	return nil
@@ -716,6 +718,11 @@ func (f *FakeQueryService) VStreamResults(ctx context.Context, target *querypb.T
 // QueryServiceByAlias satisfies the Gateway interface
 func (f *FakeQueryService) QueryServiceByAlias(_ *topodatapb.TabletAlias) (queryservice.QueryService, error) {
 	panic("not implemented")
+}
+
+// ReserveBeginExecute satisfies the Gateway interface
+func (f *FakeQueryService) ReserveBeginExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
+	panic("implement me")
 }
 
 // CreateFakeServer returns the fake server for the tests

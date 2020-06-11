@@ -147,7 +147,7 @@ func (tp *TxPool) NewTxProps(immediateCaller *querypb.VTGateCallerID, effectiveC
 	}
 }
 
-// GetAndLock fetches the connection associated to the transactionID and blocks it from concurrent use
+// GetAndLock fetches the connection associated to the connID and blocks it from concurrent use
 // You must call Unlock on TxConnection once done.
 func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (tx.IStatefulConnection, error) {
 	conn, err := tp.scp.GetAndLock(connID, reason)
@@ -222,16 +222,26 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 	if err != nil {
 		return nil, "", err
 	}
-	beginQueries, autocommit, err := createTransaction(ctx, options, conn, readOnly)
+	sql, err := tp.begin(ctx, options, readOnly, conn)
 	if err != nil {
 		conn.Close()
 		conn.Release(tx.ConnInitFail)
 		return nil, "", err
 	}
+	return conn, sql, nil
+}
+
+func (tp *TxPool) begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, conn *StatefulConnection) (string, error) {
+	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
+	effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
+	beginQueries, autocommit, err := createTransaction(ctx, options, conn, readOnly)
+	if err != nil {
+		return "", err
+	}
 
 	conn.txProps = tp.NewTxProps(immediateCaller, effectiveCaller, autocommit)
 
-	return conn, beginQueries, nil
+	return beginQueries, nil
 }
 
 func (tp *TxPool) createConn(ctx context.Context, options *querypb.ExecuteOptions) (*StatefulConnection, error) {

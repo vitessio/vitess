@@ -333,6 +333,8 @@ type internalTabletConn struct {
 	topoTablet *topodatapb.Tablet
 }
 
+var _ queryservice.QueryService = (*internalTabletConn)(nil)
+
 // Execute is part of queryservice.QueryService
 // We need to copy the bind variables as tablet server will change them.
 func (itc *internalTabletConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
@@ -472,6 +474,12 @@ func (itc *internalTabletConn) MessageAck(ctx context.Context, target *querypb.T
 
 // Handle panic is part of the QueryService interface.
 func (itc *internalTabletConn) HandlePanic(err *error) {
+}
+
+//ReserveBeginExecute is part of the QueryService interface.
+func (itc *internalTabletConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
+	res, txID, reservedID, alias, err := itc.tablet.qsc.QueryService().ReserveBeginExecute(ctx, target, sql, preQueries, bindVariables, options)
+	return res, txID, reservedID, alias, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // Close is part of queryservice.QueryService

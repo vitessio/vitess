@@ -186,6 +186,8 @@ type TabletServer struct {
 	alias topodatapb.TabletAlias
 }
 
+var _ queryservice.QueryService = (*TabletServer)(nil)
+
 // RegisterFunctions is a list of all the
 // RegisterFunction that will be called upon
 // Register() on a TabletServer
@@ -978,7 +980,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 				query:          query,
 				marginComments: comments,
 				bindVars:       bindVariables,
-				transactionID:  transactionID,
+				connID:         transactionID,
 				options:        options,
 				plan:           plan,
 				ctx:            ctx,
@@ -1018,7 +1020,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 				query:          query,
 				marginComments: comments,
 				bindVars:       bindVariables,
-				transactionID:  transactionID,
+				connID:         transactionID,
 				options:        options,
 				plan:           plan,
 				ctx:            ctx,
@@ -1353,6 +1355,28 @@ func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Tar
 		return err
 	}
 	return tsv.vstreamer.StreamResults(ctx, query, send)
+}
+
+//ReserveBeginExecute implements the QueryService interface
+func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
+	if tsv.enableHotRowProtection {
+		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
+		if err != nil {
+			return nil, 0, 0, nil, err
+		}
+		if txDone != nil {
+			defer txDone()
+		}
+	}
+
+	connID, err := tsv.te.ReserveBegin(ctx, options, preQueries)
+	if err != nil {
+		return nil, 0, 0, nil, err
+	}
+
+	// TODO
+	result, err := tsv.Execute(ctx, target, sql, bindVariables, connID, options)
+	return result, connID, connID, &tsv.alias, err
 }
 
 // execRequest performs verifications, sets up the necessary environments
