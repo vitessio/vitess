@@ -1502,6 +1502,8 @@ var (
 	}, {
 		input: "select 1 from t where foo = _binary 'bar'",
 	}, {
+		input: "select 1 from t where foo = _utf8 'bar' and bar = _latin1 'sjösjuk'",
+	}, {
 		input:  "select 1 from t where foo = _binary'bar'",
 		output: "select 1 from t where foo = _binary 'bar'",
 	}, {

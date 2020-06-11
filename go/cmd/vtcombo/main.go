@@ -31,7 +31,6 @@ import (
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -60,7 +59,6 @@ var (
 
 	ts              *topo.Server
 	resilientServer *srvtopo.ResilientServer
-	healthCheck     discovery.LegacyHealthCheck
 )
 
 func init() {
@@ -180,7 +178,6 @@ func main() {
 
 	// vtgate configuration and init
 	resilientServer = srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer")
-	healthCheck := discovery.NewLegacyHealthCheck(1*time.Millisecond /*retryDelay*/, 1*time.Hour /*healthCheckTimeout*/)
 	tabletTypesToWait := []topodatapb.TabletType{
 		topodatapb.TabletType_MASTER,
 		topodatapb.TabletType_REPLICA,
@@ -190,7 +187,7 @@ func main() {
 	vtgate.QueryLogHandler = "/debug/vtgate/querylog"
 	vtgate.QueryLogzHandler = "/debug/vtgate/querylogz"
 	vtgate.QueryzHandler = "/debug/vtgate/queryz"
-	vtg := vtgate.LegacyInit(context.Background(), healthCheck, resilientServer, tpb.Cells[0], 2 /*retryCount*/, tabletTypesToWait)
+	vtg := vtgate.Init(context.Background(), resilientServer, tpb.Cells[0], tabletTypesToWait)
 
 	// vtctld configuration and init
 	vtctld.InitVtctld(ts)
