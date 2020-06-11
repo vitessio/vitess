@@ -73,15 +73,14 @@ message Session {
     query.Target target = 1;
     int64 transaction_id = 2;
     topodata.TabletAlias tablet_alias = 3;
+    // reserved connection if a dedicated connection is needed
+    int64 reserved_id = 4;
   }
   // shard_sessions keep track of per-shard transaction info.
   repeated ShardSession shard_sessions = 2;
 
   // single_db is deprecated. Use transaction_mode instead.
-  // The value specifies if the transaction should be restricted
-  // to a single shard.
-  // TODO(sougou): remove in 3.1
-  bool single_db = 3;
+  reserved 3;
 
   // autocommit specifies if the session is in autocommit mode.
   // This is used only for V3.

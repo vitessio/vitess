@@ -85,6 +85,10 @@ service Query {
   // MessageAck acks messages for a table.
   rpc MessageAck(query.MessageAckRequest) returns (query.MessageAckResponse) {};
 
+  rpc ReserveExecute(query.ReserveExecuteRequest) returns (query.ReserveExecuteResponse) {};
+  rpc ReserveBeginExecute(query.ReserveBeginExecuteRequest) returns (query.ReserveBeginExecuteResponse) {};
+  rpc Release(query.ReleaseRequest) returns (query.ReleaseResponse) {};
+
   // StreamHealth runs a streaming RPC to the tablet, that returns the
   // current health of the tablet on a regular basis.
   rpc StreamHealth(query.StreamHealthRequest) returns (stream query.StreamHealthResponse) {};
