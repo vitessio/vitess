@@ -75,6 +75,9 @@ var (
 	// GRPCAuth which auth plugin to use (at the moment now only static is supported)
 	GRPCAuth = flag.String("grpc_auth_mode", "", "Which auth plugin implementation to use (eg: static)")
 
+	// GRPCMinTLSVersion what the minimum version of SSL/TLS allowed to connect is.
+	GRPCMinTLSVersion = flag.Uint64("grpc_min_tls_version", tls.VersionTLS12, "Minimum TLS version to accept.")
+
 	// GRPCServer is the global server to serve gRPC.
 	GRPCServer *grpc.Server
 
@@ -140,6 +143,8 @@ func createGRPCServer() {
 		if err != nil {
 			log.Exitf("Failed to log gRPC cert/key/ca: %v", err)
 		}
+
+		config.MinVersion = uint16(*GRPCMinTLSVersion)
 
 		// create the creds server options
 		creds := credentials.NewTLS(config)
