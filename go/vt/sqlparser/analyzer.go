@@ -337,11 +337,6 @@ func IsSimpleTuple(node Expr) bool {
 // NewPlanValue builds a sqltypes.PlanValue from an Expr.
 func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 	switch node := node.(type) {
-	case *UnaryExpr:
-		switch node.Operator {
-		case UBinaryStr: // for some charset introducers, we can just ignore them
-			return NewPlanValue(node.Expr)
-		}
 	case *SQLVal:
 		switch node.Type {
 		case ValArg:
@@ -382,6 +377,11 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 		return pv, nil
 	case *NullVal:
 		return sqltypes.PlanValue{}, nil
+	case *UnaryExpr:
+		switch node.Operator {
+		case UBinaryStr, Utf8mb4Str, Utf8Str, Latin1Str: // for some charset introducers, we can just ignore them
+			return NewPlanValue(node.Expr)
+		}
 	}
 	return sqltypes.PlanValue{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expression is too complex '%v'", String(node))
 }
