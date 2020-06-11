@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -116,11 +117,25 @@ func (mysqlFlavor) status(c *Conn) (SlaveStatus, error) {
 		return SlaveStatus{}, err
 	}
 
+	return parseMysqlSlaveStatus(resultMap)
+}
+
+func parseMysqlSlaveStatus(resultMap map[string]string) (SlaveStatus, error) {
 	status := parseSlaveStatus(resultMap)
+	var err error
 	status.Position.GTIDSet, err = parseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
 	if err != nil {
 		return SlaveStatus{}, vterrors.Wrapf(err, "SlaveStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
 	}
+	relayLogGTIDSet, err := parseMysql56GTIDSet(resultMap["Retrieved_Gtid_Set"])
+	if err != nil {
+		return SlaveStatus{}, vterrors.Wrapf(err, "SlaveStatus can't parse MySQL 5.6 GTID (Retrieved_Gtid_Set: %#v)", resultMap["Retrieved_Gtid_Set"])
+	}
+	// We take the union of the executed and retrieved gtidset, because the retrieved gtidset only represents GTIDs since
+	// the relay log has been reset. To get the full Position, we need to take a union of executed GTIDSets, since these would
+	// have been in the relay log's GTIDSet in the past, prior to a reset.
+	status.RelayLogPosition.GTIDSet = status.Position.GTIDSet.Union(relayLogGTIDSet)
+
 	return status, nil
 }
 

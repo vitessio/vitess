@@ -84,7 +84,6 @@ func (res *Resolver) Execute(
 			sql,
 			bindVars,
 			rss,
-			tabletType,
 			session,
 			notInTransaction,
 			options,
@@ -134,7 +133,6 @@ func (res *Resolver) StreamExecute(
 		sql,
 		bindVars,
 		rss,
-		tabletType,
 		options,
 		callback)
 	return err

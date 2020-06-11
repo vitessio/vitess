@@ -727,6 +727,12 @@ func writeValuesAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, rs *my
 	if getPK {
 		pkValues = make([]sqltypes.Value, len(tce.pkNames))
 	}
+
+	if len(tce.ti.Fields) != rs.DataColumns.Count() {
+		err := fmt.Errorf("[%v] cached columns count[%d] mismatch binglog row [%d]", tce.ti.Name, len(tce.ti.Fields), rs.DataColumns.Count())
+		return sqltypes.Value{}, nil, err
+	}
+
 	for c := 0; c < rs.DataColumns.Count(); c++ {
 		if !rs.DataColumns.Bit(c) {
 			continue

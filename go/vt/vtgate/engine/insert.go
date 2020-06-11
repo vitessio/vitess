@@ -23,13 +23,14 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -227,6 +228,10 @@ func (ins *Insert) execInsertUnsharded(vcursor VCursor, bindVars map[string]*que
 	if len(rss) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
 	}
+	err = allowOnlyMaster(rss...)
+	if err != nil {
+		return nil, err
+	}
 	result, err := execShard(vcursor, ins.Query, bindVars, rss[0], true, true /* canAutocommit */)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execInsertUnsharded")
@@ -253,6 +258,10 @@ func (ins *Insert) execInsertSharded(vcursor VCursor, bindVars map[string]*query
 	}
 
 	autocommit := (len(rss) == 1 || ins.MultiShardAutocommit) && vcursor.AutocommitApproval()
+	err = allowOnlyMaster(rss...)
+	if err != nil {
+		return nil, err
+	}
 	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
 	if errs != nil {
 		return nil, vterrors.Wrap(vterrors.Aggregate(errs), "execInsertSharded")
@@ -397,7 +406,8 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 			}
 			for colIdx, vindexKey := range rowColumnKeys {
 				col := colVindex.Columns[colIdx]
-				bindVars[insertVarName(col, rowNum)] = sqltypes.ValueBindVariable(vindexKey)
+				name := InsertVarName(col, rowNum)
+				bindVars[name] = sqltypes.ValueBindVariable(vindexKey)
 			}
 		}
 	}
@@ -514,9 +524,9 @@ func (ins *Insert) processOwned(vcursor VCursor, vindexColumnsKeys [][]sqltypes.
 
 // processUnowned either reverse maps or validates the values for an unowned column.
 func (ins *Insert) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltypes.Value, colVindex *vindexes.ColumnVindex, ksids [][]byte) error {
-	var reverseIndexes []int
+	reverseIndexes := []int{}
 	var reverseKsids [][]byte
-	var verifyIndexes []int
+	verifyIndexes := []int{}
 	var verifyKeys [][]sqltypes.Value
 	var verifyKsids [][]byte
 
@@ -580,8 +590,10 @@ func (ins *Insert) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltype
 	return nil
 }
 
-func insertVarName(col sqlparser.ColIdent, rowNum int) string {
-	return "_" + col.CompliantName() + strconv.Itoa(rowNum)
+//InsertVarName returns a name for the bind var for this column. This method is used by the planner and engine,
+//to make sure they both produce the same names
+func InsertVarName(col sqlparser.ColIdent, rowNum int) string {
+	return fmt.Sprintf("_%s_%d", col.CompliantName(), rowNum)
 }
 
 func (ins *Insert) description() PrimitiveDescription {

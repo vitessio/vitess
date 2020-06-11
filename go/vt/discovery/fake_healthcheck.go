@@ -65,7 +65,7 @@ func (fhc *FakeHealthCheck) RegisterStats() {
 func (fhc *FakeHealthCheck) WaitForInitialStatsUpdates() {
 }
 
-// AddTablet adds the tablet and calls the listener.
+// AddTablet adds the tablet.
 func (fhc *FakeHealthCheck) AddTablet(tablet *topodatapb.Tablet) {
 	key := TabletToMapKey(tablet)
 	item := &fhcItem{
@@ -111,8 +111,8 @@ func (fhc *FakeHealthCheck) ReplaceTablet(old, new *topodatapb.Tablet) {
 	fhc.AddTablet(new)
 }
 
-// GetConnection returns the TabletConn of the given tablet.
-func (fhc *FakeHealthCheck) GetConnection(key string) queryservice.QueryService {
+// TabletConnection returns the TabletConn of the given tablet.
+func (fhc *FakeHealthCheck) TabletConnection(key string) queryservice.QueryService {
 	fhc.mu.RLock()
 	defer fhc.mu.RUnlock()
 	if item := fhc.items[key]; item != nil {

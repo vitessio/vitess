@@ -56,8 +56,8 @@ func NewStreamHealthQueryService(target querypb.Target) *StreamHealthQueryServic
 }
 
 // Begin implemented as a no op
-func (q *StreamHealthQueryService) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, error) {
-	return 0, nil
+func (q *StreamHealthQueryService) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, *topodatapb.TabletAlias, error) {
+	return 0, nil, nil
 }
 
 // Execute implemented as a no op

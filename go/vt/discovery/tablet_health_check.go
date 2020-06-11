@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"vitess.io/vitess/go/sync2"
@@ -47,6 +48,8 @@ type tabletHealthCheck struct {
 	cancelFunc context.CancelFunc
 	// Tablet is the tablet object that was sent to HealthCheck.AddTablet.
 	Tablet *topodata.Tablet
+	// mutex to protect Conn
+	connMu sync.Mutex
 	// Conn is the connection associated with the tablet.
 	Conn queryservice.QueryService
 	// Target is the current target as returned by the streaming
@@ -80,6 +83,8 @@ func (thc *tabletHealthCheck) String() string {
 // Note that this is not a deep copy because we point to the same underlying RealtimeStats.
 // That is fine because the RealtimeStats object is never changed after creation.
 func (thc *tabletHealthCheck) SimpleCopy() *TabletHealth {
+	thc.connMu.Lock()
+	defer thc.connMu.Unlock()
 	return &TabletHealth{
 		Conn:                thc.Conn,
 		Tablet:              thc.Tablet,
@@ -117,7 +122,7 @@ func (thc *tabletHealthCheck) setServingState(serving bool, reason string) {
 
 // stream streams healthcheck responses to callback.
 func (thc *tabletHealthCheck) stream(ctx context.Context, callback func(*query.StreamHealthResponse) error) error {
-	conn := thc.getConnection()
+	conn := thc.Connection()
 	if conn == nil {
 		// This signals the caller to retry
 		return nil
@@ -130,7 +135,13 @@ func (thc *tabletHealthCheck) stream(ctx context.Context, callback func(*query.S
 	return err
 }
 
-func (thc *tabletHealthCheck) getConnection() queryservice.QueryService {
+func (thc *tabletHealthCheck) Connection() queryservice.QueryService {
+	thc.connMu.Lock()
+	defer thc.connMu.Unlock()
+	return thc.connectionLocked()
+}
+
+func (thc *tabletHealthCheck) connectionLocked() queryservice.QueryService {
 	if thc.Conn == nil {
 		conn, err := tabletconn.GetDialer()(thc.Tablet, grpcclient.FailFast(true))
 		if err != nil {
@@ -144,7 +155,7 @@ func (thc *tabletHealthCheck) getConnection() queryservice.QueryService {
 }
 
 // processResponse reads one health check response, and updates health
-func (thc *tabletHealthCheck) processResponse(hc *HealthCheck, shr *query.StreamHealthResponse) error {
+func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.StreamHealthResponse) error {
 	select {
 	case <-thc.ctx.Done():
 		return thc.ctx.Err()
@@ -221,7 +232,7 @@ func (thc *tabletHealthCheck) isTrivialReplagChange(newStats *query.RealtimeStat
 }
 
 // checkConn performs health checking on the given tablet.
-func (thc *tabletHealthCheck) checkConn(hc *HealthCheck) {
+func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 	defer func() {
 		// TODO(deepthi): We should ensure any return from this func calls the equivalent of hc.deleteTablet
 		thc.finalizeConn()

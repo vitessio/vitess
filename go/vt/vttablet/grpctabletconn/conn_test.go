@@ -55,6 +55,7 @@ func TestGRPCTabletConn(t *testing.T) {
 		Keyspace: tabletconntest.TestTarget.Keyspace,
 		Shard:    tabletconntest.TestTarget.Shard,
 		Type:     tabletconntest.TestTarget.TabletType,
+		Alias:    tabletconntest.TestAlias,
 		Hostname: host,
 		PortMap: map[string]int32{
 			"grpc": int32(port),
@@ -106,6 +107,7 @@ func TestGRPCTabletAuthConn(t *testing.T) {
 		Keyspace: tabletconntest.TestTarget.Keyspace,
 		Shard:    tabletconntest.TestTarget.Shard,
 		Type:     tabletconntest.TestTarget.TabletType,
+		Alias:    tabletconntest.TestAlias,
 		Hostname: host,
 		PortMap: map[string]int32{
 			"grpc": int32(port),

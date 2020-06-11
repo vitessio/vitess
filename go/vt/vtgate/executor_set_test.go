@@ -390,3 +390,67 @@ func TestExecutorSetMetadata(t *testing.T) {
 	assert.Equal(t, wantqr.Fields, gotqr.Fields)
 	assert.ElementsMatch(t, wantqr.Rows, gotqr.Rows)
 }
+
+func TestPlanExecutorSetUDV(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+
+	testcases := []struct {
+		in  string
+		out *vtgatepb.Session
+		err string
+	}{{
+		in:  "set @FOO = 'bar'",
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"}), Autocommit: true},
+	}, {
+		in:  "set @foo = 2",
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{2}), Autocommit: true},
+	}, {
+		in:  "set @foo = 2.1, @bar = 'baz'",
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo", "bar"}, []interface{}{2.1, "baz"}), Autocommit: true},
+	}}
+	for _, tcase := range testcases {
+		t.Run(tcase.in, func(t *testing.T) {
+			session := NewSafeSession(&vtgatepb.Session{Autocommit: true})
+			_, err := executor.Execute(context.Background(), "TestExecute", session, tcase.in, nil)
+			if err != nil {
+				require.EqualError(t, err, tcase.err)
+			} else {
+				utils.MustMatch(t, tcase.out, session.Session, "session output was not as expected")
+			}
+		})
+	}
+}
+
+func TestSetUDVFromTabletInput(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+
+	fields := sqltypes.MakeTestFields("some", "VARBINARY")
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(
+			fields,
+			"abc",
+		),
+	})
+
+	masterSession.TargetString = "TestExecutor"
+	defer func() {
+		masterSession.TargetString = ""
+	}()
+	_, err := executorExec(executor, "set @foo = concat('a','b','c')", nil)
+	require.NoError(t, err)
+
+	want := map[string]*querypb.BindVariable{"foo": sqltypes.StringBindVariable("abc")}
+	utils.MustMatch(t, want, masterSession.UserDefinedVariables, "")
+}
+
+func createMap(keys []string, values []interface{}) map[string]*querypb.BindVariable {
+	result := make(map[string]*querypb.BindVariable)
+	for i, key := range keys {
+		variable, err := sqltypes.BuildBindVariable(values[i])
+		if err != nil {
+			panic(err)
+		}
+		result[key] = variable
+	}
+	return result
+}

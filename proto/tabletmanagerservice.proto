@@ -105,34 +105,6 @@ service TabletManager {
   // the provided position
   rpc StartSlaveUntilAfter(tabletmanagerdata.StartSlaveUntilAfterRequest) returns (tabletmanagerdata.StartSlaveUntilAfterResponse) {};
 
-  // TabletExternallyReparented tells a tablet that its underlying MySQL is
-  // currently the master. It is only used in environments (tabletmanagerdata.such as Vitess+MoB)
-  // in which MySQL is reparented by some agent external to Vitess, and then
-  // that agent simply notifies Vitess.
-  //
-  // This call is idempotent with respect to a single target tablet.
-  // However, the tablet assumes there is a cooling-off period following the
-  // initial external reparent from A to B, before this call is repeated on any
-  // tablet other than B. This assumption is configurable with the vttablet flag
-  // "finalize_external_reparent_timeout".
-  //
-  // For more information, see the design doc at go/vt-fast-failover.
-  rpc TabletExternallyReparented(tabletmanagerdata.TabletExternallyReparentedRequest) returns (tabletmanagerdata.TabletExternallyReparentedResponse) {};
-
-  // TabletExternallyElected is an notification that may be sent in
-  // anticipation of potentially later sending TabletExternallyReparented.
-  // The tablet can use this extra lead time to prepare to react quickly if
-  // TabletExternallyReparented does follow.
-  //
-  // This call is effectively a no-op if it is not followed by a call to
-  // TabletExternallyReparented, so the external agent doing the reparent can
-  // still change its mind.
-  //
-  // The agent does not need to wait for this call or cancel it before calling
-  // TabletExternallyReparented if the external reparent operation finishes
-  // before TabletExternallyElected returns.
-  rpc TabletExternallyElected(tabletmanagerdata.TabletExternallyElectedRequest) returns (tabletmanagerdata.TabletExternallyElectedResponse) {};
-
   // GetSlaves asks for the list of mysql slaves
   rpc GetSlaves(tabletmanagerdata.GetSlavesRequest) returns (tabletmanagerdata.GetSlavesResponse) {};
 

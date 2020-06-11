@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/require"
@@ -133,6 +135,8 @@ type loggingVCursor struct {
 	multiShardErrs []error
 
 	log []string
+
+	resolvedTargetTabletType topodatapb.TabletType
 }
 
 func (f *loggingVCursor) SetUDV(key string, value interface{}) error {
@@ -263,8 +267,9 @@ func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Val
 				visited[shard] = vi
 				rss = append(rss, &srvtopo.ResolvedShard{
 					Target: &querypb.Target{
-						Keyspace: keyspace,
-						Shard:    shard,
+						Keyspace:   keyspace,
+						Shard:      shard,
+						TabletType: f.resolvedTargetTabletType,
 					},
 				})
 				if ids != nil {

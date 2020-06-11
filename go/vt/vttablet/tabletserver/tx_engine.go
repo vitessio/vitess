@@ -229,19 +229,13 @@ func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) 
 		return 0, "", vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "tx engine can't accept new transactions in state %v", te.state)
 	}
 
-	isWriteTransaction := options == nil || options.TransactionIsolation != querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY
-	if te.state == AcceptingReadOnly && isWriteTransaction {
-		te.stateLock.Unlock()
-		return 0, "", vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "tx engine can only accept read-only transactions in current state")
-	}
-
 	// By Add() to beginRequests, we block others from initiating state
 	// changes until we have finished adding this transaction
 	te.beginRequests.Add(1)
 	te.stateLock.Unlock()
 
 	defer te.beginRequests.Done()
-	conn, beginSQL, err := te.txPool.Begin(ctx, options)
+	conn, beginSQL, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly)
 	if err != nil {
 		return 0, "", err
 	}
@@ -438,7 +432,7 @@ outer:
 		if txid > maxid {
 			maxid = txid
 		}
-		conn, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{})
+		conn, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false)
 		if err != nil {
 			allErr.RecordError(err)
 			continue

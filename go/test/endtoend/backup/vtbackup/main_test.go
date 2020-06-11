@@ -96,15 +96,15 @@ func TestMain(m *testing.M) {
 		extraArgs := []string{"-db-credentials-file", dbCredentialFile}
 		commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
 
-		master = localCluster.GetVttabletInstance("replica", 0, "")
-		replica1 = localCluster.GetVttabletInstance("replica", 0, "")
-		replica2 = localCluster.GetVttabletInstance("replica", 0, "")
+		master = localCluster.NewVttabletInstance("replica", 0, "")
+		replica1 = localCluster.NewVttabletInstance("replica", 0, "")
+		replica2 = localCluster.NewVttabletInstance("replica", 0, "")
 		shard.Vttablets = []*cluster.Vttablet{master, replica1, replica2}
 
 		// Start MySql processes
 		var mysqlProcs []*exec.Cmd
 		for _, tablet := range shard.Vttablets {
-			tablet.VttabletProcess = localCluster.GetVtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
+			tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
 			tablet.VttabletProcess.DbPassword = dbPassword
 			tablet.VttabletProcess.ExtraArgs = commonTabletArg
 			tablet.VttabletProcess.SupportsBackup = true
@@ -116,6 +116,7 @@ func TestMain(m *testing.M) {
 			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
 				return 1, err
 			} else {
+				// ignore golint warning, we need the else block to use proc
 				mysqlProcs = append(mysqlProcs, proc)
 			}
 		}

@@ -670,7 +670,7 @@ func TestTabletControl(t *testing.T) {
 	// now refresh the tablet state, as the resharding process would do
 	agent.RefreshState(ctx)
 
-	// QueryService changed back from SERVING to NOT_SERVING since refreshTablet()
+	// QueryService changed back from SERVING to NOT_SERVING since RefreshState()
 	// re-read the topology and saw that REPLICA is still not allowed to serve.
 	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "", 19); err != nil {
 		t.Fatal(err)
@@ -717,13 +717,12 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Run TER to turn us into a proper master, wait for it to finish.
+	// Change to master.
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 19 * time.Second
-	if err := agent.TabletExternallyReparented(ctx, "unused_id"); err != nil {
+	if err := agent.ChangeType(ctx, topodatapb.TabletType_MASTER); err != nil {
 		t.Fatalf("TabletExternallyReparented failed: %v", err)
 	}
-	<-agent.finalizeReparentCtx.Done()
-	// It is not enough to wait for finalizeReparentCtx to be done, we have to wait for shard_sync to finish
+	// Wait for shard_sync to finish
 	startTime := time.Now()
 	for {
 		if time.Since(startTime) > 10*time.Second /* timeout */ {
