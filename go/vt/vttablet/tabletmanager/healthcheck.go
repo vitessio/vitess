@@ -184,7 +184,6 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 	tablet := agent.Tablet()
 	agent.mutex.Lock()
 	shouldBeServing := agent._disallowQueryService == ""
-	runUpdateStream := agent._enableUpdateStream
 	ignoreErrorExpr := agent._ignoreHealthErrorExpr
 	agent.mutex.Unlock()
 
@@ -260,12 +259,7 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 			}
 		}
 	}
-
-	// change UpdateStream state if necessary
-	if healthErr != nil {
-		runUpdateStream = false
-	}
-	if topo.IsRunningUpdateStream(tablet.Type) && runUpdateStream {
+	if topo.IsRunningUpdateStream(tablet.Type) {
 		agent.UpdateStream.Enable()
 	} else {
 		agent.UpdateStream.Disable()
