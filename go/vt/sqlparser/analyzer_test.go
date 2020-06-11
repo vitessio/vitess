@@ -17,9 +17,10 @@ limitations under the License.
 package sqlparser
 
 import (
-	"reflect"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/sqltypes"
@@ -413,24 +414,73 @@ func TestNewPlanValue(t *testing.T) {
 			Val:  []byte("2.1"),
 		},
 		out: sqltypes.PlanValue{Value: sqltypes.NewFloat64(2.1)},
+	}, {
+		in: &UnaryExpr{
+			Operator: Latin1Str,
+			Expr: &SQLVal{
+				Type: StrVal,
+				Val:  []byte("strval"),
+			},
+		},
+		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
+	}, {
+		in: &UnaryExpr{
+			Operator: UBinaryStr,
+			Expr: &SQLVal{
+				Type: StrVal,
+				Val:  []byte("strval"),
+			},
+		},
+		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
+	}, {
+		in: &UnaryExpr{
+			Operator: Utf8mb4Str,
+			Expr: &SQLVal{
+				Type: StrVal,
+				Val:  []byte("strval"),
+			},
+		},
+		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
+	}, {
+		in: &UnaryExpr{
+			Operator: Utf8Str,
+			Expr: &SQLVal{
+				Type: StrVal,
+				Val:  []byte("strval"),
+			},
+		},
+		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
+	}, {
+		in: &UnaryExpr{
+			Operator: MinusStr,
+			Expr: &SQLVal{
+				Type: FloatVal,
+				Val:  []byte("2.1"),
+			},
+		},
+		err: "expression is too complex",
 	}}
 	for _, tc := range tcases {
-		got, err := NewPlanValue(tc.in)
-		if tc.err != "" {
-			if !strings.Contains(err.Error(), tc.err) {
-				t.Errorf("NewPlanValue(%s) error: %v, want '%s'", String(tc.in), err, tc.err)
+		t.Run(String(tc.in), func(t *testing.T) {
+			got, err := NewPlanValue(tc.in)
+			if tc.err != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.err)
+				return
 			}
-			continue
-		}
-		if err != nil {
-			t.Error(err)
-			continue
-		}
-		if !reflect.DeepEqual(tc.out, got) {
-			t.Errorf("NewPlanValue(%s): %v, want %v", String(tc.in), got, tc.out)
-		}
+
+			require.NoError(t, err)
+			mustMatch(t, tc.out, got, "wut!")
+		})
 	}
 }
+
+var mustMatch = utils.MustMatchFn(
+	[]interface{}{ // types with unexported fields
+		sqltypes.Value{},
+	},
+	[]string{".Conn"}, // ignored fields
+)
 
 func newStrVal(in string) *SQLVal {
 	return NewStrVal([]byte(in))

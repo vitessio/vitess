@@ -103,6 +103,8 @@ var keywords = map[string]int{
 	"binary":              BINARY,
 	"_binary":             UNDERSCORE_BINARY,
 	"_utf8mb4":            UNDERSCORE_UTF8MB4,
+	"_utf8":               UNDERSCORE_UTF8,
+	"_latin1":             UNDERSCORE_LATIN1,
 	"bit":                 BIT,
 	"blob":                BLOB,
 	"bool":                BOOL,
