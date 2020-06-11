@@ -195,6 +195,13 @@ func TestNormalize(t *testing.T) {
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.TestBindVariable([]interface{}{1, []byte("2")}),
 		},
+	}, {
+		// Do not normalize cast/convert types
+		in:      `select CAST("test" AS CHAR(60))`,
+		outstmt: `select convert(:bv1, CHAR(60)) from dual`,
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.StringBindVariable("test"),
+		},
 	}}
 	for _, tc := range testcases {
 		stmt, err := Parse(tc.in)

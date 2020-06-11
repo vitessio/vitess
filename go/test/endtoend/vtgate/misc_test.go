@@ -19,8 +19,9 @@ package vtgate
 import (
 	"context"
 	"fmt"
-	"github.com/google/go-cmp/cmp"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/stretchr/testify/assert"
 
@@ -547,6 +548,14 @@ func TestShowColumns(t *testing.T) {
 	assertMatches(t, conn, "show columns from `t5_null_vindex` in `ks`", expected)
 	assertMatches(t, conn, "SHOW COLUMNS from `t5_null_vindex` in `ks`", expected)
 	assertMatches(t, conn, "SHOW columns FROM `t5_null_vindex` in `ks`", expected)
+}
+
+func TestCastConvert(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	assertMatches(t, conn, `SELECT CAST("test" AS CHAR(60))`, `[[VARCHAR("test")]]`)
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
