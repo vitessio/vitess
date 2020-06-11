@@ -384,6 +384,11 @@ func (sbc *SandboxConn) QueryServiceByAlias(_ *topodatapb.TabletAlias) (queryser
 func (sbc *SandboxConn) HandlePanic(err *error) {
 }
 
+//ReserveBeginExecute implements the QueryService interface
+func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
+	panic("implement me")
+}
+
 // Close does not change ExecCount
 func (sbc *SandboxConn) Close(ctx context.Context) error {
 	return nil

@@ -52,7 +52,7 @@ type QueryExecutor struct {
 	query          string
 	marginComments sqlparser.MarginComments
 	bindVars       map[string]*querypb.BindVariable
-	transactionID  int64
+	connID         int64
 	options        *querypb.ExecuteOptions
 	plan           *TabletPlan
 	ctx            context.Context
@@ -70,7 +70,7 @@ var sequenceFields = []*querypb.Field{
 
 // Execute performs a non-streaming query execution.
 func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
-	qre.logStats.TransactionID = qre.transactionID
+	qre.logStats.TransactionID = qre.connID
 	planName := qre.plan.PlanID.String()
 	qre.logStats.PlanType = planName
 	defer func(start time.Time) {
@@ -113,9 +113,9 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		}
 	}
 
-	if qre.transactionID != 0 {
+	if qre.connID != 0 {
 		// Need upfront connection for DMLs and transactions
-		conn, err := qre.tsv.te.txPool.GetAndLock(qre.transactionID, "for query")
+		conn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for query")
 		if err != nil {
 			return nil, err
 		}
@@ -234,8 +234,8 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 
 	// if we have a transaction id, let's use the txPool for this query
 	var conn *connpool.DBConn
-	if qre.transactionID != 0 {
-		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.transactionID, "for streaming query")
+	if qre.connID != 0 {
+		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for streaming query")
 		if err != nil {
 			return err
 		}

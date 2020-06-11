@@ -111,6 +111,8 @@ type QueryService interface {
 	// HandlePanic will be called if any of the functions panic.
 	HandlePanic(err *error)
 
+	ReserveBeginExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error)
+
 	// Close must be called for releasing resources.
 	Close(ctx context.Context) error
 }

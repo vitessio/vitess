@@ -60,6 +60,8 @@ type gRPCQueryClient struct {
 	c  queryservicepb.QueryClient
 }
 
+var _ queryservice.QueryService = (*gRPCQueryClient)(nil)
+
 // DialTablet creates and initializes gRPCQueryClient.
 func DialTablet(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 	// create the RPC client
@@ -725,6 +727,36 @@ func (conn *gRPCQueryClient) VStreamResults(ctx context.Context, target *querypb
 
 // HandlePanic is a no-op.
 func (conn *gRPCQueryClient) HandlePanic(err *error) {
+}
+
+//ReserveBeginExecute implements the queryservice interface
+func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return nil, 0, 0, nil, tabletconn.ConnClosed
+	}
+
+	req := &querypb.ReserveBeginExecuteRequest{
+		Target:            target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Options:           options,
+		PreQueries:        preQueries,
+		Query: &querypb.BoundQuery{
+			Sql:           sql,
+			BindVariables: bindVariables,
+		},
+	}
+	reply, err := conn.c.ReserveBeginExecute(ctx, req)
+	if err != nil {
+		return nil, 0, 0, nil, tabletconn.ErrorFromGRPC(err)
+	}
+	if reply.Error != nil {
+		return nil, reply.TransactionId, reply.ReservedId, conn.tablet.Alias, tabletconn.ErrorFromVTRPC(reply.Error)
+	}
+
+	return sqltypes.Proto3ToResult(reply.Result), reply.TransactionId, reply.ReservedId, conn.tablet.Alias, nil
 }
 
 // Close closes underlying gRPC channel.

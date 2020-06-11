@@ -545,3 +545,64 @@ func (te *TxEngine) startWatchdog() {
 func (te *TxEngine) stopWatchdog() {
 	te.ticks.Stop()
 }
+
+//ReserveBegin creates a reserved connection, and in it opens a transaction
+func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (int64, error) {
+	conn, err := te.reserve(ctx, options, preQueries)
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Unlock()
+	_, err = te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn)
+	if err != nil {
+		conn.Close()
+		conn.Release(tx.ConnInitFail)
+		return 0, err
+	}
+	return conn.ID(), nil
+}
+
+//Reserve creates a reserved connection and returns the id to it
+func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (int64, error) {
+	conn, err := te.reserve(ctx, options, preQueries)
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Unlock()
+	return conn.ID(), nil
+}
+
+//Reserve creates a reserved connection and returns the id to it
+func (te *TxEngine) reserve(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (*StatefulConnection, error) {
+	span, ctx := trace.NewSpan(ctx, "TxEngine.Reserve")
+	defer span.Finish()
+	te.stateLock.Lock()
+
+	canOpenTransactions := te.state == AcceptingReadOnly || te.state == AcceptingReadAndWrite
+	if !canOpenTransactions {
+		// We are not in a state where we can start new transactions. Abort.
+		te.stateLock.Unlock()
+		return nil, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "tx engine can't accept new transactions in state %v", te.state)
+	}
+	// By Add() to beginRequests, we block others from initiating state
+	// changes until we have finished adding this transaction
+	te.beginRequests.Add(1)
+	defer te.beginRequests.Done()
+
+	te.stateLock.Unlock()
+
+	conn, err := te.txPool.scp.NewConn(ctx, options)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, query := range preQueries {
+		_, err = conn.Exec(ctx, query, 0 /*maxrows*/, false /*wantFields*/)
+		if err != nil {
+			conn.Releasef("error during connection setup: %s\n%v", query, err)
+			return nil, err
+		}
+	}
+
+	return conn, err
+}

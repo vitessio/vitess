@@ -1429,7 +1429,7 @@ func TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction(t *testing.T) {
 		results, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{{
 			Sql:           q1,
 			BindVariables: bvTx1,
-		}}, true /*asTransaction*/, 0 /*transactionID*/, nil /*options*/)
+		}}, true /*asTransaction*/, 0 /*connID*/, nil /*options*/)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
@@ -1447,7 +1447,7 @@ func TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction(t *testing.T) {
 		results, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{{
 			Sql:           q2,
 			BindVariables: bvTx2,
-		}}, true /*asTransaction*/, 0 /*transactionID*/, nil /*options*/)
+		}}, true /*asTransaction*/, 0 /*connID*/, nil /*options*/)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q2, err)
 		}
@@ -1465,7 +1465,7 @@ func TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction(t *testing.T) {
 		results, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{{
 			Sql:           q3,
 			BindVariables: bvTx3,
-		}}, true /*asTransaction*/, 0 /*transactionID*/, nil /*options*/)
+		}}, true /*asTransaction*/, 0 /*connID*/, nil /*options*/)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}
@@ -1765,7 +1765,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests_ExecuteBatchAsTrans
 		results, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{{
 			Sql:           q1,
 			BindVariables: bvTx1,
-		}}, true /*asTransaction*/, 0 /*transactionID*/, nil /*options*/)
+		}}, true /*asTransaction*/, 0 /*connID*/, nil /*options*/)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
@@ -1784,7 +1784,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests_ExecuteBatchAsTrans
 		results, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{{
 			Sql:           q2,
 			BindVariables: bvTx2,
-		}}, true /*asTransaction*/, 0 /*transactionID*/, nil /*options*/)
+		}}, true /*asTransaction*/, 0 /*connID*/, nil /*options*/)
 		if err == nil || vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED || err.Error() != "hot row protection: too many queued transactions (1 >= 1) for the same row (table + WHERE clause: 'test_table where pk = 1 and name = 1')" {
 			t.Errorf("tx2 should have failed because there are too many pending requests: %v results: %+v", err, results)
 		}
@@ -2367,6 +2367,29 @@ func TestConfigChanges(t *testing.T) {
 	if val := int(tsv.qe.warnResultSize.Get()); val != newSize {
 		t.Errorf("tsv.qe.warnResultSize.Get: %d, want %d", val, newSize)
 	}
+}
+
+func TestReserveBeginExecute(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	require.NoError(t, err)
+	defer tsv.StopService()
+
+	_, txID, connID, _, err := tsv.ReserveBeginExecute(ctx, &target, "select 42", []string{"select 43"}, nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	assert.Greater(t, txID, 0, "txID")
+	assert.Equal(t, connID, txID, "connID should equal txID")
+	expected := []string{
+		"select 43",
+		"begin",
+		"select 42",
+	}
+	assert.Contains(t, expected, db.QueryLog(), "expected queries to run")
 }
 
 func setUpTabletServerTest(t *testing.T) *fakesqldb.DB {
