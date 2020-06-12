@@ -2382,12 +2382,38 @@ func TestReserveBeginExecute(t *testing.T) {
 
 	_, txID, connID, _, err := tsv.ReserveBeginExecute(ctx, &target, "select 42", []string{"select 43"}, nil, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
-	assert.Greater(t, txID, 0, "txID")
+	// TODO defer a call to tsv.ReserveRelease here
+	assert.Greater(t, txID, int64(0), "txID")
 	assert.Equal(t, connID, txID, "connID should equal txID")
 	expected := []string{
 		"select 43",
 		"begin",
-		"select 42",
+		"select 42 from dual where 1 != 1",
+		"select 42 from dual limit 10001",
+	}
+	assert.Contains(t, expected, db.QueryLog(), "expected queries to run")
+}
+
+func TestReserveExecute(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	require.NoError(t, err)
+	defer tsv.StopService()
+
+	_, txID, connID, _, err := tsv.ReserveExecute(ctx, &target, "select 42", []string{"select 43"}, nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	// TODO defer a call to tsv.ReserveRelease here
+	assert.Greater(t, txID, int64(0), "txID")
+	assert.Equal(t, connID, txID, "connID should equal txID")
+	expected := []string{
+		"select 43",
+		"select 42 from dual where 1 != 1",
+		"select 42 from dual limit 10001",
 	}
 	assert.Contains(t, expected, db.QueryLog(), "expected queries to run")
 }
@@ -2482,6 +2508,25 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				mysql.ShowPrimaryRow("test_table", "pk"),
 				mysql.ShowPrimaryRow("msg", "id"),
 			},
+		},
+		// queries for TestReserve*
+		"select 42 from dual where 1 != 1": {
+			Fields: []*querypb.Field{{
+				Name: "42",
+				Type: sqltypes.Int32,
+			}},
+		},
+		"select 42 from dual limit 10001": {
+			Fields: []*querypb.Field{{
+				Name: "42",
+				Type: sqltypes.Int32,
+			}},
+		},
+		"select 43": {
+			Fields: []*querypb.Field{{
+				Name: "43",
+				Type: sqltypes.Int32,
+			}},
 		},
 		"select * from test_table where 1 != 1": {
 			Fields: []*querypb.Field{{
