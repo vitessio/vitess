@@ -27,7 +27,8 @@ func TestExtractMapFromString(t *testing.T) {
 	expected := make(opentracing.TextMapCarrier)
 	expected["apa"] = "12"
 	expected["banan"] = "x-tracing-backend-12"
-	result, err := extractMapFromString("apa=12,banan=x-tracing-backend-12")
+	expected["uber-trace-id"] = "123:456:789:1"
+	result, err := extractMapFromString("apa=12,banan=x-tracing-backend-12,uber-trace-id=123:456:789:1")
 	assert.NoError(t, err)
 	assert.Equal(t, expected, result)
 }
