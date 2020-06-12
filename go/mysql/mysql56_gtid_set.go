@@ -444,7 +444,7 @@ func (set Mysql56GTIDSet) Difference(other GTIDSet) GTIDSet {
 		return set
 	}
 
-	// Make a copy and add the new GTID in the proper place.
+	// Make a fresh, empty set to hold the new value.
 	// This function is not supposed to modify the original set.
 	differenceSet := make(Mysql56GTIDSet)
 
@@ -456,7 +456,7 @@ func (set Mysql56GTIDSet) Difference(other GTIDSet) GTIDSet {
 			continue
 		}
 
-		// Found server id match between sets, so now we need to add each interval.
+		// Found server id match between sets, so now we need to subtract each interval.
 		s1 := intervals
 		s2 := otherIntervals
 		var diffIntervals []interval
@@ -468,7 +468,7 @@ func (set Mysql56GTIDSet) Difference(other GTIDSet) GTIDSet {
 			}
 			iv := &diffIntervals[len(diffIntervals)-1]
 
-			// Populate from other set.
+			// Subract next interval from other set.
 			otherInterval := s2[0]
 			s2 = s2[1:]
 
