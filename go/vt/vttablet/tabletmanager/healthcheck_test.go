@@ -742,7 +742,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	}
 
 	// Consume the health broadcast (no replication delay as we are master)
-	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "", 0); err != nil {
+	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "", 12); err != nil {
 		t.Fatal(err)
 	}
 	if err := expectStateChange(agent.QueryServiceControl, true, topodatapb.TabletType_MASTER); err != nil {

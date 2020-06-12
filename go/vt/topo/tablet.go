@@ -214,11 +214,6 @@ func (ti *TabletInfo) GetMasterTermStartTime() time.Time {
 	return logutil.ProtoToTime(ti.Tablet.MasterTermStartTime)
 }
 
-// SetMasterTermStartTime sets the tablet's master term start time as a Time value.
-func (ti *TabletInfo) SetMasterTermStartTime(t time.Time) {
-	ti.Tablet.MasterTermStartTime = logutil.TimeToProto(t)
-}
-
 // NewTabletInfo returns a TabletInfo basing on tablet with the
 // version set. This function should be only used by Server
 // implementations.
