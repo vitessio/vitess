@@ -1379,6 +1379,28 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 	return result, connID, connID, &tsv.alias, err
 }
 
+//ReserveExecute implements the QueryService interface
+func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
+	if tsv.enableHotRowProtection {
+		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
+		if err != nil {
+			return nil, 0, 0, nil, err
+		}
+		if txDone != nil {
+			defer txDone()
+		}
+	}
+
+	connID, err := tsv.te.Reserve(ctx, options, preQueries)
+	if err != nil {
+		return nil, 0, 0, nil, err
+	}
+
+	// TODO
+	result, err := tsv.Execute(ctx, target, sql, bindVariables, connID, options)
+	return result, connID, connID, &tsv.alias, err
+}
+
 // execRequest performs verifications, sets up the necessary environments
 // and calls the supplied function for executing the request.
 func (tsv *TabletServer) execRequest(
