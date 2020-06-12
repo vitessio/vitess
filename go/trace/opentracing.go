@@ -87,7 +87,7 @@ func (jf openTracingService) New(parent Span, label string) Span {
 
 func extractMapFromString(in string) (opentracing.TextMapCarrier, error) {
 	m := make(opentracing.TextMapCarrier)
-	items := strings.Split(in, ":")
+	items := strings.Split(in, ",")
 	if len(items) < 2 {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "expected transmitted context to contain at least span id and trace id")
 	}

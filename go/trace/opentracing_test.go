@@ -27,7 +27,7 @@ func TestExtractMapFromString(t *testing.T) {
 	expected := make(opentracing.TextMapCarrier)
 	expected["apa"] = "12"
 	expected["banan"] = "x-tracing-backend-12"
-	result, err := extractMapFromString("apa=12:banan=x-tracing-backend-12")
+	result, err := extractMapFromString("apa=12,banan=x-tracing-backend-12")
 	assert.NoError(t, err)
 	assert.Equal(t, expected, result)
 }
@@ -36,6 +36,6 @@ func TestErrorConditions(t *testing.T) {
 	_, err := extractMapFromString("")
 	assert.Error(t, err)
 
-	_, err = extractMapFromString("key=value:keywithnovalue")
+	_, err = extractMapFromString("key=value,keywithnovalue")
 	assert.Error(t, err)
 }
