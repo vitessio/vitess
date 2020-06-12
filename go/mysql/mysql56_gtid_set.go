@@ -435,12 +435,8 @@ func (set Mysql56GTIDSet) SIDBlock() []byte {
 	return buf.Bytes()
 }
 
-func (set Mysql56GTIDSet) Difference(other GTIDSet) GTIDSet {
+func (set Mysql56GTIDSet) Difference(other Mysql56GTIDSet) Mysql56GTIDSet {
 	if other == nil {
-		return set
-	}
-	mydbOther, ok := other.(Mysql56GTIDSet)
-	if !ok {
 		return set
 	}
 
@@ -449,7 +445,7 @@ func (set Mysql56GTIDSet) Difference(other GTIDSet) GTIDSet {
 	differenceSet := make(Mysql56GTIDSet)
 
 	for sid, intervals := range set {
-		otherIntervals, ok := mydbOther[sid]
+		otherIntervals, ok := other[sid]
 		if !ok {
 			// We didn't find SID in other set, so diff should include all intervals for sid unique to receiver.
 			differenceSet[sid] = intervals
