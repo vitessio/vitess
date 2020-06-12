@@ -80,20 +80,15 @@ func (agent *ActionAgent) changeTypeLocked(ctx context.Context, tabletType topod
 	// If we have been told we're master, set master term start time to Now
 	// and save it topo immediately.
 	if tabletType == topodatapb.TabletType_MASTER {
-		agentMasterTermStartTime := time.Now()
-		tablet.MasterTermStartTime = logutil.TimeToProto(agentMasterTermStartTime)
+		tablet.MasterTermStartTime = logutil.TimeToProto(time.Now())
 
 		// change our type in the topology, and set masterTermStartTime on tablet record if applicable
 		_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType, tablet.MasterTermStartTime)
 		if err != nil {
 			return err
 		}
-		// We only update agent's masterTermStartTime if we were able to update the topo.
-		// This ensures that in case of a failure, we are never in a situation where the
-		// tablet's timestamp is ahead of the topo's timestamp.
-		agent.setMasterTermStartTime(agentMasterTermStartTime)
 	} else {
-		agent.setMasterTermStartTime(time.Time{})
+		tablet.MasterTermStartTime = nil
 	}
 
 	// updateState will invoke broadcastHealth if needed.
