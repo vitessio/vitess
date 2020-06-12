@@ -336,8 +336,8 @@ func TestQueryServiceNotStarting(t *testing.T) {
 	if agent.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should not be running")
 	}
-	if agent.UpdateStream.IsEnabled() {
-		t.Errorf("UpdateStream should not be running")
+	if !agent.UpdateStream.IsEnabled() {
+		t.Errorf("UpdateStream should be running")
 	}
 
 	// There is no broadcast data to consume, we're just not
