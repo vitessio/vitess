@@ -457,63 +457,98 @@ func (set Mysql56GTIDSet) Difference(other GTIDSet) GTIDSet {
 		}
 
 		// Found server id match between sets, so now we need to subtract each interval.
+		var diffIntervals []interval
+		if len(intervals) == 0 {
+			continue
+		}
+		if len(otherIntervals) == 0 {
+			differenceSet[sid] = intervals
+			continue
+		}
 		s1 := intervals
 		s2 := otherIntervals
-		var diffIntervals []interval
 
-		for len(s1) != 0 && len(s2) != 0 {
-			if len(diffIntervals) == 0 {
+		iv := s1[0]
+		diffIntervals = append(diffIntervals, iv)
+		s1 = s1[1:]
+		otherInterval := s2[0]
+		s2 = s2[1:]
+
+		for {
+			iv = diffIntervals[len(diffIntervals)-1]
+
+			// [1, 2] - [3, 4] -> need to advance to next for s1.
+			if iv.end < otherInterval.start {
+				// Need to skip to next s1 interval. This one is completely before otherInterval even starts. It's a diff in whole.
+				if len(s1) == 0 {
+					break
+				}
 				diffIntervals = append(diffIntervals, s1[0])
 				s1 = s1[1:]
-			}
-			iv := &diffIntervals[len(diffIntervals)-1]
-
-			// Subract next interval from other set.
-			otherInterval := s2[0]
-			s2 = s2[1:]
-
-			for iv.end < otherInterval.start {
-				// need to skip to next s1 interval. This one is completely before otherInterval even starts. It's a diff in whole.
-				if len(s1) != 0 {
-					diffIntervals = append(diffIntervals, s1[0])
-					s1 = s1[1:]
-					iv = &diffIntervals[len(diffIntervals)-1]
-				}
-			}
-
-			if iv.start >= otherInterval.start && iv.end <= otherInterval.end {
-				// If interval is wholly contained in other interval, there's no diff. remove from diffIntervals and let's try again.
-				diffIntervals = diffIntervals[1:]
-				if len(s1) != 0 {
-					diffIntervals = append(diffIntervals, s1[0])
-					s1 = s1[1:]
-				}
 				continue
 			}
 
+			// [3, 4] - [1, 2] -> need to advance s2.
 			if iv.start > otherInterval.end {
 				// Interval is completely past other interval. We need a valid other to compare against.
+				if len(s2) == 0 {
+					break
+				}
+				otherInterval = s2[0]
+				s2 = s2[1:]
 				continue
 			}
 
-			if iv.start >= otherInterval.start && iv.start <= otherInterval.end && iv.end > otherInterval.end {
-				// If interval start is within the bounds of otherInterval, and interval end is past otherInterval end, then we should remove the current diff,
-				// because a new interval for the end chunk will get added later in this loop iteration. From iv.start up to otherInterval.start can just be thrown away in this case.
-				// We still keep iv around so we can assess the extra end diff later.
+			// [2, 3] - [1, 4]
+			if iv.start >= otherInterval.start && iv.end <= otherInterval.end {
+				// Interval is completed contained. Pop off diffIntervals, and advance to next s1.
 				diffIntervals = diffIntervals[:len(diffIntervals)-1]
+				if len(s1) == 0 {
+					break
+				}
+				diffIntervals = append(diffIntervals, s1[0])
+				s1 = s1[1:]
+				continue
 			}
 
+			if iv.end >= otherInterval.start {
+				// [1, 3] - [2, 5]
+				if iv.start < otherInterval.start {
+					// So we can update the latest interval in diffIntervals to have it's end stop one before otherInterval.start.
+					diffIntervals[len(diffIntervals)-1].end = otherInterval.start - 1
+				} else {
+					// [2, 4] - [1, 4]
+
+					// We should pop diffIntervals. We will still add an end interval below,
+					// if necessary.
+					diffIntervals = diffIntervals[:len(diffIntervals)-1]
+				}
+			}
+
+			// [2, 5] - [1, 4]
 			if iv.end > otherInterval.end {
-				// End is strictly greater. In this case we need to create an extra diff interval. We'll deal any necessary trimming of it next round.
+				// End is strictly greater. In this case we need to create an extra diff interval. We'll deal with any necessary trimming of it next round.
 				diffIntervals = append(diffIntervals, interval{start: otherInterval.end + 1, end: iv.end})
-			}
 
-			if iv.start < otherInterval.start && iv.end >= otherInterval.start {
-				// In this case we have already handled the case of needing to add an extra interval for an end chunk above, so we can safely
-				// scale back the end on iv to match up.
-				iv.end = otherInterval.start - 1
+				// We need to pop s2 at this point. s1's new interval is fully past otherInterval, so no point in comparing
+				// this one next round.
+				if len(s2) == 0 {
+					break
+				}
+				otherInterval = s2[0]
+				s2 = s2[1:]
+				continue
+			} else {
+				// In this case we are done comparing the newest interval and don't have a new interval (end piece)
+				// to add to diffIntervals that needs to be compared next round. We will instead grab the next s1 for
+				// comparisons next round.
+				if len(s1) == 0 {
+					break
+				}
+				diffIntervals = append(diffIntervals, s1[0])
+				s1 = s1[1:]
+				continue
 			}
-
 		}
 
 		if len(s1) != 0 {
