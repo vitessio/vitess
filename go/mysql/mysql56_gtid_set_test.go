@@ -450,10 +450,12 @@ func TestMysql56GTIDSetDifference(t *testing.T) {
 	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
 	sid3 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17}
+	sid4 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 18}
 
 	set1 := Mysql56GTIDSet{
 		sid1: []interval{{20, 30}, {35, 39}, {40, 53}, {55, 75}},
 		sid2: []interval{{1, 7}, {20, 50}, {60, 70}},
+		sid4: []interval{{1, 30}},
 	}
 
 	set2 := Mysql56GTIDSet{
@@ -467,6 +469,7 @@ func TestMysql56GTIDSetDifference(t *testing.T) {
 	want := Mysql56GTIDSet{
 		sid1: []interval{{38, 39}, {40, 49}, {61, 75}},
 		sid2: []interval{{1, 2}, {6, 7}, {20, 21}, {26, 31}, {38, 50}, {60, 66}},
+		sid4: []interval{{1, 30}},
 	}
 
 	if !got.Equal(want) {
