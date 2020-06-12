@@ -39,7 +39,7 @@ type BindVarNeeds struct {
 	NeedDatabase             bool
 	NeedFoundRows            bool
 	NeedRowCount             bool
-	NeedUserDefinedVariables bool
+	NeedUserDefinedVariables []string
 }
 
 // RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries
@@ -58,22 +58,20 @@ func RewriteAST(in Statement) (*RewriteASTResult, error) {
 	r := &RewriteASTResult{
 		AST: out,
 	}
-	if _, ok := er.bindVars[LastInsertIDName]; ok {
-		r.NeedLastInsertID = true
+	for k := range er.bindVars {
+		switch k {
+		case LastInsertIDName:
+			r.NeedLastInsertID = true
+		case DBVarName:
+			r.NeedDatabase = true
+		case FoundRowsName:
+			r.NeedFoundRows = true
+		case RowCountName:
+			r.NeedRowCount = true
+		default:
+			r.NeedUserDefinedVariables = append(r.NeedUserDefinedVariables, k)
+		}
 	}
-	if _, ok := er.bindVars[DBVarName]; ok {
-		r.NeedDatabase = true
-	}
-	if _, ok := er.bindVars[FoundRowsName]; ok {
-		r.NeedFoundRows = true
-	}
-	if _, ok := er.bindVars[RowCountName]; ok {
-		r.NeedRowCount = true
-	}
-	if _, ok := er.bindVars[UserDefinedVariableName]; ok {
-		r.NeedUserDefinedVariables = true
-	}
-
 	return r, nil
 }
 
@@ -159,8 +157,9 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 		er.funcRewrite(cursor, node)
 	case *ColName:
 		if node.Name.at == SingleAt {
-			cursor.Replace(bindVarExpression(UserDefinedVariableName + strings.ToLower(node.Name.CompliantName())))
-			er.needBindVarFor(UserDefinedVariableName)
+			udv := strings.ToLower(node.Name.CompliantName())
+			cursor.Replace(bindVarExpression(UserDefinedVariableName + udv))
+			er.needBindVarFor(udv)
 		}
 	}
 	return true

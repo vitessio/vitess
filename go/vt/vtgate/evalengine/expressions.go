@@ -287,6 +287,8 @@ func evaluateByType(val *querypb.BindVariable) (EvalResult, error) {
 		return evalResult{typ: sqltypes.Float64, fval: fval}, nil
 	case sqltypes.VarChar, sqltypes.Text, sqltypes.VarBinary:
 		return evalResult{typ: sqltypes.VarBinary, bytes: val.Value}, nil
+	case sqltypes.Null:
+		return evalResult{typ: sqltypes.Null}, nil
 	}
 	return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %s", val.Type.String())
 }
