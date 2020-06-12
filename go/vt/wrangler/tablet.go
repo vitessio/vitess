@@ -235,7 +235,7 @@ func (wr *Wrangler) isMasterTablet(ctx context.Context, ti *topo.TabletInfo) (bo
 	}
 	// Shard record has another tablet as master, so check MasterTermStartTime
 	// If tablet record's MasterTermStartTime is later than the one in the shard record, then tablet is master
-	tabletMTST := logutil.ProtoToTime(ti.MasterTermStartTime)
-	shardMTST := logutil.ProtoToTime(si.MasterTermStartTime)
+	tabletMTST := ti.GetMasterTermStartTime()
+	shardMTST := si.GetMasterTermStartTime()
 	return tabletMTST.After(shardMTST), nil
 }

@@ -284,25 +284,11 @@ func (agent *ActionAgent) notifyShardSync() {
 	}
 }
 
-// setMasterTermStartTime remembers the time when our term as master began.
-//
-// If another tablet claims to be master and offers a more recent time,
-// that tablet will be trusted over us.
-func (agent *ActionAgent) setMasterTermStartTime(t time.Time) {
-	agent.mutex.Lock()
-	agent._masterTermStartTime = t
-	// Reset replication delay ony if we're the master.
-	if !t.IsZero() {
-		agent._replicationDelay = 0
-	}
-	agent.mutex.Unlock()
-
-	// Notify the shard sync loop that the tablet state changed.
-	agent.notifyShardSync()
-}
-
 func (agent *ActionAgent) masterTermStartTime() time.Time {
-	agent.mutex.Lock()
-	defer agent.mutex.Unlock()
-	return agent._masterTermStartTime
+	agent.pubMu.Lock()
+	defer agent.pubMu.Unlock()
+	if agent.tablet == nil {
+		return time.Time{}
+	}
+	return logutil.ProtoToTime(agent.tablet.MasterTermStartTime)
 }

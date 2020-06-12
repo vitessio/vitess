@@ -530,14 +530,14 @@ func listTabletsByShard(ctx context.Context, wr *wrangler.Wrangler, keyspace, sh
 	var trueMasterTimestamp time.Time
 	for _, ti := range tabletMap {
 		if ti.Type == topodatapb.TabletType_MASTER {
-			masterTimestamp := logutil.ProtoToTime(ti.MasterTermStartTime)
+			masterTimestamp := ti.GetMasterTermStartTime()
 			if masterTimestamp.After(trueMasterTimestamp) {
 				trueMasterTimestamp = masterTimestamp
 			}
 		}
 	}
 	for _, ti := range tabletMap {
-		masterTimestamp := logutil.ProtoToTime(ti.MasterTermStartTime)
+		masterTimestamp := ti.GetMasterTermStartTime()
 		if ti.Type == topodatapb.TabletType_MASTER && masterTimestamp.Before(trueMasterTimestamp) {
 			ti.Type = topodatapb.TabletType_UNKNOWN
 		}
@@ -557,7 +557,7 @@ func dumpAllTablets(ctx context.Context, wr *wrangler.Wrangler, cell string) err
 	trueMasterTimestamps := findTrueMasterTimestamps(tablets)
 	for _, ti := range tablets {
 		key := ti.Keyspace + "." + ti.Shard
-		masterTimestamp := logutil.ProtoToTime(ti.MasterTermStartTime)
+		masterTimestamp := ti.GetMasterTermStartTime()
 		if ti.Type == topodatapb.TabletType_MASTER && masterTimestamp.Before(trueMasterTimestamps[key]) {
 			ti.Type = topodatapb.TabletType_UNKNOWN
 		}
@@ -571,10 +571,10 @@ func findTrueMasterTimestamps(tablets []*topo.TabletInfo) map[string]time.Time {
 	for _, ti := range tablets {
 		key := ti.Keyspace + "." + ti.Shard
 		if v, ok := result[key]; !ok {
-			result[key] = logutil.ProtoToTime(ti.MasterTermStartTime)
+			result[key] = ti.GetMasterTermStartTime()
 		} else {
-			if logutil.ProtoToTime(ti.MasterTermStartTime).After(v) {
-				result[key] = logutil.ProtoToTime(ti.MasterTermStartTime)
+			if ti.GetMasterTermStartTime().After(v) {
+				result[key] = ti.GetMasterTermStartTime()
 			}
 		}
 	}

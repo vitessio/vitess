@@ -104,7 +104,6 @@ func (agent *ActionAgent) broadcastHealth() {
 	agent.mutex.Lock()
 	replicationDelay := agent._replicationDelay
 	healthError := agent._healthy
-	terTime := agent._masterTermStartTime
 	healthyTime := agent._healthyTime
 	agent.mutex.Unlock()
 
@@ -124,6 +123,7 @@ func (agent *ActionAgent) broadcastHealth() {
 		}
 	}
 	var ts int64
+	terTime := agent.masterTermStartTime()
 	if !terTime.IsZero() {
 		ts = terTime.Unix()
 	}
@@ -167,17 +167,6 @@ func (agent *ActionAgent) updateState(ctx context.Context, newTablet *topodatapb
 
 // changeCallback is run after every action that might
 // have changed something in the tablet record or in the topology.
-//
-// It owns making changes to the BinlogPlayerMap. The input for this is the
-// tablet type (has to be master), and the shard's SourceShards.
-//
-// It owns updating the blacklisted tables.
-//
-// It owns updating the stats record for 'TabletType'.
-//
-// It owns starting and stopping the update stream service.
-//
-// It owns reading the TabletControl for the current tablet, and storing it.
 func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTablet *topodatapb.Tablet) {
 	agent.checkLock()
 
