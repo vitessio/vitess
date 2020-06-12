@@ -200,9 +200,6 @@ type ActionAgent struct {
 	// replication delay the last time we got it
 	_replicationDelay time.Duration
 
-	// _masterTermStartTime is the time at which our term as master began.
-	_masterTermStartTime time.Time
-
 	// _ignoreHealthErrorExpr can be set by RPC to selectively disable certain
 	// healthcheck errors. It should only be accessed while holding actionMutex.
 	_ignoreHealthErrorExpr *regexp.Regexp
@@ -828,7 +825,6 @@ func (agent *ActionAgent) checkMastership(ctx context.Context) error {
 			return vterrors.Wrap(err, "InitTablet failed to read existing tablet record")
 		}
 	}
-	agent.setMasterTermStartTime(logutil.ProtoToTime(agent.Tablet().MasterTermStartTime))
 	return nil
 }
 
