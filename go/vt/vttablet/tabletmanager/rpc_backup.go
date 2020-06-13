@@ -35,7 +35,7 @@ const (
 )
 
 // Backup takes a db backup and sends it to the BackupStorage
-func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowMaster bool) error {
+func (agent *TabletManager) Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowMaster bool) error {
 	if agent.Cnf == nil {
 		return fmt.Errorf("cannot perform backup without my.cnf, please restart vttablet with a my.cnf file specified")
 	}
@@ -129,7 +129,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 }
 
 // RestoreFromBackup deletes all local data and restores anew from the latest backup.
-func (agent *ActionAgent) RestoreFromBackup(ctx context.Context, logger logutil.Logger) error {
+func (agent *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.Logger) error {
 	if err := agent.lock(ctx); err != nil {
 		return err
 	}
@@ -155,7 +155,7 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context, logger logutil.
 	return err
 }
 
-func (agent *ActionAgent) beginBackup(backupMode string) error {
+func (agent *TabletManager) beginBackup(backupMode string) error {
 	agent.mutex.Lock()
 	defer agent.mutex.Unlock()
 	if agent._isBackupRunning {
@@ -171,7 +171,7 @@ func (agent *ActionAgent) beginBackup(backupMode string) error {
 	return nil
 }
 
-func (agent *ActionAgent) endBackup(backupMode string) {
+func (agent *TabletManager) endBackup(backupMode string) {
 	// now we set _isBackupRunning back to false
 	// have to take the mutex lock before writing to _ fields
 	agent.mutex.Lock()

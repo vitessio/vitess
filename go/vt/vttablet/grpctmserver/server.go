@@ -482,7 +482,7 @@ func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBacku
 // registration glue
 
 func init() {
-	tabletmanager.RegisterQueryServices = append(tabletmanager.RegisterQueryServices, func(agent *tabletmanager.ActionAgent) {
+	tabletmanager.RegisterQueryServices = append(tabletmanager.RegisterQueryServices, func(agent *tabletmanager.TabletManager) {
 		if servenv.GRPCCheckServiceMap("tabletmanager") {
 			tabletmanagerservicepb.RegisterTabletManagerServer(servenv.GRPCServer, &server{agent})
 		}
@@ -490,6 +490,6 @@ func init() {
 }
 
 // RegisterForTest will register the RPC, to be used by test instances only
-func RegisterForTest(s *grpc.Server, agent *tabletmanager.ActionAgent) {
+func RegisterForTest(s *grpc.Server, agent *tabletmanager.TabletManager) {
 	tabletmanagerservicepb.RegisterTabletManagerServer(s, &server{agent})
 }

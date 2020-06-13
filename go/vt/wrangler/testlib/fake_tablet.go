@@ -69,7 +69,7 @@ type FakeTablet struct {
 	// The following fields are created when we start the event loop for
 	// the tablet, and closed / cleared when we stop it.
 	// The Listener is used by the gRPC server.
-	Agent    *tabletmanager.ActionAgent
+	Agent    *tabletmanager.TabletManager
 	Listener net.Listener
 
 	// These optional fields are used if the tablet also needs to
@@ -196,7 +196,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 
 	// Create a test agent on that port, and re-read the record
 	// (it has new ports and IP).
-	ft.Agent = tabletmanager.NewTestActionAgent(context.Background(), wr.TopoServer(), ft.Tablet.Alias, vtPort, gRPCPort, ft.FakeMysqlDaemon, nil)
+	ft.Agent = tabletmanager.NewTestTabletManager(context.Background(), wr.TopoServer(), ft.Tablet.Alias, vtPort, gRPCPort, ft.FakeMysqlDaemon, nil)
 	ft.Tablet = ft.Agent.Tablet()
 
 	// Register the gRPC server, and starts listening.

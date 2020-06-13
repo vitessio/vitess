@@ -134,9 +134,9 @@ func ConfigHTML() template.HTML {
 }
 
 // initHealthCheck will start the health check background go routine,
-// and configure the healthcheck shutdown. It is only run by NewActionAgent
+// and configure the healthcheck shutdown. It is only run by NewTabletManager
 // for real vttablet agents (not by tests, nor vtcombo).
-func (agent *ActionAgent) initHealthCheck() {
+func (agent *TabletManager) initHealthCheck() {
 	registerReplicationReporter(agent)
 	registerHeartbeatReporter(agent.QueryServiceControl)
 
@@ -168,7 +168,7 @@ func (agent *ActionAgent) initHealthCheck() {
 //
 // This will not change the TabletControl record, but will use it
 // to see if we should be running the query service.
-func (agent *ActionAgent) runHealthCheck() {
+func (agent *TabletManager) runHealthCheck() {
 	if err := agent.lock(agent.batchCtx); err != nil {
 		log.Warningf("cannot lock actionMutex, not running HealthCheck")
 		return
@@ -178,7 +178,7 @@ func (agent *ActionAgent) runHealthCheck() {
 	agent.runHealthCheckLocked()
 }
 
-func (agent *ActionAgent) runHealthCheckLocked() {
+func (agent *TabletManager) runHealthCheckLocked() {
 	agent.checkLock()
 	// read the current tablet record and tablet control
 	tablet := agent.Tablet()
@@ -295,7 +295,7 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 // terminateHealthChecks is called when we enter lame duck mode.
 // We will clean up our state, and set query service to lame duck mode.
 // We only do something if we are in a serving state, and not a master.
-func (agent *ActionAgent) terminateHealthChecks() {
+func (agent *TabletManager) terminateHealthChecks() {
 	// No need to check for error, only a canceled batchCtx would fail this.
 	agent.lock(agent.batchCtx)
 	defer agent.unlock()

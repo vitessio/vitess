@@ -43,7 +43,7 @@ var (
 	tabletPath                   = flag.String("tablet-path", "", "tablet alias")
 	tabletConfig                 = flag.String("tablet_config", "", "YAML file config for tablet")
 
-	agent *tabletmanager.ActionAgent
+	agent *tabletmanager.TabletManager
 )
 
 func init() {
@@ -142,9 +142,9 @@ func main() {
 	if servenv.GRPCPort != nil {
 		gRPCPort = int32(*servenv.GRPCPort)
 	}
-	agent, err = tabletmanager.NewActionAgent(context.Background(), ts, mysqld, qsc, tabletAlias, config, mycnf, int32(*servenv.Port), gRPCPort)
+	agent, err = tabletmanager.NewTabletManager(context.Background(), ts, mysqld, qsc, tabletAlias, config, mycnf, int32(*servenv.Port), gRPCPort)
 	if err != nil {
-		log.Exitf("NewActionAgent() failed: %v", err)
+		log.Exitf("NewTabletManager() failed: %v", err)
 	}
 
 	servenv.OnClose(func() {

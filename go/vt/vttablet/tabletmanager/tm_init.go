@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 /*
-Package tabletmanager exports the ActionAgent object. It keeps the local tablet
+Package tabletmanager exports the TabletManager object. It keeps the local tablet
 state, starts / stops all associated services (query service,
 update stream, binlog players, ...), and handles tabletmanager RPCs
 to update the state.
@@ -117,8 +117,8 @@ func init() {
 	statsBackupIsRunning = stats.NewGaugesWithMultiLabels("BackupIsRunning", "Whether a backup is running", []string{"mode"})
 }
 
-// ActionAgent is the main class for the agent.
-type ActionAgent struct {
+// TabletManager is the main class for the agent.
+type TabletManager struct {
 	// The following fields are set during creation
 	QueryServiceControl tabletserver.Controller
 	UpdateStream        binlog.UpdateStreamControl
@@ -154,7 +154,7 @@ type ActionAgent struct {
 
 	// orc is an optional client for Orchestrator HTTP API calls.
 	// If this is nil, those calls will be skipped.
-	// It's only set once in NewActionAgent() and never modified after that.
+	// It's only set once in NewTabletManager() and never modified after that.
 	orc *orcClient
 
 	// mutex protects all the following fields (that start with '_'),
@@ -220,12 +220,12 @@ type ActionAgent struct {
 	isPublishing bool
 }
 
-// NewActionAgent creates a new ActionAgent and registers all the
+// NewTabletManager creates a new TabletManager and registers all the
 // associated services.
 //
 // batchCtx is the context that the agent will use for any background tasks
 // it spawns.
-func NewActionAgent(
+func NewTabletManager(
 	batchCtx context.Context,
 	ts *topo.Server,
 	mysqld mysqlctl.MysqlDaemon,
@@ -234,7 +234,7 @@ func NewActionAgent(
 	config *tabletenv.TabletConfig,
 	mycnf *mysqlctl.Mycnf,
 	port, gRPCPort int32,
-) (agent *ActionAgent, err error) {
+) (agent *TabletManager, err error) {
 
 	tablet, err := buildTabletFromInput(tabletAlias, port, gRPCPort)
 	if err != nil {
@@ -242,7 +242,7 @@ func NewActionAgent(
 	}
 	config.DB.DBName = topoproto.TabletDbName(tablet)
 
-	agent = &ActionAgent{
+	agent = &TabletManager{
 		QueryServiceControl: queryServiceControl,
 		HealthReporter:      health.DefaultAggregator,
 		batchCtx:            batchCtx,
@@ -321,16 +321,16 @@ func NewActionAgent(
 	return agent, nil
 }
 
-// NewTestActionAgent creates an agent for test purposes. Only a
+// NewTestTabletManager creates an agent for test purposes. Only a
 // subset of features are supported now, but we'll add more over time.
-func NewTestActionAgent(
+func NewTestTabletManager(
 	batchCtx context.Context,
 	ts *topo.Server,
 	tabletAlias *topodatapb.TabletAlias,
 	vtPort, grpcPort int32,
 	mysqlDaemon mysqlctl.MysqlDaemon,
-	preStart func(*ActionAgent),
-) *ActionAgent {
+	preStart func(*TabletManager),
+) *TabletManager {
 
 	ti, err := ts.GetTablet(batchCtx, tabletAlias)
 	if err != nil {
@@ -341,7 +341,7 @@ func NewTestActionAgent(
 		"grpc": grpcPort,
 	}
 
-	agent := &ActionAgent{
+	agent := &TabletManager{
 		QueryServiceControl: tabletservermock.NewController(),
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
 		HealthReporter:      health.DefaultAggregator,
@@ -397,10 +397,10 @@ func NewTestActionAgent(
 	return agent
 }
 
-// NewComboActionAgent creates an agent tailored specifically to run
+// NewComboTabletManager creates an agent tailored specifically to run
 // within the vtcombo binary. It cannot be called concurrently,
 // as it changes the flags.
-func NewComboActionAgent(
+func NewComboTabletManager(
 	batchCtx context.Context,
 	ts *topo.Server,
 	tabletAlias *topodatapb.TabletAlias,
@@ -409,7 +409,7 @@ func NewComboActionAgent(
 	dbcfgs *dbconfigs.DBConfigs,
 	mysqlDaemon mysqlctl.MysqlDaemon,
 	keyspace, shard, dbname, tabletTypeStr string,
-) *ActionAgent {
+) *TabletManager {
 
 	*initDbNameOverride = dbname
 	*initKeyspace = keyspace
@@ -420,7 +420,7 @@ func NewComboActionAgent(
 		panic(err)
 	}
 	dbcfgs.DBName = topoproto.TabletDbName(tablet)
-	agent := &ActionAgent{
+	agent := &TabletManager{
 		QueryServiceControl: queryServiceControl,
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
 		HealthReporter:      health.DefaultAggregator,
@@ -467,7 +467,7 @@ func NewComboActionAgent(
 	return agent
 }
 
-func (agent *ActionAgent) setTablet(tablet *topodatapb.Tablet) {
+func (agent *TabletManager) setTablet(tablet *topodatapb.Tablet) {
 	agent.pubMu.Lock()
 	agent.tablet = proto.Clone(tablet).(*topodatapb.Tablet)
 	agent.pubMu.Unlock()
@@ -476,7 +476,7 @@ func (agent *ActionAgent) setTablet(tablet *topodatapb.Tablet) {
 	agent.notifyShardSync()
 }
 
-func (agent *ActionAgent) updateTablet(update func(tablet *topodatapb.Tablet)) {
+func (agent *TabletManager) updateTablet(update func(tablet *topodatapb.Tablet)) {
 	agent.pubMu.Lock()
 	update(agent.tablet)
 	agent.pubMu.Unlock()
@@ -486,7 +486,7 @@ func (agent *ActionAgent) updateTablet(update func(tablet *topodatapb.Tablet)) {
 }
 
 // Tablet reads the stored Tablet from the agent.
-func (agent *ActionAgent) Tablet() *topodatapb.Tablet {
+func (agent *TabletManager) Tablet() *topodatapb.Tablet {
 	agent.pubMu.Lock()
 	tablet := proto.Clone(agent.tablet).(*topodatapb.Tablet)
 	agent.pubMu.Unlock()
@@ -496,7 +496,7 @@ func (agent *ActionAgent) Tablet() *topodatapb.Tablet {
 // Healthy reads the result of the latest healthcheck, protected by mutex.
 // If that status is too old, it means healthcheck hasn't run for a while,
 // and is probably stuck, this is not good, we're not healthy.
-func (agent *ActionAgent) Healthy() (time.Duration, error) {
+func (agent *TabletManager) Healthy() (time.Duration, error) {
 	agent.mutex.Lock()
 	defer agent.mutex.Unlock()
 
@@ -512,7 +512,7 @@ func (agent *ActionAgent) Healthy() (time.Duration, error) {
 }
 
 // BlacklistedTables returns the list of currently blacklisted tables.
-func (agent *ActionAgent) BlacklistedTables() []string {
+func (agent *TabletManager) BlacklistedTables() []string {
 	agent.mutex.Lock()
 	defer agent.mutex.Unlock()
 	return agent._blacklistedTables
@@ -520,13 +520,13 @@ func (agent *ActionAgent) BlacklistedTables() []string {
 
 // DisallowQueryService returns the reason the query service should be
 // disabled, if any.
-func (agent *ActionAgent) DisallowQueryService() string {
+func (agent *TabletManager) DisallowQueryService() string {
 	agent.mutex.Lock()
 	defer agent.mutex.Unlock()
 	return agent._disallowQueryService
 }
 
-func (agent *ActionAgent) slaveStopped() bool {
+func (agent *TabletManager) slaveStopped() bool {
 	agent.mutex.Lock()
 	defer agent.mutex.Unlock()
 
@@ -548,7 +548,7 @@ func (agent *ActionAgent) slaveStopped() bool {
 	return slaveStopped
 }
 
-func (agent *ActionAgent) setSlaveStopped(slaveStopped bool) {
+func (agent *TabletManager) setSlaveStopped(slaveStopped bool) {
 	agent.mutex.Lock()
 	defer agent.mutex.Unlock()
 
@@ -576,13 +576,13 @@ func (agent *ActionAgent) setSlaveStopped(slaveStopped bool) {
 	}
 }
 
-func (agent *ActionAgent) setServicesDesiredState(disallowQueryService string) {
+func (agent *TabletManager) setServicesDesiredState(disallowQueryService string) {
 	agent.mutex.Lock()
 	agent._disallowQueryService = disallowQueryService
 	agent.mutex.Unlock()
 }
 
-func (agent *ActionAgent) setBlacklistedTables(value []string) {
+func (agent *TabletManager) setBlacklistedTables(value []string) {
 	agent.mutex.Lock()
 	agent._blacklistedTables = value
 	agent.mutex.Unlock()
@@ -591,7 +591,7 @@ func (agent *ActionAgent) setBlacklistedTables(value []string) {
 // Close prepares a tablet for shutdown. First we check our tablet ownership and
 // then prune the tablet topology entry of all post-init fields. This prevents
 // stale identifiers from hanging around in topology.
-func (agent *ActionAgent) Close() {
+func (agent *TabletManager) Close() {
 	// Stop the shard sync loop and wait for it to exit. We do this in Close()
 	// rather than registering it as an OnTerm hook so the shard sync loop keeps
 	// running during lame duck.
@@ -620,7 +620,7 @@ func (agent *ActionAgent) Close() {
 // servenv OnTerm and OnClose hooks to coordinate shutdown automatically,
 // while taking lameduck into account. However, this may be useful for tests,
 // when you want to clean up an agent immediately.
-func (agent *ActionAgent) Stop() {
+func (agent *TabletManager) Stop() {
 	// Stop the shard sync loop and wait for it to exit. This needs to be done
 	// here in addition to in Close() because tests do not call Close().
 	agent.stopShardSync()
@@ -637,7 +637,7 @@ func (agent *ActionAgent) Stop() {
 }
 
 // hookExtraEnv returns the map to pass to local hooks
-func (agent *ActionAgent) hookExtraEnv() map[string]string {
+func (agent *TabletManager) hookExtraEnv() map[string]string {
 	return map[string]string{"TABLET_ALIAS": topoproto.TabletAliasString(agent.TabletAlias)}
 }
 
@@ -646,7 +646,7 @@ func (agent *ActionAgent) hookExtraEnv() map[string]string {
 // no error. We use this at startup with a context timeout set to the
 // value of the init_timeout flag, so we can try to modify the
 // topology over a longer period instead of dying right away.
-func (agent *ActionAgent) withRetry(ctx context.Context, description string, work func() error) error {
+func (agent *TabletManager) withRetry(ctx context.Context, description string, work func() error) error {
 	backoff := 1 * time.Second
 	for {
 		err := work()
@@ -720,7 +720,7 @@ func buildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (
 	}, nil
 }
 
-func (agent *ActionAgent) createKeyspaceShard(ctx context.Context) error {
+func (agent *TabletManager) createKeyspaceShard(ctx context.Context) error {
 	// mutex is needed because we set _shardInfo and _srvKeyspace
 	agent.mutex.Lock()
 	defer agent.mutex.Unlock()
@@ -769,7 +769,7 @@ func (agent *ActionAgent) createKeyspaceShard(ctx context.Context) error {
 	return nil
 }
 
-func (agent *ActionAgent) checkMastership(ctx context.Context) error {
+func (agent *TabletManager) checkMastership(ctx context.Context) error {
 	agent.mutex.Lock()
 	si := agent._shardInfo
 	agent.mutex.Unlock()
@@ -828,7 +828,7 @@ func (agent *ActionAgent) checkMastership(ctx context.Context) error {
 	return nil
 }
 
-func (agent *ActionAgent) checkMysql(ctx context.Context) error {
+func (agent *TabletManager) checkMysql(ctx context.Context) error {
 	if appConfig, _ := agent.DBConfigs.AppWithDB().MysqlParams(); appConfig.Host != "" {
 		agent.updateTablet(func(tablet *topodatapb.Tablet) {
 			tablet.MysqlHostname = appConfig.Host
@@ -852,7 +852,7 @@ func (agent *ActionAgent) checkMysql(ctx context.Context) error {
 	return nil
 }
 
-func (agent *ActionAgent) initTablet(ctx context.Context) error {
+func (agent *TabletManager) initTablet(ctx context.Context) error {
 	tablet := agent.Tablet()
 	err := agent.TopoServer.CreateTablet(ctx, tablet)
 	switch {
@@ -890,7 +890,7 @@ func (agent *ActionAgent) initTablet(ctx context.Context) error {
 	return nil
 }
 
-func (agent *ActionAgent) handleRestore(ctx context.Context) error {
+func (agent *TabletManager) handleRestore(ctx context.Context) error {
 	tablet := agent.Tablet()
 	// Sanity check for inconsistent flags
 	if agent.Cnf == nil && *restoreFromBackup {
@@ -935,7 +935,7 @@ func (agent *ActionAgent) handleRestore(ctx context.Context) error {
 	return nil
 }
 
-func (agent *ActionAgent) exportStats() {
+func (agent *TabletManager) exportStats() {
 	tablet := agent.Tablet()
 	statsKeyspace := stats.NewString("TabletKeyspace")
 	statsShard := stats.NewString("TabletShard")

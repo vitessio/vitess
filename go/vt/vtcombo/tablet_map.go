@@ -65,7 +65,7 @@ type tablet struct {
 
 	// objects built at construction time
 	qsc   tabletserver.Controller
-	agent *tabletmanager.ActionAgent
+	agent *tabletmanager.TabletManager
 }
 
 // tabletMap maps the tablet uid to the tablet record
@@ -86,7 +86,7 @@ func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 	if tabletType == topodatapb.TabletType_MASTER {
 		initTabletType = topodatapb.TabletType_REPLICA
 	}
-	agent := tabletmanager.NewComboActionAgent(ctx, ts, alias, int32(8000+uid), int32(9000+uid), controller, dbcfgs, mysqld, keyspace, shard, dbname, strings.ToLower(initTabletType.String()))
+	agent := tabletmanager.NewComboTabletManager(ctx, ts, alias, int32(8000+uid), int32(9000+uid), controller, dbcfgs, mysqld, keyspace, shard, dbname, strings.ToLower(initTabletType.String()))
 	if tabletType == topodatapb.TabletType_MASTER {
 		if err := agent.ChangeType(ctx, topodatapb.TabletType_MASTER); err != nil {
 			return fmt.Errorf("TabletExternallyReparented failed on master %v: %v", topoproto.TabletAliasString(alias), err)
@@ -200,7 +200,7 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 
 						_, err = conn.ExecuteFetch("CREATE DATABASE IF NOT EXISTS `"+dbname+"`", 1, false)
 						if err != nil {
-							return fmt.Errorf("Error ensuring database exists: %v", err)
+							return fmt.Errorf("error ensuring database exists: %v", err)
 						}
 
 					}
