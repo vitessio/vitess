@@ -196,7 +196,7 @@ func (tm *TabletManager) runHealthCheckLocked() {
 
 	// Remember the health error as healthErr to be sure we don't
 	// accidentally overwrite it with some other err.
-	replicationDelay, healthErr := tm.HealthReporter.Report(isSlaveType, shouldBeServing)
+	replicationDelay, healthErr := tm.healthReporter.Report(isSlaveType, shouldBeServing)
 	if healthErr != nil && ignoreErrorExpr != nil &&
 		ignoreErrorExpr.MatchString(healthErr.Error()) {
 		// we need to ignore this health error

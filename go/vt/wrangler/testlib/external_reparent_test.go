@@ -447,17 +447,13 @@ func TestRPCTabletExternallyReparentedDemotesMasterToConfiguredTabletType(t *tes
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create an old master and a new master
-	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_SPARE, nil)
 	newMaster := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_SPARE, nil)
 
 	oldMaster.StartActionLoop(t, wr)
 	newMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
 	defer newMaster.StopActionLoop(t)
-
-	// For a real TM, this would be initialized from initTabletType.
-	oldMaster.TM.BaseTabletType = topodatapb.TabletType_SPARE
-	newMaster.TM.BaseTabletType = topodatapb.TabletType_SPARE
 
 	// Build keyspace graph
 	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldMaster.Tablet.Keyspace, []string{"cell1"})
