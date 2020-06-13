@@ -60,7 +60,7 @@ var (
 const blacklistQueryRules string = "BlacklistQueryRules"
 
 // loadBlacklistRules loads and builds the blacklist query rules
-func (agent *ActionAgent) loadBlacklistRules(ctx context.Context, tablet *topodatapb.Tablet, blacklistedTables []string) (err error) {
+func (agent *TabletManager) loadBlacklistRules(ctx context.Context, tablet *topodatapb.Tablet, blacklistedTables []string) (err error) {
 	blacklistRules := rules.New()
 	if len(blacklistedTables) > 0 {
 		// tables, first resolve wildcards
@@ -91,7 +91,7 @@ func (agent *ActionAgent) loadBlacklistRules(ctx context.Context, tablet *topoda
 // lameduck changes the QueryServiceControl state to lameduck,
 // brodcasts the new health, then sleep for grace period, to give time
 // to clients to get the new status.
-func (agent *ActionAgent) lameduck(reason string) {
+func (agent *TabletManager) lameduck(reason string) {
 	log.Infof("Agent is entering lameduck, reason: %v", reason)
 	agent.QueryServiceControl.EnterLameduck()
 	agent.broadcastHealth()
@@ -99,7 +99,7 @@ func (agent *ActionAgent) lameduck(reason string) {
 	log.Infof("Agent is leaving lameduck")
 }
 
-func (agent *ActionAgent) broadcastHealth() {
+func (agent *TabletManager) broadcastHealth() {
 	// get the replication delays
 	agent.mutex.Lock()
 	replicationDelay := agent._replicationDelay
@@ -132,11 +132,11 @@ func (agent *ActionAgent) broadcastHealth() {
 
 // refreshTablet needs to be run after an action may have changed the current
 // state of the tablet.
-func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) error {
+func (agent *TabletManager) refreshTablet(ctx context.Context, reason string) error {
 	agent.checkLock()
 	log.Infof("Executing post-action state refresh: %v", reason)
 
-	span, ctx := trace.NewSpan(ctx, "ActionAgent.refreshTablet")
+	span, ctx := trace.NewSpan(ctx, "TabletManager.refreshTablet")
 	span.Annotate("reason", reason)
 	defer span.Finish()
 
@@ -149,7 +149,7 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 
 // updateState will use the provided tablet record as the new tablet state,
 // the current tablet as a base, run changeCallback, and dispatch the event.
-func (agent *ActionAgent) updateState(ctx context.Context, newTablet *topodatapb.Tablet, reason string) {
+func (agent *TabletManager) updateState(ctx context.Context, newTablet *topodatapb.Tablet, reason string) {
 	oldTablet := agent.Tablet()
 	if oldTablet == nil {
 		oldTablet = &topodatapb.Tablet{}
@@ -167,10 +167,10 @@ func (agent *ActionAgent) updateState(ctx context.Context, newTablet *topodatapb
 
 // changeCallback is run after every action that might
 // have changed something in the tablet record or in the topology.
-func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTablet *topodatapb.Tablet) {
+func (agent *TabletManager) changeCallback(ctx context.Context, oldTablet, newTablet *topodatapb.Tablet) {
 	agent.checkLock()
 
-	span, ctx := trace.NewSpan(ctx, "ActionAgent.changeCallback")
+	span, ctx := trace.NewSpan(ctx, "TabletManager.changeCallback")
 	defer span.Finish()
 
 	allowQuery := topo.IsRunningQueryService(newTablet.Type)
@@ -346,7 +346,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	}
 }
 
-func (agent *ActionAgent) publishState(ctx context.Context) {
+func (agent *TabletManager) publishState(ctx context.Context) {
 	agent.pubMu.Lock()
 	defer agent.pubMu.Unlock()
 	log.Infof("Publishing state: %v", agent.tablet)
@@ -373,7 +373,7 @@ func (agent *ActionAgent) publishState(ctx context.Context) {
 	}
 }
 
-func (agent *ActionAgent) retryPublish() {
+func (agent *TabletManager) retryPublish() {
 	agent.pubMu.Lock()
 	defer func() {
 		agent.isPublishing = false
@@ -405,7 +405,7 @@ func (agent *ActionAgent) retryPublish() {
 	}
 }
 
-func (agent *ActionAgent) rebuildKeyspace(keyspace string, retryInterval time.Duration) {
+func (agent *TabletManager) rebuildKeyspace(keyspace string, retryInterval time.Duration) {
 	var srvKeyspace *topodatapb.SrvKeyspace
 	defer func() {
 		log.Infof("Keyspace rebuilt: %v", keyspace)
@@ -440,7 +440,7 @@ func (agent *ActionAgent) rebuildKeyspace(keyspace string, retryInterval time.Du
 	}
 }
 
-func (agent *ActionAgent) findMysqlPort(retryInterval time.Duration) {
+func (agent *TabletManager) findMysqlPort(retryInterval time.Duration) {
 	for {
 		time.Sleep(retryInterval)
 		mport, err := agent.MysqlDaemon.GetMysqlPort()

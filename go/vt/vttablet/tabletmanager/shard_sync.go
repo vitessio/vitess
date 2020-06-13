@@ -48,7 +48,7 @@ var (
 // This goroutine gets woken up for shard record changes by maintaining a
 // topo watch on the shard record. It gets woken up for tablet state changes by
 // a notification signal from setTablet().
-func (agent *ActionAgent) shardSyncLoop(ctx context.Context) {
+func (agent *TabletManager) shardSyncLoop(ctx context.Context) {
 	// Make a copy of the channels so we don't race when stopShardSync() clears them.
 	agent.mutex.Lock()
 	notifyChan := agent._shardSyncChan
@@ -193,7 +193,7 @@ func syncShardMaster(ctx context.Context, ts *topo.Server, tablet *topodatapb.Ta
 //
 // If active reparents are disabled, we don't touch our MySQL.
 // We just directly update our tablet type to REPLICA.
-func (agent *ActionAgent) abortMasterTerm(ctx context.Context, masterAlias *topodatapb.TabletAlias) error {
+func (agent *TabletManager) abortMasterTerm(ctx context.Context, masterAlias *topodatapb.TabletAlias) error {
 	masterAliasStr := topoproto.TabletAliasString(masterAlias)
 	log.Warningf("Another tablet (%v) has won master election. Stepping down to %v.", masterAliasStr, agent.BaseTabletType)
 
@@ -228,7 +228,7 @@ func (agent *ActionAgent) abortMasterTerm(ctx context.Context, masterAlias *topo
 	return nil
 }
 
-func (agent *ActionAgent) startShardSync() {
+func (agent *TabletManager) startShardSync() {
 	// Use a buffer size of 1 so we can remember we need to check the state
 	// even if the receiver is busy. We can drop any additional send attempts
 	// if the buffer is full because all we care about is that the receiver will
@@ -247,7 +247,7 @@ func (agent *ActionAgent) startShardSync() {
 	go agent.shardSyncLoop(ctx)
 }
 
-func (agent *ActionAgent) stopShardSync() {
+func (agent *TabletManager) stopShardSync() {
 	var doneChan <-chan struct{}
 
 	agent.mutex.Lock()
@@ -267,7 +267,7 @@ func (agent *ActionAgent) stopShardSync() {
 	}
 }
 
-func (agent *ActionAgent) notifyShardSync() {
+func (agent *TabletManager) notifyShardSync() {
 	// If this is called before the shard sync is started, do nothing.
 	agent.mutex.Lock()
 	defer agent.mutex.Unlock()
@@ -284,7 +284,7 @@ func (agent *ActionAgent) notifyShardSync() {
 	}
 }
 
-func (agent *ActionAgent) masterTermStartTime() time.Time {
+func (agent *TabletManager) masterTermStartTime() time.Time {
 	agent.pubMu.Lock()
 	defer agent.pubMu.Unlock()
 	if agent.tablet == nil {

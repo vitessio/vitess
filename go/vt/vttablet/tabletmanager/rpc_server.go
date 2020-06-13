@@ -36,7 +36,7 @@ import (
 
 // lock is used at the beginning of an RPC call, to lock the
 // action mutex. It returns ctx.Err() if <-ctx.Done() after the lock.
-func (agent *ActionAgent) lock(ctx context.Context) error {
+func (agent *TabletManager) lock(ctx context.Context) error {
 	agent.actionMutex.Lock()
 	agent.actionMutexLocked = true
 
@@ -53,20 +53,20 @@ func (agent *ActionAgent) lock(ctx context.Context) error {
 }
 
 // unlock is the symmetrical action to lock.
-func (agent *ActionAgent) unlock() {
+func (agent *TabletManager) unlock() {
 	agent.actionMutexLocked = false
 	agent.actionMutex.Unlock()
 }
 
 // checkLock checks we have locked the actionMutex.
-func (agent *ActionAgent) checkLock() {
+func (agent *TabletManager) checkLock() {
 	if !agent.actionMutexLocked {
 		panic("programming error: this action should have taken the actionMutex")
 	}
 }
 
 // HandleRPCPanic is part of the RPCAgent interface.
-func (agent *ActionAgent) HandleRPCPanic(ctx context.Context, name string, args, reply interface{}, verbose bool, err *error) {
+func (agent *TabletManager) HandleRPCPanic(ctx context.Context, name string, args, reply interface{}, verbose bool, err *error) {
 	// panic handling
 	if x := recover(); x != nil {
 		log.Errorf("TabletManager.%v(%v) on %v panic: %v\n%s", name, args, topoproto.TabletAliasString(agent.TabletAlias), x, tb.Stack(4))
@@ -98,13 +98,13 @@ func (agent *ActionAgent) HandleRPCPanic(ctx context.Context, name string, args,
 
 //
 // RegisterQueryService is used to delay registration of RPC servers until we have all the objects.
-type RegisterQueryService func(*ActionAgent)
+type RegisterQueryService func(*TabletManager)
 
 // RegisterQueryServices is a list of functions to call when the delayed registration is triggered.
 var RegisterQueryServices []RegisterQueryService
 
 // registerQueryService will register all the instances.
-func (agent *ActionAgent) registerQueryService() {
+func (agent *TabletManager) registerQueryService() {
 	for _, f := range RegisterQueryServices {
 		f(agent)
 	}
