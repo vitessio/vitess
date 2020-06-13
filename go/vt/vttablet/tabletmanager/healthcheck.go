@@ -135,10 +135,10 @@ func ConfigHTML() template.HTML {
 
 // initHealthCheck will start the health check background go routine,
 // and configure the healthcheck shutdown. It is only run by NewTabletManager
-// for real vttablet agents (not by tests, nor vtcombo).
-func (agent *TabletManager) initHealthCheck() {
-	registerReplicationReporter(agent)
-	registerHeartbeatReporter(agent.QueryServiceControl)
+// for real vttablet tms (not by tests, nor vtcombo).
+func (tm *TabletManager) initHealthCheck() {
+	registerReplicationReporter(tm)
+	registerHeartbeatReporter(tm.QueryServiceControl)
 
 	log.Infof("Starting periodic health check every %v", *healthCheckInterval)
 	t := timer.NewTimer(*healthCheckInterval)
@@ -150,10 +150,10 @@ func (agent *TabletManager) initHealthCheck() {
 		t.Stop()
 
 		// Now we can finish up and force ourselves to not healthy.
-		agent.terminateHealthChecks()
+		tm.terminateHealthChecks()
 	})
 	t.Start(func() {
-		agent.runHealthCheck()
+		tm.runHealthCheck()
 	})
 	t.Trigger()
 }
@@ -168,24 +168,24 @@ func (agent *TabletManager) initHealthCheck() {
 //
 // This will not change the TabletControl record, but will use it
 // to see if we should be running the query service.
-func (agent *TabletManager) runHealthCheck() {
-	if err := agent.lock(agent.batchCtx); err != nil {
+func (tm *TabletManager) runHealthCheck() {
+	if err := tm.lock(tm.batchCtx); err != nil {
 		log.Warningf("cannot lock actionMutex, not running HealthCheck")
 		return
 	}
-	defer agent.unlock()
+	defer tm.unlock()
 
-	agent.runHealthCheckLocked()
+	tm.runHealthCheckLocked()
 }
 
-func (agent *TabletManager) runHealthCheckLocked() {
-	agent.checkLock()
+func (tm *TabletManager) runHealthCheckLocked() {
+	tm.checkLock()
 	// read the current tablet record and tablet control
-	tablet := agent.Tablet()
-	agent.mutex.Lock()
-	shouldBeServing := agent._disallowQueryService == ""
-	ignoreErrorExpr := agent._ignoreHealthErrorExpr
-	agent.mutex.Unlock()
+	tablet := tm.Tablet()
+	tm.mutex.Lock()
+	shouldBeServing := tm._disallowQueryService == ""
+	ignoreErrorExpr := tm._ignoreHealthErrorExpr
+	tm.mutex.Unlock()
 
 	// run the health check
 	record := &HealthRecord{}
@@ -196,7 +196,7 @@ func (agent *TabletManager) runHealthCheckLocked() {
 
 	// Remember the health error as healthErr to be sure we don't
 	// accidentally overwrite it with some other err.
-	replicationDelay, healthErr := agent.HealthReporter.Report(isSlaveType, shouldBeServing)
+	replicationDelay, healthErr := tm.HealthReporter.Report(isSlaveType, shouldBeServing)
 	if healthErr != nil && ignoreErrorExpr != nil &&
 		ignoreErrorExpr.MatchString(healthErr.Error()) {
 		// we need to ignore this health error
@@ -228,7 +228,7 @@ func (agent *TabletManager) runHealthCheckLocked() {
 			shouldBeServing = false
 		}
 	}
-	isServing := agent.QueryServiceControl.IsServing()
+	isServing := tm.QueryServiceControl.IsServing()
 	if shouldBeServing {
 		if !isServing {
 			// If starting queryservice fails, that's our
@@ -237,7 +237,7 @@ func (agent *TabletManager) runHealthCheckLocked() {
 			// We don't care if the QueryService state actually
 			// changed because we'll broadcast the latest health
 			// status after this immediately anyway.
-			_ /* state changed */, healthErr = agent.QueryServiceControl.SetServingType(tablet.Type, true, nil)
+			_ /* state changed */, healthErr = tm.QueryServiceControl.SetServingType(tablet.Type, true, nil)
 		}
 	} else {
 		if isServing {
@@ -247,30 +247,30 @@ func (agent *TabletManager) runHealthCheckLocked() {
 			// First enter lameduck during gracePeriod to
 			// limit client errors.
 			if topo.IsSubjectToLameduck(tablet.Type) && *gracePeriod > 0 {
-				agent.lameduck("health check failed")
+				tm.lameduck("health check failed")
 			}
 
 			// We don't care if the QueryService state actually
 			// changed because we'll broadcast the latest health
 			// status after this immediately anyway.
 			log.Infof("Disabling query service because of health-check failure: %v", healthErr)
-			if _ /* state changed */, err := agent.QueryServiceControl.SetServingType(tablet.Type, false, nil); err != nil {
+			if _ /* state changed */, err := tm.QueryServiceControl.SetServingType(tablet.Type, false, nil); err != nil {
 				log.Errorf("SetServingType(serving=false) failed: %v", err)
 			}
 		}
 	}
 	if topo.IsRunningUpdateStream(tablet.Type) {
-		agent.UpdateStream.Enable()
+		tm.UpdateStream.Enable()
 	} else {
-		agent.UpdateStream.Disable()
+		tm.UpdateStream.Disable()
 	}
 
 	// All master tablets have to run the VReplication engine.
 	// There is no guarantee that VREngine was successfully started when tabletmanager
 	// came up. This is because the mysql could have been in read-only mode, etc.
 	// So, start the engine if it's not already running.
-	if tablet.Type == topodatapb.TabletType_MASTER && !agent.VREngine.IsOpen() {
-		if err := agent.VREngine.Open(agent.batchCtx); err == nil {
+	if tablet.Type == topodatapb.TabletType_MASTER && !tm.VREngine.IsOpen() {
+		if err := tm.VREngine.Open(tm.batchCtx); err == nil {
 			log.Info("VReplication engine successfully started")
 		}
 	}
@@ -279,30 +279,30 @@ func (agent *TabletManager) runHealthCheckLocked() {
 	record.Time = time.Now()
 	record.Error = healthErr
 	record.ReplicationDelay = replicationDelay
-	agent.History.Add(record)
+	tm.History.Add(record)
 
 	// remember our health status
-	agent.mutex.Lock()
-	agent._healthy = healthErr
-	agent._healthyTime = time.Now()
-	agent._replicationDelay = replicationDelay
-	agent.mutex.Unlock()
+	tm.mutex.Lock()
+	tm._healthy = healthErr
+	tm._healthyTime = time.Now()
+	tm._replicationDelay = replicationDelay
+	tm.mutex.Unlock()
 
 	// send it to our observers
-	agent.broadcastHealth()
+	tm.broadcastHealth()
 }
 
 // terminateHealthChecks is called when we enter lame duck mode.
 // We will clean up our state, and set query service to lame duck mode.
 // We only do something if we are in a serving state, and not a master.
-func (agent *TabletManager) terminateHealthChecks() {
+func (tm *TabletManager) terminateHealthChecks() {
 	// No need to check for error, only a canceled batchCtx would fail this.
-	agent.lock(agent.batchCtx)
-	defer agent.unlock()
-	log.Info("agent.terminateHealthChecks is starting")
+	tm.lock(tm.batchCtx)
+	defer tm.unlock()
+	log.Info("tm.terminateHealthChecks is starting")
 
 	// read the current tablet record
-	tablet := agent.Tablet()
+	tablet := tm.Tablet()
 	if !topo.IsSubjectToLameduck(tablet.Type) {
 		// If we're MASTER, SPARE, WORKER, etc. then we
 		// shouldn't enter lameduck. We do lameduck to not
@@ -322,7 +322,7 @@ func (agent *TabletManager) terminateHealthChecks() {
 	// own "-lameduck-period" flag. During that extra period,
 	// queryservice will be in old lameduck mode, meaning stay
 	// alive but reject new queries.
-	agent.lameduck("terminating healthchecks")
+	tm.lameduck("terminating healthchecks")
 
 	// Note we only do this now if we entered lameduck. In the
 	// master case for instance, we want to keep serving until
@@ -330,5 +330,5 @@ func (agent *TabletManager) terminateHealthChecks() {
 	// go?).  After servenv lameduck, the queryservice is stopped
 	// from a servenv.OnClose() hook anyway.
 	log.Infof("Disabling query service after lameduck in terminating healthchecks")
-	agent.QueryServiceControl.SetServingType(tablet.Type, false, nil)
+	tm.QueryServiceControl.SetServingType(tablet.Type, false, nil)
 }

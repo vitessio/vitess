@@ -184,44 +184,44 @@ func (fra *fakeRPCTM) Ping(ctx context.Context, args string) string {
 	return args
 }
 
-func agentRPCTestPing(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestPing(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.Ping(ctx, tablet)
 	if err != nil {
 		t.Errorf("Ping failed: %v", err)
 	}
 }
 
-func agentRPCTestPingPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestPingPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.Ping(ctx, tablet)
 	expectHandleRPCPanic(t, "Ping", false /*verbose*/, err)
 }
 
-// agentRPCTestDialExpiredContext verifies that
+// tmRPCTestDialExpiredContext verifies that
 // the context returns the right DeadlineExceeded Err() for
 // RPCs failed due to an expired context before .Dial().
-func agentRPCTestDialExpiredContext(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestDialExpiredContext(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	// Using a timeout of 0 here such that .Dial() will fail immediately.
 	expiredCtx, cancel := context.WithTimeout(ctx, 0)
 	defer cancel()
 	err := client.Ping(expiredCtx, tablet)
 	if err == nil {
-		t.Fatal("agentRPCTestDialExpiredContext: RPC with expired context did not fail")
+		t.Fatal("tmRPCTestDialExpiredContext: RPC with expired context did not fail")
 	}
 	// The context was already expired when we created it. Here we only verify that it returns the expected error.
 	select {
 	case <-expiredCtx.Done():
 		if err := expiredCtx.Err(); err != context.DeadlineExceeded {
-			t.Errorf("agentRPCTestDialExpiredContext: got %v want context.DeadlineExceeded", err)
+			t.Errorf("tmRPCTestDialExpiredContext: got %v want context.DeadlineExceeded", err)
 		}
 	default:
-		t.Errorf("agentRPCTestDialExpiredContext: context.Done() not closed")
+		t.Errorf("tmRPCTestDialExpiredContext: context.Done() not closed")
 	}
 }
 
-// agentRPCTestRPCTimeout verifies that
+// tmRPCTestRPCTimeout verifies that
 // the context returns the right DeadlineExceeded Err() for
 // RPCs failed due to an expired context during execution.
-func agentRPCTestRPCTimeout(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet, fakeTM *fakeRPCTM) {
+func tmRPCTestRPCTimeout(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet, fakeTM *fakeRPCTM) {
 	// We must use a timeout > 0 such that the context deadline hasn't expired
 	// yet in grpctmclient.Client.dial().
 	// NOTE: This might still race e.g. when test execution takes too long the
@@ -233,15 +233,15 @@ func agentRPCTestRPCTimeout(ctx context.Context, t *testing.T, client tmclient.T
 	defer func() { fakeTM.setSlow(false) }()
 	err := client.Ping(shortCtx, tablet)
 	if err == nil {
-		t.Fatal("agentRPCTestRPCTimeout: RPC with expired context did not fail")
+		t.Fatal("tmRPCTestRPCTimeout: RPC with expired context did not fail")
 	}
 	select {
 	case <-shortCtx.Done():
 		if err := shortCtx.Err(); err != context.DeadlineExceeded {
-			t.Errorf("agentRPCTestRPCTimeout: got %v want context.DeadlineExceeded", err)
+			t.Errorf("tmRPCTestRPCTimeout: got %v want context.DeadlineExceeded", err)
 		}
 	default:
-		t.Errorf("agentRPCTestRPCTimeout: context.Done() not closed")
+		t.Errorf("tmRPCTestRPCTimeout: context.Done() not closed")
 	}
 }
 
@@ -282,12 +282,12 @@ func (fra *fakeRPCTM) GetSchema(ctx context.Context, tables, excludeTables []str
 	return testGetSchemaReply, nil
 }
 
-func agentRPCTestGetSchema(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestGetSchema(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	result, err := client.GetSchema(ctx, tablet, testGetSchemaTables, testGetSchemaExcludeTables, true)
 	compareError(t, "GetSchema", err, result, testGetSchemaReply)
 }
 
-func agentRPCTestGetSchemaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestGetSchemaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.GetSchema(ctx, tablet, testGetSchemaTables, testGetSchemaExcludeTables, true)
 	expectHandleRPCPanic(t, "GetSchema", false /*verbose*/, err)
 }
@@ -324,12 +324,12 @@ func (fra *fakeRPCTM) GetPermissions(ctx context.Context) (*tabletmanagerdatapb.
 	return testGetPermissionsReply, nil
 }
 
-func agentRPCTestGetPermissions(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestGetPermissions(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	result, err := client.GetPermissions(ctx, tablet)
 	compareError(t, "GetPermissions", err, result, testGetPermissionsReply)
 }
 
-func agentRPCTestGetPermissionsPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestGetPermissionsPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.GetPermissions(ctx, tablet)
 	expectHandleRPCPanic(t, "GetPermissions", false /*verbose*/, err)
 }
@@ -350,7 +350,7 @@ func (fra *fakeRPCTM) SetReadOnly(ctx context.Context, rdonly bool) error {
 	return nil
 }
 
-func agentRPCTestSetReadOnly(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestSetReadOnly(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	testSetReadOnlyExpectedValue = true
 	err := client.SetReadOnly(ctx, tablet)
 	if err != nil {
@@ -363,7 +363,7 @@ func agentRPCTestSetReadOnly(ctx context.Context, t *testing.T, client tmclient.
 	}
 }
 
-func agentRPCTestSetReadOnlyPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestSetReadOnlyPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.SetReadOnly(ctx, tablet)
 	expectHandleRPCPanic(t, "SetReadOnly", true /*verbose*/, err)
 	err = client.SetReadWrite(ctx, tablet)
@@ -380,14 +380,14 @@ func (fra *fakeRPCTM) ChangeType(ctx context.Context, tabletType topodatapb.Tabl
 	return nil
 }
 
-func agentRPCTestChangeType(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestChangeType(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.ChangeType(ctx, tablet, testChangeTypeValue)
 	if err != nil {
 		t.Errorf("ChangeType failed: %v", err)
 	}
 }
 
-func agentRPCTestChangeTypePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestChangeTypePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.ChangeType(ctx, tablet, testChangeTypeValue)
 	expectHandleRPCPanic(t, "ChangeType", true /*verbose*/, err)
 }
@@ -401,14 +401,14 @@ func (fra *fakeRPCTM) Sleep(ctx context.Context, duration time.Duration) {
 	compare(fra.t, "Sleep duration", duration, testSleepDuration)
 }
 
-func agentRPCTestSleep(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestSleep(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.Sleep(ctx, tablet, testSleepDuration)
 	if err != nil {
 		t.Errorf("Sleep failed: %v", err)
 	}
 }
 
-func agentRPCTestSleepPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestSleepPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.Sleep(ctx, tablet, testSleepDuration)
 	expectHandleRPCPanic(t, "Sleep", true /*verbose*/, err)
 }
@@ -435,12 +435,12 @@ func (fra *fakeRPCTM) ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.Hook
 	return testExecuteHookHookResult
 }
 
-func agentRPCTestExecuteHook(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestExecuteHook(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	hr, err := client.ExecuteHook(ctx, tablet, testExecuteHookHook)
 	compareError(t, "ExecuteHook", err, hr, testExecuteHookHookResult)
 }
 
-func agentRPCTestExecuteHookPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestExecuteHookPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.ExecuteHook(ctx, tablet, testExecuteHookHook)
 	expectHandleRPCPanic(t, "ExecuteHook", true /*verbose*/, err)
 }
@@ -458,7 +458,7 @@ func (fra *fakeRPCTM) RefreshState(ctx context.Context) error {
 	return nil
 }
 
-func agentRPCTestRefreshState(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestRefreshState(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.RefreshState(ctx, tablet)
 	if err != nil {
 		t.Errorf("RefreshState failed: %v", err)
@@ -468,7 +468,7 @@ func agentRPCTestRefreshState(ctx context.Context, t *testing.T, client tmclient
 	}
 }
 
-func agentRPCTestRefreshStatePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestRefreshStatePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.RefreshState(ctx, tablet)
 	expectHandleRPCPanic(t, "RefreshState", true /*verbose*/, err)
 }
@@ -489,26 +489,26 @@ func (fra *fakeRPCTM) IgnoreHealthError(ctx context.Context, pattern string) err
 	return nil
 }
 
-func agentRPCTestRunHealthCheck(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestRunHealthCheck(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.RunHealthCheck(ctx, tablet)
 	if err != nil {
 		t.Errorf("RunHealthCheck failed: %v", err)
 	}
 }
 
-func agentRPCTestRunHealthCheckPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestRunHealthCheckPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.RunHealthCheck(ctx, tablet)
 	expectHandleRPCPanic(t, "RunHealthCheck", false /*verbose*/, err)
 }
 
-func agentRPCTestIgnoreHealthError(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestIgnoreHealthError(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.IgnoreHealthError(ctx, tablet, testIgnoreHealthErrorValue)
 	if err != nil {
 		t.Errorf("IgnoreHealthError failed: %v", err)
 	}
 }
 
-func agentRPCTestIgnoreHealthErrorPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestIgnoreHealthErrorPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.IgnoreHealthError(ctx, tablet, testIgnoreHealthErrorValue)
 	expectHandleRPCPanic(t, "IgnoreHealthError", false /*verbose*/, err)
 }
@@ -526,7 +526,7 @@ func (fra *fakeRPCTM) ReloadSchema(ctx context.Context, waitPosition string) err
 	return nil
 }
 
-func agentRPCTestReloadSchema(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestReloadSchema(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.ReloadSchema(ctx, tablet, "")
 	if err != nil {
 		t.Errorf("ReloadSchema failed: %v", err)
@@ -536,7 +536,7 @@ func agentRPCTestReloadSchema(ctx context.Context, t *testing.T, client tmclient
 	}
 }
 
-func agentRPCTestReloadSchemaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestReloadSchemaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.ReloadSchema(ctx, tablet, "")
 	expectHandleRPCPanic(t, "ReloadSchema", false /*verbose*/, err)
 }
@@ -557,12 +557,12 @@ func (fra *fakeRPCTM) PreflightSchema(ctx context.Context, changes []string) ([]
 	return testSchemaChangeResult, nil
 }
 
-func agentRPCTestPreflightSchema(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestPreflightSchema(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	scr, err := client.PreflightSchema(ctx, tablet, testPreflightSchema)
 	compareError(t, "PreflightSchema", err, scr, testSchemaChangeResult)
 }
 
-func agentRPCTestPreflightSchemaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestPreflightSchemaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.PreflightSchema(ctx, tablet, testPreflightSchema)
 	expectHandleRPCPanic(t, "PreflightSchema", true /*verbose*/, err)
 }
@@ -585,12 +585,12 @@ func (fra *fakeRPCTM) ApplySchema(ctx context.Context, change *tmutils.SchemaCha
 	return testSchemaChangeResult[0], nil
 }
 
-func agentRPCTestApplySchema(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestApplySchema(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	scr, err := client.ApplySchema(ctx, tablet, testSchemaChange)
 	compareError(t, "ApplySchema", err, scr, testSchemaChangeResult[0])
 }
 
-func agentRPCTestApplySchemaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestApplySchemaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.ApplySchema(ctx, tablet, testSchemaChange)
 	expectHandleRPCPanic(t, "ApplySchema", true /*verbose*/, err)
 }
@@ -655,7 +655,7 @@ func (fra *fakeRPCTM) ExecuteFetchAsApp(ctx context.Context, query []byte, maxro
 	return testExecuteFetchResult, nil
 }
 
-func agentRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	// using pool
 	qr, err := client.ExecuteFetchAsDba(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true)
 	compareError(t, "ExecuteFetchAsDba", err, qr, testExecuteFetchResult)
@@ -672,7 +672,7 @@ func agentRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient
 
 }
 
-func agentRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	// using pool
 	_, err := client.ExecuteFetchAsDba(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows, true, false)
 	expectHandleRPCPanic(t, "ExecuteFetchAsDba", false /*verbose*/, err)
@@ -709,12 +709,12 @@ func (fra *fakeRPCTM) SlaveStatus(ctx context.Context) (*replicationdatapb.Statu
 	return testReplicationStatus, nil
 }
 
-func agentRPCTestSlaveStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestSlaveStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	rs, err := client.SlaveStatus(ctx, tablet)
 	compareError(t, "SlaveStatus", err, rs, testReplicationStatus)
 }
 
-func agentRPCTestSlaveStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestSlaveStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.SlaveStatus(ctx, tablet)
 	expectHandleRPCPanic(t, "SlaveStatus", false /*verbose*/, err)
 }
@@ -732,12 +732,12 @@ func (fra *fakeRPCTM) WaitForPosition(ctx context.Context, pos string) error {
 	panic("unimplemented")
 }
 
-func agentRPCTestMasterPosition(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestMasterPosition(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	rs, err := client.MasterPosition(ctx, tablet)
 	compareError(t, "MasterPosition", err, rs, testReplicationPosition)
 }
 
-func agentRPCTestMasterPositionPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestMasterPositionPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.MasterPosition(ctx, tablet)
 	expectHandleRPCPanic(t, "MasterPosition", false /*verbose*/, err)
 }
@@ -752,12 +752,12 @@ func (fra *fakeRPCTM) StopSlave(ctx context.Context) error {
 	return nil
 }
 
-func agentRPCTestStopSlave(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestStopSlave(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.StopSlave(ctx, tablet)
 	compareError(t, "StopSlave", err, true, testStopSlaveCalled)
 }
 
-func agentRPCTestStopSlavePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestStopSlavePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.StopSlave(ctx, tablet)
 	expectHandleRPCPanic(t, "StopSlave", true /*verbose*/, err)
 }
@@ -773,12 +773,12 @@ func (fra *fakeRPCTM) StopSlaveMinimum(ctx context.Context, position string, wai
 	return testReplicationPositionReturned, nil
 }
 
-func agentRPCTestStopSlaveMinimum(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestStopSlaveMinimum(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	pos, err := client.StopSlaveMinimum(ctx, tablet, testReplicationPosition, testStopSlaveMinimumWaitTime)
 	compareError(t, "StopSlaveMinimum", err, pos, testReplicationPositionReturned)
 }
 
-func agentRPCTestStopSlaveMinimumPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestStopSlaveMinimumPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.StopSlaveMinimum(ctx, tablet, testReplicationPosition, testStopSlaveMinimumWaitTime)
 	expectHandleRPCPanic(t, "StopSlaveMinimum", true /*verbose*/, err)
 }
@@ -803,17 +803,17 @@ func (fra *fakeRPCTM) StartSlaveUntilAfter(ctx context.Context, position string,
 	return nil
 }
 
-func agentRPCTestStartSlave(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestStartSlave(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.StartSlave(ctx, tablet)
 	compareError(t, "StartSlave", err, true, testStartSlaveCalled)
 }
 
-func agentRPCTestStartSlaveUntilAfter(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestStartSlaveUntilAfter(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.StartSlaveUntilAfter(ctx, tablet, "test-position", time.Minute)
 	compareError(t, "StartSlaveUntilAfter", err, "test-position", testStartSlaveUntilAfterCalledWith)
 }
 
-func agentRPCTestStartSlavePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestStartSlavePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.StartSlave(ctx, tablet)
 	expectHandleRPCPanic(t, "StartSlave", true /*verbose*/, err)
 }
@@ -827,12 +827,12 @@ func (fra *fakeRPCTM) GetSlaves(ctx context.Context) ([]string, error) {
 	return testGetSlavesResult, nil
 }
 
-func agentRPCTestGetSlaves(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestGetSlaves(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	s, err := client.GetSlaves(ctx, tablet)
 	compareError(t, "GetSlaves", err, s, testGetSlavesResult)
 }
 
-func agentRPCTestGetSlavesPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestGetSlavesPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.GetSlaves(ctx, tablet)
 	expectHandleRPCPanic(t, "GetSlaves", false /*verbose*/, err)
 }
@@ -847,12 +847,12 @@ func (fra *fakeRPCTM) VReplicationExec(ctx context.Context, query string) (*quer
 	return testExecuteFetchResult, nil
 }
 
-func agentRPCTestVReplicationExec(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestVReplicationExec(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	rp, err := client.VReplicationExec(ctx, tablet, testVRQuery)
 	compareError(t, "VReplicationExec", err, rp, testExecuteFetchResult)
 }
 
-func agentRPCTestVReplicationExecPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestVReplicationExecPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.VReplicationExec(ctx, tablet, testVRQuery)
 	expectHandleRPCPanic(t, "VReplicationExec", true /*verbose*/, err)
 }
@@ -871,12 +871,12 @@ func (fra *fakeRPCTM) VReplicationWaitForPos(ctx context.Context, id int, pos st
 	return nil
 }
 
-func agentRPCTestVReplicationWaitForPos(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestVReplicationWaitForPos(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.VReplicationWaitForPos(ctx, tablet, wfpid, wfppos)
 	compareError(t, "VReplicationWaitForPos", err, true, true)
 }
 
-func agentRPCTestVReplicationWaitForPosPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestVReplicationWaitForPosPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.VReplicationWaitForPos(ctx, tablet, wfpid, wfppos)
 	expectHandleRPCPanic(t, "VReplicationWaitForPos", true /*verbose*/, err)
 }
@@ -895,12 +895,12 @@ func (fra *fakeRPCTM) ResetReplication(ctx context.Context) error {
 	return nil
 }
 
-func agentRPCTestResetReplication(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestResetReplication(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.ResetReplication(ctx, tablet)
 	compareError(t, "ResetReplication", err, true, testResetReplicationCalled)
 }
 
-func agentRPCTestResetReplicationPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestResetReplicationPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.ResetReplication(ctx, tablet)
 	expectHandleRPCPanic(t, "ResetReplication", true /*verbose*/, err)
 }
@@ -912,12 +912,12 @@ func (fra *fakeRPCTM) InitMaster(ctx context.Context) (string, error) {
 	return testReplicationPosition, nil
 }
 
-func agentRPCTestInitMaster(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestInitMaster(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	rp, err := client.InitMaster(ctx, tablet)
 	compareError(t, "InitMaster", err, rp, testReplicationPosition)
 }
 
-func agentRPCTestInitMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestInitMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.InitMaster(ctx, tablet)
 	expectHandleRPCPanic(t, "InitMaster", true /*verbose*/, err)
 }
@@ -943,12 +943,12 @@ func (fra *fakeRPCTM) PopulateReparentJournal(ctx context.Context, timeCreatedNS
 	return nil
 }
 
-func agentRPCTestPopulateReparentJournal(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestPopulateReparentJournal(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.PopulateReparentJournal(ctx, tablet, testTimeCreatedNS, testActionName, testMasterAlias, testReplicationPosition)
 	compareError(t, "PopulateReparentJournal", err, true, testPopulateReparentJournalCalled)
 }
 
-func agentRPCTestPopulateReparentJournalPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestPopulateReparentJournalPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.PopulateReparentJournal(ctx, tablet, testTimeCreatedNS, testActionName, testMasterAlias, testReplicationPosition)
 	expectHandleRPCPanic(t, "PopulateReparentJournal", false /*verbose*/, err)
 }
@@ -966,12 +966,12 @@ func (fra *fakeRPCTM) InitSlave(ctx context.Context, parent *topodatapb.TabletAl
 	return nil
 }
 
-func agentRPCTestInitSlave(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestInitSlave(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.InitSlave(ctx, tablet, testMasterAlias, testReplicationPosition, testTimeCreatedNS)
 	compareError(t, "InitSlave", err, true, testInitSlaveCalled)
 }
 
-func agentRPCTestInitSlavePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestInitSlavePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.InitSlave(ctx, tablet, testMasterAlias, testReplicationPosition, testTimeCreatedNS)
 	expectHandleRPCPanic(t, "InitSlave", true /*verbose*/, err)
 }
@@ -983,12 +983,12 @@ func (fra *fakeRPCTM) DemoteMaster(ctx context.Context) (string, error) {
 	return testReplicationPosition, nil
 }
 
-func agentRPCTestDemoteMaster(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestDemoteMaster(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	rp, err := client.DemoteMaster(ctx, tablet)
 	compareError(t, "DemoteMaster", err, rp, testReplicationPosition)
 }
 
-func agentRPCTestDemoteMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestDemoteMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.DemoteMaster(ctx, tablet)
 	expectHandleRPCPanic(t, "DemoteMaster", true /*verbose*/, err)
 }
@@ -1002,13 +1002,13 @@ func (fra *fakeRPCTM) UndoDemoteMaster(ctx context.Context) error {
 	return nil
 }
 
-func agentRPCTestUndoDemoteMaster(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestUndoDemoteMaster(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.UndoDemoteMaster(ctx, tablet)
 	testUndoDemoteMasterCalled = true
 	compareError(t, "UndoDemoteMaster", err, true, testUndoDemoteMasterCalled)
 }
 
-func agentRPCTestUndoDemoteMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestUndoDemoteMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.UndoDemoteMaster(ctx, tablet)
 	expectHandleRPCPanic(t, "UndoDemoteMaster", true /*verbose*/, err)
 }
@@ -1023,12 +1023,12 @@ func (fra *fakeRPCTM) PromoteSlaveWhenCaughtUp(ctx context.Context, position str
 	return testReplicationPositionReturned, nil
 }
 
-func agentRPCTestPromoteSlaveWhenCaughtUp(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestPromoteSlaveWhenCaughtUp(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	rp, err := client.PromoteSlaveWhenCaughtUp(ctx, tablet, testReplicationPosition)
 	compareError(t, "PromoteSlaveWhenCaughtUp", err, rp, testReplicationPositionReturned)
 }
 
-func agentRPCTestPromoteSlaveWhenCaughtUpPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestPromoteSlaveWhenCaughtUpPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.PromoteSlaveWhenCaughtUp(ctx, tablet, testReplicationPosition)
 	expectHandleRPCPanic(t, "PromoteSlaveWhenCaughtUp", true /*verbose*/, err)
 }
@@ -1043,12 +1043,12 @@ func (fra *fakeRPCTM) SlaveWasPromoted(ctx context.Context) error {
 	return nil
 }
 
-func agentRPCTestSlaveWasPromoted(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestSlaveWasPromoted(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.SlaveWasPromoted(ctx, tablet)
 	compareError(t, "SlaveWasPromoted", err, true, testSlaveWasPromotedCalled)
 }
 
-func agentRPCTestSlaveWasPromotedPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestSlaveWasPromotedPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.SlaveWasPromoted(ctx, tablet)
 	expectHandleRPCPanic(t, "SlaveWasPromoted", true /*verbose*/, err)
 }
@@ -1068,12 +1068,12 @@ func (fra *fakeRPCTM) SetMaster(ctx context.Context, parent *topodatapb.TabletAl
 	return nil
 }
 
-func agentRPCTestSetMaster(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestSetMaster(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.SetMaster(ctx, tablet, testMasterAlias, testTimeCreatedNS, testWaitPosition, testForceStartSlave)
 	compareError(t, "SetMaster", err, true, testSetMasterCalled)
 }
 
-func agentRPCTestSetMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestSetMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.SetMaster(ctx, tablet, testMasterAlias, testTimeCreatedNS, testWaitPosition, testForceStartSlave)
 	expectHandleRPCPanic(t, "SetMaster", true /*verbose*/, err)
 }
@@ -1093,12 +1093,12 @@ func (fra *fakeRPCTM) SlaveWasRestarted(ctx context.Context, parent *topodatapb.
 	return nil
 }
 
-func agentRPCTestSlaveWasRestarted(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestSlaveWasRestarted(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.SlaveWasRestarted(ctx, tablet, testSlaveWasRestartedParent)
 	compareError(t, "SlaveWasRestarted", err, true, testSlaveWasRestartedCalled)
 }
 
-func agentRPCTestSlaveWasRestartedPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestSlaveWasRestartedPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.SlaveWasRestarted(ctx, tablet, testSlaveWasRestartedParent)
 	expectHandleRPCPanic(t, "SlaveWasRestarted", true /*verbose*/, err)
 }
@@ -1110,12 +1110,12 @@ func (fra *fakeRPCTM) StopReplicationAndGetStatus(ctx context.Context) (*replica
 	return testReplicationStatus, nil
 }
 
-func agentRPCTestStopReplicationAndGetStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestStopReplicationAndGetStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	rp, err := client.StopReplicationAndGetStatus(ctx, tablet)
 	compareError(t, "StopReplicationAndGetStatus", err, rp, testReplicationStatus)
 }
 
-func agentRPCTestStopReplicationAndGetStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestStopReplicationAndGetStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.StopReplicationAndGetStatus(ctx, tablet)
 	expectHandleRPCPanic(t, "StopReplicationAndGetStatus", true /*verbose*/, err)
 }
@@ -1127,12 +1127,12 @@ func (fra *fakeRPCTM) PromoteSlave(ctx context.Context) (string, error) {
 	return testReplicationPosition, nil
 }
 
-func agentRPCTestPromoteSlave(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestPromoteSlave(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	rp, err := client.PromoteSlave(ctx, tablet)
 	compareError(t, "PromoteSlave", err, rp, testReplicationPosition)
 }
 
-func agentRPCTestPromoteSlavePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestPromoteSlavePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.PromoteSlave(ctx, tablet)
 	expectHandleRPCPanic(t, "PromoteSlave", true /*verbose*/, err)
 }
@@ -1144,12 +1144,12 @@ func (fra *fakeRPCTM) PromoteReplica(ctx context.Context) (string, error) {
 	return testReplicationPosition, nil
 }
 
-func agentRPCTestPromoteReplica(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestPromoteReplica(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	rp, err := client.PromoteReplica(ctx, tablet)
 	compareError(t, "PromoteReplica", err, rp, testReplicationPosition)
 }
 
-func agentRPCTestPromoteReplicaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestPromoteReplicaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.PromoteReplica(ctx, tablet)
 	expectHandleRPCPanic(t, "PromoteReplica", true /*verbose*/, err)
 }
@@ -1174,7 +1174,7 @@ func (fra *fakeRPCTM) Backup(ctx context.Context, concurrency int, logger loguti
 	return nil
 }
 
-func agentRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	stream, err := client.Backup(ctx, tablet, testBackupConcurrency, testBackupAllowMaster)
 	if err != nil {
 		t.Fatalf("Backup failed: %v", err)
@@ -1183,7 +1183,7 @@ func agentRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.Table
 	compareError(t, "Backup", err, true, testBackupCalled)
 }
 
-func agentRPCTestBackupPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestBackupPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	stream, err := client.Backup(ctx, tablet, testBackupConcurrency, testBackupAllowMaster)
 	if err != nil {
 		t.Fatalf("Backup failed: %v", err)
@@ -1204,7 +1204,7 @@ func (fra *fakeRPCTM) RestoreFromBackup(ctx context.Context, logger logutil.Logg
 	return nil
 }
 
-func agentRPCTestRestoreFromBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestRestoreFromBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	stream, err := client.RestoreFromBackup(ctx, tablet)
 	if err != nil {
 		t.Fatalf("RestoreFromBackup failed: %v", err)
@@ -1213,7 +1213,7 @@ func agentRPCTestRestoreFromBackup(ctx context.Context, t *testing.T, client tmc
 	compareError(t, "RestoreFromBackup", err, true, testRestoreFromBackupCalled)
 }
 
-func agentRPCTestRestoreFromBackupPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestRestoreFromBackupPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	stream, err := client.RestoreFromBackup(ctx, tablet)
 	if err != nil {
 		t.Fatalf("RestoreFromBackup failed: %v", err)
@@ -1247,58 +1247,58 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	ctx := context.Background()
 
 	// Test RPC specific methods of the interface.
-	agentRPCTestDialExpiredContext(ctx, t, client, tablet)
-	agentRPCTestRPCTimeout(ctx, t, client, tablet, fakeTM.(*fakeRPCTM))
+	tmRPCTestDialExpiredContext(ctx, t, client, tablet)
+	tmRPCTestRPCTimeout(ctx, t, client, tablet, fakeTM.(*fakeRPCTM))
 
 	// Various read-only methods
-	agentRPCTestPing(ctx, t, client, tablet)
-	agentRPCTestGetSchema(ctx, t, client, tablet)
-	agentRPCTestGetPermissions(ctx, t, client, tablet)
+	tmRPCTestPing(ctx, t, client, tablet)
+	tmRPCTestGetSchema(ctx, t, client, tablet)
+	tmRPCTestGetPermissions(ctx, t, client, tablet)
 
 	// Various read-write methods
-	agentRPCTestSetReadOnly(ctx, t, client, tablet)
-	agentRPCTestChangeType(ctx, t, client, tablet)
-	agentRPCTestSleep(ctx, t, client, tablet)
-	agentRPCTestExecuteHook(ctx, t, client, tablet)
-	agentRPCTestRefreshState(ctx, t, client, tablet)
-	agentRPCTestRunHealthCheck(ctx, t, client, tablet)
-	agentRPCTestIgnoreHealthError(ctx, t, client, tablet)
-	agentRPCTestReloadSchema(ctx, t, client, tablet)
-	agentRPCTestPreflightSchema(ctx, t, client, tablet)
-	agentRPCTestApplySchema(ctx, t, client, tablet)
-	agentRPCTestExecuteFetch(ctx, t, client, tablet)
+	tmRPCTestSetReadOnly(ctx, t, client, tablet)
+	tmRPCTestChangeType(ctx, t, client, tablet)
+	tmRPCTestSleep(ctx, t, client, tablet)
+	tmRPCTestExecuteHook(ctx, t, client, tablet)
+	tmRPCTestRefreshState(ctx, t, client, tablet)
+	tmRPCTestRunHealthCheck(ctx, t, client, tablet)
+	tmRPCTestIgnoreHealthError(ctx, t, client, tablet)
+	tmRPCTestReloadSchema(ctx, t, client, tablet)
+	tmRPCTestPreflightSchema(ctx, t, client, tablet)
+	tmRPCTestApplySchema(ctx, t, client, tablet)
+	tmRPCTestExecuteFetch(ctx, t, client, tablet)
 
 	// Replication related methods
-	agentRPCTestSlaveStatus(ctx, t, client, tablet)
-	agentRPCTestMasterPosition(ctx, t, client, tablet)
-	agentRPCTestStopSlave(ctx, t, client, tablet)
-	agentRPCTestStopSlaveMinimum(ctx, t, client, tablet)
-	agentRPCTestStartSlave(ctx, t, client, tablet)
-	agentRPCTestStartSlaveUntilAfter(ctx, t, client, tablet)
-	agentRPCTestGetSlaves(ctx, t, client, tablet)
+	tmRPCTestSlaveStatus(ctx, t, client, tablet)
+	tmRPCTestMasterPosition(ctx, t, client, tablet)
+	tmRPCTestStopSlave(ctx, t, client, tablet)
+	tmRPCTestStopSlaveMinimum(ctx, t, client, tablet)
+	tmRPCTestStartSlave(ctx, t, client, tablet)
+	tmRPCTestStartSlaveUntilAfter(ctx, t, client, tablet)
+	tmRPCTestGetSlaves(ctx, t, client, tablet)
 
 	// VReplication methods
-	agentRPCTestVReplicationExec(ctx, t, client, tablet)
-	agentRPCTestVReplicationWaitForPos(ctx, t, client, tablet)
+	tmRPCTestVReplicationExec(ctx, t, client, tablet)
+	tmRPCTestVReplicationWaitForPos(ctx, t, client, tablet)
 
 	// Reparenting related functions
-	agentRPCTestResetReplication(ctx, t, client, tablet)
-	agentRPCTestInitMaster(ctx, t, client, tablet)
-	agentRPCTestPopulateReparentJournal(ctx, t, client, tablet)
-	agentRPCTestInitSlave(ctx, t, client, tablet)
-	agentRPCTestDemoteMaster(ctx, t, client, tablet)
-	agentRPCTestUndoDemoteMaster(ctx, t, client, tablet)
-	agentRPCTestPromoteSlaveWhenCaughtUp(ctx, t, client, tablet)
-	agentRPCTestSlaveWasPromoted(ctx, t, client, tablet)
-	agentRPCTestSetMaster(ctx, t, client, tablet)
-	agentRPCTestSlaveWasRestarted(ctx, t, client, tablet)
-	agentRPCTestStopReplicationAndGetStatus(ctx, t, client, tablet)
-	agentRPCTestPromoteSlave(ctx, t, client, tablet)
-	agentRPCTestPromoteReplica(ctx, t, client, tablet)
+	tmRPCTestResetReplication(ctx, t, client, tablet)
+	tmRPCTestInitMaster(ctx, t, client, tablet)
+	tmRPCTestPopulateReparentJournal(ctx, t, client, tablet)
+	tmRPCTestInitSlave(ctx, t, client, tablet)
+	tmRPCTestDemoteMaster(ctx, t, client, tablet)
+	tmRPCTestUndoDemoteMaster(ctx, t, client, tablet)
+	tmRPCTestPromoteSlaveWhenCaughtUp(ctx, t, client, tablet)
+	tmRPCTestSlaveWasPromoted(ctx, t, client, tablet)
+	tmRPCTestSetMaster(ctx, t, client, tablet)
+	tmRPCTestSlaveWasRestarted(ctx, t, client, tablet)
+	tmRPCTestStopReplicationAndGetStatus(ctx, t, client, tablet)
+	tmRPCTestPromoteSlave(ctx, t, client, tablet)
+	tmRPCTestPromoteReplica(ctx, t, client, tablet)
 
 	// Backup / restore related methods
-	agentRPCTestBackup(ctx, t, client, tablet)
-	agentRPCTestRestoreFromBackup(ctx, t, client, tablet)
+	tmRPCTestBackup(ctx, t, client, tablet)
+	tmRPCTestRestoreFromBackup(ctx, t, client, tablet)
 
 	//
 	// Tests panic handling everywhere now
@@ -1306,53 +1306,53 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	fakeTM.(*fakeRPCTM).panics = true
 
 	// Various read-only methods
-	agentRPCTestPingPanic(ctx, t, client, tablet)
-	agentRPCTestGetSchemaPanic(ctx, t, client, tablet)
-	agentRPCTestGetPermissionsPanic(ctx, t, client, tablet)
+	tmRPCTestPingPanic(ctx, t, client, tablet)
+	tmRPCTestGetSchemaPanic(ctx, t, client, tablet)
+	tmRPCTestGetPermissionsPanic(ctx, t, client, tablet)
 
 	// Various read-write methods
-	agentRPCTestSetReadOnlyPanic(ctx, t, client, tablet)
-	agentRPCTestChangeTypePanic(ctx, t, client, tablet)
-	agentRPCTestSleepPanic(ctx, t, client, tablet)
-	agentRPCTestExecuteHookPanic(ctx, t, client, tablet)
-	agentRPCTestRefreshStatePanic(ctx, t, client, tablet)
-	agentRPCTestRunHealthCheckPanic(ctx, t, client, tablet)
-	agentRPCTestIgnoreHealthErrorPanic(ctx, t, client, tablet)
-	agentRPCTestReloadSchemaPanic(ctx, t, client, tablet)
-	agentRPCTestPreflightSchemaPanic(ctx, t, client, tablet)
-	agentRPCTestApplySchemaPanic(ctx, t, client, tablet)
-	agentRPCTestExecuteFetchPanic(ctx, t, client, tablet)
+	tmRPCTestSetReadOnlyPanic(ctx, t, client, tablet)
+	tmRPCTestChangeTypePanic(ctx, t, client, tablet)
+	tmRPCTestSleepPanic(ctx, t, client, tablet)
+	tmRPCTestExecuteHookPanic(ctx, t, client, tablet)
+	tmRPCTestRefreshStatePanic(ctx, t, client, tablet)
+	tmRPCTestRunHealthCheckPanic(ctx, t, client, tablet)
+	tmRPCTestIgnoreHealthErrorPanic(ctx, t, client, tablet)
+	tmRPCTestReloadSchemaPanic(ctx, t, client, tablet)
+	tmRPCTestPreflightSchemaPanic(ctx, t, client, tablet)
+	tmRPCTestApplySchemaPanic(ctx, t, client, tablet)
+	tmRPCTestExecuteFetchPanic(ctx, t, client, tablet)
 
 	// Replication related methods
-	agentRPCTestSlaveStatusPanic(ctx, t, client, tablet)
-	agentRPCTestMasterPositionPanic(ctx, t, client, tablet)
-	agentRPCTestStopSlavePanic(ctx, t, client, tablet)
-	agentRPCTestStopSlaveMinimumPanic(ctx, t, client, tablet)
-	agentRPCTestStartSlavePanic(ctx, t, client, tablet)
-	agentRPCTestGetSlavesPanic(ctx, t, client, tablet)
+	tmRPCTestSlaveStatusPanic(ctx, t, client, tablet)
+	tmRPCTestMasterPositionPanic(ctx, t, client, tablet)
+	tmRPCTestStopSlavePanic(ctx, t, client, tablet)
+	tmRPCTestStopSlaveMinimumPanic(ctx, t, client, tablet)
+	tmRPCTestStartSlavePanic(ctx, t, client, tablet)
+	tmRPCTestGetSlavesPanic(ctx, t, client, tablet)
 
 	// VReplication methods
-	agentRPCTestVReplicationExecPanic(ctx, t, client, tablet)
-	agentRPCTestVReplicationWaitForPosPanic(ctx, t, client, tablet)
+	tmRPCTestVReplicationExecPanic(ctx, t, client, tablet)
+	tmRPCTestVReplicationWaitForPosPanic(ctx, t, client, tablet)
 
 	// Reparenting related functions
-	agentRPCTestResetReplicationPanic(ctx, t, client, tablet)
-	agentRPCTestInitMasterPanic(ctx, t, client, tablet)
-	agentRPCTestPopulateReparentJournalPanic(ctx, t, client, tablet)
-	agentRPCTestInitSlavePanic(ctx, t, client, tablet)
-	agentRPCTestDemoteMasterPanic(ctx, t, client, tablet)
-	agentRPCTestUndoDemoteMasterPanic(ctx, t, client, tablet)
-	agentRPCTestPromoteSlaveWhenCaughtUpPanic(ctx, t, client, tablet)
-	agentRPCTestSlaveWasPromotedPanic(ctx, t, client, tablet)
-	agentRPCTestSetMasterPanic(ctx, t, client, tablet)
-	agentRPCTestSlaveWasRestartedPanic(ctx, t, client, tablet)
-	agentRPCTestStopReplicationAndGetStatusPanic(ctx, t, client, tablet)
-	agentRPCTestPromoteSlavePanic(ctx, t, client, tablet)
-	agentRPCTestPromoteReplicaPanic(ctx, t, client, tablet)
+	tmRPCTestResetReplicationPanic(ctx, t, client, tablet)
+	tmRPCTestInitMasterPanic(ctx, t, client, tablet)
+	tmRPCTestPopulateReparentJournalPanic(ctx, t, client, tablet)
+	tmRPCTestInitSlavePanic(ctx, t, client, tablet)
+	tmRPCTestDemoteMasterPanic(ctx, t, client, tablet)
+	tmRPCTestUndoDemoteMasterPanic(ctx, t, client, tablet)
+	tmRPCTestPromoteSlaveWhenCaughtUpPanic(ctx, t, client, tablet)
+	tmRPCTestSlaveWasPromotedPanic(ctx, t, client, tablet)
+	tmRPCTestSetMasterPanic(ctx, t, client, tablet)
+	tmRPCTestSlaveWasRestartedPanic(ctx, t, client, tablet)
+	tmRPCTestStopReplicationAndGetStatusPanic(ctx, t, client, tablet)
+	tmRPCTestPromoteSlavePanic(ctx, t, client, tablet)
+	tmRPCTestPromoteReplicaPanic(ctx, t, client, tablet)
 
 	// Backup / restore related methods
-	agentRPCTestBackupPanic(ctx, t, client, tablet)
-	agentRPCTestRestoreFromBackupPanic(ctx, t, client, tablet)
+	tmRPCTestBackupPanic(ctx, t, client, tablet)
+	tmRPCTestRestoreFromBackupPanic(ctx, t, client, tablet)
 
 	client.Close()
 }
