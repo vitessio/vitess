@@ -160,7 +160,7 @@ func createTestTM(ctx context.Context, t *testing.T, preStart func(*TabletManage
 	mysqlDaemon := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(-1)}
 	tm := NewTestTM(ctx, ts, tabletAlias, port, 0, mysqlDaemon, preStart)
 
-	tm.HealthReporter = &fakeHealthCheck{}
+	tm.healthReporter = &fakeHealthCheck{}
 
 	return tm
 }
@@ -195,7 +195,7 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 
 	// First health check, should keep us as replica and serving.
 	before := time.Now()
-	tm.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 12 * time.Second
+	tm.healthReporter.(*fakeHealthCheck).reportReplicationDelay = 12 * time.Second
 	tm.runHealthCheck()
 	ti, err := tm.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
@@ -221,8 +221,8 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	}
 
 	// now make the tablet unhealthy
-	tm.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 13 * time.Second
-	tm.HealthReporter.(*fakeHealthCheck).reportError = fmt.Errorf("tablet is unhealthy")
+	tm.healthReporter.(*fakeHealthCheck).reportReplicationDelay = 13 * time.Second
+	tm.healthReporter.(*fakeHealthCheck).reportError = fmt.Errorf("tablet is unhealthy")
 	before = time.Now()
 	tm.runHealthCheck()
 	ti, err = tm.TopoServer.GetTablet(ctx, tabletAlias)
@@ -294,8 +294,8 @@ func TestErrSlaveNotRunningIsHealthy(t *testing.T) {
 	// health check returning health.ErrSlaveNotRunning, should
 	// keep us as replica and serving
 	before := time.Now()
-	tm.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 12 * time.Second
-	tm.HealthReporter.(*fakeHealthCheck).reportError = health.ErrSlaveNotRunning
+	tm.healthReporter.(*fakeHealthCheck).reportReplicationDelay = 12 * time.Second
+	tm.healthReporter.(*fakeHealthCheck).reportError = health.ErrSlaveNotRunning
 	tm.runHealthCheck()
 	if !tm.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should be running")
@@ -399,7 +399,7 @@ func TestQueryServiceStopped(t *testing.T) {
 
 	// first health check, should keep us in replica / healthy
 	before := time.Now()
-	tm.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 14 * time.Second
+	tm.healthReporter.(*fakeHealthCheck).reportReplicationDelay = 14 * time.Second
 	tm.runHealthCheck()
 	ti, err := tm.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
@@ -437,7 +437,7 @@ func TestQueryServiceStopped(t *testing.T) {
 
 	// health check should now fail
 	before = time.Now()
-	tm.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 15 * time.Second
+	tm.healthReporter.(*fakeHealthCheck).reportReplicationDelay = 15 * time.Second
 	tm.runHealthCheck()
 	ti, err = tm.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
@@ -488,7 +488,7 @@ func TestTabletControl(t *testing.T) {
 
 	// first health check, should keep us in replica, just broadcast
 	before := time.Now()
-	tm.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 16 * time.Second
+	tm.healthReporter.(*fakeHealthCheck).reportReplicationDelay = 16 * time.Second
 	tm.runHealthCheck()
 	ti, err := tm.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
@@ -527,7 +527,7 @@ func TestTabletControl(t *testing.T) {
 	defer unlock(&err)
 
 	// Let's generate the keyspace graph we have partition information for this cell
-	err = topotools.RebuildKeyspaceLocked(ctx, logutil.NewConsoleLogger(), tm.TopoServer, "test_keyspace", []string{tm.TabletAlias.GetCell()})
+	err = topotools.RebuildKeyspaceLocked(ctx, logutil.NewConsoleLogger(), tm.TopoServer, "test_keyspace", []string{tm.tabletAlias.GetCell()})
 	if err != nil {
 		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
 	}
@@ -561,7 +561,7 @@ func TestTabletControl(t *testing.T) {
 
 	// check running a health check will not start it again
 	before = time.Now()
-	tm.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 17 * time.Second
+	tm.healthReporter.(*fakeHealthCheck).reportReplicationDelay = 17 * time.Second
 	tm.runHealthCheck()
 	ti, err = tm.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
@@ -588,8 +588,8 @@ func TestTabletControl(t *testing.T) {
 	// NOTE: No state change here since nothing has changed.
 
 	// go unhealthy, check we go to error state and QS is not running
-	tm.HealthReporter.(*fakeHealthCheck).reportError = fmt.Errorf("tablet is unhealthy")
-	tm.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 18 * time.Second
+	tm.healthReporter.(*fakeHealthCheck).reportError = fmt.Errorf("tablet is unhealthy")
+	tm.healthReporter.(*fakeHealthCheck).reportReplicationDelay = 18 * time.Second
 	before = time.Now()
 	tm.runHealthCheck()
 	ti, err = tm.TopoServer.GetTablet(ctx, tabletAlias)
@@ -615,8 +615,8 @@ func TestTabletControl(t *testing.T) {
 	}
 
 	// go back healthy, check QS is still not running
-	tm.HealthReporter.(*fakeHealthCheck).reportError = nil
-	tm.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 19 * time.Second
+	tm.healthReporter.(*fakeHealthCheck).reportError = nil
+	tm.healthReporter.(*fakeHealthCheck).reportReplicationDelay = 19 * time.Second
 	before = time.Now()
 	tm.runHealthCheck()
 	ti, err = tm.TopoServer.GetTablet(ctx, tabletAlias)
@@ -687,7 +687,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	}
 
 	// Run health check to turn into a healthy replica
-	tm.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 12 * time.Second
+	tm.healthReporter.(*fakeHealthCheck).reportReplicationDelay = 12 * time.Second
 	tm.runHealthCheck()
 	if !tm.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should be running")
@@ -700,7 +700,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	}
 
 	// Change to master.
-	tm.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 19 * time.Second
+	tm.healthReporter.(*fakeHealthCheck).reportReplicationDelay = 19 * time.Second
 	if err := tm.ChangeType(ctx, topodatapb.TabletType_MASTER); err != nil {
 		t.Fatalf("TabletExternallyReparented failed: %v", err)
 	}
@@ -750,7 +750,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	}
 
 	// Run health check to make sure we stay good
-	tm.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 20 * time.Second
+	tm.healthReporter.(*fakeHealthCheck).reportReplicationDelay = 20 * time.Second
 	tm.runHealthCheck()
 	ti, err = tm.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
@@ -838,7 +838,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	// Refresh the tablet state, as vtctl MigrateServedFrom would do.
 	// This should also trigger a health broadcast since the QueryService state
 	// changes from NOT_SERVING to SERVING.
-	tm.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 23 * time.Second
+	tm.healthReporter.(*fakeHealthCheck).reportReplicationDelay = 23 * time.Second
 	tm.RefreshState(ctx)
 
 	// QueryService changed from NOT_SERVING to SERVING.
@@ -906,7 +906,7 @@ func TestBackupStateChange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tm.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 16 * time.Second
+	tm.healthReporter.(*fakeHealthCheck).reportReplicationDelay = 16 * time.Second
 
 	// change to BACKUP, query service will turn off
 	if err := tm.ChangeType(ctx, topodatapb.TabletType_BACKUP); err != nil {
@@ -954,7 +954,7 @@ func TestRestoreStateChange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tm.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 16 * time.Second
+	tm.healthReporter.(*fakeHealthCheck).reportReplicationDelay = 16 * time.Second
 
 	// change to RESTORE, query service will turn off
 	if err := tm.ChangeType(ctx, topodatapb.TabletType_RESTORE); err != nil {

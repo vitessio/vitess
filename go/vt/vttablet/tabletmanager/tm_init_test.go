@@ -46,7 +46,7 @@ func TestInitTabletFixesReplicationData(t *testing.T) {
 	// start with a tablet record that doesn't exist
 	tm := &TabletManager{
 		TopoServer:  ts,
-		TabletAlias: tabletAlias,
+		tabletAlias: tabletAlias,
 		MysqlDaemon: fakemysqldaemon.NewFakeMysqlDaemon(nil),
 		DBConfigs:   &dbconfigs.DBConfigs{},
 		batchCtx:    ctx,
@@ -63,7 +63,7 @@ func TestInitTabletFixesReplicationData(t *testing.T) {
 		Cell: cell,
 		Uid:  2,
 	}
-	tm.TabletAlias = tabletAlias
+	tm.tabletAlias = tabletAlias
 
 	tablet, err := buildTabletFromInput(tabletAlias, int32(1234), int32(3456))
 	require.NoError(t, err)
@@ -112,7 +112,7 @@ func TestInitTabletDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.
 	// start with a tablet record that doesn't exist
 	tm := &TabletManager{
 		TopoServer:  ts,
-		TabletAlias: tabletAlias,
+		tabletAlias: tabletAlias,
 		MysqlDaemon: fakemysqldaemon.NewFakeMysqlDaemon(nil),
 		DBConfigs:   &dbconfigs.DBConfigs{},
 		batchCtx:    ctx,
@@ -129,7 +129,7 @@ func TestInitTabletDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.
 		Cell: "cell1",
 		Uid:  2,
 	}
-	tm.TabletAlias = tabletAlias
+	tm.tabletAlias = tabletAlias
 
 	tablet, err := buildTabletFromInput(tabletAlias, int32(1234), int32(3456))
 	require.NoError(t, err)
@@ -186,13 +186,13 @@ func TestInitTablet(t *testing.T) {
 	mysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(db)
 	tm := &TabletManager{
 		TopoServer:     ts,
-		TabletAlias:    tabletAlias,
+		tabletAlias:    tabletAlias,
 		MysqlDaemon:    mysqlDaemon,
 		DBConfigs:      &dbconfigs.DBConfigs{},
 		VREngine:       vreplication.NewTestEngine(nil, "", nil, nil, "", nil),
 		batchCtx:       ctx,
 		History:        history.New(historyLength),
-		BaseTabletType: topodatapb.TabletType_REPLICA,
+		baseTabletType: topodatapb.TabletType_REPLICA,
 		_healthy:       fmt.Errorf("healthcheck not run yet"),
 	}
 
@@ -217,7 +217,7 @@ func TestInitTablet(t *testing.T) {
 		t.Fatalf("GetSrvKeyspace failed: %v", err)
 	}
 
-	tm.TabletAlias = tabletAlias
+	tm.tabletAlias = tabletAlias
 
 	tablet, err := buildTabletFromInput(tabletAlias, port, gRPCPort)
 	require.NoError(t, err)

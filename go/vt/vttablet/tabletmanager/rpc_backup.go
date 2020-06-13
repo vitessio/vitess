@@ -53,7 +53,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 		return vterrors.Wrap(err, "failed to find backup engine")
 	}
 	// get Tablet info from topo so that it is up to date
-	tablet, err := tm.TopoServer.GetTablet(ctx, tm.TabletAlias)
+	tablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 		}
 		defer tm.unlock()
 
-		tablet, err := tm.TopoServer.GetTablet(ctx, tm.TabletAlias)
+		tablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 		if err != nil {
 			return err
 		}
@@ -135,7 +135,7 @@ func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.L
 	}
 	defer tm.unlock()
 
-	tablet, err := tm.TopoServer.GetTablet(ctx, tm.TabletAlias)
+	tablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -159,7 +159,7 @@ func (tm *TabletManager) beginBackup(backupMode string) error {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
 	if tm._isBackupRunning {
-		return fmt.Errorf("a backup is already running on tablet: %v", tm.TabletAlias)
+		return fmt.Errorf("a backup is already running on tablet: %v", tm.tabletAlias)
 	}
 	// when mode is online we don't take the action lock, so we continue to serve,
 	// but let's set _isBackupRunning to true
