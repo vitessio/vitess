@@ -36,16 +36,16 @@ import (
 
 // lock is used at the beginning of an RPC call, to lock the
 // action mutex. It returns ctx.Err() if <-ctx.Done() after the lock.
-func (agent *TabletManager) lock(ctx context.Context) error {
-	agent.actionMutex.Lock()
-	agent.actionMutexLocked = true
+func (tm *TabletManager) lock(ctx context.Context) error {
+	tm.actionMutex.Lock()
+	tm.actionMutexLocked = true
 
 	// After we take the lock (which could take a long time), we
 	// check the client is still here.
 	select {
 	case <-ctx.Done():
-		agent.actionMutexLocked = false
-		agent.actionMutex.Unlock()
+		tm.actionMutexLocked = false
+		tm.actionMutex.Unlock()
 		return ctx.Err()
 	default:
 		return nil
@@ -53,23 +53,23 @@ func (agent *TabletManager) lock(ctx context.Context) error {
 }
 
 // unlock is the symmetrical action to lock.
-func (agent *TabletManager) unlock() {
-	agent.actionMutexLocked = false
-	agent.actionMutex.Unlock()
+func (tm *TabletManager) unlock() {
+	tm.actionMutexLocked = false
+	tm.actionMutex.Unlock()
 }
 
 // checkLock checks we have locked the actionMutex.
-func (agent *TabletManager) checkLock() {
-	if !agent.actionMutexLocked {
+func (tm *TabletManager) checkLock() {
+	if !tm.actionMutexLocked {
 		panic("programming error: this action should have taken the actionMutex")
 	}
 }
 
 // HandleRPCPanic is part of the RPCTM interface.
-func (agent *TabletManager) HandleRPCPanic(ctx context.Context, name string, args, reply interface{}, verbose bool, err *error) {
+func (tm *TabletManager) HandleRPCPanic(ctx context.Context, name string, args, reply interface{}, verbose bool, err *error) {
 	// panic handling
 	if x := recover(); x != nil {
-		log.Errorf("TabletManager.%v(%v) on %v panic: %v\n%s", name, args, topoproto.TabletAliasString(agent.TabletAlias), x, tb.Stack(4))
+		log.Errorf("TabletManager.%v(%v) on %v panic: %v\n%s", name, args, topoproto.TabletAliasString(tm.TabletAlias), x, tb.Stack(4))
 		*err = fmt.Errorf("caught panic during %v: %v", name, x)
 		return
 	}
@@ -88,11 +88,11 @@ func (agent *TabletManager) HandleRPCPanic(ctx context.Context, name string, arg
 
 	if *err != nil {
 		// error case
-		log.Warningf("TabletManager.%v(%v)(on %v from %v) error: %v", name, args, topoproto.TabletAliasString(agent.TabletAlias), from, (*err).Error())
-		*err = vterrors.Wrapf(*err, "TabletManager.%v on %v error: %v", name, topoproto.TabletAliasString(agent.TabletAlias), (*err).Error())
+		log.Warningf("TabletManager.%v(%v)(on %v from %v) error: %v", name, args, topoproto.TabletAliasString(tm.TabletAlias), from, (*err).Error())
+		*err = vterrors.Wrapf(*err, "TabletManager.%v on %v error: %v", name, topoproto.TabletAliasString(tm.TabletAlias), (*err).Error())
 	} else {
 		// success case
-		log.Infof("TabletManager.%v(%v)(on %v from %v): %#v", name, args, topoproto.TabletAliasString(agent.TabletAlias), from, reply)
+		log.Infof("TabletManager.%v(%v)(on %v from %v): %#v", name, args, topoproto.TabletAliasString(tm.TabletAlias), from, reply)
 	}
 }
 
@@ -104,8 +104,8 @@ type RegisterQueryService func(*TabletManager)
 var RegisterQueryServices []RegisterQueryService
 
 // registerQueryService will register all the instances.
-func (agent *TabletManager) registerQueryService() {
+func (tm *TabletManager) registerQueryService() {
 	for _, f := range RegisterQueryServices {
-		f(agent)
+		f(tm)
 	}
 }

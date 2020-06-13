@@ -66,9 +66,9 @@ func newOrcClient() (*orcClient, error) {
 }
 
 // DiscoverLoop periodically calls orc.discover() until process termination.
-// The Tablet is read from the given agent each time before calling discover().
+// The Tablet is read from the given tm each time before calling discover().
 // Usually this will be launched as a background goroutine.
-func (orc *orcClient) DiscoverLoop(agent *TabletManager) {
+func (orc *orcClient) DiscoverLoop(tm *TabletManager) {
 	if *orcInterval == 0 {
 		// 0 means never.
 		return
@@ -83,7 +83,7 @@ func (orc *orcClient) DiscoverLoop(agent *TabletManager) {
 
 	for {
 		// Do the first attempt immediately.
-		err := orc.Discover(agent.Tablet())
+		err := orc.Discover(tm.Tablet())
 
 		// Only log if we're transitioning between success and failure states.
 		if (err != nil) != (lastErr != nil) {

@@ -147,18 +147,18 @@ func healthHTMLName() template.HTML {
 func addStatusParts(qsc tabletserver.Controller) {
 	servenv.AddStatusPart("Tablet", tabletTemplate, func() interface{} {
 		return map[string]interface{}{
-			"Tablet":               topo.NewTabletInfo(agent.Tablet(), nil),
-			"BlacklistedTables":    agent.BlacklistedTables(),
-			"DisallowQueryService": agent.DisallowQueryService(),
+			"Tablet":               topo.NewTabletInfo(tm.Tablet(), nil),
+			"BlacklistedTables":    tm.BlacklistedTables(),
+			"DisallowQueryService": tm.DisallowQueryService(),
 		}
 	})
 	servenv.AddStatusFuncs(template.FuncMap{
 		"github_com_vitessio_vitess_health_html_name": healthHTMLName,
 	})
 	servenv.AddStatusPart("Health", healthTemplate, func() interface{} {
-		latest, _ := agent.History.Latest().(*tabletmanager.HealthRecord)
+		latest, _ := tm.History.Latest().(*tabletmanager.HealthRecord)
 		return &healthStatus{
-			Records: agent.History.Records(),
+			Records: tm.History.Records(),
 			Config:  tabletmanager.ConfigHTML(),
 			current: latest,
 		}

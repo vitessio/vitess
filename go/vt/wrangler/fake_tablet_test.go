@@ -169,7 +169,7 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 		vtPort = int32(ft.HTTPListener.Addr().(*net.TCPAddr).Port)
 	}
 
-	// Create a test agent on that port, and re-read the record
+	// Create a test tm on that port, and re-read the record
 	// (it has new ports and IP).
 	ft.TM = tabletmanager.NewTestTabletManager(context.Background(), wr.TopoServer(), ft.Tablet.Alias, vtPort, gRPCPort, ft.FakeMysqlDaemon, nil)
 	ft.Tablet = ft.TM.Tablet()

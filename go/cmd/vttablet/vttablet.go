@@ -43,7 +43,7 @@ var (
 	tabletPath                   = flag.String("tablet-path", "", "tablet alias")
 	tabletConfig                 = flag.String("tablet_config", "", "YAML file config for tablet")
 
-	agent *tabletmanager.TabletManager
+	tm *tabletmanager.TabletManager
 )
 
 func init() {
@@ -132,8 +132,8 @@ func main() {
 	qsc.InitACL(*tableACLConfig, *enforceTableACLConfig, *tableACLConfigReloadInterval)
 
 	// Create mysqld and register the health reporter (needs to be done
-	// before initializing the agent, so the initial health check
-	// done by the agent has the right reporter)
+	// before initializing the tm, so the initial health check
+	// done by the tm has the right reporter)
 	mysqld := mysqlctl.NewMysqld(config.DB)
 	servenv.OnClose(mysqld.Close)
 
@@ -142,15 +142,15 @@ func main() {
 	if servenv.GRPCPort != nil {
 		gRPCPort = int32(*servenv.GRPCPort)
 	}
-	agent, err = tabletmanager.NewTabletManager(context.Background(), ts, mysqld, qsc, tabletAlias, config, mycnf, int32(*servenv.Port), gRPCPort)
+	tm, err = tabletmanager.NewTabletManager(context.Background(), ts, mysqld, qsc, tabletAlias, config, mycnf, int32(*servenv.Port), gRPCPort)
 	if err != nil {
 		log.Exitf("NewTabletManager() failed: %v", err)
 	}
 
 	servenv.OnClose(func() {
-		// Close the agent so that our topo entry gets pruned properly and any
+		// Close the tm so that our topo entry gets pruned properly and any
 		// background goroutines that use the topo connection are stopped.
-		agent.Close()
+		tm.Close()
 
 		// We will still use the topo server during lameduck period
 		// to update our state, so closing it in OnClose()

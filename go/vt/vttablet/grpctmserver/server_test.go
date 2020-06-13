@@ -42,7 +42,7 @@ func TestGRPCTMServer(t *testing.T) {
 	// Create a gRPC server and listen on the port.
 	s := grpc.NewServer()
 	fakeTM := tmrpctest.NewFakeRPCTM(t)
-	tabletmanagerservicepb.RegisterTabletManagerServer(s, &server{agent: fakeTM})
+	tabletmanagerservicepb.RegisterTabletManagerServer(s, &server{tm: fakeTM})
 	go s.Serve(listener)
 
 	// Create a gRPC client to talk to the fake tablet.
