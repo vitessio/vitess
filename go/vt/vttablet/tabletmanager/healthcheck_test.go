@@ -131,7 +131,7 @@ func (fhc *fakeHealthCheck) HTMLName() template.HTML {
 	return template.HTML("fakeHealthCheck")
 }
 
-func createTestAgent(ctx context.Context, t *testing.T, preStart func(*TabletManager)) *TabletManager {
+func createTestTM(ctx context.Context, t *testing.T, preStart func(*TabletManager)) *TabletManager {
 	ts := memorytopo.NewServer("cell1")
 
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
@@ -175,7 +175,7 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	}()
 
 	ctx := context.Background()
-	agent := createTestAgent(ctx, t, nil)
+	agent := createTestTM(ctx, t, nil)
 
 	// Consume the first health broadcast triggered by TabletManager.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
@@ -273,7 +273,7 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 func TestErrSlaveNotRunningIsHealthy(t *testing.T) {
 	*unhealthyThreshold = 10 * time.Minute
 	ctx := context.Background()
-	agent := createTestAgent(ctx, t, nil)
+	agent := createTestTM(ctx, t, nil)
 
 	// Consume the first health broadcast triggered by TabletManager.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
@@ -326,7 +326,7 @@ func TestErrSlaveNotRunningIsHealthy(t *testing.T) {
 // query service, it should not go healthy.
 func TestQueryServiceNotStarting(t *testing.T) {
 	ctx := context.Background()
-	agent := createTestAgent(ctx, t, func(a *TabletManager) {
+	agent := createTestTM(ctx, t, func(a *TabletManager) {
 		// The SetServingType that will fail is part of Start()
 		// so we have to do this here.
 		a.QueryServiceControl.(*tabletservermock.Controller).SetServingTypeError = fmt.Errorf("test cannot start query service")
@@ -379,7 +379,7 @@ func TestQueryServiceNotStarting(t *testing.T) {
 // service is shut down, the tablet goes unhealthy
 func TestQueryServiceStopped(t *testing.T) {
 	ctx := context.Background()
-	agent := createTestAgent(ctx, t, nil)
+	agent := createTestTM(ctx, t, nil)
 
 	// Consume the first health broadcast triggered by TabletManager.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
@@ -474,7 +474,7 @@ func TestQueryServiceStopped(t *testing.T) {
 // query service in a tablet.
 func TestTabletControl(t *testing.T) {
 	ctx := context.Background()
-	agent := createTestAgent(ctx, t, nil)
+	agent := createTestTM(ctx, t, nil)
 
 	// Consume the first health broadcast triggered by TabletManager.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
@@ -674,7 +674,7 @@ func TestTabletControl(t *testing.T) {
 // of a StreamHealthResponse message.
 func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	ctx := context.Background()
-	agent := createTestAgent(ctx, t, nil)
+	agent := createTestTM(ctx, t, nil)
 
 	// Consume the first health broadcast triggered by TabletManager.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
@@ -867,7 +867,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 // return an error
 func TestOldHealthCheck(t *testing.T) {
 	ctx := context.Background()
-	agent := createTestAgent(ctx, t, nil)
+	agent := createTestTM(ctx, t, nil)
 	*healthCheckInterval = 20 * time.Second
 	agent._healthy = nil
 
@@ -894,7 +894,7 @@ func TestOldHealthCheck(t *testing.T) {
 // the replication delay before setting REPLICA tablet to SERVING
 func TestBackupStateChange(t *testing.T) {
 	ctx := context.Background()
-	agent := createTestAgent(ctx, t, nil)
+	agent := createTestTM(ctx, t, nil)
 
 	*degradedThreshold = 7 * time.Second
 	*unhealthyThreshold = 15 * time.Second
@@ -942,7 +942,7 @@ func TestBackupStateChange(t *testing.T) {
 // the replication delay before setting REPLICA tablet to SERVING
 func TestRestoreStateChange(t *testing.T) {
 	ctx := context.Background()
-	agent := createTestAgent(ctx, t, nil)
+	agent := createTestTM(ctx, t, nil)
 
 	*degradedThreshold = 7 * time.Second
 	*unhealthyThreshold = 15 * time.Second

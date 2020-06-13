@@ -455,9 +455,9 @@ func TestRPCTabletExternallyReparentedDemotesMasterToConfiguredTabletType(t *tes
 	defer oldMaster.StopActionLoop(t)
 	defer newMaster.StopActionLoop(t)
 
-	// For a real Agent, this would be initialized from initTabletType.
-	oldMaster.Agent.BaseTabletType = topodatapb.TabletType_SPARE
-	newMaster.Agent.BaseTabletType = topodatapb.TabletType_SPARE
+	// For a real TM, this would be initialized from initTabletType.
+	oldMaster.TM.BaseTabletType = topodatapb.TabletType_SPARE
+	newMaster.TM.BaseTabletType = topodatapb.TabletType_SPARE
 
 	// Build keyspace graph
 	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldMaster.Tablet.Keyspace, []string{"cell1"})
@@ -499,5 +499,5 @@ func TestRPCTabletExternallyReparentedDemotesMasterToConfiguredTabletType(t *tes
 	assert.NoError(t, err)
 
 	assert.True(t, topoproto.TabletAliasEqual(newMaster.Tablet.Alias, shardInfo.MasterAlias))
-	assert.Equal(t, topodatapb.TabletType_MASTER, newMaster.Agent.Tablet().Type)
+	assert.Equal(t, topodatapb.TabletType_MASTER, newMaster.TM.Tablet().Type)
 }

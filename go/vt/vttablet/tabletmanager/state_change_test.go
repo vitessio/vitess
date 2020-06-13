@@ -35,7 +35,7 @@ func TestPublishState(t *testing.T) {
 	// code path.
 
 	ctx := context.Background()
-	agent := createTestAgent(ctx, t, nil)
+	agent := createTestTM(ctx, t, nil)
 	ttablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, agent.Tablet(), ttablet.Tablet)
@@ -77,7 +77,7 @@ func TestFindMysqlPort(t *testing.T) {
 	mysqlPortRetryInterval = 1 * time.Millisecond
 
 	ctx := context.Background()
-	agent := createTestAgent(ctx, t, nil)
+	agent := createTestTM(ctx, t, nil)
 	err := agent.checkMysql(ctx)
 	require.NoError(t, err)
 	ttablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)

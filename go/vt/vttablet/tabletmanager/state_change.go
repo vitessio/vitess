@@ -92,11 +92,11 @@ func (agent *TabletManager) loadBlacklistRules(ctx context.Context, tablet *topo
 // brodcasts the new health, then sleep for grace period, to give time
 // to clients to get the new status.
 func (agent *TabletManager) lameduck(reason string) {
-	log.Infof("Agent is entering lameduck, reason: %v", reason)
+	log.Infof("TabletManager is entering lameduck, reason: %v", reason)
 	agent.QueryServiceControl.EnterLameduck()
 	agent.broadcastHealth()
 	time.Sleep(*gracePeriod)
-	log.Infof("Agent is leaving lameduck")
+	log.Infof("TabletManager is leaving lameduck")
 }
 
 func (agent *TabletManager) broadcastHealth() {

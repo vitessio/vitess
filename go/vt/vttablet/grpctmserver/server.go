@@ -38,7 +38,7 @@ import (
 // server is the gRPC implementation of the RPC server
 type server struct {
 	// implementation of the agent to call
-	agent tabletmanager.RPCAgent
+	agent tabletmanager.RPCTM
 }
 
 func (s *server) Ping(ctx context.Context, request *tabletmanagerdatapb.PingRequest) (response *tabletmanagerdatapb.PingResponse, err error) {
