@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package agentrpctest
+package tmrpctest
 
 import (
 	"fmt"
@@ -41,9 +41,9 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// fakeRPCAgent implements tabletmanager.RPCAgent and fills in all
+// fakeRPCTM implements tabletmanager.RPCTM and fills in all
 // possible values in all APIs
-type fakeRPCAgent struct {
+type fakeRPCTM struct {
 	t      *testing.T
 	panics bool
 	// slow if true will let Ping() sleep and effectively not respond to an RPC.
@@ -52,30 +52,30 @@ type fakeRPCAgent struct {
 	mu sync.Mutex
 }
 
-func (fra *fakeRPCAgent) LockTables(ctx context.Context) error {
+func (fra *fakeRPCTM) LockTables(ctx context.Context) error {
 	panic("implement me")
 }
 
-func (fra *fakeRPCAgent) UnlockTables(ctx context.Context) error {
+func (fra *fakeRPCTM) UnlockTables(ctx context.Context) error {
 	panic("implement me")
 }
 
-func (fra *fakeRPCAgent) setSlow(slow bool) {
+func (fra *fakeRPCTM) setSlow(slow bool) {
 	fra.mu.Lock()
 	fra.slow = slow
 	fra.mu.Unlock()
 }
 
-// NewFakeRPCAgent returns a fake tabletmanager.RPCAgent that's just a mirror.
-func NewFakeRPCAgent(t *testing.T) tabletmanager.RPCAgent {
-	return &fakeRPCAgent{
+// NewFakeRPCTM returns a fake tabletmanager.RPCTM that's just a mirror.
+func NewFakeRPCTM(t *testing.T) tabletmanager.RPCTM {
+	return &fakeRPCTM{
 		t: t,
 	}
 }
 
 // The way this test is organized is a repetition of:
 // - static test data for a call
-// - implementation of the tabletmanager.RPCAgent method for fakeRPCAgent
+// - implementation of the tabletmanager.RPCTM method for fakeRPCTM
 // - static test method for the call (client side)
 // for each possible method of the interface.
 // This makes the implementations all in the same spot.
@@ -171,7 +171,7 @@ func expectHandleRPCPanic(t *testing.T, name string, verbose bool, err error) {
 // Various read-only methods
 //
 
-func (fra *fakeRPCAgent) Ping(ctx context.Context, args string) string {
+func (fra *fakeRPCTM) Ping(ctx context.Context, args string) string {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -221,7 +221,7 @@ func agentRPCTestDialExpiredContext(ctx context.Context, t *testing.T, client tm
 // agentRPCTestRPCTimeout verifies that
 // the context returns the right DeadlineExceeded Err() for
 // RPCs failed due to an expired context during execution.
-func agentRPCTestRPCTimeout(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet, fakeAgent *fakeRPCAgent) {
+func agentRPCTestRPCTimeout(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet, fakeTM *fakeRPCTM) {
 	// We must use a timeout > 0 such that the context deadline hasn't expired
 	// yet in grpctmclient.Client.dial().
 	// NOTE: This might still race e.g. when test execution takes too long the
@@ -229,8 +229,8 @@ func agentRPCTestRPCTimeout(ctx context.Context, t *testing.T, client tmclient.T
 	//       will be reduced but the test will not flake.
 	shortCtx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
 	defer cancel()
-	fakeAgent.setSlow(true)
-	defer func() { fakeAgent.setSlow(false) }()
+	fakeTM.setSlow(true)
+	defer func() { fakeTM.setSlow(false) }()
 	err := client.Ping(shortCtx, tablet)
 	if err == nil {
 		t.Fatal("agentRPCTestRPCTimeout: RPC with expired context did not fail")
@@ -272,7 +272,7 @@ var testGetSchemaReply = &tabletmanagerdatapb.SchemaDefinition{
 	Version: "xxx",
 }
 
-func (fra *fakeRPCAgent) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (fra *fakeRPCTM) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -317,7 +317,7 @@ var testGetPermissionsReply = &tabletmanagerdatapb.Permissions{
 	},
 }
 
-func (fra *fakeRPCAgent) GetPermissions(ctx context.Context) (*tabletmanagerdatapb.Permissions, error) {
+func (fra *fakeRPCTM) GetPermissions(ctx context.Context) (*tabletmanagerdatapb.Permissions, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -340,7 +340,7 @@ func agentRPCTestGetPermissionsPanic(ctx context.Context, t *testing.T, client t
 
 var testSetReadOnlyExpectedValue bool
 
-func (fra *fakeRPCAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
+func (fra *fakeRPCTM) SetReadOnly(ctx context.Context, rdonly bool) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -372,7 +372,7 @@ func agentRPCTestSetReadOnlyPanic(ctx context.Context, t *testing.T, client tmcl
 
 var testChangeTypeValue = topodatapb.TabletType_REPLICA
 
-func (fra *fakeRPCAgent) ChangeType(ctx context.Context, tabletType topodatapb.TabletType) error {
+func (fra *fakeRPCTM) ChangeType(ctx context.Context, tabletType topodatapb.TabletType) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -394,7 +394,7 @@ func agentRPCTestChangeTypePanic(ctx context.Context, t *testing.T, client tmcli
 
 var testSleepDuration = time.Minute
 
-func (fra *fakeRPCAgent) Sleep(ctx context.Context, duration time.Duration) {
+func (fra *fakeRPCTM) Sleep(ctx context.Context, duration time.Duration) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -427,7 +427,7 @@ var testExecuteHookHookResult = &hook.HookResult{
 	Stderr:     "err",
 }
 
-func (fra *fakeRPCAgent) ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.HookResult {
+func (fra *fakeRPCTM) ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.HookResult {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -447,7 +447,7 @@ func agentRPCTestExecuteHookPanic(ctx context.Context, t *testing.T, client tmcl
 
 var testRefreshStateCalled = false
 
-func (fra *fakeRPCAgent) RefreshState(ctx context.Context) error {
+func (fra *fakeRPCTM) RefreshState(ctx context.Context) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -473,7 +473,7 @@ func agentRPCTestRefreshStatePanic(ctx context.Context, t *testing.T, client tmc
 	expectHandleRPCPanic(t, "RefreshState", true /*verbose*/, err)
 }
 
-func (fra *fakeRPCAgent) RunHealthCheck(ctx context.Context) {
+func (fra *fakeRPCTM) RunHealthCheck(ctx context.Context) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -481,7 +481,7 @@ func (fra *fakeRPCAgent) RunHealthCheck(ctx context.Context) {
 
 var testIgnoreHealthErrorValue = ".*"
 
-func (fra *fakeRPCAgent) IgnoreHealthError(ctx context.Context, pattern string) error {
+func (fra *fakeRPCTM) IgnoreHealthError(ctx context.Context, pattern string) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -515,7 +515,7 @@ func agentRPCTestIgnoreHealthErrorPanic(ctx context.Context, t *testing.T, clien
 
 var testReloadSchemaCalled = false
 
-func (fra *fakeRPCAgent) ReloadSchema(ctx context.Context, waitPosition string) error {
+func (fra *fakeRPCTM) ReloadSchema(ctx context.Context, waitPosition string) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -549,7 +549,7 @@ var testSchemaChangeResult = []*tabletmanagerdatapb.SchemaChangeResult{
 	},
 }
 
-func (fra *fakeRPCAgent) PreflightSchema(ctx context.Context, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
+func (fra *fakeRPCTM) PreflightSchema(ctx context.Context, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -575,7 +575,7 @@ var testSchemaChange = &tmutils.SchemaChange{
 	AfterSchema:      testGetSchemaReply,
 }
 
-func (fra *fakeRPCAgent) ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
+func (fra *fakeRPCTM) ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -623,7 +623,7 @@ var testExecuteFetchResult = &querypb.QueryResult{
 	},
 }
 
-func (fra *fakeRPCAgent) ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
+func (fra *fakeRPCTM) ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -635,7 +635,7 @@ func (fra *fakeRPCAgent) ExecuteFetchAsDba(ctx context.Context, query []byte, db
 	return testExecuteFetchResult, nil
 }
 
-func (fra *fakeRPCAgent) ExecuteFetchAsAllPrivs(ctx context.Context, query []byte, dbName string, maxrows int, reloadSchema bool) (*querypb.QueryResult, error) {
+func (fra *fakeRPCTM) ExecuteFetchAsAllPrivs(ctx context.Context, query []byte, dbName string, maxrows int, reloadSchema bool) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -646,7 +646,7 @@ func (fra *fakeRPCAgent) ExecuteFetchAsAllPrivs(ctx context.Context, query []byt
 	return testExecuteFetchResult, nil
 }
 
-func (fra *fakeRPCAgent) ExecuteFetchAsApp(ctx context.Context, query []byte, maxrows int) (*querypb.QueryResult, error) {
+func (fra *fakeRPCTM) ExecuteFetchAsApp(ctx context.Context, query []byte, maxrows int) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -702,7 +702,7 @@ var testReplicationStatus = &replicationdatapb.Status{
 	MasterConnectRetry:  12,
 }
 
-func (fra *fakeRPCAgent) SlaveStatus(ctx context.Context) (*replicationdatapb.Status, error) {
+func (fra *fakeRPCTM) SlaveStatus(ctx context.Context) (*replicationdatapb.Status, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -721,14 +721,14 @@ func agentRPCTestSlaveStatusPanic(ctx context.Context, t *testing.T, client tmcl
 
 var testReplicationPosition = "MariaDB/5-456-890"
 
-func (fra *fakeRPCAgent) MasterPosition(ctx context.Context) (string, error) {
+func (fra *fakeRPCTM) MasterPosition(ctx context.Context) (string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	return testReplicationPosition, nil
 }
 
-func (fra *fakeRPCAgent) WaitForPosition(ctx context.Context, pos string) error {
+func (fra *fakeRPCTM) WaitForPosition(ctx context.Context, pos string) error {
 	panic("unimplemented")
 }
 
@@ -744,7 +744,7 @@ func agentRPCTestMasterPositionPanic(ctx context.Context, t *testing.T, client t
 
 var testStopSlaveCalled = false
 
-func (fra *fakeRPCAgent) StopSlave(ctx context.Context) error {
+func (fra *fakeRPCTM) StopSlave(ctx context.Context) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -764,7 +764,7 @@ func agentRPCTestStopSlavePanic(ctx context.Context, t *testing.T, client tmclie
 
 var testStopSlaveMinimumWaitTime = time.Hour
 
-func (fra *fakeRPCAgent) StopSlaveMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error) {
+func (fra *fakeRPCTM) StopSlaveMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -785,7 +785,7 @@ func agentRPCTestStopSlaveMinimumPanic(ctx context.Context, t *testing.T, client
 
 var testStartSlaveCalled = false
 
-func (fra *fakeRPCAgent) StartSlave(ctx context.Context) error {
+func (fra *fakeRPCTM) StartSlave(ctx context.Context) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -795,7 +795,7 @@ func (fra *fakeRPCAgent) StartSlave(ctx context.Context) error {
 
 var testStartSlaveUntilAfterCalledWith = ""
 
-func (fra *fakeRPCAgent) StartSlaveUntilAfter(ctx context.Context, position string, waitTime time.Duration) error {
+func (fra *fakeRPCTM) StartSlaveUntilAfter(ctx context.Context, position string, waitTime time.Duration) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -820,7 +820,7 @@ func agentRPCTestStartSlavePanic(ctx context.Context, t *testing.T, client tmcli
 
 var testGetSlavesResult = []string{"slave1", "slave2"}
 
-func (fra *fakeRPCAgent) GetSlaves(ctx context.Context) ([]string, error) {
+func (fra *fakeRPCTM) GetSlaves(ctx context.Context) ([]string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -839,7 +839,7 @@ func agentRPCTestGetSlavesPanic(ctx context.Context, t *testing.T, client tmclie
 
 var testVRQuery = "query"
 
-func (fra *fakeRPCAgent) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
+func (fra *fakeRPCTM) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -862,7 +862,7 @@ var (
 	wfppos = ""
 )
 
-func (fra *fakeRPCAgent) VReplicationWaitForPos(ctx context.Context, id int, pos string) error {
+func (fra *fakeRPCTM) VReplicationWaitForPos(ctx context.Context, id int, pos string) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -887,7 +887,7 @@ func agentRPCTestVReplicationWaitForPosPanic(ctx context.Context, t *testing.T, 
 
 var testResetReplicationCalled = false
 
-func (fra *fakeRPCAgent) ResetReplication(ctx context.Context) error {
+func (fra *fakeRPCTM) ResetReplication(ctx context.Context) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -905,7 +905,7 @@ func agentRPCTestResetReplicationPanic(ctx context.Context, t *testing.T, client
 	expectHandleRPCPanic(t, "ResetReplication", true /*verbose*/, err)
 }
 
-func (fra *fakeRPCAgent) InitMaster(ctx context.Context) (string, error) {
+func (fra *fakeRPCTM) InitMaster(ctx context.Context) (string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -931,7 +931,7 @@ var testMasterAlias = &topodatapb.TabletAlias{
 	Uid:  372,
 }
 
-func (fra *fakeRPCAgent) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, position string) error {
+func (fra *fakeRPCTM) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, position string) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -955,7 +955,7 @@ func agentRPCTestPopulateReparentJournalPanic(ctx context.Context, t *testing.T,
 
 var testInitSlaveCalled = false
 
-func (fra *fakeRPCAgent) InitSlave(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
+func (fra *fakeRPCTM) InitSlave(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -976,7 +976,7 @@ func agentRPCTestInitSlavePanic(ctx context.Context, t *testing.T, client tmclie
 	expectHandleRPCPanic(t, "InitSlave", true /*verbose*/, err)
 }
 
-func (fra *fakeRPCAgent) DemoteMaster(ctx context.Context) (string, error) {
+func (fra *fakeRPCTM) DemoteMaster(ctx context.Context) (string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -995,7 +995,7 @@ func agentRPCTestDemoteMasterPanic(ctx context.Context, t *testing.T, client tmc
 
 var testUndoDemoteMasterCalled = false
 
-func (fra *fakeRPCAgent) UndoDemoteMaster(ctx context.Context) error {
+func (fra *fakeRPCTM) UndoDemoteMaster(ctx context.Context) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1015,7 +1015,7 @@ func agentRPCTestUndoDemoteMasterPanic(ctx context.Context, t *testing.T, client
 
 var testReplicationPositionReturned = "MariaDB/5-567-3456"
 
-func (fra *fakeRPCAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position string) (string, error) {
+func (fra *fakeRPCTM) PromoteSlaveWhenCaughtUp(ctx context.Context, position string) (string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1035,7 +1035,7 @@ func agentRPCTestPromoteSlaveWhenCaughtUpPanic(ctx context.Context, t *testing.T
 
 var testSlaveWasPromotedCalled = false
 
-func (fra *fakeRPCAgent) SlaveWasPromoted(ctx context.Context) error {
+func (fra *fakeRPCTM) SlaveWasPromoted(ctx context.Context) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1056,7 +1056,7 @@ func agentRPCTestSlaveWasPromotedPanic(ctx context.Context, t *testing.T, client
 var testSetMasterCalled = false
 var testForceStartSlave = true
 
-func (fra *fakeRPCAgent) SetMaster(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) error {
+func (fra *fakeRPCTM) SetMaster(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1084,7 +1084,7 @@ var testSlaveWasRestartedParent = &topodatapb.TabletAlias{
 }
 var testSlaveWasRestartedCalled = false
 
-func (fra *fakeRPCAgent) SlaveWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error {
+func (fra *fakeRPCTM) SlaveWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1103,7 +1103,7 @@ func agentRPCTestSlaveWasRestartedPanic(ctx context.Context, t *testing.T, clien
 	expectHandleRPCPanic(t, "SlaveWasRestarted", true /*verbose*/, err)
 }
 
-func (fra *fakeRPCAgent) StopReplicationAndGetStatus(ctx context.Context) (*replicationdatapb.Status, error) {
+func (fra *fakeRPCTM) StopReplicationAndGetStatus(ctx context.Context) (*replicationdatapb.Status, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1120,7 +1120,7 @@ func agentRPCTestStopReplicationAndGetStatusPanic(ctx context.Context, t *testin
 	expectHandleRPCPanic(t, "StopReplicationAndGetStatus", true /*verbose*/, err)
 }
 
-func (fra *fakeRPCAgent) PromoteSlave(ctx context.Context) (string, error) {
+func (fra *fakeRPCTM) PromoteSlave(ctx context.Context) (string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1137,7 +1137,7 @@ func agentRPCTestPromoteSlavePanic(ctx context.Context, t *testing.T, client tmc
 	expectHandleRPCPanic(t, "PromoteSlave", true /*verbose*/, err)
 }
 
-func (fra *fakeRPCAgent) PromoteReplica(ctx context.Context) (string, error) {
+func (fra *fakeRPCTM) PromoteReplica(ctx context.Context) (string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1163,7 +1163,7 @@ var testBackupAllowMaster = false
 var testBackupCalled = false
 var testRestoreFromBackupCalled = false
 
-func (fra *fakeRPCAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowMaster bool) error {
+func (fra *fakeRPCTM) Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowMaster bool) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1195,7 +1195,7 @@ func agentRPCTestBackupPanic(ctx context.Context, t *testing.T, client tmclient.
 	expectHandleRPCPanic(t, "Backup", true /*verbose*/, err)
 }
 
-func (fra *fakeRPCAgent) RestoreFromBackup(ctx context.Context, logger logutil.Logger) error {
+func (fra *fakeRPCTM) RestoreFromBackup(ctx context.Context, logger logutil.Logger) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1229,8 +1229,8 @@ func agentRPCTestRestoreFromBackupPanic(ctx context.Context, t *testing.T, clien
 // RPC helpers
 //
 
-// HandleRPCPanic is part of the RPCAgent interface
-func (fra *fakeRPCAgent) HandleRPCPanic(ctx context.Context, name string, args, reply interface{}, verbose bool, err *error) {
+// HandleRPCPanic is part of the RPCTM interface
+func (fra *fakeRPCTM) HandleRPCPanic(ctx context.Context, name string, args, reply interface{}, verbose bool, err *error) {
 	if x := recover(); x != nil {
 		// Use the panic case to make sure 'name' and 'verbose' are right.
 		*err = fmt.Errorf("HandleRPCPanic caught panic during %v with verbose %v", name, verbose)
@@ -1241,14 +1241,14 @@ func (fra *fakeRPCAgent) HandleRPCPanic(ctx context.Context, name string, args, 
 
 // Run will run the test suite using the provided client and
 // the provided tablet. Tablet's vt address needs to be configured so
-// the client will connect to a server backed by our RPCAgent (returned
-// by NewFakeRPCAgent)
-func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet, fakeAgent tabletmanager.RPCAgent) {
+// the client will connect to a server backed by our RPCTM (returned
+// by NewFakeRPCTM)
+func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet, fakeTM tabletmanager.RPCTM) {
 	ctx := context.Background()
 
 	// Test RPC specific methods of the interface.
 	agentRPCTestDialExpiredContext(ctx, t, client, tablet)
-	agentRPCTestRPCTimeout(ctx, t, client, tablet, fakeAgent.(*fakeRPCAgent))
+	agentRPCTestRPCTimeout(ctx, t, client, tablet, fakeTM.(*fakeRPCTM))
 
 	// Various read-only methods
 	agentRPCTestPing(ctx, t, client, tablet)
@@ -1303,7 +1303,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	//
 	// Tests panic handling everywhere now
 	//
-	fakeAgent.(*fakeRPCAgent).panics = true
+	fakeTM.(*fakeRPCTM).panics = true
 
 	// Various read-only methods
 	agentRPCTestPingPanic(ctx, t, client, tablet)

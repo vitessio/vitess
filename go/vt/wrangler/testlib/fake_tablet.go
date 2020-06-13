@@ -69,7 +69,7 @@ type FakeTablet struct {
 	// The following fields are created when we start the event loop for
 	// the tablet, and closed / cleared when we stop it.
 	// The Listener is used by the gRPC server.
-	Agent    *tabletmanager.TabletManager
+	TM       *tabletmanager.TabletManager
 	Listener net.Listener
 
 	// These optional fields are used if the tablet also needs to
@@ -167,8 +167,8 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 // StartActionLoop will start the action loop for a fake tablet,
 // using ft.FakeMysqlDaemon as the backing mysqld.
 func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
-	if ft.Agent != nil {
-		t.Fatalf("Agent for %v is already running", ft.Tablet.Alias)
+	if ft.TM != nil {
+		t.Fatalf("TM for %v is already running", ft.Tablet.Alias)
 	}
 
 	// Listen on a random port for gRPC.
@@ -196,11 +196,11 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 
 	// Create a test agent on that port, and re-read the record
 	// (it has new ports and IP).
-	ft.Agent = tabletmanager.NewTestTabletManager(context.Background(), wr.TopoServer(), ft.Tablet.Alias, vtPort, gRPCPort, ft.FakeMysqlDaemon, nil)
-	ft.Tablet = ft.Agent.Tablet()
+	ft.TM = tabletmanager.NewTestTabletManager(context.Background(), wr.TopoServer(), ft.Tablet.Alias, vtPort, gRPCPort, ft.FakeMysqlDaemon, nil)
+	ft.Tablet = ft.TM.Tablet()
 
 	// Register the gRPC server, and starts listening.
-	grpctmserver.RegisterForTest(ft.RPCServer, ft.Agent)
+	grpctmserver.RegisterForTest(ft.RPCServer, ft.TM)
 	go ft.RPCServer.Serve(ft.Listener)
 
 	// And wait for it to serve, so we don't start using it before it's
@@ -210,7 +210,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 	c := tmclient.NewTabletManagerClient()
 	for timeout >= 0 {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-		err := c.Ping(ctx, ft.Agent.Tablet())
+		err := c.Ping(ctx, ft.TM.Tablet())
 		cancel()
 		if err == nil {
 			break
@@ -225,15 +225,15 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 
 // StopActionLoop will stop the Action Loop for the given FakeTablet
 func (ft *FakeTablet) StopActionLoop(t *testing.T) {
-	if ft.Agent == nil {
-		t.Fatalf("Agent for %v is not running", ft.Tablet.Alias)
+	if ft.TM == nil {
+		t.Fatalf("TM for %v is not running", ft.Tablet.Alias)
 	}
 	if ft.StartHTTPServer {
 		ft.HTTPListener.Close()
 	}
 	ft.Listener.Close()
-	ft.Agent.Stop()
-	ft.Agent = nil
+	ft.TM.Stop()
+	ft.TM = nil
 	ft.Listener = nil
 	ft.HTTPListener = nil
 }

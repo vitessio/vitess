@@ -293,7 +293,7 @@ func (tc *splitCloneTestCase) tearDown() {
 		ft.StopActionLoop(tc.t)
 		ft.RPCServer.Stop()
 		ft.FakeMysqlDaemon.Close()
-		ft.Agent = nil
+		ft.TM = nil
 		ft.RPCServer = nil
 		ft.FakeMysqlDaemon = nil
 	}
@@ -985,7 +985,7 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 		}
 
 		// Make leftReplica the new MASTER.
-		tc.leftReplica.Agent.ChangeType(ctx, topodatapb.TabletType_MASTER)
+		tc.leftReplica.TM.ChangeType(ctx, topodatapb.TabletType_MASTER)
 		t.Logf("resetting tablet back to MASTER")
 		tc.leftReplicaQs.UpdateType(topodatapb.TabletType_MASTER)
 		tc.leftReplicaQs.AddDefaultHealthResponse()

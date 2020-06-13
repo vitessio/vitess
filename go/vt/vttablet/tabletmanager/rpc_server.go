@@ -65,7 +65,7 @@ func (agent *TabletManager) checkLock() {
 	}
 }
 
-// HandleRPCPanic is part of the RPCAgent interface.
+// HandleRPCPanic is part of the RPCTM interface.
 func (agent *TabletManager) HandleRPCPanic(ctx context.Context, name string, args, reply interface{}, verbose bool, err *error) {
 	// panic handling
 	if x := recover(); x != nil {
