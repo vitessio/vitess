@@ -131,7 +131,7 @@ func (fhc *fakeHealthCheck) HTMLName() template.HTML {
 	return template.HTML("fakeHealthCheck")
 }
 
-func createTestAgent(ctx context.Context, t *testing.T, preStart func(*ActionAgent)) *ActionAgent {
+func createTestAgent(ctx context.Context, t *testing.T, preStart func(*TabletManager)) *TabletManager {
 	ts := memorytopo.NewServer("cell1")
 
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
@@ -158,7 +158,7 @@ func createTestAgent(ctx context.Context, t *testing.T, preStart func(*ActionAge
 	}
 
 	mysqlDaemon := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(-1)}
-	agent := NewTestActionAgent(ctx, ts, tabletAlias, port, 0, mysqlDaemon, preStart)
+	agent := NewTestTabletManager(ctx, ts, tabletAlias, port, 0, mysqlDaemon, preStart)
 
 	agent.HealthReporter = &fakeHealthCheck{}
 
@@ -177,7 +177,7 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	ctx := context.Background()
 	agent := createTestAgent(ctx, t, nil)
 
-	// Consume the first health broadcast triggered by ActionAgent.Start():
+	// Consume the first health broadcast triggered by TabletManager.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
 	//  should be serving.
 	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
@@ -275,7 +275,7 @@ func TestErrSlaveNotRunningIsHealthy(t *testing.T) {
 	ctx := context.Background()
 	agent := createTestAgent(ctx, t, nil)
 
-	// Consume the first health broadcast triggered by ActionAgent.Start():
+	// Consume the first health broadcast triggered by TabletManager.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
 	//  should be serving.
 	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
@@ -326,7 +326,7 @@ func TestErrSlaveNotRunningIsHealthy(t *testing.T) {
 // query service, it should not go healthy.
 func TestQueryServiceNotStarting(t *testing.T) {
 	ctx := context.Background()
-	agent := createTestAgent(ctx, t, func(a *ActionAgent) {
+	agent := createTestAgent(ctx, t, func(a *TabletManager) {
 		// The SetServingType that will fail is part of Start()
 		// so we have to do this here.
 		a.QueryServiceControl.(*tabletservermock.Controller).SetServingTypeError = fmt.Errorf("test cannot start query service")
@@ -381,7 +381,7 @@ func TestQueryServiceStopped(t *testing.T) {
 	ctx := context.Background()
 	agent := createTestAgent(ctx, t, nil)
 
-	// Consume the first health broadcast triggered by ActionAgent.Start():
+	// Consume the first health broadcast triggered by TabletManager.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
 	//  should be serving.
 	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
@@ -476,7 +476,7 @@ func TestTabletControl(t *testing.T) {
 	ctx := context.Background()
 	agent := createTestAgent(ctx, t, nil)
 
-	// Consume the first health broadcast triggered by ActionAgent.Start():
+	// Consume the first health broadcast triggered by TabletManager.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
 	//  should be serving.
 	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
@@ -676,7 +676,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	ctx := context.Background()
 	agent := createTestAgent(ctx, t, nil)
 
-	// Consume the first health broadcast triggered by ActionAgent.Start():
+	// Consume the first health broadcast triggered by TabletManager.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
 	//  should be serving.
 	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {

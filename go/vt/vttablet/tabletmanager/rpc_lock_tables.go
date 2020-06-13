@@ -35,7 +35,7 @@ var (
 )
 
 // LockTables will lock all tables with read locks, effectively pausing replication while the lock is held (idempotent)
-func (agent *ActionAgent) LockTables(ctx context.Context) error {
+func (agent *TabletManager) LockTables(ctx context.Context) error {
 	// get a connection
 	agent.mutex.Lock()
 	defer agent.mutex.Unlock()
@@ -82,7 +82,7 @@ func (agent *ActionAgent) LockTables(ctx context.Context) error {
 	return nil
 }
 
-func (agent *ActionAgent) lockTablesUsingLockTables(conn *dbconnpool.DBConnection) error {
+func (agent *TabletManager) lockTablesUsingLockTables(conn *dbconnpool.DBConnection) error {
 	log.Warningf("failed to lock tables with FTWRL - falling back to LOCK TABLES")
 
 	// Ensure schema engine is Open. If vttablet came up in a non_serving role,
@@ -116,7 +116,7 @@ func (agent *ActionAgent) lockTablesUsingLockTables(conn *dbconnpool.DBConnectio
 }
 
 // UnlockTables will unlock all tables (idempotent)
-func (agent *ActionAgent) UnlockTables(ctx context.Context) error {
+func (agent *TabletManager) UnlockTables(ctx context.Context) error {
 	agent.mutex.Lock()
 	defer agent.mutex.Unlock()
 
@@ -127,7 +127,7 @@ func (agent *ActionAgent) UnlockTables(ctx context.Context) error {
 	return agent.unlockTablesHoldingMutex()
 }
 
-func (agent *ActionAgent) unlockTablesHoldingMutex() error {
+func (agent *TabletManager) unlockTablesHoldingMutex() error {
 	// We are cleaning up manually, let's kill the timer
 	agent._lockTablesTimer.Stop()
 	_, err := agent._lockTablesConnection.ExecuteFetch("UNLOCK TABLES", 0, false)

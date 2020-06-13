@@ -25,7 +25,7 @@ import (
 )
 
 // ExecuteFetchAsDba will execute the given query, possibly disabling binlogs and reload schema.
-func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
+func (agent *TabletManager) ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
 	// get a connection
 	conn, err := agent.MysqlDaemon.GetDbaConnection(ctx)
 	if err != nil {
@@ -70,7 +70,7 @@ func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query []byte, d
 }
 
 // ExecuteFetchAsAllPrivs will execute the given query, possibly reloading schema.
-func (agent *ActionAgent) ExecuteFetchAsAllPrivs(ctx context.Context, query []byte, dbName string, maxrows int, reloadSchema bool) (*querypb.QueryResult, error) {
+func (agent *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, query []byte, dbName string, maxrows int, reloadSchema bool) (*querypb.QueryResult, error) {
 	// get a connection
 	conn, err := agent.MysqlDaemon.GetAllPrivsConnection(ctx)
 	if err != nil {
@@ -97,7 +97,7 @@ func (agent *ActionAgent) ExecuteFetchAsAllPrivs(ctx context.Context, query []by
 }
 
 // ExecuteFetchAsApp will execute the given query.
-func (agent *ActionAgent) ExecuteFetchAsApp(ctx context.Context, query []byte, maxrows int) (*querypb.QueryResult, error) {
+func (agent *TabletManager) ExecuteFetchAsApp(ctx context.Context, query []byte, maxrows int) (*querypb.QueryResult, error) {
 	// get a connection
 	conn, err := agent.MysqlDaemon.GetAppConnection(ctx)
 	if err != nil {

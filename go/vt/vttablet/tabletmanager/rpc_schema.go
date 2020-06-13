@@ -30,14 +30,14 @@ import (
 )
 
 // GetSchema returns the schema.
-func (agent *ActionAgent) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (agent *TabletManager) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	return agent.MysqlDaemon.GetSchema(ctx, topoproto.TabletDbName(agent.Tablet()), tables, excludeTables, includeViews)
 }
 
 // ReloadSchema will reload the schema
 // This doesn't need the action mutex because periodic schema reloads happen
 // in the background anyway.
-func (agent *ActionAgent) ReloadSchema(ctx context.Context, waitPosition string) error {
+func (agent *TabletManager) ReloadSchema(ctx context.Context, waitPosition string) error {
 	if agent.DBConfigs.IsZero() {
 		// we skip this for test instances that can't connect to the DB anyway
 		return nil
@@ -59,7 +59,7 @@ func (agent *ActionAgent) ReloadSchema(ctx context.Context, waitPosition string)
 }
 
 // PreflightSchema will try out the schema changes in "changes".
-func (agent *ActionAgent) PreflightSchema(ctx context.Context, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
+func (agent *TabletManager) PreflightSchema(ctx context.Context, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
 	if err := agent.lock(ctx); err != nil {
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func (agent *ActionAgent) PreflightSchema(ctx context.Context, changes []string)
 }
 
 // ApplySchema will apply a schema change
-func (agent *ActionAgent) ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
+func (agent *TabletManager) ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
 	if err := agent.lock(ctx); err != nil {
 		return nil, err
 	}

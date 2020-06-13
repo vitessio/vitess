@@ -50,7 +50,7 @@ var (
 // It will either work, fail gracefully, or return
 // an error in case of a non-recoverable error.
 // It takes the action lock so no RPC interferes.
-func (agent *ActionAgent) RestoreData(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool) error {
+func (agent *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool) error {
 	if err := agent.lock(ctx); err != nil {
 		return err
 	}
@@ -61,7 +61,7 @@ func (agent *ActionAgent) RestoreData(ctx context.Context, logger logutil.Logger
 	return agent.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore)
 }
 
-func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool) error {
+func (agent *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool) error {
 	var originalType topodatapb.TabletType
 	tablet := agent.Tablet()
 	originalType, tablet.Type = tablet.Type, topodatapb.TabletType_RESTORE
@@ -166,7 +166,7 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	return nil
 }
 
-func (agent *ActionAgent) startReplication(ctx context.Context, pos mysql.Position, tabletType topodatapb.TabletType) error {
+func (agent *TabletManager) startReplication(ctx context.Context, pos mysql.Position, tabletType topodatapb.TabletType) error {
 	cmds := []string{
 		"STOP SLAVE",
 		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
@@ -261,7 +261,7 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos mysql.Positi
 	return nil
 }
 
-func (agent *ActionAgent) getLocalMetadataValues(tabletType topodatapb.TabletType) map[string]string {
+func (agent *TabletManager) getLocalMetadataValues(tabletType topodatapb.TabletType) map[string]string {
 	tablet := agent.Tablet()
 	values := map[string]string{
 		"Alias":         topoproto.TabletAliasString(tablet.Alias),
