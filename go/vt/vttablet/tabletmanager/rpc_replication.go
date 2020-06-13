@@ -40,7 +40,7 @@ var (
 )
 
 // SlaveStatus returns the replication status
-func (agent *ActionAgent) SlaveStatus(ctx context.Context) (*replicationdatapb.Status, error) {
+func (agent *TabletManager) SlaveStatus(ctx context.Context) (*replicationdatapb.Status, error) {
 	status, err := agent.MysqlDaemon.SlaveStatus()
 	if err != nil {
 		return nil, err
@@ -49,7 +49,7 @@ func (agent *ActionAgent) SlaveStatus(ctx context.Context) (*replicationdatapb.S
 }
 
 // MasterPosition returns the master position
-func (agent *ActionAgent) MasterPosition(ctx context.Context) (string, error) {
+func (agent *TabletManager) MasterPosition(ctx context.Context) (string, error) {
 	pos, err := agent.MysqlDaemon.MasterPosition()
 	if err != nil {
 		return "", err
@@ -58,7 +58,7 @@ func (agent *ActionAgent) MasterPosition(ctx context.Context) (string, error) {
 }
 
 // WaitForPosition returns the master position
-func (agent *ActionAgent) WaitForPosition(ctx context.Context, pos string) error {
+func (agent *TabletManager) WaitForPosition(ctx context.Context, pos string) error {
 	mpos, err := mysql.DecodePosition(pos)
 	if err != nil {
 		return err
@@ -68,7 +68,7 @@ func (agent *ActionAgent) WaitForPosition(ctx context.Context, pos string) error
 
 // StopSlave will stop the mysql. Works both when Vitess manages
 // replication or not (using hook if not).
-func (agent *ActionAgent) StopSlave(ctx context.Context) error {
+func (agent *TabletManager) StopSlave(ctx context.Context) error {
 	if err := agent.lock(ctx); err != nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func (agent *ActionAgent) StopSlave(ctx context.Context) error {
 	return agent.stopSlaveLocked(ctx)
 }
 
-func (agent *ActionAgent) stopSlaveLocked(ctx context.Context) error {
+func (agent *TabletManager) stopSlaveLocked(ctx context.Context) error {
 
 	// Remember that we were told to stop, so we don't try to
 	// restart ourselves (in replication_reporter).
@@ -100,7 +100,7 @@ func (agent *ActionAgent) stopSlaveLocked(ctx context.Context) error {
 // StopSlaveMinimum will stop the slave after it reaches at least the
 // provided position. Works both when Vitess manages
 // replication or not (using hook if not).
-func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error) {
+func (agent *TabletManager) StopSlaveMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error) {
 	if err := agent.lock(ctx); err != nil {
 		return "", err
 	}
@@ -127,7 +127,7 @@ func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position string,
 
 // StartSlave will start the mysql. Works both when Vitess manages
 // replication or not (using hook if not).
-func (agent *ActionAgent) StartSlave(ctx context.Context) error {
+func (agent *TabletManager) StartSlave(ctx context.Context) error {
 	if err := agent.lock(ctx); err != nil {
 		return err
 	}
@@ -154,7 +154,7 @@ func (agent *ActionAgent) StartSlave(ctx context.Context) error {
 
 // StartSlaveUntilAfter will start the replication and let it catch up
 // until and including the transactions in `position`
-func (agent *ActionAgent) StartSlaveUntilAfter(ctx context.Context, position string, waitTime time.Duration) error {
+func (agent *TabletManager) StartSlaveUntilAfter(ctx context.Context, position string, waitTime time.Duration) error {
 	if err := agent.lock(ctx); err != nil {
 		return err
 	}
@@ -172,13 +172,13 @@ func (agent *ActionAgent) StartSlaveUntilAfter(ctx context.Context, position str
 }
 
 // GetSlaves returns the address of all the slaves
-func (agent *ActionAgent) GetSlaves(ctx context.Context) ([]string, error) {
+func (agent *TabletManager) GetSlaves(ctx context.Context) ([]string, error) {
 	return mysqlctl.FindSlaves(agent.MysqlDaemon)
 }
 
 // ResetReplication completely resets the replication on the host.
 // All binary and relay logs are flushed. All replication positions are reset.
-func (agent *ActionAgent) ResetReplication(ctx context.Context) error {
+func (agent *TabletManager) ResetReplication(ctx context.Context) error {
 	if err := agent.lock(ctx); err != nil {
 		return err
 	}
@@ -189,7 +189,7 @@ func (agent *ActionAgent) ResetReplication(ctx context.Context) error {
 }
 
 // InitMaster enables writes and returns the replication position.
-func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
+func (agent *TabletManager) InitMaster(ctx context.Context) (string, error) {
 	if err := agent.lock(ctx); err != nil {
 		return "", err
 	}
@@ -230,7 +230,7 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 }
 
 // PopulateReparentJournal adds an entry into the reparent_journal table.
-func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, position string) error {
+func (agent *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, position string) error {
 	pos, err := mysql.DecodePosition(position)
 	if err != nil {
 		return err
@@ -243,7 +243,7 @@ func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreat
 
 // InitSlave sets replication master and position, and waits for the
 // reparent_journal table entry up to context timeout
-func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
+func (agent *TabletManager) InitSlave(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
 	if err := agent.lock(ctx); err != nil {
 		return err
 	}
@@ -306,7 +306,7 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.Tabl
 // or on a tablet that already transitioned to REPLICA.
 //
 // If a step fails in the middle, it will try to undo any changes it made.
-func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
+func (agent *TabletManager) DemoteMaster(ctx context.Context) (string, error) {
 	// The public version always reverts on partial failure.
 	return agent.demoteMaster(ctx, true /* revertPartialFailure */)
 }
@@ -315,7 +315,7 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 //
 // If revertPartialFailure is true, and a step fails in the middle, it will try
 // to undo any changes it made.
-func (agent *ActionAgent) demoteMaster(ctx context.Context, revertPartialFailure bool) (replicationPosition string, finalErr error) {
+func (agent *TabletManager) demoteMaster(ctx context.Context, revertPartialFailure bool) (replicationPosition string, finalErr error) {
 	if err := agent.lock(ctx); err != nil {
 		return "", err
 	}
@@ -411,7 +411,7 @@ func (agent *ActionAgent) demoteMaster(ctx context.Context, revertPartialFailure
 // UndoDemoteMaster reverts a previous call to DemoteMaster
 // it sets read-only to false, fixes semi-sync
 // and returns its master position.
-func (agent *ActionAgent) UndoDemoteMaster(ctx context.Context) error {
+func (agent *TabletManager) UndoDemoteMaster(ctx context.Context) error {
 	if err := agent.lock(ctx); err != nil {
 		return err
 	}
@@ -441,7 +441,7 @@ func (agent *ActionAgent) UndoDemoteMaster(ctx context.Context) error {
 // replication up to the provided point, and then makes the slave the
 // shard master.
 // Deprecated
-func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position string) (string, error) {
+func (agent *TabletManager) PromoteSlaveWhenCaughtUp(ctx context.Context, position string) (string, error) {
 	if err := agent.lock(ctx); err != nil {
 		return "", err
 	}
@@ -478,13 +478,13 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 }
 
 // SlaveWasPromoted promotes a slave to master, no questions asked.
-func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
+func (agent *TabletManager) SlaveWasPromoted(ctx context.Context) error {
 	return agent.ChangeType(ctx, topodatapb.TabletType_MASTER)
 }
 
 // SetMaster sets replication master, and waits for the
 // reparent_journal table entry up to context timeout
-func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) error {
+func (agent *TabletManager) SetMaster(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) error {
 	if err := agent.lock(ctx); err != nil {
 		return err
 	}
@@ -493,7 +493,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb
 	return agent.setMasterLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartSlave)
 }
 
-func (agent *ActionAgent) setMasterRepairReplication(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) (err error) {
+func (agent *TabletManager) setMasterRepairReplication(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) (err error) {
 	parent, err := agent.TopoServer.GetTablet(ctx, parentAlias)
 	if err != nil {
 		return err
@@ -509,7 +509,7 @@ func (agent *ActionAgent) setMasterRepairReplication(ctx context.Context, parent
 	return agent.setMasterLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartSlave)
 }
 
-func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) (err error) {
+func (agent *TabletManager) setMasterLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) (err error) {
 	// End orchestrator maintenance at the end of fixing replication.
 	// This is a best effort operation, so it should happen in a goroutine
 	defer func() {
@@ -621,7 +621,7 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 }
 
 // SlaveWasRestarted updates the parent record for a tablet.
-func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error {
+func (agent *TabletManager) SlaveWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error {
 	if err := agent.lock(ctx); err != nil {
 		return err
 	}
@@ -642,7 +642,7 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, parent *topodat
 
 // StopReplicationAndGetStatus stops MySQL replication, and returns the
 // current status.
-func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*replicationdatapb.Status, error) {
+func (agent *TabletManager) StopReplicationAndGetStatus(ctx context.Context) (*replicationdatapb.Status, error) {
 	if err := agent.lock(ctx); err != nil {
 		return nil, err
 	}
@@ -669,7 +669,7 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*rep
 }
 
 // PromoteReplica makes the current tablet the master
-func (agent *ActionAgent) PromoteReplica(ctx context.Context) (string, error) {
+func (agent *TabletManager) PromoteReplica(ctx context.Context) (string, error) {
 	if err := agent.lock(ctx); err != nil {
 		return "", err
 	}
@@ -700,7 +700,7 @@ func (agent *ActionAgent) PromoteReplica(ctx context.Context) (string, error) {
 
 // PromoteSlave makes the current tablet the master
 // Deprecated
-func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
+func (agent *TabletManager) PromoteSlave(ctx context.Context) (string, error) {
 	if err := agent.lock(ctx); err != nil {
 		return "", err
 	}
@@ -737,7 +737,7 @@ func isMasterEligible(tabletType topodatapb.TabletType) bool {
 	return false
 }
 
-func (agent *ActionAgent) fixSemiSync(tabletType topodatapb.TabletType) error {
+func (agent *TabletManager) fixSemiSync(tabletType topodatapb.TabletType) error {
 	if !*enableSemiSync {
 		// Semi-sync handling is not enabled.
 		return nil
@@ -754,7 +754,7 @@ func (agent *ActionAgent) fixSemiSync(tabletType topodatapb.TabletType) error {
 	return agent.MysqlDaemon.SetSemiSyncEnabled(tabletType == topodatapb.TabletType_MASTER, true)
 }
 
-func (agent *ActionAgent) fixSemiSyncAndReplication(tabletType topodatapb.TabletType) error {
+func (agent *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletType) error {
 	if !*enableSemiSync {
 		// Semi-sync handling is not enabled.
 		return nil
@@ -804,7 +804,7 @@ func (agent *ActionAgent) fixSemiSyncAndReplication(tabletType topodatapb.Tablet
 	return nil
 }
 
-func (agent *ActionAgent) handleRelayLogError(err error) error {
+func (agent *TabletManager) handleRelayLogError(err error) error {
 	// attempt to fix this error:
 	// Slave failed to initialize relay log info structure from the repository (errno 1872) (sqlstate HY000) during query: START SLAVE
 	// see https://bugs.mysql.com/bug.php?id=83713 or https://github.com/vitessio/vitess/issues/5067

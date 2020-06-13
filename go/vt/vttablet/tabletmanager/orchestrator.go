@@ -68,7 +68,7 @@ func newOrcClient() (*orcClient, error) {
 // DiscoverLoop periodically calls orc.discover() until process termination.
 // The Tablet is read from the given agent each time before calling discover().
 // Usually this will be launched as a background goroutine.
-func (orc *orcClient) DiscoverLoop(agent *ActionAgent) {
+func (orc *orcClient) DiscoverLoop(agent *TabletManager) {
 	if *orcInterval == 0 {
 		// 0 means never.
 		return

@@ -38,17 +38,17 @@ import (
 // Major groups of methods are broken out into files named "rpc_*.go".
 
 // Ping makes sure RPCs work, and refreshes the tablet record.
-func (agent *ActionAgent) Ping(ctx context.Context, args string) string {
+func (agent *TabletManager) Ping(ctx context.Context, args string) string {
 	return args
 }
 
 // GetPermissions returns the db permissions.
-func (agent *ActionAgent) GetPermissions(ctx context.Context) (*tabletmanagerdatapb.Permissions, error) {
+func (agent *TabletManager) GetPermissions(ctx context.Context) (*tabletmanagerdatapb.Permissions, error) {
 	return mysqlctl.GetPermissions(agent.MysqlDaemon)
 }
 
 // SetReadOnly makes the mysql instance read-only or read-write.
-func (agent *ActionAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
+func (agent *TabletManager) SetReadOnly(ctx context.Context, rdonly bool) error {
 	if err := agent.lock(ctx); err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func (agent *ActionAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
 }
 
 // ChangeType changes the tablet type
-func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.TabletType) error {
+func (agent *TabletManager) ChangeType(ctx context.Context, tabletType topodatapb.TabletType) error {
 	if err := agent.lock(ctx); err != nil {
 		return err
 	}
@@ -67,7 +67,7 @@ func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.
 }
 
 // ChangeType changes the tablet type
-func (agent *ActionAgent) changeTypeLocked(ctx context.Context, tabletType topodatapb.TabletType) error {
+func (agent *TabletManager) changeTypeLocked(ctx context.Context, tabletType topodatapb.TabletType) error {
 	// We don't want to allow multiple callers to claim a tablet as drained. There is a race that could happen during
 	// horizontal resharding where two vtworkers will try to DRAIN the same tablet. This check prevents that race from
 	// causing errors.
@@ -102,7 +102,7 @@ func (agent *ActionAgent) changeTypeLocked(ctx context.Context, tabletType topod
 }
 
 // Sleep sleeps for the duration
-func (agent *ActionAgent) Sleep(ctx context.Context, duration time.Duration) {
+func (agent *TabletManager) Sleep(ctx context.Context, duration time.Duration) {
 	if err := agent.lock(ctx); err != nil {
 		// client gave up
 		return
@@ -113,7 +113,7 @@ func (agent *ActionAgent) Sleep(ctx context.Context, duration time.Duration) {
 }
 
 // ExecuteHook executes the provided hook locally, and returns the result.
-func (agent *ActionAgent) ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.HookResult {
+func (agent *TabletManager) ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.HookResult {
 	if err := agent.lock(ctx); err != nil {
 		// client gave up
 		return &hook.HookResult{}
@@ -126,7 +126,7 @@ func (agent *ActionAgent) ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.
 }
 
 // RefreshState reload the tablet record from the topo server.
-func (agent *ActionAgent) RefreshState(ctx context.Context) error {
+func (agent *TabletManager) RefreshState(ctx context.Context) error {
 	if err := agent.lock(ctx); err != nil {
 		return err
 	}
@@ -136,12 +136,12 @@ func (agent *ActionAgent) RefreshState(ctx context.Context) error {
 }
 
 // RunHealthCheck will manually run the health check on the tablet.
-func (agent *ActionAgent) RunHealthCheck(ctx context.Context) {
+func (agent *TabletManager) RunHealthCheck(ctx context.Context) {
 	agent.runHealthCheck()
 }
 
 // IgnoreHealthError sets the regexp for health check errors to ignore.
-func (agent *ActionAgent) IgnoreHealthError(ctx context.Context, pattern string) error {
+func (agent *TabletManager) IgnoreHealthError(ctx context.Context, pattern string) error {
 	var expr *regexp.Regexp
 	if pattern != "" {
 		var err error

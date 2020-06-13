@@ -40,7 +40,7 @@ var (
 // replicationReporter implements health.Reporter
 type replicationReporter struct {
 	// set at construction time
-	agent *ActionAgent
+	agent *TabletManager
 	now   func() time.Time
 
 	// store the last time we successfully got the lag, so if we
@@ -111,7 +111,7 @@ func (r *replicationReporter) HTMLName() template.HTML {
 
 // repairReplication tries to connect this slave to whoever is
 // the current master of the shard, and start replicating.
-func repairReplication(ctx context.Context, agent *ActionAgent) error {
+func repairReplication(ctx context.Context, agent *TabletManager) error {
 	if *mysqlctl.DisableActiveReparents {
 		return fmt.Errorf("can't repair replication with --disable_active_reparents")
 	}
@@ -156,7 +156,7 @@ func repairReplication(ctx context.Context, agent *ActionAgent) error {
 	return agent.setMasterRepairReplication(ctx, si.MasterAlias, 0, "", true)
 }
 
-func registerReplicationReporter(agent *ActionAgent) {
+func registerReplicationReporter(agent *TabletManager) {
 	if *enableReplicationReporter {
 		health.DefaultAggregator.Register("replication_reporter",
 			&replicationReporter{

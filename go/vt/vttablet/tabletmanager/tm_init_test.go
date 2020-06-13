@@ -44,7 +44,7 @@ func TestInitTabletFixesReplicationData(t *testing.T) {
 	}
 
 	// start with a tablet record that doesn't exist
-	agent := &ActionAgent{
+	agent := &TabletManager{
 		TopoServer:  ts,
 		TabletAlias: tabletAlias,
 		MysqlDaemon: fakemysqldaemon.NewFakeMysqlDaemon(nil),
@@ -110,7 +110,7 @@ func TestInitTabletDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.
 	}
 
 	// start with a tablet record that doesn't exist
-	agent := &ActionAgent{
+	agent := &TabletManager{
 		TopoServer:  ts,
 		TabletAlias: tabletAlias,
 		MysqlDaemon: fakemysqldaemon.NewFakeMysqlDaemon(nil),
@@ -184,7 +184,7 @@ func TestInitTablet(t *testing.T) {
 	port := int32(1234)
 	gRPCPort := int32(3456)
 	mysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(db)
-	agent := &ActionAgent{
+	agent := &TabletManager{
 		TopoServer:     ts,
 		TabletAlias:    tabletAlias,
 		MysqlDaemon:    mysqlDaemon,
