@@ -120,18 +120,23 @@ func init() {
 // TabletManager is the main class for the tablet manager.
 type TabletManager struct {
 	// The following fields are set during creation
-	QueryServiceControl tabletserver.Controller
-	UpdateStream        binlog.UpdateStreamControl
-	HealthReporter      health.Reporter
 	TopoServer          *topo.Server
-	TabletAlias         *topodatapb.TabletAlias
 	Cnf                 *mysqlctl.Mycnf
 	MysqlDaemon         mysqlctl.MysqlDaemon
 	DBConfigs           *dbconfigs.DBConfigs
+	QueryServiceControl tabletserver.Controller
+	UpdateStream        binlog.UpdateStreamControl
 	VREngine            *vreplication.Engine
-	// BaseTabletType is the tablet type we revert back to
+
+	// healthReporter initiates healthchecks.
+	healthReporter health.Reporter
+
+	// tabletAlias is saved away from tablet for read-only access
+	tabletAlias *topodatapb.TabletAlias
+
+	// baseTabletType is the tablet type we revert back to
 	// when we transition back from something like MASTER.
-	BaseTabletType topodatapb.TabletType
+	baseTabletType topodatapb.TabletType
 
 	// batchCtx is given to the tm by its creator, and should be used for
 	// any background tasks spawned by the tm.
@@ -243,18 +248,18 @@ func New(
 	config.DB.DBName = topoproto.TabletDbName(tablet)
 
 	tm = &TabletManager{
-		QueryServiceControl: queryServiceControl,
-		HealthReporter:      health.DefaultAggregator,
 		batchCtx:            batchCtx,
 		TopoServer:          ts,
-		TabletAlias:         tabletAlias,
 		Cnf:                 mycnf,
 		MysqlDaemon:         mysqld,
 		DBConfigs:           config.DB,
+		QueryServiceControl: queryServiceControl,
 		History:             history.New(historyLength),
-		_healthy:            fmt.Errorf("healthcheck not run yet"),
-		BaseTabletType:      tablet.Type,
+		tabletAlias:         tabletAlias,
+		baseTabletType:      tablet.Type,
 		tablet:              tablet,
+		healthReporter:      health.DefaultAggregator,
+		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
 
 	ctx, cancel := context.WithTimeout(tm.batchCtx, *initTimeout)
@@ -284,7 +289,7 @@ func New(
 	tm.QueryServiceControl.RegisterQueryRuleSource(blacklistQueryRules)
 	servenv.OnRun(tm.registerQueryService)
 
-	tm.UpdateStream = binlog.NewUpdateStream(tm.TopoServer, tablet.Keyspace, tm.TabletAlias.Cell, tm.DBConfigs.DbaWithDB(), tm.QueryServiceControl.SchemaEngine())
+	tm.UpdateStream = binlog.NewUpdateStream(tm.TopoServer, tablet.Keyspace, tm.tabletAlias.Cell, tm.DBConfigs.DbaWithDB(), tm.QueryServiceControl.SchemaEngine())
 	servenv.OnRun(tm.UpdateStream.RegisterService)
 	servenv.OnTerm(tm.UpdateStream.Disable)
 
@@ -342,19 +347,19 @@ func NewTestTM(
 	}
 
 	tm := &TabletManager{
-		QueryServiceControl: tabletservermock.NewController(),
-		UpdateStream:        binlog.NewUpdateStreamControlMock(),
-		HealthReporter:      health.DefaultAggregator,
 		batchCtx:            batchCtx,
 		TopoServer:          ts,
-		TabletAlias:         tabletAlias,
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           &dbconfigs.DBConfigs{},
+		QueryServiceControl: tabletservermock.NewController(),
+		UpdateStream:        binlog.NewUpdateStreamControlMock(),
 		VREngine:            vreplication.NewTestEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient, ti.DbName(), nil),
 		History:             history.New(historyLength),
-		BaseTabletType:      topodatapb.TabletType_REPLICA,
+		tabletAlias:         tabletAlias,
+		baseTabletType:      topodatapb.TabletType_REPLICA,
 		tablet:              ti.Tablet,
+		healthReporter:      health.DefaultAggregator,
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
 	if preStart != nil {
@@ -421,20 +426,20 @@ func NewComboTM(
 	}
 	dbcfgs.DBName = topoproto.TabletDbName(tablet)
 	tm := &TabletManager{
-		QueryServiceControl: queryServiceControl,
-		UpdateStream:        binlog.NewUpdateStreamControlMock(),
-		HealthReporter:      health.DefaultAggregator,
 		batchCtx:            batchCtx,
 		TopoServer:          ts,
-		TabletAlias:         tabletAlias,
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           dbcfgs,
+		QueryServiceControl: queryServiceControl,
+		UpdateStream:        binlog.NewUpdateStreamControlMock(),
 		VREngine:            vreplication.NewTestEngine(nil, "", nil, nil, "", nil),
 		History:             history.New(historyLength),
-		_healthy:            fmt.Errorf("healthcheck not run yet"),
-		BaseTabletType:      tablet.Type,
+		tabletAlias:         tabletAlias,
+		baseTabletType:      tablet.Type,
 		tablet:              tablet,
+		healthReporter:      health.DefaultAggregator,
+		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
 
 	ctx, cancel := context.WithTimeout(tm.batchCtx, *initTimeout)
@@ -611,7 +616,7 @@ func (tm *TabletManager) Close() {
 	updateCtx, updateCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 	defer updateCancel()
 
-	if _, err := tm.TopoServer.UpdateTabletFields(updateCtx, tm.TabletAlias, f); err != nil {
+	if _, err := tm.TopoServer.UpdateTabletFields(updateCtx, tm.tabletAlias, f); err != nil {
 		log.Warningf("Failed to update tablet record, may contain stale identifiers: %v", err)
 	}
 }
@@ -638,7 +643,7 @@ func (tm *TabletManager) Stop() {
 
 // hookExtraEnv returns the map to pass to local hooks
 func (tm *TabletManager) hookExtraEnv() map[string]string {
-	return map[string]string{"TABLET_ALIAS": topoproto.TabletAliasString(tm.TabletAlias)}
+	return map[string]string{"TABLET_ALIAS": topoproto.TabletAliasString(tm.tabletAlias)}
 }
 
 // withRetry will exponentially back off and retry a function upon
@@ -738,7 +743,7 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) error {
 	}
 
 	// Rebuild keyspace if this the first tablet in this keyspace/cell
-	srvKeyspace, err := tm.TopoServer.GetSrvKeyspace(ctx, tm.TabletAlias.Cell, tablet.Keyspace)
+	srvKeyspace, err := tm.TopoServer.GetSrvKeyspace(ctx, tm.tabletAlias.Cell, tablet.Keyspace)
 	switch {
 	case err == nil:
 		tm._srvKeyspace = srvKeyspace
@@ -749,18 +754,18 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) error {
 	}
 
 	// Rebuild vschema graph if this is the first tablet in this keyspace/cell.
-	srvVSchema, err := tm.TopoServer.GetSrvVSchema(ctx, tm.TabletAlias.Cell)
+	srvVSchema, err := tm.TopoServer.GetSrvVSchema(ctx, tm.tabletAlias.Cell)
 	switch {
 	case err == nil:
 		// Check if vschema was rebuilt after the initial creation of the keyspace.
 		if _, keyspaceExists := srvVSchema.GetKeyspaces()[tablet.Keyspace]; !keyspaceExists {
-			if err := tm.TopoServer.RebuildSrvVSchema(ctx, []string{tm.TabletAlias.Cell}); err != nil {
+			if err := tm.TopoServer.RebuildSrvVSchema(ctx, []string{tm.tabletAlias.Cell}); err != nil {
 				return vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to RebuildSrvVSchema")
 			}
 		}
 	case topo.IsErrType(err, topo.NoNode):
 		// There is no SrvSchema in this cell at all, so we definitely need to rebuild.
-		if err := tm.TopoServer.RebuildSrvVSchema(ctx, []string{tm.TabletAlias.Cell}); err != nil {
+		if err := tm.TopoServer.RebuildSrvVSchema(ctx, []string{tm.tabletAlias.Cell}); err != nil {
 			return vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to RebuildSrvVSchema")
 		}
 	default:
@@ -774,12 +779,12 @@ func (tm *TabletManager) checkMastership(ctx context.Context) error {
 	si := tm._shardInfo
 	tm.mutex.Unlock()
 
-	if si.MasterAlias != nil && topoproto.TabletAliasEqual(si.MasterAlias, tm.TabletAlias) {
+	if si.MasterAlias != nil && topoproto.TabletAliasEqual(si.MasterAlias, tm.tabletAlias) {
 		// We're marked as master in the shard record, which could mean the master
 		// tablet process was just restarted. However, we need to check if a new
 		// master is in the process of taking over. In that case, it will let us
 		// know by forcibly updating the old master's tablet record.
-		oldTablet, err := tm.TopoServer.GetTablet(ctx, tm.TabletAlias)
+		oldTablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 		switch {
 		case topo.IsErrType(err, topo.NoNode):
 			// There's no existing tablet record, so we can assume
@@ -804,7 +809,7 @@ func (tm *TabletManager) checkMastership(ctx context.Context) error {
 			return vterrors.Wrap(err, "InitTablet failed to read existing tablet record")
 		}
 	} else {
-		oldTablet, err := tm.TopoServer.GetTablet(ctx, tm.TabletAlias)
+		oldTablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 		switch {
 		case topo.IsErrType(err, topo.NoNode):
 			// There's no existing tablet record, so there is nothing to do

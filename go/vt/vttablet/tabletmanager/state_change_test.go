@@ -36,7 +36,7 @@ func TestPublishState(t *testing.T) {
 
 	ctx := context.Background()
 	tm := createTestTM(ctx, t, nil)
-	ttablet, err := tm.TopoServer.GetTablet(ctx, tm.TabletAlias)
+	ttablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, tm.Tablet(), ttablet.Tablet)
 
@@ -44,7 +44,7 @@ func TestPublishState(t *testing.T) {
 	tab1.Keyspace = "tab1"
 	tm.setTablet(tab1)
 	tm.publishState(ctx)
-	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.TabletAlias)
+	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, tab1, ttablet.Tablet)
 
@@ -52,7 +52,7 @@ func TestPublishState(t *testing.T) {
 	tab2.Keyspace = "tab2"
 	tm.setTablet(tab2)
 	tm.retryPublish()
-	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.TabletAlias)
+	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, tab2, ttablet.Tablet)
 
@@ -61,13 +61,13 @@ func TestPublishState(t *testing.T) {
 	tab3.Hostname = "tab3"
 	tm.setTablet(tab3)
 	tm.publishState(ctx)
-	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.TabletAlias)
+	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, tab2, ttablet.Tablet)
 
 	// Same for retryPublish.
 	tm.retryPublish()
-	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.TabletAlias)
+	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, tab2, ttablet.Tablet)
 }
@@ -80,7 +80,7 @@ func TestFindMysqlPort(t *testing.T) {
 	tm := createTestTM(ctx, t, nil)
 	err := tm.checkMysql(ctx)
 	require.NoError(t, err)
-	ttablet, err := tm.TopoServer.GetTablet(ctx, tm.TabletAlias)
+	ttablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, ttablet.MysqlPort, int32(0))
 
@@ -88,7 +88,7 @@ func TestFindMysqlPort(t *testing.T) {
 	tm.MysqlDaemon.(*fakemysqldaemon.FakeMysqlDaemon).MysqlPort.Set(3306)
 	tm.pubMu.Unlock()
 	for i := 0; i < 10; i++ {
-		ttablet, err := tm.TopoServer.GetTablet(ctx, tm.TabletAlias)
+		ttablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 		require.NoError(t, err)
 		if ttablet.MysqlPort == 3306 {
 			return

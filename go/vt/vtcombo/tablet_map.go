@@ -58,6 +58,7 @@ import (
 // tablet contains all the data for an individual tablet.
 type tablet struct {
 	// configuration parameters
+	alias      *topodatapb.TabletAlias
 	keyspace   string
 	shard      string
 	tabletType topodatapb.TabletType
@@ -95,6 +96,7 @@ func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 	controller.AddStatusHeader()
 	controller.AddStatusPart()
 	tabletMap[uid] = &tablet{
+		alias:      alias,
 		keyspace:   keyspace,
 		shard:      shard,
 		tabletType: tabletType,
@@ -270,9 +272,9 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 	// run healthcheck on all vttablets
 	tmc := tmclient.NewTabletManagerClient()
 	for _, tablet := range tabletMap {
-		tabletInfo, err := ts.GetTablet(ctx, tablet.tm.TabletAlias)
+		tabletInfo, err := ts.GetTablet(ctx, tablet.alias)
 		if err != nil {
-			return fmt.Errorf("cannot find tablet: %+v", tablet.tm.TabletAlias)
+			return fmt.Errorf("cannot find tablet: %+v", tablet.alias)
 		}
 		tmc.RunHealthCheck(ctx, tabletInfo.Tablet)
 	}
