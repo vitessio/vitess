@@ -35,39 +35,39 @@ func TestPublishState(t *testing.T) {
 	// code path.
 
 	ctx := context.Background()
-	agent := createTestTM(ctx, t, nil)
-	ttablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+	tm := createTestTM(ctx, t, nil)
+	ttablet, err := tm.TopoServer.GetTablet(ctx, tm.TabletAlias)
 	require.NoError(t, err)
-	assert.Equal(t, agent.Tablet(), ttablet.Tablet)
+	assert.Equal(t, tm.Tablet(), ttablet.Tablet)
 
-	tab1 := agent.Tablet()
+	tab1 := tm.Tablet()
 	tab1.Keyspace = "tab1"
-	agent.setTablet(tab1)
-	agent.publishState(ctx)
-	ttablet, err = agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+	tm.setTablet(tab1)
+	tm.publishState(ctx)
+	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.TabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, tab1, ttablet.Tablet)
 
-	tab2 := agent.Tablet()
+	tab2 := tm.Tablet()
 	tab2.Keyspace = "tab2"
-	agent.setTablet(tab2)
-	agent.retryPublish()
-	ttablet, err = agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+	tm.setTablet(tab2)
+	tm.retryPublish()
+	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.TabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, tab2, ttablet.Tablet)
 
 	// If hostname doesn't match, it should not update.
-	tab3 := agent.Tablet()
+	tab3 := tm.Tablet()
 	tab3.Hostname = "tab3"
-	agent.setTablet(tab3)
-	agent.publishState(ctx)
-	ttablet, err = agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+	tm.setTablet(tab3)
+	tm.publishState(ctx)
+	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.TabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, tab2, ttablet.Tablet)
 
 	// Same for retryPublish.
-	agent.retryPublish()
-	ttablet, err = agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+	tm.retryPublish()
+	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.TabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, tab2, ttablet.Tablet)
 }
@@ -77,18 +77,18 @@ func TestFindMysqlPort(t *testing.T) {
 	mysqlPortRetryInterval = 1 * time.Millisecond
 
 	ctx := context.Background()
-	agent := createTestTM(ctx, t, nil)
-	err := agent.checkMysql(ctx)
+	tm := createTestTM(ctx, t, nil)
+	err := tm.checkMysql(ctx)
 	require.NoError(t, err)
-	ttablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+	ttablet, err := tm.TopoServer.GetTablet(ctx, tm.TabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, ttablet.MysqlPort, int32(0))
 
-	agent.pubMu.Lock()
-	agent.MysqlDaemon.(*fakemysqldaemon.FakeMysqlDaemon).MysqlPort.Set(3306)
-	agent.pubMu.Unlock()
+	tm.pubMu.Lock()
+	tm.MysqlDaemon.(*fakemysqldaemon.FakeMysqlDaemon).MysqlPort.Set(3306)
+	tm.pubMu.Unlock()
 	for i := 0; i < 10; i++ {
-		ttablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+		ttablet, err := tm.TopoServer.GetTablet(ctx, tm.TabletAlias)
 		require.NoError(t, err)
 		if ttablet.MysqlPort == 3306 {
 			return

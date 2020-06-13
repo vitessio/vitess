@@ -44,7 +44,7 @@ func TestInitTabletFixesReplicationData(t *testing.T) {
 	}
 
 	// start with a tablet record that doesn't exist
-	agent := &TabletManager{
+	tm := &TabletManager{
 		TopoServer:  ts,
 		TabletAlias: tabletAlias,
 		MysqlDaemon: fakemysqldaemon.NewFakeMysqlDaemon(nil),
@@ -63,14 +63,14 @@ func TestInitTabletFixesReplicationData(t *testing.T) {
 		Cell: cell,
 		Uid:  2,
 	}
-	agent.TabletAlias = tabletAlias
+	tm.TabletAlias = tabletAlias
 
 	tablet, err := buildTabletFromInput(tabletAlias, int32(1234), int32(3456))
 	require.NoError(t, err)
-	agent.tablet = tablet
-	err = agent.createKeyspaceShard(context.Background())
+	tm.tablet = tablet
+	err = tm.createKeyspaceShard(context.Background())
 	require.NoError(t, err)
-	err = agent.initTablet(context.Background())
+	err = tm.initTablet(context.Background())
 	require.NoError(t, err)
 
 	sri, err := ts.GetShardReplication(ctx, cell, *initKeyspace, "-c0")
@@ -88,7 +88,7 @@ func TestInitTabletFixesReplicationData(t *testing.T) {
 	}
 
 	// An initTablet will recreate the shard replication data.
-	err = agent.initTablet(context.Background())
+	err = tm.initTablet(context.Background())
 	require.NoError(t, err)
 
 	sri, err = ts.GetShardReplication(ctx, cell, *initKeyspace, "-c0")
@@ -110,7 +110,7 @@ func TestInitTabletDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.
 	}
 
 	// start with a tablet record that doesn't exist
-	agent := &TabletManager{
+	tm := &TabletManager{
 		TopoServer:  ts,
 		TabletAlias: tabletAlias,
 		MysqlDaemon: fakemysqldaemon.NewFakeMysqlDaemon(nil),
@@ -129,14 +129,14 @@ func TestInitTabletDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.
 		Cell: "cell1",
 		Uid:  2,
 	}
-	agent.TabletAlias = tabletAlias
+	tm.TabletAlias = tabletAlias
 
 	tablet, err := buildTabletFromInput(tabletAlias, int32(1234), int32(3456))
 	require.NoError(t, err)
-	agent.tablet = tablet
-	err = agent.createKeyspaceShard(context.Background())
+	tm.tablet = tablet
+	err = tm.createKeyspaceShard(context.Background())
 	require.NoError(t, err)
-	err = agent.initTablet(context.Background())
+	err = tm.initTablet(context.Background())
 	require.NoError(t, err)
 
 	tabletAliases, err := ts.FindAllTabletAliasesInShard(ctx, "test_keyspace", "-c0")
@@ -155,10 +155,10 @@ func TestInitTabletDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.
 	*initShard = "-D0"
 	tablet, err = buildTabletFromInput(tabletAlias, int32(1234), int32(3456))
 	require.NoError(t, err)
-	agent.tablet = tablet
-	err = agent.createKeyspaceShard(context.Background())
+	tm.tablet = tablet
+	err = tm.createKeyspaceShard(context.Background())
 	require.NoError(t, err)
-	err = agent.initTablet(context.Background())
+	err = tm.initTablet(context.Background())
 	// This should fail.
 	require.Error(t, err)
 
@@ -184,7 +184,7 @@ func TestInitTablet(t *testing.T) {
 	port := int32(1234)
 	gRPCPort := int32(3456)
 	mysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(db)
-	agent := &TabletManager{
+	tm := &TabletManager{
 		TopoServer:     ts,
 		TabletAlias:    tabletAlias,
 		MysqlDaemon:    mysqlDaemon,
@@ -209,7 +209,7 @@ func TestInitTablet(t *testing.T) {
 		Uid:  2,
 	}
 
-	_, err := agent.TopoServer.GetSrvKeyspace(ctx, "cell1", "test_keyspace")
+	_, err := tm.TopoServer.GetSrvKeyspace(ctx, "cell1", "test_keyspace")
 	switch {
 	case topo.IsErrType(err, topo.NoNode):
 		// srvKeyspace should not be when tablets haven't been registered to this cell
@@ -217,14 +217,14 @@ func TestInitTablet(t *testing.T) {
 		t.Fatalf("GetSrvKeyspace failed: %v", err)
 	}
 
-	agent.TabletAlias = tabletAlias
+	tm.TabletAlias = tabletAlias
 
 	tablet, err := buildTabletFromInput(tabletAlias, port, gRPCPort)
 	require.NoError(t, err)
-	agent.tablet = tablet
-	err = agent.createKeyspaceShard(context.Background())
+	tm.tablet = tablet
+	err = tm.createKeyspaceShard(context.Background())
 	require.NoError(t, err)
-	err = agent.initTablet(context.Background())
+	err = tm.initTablet(context.Background())
 	require.NoError(t, err)
 
 	si, err := ts.GetShard(ctx, "test_keyspace", "-c0")
@@ -232,7 +232,7 @@ func TestInitTablet(t *testing.T) {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 
-	_, err = agent.TopoServer.GetSrvKeyspace(ctx, "cell1", "test_keyspace")
+	_, err = tm.TopoServer.GetSrvKeyspace(ctx, "cell1", "test_keyspace")
 	switch {
 	case err != nil:
 		// srvKeyspace should not be when tablets haven't been registered to this cell
@@ -262,7 +262,7 @@ func TestInitTablet(t *testing.T) {
 	if string(ti.KeyRange.Start) != "" || string(ti.KeyRange.End) != "\xc0" {
 		t.Errorf("wrong KeyRange for tablet: %v", ti.KeyRange)
 	}
-	if got := agent.masterTermStartTime(); !got.IsZero() {
+	if got := tm.masterTermStartTime(); !got.IsZero() {
 		t.Fatalf("REPLICA tablet should not have a MasterTermStartTime set: %v", got)
 	}
 
@@ -270,7 +270,7 @@ func TestInitTablet(t *testing.T) {
 	// (This simulates the case where the MasterAlias in the shard record says
 	// that we are the master but the tablet record says otherwise. In that case,
 	// we assume we are not the MASTER.)
-	_, err = agent.TopoServer.UpdateShardFields(ctx, "test_keyspace", "-c0", func(si *topo.ShardInfo) error {
+	_, err = tm.TopoServer.UpdateShardFields(ctx, "test_keyspace", "-c0", func(si *topo.ShardInfo) error {
 		si.MasterAlias = tabletAlias
 		return nil
 	})
@@ -280,10 +280,10 @@ func TestInitTablet(t *testing.T) {
 
 	tablet, err = buildTabletFromInput(tabletAlias, port, gRPCPort)
 	require.NoError(t, err)
-	agent.tablet = tablet
-	err = agent.createKeyspaceShard(context.Background())
+	tm.tablet = tablet
+	err = tm.createKeyspaceShard(context.Background())
 	require.NoError(t, err)
-	err = agent.initTablet(context.Background())
+	err = tm.initTablet(context.Background())
 	require.NoError(t, err)
 
 	ti, err = ts.GetTablet(ctx, tabletAlias)
@@ -294,7 +294,7 @@ func TestInitTablet(t *testing.T) {
 	if ti.Type != topodatapb.TabletType_REPLICA {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
-	if got := agent.masterTermStartTime(); !got.IsZero() {
+	if got := tm.masterTermStartTime(); !got.IsZero() {
 		t.Fatalf("REPLICA tablet should not have a masterTermStartTime set: %v", got)
 	}
 
@@ -307,12 +307,12 @@ func TestInitTablet(t *testing.T) {
 
 	tablet, err = buildTabletFromInput(tabletAlias, port, gRPCPort)
 	require.NoError(t, err)
-	agent.tablet = tablet
-	err = agent.createKeyspaceShard(context.Background())
+	tm.tablet = tablet
+	err = tm.createKeyspaceShard(context.Background())
 	require.NoError(t, err)
-	err = agent.checkMastership(ctx)
+	err = tm.checkMastership(ctx)
 	require.NoError(t, err)
-	err = agent.initTablet(context.Background())
+	err = tm.initTablet(context.Background())
 	require.NoError(t, err)
 
 	ti, err = ts.GetTablet(ctx, tabletAlias)
@@ -337,12 +337,12 @@ func TestInitTablet(t *testing.T) {
 
 	tablet, err = buildTabletFromInput(tabletAlias, port, gRPCPort)
 	require.NoError(t, err)
-	agent.tablet = tablet
-	err = agent.createKeyspaceShard(context.Background())
+	tm.tablet = tablet
+	err = tm.createKeyspaceShard(context.Background())
 	require.NoError(t, err)
-	err = agent.checkMastership(ctx)
+	err = tm.checkMastership(ctx)
 	require.NoError(t, err)
-	err = agent.initTablet(context.Background())
+	err = tm.initTablet(context.Background())
 	require.NoError(t, err)
 
 	ti, err = ts.GetTablet(ctx, tabletAlias)
@@ -364,12 +364,12 @@ func TestInitTablet(t *testing.T) {
 
 	tablet, err = buildTabletFromInput(tabletAlias, port, gRPCPort)
 	require.NoError(t, err)
-	agent.tablet = tablet
-	err = agent.createKeyspaceShard(context.Background())
+	tm.tablet = tablet
+	err = tm.createKeyspaceShard(context.Background())
 	require.NoError(t, err)
-	err = agent.checkMastership(ctx)
+	err = tm.checkMastership(ctx)
 	require.NoError(t, err)
-	err = agent.initTablet(context.Background())
+	err = tm.initTablet(context.Background())
 	require.NoError(t, err)
 
 	ti, err = ts.GetTablet(ctx, tabletAlias)
