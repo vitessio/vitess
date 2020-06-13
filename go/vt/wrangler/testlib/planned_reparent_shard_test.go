@@ -93,7 +93,7 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 	}
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
-	oldMaster.Agent.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
+	oldMaster.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 
 	// SetMaster is called on new master to make sure it's replicating before reparenting.
 	newMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(oldMaster.Tablet)
@@ -127,7 +127,7 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 	assert.False(t, newMaster.FakeMysqlDaemon.ReadOnly, "newMaster.FakeMysqlDaemon.ReadOnly is set")
 	assert.True(t, oldMaster.FakeMysqlDaemon.ReadOnly, "oldMaster.FakeMysqlDaemon.ReadOnly not set")
 	assert.True(t, goodReplica1.FakeMysqlDaemon.ReadOnly, "goodReplica1.FakeMysqlDaemon.ReadOnly not set")
-	assert.True(t, oldMaster.Agent.QueryServiceControl.IsServing(), "oldMaster...QueryServiceControl not serving")
+	assert.True(t, oldMaster.TM.QueryServiceControl.IsServing(), "oldMaster...QueryServiceControl not serving")
 
 	// verify the old master was told to start replicating (and not
 	// the replica that wasn't replicating in the first place)
@@ -196,7 +196,7 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	}
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
-	oldMaster.Agent.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
+	oldMaster.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 
 	// SetMaster is called on new master to make sure it's replicating before reparenting.
 	newMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(oldMaster.Tablet)
@@ -243,7 +243,7 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	assert.True(t, goodReplica1.FakeMysqlDaemon.ReadOnly, "goodReplica1.FakeMysqlDaemon.ReadOnly not set")
 
 	assert.True(t, goodReplica2.FakeMysqlDaemon.ReadOnly, "goodReplica2.FakeMysqlDaemon.ReadOnly not set")
-	assert.True(t, oldMaster.Agent.QueryServiceControl.IsServing(), "oldMaster...QueryServiceControl not serving")
+	assert.True(t, oldMaster.TM.QueryServiceControl.IsServing(), "oldMaster...QueryServiceControl not serving")
 
 	// verify the old master was told to start replicating (and not
 	// the replica that wasn't replicating in the first place)
@@ -329,7 +329,7 @@ func TestPlannedReparentShardWaitForPositionFail(t *testing.T) {
 	}
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
-	oldMaster.Agent.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
+	oldMaster.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 	// SetMaster is called on new master to make sure it's replicating before reparenting.
 	newMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(oldMaster.Tablet)
 
@@ -423,7 +423,7 @@ func TestPlannedReparentShardWaitForPositionTimeout(t *testing.T) {
 	}
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
-	oldMaster.Agent.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
+	oldMaster.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 
 	// SetMaster is called on new master to make sure it's replicating before reparenting.
 	newMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(oldMaster.Tablet)
@@ -489,7 +489,7 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 	}
 	master.StartActionLoop(t, wr)
 	defer master.StopActionLoop(t)
-	master.Agent.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
+	master.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 
 	// goodReplica1 is replicating
 	goodReplica1.FakeMysqlDaemon.ReadOnly = true
@@ -517,7 +517,7 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 
 	assert.False(t, master.FakeMysqlDaemon.ReadOnly, "master.FakeMysqlDaemon.ReadOnly set")
 	assert.True(t, goodReplica1.FakeMysqlDaemon.ReadOnly, "goodReplica1.FakeMysqlDaemon.ReadOnly not set")
-	assert.True(t, master.Agent.QueryServiceControl.IsServing(), "master...QueryServiceControl not serving")
+	assert.True(t, master.TM.QueryServiceControl.IsServing(), "master...QueryServiceControl not serving")
 
 	// verify the old master was told to start replicating (and not
 	// the replica that wasn't replicating in the first place)
@@ -554,7 +554,7 @@ func TestPlannedReparentShardRelayLogErrorStartSlave(t *testing.T) {
 	}
 	master.StartActionLoop(t, wr)
 	defer master.StopActionLoop(t)
-	master.Agent.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
+	master.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 
 	// good replica 1 is not replicating
 	goodReplica1.FakeMysqlDaemon.ReadOnly = true
@@ -585,7 +585,7 @@ func TestPlannedReparentShardRelayLogErrorStartSlave(t *testing.T) {
 
 	assert.False(t, master.FakeMysqlDaemon.ReadOnly, "master.FakeMysqlDaemon.ReadOnly set")
 	assert.True(t, goodReplica1.FakeMysqlDaemon.ReadOnly, "goodReplica1.FakeMysqlDaemon.ReadOnly not set")
-	assert.True(t, master.Agent.QueryServiceControl.IsServing(), "master...QueryServiceControl not serving")
+	assert.True(t, master.TM.QueryServiceControl.IsServing(), "master...QueryServiceControl not serving")
 
 	// verify the old master was told to start replicating (and not
 	// the replica that wasn't replicating in the first place)
@@ -652,7 +652,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	}
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
-	oldMaster.Agent.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
+	oldMaster.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 
 	// SetMaster is called on new master to make sure it's replicating before reparenting.
 	newMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(oldMaster.Tablet)
@@ -753,7 +753,7 @@ func TestPlannedReparentShardSameMaster(t *testing.T) {
 	}
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
-	oldMaster.Agent.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
+	oldMaster.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 
 	// good replica 1 is replicating
 	goodReplica1.FakeMysqlDaemon.ReadOnly = true

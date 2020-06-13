@@ -34,7 +34,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// This file contains the implementations of RPCAgent methods.
+// This file contains the implementations of RPCTM methods.
 // Major groups of methods are broken out into files named "rpc_*.go".
 
 // Ping makes sure RPCs work, and refreshes the tablet record.
