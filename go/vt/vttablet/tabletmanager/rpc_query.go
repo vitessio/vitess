@@ -25,9 +25,9 @@ import (
 )
 
 // ExecuteFetchAsDba will execute the given query, possibly disabling binlogs and reload schema.
-func (agent *TabletManager) ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
+func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
 	// get a connection
-	conn, err := agent.MysqlDaemon.GetDbaConnection(ctx)
+	conn, err := tm.MysqlDaemon.GetDbaConnection(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func (agent *TabletManager) ExecuteFetchAsDba(ctx context.Context, query []byte,
 	}
 
 	if err == nil && reloadSchema {
-		reloadErr := agent.QueryServiceControl.ReloadSchema(ctx)
+		reloadErr := tm.QueryServiceControl.ReloadSchema(ctx)
 		if reloadErr != nil {
 			log.Errorf("failed to reload the schema %v", reloadErr)
 		}
@@ -70,9 +70,9 @@ func (agent *TabletManager) ExecuteFetchAsDba(ctx context.Context, query []byte,
 }
 
 // ExecuteFetchAsAllPrivs will execute the given query, possibly reloading schema.
-func (agent *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, query []byte, dbName string, maxrows int, reloadSchema bool) (*querypb.QueryResult, error) {
+func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, query []byte, dbName string, maxrows int, reloadSchema bool) (*querypb.QueryResult, error) {
 	// get a connection
-	conn, err := agent.MysqlDaemon.GetAllPrivsConnection(ctx)
+	conn, err := tm.MysqlDaemon.GetAllPrivsConnection(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func (agent *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, query []
 	result, err := conn.ExecuteFetch(string(query), maxrows, true /*wantFields*/)
 
 	if err == nil && reloadSchema {
-		reloadErr := agent.QueryServiceControl.ReloadSchema(ctx)
+		reloadErr := tm.QueryServiceControl.ReloadSchema(ctx)
 		if reloadErr != nil {
 			log.Errorf("failed to reload the schema %v", reloadErr)
 		}
@@ -97,9 +97,9 @@ func (agent *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, query []
 }
 
 // ExecuteFetchAsApp will execute the given query.
-func (agent *TabletManager) ExecuteFetchAsApp(ctx context.Context, query []byte, maxrows int) (*querypb.QueryResult, error) {
+func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, query []byte, maxrows int) (*querypb.QueryResult, error) {
 	// get a connection
-	conn, err := agent.MysqlDaemon.GetAppConnection(ctx)
+	conn, err := tm.MysqlDaemon.GetAppConnection(ctx)
 	if err != nil {
 		return nil, err
 	}

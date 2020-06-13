@@ -20,7 +20,7 @@ state, starts / stops all associated services (query service,
 update stream, binlog players, ...), and handles tabletmanager RPCs
 to update the state.
 
-The agent is responsible for maintaining the tablet record in the
+The tm is responsible for maintaining the tablet record in the
 topology server. Only 'vtctl DeleteTablet'
 should be run by other processes, everything else should ask
 the tablet server to make the change.
@@ -117,7 +117,7 @@ func init() {
 	statsBackupIsRunning = stats.NewGaugesWithMultiLabels("BackupIsRunning", "Whether a backup is running", []string{"mode"})
 }
 
-// TabletManager is the main class for the agent.
+// TabletManager is the main class for the tm.
 type TabletManager struct {
 	// The following fields are set during creation
 	QueryServiceControl tabletserver.Controller
@@ -133,8 +133,8 @@ type TabletManager struct {
 	// when we transition back from something like MASTER.
 	BaseTabletType topodatapb.TabletType
 
-	// batchCtx is given to the agent by its creator, and should be used for
-	// any background tasks spawned by the agent.
+	// batchCtx is given to the tm by its creator, and should be used for
+	// any background tasks spawned by the tm.
 	batchCtx context.Context
 
 	// History of the health checks, public so status
@@ -142,7 +142,7 @@ type TabletManager struct {
 	History *history.History
 
 	// actionMutex is there to run only one action at a time. If
-	// both agent.actionMutex and agent.mutex needs to be taken,
+	// both tm.actionMutex and tm.mutex needs to be taken,
 	// take actionMutex first.
 	actionMutex sync.Mutex
 
@@ -169,7 +169,7 @@ type TabletManager struct {
 	// it should wake up and recheck the tablet state, to make sure it and the
 	// shard record are in sync.
 	//
-	// Call agent.notifyShardSync() instead of sending directly to this channel.
+	// Call tm.notifyShardSync() instead of sending directly to this channel.
 	_shardSyncChan chan struct{}
 
 	// _shardSyncDone is a channel for waiting until the shard sync goroutine
@@ -190,7 +190,7 @@ type TabletManager struct {
 	// blacklisting.
 	_blacklistedTables []string
 
-	// if the agent is healthy, this is nil. Otherwise it contains
+	// if the tm is healthy, this is nil. Otherwise it contains
 	// the reason we're not healthy.
 	_healthy error
 
@@ -223,7 +223,7 @@ type TabletManager struct {
 // NewTabletManager creates a new TabletManager and registers all the
 // associated services.
 //
-// batchCtx is the context that the agent will use for any background tasks
+// batchCtx is the context that the tm will use for any background tasks
 // it spawns.
 func NewTabletManager(
 	batchCtx context.Context,
@@ -234,7 +234,7 @@ func NewTabletManager(
 	config *tabletenv.TabletConfig,
 	mycnf *mysqlctl.Mycnf,
 	port, gRPCPort int32,
-) (agent *TabletManager, err error) {
+) (tm *TabletManager, err error) {
 
 	tablet, err := buildTabletFromInput(tabletAlias, port, gRPCPort)
 	if err != nil {
@@ -242,7 +242,7 @@ func NewTabletManager(
 	}
 	config.DB.DBName = topoproto.TabletDbName(tablet)
 
-	agent = &TabletManager{
+	tm = &TabletManager{
 		QueryServiceControl: queryServiceControl,
 		HealthReporter:      health.DefaultAggregator,
 		batchCtx:            batchCtx,
@@ -257,47 +257,47 @@ func NewTabletManager(
 		tablet:              tablet,
 	}
 
-	ctx, cancel := context.WithTimeout(agent.batchCtx, *initTimeout)
+	ctx, cancel := context.WithTimeout(tm.batchCtx, *initTimeout)
 	defer cancel()
-	if err = agent.createKeyspaceShard(ctx); err != nil {
+	if err = tm.createKeyspaceShard(ctx); err != nil {
 		return nil, err
 	}
-	if err := agent.checkMastership(ctx); err != nil {
+	if err := tm.checkMastership(ctx); err != nil {
 		return nil, err
 	}
-	if err := agent.checkMysql(ctx); err != nil {
+	if err := tm.checkMysql(ctx); err != nil {
 		return nil, err
 	}
-	if err := agent.initTablet(ctx); err != nil {
+	if err := tm.initTablet(ctx); err != nil {
 		return nil, err
 	}
 
-	tablet = agent.Tablet()
-	err = agent.QueryServiceControl.InitDBConfig(querypb.Target{
+	tablet = tm.Tablet()
+	err = tm.QueryServiceControl.InitDBConfig(querypb.Target{
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,
-	}, agent.DBConfigs)
+	}, tm.DBConfigs)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "failed to InitDBConfig")
 	}
-	agent.QueryServiceControl.RegisterQueryRuleSource(blacklistQueryRules)
-	servenv.OnRun(agent.registerQueryService)
+	tm.QueryServiceControl.RegisterQueryRuleSource(blacklistQueryRules)
+	servenv.OnRun(tm.registerQueryService)
 
-	agent.UpdateStream = binlog.NewUpdateStream(agent.TopoServer, tablet.Keyspace, agent.TabletAlias.Cell, agent.DBConfigs.DbaWithDB(), agent.QueryServiceControl.SchemaEngine())
-	servenv.OnRun(agent.UpdateStream.RegisterService)
-	servenv.OnTerm(agent.UpdateStream.Disable)
+	tm.UpdateStream = binlog.NewUpdateStream(tm.TopoServer, tablet.Keyspace, tm.TabletAlias.Cell, tm.DBConfigs.DbaWithDB(), tm.QueryServiceControl.SchemaEngine())
+	servenv.OnRun(tm.UpdateStream.RegisterService)
+	servenv.OnTerm(tm.UpdateStream.Disable)
 
-	agent.VREngine = vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld)
-	servenv.OnTerm(agent.VREngine.Close)
+	tm.VREngine = vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld)
+	servenv.OnTerm(tm.VREngine.Close)
 
-	if err := agent.handleRestore(batchCtx); err != nil {
+	if err := tm.handleRestore(batchCtx); err != nil {
 		return nil, err
 	}
 
-	agent.startShardSync()
+	tm.startShardSync()
 
-	agent.exportStats()
+	tm.exportStats()
 
 	// Start periodic Orchestrator self-registration, if configured.
 	orc, err := newOrcClient()
@@ -305,23 +305,23 @@ func NewTabletManager(
 		return nil, err
 	}
 	if orc != nil {
-		agent.orc = orc
-		go agent.orc.DiscoverLoop(agent)
+		tm.orc = orc
+		go tm.orc.DiscoverLoop(tm)
 	}
 
 	// Temporary glue code to keep things working.
 	// TODO(sougou); remove after refactor.
-	if err := agent.lock(batchCtx); err != nil {
+	if err := tm.lock(batchCtx); err != nil {
 		return nil, err
 	}
-	defer agent.unlock()
-	tablet = agent.Tablet()
-	agent.changeCallback(batchCtx, tablet, tablet)
+	defer tm.unlock()
+	tablet = tm.Tablet()
+	tm.changeCallback(batchCtx, tablet, tablet)
 
-	return agent, nil
+	return tm, nil
 }
 
-// NewTestTabletManager creates an agent for test purposes. Only a
+// NewTestTabletManager creates an tm for test purposes. Only a
 // subset of features are supported now, but we'll add more over time.
 func NewTestTabletManager(
 	batchCtx context.Context,
@@ -341,7 +341,7 @@ func NewTestTabletManager(
 		"grpc": grpcPort,
 	}
 
-	agent := &TabletManager{
+	tm := &TabletManager{
 		QueryServiceControl: tabletservermock.NewController(),
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
 		HealthReporter:      health.DefaultAggregator,
@@ -358,46 +358,46 @@ func NewTestTabletManager(
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
 	if preStart != nil {
-		preStart(agent)
+		preStart(tm)
 	}
 
-	if err := agent.createKeyspaceShard(batchCtx); err != nil {
+	if err := tm.createKeyspaceShard(batchCtx); err != nil {
 		panic(err)
 	}
-	if err := agent.checkMastership(batchCtx); err != nil {
+	if err := tm.checkMastership(batchCtx); err != nil {
 		panic(err)
 	}
-	if agent.initTablet(batchCtx); err != nil {
+	if tm.initTablet(batchCtx); err != nil {
 		panic(err)
 	}
 
-	tablet := agent.Tablet()
-	err = agent.QueryServiceControl.InitDBConfig(querypb.Target{
+	tablet := tm.Tablet()
+	err = tm.QueryServiceControl.InitDBConfig(querypb.Target{
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,
-	}, agent.DBConfigs)
+	}, tm.DBConfigs)
 	if err != nil {
 		panic(err)
 	}
 
 	// Start a background goroutine to watch and update the shard record,
 	// to make sure it and our tablet record are in sync.
-	agent.startShardSync()
+	tm.startShardSync()
 
 	// Temporary glue code to keep things working.
 	// TODO(sougou); remove after refactor.
-	if err := agent.lock(batchCtx); err != nil {
+	if err := tm.lock(batchCtx); err != nil {
 		panic(err)
 	}
-	defer agent.unlock()
-	tablet = agent.Tablet()
-	agent.changeCallback(batchCtx, tablet, tablet)
+	defer tm.unlock()
+	tablet = tm.Tablet()
+	tm.changeCallback(batchCtx, tablet, tablet)
 
-	return agent
+	return tm
 }
 
-// NewComboTabletManager creates an agent tailored specifically to run
+// NewComboTabletManager creates an tm tailored specifically to run
 // within the vtcombo binary. It cannot be called concurrently,
 // as it changes the flags.
 func NewComboTabletManager(
@@ -420,7 +420,7 @@ func NewComboTabletManager(
 		panic(err)
 	}
 	dbcfgs.DBName = topoproto.TabletDbName(tablet)
-	agent := &TabletManager{
+	tm := &TabletManager{
 		QueryServiceControl: queryServiceControl,
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
 		HealthReporter:      health.DefaultAggregator,
@@ -437,131 +437,131 @@ func NewComboTabletManager(
 		tablet:              tablet,
 	}
 
-	ctx, cancel := context.WithTimeout(agent.batchCtx, *initTimeout)
+	ctx, cancel := context.WithTimeout(tm.batchCtx, *initTimeout)
 	defer cancel()
-	if err := agent.createKeyspaceShard(ctx); err != nil {
+	if err := tm.createKeyspaceShard(ctx); err != nil {
 		panic(err)
 	}
-	if err := agent.checkMastership(ctx); err != nil {
+	if err := tm.checkMastership(ctx); err != nil {
 		panic(err)
 	}
-	if err := agent.initTablet(ctx); err != nil {
+	if err := tm.initTablet(ctx); err != nil {
 		panic(err)
 	}
 
-	tablet = agent.Tablet()
-	err = agent.QueryServiceControl.InitDBConfig(querypb.Target{
+	tablet = tm.Tablet()
+	err = tm.QueryServiceControl.InitDBConfig(querypb.Target{
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,
-	}, agent.DBConfigs)
+	}, tm.DBConfigs)
 	if err != nil {
 		panic(err)
 	}
-	agent.QueryServiceControl.RegisterQueryRuleSource(blacklistQueryRules)
+	tm.QueryServiceControl.RegisterQueryRuleSource(blacklistQueryRules)
 
 	// Start a background goroutine to watch and update the shard record,
 	// to make sure it and our tablet record are in sync.
-	agent.startShardSync()
+	tm.startShardSync()
 
-	return agent
+	return tm
 }
 
-func (agent *TabletManager) setTablet(tablet *topodatapb.Tablet) {
-	agent.pubMu.Lock()
-	agent.tablet = proto.Clone(tablet).(*topodatapb.Tablet)
-	agent.pubMu.Unlock()
+func (tm *TabletManager) setTablet(tablet *topodatapb.Tablet) {
+	tm.pubMu.Lock()
+	tm.tablet = proto.Clone(tablet).(*topodatapb.Tablet)
+	tm.pubMu.Unlock()
 
 	// Notify the shard sync loop that the tablet state changed.
-	agent.notifyShardSync()
+	tm.notifyShardSync()
 }
 
-func (agent *TabletManager) updateTablet(update func(tablet *topodatapb.Tablet)) {
-	agent.pubMu.Lock()
-	update(agent.tablet)
-	agent.pubMu.Unlock()
+func (tm *TabletManager) updateTablet(update func(tablet *topodatapb.Tablet)) {
+	tm.pubMu.Lock()
+	update(tm.tablet)
+	tm.pubMu.Unlock()
 
 	// Notify the shard sync loop that the tablet state changed.
-	agent.notifyShardSync()
+	tm.notifyShardSync()
 }
 
-// Tablet reads the stored Tablet from the agent.
-func (agent *TabletManager) Tablet() *topodatapb.Tablet {
-	agent.pubMu.Lock()
-	tablet := proto.Clone(agent.tablet).(*topodatapb.Tablet)
-	agent.pubMu.Unlock()
+// Tablet reads the stored Tablet from the tm.
+func (tm *TabletManager) Tablet() *topodatapb.Tablet {
+	tm.pubMu.Lock()
+	tablet := proto.Clone(tm.tablet).(*topodatapb.Tablet)
+	tm.pubMu.Unlock()
 	return tablet
 }
 
 // Healthy reads the result of the latest healthcheck, protected by mutex.
 // If that status is too old, it means healthcheck hasn't run for a while,
 // and is probably stuck, this is not good, we're not healthy.
-func (agent *TabletManager) Healthy() (time.Duration, error) {
-	agent.mutex.Lock()
-	defer agent.mutex.Unlock()
+func (tm *TabletManager) Healthy() (time.Duration, error) {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
 
-	healthy := agent._healthy
+	healthy := tm._healthy
 	if healthy == nil {
-		timeSinceLastCheck := time.Since(agent._healthyTime)
+		timeSinceLastCheck := time.Since(tm._healthyTime)
 		if timeSinceLastCheck > *healthCheckInterval*3 {
 			healthy = fmt.Errorf("last health check is too old: %s > %s", timeSinceLastCheck, *healthCheckInterval*3)
 		}
 	}
 
-	return agent._replicationDelay, healthy
+	return tm._replicationDelay, healthy
 }
 
 // BlacklistedTables returns the list of currently blacklisted tables.
-func (agent *TabletManager) BlacklistedTables() []string {
-	agent.mutex.Lock()
-	defer agent.mutex.Unlock()
-	return agent._blacklistedTables
+func (tm *TabletManager) BlacklistedTables() []string {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+	return tm._blacklistedTables
 }
 
 // DisallowQueryService returns the reason the query service should be
 // disabled, if any.
-func (agent *TabletManager) DisallowQueryService() string {
-	agent.mutex.Lock()
-	defer agent.mutex.Unlock()
-	return agent._disallowQueryService
+func (tm *TabletManager) DisallowQueryService() string {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+	return tm._disallowQueryService
 }
 
-func (agent *TabletManager) slaveStopped() bool {
-	agent.mutex.Lock()
-	defer agent.mutex.Unlock()
+func (tm *TabletManager) slaveStopped() bool {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
 
 	// If we already know the value, don't bother checking the file.
-	if agent._slaveStopped != nil {
-		return *agent._slaveStopped
+	if tm._slaveStopped != nil {
+		return *tm._slaveStopped
 	}
 
 	// If there's no Cnf file, don't read state.
-	if agent.Cnf == nil {
+	if tm.Cnf == nil {
 		return false
 	}
 
 	// If the marker file exists, we're stopped.
 	// Treat any read error as if the file doesn't exist.
-	_, err := os.Stat(path.Join(agent.Cnf.TabletDir(), slaveStoppedFile))
+	_, err := os.Stat(path.Join(tm.Cnf.TabletDir(), slaveStoppedFile))
 	slaveStopped := err == nil
-	agent._slaveStopped = &slaveStopped
+	tm._slaveStopped = &slaveStopped
 	return slaveStopped
 }
 
-func (agent *TabletManager) setSlaveStopped(slaveStopped bool) {
-	agent.mutex.Lock()
-	defer agent.mutex.Unlock()
+func (tm *TabletManager) setSlaveStopped(slaveStopped bool) {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
 
-	agent._slaveStopped = &slaveStopped
+	tm._slaveStopped = &slaveStopped
 
 	// Make a best-effort attempt to persist the value across tablet restarts.
 	// We store a marker in the filesystem so it works regardless of whether
 	// mysqld is running, and so it's tied to this particular instance of the
 	// tablet data dir (the one that's paused at a known replication position).
-	if agent.Cnf == nil {
+	if tm.Cnf == nil {
 		return
 	}
-	tabletDir := agent.Cnf.TabletDir()
+	tabletDir := tm.Cnf.TabletDir()
 	if tabletDir == "" {
 		return
 	}
@@ -576,30 +576,30 @@ func (agent *TabletManager) setSlaveStopped(slaveStopped bool) {
 	}
 }
 
-func (agent *TabletManager) setServicesDesiredState(disallowQueryService string) {
-	agent.mutex.Lock()
-	agent._disallowQueryService = disallowQueryService
-	agent.mutex.Unlock()
+func (tm *TabletManager) setServicesDesiredState(disallowQueryService string) {
+	tm.mutex.Lock()
+	tm._disallowQueryService = disallowQueryService
+	tm.mutex.Unlock()
 }
 
-func (agent *TabletManager) setBlacklistedTables(value []string) {
-	agent.mutex.Lock()
-	agent._blacklistedTables = value
-	agent.mutex.Unlock()
+func (tm *TabletManager) setBlacklistedTables(value []string) {
+	tm.mutex.Lock()
+	tm._blacklistedTables = value
+	tm.mutex.Unlock()
 }
 
 // Close prepares a tablet for shutdown. First we check our tablet ownership and
 // then prune the tablet topology entry of all post-init fields. This prevents
 // stale identifiers from hanging around in topology.
-func (agent *TabletManager) Close() {
+func (tm *TabletManager) Close() {
 	// Stop the shard sync loop and wait for it to exit. We do this in Close()
 	// rather than registering it as an OnTerm hook so the shard sync loop keeps
 	// running during lame duck.
-	agent.stopShardSync()
+	tm.stopShardSync()
 
 	// cleanup initialized fields in the tablet entry
 	f := func(tablet *topodatapb.Tablet) error {
-		if err := topotools.CheckOwnership(agent.Tablet(), tablet); err != nil {
+		if err := topotools.CheckOwnership(tm.Tablet(), tablet); err != nil {
 			return err
 		}
 		tablet.Hostname = ""
@@ -611,34 +611,34 @@ func (agent *TabletManager) Close() {
 	updateCtx, updateCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 	defer updateCancel()
 
-	if _, err := agent.TopoServer.UpdateTabletFields(updateCtx, agent.TabletAlias, f); err != nil {
+	if _, err := tm.TopoServer.UpdateTabletFields(updateCtx, tm.TabletAlias, f); err != nil {
 		log.Warningf("Failed to update tablet record, may contain stale identifiers: %v", err)
 	}
 }
 
-// Stop shuts down the agent. Normally this is not necessary, since we use
+// Stop shuts down the tm. Normally this is not necessary, since we use
 // servenv OnTerm and OnClose hooks to coordinate shutdown automatically,
 // while taking lameduck into account. However, this may be useful for tests,
-// when you want to clean up an agent immediately.
-func (agent *TabletManager) Stop() {
+// when you want to clean up an tm immediately.
+func (tm *TabletManager) Stop() {
 	// Stop the shard sync loop and wait for it to exit. This needs to be done
 	// here in addition to in Close() because tests do not call Close().
-	agent.stopShardSync()
+	tm.stopShardSync()
 
-	if agent.UpdateStream != nil {
-		agent.UpdateStream.Disable()
+	if tm.UpdateStream != nil {
+		tm.UpdateStream.Disable()
 	}
 
-	agent.VREngine.Close()
+	tm.VREngine.Close()
 
-	if agent.MysqlDaemon != nil {
-		agent.MysqlDaemon.Close()
+	if tm.MysqlDaemon != nil {
+		tm.MysqlDaemon.Close()
 	}
 }
 
 // hookExtraEnv returns the map to pass to local hooks
-func (agent *TabletManager) hookExtraEnv() map[string]string {
-	return map[string]string{"TABLET_ALIAS": topoproto.TabletAliasString(agent.TabletAlias)}
+func (tm *TabletManager) hookExtraEnv() map[string]string {
+	return map[string]string{"TABLET_ALIAS": topoproto.TabletAliasString(tm.TabletAlias)}
 }
 
 // withRetry will exponentially back off and retry a function upon
@@ -646,7 +646,7 @@ func (agent *TabletManager) hookExtraEnv() map[string]string {
 // no error. We use this at startup with a context timeout set to the
 // value of the init_timeout flag, so we can try to modify the
 // topology over a longer period instead of dying right away.
-func (agent *TabletManager) withRetry(ctx context.Context, description string, work func() error) error {
+func (tm *TabletManager) withRetry(ctx context.Context, description string, work func() error) error {
 	backoff := 1 * time.Second
 	for {
 		err := work()
@@ -720,47 +720,47 @@ func buildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (
 	}, nil
 }
 
-func (agent *TabletManager) createKeyspaceShard(ctx context.Context) error {
+func (tm *TabletManager) createKeyspaceShard(ctx context.Context) error {
 	// mutex is needed because we set _shardInfo and _srvKeyspace
-	agent.mutex.Lock()
-	defer agent.mutex.Unlock()
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
 
-	tablet := agent.Tablet()
+	tablet := tm.Tablet()
 	log.Infof("Reading/creating keyspace and shard records for %v/%v", tablet.Keyspace, tablet.Shard)
 
 	// Read the shard, create it if necessary.
-	if err := agent.withRetry(ctx, "creating keyspace and shard", func() error {
+	if err := tm.withRetry(ctx, "creating keyspace and shard", func() error {
 		var err error
-		agent._shardInfo, err = agent.TopoServer.GetOrCreateShard(ctx, tablet.Keyspace, tablet.Shard)
+		tm._shardInfo, err = tm.TopoServer.GetOrCreateShard(ctx, tablet.Keyspace, tablet.Shard)
 		return err
 	}); err != nil {
 		return vterrors.Wrap(err, "createKeyspaceShard: cannot GetOrCreateShard shard")
 	}
 
 	// Rebuild keyspace if this the first tablet in this keyspace/cell
-	srvKeyspace, err := agent.TopoServer.GetSrvKeyspace(ctx, agent.TabletAlias.Cell, tablet.Keyspace)
+	srvKeyspace, err := tm.TopoServer.GetSrvKeyspace(ctx, tm.TabletAlias.Cell, tablet.Keyspace)
 	switch {
 	case err == nil:
-		agent._srvKeyspace = srvKeyspace
+		tm._srvKeyspace = srvKeyspace
 	case topo.IsErrType(err, topo.NoNode):
-		go agent.rebuildKeyspace(tablet.Keyspace, rebuildKeyspaceRetryInterval)
+		go tm.rebuildKeyspace(tablet.Keyspace, rebuildKeyspaceRetryInterval)
 	default:
 		return vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to read SrvKeyspace")
 	}
 
 	// Rebuild vschema graph if this is the first tablet in this keyspace/cell.
-	srvVSchema, err := agent.TopoServer.GetSrvVSchema(ctx, agent.TabletAlias.Cell)
+	srvVSchema, err := tm.TopoServer.GetSrvVSchema(ctx, tm.TabletAlias.Cell)
 	switch {
 	case err == nil:
 		// Check if vschema was rebuilt after the initial creation of the keyspace.
 		if _, keyspaceExists := srvVSchema.GetKeyspaces()[tablet.Keyspace]; !keyspaceExists {
-			if err := agent.TopoServer.RebuildSrvVSchema(ctx, []string{agent.TabletAlias.Cell}); err != nil {
+			if err := tm.TopoServer.RebuildSrvVSchema(ctx, []string{tm.TabletAlias.Cell}); err != nil {
 				return vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to RebuildSrvVSchema")
 			}
 		}
 	case topo.IsErrType(err, topo.NoNode):
 		// There is no SrvSchema in this cell at all, so we definitely need to rebuild.
-		if err := agent.TopoServer.RebuildSrvVSchema(ctx, []string{agent.TabletAlias.Cell}); err != nil {
+		if err := tm.TopoServer.RebuildSrvVSchema(ctx, []string{tm.TabletAlias.Cell}); err != nil {
 			return vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to RebuildSrvVSchema")
 		}
 	default:
@@ -769,22 +769,22 @@ func (agent *TabletManager) createKeyspaceShard(ctx context.Context) error {
 	return nil
 }
 
-func (agent *TabletManager) checkMastership(ctx context.Context) error {
-	agent.mutex.Lock()
-	si := agent._shardInfo
-	agent.mutex.Unlock()
+func (tm *TabletManager) checkMastership(ctx context.Context) error {
+	tm.mutex.Lock()
+	si := tm._shardInfo
+	tm.mutex.Unlock()
 
-	if si.MasterAlias != nil && topoproto.TabletAliasEqual(si.MasterAlias, agent.TabletAlias) {
+	if si.MasterAlias != nil && topoproto.TabletAliasEqual(si.MasterAlias, tm.TabletAlias) {
 		// We're marked as master in the shard record, which could mean the master
 		// tablet process was just restarted. However, we need to check if a new
 		// master is in the process of taking over. In that case, it will let us
 		// know by forcibly updating the old master's tablet record.
-		oldTablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+		oldTablet, err := tm.TopoServer.GetTablet(ctx, tm.TabletAlias)
 		switch {
 		case topo.IsErrType(err, topo.NoNode):
 			// There's no existing tablet record, so we can assume
 			// no one has left us a message to step down.
-			agent.updateTablet(func(tablet *topodatapb.Tablet) {
+			tm.updateTablet(func(tablet *topodatapb.Tablet) {
 				tablet.Type = topodatapb.TabletType_MASTER
 				// Update the master term start time (current value is 0) because we
 				// assume that we are actually the MASTER and in case of a tiebreak,
@@ -795,7 +795,7 @@ func (agent *TabletManager) checkMastership(ctx context.Context) error {
 			if oldTablet.Type == topodatapb.TabletType_MASTER {
 				// We're marked as master in the shard record,
 				// and our existing tablet record agrees.
-				agent.updateTablet(func(tablet *topodatapb.Tablet) {
+				tm.updateTablet(func(tablet *topodatapb.Tablet) {
 					tablet.Type = topodatapb.TabletType_MASTER
 					tablet.MasterTermStartTime = oldTablet.MasterTermStartTime
 				})
@@ -804,7 +804,7 @@ func (agent *TabletManager) checkMastership(ctx context.Context) error {
 			return vterrors.Wrap(err, "InitTablet failed to read existing tablet record")
 		}
 	} else {
-		oldTablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+		oldTablet, err := tm.TopoServer.GetTablet(ctx, tm.TabletAlias)
 		switch {
 		case topo.IsErrType(err, topo.NoNode):
 			// There's no existing tablet record, so there is nothing to do
@@ -815,7 +815,7 @@ func (agent *TabletManager) checkMastership(ctx context.Context) error {
 				oldMasterTermStartTime := oldTablet.GetMasterTermStartTime()
 				currentShardTime := si.GetMasterTermStartTime()
 				if oldMasterTermStartTime.After(currentShardTime) {
-					agent.updateTablet(func(tablet *topodatapb.Tablet) {
+					tm.updateTablet(func(tablet *topodatapb.Tablet) {
 						tablet.Type = topodatapb.TabletType_MASTER
 						tablet.MasterTermStartTime = oldTablet.MasterTermStartTime
 					})
@@ -828,23 +828,23 @@ func (agent *TabletManager) checkMastership(ctx context.Context) error {
 	return nil
 }
 
-func (agent *TabletManager) checkMysql(ctx context.Context) error {
-	if appConfig, _ := agent.DBConfigs.AppWithDB().MysqlParams(); appConfig.Host != "" {
-		agent.updateTablet(func(tablet *topodatapb.Tablet) {
+func (tm *TabletManager) checkMysql(ctx context.Context) error {
+	if appConfig, _ := tm.DBConfigs.AppWithDB().MysqlParams(); appConfig.Host != "" {
+		tm.updateTablet(func(tablet *topodatapb.Tablet) {
 			tablet.MysqlHostname = appConfig.Host
 			tablet.MysqlPort = int32(appConfig.Port)
 		})
 	} else {
 		// Assume unix socket was specified and try to get the port from mysqld
-		agent.updateTablet(func(tablet *topodatapb.Tablet) {
+		tm.updateTablet(func(tablet *topodatapb.Tablet) {
 			tablet.MysqlHostname = tablet.Hostname
 		})
-		mysqlPort, err := agent.MysqlDaemon.GetMysqlPort()
+		mysqlPort, err := tm.MysqlDaemon.GetMysqlPort()
 		if err != nil {
 			log.Warningf("Cannot get current mysql port, will keep retrying every %v: %v", mysqlPortRetryInterval, err)
-			go agent.findMysqlPort(mysqlPortRetryInterval)
+			go tm.findMysqlPort(mysqlPortRetryInterval)
 		} else {
-			agent.updateTablet(func(tablet *topodatapb.Tablet) {
+			tm.updateTablet(func(tablet *topodatapb.Tablet) {
 				tablet.MysqlPort = mysqlPort
 			})
 		}
@@ -852,16 +852,16 @@ func (agent *TabletManager) checkMysql(ctx context.Context) error {
 	return nil
 }
 
-func (agent *TabletManager) initTablet(ctx context.Context) error {
-	tablet := agent.Tablet()
-	err := agent.TopoServer.CreateTablet(ctx, tablet)
+func (tm *TabletManager) initTablet(ctx context.Context) error {
+	tablet := tm.Tablet()
+	err := tm.TopoServer.CreateTablet(ctx, tablet)
 	switch {
 	case err == nil:
 		// It worked, we're good.
 	case topo.IsErrType(err, topo.NodeExists):
 		// The node already exists, will just try to update
 		// it. So we read it first.
-		oldTablet, err := agent.TopoServer.GetTablet(ctx, tablet.Alias)
+		oldTablet, err := tm.TopoServer.GetTablet(ctx, tablet.Alias)
 		if err != nil {
 			return vterrors.Wrap(err, "initTablet failed to read existing tablet record")
 		}
@@ -876,12 +876,12 @@ func (agent *TabletManager) initTablet(ctx context.Context) error {
 		// then the ShardReplication record was not (because for
 		// instance of a startup timeout). Upon running this code
 		// again, we want to fix ShardReplication.
-		if updateErr := topo.UpdateTabletReplicationData(ctx, agent.TopoServer, tablet); updateErr != nil {
+		if updateErr := topo.UpdateTabletReplicationData(ctx, tm.TopoServer, tablet); updateErr != nil {
 			return vterrors.Wrap(updateErr, "UpdateTabletReplicationData failed")
 		}
 
 		// Then overwrite everything, ignoring version mismatch.
-		if err := agent.TopoServer.UpdateTablet(ctx, topo.NewTabletInfo(tablet, nil)); err != nil {
+		if err := tm.TopoServer.UpdateTablet(ctx, topo.NewTabletInfo(tablet, nil)); err != nil {
 			return vterrors.Wrap(err, "UpdateTablet failed")
 		}
 	default:
@@ -890,10 +890,10 @@ func (agent *TabletManager) initTablet(ctx context.Context) error {
 	return nil
 }
 
-func (agent *TabletManager) handleRestore(ctx context.Context) error {
-	tablet := agent.Tablet()
+func (tm *TabletManager) handleRestore(ctx context.Context) error {
+	tablet := tm.Tablet()
 	// Sanity check for inconsistent flags
-	if agent.Cnf == nil && *restoreFromBackup {
+	if tm.Cnf == nil && *restoreFromBackup {
 		return fmt.Errorf("you cannot enable -restore_from_backup without a my.cnf file")
 	}
 
@@ -905,38 +905,38 @@ func (agent *TabletManager) handleRestore(ctx context.Context) error {
 		go func() {
 			// restoreFromBackup will just be a regular action
 			// (same as if it was triggered remotely)
-			if err := agent.RestoreData(ctx, logutil.NewConsoleLogger(), *waitForBackupInterval, false /* deleteBeforeRestore */); err != nil {
+			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), *waitForBackupInterval, false /* deleteBeforeRestore */); err != nil {
 				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
 
 			// after the restore is done, start health check
-			agent.initHealthCheck()
+			tm.initHealthCheck()
 		}()
 		return nil
 	}
 
 	// optionally populate metadata records
 	if *initPopulateMetadata {
-		localMetadata := agent.getLocalMetadataValues(tablet.Type)
-		if agent.Cnf != nil { // we are managing mysqld
+		localMetadata := tm.getLocalMetadataValues(tablet.Type)
+		if tm.Cnf != nil { // we are managing mysqld
 			// we'll use batchCtx here because we are still initializing and can't proceed unless this succeeds
-			if err := agent.MysqlDaemon.Wait(ctx, agent.Cnf); err != nil {
+			if err := tm.MysqlDaemon.Wait(ctx, tm.Cnf); err != nil {
 				return err
 			}
 		}
-		err := mysqlctl.PopulateMetadataTables(agent.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet))
+		err := mysqlctl.PopulateMetadataTables(tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet))
 		if err != nil {
 			return vterrors.Wrap(err, "failed to -init_populate_metadata")
 		}
 	}
 
 	// synchronously start health check if needed
-	agent.initHealthCheck()
+	tm.initHealthCheck()
 	return nil
 }
 
-func (agent *TabletManager) exportStats() {
-	tablet := agent.Tablet()
+func (tm *TabletManager) exportStats() {
+	tablet := tm.Tablet()
 	statsKeyspace := stats.NewString("TabletKeyspace")
 	statsShard := stats.NewString("TabletShard")
 	statsKeyRangeStart := stats.NewString("TabletKeyRangeStart")
