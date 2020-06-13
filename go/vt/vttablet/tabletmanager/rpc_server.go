@@ -69,7 +69,7 @@ func (tm *TabletManager) checkLock() {
 func (tm *TabletManager) HandleRPCPanic(ctx context.Context, name string, args, reply interface{}, verbose bool, err *error) {
 	// panic handling
 	if x := recover(); x != nil {
-		log.Errorf("TabletManager.%v(%v) on %v panic: %v\n%s", name, args, topoproto.TabletAliasString(tm.TabletAlias), x, tb.Stack(4))
+		log.Errorf("TabletManager.%v(%v) on %v panic: %v\n%s", name, args, topoproto.TabletAliasString(tm.tabletAlias), x, tb.Stack(4))
 		*err = fmt.Errorf("caught panic during %v: %v", name, x)
 		return
 	}
@@ -88,11 +88,11 @@ func (tm *TabletManager) HandleRPCPanic(ctx context.Context, name string, args, 
 
 	if *err != nil {
 		// error case
-		log.Warningf("TabletManager.%v(%v)(on %v from %v) error: %v", name, args, topoproto.TabletAliasString(tm.TabletAlias), from, (*err).Error())
-		*err = vterrors.Wrapf(*err, "TabletManager.%v on %v error: %v", name, topoproto.TabletAliasString(tm.TabletAlias), (*err).Error())
+		log.Warningf("TabletManager.%v(%v)(on %v from %v) error: %v", name, args, topoproto.TabletAliasString(tm.tabletAlias), from, (*err).Error())
+		*err = vterrors.Wrapf(*err, "TabletManager.%v on %v error: %v", name, topoproto.TabletAliasString(tm.tabletAlias), (*err).Error())
 	} else {
 		// success case
-		log.Infof("TabletManager.%v(%v)(on %v from %v): %#v", name, args, topoproto.TabletAliasString(tm.TabletAlias), from, reply)
+		log.Infof("TabletManager.%v(%v)(on %v from %v): %#v", name, args, topoproto.TabletAliasString(tm.tabletAlias), from, reply)
 	}
 }
 

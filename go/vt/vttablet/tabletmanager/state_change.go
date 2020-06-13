@@ -207,7 +207,7 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 						disallowQueryService = disallowQueryReason
 					}
 				} else {
-					replicationDelay, healthErr := tm.HealthReporter.Report(true, true)
+					replicationDelay, healthErr := tm.healthReporter.Report(true, true)
 					if healthErr != nil {
 						allowQuery = false
 						disallowQueryReason = "unable to get health"
@@ -357,7 +357,7 @@ func (tm *TabletManager) publishState(ctx context.Context) {
 	// Common code path: publish immediately.
 	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancel()
-	_, err := tm.TopoServer.UpdateTabletFields(ctx, tm.TabletAlias, func(tablet *topodatapb.Tablet) error {
+	_, err := tm.TopoServer.UpdateTabletFields(ctx, tm.tabletAlias, func(tablet *topodatapb.Tablet) error {
 		if err := topotools.CheckOwnership(tablet, tm.tablet); err != nil {
 			log.Error(err)
 			return topo.NewError(topo.NoUpdateNeeded, "")
@@ -384,7 +384,7 @@ func (tm *TabletManager) retryPublish() {
 		// Retry immediately the first time because the previous failure might have been
 		// due to an expired context.
 		ctx, cancel := context.WithTimeout(tm.batchCtx, *topo.RemoteOperationTimeout)
-		_, err := tm.TopoServer.UpdateTabletFields(ctx, tm.TabletAlias, func(tablet *topodatapb.Tablet) error {
+		_, err := tm.TopoServer.UpdateTabletFields(ctx, tm.tabletAlias, func(tablet *topodatapb.Tablet) error {
 			if err := topotools.CheckOwnership(tablet, tm.tablet); err != nil {
 				log.Error(err)
 				return topo.NewError(topo.NoUpdateNeeded, "")
@@ -420,14 +420,14 @@ func (tm *TabletManager) rebuildKeyspace(keyspace string, retryInterval time.Dur
 	for {
 		if !firstTime {
 			// If keyspace was rebuilt by someone else, we can just exit.
-			srvKeyspace, err = tm.TopoServer.GetSrvKeyspace(tm.batchCtx, tm.TabletAlias.Cell, keyspace)
+			srvKeyspace, err = tm.TopoServer.GetSrvKeyspace(tm.batchCtx, tm.tabletAlias.Cell, keyspace)
 			if err == nil {
 				return
 			}
 		}
-		err = topotools.RebuildKeyspace(tm.batchCtx, logutil.NewConsoleLogger(), tm.TopoServer, keyspace, []string{tm.TabletAlias.Cell})
+		err = topotools.RebuildKeyspace(tm.batchCtx, logutil.NewConsoleLogger(), tm.TopoServer, keyspace, []string{tm.tabletAlias.Cell})
 		if err == nil {
-			srvKeyspace, err = tm.TopoServer.GetSrvKeyspace(tm.batchCtx, tm.TabletAlias.Cell, keyspace)
+			srvKeyspace, err = tm.TopoServer.GetSrvKeyspace(tm.batchCtx, tm.tabletAlias.Cell, keyspace)
 			if err == nil {
 				return
 			}

@@ -72,7 +72,7 @@ func (tm *TabletManager) changeTypeLocked(ctx context.Context, tabletType topoda
 	// horizontal resharding where two vtworkers will try to DRAIN the same tablet. This check prevents that race from
 	// causing errors.
 	if tabletType == topodatapb.TabletType_DRAINED && tm.Tablet().Type == topodatapb.TabletType_DRAINED {
-		return fmt.Errorf("Tablet: %v, is already drained", tm.TabletAlias)
+		return fmt.Errorf("Tablet: %v, is already drained", tm.tabletAlias)
 	}
 
 	tablet := tm.Tablet()
@@ -83,7 +83,7 @@ func (tm *TabletManager) changeTypeLocked(ctx context.Context, tabletType topoda
 		tablet.MasterTermStartTime = logutil.TimeToProto(time.Now())
 
 		// change our type in the topology, and set masterTermStartTime on tablet record if applicable
-		_, err := topotools.ChangeType(ctx, tm.TopoServer, tm.TabletAlias, tabletType, tablet.MasterTermStartTime)
+		_, err := topotools.ChangeType(ctx, tm.TopoServer, tm.tabletAlias, tabletType, tablet.MasterTermStartTime)
 		if err != nil {
 			return err
 		}
@@ -121,7 +121,7 @@ func (tm *TabletManager) ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.H
 	defer tm.unlock()
 
 	// Execute the hooks
-	topotools.ConfigureTabletHook(hk, tm.TabletAlias)
+	topotools.ConfigureTabletHook(hk, tm.tabletAlias)
 	return hk.Execute()
 }
 
