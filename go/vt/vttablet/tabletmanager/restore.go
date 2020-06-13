@@ -17,6 +17,7 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"time"
@@ -44,6 +45,13 @@ var (
 	restoreFromBackup     = flag.Bool("restore_from_backup", false, "(init restore parameter) will check BackupStorage for a recent backup at startup and start there")
 	restoreConcurrency    = flag.Int("restore_concurrency", 4, "(init restore parameter) how many concurrent files to restore at once")
 	waitForBackupInterval = flag.Duration("wait_for_backup_interval", 0, "(init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear")
+
+	// Flags for PITR
+	restoreToTimeStr = flag.String("restore_to_time", "", "(init restore parameter) will restore to the specified time, it depends on the binlog related flags.")
+	binlogHost       = flag.String("binlog_host", "", "(init restore parameter) host name of binlog server.")
+	binlogPort       = flag.Int("binlog_port", 0, "(init restore parameter) port of binlog server.")
+	binlogUser       = flag.String("binlog_user", "", "(init restore parameter) username of binlog server.")
+	binlogPwd        = flag.String("binlog_password", "", "(init restore parameter) password of binlog server.")
 )
 
 // RestoreData is the main entry point for backup restore.
@@ -126,6 +134,17 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	if backupManifest != nil {
 		pos = backupManifest.Position
 	}
+	// If restore_to_time is set , then apply the incremental change
+	if restoreToTimeStr != nil {
+		// validate the dependent settings
+		if *binlogHost == "" || *binlogPort <= 0 || *binlogUser == "" || *binlogPwd == "" {
+			return errors.New("restore_to_time flag depends on binlog server flags(binlog_host, binlog_port, binlog_user, binlog_password)")
+		}
+		err = agent.restoreToTimeFromBinlog(ctx, pos)
+		if err != nil {
+			return nil
+		}
+	}
 	switch err {
 	case nil:
 		// Starting from here we won't be able to recover if we get stopped by a cancelled
@@ -163,6 +182,19 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	tablet.Type = originalType
 	agent.updateState(ctx, tablet, "after restore from backup")
 
+	return nil
+}
+
+func (agent *ActionAgent) restoreToTimeFromBinlog(ctx context.Context, pos mysql.Position) error {
+	restoreTime, err := time.Parse(time.RFC3339, *restoreToTimeStr)
+	if err != nil {
+		return err
+	}
+	restoreTimePb := logutil.TimeToProto(restoreTime)
+	println(restoreTimePb)
+	// Get GTID from the restoreTime
+
+	// Apply binlog events to the above GTID
 	return nil
 }
 
