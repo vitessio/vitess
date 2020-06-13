@@ -158,7 +158,7 @@ func createTestTM(ctx context.Context, t *testing.T, preStart func(*TabletManage
 	}
 
 	mysqlDaemon := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(-1)}
-	tm := NewTestTabletManager(ctx, ts, tabletAlias, port, 0, mysqlDaemon, preStart)
+	tm := NewTestTM(ctx, ts, tabletAlias, port, 0, mysqlDaemon, preStart)
 
 	tm.HealthReporter = &fakeHealthCheck{}
 
