@@ -86,7 +86,7 @@ func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 	if tabletType == topodatapb.TabletType_MASTER {
 		initTabletType = topodatapb.TabletType_REPLICA
 	}
-	tm := tabletmanager.NewComboTabletManager(ctx, ts, alias, int32(8000+uid), int32(9000+uid), controller, dbcfgs, mysqld, keyspace, shard, dbname, strings.ToLower(initTabletType.String()))
+	tm := tabletmanager.NewComboTM(ctx, ts, alias, int32(8000+uid), int32(9000+uid), controller, dbcfgs, mysqld, keyspace, shard, dbname, strings.ToLower(initTabletType.String()))
 	if tabletType == topodatapb.TabletType_MASTER {
 		if err := tm.ChangeType(ctx, topodatapb.TabletType_MASTER); err != nil {
 			return fmt.Errorf("TabletExternallyReparented failed on master %v: %v", topoproto.TabletAliasString(alias), err)

@@ -142,7 +142,7 @@ func main() {
 	if servenv.GRPCPort != nil {
 		gRPCPort = int32(*servenv.GRPCPort)
 	}
-	tm, err = tabletmanager.NewTabletManager(context.Background(), ts, mysqld, qsc, tabletAlias, config, mycnf, int32(*servenv.Port), gRPCPort)
+	tm, err = tabletmanager.New(context.Background(), ts, mysqld, qsc, tabletAlias, config, mycnf, int32(*servenv.Port), gRPCPort)
 	if err != nil {
 		log.Exitf("NewTabletManager() failed: %v", err)
 	}

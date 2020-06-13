@@ -117,7 +117,7 @@ func init() {
 	statsBackupIsRunning = stats.NewGaugesWithMultiLabels("BackupIsRunning", "Whether a backup is running", []string{"mode"})
 }
 
-// TabletManager is the main class for the tm.
+// TabletManager is the main class for the tablet manager.
 type TabletManager struct {
 	// The following fields are set during creation
 	QueryServiceControl tabletserver.Controller
@@ -220,12 +220,12 @@ type TabletManager struct {
 	isPublishing bool
 }
 
-// NewTabletManager creates a new TabletManager and registers all the
+// New creates a new TabletManager and registers all the
 // associated services.
 //
 // batchCtx is the context that the tm will use for any background tasks
 // it spawns.
-func NewTabletManager(
+func New(
 	batchCtx context.Context,
 	ts *topo.Server,
 	mysqld mysqlctl.MysqlDaemon,
@@ -321,9 +321,9 @@ func NewTabletManager(
 	return tm, nil
 }
 
-// NewTestTabletManager creates an tm for test purposes. Only a
+// NewTestTM creates an tm for test purposes. Only a
 // subset of features are supported now, but we'll add more over time.
-func NewTestTabletManager(
+func NewTestTM(
 	batchCtx context.Context,
 	ts *topo.Server,
 	tabletAlias *topodatapb.TabletAlias,
@@ -397,10 +397,10 @@ func NewTestTabletManager(
 	return tm
 }
 
-// NewComboTabletManager creates an tm tailored specifically to run
+// NewComboTM creates an tm tailored specifically to run
 // within the vtcombo binary. It cannot be called concurrently,
 // as it changes the flags.
-func NewComboTabletManager(
+func NewComboTM(
 	batchCtx context.Context,
 	ts *topo.Server,
 	tabletAlias *topodatapb.TabletAlias,
