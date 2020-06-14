@@ -20,17 +20,19 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/gogo/protobuf/proto"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 )
 
 // Init tablet fixes replication data when safe
@@ -38,63 +40,29 @@ func TestInitTabletFixesReplicationData(t *testing.T) {
 	ctx := context.Background()
 	cell := "cell1"
 	ts := memorytopo.NewServer(cell, "cell2")
-	tabletAlias := &topodatapb.TabletAlias{
-		Cell: cell,
-		Uid:  1,
-	}
+	tm := newTestTM(t, ts)
+	tabletAlias := tm.tabletAlias
+	tablet := tm.Tablet()
 
-	// start with a tablet record that doesn't exist
-	tm := &TabletManager{
-		TopoServer:  ts,
-		tabletAlias: tabletAlias,
-		MysqlDaemon: fakemysqldaemon.NewFakeMysqlDaemon(nil),
-		DBConfigs:   &dbconfigs.DBConfigs{},
-		BatchCtx:    ctx,
-		History:     history.New(historyLength),
-		_healthy:    fmt.Errorf("healthcheck not run yet"),
-	}
-
-	// 1. Initialize the tablet as REPLICA.
-	*tabletHostname = "localhost"
-	*initKeyspace = "test_keyspace"
-	*initShard = "-C0"
-	*initTabletType = "replica"
-	tabletAlias = &topodatapb.TabletAlias{
-		Cell: cell,
-		Uid:  2,
-	}
-	tm.tabletAlias = tabletAlias
-
-	tablet, err := BuildTabletFromInput(tabletAlias, int32(1234), int32(3456))
+	sri, err := ts.GetShardReplication(ctx, cell, tablet.Keyspace, "-c0")
 	require.NoError(t, err)
-	tm.tablet = tablet
-	err = tm.createKeyspaceShard(context.Background())
-	require.NoError(t, err)
-	err = tm.initTablet(context.Background())
-	require.NoError(t, err)
-
-	sri, err := ts.GetShardReplication(ctx, cell, *initKeyspace, "-c0")
-	if err != nil || len(sri.Nodes) != 1 || !proto.Equal(sri.Nodes[0].TabletAlias, tabletAlias) {
-		t.Fatalf("Created ShardReplication doesn't match: %v %v", sri, err)
-	}
+	assert.Equal(t, tabletAlias, sri.Nodes[0].TabletAlias)
 
 	// Remove the ShardReplication record, try to create the
 	// tablets again, make sure it's fixed.
-	err = topo.RemoveShardReplicationRecord(ctx, ts, cell, *initKeyspace, "-c0", tabletAlias)
+	err = topo.RemoveShardReplicationRecord(ctx, ts, cell, tablet.Keyspace, "-c0", tabletAlias)
 	require.NoError(t, err)
-	sri, err = ts.GetShardReplication(ctx, cell, *initKeyspace, "-c0")
-	if err != nil || len(sri.Nodes) != 0 {
-		t.Fatalf("Modifed ShardReplication doesn't match: %v %v", sri, err)
-	}
+	sri, err = ts.GetShardReplication(ctx, cell, tablet.Keyspace, "-c0")
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(sri.Nodes))
 
 	// An initTablet will recreate the shard replication data.
 	err = tm.initTablet(context.Background())
 	require.NoError(t, err)
 
-	sri, err = ts.GetShardReplication(ctx, cell, *initKeyspace, "-c0")
-	if err != nil || len(sri.Nodes) != 1 || !proto.Equal(sri.Nodes[0].TabletAlias, tabletAlias) {
-		t.Fatalf("Created ShardReplication doesn't match: %v %v", sri, err)
-	}
+	sri, err = ts.GetShardReplication(ctx, cell, tablet.Keyspace, "-c0")
+	require.NoError(t, err)
+	assert.Equal(t, tabletAlias, sri.Nodes[0].TabletAlias)
 }
 
 // This is a test to make sure a regression does not happen in the future.
@@ -104,67 +72,24 @@ func TestInitTabletFixesReplicationData(t *testing.T) {
 func TestInitTabletDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1", "cell2")
-	tabletAlias := &topodatapb.TabletAlias{
-		Cell: "cell1",
-		Uid:  1,
-	}
-
-	// start with a tablet record that doesn't exist
-	tm := &TabletManager{
-		TopoServer:  ts,
-		tabletAlias: tabletAlias,
-		MysqlDaemon: fakemysqldaemon.NewFakeMysqlDaemon(nil),
-		DBConfigs:   &dbconfigs.DBConfigs{},
-		BatchCtx:    ctx,
-		History:     history.New(historyLength),
-		_healthy:    fmt.Errorf("healthcheck not run yet"),
-	}
-
-	// 1. Initialize the tablet as REPLICA.
-	*tabletHostname = "localhost"
-	*initKeyspace = "test_keyspace"
-	*initShard = "-C0"
-	*initTabletType = "replica"
-	tabletAlias = &topodatapb.TabletAlias{
-		Cell: "cell1",
-		Uid:  2,
-	}
-	tm.tabletAlias = tabletAlias
-
-	tablet, err := BuildTabletFromInput(tabletAlias, int32(1234), int32(3456))
-	require.NoError(t, err)
-	tm.tablet = tablet
-	err = tm.createKeyspaceShard(context.Background())
-	require.NoError(t, err)
-	err = tm.initTablet(context.Background())
-	require.NoError(t, err)
+	tm := newTestTM(t, ts)
 
 	tabletAliases, err := ts.FindAllTabletAliasesInShard(ctx, "test_keyspace", "-c0")
-	if err != nil {
-		t.Fatalf("Could not fetch tablet aliases for shard: %v", err)
-	}
-
-	if len(tabletAliases) != 1 {
-		t.Fatalf("Expected to have only one tablet alias, got: %v", len(tabletAliases))
-	}
-	if tabletAliases[0].Uid != 2 {
-		t.Fatalf("Expected table UID be equal to 2, got: %v", tabletAliases[0].Uid)
-	}
-
-	// Try to initialize a tablet with the same uid in a different shard.
-	*initShard = "-D0"
-	tablet, err = BuildTabletFromInput(tabletAlias, int32(1234), int32(3456))
 	require.NoError(t, err)
-	tm.tablet = tablet
-	err = tm.createKeyspaceShard(context.Background())
+	assert.Equal(t, uint32(1), tabletAliases[0].Uid)
+
+	tablet := newTestTablet(t)
+	_, keyRange, err := topo.ValidateShardName("-d0")
 	require.NoError(t, err)
-	err = tm.initTablet(context.Background())
+	tablet.Shard = "-d0"
+	tablet.KeyRange = keyRange
+	err = tm.Start(tablet)
 	// This should fail.
 	require.Error(t, err)
 
-	if tablets, _ := ts.FindAllTabletAliasesInShard(ctx, "test_keyspace", "-d0"); len(tablets) != 0 {
-		t.Fatalf("Tablet shouldn't be added to replication data")
-	}
+	tablets, err := ts.FindAllTabletAliasesInShard(ctx, "test_keyspace", "-d0")
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(tablets))
 }
 
 // TestInitTablet will test the InitTablet code creates / updates the
@@ -204,6 +129,7 @@ func TestInitTablet(t *testing.T) {
 	*tabletHostname = "localhost"
 	*initKeyspace = "test_keyspace"
 	*initShard = "-C0"
+	*initTabletType = "replica"
 	tabletAlias = &topodatapb.TabletAlias{
 		Cell: "cell1",
 		Uid:  2,
@@ -388,5 +314,40 @@ func TestInitTablet(t *testing.T) {
 	ter3 := ti.GetMasterTermStartTime()
 	if ter3.IsZero() || !ter3.Equal(ter2) {
 		t.Fatalf("After a restart, masterTermStartTime must be set to the previous time saved in the tablet record. Previous timestamp: %v current timestamp: %v", ter2, ter3)
+	}
+}
+
+func newTestTM(t *testing.T, ts *topo.Server) *TabletManager {
+	tablet := newTestTablet(t)
+	tm := &TabletManager{
+		BatchCtx:            context.Background(),
+		TopoServer:          ts,
+		MysqlDaemon:         &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(-1)},
+		DBConfigs:           &dbconfigs.DBConfigs{},
+		QueryServiceControl: tabletservermock.NewController(),
+	}
+	err := tm.Start(tablet)
+	require.NoError(t, err)
+	return tm
+}
+
+func newTestTablet(t *testing.T) *topodatapb.Tablet {
+	shard := "-c0"
+	_, keyRange, err := topo.ValidateShardName(shard)
+	require.NoError(t, err)
+	return &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  1,
+		},
+		Hostname: "localhost",
+		PortMap: map[string]int32{
+			"vt":   int32(1234),
+			"grpc": int32(3456),
+		},
+		Keyspace: "test_keyspace",
+		Shard:    shard,
+		KeyRange: keyRange,
+		Type:     topodatapb.TabletType_REPLICA,
 	}
 }
