@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 
@@ -48,7 +50,12 @@ import (
 
 func init() {
 	tabletconn.RegisterDialer("fake_gateway", tabletDialer)
-	flag.Set("tablet_protocol", "fake_gateway")
+	err := flag.Set("tablet_protocol", "fake_gateway")
+
+	//log error
+	if err != nil {
+		log.Error("flag.Set(\"tablet_protocol\", \"fake_gateway\")", err)
+	}
 }
 
 func TestHealthCheck(t *testing.T) {
@@ -730,7 +737,12 @@ func TestTemplate(t *testing.T) {
 }
 
 func TestDebugURLFormatting(t *testing.T) {
-	flag.Set("tablet_url_template", "https://{{.GetHostNameLevel 0}}.bastion.{{.Tablet.Alias.Cell}}.corp")
+	err2 := flag.Set("tablet_url_template", "https://{{.GetHostNameLevel 0}}.bastion.{{.Tablet.Alias.Cell}}.corp")
+
+	//log error
+	if err2 != nil {
+		log.Error("flag.Set(\"tablet_url_template\", \"https://{{.GetHostNameLevel 0}}.bastion.{{.Tablet.Alias.Cell}}.corp\") failed : %v", err2)
+	}
 	ParseTabletURLTemplateFromFlag()
 
 	tablet := topo.NewTablet(0, "cell", "host.dc.domain")
