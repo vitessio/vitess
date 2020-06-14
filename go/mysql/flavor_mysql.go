@@ -32,7 +32,7 @@ type mysqlFlavor struct{}
 
 // masterGTIDSet is part of the Flavor interface.
 func (mysqlFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
-	qr, err := c.ExecuteFetch("SELECT @@GLOBAL.gtid_executed", 1, false)
+	qr, err := c.ExecuteFetch("SELECT @@global.gtid_executed", 1, false)
 	if err != nil {
 		return nil, err
 	}

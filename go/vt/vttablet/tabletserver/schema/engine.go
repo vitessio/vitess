@@ -62,6 +62,9 @@ type Engine struct {
 	notifierMu  sync.Mutex
 	notifiers   map[string]notifier
 
+	// SkipMetaCheck skips the metadata about the database and table information
+	SkipMetaCheck bool
+
 	// The following fields have their own synchronization
 	// and do not require locking mu.
 	conns *connpool.Pool
@@ -236,6 +239,10 @@ func (se *Engine) reload(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// if this flag is set, then we can return from here
+	if se.SkipMetaCheck {
+		return nil
+	}
 	tableData, err := conn.Exec(ctx, mysql.BaseShowTables, maxTableCount, false)
 	if err != nil {
 		return err
@@ -296,7 +303,7 @@ func (se *Engine) reload(ctx context.Context) error {
 }
 
 func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, error) {
-	tm, err := conn.Exec(ctx, "select unix_timestamp()", 1, false)
+	tm, err := conn.Exec(ctx, "SELECT UNIX_TIMESTAMP()", 1, false)
 	if err != nil {
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get MySQL time: %v", err)
 	}
