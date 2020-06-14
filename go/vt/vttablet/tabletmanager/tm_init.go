@@ -307,12 +307,16 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	}
 	tm.QueryServiceControl.RegisterQueryRuleSource(blacklistQueryRules)
 
-	tm.UpdateStream = binlog.NewUpdateStream(tm.TopoServer, tablet.Keyspace, tm.tabletAlias.Cell, tm.DBConfigs.DbaWithDB(), tm.QueryServiceControl.SchemaEngine())
-	servenv.OnRun(tm.UpdateStream.RegisterService)
-	servenv.OnTerm(tm.UpdateStream.Disable)
+	if tm.UpdateStream != nil {
+		tm.UpdateStream.InitDBConfig(tm.DBConfigs)
+		servenv.OnRun(tm.UpdateStream.RegisterService)
+		servenv.OnTerm(tm.UpdateStream.Disable)
+	}
 
-	tm.VREngine = vreplication.NewEngine(config, tm.TopoServer, tablet.Alias.Cell, tm.MysqlDaemon)
-	servenv.OnTerm(tm.VREngine.Close)
+	if tm.VREngine != nil {
+		tm.VREngine.InitDBConfig(tm.DBConfigs)
+		servenv.OnTerm(tm.VREngine.Close)
+	}
 
 	if err := tm.handleRestore(tm.BatchCtx); err != nil {
 		return err
@@ -452,8 +456,6 @@ func NewComboTM(
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           dbcfgs,
 		QueryServiceControl: queryServiceControl,
-		UpdateStream:        binlog.NewUpdateStreamControlMock(),
-		VREngine:            vreplication.NewTestEngine(nil, "", nil, nil, "", nil),
 		History:             history.New(historyLength),
 		tabletAlias:         tabletAlias,
 		baseTabletType:      tablet.Type,
@@ -533,11 +535,11 @@ func (tm *TabletManager) Stop() {
 		tm.UpdateStream.Disable()
 	}
 
-	tm.VREngine.Close()
-
-	if tm.MysqlDaemon != nil {
-		tm.MysqlDaemon.Close()
+	if tm.VREngine != nil {
+		tm.VREngine.Close()
 	}
+
+	tm.MysqlDaemon.Close()
 }
 
 // hookExtraEnv returns the map to pass to local hooks

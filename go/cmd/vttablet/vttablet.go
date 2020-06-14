@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -32,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/yaml2"
@@ -91,6 +93,8 @@ func main() {
 		MysqlDaemon:         mysqld,
 		DBConfigs:           config.DB.Clone(),
 		QueryServiceControl: qsc,
+		UpdateStream:        binlog.NewUpdateStream(ts, tablet.Keyspace, tabletAlias.Cell, qsc.SchemaEngine()),
+		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld),
 	}
 	if err := tm.Start(tablet, config); err != nil {
 		log.Exitf("failed to parse -tablet-path: %v", err)
