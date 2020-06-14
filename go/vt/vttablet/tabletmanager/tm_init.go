@@ -120,6 +120,7 @@ func init() {
 // TabletManager is the main class for the tablet manager.
 type TabletManager struct {
 	// The following fields are set during creation
+	BatchCtx            context.Context
 	TopoServer          *topo.Server
 	Cnf                 *mysqlctl.Mycnf
 	MysqlDaemon         mysqlctl.MysqlDaemon
@@ -137,10 +138,6 @@ type TabletManager struct {
 	// baseTabletType is the tablet type we revert back to
 	// when we transition back from something like MASTER.
 	baseTabletType topodatapb.TabletType
-
-	// batchCtx is given to the tm by its creator, and should be used for
-	// any background tasks spawned by the tm.
-	batchCtx context.Context
 
 	// History of the health checks, public so status
 	// pages can display it
@@ -225,6 +222,56 @@ type TabletManager struct {
 	isPublishing bool
 }
 
+// BuildTabletFromInput builds a tablet record from input parameters.
+func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (*topodatapb.Tablet, error) {
+	hostname := *tabletHostname
+	if hostname == "" {
+		var err error
+		hostname, err = netutil.FullyQualifiedHostname()
+		if err != nil {
+			return nil, err
+		}
+		log.Infof("Using detected machine hostname: %v To change this, fix your machine network configuration or override it with -tablet_hostname.", hostname)
+	} else {
+		log.Infof("Using hostname: %v from -tablet_hostname flag.", hostname)
+	}
+
+	if *initKeyspace == "" || *initShard == "" {
+		return nil, fmt.Errorf("init_keyspace and init_shard must be specified")
+	}
+
+	// parse and validate shard name
+	shard, keyRange, err := topo.ValidateShardName(*initShard)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "cannot validate shard name %v", *initShard)
+	}
+
+	tabletType, err := topoproto.ParseTabletType(*initTabletType)
+	if err != nil {
+		return nil, err
+	}
+	switch tabletType {
+	case topodatapb.TabletType_SPARE, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
+	default:
+		return nil, fmt.Errorf("invalid init_tablet_type %v; can only be REPLICA, RDONLY or SPARE", tabletType)
+	}
+
+	return &topodatapb.Tablet{
+		Alias:    alias,
+		Hostname: hostname,
+		PortMap: map[string]int32{
+			"vt":   port,
+			"grpc": grpcPort,
+		},
+		Keyspace:       *initKeyspace,
+		Shard:          shard,
+		KeyRange:       keyRange,
+		Type:           tabletType,
+		DbNameOverride: *initDbNameOverride,
+		Tags:           initTags,
+	}, nil
+}
+
 // New creates a new TabletManager and registers all the
 // associated services.
 //
@@ -241,14 +288,14 @@ func New(
 	port, gRPCPort int32,
 ) (tm *TabletManager, err error) {
 
-	tablet, err := buildTabletFromInput(tabletAlias, port, gRPCPort)
+	tablet, err := BuildTabletFromInput(tabletAlias, port, gRPCPort)
 	if err != nil {
 		return nil, err
 	}
 	config.DB.DBName = topoproto.TabletDbName(tablet)
 
 	tm = &TabletManager{
-		batchCtx:            batchCtx,
+		BatchCtx:            batchCtx,
 		TopoServer:          ts,
 		Cnf:                 mycnf,
 		MysqlDaemon:         mysqld,
@@ -262,7 +309,7 @@ func New(
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
 
-	ctx, cancel := context.WithTimeout(tm.batchCtx, *initTimeout)
+	ctx, cancel := context.WithTimeout(tm.BatchCtx, *initTimeout)
 	defer cancel()
 	if err = tm.createKeyspaceShard(ctx); err != nil {
 		return nil, err
@@ -347,7 +394,7 @@ func NewTestTM(
 	}
 
 	tm := &TabletManager{
-		batchCtx:            batchCtx,
+		BatchCtx:            batchCtx,
 		TopoServer:          ts,
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
@@ -420,13 +467,13 @@ func NewComboTM(
 	*initKeyspace = keyspace
 	*initShard = shard
 	*initTabletType = tabletTypeStr
-	tablet, err := buildTabletFromInput(tabletAlias, vtPort, grpcPort)
+	tablet, err := BuildTabletFromInput(tabletAlias, vtPort, grpcPort)
 	if err != nil {
 		panic(err)
 	}
 	dbcfgs.DBName = topoproto.TabletDbName(tablet)
 	tm := &TabletManager{
-		batchCtx:            batchCtx,
+		BatchCtx:            batchCtx,
 		TopoServer:          ts,
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
@@ -442,7 +489,7 @@ func NewComboTM(
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
 
-	ctx, cancel := context.WithTimeout(tm.batchCtx, *initTimeout)
+	ctx, cancel := context.WithTimeout(tm.BatchCtx, *initTimeout)
 	defer cancel()
 	if err := tm.createKeyspaceShard(ctx); err != nil {
 		panic(err)
@@ -470,127 +517,6 @@ func NewComboTM(
 	tm.startShardSync()
 
 	return tm
-}
-
-func (tm *TabletManager) setTablet(tablet *topodatapb.Tablet) {
-	tm.pubMu.Lock()
-	tm.tablet = proto.Clone(tablet).(*topodatapb.Tablet)
-	tm.pubMu.Unlock()
-
-	// Notify the shard sync loop that the tablet state changed.
-	tm.notifyShardSync()
-}
-
-func (tm *TabletManager) updateTablet(update func(tablet *topodatapb.Tablet)) {
-	tm.pubMu.Lock()
-	update(tm.tablet)
-	tm.pubMu.Unlock()
-
-	// Notify the shard sync loop that the tablet state changed.
-	tm.notifyShardSync()
-}
-
-// Tablet reads the stored Tablet from the tm.
-func (tm *TabletManager) Tablet() *topodatapb.Tablet {
-	tm.pubMu.Lock()
-	tablet := proto.Clone(tm.tablet).(*topodatapb.Tablet)
-	tm.pubMu.Unlock()
-	return tablet
-}
-
-// Healthy reads the result of the latest healthcheck, protected by mutex.
-// If that status is too old, it means healthcheck hasn't run for a while,
-// and is probably stuck, this is not good, we're not healthy.
-func (tm *TabletManager) Healthy() (time.Duration, error) {
-	tm.mutex.Lock()
-	defer tm.mutex.Unlock()
-
-	healthy := tm._healthy
-	if healthy == nil {
-		timeSinceLastCheck := time.Since(tm._healthyTime)
-		if timeSinceLastCheck > *healthCheckInterval*3 {
-			healthy = fmt.Errorf("last health check is too old: %s > %s", timeSinceLastCheck, *healthCheckInterval*3)
-		}
-	}
-
-	return tm._replicationDelay, healthy
-}
-
-// BlacklistedTables returns the list of currently blacklisted tables.
-func (tm *TabletManager) BlacklistedTables() []string {
-	tm.mutex.Lock()
-	defer tm.mutex.Unlock()
-	return tm._blacklistedTables
-}
-
-// DisallowQueryService returns the reason the query service should be
-// disabled, if any.
-func (tm *TabletManager) DisallowQueryService() string {
-	tm.mutex.Lock()
-	defer tm.mutex.Unlock()
-	return tm._disallowQueryService
-}
-
-func (tm *TabletManager) slaveStopped() bool {
-	tm.mutex.Lock()
-	defer tm.mutex.Unlock()
-
-	// If we already know the value, don't bother checking the file.
-	if tm._slaveStopped != nil {
-		return *tm._slaveStopped
-	}
-
-	// If there's no Cnf file, don't read state.
-	if tm.Cnf == nil {
-		return false
-	}
-
-	// If the marker file exists, we're stopped.
-	// Treat any read error as if the file doesn't exist.
-	_, err := os.Stat(path.Join(tm.Cnf.TabletDir(), slaveStoppedFile))
-	slaveStopped := err == nil
-	tm._slaveStopped = &slaveStopped
-	return slaveStopped
-}
-
-func (tm *TabletManager) setSlaveStopped(slaveStopped bool) {
-	tm.mutex.Lock()
-	defer tm.mutex.Unlock()
-
-	tm._slaveStopped = &slaveStopped
-
-	// Make a best-effort attempt to persist the value across tablet restarts.
-	// We store a marker in the filesystem so it works regardless of whether
-	// mysqld is running, and so it's tied to this particular instance of the
-	// tablet data dir (the one that's paused at a known replication position).
-	if tm.Cnf == nil {
-		return
-	}
-	tabletDir := tm.Cnf.TabletDir()
-	if tabletDir == "" {
-		return
-	}
-	markerFile := path.Join(tabletDir, slaveStoppedFile)
-	if slaveStopped {
-		file, err := os.Create(markerFile)
-		if err == nil {
-			file.Close()
-		}
-	} else {
-		os.Remove(markerFile)
-	}
-}
-
-func (tm *TabletManager) setServicesDesiredState(disallowQueryService string) {
-	tm.mutex.Lock()
-	tm._disallowQueryService = disallowQueryService
-	tm.mutex.Unlock()
-}
-
-func (tm *TabletManager) setBlacklistedTables(value []string) {
-	tm.mutex.Lock()
-	tm._blacklistedTables = value
-	tm.mutex.Unlock()
 }
 
 // Close prepares a tablet for shutdown. First we check our tablet ownership and
@@ -674,55 +600,6 @@ func (tm *TabletManager) withRetry(ctx context.Context, description string, work
 			backoff = time.Duration(f)
 		}
 	}
-}
-
-func buildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (*topodatapb.Tablet, error) {
-	hostname := *tabletHostname
-	if hostname == "" {
-		var err error
-		hostname, err = netutil.FullyQualifiedHostname()
-		if err != nil {
-			return nil, err
-		}
-		log.Infof("Using detected machine hostname: %v To change this, fix your machine network configuration or override it with -tablet_hostname.", hostname)
-	} else {
-		log.Infof("Using hostname: %v from -tablet_hostname flag.", hostname)
-	}
-
-	if *initKeyspace == "" || *initShard == "" {
-		return nil, fmt.Errorf("init_keyspace and init_shard must be specified")
-	}
-
-	// parse and validate shard name
-	shard, keyRange, err := topo.ValidateShardName(*initShard)
-	if err != nil {
-		return nil, vterrors.Wrapf(err, "cannot validate shard name %v", *initShard)
-	}
-
-	tabletType, err := topoproto.ParseTabletType(*initTabletType)
-	if err != nil {
-		return nil, err
-	}
-	switch tabletType {
-	case topodatapb.TabletType_SPARE, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
-	default:
-		return nil, fmt.Errorf("invalid init_tablet_type %v; can only be REPLICA, RDONLY or SPARE", tabletType)
-	}
-
-	return &topodatapb.Tablet{
-		Alias:    alias,
-		Hostname: hostname,
-		PortMap: map[string]int32{
-			"vt":   port,
-			"grpc": grpcPort,
-		},
-		Keyspace:       *initKeyspace,
-		Shard:          shard,
-		KeyRange:       keyRange,
-		Type:           tabletType,
-		DbNameOverride: *initDbNameOverride,
-		Tags:           initTags,
-	}, nil
 }
 
 func (tm *TabletManager) createKeyspaceShard(ctx context.Context) error {
@@ -955,4 +832,125 @@ func (tm *TabletManager) exportStats() {
 		statsKeyRangeEnd.Set(hex.EncodeToString(tablet.KeyRange.End))
 	}
 	statsAlias.Set(topoproto.TabletAliasString(tablet.Alias))
+}
+
+func (tm *TabletManager) setTablet(tablet *topodatapb.Tablet) {
+	tm.pubMu.Lock()
+	tm.tablet = proto.Clone(tablet).(*topodatapb.Tablet)
+	tm.pubMu.Unlock()
+
+	// Notify the shard sync loop that the tablet state changed.
+	tm.notifyShardSync()
+}
+
+func (tm *TabletManager) updateTablet(update func(tablet *topodatapb.Tablet)) {
+	tm.pubMu.Lock()
+	update(tm.tablet)
+	tm.pubMu.Unlock()
+
+	// Notify the shard sync loop that the tablet state changed.
+	tm.notifyShardSync()
+}
+
+// Tablet reads the stored Tablet from the tm.
+func (tm *TabletManager) Tablet() *topodatapb.Tablet {
+	tm.pubMu.Lock()
+	tablet := proto.Clone(tm.tablet).(*topodatapb.Tablet)
+	tm.pubMu.Unlock()
+	return tablet
+}
+
+// Healthy reads the result of the latest healthcheck, protected by mutex.
+// If that status is too old, it means healthcheck hasn't run for a while,
+// and is probably stuck, this is not good, we're not healthy.
+func (tm *TabletManager) Healthy() (time.Duration, error) {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+
+	healthy := tm._healthy
+	if healthy == nil {
+		timeSinceLastCheck := time.Since(tm._healthyTime)
+		if timeSinceLastCheck > *healthCheckInterval*3 {
+			healthy = fmt.Errorf("last health check is too old: %s > %s", timeSinceLastCheck, *healthCheckInterval*3)
+		}
+	}
+
+	return tm._replicationDelay, healthy
+}
+
+// BlacklistedTables returns the list of currently blacklisted tables.
+func (tm *TabletManager) BlacklistedTables() []string {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+	return tm._blacklistedTables
+}
+
+// DisallowQueryService returns the reason the query service should be
+// disabled, if any.
+func (tm *TabletManager) DisallowQueryService() string {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+	return tm._disallowQueryService
+}
+
+func (tm *TabletManager) slaveStopped() bool {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+
+	// If we already know the value, don't bother checking the file.
+	if tm._slaveStopped != nil {
+		return *tm._slaveStopped
+	}
+
+	// If there's no Cnf file, don't read state.
+	if tm.Cnf == nil {
+		return false
+	}
+
+	// If the marker file exists, we're stopped.
+	// Treat any read error as if the file doesn't exist.
+	_, err := os.Stat(path.Join(tm.Cnf.TabletDir(), slaveStoppedFile))
+	slaveStopped := err == nil
+	tm._slaveStopped = &slaveStopped
+	return slaveStopped
+}
+
+func (tm *TabletManager) setSlaveStopped(slaveStopped bool) {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+
+	tm._slaveStopped = &slaveStopped
+
+	// Make a best-effort attempt to persist the value across tablet restarts.
+	// We store a marker in the filesystem so it works regardless of whether
+	// mysqld is running, and so it's tied to this particular instance of the
+	// tablet data dir (the one that's paused at a known replication position).
+	if tm.Cnf == nil {
+		return
+	}
+	tabletDir := tm.Cnf.TabletDir()
+	if tabletDir == "" {
+		return
+	}
+	markerFile := path.Join(tabletDir, slaveStoppedFile)
+	if slaveStopped {
+		file, err := os.Create(markerFile)
+		if err == nil {
+			file.Close()
+		}
+	} else {
+		os.Remove(markerFile)
+	}
+}
+
+func (tm *TabletManager) setServicesDesiredState(disallowQueryService string) {
+	tm.mutex.Lock()
+	tm._disallowQueryService = disallowQueryService
+	tm.mutex.Unlock()
+}
+
+func (tm *TabletManager) setBlacklistedTables(value []string) {
+	tm.mutex.Lock()
+	tm._blacklistedTables = value
+	tm.mutex.Unlock()
 }

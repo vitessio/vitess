@@ -169,7 +169,7 @@ func (tm *TabletManager) initHealthCheck() {
 // This will not change the TabletControl record, but will use it
 // to see if we should be running the query service.
 func (tm *TabletManager) runHealthCheck() {
-	if err := tm.lock(tm.batchCtx); err != nil {
+	if err := tm.lock(tm.BatchCtx); err != nil {
 		log.Warningf("cannot lock actionMutex, not running HealthCheck")
 		return
 	}
@@ -270,7 +270,7 @@ func (tm *TabletManager) runHealthCheckLocked() {
 	// came up. This is because the mysql could have been in read-only mode, etc.
 	// So, start the engine if it's not already running.
 	if tablet.Type == topodatapb.TabletType_MASTER && !tm.VREngine.IsOpen() {
-		if err := tm.VREngine.Open(tm.batchCtx); err == nil {
+		if err := tm.VREngine.Open(tm.BatchCtx); err == nil {
 			log.Info("VReplication engine successfully started")
 		}
 	}
@@ -297,7 +297,7 @@ func (tm *TabletManager) runHealthCheckLocked() {
 // We only do something if we are in a serving state, and not a master.
 func (tm *TabletManager) terminateHealthChecks() {
 	// No need to check for error, only a canceled batchCtx would fail this.
-	tm.lock(tm.batchCtx)
+	tm.lock(tm.BatchCtx)
 	defer tm.unlock()
 	log.Info("tm.terminateHealthChecks is starting")
 

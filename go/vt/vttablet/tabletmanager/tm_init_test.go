@@ -49,7 +49,7 @@ func TestInitTabletFixesReplicationData(t *testing.T) {
 		tabletAlias: tabletAlias,
 		MysqlDaemon: fakemysqldaemon.NewFakeMysqlDaemon(nil),
 		DBConfigs:   &dbconfigs.DBConfigs{},
-		batchCtx:    ctx,
+		BatchCtx:    ctx,
 		History:     history.New(historyLength),
 		_healthy:    fmt.Errorf("healthcheck not run yet"),
 	}
@@ -65,7 +65,7 @@ func TestInitTabletFixesReplicationData(t *testing.T) {
 	}
 	tm.tabletAlias = tabletAlias
 
-	tablet, err := buildTabletFromInput(tabletAlias, int32(1234), int32(3456))
+	tablet, err := BuildTabletFromInput(tabletAlias, int32(1234), int32(3456))
 	require.NoError(t, err)
 	tm.tablet = tablet
 	err = tm.createKeyspaceShard(context.Background())
@@ -115,7 +115,7 @@ func TestInitTabletDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.
 		tabletAlias: tabletAlias,
 		MysqlDaemon: fakemysqldaemon.NewFakeMysqlDaemon(nil),
 		DBConfigs:   &dbconfigs.DBConfigs{},
-		batchCtx:    ctx,
+		BatchCtx:    ctx,
 		History:     history.New(historyLength),
 		_healthy:    fmt.Errorf("healthcheck not run yet"),
 	}
@@ -131,7 +131,7 @@ func TestInitTabletDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.
 	}
 	tm.tabletAlias = tabletAlias
 
-	tablet, err := buildTabletFromInput(tabletAlias, int32(1234), int32(3456))
+	tablet, err := BuildTabletFromInput(tabletAlias, int32(1234), int32(3456))
 	require.NoError(t, err)
 	tm.tablet = tablet
 	err = tm.createKeyspaceShard(context.Background())
@@ -153,7 +153,7 @@ func TestInitTabletDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.
 
 	// Try to initialize a tablet with the same uid in a different shard.
 	*initShard = "-D0"
-	tablet, err = buildTabletFromInput(tabletAlias, int32(1234), int32(3456))
+	tablet, err = BuildTabletFromInput(tabletAlias, int32(1234), int32(3456))
 	require.NoError(t, err)
 	tm.tablet = tablet
 	err = tm.createKeyspaceShard(context.Background())
@@ -190,7 +190,7 @@ func TestInitTablet(t *testing.T) {
 		MysqlDaemon:    mysqlDaemon,
 		DBConfigs:      &dbconfigs.DBConfigs{},
 		VREngine:       vreplication.NewTestEngine(nil, "", nil, nil, "", nil),
-		batchCtx:       ctx,
+		BatchCtx:       ctx,
 		History:        history.New(historyLength),
 		baseTabletType: topodatapb.TabletType_REPLICA,
 		_healthy:       fmt.Errorf("healthcheck not run yet"),
@@ -219,7 +219,7 @@ func TestInitTablet(t *testing.T) {
 
 	tm.tabletAlias = tabletAlias
 
-	tablet, err := buildTabletFromInput(tabletAlias, port, gRPCPort)
+	tablet, err := BuildTabletFromInput(tabletAlias, port, gRPCPort)
 	require.NoError(t, err)
 	tm.tablet = tablet
 	err = tm.createKeyspaceShard(context.Background())
@@ -278,7 +278,7 @@ func TestInitTablet(t *testing.T) {
 		t.Fatalf("UpdateShardFields failed: %v", err)
 	}
 
-	tablet, err = buildTabletFromInput(tabletAlias, port, gRPCPort)
+	tablet, err = BuildTabletFromInput(tabletAlias, port, gRPCPort)
 	require.NoError(t, err)
 	tm.tablet = tablet
 	err = tm.createKeyspaceShard(context.Background())
@@ -305,7 +305,7 @@ func TestInitTablet(t *testing.T) {
 		t.Fatalf("DeleteTablet failed: %v", err)
 	}
 
-	tablet, err = buildTabletFromInput(tabletAlias, port, gRPCPort)
+	tablet, err = BuildTabletFromInput(tabletAlias, port, gRPCPort)
 	require.NoError(t, err)
 	tm.tablet = tablet
 	err = tm.createKeyspaceShard(context.Background())
@@ -335,7 +335,7 @@ func TestInitTablet(t *testing.T) {
 		t.Fatalf("UpdateTablet failed: %v", err)
 	}
 
-	tablet, err = buildTabletFromInput(tabletAlias, port, gRPCPort)
+	tablet, err = BuildTabletFromInput(tabletAlias, port, gRPCPort)
 	require.NoError(t, err)
 	tm.tablet = tablet
 	err = tm.createKeyspaceShard(context.Background())
@@ -362,7 +362,7 @@ func TestInitTablet(t *testing.T) {
 	*initDbNameOverride = "DBNAME"
 	initTags.Set("aaa:bbb")
 
-	tablet, err = buildTabletFromInput(tabletAlias, port, gRPCPort)
+	tablet, err = BuildTabletFromInput(tabletAlias, port, gRPCPort)
 	require.NoError(t, err)
 	tm.tablet = tablet
 	err = tm.createKeyspaceShard(context.Background())
