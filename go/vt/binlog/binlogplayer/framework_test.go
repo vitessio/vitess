@@ -21,6 +21,8 @@ import (
 	"reflect"
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
@@ -116,5 +118,8 @@ var globalFBC *fakeBinlogClient
 
 func init() {
 	RegisterClientFactory("test", func() Client { return globalFBC })
-	flag.Set("binlog_player_protocol", "test")
+	err := flag.Set("binlog_player_protocol", "test")
+	if err != nil {
+		log.Error("flag.Set(\"binlog_player_protocol\", \"test\") failed :%v", err)
+	}
 }

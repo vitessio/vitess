@@ -247,7 +247,11 @@ func TestDiscoveryGatewayGetTabletsWithRegion(t *testing.T) {
 
 	dg := NewDiscoveryGateway(context.Background(), hc, srvTopo, "local", 2)
 
-	ts.CreateCellsAlias(context.Background(), "local", cellsAlias)
+	err := ts.CreateCellsAlias(context.Background(), "local", cellsAlias)
+
+	if err != nil {
+		t.Errorf("ts.CreateCellsAlias(context.Background()... %v", err)
+	}
 
 	defer ts.DeleteCellsAlias(context.Background(), "local")
 

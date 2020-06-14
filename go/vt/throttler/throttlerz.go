@@ -21,6 +21,8 @@ import (
 	"html/template"
 	"net/http"
 	"strings"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
 const listHTML = `<!DOCTYPE html>
@@ -73,11 +75,19 @@ func throttlerzHandler(w http.ResponseWriter, r *http.Request, m *managerImpl) {
 
 func listThrottlers(w http.ResponseWriter, m *managerImpl) {
 	throttlers := m.Throttlers()
-	listTemplate.Execute(w, map[string]interface{}{
+	err := listTemplate.Execute(w, map[string]interface{}{
 		"Throttlers": throttlers,
 	})
+	// Log error
+	if err != nil {
+		log.Error("listTemplate.Execute(w, map[string]interface{}{\n\t\t\"Throttlers\": throttlers,\n\t}) failed :%v", err)
+	}
 }
 
 func showThrottlerDetails(w http.ResponseWriter, name string) {
-	detailsTemplate.Execute(w, name)
+	err := detailsTemplate.Execute(w, name)
+	// Log error
+	if err != nil {
+		log.Error("detailsTemplate.Execute(w, name) failed :%v", err)
+	}
 }
