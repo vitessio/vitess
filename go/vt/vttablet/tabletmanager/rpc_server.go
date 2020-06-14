@@ -97,15 +97,15 @@ func (tm *TabletManager) HandleRPCPanic(ctx context.Context, name string, args, 
 }
 
 //
-// RegisterQueryService is used to delay registration of RPC servers until we have all the objects.
-type RegisterQueryService func(*TabletManager)
+// RegisterTabletManager is used to delay registration of RPC servers until we have all the objects.
+type RegisterTabletManager func(*TabletManager)
 
-// RegisterQueryServices is a list of functions to call when the delayed registration is triggered.
-var RegisterQueryServices []RegisterQueryService
+// RegisterTabletManagers is a list of functions to call when the delayed registration is triggered.
+var RegisterTabletManagers []RegisterTabletManager
 
-// registerQueryService will register all the instances.
-func (tm *TabletManager) registerQueryService() {
-	for _, f := range RegisterQueryServices {
+// registerTabletManager will register all the instances.
+func (tm *TabletManager) registerTabletManager() {
+	for _, f := range RegisterTabletManagers {
 		f(tm)
 	}
 }
