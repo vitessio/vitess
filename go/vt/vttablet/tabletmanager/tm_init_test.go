@@ -176,6 +176,20 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	srvVSchema, err = ts.GetSrvVSchema(context.Background(), cell)
 	require.NoError(t, err)
 	assert.Equal(t, wantVSchema, srvVSchema.Keyspaces["ks3"])
+
+	// Multi-shard
+	tm1 := newTestTM(t, ts, 5, "ks4", "-80")
+	defer tm1.Stop()
+
+	// Wait a bit and make sure that srvKeyspace is still not created.
+	time.Sleep(100 * time.Millisecond)
+	_, err = ts.GetSrvKeyspace(context.Background(), cell, "ks4")
+	require.True(t, topo.IsErrType(err, topo.NoNode), err)
+
+	tm2 := newTestTM(t, ts, 6, "ks4", "80-")
+	defer tm2.Stop()
+	// Now that we've started the tablet for the other shard, srvKeyspace will succeed.
+	ensureSrvKeyspace(t, ts, cell, "ks4")
 }
 
 func ensureSrvKeyspace(t *testing.T, ts *topo.Server, cell, keyspace string) {
