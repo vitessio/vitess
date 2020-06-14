@@ -75,23 +75,32 @@ func main() {
 	mysqld := mysqlctl.NewMysqld(config.DB)
 	servenv.OnClose(mysqld.Close)
 
-	// Depends on both query and updateStream.
+	// Initialize and start tm.
 	gRPCPort := int32(0)
 	if servenv.GRPCPort != nil {
 		gRPCPort = int32(*servenv.GRPCPort)
 	}
-	tm, err = tabletmanager.New(context.Background(), ts, mysqld, qsc, tabletAlias, config, mycnf, int32(*servenv.Port), gRPCPort)
+	tablet, err := tabletmanager.BuildTabletFromInput(tabletAlias, int32(*servenv.Port), gRPCPort)
 	if err != nil {
-		log.Exitf("NewTabletManager() failed: %v", err)
+		log.Exitf("failed to parse -tablet-path: %v", err)
 	}
-
+	tm = &tabletmanager.TabletManager{
+		BatchCtx:            context.Background(),
+		TopoServer:          ts,
+		Cnf:                 mycnf,
+		MysqlDaemon:         mysqld,
+		DBConfigs:           config.DB.Clone(),
+		QueryServiceControl: qsc,
+	}
+	if err := tm.Start(tablet, config); err != nil {
+		log.Exitf("failed to parse -tablet-path: %v", err)
+	}
 	servenv.OnClose(func() {
 		// Close the tm so that our topo entry gets pruned properly and any
 		// background goroutines that use the topo connection are stopped.
 		tm.Close()
 
-		// We will still use the topo server during lameduck period
-		// to update our state, so closing it in OnClose()
+		// tm uses ts. So, it should be closed after tm.
 		ts.Close()
 	})
 
