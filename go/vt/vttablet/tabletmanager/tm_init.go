@@ -79,16 +79,16 @@ const (
 )
 
 var (
-	tabletHostname       = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
-	initPopulateMetadata = flag.Bool("init_populate_metadata", false, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
-
+	// The following flags initialize the tablet record.
+	tabletHostname     = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
 	initKeyspace       = flag.String("init_keyspace", "", "(init parameter) keyspace to use for this tablet")
 	initShard          = flag.String("init_shard", "", "(init parameter) shard to use for this tablet")
 	initTabletType     = flag.String("init_tablet_type", "", "(init parameter) the tablet type to use for this tablet.")
 	initDbNameOverride = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>")
 	initTags           flagutil.StringMapValue
 
-	initTimeout = flag.Duration("init_timeout", 1*time.Minute, "(init parameter) timeout to use for the init phase.")
+	initPopulateMetadata = flag.Bool("init_populate_metadata", false, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
+	initTimeout          = flag.Duration("init_timeout", 1*time.Minute, "(init parameter) timeout to use for the init phase.")
 
 	// statsTabletType is set to expose the current tablet type.
 	statsTabletType *stats.String
@@ -234,7 +234,7 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (
 		if err != nil {
 			return nil, err
 		}
-		log.Infof("Using detected machine hostname: %v To change this, fix your machine network configuration or override it with -tablet_hostname.", hostname)
+		log.Infof("Using detected machine hostname: %v, to change this, fix your machine network configuration or override it with -tablet_hostname.", hostname)
 	} else {
 		log.Infof("Using hostname: %v from -tablet_hostname flag.", hostname)
 	}
@@ -397,41 +397,6 @@ func (tm *TabletManager) Stop() {
 	}
 
 	tm.MysqlDaemon.Close()
-}
-
-// hookExtraEnv returns the map to pass to local hooks
-func (tm *TabletManager) hookExtraEnv() map[string]string {
-	return map[string]string{"TABLET_ALIAS": topoproto.TabletAliasString(tm.tabletAlias)}
-}
-
-// withRetry will exponentially back off and retry a function upon
-// failure, until the context is Done(), or the function returned with
-// no error. We use this at startup with a context timeout set to the
-// value of the init_timeout flag, so we can try to modify the
-// topology over a longer period instead of dying right away.
-func (tm *TabletManager) withRetry(ctx context.Context, description string, work func() error) error {
-	backoff := 1 * time.Second
-	for {
-		err := work()
-		if err == nil || err == context.Canceled || err == context.DeadlineExceeded {
-			return err
-		}
-
-		log.Warningf("%v failed (%v), backing off %v before retrying", description, err, backoff)
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(backoff):
-			// Exponential backoff with 1.3 as a factor,
-			// and randomized down by at most 20
-			// percent. The generated time series looks
-			// good.  Also note rand.Seed is called at
-			// init() time in binlog_players.go.
-			f := float64(backoff) * 1.3
-			f -= f * 0.2 * rand.Float64()
-			backoff = time.Duration(f)
-		}
-	}
 }
 
 func (tm *TabletManager) createKeyspaceShard(ctx context.Context) error {
@@ -660,6 +625,36 @@ func (tm *TabletManager) exportStats() {
 	statsAlias.Set(topoproto.TabletAliasString(tablet.Alias))
 }
 
+// withRetry will exponentially back off and retry a function upon
+// failure, until the context is Done(), or the function returned with
+// no error. We use this at startup with a context timeout set to the
+// value of the init_timeout flag, so we can try to modify the
+// topology over a longer period instead of dying right away.
+func (tm *TabletManager) withRetry(ctx context.Context, description string, work func() error) error {
+	backoff := 1 * time.Second
+	for {
+		err := work()
+		if err == nil || err == context.Canceled || err == context.DeadlineExceeded {
+			return err
+		}
+
+		log.Warningf("%v failed (%v), backing off %v before retrying", description, err, backoff)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(backoff):
+			// Exponential backoff with 1.3 as a factor,
+			// and randomized down by at most 20
+			// percent. The generated time series looks
+			// good.  Also note rand.Seed is called at
+			// init() time in binlog_players.go.
+			f := float64(backoff) * 1.3
+			f -= f * 0.2 * rand.Float64()
+			backoff = time.Duration(f)
+		}
+	}
+}
+
 func (tm *TabletManager) setTablet(tablet *topodatapb.Tablet) {
 	tm.pubMu.Lock()
 	tm.tablet = proto.Clone(tablet).(*topodatapb.Tablet)
@@ -779,4 +774,9 @@ func (tm *TabletManager) setBlacklistedTables(value []string) {
 	tm.mutex.Lock()
 	tm._blacklistedTables = value
 	tm.mutex.Unlock()
+}
+
+// hookExtraEnv returns the map to pass to local hooks
+func (tm *TabletManager) hookExtraEnv() map[string]string {
+	return map[string]string{"TABLET_ALIAS": topoproto.TabletAliasString(tm.tabletAlias)}
 }

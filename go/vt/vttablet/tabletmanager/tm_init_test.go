@@ -35,8 +35,86 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 )
 
+func TestStartBuildTabletFromInput(t *testing.T) {
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell",
+		Uid:  1,
+	}
+	port := int32(12)
+	grpcport := int32(34)
+
+	// Hostname should be used as is.
+	*tabletHostname = "foo"
+	*initKeyspace = "test_keyspace"
+	*initShard = "0"
+	*initTabletType = "replica"
+	*initDbNameOverride = "aa"
+	wantTablet := &topodatapb.Tablet{
+		Alias:    alias,
+		Hostname: "foo",
+		PortMap: map[string]int32{
+			"vt":   port,
+			"grpc": grpcport,
+		},
+		Keyspace:       "test_keyspace",
+		Shard:          "0",
+		KeyRange:       nil,
+		Type:           topodatapb.TabletType_REPLICA,
+		DbNameOverride: "aa",
+	}
+
+	gotTablet, err := BuildTabletFromInput(alias, port, grpcport)
+	require.NoError(t, err)
+
+	// Hostname should be resolved.
+	assert.Equal(t, wantTablet, gotTablet)
+	*tabletHostname = ""
+	gotTablet, err = BuildTabletFromInput(alias, port, grpcport)
+	require.NoError(t, err)
+	assert.NotEqual(t, "", gotTablet.Hostname)
+
+	// Cannonicalize shard name and compute keyrange.
+	*tabletHostname = "foo"
+	*initShard = "-C0"
+	wantTablet.Shard = "-c0"
+	wantTablet.KeyRange = &topodatapb.KeyRange{
+		Start: []byte(""),
+		End:   []byte("\xc0"),
+	}
+	gotTablet, err = BuildTabletFromInput(alias, port, grpcport)
+	require.NoError(t, err)
+	// KeyRange check is explicit because the next comparison doesn't
+	// show the diff well enough.
+	assert.Equal(t, wantTablet.KeyRange, gotTablet.KeyRange)
+	assert.Equal(t, wantTablet, gotTablet)
+
+	// Invalid inputs.
+	*initKeyspace = ""
+	*initShard = "0"
+	_, err = BuildTabletFromInput(alias, port, grpcport)
+	assert.Contains(t, err.Error(), "init_keyspace and init_shard must be specified")
+
+	*initKeyspace = "test_keyspace"
+	*initShard = ""
+	_, err = BuildTabletFromInput(alias, port, grpcport)
+	assert.Contains(t, err.Error(), "init_keyspace and init_shard must be specified")
+
+	*initShard = "x-y"
+	_, err = BuildTabletFromInput(alias, port, grpcport)
+	assert.Contains(t, err.Error(), "cannot validate shard name")
+
+	*initShard = "0"
+	*initTabletType = "bad"
+	_, err = BuildTabletFromInput(alias, port, grpcport)
+	assert.Contains(t, err.Error(), "unknown TabletType bad")
+
+	*initTabletType = "master"
+	_, err = BuildTabletFromInput(alias, port, grpcport)
+	assert.Contains(t, err.Error(), "invalid init_tablet_type MASTER")
+}
+
 // Init tablet fixes replication data when safe
-func TestInitTabletFixesReplicationData(t *testing.T) {
+func TestStartFixesReplicationData(t *testing.T) {
 	ctx := context.Background()
 	cell := "cell1"
 	ts := memorytopo.NewServer(cell, "cell2")
@@ -44,15 +122,15 @@ func TestInitTabletFixesReplicationData(t *testing.T) {
 	tabletAlias := tm.tabletAlias
 	tablet := tm.Tablet()
 
-	sri, err := ts.GetShardReplication(ctx, cell, tablet.Keyspace, "-c0")
+	sri, err := ts.GetShardReplication(ctx, cell, tablet.Keyspace, "0")
 	require.NoError(t, err)
 	assert.Equal(t, tabletAlias, sri.Nodes[0].TabletAlias)
 
 	// Remove the ShardReplication record, try to create the
 	// tablets again, make sure it's fixed.
-	err = topo.RemoveShardReplicationRecord(ctx, ts, cell, tablet.Keyspace, "-c0", tabletAlias)
+	err = topo.RemoveShardReplicationRecord(ctx, ts, cell, tablet.Keyspace, "0", tabletAlias)
 	require.NoError(t, err)
-	sri, err = ts.GetShardReplication(ctx, cell, tablet.Keyspace, "-c0")
+	sri, err = ts.GetShardReplication(ctx, cell, tablet.Keyspace, "0")
 	require.NoError(t, err)
 	assert.Equal(t, 0, len(sri.Nodes))
 
@@ -60,21 +138,21 @@ func TestInitTabletFixesReplicationData(t *testing.T) {
 	err = tm.initTablet(context.Background())
 	require.NoError(t, err)
 
-	sri, err = ts.GetShardReplication(ctx, cell, tablet.Keyspace, "-c0")
+	sri, err = ts.GetShardReplication(ctx, cell, tablet.Keyspace, "0")
 	require.NoError(t, err)
 	assert.Equal(t, tabletAlias, sri.Nodes[0].TabletAlias)
 }
 
 // This is a test to make sure a regression does not happen in the future.
-// There is code in InitTablet that updates replication data if tablet fails
+// There is code in Start that updates replication data if tablet fails
 // to be created due to a NodeExists error. During this particular error we were not doing
 // the sanity checks that the provided tablet was the same in the topo.
-func TestInitTabletDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.T) {
+func TestStartDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	tm := newTestTM(t, ts)
 
-	tabletAliases, err := ts.FindAllTabletAliasesInShard(ctx, "test_keyspace", "-c0")
+	tabletAliases, err := ts.FindAllTabletAliasesInShard(ctx, "test_keyspace", "0")
 	require.NoError(t, err)
 	assert.Equal(t, uint32(1), tabletAliases[0].Uid)
 
@@ -92,10 +170,10 @@ func TestInitTabletDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.
 	assert.Equal(t, 0, len(tablets))
 }
 
-// TestInitTablet will test the InitTablet code creates / updates the
+// TestStart will test the Start code creates / updates the
 // tablet node correctly. Note we modify global parameters (the flags)
 // so this has to be in one test.
-func TestInitTablet(t *testing.T) {
+func TestStart(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	tabletAlias := &topodatapb.TabletAlias{
@@ -128,7 +206,7 @@ func TestInitTablet(t *testing.T) {
 	// it to lower case.
 	*tabletHostname = "localhost"
 	*initKeyspace = "test_keyspace"
-	*initShard = "-C0"
+	*initShard = "0"
 	*initTabletType = "replica"
 	tabletAlias = &topodatapb.TabletAlias{
 		Cell: "cell1",
@@ -153,7 +231,7 @@ func TestInitTablet(t *testing.T) {
 	err = tm.initTablet(context.Background())
 	require.NoError(t, err)
 
-	si, err := ts.GetShard(ctx, "test_keyspace", "-c0")
+	si, err := ts.GetShard(ctx, "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
@@ -182,10 +260,10 @@ func TestInitTablet(t *testing.T) {
 	if ti.PortMap["grpc"] != gRPCPort {
 		t.Errorf("wrong gRPC port for tablet: %v", ti.PortMap["grpc"])
 	}
-	if ti.Shard != "-c0" {
+	if ti.Shard != "0" {
 		t.Errorf("wrong shard for tablet: %v", ti.Shard)
 	}
-	if string(ti.KeyRange.Start) != "" || string(ti.KeyRange.End) != "\xc0" {
+	if ti.KeyRange != nil {
 		t.Errorf("wrong KeyRange for tablet: %v", ti.KeyRange)
 	}
 	if got := tm.masterTermStartTime(); !got.IsZero() {
@@ -196,7 +274,7 @@ func TestInitTablet(t *testing.T) {
 	// (This simulates the case where the MasterAlias in the shard record says
 	// that we are the master but the tablet record says otherwise. In that case,
 	// we assume we are not the MASTER.)
-	_, err = tm.TopoServer.UpdateShardFields(ctx, "test_keyspace", "-c0", func(si *topo.ShardInfo) error {
+	_, err = tm.TopoServer.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
 		si.MasterAlias = tabletAlias
 		return nil
 	})
@@ -332,7 +410,7 @@ func newTestTM(t *testing.T, ts *topo.Server) *TabletManager {
 }
 
 func newTestTablet(t *testing.T) *topodatapb.Tablet {
-	shard := "-c0"
+	shard := "0"
 	_, keyRange, err := topo.ValidateShardName(shard)
 	require.NoError(t, err)
 	return &topodatapb.Tablet{
