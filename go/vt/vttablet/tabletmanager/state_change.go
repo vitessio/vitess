@@ -331,7 +331,7 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 
 	// See if we need to start or stop vreplication.
 	if newTablet.Type == topodatapb.TabletType_MASTER {
-		if err := tm.VREngine.Open(tm.batchCtx); err != nil {
+		if err := tm.VREngine.Open(tm.BatchCtx); err != nil {
 			log.Errorf("Could not start VReplication engine: %v. Will keep retrying at health check intervals.", err)
 		} else {
 			log.Info("VReplication engine started")
@@ -383,7 +383,7 @@ func (tm *TabletManager) retryPublish() {
 	for {
 		// Retry immediately the first time because the previous failure might have been
 		// due to an expired context.
-		ctx, cancel := context.WithTimeout(tm.batchCtx, *topo.RemoteOperationTimeout)
+		ctx, cancel := context.WithTimeout(tm.BatchCtx, *topo.RemoteOperationTimeout)
 		_, err := tm.TopoServer.UpdateTabletFields(ctx, tm.tabletAlias, func(tablet *topodatapb.Tablet) error {
 			if err := topotools.CheckOwnership(tablet, tm.tablet); err != nil {
 				log.Error(err)
@@ -420,14 +420,14 @@ func (tm *TabletManager) rebuildKeyspace(keyspace string, retryInterval time.Dur
 	for {
 		if !firstTime {
 			// If keyspace was rebuilt by someone else, we can just exit.
-			srvKeyspace, err = tm.TopoServer.GetSrvKeyspace(tm.batchCtx, tm.tabletAlias.Cell, keyspace)
+			srvKeyspace, err = tm.TopoServer.GetSrvKeyspace(tm.BatchCtx, tm.tabletAlias.Cell, keyspace)
 			if err == nil {
 				return
 			}
 		}
-		err = topotools.RebuildKeyspace(tm.batchCtx, logutil.NewConsoleLogger(), tm.TopoServer, keyspace, []string{tm.tabletAlias.Cell})
+		err = topotools.RebuildKeyspace(tm.BatchCtx, logutil.NewConsoleLogger(), tm.TopoServer, keyspace, []string{tm.tabletAlias.Cell})
 		if err == nil {
-			srvKeyspace, err = tm.TopoServer.GetSrvKeyspace(tm.batchCtx, tm.tabletAlias.Cell, keyspace)
+			srvKeyspace, err = tm.TopoServer.GetSrvKeyspace(tm.BatchCtx, tm.tabletAlias.Cell, keyspace)
 			if err == nil {
 				return
 			}
@@ -451,7 +451,7 @@ func (tm *TabletManager) findMysqlPort(retryInterval time.Duration) {
 		tm.pubMu.Lock()
 		tm.tablet.MysqlPort = mport
 		tm.pubMu.Unlock()
-		tm.publishState(tm.batchCtx)
+		tm.publishState(tm.BatchCtx)
 		return
 	}
 }
