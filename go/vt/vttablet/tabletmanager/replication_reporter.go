@@ -68,7 +68,7 @@ func (r *replicationReporter) Report(isSlaveType, shouldQueryServiceBeRunning bo
 				log.Infof("Slave is stopped. Running with --disable_active_reparents so will not try to reconnect to master...")
 			} else {
 				log.Infof("Slave is stopped. Trying to reconnect to master...")
-				ctx, cancel := context.WithTimeout(r.tm.batchCtx, 5*time.Second)
+				ctx, cancel := context.WithTimeout(r.tm.BatchCtx, 5*time.Second)
 				if err := repairReplication(ctx, r.tm); err != nil {
 					log.Infof("Failed to reconnect to master: %v", err)
 				}

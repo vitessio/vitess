@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
@@ -55,26 +56,6 @@ func main() {
 	mysqlctl.RegisterFlags()
 
 	servenv.ParseFlags("vttablet")
-
-	tabletenv.Init()
-	// Load current config after tabletenv.Init, because it changes it.
-	config := tabletenv.NewCurrentConfig()
-	if err := config.Verify(); err != nil {
-		log.Exitf("invalid config: %v", err)
-	}
-
-	if *tabletConfig != "" {
-		bytes, err := ioutil.ReadFile(*tabletConfig)
-		if err != nil {
-			log.Exitf("error reading config file %s: %v", *tabletConfig, err)
-		}
-		if err := yaml2.Unmarshal(bytes, config); err != nil {
-			log.Exitf("error parsing config file %s: %v", bytes, err)
-		}
-	}
-	gotBytes, _ := yaml2.Marshal(config)
-	log.Infof("Loaded config file %s successfully:\n%s", *tabletConfig, gotBytes)
-
 	servenv.Init()
 
 	if *tabletPath == "" {
@@ -85,55 +66,12 @@ func main() {
 		log.Exitf("failed to parse -tablet-path: %v", err)
 	}
 
-	var mycnf *mysqlctl.Mycnf
-	var socketFile string
-	// If no connection parameters were specified, load the mycnf file
-	// and use the socket from it. If connection parameters were specified,
-	// we assume that the mysql is not local, and we skip loading mycnf.
-	// This also means that backup and restore will not be allowed.
-	if !config.DB.HasGlobalSettings() {
-		var err error
-		if mycnf, err = mysqlctl.NewMycnfFromFlags(tabletAlias.Uid); err != nil {
-			log.Exitf("mycnf read failed: %v", err)
-		}
-		socketFile = mycnf.SocketFile
-	} else {
-		log.Info("connection parameters were specified. Not loading my.cnf.")
-	}
+	// config and mycnf intializatin is intertwined.
+	config, mycnf := initConfig(tabletAlias)
 
-	// If connection parameters were specified, socketFile will be empty.
-	// Otherwise, the socketFile (read from mycnf) will be used to initialize
-	// dbconfigs.
-	config.DB.InitWithSocket(socketFile)
-	for _, cfg := range config.ExternalConnections {
-		cfg.InitWithSocket("")
-	}
-
-	if *tableACLConfig != "" {
-		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
-		tableacl.Register("simpleacl", &simpleacl.Factory{})
-	} else if *enforceTableACLConfig {
-		log.Exit("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
-	}
-
-	// creates and registers the query service
 	ts := topo.Open()
-	qsc := tabletserver.NewTabletServer("", config, ts, *tabletAlias)
-	servenv.OnRun(func() {
-		qsc.Register()
-		addStatusParts(qsc)
-	})
-	servenv.OnClose(func() {
-		// We now leave the queryservice running during lameduck,
-		// so stop it in OnClose(), after lameduck is over.
-		qsc.StopService()
-	})
+	qsc := createTabletServer(config, ts, tabletAlias)
 
-	qsc.InitACL(*tableACLConfig, *enforceTableACLConfig, *tableACLConfigReloadInterval)
-
-	// Create mysqld and register the health reporter (needs to be done
-	// before initializing the tm, so the initial health check
-	// done by the tm has the right reporter)
 	mysqld := mysqlctl.NewMysqld(config.DB)
 	servenv.OnClose(mysqld.Close)
 
@@ -158,4 +96,68 @@ func main() {
 	})
 
 	servenv.RunDefault()
+}
+
+func initConfig(tabletAlias *topodatapb.TabletAlias) (*tabletenv.TabletConfig, *mysqlctl.Mycnf) {
+	tabletenv.Init()
+	// Load current config after tabletenv.Init, because it changes it.
+	config := tabletenv.NewCurrentConfig()
+	if err := config.Verify(); err != nil {
+		log.Exitf("invalid config: %v", err)
+	}
+
+	if *tabletConfig != "" {
+		bytes, err := ioutil.ReadFile(*tabletConfig)
+		if err != nil {
+			log.Exitf("error reading config file %s: %v", *tabletConfig, err)
+		}
+		if err := yaml2.Unmarshal(bytes, config); err != nil {
+			log.Exitf("error parsing config file %s: %v", bytes, err)
+		}
+	}
+	gotBytes, _ := yaml2.Marshal(config)
+	log.Infof("Loaded config file %s successfully:\n%s", *tabletConfig, gotBytes)
+
+	var mycnf *mysqlctl.Mycnf
+	var socketFile string
+	// If no connection parameters were specified, load the mycnf file
+	// and use the socket from it. If connection parameters were specified,
+	// we assume that the mysql is not local, and we skip loading mycnf.
+	// This also means that backup and restore will not be allowed.
+	if !config.DB.HasGlobalSettings() {
+		var err error
+		if mycnf, err = mysqlctl.NewMycnfFromFlags(tabletAlias.Uid); err != nil {
+			log.Exitf("mycnf read failed: %v", err)
+		}
+		socketFile = mycnf.SocketFile
+	} else {
+		log.Info("connection parameters were specified. Not loading my.cnf.")
+	}
+
+	// If connection parameters were specified, socketFile will be empty.
+	// Otherwise, the socketFile (read from mycnf) will be used to initialize
+	// dbconfigs.
+	config.DB.InitWithSocket(socketFile)
+	for _, cfg := range config.ExternalConnections {
+		cfg.InitWithSocket("")
+	}
+	return config, mycnf
+}
+
+func createTabletServer(config *tabletenv.TabletConfig, ts *topo.Server, tabletAlias *topodatapb.TabletAlias) *tabletserver.TabletServer {
+	if *tableACLConfig != "" {
+		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
+		tableacl.Register("simpleacl", &simpleacl.Factory{})
+	} else if *enforceTableACLConfig {
+		log.Exit("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
+	}
+	// creates and registers the query service
+	qsc := tabletserver.NewTabletServer("", config, ts, *tabletAlias)
+	servenv.OnRun(func() {
+		qsc.Register()
+		addStatusParts(qsc)
+	})
+	servenv.OnClose(qsc.StopService)
+	qsc.InitACL(*tableACLConfig, *enforceTableACLConfig, *tableACLConfigReloadInterval)
+	return qsc
 }
