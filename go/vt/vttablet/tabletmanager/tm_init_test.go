@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,10 +28,13 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 )
@@ -113,24 +117,99 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid init_tablet_type MASTER")
 }
 
+func TestStartCreateKeyspaceShard(t *testing.T) {
+	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
+	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
+
+	ctx := context.Background()
+	cell := "cell1"
+	ts := memorytopo.NewServer(cell)
+	_ = newTestTM(t, ts, 1, "ks", "0")
+
+	_, err := ts.GetShard(ctx, "ks", "0")
+	require.NoError(t, err)
+
+	ensureSrvKeyspace(t, ts, cell, "ks")
+
+	srvVSchema, err := ts.GetSrvVSchema(context.Background(), cell)
+	require.NoError(t, err)
+	wantVSchema := &vschemapb.Keyspace{}
+	assert.Equal(t, wantVSchema, srvVSchema.Keyspaces["ks"])
+
+	// keyspace-shard already created.
+	_, err = ts.GetOrCreateShard(ctx, "ks1", "0")
+	require.NoError(t, err)
+	_ = newTestTM(t, ts, 2, "ks1", "0")
+	_, err = ts.GetShard(ctx, "ks1", "0")
+	require.NoError(t, err)
+	ensureSrvKeyspace(t, ts, cell, "ks1")
+	srvVSchema, err = ts.GetSrvVSchema(context.Background(), cell)
+	require.NoError(t, err)
+	assert.Equal(t, wantVSchema, srvVSchema.Keyspaces["ks1"])
+
+	// srvKeyspace already created
+	_, err = ts.GetOrCreateShard(ctx, "ks2", "0")
+	require.NoError(t, err)
+	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, "ks2", []string{cell})
+	require.NoError(t, err)
+	_ = newTestTM(t, ts, 3, "ks2", "0")
+	_, err = ts.GetShard(ctx, "ks2", "0")
+	require.NoError(t, err)
+	_, err = ts.GetSrvKeyspace(context.Background(), cell, "ks2")
+	require.NoError(t, err)
+	srvVSchema, err = ts.GetSrvVSchema(context.Background(), cell)
+	require.NoError(t, err)
+	assert.Equal(t, wantVSchema, srvVSchema.Keyspaces["ks2"])
+
+	// srvVSchema already created
+	_, err = ts.GetOrCreateShard(ctx, "ks3", "0")
+	require.NoError(t, err)
+	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, "ks3", []string{cell})
+	require.NoError(t, err)
+	err = ts.RebuildSrvVSchema(ctx, []string{cell})
+	require.NoError(t, err)
+	_ = newTestTM(t, ts, 4, "ks3", "0")
+	_, err = ts.GetShard(ctx, "ks3", "0")
+	require.NoError(t, err)
+	_, err = ts.GetSrvKeyspace(context.Background(), cell, "ks3")
+	require.NoError(t, err)
+	srvVSchema, err = ts.GetSrvVSchema(context.Background(), cell)
+	require.NoError(t, err)
+	assert.Equal(t, wantVSchema, srvVSchema.Keyspaces["ks3"])
+}
+
+func ensureSrvKeyspace(t *testing.T, ts *topo.Server, cell, keyspace string) {
+	t.Helper()
+	found := false
+	for i := 0; i < 10; i++ {
+		_, err := ts.GetSrvKeyspace(context.Background(), cell, "ks")
+		if err == nil {
+			found = true
+			break
+		}
+		require.True(t, topo.IsErrType(err, topo.NoNode), err)
+		time.Sleep(rebuildKeyspaceRetryInterval)
+	}
+	assert.True(t, found)
+}
+
 // Init tablet fixes replication data when safe
 func TestStartFixesReplicationData(t *testing.T) {
 	ctx := context.Background()
 	cell := "cell1"
 	ts := memorytopo.NewServer(cell, "cell2")
-	tm := newTestTM(t, ts)
+	tm := newTestTM(t, ts, 1, "ks", "0")
 	tabletAlias := tm.tabletAlias
-	tablet := tm.Tablet()
 
-	sri, err := ts.GetShardReplication(ctx, cell, tablet.Keyspace, "0")
+	sri, err := ts.GetShardReplication(ctx, cell, "ks", "0")
 	require.NoError(t, err)
 	assert.Equal(t, tabletAlias, sri.Nodes[0].TabletAlias)
 
 	// Remove the ShardReplication record, try to create the
 	// tablets again, make sure it's fixed.
-	err = topo.RemoveShardReplicationRecord(ctx, ts, cell, tablet.Keyspace, "0", tabletAlias)
+	err = topo.RemoveShardReplicationRecord(ctx, ts, cell, "ks", "0", tabletAlias)
 	require.NoError(t, err)
-	sri, err = ts.GetShardReplication(ctx, cell, tablet.Keyspace, "0")
+	sri, err = ts.GetShardReplication(ctx, cell, "ks", "0")
 	require.NoError(t, err)
 	assert.Equal(t, 0, len(sri.Nodes))
 
@@ -138,7 +217,7 @@ func TestStartFixesReplicationData(t *testing.T) {
 	err = tm.initTablet(context.Background())
 	require.NoError(t, err)
 
-	sri, err = ts.GetShardReplication(ctx, cell, tablet.Keyspace, "0")
+	sri, err = ts.GetShardReplication(ctx, cell, "ks", "0")
 	require.NoError(t, err)
 	assert.Equal(t, tabletAlias, sri.Nodes[0].TabletAlias)
 }
@@ -150,22 +229,18 @@ func TestStartFixesReplicationData(t *testing.T) {
 func TestStartDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1", "cell2")
-	tm := newTestTM(t, ts)
+	tm := newTestTM(t, ts, 1, "ks", "0")
 
-	tabletAliases, err := ts.FindAllTabletAliasesInShard(ctx, "test_keyspace", "0")
+	tabletAliases, err := ts.FindAllTabletAliasesInShard(ctx, "ks", "0")
 	require.NoError(t, err)
 	assert.Equal(t, uint32(1), tabletAliases[0].Uid)
 
-	tablet := newTestTablet(t)
-	_, keyRange, err := topo.ValidateShardName("-d0")
+	tablet := newTestTablet(t, 1, "ks", "-d0")
 	require.NoError(t, err)
-	tablet.Shard = "-d0"
-	tablet.KeyRange = keyRange
 	err = tm.Start(tablet)
-	// This should fail.
-	require.Error(t, err)
+	assert.Contains(t, err.Error(), "existing tablet keyspace and shard ks/0 differ")
 
-	tablets, err := ts.FindAllTabletAliasesInShard(ctx, "test_keyspace", "-d0")
+	tablets, err := ts.FindAllTabletAliasesInShard(ctx, "ks", "-d0")
 	require.NoError(t, err)
 	assert.Equal(t, 0, len(tablets))
 }
@@ -230,19 +305,6 @@ func TestStart(t *testing.T) {
 	require.NoError(t, err)
 	err = tm.initTablet(context.Background())
 	require.NoError(t, err)
-
-	si, err := ts.GetShard(ctx, "test_keyspace", "0")
-	if err != nil {
-		t.Fatalf("GetShard failed: %v", err)
-	}
-
-	_, err = tm.TopoServer.GetSrvKeyspace(ctx, "cell1", "test_keyspace")
-	switch {
-	case err != nil:
-		// srvKeyspace should not be when tablets haven't been registered to this cell
-	default:
-		t.Errorf("Serving keyspace was not generated for cell: %v", si)
-	}
 
 	ti, err := ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
@@ -395,8 +457,9 @@ func TestStart(t *testing.T) {
 	}
 }
 
-func newTestTM(t *testing.T, ts *topo.Server) *TabletManager {
-	tablet := newTestTablet(t)
+func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string) *TabletManager {
+	t.Helper()
+	tablet := newTestTablet(t, uid, keyspace, shard)
 	tm := &TabletManager{
 		BatchCtx:            context.Background(),
 		TopoServer:          ts,
@@ -409,21 +472,20 @@ func newTestTM(t *testing.T, ts *topo.Server) *TabletManager {
 	return tm
 }
 
-func newTestTablet(t *testing.T) *topodatapb.Tablet {
-	shard := "0"
-	_, keyRange, err := topo.ValidateShardName(shard)
+func newTestTablet(t *testing.T, uid int, keyspace, shard string) *topodatapb.Tablet {
+	shard, keyRange, err := topo.ValidateShardName(shard)
 	require.NoError(t, err)
 	return &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "cell1",
-			Uid:  1,
+			Uid:  uint32(uid),
 		},
 		Hostname: "localhost",
 		PortMap: map[string]int32{
 			"vt":   int32(1234),
 			"grpc": int32(3456),
 		},
-		Keyspace: "test_keyspace",
+		Keyspace: keyspace,
 		Shard:    shard,
 		KeyRange: keyRange,
 		Type:     topodatapb.TabletType_REPLICA,
