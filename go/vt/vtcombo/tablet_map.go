@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/health"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -96,6 +97,7 @@ func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 		MysqlDaemon:         mysqld,
 		DBConfigs:           dbcfgs,
 		QueryServiceControl: controller,
+		HealthReporter:      health.DefaultAggregator,
 	}
 	tablet := &topodatapb.Tablet{
 		Alias: alias,
