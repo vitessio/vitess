@@ -21,6 +21,10 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+
+	"vitess.io/vitess/go/vt/dbconfigs"
+
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -33,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -191,9 +196,67 @@ func (agent *ActionAgent) restoreToTimeFromBinlog(ctx context.Context, pos mysql
 	}
 	restoreTimePb := logutil.TimeToProto(restoreTime)
 	println(restoreTimePb.Seconds)
-	// Get GTID from the restoreTime
 
-	// Apply binlog events to the above GTID
+	gtid := agent.getGTIDFromTimestamp(ctx, pos, restoreTimePb.Seconds)
+	if gtid == "" {
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "unable to fetch the GTID for the specified restore_to_time")
+	}
+
+	err = agent.replicateUptoGTID(ctx, gtid)
+	if err != nil {
+		return vterrors.Wrapf(err, "unable to replicate upto specified gtid : %s", gtid)
+	}
+
+	return nil
+}
+
+// getGTIDFromTimestamp gets the next GTID of the event happened on the timestamp (resore_to_time)
+func (agent *ActionAgent) getGTIDFromTimestamp(ctx context.Context, pos mysql.Position, restoreTime int64) string {
+	connParams := &mysql.ConnParams{
+		Host:  *binlogHost,
+		Port:  *binlogPort,
+		Uname: *binlogUser,
+		Pass:  *binlogPwd,
+	}
+	dbCfgs := &dbconfigs.DBConfigs{
+		Host: connParams.Host,
+		Port: connParams.Port,
+	}
+	dbCfgs.SetDbParams(*connParams)
+	vsClient := vreplication.NewReplicaConnector(connParams)
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	gtid := ""
+	_ = vsClient.VStream(ctx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
+		for _, event := range events {
+			if event.Gtid != "" && event.Timestamp > restoreTime {
+				gtid = event.Gtid
+				break
+			}
+		}
+		return nil
+	})
+	return gtid
+}
+
+// replicateUptoGTID replicates upto specified gtid from binlog server
+func (agent *ActionAgent) replicateUptoGTID(ctx context.Context, gtid string) error {
+	// TODO: we can use agent.MysqlDaemon.SetMaster , but it uses replDbConfig
+	cmds := []string{
+		"STOP SLAVE FOR CHANNEL '' ",
+		"STOP SLAVE IO_THREAD FOR CHANNEL ''",
+		fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s',MASTER_PORT=%d, MASTER_USER='%s', MASTER_AUTO_POSITION = 1;", *binlogHost, *binlogPort, *binlogUser),
+		fmt.Sprintf(" START SLAVE  UNTIL SQL_BEFORE_GTIDS = '%s'", gtid),
+	}
+
+	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
+		return vterrors.Wrap(err, "failed to reset slave")
+	}
+	// TODO: Wait for the replication to happen and then reset the slave, so that we don't be connected to binlog server
 	return nil
 }
 
