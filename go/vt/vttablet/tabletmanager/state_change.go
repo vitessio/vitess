@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -408,57 +407,6 @@ func (tm *TabletManager) retryPublish() {
 			continue
 		}
 		log.Infof("Published state: %v", tm.tablet)
-		return
-	}
-}
-
-func (tm *TabletManager) rebuildKeyspace(keyspace string, retryInterval time.Duration) {
-	var srvKeyspace *topodatapb.SrvKeyspace
-	defer func() {
-		log.Infof("Keyspace rebuilt: %v", keyspace)
-		tm.mutex.Lock()
-		defer tm.mutex.Unlock()
-		tm._srvKeyspace = srvKeyspace
-	}()
-
-	// RebuildKeyspace will fail until at least one tablet is up for every shard.
-	firstTime := true
-	var err error
-	for {
-		if !firstTime {
-			// If keyspace was rebuilt by someone else, we can just exit.
-			srvKeyspace, err = tm.TopoServer.GetSrvKeyspace(tm.BatchCtx, tm.tabletAlias.Cell, keyspace)
-			if err == nil {
-				return
-			}
-		}
-		err = topotools.RebuildKeyspace(tm.BatchCtx, logutil.NewConsoleLogger(), tm.TopoServer, keyspace, []string{tm.tabletAlias.Cell})
-		if err == nil {
-			srvKeyspace, err = tm.TopoServer.GetSrvKeyspace(tm.BatchCtx, tm.tabletAlias.Cell, keyspace)
-			if err == nil {
-				return
-			}
-		}
-		if firstTime {
-			log.Warningf("rebuildKeyspace failed, will retry every %v: %v", retryInterval, err)
-		}
-		firstTime = false
-		time.Sleep(retryInterval)
-	}
-}
-
-func (tm *TabletManager) findMysqlPort(retryInterval time.Duration) {
-	for {
-		time.Sleep(retryInterval)
-		mport, err := tm.MysqlDaemon.GetMysqlPort()
-		if err != nil {
-			continue
-		}
-		log.Infof("Identified mysql port: %v", mport)
-		tm.pubMu.Lock()
-		tm.tablet.MysqlPort = mport
-		tm.pubMu.Unlock()
-		tm.publishState(tm.BatchCtx)
 		return
 	}
 }
