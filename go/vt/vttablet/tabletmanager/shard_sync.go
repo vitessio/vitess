@@ -48,13 +48,7 @@ var (
 // This goroutine gets woken up for shard record changes by maintaining a
 // topo watch on the shard record. It gets woken up for tablet state changes by
 // a notification signal from setTablet().
-func (tm *TabletManager) shardSyncLoop(ctx context.Context) {
-	// Make a copy of the channels so we don't race when stopShardSync() clears them.
-	tm.mutex.Lock()
-	notifyChan := tm._shardSyncChan
-	doneChan := tm._shardSyncDone
-	tm.mutex.Unlock()
-
+func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan struct{}, doneChan chan<- struct{}) {
 	defer close(doneChan)
 
 	// retryChan is how we wake up after going to sleep between retries.
@@ -234,17 +228,17 @@ func (tm *TabletManager) startShardSync() {
 	// if the buffer is full because all we care about is that the receiver will
 	// be told it needs to recheck the state.
 	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
 	tm._shardSyncChan = make(chan struct{}, 1)
 	tm._shardSyncDone = make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
 	tm._shardSyncCancel = cancel
-	tm.mutex.Unlock()
-
-	// Queue up a pending notification to force the loop to run once at startup.
-	tm.notifyShardSync()
 
 	// Start the sync loop in the background.
-	go tm.shardSyncLoop(ctx)
+	go tm.shardSyncLoop(ctx, tm._shardSyncChan, tm._shardSyncDone)
+
+	// Queue up a pending notification to force the loop to run once at startup.
+	go tm.notifyShardSync()
 }
 
 func (tm *TabletManager) stopShardSync() {
@@ -253,12 +247,8 @@ func (tm *TabletManager) stopShardSync() {
 	tm.mutex.Lock()
 	if tm._shardSyncCancel != nil {
 		tm._shardSyncCancel()
-		tm._shardSyncCancel = nil
-		tm._shardSyncChan = nil
-
-		doneChan = tm._shardSyncDone
-		tm._shardSyncDone = nil
 	}
+	doneChan = tm._shardSyncDone
 	tm.mutex.Unlock()
 
 	// If the shard sync loop was running, wait for it to fully stop.
