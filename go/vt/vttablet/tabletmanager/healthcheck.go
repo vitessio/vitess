@@ -259,17 +259,19 @@ func (tm *TabletManager) runHealthCheckLocked() {
 			}
 		}
 	}
-	if topo.IsRunningUpdateStream(tablet.Type) {
-		tm.UpdateStream.Enable()
-	} else {
-		tm.UpdateStream.Disable()
+	if tm.UpdateStream != nil {
+		if topo.IsRunningUpdateStream(tablet.Type) {
+			tm.UpdateStream.Enable()
+		} else {
+			tm.UpdateStream.Disable()
+		}
 	}
 
 	// All master tablets have to run the VReplication engine.
 	// There is no guarantee that VREngine was successfully started when tabletmanager
 	// came up. This is because the mysql could have been in read-only mode, etc.
 	// So, start the engine if it's not already running.
-	if tablet.Type == topodatapb.TabletType_MASTER && !tm.VREngine.IsOpen() {
+	if tablet.Type == topodatapb.TabletType_MASTER && tm.VREngine != nil && !tm.VREngine.IsOpen() {
 		if err := tm.VREngine.Open(tm.BatchCtx); err == nil {
 			log.Info("VReplication engine successfully started")
 		}
