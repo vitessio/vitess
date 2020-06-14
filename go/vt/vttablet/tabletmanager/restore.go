@@ -17,7 +17,6 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"time"
@@ -136,10 +135,6 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	}
 	// If restore_to_time is set , then apply the incremental change
 	if restoreToTimeStr != nil {
-		// validate the dependent settings
-		if *binlogHost == "" || *binlogPort <= 0 || *binlogUser == "" || *binlogPwd == "" {
-			return errors.New("restore_to_time flag depends on binlog server flags(binlog_host, binlog_port, binlog_user, binlog_password)")
-		}
 		err = agent.restoreToTimeFromBinlog(ctx, pos)
 		if err != nil {
 			return nil
@@ -186,12 +181,16 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 }
 
 func (agent *ActionAgent) restoreToTimeFromBinlog(ctx context.Context, pos mysql.Position) error {
+	// validate the dependent settings
+	if *binlogHost == "" || *binlogPort <= 0 || *binlogUser == "" {
+		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "restore_to_time flag depends on binlog server flags(binlog_host, binlog_port, binlog_user, binlog_password)")
+	}
 	restoreTime, err := time.Parse(time.RFC3339, *restoreToTimeStr)
 	if err != nil {
 		return err
 	}
 	restoreTimePb := logutil.TimeToProto(restoreTime)
-	println(restoreTimePb)
+	println(restoreTimePb.Seconds)
 	// Get GTID from the restoreTime
 
 	// Apply binlog events to the above GTID
