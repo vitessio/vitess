@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"strings"
 	"time"
 
 	"golang.org/x/net/context"
@@ -56,7 +55,7 @@ import (
 )
 
 // tablet contains all the data for an individual tablet.
-type tablet struct {
+type comboTablet struct {
 	// configuration parameters
 	alias      *topodatapb.TabletAlias
 	keyspace   string
@@ -70,7 +69,7 @@ type tablet struct {
 }
 
 // tabletMap maps the tablet uid to the tablet record
-var tabletMap map[uint32]*tablet
+var tabletMap map[uint32]*comboTablet
 
 // CreateTablet creates an individual tablet, with its tm, and adds
 // it to the map. If it's a master tablet, it also issues a TER.
@@ -87,7 +86,33 @@ func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 	if tabletType == topodatapb.TabletType_MASTER {
 		initTabletType = topodatapb.TabletType_REPLICA
 	}
-	tm := tabletmanager.NewComboTM(ctx, ts, alias, int32(8000+uid), int32(9000+uid), controller, dbcfgs, mysqld, keyspace, shard, dbname, strings.ToLower(initTabletType.String()))
+	_, kr, err := topo.ValidateShardName(shard)
+	if err != nil {
+		return err
+	}
+	tm := &tabletmanager.TabletManager{
+		BatchCtx:            context.Background(),
+		TopoServer:          ts,
+		MysqlDaemon:         mysqld,
+		DBConfigs:           dbcfgs,
+		QueryServiceControl: controller,
+	}
+	tablet := &topodatapb.Tablet{
+		Alias: alias,
+		PortMap: map[string]int32{
+			"vt":   int32(8000 + uid),
+			"grpc": int32(9000 + uid),
+		},
+		Keyspace:       keyspace,
+		Shard:          shard,
+		KeyRange:       kr,
+		Type:           initTabletType,
+		DbNameOverride: dbname,
+	}
+	if err := tm.Start(tablet); err != nil {
+		return err
+	}
+
 	if tabletType == topodatapb.TabletType_MASTER {
 		if err := tm.ChangeType(ctx, topodatapb.TabletType_MASTER); err != nil {
 			return fmt.Errorf("TabletExternallyReparented failed on master %v: %v", topoproto.TabletAliasString(alias), err)
@@ -95,7 +120,7 @@ func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 	}
 	controller.AddStatusHeader()
 	controller.AddStatusPart()
-	tabletMap[uid] = &tablet{
+	tabletMap[uid] = &comboTablet{
 		alias:      alias,
 		keyspace:   keyspace,
 		shard:      shard,
@@ -111,7 +136,7 @@ func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 // InitTabletMap creates the action tms and associated data structures
 // for all tablets, based on the vttest proto parameter.
 func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl.MysqlDaemon, dbcfgs *dbconfigs.DBConfigs, schemaDir string, mycnf *mysqlctl.Mycnf, ensureDatabase bool) error {
-	tabletMap = make(map[uint32]*tablet)
+	tabletMap = make(map[uint32]*comboTablet)
 
 	ctx := context.Background()
 
@@ -302,7 +327,7 @@ func dialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservi
 // internalTabletConn implements queryservice.QueryService by forwarding everything
 // to the tablet
 type internalTabletConn struct {
-	tablet     *tablet
+	tablet     *comboTablet
 	topoTablet *topodatapb.Tablet
 }
 
