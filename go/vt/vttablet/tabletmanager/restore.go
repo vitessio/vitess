@@ -194,6 +194,10 @@ func (agent *ActionAgent) restoreToTimeFromBinlog(ctx context.Context, pos mysql
 	if err != nil {
 		return err
 	}
+	if restoreTime.Second() > time.Now().Second() {
+		log.Warning("Restore time request is a future date, so skipping it")
+		return nil
+	}
 	restoreTimePb := logutil.TimeToProto(restoreTime)
 	println(restoreTimePb.Seconds)
 
@@ -202,6 +206,7 @@ func (agent *ActionAgent) restoreToTimeFromBinlog(ctx context.Context, pos mysql
 		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "unable to fetch the GTID for the specified restore_to_time")
 	}
 
+	println(fmt.Sprintf("going to restore upto the gtid - %s", gtid))
 	err = agent.replicateUptoGTID(ctx, gtid)
 	if err != nil {
 		return vterrors.Wrapf(err, "unable to replicate upto specified gtid : %s", gtid)
@@ -231,6 +236,8 @@ func (agent *ActionAgent) getGTIDFromTimestamp(ctx context.Context, pos mysql.Po
 		}},
 	}
 	gtid := ""
+	// Todo: we need to safely return from vstream if it takes more time
+	// Todo: we need to return from vstream , so that we return the GTID
 	_ = vsClient.VStream(ctx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
 		for _, event := range events {
 			if event.Gtid != "" && event.Timestamp > restoreTime {
