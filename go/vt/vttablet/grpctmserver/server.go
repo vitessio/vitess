@@ -482,7 +482,7 @@ func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBacku
 // registration glue
 
 func init() {
-	tabletmanager.RegisterQueryServices = append(tabletmanager.RegisterQueryServices, func(tm *tabletmanager.TabletManager) {
+	tabletmanager.RegisterTabletManagers = append(tabletmanager.RegisterTabletManagers, func(tm *tabletmanager.TabletManager) {
 		if servenv.GRPCCheckServiceMap("tabletmanager") {
 			tabletmanagerservicepb.RegisterTabletManagerServer(servenv.GRPCServer, &server{tm})
 		}

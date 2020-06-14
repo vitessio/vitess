@@ -272,79 +272,50 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (
 	}, nil
 }
 
-// New creates a new TabletManager and registers all the
-// associated services.
-//
-// batchCtx is the context that the tm will use for any background tasks
-// it spawns.
-func New(
-	batchCtx context.Context,
-	ts *topo.Server,
-	mysqld mysqlctl.MysqlDaemon,
-	queryServiceControl tabletserver.Controller,
-	tabletAlias *topodatapb.TabletAlias,
-	config *tabletenv.TabletConfig,
-	mycnf *mysqlctl.Mycnf,
-	port, gRPCPort int32,
-) (tm *TabletManager, err error) {
-
-	tablet, err := BuildTabletFromInput(tabletAlias, port, gRPCPort)
-	if err != nil {
-		return nil, err
-	}
-	config.DB.DBName = topoproto.TabletDbName(tablet)
-
-	tm = &TabletManager{
-		BatchCtx:            batchCtx,
-		TopoServer:          ts,
-		Cnf:                 mycnf,
-		MysqlDaemon:         mysqld,
-		DBConfigs:           config.DB,
-		QueryServiceControl: queryServiceControl,
-		History:             history.New(historyLength),
-		tabletAlias:         tabletAlias,
-		baseTabletType:      tablet.Type,
-		tablet:              tablet,
-		healthReporter:      health.DefaultAggregator,
-		_healthy:            fmt.Errorf("healthcheck not run yet"),
-	}
+// Start starts the TabletManager.
+func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.TabletConfig) error {
+	tm.setTablet(tablet)
+	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
+	tm.History = history.New(historyLength)
+	tm.tabletAlias = tablet.Alias
+	tm.baseTabletType = tablet.Type
+	tm.healthReporter = health.DefaultAggregator
+	tm._healthy = fmt.Errorf("healthcheck not run yet")
 
 	ctx, cancel := context.WithTimeout(tm.BatchCtx, *initTimeout)
 	defer cancel()
-	if err = tm.createKeyspaceShard(ctx); err != nil {
-		return nil, err
+	if err := tm.createKeyspaceShard(ctx); err != nil {
+		return err
 	}
 	if err := tm.checkMastership(ctx); err != nil {
-		return nil, err
+		return err
 	}
 	if err := tm.checkMysql(ctx); err != nil {
-		return nil, err
+		return err
 	}
 	if err := tm.initTablet(ctx); err != nil {
-		return nil, err
+		return err
 	}
 
-	tablet = tm.Tablet()
-	err = tm.QueryServiceControl.InitDBConfig(querypb.Target{
+	err := tm.QueryServiceControl.InitDBConfig(querypb.Target{
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,
 	}, tm.DBConfigs)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "failed to InitDBConfig")
+		return vterrors.Wrap(err, "failed to InitDBConfig")
 	}
 	tm.QueryServiceControl.RegisterQueryRuleSource(blacklistQueryRules)
-	servenv.OnRun(tm.registerQueryService)
 
 	tm.UpdateStream = binlog.NewUpdateStream(tm.TopoServer, tablet.Keyspace, tm.tabletAlias.Cell, tm.DBConfigs.DbaWithDB(), tm.QueryServiceControl.SchemaEngine())
 	servenv.OnRun(tm.UpdateStream.RegisterService)
 	servenv.OnTerm(tm.UpdateStream.Disable)
 
-	tm.VREngine = vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld)
+	tm.VREngine = vreplication.NewEngine(config, tm.TopoServer, tablet.Alias.Cell, tm.MysqlDaemon)
 	servenv.OnTerm(tm.VREngine.Close)
 
-	if err := tm.handleRestore(batchCtx); err != nil {
-		return nil, err
+	if err := tm.handleRestore(tm.BatchCtx); err != nil {
+		return err
 	}
 
 	tm.startShardSync()
@@ -354,23 +325,25 @@ func New(
 	// Start periodic Orchestrator self-registration, if configured.
 	orc, err := newOrcClient()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if orc != nil {
 		tm.orc = orc
 		go tm.orc.DiscoverLoop(tm)
 	}
 
+	servenv.OnRun(tm.registerTabletManager)
+
 	// Temporary glue code to keep things working.
 	// TODO(sougou); remove after refactor.
-	if err := tm.lock(batchCtx); err != nil {
-		return nil, err
+	if err := tm.lock(tm.BatchCtx); err != nil {
+		return err
 	}
 	defer tm.unlock()
 	tablet = tm.Tablet()
-	tm.changeCallback(batchCtx, tablet, tablet)
+	tm.changeCallback(tm.BatchCtx, tablet, tablet)
 
-	return tm, nil
+	return nil
 }
 
 // NewTestTM creates an tm for test purposes. Only a
