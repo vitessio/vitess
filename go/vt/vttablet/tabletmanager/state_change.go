@@ -317,11 +317,12 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 		}
 	}
 
-	// UpdateStream needs to be started or stopped too.
-	if topo.IsRunningUpdateStream(newTablet.Type) {
-		tm.UpdateStream.Enable()
-	} else {
-		tm.UpdateStream.Disable()
+	if tm.UpdateStream != nil {
+		if topo.IsRunningUpdateStream(newTablet.Type) {
+			tm.UpdateStream.Enable()
+		} else {
+			tm.UpdateStream.Disable()
+		}
 	}
 
 	// Update the stats to our current type.
@@ -330,14 +331,16 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 	statsTabletTypeCount.Add(s, 1)
 
 	// See if we need to start or stop vreplication.
-	if newTablet.Type == topodatapb.TabletType_MASTER {
-		if err := tm.VREngine.Open(tm.BatchCtx); err != nil {
-			log.Errorf("Could not start VReplication engine: %v. Will keep retrying at health check intervals.", err)
+	if tm.VREngine != nil {
+		if newTablet.Type == topodatapb.TabletType_MASTER {
+			if err := tm.VREngine.Open(tm.BatchCtx); err != nil {
+				log.Errorf("Could not start VReplication engine: %v. Will keep retrying at health check intervals.", err)
+			} else {
+				log.Info("VReplication engine started")
+			}
 		} else {
-			log.Info("VReplication engine started")
+			tm.VREngine.Close()
 		}
-	} else {
-		tm.VREngine.Close()
 	}
 
 	// Broadcast health changes to vtgate immediately.
