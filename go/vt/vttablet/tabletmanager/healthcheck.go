@@ -137,6 +137,9 @@ func ConfigHTML() template.HTML {
 // and configure the healthcheck shutdown. It is only run by NewTabletManager
 // for real vttablet tms (not by tests, nor vtcombo).
 func (tm *TabletManager) initHealthCheck() {
+	if tm.HealthReporter == nil {
+		return
+	}
 	registerReplicationReporter(tm)
 	registerHeartbeatReporter(tm.QueryServiceControl)
 
@@ -179,6 +182,9 @@ func (tm *TabletManager) runHealthCheck() {
 }
 
 func (tm *TabletManager) runHealthCheckLocked() {
+	if tm.HealthReporter == nil {
+		return
+	}
 	tm.checkLock()
 	// read the current tablet record and tablet control
 	tablet := tm.Tablet()
@@ -196,7 +202,7 @@ func (tm *TabletManager) runHealthCheckLocked() {
 
 	// Remember the health error as healthErr to be sure we don't
 	// accidentally overwrite it with some other err.
-	replicationDelay, healthErr := tm.healthReporter.Report(isSlaveType, shouldBeServing)
+	replicationDelay, healthErr := tm.HealthReporter.Report(isSlaveType, shouldBeServing)
 	if healthErr != nil && ignoreErrorExpr != nil &&
 		ignoreErrorExpr.MatchString(healthErr.Error()) {
 		// we need to ignore this health error
