@@ -45,7 +45,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/flagutil"
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -68,8 +67,6 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -104,6 +101,12 @@ var (
 	// statsBackupIsRunning is set to 1 (true) if a backup is running.
 	statsBackupIsRunning *stats.GaugesWithMultiLabels
 
+	statsKeyspace      = stats.NewString("TabletKeyspace")
+	statsShard         = stats.NewString("TabletShard")
+	statsKeyRangeStart = stats.NewString("TabletKeyRangeStart")
+	statsKeyRangeEnd   = stats.NewString("TabletKeyRangeEnd")
+	statsAlias         = stats.NewString("TabletAlias")
+
 	// The following variables can be changed to speed up tests.
 	mysqlPortRetryInterval       = 1 * time.Second
 	rebuildKeyspaceRetryInterval = 1 * time.Second
@@ -129,8 +132,8 @@ type TabletManager struct {
 	UpdateStream        binlog.UpdateStreamControl
 	VREngine            *vreplication.Engine
 
-	// healthReporter initiates healthchecks.
-	healthReporter health.Reporter
+	// HealthReporter initiates healthchecks.
+	HealthReporter health.Reporter
 
 	// tabletAlias is saved away from tablet for read-only access
 	tabletAlias *topodatapb.TabletAlias
@@ -273,13 +276,12 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (
 }
 
 // Start starts the TabletManager.
-func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.TabletConfig) error {
+func (tm *TabletManager) Start(tablet *topodatapb.Tablet) error {
 	tm.setTablet(tablet)
 	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
 	tm.History = history.New(historyLength)
 	tm.tabletAlias = tablet.Alias
 	tm.baseTabletType = tablet.Type
-	tm.healthReporter = health.DefaultAggregator
 	tm._healthy = fmt.Errorf("healthcheck not run yet")
 
 	ctx, cancel := context.WithTimeout(tm.BatchCtx, *initTimeout)
@@ -339,7 +341,6 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	servenv.OnRun(tm.registerTabletManager)
 
 	// Temporary glue code to keep things working.
-	// TODO(sougou); remove after refactor.
 	if err := tm.lock(tm.BatchCtx); err != nil {
 		return err
 	}
@@ -348,150 +349,6 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	tm.changeCallback(tm.BatchCtx, tablet, tablet)
 
 	return nil
-}
-
-// NewTestTM creates an tm for test purposes. Only a
-// subset of features are supported now, but we'll add more over time.
-func NewTestTM(
-	batchCtx context.Context,
-	ts *topo.Server,
-	tabletAlias *topodatapb.TabletAlias,
-	vtPort, grpcPort int32,
-	mysqlDaemon mysqlctl.MysqlDaemon,
-	preStart func(*TabletManager),
-) *TabletManager {
-
-	ti, err := ts.GetTablet(batchCtx, tabletAlias)
-	if err != nil {
-		panic(vterrors.Wrap(err, "failed reading tablet"))
-	}
-	ti.PortMap = map[string]int32{
-		"vt":   vtPort,
-		"grpc": grpcPort,
-	}
-
-	tm := &TabletManager{
-		BatchCtx:            batchCtx,
-		TopoServer:          ts,
-		Cnf:                 nil,
-		MysqlDaemon:         mysqlDaemon,
-		DBConfigs:           &dbconfigs.DBConfigs{},
-		QueryServiceControl: tabletservermock.NewController(),
-		UpdateStream:        binlog.NewUpdateStreamControlMock(),
-		VREngine:            vreplication.NewTestEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient, ti.DbName(), nil),
-		History:             history.New(historyLength),
-		tabletAlias:         tabletAlias,
-		baseTabletType:      topodatapb.TabletType_REPLICA,
-		tablet:              ti.Tablet,
-		healthReporter:      health.DefaultAggregator,
-		_healthy:            fmt.Errorf("healthcheck not run yet"),
-	}
-	if preStart != nil {
-		preStart(tm)
-	}
-
-	if err := tm.createKeyspaceShard(batchCtx); err != nil {
-		panic(err)
-	}
-	if err := tm.checkMastership(batchCtx); err != nil {
-		panic(err)
-	}
-	if tm.initTablet(batchCtx); err != nil {
-		panic(err)
-	}
-
-	tablet := tm.Tablet()
-	err = tm.QueryServiceControl.InitDBConfig(querypb.Target{
-		Keyspace:   tablet.Keyspace,
-		Shard:      tablet.Shard,
-		TabletType: tablet.Type,
-	}, tm.DBConfigs)
-	if err != nil {
-		panic(err)
-	}
-
-	// Start a background goroutine to watch and update the shard record,
-	// to make sure it and our tablet record are in sync.
-	tm.startShardSync()
-
-	// Temporary glue code to keep things working.
-	// TODO(sougou); remove after refactor.
-	if err := tm.lock(batchCtx); err != nil {
-		panic(err)
-	}
-	defer tm.unlock()
-	tablet = tm.Tablet()
-	tm.changeCallback(batchCtx, tablet, tablet)
-
-	return tm
-}
-
-// NewComboTM creates an tm tailored specifically to run
-// within the vtcombo binary. It cannot be called concurrently,
-// as it changes the flags.
-func NewComboTM(
-	batchCtx context.Context,
-	ts *topo.Server,
-	tabletAlias *topodatapb.TabletAlias,
-	vtPort, grpcPort int32,
-	queryServiceControl tabletserver.Controller,
-	dbcfgs *dbconfigs.DBConfigs,
-	mysqlDaemon mysqlctl.MysqlDaemon,
-	keyspace, shard, dbname, tabletTypeStr string,
-) *TabletManager {
-
-	*initDbNameOverride = dbname
-	*initKeyspace = keyspace
-	*initShard = shard
-	*initTabletType = tabletTypeStr
-	tablet, err := BuildTabletFromInput(tabletAlias, vtPort, grpcPort)
-	if err != nil {
-		panic(err)
-	}
-	dbcfgs.DBName = topoproto.TabletDbName(tablet)
-	tm := &TabletManager{
-		BatchCtx:            batchCtx,
-		TopoServer:          ts,
-		Cnf:                 nil,
-		MysqlDaemon:         mysqlDaemon,
-		DBConfigs:           dbcfgs,
-		QueryServiceControl: queryServiceControl,
-		History:             history.New(historyLength),
-		tabletAlias:         tabletAlias,
-		baseTabletType:      tablet.Type,
-		tablet:              tablet,
-		healthReporter:      health.DefaultAggregator,
-		_healthy:            fmt.Errorf("healthcheck not run yet"),
-	}
-
-	ctx, cancel := context.WithTimeout(tm.BatchCtx, *initTimeout)
-	defer cancel()
-	if err := tm.createKeyspaceShard(ctx); err != nil {
-		panic(err)
-	}
-	if err := tm.checkMastership(ctx); err != nil {
-		panic(err)
-	}
-	if err := tm.initTablet(ctx); err != nil {
-		panic(err)
-	}
-
-	tablet = tm.Tablet()
-	err = tm.QueryServiceControl.InitDBConfig(querypb.Target{
-		Keyspace:   tablet.Keyspace,
-		Shard:      tablet.Shard,
-		TabletType: tablet.Type,
-	}, tm.DBConfigs)
-	if err != nil {
-		panic(err)
-	}
-	tm.QueryServiceControl.RegisterQueryRuleSource(blacklistQueryRules)
-
-	// Start a background goroutine to watch and update the shard record,
-	// to make sure it and our tablet record are in sync.
-	tm.startShardSync()
-
-	return tm
 }
 
 // Close prepares a tablet for shutdown. First we check our tablet ownership and
@@ -794,12 +651,6 @@ func (tm *TabletManager) handleRestore(ctx context.Context) error {
 
 func (tm *TabletManager) exportStats() {
 	tablet := tm.Tablet()
-	statsKeyspace := stats.NewString("TabletKeyspace")
-	statsShard := stats.NewString("TabletShard")
-	statsKeyRangeStart := stats.NewString("TabletKeyRangeStart")
-	statsKeyRangeEnd := stats.NewString("TabletKeyRangeEnd")
-	statsAlias := stats.NewString("TabletAlias")
-
 	statsKeyspace.Set(tablet.Keyspace)
 	statsShard.Set(tablet.Shard)
 	if key.KeyRangeIsPartial(tablet.KeyRange) {

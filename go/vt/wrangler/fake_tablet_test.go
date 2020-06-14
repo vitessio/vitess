@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -34,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/grpctmserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
+	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	// import the gRPC client implementation for tablet manager
@@ -168,10 +170,21 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 		go ft.HTTPServer.Serve(ft.HTTPListener)
 		vtPort = int32(ft.HTTPListener.Addr().(*net.TCPAddr).Port)
 	}
+	ft.Tablet.PortMap["vt"] = vtPort
+	ft.Tablet.PortMap["grpc"] = gRPCPort
 
 	// Create a test tm on that port, and re-read the record
 	// (it has new ports and IP).
-	ft.TM = tabletmanager.NewTestTM(context.Background(), wr.TopoServer(), ft.Tablet.Alias, vtPort, gRPCPort, ft.FakeMysqlDaemon, nil)
+	ft.TM = &tabletmanager.TabletManager{
+		BatchCtx:            context.Background(),
+		TopoServer:          wr.TopoServer(),
+		MysqlDaemon:         ft.FakeMysqlDaemon,
+		DBConfigs:           &dbconfigs.DBConfigs{},
+		QueryServiceControl: tabletservermock.NewController(),
+	}
+	if err := ft.TM.Start(ft.Tablet); err != nil {
+		t.Fatal(err)
+	}
 	ft.Tablet = ft.TM.Tablet()
 
 	// Register the gRPC server, and starts listening.
