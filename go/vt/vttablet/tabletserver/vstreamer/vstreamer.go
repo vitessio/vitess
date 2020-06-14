@@ -169,8 +169,10 @@ func (vs *vstreamer) Stream() error {
 
 	// Ensure sh is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
-	if err := vs.sh.Open(); err != nil {
-		return wrapError(err, vs.pos)
+	if !vs.se.SkipMetaCheck {
+		if err := vs.sh.Open(); err != nil {
+			return wrapError(err, vs.pos)
+		}
 	}
 
 	conn, err := binlog.NewSlaveConnection(vs.cp)
