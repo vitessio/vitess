@@ -207,7 +207,11 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 						disallowQueryService = disallowQueryReason
 					}
 				} else {
-					replicationDelay, healthErr := tm.healthReporter.Report(true, true)
+					var replicationDelay time.Duration
+					var healthErr error
+					if tm.HealthReporter != nil {
+						replicationDelay, healthErr = tm.HealthReporter.Report(true, true)
+					}
 					if healthErr != nil {
 						allowQuery = false
 						disallowQueryReason = "unable to get health"
