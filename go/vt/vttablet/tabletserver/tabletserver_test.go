@@ -2445,6 +2445,79 @@ func TestReserveExecute_WithTx(t *testing.T) {
 	assert.Contains(t, db.QueryLog(), strings.Join(expected, ";"), "expected queries to run")
 }
 
+func TestRelease(t *testing.T) {
+	type testcase struct {
+		begin, reserve  bool
+		expectedQueries []string
+		err             bool
+	}
+
+	tests := []testcase{{
+		begin:           true,
+		reserve:         false,
+		expectedQueries: []string{"rollback"},
+	}, {
+		begin:   true,
+		reserve: true,
+	}, {
+		begin:   false,
+		reserve: true,
+	}, {
+		begin:   false,
+		reserve: false,
+		err:     true,
+	}}
+
+	for i, test := range tests {
+
+		name := fmt.Sprintf("%d", i)
+		if test.begin {
+			name += " begin"
+		}
+		if test.reserve {
+			name += " reserve"
+		}
+		t.Run(name, func(t *testing.T) {
+			db := setUpTabletServerTest(t)
+			db.AddQueryPattern(".*", &sqltypes.Result{})
+			defer db.Close()
+			config := tabletenv.NewDefaultConfig()
+			tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+			dbcfgs := newDBConfigs(db)
+			target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+			err := tsv.StartService(target, dbcfgs)
+			require.NoError(t, err)
+			defer tsv.StopService()
+
+			var txID, connID int64
+
+			switch {
+			case test.begin && test.reserve:
+				_, txID, connID, _, err = tsv.ReserveBeginExecute(ctx, &target, "select 42", []string{"select 1212"}, nil, &querypb.ExecuteOptions{})
+				require.NotEqual(t, int64(0), txID)
+				require.NotEqual(t, int64(0), connID)
+			case test.begin:
+				_, txID, _, err = tsv.BeginExecute(ctx, &target, "select 42", nil, &querypb.ExecuteOptions{})
+				require.NotEqual(t, int64(0), txID)
+			case test.reserve:
+				_, connID, _, err = tsv.ReserveExecute(ctx, &target, "select 42", nil, nil, 0, &querypb.ExecuteOptions{})
+				require.NotEqual(t, int64(0), connID)
+			}
+			require.NoError(t, err)
+
+			db.ResetQueryLog()
+
+			err = tsv.Release(ctx, &target, connID, txID)
+			if test.err {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			assert.Contains(t, db.QueryLog(), strings.Join(test.expectedQueries, ";"), "expected queries to run")
+		})
+	}
+}
+
 func setUpTabletServerTest(t *testing.T) *fakesqldb.DB {
 	db := fakesqldb.New(t)
 	for query, result := range getSupportedQueries() {
