@@ -236,9 +236,9 @@ func (ws *wrappedService) MessageAck(ctx context.Context, target *querypb.Target
 	return count, err
 }
 
-func (ws *wrappedService) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (ws *wrappedService) VStream(ctx context.Context, target *querypb.Target, startPos string, tableLastPKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	return ws.wrapper(ctx, target, ws.impl, "VStream", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
-		innerErr := conn.VStream(ctx, target, startPos, filter, send)
+		innerErr := conn.VStream(ctx, target, startPos, tableLastPKs, filter, send)
 		return false, innerErr
 	})
 }

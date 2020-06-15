@@ -649,7 +649,7 @@ func (mm *messageManager) runOneVStream(ctx context.Context) error {
 	var curPos string
 	var fields []*querypb.Field
 
-	err := mm.vs.Stream(ctx, "current", mm.vsFilter, func(events []*binlogdatapb.VEvent) error {
+	err := mm.vs.Stream(ctx, "current", nil, mm.vsFilter, func(events []*binlogdatapb.VEvent) error {
 		mm.streamMu.Lock()
 		defer mm.streamMu.Unlock()
 
