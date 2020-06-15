@@ -60,8 +60,7 @@ type vreplicator struct {
 	mysqld    mysqlctl.MysqlDaemon
 	tableKeys map[string][]string
 
-	originalFKCheckSetting    int64
-	mustResetFKCheckAfterCopy bool
+	originalFKCheckSetting int64
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
@@ -160,6 +159,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		switch {
 		case numTablesToCopy != 0:
 			if err := vr.clearFKCheck(); err != nil {
+				log.Warningf("Unable to clear FK check %v", err)
 				return err
 			}
 			if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
@@ -171,6 +171,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 			}
 		default:
 			if err := vr.resetFKCheckAfterCopy(); err != nil {
+				log.Warningf("Unable to reset FK check %v", err)
 				return err
 			}
 			if vr.source.StopAfterCopy {
@@ -284,22 +285,11 @@ func (vr *vreplicator) getSettingFKCheck() error {
 }
 
 func (vr *vreplicator) resetFKCheckAfterCopy() error {
-	if vr.mustResetFKCheckAfterCopy {
-		log.Info("Setting foreign key checks")
-		if _, err := vr.dbClient.Execute("set foreign_key_checks=1;"); err != nil {
-			return err
-		}
-		vr.mustResetFKCheckAfterCopy = false
-	}
-	return nil
+	_, err := vr.dbClient.Execute(fmt.Sprintf("set foreign_key_checks=%d;", vr.originalFKCheckSetting))
+	return err
 }
 
 func (vr *vreplicator) clearFKCheck() error {
-	if vr.originalFKCheckSetting == 0 || vr.mustResetFKCheckAfterCopy {
-		return nil
-	}
-	log.Info("Clearing foreign key checks")
-	vr.dbClient.Execute("set foreign_key_checks=0;")
-	vr.mustResetFKCheckAfterCopy = true
-	return nil
+	_, err := vr.dbClient.Execute("set foreign_key_checks=0;")
+	return err
 }
