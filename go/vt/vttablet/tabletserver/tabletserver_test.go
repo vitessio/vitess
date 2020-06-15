@@ -2405,11 +2405,10 @@ func TestReserveExecute(t *testing.T) {
 	require.NoError(t, err)
 	defer tsv.StopService()
 
-	_, txID, connID, _, err := tsv.ReserveExecute(ctx, &target, "select 42", []string{"select 43"}, nil, &querypb.ExecuteOptions{})
+	_, connID, _, err := tsv.ReserveExecute(ctx, &target, "select 42", []string{"select 43"}, nil, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
-	defer tsv.Release(ctx, &target, connID, txID)
-	assert.Greater(t, txID, int64(0), "txID")
-	assert.Equal(t, connID, txID, "connID should equal txID")
+	defer tsv.Release(ctx, &target, connID, 0)
+	assert.NotEqual(t, int64(0), connID, "connID should not be zero")
 	expected := []string{
 		"select 43",
 		"select 42 from dual where 1 != 1",
