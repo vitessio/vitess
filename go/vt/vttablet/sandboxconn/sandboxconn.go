@@ -389,6 +389,11 @@ func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, target *querypb
 	panic("implement me")
 }
 
+//ReserveExecute implements the QueryService interface
+func (sbc *SandboxConn) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, txID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	panic("implement me")
+}
+
 // Close does not change ExecCount
 func (sbc *SandboxConn) Close(ctx context.Context) error {
 	return nil

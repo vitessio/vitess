@@ -725,6 +725,11 @@ func (f *FakeQueryService) ReserveBeginExecute(ctx context.Context, target *quer
 	panic("implement me")
 }
 
+//ReserveExecute implements the QueryService interface
+func (f *FakeQueryService) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, txID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	panic("implement me")
+}
+
 // CreateFakeServer returns the fake server for the tests
 func CreateFakeServer(t *testing.T) *FakeQueryService {
 	return &FakeQueryService{

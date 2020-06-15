@@ -281,6 +281,19 @@ func (ws *wrappedService) ReserveBeginExecute(ctx context.Context, target *query
 	return res, txID, reservedID, alias, err
 }
 
+func (ws *wrappedService) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, txID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	var res *sqltypes.Result
+	var reservedID int64
+	var alias *topodatapb.TabletAlias
+	err := ws.wrapper(ctx, target, ws.impl, "ReserveExecute", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
+		var err error
+		res, reservedID, alias, err = conn.ReserveExecute(ctx, target, sql, preQueries, bindVariables, txID, options)
+		return canRetry(ctx, err), err
+	})
+
+	return res, reservedID, alias, err
+}
+
 func (ws *wrappedService) Close(ctx context.Context) error {
 	return ws.wrapper(ctx, nil, ws.impl, "Close", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		// No point retrying Close.
