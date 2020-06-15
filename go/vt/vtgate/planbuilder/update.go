@@ -103,10 +103,11 @@ func buildChangedVindexesValues(update *sqlparser.Update, colVindexes []*vindexe
 // extractValueFromUpdate given an UpdateExpr attempts to extracts the Value
 // it's holding. At the moment it only supports: StrVal, HexVal, IntVal, ValArg.
 // If a complex expression is provided (e.g set name = name + 1), the update will be rejected.
-func extractValueFromUpdate(upd *sqlparser.UpdateExpr) (pv sqltypes.PlanValue, err error) {
-	if !sqlparser.IsValue(upd.Expr) && !sqlparser.IsNull(upd.Expr) {
+func extractValueFromUpdate(upd *sqlparser.UpdateExpr) (sqltypes.PlanValue, error) {
+	pv, err := sqlparser.NewPlanValue(upd.Expr)
+	if err != nil || sqlparser.IsSimpleTuple(upd.Expr) {
 		err := vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Only values are supported. Invalid update on column: %v", upd.Name.Name)
 		return sqltypes.PlanValue{}, err
 	}
-	return sqlparser.NewPlanValue(upd.Expr)
+	return pv, nil
 }
