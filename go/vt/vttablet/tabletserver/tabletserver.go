@@ -1397,7 +1397,7 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("Reserve", time.Now())
-			connID, err = tsv.te.Reserve(ctx, options, preQueries)
+			connID, err = tsv.te.Reserve(ctx, options, txID, preQueries)
 			if err != nil {
 				return err
 			}

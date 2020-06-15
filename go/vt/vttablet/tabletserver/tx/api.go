@@ -68,6 +68,9 @@ type (
 		CleanTxState()
 
 		Stats() *tabletenv.Stats
+
+		//Taint taints the existing connection.
+		Taint()
 	}
 
 	// ReleaseReason as type int

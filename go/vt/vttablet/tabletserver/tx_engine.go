@@ -548,6 +548,8 @@ func (te *TxEngine) stopWatchdog() {
 
 //ReserveBegin creates a reserved connection, and in it opens a transaction
 func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (int64, error) {
+	span, ctx := trace.NewSpan(ctx, "TxEngine.ReserveBegin")
+	defer span.Finish()
 	conn, err := te.reserve(ctx, options, preQueries)
 	if err != nil {
 		return 0, err
@@ -563,19 +565,31 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 }
 
 //Reserve creates a reserved connection and returns the id to it
-func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (int64, error) {
-	conn, err := te.reserve(ctx, options, preQueries)
+func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions, txID int64, preQueries []string) (int64, error) {
+	span, ctx := trace.NewSpan(ctx, "TxEngine.Reserve")
+	defer span.Finish()
+	if txID == 0 {
+		conn, err := te.reserve(ctx, options, preQueries)
+		if err != nil {
+			return 0, err
+		}
+		defer conn.Unlock()
+		return conn.ID(), nil
+	}
+
+	conn, err := te.txPool.GetAndLock(txID, "to reserve")
 	if err != nil {
 		return 0, err
 	}
 	defer conn.Unlock()
+
+	te.taintConn(ctx, conn, preQueries)
+
 	return conn.ID(), nil
 }
 
 //Reserve creates a reserved connection and returns the id to it
 func (te *TxEngine) reserve(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (*StatefulConnection, error) {
-	span, ctx := trace.NewSpan(ctx, "TxEngine.Reserve")
-	defer span.Finish()
 	te.stateLock.Lock()
 
 	canOpenTransactions := te.state == AcceptingReadOnly || te.state == AcceptingReadAndWrite
@@ -596,17 +610,24 @@ func (te *TxEngine) reserve(ctx context.Context, options *querypb.ExecuteOptions
 		return nil, err
 	}
 
-	conn.tainted = true // Taint the connection before executing preQueries
-	conn.Taint()
-	for _, query := range preQueries {
-		_, err = conn.Exec(ctx, query, 0 /*maxrows*/, false /*wantFields*/)
-		if err != nil {
-			conn.Releasef("error during connection setup: %s\n%v", query, err)
-			return nil, err
-		}
+	err = te.taintConn(ctx, conn, preQueries)
+	if err != nil {
+		return nil, err
 	}
 
 	return conn, err
+}
+
+func (te *TxEngine) taintConn(ctx context.Context, conn tx.IStatefulConnection, preQueries []string) error {
+	conn.Taint()
+	for _, query := range preQueries {
+		_, err := conn.Exec(ctx, query, 0 /*maxrows*/, false /*wantFields*/)
+		if err != nil {
+			conn.Releasef("error during connection setup: %s\n%v", query, err)
+			return err
+		}
+	}
+	return nil
 }
 
 //Release closes the underlying connection.
