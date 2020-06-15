@@ -52,3 +52,51 @@ func TestStatusSlaveSQLNotRunning(t *testing.T) {
 		t.Errorf("%#v.SlaveRunning() = %v, want %v", input, got, want)
 	}
 }
+
+func TestFindErrantGTIDs(t *testing.T) {
+	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
+	sid3 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17}
+	sid4 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 18}
+	masterSID := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 19}
+
+	set1 := Mysql56GTIDSet{
+		sid1:      []interval{{20, 30}, {35, 39}, {40, 53}, {55, 75}},
+		sid2:      []interval{{1, 7}, {20, 50}, {60, 70}},
+		sid4:      []interval{{1, 30}},
+		masterSID: []interval{{1, 7}, {20, 30}},
+	}
+
+	set2 := Mysql56GTIDSet{
+		sid1:      []interval{{20, 30}, {35, 37}, {50, 60}},
+		sid2:      []interval{{3, 5}, {22, 25}, {32, 37}, {67, 70}},
+		sid3:      []interval{{1, 45}},
+		masterSID: []interval{{2, 6}, {15, 40}},
+	}
+
+	set3 := Mysql56GTIDSet{
+		sid1:      []interval{{20, 30}, {35, 38}, {50, 70}},
+		sid2:      []interval{{3, 5}, {22, 25}, {32, 37}, {67, 70}},
+		sid3:      []interval{{1, 45}},
+		masterSID: []interval{{2, 6}, {15, 45}},
+	}
+
+	slaveStatus1 := SlaveStatus{MasterUUID: masterSID, RelayLogPosition: Position{GTIDSet: set1}}
+	slaveStatus2 := SlaveStatus{MasterUUID: masterSID, RelayLogPosition: Position{GTIDSet: set2}}
+	slaveStatus3 := SlaveStatus{MasterUUID: masterSID, RelayLogPosition: Position{GTIDSet: set3}}
+
+	got, err := slaveStatus1.FindErrantGTIDs([]*SlaveStatus{&slaveStatus2, &slaveStatus3})
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+
+	want := Mysql56GTIDSet{
+		sid1: []interval{{39, 39}, {40, 49}, {71, 75}},
+		sid2: []interval{{1, 2}, {6, 7}, {20, 21}, {26, 31}, {38, 50}, {60, 66}},
+		sid4: []interval{{1, 30}},
+	}
+
+	if !got.Equal(want) {
+		t.Errorf("got %#v; want %#v", got, want)
+	}
+}
