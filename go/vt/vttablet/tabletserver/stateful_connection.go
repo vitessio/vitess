@@ -36,12 +36,13 @@ import (
 // This is used for transactions and reserved connections.
 // NOTE: After use, if must be returned either by doing a Unlock() or a Release().
 type StatefulConnection struct {
-	pool   *StatefulConnectionPool
-	dbConn *connpool.DBConn
-	ConnID tx.ConnID
-	env    tabletenv.Env
-
-	txProps *tx.Properties
+	pool           *StatefulConnectionPool
+	dbConn         *connpool.DBConn
+	ConnID         tx.ConnID
+	env            tabletenv.Env
+	txProps        *tx.Properties
+	tainted        bool
+	enforceTimeout bool
 }
 
 // Close closes the underlying connection. When the connection is Unblocked, it will be Released
@@ -125,6 +126,16 @@ func (sc *StatefulConnection) Releasef(reasonFormat string, a ...interface{}) {
 	sc.dbConn = nil
 }
 
+//Renew the existing connection with new connection id.
+func (sc *StatefulConnection) Renew() error {
+	err := sc.pool.RenewConn(sc)
+	if err != nil {
+		sc.Close()
+		return vterrors.Wrap(err, "connection renew failed: ")
+	}
+	return nil
+}
+
 // String returns a printable version of the connection info.
 func (sc *StatefulConnection) String() string {
 	return fmt.Sprintf(
@@ -157,6 +168,12 @@ func (sc *StatefulConnection) CleanTxState() {
 //Stats implements the tx.IStatefulConnection interface
 func (sc *StatefulConnection) Stats() *tabletenv.Stats {
 	return sc.env.Stats()
+}
+
+//Taint Taints the existing connection.
+func (sc *StatefulConnection) Taint() {
+	sc.tainted = true
+	sc.dbConn.Taint()
 }
 
 var _ tx.IStatefulConnection = (*StatefulConnection)(nil)

@@ -596,6 +596,8 @@ func (te *TxEngine) reserve(ctx context.Context, options *querypb.ExecuteOptions
 		return nil, err
 	}
 
+	conn.tainted = true // Taint the connection before executing preQueries
+	conn.Taint()
 	for _, query := range preQueries {
 		_, err = conn.Exec(ctx, query, 0 /*maxrows*/, false /*wantFields*/)
 		if err != nil {
