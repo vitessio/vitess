@@ -2391,7 +2391,7 @@ func TestReserveBeginExecute(t *testing.T) {
 		"select 42 from dual where 1 != 1",
 		"select 42 from dual limit 10001",
 	}
-	assert.Contains(t, expected, db.QueryLog(), "expected queries to run")
+	assert.Contains(t, db.QueryLog(), strings.Join(expected, ";"), "expected queries to run")
 }
 
 func TestReserveExecute(t *testing.T) {
@@ -2415,7 +2415,7 @@ func TestReserveExecute(t *testing.T) {
 		"select 42 from dual where 1 != 1",
 		"select 42 from dual limit 10001",
 	}
-	assert.Contains(t, expected, db.QueryLog(), "expected queries to run")
+	assert.Contains(t, db.QueryLog(), strings.Join(expected, ";"), "expected queries to run")
 }
 
 func setUpTabletServerTest(t *testing.T) *fakesqldb.DB {
