@@ -395,7 +395,7 @@ var ExecuteQueryResult = sqltypes.Result{
 }
 
 // Execute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, txID, connID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	if f.HasError {
 		return nil, f.TabletError
 	}
@@ -412,8 +412,8 @@ func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, 
 		f.t.Errorf("invalid Execute.ExecuteOptions: got %v expected %v", options, TestExecuteOptions)
 	}
 	f.checkTargetCallerID(ctx, "Execute", target)
-	if transactionID != f.ExpectedTransactionID {
-		f.t.Errorf("invalid Execute.TransactionId: got %v expected %v", transactionID, f.ExpectedTransactionID)
+	if txID != f.ExpectedTransactionID {
+		f.t.Errorf("invalid Execute.TransactionId: got %v expected %v", txID, f.ExpectedTransactionID)
 	}
 	return &ExecuteQueryResult, nil
 }
