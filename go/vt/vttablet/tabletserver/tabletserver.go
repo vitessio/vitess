@@ -1359,7 +1359,25 @@ func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Tar
 
 //ReserveBeginExecute implements the QueryService interface
 func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
-	connID, err := tsv.te.ReserveBegin(ctx, options, preQueries)
+
+	var connID int64
+	var err error
+
+	err = tsv.execRequest(
+		ctx, tsv.QueryTimeout.Get(),
+		"ReserveBegin", "begin", nil,
+		target, options, false, /* allowOnShutdown */
+		func(ctx context.Context, logStats *tabletenv.LogStats) error {
+			defer tsv.stats.QueryTimings.Record("ReserveBegin", time.Now())
+			connID, err = tsv.te.ReserveBegin(ctx, options, preQueries)
+			if err != nil {
+				return err
+			}
+			logStats.TransactionID = connID
+			return nil
+		},
+	)
+
 	if err != nil {
 		return nil, 0, 0, nil, err
 	}
@@ -1369,14 +1387,31 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 }
 
 //ReserveExecute implements the QueryService interface
-func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
-	connID, err := tsv.te.Reserve(ctx, options, preQueries)
+func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	var connID int64
+	var err error
+
+	err = tsv.execRequest(
+		ctx, tsv.QueryTimeout.Get(),
+		"Reserve", "", nil,
+		target, options, false, /* allowOnShutdown */
+		func(ctx context.Context, logStats *tabletenv.LogStats) error {
+			defer tsv.stats.QueryTimings.Record("Reserve", time.Now())
+			connID, err = tsv.te.Reserve(ctx, options, preQueries)
+			if err != nil {
+				return err
+			}
+			logStats.TransactionID = connID
+			return nil
+		},
+	)
+
 	if err != nil {
-		return nil, 0, 0, nil, err
+		return nil, 0, nil, err
 	}
 
 	result, err := tsv.Execute(ctx, target, sql, bindVariables, connID, options)
-	return result, connID, connID, &tsv.alias, err
+	return result, connID, &tsv.alias, err
 }
 
 //Release implements the QueryService interface
