@@ -104,6 +104,9 @@ const (
 
 	// ConnInitFail - connection released on failed to start tx.
 	ConnInitFail
+
+	// ConnRelease - connection closed.
+	ConnRelease
 )
 
 func (r ReleaseReason) String() string {
@@ -121,6 +124,7 @@ var txResolutions = map[ReleaseReason]string{
 	TxRollback:   "transaction rolled back",
 	TxKill:       "kill",
 	ConnInitFail: "initFail",
+	ConnRelease:  "release connection",
 }
 
 var txNames = map[ReleaseReason]string{
@@ -129,6 +133,7 @@ var txNames = map[ReleaseReason]string{
 	TxRollback:   "rollback",
 	TxKill:       "kill",
 	ConnInitFail: "initFail",
+	ConnRelease:  "release",
 }
 
 // RecordQuery records the query against this transaction.
