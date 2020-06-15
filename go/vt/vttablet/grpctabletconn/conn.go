@@ -759,6 +759,37 @@ func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *qu
 	return sqltypes.Proto3ToResult(reply.Result), reply.TransactionId, reply.ReservedId, conn.tablet.Alias, nil
 }
 
+//ReserveBeginExecute implements the queryservice interface
+func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, txID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return nil, 0, nil, tabletconn.ConnClosed
+	}
+
+	req := &querypb.ReserveExecuteRequest{
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Target:            target,
+		Query: &querypb.BoundQuery{
+			Sql:           sql,
+			BindVariables: bindVariables,
+		},
+		TransactionId: txID,
+		Options:       options,
+		PreQueries:    preQueries,
+	}
+	reply, err := conn.c.ReserveExecute(ctx, req)
+	if err != nil {
+		return nil, 0, nil, tabletconn.ErrorFromGRPC(err)
+	}
+	if reply.Error != nil {
+		return nil, reply.ReservedId, conn.tablet.Alias, tabletconn.ErrorFromVTRPC(reply.Error)
+	}
+
+	return sqltypes.Proto3ToResult(reply.Result), reply.ReservedId, conn.tablet.Alias, nil
+}
+
 // Close closes underlying gRPC channel.
 func (conn *gRPCQueryClient) Close(ctx context.Context) error {
 	conn.mu.Lock()
