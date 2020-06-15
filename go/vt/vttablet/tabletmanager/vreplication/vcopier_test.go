@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -71,17 +73,7 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 	}
 	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
-		expectDeleteQueries(t)
-
-	}()
+	require.NoError(t, err)
 
 	expectDBClientQueries(t, []string{
 		"/insert into _vt.vreplication",
@@ -101,6 +93,7 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
 		// The next FF executes and updates the position before copying.
+		"set foreign_key_checks=0;",
 		"begin",
 		"/update _vt.vreplication set pos=",
 		"commit",
@@ -111,8 +104,8 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst2",
-		"set foreign_key_checks=1;",
 		// All tables copied. Final catch up followed by Running state.
+		"set foreign_key_checks=1;",
 		"/update _vt.vreplication set state='Running'",
 	})
 
@@ -123,6 +116,18 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 	expectData(t, "dst2", [][]string{
 		{"1", "21"},
 		{"2", "22"},
+	})
+
+	query = fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+	if _, err := playerEngine.Exec(query); err != nil {
+		t.Fatal(err)
+	}
+	expectDBClientQueries(t, []string{
+		"set foreign_key_checks=1;",
+		"begin",
+		"/delete from _vt.vreplication",
+		"/delete from _vt.copy_state",
+		"commit",
 	})
 }
 
