@@ -2394,7 +2394,7 @@ func TestReserveBeginExecute(t *testing.T) {
 	assert.Contains(t, db.QueryLog(), strings.Join(expected, ";"), "expected queries to run")
 }
 
-func TestReserveExecute(t *testing.T) {
+func TestReserveExecute_WithoutTx(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
 	config := tabletenv.NewDefaultConfig()
@@ -2405,10 +2405,38 @@ func TestReserveExecute(t *testing.T) {
 	require.NoError(t, err)
 	defer tsv.StopService()
 
-	_, connID, _, err := tsv.ReserveExecute(ctx, &target, "select 42", []string{"select 43"}, nil, &querypb.ExecuteOptions{})
+	_, connID, _, err := tsv.ReserveExecute(ctx, &target, "select 42", []string{"select 43"}, nil, 0, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	defer tsv.Release(ctx, &target, connID, 0)
 	assert.NotEqual(t, int64(0), connID, "connID should not be zero")
+	expected := []string{
+		"select 43",
+		"select 42 from dual where 1 != 1",
+		"select 42 from dual limit 10001",
+	}
+	assert.Contains(t, db.QueryLog(), strings.Join(expected, ";"), "expected queries to run")
+}
+
+func TestReserveExecute_WithTx(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	require.NoError(t, err)
+	defer tsv.StopService()
+
+	txID, _, err := tsv.Begin(ctx, &target, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	require.NotEqual(t, int64(0), txID)
+	db.ResetQueryLog()
+
+	_, connID, _, err := tsv.ReserveExecute(ctx, &target, "select 42", []string{"select 43"}, nil, txID, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	defer tsv.Release(ctx, &target, connID, txID)
+	assert.Equal(t, txID, connID, "connID should be equal to txID")
 	expected := []string{
 		"select 43",
 		"select 42 from dual where 1 != 1",
