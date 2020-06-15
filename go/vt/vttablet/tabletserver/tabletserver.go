@@ -957,12 +957,12 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 }
 
 // Execute executes the query and returns the result as response.
-func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
+func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, txID, connID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
 	span, ctx := trace.NewSpan(ctx, "TabletServer.Execute")
 	trace.AnnotateSQL(span, sql)
 	defer span.Finish()
 
-	allowOnShutdown := transactionID != 0
+	allowOnShutdown := txID != 0
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Execute", sql, bindVariables,
@@ -1020,7 +1020,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 				query:          query,
 				marginComments: comments,
 				bindVars:       bindVariables,
-				connID:         transactionID,
+				connID:         txID,
 				options:        options,
 				plan:           plan,
 				ctx:            ctx,
@@ -1036,14 +1036,14 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 // ExecuteBatch can be called for an existing transaction, or it can be called with
 // the AsTransaction flag which will execute all statements inside an independent
 // transaction. If AsTransaction is true, TransactionId must be 0.
-func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) (results []sqltypes.Result, err error) {
+func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, txID int64, options *querypb.ExecuteOptions) (results []sqltypes.Result, err error) {
 	span, ctx := trace.NewSpan(ctx, "TabletServer.ExecuteBatch")
 	defer span.Finish()
 
 	if len(queries) == 0 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Empty query list")
 	}
-	if asTransaction && transactionID != 0 {
+	if asTransaction && txID != 0 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot start a new transaction in the scope of an existing one")
 	}
 
@@ -1062,7 +1062,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 		}
 	}
 
-	allowOnShutdown := transactionID != 0
+	allowOnShutdown := txID != 0
 	// TODO(sougou): Convert startRequest/endRequest pattern to use wrapper
 	// function tsv.execRequest() instead.
 	// Note that below we always return "err" right away and do not call
@@ -1092,32 +1092,32 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 
 	if asTransaction {
 		// We ignore the return alias because this transaction only exists in the scope of this call
-		transactionID, _, err = tsv.Begin(ctx, target, options)
+		txID, _, err = tsv.Begin(ctx, target, options)
 		if err != nil {
 			return nil, err
 		}
 		// If transaction was not committed by the end, it means
 		// that there was an error, roll it back.
 		defer func() {
-			if transactionID != 0 {
-				tsv.Rollback(ctx, target, transactionID)
+			if txID != 0 {
+				tsv.Rollback(ctx, target, txID)
 			}
 		}()
 	}
 	results = make([]sqltypes.Result, 0, len(queries))
 	for _, bound := range queries {
-		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, transactionID, options)
+		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, txID, 0, options) // TODO (systay) should we accept connID as a param?
 		if err != nil {
 			return nil, err
 		}
 		results = append(results, *localReply)
 	}
 	if asTransaction {
-		if err = tsv.Commit(ctx, target, transactionID); err != nil {
-			transactionID = 0
+		if err = tsv.Commit(ctx, target, txID); err != nil {
+			txID = 0
 			return nil, err
 		}
-		transactionID = 0
+		txID = 0
 	}
 	return results, nil
 }
@@ -1139,7 +1139,7 @@ func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Targe
 		return nil, 0, nil, err
 	}
 
-	result, err := tsv.Execute(ctx, target, sql, bindVariables, transactionID, options)
+	result, err := tsv.Execute(ctx, target, sql, bindVariables, transactionID, 0, options)
 	return result, transactionID, alias, err
 }
 
@@ -1313,7 +1313,7 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 			tsv.Rollback(ctx, target, transactionID)
 		}
 	}()
-	qr, err := tsv.Execute(ctx, target, query, bv, transactionID, nil)
+	qr, err := tsv.Execute(ctx, target, query, bv, transactionID, 0, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -1365,7 +1365,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
-		"ReserveBegin", "begin", nil,
+		"ReserveBegin", "begin", bindVariables,
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("ReserveBegin", time.Now())
@@ -1382,7 +1382,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 		return nil, 0, 0, nil, err
 	}
 
-	result, err := tsv.Execute(ctx, target, sql, bindVariables, connID, options)
+	result, err := tsv.Execute(ctx, target, sql, bindVariables, txID, connID, options)
 	return result, connID, connID, &tsv.alias, err
 }
 
@@ -1393,7 +1393,7 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
-		"Reserve", "", nil,
+		"Reserve", "", bindVariables,
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("Reserve", time.Now())

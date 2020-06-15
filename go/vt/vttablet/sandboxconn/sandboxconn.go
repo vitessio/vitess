@@ -122,7 +122,7 @@ func (sbc *SandboxConn) SetResults(r []*sqltypes.Result) {
 }
 
 // Execute is part of the QueryService interface.
-func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, txID, connID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]*querypb.BindVariable)
 	for k, v := range bindVars {

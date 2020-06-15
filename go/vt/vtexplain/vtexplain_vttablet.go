@@ -73,6 +73,8 @@ type explainTablet struct {
 	currentTime   int
 }
 
+var _ queryservice.QueryService = (*explainTablet)(nil)
+
 func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 	db := fakesqldb.New(nil)
 
@@ -155,7 +157,7 @@ func (t *explainTablet) Rollback(ctx context.Context, target *querypb.Target, tr
 }
 
 // Execute is part of the QueryService interface.
-func (t *explainTablet) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (t *explainTablet) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, txID, connID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
 
@@ -169,7 +171,7 @@ func (t *explainTablet) Execute(ctx context.Context, target *querypb.Target, sql
 	})
 	t.mu.Unlock()
 
-	return t.tsv.Execute(ctx, target, sql, bindVariables, transactionID, options)
+	return t.tsv.Execute(ctx, target, sql, bindVariables, txID, connID, options)
 }
 
 // Prepare is part of the QueryService interface.

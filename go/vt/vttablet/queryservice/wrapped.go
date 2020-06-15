@@ -165,11 +165,11 @@ func (ws *wrappedService) ReadTransaction(ctx context.Context, target *querypb.T
 	return metadata, err
 }
 
-func (ws *wrappedService) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (qr *sqltypes.Result, err error) {
-	inTransaction := (transactionID != 0)
+func (ws *wrappedService) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, txID, connID int64, options *querypb.ExecuteOptions) (qr *sqltypes.Result, err error) {
+	inTransaction := txID != 0
 	err = ws.wrapper(ctx, target, ws.impl, "Execute", inTransaction, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
-		qr, innerErr = conn.Execute(ctx, target, query, bindVars, transactionID, options)
+		qr, innerErr = conn.Execute(ctx, target, query, bindVars, txID, connID, options)
 		// You cannot retry if you're in a transaction.
 		retryable := canRetry(ctx, innerErr) && (!inTransaction)
 		return retryable, innerErr
