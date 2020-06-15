@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/logutil"
@@ -192,21 +193,6 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	ensureSrvKeyspace(t, ts, cell, "ks4")
 }
 
-func ensureSrvKeyspace(t *testing.T, ts *topo.Server, cell, keyspace string) {
-	t.Helper()
-	found := false
-	for i := 0; i < 10; i++ {
-		_, err := ts.GetSrvKeyspace(context.Background(), cell, "ks")
-		if err == nil {
-			found = true
-			break
-		}
-		require.True(t, topo.IsErrType(err, topo.NoNode), err)
-		time.Sleep(rebuildKeyspaceRetryInterval)
-	}
-	assert.True(t, found)
-}
-
 func TestCheckMastership(t *testing.T) {
 	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
 	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
@@ -307,25 +293,63 @@ func TestCheckMastership(t *testing.T) {
 	tm.Stop()
 }
 
-func TestFindMysqlPort(t *testing.T) {
+func TestStartCheckMysql(t *testing.T) {
+	ctx := context.Background()
+	cell := "cell1"
+	ts := memorytopo.NewServer(cell)
+	tablet := newTestTablet(t, 1, "ks", "0")
+	cp := mysql.ConnParams{
+		Host: "foo",
+		Port: 1,
+	}
+	tm := &TabletManager{
+		BatchCtx:            context.Background(),
+		TopoServer:          ts,
+		MysqlDaemon:         &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(-1)},
+		DBConfigs:           dbconfigs.NewTestDBConfigs(cp, cp, ""),
+		QueryServiceControl: tabletservermock.NewController(),
+	}
+	err := tm.Start(tablet)
+	require.NoError(t, err)
+	defer tm.Stop()
+
+	ti, err := ts.GetTablet(ctx, tm.tabletAlias)
+	require.NoError(t, err)
+	assert.Equal(t, int32(1), ti.MysqlPort)
+	assert.Equal(t, "foo", ti.MysqlHostname)
+}
+
+func TestStartFindMysqlPort(t *testing.T) {
 	defer func(saved time.Duration) { mysqlPortRetryInterval = saved }(mysqlPortRetryInterval)
 	mysqlPortRetryInterval = 1 * time.Millisecond
 
 	ctx := context.Background()
-	tm := createTestTM(ctx, t, nil)
-	err := tm.checkMysql(ctx)
+	cell := "cell1"
+	ts := memorytopo.NewServer(cell)
+	tablet := newTestTablet(t, 1, "ks", "0")
+	fmd := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(-1)}
+	tm := &TabletManager{
+		BatchCtx:            context.Background(),
+		TopoServer:          ts,
+		MysqlDaemon:         fmd,
+		DBConfigs:           &dbconfigs.DBConfigs{},
+		QueryServiceControl: tabletservermock.NewController(),
+	}
+	err := tm.Start(tablet)
 	require.NoError(t, err)
-	ttablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
+	defer tm.Stop()
+
+	ti, err := ts.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
-	assert.Equal(t, ttablet.MysqlPort, int32(0))
+	assert.Equal(t, int32(0), ti.MysqlPort)
 
 	tm.pubMu.Lock()
-	tm.MysqlDaemon.(*fakemysqldaemon.FakeMysqlDaemon).MysqlPort.Set(3306)
+	fmd.MysqlPort.Set(3306)
 	tm.pubMu.Unlock()
 	for i := 0; i < 10; i++ {
-		ttablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
+		ti, err := ts.GetTablet(ctx, tm.tabletAlias)
 		require.NoError(t, err)
-		if ttablet.MysqlPort == 3306 {
+		if ti.MysqlPort == 3306 {
 			return
 		}
 		time.Sleep(5 * time.Millisecond)
@@ -420,4 +444,19 @@ func newTestTablet(t *testing.T, uid int, keyspace, shard string) *topodatapb.Ta
 		KeyRange: keyRange,
 		Type:     topodatapb.TabletType_REPLICA,
 	}
+}
+
+func ensureSrvKeyspace(t *testing.T, ts *topo.Server, cell, keyspace string) {
+	t.Helper()
+	found := false
+	for i := 0; i < 10; i++ {
+		_, err := ts.GetSrvKeyspace(context.Background(), cell, "ks")
+		if err == nil {
+			found = true
+			break
+		}
+		require.True(t, topo.IsErrType(err, topo.NoNode), err)
+		time.Sleep(rebuildKeyspaceRetryInterval)
+	}
+	assert.True(t, found)
 }
