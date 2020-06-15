@@ -214,7 +214,7 @@ func (dc *dataCollector) addExpVar(kv expvar.KeyValue) {
 	case *stats.MultiTimings:
 		dc.addTimings(v.Labels(), &v.Timings, k)
 	case *stats.Timings:
-		dc.addTimings([]string{"Histograms"}, v, k)
+		dc.addTimings([]string{v.Label()}, v, k)
 	case *stats.Histogram:
 		dc.addHistogram(v, 1, k, make(map[string]string))
 	case *stats.CountersWithSingleLabel:
