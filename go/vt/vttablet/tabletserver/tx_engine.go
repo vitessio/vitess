@@ -608,3 +608,13 @@ func (te *TxEngine) reserve(ctx context.Context, options *querypb.ExecuteOptions
 
 	return conn, err
 }
+
+//Release closes the underlying connection.
+func (te *TxEngine) Release(ctx context.Context, connID int64) error {
+	conn, err := te.txPool.GetAndLock(connID, "for release")
+	if err != nil {
+		return err
+	}
+	conn.Release(tx.ConnRelease)
+	return nil
+}

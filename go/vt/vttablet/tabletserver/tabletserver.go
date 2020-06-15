@@ -1359,46 +1359,47 @@ func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Tar
 
 //ReserveBeginExecute implements the QueryService interface
 func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
-	if tsv.enableHotRowProtection {
-		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
-		if err != nil {
-			return nil, 0, 0, nil, err
-		}
-		if txDone != nil {
-			defer txDone()
-		}
-	}
-
 	connID, err := tsv.te.ReserveBegin(ctx, options, preQueries)
 	if err != nil {
 		return nil, 0, 0, nil, err
 	}
 
-	// TODO
 	result, err := tsv.Execute(ctx, target, sql, bindVariables, connID, options)
 	return result, connID, connID, &tsv.alias, err
 }
 
 //ReserveExecute implements the QueryService interface
 func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
-	if tsv.enableHotRowProtection {
-		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
-		if err != nil {
-			return nil, 0, 0, nil, err
-		}
-		if txDone != nil {
-			defer txDone()
-		}
-	}
-
 	connID, err := tsv.te.Reserve(ctx, options, preQueries)
 	if err != nil {
 		return nil, 0, 0, nil, err
 	}
 
-	// TODO
 	result, err := tsv.Execute(ctx, target, sql, bindVariables, connID, options)
 	return result, connID, connID, &tsv.alias, err
+}
+
+//Release implements the QueryService interface
+func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, connID int64, txID int64) error {
+	if connID == 0 && txID == 0 {
+		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "Connection Id and Transaction ID does not exists")
+	}
+	return tsv.execRequest(
+		ctx, tsv.QueryTimeout.Get(),
+		"Release", "", nil, //TODO (hgangal): Do we need to set any sql query to be logged?
+		target, nil, true, /* allowOnShutdown */
+		func(ctx context.Context, logStats *tabletenv.LogStats) error {
+			defer tsv.stats.QueryTimings.Record("RELEASE", time.Now())
+			if connID != 0 {
+				//Release to close the underlying connection.
+				logStats.TransactionID = connID
+				return tsv.te.Release(ctx, connID)
+			}
+			// Rollback to cleanup the transaction before returning to the pool.
+			logStats.TransactionID = txID
+			return tsv.te.Rollback(ctx, txID)
+		},
+	)
 }
 
 // execRequest performs verifications, sets up the necessary environments

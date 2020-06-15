@@ -2382,7 +2382,7 @@ func TestReserveBeginExecute(t *testing.T) {
 
 	_, txID, connID, _, err := tsv.ReserveBeginExecute(ctx, &target, "select 42", []string{"select 43"}, nil, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
-	// TODO defer a call to tsv.ReserveRelease here
+	defer tsv.Release(ctx, &target, connID, txID)
 	assert.Greater(t, txID, int64(0), "txID")
 	assert.Equal(t, connID, txID, "connID should equal txID")
 	expected := []string{
@@ -2407,7 +2407,7 @@ func TestReserveExecute(t *testing.T) {
 
 	_, txID, connID, _, err := tsv.ReserveExecute(ctx, &target, "select 42", []string{"select 43"}, nil, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
-	// TODO defer a call to tsv.ReserveRelease here
+	defer tsv.Release(ctx, &target, connID, txID)
 	assert.Greater(t, txID, int64(0), "txID")
 	assert.Equal(t, connID, txID, "connID should equal txID")
 	expected := []string{
