@@ -49,7 +49,7 @@ type Engine struct {
 	// wg is incremented for every Stream, and decremented on end.
 	// Close waits for all current streams to end by waiting on wg.
 	wg              sync.WaitGroup
-	streamers       map[int]*vstreamer
+	streamers       map[int]*uvstreamer
 	rowStreamers    map[int]*rowStreamer
 	resultStreamers map[int]*resultStreamer
 	streamIdx       int
@@ -78,7 +78,7 @@ type Engine struct {
 func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, sh schema.Historian) *Engine {
 	vse := &Engine{
 		env:             env,
-		streamers:       make(map[int]*vstreamer),
+		streamers:       make(map[int]*uvstreamer),
 		rowStreamers:    make(map[int]*rowStreamer),
 		resultStreamers: make(map[int]*resultStreamer),
 		lvschema:        &localVSchema{vschema: &vindexes.VSchema{}},
@@ -145,20 +145,20 @@ func (vse *Engine) vschema() *vindexes.VSchema {
 }
 
 // Stream starts a new stream.
-func (vse *Engine) Stream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	// Ensure vschema is initialized and the watcher is started.
 	// Starting of the watcher has to be delayed till the first call to Stream
 	// because this overhead should be incurred only if someone uses this feature.
 	vse.watcherOnce.Do(vse.setWatch)
 
 	// Create stream and add it to the map.
-	streamer, idx, err := func() (*vstreamer, int, error) {
+	streamer, idx, err := func() (*uvstreamer, int, error) {
 		vse.mu.Lock()
 		defer vse.mu.Unlock()
 		if !vse.isOpen {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
-		streamer := newVStreamer(ctx, vse.env.Config().DB.AppWithDB(), vse.se, vse.sh, startPos, filter, vse.lvschema, send)
+		streamer := newUVStreamer(ctx, vse, vse.env.Config().DB.AppWithDB(), vse.se, vse.sh, startPos, tablePKs, filter, vse.lvschema, send)
 		idx := vse.streamIdx
 		vse.streamers[idx] = streamer
 		vse.streamIdx++

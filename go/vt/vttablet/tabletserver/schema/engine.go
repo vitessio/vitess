@@ -255,6 +255,7 @@ func (se *Engine) reload(ctx context.Context) error {
 		if _, ok := se.tables[tableName]; ok && createTime < se.lastChange {
 			continue
 		}
+		log.V(2).Infof("Reading schema for table: %s", tableName)
 		table, err := LoadTable(conn, tableName, row[1].ToString(), row[3].ToString())
 		if err != nil {
 			rec.RecordError(err)
