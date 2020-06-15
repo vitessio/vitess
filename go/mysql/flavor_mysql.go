@@ -122,6 +122,15 @@ func (mysqlFlavor) status(c *Conn) (SlaveStatus, error) {
 
 func parseMysqlSlaveStatus(resultMap map[string]string) (SlaveStatus, error) {
 	status := parseSlaveStatus(resultMap)
+	uuidString := resultMap["Master_UUID"]
+	if uuidString != "" {
+		sid, err := ParseSID(uuidString)
+		if err != nil {
+			return SlaveStatus{}, vterrors.Wrapf(err, "cannot decode MasterUUID")
+		}
+		status.MasterUUID = sid
+	}
+
 	var err error
 	status.Position.GTIDSet, err = parseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
 	if err != nil {
