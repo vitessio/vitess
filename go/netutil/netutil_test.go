@@ -19,6 +19,7 @@ package netutil
 import (
 	"math/rand"
 	"net"
+	"reflect"
 	"testing"
 )
 
@@ -130,5 +131,42 @@ func TestJoinHostPort(t *testing.T) {
 		if got := JoinHostPort(input.host, input.port); got != want {
 			t.Errorf("SplitHostPort(%v, %v) = %#v, want %#v", input.host, input.port, got, want)
 		}
+	}
+}
+
+func TestResolveIPv4Addrs(t *testing.T) {
+	cases := []struct {
+		address       string
+		expected      []string
+		expectedError bool
+	}{
+		{
+			address:  "localhost:3306",
+			expected: []string{"127.0.0.1:3306"},
+		},
+		{
+			address:       "127.0.0.256:3306",
+			expectedError: true,
+		},
+		{
+			address:       "localhost",
+			expectedError: true,
+		},
+		{
+			address:       "InvalidHost:3306",
+			expectedError: true,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.address, func(t *testing.T) {
+			got, err := ResolveIPv4Addrs(c.address)
+			if (err != nil) != c.expectedError {
+				t.Errorf("expected error but got: %v", err)
+			}
+			if !reflect.DeepEqual(got, c.expected) {
+				t.Errorf("expected: %v, got: %v", c.expected, got)
+			}
+		})
 	}
 }
