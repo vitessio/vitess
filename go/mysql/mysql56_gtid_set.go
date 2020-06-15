@@ -546,7 +546,7 @@ func (set Mysql56GTIDSet) Difference(other Mysql56GTIDSet) Mysql56GTIDSet {
 		}
 
 		if len(intervals) != 0 {
-			// If we've gotten to this point, then we have intervals that exist beyond the bounds of any intervals in s2, and they
+			// If we've gotten to this point, then we have intervals that exist beyond the bounds of any intervals in otherIntervals, and they
 			// are all diffs and should be added in whole.
 			diffIntervals = append(diffIntervals, intervals...)
 		}
