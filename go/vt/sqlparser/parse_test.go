@@ -694,6 +694,8 @@ var (
 	}, {
 		input: "insert /* bool expression on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = a > d",
 	}, {
+		input: "insert into user(username, `status`) values ('Chuck', default(`status`))",
+	}, {
 		input: "update /* simple */ a set b = 3",
 	}, {
 		input: "update /* a.b */ a.b set b = 3",
