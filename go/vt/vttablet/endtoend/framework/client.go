@@ -169,6 +169,7 @@ func (client *QueryClient) BeginExecute(query string, bindvars map[string]*query
 		&client.target,
 		query,
 		bindvars,
+		0,
 		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 	)
 	if err != nil {
@@ -186,6 +187,8 @@ func (client *QueryClient) ExecuteWithOptions(query string, bindvars map[string]
 		query,
 		bindvars,
 		client.transactionID,
+		// TODO: client needs a reservedID field to write tests
+		0,
 		options,
 	)
 }

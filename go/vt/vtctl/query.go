@@ -232,7 +232,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		Keyspace:   tabletInfo.Tablet.Keyspace,
 		Shard:      tabletInfo.Tablet.Shard,
 		TabletType: tabletInfo.Tablet.Type,
-	}, subFlags.Arg(1), bindVars, int64(*transactionID), executeOptions)
+	}, subFlags.Arg(1), bindVars, int64(*transactionID), 0, executeOptions)
 	if err != nil {
 		return fmt.Errorf("execute failed: %v", err)
 	}

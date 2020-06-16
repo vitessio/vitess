@@ -80,12 +80,25 @@ func Aggregate(errors []error) error {
 	if len(errors) == 0 {
 		return nil
 	}
+	found := false
+	for _, e := range errors {
+		if e == nil { // e can be nil when we are collecting errors across shards and some shards have no error
+			continue
+		}
+		found = true
+	}
+	if !found {
+		return nil
+	}
 	return New(aggregateCodes(errors), aggregateErrors(errors))
 }
 
 func aggregateCodes(errors []error) vtrpcpb.Code {
 	highCode := vtrpcpb.Code_OK
 	for _, e := range errors {
+		if e == nil { // e can be nil when we are collecting errors across shards and some shards have no error
+			continue
+		}
 		code := Code(e)
 		if errorPriorities[code] > errorPriorities[highCode] {
 			highCode = code
@@ -98,6 +111,9 @@ func aggregateCodes(errors []error) vtrpcpb.Code {
 func aggregateErrors(errs []error) string {
 	errStrs := make([]string, 0, len(errs))
 	for _, e := range errs {
+		if e == nil { // e can be nil when we are collecting errors across shards and some shards have no error
+			continue
+		}
 		errStrs = append(errStrs, e.Error())
 	}
 	// sort the error strings so we always have deterministic ordering

@@ -165,11 +165,11 @@ func (ws *wrappedService) ReadTransaction(ctx context.Context, target *querypb.T
 	return metadata, err
 }
 
-func (ws *wrappedService) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, txID, connID int64, options *querypb.ExecuteOptions) (qr *sqltypes.Result, err error) {
-	inTransaction := txID != 0
+func (ws *wrappedService) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (qr *sqltypes.Result, err error) {
+	inTransaction := transactionID != 0
 	err = ws.wrapper(ctx, target, ws.impl, "Execute", inTransaction, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
-		qr, innerErr = conn.Execute(ctx, target, query, bindVars, txID, connID, options)
+		qr, innerErr = conn.Execute(ctx, target, query, bindVars, transactionID, reservedID, options)
 		// You cannot retry if you're in a transaction.
 		retryable := canRetry(ctx, innerErr) && (!inTransaction)
 		return retryable, innerErr
@@ -202,10 +202,10 @@ func (ws *wrappedService) ExecuteBatch(ctx context.Context, target *querypb.Targ
 	return qrs, err
 }
 
-func (ws *wrappedService) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (qr *sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
+func (ws *wrappedService) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (qr *sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
 	err = ws.wrapper(ctx, target, ws.impl, "BeginExecute", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
-		qr, transactionID, alias, innerErr = conn.BeginExecute(ctx, target, query, bindVars, options)
+		qr, transactionID, alias, innerErr = conn.BeginExecute(ctx, target, query, bindVars, reservedID, options)
 		return canRetry(ctx, innerErr), innerErr
 	})
 	return qr, transactionID, alias, err
