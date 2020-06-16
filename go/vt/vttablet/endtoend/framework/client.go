@@ -312,3 +312,13 @@ func (client *QueryClient) Release() error {
 	client.transactionID = 0
 	return nil
 }
+
+//TransactionID returns transactionID
+func (client *QueryClient) TransactionID() int64 {
+	return client.transactionID
+}
+
+//ReserveID returns reserveID
+func (client *QueryClient) ReserveID() int64 {
+	return client.reserveID
+}
