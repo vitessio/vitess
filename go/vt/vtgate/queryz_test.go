@@ -73,10 +73,9 @@ func TestQueryzHandler(t *testing.T) {
 	plan3 := result.(*engine.Plan)
 
 	// vindex insert from above execution
-	result, ok = executor.plans.Get("@master:" + "insert into name_user_map(name, user_id) values(:name0, :user_id0)")
-	if !ok {
-		t.Fatalf("couldn't get plan from cache")
-	}
+	result, ok = executor.plans.Get("@master:" + "insert into name_user_map(name, user_id) values(:name_0, :user_id_0)")
+	require.True(t, ok, "couldn't get plan from cache")
+
 	plan4 := result.(*engine.Plan)
 
 	// same query again should add query counts to existing plans

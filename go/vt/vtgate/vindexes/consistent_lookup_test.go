@@ -236,7 +236,7 @@ func TestConsistentLookupCreateSimple(t *testing.T) {
 		t.Error(err)
 	}
 	vc.verifyLog(t, []string{
-		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc10, :fromc20, :toc0), (:fromc11, :fromc21, :toc1) [{fromc10 1} {fromc11 3} {fromc20 2} {fromc21 4} {toc0 test1} {toc1 test2}] true",
+		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc1_0, :fromc2_0, :toc_0), (:fromc1_1, :fromc2_1, :toc_1) [{fromc1_0 1} {fromc1_1 3} {fromc2_0 2} {fromc2_1 4} {toc_0 test1} {toc_1 test2}] true",
 	})
 }
 
@@ -257,7 +257,7 @@ func TestConsistentLookupCreateThenRecreate(t *testing.T) {
 		t.Error(err)
 	}
 	vc.verifyLog(t, []string{
-		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc10, :fromc20, :toc0) [{fromc10 1} {fromc20 2} {toc0 test1}] true",
+		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc1_0, :fromc2_0, :toc_0) [{fromc1_0 1} {fromc2_0 2} {toc_0 test1}] true",
 		"ExecutePre select toc from t where fromc1 = :fromc1 and fromc2 = :fromc2 for update [{fromc1 1} {fromc2 2} {toc test1}] false",
 		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc1, :fromc2, :toc) [{fromc1 1} {fromc2 2} {toc test1}] true",
 	})
@@ -281,7 +281,7 @@ func TestConsistentLookupCreateThenUpdate(t *testing.T) {
 		t.Error(err)
 	}
 	vc.verifyLog(t, []string{
-		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc10, :fromc20, :toc0) [{fromc10 1} {fromc20 2} {toc0 test1}] true",
+		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc1_0, :fromc2_0, :toc_0) [{fromc1_0 1} {fromc2_0 2} {toc_0 test1}] true",
 		"ExecutePre select toc from t where fromc1 = :fromc1 and fromc2 = :fromc2 for update [{fromc1 1} {fromc2 2} {toc test1}] false",
 		"ExecuteKeyspaceID select fc1 from t1 where fc1 = :fromc1 and fc2 = :fromc2 lock in share mode [{fromc1 1} {fromc2 2} {toc test1}] false",
 		"ExecutePre update t set toc=:toc where fromc1 = :fromc1 and fromc2 = :fromc2 [{fromc1 1} {fromc2 2} {toc test1}] true",
@@ -306,7 +306,7 @@ func TestConsistentLookupCreateThenSkipUpdate(t *testing.T) {
 		t.Error(err)
 	}
 	vc.verifyLog(t, []string{
-		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc10, :fromc20, :toc0) [{fromc10 1} {fromc20 2} {toc0 1}] true",
+		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc1_0, :fromc2_0, :toc_0) [{fromc1_0 1} {fromc2_0 2} {toc_0 1}] true",
 		"ExecutePre select toc from t where fromc1 = :fromc1 and fromc2 = :fromc2 for update [{fromc1 1} {fromc2 2} {toc 1}] false",
 		"ExecuteKeyspaceID select fc1 from t1 where fc1 = :fromc1 and fc2 = :fromc2 lock in share mode [{fromc1 1} {fromc2 2} {toc 1}] false",
 	})
@@ -332,7 +332,7 @@ func TestConsistentLookupCreateThenDupkey(t *testing.T) {
 		t.Errorf("lookup(query fail) err: %v, must contain %s", err, want)
 	}
 	vc.verifyLog(t, []string{
-		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc10, :fromc20, :toc0) [{fromc10 1} {fromc20 2} {toc0 test1}] true",
+		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc1_0, :fromc2_0, :toc_0) [{fromc1_0 1} {fromc2_0 2} {toc_0 test1}] true",
 		"ExecutePre select toc from t where fromc1 = :fromc1 and fromc2 = :fromc2 for update [{fromc1 1} {fromc2 2} {toc test1}] false",
 		"ExecuteKeyspaceID select fc1 from t1 where fc1 = :fromc1 and fc2 = :fromc2 lock in share mode [{fromc1 1} {fromc2 2} {toc test1}] false",
 	})
@@ -355,7 +355,7 @@ func TestConsistentLookupCreateNonDupError(t *testing.T) {
 		t.Errorf("lookup(query fail) err: %v, must contain %s", err, want)
 	}
 	vc.verifyLog(t, []string{
-		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc10, :fromc20, :toc0) [{fromc10 1} {fromc20 2} {toc0 test1}] true",
+		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc1_0, :fromc2_0, :toc_0) [{fromc1_0 1} {fromc2_0 2} {toc_0 test1}] true",
 	})
 }
 
@@ -377,7 +377,7 @@ func TestConsistentLookupCreateThenBadRows(t *testing.T) {
 		t.Errorf("lookup(query fail) err: %v, must contain %s", err, want)
 	}
 	vc.verifyLog(t, []string{
-		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc10, :fromc20, :toc0) [{fromc10 1} {fromc20 2} {toc0 test1}] true",
+		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc1_0, :fromc2_0, :toc_0) [{fromc1_0 1} {fromc2_0 2} {toc_0 test1}] true",
 		"ExecutePre select toc from t where fromc1 = :fromc1 and fromc2 = :fromc2 for update [{fromc1 1} {fromc2 2} {toc test1}] false",
 	})
 }
@@ -420,7 +420,7 @@ func TestConsistentLookupUpdate(t *testing.T) {
 	}
 	vc.verifyLog(t, []string{
 		"ExecutePost delete from t where fromc1 = :fromc1 and fromc2 = :fromc2 and toc = :toc [{fromc1 1} {fromc2 2} {toc test}] true",
-		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc10, :fromc20, :toc0) [{fromc10 3} {fromc20 4} {toc0 test}] true",
+		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc1_0, :fromc2_0, :toc_0) [{fromc1_0 3} {fromc2_0 4} {toc_0 test}] true",
 	})
 }
 
