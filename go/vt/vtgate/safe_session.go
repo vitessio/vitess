@@ -92,7 +92,6 @@ func (session *SafeSession) Reset() {
 	session.mustRollback = false
 	session.autocommitState = notAutocommittable
 	session.Session.InTransaction = false
-	session.SingleDb = false
 	session.ShardSessions = nil
 	session.PreSessions = nil
 	session.PostSessions = nil
@@ -202,8 +201,7 @@ func (session *SafeSession) Append(shardSession *vtgatepb.Session_ShardSession, 
 }
 
 func (session *SafeSession) isSingleDB(txMode vtgatepb.TransactionMode) bool {
-	return session.SingleDb ||
-		session.TransactionMode == vtgatepb.TransactionMode_SINGLE ||
+	return session.TransactionMode == vtgatepb.TransactionMode_SINGLE ||
 		(session.TransactionMode == vtgatepb.TransactionMode_UNSPECIFIED && txMode == vtgatepb.TransactionMode_SINGLE)
 }
 
