@@ -224,7 +224,7 @@ func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*quer
 var vstreamHook func(ctx context.Context)
 
 // VStream directly calls into the pre-initialized engine.
-func (ftc *fakeTabletConn) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (ftc *fakeTabletConn) VStream(ctx context.Context, target *querypb.Target, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	if target.Keyspace != "vttest" {
 		<-ctx.Done()
 		return io.EOF
@@ -232,7 +232,7 @@ func (ftc *fakeTabletConn) VStream(ctx context.Context, target *querypb.Target, 
 	if vstreamHook != nil {
 		vstreamHook(ctx)
 	}
-	return streamerEngine.Stream(ctx, startPos, filter, send)
+	return streamerEngine.Stream(ctx, startPos, tablePKs, filter, send)
 }
 
 // vstreamRowsHook allows you to do work just before calling VStreamRows.

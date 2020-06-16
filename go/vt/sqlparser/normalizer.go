@@ -73,6 +73,8 @@ func (nz *normalizer) WalkStatement(node SQLNode) (bool, error) {
 		// Common node types that never contain SQLVals or ListArgs but create a lot of object
 		// allocations.
 		return false, nil
+	case *ConvertType: // we should not rewrite the type description
+		return false, nil
 	}
 	return true, nil
 }
@@ -90,6 +92,9 @@ func (nz *normalizer) WalkSelect(node SQLNode) (bool, error) {
 		return false, nil
 	case OrderBy, GroupBy:
 		// do not make a bind var for order by column_position
+		return false, nil
+	case *ConvertType:
+		// we should not rewrite the type description
 		return false, nil
 	}
 	return true, nil

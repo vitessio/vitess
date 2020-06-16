@@ -3660,6 +3660,7 @@ non_reserved_keyword:
 | POLYGON
 | PRIMARY
 | PROCEDURE
+| PROCESSLIST
 | QUERY
 | RANDOM
 | READ

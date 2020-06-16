@@ -205,6 +205,46 @@ func reconnectAndTest(t *testing.T) {
 
 }
 
+// TestColumnParameter query database using column
+// parameter.
+func TestColumnParameter(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	dbo := Connect(t)
+	defer dbo.Close()
+
+	id := 1000
+	parameter1 := "param1"
+	message := "TestColumnParameter"
+	insertStmt := "INSERT INTO " + tableName + " (id, msg, keyspace_id) VALUES (?, ?, ?);"
+	values := []interface{}{
+		id,
+		message,
+		2000,
+	}
+	exec(t, dbo, insertStmt, values...)
+
+	var param, msg string
+	var recID int
+
+	selectStmt := "SELECT COALESCE(?, id), msg FROM " + tableName + " WHERE msg = ? LIMIT ?"
+
+	results1, err := dbo.Query(selectStmt, parameter1, message, 1)
+	require.Nil(t, err)
+	require.True(t, results1.Next())
+
+	results1.Scan(&param, &msg)
+	assert.Equal(t, parameter1, param)
+	assert.Equal(t, message, msg)
+
+	results2, err := dbo.Query(selectStmt, nil, message, 1)
+	require.Nil(t, err)
+	require.True(t, results2.Next())
+
+	results2.Scan(&recID, &msg)
+	assert.Equal(t, id, recID)
+	assert.Equal(t, message, msg)
+}
+
 // TestWrongTableName query database using invalid
 // tablename and validate error.
 func TestWrongTableName(t *testing.T) {

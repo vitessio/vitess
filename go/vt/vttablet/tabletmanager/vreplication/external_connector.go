@@ -46,7 +46,7 @@ type VStreamerClient interface {
 	Close(context.Context) error
 
 	// VStream streams VReplication events based on the specified filter.
-	VStream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
+	VStream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
 
 	// VStreamRows streams rows of a table from the specified starting point.
 	VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error
@@ -124,8 +124,8 @@ func (c *mysqlConnector) Close(ctx context.Context) error {
 	return nil
 }
 
-func (c *mysqlConnector) VStream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return c.vstreamer.Stream(ctx, startPos, filter, send)
+func (c *mysqlConnector) VStream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	return c.vstreamer.Stream(ctx, startPos, tablePKs, filter, send)
 }
 
 func (c *mysqlConnector) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
@@ -169,8 +169,8 @@ func (tc *tabletConnector) Close(ctx context.Context) error {
 	return tc.qs.Close(ctx)
 }
 
-func (tc *tabletConnector) VStream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return tc.qs.VStream(ctx, tc.target, startPos, filter, send)
+func (tc *tabletConnector) VStream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	return tc.qs.VStream(ctx, tc.target, startPos, tablePKs, filter, send)
 }
 
 func (tc *tabletConnector) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {

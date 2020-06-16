@@ -1353,11 +1353,11 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 }
 
 // VStream streams VReplication events.
-func (tsv *TabletServer) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (tsv *TabletServer) VStream(ctx context.Context, target *querypb.Target, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	if err := tsv.verifyTarget(ctx, target); err != nil {
 		return err
 	}
-	return tsv.vstreamer.Stream(ctx, startPos, filter, send)
+	return tsv.vstreamer.Stream(ctx, startPos, tablePKs, filter, send)
 }
 
 // VStreamRows streams rows from the specified starting point.
