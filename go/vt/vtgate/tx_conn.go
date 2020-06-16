@@ -97,7 +97,9 @@ func (txc *TxConn) commitShard(ctx context.Context, s *vtgatepb.Session_ShardSes
 	if err != nil {
 		return err
 	}
-	return qs.Commit(ctx, s.Target, s.TransactionId)
+	// TODO: is it ok to ignore reservedID here?
+	_, err = qs.Commit(ctx, s.Target, s.TransactionId)
+	return err
 }
 
 func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error {

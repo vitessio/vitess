@@ -170,10 +170,15 @@ func (sc *StatefulConnection) Stats() *tabletenv.Stats {
 	return sc.env.Stats()
 }
 
-//Taint Taints the existing connection.
+//Taint taints the existing connection.
 func (sc *StatefulConnection) Taint() {
 	sc.tainted = true
 	sc.dbConn.Taint()
+}
+
+//IsTainted tells us whether this connection is tainted
+func (sc *StatefulConnection) IsTainted() bool {
+	return sc.tainted
 }
 
 var _ tx.IStatefulConnection = (*StatefulConnection)(nil)

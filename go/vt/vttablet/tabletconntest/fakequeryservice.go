@@ -157,9 +157,9 @@ func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, op
 const commitTransactionID int64 = 999044
 
 // Commit is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
+func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
 	if f.HasError {
-		return f.TabletError
+		return 0, f.TabletError
 	}
 	if f.Panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -168,7 +168,7 @@ func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, t
 	if transactionID != commitTransactionID {
 		f.t.Errorf("Commit: invalid TransactionId: got %v expected %v", transactionID, commitTransactionID)
 	}
-	return nil
+	return 0, nil
 }
 
 // rollbackTransactionID is a test transactin id for Rollback.

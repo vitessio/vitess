@@ -50,7 +50,7 @@ func TestCommit(t *testing.T) {
 	_, err = client.Execute(query, nil)
 	require.NoError(t, err)
 
-	err = client.Commit()
+	_, err = client.Commit()
 	require.NoError(t, err)
 
 	qr, err := client.Execute("select * from vitess_test", nil)
@@ -244,7 +244,7 @@ func TestForUpdate(t *testing.T) {
 		require.NoError(t, err)
 		_, err = client.Execute(query, nil)
 		require.NoError(t, err)
-		err = client.Commit()
+		_, err = client.Commit()
 		require.NoError(t, err)
 	}
 }

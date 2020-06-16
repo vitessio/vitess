@@ -93,11 +93,13 @@ func (ws *wrappedService) Begin(ctx context.Context, target *querypb.Target, opt
 	return transactionID, alias, err
 }
 
-func (ws *wrappedService) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
-	return ws.wrapper(ctx, target, ws.impl, "Commit", true, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
-		innerErr := conn.Commit(ctx, target, transactionID)
+func (ws *wrappedService) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (reservedID int64, err error) {
+	err = ws.wrapper(ctx, target, ws.impl, "Commit", true, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
+		var innerErr error
+		reservedID, innerErr = conn.Commit(ctx, target, transactionID)
 		return canRetry(ctx, innerErr), innerErr
 	})
+	return reservedID, err
 }
 
 func (ws *wrappedService) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {

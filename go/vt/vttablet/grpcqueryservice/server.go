@@ -112,10 +112,11 @@ func (q *query) Commit(ctx context.Context, request *querypb.CommitRequest) (res
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.Commit(ctx, request.Target, request.TransactionId); err != nil {
+	rID, err := q.server.Commit(ctx, request.Target, request.TransactionId)
+	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
-	return &querypb.CommitResponse{}, nil
+	return &querypb.CommitResponse{ReservedId: rID}, nil
 }
 
 // Rollback is part of the queryservice.QueryServer interface

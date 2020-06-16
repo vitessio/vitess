@@ -46,7 +46,8 @@ type QueryService interface {
 	Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, *topodatapb.TabletAlias, error)
 
 	// Commit commits the current transaction
-	Commit(ctx context.Context, target *querypb.Target, transactionID int64) error
+	// TODO: should this also take in a reservedID?
+	Commit(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error)
 
 	// Rollback aborts the current transaction
 	Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error

@@ -244,19 +244,39 @@ func (te *TxEngine) Begin(ctx context.Context, reserveID int64, options *querypb
 }
 
 // Commit commits the specified transaction.
-func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (string, error) {
+func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Commit")
 	defer span.Finish()
 	conn, err := te.txPool.GetAndLock(transactionID, "for commit")
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
-	defer conn.Release(tx.TxCommit)
-	queries, err := te.txPool.Commit(ctx, conn)
+	sc, ok := conn.(*StatefulConnection)
+	if !ok {
+		return 0, "", vterrors.New(vtrpc.Code_INTERNAL, "wrong type of connection")
+	}
+	// check if coneection is tainted
+	// and if yes, release and renew after commit?
+	var newReservedID int64
+	if !sc.IsTainted() {
+		newReservedID = 0
+		defer conn.Release(tx.TxCommit)
+	}
+	queries, err := te.txPool.Commit(ctx, sc)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
-	return queries, nil
+	if sc.IsTainted() {
+		err = sc.Renew()
+		if err != nil {
+			sc.Releasef("error from RenewConn:%v", err)
+		} else {
+			// must taint the new connectionID
+			sc.Taint()
+			newReservedID = sc.ConnID
+		}
+	}
+	return newReservedID, queries, nil
 }
 
 // Rollback rolls back the specified transaction.
@@ -583,7 +603,8 @@ func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions
 	}
 	defer conn.Unlock()
 
-	te.taintConn(ctx, conn, preQueries)
+	// TODO: is it safe to ignore this error?
+	_ = te.taintConn(ctx, conn, preQueries)
 
 	return conn.ID(), nil
 }

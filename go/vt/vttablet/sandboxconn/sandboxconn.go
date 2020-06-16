@@ -187,9 +187,9 @@ func (sbc *SandboxConn) Begin(ctx context.Context, target *querypb.Target, optio
 }
 
 // Commit is part of the QueryService interface.
-func (sbc *SandboxConn) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
+func (sbc *SandboxConn) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
 	sbc.CommitCount.Add(1)
-	return sbc.getError()
+	return 0, sbc.getError()
 }
 
 // Rollback is part of the QueryService interface.
