@@ -386,6 +386,8 @@ func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Fi
 	go func() {
 		err := engine.Stream(ctx, pos, tablePKs, filter, func(evs []*binlogdatapb.VEvent) error {
 			//t.Logf("Received events: %v", evs)
+			muAllEvents.Lock()
+			defer muAllEvents.Unlock()
 			for _, ev := range evs {
 				if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
 					continue
@@ -394,9 +396,7 @@ func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Fi
 				if cb != nil {
 					cb()
 				}
-				muAllEvents.Lock()
 				allEvents = append(allEvents, ev)
-				muAllEvents.Unlock()
 			}
 			return nil
 		})
