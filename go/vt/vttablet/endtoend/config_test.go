@@ -60,7 +60,7 @@ func TestConfigVars(t *testing.T) {
 		val: currentConfig.OltpReadPool.Size,
 	}, {
 		tag: "ConnPoolIdleTimeout",
-		val: currentConfig.OltpReadPool.IdleTimeoutSeconds * 1e9,
+		val: int(currentConfig.OltpReadPool.IdleTimeoutSeconds * 1e9),
 	}, {
 		tag: "ConnPoolMaxCap",
 		val: currentConfig.OltpReadPool.Size,
@@ -90,7 +90,7 @@ func TestConfigVars(t *testing.T) {
 		val: currentConfig.OlapReadPool.Size,
 	}, {
 		tag: "StreamConnPoolIdleTimeout",
-		val: currentConfig.OlapReadPool.IdleTimeoutSeconds * 1e9,
+		val: int(currentConfig.OlapReadPool.IdleTimeoutSeconds * 1e9),
 	}, {
 		tag: "StreamConnPoolMaxCap",
 		val: currentConfig.OlapReadPool.Size,
@@ -102,7 +102,7 @@ func TestConfigVars(t *testing.T) {
 		val: currentConfig.TxPool.Size,
 	}, {
 		tag: "TransactionPoolIdleTimeout",
-		val: currentConfig.TxPool.IdleTimeoutSeconds * 1e9,
+		val: int(currentConfig.TxPool.IdleTimeoutSeconds * 1e9),
 	}, {
 		tag: "TransactionPoolMaxCap",
 		val: currentConfig.TxPool.Size,
