@@ -37,6 +37,7 @@ type QueryClient struct {
 	target        querypb.Target
 	server        *tabletserver.TabletServer
 	transactionID int64
+	reserveID     int64
 }
 
 // NewClient creates a new client for Server.
@@ -169,7 +170,7 @@ func (client *QueryClient) BeginExecute(query string, bindvars map[string]*query
 		&client.target,
 		query,
 		bindvars,
-		0,
+		client.reserveID,
 		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 	)
 	if err != nil {
@@ -187,8 +188,7 @@ func (client *QueryClient) ExecuteWithOptions(query string, bindvars map[string]
 		query,
 		bindvars,
 		client.transactionID,
-		// TODO: client needs a reservedID field to write tests
-		0,
+		client.reserveID,
 		options,
 	)
 }
@@ -263,4 +263,52 @@ func (client *QueryClient) MessageAck(name string, ids []string) (int64, error) 
 		})
 	}
 	return client.server.MessageAck(client.ctx, &client.target, name, bids)
+}
+
+// ReserveExecute performs a ReserveExecute.
+func (client *QueryClient) ReserveExecute(query string, preQueries []string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	if client.reserveID != 0 {
+		return nil, errors.New("already reserved a connection")
+	}
+	qr, reserveID, _, err := client.server.ReserveExecute(client.ctx, &client.target, query, preQueries, bindvars, client.transactionID, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	if err != nil {
+		return nil, err
+	}
+	client.reserveID = reserveID
+	return qr, nil
+}
+
+// ReserveBeginExecute performs a ReserveBeginExecute.
+func (client *QueryClient) ReserveBeginExecute(query string, preQueries []string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	if client.reserveID != 0 {
+		return nil, errors.New("already reserved a connection")
+	}
+	if client.transactionID != 0 {
+		return nil, errors.New("already in transaction")
+	}
+	qr, transactionID, reserveID, _, err := client.server.ReserveBeginExecute(
+		client.ctx,
+		&client.target,
+		query,
+		preQueries,
+		bindvars,
+		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
+	)
+	if err != nil {
+		return nil, err
+	}
+	client.transactionID = transactionID
+	client.reserveID = reserveID
+	return qr, nil
+}
+
+// Release performs a Release.
+func (client *QueryClient) Release() error {
+	err := client.server.Release(client.ctx, &client.target, client.reserveID, client.transactionID)
+	if err != nil {
+		return err
+	}
+	client.reserveID = 0
+	client.transactionID = 0
+	return nil
 }
