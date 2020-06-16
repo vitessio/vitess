@@ -249,10 +249,22 @@ func TestSelectUserDefinedVariable(t *testing.T) {
 	defer QueryLogger.Unsubscribe(logChan)
 
 	sql := "select @foo"
-	masterSession = &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"})}
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "@foo", Type: sqltypes.Null},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NULL,
+		}},
+	}
+	utils.MustMatch(t, result, wantResult, "Mismatch")
+
+	masterSession = &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"})}
+	result, err = executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	wantResult = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "@foo", Type: sqltypes.VarBinary},
 		},
@@ -260,7 +272,6 @@ func TestSelectUserDefinedVariable(t *testing.T) {
 			sqltypes.NewVarBinary("bar"),
 		}},
 	}
-	require.NoError(t, err)
 	utils.MustMatch(t, result, wantResult, "Mismatch")
 }
 

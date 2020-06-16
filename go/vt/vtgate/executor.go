@@ -242,11 +242,16 @@ func (e *Executor) addNeededBindVars(bindVarNeeds sqlparser.BindVarNeeds, bindVa
 		bindVars[sqlparser.LastInsertIDName] = sqltypes.Uint64BindVariable(session.GetLastInsertId())
 	}
 
-	// todo: do we need to check this map for nil?
-	if bindVarNeeds.NeedUserDefinedVariables && session.UserDefinedVariables != nil {
-		for k, v := range session.UserDefinedVariables {
-			bindVars[sqlparser.UserDefinedVariableName+k] = v
+	udvMap := session.UserDefinedVariables
+	if udvMap == nil {
+		udvMap = map[string]*querypb.BindVariable{}
+	}
+	for _, udv := range bindVarNeeds.NeedUserDefinedVariables {
+		val := udvMap[udv]
+		if val == nil {
+			val = sqltypes.NullBindVariable
 		}
+		bindVars[sqlparser.UserDefinedVariableName+udv] = val
 	}
 
 	if bindVarNeeds.NeedFoundRows {
