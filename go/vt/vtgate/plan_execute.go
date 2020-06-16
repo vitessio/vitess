@@ -165,6 +165,9 @@ func (e *planExecute) insideTransaction(ctx context.Context, safeSession *SafeSe
 		if err := e.e.txConn.Begin(ctx, safeSession); err != nil {
 			return nil, err
 		}
+		// The defer acts as a failsafe. If commit was successful,
+		// the rollback will be a no-op.
+		defer e.e.txConn.Rollback(ctx, safeSession)
 	}
 
 	// The SetAutocommitable flag should be same as mustCommit.
@@ -184,10 +187,6 @@ func (e *planExecute) insideTransaction(ctx context.Context, safeSession *SafeSe
 	}
 
 	if mustCommit {
-		// The defer acts as a failsafe. If commit was successful,
-		// the rollback will be a no-op.
-		defer e.e.txConn.Rollback(ctx, safeSession)
-
 		commitStart := time.Now()
 		if err := e.e.txConn.Commit(ctx, safeSession); err != nil {
 			return nil, err
