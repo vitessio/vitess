@@ -126,9 +126,10 @@ func (s *SlaveStatus) FindErrantGTIDs(otherReplicaStatuses []*SlaveStatus) (Mysq
 		// Copy and throw out master SID from consideration, so we don't mutate input.
 		otherSetNoMasterSID := make(Mysql56GTIDSet, len(otherSet))
 		for sid, intervals := range otherSet {
-			if sid != status.MasterUUID {
-				otherSetNoMasterSID[sid] = intervals
+			if sid == status.MasterUUID {
+				continue
 			}
+			otherSetNoMasterSID[sid] = intervals
 		}
 
 		otherSets = append(otherSets, otherSetNoMasterSID)
