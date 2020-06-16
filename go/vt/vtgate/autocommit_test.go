@@ -97,11 +97,11 @@ func TestAutocommitUpdateVindexChange(t *testing.T) {
 			"keyspace_id": sqltypes.BytesBindVariable([]byte("\026k@\264J\272K\326")),
 		},
 	}, {
-		Sql: "insert into name_lastname_keyspace_id_map(name, lastname, keyspace_id) values (:name0, :lastname0, :keyspace_id0)",
+		Sql: "insert into name_lastname_keyspace_id_map(name, lastname, keyspace_id) values (:name_0, :lastname_0, :keyspace_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name0":        sqltypes.BytesBindVariable([]byte("myname")),
-			"lastname0":    sqltypes.BytesBindVariable([]byte("mylastname")),
-			"keyspace_id0": sqltypes.BytesBindVariable([]byte("\026k@\264J\272K\326")),
+			"name_0":        sqltypes.BytesBindVariable([]byte("myname")),
+			"lastname_0":    sqltypes.BytesBindVariable([]byte("mylastname")),
+			"keyspace_id_0": sqltypes.BytesBindVariable([]byte("\026k@\264J\272K\326")),
 		},
 	}})
 	testAsTransactionCount(t, "sbclookup", sbclookup, 0)
@@ -269,10 +269,10 @@ func TestAutocommitInsertLookup(t *testing.T) {
 	require.NoError(t, err)
 
 	testQueries(t, "sbclookup", sbclookup, []*querypb.BoundQuery{{
-		Sql: "insert into name_user_map(name, user_id) values (:name0, :user_id0)",
+		Sql: "insert into name_user_map(name, user_id) values (:name_0, :user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name0":    sqltypes.BytesBindVariable([]byte("myname")),
-			"user_id0": sqltypes.Uint64BindVariable(1),
+			"name_0":    sqltypes.BytesBindVariable([]byte("myname")),
+			"user_id_0": sqltypes.Uint64BindVariable(1),
 		},
 	}})
 	testAsTransactionCount(t, "sbclookup", sbclookup, 0)
