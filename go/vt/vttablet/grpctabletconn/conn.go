@@ -225,11 +225,11 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context, target *querypb.Target, 
 }
 
 // Commit commits the ongoing transaction.
-func (conn *gRPCQueryClient) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
+func (conn *gRPCQueryClient) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
-		return tabletconn.ConnClosed
+		return 0, tabletconn.ConnClosed
 	}
 
 	req := &querypb.CommitRequest{
@@ -238,11 +238,11 @@ func (conn *gRPCQueryClient) Commit(ctx context.Context, target *querypb.Target,
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 		TransactionId:     transactionID,
 	}
-	_, err := conn.c.Commit(ctx, req)
+	resp, err := conn.c.Commit(ctx, req)
 	if err != nil {
-		return tabletconn.ErrorFromGRPC(err)
+		return 0, tabletconn.ErrorFromGRPC(err)
 	}
-	return nil
+	return resp.ReservedId, nil
 }
 
 // Rollback rolls back the ongoing transaction.

@@ -148,7 +148,7 @@ func TestTxEngineBegin(t *testing.T) {
 	te.AcceptReadOnly()
 	tx1, _, err := te.Begin(ctx, 0, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
-	_, err = te.Commit(ctx, tx1)
+	_, _, err = te.Commit(ctx, tx1)
 	require.NoError(t, err)
 	require.Equal(t, "start transaction read only;commit", db.QueryLog())
 	db.ResetQueryLog()
@@ -156,7 +156,7 @@ func TestTxEngineBegin(t *testing.T) {
 	te.AcceptReadWrite()
 	tx2, _, err := te.Begin(ctx, 0, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
-	_, err = te.Commit(ctx, tx2)
+	_, _, err = te.Commit(ctx, tx2)
 	require.NoError(t, err)
 	require.Equal(t, "begin;commit", db.QueryLog())
 

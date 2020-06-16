@@ -796,12 +796,12 @@ func TestTabletServerCommitTransaction(t *testing.T) {
 	if _, err := tsv.Execute(ctx, &target, executeSQL, nil, transactionID, 0, nil); err != nil {
 		t.Fatalf("failed to execute query: %s: %s", executeSQL, err)
 	}
-	if err := tsv.Commit(ctx, &target, transactionID); err != nil {
+	if _, err := tsv.Commit(ctx, &target, transactionID); err != nil {
 		t.Fatalf("call TabletServer.Commit failed: %v", err)
 	}
 }
 
-func TestTabletServerCommiRollbacktFail(t *testing.T) {
+func TestTabletServerCommitRollbackFail(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
 	config := tabletenv.NewDefaultConfig()
@@ -813,7 +813,7 @@ func TestTabletServerCommiRollbacktFail(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	err = tsv.Commit(ctx, &target, -1)
+	_, err = tsv.Commit(ctx, &target, -1)
 	want := "transaction -1: not found"
 	if err == nil || err.Error() != want {
 		t.Fatalf("Commit err: %v, want %v", err, want)
@@ -1283,7 +1283,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
-		if err := tsv.Commit(ctx, &target, tx1); err != nil {
+		if _, err := tsv.Commit(ctx, &target, tx1); err != nil {
 			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
@@ -1303,7 +1303,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 		// open a second connection while the request of the first connection is
 		// still pending.
 		<-tx3Finished
-		if err := tsv.Commit(ctx, &target, tx2); err != nil {
+		if _, err := tsv.Commit(ctx, &target, tx2); err != nil {
 			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
@@ -1318,7 +1318,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}
-		if err := tsv.Commit(ctx, &target, tx3); err != nil {
+		if _, err := tsv.Commit(ctx, &target, tx3); err != nil {
 			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 		close(tx3Finished)
@@ -1353,7 +1353,7 @@ func TestDMLQueryWithoutWhereClause(t *testing.T) {
 
 	_, txid, _, err := tsv.BeginExecute(ctx, &target, q, nil, 0, nil)
 	require.NoError(t, err)
-	err = tsv.Commit(ctx, &target, txid)
+	_, err = tsv.Commit(ctx, &target, txid)
 	require.NoError(t, err)
 }
 
@@ -1544,7 +1544,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
 
-		if err := tsv.Commit(ctx, &target, tx1); err != nil {
+		if _, err := tsv.Commit(ctx, &target, tx1); err != nil {
 			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
@@ -1563,7 +1563,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 			t.Errorf("failed to execute query: %s: %s", q2, err)
 		}
 
-		if err := tsv.Commit(ctx, &target, tx2); err != nil {
+		if _, err := tsv.Commit(ctx, &target, tx2); err != nil {
 			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
@@ -1582,7 +1582,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}
 
-		if err := tsv.Commit(ctx, &target, tx3); err != nil {
+		if _, err := tsv.Commit(ctx, &target, tx3); err != nil {
 			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
@@ -1679,7 +1679,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
-		if err := tsv.Commit(ctx, &target, tx1); err != nil {
+		if _, err := tsv.Commit(ctx, &target, tx1); err != nil {
 			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
@@ -1863,7 +1863,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
 
-		if err := tsv.Commit(ctx, &target, tx1); err != nil {
+		if _, err := tsv.Commit(ctx, &target, tx1); err != nil {
 			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
@@ -1900,7 +1900,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}
 
-		if err := tsv.Commit(ctx, &target, tx3); err != nil {
+		if _, err := tsv.Commit(ctx, &target, tx3); err != nil {
 			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()

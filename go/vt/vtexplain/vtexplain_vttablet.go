@@ -136,7 +136,7 @@ func (t *explainTablet) Begin(ctx context.Context, target *querypb.Target, optio
 }
 
 // Commit is part of the QueryService interface.
-func (t *explainTablet) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
+func (t *explainTablet) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
 	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
 	t.tabletQueries = append(t.tabletQueries, &TabletQuery{

@@ -327,11 +327,13 @@ func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 	defer conn.Close(ctx)
 
-	return conn.Commit(ctx, &querypb.Target{
+	// we do not support reserving through vtctl commands
+	_, err = conn.Commit(ctx, &querypb.Target{
 		Keyspace:   tabletInfo.Tablet.Keyspace,
 		Shard:      tabletInfo.Tablet.Shard,
 		TabletType: tabletInfo.Tablet.Type,
 	}, transactionID)
+	return err
 }
 
 func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
