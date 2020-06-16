@@ -665,6 +665,7 @@ func (tsv *TabletServer) IsHealthy() error {
 			"/* health */ select 1 from dual",
 			nil,
 			0,
+			0,
 			nil,
 		)
 		return err
@@ -957,12 +958,12 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 }
 
 // Execute executes the query and returns the result as response.
-func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, txID, connID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
+func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
 	span, ctx := trace.NewSpan(ctx, "TabletServer.Execute")
 	trace.AnnotateSQL(span, sql)
 	defer span.Finish()
 
-	allowOnShutdown := txID != 0
+	allowOnShutdown := transactionID != 0
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Execute", sql, bindVariables,
@@ -1123,7 +1124,9 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 }
 
 // BeginExecute combines Begin and Execute.
-func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+
+	// TODO: if reservedID != 0, then skip hotrow protection
 	if tsv.enableHotRowProtection {
 		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
 		if err != nil {
@@ -1134,12 +1137,15 @@ func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Targe
 		}
 	}
 
+	// TODO: tsv.Begin creates a new connection, that's a big no-no if we already have a reservedID
+	// Begin needs to take a reservedID and start a transaction on that connection if it exists
+	// if reservedID is 0, then create a new connection as before
 	transactionID, alias, err := tsv.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, nil, err
 	}
 
-	result, err := tsv.Execute(ctx, target, sql, bindVariables, transactionID, 0, options)
+	result, err := tsv.Execute(ctx, target, sql, bindVariables, transactionID, reservedID, options)
 	return result, transactionID, alias, err
 }
 
@@ -1382,7 +1388,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 		return nil, 0, 0, nil, err
 	}
 
-	result, err := tsv.Execute(ctx, target, sql, bindVariables, txID, connID, options)
+	result, err := tsv.Execute(ctx, target, sql, bindVariables, connID, connID, options)
 	return result, connID, connID, &tsv.alias, err
 }
 
@@ -1410,7 +1416,7 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 		return nil, 0, nil, err
 	}
 
-	result, err := tsv.Execute(ctx, target, sql, bindVariables, connID, options)
+	result, err := tsv.Execute(ctx, target, sql, bindVariables, connID, connID, options)
 	return result, connID, &tsv.alias, err
 }
 

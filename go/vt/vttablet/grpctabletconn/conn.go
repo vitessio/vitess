@@ -91,7 +91,7 @@ func DialTablet(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (querys
 }
 
 // Execute sends the query to VTTablet.
-func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, txID, connID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -106,9 +106,9 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target
 			Sql:           query,
 			BindVariables: bindVars,
 		},
-		TransactionId: txID,
+		TransactionId: transactionID,
 		Options:       options,
-		ReservedId:    connID,
+		ReservedId:    reservedID,
 	}
 	er, err := conn.c.Execute(ctx, req)
 	if err != nil {
@@ -443,7 +443,7 @@ func (conn *gRPCQueryClient) ReadTransaction(ctx context.Context, target *queryp
 }
 
 // BeginExecute starts a transaction and runs an Execute.
-func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (result *sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
+func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -458,7 +458,8 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 			Sql:           query,
 			BindVariables: bindVars,
 		},
-		Options: options,
+		ReservedId: reservedID,
+		Options:    options,
 	}
 	reply, err := conn.c.BeginExecute(ctx, req)
 	if err != nil {

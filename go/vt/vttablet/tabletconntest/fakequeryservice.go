@@ -368,6 +368,9 @@ var ExecuteBindVars = map[string]*querypb.BindVariable{
 // ExecuteTransactionID is a test transaction id.
 const ExecuteTransactionID int64 = 678
 
+// ReserveConnectionID is a test reserved connection id.
+const ReserveConnectionID int64 = 933
+
 // ExecuteQueryResult is a test query result.
 var ExecuteQueryResult = sqltypes.Result{
 	Fields: []*querypb.Field{
@@ -395,7 +398,7 @@ var ExecuteQueryResult = sqltypes.Result{
 }
 
 // Execute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, txID, connID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	if f.HasError {
 		return nil, f.TabletError
 	}
@@ -412,8 +415,8 @@ func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, 
 		f.t.Errorf("invalid Execute.ExecuteOptions: got %v expected %v", options, TestExecuteOptions)
 	}
 	f.checkTargetCallerID(ctx, "Execute", target)
-	if txID != f.ExpectedTransactionID {
-		f.t.Errorf("invalid Execute.TransactionId: got %v expected %v", txID, f.ExpectedTransactionID)
+	if transactionID != f.ExpectedTransactionID {
+		f.t.Errorf("invalid Execute.TransactionId: got %v expected %v", transactionID, f.ExpectedTransactionID)
 	}
 	return &ExecuteQueryResult, nil
 }
@@ -577,14 +580,14 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Tar
 }
 
 // BeginExecute combines Begin and Execute.
-func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	transactionID, _, err := f.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, nil, err
 	}
 
 	// TODO(deepthi): what alias should we actually return here?
-	result, err := f.Execute(ctx, target, sql, bindVariables, transactionID, options)
+	result, err := f.Execute(ctx, target, sql, bindVariables, transactionID, reservedID, options)
 	return result, transactionID, nil, err
 }
 

@@ -170,7 +170,7 @@ func (stc *ScatterConn) Execute(
 			case autocommit:
 				innerqr, err = stc.executeAutocommit(ctx, rs, query, bindVars, opts)
 			case shouldBegin:
-				innerqr, transactionID, alias, err = rs.Gateway.BeginExecute(ctx, rs.Target, query, bindVars, options)
+				innerqr, transactionID, alias, err = rs.Gateway.BeginExecute(ctx, rs.Target, query, bindVars, 0, options)
 			default:
 				var qs queryservice.QueryService
 				_, usingLegacy := rs.Gateway.(*DiscoveryGateway)
@@ -184,7 +184,7 @@ func (stc *ScatterConn) Execute(
 					qs, err = rs.Gateway.QueryServiceByAlias(alias)
 				}
 				if err == nil {
-					innerqr, err = qs.Execute(ctx, rs.Target, query, bindVars, transactionID, options)
+					innerqr, err = qs.Execute(ctx, rs.Target, query, bindVars, transactionID, 0, options)
 				}
 			}
 			if err != nil {
@@ -248,7 +248,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				// tansactionID and alias are not used by this call, it is one round trip
 				innerqr, err = stc.executeAutocommit(ctx, rs, queries[i].Sql, queries[i].BindVariables, opts)
 			case shouldBegin:
-				innerqr, transactionID, alias, err = rs.Gateway.BeginExecute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, opts)
+				innerqr, transactionID, alias, err = rs.Gateway.BeginExecute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, 0, opts)
 			default:
 				var qs queryservice.QueryService
 				_, usingLegacy := rs.Gateway.(*DiscoveryGateway)
@@ -258,7 +258,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 					qs, err = rs.Gateway.QueryServiceByAlias(alias)
 				}
 				if err == nil {
-					innerqr, err = qs.Execute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, transactionID, opts)
+					innerqr, err = qs.Execute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, transactionID, 0, opts)
 				}
 			}
 			if err != nil {

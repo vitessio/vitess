@@ -541,7 +541,7 @@ func newNoTwopcExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *f
 func newTxForPrep(tsv *TabletServer) int64 {
 	txid := newTransaction(tsv, nil)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	_, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid, nil)
+	_, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid, 0, nil)
 	if err != nil {
 		panic(err)
 	}
