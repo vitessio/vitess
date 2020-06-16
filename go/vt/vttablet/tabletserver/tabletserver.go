@@ -977,11 +977,17 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 			if err != nil {
 				return err
 			}
+			// If reserveID or transactionID is non zero it should be assigned as connID and passed to query executor.
+			connID := reservedID
+			if transactionID != 0 {
+				connID = transactionID
+			}
+
 			qre := &QueryExecutor{
 				query:          query,
 				marginComments: comments,
 				bindVars:       bindVariables,
-				connID:         transactionID,
+				connID:         connID,
 				options:        options,
 				plan:           plan,
 				ctx:            ctx,
