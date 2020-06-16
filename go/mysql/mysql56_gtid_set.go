@@ -436,7 +436,7 @@ func (set Mysql56GTIDSet) SIDBlock() []byte {
 }
 
 func (set Mysql56GTIDSet) Difference(other Mysql56GTIDSet) Mysql56GTIDSet {
-	if other == nil {
+	if other == nil || set == nil {
 		return set
 	}
 
