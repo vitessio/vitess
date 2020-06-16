@@ -208,17 +208,22 @@ func (tp *TxPool) Rollback(ctx context.Context, txConn tx.IStatefulConnection) e
 // the statements (if any) executed to initiate the transaction. In autocommit
 // mode the statement will be "".
 // The connection returned is locked for the callee and its responsibility is to unlock the connection.
-func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool) (tx.IStatefulConnection, string, error) {
+func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, reserveID int64) (tx.IStatefulConnection, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Begin")
 	defer span.Finish()
 
-	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
-	effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
-	if !tp.limiter.Get(immediateCaller, effectiveCaller) {
-		return nil, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
+	var conn *StatefulConnection
+	var err error
+	if reserveID != 0 {
+		conn, err = tp.scp.GetAndLock(reserveID, "start transaction on reserve conn")
+	} else {
+		immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
+		effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
+		if !tp.limiter.Get(immediateCaller, effectiveCaller) {
+			return nil, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
+		}
+		conn, err = tp.createConn(ctx, options)
 	}
-
-	conn, err := tp.createConn(ctx, options)
 	if err != nil {
 		return nil, "", err
 	}

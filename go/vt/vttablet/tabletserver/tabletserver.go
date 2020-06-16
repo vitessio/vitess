@@ -747,6 +747,10 @@ func (tsv *TabletServer) SchemaEngine() *schema.Engine {
 
 // Begin starts a new transaction. This is allowed only if the state is StateServing.
 func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (transactionID int64, tablet *topodatapb.TabletAlias, err error) {
+	return tsv.begin(ctx, target, 0, options)
+}
+
+func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, reserveID int64, options *querypb.ExecuteOptions) (transactionID int64, tablet *topodatapb.TabletAlias, err error) {
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Begin", "begin", nil,
@@ -757,7 +761,7 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, opti
 				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
 			}
 			var beginSQL string
-			transactionID, beginSQL, err = tsv.te.Begin(ctx, options)
+			transactionID, beginSQL, err = tsv.te.Begin(ctx, reserveID, options)
 			logStats.TransactionID = transactionID
 
 			// Record the actual statements that were executed in the logStats.
@@ -1146,7 +1150,7 @@ func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Targe
 	// TODO: tsv.Begin creates a new connection, that's a big no-no if we already have a reservedID
 	// Begin needs to take a reservedID and start a transaction on that connection if it exists
 	// if reservedID is 0, then create a new connection as before
-	transactionID, alias, err := tsv.Begin(ctx, target, options)
+	transactionID, alias, err := tsv.begin(ctx, target, reservedID, options)
 	if err != nil {
 		return nil, 0, nil, err
 	}
@@ -1399,7 +1403,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 }
 
 //ReserveExecute implements the QueryService interface
-func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, txID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	var connID int64
 	var err error
 
@@ -1409,7 +1413,7 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("Reserve", time.Now())
-			connID, err = tsv.te.Reserve(ctx, options, txID, preQueries)
+			connID, err = tsv.te.Reserve(ctx, options, transactionID, preQueries)
 			if err != nil {
 				return err
 			}
