@@ -108,9 +108,9 @@ func ProtoToSlaveStatus(s *replicationdatapb.Status) SlaveStatus {
 	}
 }
 
-// FindErrantGTIDs can be used to find ErrantGTIDs in the receiver's relay log, by comparing it against all known replicas,
+// FindErrantGTIDs can be used to find errant GTIDs in the receiver's relay log, by comparing it against all known replicas,
 // provided as a list of SlaveStatus's. This method only works if the flavor for all retrieved SlaveStatus's is MySQL.
-// The result is returned at a Mysql56GTIDSet, where everything in the GTIDSet is a found errant GTID.
+// The result is returned as a Mysql56GTIDSet, each of whose elements is a found errant GTID.
 func (s *SlaveStatus) FindErrantGTIDs(otherReplicaStatuses []*SlaveStatus) (Mysql56GTIDSet, error) {
 	set, ok := s.RelayLogPosition.GTIDSet.(Mysql56GTIDSet)
 	if !ok {
