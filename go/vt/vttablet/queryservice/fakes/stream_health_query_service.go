@@ -46,6 +46,8 @@ type StreamHealthQueryService struct {
 	target          querypb.Target
 }
 
+var _ queryservice.QueryService = (*StreamHealthQueryService)(nil)
+
 // NewStreamHealthQueryService creates a new fake query service for the target.
 func NewStreamHealthQueryService(target querypb.Target) *StreamHealthQueryService {
 	return &StreamHealthQueryService{
