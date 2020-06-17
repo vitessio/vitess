@@ -715,13 +715,24 @@ func (hc *HealthCheckImpl) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	status := hc.CacheStatus()
 	b, err := json.MarshalIndent(status, "", " ")
 	if err != nil {
-		w.Write([]byte(err.Error()))
+		_, err2 := w.Write([]byte(err.Error()))
+
+		//error logged
+		if err2 != nil {
+			log.Error("w.Write([]byte(err.Error())) failed: %v", err2)
+		}
+
 		return
 	}
 
 	buf := bytes.NewBuffer(nil)
 	json.HTMLEscape(buf, b)
-	w.Write(buf.Bytes())
+	_, err1 := w.Write(buf.Bytes())
+
+	//error logged
+	if err1 != nil {
+		log.Error("w.Write(buf.Bytes()) failed: %v", err1)
+	}
 }
 
 // servingConnStats returns the number of serving tablets per keyspace/shard/tablet type.

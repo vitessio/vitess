@@ -452,7 +452,12 @@ func TestMaxReplicationLagModule_Increase_BadRateUpperBound(t *testing.T) {
 	}
 
 	// Assume that a bad value of 150 was set @ 30s.
-	tf.m.memory.markBad(150, sinceZero(30*time.Second))
+	err1 := tf.m.memory.markBad(150, sinceZero(30*time.Second))
+
+	//log error
+	if err1 != nil {
+		t.Fatal(err1)
+	}
 
 	// r2 @  70s, 0s lag
 	tf.ratesHistory.add(sinceZero(69*time.Second), 100)

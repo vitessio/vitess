@@ -129,8 +129,17 @@ func TestConsulTopo(t *testing.T) {
 	// Start a single consul in the background.
 	cmd, configFilename, serverAddr := startConsul(t, "")
 	defer func() {
-		cmd.Process.Kill()
-		cmd.Wait()
+		err := cmd.Process.Kill()
+		// Alerts command did not run successful
+		if err != nil {
+			t.Fatalf("cmd process kill has an error: %v", err)
+		}
+		// Alerts command did not run successful
+		err = cmd.Wait()
+		if err != nil {
+			t.Fatalf("cmd wait has an error: %v", err)
+		}
+
 		os.Remove(configFilename)
 	}()
 
@@ -166,8 +175,16 @@ func TestConsulTopoWithAuth(t *testing.T) {
 	// Start a single consul in the background.
 	cmd, configFilename, serverAddr := startConsul(t, "123456")
 	defer func() {
-		cmd.Process.Kill()
-		cmd.Wait()
+		err := cmd.Process.Kill()
+		// Alerts command did not run successful
+		if err != nil {
+			t.Fatalf("cmd process kill has an error: %v", err)
+		}
+		err = cmd.Wait()
+		// Alerts command did not run successful
+		if err != nil {
+			t.Fatalf("cmd process wait has an error: %v", err)
+		}
 		os.Remove(configFilename)
 	}()
 

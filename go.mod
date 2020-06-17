@@ -4,12 +4,14 @@ go 1.13
 
 require (
 	cloud.google.com/go v0.45.1
+	github.com/AlekSi/gocov-xml v0.0.0-20190121064608-3a14fb1c4737 // indirect
 	github.com/Azure/azure-storage-blob-go v0.8.0
 	github.com/Azure/go-autorest/autorest/adal v0.8.1 // indirect
 	github.com/GeertJohan/go.rice v1.0.0
 	github.com/PuerkitoBio/goquery v1.5.1
 	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878 // indirect
 	github.com/aws/aws-sdk-go v1.28.8
+	github.com/axw/gocov v1.0.0 // indirect
 	github.com/buger/jsonparser v0.0.0-20200322175846-f7e751efca13
 	github.com/cespare/xxhash/v2 v2.1.1
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
