@@ -74,7 +74,7 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEqual(t, "", gotTablet.Hostname)
 
-	// Cannonicalize shard name and compute keyrange.
+	// Canonicalize shard name and compute keyrange.
 	*tabletHostname = "foo"
 	*initShard = "-C0"
 	wantTablet.Shard = "-c0"

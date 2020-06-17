@@ -30,7 +30,7 @@ func init() {
 	servenv.OnRun(func() {
 		http.Handle("/healthz", http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 			if _, err := tm.Healthy(); err != nil {
-				http.Error(rw, fmt.Sprintf("500 internal server error: tm not healthy: %v", err), http.StatusInternalServerError)
+				http.Error(rw, fmt.Sprintf("500 internal server error: tablet manager not healthy: %v", err), http.StatusInternalServerError)
 				return
 			}
 
