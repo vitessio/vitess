@@ -208,14 +208,14 @@ func (tp *TxPool) Rollback(ctx context.Context, txConn *StatefulConnection) erro
 // the statements (if any) executed to initiate the transaction. In autocommit
 // mode the statement will be "".
 // The connection returned is locked for the callee and its responsibility is to unlock the connection.
-func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, reserveID int64) (*StatefulConnection, string, error) {
+func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, reservedID int64) (*StatefulConnection, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Begin")
 	defer span.Finish()
 
 	var conn *StatefulConnection
 	var err error
-	if reserveID != 0 {
-		conn, err = tp.scp.GetAndLock(reserveID, "start transaction on reserve conn")
+	if reservedID != 0 {
+		conn, err = tp.scp.GetAndLock(reservedID, "start transaction on reserve conn")
 	} else {
 		immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
 		effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
