@@ -17,6 +17,8 @@ limitations under the License.
 package mysql
 
 import (
+	"fmt"
+
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -38,6 +40,7 @@ type SlaveStatus struct {
 	MasterHost           string
 	MasterPort           int
 	MasterConnectRetry   int
+	MasterUUID           SID
 }
 
 // SlaveRunning returns true iff both the Slave IO and Slave SQL threads are
@@ -60,6 +63,7 @@ func SlaveStatusToProto(s SlaveStatus) *replicationdatapb.Status {
 		MasterHost:           s.MasterHost,
 		MasterPort:           int32(s.MasterPort),
 		MasterConnectRetry:   int32(s.MasterConnectRetry),
+		MasterUuid:           s.MasterUUID.String(),
 	}
 }
 
@@ -81,6 +85,13 @@ func ProtoToSlaveStatus(s *replicationdatapb.Status) SlaveStatus {
 	if err != nil {
 		panic(vterrors.Wrapf(err, "cannot decode FileRelayLogPosition"))
 	}
+	var sid SID
+	if s.MasterUuid != "" {
+		sid, err = ParseSID(s.MasterUuid)
+		if err != nil {
+			panic(vterrors.Wrapf(err, "cannot decode MasterUUID"))
+		}
+	}
 	return SlaveStatus{
 		Position:             pos,
 		RelayLogPosition:     relayPos,
@@ -93,5 +104,54 @@ func ProtoToSlaveStatus(s *replicationdatapb.Status) SlaveStatus {
 		MasterHost:           s.MasterHost,
 		MasterPort:           int(s.MasterPort),
 		MasterConnectRetry:   int(s.MasterConnectRetry),
+		MasterUUID:           sid,
 	}
+}
+
+// FindErrantGTIDs can be used to find errant GTIDs in the receiver's relay log, by comparing it against all known replicas,
+// provided as a list of SlaveStatus's. This method only works if the flavor for all retrieved SlaveStatus's is MySQL.
+// The result is returned as a Mysql56GTIDSet, each of whose elements is a found errant GTID.
+func (s *SlaveStatus) FindErrantGTIDs(otherReplicaStatuses []*SlaveStatus) (Mysql56GTIDSet, error) {
+	set, ok := s.RelayLogPosition.GTIDSet.(Mysql56GTIDSet)
+	if !ok {
+		return nil, fmt.Errorf("errant GTIDs can only be computed on the MySQL flavor")
+	}
+
+	otherSets := make([]Mysql56GTIDSet, 0, len(otherReplicaStatuses))
+	for _, status := range otherReplicaStatuses {
+		otherSet, ok := status.RelayLogPosition.GTIDSet.(Mysql56GTIDSet)
+		if !ok {
+			panic("The receiver SlaveStatus contained a Mysql56GTIDSet in its relay log, but a replica's SlaveStatus is of another flavor. This should never happen.")
+		}
+		// Copy and throw out master SID from consideration, so we don't mutate input.
+		otherSetNoMasterSID := make(Mysql56GTIDSet, len(otherSet))
+		for sid, intervals := range otherSet {
+			if sid == status.MasterUUID {
+				continue
+			}
+			otherSetNoMasterSID[sid] = intervals
+		}
+
+		otherSets = append(otherSets, otherSetNoMasterSID)
+	}
+
+	// Copy set for final diffSet so we don't mutate receiver.
+	diffSet := make(Mysql56GTIDSet, len(set))
+	for sid, intervals := range set {
+		if sid == s.MasterUUID {
+			continue
+		}
+		diffSet[sid] = intervals
+	}
+
+	for _, otherSet := range otherSets {
+		diffSet = diffSet.Difference(otherSet)
+	}
+
+	if len(diffSet) == 0 {
+		// If diffSet is empty, then we have no errant GTIDs.
+		return nil, nil
+	}
+
+	return diffSet, nil
 }
