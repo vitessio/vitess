@@ -1452,6 +1452,9 @@ func (idx *IndexSpec) Format(buf *TrackedBuffer) {
 			if col.Length != nil {
 				buf.Myprintf("(%v)", col.Length)
 			}
+			if col.Order != AscScr {
+				buf.Myprintf(" %s", col.Order)
+			}
 		}
 		buf.Myprintf(")")
 		for _, opt := range idx.Options {
@@ -1553,10 +1556,11 @@ func (ii *IndexInfo) walkSubtree(visit Visit) error {
 	return Walk(visit, ii.Name)
 }
 
-// IndexColumn describes a column in an index definition with optional length
+// IndexColumn describes a column in an index definition with optional length and direction
 type IndexColumn struct {
 	Column ColIdent
 	Length *SQLVal
+	Order string
 }
 
 // LengthScaleOption is used for types that have an optional length
