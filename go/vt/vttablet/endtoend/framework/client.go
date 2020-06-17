@@ -332,3 +332,13 @@ func (client *QueryClient) TransactionID() int64 {
 func (client *QueryClient) ReservedID() int64 {
 	return client.reservedID
 }
+
+//SetTransactionID does what it says
+func (client *QueryClient) SetTransactionID(id int64) {
+	client.transactionID = id
+}
+
+//SetReservedID does what it says
+func (client *QueryClient) SetReservedID(id int64) {
+	client.reservedID = id
+}

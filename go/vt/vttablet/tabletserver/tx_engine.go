@@ -247,25 +247,14 @@ func (te *TxEngine) Begin(ctx context.Context, reserveID int64, options *querypb
 func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Commit")
 	defer span.Finish()
-	conn, err := te.txPool.GetAndLock(transactionID, "for commit")
-	if err != nil {
-		return 0, "", err
-	}
-	queries, err := te.txPool.Commit(ctx, conn)
-	if err != nil {
-		conn.Release(tx.TxCommit)
-		return 0, "", err
-	}
-	if !conn.IsTainted() {
-		conn.Release(tx.TxCommit)
-		return 0, queries, nil
-	}
-	err = conn.Renew()
-	if err != nil {
-		conn.Release(tx.ConnRenewFail)
-		return 0, "", err
-	}
-	return conn.ConnID, queries, nil
+	var query string
+	var err error
+	rID, err := te.txFinish(transactionID, tx.TxCommit, func(conn *StatefulConnection) error {
+		query, err = te.txPool.Commit(ctx, conn)
+		return err
+	})
+
+	return rID, query, err
 }
 
 // Rollback rolls back the specified transaction.
@@ -273,17 +262,23 @@ func (te *TxEngine) Rollback(ctx context.Context, transactionID int64) (int64, e
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Rollback")
 	defer span.Finish()
 
-	conn, err := te.txPool.GetAndLock(transactionID, "for rollback")
+	return te.txFinish(transactionID, tx.TxRollback, func(conn *StatefulConnection) error {
+		return te.txPool.Rollback(ctx, conn)
+	})
+}
+
+func (te *TxEngine) txFinish(transactionID int64, reason tx.ReleaseReason, f func(*StatefulConnection) error) (int64, error) {
+	conn, err := te.txPool.GetAndLock(transactionID, reason.String())
 	if err != nil {
 		return 0, err
 	}
-	err = te.txPool.Rollback(ctx, conn)
+	err = f(conn)
 	if err != nil {
-		conn.Release(tx.TxRollback)
+		conn.Release(reason)
 		return 0, err
 	}
 	if !conn.IsTainted() {
-		conn.Release(tx.TxRollback)
+		conn.Release(reason)
 		return 0, nil
 	}
 	err = conn.Renew()
