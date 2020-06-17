@@ -40,6 +40,23 @@ func TestAlterCreateIndex(t *testing.T) {
 			},
 		},
 		{
+			"ALTER TABLE asdf ADD UNIQUE (w,X, y , z)",
+			TableName{
+				Name: TableIdent{"asdf"},
+			},
+			&IndexSpec{
+				Action: CreateStr,
+				ToName: ColIdent{},
+				Type: "unique",
+				Columns: []*IndexColumn{
+					{Column: ColIdent{val: "w"}, Order: AscScr},
+					{Column: ColIdent{val: "X"}, Order: AscScr},
+					{Column: ColIdent{val: "y"}, Order: AscScr},
+					{Column: ColIdent{val: "z"}, Order: AscScr},
+				},
+			},
+		},
+		{
 			"ALTER TABLE asdf ADD CONSTRAINT abc UNIQUE (w,X, y , z)",
 			TableName{
 				Name: TableIdent{"asdf"},
