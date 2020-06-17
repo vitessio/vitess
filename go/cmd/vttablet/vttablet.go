@@ -69,7 +69,7 @@ func main() {
 		log.Exitf("failed to parse -tablet-path: %v", err)
 	}
 
-	// config and mycnf intializatin is intertwined.
+	// config and mycnf intializations are intertwined.
 	config, mycnf := initConfig(tabletAlias)
 
 	ts := topo.Open()
