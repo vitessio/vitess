@@ -18,7 +18,7 @@ func TestAlterCreateIndex(t *testing.T) {
 				Action: CreateStr,
 				ToName: ColIdent{val: "idx_v"},
 				Columns: []*IndexColumn{
-					{Column: ColIdent{val: "col1"}},
+					{Column: ColIdent{val: "col1"}, Order: AscScr},
 				},
 			},
 		},
@@ -32,10 +32,27 @@ func TestAlterCreateIndex(t *testing.T) {
 				ToName: ColIdent{val: "wxyzIndex"},
 				Type: "unique",
 				Columns: []*IndexColumn{
-					{Column: ColIdent{val: "w"}},
-					{Column: ColIdent{val: "X"}},
-					{Column: ColIdent{val: "y"}},
-					{Column: ColIdent{val: "z"}},
+					{Column: ColIdent{val: "w"}, Order: AscScr},
+					{Column: ColIdent{val: "X"}, Order: AscScr},
+					{Column: ColIdent{val: "y"}, Order: AscScr},
+					{Column: ColIdent{val: "z"}, Order: AscScr},
+				},
+			},
+		},
+		{
+			"ALTER TABLE asdf ADD CONSTRAINT abc UNIQUE (w,X, y , z)",
+			TableName{
+				Name: TableIdent{"asdf"},
+			},
+			&IndexSpec{
+				Action: CreateStr,
+				ToName: ColIdent{},
+				Type: "unique",
+				Columns: []*IndexColumn{
+					{Column: ColIdent{val: "w"}, Order: AscScr},
+					{Column: ColIdent{val: "X"}, Order: AscScr},
+					{Column: ColIdent{val: "y"}, Order: AscScr},
+					{Column: ColIdent{val: "z"}, Order: AscScr},
 				},
 			},
 		},
@@ -49,13 +66,13 @@ func TestAlterCreateIndex(t *testing.T) {
 				ToName: ColIdent{val: "bestindex"},
 				Type: "spatial",
 				Columns: []*IndexColumn{
-					{Column: ColIdent{val: "bestcol"}},
+					{Column: ColIdent{val: "bestcol"}, Order: AscScr},
 				},
 				Options: []*IndexOption{{Name: "COMMENT", Value: &SQLVal{Type:StrVal, Val: []byte("hello world")}}},
 			},
 		},
 		{
-			"ALTER TABLE tableBOI ADD KEY sOmEiNdEx USING BTREE (ye, ne) USING HASH", // doesn't make sense but valid
+			"ALTER TABLE tableBOI ADD KEY sOmEiNdEx USING BTREE (ye DESC, ne) USING HASH", // doesn't make sense but valid
 			TableName{
 				Name: TableIdent{"tableBOI"},
 			},
@@ -64,8 +81,8 @@ func TestAlterCreateIndex(t *testing.T) {
 				ToName: ColIdent{val: "sOmEiNdEx"},
 				Using: ColIdent{val: "BTREE"},
 				Columns: []*IndexColumn{
-					{Column: ColIdent{val: "ye"}},
-					{Column: ColIdent{val: "ne"}},
+					{Column: ColIdent{val: "ye"}, Order: DescScr},
+					{Column: ColIdent{val: "ne"}, Order: AscScr},
 				},
 				Options: []*IndexOption{{Name: "USING", Using: "HASH"}},
 			},
@@ -139,12 +156,12 @@ func TestCreateIndex(t *testing.T) {
 				Action: CreateStr,
 				ToName: ColIdent{val: "idx_v"},
 				Columns: []*IndexColumn{
-					{Column: ColIdent{val: "col1"}},
+					{Column: ColIdent{val: "col1"}, Order: AscScr},
 				},
 			},
 		},
 		{
-			"CREATE UNIQUE INDEX wxyzIndex ON asdf (w,X, y , z)",
+			"CREATE UNIQUE INDEX wxyzIndex ON asdf (w,X DESC, y , z)",
 			TableName{
 				Name: TableIdent{"asdf"},
 			},
@@ -153,10 +170,10 @@ func TestCreateIndex(t *testing.T) {
 				ToName: ColIdent{val: "wxyzIndex"},
 				Type: "unique",
 				Columns: []*IndexColumn{
-					{Column: ColIdent{val: "w"}},
-					{Column: ColIdent{val: "X"}},
-					{Column: ColIdent{val: "y"}},
-					{Column: ColIdent{val: "z"}},
+					{Column: ColIdent{val: "w"}, Order: AscScr},
+					{Column: ColIdent{val: "X"}, Order: DescScr},
+					{Column: ColIdent{val: "y"}, Order: AscScr},
+					{Column: ColIdent{val: "z"}, Order: AscScr},
 				},
 			},
 		},
@@ -170,13 +187,13 @@ func TestCreateIndex(t *testing.T) {
 				ToName: ColIdent{val: "bestindex"},
 				Type: "spatial",
 				Columns: []*IndexColumn{
-					{Column: ColIdent{val: "bestcol"}},
+					{Column: ColIdent{val: "bestcol"}, Order: AscScr},
 				},
 				Options: []*IndexOption{{Name: "COMMENT", Value: &SQLVal{Type:StrVal, Val: []byte("hello world")}}},
 			},
 		},
 		{
-			"CREATE INDEX sOmEiNdEx USING BTREE ON tableBOI (ye, ne) USING HASH", // doesn't make sense but valid
+			"CREATE INDEX sOmEiNdEx USING BTREE ON tableBOI (ye, ne DESC) USING HASH", // doesn't make sense but valid
 			TableName{
 				Name: TableIdent{"tableBOI"},
 			},
@@ -185,8 +202,8 @@ func TestCreateIndex(t *testing.T) {
 				ToName: ColIdent{val: "sOmEiNdEx"},
 				Using: ColIdent{val: "BTREE"},
 				Columns: []*IndexColumn{
-					{Column: ColIdent{val: "ye"}},
-					{Column: ColIdent{val: "ne"}},
+					{Column: ColIdent{val: "ye"}, Order: AscScr},
+					{Column: ColIdent{val: "ne"}, Order: DescScr},
 				},
 				Options: []*IndexOption{{Name: "USING", Using: "HASH"}},
 			},
