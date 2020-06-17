@@ -572,3 +572,105 @@ func TestReserveAndBeginExecuteWithFailingQueryAndReserveConnAndTxRemainsOpen(t 
 
 	require.NoError(t, client.Release())
 }
+
+func TestReserveExecuteWithPreQueriesAndCheckConnection(t *testing.T) {
+	client1 := framework.NewClient()
+	client2 := framework.NewClient()
+
+	selQuery := "select str_to_date('00/00/0000', '%m/%d/%Y')"
+	warnQuery := "show warnings"
+	preQueries1 := []string{
+		"set sql_mode = ''",
+	}
+	preQueries2 := []string{
+		"set sql_mode = 'NO_ZERO_DATE'",
+	}
+
+	qr1, err := client1.ReserveExecute(selQuery, preQueries1, nil)
+	require.NoError(t, err)
+	defer client1.Release()
+
+	qr2, err := client2.ReserveExecute(selQuery, preQueries2, nil)
+	require.NoError(t, err)
+	defer client2.Release()
+
+	assert.NotEqual(t, qr1.Rows, qr2.Rows)
+	assert.Equal(t, `[[DATE("0000-00-00")]]`, fmt.Sprintf("%v", qr1.Rows))
+	assert.Equal(t, `[[NULL]]`, fmt.Sprintf("%v", qr2.Rows))
+
+	qr1, err = client1.Execute(warnQuery, nil)
+	require.NoError(t, err)
+
+	qr2, err = client2.Execute(warnQuery, nil)
+	require.NoError(t, err)
+
+	assert.NotEqual(t, qr1.Rows, qr2.Rows)
+	assert.Equal(t, `[]`, fmt.Sprintf("%v", qr1.Rows))
+	assert.Equal(t, `[[VARCHAR("Warning") UINT32(1411) VARCHAR("Incorrect datetime value: '00/00/0000' for function str_to_date")]]`, fmt.Sprintf("%v", qr2.Rows))
+}
+
+func TestReserveBeginExecuteWithPreQueriesAndCheckConnection(t *testing.T) {
+	rcClient := framework.NewClient()
+	rucClient := framework.NewClient()
+
+	insRcQuery := "insert into vitess_test (intval, floatval, charval, binval) values (4, null, null, null)"
+	insRucQuery := "insert into vitess_test (intval, floatval, charval, binval) values (5, null, null, null)"
+	selQuery := "select intval from vitess_test"
+	delQuery := "delete from vitess_test where intval = 5"
+	rcQuery := []string{
+		"set session transaction isolation level read committed",
+	}
+	rucQuery := []string{
+		"set session transaction isolation level read uncommitted",
+	}
+
+	_, err := rcClient.ReserveBeginExecute(insRcQuery, rcQuery, nil)
+	require.NoError(t, err)
+	defer rcClient.Release()
+
+	_, err = rucClient.ReserveBeginExecute(insRucQuery, rucQuery, nil)
+	require.NoError(t, err)
+	defer rucClient.Release()
+
+	qr1, err := rcClient.Execute(selQuery, nil)
+	require.NoError(t, err)
+
+	qr2, err := rucClient.Execute(selQuery, nil)
+	require.NoError(t, err)
+
+	assert.NotEqual(t, qr1.Rows, qr2.Rows)
+	// As the transaction is read commited it is not able to see #5.
+	assert.Equal(t, `[[INT32(1)] [INT32(2)] [INT32(3)] [INT32(4)]]`, fmt.Sprintf("%v", qr1.Rows))
+	// As the transaction is read uncommited it is able to see #4.
+	assert.Equal(t, `[[INT32(1)] [INT32(2)] [INT32(3)] [INT32(4)] [INT32(5)]]`, fmt.Sprintf("%v", qr2.Rows))
+
+	err = rucClient.Commit()
+	require.NoError(t, err)
+
+	qr1, err = rcClient.Execute(selQuery, nil)
+	require.NoError(t, err)
+
+	qr2, err = rucClient.Execute(selQuery, nil)
+	require.NoError(t, err)
+
+	// As the transaction on read uncommitted client got committed, transaction with read committed will be able to see #5.
+	assert.Equal(t, qr1.Rows, qr2.Rows)
+	assert.Equal(t, `[[INT32(1)] [INT32(2)] [INT32(3)] [INT32(4)] [INT32(5)]]`, fmt.Sprintf("%v", qr1.Rows))
+
+	err = rcClient.Rollback()
+	require.NoError(t, err)
+
+	qr1, err = rcClient.Execute(selQuery, nil)
+	require.NoError(t, err)
+
+	qr2, err = rucClient.Execute(selQuery, nil)
+	require.NoError(t, err)
+
+	// As the transaction on read committed client got rollbacked back, table will forget #4.
+	assert.Equal(t, qr1.Rows, qr2.Rows)
+	assert.Equal(t, `[[INT32(1)] [INT32(2)] [INT32(3)] [INT32(5)]]`, fmt.Sprintf("%v", qr2.Rows))
+
+	// This is executed on reserved connection without transaction as the transaction was committed.
+	_, err = rucClient.Execute(delQuery, nil)
+	require.NoError(t, err)
+}
