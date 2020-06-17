@@ -481,3 +481,94 @@ func TestReserveBeginReleaseAndFailToUseReservedIDAndTxIDAgain(t *testing.T) {
 	_, err = client.Execute(query, nil)
 	require.Error(t, err)
 }
+
+func TestReserveExecuteWithFailingQueryAndReserveConnectionRemainsOpen(t *testing.T) {
+	client := framework.NewClient()
+
+	_, err := client.ReserveExecute("select foo", nil, nil)
+	require.Error(t, err)
+	defer client.Release()
+	require.NotEqual(t, int64(0), client.ReservedID())
+
+	_, err = client.Execute("select 42", nil)
+	require.NoError(t, err)
+	require.NoError(t, client.Release())
+}
+
+func TestReserveAndExecuteWithFailingQueryAndReserveConnectionRemainsOpen(t *testing.T) {
+	client := framework.NewClient()
+
+	qr1, err := client.ReserveExecute("select connection_id()", nil, nil)
+	require.NoError(t, err)
+	defer client.Release()
+
+	_, err = client.Execute("select foo", nil)
+	require.Error(t, err)
+
+	qr2, err := client.Execute("select connection_id()", nil)
+	require.NoError(t, err)
+	require.Equal(t, qr1.Rows, qr2.Rows)
+	require.NoError(t, client.Release())
+}
+
+func TestReserveBeginExecuteWithFailingQueryAndReserveConnAndTxRemainsOpen(t *testing.T) {
+	client := framework.NewClient()
+
+	_, err := client.ReserveBeginExecute("select foo", nil, nil)
+	require.Error(t, err)
+
+	// Save the connection id to check in the end that everything got executed on same connection.
+	qr1, err := client.Execute("select connection_id()", nil)
+	require.NoError(t, err)
+
+	_, err = client.Execute("insert into vitess_test (intval, floatval, charval, binval) values (4, null, null, null)", nil)
+	require.NoError(t, err)
+
+	qr, err := client.Execute("select intval from vitess_test", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "[[INT32(1)] [INT32(2)] [INT32(3)] [INT32(4)]]", fmt.Sprintf("%v", qr.Rows))
+
+	err = client.Rollback()
+	require.NoError(t, err)
+
+	qr, err = client.Execute("select intval from vitess_test", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "[[INT32(1)] [INT32(2)] [INT32(3)]]", fmt.Sprintf("%v", qr.Rows))
+
+	qr2, err := client.Execute("select connection_id()", nil)
+	require.NoError(t, err)
+	require.Equal(t, qr1.Rows, qr2.Rows)
+
+	require.NoError(t, client.Release())
+}
+
+func TestReserveAndBeginExecuteWithFailingQueryAndReserveConnAndTxRemainsOpen(t *testing.T) {
+	client := framework.NewClient()
+
+	// Save the connection id to check in the end that everything got executed on same connection.
+	qr1, err := client.ReserveExecute("select connection_id()", nil, nil)
+	require.NoError(t, err)
+
+	_, err = client.BeginExecute("select foo", nil)
+	require.Error(t, err)
+
+	_, err = client.Execute("insert into vitess_test (intval, floatval, charval, binval) values (4, null, null, null)", nil)
+	require.NoError(t, err)
+
+	qr, err := client.Execute("select intval from vitess_test", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "[[INT32(1)] [INT32(2)] [INT32(3)] [INT32(4)]]", fmt.Sprintf("%v", qr.Rows))
+
+	err = client.Rollback()
+	require.NoError(t, err)
+
+	qr, err = client.Execute("select intval from vitess_test", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "[[INT32(1)] [INT32(2)] [INT32(3)]]", fmt.Sprintf("%v", qr.Rows))
+
+	qr2, err := client.Execute("select connection_id()", nil)
+	require.NoError(t, err)
+	require.Equal(t, qr1.Rows, qr2.Rows)
+
+	require.NoError(t, client.Release())
+}
