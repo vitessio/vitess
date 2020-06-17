@@ -18,6 +18,7 @@ package endtoend
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,7 +29,7 @@ import (
 
 //TODO: Add Counter checks in all the tests.
 
-func TestDifferentConnIDOnMultipleReserve(t *testing.T) {
+func TestMultipleReserveHaveDifferentConnection(t *testing.T) {
 	client1 := framework.NewClient()
 	client2 := framework.NewClient()
 
@@ -51,44 +52,6 @@ func TestDifferentConnIDOnMultipleReserve(t *testing.T) {
 	require.Equal(t, qrc1_1.Rows, qrc1_2.Rows)
 	require.Equal(t, qrc2_1.Rows, qrc2_2.Rows)
 
-	//expectedDiffs := []struct {
-	//	tag  string
-	//	diff int
-	//}{{
-	//	tag:  "Release/TotalCount",
-	//	diff: 2,
-	//}, {
-	//	tag:  "Transactions/Histograms/commit/Count",
-	//	diff: 2,
-	//}, {
-	//	tag:  "Queries/TotalCount",
-	//	diff: 4,
-	//}, {
-	//	tag:  "Queries/Histograms/BEGIN/Count",
-	//	diff: 0,
-	//}, {
-	//	tag:  "Queries/Histograms/COMMIT/Count",
-	//	diff: 0,
-	//}, {
-	//	tag:  "Queries/Histograms/Insert/Count",
-	//	diff: 1,
-	//}, {
-	//	tag:  "Queries/Histograms/DeleteLimit/Count",
-	//	diff: 1,
-	//}, {
-	//	tag:  "Queries/Histograms/Select/Count",
-	//	diff: 2,
-	//}}
-	//vend := framework.DebugVars()
-	//for _, expected := range expectedDiffs {
-	//	got := framework.FetchInt(vend, expected.tag)
-	//	want := framework.FetchInt(vstart, expected.tag) + expected.diff
-	//	// It's possible that other house-keeping transactions (like messaging)
-	//	// can happen during this test. So, don't perform equality comparisons.
-	//	if got < want {
-	//		t.Errorf("%s: %d, must be at least %d", expected.tag, got, want)
-	//	}
-	//}
 }
 
 func TestReserveBeginRelease(t *testing.T) {
@@ -117,7 +80,7 @@ func TestBeginReserveRelease(t *testing.T) {
 	require.NoError(t, err)
 	defer client.Release()
 
-	qr2, err := client.BeginExecute(query, nil)
+	qr2, err := client.ReserveExecute(query, nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, qr1.Rows, qr2.Rows)
 	assert.Equal(t, client.ReservedID(), client.TransactionID())
@@ -266,7 +229,7 @@ func TestReserveBeginRollbackAndBeginCommitAgain(t *testing.T) {
 		client.Release())
 }
 
-func TestReserveBeginCommitTryToReuseTxID(t *testing.T) {
+func TestReserveBeginCommitFailToReuseTxID(t *testing.T) {
 	client := framework.NewClient()
 
 	query := "select connection_id()"
@@ -288,7 +251,7 @@ func TestReserveBeginCommitTryToReuseTxID(t *testing.T) {
 		client.Release())
 }
 
-func TestReserveBeginRollbackTryToReuseTxID(t *testing.T) {
+func TestReserveBeginRollbackFailToReuseTxID(t *testing.T) {
 	client := framework.NewClient()
 
 	query := "select connection_id()"
@@ -310,7 +273,54 @@ func TestReserveBeginRollbackTryToReuseTxID(t *testing.T) {
 		client.Release())
 }
 
-func TestReserveReleaseAndTryToUseReservedIDAgain(t *testing.T) {
+func TestReserveBeginCommitFailToReuseOldReservedID(t *testing.T) {
+	client := framework.NewClient()
+
+	query := "select connection_id()"
+
+	_, err := client.ReserveBeginExecute(query, nil, nil)
+	require.NoError(t, err)
+
+	oldRID := client.ReservedID()
+
+	err = client.Commit()
+	require.NoError(t, err)
+	newRID := client.ReservedID()
+
+	client.SetReservedID(oldRID)
+
+	_, err = client.Execute(query, nil)
+	require.Error(t, err)
+
+	client.SetReservedID(newRID)
+	require.NoError(t,
+		client.Release())
+}
+
+func TestReserveBeginRollbackFailToReuseOldReservedID(t *testing.T) {
+	client := framework.NewClient()
+
+	query := "select connection_id()"
+
+	_, err := client.ReserveBeginExecute(query, nil, nil)
+	require.NoError(t, err)
+
+	oldRID := client.ReservedID()
+
+	err = client.Rollback()
+	require.NoError(t, err)
+	newRID := client.ReservedID()
+
+	client.SetReservedID(oldRID)
+	_, err = client.Execute(query, nil)
+	require.Error(t, err)
+
+	client.SetReservedID(newRID)
+	require.NoError(t,
+		client.Release())
+}
+
+func TestReserveReleaseAndFailToUseReservedIDAgain(t *testing.T) {
 	client := framework.NewClient()
 
 	query := "select 42"
@@ -328,7 +338,7 @@ func TestReserveReleaseAndTryToUseReservedIDAgain(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestReserveAndTryToRunTwiceConcurrently(t *testing.T) {
+func TestReserveAndFailToRunTwiceConcurrently(t *testing.T) {
 	client := framework.NewClient()
 
 	query := "select 42"
@@ -337,13 +347,137 @@ func TestReserveAndTryToRunTwiceConcurrently(t *testing.T) {
 	require.NoError(t, err)
 	defer client.Release()
 
+	// WaitGroup will make defer call to wait for go func to complete.
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
 		_, err = client.Execute("select sleep(1)", nil)
+		wg.Done()
 	}()
-
 	_, err2 := client.Execute("select sleep(1)", nil)
+	wg.Wait()
 
 	if err == nil && err2 == nil {
 		assert.Fail(t, "at least one execution should fail")
 	}
+}
+
+func TestBeginReserveCommitAndNewTransactionsOnSameReservedID(t *testing.T) {
+	client := framework.NewClient()
+
+	query := "select connection_id()"
+
+	qrTx, err := client.BeginExecute(query, nil)
+	require.NoError(t, err)
+
+	qrRID, err := client.ReserveExecute(query, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, qrTx.Rows, qrRID.Rows)
+
+	err = client.Commit()
+	require.NoError(t, err)
+
+	qrTx, err = client.BeginExecute(query, nil)
+	require.NoError(t, err)
+	require.Equal(t, qrTx.Rows, qrRID.Rows)
+
+	err = client.Commit()
+	require.NoError(t, err)
+
+	qrTx, err = client.BeginExecute(query, nil)
+	require.NoError(t, err)
+	require.Equal(t, qrTx.Rows, qrRID.Rows)
+
+	err = client.Rollback()
+	require.NoError(t, err)
+
+	require.NoError(t,
+		client.Release())
+}
+
+func TestBeginReserveRollbackAndNewTransactionsOnSameReservedID(t *testing.T) {
+	client := framework.NewClient()
+
+	query := "select connection_id()"
+
+	qrTx, err := client.BeginExecute(query, nil)
+	require.NoError(t, err)
+
+	qrRID, err := client.ReserveExecute(query, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, qrTx.Rows, qrRID.Rows)
+
+	err = client.Rollback()
+	require.NoError(t, err)
+
+	qrTx, err = client.BeginExecute(query, nil)
+	require.NoError(t, err)
+	require.Equal(t, qrTx.Rows, qrRID.Rows)
+
+	err = client.Commit()
+	require.NoError(t, err)
+
+	qrTx, err = client.BeginExecute(query, nil)
+	require.NoError(t, err)
+	require.Equal(t, qrTx.Rows, qrRID.Rows)
+
+	err = client.Rollback()
+	require.NoError(t, err)
+
+	require.NoError(t,
+		client.Release())
+}
+
+func TestBeginReserveReleaseAndFailToUseReservedIDAndTxIDAgain(t *testing.T) {
+	client := framework.NewClient()
+
+	query := "select 42"
+
+	_, err := client.BeginExecute(query, nil)
+	require.NoError(t, err)
+
+	_, err = client.ReserveExecute(query, nil, nil)
+	require.NoError(t, err)
+
+	rID := client.ReservedID()
+	txID := client.TransactionID()
+
+	require.NoError(t,
+		client.Release())
+
+	client.SetReservedID(rID)
+	_, err = client.Execute(query, nil)
+	require.Error(t, err)
+
+	client.SetReservedID(0)
+	client.SetTransactionID(txID)
+	_, err = client.Execute(query, nil)
+	require.Error(t, err)
+}
+
+func TestReserveBeginReleaseAndFailToUseReservedIDAndTxIDAgain(t *testing.T) {
+	client := framework.NewClient()
+
+	query := "select 42"
+
+	_, err := client.ReserveExecute(query, nil, nil)
+	require.NoError(t, err)
+
+	_, err = client.BeginExecute(query, nil)
+	require.NoError(t, err)
+
+	rID := client.ReservedID()
+	txID := client.TransactionID()
+
+	require.NoError(t,
+		client.Release())
+
+	client.SetReservedID(rID)
+	_, err = client.Execute(query, nil)
+	require.Error(t, err)
+
+	client.SetReservedID(0)
+	client.SetTransactionID(txID)
+	_, err = client.Execute(query, nil)
+	require.Error(t, err)
 }
