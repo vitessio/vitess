@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/proto/vttime"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -51,11 +53,10 @@ var (
 	waitForBackupInterval = flag.Duration("wait_for_backup_interval", 0, "(init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear")
 
 	// Flags for PITR
-	restoreToTimeStr = flag.String("restore_to_time", "", "(init restore parameter) will restore to the specified time, it depends on the binlog related flags.")
-	binlogHost       = flag.String("binlog_host", "", "(init restore parameter) host name of binlog server.")
-	binlogPort       = flag.Int("binlog_port", 0, "(init restore parameter) port of binlog server.")
-	binlogUser       = flag.String("binlog_user", "", "(init restore parameter) username of binlog server.")
-	binlogPwd        = flag.String("binlog_password", "", "(init restore parameter) password of binlog server.")
+	binlogHost = flag.String("binlog_host", "", "(init restore parameter) host name of binlog server.")
+	binlogPort = flag.Int("binlog_port", 0, "(init restore parameter) port of binlog server.")
+	binlogUser = flag.String("binlog_user", "", "(init restore parameter) username of binlog server.")
+	binlogPwd  = flag.String("binlog_password", "", "(init restore parameter) password of binlog server.")
 )
 
 // RestoreData is the main entry point for backup restore.
@@ -139,8 +140,8 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 		pos = backupManifest.Position
 	}
 	// If restore_to_time is set , then apply the incremental change
-	if restoreToTimeStr != nil {
-		err = agent.restoreToTimeFromBinlog(ctx, pos)
+	if keyspaceInfo.SnapshotTime != nil {
+		err = agent.restoreToTimeFromBinlog(ctx, pos, keyspaceInfo.SnapshotTime)
 		if err != nil {
 			return nil
 		}
@@ -185,29 +186,27 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	return nil
 }
 
-func (agent *ActionAgent) restoreToTimeFromBinlog(ctx context.Context, pos mysql.Position) error {
+func (agent *ActionAgent) restoreToTimeFromBinlog(ctx context.Context, pos mysql.Position, restoreTime *vttime.Time) error {
 	// validate the dependent settings
 	if *binlogHost == "" || *binlogPort <= 0 || *binlogUser == "" {
 		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "restore_to_time flag depends on binlog server flags(binlog_host, binlog_port, binlog_user, binlog_password)")
 	}
-	restoreTime, err := time.Parse(time.RFC3339, *restoreToTimeStr)
-	if err != nil {
-		return err
-	}
-	if restoreTime.Second() > time.Now().Second() {
-		log.Warning("Restore time request is a future date, so skipping it")
-		return nil
-	}
-	restoreTimePb := logutil.TimeToProto(restoreTime)
-	println(restoreTimePb.Seconds)
 
-	gtid := agent.getGTIDFromTimestamp(ctx, pos, restoreTimePb.Seconds)
+	//if restoreTime.Seconds > int64(time.Now().Second()) {
+	//	println(restoreTime.Seconds)
+	//	println(time.Now().Second())
+	//	log.Warning("Restore time request is a future date, so skipping it")
+	//	return nil
+	//}
+	println("restoring from below time")
+	println(restoreTime.Seconds)
+	gtid := agent.getGTIDFromTimestamp(ctx, pos, restoreTime.Seconds)
 	if gtid == "" {
 		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "unable to fetch the GTID for the specified restore_to_time")
 	}
 
 	println(fmt.Sprintf("going to restore upto the gtid - %s", gtid))
-	err = agent.replicateUptoGTID(ctx, gtid)
+	err := agent.catchupToGTID(ctx, gtid)
 	if err != nil {
 		return vterrors.Wrapf(err, "unable to replicate upto specified gtid : %s", gtid)
 	}
@@ -227,7 +226,7 @@ func (agent *ActionAgent) getGTIDFromTimestamp(ctx context.Context, pos mysql.Po
 		Host: connParams.Host,
 		Port: connParams.Port,
 	}
-	dbCfgs.SetDbParams(*connParams)
+	dbCfgs.SetDbParams(*connParams, *connParams)
 	vsClient := vreplication.NewReplicaConnector(connParams)
 
 	filter := &binlogdatapb.Filter{
@@ -235,23 +234,37 @@ func (agent *ActionAgent) getGTIDFromTimestamp(ctx context.Context, pos mysql.Po
 			Match: "/.*",
 		}},
 	}
-	gtid := ""
+
 	// Todo: we need to safely return from vstream if it takes more time
-	// Todo: we need to return from vstream , so that we return the GTID
-	_ = vsClient.VStream(ctx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
-		for _, event := range events {
-			if event.Gtid != "" && event.Timestamp > restoreTime {
-				gtid = event.Gtid
-				break
+	found := make(chan string)
+	go func() {
+		err := vsClient.VStream(ctx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
+			for _, event := range events {
+				if event.Gtid != "" && event.Timestamp > restoreTime {
+					found <- event.Gtid
+					break
+				}
 			}
+			return nil
+		})
+		if err != nil {
+			found <- ""
 		}
-		return nil
-	})
-	return gtid
+	}()
+	timeout := time.Now().Add(60 * time.Second)
+	for time.Now().Before(timeout) {
+		select {
+		case <-found:
+			return <-found
+		default:
+			time.Sleep(300 * time.Millisecond)
+		}
+	}
+	return ""
 }
 
 // replicateUptoGTID replicates upto specified gtid from binlog server
-func (agent *ActionAgent) replicateUptoGTID(ctx context.Context, gtid string) error {
+func (agent *ActionAgent) catchupToGTID(ctx context.Context, gtid string) error {
 	// TODO: we can use agent.MysqlDaemon.SetMaster , but it uses replDbConfig
 	cmds := []string{
 		"STOP SLAVE FOR CHANNEL '' ",
@@ -263,6 +276,7 @@ func (agent *ActionAgent) replicateUptoGTID(ctx context.Context, gtid string) er
 	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
 		return vterrors.Wrap(err, "failed to reset slave")
 	}
+	println("it should have cought up")
 	// TODO: Wait for the replication to happen and then reset the slave, so that we don't be connected to binlog server
 	return nil
 }
