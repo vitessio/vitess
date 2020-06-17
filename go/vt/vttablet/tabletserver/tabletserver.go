@@ -808,17 +808,19 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 }
 
 // Rollback rollsback the specified transaction.
-func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (err error) {
-	return tsv.execRequest(
+func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (newReservedID int64, err error) {
+	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Rollback", "rollback", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("ROLLBACK", time.Now())
 			logStats.TransactionID = transactionID
-			return tsv.te.Rollback(ctx, transactionID)
+			newReservedID, err = tsv.te.Rollback(ctx, transactionID)
+			return err
 		},
 	)
+	return newReservedID, err
 }
 
 // Prepare prepares the specified transaction.
@@ -1449,7 +1451,8 @@ func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, co
 			}
 			// Rollback to cleanup the transaction before returning to the pool.
 			logStats.TransactionID = txID
-			return tsv.te.Rollback(ctx, txID)
+			_, err := tsv.te.Rollback(ctx, txID)
+			return err
 		},
 	)
 }

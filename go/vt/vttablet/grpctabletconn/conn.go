@@ -246,11 +246,11 @@ func (conn *gRPCQueryClient) Commit(ctx context.Context, target *querypb.Target,
 }
 
 // Rollback rolls back the ongoing transaction.
-func (conn *gRPCQueryClient) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
+func (conn *gRPCQueryClient) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
-		return tabletconn.ConnClosed
+		return 0, tabletconn.ConnClosed
 	}
 
 	req := &querypb.RollbackRequest{
@@ -259,11 +259,11 @@ func (conn *gRPCQueryClient) Rollback(ctx context.Context, target *querypb.Targe
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 		TransactionId:     transactionID,
 	}
-	_, err := conn.c.Rollback(ctx, req)
+	resp, err := conn.c.Rollback(ctx, req)
 	if err != nil {
-		return tabletconn.ErrorFromGRPC(err)
+		return 0, tabletconn.ErrorFromGRPC(err)
 	}
-	return nil
+	return resp.ReservedId, nil
 }
 
 // Prepare executes a Prepare on the ongoing transaction.

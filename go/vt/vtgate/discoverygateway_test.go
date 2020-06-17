@@ -87,7 +87,8 @@ func TestDiscoveryGatewayCommit(t *testing.T) {
 
 func TestDiscoveryGatewayRollback(t *testing.T) {
 	testDiscoveryGatewayTransact(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
-		return dg.Rollback(context.Background(), target, 1)
+		_, err := dg.Rollback(context.Background(), target, 1)
+		return err
 	})
 }
 

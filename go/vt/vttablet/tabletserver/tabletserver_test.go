@@ -459,14 +459,14 @@ func TestBeginOnReplica(t *testing.T) {
 	txID, alias, err := tsv.Begin(ctx, &target1, &options)
 	require.NoError(t, err, "failed to create read only tx on replica")
 	assert.Equal(t, tsv.alias, *alias, "Wrong tablet alias from Begin")
-	err = tsv.Rollback(ctx, &target1, txID)
+	_, err = tsv.Rollback(ctx, &target1, txID)
 	require.NoError(t, err, "failed to rollback read only tx")
 
 	// test that we can still create transactions even in read-only mode
 	options = querypb.ExecuteOptions{}
 	txID, _, err = tsv.Begin(ctx, &target1, &options)
 	require.NoError(t, err, "expected write tx to be allowed")
-	err = tsv.Rollback(ctx, &target1, txID)
+	_, err = tsv.Rollback(ctx, &target1, txID)
 	require.NoError(t, err)
 }
 
@@ -818,7 +818,7 @@ func TestTabletServerCommitRollbackFail(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Fatalf("Commit err: %v, want %v", err, want)
 	}
-	err = tsv.Rollback(ctx, &target, -1)
+	_, err = tsv.Rollback(ctx, &target, -1)
 	if err == nil || err.Error() != want {
 		t.Fatalf("Commit err: %v, want %v", err, want)
 	}
@@ -854,7 +854,7 @@ func TestTabletServerRollback(t *testing.T) {
 	if _, err := tsv.Execute(ctx, &target, executeSQL, nil, transactionID, 0, nil); err != nil {
 		t.Fatalf("failed to execute query: %s: %v", executeSQL, err)
 	}
-	if err := tsv.Rollback(ctx, &target, transactionID); err != nil {
+	if _, err := tsv.Rollback(ctx, &target, transactionID); err != nil {
 		t.Fatalf("call TabletServer.Rollback failed: %v", err)
 	}
 }

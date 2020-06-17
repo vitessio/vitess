@@ -130,27 +130,6 @@ func NewTransactionalQueryResultReaderForTablet(ctx context.Context, ts *topo.Se
 	}, nil
 }
 
-// RollbackTransaction rolls back the transaction
-func RollbackTransaction(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, txID int64) error {
-	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	tablet, err := ts.GetTablet(shortCtx, tabletAlias)
-	cancel()
-	if err != nil {
-		return err
-	}
-
-	conn, err := tabletconn.GetDialer()(tablet.Tablet, grpcclient.FailFast(false))
-	if err != nil {
-		return err
-	}
-
-	return conn.Rollback(ctx, &querypb.Target{
-		Keyspace:   tablet.Tablet.Keyspace,
-		Shard:      tablet.Tablet.Shard,
-		TabletType: tablet.Tablet.Type,
-	}, txID)
-}
-
 // Next returns the next result on the stream. It implements ResultReader.
 func (qrr *QueryResultReader) Next() (*sqltypes.Result, error) {
 	return qrr.output.Recv()
@@ -675,7 +654,8 @@ func createTransactions(ctx context.Context, numberOfScanners int, wr *wrangler.
 			if err != nil {
 				return err
 			}
-			return queryService.Rollback(ctx, target, tx)
+			_, err = queryService.Rollback(ctx, target, tx)
+			return err
 		})
 
 		scanners[i] = tx

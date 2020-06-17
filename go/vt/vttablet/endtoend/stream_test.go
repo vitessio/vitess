@@ -148,8 +148,7 @@ func populateBigData(client *framework.QueryClient) error {
 			return err
 		}
 	}
-	_, err = client.Commit()
-	return err
+	return client.Commit()
 }
 
 func TestStreamError(t *testing.T) {

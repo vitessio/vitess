@@ -181,14 +181,32 @@ func TestCommitOnReserveConn(t *testing.T) {
 	defer client.Release()
 
 	oldRID := client.ReservedID()
-	newRID, err := client.Commit()
+	err = client.Commit()
 	require.NoError(t, err)
-	assert.Equal(t, newRID, client.ReservedID(), "returned and saved reservedID must be the same")
 	assert.NotEqual(t, client.ReservedID(), oldRID, "reservedID must change after commit")
 	assert.EqualValues(t, 0, client.TransactionID(), "transactionID should be 0 after commit")
 
 	qr2, err := client.Execute(query, nil)
 	require.NoError(t, err)
 	assert.Equal(t, qr1.Rows, qr2.Rows)
-	// TODO test that new connection obtained after Commit has been tainted correctly
+}
+
+func TestRollbackOnReserveConn(t *testing.T) {
+	client := framework.NewClient()
+
+	query := "select connection_id()"
+
+	qr1, err := client.ReserveBeginExecute(query, nil, nil)
+	require.NoError(t, err)
+	defer client.Release()
+
+	oldRID := client.ReservedID()
+	err = client.Rollback()
+	require.NoError(t, err)
+	assert.NotEqual(t, client.ReservedID(), oldRID, "reservedID must change after rollback")
+	assert.EqualValues(t, 0, client.TransactionID(), "transactionID should be 0 after commit")
+
+	qr2, err := client.Execute(query, nil)
+	require.NoError(t, err)
+	assert.Equal(t, qr1.Rows, qr2.Rows)
 }

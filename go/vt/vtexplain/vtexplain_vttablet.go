@@ -149,7 +149,7 @@ func (t *explainTablet) Commit(ctx context.Context, target *querypb.Target, tran
 }
 
 // Rollback is part of the QueryService interface.
-func (t *explainTablet) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
+func (t *explainTablet) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
 	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
 	t.mu.Unlock()

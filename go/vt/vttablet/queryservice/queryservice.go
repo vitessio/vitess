@@ -49,7 +49,7 @@ type QueryService interface {
 	Commit(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error)
 
 	// Rollback aborts the current transaction
-	Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error
+	Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error)
 
 	// Prepare prepares the specified transaction.
 	Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error)

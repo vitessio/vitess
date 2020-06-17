@@ -193,9 +193,9 @@ func (sbc *SandboxConn) Commit(ctx context.Context, target *querypb.Target, tran
 }
 
 // Rollback is part of the QueryService interface.
-func (sbc *SandboxConn) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
+func (sbc *SandboxConn) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
 	sbc.RollbackCount.Add(1)
-	return sbc.getError()
+	return 0, sbc.getError()
 }
 
 // Prepare prepares the specified transaction.

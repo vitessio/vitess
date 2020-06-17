@@ -175,9 +175,9 @@ func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, t
 const rollbackTransactionID int64 = 999044
 
 // Rollback is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
+func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
 	if f.HasError {
-		return f.TabletError
+		return 0, f.TabletError
 	}
 	if f.Panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -186,7 +186,7 @@ func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target,
 	if transactionID != rollbackTransactionID {
 		f.t.Errorf("Rollback: invalid TransactionId: got %v expected %v", transactionID, rollbackTransactionID)
 	}
-	return nil
+	return 0, nil
 }
 
 // Dtid is a test dtid

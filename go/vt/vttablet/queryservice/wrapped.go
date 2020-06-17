@@ -93,20 +93,30 @@ func (ws *wrappedService) Begin(ctx context.Context, target *querypb.Target, opt
 	return transactionID, alias, err
 }
 
-func (ws *wrappedService) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (reservedID int64, err error) {
-	err = ws.wrapper(ctx, target, ws.impl, "Commit", true, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
+func (ws *wrappedService) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
+	var rID int64
+	err := ws.wrapper(ctx, target, ws.impl, "Commit", true, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
-		reservedID, innerErr = conn.Commit(ctx, target, transactionID)
+		rID, innerErr = conn.Commit(ctx, target, transactionID)
 		return canRetry(ctx, innerErr), innerErr
 	})
-	return reservedID, err
+	if err != nil {
+		return 0, err
+	}
+	return rID, nil
 }
 
-func (ws *wrappedService) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
-	return ws.wrapper(ctx, target, ws.impl, "Rollback", true, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
-		innerErr := conn.Rollback(ctx, target, transactionID)
+func (ws *wrappedService) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
+	var rID int64
+	err := ws.wrapper(ctx, target, ws.impl, "Rollback", true, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
+		var innerErr error
+		rID, innerErr = conn.Rollback(ctx, target, transactionID)
 		return canRetry(ctx, innerErr), innerErr
 	})
+	if err != nil {
+		return 0, err
+	}
+	return rID, nil
 }
 
 func (ws *wrappedService) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) error {
