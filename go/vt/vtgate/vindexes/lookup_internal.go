@@ -189,11 +189,11 @@ func (lkp *lookupInternal) createCustom(vcursor VCursor, rowsColValues [][]sqlty
 			buf.WriteString(", (")
 		}
 		for colIdx, colID := range colIds {
-			fromStr := lkp.FromColumns[colIdx] + strconv.Itoa(rowIdx)
+			fromStr := lkp.FromColumns[colIdx] + "_" + strconv.Itoa(rowIdx)
 			bindVars[fromStr] = sqltypes.ValueBindVariable(colID)
 			buf.WriteString(":" + fromStr + ", ")
 		}
-		toStr := lkp.To + strconv.Itoa(rowIdx)
+		toStr := lkp.To + "_" + strconv.Itoa(rowIdx)
 		buf.WriteString(":" + toStr + ")")
 		bindVars[toStr] = sqltypes.ValueBindVariable(toValues[rowIdx])
 	}
