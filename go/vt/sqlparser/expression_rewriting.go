@@ -17,6 +17,8 @@ limitations under the License.
 package sqlparser
 
 import (
+	"strings"
+
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -36,7 +38,7 @@ type BindVarNeeds struct {
 	NeedLastInsertID         bool
 	NeedDatabase             bool
 	NeedFoundRows            bool
-	NeedUserDefinedVariables bool
+	NeedUserDefinedVariables []string
 }
 
 // RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries
@@ -55,19 +57,18 @@ func RewriteAST(in Statement) (*RewriteASTResult, error) {
 	r := &RewriteASTResult{
 		AST: out,
 	}
-	if _, ok := er.bindVars[LastInsertIDName]; ok {
-		r.NeedLastInsertID = true
+	for k := range er.bindVars {
+		switch k {
+		case LastInsertIDName:
+			r.NeedLastInsertID = true
+		case DBVarName:
+			r.NeedDatabase = true
+		case FoundRowsName:
+			r.NeedFoundRows = true
+		default:
+			r.NeedUserDefinedVariables = append(r.NeedUserDefinedVariables, k)
+		}
 	}
-	if _, ok := er.bindVars[DBVarName]; ok {
-		r.NeedDatabase = true
-	}
-	if _, ok := er.bindVars[FoundRowsName]; ok {
-		r.NeedFoundRows = true
-	}
-	if _, ok := er.bindVars[UserDefinedVariableName]; ok {
-		r.NeedUserDefinedVariables = true
-	}
-
 	return r, nil
 }
 
@@ -145,39 +146,46 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 			return false
 		}
 	case *FuncExpr:
-		switch {
-		// last_insert_id() -> :__lastInsertId
-		case node.Name.EqualString("last_insert_id"):
-			if len(node.Exprs) > 0 { //last_insert_id(x)
-				er.err = vterrors.New(vtrpc.Code_UNIMPLEMENTED, "Argument to LAST_INSERT_ID() not supported")
-			} else {
-				cursor.Replace(bindVarExpression(LastInsertIDName))
-				er.needBindVarFor(LastInsertIDName)
-			}
-		case er.shouldRewriteDatabaseFunc &&
-			(node.Name.EqualString("database") ||
-				node.Name.EqualString("schema")):
-			if len(node.Exprs) > 0 {
-				er.err = vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Syntax error. %s() takes no arguments", node.Name.String())
-			} else {
-				cursor.Replace(bindVarExpression(DBVarName))
-				er.needBindVarFor(DBVarName)
-			}
-		case node.Name.EqualString("found_rows"):
-			if len(node.Exprs) > 0 {
-				er.err = vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Arguments to FOUND_ROWS() not supported")
-			} else {
-				cursor.Replace(bindVarExpression(FoundRowsName))
-				er.needBindVarFor(FoundRowsName)
-			}
-		}
+		er.funcRewrite(cursor, node)
 	case *ColName:
 		if node.Name.at == SingleAt {
-			cursor.Replace(bindVarExpression(UserDefinedVariableName + node.Name.CompliantName()))
-			er.needBindVarFor(UserDefinedVariableName)
+			udv := strings.ToLower(node.Name.CompliantName())
+			cursor.Replace(bindVarExpression(UserDefinedVariableName + udv))
+			er.needBindVarFor(udv)
 		}
 	}
 	return true
+}
+
+func (er *expressionRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
+	switch {
+	// last_insert_id() -> :__lastInsertId
+	case node.Name.EqualString("last_insert_id"):
+		if len(node.Exprs) > 0 { //last_insert_id(x)
+			er.err = vterrors.New(vtrpc.Code_UNIMPLEMENTED, "Argument to LAST_INSERT_ID() not supported")
+		} else {
+			cursor.Replace(bindVarExpression(LastInsertIDName))
+			er.needBindVarFor(LastInsertIDName)
+		}
+	// database() -> :__vtdbname
+	case er.shouldRewriteDatabaseFunc &&
+		(node.Name.EqualString("database") ||
+			node.Name.EqualString("schema")):
+		if len(node.Exprs) > 0 {
+			er.err = vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Syntax error. %s() takes no arguments", node.Name.String())
+		} else {
+			cursor.Replace(bindVarExpression(DBVarName))
+			er.needBindVarFor(DBVarName)
+		}
+	// found_rows() -> :__vtfrows
+	case node.Name.EqualString("found_rows"):
+		if len(node.Exprs) > 0 {
+			er.err = vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Arguments to FOUND_ROWS() not supported")
+		} else {
+			cursor.Replace(bindVarExpression(FoundRowsName))
+			er.needBindVarFor(FoundRowsName)
+		}
+	}
 }
 
 // instead of creating new objects, we'll reuse this one
