@@ -23,13 +23,14 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -397,7 +398,8 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 			}
 			for colIdx, vindexKey := range rowColumnKeys {
 				col := colVindex.Columns[colIdx]
-				bindVars[insertVarName(col, rowNum)] = sqltypes.ValueBindVariable(vindexKey)
+				name := InsertVarName(col, rowNum)
+				bindVars[name] = sqltypes.ValueBindVariable(vindexKey)
 			}
 		}
 	}
@@ -514,9 +516,9 @@ func (ins *Insert) processOwned(vcursor VCursor, vindexColumnsKeys [][]sqltypes.
 
 // processUnowned either reverse maps or validates the values for an unowned column.
 func (ins *Insert) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltypes.Value, colVindex *vindexes.ColumnVindex, ksids [][]byte) error {
-	var reverseIndexes []int
+	reverseIndexes := []int{}
 	var reverseKsids [][]byte
-	var verifyIndexes []int
+	verifyIndexes := []int{}
 	var verifyKeys [][]sqltypes.Value
 	var verifyKsids [][]byte
 
@@ -580,8 +582,10 @@ func (ins *Insert) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltype
 	return nil
 }
 
-func insertVarName(col sqlparser.ColIdent, rowNum int) string {
-	return "_" + col.CompliantName() + strconv.Itoa(rowNum)
+//InsertVarName returns a name for the bind var for this column. This method is used by the planner and engine,
+//to make sure they both produce the same names
+func InsertVarName(col sqlparser.ColIdent, rowNum int) string {
+	return fmt.Sprintf("_%s_%d", col.CompliantName(), rowNum)
 }
 
 func (ins *Insert) description() PrimitiveDescription {
