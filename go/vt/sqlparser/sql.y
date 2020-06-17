@@ -284,7 +284,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields
 %type <showFilter> like_or_where_opt like_opt
 %type <byt> exists_opt not_exists_opt
-%type <str> constraint constraint_opt
+%type <str> key_type key_type_opt
 %type <empty> non_add_drop_or_rename_operation
 %type <empty> to_opt to_or_as as_opt column_opt describe
 %type <empty> skip_to_end ddl_skip_to_end
@@ -308,7 +308,7 @@ func skipToEnd(yylex interface{}) {
 %type <columnDefinition> column_definition
 %type <indexDefinition> index_definition
 %type <constraintDefinition> constraint_definition
-%type <str> index_or_key indexes_or_keys
+%type <str> index_or_key indexes_or_keys index_or_key_opt
 %type <str> from_or_in show_database_opt
 %type <str> name_opt
 %type <str> equal_opt
@@ -618,7 +618,7 @@ create_statement:
     $1.OptLike = $2
     $$ = $1
   }
-| CREATE constraint_opt INDEX sql_id using_opt ON table_name '(' index_column_list ')' index_option_list_opt
+| CREATE key_type_opt INDEX sql_id using_opt ON table_name '(' index_column_list ')' index_option_list_opt
   {
     $$ = &DDL{Action: AlterStr, Table: $7, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $4, Using: $5, Type: $2, Columns: $9, Options: $11}}
   }
@@ -1304,13 +1304,22 @@ indexes_or_keys:
   }
 
 index_or_key:
-    INDEX
+  INDEX
   {
     $$ = string($1)
   }
-  | KEY
+| KEY
   {
     $$ = string($1)
+  }
+
+index_or_key_opt:
+  {
+    $$ = ""
+  }
+| index_or_key
+  {
+    $$ = $1
   }
 
 name_opt:
@@ -1333,9 +1342,9 @@ index_column_list:
   }
 
 index_column:
-  sql_id length_opt
+  sql_id length_opt asc_desc_opt
   {
-      $$ = &IndexColumn{Column: $1, Length: $2}
+      $$ = &IndexColumn{Column: $1, Length: $2, Order: $3}
   }
 
 constraint_definition:
@@ -1529,9 +1538,9 @@ alter_table_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $7,  Using: $8, Columns: $10, Options: $12}}
   }
-| ALTER ignore_opt TABLE table_name ADD constraint_symbol_opt constraint index_or_key sql_id using_opt '(' index_column_list ')' index_option_list_opt
+| ALTER ignore_opt TABLE table_name ADD constraint_symbol_opt key_type index_or_key_opt name_opt using_opt '(' index_column_list ')' index_option_list_opt
   {
-    $$ = &DDL{Action: AlterStr, Table: $4, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $9, Type: $7, Using: $10, Columns: $12, Options: $14}}
+    $$ = &DDL{Action: AlterStr, Table: $4, IndexSpec: &IndexSpec{Action: CreateStr, ToName: NewColIdent($9), Type: $7, Using: $10, Columns: $12, Options: $14}}
   }
 | ALTER ignore_opt TABLE table_name DROP index_or_key sql_id
   {
@@ -3515,7 +3524,7 @@ to_opt:
 | AS
   { $$ = struct{}{} }
 
-constraint:
+key_type:
   UNIQUE
   { $$ = UniqueStr }
 | FULLTEXT
@@ -3523,9 +3532,9 @@ constraint:
 | SPATIAL
   { $$ = SpatialStr }
 
-constraint_opt:
+key_type_opt:
   { $$ = "" }
-| constraint
+| key_type
   { $$ = $1 }
 
 using_opt:
