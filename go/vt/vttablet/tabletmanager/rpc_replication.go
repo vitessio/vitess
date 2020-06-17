@@ -118,8 +118,6 @@ func (agent *ActionAgent) stopSlaveIOThreadLocked(ctx context.Context) error {
 }
 
 // StopSlaveMinimum will stop the slave after it reaches at least the
-
-// StopSlaveMinimum will stop the slave after it reaches at least the
 // provided position. Works both when Vitess manages
 // replication or not (using hook if not).
 func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error) {
