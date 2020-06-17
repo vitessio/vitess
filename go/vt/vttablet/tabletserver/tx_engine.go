@@ -243,7 +243,7 @@ func (te *TxEngine) Begin(ctx context.Context, reserveID int64, options *querypb
 	return conn.ID(), beginSQL, err
 }
 
-// Commit commits the specified transaction.
+// Commit commits the specified transaction and renew connection id if exists.
 func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Commit")
 	defer span.Finish()
@@ -251,28 +251,21 @@ func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (int64, str
 	if err != nil {
 		return 0, "", err
 	}
-	// check if coneection is tainted
-	// and if yes, release and renew after commit?
-	var newReservedID int64
-	if !conn.IsTainted() {
-		newReservedID = 0
-		defer conn.Release(tx.TxCommit)
-	}
 	queries, err := te.txPool.Commit(ctx, conn)
 	if err != nil {
+		conn.Release(tx.TxCommit)
 		return 0, "", err
 	}
-	if conn.IsTainted() {
-		err = conn.Renew()
-		if err != nil {
-			conn.Releasef("error from RenewConn:%v", err)
-		} else {
-			// must taint the new connectionID
-			conn.Taint()
-			newReservedID = conn.ConnID
-		}
+	if !conn.IsTainted() {
+		conn.Release(tx.TxCommit)
+		return 0, queries, nil
 	}
-	return newReservedID, queries, nil
+	err = conn.Renew()
+	if err != nil {
+		conn.Release(tx.ConnRenewFail)
+		return 0, "", err
+	}
+	return conn.ConnID, queries, nil
 }
 
 // Rollback rolls back the specified transaction.
