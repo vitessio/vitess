@@ -22,8 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
-
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"golang.org/x/net/context"
@@ -147,7 +145,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
 }
 
-func (qre *QueryExecutor) execAutocommit(f func(conn tx.IStatefulConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
+func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
 	if qre.options == nil {
 		qre.options = &querypb.ExecuteOptions{}
 	}
@@ -163,7 +161,7 @@ func (qre *QueryExecutor) execAutocommit(f func(conn tx.IStatefulConnection) (*s
 	return f(conn)
 }
 
-func (qre *QueryExecutor) execAsTransaction(f func(conn tx.IStatefulConnection) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	conn, beginSQL, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0)
 	if err != nil {
 		return nil, err
@@ -191,7 +189,7 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn tx.IStatefulConnection) 
 	return result, nil
 }
 
-func (qre *QueryExecutor) txConnExec(conn tx.IStatefulConnection) (*sqltypes.Result, error) {
+func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result, error) {
 	switch qre.plan.PlanID {
 	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete:
 		return qre.txFetch(conn, true)
@@ -364,7 +362,7 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 	return nil
 }
 
-func (qre *QueryExecutor) execDDL(conn tx.IStatefulConnection) (*sqltypes.Result, error) {
+func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, error) {
 	defer func() {
 		if err := qre.tsv.se.Reload(qre.ctx); err != nil {
 			log.Errorf("failed to reload schema %v", err)
@@ -383,7 +381,7 @@ func (qre *QueryExecutor) execDDL(conn tx.IStatefulConnection) (*sqltypes.Result
 }
 
 // BeginAgain commits the existing transaction and begins a new one
-func (*QueryExecutor) BeginAgain(ctx context.Context, dc tx.IStatefulConnection) error {
+func (*QueryExecutor) BeginAgain(ctx context.Context, dc *StatefulConnection) error {
 	if dc.IsClosed() || dc.TxProperties().Autocommit {
 		return nil
 	}
@@ -410,7 +408,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	t.SequenceInfo.Lock()
 	defer t.SequenceInfo.Unlock()
 	if t.SequenceInfo.NextVal == 0 || t.SequenceInfo.NextVal+inc > t.SequenceInfo.LastVal {
-		_, err := qre.execAsTransaction(func(conn tx.IStatefulConnection) (*sqltypes.Result, error) {
+		_, err := qre.execAsTransaction(func(conn *StatefulConnection) (*sqltypes.Result, error) {
 			query := fmt.Sprintf("select next_id, cache from %s where id = 0 for update", sqlparser.String(tableName))
 			qr, err := qre.execSQL(conn, query, false)
 			if err != nil {
@@ -490,7 +488,7 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 	return qre.dbConnFetch(conn, qre.plan.FullQuery, qre.bindVars)
 }
 
-func (qre *QueryExecutor) execDMLLimit(conn tx.IStatefulConnection) (*sqltypes.Result, error) {
+func (qre *QueryExecutor) execDMLLimit(conn *StatefulConnection) (*sqltypes.Result, error) {
 	maxrows := qre.tsv.qe.maxResultSize.Get()
 	qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
 	result, err := qre.txFetch(conn, true)
@@ -602,7 +600,7 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 }
 
 // txFetch fetches from a TxConnection.
-func (qre *QueryExecutor) txFetch(conn tx.IStatefulConnection, record bool) (*sqltypes.Result, error) {
+func (qre *QueryExecutor) txFetch(conn *StatefulConnection, record bool) (*sqltypes.Result, error) {
 	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
 	if err != nil {
 		return nil, err

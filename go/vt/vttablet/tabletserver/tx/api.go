@@ -17,17 +17,13 @@ limitations under the License.
 package tx
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 type (
@@ -37,40 +33,13 @@ type (
 	//DTID as type string
 	DTID = string
 
-	//IStatefulConnection is a connection where the user is trusted to clean things up after using the connection
-	IStatefulConnection interface {
-		// Executes a query on the connection
-		Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
-
-		// Release is used after we are done with the connection and will not use it again
-		Release(reason ReleaseReason)
-
-		// Releasef is used after we are done with the connection and will not use it again
-		Releasef(format string, params ...interface{})
-
-		// Unlock marks the connection as not in use. The connection remains active.
-		Unlock()
-
-		IsInTransaction() bool
-
-		Close()
-
-		IsClosed() bool
-
-		String() string
-
-		TxProperties() *Properties
-
-		ID() ConnID
-
-		UnderlyingdDBConn() *connpool.DBConn
-
-		CleanTxState()
-
-		Stats() *tabletenv.Stats
-
-		//Taint taints the existing connection.
-		Taint()
+	//EngineStateMachine is used to control the state the transactional engine -
+	//whether new connections and/or transactions are allowed or not.
+	EngineStateMachine interface {
+		Init() error
+		AcceptReadWrite() error
+		AcceptReadOnly() error
+		StopGently()
 	}
 
 	// ReleaseReason as type int
