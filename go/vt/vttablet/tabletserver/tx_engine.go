@@ -269,16 +269,29 @@ func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (int64, str
 }
 
 // Rollback rolls back the specified transaction.
-func (te *TxEngine) Rollback(ctx context.Context, transactionID int64) error {
+func (te *TxEngine) Rollback(ctx context.Context, transactionID int64) (int64, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Rollback")
 	defer span.Finish()
 
 	conn, err := te.txPool.GetAndLock(transactionID, "for rollback")
 	if err != nil {
-		return err
+		return 0, err
 	}
-	defer conn.Release(tx.TxRollback)
-	return te.txPool.Rollback(ctx, conn)
+	err = te.txPool.Rollback(ctx, conn)
+	if err != nil {
+		conn.Release(tx.TxRollback)
+		return 0, err
+	}
+	if !conn.IsTainted() {
+		conn.Release(tx.TxRollback)
+		return 0, nil
+	}
+	err = conn.Renew()
+	if err != nil {
+		conn.Release(tx.ConnRenewFail)
+		return 0, err
+	}
+	return conn.ConnID, nil
 }
 
 func (te *TxEngine) unknownStateError() error {

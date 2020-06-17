@@ -95,20 +95,25 @@ func (client *QueryClient) Begin(clientFoundRows bool) error {
 }
 
 // Commit commits the current transaction.
-func (client *QueryClient) Commit() (int64, error) {
+func (client *QueryClient) Commit() error {
 	defer func() { client.transactionID = 0 }()
 	rID, err := client.server.Commit(client.ctx, &client.target, client.transactionID)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	client.reservedID = rID
-	return rID, nil
+	return nil
 }
 
 // Rollback rolls back the current transaction.
 func (client *QueryClient) Rollback() error {
 	defer func() { client.transactionID = 0 }()
-	return client.server.Rollback(client.ctx, &client.target, client.transactionID)
+	rID, err := client.server.Rollback(client.ctx, &client.target, client.transactionID)
+	if err != nil {
+		return err
+	}
+	client.reservedID = rID
+	return nil
 }
 
 // Prepare executes a prepare on the current transaction.

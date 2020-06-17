@@ -166,8 +166,7 @@ func exec(client *QueryClient, query string, bv map[string]*querypb.BindVariable
 	case "begin":
 		return nil, client.Begin(false)
 	case "commit":
-		_, err := client.Commit()
-		return nil, err
+		return nil, client.Commit()
 	case "rollback":
 		return nil, client.Rollback()
 	}

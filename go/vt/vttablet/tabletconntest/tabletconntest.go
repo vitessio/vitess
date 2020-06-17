@@ -160,7 +160,7 @@ func testRollback(t *testing.T, conn queryservice.QueryService, f *FakeQueryServ
 	t.Log("testRollback")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	err := conn.Rollback(ctx, TestTarget, rollbackTransactionID)
+	_, err := conn.Rollback(ctx, TestTarget, rollbackTransactionID)
 	if err != nil {
 		t.Fatalf("Rollback failed: %v", err)
 	}
@@ -170,7 +170,8 @@ func testRollbackError(t *testing.T, conn queryservice.QueryService, f *FakeQuer
 	t.Log("testRollbackError")
 	f.HasError = true
 	testErrorHelper(t, f, "Rollback", func(ctx context.Context) error {
-		return conn.Rollback(ctx, TestTarget, commitTransactionID)
+		_, err := conn.Rollback(ctx, TestTarget, commitTransactionID)
+		return err
 	})
 	f.HasError = false
 }
@@ -178,7 +179,8 @@ func testRollbackError(t *testing.T, conn queryservice.QueryService, f *FakeQuer
 func testRollbackPanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testRollbackPanics")
 	testPanicHelper(t, f, "Rollback", func(ctx context.Context) error {
-		return conn.Rollback(ctx, TestTarget, rollbackTransactionID)
+		_, err := conn.Rollback(ctx, TestTarget, rollbackTransactionID)
+		return err
 	})
 }
 

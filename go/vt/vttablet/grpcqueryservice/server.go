@@ -126,11 +126,12 @@ func (q *query) Rollback(ctx context.Context, request *querypb.RollbackRequest) 
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.Rollback(ctx, request.Target, request.TransactionId); err != nil {
+	rID, err := q.server.Rollback(ctx, request.Target, request.TransactionId)
+	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
 
-	return &querypb.RollbackResponse{}, nil
+	return &querypb.RollbackResponse{ReservedId: rID}, nil
 }
 
 // Prepare is part of the queryservice.QueryServer interface

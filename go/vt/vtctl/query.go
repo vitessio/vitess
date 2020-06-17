@@ -373,11 +373,13 @@ func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	}
 	defer conn.Close(ctx)
 
-	return conn.Rollback(ctx, &querypb.Target{
+	// we do not support reserving through vtctl commands
+	_, err = conn.Rollback(ctx, &querypb.Target{
 		Keyspace:   tabletInfo.Tablet.Keyspace,
 		Shard:      tabletInfo.Tablet.Shard,
 		TabletType: tabletInfo.Tablet.Type,
 	}, transactionID)
+	return err
 }
 
 func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
