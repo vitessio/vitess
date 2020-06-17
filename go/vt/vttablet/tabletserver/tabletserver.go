@@ -750,7 +750,7 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, opti
 	return tsv.begin(ctx, target, 0, options)
 }
 
-func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, reserveID int64, options *querypb.ExecuteOptions) (transactionID int64, tablet *topodatapb.TabletAlias, err error) {
+func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, reservedID int64, options *querypb.ExecuteOptions) (transactionID int64, tablet *topodatapb.TabletAlias, err error) {
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Begin", "begin", nil,
@@ -761,7 +761,7 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, rese
 				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
 			}
 			var beginSQL string
-			transactionID, beginSQL, err = tsv.te.Begin(ctx, reserveID, options)
+			transactionID, beginSQL, err = tsv.te.Begin(ctx, reservedID, options)
 			logStats.TransactionID = transactionID
 
 			// Record the actual statements that were executed in the logStats.
@@ -984,7 +984,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 			if err != nil {
 				return err
 			}
-			// If reserveID or transactionID is non zero it should be assigned as connID and passed to query executor.
+			// If reservedID or transactionID is non zero it should be assigned as connID and passed to query executor.
 			connID := reservedID
 			if transactionID != 0 {
 				connID = transactionID
@@ -1050,14 +1050,14 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 // ExecuteBatch can be called for an existing transaction, or it can be called with
 // the AsTransaction flag which will execute all statements inside an independent
 // transaction. If AsTransaction is true, TransactionId must be 0.
-func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, txID int64, options *querypb.ExecuteOptions) (results []sqltypes.Result, err error) {
+func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) (results []sqltypes.Result, err error) {
 	span, ctx := trace.NewSpan(ctx, "TabletServer.ExecuteBatch")
 	defer span.Finish()
 
 	if len(queries) == 0 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Empty query list")
 	}
-	if asTransaction && txID != 0 {
+	if asTransaction && transactionID != 0 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot start a new transaction in the scope of an existing one")
 	}
 
@@ -1076,7 +1076,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 		}
 	}
 
-	allowOnShutdown := txID != 0
+	allowOnShutdown := transactionID != 0
 	// TODO(sougou): Convert startRequest/endRequest pattern to use wrapper
 	// function tsv.execRequest() instead.
 	// Note that below we always return "err" right away and do not call
@@ -1106,32 +1106,32 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 
 	if asTransaction {
 		// We ignore the return alias because this transaction only exists in the scope of this call
-		txID, _, err = tsv.Begin(ctx, target, options)
+		transactionID, _, err = tsv.Begin(ctx, target, options)
 		if err != nil {
 			return nil, err
 		}
 		// If transaction was not committed by the end, it means
 		// that there was an error, roll it back.
 		defer func() {
-			if txID != 0 {
-				tsv.Rollback(ctx, target, txID)
+			if transactionID != 0 {
+				tsv.Rollback(ctx, target, transactionID)
 			}
 		}()
 	}
 	results = make([]sqltypes.Result, 0, len(queries))
 	for _, bound := range queries {
-		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, txID, 0, options) // TODO (systay) should we accept connID as a param?
+		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, transactionID, 0, options) // TODO (systay) should we accept connID as a param?
 		if err != nil {
 			return nil, err
 		}
 		results = append(results, *localReply)
 	}
 	if asTransaction {
-		if _, err = tsv.Commit(ctx, target, txID); err != nil {
-			txID = 0
+		if _, err = tsv.Commit(ctx, target, transactionID); err != nil {
+			transactionID = 0
 			return nil, err
 		}
-		txID = 0
+		transactionID = 0
 	}
 	return results, nil
 }

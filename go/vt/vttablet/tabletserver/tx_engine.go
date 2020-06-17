@@ -217,7 +217,7 @@ func (te *TxEngine) AcceptReadOnly() error {
 // statement(s) used to execute the begin (if any).
 //
 // Subsequent statements can access the connection through the transaction id.
-func (te *TxEngine) Begin(ctx context.Context, reserveID int64, options *querypb.ExecuteOptions) (int64, string, error) {
+func (te *TxEngine) Begin(ctx context.Context, reservedID int64, options *querypb.ExecuteOptions) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Begin")
 	defer span.Finish()
 	te.stateLock.Lock()
@@ -235,7 +235,7 @@ func (te *TxEngine) Begin(ctx context.Context, reserveID int64, options *querypb
 	te.stateLock.Unlock()
 
 	defer te.beginRequests.Done()
-	conn, beginSQL, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly, reserveID)
+	conn, beginSQL, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly, reservedID)
 	if err != nil {
 		return 0, "", err
 	}
@@ -243,18 +243,18 @@ func (te *TxEngine) Begin(ctx context.Context, reserveID int64, options *querypb
 	return conn.ID(), beginSQL, err
 }
 
-// Commit commits the specified transaction and renew connection id if exists.
+// Commit commits the specified transaction and renews connection id if one exists.
 func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Commit")
 	defer span.Finish()
 	var query string
 	var err error
-	rID, err := te.txFinish(transactionID, tx.TxCommit, func(conn *StatefulConnection) error {
+	connID, err := te.txFinish(transactionID, tx.TxCommit, func(conn *StatefulConnection) error {
 		query, err = te.txPool.Commit(ctx, conn)
 		return err
 	})
 
-	return rID, query, err
+	return connID, query, err
 }
 
 // Rollback rolls back the specified transaction.
@@ -273,13 +273,9 @@ func (te *TxEngine) txFinish(transactionID int64, reason tx.ReleaseReason, f fun
 		return 0, err
 	}
 	err = f(conn)
-	if err != nil {
+	if err != nil || !conn.IsTainted() {
 		conn.Release(reason)
 		return 0, err
-	}
-	if !conn.IsTainted() {
-		conn.Release(reason)
-		return 0, nil
 	}
 	err = conn.Renew()
 	if err != nil {
