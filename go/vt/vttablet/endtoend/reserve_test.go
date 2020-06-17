@@ -573,7 +573,7 @@ func TestReserveAndBeginExecuteWithFailingQueryAndReserveConnAndTxRemainsOpen(t 
 	require.NoError(t, client.Release())
 }
 
-func TestReserveExecuteWithPreQueriesAndCheckConnection(t *testing.T) {
+func TestReserveExecuteWithPreQueriesAndCheckConnectionState(t *testing.T) {
 	client1 := framework.NewClient()
 	client2 := framework.NewClient()
 
@@ -609,7 +609,7 @@ func TestReserveExecuteWithPreQueriesAndCheckConnection(t *testing.T) {
 	assert.Equal(t, `[[VARCHAR("Warning") UINT32(1411) VARCHAR("Incorrect datetime value: '00/00/0000' for function str_to_date")]]`, fmt.Sprintf("%v", qr2.Rows))
 }
 
-func TestReserveBeginExecuteWithPreQueriesAndCheckConnection(t *testing.T) {
+func TestReserveBeginExecuteWithPreQueriesAndCheckConnectionState(t *testing.T) {
 	rcClient := framework.NewClient()
 	rucClient := framework.NewClient()
 
@@ -673,4 +673,58 @@ func TestReserveBeginExecuteWithPreQueriesAndCheckConnection(t *testing.T) {
 	// This is executed on reserved connection without transaction as the transaction was committed.
 	_, err = rucClient.Execute(delQuery, nil)
 	require.NoError(t, err)
+}
+
+func TestReserveExecuteWithFailingPreQueriesAndCheckConnectionState(t *testing.T) {
+	client := framework.NewClient()
+
+	selQuery := "select 42"
+	preQueries := []string{
+		"set @@no_sys_var = 42",
+	}
+
+	_, err := client.ReserveExecute(selQuery, preQueries, nil)
+	require.Error(t, err)
+
+	err = client.Release()
+	require.Error(t, err)
+}
+
+func TestReserveBeginExecuteWithFailingPreQueriesAndCheckConnectionState(t *testing.T) {
+	client := framework.NewClient()
+
+	selQuery := "select 42"
+	preQueries := []string{
+		"set @@no_sys_var = 42",
+	}
+
+	_, err := client.ReserveBeginExecute(selQuery, preQueries, nil)
+	require.Error(t, err)
+
+	err = client.Commit()
+	require.Error(t, err)
+
+	err = client.Release()
+	require.Error(t, err)
+}
+
+func TestBeginReserveExecuteWithFailingPreQueriesAndCheckConnectionState(t *testing.T) {
+	client := framework.NewClient()
+
+	selQuery := "select 42"
+	preQueries := []string{
+		"set @@no_sys_var = 42",
+	}
+
+	_, err := client.BeginExecute(selQuery, nil)
+	require.NoError(t, err)
+
+	_, err = client.ReserveExecute(selQuery, preQueries, nil)
+	require.Error(t, err)
+
+	err = client.Commit()
+	require.Error(t, err)
+
+	err = client.Release()
+	require.Error(t, err)
 }
