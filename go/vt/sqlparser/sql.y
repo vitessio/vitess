@@ -1317,13 +1317,9 @@ index_or_key_opt:
   {
     $$ = ""
   }
-| INDEX
+| index_or_key
   {
-    $$ = string($1)
-  }
-| KEY
-  {
-    $$ = string($1)
+    $$ = $1
   }
 
 name_opt:
