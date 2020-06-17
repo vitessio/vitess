@@ -691,7 +691,7 @@ func (itmc *internalTabletManagerClient) SlaveWasRestarted(ctx context.Context, 
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
+func (itmc *internalTabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopIOThreadOnly bool) (*replicationdatapb.Status, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

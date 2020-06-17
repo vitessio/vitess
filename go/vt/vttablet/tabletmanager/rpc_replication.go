@@ -97,6 +97,28 @@ func (agent *ActionAgent) stopSlaveLocked(ctx context.Context) error {
 	return agent.MysqlDaemon.StopSlave(agent.hookExtraEnv())
 }
 
+func (agent *ActionAgent) stopSlaveIOThreadLocked(ctx context.Context) error {
+
+	// Remember that we were told to stop, so we don't try to
+	// restart ourselves (in replication_reporter).
+	agent.setSlaveStopped(true)
+
+	// Also tell Orchestrator we're stopped on purpose for some Vitess task.
+	// Do this in the background, as it's best-effort.
+	go func() {
+		if agent.orc == nil {
+			return
+		}
+		if err := agent.orc.BeginMaintenance(agent.Tablet(), "vttablet has been told to StopSlave"); err != nil {
+			log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
+		}
+	}()
+
+	return agent.MysqlDaemon.StopSlaveIOThread(agent.hookExtraEnv())
+}
+
+// StopSlaveMinimum will stop the slave after it reaches at least the
+
 // StopSlaveMinimum will stop the slave after it reaches at least the
 // provided position. Works both when Vitess manages
 // replication or not (using hook if not).
@@ -643,7 +665,7 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, parent *topodat
 
 // StopReplicationAndGetStatus stops MySQL replication, and returns the
 // current status.
-func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*replicationdatapb.Status, error) {
+func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context, stopIOThreadOnly bool) (*replicationdatapb.Status, error) {
 	if err := agent.lock(ctx); err != nil {
 		return nil, err
 	}
@@ -654,12 +676,21 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*rep
 	if err != nil {
 		return nil, vterrors.Wrap(err, "before status failed")
 	}
-	if !rs.SlaveIORunning && !rs.SlaveSQLRunning {
-		// no replication is running, just return what we got
-		return mysql.SlaveStatusToProto(rs), nil
-	}
-	if err := agent.stopSlaveLocked(ctx); err != nil {
-		return nil, vterrors.Wrap(err, "stop slave failed")
+	if stopIOThreadOnly {
+		if !rs.SlaveIORunning {
+			return mysql.SlaveStatusToProto(rs), nil
+		}
+		if err := agent.stopSlaveIOThreadLocked(ctx); err != nil {
+			return nil, vterrors.Wrap(err, "stop slave io thread failed")
+		}
+	} else {
+		if !rs.SlaveIORunning && !rs.SlaveSQLRunning {
+			// no replication is running, just return what we got
+			return mysql.SlaveStatusToProto(rs), nil
+		}
+		if err := agent.stopSlaveLocked(ctx); err != nil {
+			return nil, vterrors.Wrap(err, "stop slave failed")
+		}
 	}
 	// now patch in the current position
 	rs.Position, err = agent.MysqlDaemon.MasterPosition()

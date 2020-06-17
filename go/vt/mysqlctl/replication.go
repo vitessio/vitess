@@ -114,6 +114,23 @@ func (mysqld *Mysqld) StopSlave(hookExtraEnv map[string]string) error {
 	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopSlaveCommand()})
 }
 
+// StopSlaveIOThread stops a slave's IO thread only.
+func (mysqld *Mysqld) StopSlaveIOThread(hookExtraEnv map[string]string) error {
+	h := hook.NewSimpleHook("preflight_stop_slave_io_thread")
+	h.ExtraEnv = hookExtraEnv
+	if err := h.ExecuteOptional(); err != nil {
+		return err
+	}
+	ctx := context.TODO()
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopSlaveIOThreadCommand()})
+}
+
 // RestartSlave stops, resets and starts a slave.
 func (mysqld *Mysqld) RestartSlave(hookExtraEnv map[string]string) error {
 	h := hook.NewSimpleHook("preflight_stop_slave")

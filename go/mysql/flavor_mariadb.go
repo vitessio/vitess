@@ -63,6 +63,10 @@ func (mariadbFlavor) stopSlaveCommand() string {
 	return "STOP SLAVE"
 }
 
+func (mariadbFlavor) stopSlaveIOThreadCommand() string {
+	return "STOP SLAVE IO_THREAD"
+}
+
 // sendBinlogDumpCommand is part of the Flavor interface.
 func (mariadbFlavor) sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Position) error {
 	// Tell the server that we understand GTIDs by setting our slave

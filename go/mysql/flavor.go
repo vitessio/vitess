@@ -65,6 +65,9 @@ type flavor interface {
 	// stopSlave returns the command to stop the slave.
 	stopSlaveCommand() string
 
+	// stopSlaveIOThreadCommand returns the command to stop the slave's io thread only.
+	stopSlaveIOThreadCommand() string
+
 	// sendBinlogDumpCommand sends the packet required to start
 	// dumping binlogs from the specified location.
 	sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Position) error
@@ -181,6 +184,11 @@ func (c *Conn) StartSlaveUntilAfterCommand(pos Position) string {
 // StopSlaveCommand returns the command to stop the slave.
 func (c *Conn) StopSlaveCommand() string {
 	return c.flavor.stopSlaveCommand()
+}
+
+// StopSlaveIOThreadCommand returns the command to stop the slave's io thread.
+func (c *Conn) StopSlaveIOThreadCommand() string {
+	return c.flavor.stopSlaveIOThreadCommand()
 }
 
 // SendBinlogDumpCommand sends the flavor-specific version of

@@ -414,6 +414,7 @@ message SlaveWasRestartedResponse {
 }
 
 message StopReplicationAndGetStatusRequest {
+  bool stopIOThreadOnly = 1;
 }
 
 message StopReplicationAndGetStatusResponse {

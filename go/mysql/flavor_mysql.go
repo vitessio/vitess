@@ -62,6 +62,10 @@ func (mysqlFlavor) stopSlaveCommand() string {
 	return "STOP SLAVE"
 }
 
+func (mysqlFlavor) stopSlaveIOThreadCommand() string {
+	return "STOP SLAVE IO_THREAD"
+}
+
 // sendBinlogDumpCommand is part of the Flavor interface.
 func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Position) error {
 	gtidSet, ok := startPos.GTIDSet.(Mysql56GTIDSet)

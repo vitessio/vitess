@@ -121,7 +121,7 @@ type RPCAgent interface {
 
 	SlaveWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error
 
-	StopReplicationAndGetStatus(ctx context.Context) (*replicationdatapb.Status, error)
+	StopReplicationAndGetStatus(ctx context.Context, stopIOThreadOnly bool) (*replicationdatapb.Status, error)
 
 	PromoteReplica(ctx context.Context) (string, error)
 

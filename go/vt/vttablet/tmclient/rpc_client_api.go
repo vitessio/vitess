@@ -187,7 +187,7 @@ type TabletManagerClient interface {
 
 	// StopReplicationAndGetStatus stops replication and returns the
 	// current position.
-	StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error)
+	StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopIOThreadOnly bool) (*replicationdatapb.Status, error)
 
 	// PromoteSlave makes the tablet the new master
 	// Deprecated
