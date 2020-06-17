@@ -79,6 +79,9 @@ const (
 
 	// ConnRelease - connection closed.
 	ConnRelease
+
+	// ConnRenewFail - reserve connection renew failed.
+	ConnRenewFail
 )
 
 func (r ReleaseReason) String() string {
@@ -91,21 +94,23 @@ func (r ReleaseReason) Name() string {
 }
 
 var txResolutions = map[ReleaseReason]string{
-	TxClose:      "closed",
-	TxCommit:     "transaction committed",
-	TxRollback:   "transaction rolled back",
-	TxKill:       "kill",
-	ConnInitFail: "initFail",
-	ConnRelease:  "release connection",
+	TxClose:       "closed",
+	TxCommit:      "transaction committed",
+	TxRollback:    "transaction rolled back",
+	TxKill:        "kill",
+	ConnInitFail:  "initFail",
+	ConnRelease:   "release connection",
+	ConnRenewFail: "connection renew failed",
 }
 
 var txNames = map[ReleaseReason]string{
-	TxClose:      "close",
-	TxCommit:     "commit",
-	TxRollback:   "rollback",
-	TxKill:       "kill",
-	ConnInitFail: "initFail",
-	ConnRelease:  "release",
+	TxClose:       "close",
+	TxCommit:      "commit",
+	TxRollback:    "rollback",
+	TxKill:        "kill",
+	ConnInitFail:  "initFail",
+	ConnRelease:   "release",
+	ConnRenewFail: "renewFail",
 }
 
 // RecordQuery records the query against this transaction.
