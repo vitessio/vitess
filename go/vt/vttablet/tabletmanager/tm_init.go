@@ -73,7 +73,7 @@ import (
 )
 
 const (
-	// slaveStoppedFile is the file name for the file whose existence informs
+	// slaveStoppedFile is the name of the file whose existence informs
 	// vttablet to NOT try to repair replication.
 	slaveStoppedFile = "do_not_replicate"
 )
@@ -324,11 +324,10 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet) error {
 		return err
 	}
 
+	// The following initializations don't need to be done
+	// in any specific order.
 	tm.startShardSync()
-
 	tm.exportStats()
-
-	// Start periodic Orchestrator self-registration, if configured.
 	orc, err := newOrcClient()
 	if err != nil {
 		return err
@@ -337,7 +336,6 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet) error {
 		tm.orc = orc
 		go tm.orc.DiscoverLoop(tm)
 	}
-
 	servenv.OnRun(tm.registerTabletManager)
 
 	// Temporary glue code to keep things working.
