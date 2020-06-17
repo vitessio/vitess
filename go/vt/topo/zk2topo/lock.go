@@ -61,7 +61,11 @@ func (zs *Server) Lock(ctx context.Context, dirPath, contents string) (topo.Lock
 
 		// Regardless of the reason, try to cleanup.
 		log.Warningf("Failed to obtain action lock: %v", err)
-		zs.conn.Delete(ctx, nodePath, -1)
+		err := zs.conn.Delete(ctx, nodePath, -1)
+
+		if err != nil {
+			log.Warningf("Failed to close connection :%v", err)
+		}
 
 		// Show the other locks in the directory
 		dir := path.Dir(nodePath)

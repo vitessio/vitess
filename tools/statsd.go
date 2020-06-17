@@ -83,7 +83,8 @@ type TestStats struct {
 	Pass, Fail, Flake int
 	PassTime          time.Duration
 
-	name string
+	// Not used
+	//name string
 }
 
 func testPassed(name string, passTime time.Duration) {

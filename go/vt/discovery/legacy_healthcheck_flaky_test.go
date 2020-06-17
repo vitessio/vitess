@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/status"
@@ -42,7 +44,12 @@ var connMap map[string]*fakeConn
 
 func init() {
 	tabletconn.RegisterDialer("fake_discovery", discoveryDialer)
-	flag.Set("tablet_protocol", "fake_discovery")
+	err := flag.Set("tablet_protocol", "fake_discovery")
+
+	//log error
+	if err != nil {
+		log.Error("flag.Set(\"tablet_protocol\", \"fake_discovery\") failed : %v", err)
+	}
 	connMap = make(map[string]*fakeConn)
 }
 

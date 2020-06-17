@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 
@@ -347,7 +349,12 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	// Check if we should close the connection and provoke errno 2013.
 	if db.shouldClose {
 		c.Close()
-		callback(&sqltypes.Result{})
+		err := callback(&sqltypes.Result{})
+
+		//log error
+		if err != nil {
+			log.Error("callback(&sqltypes.Result{}) failed : %v", err)
+		}
 		return nil
 	}
 
@@ -355,7 +362,12 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	// may send this at connection time, and we don't want it to
 	// interfere.
 	if key == "set names utf8" {
-		callback(&sqltypes.Result{})
+		err2 := callback(&sqltypes.Result{})
+
+		//log error
+		if err2 != nil {
+			log.Error("callback(&sqltypes.Result{}) failed : %v", err2)
+		}
 		return nil
 	}
 

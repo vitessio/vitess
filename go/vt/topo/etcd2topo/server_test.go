@@ -181,8 +181,16 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs, func
 	}
 
 	stopEtcd := func() {
-		cmd.Process.Kill()
-		cmd.Wait()
+		err3 := cmd.Process.Kill()
+		// log error
+		if err3 != nil {
+			t.Fatalf("cmd.Process.Kill() failed : %v", err3)
+		}
+		err2 := cmd.Wait()
+		// log error
+		if err2 != nil {
+			t.Fatalf("cmd.wait() failed : %v", err2)
+		}
 		os.RemoveAll(dataDir)
 	}
 
