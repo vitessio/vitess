@@ -44,7 +44,7 @@ func NewReplicaConnector(connParams *mysql.ConnParams) *replicaConnector {
 		Host: connParams.Host,
 		Port: connParams.Port,
 	}
-	dbCfg.SetDbParams(*connParams)
+	dbCfg.SetDbParams(*connParams, *connParams)
 	config.DB = dbCfg
 	c := &replicaConnector{conn: connParams}
 	env := tabletenv.NewEnv(config, "source")
