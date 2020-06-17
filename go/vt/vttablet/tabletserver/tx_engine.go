@@ -251,29 +251,25 @@ func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (int64, str
 	if err != nil {
 		return 0, "", err
 	}
-	sc, ok := conn.(*StatefulConnection)
-	if !ok {
-		return 0, "", vterrors.New(vtrpc.Code_INTERNAL, "wrong type of connection")
-	}
 	// check if coneection is tainted
 	// and if yes, release and renew after commit?
 	var newReservedID int64
-	if !sc.IsTainted() {
+	if !conn.IsTainted() {
 		newReservedID = 0
 		defer conn.Release(tx.TxCommit)
 	}
-	queries, err := te.txPool.Commit(ctx, sc)
+	queries, err := te.txPool.Commit(ctx, conn)
 	if err != nil {
 		return 0, "", err
 	}
-	if sc.IsTainted() {
-		err = sc.Renew()
+	if conn.IsTainted() {
+		err = conn.Renew()
 		if err != nil {
-			sc.Releasef("error from RenewConn:%v", err)
+			conn.Releasef("error from RenewConn:%v", err)
 		} else {
 			// must taint the new connectionID
-			sc.Taint()
-			newReservedID = sc.ConnID
+			conn.Taint()
+			newReservedID = conn.ConnID
 		}
 	}
 	return newReservedID, queries, nil
@@ -639,7 +635,7 @@ func (te *TxEngine) reserve(ctx context.Context, options *querypb.ExecuteOptions
 	return conn, err
 }
 
-func (te *TxEngine) taintConn(ctx context.Context, conn tx.IStatefulConnection, preQueries []string) error {
+func (te *TxEngine) taintConn(ctx context.Context, conn *StatefulConnection, preQueries []string) error {
 	conn.Taint()
 	for _, query := range preQueries {
 		_, err := conn.Exec(ctx, query, 0 /*maxrows*/, false /*wantFields*/)
