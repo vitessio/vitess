@@ -399,8 +399,7 @@ select_statement:
   }
 | openb select_statement closeb order_by_opt limit_opt lock_opt
   {
-  // TODO(sougou): may potentially need a new AST node for this.
-    $$ = nil
+    $$ = &Union{FirstStatement: &ParenSelect{Select: $2}, OrderBy: $4, Limit:$5, Lock:$6}
   }
 | select_statement union_op union_rhs order_by_opt limit_opt lock_opt
   {

@@ -26,7 +26,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 )
 
@@ -143,6 +142,8 @@ var (
 		input: "select * from t1 where exists (select a from t2 union select b from t3)",
 	}, {
 		input: "select 1 from dual union select 2 from dual union all select 3 from dual union select 4 from dual union all select 5 from dual",
+	}, {
+		input: "(select 1 from dual) order by 1 asc limit 2",
 	}, {
 		input: "select /* distinct */ distinct 1 from t",
 	}, {
@@ -1655,8 +1656,8 @@ func TestValid(t *testing.T) {
 			tree, err := Parse(tcase.input)
 			require.NoError(t, err, tcase.input)
 			out := String(tree)
-			if diff := cmp.Diff(tcase.output, out); diff != "" {
-				t.Errorf("Parse(%q):\n%s", tcase.input, diff)
+			if tcase.output != out {
+				t.Errorf("Parsing failed. \nExpected/Got:\n%s\n%s", tcase.output, out)
 			}
 			// This test just exercises the tree walking functionality.
 			// There's no way automated way to verify that a node calls
