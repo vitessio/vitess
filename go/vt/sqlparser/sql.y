@@ -393,9 +393,13 @@ do_statement:
   }
 
 select_statement:
-  simple_select
+  base_select order_by_opt limit_opt lock_opt
   {
-    $$ = $1
+    sel := $1.(*Select)
+    sel.OrderBy = $2
+    sel.Limit = $3
+    sel.Lock = $4
+    $$ = sel
   }
 | openb select_statement closeb order_by_opt limit_opt lock_opt
   {
@@ -435,6 +439,10 @@ simple_select:
     sel.Limit = $3
     sel.Lock = $4
     $$ = sel
+  }
+| simple_select union_op union_rhs order_by_opt limit_opt lock_opt
+  {
+    $$ = Unionize($1, $3, $2, $4, $5, $6)
   }
 
 stream_statement:
