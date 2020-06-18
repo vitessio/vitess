@@ -596,9 +596,10 @@ func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions
 	}
 	defer conn.Unlock()
 
-	// TODO: is it safe to ignore this error?
-	_ = te.taintConn(ctx, conn, preQueries)
-
+	err = te.taintConn(ctx, conn, preQueries)
+	if err != nil {
+		return 0, err
+	}
 	return conn.ID(), nil
 }
 

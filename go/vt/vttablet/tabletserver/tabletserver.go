@@ -1050,6 +1050,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 // ExecuteBatch can be called for an existing transaction, or it can be called with
 // the AsTransaction flag which will execute all statements inside an independent
 // transaction. If AsTransaction is true, TransactionId must be 0.
+// TODO(reserve-conn): Validate the use-case and Add support for reserve connection in ExecuteBatch
 func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) (results []sqltypes.Result, err error) {
 	span, ctx := trace.NewSpan(ctx, "TabletServer.ExecuteBatch")
 	defer span.Finish()
@@ -1120,7 +1121,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	}
 	results = make([]sqltypes.Result, 0, len(queries))
 	for _, bound := range queries {
-		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, transactionID, 0, options) // TODO (systay) should we accept connID as a param?
+		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, transactionID, 0, options)
 		if err != nil {
 			return nil, err
 		}
@@ -1139,8 +1140,8 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 // BeginExecute combines Begin and Execute.
 func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 
-	// TODO: if reservedID != 0, then skip hotrow protection
-	if tsv.enableHotRowProtection {
+	// Disable hot row protection in case of reserve connection.
+	if tsv.enableHotRowProtection && reservedID == 0 {
 		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
 		if err != nil {
 			return nil, 0, nil, err
@@ -1150,9 +1151,6 @@ func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Targe
 		}
 	}
 
-	// TODO: tsv.Begin creates a new connection, that's a big no-no if we already have a reservedID
-	// Begin needs to take a reservedID and start a transaction on that connection if it exists
-	// if reservedID is 0, then create a new connection as before
 	transactionID, alias, err := tsv.begin(ctx, target, reservedID, options)
 	if err != nil {
 		return nil, 0, nil, err
@@ -1434,24 +1432,24 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 }
 
 //Release implements the QueryService interface
-func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, connID int64, txID int64) error {
-	if connID == 0 && txID == 0 {
+func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
+	if reservedID == 0 && transactionID == 0 {
 		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "Connection Id and Transaction ID does not exists")
 	}
 	return tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
-		"Release", "", nil, //TODO (hgangal): Do we need to set any sql query to be logged?
+		"Release", "", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RELEASE", time.Now())
-			if connID != 0 {
+			if reservedID != 0 {
 				//Release to close the underlying connection.
-				logStats.TransactionID = connID
-				return tsv.te.Release(ctx, connID)
+				logStats.TransactionID = reservedID
+				return tsv.te.Release(ctx, reservedID)
 			}
 			// Rollback to cleanup the transaction before returning to the pool.
-			logStats.TransactionID = txID
-			_, err := tsv.te.Rollback(ctx, txID)
+			logStats.TransactionID = transactionID
+			_, err := tsv.te.Rollback(ctx, transactionID)
 			return err
 		},
 	)

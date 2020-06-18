@@ -733,6 +733,11 @@ func (f *FakeQueryService) ReserveExecute(ctx context.Context, target *querypb.T
 	panic("implement me")
 }
 
+//Release implements the QueryService interface
+func (f *FakeQueryService) Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
+	panic("implement me")
+}
+
 // CreateFakeServer returns the fake server for the tests
 func CreateFakeServer(t *testing.T) *FakeQueryService {
 	return &FakeQueryService{

@@ -282,15 +282,15 @@ func (ws *wrappedService) HandlePanic(err *error) {
 
 func (ws *wrappedService) ReserveBeginExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
 	var res *sqltypes.Result
-	var txID, reservedID int64
+	var transactionID, reservedID int64
 	var alias *topodatapb.TabletAlias
 	err := ws.wrapper(ctx, target, ws.impl, "ReserveBeginExecute", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var err error
-		res, txID, reservedID, alias, err = conn.ReserveBeginExecute(ctx, target, sql, preQueries, bindVariables, options)
+		res, transactionID, reservedID, alias, err = conn.ReserveBeginExecute(ctx, target, sql, preQueries, bindVariables, options)
 		return canRetry(ctx, err), err
 	})
 
-	return res, txID, reservedID, alias, err
+	return res, transactionID, reservedID, alias, err
 }
 
 func (ws *wrappedService) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, txID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
@@ -304,6 +304,13 @@ func (ws *wrappedService) ReserveExecute(ctx context.Context, target *querypb.Ta
 	})
 
 	return res, reservedID, alias, err
+}
+
+func (ws *wrappedService) Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
+	return ws.wrapper(ctx, target, ws.impl, "Release", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
+		// No point retrying Release.
+		return false, conn.Release(ctx, target, transactionID, reservedID)
+	})
 }
 
 func (ws *wrappedService) Close(ctx context.Context) error {
