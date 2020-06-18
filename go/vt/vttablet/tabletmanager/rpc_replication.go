@@ -114,7 +114,7 @@ func (agent *ActionAgent) stopSlaveIOThreadLocked(ctx context.Context) error {
 		}
 	}()
 
-	return agent.MysqlDaemon.StopSlaveIOThread(agent.hookExtraEnv())
+	return agent.MysqlDaemon.StopSlaveIOThread()
 }
 
 // StopSlaveMinimum will stop the slave after it reaches at least the
