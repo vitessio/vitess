@@ -272,8 +272,10 @@ func TestConsolidation(t *testing.T) {
 	defer framework.Server.SetPoolSize(framework.Server.PoolSize())
 	framework.Server.SetPoolSize(1)
 
+	const tag = "Waits/Histograms/Consolidations/Count"
+
 	for sleep := 0.1; sleep < 10.0; sleep *= 2 {
-		vstart := framework.DebugVars()
+		want := framework.FetchInt(framework.DebugVars(), tag) + 1
 		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() {
@@ -288,10 +290,10 @@ func TestConsolidation(t *testing.T) {
 		}()
 		wg.Wait()
 
-		vend := framework.DebugVars()
-		compareIntDiff(t, vend, "Waits/Histograms/Consolidations/Count", vstart, 1)
-		t.Logf("DebugVars properly incremented with sleep=%v", sleep)
-		return
+		if framework.FetchInt(framework.DebugVars(), tag) == want {
+			return
+		}
+		t.Logf("Consolidation didn't succeed with sleep for %v, trying a longer sleep", sleep)
 	}
 	t.Error("DebugVars for consolidation not incremented")
 }
