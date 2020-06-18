@@ -70,13 +70,19 @@ type (
 		Lock             string
 	}
 
+	// UnionSelect represents union type and select statement after first select statement.
+	UnionSelect struct {
+		Type      string
+		Statement SelectStatement
+	}
+
 	// Union represents a UNION statement.
 	Union struct {
-		Types      []string
-		Statements []SelectStatement
-		OrderBy    OrderBy
-		Limit      *Limit
-		Lock       string
+		FirstStatement SelectStatement
+		UnionSelects   []*UnionSelect
+		OrderBy        OrderBy
+		Limit          *Limit
+		Lock           string
 	}
 
 	// Stream represents a SELECT statement.
@@ -874,14 +880,16 @@ func (node *ParenSelect) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Union) Format(buf *TrackedBuffer) {
-	for i, stmt := range node.Statements {
-		if i == 0 {
-			buf.astPrintf(node, "%v", stmt)
-		} else {
-			buf.astPrintf(node, " %s %v", node.Types[(i-1)], stmt)
-		}
+	buf.astPrintf(node, "%v", node.FirstStatement)
+	for _, us := range node.UnionSelects {
+		buf.astPrintf(node, "%v", us)
 	}
 	buf.astPrintf(node, "%v%v%s", node.OrderBy, node.Limit, node.Lock)
+}
+
+// Format formats the node.
+func (node *UnionSelect) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, " %s %v", node.Type, node.Statement)
 }
 
 // Format formats the node.

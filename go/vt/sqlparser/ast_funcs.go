@@ -773,15 +773,14 @@ func (node *Union) SetLimit(limit *Limit) {
 func Unionize(lhs, rhs SelectStatement, typ string, by OrderBy, limit *Limit, lock string) *Union {
 	union, isUnion := lhs.(*Union)
 	if isUnion {
-		union.Statements = append(union.Statements, rhs)
-		union.Types = append(union.Types, typ)
+		union.UnionSelects = append(union.UnionSelects, &UnionSelect{Type: typ, Statement: rhs})
 		union.OrderBy = by
 		union.Limit = limit
 		union.Lock = lock
 		return union
 	}
 
-	return &Union{Types: []string{typ}, Statements: []SelectStatement{lhs, rhs}, OrderBy: by, Limit: limit, Lock: lock}
+	return &Union{FirstStatement: lhs, UnionSelects: []*UnionSelect{{Type: typ, Statement: rhs}}, OrderBy: by, Limit: limit, Lock: lock}
 }
 
 // AtCount represents the '@' count in ColIdent

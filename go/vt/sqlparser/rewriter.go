@@ -721,6 +721,10 @@ func replaceUnaryExprExpr(newNode, parent SQLNode) {
 	parent.(*UnaryExpr).Expr = newNode.(Expr)
 }
 
+func replaceUnionFirstStatement(newNode, parent SQLNode) {
+	parent.(*Union).FirstStatement = newNode.(SelectStatement)
+}
+
 func replaceUnionLimit(newNode, parent SQLNode) {
 	parent.(*Union).Limit = newNode.(*Limit)
 }
@@ -729,14 +733,18 @@ func replaceUnionOrderBy(newNode, parent SQLNode) {
 	parent.(*Union).OrderBy = newNode.(OrderBy)
 }
 
-type replaceUnionStatements int
+type replaceUnionUnionSelects int
 
-func (r *replaceUnionStatements) replace(newNode, container SQLNode) {
-	container.(*Union).Statements[int(*r)] = newNode.(SelectStatement)
+func (r *replaceUnionUnionSelects) replace(newNode, container SQLNode) {
+	container.(*Union).UnionSelects[int(*r)] = newNode.(*UnionSelect)
 }
 
-func (r *replaceUnionStatements) inc() {
+func (r *replaceUnionUnionSelects) inc() {
 	*r++
+}
+
+func replaceUnionSelectStatement(newNode, parent SQLNode) {
+	parent.(*UnionSelect).Statement = newNode.(SelectStatement)
 }
 
 func replaceUpdateComments(newNode, parent SQLNode) {
@@ -1273,14 +1281,18 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Expr, replaceUnaryExprExpr)
 
 	case *Union:
+		a.apply(node, n.FirstStatement, replaceUnionFirstStatement)
 		a.apply(node, n.Limit, replaceUnionLimit)
 		a.apply(node, n.OrderBy, replaceUnionOrderBy)
-		replacerStatements := replaceUnionStatements(0)
-		replacerStatementsB := &replacerStatements
-		for _, item := range n.Statements {
-			a.apply(node, item, replacerStatementsB.replace)
-			replacerStatementsB.inc()
+		replacerUnionSelects := replaceUnionUnionSelects(0)
+		replacerUnionSelectsB := &replacerUnionSelects
+		for _, item := range n.UnionSelects {
+			a.apply(node, item, replacerUnionSelectsB.replace)
+			replacerUnionSelectsB.inc()
 		}
+
+	case *UnionSelect:
+		a.apply(node, n.Statement, replaceUnionSelectStatement)
 
 	case *Update:
 		a.apply(node, n.Comments, replaceUpdateComments)
