@@ -41,28 +41,25 @@ func buildUnionPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Pr
 }
 
 func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, outer *symtab) error {
-	for i, stmt := range union.Statements {
-		if i == 0 {
-			if err := pb.processPart(stmt, outer); err != nil {
-				return err
-			}
-		} else {
-			rpb := newPrimitiveBuilder(pb.vschema, pb.jt)
-			if err := rpb.processPart(stmt, outer); err != nil {
-				return err
-			}
-
-			if err := unionRouteMerge(pb.bldr, rpb.bldr); err != nil {
-				return err
-			}
-			pb.st.Outer = outer
+	if err := pb.processPart(union.FirstStatement, outer); err != nil {
+		return err
+	}
+	for _, us := range union.UnionSelects {
+		rpb := newPrimitiveBuilder(pb.vschema, pb.jt)
+		if err := rpb.processPart(us.Statement, outer); err != nil {
+			return err
 		}
+
+		if err := unionRouteMerge(pb.bldr, rpb.bldr); err != nil {
+			return err
+		}
+		pb.st.Outer = outer
 	}
 	unionRoute, ok := pb.bldr.(*route)
 	if !ok {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "expected union to produce a route")
 	}
-	unionRoute.Select = &sqlparser.Union{Types: union.Types, Statements: union.Statements, Lock: union.Lock}
+	unionRoute.Select = &sqlparser.Union{FirstStatement: union.FirstStatement, UnionSelects: union.UnionSelects, Lock: union.Lock}
 
 	if err := pb.pushOrderBy(union.OrderBy); err != nil {
 		return err
