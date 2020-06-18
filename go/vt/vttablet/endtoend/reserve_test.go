@@ -700,3 +700,108 @@ func TestBeginReserveExecuteWithFailingPreQueriesAndCheckConnectionState(t *test
 	err = client.Release()
 	require.Error(t, err)
 }
+
+func TestReserveBeginExecuteWithCommitFailureAndCheckConnectionAndDBState(t *testing.T) {
+	client := framework.NewClient()
+
+	connQuery := "select connection_id()"
+	insQuery := "insert into vitess_test (intval, floatval, charval, binval) values (4, null, null, null)"
+	selQuery := "select intval from vitess_test where intval = 4"
+
+	connQr, err := client.ReserveBeginExecute(connQuery, nil, nil)
+	require.NoError(t, err)
+
+	_, err = client.Execute(insQuery, nil)
+	require.NoError(t, err)
+
+	killConnection(t, connQr.Rows[0][0].ToString())
+
+	err = client.Commit()
+	require.Error(t, err)
+	require.Zero(t, client.ReservedID())
+
+	qr, err := client.Execute(selQuery, nil)
+	require.NoError(t, err)
+	require.Empty(t, qr.Rows)
+
+	qr, err = client.Execute(connQuery, nil)
+	require.NoError(t, err)
+	require.NotEqual(t, connQr.Rows, qr.Rows)
+
+	require.Error(t, client.Release())
+}
+
+func TestReserveBeginExecuteWithRollbackFailureAndCheckConnectionAndDBState(t *testing.T) {
+	client := framework.NewClient()
+
+	connQuery := "select connection_id()"
+	insQuery := "insert into vitess_test (intval, floatval, charval, binval) values (4, null, null, null)"
+	selQuery := "select intval from vitess_test where intval = 4"
+
+	connQr, err := client.ReserveBeginExecute(connQuery, nil, nil)
+	require.NoError(t, err)
+
+	_, err = client.Execute(insQuery, nil)
+	require.NoError(t, err)
+
+	killConnection(t, connQr.Rows[0][0].ToString())
+
+	err = client.Rollback()
+	require.Error(t, err)
+	require.Zero(t, client.ReservedID())
+
+	qr, err := client.Execute(selQuery, nil)
+	require.NoError(t, err)
+	require.Empty(t, qr.Rows)
+
+	qr, err = client.Execute(connQuery, nil)
+	require.NoError(t, err)
+	require.NotEqual(t, connQr.Rows, qr.Rows)
+
+	require.Error(t, client.Release())
+}
+
+func TestReserveExecuteWithExecuteFailureAndCheckConnectionAndDBState(t *testing.T) {
+	client := framework.NewClient()
+
+	connQuery := "select connection_id()"
+	insQuery := "insert into vitess_test (intval, floatval, charval, binval) values (4, null, null, null)"
+	selQuery := "select intval from vitess_test where intval = 4"
+
+	connQr, err := client.ReserveExecute(connQuery, nil, nil)
+	require.NoError(t, err)
+
+	killConnection(t, connQr.Rows[0][0].ToString())
+
+	_, err = client.Execute(insQuery, nil)
+	require.Error(t, err)
+	// Expectation  - require.Zero(t, client.ReservedID())
+	// Reality
+	require.NotZero(t, client.ReservedID())
+
+	// Client still has transaction id and client id as non-zero.
+	_, err = client.Execute(selQuery, nil)
+	require.Error(t, err)
+	client.SetTransactionID(0)
+
+	_, err = client.Execute(selQuery, nil)
+	require.Error(t, err)
+	client.SetReservedID(0)
+
+	qr, err := client.Execute(selQuery, nil)
+	require.NoError(t, err)
+	require.Empty(t, qr.Rows)
+
+	qr, err = client.Execute(connQuery, nil)
+	require.NoError(t, err)
+	require.NotEqual(t, connQr.Rows, qr.Rows)
+
+	require.Error(t, client.Release())
+}
+
+func killConnection(t *testing.T, connID string) {
+	client := framework.NewClient()
+	_, err := client.ReserveExecute("select 1", []string{fmt.Sprintf("kill %s", connID)}, nil)
+	require.NoError(t, err)
+	defer client.Release()
+}

@@ -98,10 +98,10 @@ func (client *QueryClient) Begin(clientFoundRows bool) error {
 func (client *QueryClient) Commit() error {
 	defer func() { client.transactionID = 0 }()
 	rID, err := client.server.Commit(client.ctx, &client.target, client.transactionID)
+	client.reservedID = rID
 	if err != nil {
 		return err
 	}
-	client.reservedID = rID
 	return nil
 }
 
@@ -109,10 +109,10 @@ func (client *QueryClient) Commit() error {
 func (client *QueryClient) Rollback() error {
 	defer func() { client.transactionID = 0 }()
 	rID, err := client.server.Rollback(client.ctx, &client.target, client.transactionID)
+	client.reservedID = rID
 	if err != nil {
 		return err
 	}
-	client.reservedID = rID
 	return nil
 }
 
