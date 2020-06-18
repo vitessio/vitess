@@ -72,11 +72,11 @@ type (
 
 	// Union represents a UNION statement.
 	Union struct {
-		Type        string
-		Left, Right SelectStatement
-		OrderBy     OrderBy
-		Limit       *Limit
-		Lock        string
+		Types      []string
+		Statements []SelectStatement
+		OrderBy    OrderBy
+		Limit      *Limit
+		Lock       string
 	}
 
 	// Stream represents a SELECT statement.
@@ -874,8 +874,14 @@ func (node *ParenSelect) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Union) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s %v%v%v%s", node.Left, node.Type, node.Right,
-		node.OrderBy, node.Limit, node.Lock)
+	for i, stmt := range node.Statements {
+		if i == 0 {
+			buf.astPrintf(node, "%v", stmt)
+		} else {
+			buf.astPrintf(node, " %s %v", node.Types[(i-1)], stmt)
+		}
+	}
+	buf.astPrintf(node, "%v%v%s", node.OrderBy, node.Limit, node.Lock)
 }
 
 // Format formats the node.

@@ -403,7 +403,7 @@ select_statement:
   }
 | union_lhs union_op union_rhs order_by_opt limit_opt lock_opt
   {
-    $$ = &Union{Type: $2, Left: $1, Right: $3, OrderBy: $4, Limit: $5, Lock: $6}
+    $$ = Unionize($1, $3, $2, $4, $5, $6)
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {

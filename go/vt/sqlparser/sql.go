@@ -3837,7 +3837,7 @@ yydefault:
 		yyDollar = yyS[yypt-6 : yypt+1]
 //line sql.y:405
 		{
-			yyVAL.selStmt = &Union{Type: yyDollar[2].str, Left: yyDollar[1].selStmt, Right: yyDollar[3].selStmt, OrderBy: yyDollar[4].orderBy, Limit: yyDollar[5].limit, Lock: yyDollar[6].str}
+			yyVAL.selStmt = Unionize(yyDollar[1].selStmt, yyDollar[3].selStmt, yyDollar[2].str, yyDollar[4].orderBy, yyDollar[5].limit, yyDollar[6].str)
 		}
 	case 33:
 		yyDollar = yyS[yypt-7 : yypt+1]

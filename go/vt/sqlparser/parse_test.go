@@ -142,6 +142,8 @@ var (
 	}, {
 		input: "select * from t1 where exists (select a from t2 union select b from t3)",
 	}, {
+		input: "select 1 from dual union select 2 from dual union all select 3 from dual union select 4 from dual union all select 5 from dual",
+	}, {
 		input: "select /* distinct */ distinct 1 from t",
 	}, {
 		input: "select /* straight_join */ straight_join 1 from t",
