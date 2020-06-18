@@ -267,12 +267,8 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	}
 	muAllEvents.Lock()
 	defer muAllEvents.Unlock()
-	printAllEvents("End of test")
 	if len(allEvents) != numExpectedEvents {
-		log.Errorf("Received %d events, expected %d", len(allEvents), numExpectedEvents)
-		for _, ev := range allEvents {
-			log.Errorf("\t%s", ev)
-		}
+		printAllEvents(fmt.Sprintf("Received %d events, expected %d", len(allEvents), numExpectedEvents))
 		t.Fatalf("Received %d events, expected %d", len(allEvents), numExpectedEvents)
 	} else {
 		log.Infof("Successfully received %d events", numExpectedEvents)
@@ -281,14 +277,12 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 }
 
 func validateReceivedEvents(t *testing.T) {
-	if len(allEvents) != len(expectedEvents) {
-		t.Fatalf("Received events not equal to expected events, wanted %d, got %d", len(expectedEvents), len(allEvents))
-	}
 	for i, ev := range allEvents {
 		ev.Timestamp = 0
 		got := ev.String()
 		want := expectedEvents[i]
 		if !strings.HasPrefix(got, want) {
+			printAllEvents("Events not received in the right order")
 			t.Fatalf("Event %d did not match, want %s, got %s", i, want, got)
 		}
 	}
@@ -364,9 +358,9 @@ func insertRow(t *testing.T, table string, idx int, id int) {
 }
 
 func printAllEvents(msg string) {
-	log.Infof("%s: Received %d events", msg, len(allEvents))
-	for _, ev := range allEvents {
-		log.Infof("\t%s", ev)
+	log.Errorf("%s: Received %d events", msg, len(allEvents))
+	for i, ev := range allEvents {
+		log.Errorf("%d:\t%s", i, ev)
 	}
 }
 
