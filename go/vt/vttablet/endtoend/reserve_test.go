@@ -33,8 +33,6 @@ func TestMultipleReserveHaveDifferentConnection(t *testing.T) {
 	client1 := framework.NewClient()
 	client2 := framework.NewClient()
 
-	//vstart := framework.DebugVars()
-
 	query := "select connection_id()"
 
 	qrc1_1, err := client1.ReserveExecute(query, nil, nil)
@@ -51,7 +49,6 @@ func TestMultipleReserveHaveDifferentConnection(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, qrc1_1.Rows, qrc1_2.Rows)
 	require.Equal(t, qrc2_1.Rows, qrc2_2.Rows)
-
 }
 
 func TestReserveBeginRelease(t *testing.T) {
@@ -88,7 +85,27 @@ func TestBeginReserveRelease(t *testing.T) {
 	require.NoError(t, client.Release())
 }
 
-func TestReserveBeginExecute(t *testing.T) {
+func TestReserveBeginExecuteRelease(t *testing.T) {
+	client := framework.NewClient()
+
+	insQuery := "insert into vitess_test (intval, floatval, charval, binval) values (4, null, null, null)"
+	selQuery := "select intval from vitess_test where intval = 4"
+	_, err := client.ReserveBeginExecute(insQuery, nil, nil)
+	require.NoError(t, err)
+
+	qr, err := client.Execute(selQuery, nil)
+	require.NoError(t, err)
+	assert.Equal(t, `[[INT32(4)]]`, fmt.Sprintf("%v", qr.Rows))
+
+	err = client.Release()
+	require.NoError(t, err)
+
+	qr, err = client.Execute(selQuery, nil)
+	require.NoError(t, err)
+	assert.Equal(t, `[]`, fmt.Sprintf("%v", qr.Rows))
+}
+
+func TestMultipleReserveBeginHaveDifferentConnection(t *testing.T) {
 	client1 := framework.NewClient()
 	client2 := framework.NewClient()
 
@@ -96,66 +113,21 @@ func TestReserveBeginExecute(t *testing.T) {
 
 	qrc1_1, err := client1.ReserveBeginExecute(query, nil, nil)
 	require.NoError(t, err)
-	defer func() {
-		if client1.ReservedID() != 0 {
-			t.Error("should not be reserved after release")
-			_ = client1.Release()
-		}
-	}()
+	defer client1.Release()
 	qrc2_1, err := client2.ReserveBeginExecute(query, nil, nil)
 	require.NoError(t, err)
-	defer func() {
-		if client2.ReservedID() != 0 {
-			t.Error("should not be reserved after release")
-			_ = client2.Release()
-		}
-	}()
+	defer client2.Release()
 	require.NotEqual(t, qrc1_1.Rows, qrc2_1.Rows)
-	assert.Equal(t, client1.ReservedID(), client1.TransactionID())
-	assert.Equal(t, client2.ReservedID(), client2.TransactionID())
 
-	// rows with values 1, 2 and 3 already exist
-	query1 := "insert into vitess_test (intval, floatval, charval, binval) values (4, null, null, null)"
-	qrc1_2, err := client1.Execute(query1, nil)
+	qrc1_2, err := client1.Execute(query, nil)
 	require.NoError(t, err)
-	assert.Equal(t, uint64(1), qrc1_2.RowsAffected, "insert should create 1 row")
-
-	query2 := "insert into vitess_test (intval, floatval, charval, binval) values (5, null, null, null)"
-	qrc2_2, err := client2.Execute(query2, nil)
+	qrc2_2, err := client2.Execute(query, nil)
 	require.NoError(t, err)
-	assert.Equal(t, uint64(1), qrc2_2.RowsAffected, "insert should create 1 row")
-
-	query = "select intval from vitess_test"
-	qrc1_2, err = client1.Execute(query, nil)
-	require.NoError(t, err)
-	// client1 does not see row inserted by client2
-	expectedRows1 := "[[INT32(1)] [INT32(2)] [INT32(3)] [INT32(4)]]"
-	assert.Equal(t, expectedRows1, fmt.Sprintf("%v", qrc1_2.Rows), "wrong result from select1")
-
-	qrc2_2, err = client2.Execute(query, nil)
-	require.NoError(t, err)
-	expectedRows2 := "[[INT32(1)] [INT32(2)] [INT32(3)] [INT32(5)]]"
-	assert.Equal(t, expectedRows2, fmt.Sprintf("%v", qrc2_2.Rows), "wrong result from select2")
-
-	// Release connections without committing
-	err = client1.Release()
-	require.NoError(t, err)
-	err = client1.Release()
-	require.Error(t, err)
-	err = client2.Release()
-	require.NoError(t, err)
-	err = client2.Release()
-	require.Error(t, err)
-
-	// test that inserts were rolled back
-	client3 := framework.NewClient()
-	qrc3, err := client3.Execute(query, nil)
-	require.NoError(t, err)
-	expectedRows := "[[INT32(1)] [INT32(2)] [INT32(3)]]"
-	assert.Equal(t, expectedRows, fmt.Sprintf("%v", qrc3.Rows), "wrong result from select after release")
+	require.Equal(t, qrc1_1.Rows, qrc1_2.Rows)
+	require.Equal(t, qrc2_1.Rows, qrc2_2.Rows)
 }
 
-func TestCommitOnReserveConn(t *testing.T) {
+func TestCommitOnReserveBeginConn(t *testing.T) {
 	client := framework.NewClient()
 
 	query := "select connection_id()"
@@ -175,7 +147,7 @@ func TestCommitOnReserveConn(t *testing.T) {
 	assert.Equal(t, qr1.Rows, qr2.Rows)
 }
 
-func TestRollbackOnReserveConn(t *testing.T) {
+func TestRollbackOnReserveBeginConn(t *testing.T) {
 	client := framework.NewClient()
 
 	query := "select connection_id()"
