@@ -57,7 +57,9 @@ type uvstreamer struct {
 	startPos   string
 	filter     *binlogdatapb.Filter
 	inTablePKs []*binlogdatapb.TableLastPK
-	vschema    *localVSchema
+
+	vschema   *localVSchema
+	muVSchema sync.Mutex //to handle race when WatchSrvVSchema can set VSchema on topo change
 
 	// map holds tables remaining to be fully copied, it is depleted as each table gets completely copied
 	plans        map[string]*tablePlan
@@ -368,17 +370,25 @@ func (uvs *uvstreamer) Stream() error {
 		uvs.sendTestEvent("Copy Done")
 	}
 	log.V(2).Infof("Starting replicate in uvstreamer.Stream()")
-	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, uvs.sh, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos), uvs.filter, uvs.vschema, uvs.send)
+	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, uvs.sh, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos), uvs.filter, uvs.getVSchema(), uvs.send)
 	uvs.vs = vs
 	return vs.Stream()
 }
 
 // SetVSchema updates the vstreamer against the new vschema.
 func (uvs *uvstreamer) SetVSchema(vschema *localVSchema) {
+	uvs.muVSchema.Lock()
+	defer uvs.muVSchema.Unlock()
 	uvs.vschema = vschema
 	if uvs.vs != nil {
 		uvs.vs.SetVSchema(vschema)
 	}
+}
+
+func (uvs *uvstreamer) getVSchema() *localVSchema {
+	uvs.muVSchema.Lock()
+	defer uvs.muVSchema.Unlock()
+	return uvs.vschema
 }
 
 func (uvs *uvstreamer) setCopyState(tableName string, qr *querypb.QueryResult) {
