@@ -314,7 +314,7 @@ func (client *QueryClient) ReserveBeginExecute(query string, preQueries []string
 
 // Release performs a Release.
 func (client *QueryClient) Release() error {
-	err := client.server.Release(client.ctx, &client.target, client.reservedID, client.transactionID)
+	err := client.server.Release(client.ctx, &client.target, client.transactionID, client.reservedID)
 	if err != nil {
 		return err
 	}

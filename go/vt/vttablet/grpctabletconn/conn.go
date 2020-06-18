@@ -792,6 +792,27 @@ func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, target *querypb
 	return sqltypes.Proto3ToResult(reply.Result), reply.ReservedId, conn.tablet.Alias, nil
 }
 
+func (conn *gRPCQueryClient) Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return tabletconn.ConnClosed
+	}
+
+	req := &querypb.ReleaseRequest{
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Target:            target,
+		TransactionId:     transactionID,
+		ReservedId:        reservedID,
+	}
+	_, err := conn.c.Release(ctx, req)
+	if err != nil {
+		return tabletconn.ErrorFromGRPC(err)
+	}
+	return nil
+}
+
 // Close closes underlying gRPC channel.
 func (conn *gRPCQueryClient) Close(ctx context.Context) error {
 	conn.mu.Lock()

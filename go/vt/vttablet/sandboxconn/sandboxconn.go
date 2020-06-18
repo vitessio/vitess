@@ -394,6 +394,11 @@ func (sbc *SandboxConn) ReserveExecute(ctx context.Context, target *querypb.Targ
 	panic("implement me")
 }
 
+//Release implements the QueryService interface
+func (sbc *SandboxConn) Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
+	panic("implement me")
+}
+
 // Close does not change ExecCount
 func (sbc *SandboxConn) Close(ctx context.Context) error {
 	return nil

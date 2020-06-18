@@ -478,14 +478,20 @@ func (itc *internalTabletConn) HandlePanic(err *error) {
 
 //ReserveBeginExecute is part of the QueryService interface.
 func (itc *internalTabletConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
-	res, txID, reservedID, alias, err := itc.tablet.qsc.QueryService().ReserveBeginExecute(ctx, target, sql, preQueries, bindVariables, options)
-	return res, txID, reservedID, alias, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+	res, transactionID, reservedID, alias, err := itc.tablet.qsc.QueryService().ReserveBeginExecute(ctx, target, sql, preQueries, bindVariables, options)
+	return res, transactionID, reservedID, alias, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 //ReserveBeginExecute is part of the QueryService interface.
 func (itc *internalTabletConn) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, txID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	res, reservedID, alias, err := itc.tablet.qsc.QueryService().ReserveExecute(ctx, target, sql, preQueries, bindVariables, txID, options)
 	return res, reservedID, alias, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+}
+
+//Release is part of the QueryService interface.
+func (itc *internalTabletConn) Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
+	err := itc.tablet.qsc.QueryService().Release(ctx, target, transactionID, reservedID)
+	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // Close is part of queryservice.QueryService

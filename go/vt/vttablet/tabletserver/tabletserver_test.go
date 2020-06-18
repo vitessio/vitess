@@ -2380,11 +2380,11 @@ func TestReserveBeginExecute(t *testing.T) {
 	require.NoError(t, err)
 	defer tsv.StopService()
 
-	_, txID, connID, _, err := tsv.ReserveBeginExecute(ctx, &target, "select 42", []string{"select 43"}, nil, &querypb.ExecuteOptions{})
+	_, transactionID, reservedID, _, err := tsv.ReserveBeginExecute(ctx, &target, "select 42", []string{"select 43"}, nil, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
-	defer tsv.Release(ctx, &target, connID, txID)
-	assert.Greater(t, txID, int64(0), "txID")
-	assert.Equal(t, connID, txID, "connID should equal txID")
+	defer tsv.Release(ctx, &target, transactionID, reservedID)
+	assert.Greater(t, transactionID, int64(0), "transactionID")
+	assert.Equal(t, reservedID, transactionID, "reservedID should equal transactionID")
 	expected := []string{
 		"select 43",
 		"begin",
@@ -2405,10 +2405,10 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 	require.NoError(t, err)
 	defer tsv.StopService()
 
-	_, connID, _, err := tsv.ReserveExecute(ctx, &target, "select 42", []string{"select 43"}, nil, 0, &querypb.ExecuteOptions{})
+	_, reservedID, _, err := tsv.ReserveExecute(ctx, &target, "select 42", []string{"select 43"}, nil, 0, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
-	defer tsv.Release(ctx, &target, connID, 0)
-	assert.NotEqual(t, int64(0), connID, "connID should not be zero")
+	defer tsv.Release(ctx, &target, 0, reservedID)
+	assert.NotEqual(t, int64(0), reservedID, "reservedID should not be zero")
 	expected := []string{
 		"select 43",
 		"select 42 from dual where 1 != 1",
@@ -2428,15 +2428,15 @@ func TestReserveExecute_WithTx(t *testing.T) {
 	require.NoError(t, err)
 	defer tsv.StopService()
 
-	txID, _, err := tsv.Begin(ctx, &target, &querypb.ExecuteOptions{})
+	transactionID, _, err := tsv.Begin(ctx, &target, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
-	require.NotEqual(t, int64(0), txID)
+	require.NotEqual(t, int64(0), transactionID)
 	db.ResetQueryLog()
 
-	_, connID, _, err := tsv.ReserveExecute(ctx, &target, "select 42", []string{"select 43"}, nil, txID, &querypb.ExecuteOptions{})
+	_, reservedID, _, err := tsv.ReserveExecute(ctx, &target, "select 42", []string{"select 43"}, nil, transactionID, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
-	defer tsv.Release(ctx, &target, connID, txID)
-	assert.Equal(t, txID, connID, "connID should be equal to txID")
+	defer tsv.Release(ctx, &target, transactionID, reservedID)
+	assert.Equal(t, transactionID, reservedID, "reservedID should be equal to transactionID")
 	expected := []string{
 		"select 43",
 		"select 42 from dual where 1 != 1",
@@ -2489,25 +2489,25 @@ func TestRelease(t *testing.T) {
 			require.NoError(t, err)
 			defer tsv.StopService()
 
-			var txID, connID int64
+			var transactionID, reservedID int64
 
 			switch {
 			case test.begin && test.reserve:
-				_, txID, connID, _, err = tsv.ReserveBeginExecute(ctx, &target, "select 42", []string{"select 1212"}, nil, &querypb.ExecuteOptions{})
-				require.NotEqual(t, int64(0), txID)
-				require.NotEqual(t, int64(0), connID)
+				_, transactionID, reservedID, _, err = tsv.ReserveBeginExecute(ctx, &target, "select 42", []string{"select 1212"}, nil, &querypb.ExecuteOptions{})
+				require.NotEqual(t, int64(0), transactionID)
+				require.NotEqual(t, int64(0), reservedID)
 			case test.begin:
-				_, txID, _, err = tsv.BeginExecute(ctx, &target, "select 42", nil, 0, &querypb.ExecuteOptions{})
-				require.NotEqual(t, int64(0), txID)
+				_, transactionID, _, err = tsv.BeginExecute(ctx, &target, "select 42", nil, 0, &querypb.ExecuteOptions{})
+				require.NotEqual(t, int64(0), transactionID)
 			case test.reserve:
-				_, connID, _, err = tsv.ReserveExecute(ctx, &target, "select 42", nil, nil, 0, &querypb.ExecuteOptions{})
-				require.NotEqual(t, int64(0), connID)
+				_, reservedID, _, err = tsv.ReserveExecute(ctx, &target, "select 42", nil, nil, 0, &querypb.ExecuteOptions{})
+				require.NotEqual(t, int64(0), reservedID)
 			}
 			require.NoError(t, err)
 
 			db.ResetQueryLog()
 
-			err = tsv.Release(ctx, &target, connID, txID)
+			err = tsv.Release(ctx, &target, transactionID, reservedID)
 			if test.err {
 				require.Error(t, err)
 			} else {

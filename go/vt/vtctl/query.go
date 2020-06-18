@@ -228,6 +228,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		return fmt.Errorf("BuildBindVariables failed: %v", err)
 	}
 
+	// We do not support reserve connection through vtctl commands, so reservedID is always 0.
 	qr, err := conn.Execute(ctx, &querypb.Target{
 		Keyspace:   tabletInfo.Tablet.Keyspace,
 		Shard:      tabletInfo.Tablet.Shard,
