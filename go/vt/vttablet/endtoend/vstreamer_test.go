@@ -34,10 +34,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
 type test struct {
@@ -50,9 +47,7 @@ func TestHistorianSchemaUpdate(t *testing.T) {
 	defer cancel()
 	tsv := framework.Server
 	historian := tsv.Historian()
-	srvTopo := srvtopo.NewResilientServer(framework.TopoServer, "SchemaVersionE2ETestTopo")
 
-	vstreamer.NewEngine(tabletenv.NewEnv(tsv.Config(), "SchemaVersionE2ETest"), srvTopo, tsv.SchemaEngine(), historian)
 	target := &querypb.Target{
 		Keyspace:   "vttest",
 		Shard:      "0",
@@ -96,14 +91,19 @@ func TestHistorianSchemaUpdate(t *testing.T) {
 }
 
 func TestSchemaVersioning(t *testing.T) {
+	// Let's disable the already running tracker to prevent it from
+	// picking events from the previous test, and then re-enable it at the end.
+	tsv := framework.Server
+	tsv.StopTracker()
+	tsv.Historian().SetTrackSchemaVersions(false)
+	defer tsv.StartTracker()
+	defer tsv.Historian().SetTrackSchemaVersions(true)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	tsv := framework.Server
 	tsv.Historian().SetTrackSchemaVersions(true)
 	tsv.StartTracker()
-	srvTopo := srvtopo.NewResilientServer(framework.TopoServer, "SchemaVersionE2ETestTopo")
 
-	vstreamer.NewEngine(tabletenv.NewEnv(tsv.Config(), "SchemaVersionE2ETest"), srvTopo, tsv.SchemaEngine(), tsv.Historian())
 	target := &querypb.Target{
 		Keyspace:   "vttest",
 		Shard:      "0",
@@ -379,7 +379,6 @@ func runCases(ctx context.Context, t *testing.T, tests []test, eventCh chan []*b
 		query := test.query
 		client.Execute(query, nil)
 		if len(test.output) > 0 {
-			t.Logf("expecting: %#v", test.output)
 			expectLogs(ctx, t, query, eventCh, test.output)
 		}
 		if strings.HasPrefix(query, "create") || strings.HasPrefix(query, "alter") || strings.HasPrefix(query, "drop") {
@@ -434,7 +433,6 @@ func expectLogs(ctx context.Context, t *testing.T, query string, eventCh chan []
 	for i, want := range output {
 		// CurrentTime is not testable.
 		evs[i].CurrentTime = 0
-		t.Logf("checking: %v: %v: %v", i, want, evs[i])
 		switch want {
 		case "begin":
 			if evs[i].Type != binlogdatapb.VEventType_BEGIN {
