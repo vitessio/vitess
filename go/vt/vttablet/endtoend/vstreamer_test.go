@@ -192,7 +192,7 @@ func TestSchemaVersioning(t *testing.T) {
 		select {
 		case eventCh <- evs:
 		case <-ctx.Done():
-			t.Fatal("Context Done() in send")
+			return nil
 		}
 		return nil
 	}
@@ -379,6 +379,7 @@ func runCases(ctx context.Context, t *testing.T, tests []test, eventCh chan []*b
 		query := test.query
 		client.Execute(query, nil)
 		if len(test.output) > 0 {
+			t.Logf("expecting: %#v", test.output)
 			expectLogs(ctx, t, query, eventCh, test.output)
 		}
 		if strings.HasPrefix(query, "create") || strings.HasPrefix(query, "alter") || strings.HasPrefix(query, "drop") {
@@ -433,6 +434,7 @@ func expectLogs(ctx context.Context, t *testing.T, query string, eventCh chan []
 	for i, want := range output {
 		// CurrentTime is not testable.
 		evs[i].CurrentTime = 0
+		t.Logf("checking: %v: %v: %v", i, want, evs[i])
 		switch want {
 		case "begin":
 			if evs[i].Type != binlogdatapb.VEventType_BEGIN {

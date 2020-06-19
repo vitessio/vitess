@@ -240,8 +240,8 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.sh)
-	tsv.tracker = schema.NewTracker(tsv.se)
-	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config, tsv.tracker)
+	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
+	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
 		tsv.mu.Lock()
@@ -267,19 +267,12 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 // StartTracker starts a new replication watcher
 // Only to be used for testing
 func (tsv *TabletServer) StartTracker() {
-	tsv.config.TrackSchemaVersions = true
-	tsv.config.WatchReplication = true
 	tsv.tracker.Open()
-	//need to close and reopen watcher since it is already opened in the tsv init and is idempotent ...
-	tsv.watcher.Close()
-	tsv.watcher.watchReplication = true
-	tsv.watcher.Open()
 }
 
 // StopTracker turns the watcher off
 // Only to be used for testing
 func (tsv *TabletServer) StopTracker() {
-	tsv.config.TrackSchemaVersions = false
 	tsv.tracker.Close()
 }
 
@@ -572,12 +565,8 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.messager.Open()
 		tsv.hr.Close()
 		tsv.hw.Open()
-		log.Info("Opening tracker, trackschemaversions is %t", tsv.config.TrackSchemaVersions)
 		tsv.tracker.Open()
-		if tsv.config.TrackSchemaVersions {
-			log.Info("Starting watcher")
-			tsv.watcher.Open()
-		}
+		tsv.watcher.Close()
 	} else {
 		tsv.txController.AcceptReadOnly()
 		tsv.messager.Close()
