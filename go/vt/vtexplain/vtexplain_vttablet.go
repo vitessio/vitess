@@ -77,6 +77,7 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 	db := fakesqldb.New(nil)
 
 	config := tabletenv.NewCurrentConfig()
+	config.TrackSchemaVersions = false
 	if opts.ExecutionMode == ModeTwoPC {
 		config.TwoPCCoordinatorAddress = "XXX"
 		config.TwoPCAbandonAge = 1.0
