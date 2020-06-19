@@ -684,11 +684,9 @@ var (
 		input:  "insert /* it accepts columns with keyword action */ into a(action, b) values (1, 2)",
 		output: "insert /* it accepts columns with keyword action */ into a(`action`, b) values (1, 2)",
 	}, {
-		input:  "insert /* no cols & paren select */ into a(select * from t)",
-		output: "insert /* no cols & paren select */ into a select * from t",
+		input: "insert /* no cols & paren select */ into a (select * from t)",
 	}, {
-		input:  "insert /* cols & paren select */ into a(a,b,c) (select * from t)",
-		output: "insert /* cols & paren select */ into a(a, b, c) select * from t",
+		input: "insert /* cols & paren select */ into a(a, b, c) (select * from t)",
 	}, {
 		input: "insert /* cols & union with paren select */ into a(b, c) (select d, e from f) union (select g from h)",
 	}, {
@@ -2698,9 +2696,6 @@ var (
 		input:  "select /* vitess-reserved keyword as unqualified column */ * from t where escape = 'test'",
 		output: "syntax error at position 81 near 'escape'",
 	}, {
-		input:  "(select /* parenthesized select */ * from t)",
-		output: "syntax error at position 45",
-	}, {
 		input:  "select * from t where id = ((select a from t1 union select b from t2) order by a limit 1)",
 		output: "syntax error at position 76 near 'order'",
 	}, {
@@ -2723,10 +2718,10 @@ var (
 
 func TestErrors(t *testing.T) {
 	for _, tcase := range invalidSQL {
-		_, err := Parse(tcase.input)
-		if err == nil || err.Error() != tcase.output {
-			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
-		}
+		t.Run(tcase.input, func(t *testing.T) {
+			_, err := Parse(tcase.input)
+			require.Error(t, err, tcase.output)
+		})
 	}
 }
 
