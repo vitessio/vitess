@@ -79,7 +79,7 @@ func (rpw *ReplicationWatcher) Close() {
 
 func (rpw *ReplicationWatcher) process(ctx context.Context) {
 	defer rpw.env.LogError()
-	defer rpw.wg.Wait()
+	defer rpw.wg.Done()
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
