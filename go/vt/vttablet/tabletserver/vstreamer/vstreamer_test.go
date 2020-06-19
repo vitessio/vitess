@@ -26,8 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
-
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/stretchr/testify/assert"
@@ -1631,8 +1629,6 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 	}
 }
 
-var lastPos string
-
 func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string, tablePKs []*binlogdatapb.TableLastPK) <-chan []*binlogdatapb.VEvent {
 	if position == "" {
 		position = masterPosition(t)
@@ -1661,18 +1657,6 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 		}
 	}
 	return engine.Stream(ctx, pos, tablePKs, filter, func(evs []*binlogdatapb.VEvent) error {
-		if t.Name() == "TestVersion" { // emulate tracker only for the version test
-			for _, ev := range evs {
-				log.Infof("Original stream: %s event found %v", ev.Type, ev)
-				if ev.Type == binlogdatapb.VEventType_GTID {
-					lastPos = ev.Gtid
-				}
-				if ev.Type == binlogdatapb.VEventType_DDL {
-					schemaTracker := schema.NewTracker(env.SchemaEngine)
-					schemaTracker.SchemaUpdated(lastPos, ev.Ddl, ev.Timestamp)
-				}
-			}
-		}
 		t.Logf("Received events: %v", evs)
 		select {
 		case ch <- evs:
