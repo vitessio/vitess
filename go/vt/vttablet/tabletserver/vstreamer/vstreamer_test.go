@@ -519,8 +519,8 @@ func TestOther(t *testing.T) {
 		t.Logf("Run mode: %v", mode)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		ch := startStream(ctx, t, nil, "", nil)
-
+		wg, ch := startStream(ctx, t, nil, "", nil)
+		defer wg.Wait()
 		want := [][]string{{
 			`gtid`,
 			`type:OTHER `,
@@ -623,8 +623,8 @@ func TestREKeyRange(t *testing.T) {
 			Filter: "-80",
 		}},
 	}
-	ch := startStream(ctx, t, filter, "", nil)
-
+	wg, ch := startStream(ctx, t, filter, "", nil)
+	defer wg.Wait()
 	// 1, 2, 3 and 5 are in shard -80.
 	// 4 and 6 are in shard 80-.
 	input := []string{
@@ -686,6 +686,7 @@ func TestREKeyRange(t *testing.T) {
 		`gtid`,
 		`commit`,
 	}})
+	cancel()
 }
 
 func TestInKeyRangeMultiColumn(t *testing.T) {
@@ -713,7 +714,8 @@ func TestInKeyRangeMultiColumn(t *testing.T) {
 			Filter: "select id, region, val, keyspace_id() from t1 where in_keyrange('-80')",
 		}},
 	}
-	ch := startStream(ctx, t, filter, "", nil)
+	wg, ch := startStream(ctx, t, filter, "", nil)
+	defer wg.Wait()
 
 	// 1, 2, 3 and 5 are in shard -80.
 	// 4 and 6 are in shard 80-.
@@ -741,6 +743,7 @@ func TestInKeyRangeMultiColumn(t *testing.T) {
 		`gtid`,
 		`commit`,
 	}})
+	cancel()
 }
 
 func TestREMultiColumnVindex(t *testing.T) {
@@ -768,7 +771,8 @@ func TestREMultiColumnVindex(t *testing.T) {
 			Filter: "-80",
 		}},
 	}
-	ch := startStream(ctx, t, filter, "", nil)
+	wg, ch := startStream(ctx, t, filter, "", nil)
+	defer wg.Wait()
 
 	// 1, 2, 3 and 5 are in shard -80.
 	// 4 and 6 are in shard 80-.
@@ -795,6 +799,7 @@ func TestREMultiColumnVindex(t *testing.T) {
 		`gtid`,
 		`commit`,
 	}})
+	cancel()
 }
 
 func TestSelectFilter(t *testing.T) {
@@ -1448,10 +1453,12 @@ func TestHeartbeat(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ch := startStream(ctx, t, nil, "", nil)
+	wg, ch := startStream(ctx, t, nil, "", nil)
+	defer wg.Wait()
 	evs := <-ch
 	require.Equal(t, 1, len(evs))
 	assert.Equal(t, binlogdatapb.VEventType_HEARTBEAT, evs[0].Type)
+	cancel()
 }
 
 func TestNoFutureGTID(t *testing.T) {
@@ -1544,8 +1551,8 @@ func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, p
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ch := startStream(ctx, t, filter, position, tablePK)
-
+	wg, ch := startStream(ctx, t, filter, position, tablePK)
+	defer wg.Wait()
 	// If position is 'current', we wait for a heartbeat to be
 	// sure the vstreamer has started.
 	if position == "current" {
@@ -1553,6 +1560,7 @@ func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, p
 		expectLog(ctx, t, "current pos", ch, [][]string{{`gtid`, `type:OTHER `}})
 	}
 
+	log.Infof("Starting to run test cases")
 	for _, tcase := range testcases {
 		switch input := tcase.input.(type) {
 		case []string:
@@ -1564,10 +1572,12 @@ func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, p
 		}
 		expectLog(ctx, t, tcase.input, ch, tcase.output)
 	}
+
 	cancel()
 	if evs, ok := <-ch; ok {
 		t.Fatalf("unexpected evs: %v", evs)
 	}
+	log.Infof("Last line of runCases")
 }
 
 func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan []*binlogdatapb.VEvent, output [][]string) {
@@ -1633,23 +1643,26 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 
 var lastPos string
 
-func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string, tablePKs []*binlogdatapb.TableLastPK) <-chan []*binlogdatapb.VEvent {
-	if position == "" {
+func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string, tablePKs []*binlogdatapb.TableLastPK) (*sync.WaitGroup, <-chan []*binlogdatapb.VEvent) {
+	switch position {
+	case "":
 		position = masterPosition(t)
-	}
-	if position == "vscopy" {
+	case "vscopy":
 		position = ""
 	}
 
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	ch := make(chan []*binlogdatapb.VEvent)
+
 	go func() {
 		defer close(ch)
-		err := vstream(ctx, t, position, tablePKs, filter, ch)
-		if len(tablePKs) == 0 {
-			require.Nil(t, err)
-		}
+		defer wg.Done()
+		log.Infof(">>>>>>>>>>> before vstream")
+		vstream(ctx, t, position, tablePKs, filter, ch)
+		log.Infof(">>>>>>>>>> after vstream")
 	}()
-	return ch
+	return &wg, ch
 }
 
 func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, ch chan []*binlogdatapb.VEvent) error {
