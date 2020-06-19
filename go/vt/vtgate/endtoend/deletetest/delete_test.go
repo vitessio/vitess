@@ -142,9 +142,9 @@ func TestMain(m *testing.M) {
 		}
 		if err := cluster.Setup(); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
-			err := cluster.TearDown()
-			if err != nil {
-				log.Error("cluster.TearDoDoc	wn() did not work: ", err)
+			//log error
+			if err := cluster.TearDown(); err != nil {
+				log.Errorf("cluster.TearDoDoc	wn() did not work: ", err)
 			}
 			return 1
 		}

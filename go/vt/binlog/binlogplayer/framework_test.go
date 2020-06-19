@@ -118,8 +118,9 @@ var globalFBC *fakeBinlogClient
 
 func init() {
 	RegisterClientFactory("test", func() Client { return globalFBC })
-	err := flag.Set("binlog_player_protocol", "test")
-	if err != nil {
-		log.Error("flag.Set(\"binlog_player_protocol\", \"test\") failed :%v", err)
+
+	//log error
+	if err := flag.Set("binlog_player_protocol", "test") ; err != nil {
+		log.Errorf("flag.Set(\"binlog_player_protocol\", \"test\") failed :%v", err)
 	}
 }

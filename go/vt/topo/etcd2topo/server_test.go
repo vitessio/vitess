@@ -24,6 +24,7 @@ import (
 	"path"
 	"testing"
 	"time"
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/tlstest"
 
@@ -181,15 +182,13 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs, func
 	}
 
 	stopEtcd := func() {
-		err3 := cmd.Process.Kill()
 		// log error
-		if err3 != nil {
-			t.Fatalf("cmd.Process.Kill() failed : %v", err3)
+		if err3 := cmd.Process.Kill(); err3 != nil {
+			log.Errorf("cmd.Process.Kill() failed : %v", err3)
 		}
-		err2 := cmd.Wait()
 		// log error
-		if err2 != nil {
-			t.Fatalf("cmd.wait() failed : %v", err2)
+		if err2 := cmd.Wait(); err2 != nil {
+			log.Errorf("cmd.wait() failed : %v", err2)
 		}
 		os.RemoveAll(dataDir)
 	}

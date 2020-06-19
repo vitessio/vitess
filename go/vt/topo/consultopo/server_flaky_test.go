@@ -25,6 +25,7 @@ import (
 	"path"
 	"testing"
 	"time"
+	"vitess.io/vitess/go/vt/log"
 
 	"github.com/hashicorp/consul/api"
 	"golang.org/x/net/context"
@@ -129,15 +130,13 @@ func TestConsulTopo(t *testing.T) {
 	// Start a single consul in the background.
 	cmd, configFilename, serverAddr := startConsul(t, "")
 	defer func() {
-		err := cmd.Process.Kill()
 		// Alerts command did not run successful
-		if err != nil {
-			t.Fatalf("cmd process kill has an error: %v", err)
+		if err := cmd.Process.Kill(); err != nil {
+			log.Errorf("cmd process kill has an error: %v", err)
 		}
 		// Alerts command did not run successful
-		err = cmd.Wait()
-		if err != nil {
-			t.Fatalf("cmd wait has an error: %v", err)
+		if err1 := cmd.Wait(); err1 != nil {
+			log.Errorf("cmd wait has an error: %v", err)
 		}
 
 		os.Remove(configFilename)
@@ -175,15 +174,13 @@ func TestConsulTopoWithAuth(t *testing.T) {
 	// Start a single consul in the background.
 	cmd, configFilename, serverAddr := startConsul(t, "123456")
 	defer func() {
-		err := cmd.Process.Kill()
 		// Alerts command did not run successful
-		if err != nil {
-			t.Fatalf("cmd process kill has an error: %v", err)
+		if err := cmd.Process.Kill(); err != nil {
+			log.Errorf("cmd process kill has an error: %v", err)
 		}
-		err = cmd.Wait()
 		// Alerts command did not run successful
-		if err != nil {
-			t.Fatalf("cmd process wait has an error: %v", err)
+		if err1 := cmd.Wait(); err1 != nil {
+			log.Errorf("cmd process wait has an error: %v", err1)
 		}
 		os.Remove(configFilename)
 	}()

@@ -44,11 +44,10 @@ var connMap map[string]*fakeConn
 
 func init() {
 	tabletconn.RegisterDialer("fake_discovery", discoveryDialer)
-	err := flag.Set("tablet_protocol", "fake_discovery")
 
 	//log error
-	if err != nil {
-		log.Error("flag.Set(\"tablet_protocol\", \"fake_discovery\") failed : %v", err)
+	if err := flag.Set("tablet_protocol", "fake_discovery"); err != nil {
+		log.Errorf("flag.Set(\"tablet_protocol\", \"fake_discovery\") failed : %v", err)
 	}
 	connMap = make(map[string]*fakeConn)
 }

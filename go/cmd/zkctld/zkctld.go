@@ -69,10 +69,9 @@ func main() {
 		log.Infof("server shut down on its own")
 	case <-sig:
 		log.Infof("signal received, shutting down server")
-		err := zkd.Shutdown()
 
 		// Action to perform if there is an error
-		if err != nil {
+		if err := zkd.Shutdown(); err != nil {
 			log.Errorf("failed %v", err)
 			exit.Return(1)
 		}

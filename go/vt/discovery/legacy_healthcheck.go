@@ -222,11 +222,10 @@ func (e LegacyTabletStats) NamedStatusURL() string {
 // {{.NamedStatusURL}} -> test-0000000001/debug/status
 func (e LegacyTabletStats) getTabletDebugURL() string {
 	var buffer bytes.Buffer
-	err := tabletURLTemplate.Execute(&buffer, e)
 
 	//Error logged
-	if err != nil {
-		log.Error("tabletURLTemplate.Execute(&buffer, e) failed: %v", err)
+	if err := tabletURLTemplate.Execute(&buffer, e); err != nil {
+		log.Errorf("tabletURLTemplate.Execute(&buffer, e) failed: %v", err)
 	}
 	return buffer.String()
 }

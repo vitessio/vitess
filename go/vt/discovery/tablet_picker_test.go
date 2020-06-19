@@ -171,11 +171,10 @@ func addTablet(te *pickerTestEnv, id int, tabletType topodatapb.TabletType, serv
 }
 
 func deleteTablet(te *pickerTestEnv, tablet *topodatapb.Tablet) {
-	err2 := te.topoServ.DeleteTablet(context.Background(), tablet.Alias)
 
 	//log error
-	if err2 != nil {
-		log.Error("te.topoServ.DeleteTablet(context.Background(), tablet.Alias) failed : %v", err2)
+	if err2 := te.topoServ.DeleteTablet(context.Background(), tablet.Alias) ; err2 != nil {
+		log.Errorf("te.topoServ.DeleteTablet(context.Background(), tablet.Alias) failed : %v", err2)
 	}
 
 	// This is not automatically removed from shard replication, which results in log spam.
@@ -183,6 +182,6 @@ func deleteTablet(te *pickerTestEnv, tablet *topodatapb.Tablet) {
 
 	//log error
 	if err != nil {
-		log.Error("topo.DeleteTabletReplicationData(context.Background(), te.topoServ, tablet) failed : %v", err)
+		log.Errorf("topo.DeleteTabletReplicationData(context.Background(), te.topoServ, tablet) failed : %v", err)
 	}
 }

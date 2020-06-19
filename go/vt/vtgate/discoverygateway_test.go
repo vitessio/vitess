@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"vitess.io/vitess/go/vt/log"
 
 	"golang.org/x/net/context"
 
@@ -247,10 +248,8 @@ func TestDiscoveryGatewayGetTabletsWithRegion(t *testing.T) {
 
 	dg := NewDiscoveryGateway(context.Background(), hc, srvTopo, "local", 2)
 
-	err := ts.CreateCellsAlias(context.Background(), "local", cellsAlias)
-
-	if err != nil {
-		t.Errorf("ts.CreateCellsAlias(context.Background()... %v", err)
+	if err := ts.CreateCellsAlias(context.Background(), "local", cellsAlias); err != nil {
+		log.Errorf("ts.CreateCellsAlias(context.Background()... %v", err)
 	}
 
 	defer ts.DeleteCellsAlias(context.Background(), "local")

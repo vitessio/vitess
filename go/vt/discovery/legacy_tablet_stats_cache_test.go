@@ -35,9 +35,8 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 		Cells: []string{"cell", "cell1"},
 	}
 
-	err2 := ts.CreateCellsAlias(context.Background(), "region1", cellsAlias)
 
-	if err2 != nil {
+	if err2 := ts.CreateCellsAlias(context.Background(), "region1", cellsAlias); err2 != nil {
 		t.Errorf("ts.CreateCellsAlias(context.Background(), \"region1\", cellsAlias) failed: %v", err2)
 	}
 
@@ -47,9 +46,8 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 		Cells: []string{"cell2"},
 	}
 
-	err := ts.CreateCellsAlias(context.Background(), "region2", cellsAlias)
 
-	if err != nil {
+	if err := ts.CreateCellsAlias(context.Background(), "region2", cellsAlias); err != nil {
 		t.Errorf("ts.CreateCellsAlias(context.Background(), \"region2\", cellsAlias) failed: %v", err)
 	}
 

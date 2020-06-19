@@ -19,38 +19,34 @@ package throttler
 import (
 	"testing"
 	"time"
+	"vitess.io/vitess/go/vt/log"
 )
 
 func TestMemory(t *testing.T) {
 	m := newMemory(5, 1*time.Second, 0.10)
-	// Add several good rates.
-	err5 := m.markGood(201)
 
-	//log error
-	if err5 != nil {
-		t.Fatalf("m.markGood(201) failed :%v ", err5)
+	// Add several good rates.
+	if err5 := m.markGood(201); err5 != nil {
+		log.Errorf("m.markGood(201) failed :%v ", err5)
 	}
 
 	want200 := int64(200)
 	if got := m.highestGood(); got != want200 {
 		t.Fatalf("memory with one good entry: got = %v, want = %v", got, want200)
 	}
-	err4 := m.markGood(101)
 
 	//log error
-	if err4 != nil {
-		t.Fatalf("m.markGood(101) failed :%v ", err4)
+	if err4 := m.markGood(101); err4 != nil {
+		log.Errorf("m.markGood(101) failed :%v ", err4)
 	}
 
 	if got := m.highestGood(); got != want200 {
 		t.Fatalf("wrong order within memory: got = %v, want = %v", got, want200)
 	}
 
-	err3 := m.markGood(301)
-
 	//log error
-	if err3 != nil {
-		t.Fatalf(" m.markGood(301) failed :%v ", err3)
+	if err3 := m.markGood(301); err3 != nil {
+		log.Errorf(" m.markGood(301) failed :%v ", err3)
 	}
 
 	want300 := int64(300)
@@ -67,11 +63,10 @@ func TestMemory(t *testing.T) {
 	if got := m.lowestBad(); got != 0 {
 		t.Fatalf("lowestBad should return zero value when no bad rate is recorded yet: got = %v", got)
 	}
-	err2 := m.markBad(300, sinceZero(0))
 
 	//log error
-	if err2 != nil {
-		t.Fatalf(" m.markBad(300, sinceZero(0)) failed :%v ", err2)
+	if err2 := m.markBad(300, sinceZero(0)) ; err2 != nil {
+		log.Errorf(" m.markBad(300, sinceZero(0)) failed :%v ", err2)
 	}
 
 	if got, want := m.lowestBad(), want300; got != want {
@@ -81,11 +76,9 @@ func TestMemory(t *testing.T) {
 		t.Fatalf("new lower bad rate did not invalidate previous good rates: got = %v, want = %v", got, want200)
 	}
 
-	err1 := m.markBad(311, sinceZero(0))
-
 	//log error
-	if err1 != nil {
-		t.Fatalf(" m.markBad(311, sinceZero(0)) failed :%v ", err1)
+	if err1 := m.markBad(311, sinceZero(0)) ; err1 != nil {
+		log.Errorf(" m.markBad(311, sinceZero(0)) failed :%v ", err1)
 	}
 
 	if got := m.lowestBad(); got != want300 {

@@ -142,9 +142,8 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	attempt := c.i
 	// Value used in next UPDATE query. Increased after every query.
 	c.i++
-	_, err2 := conn.ExecuteFetch("begin", 1000, true)
 
-	if err2 != nil {
+	if _, err2 := conn.ExecuteFetch("begin", 1000, true); err2 != nil {
 		log.Errorf("conn.ExecuteFetch(\"begin\", 1000...: %v", err2)
 	}
 
@@ -362,11 +361,12 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 	newMaster := replica
 	master.VttabletProcess.QueryTablet(demoteMasterQuery, keyspaceUnshardedName, true)
 	if master.VttabletProcess.EnableSemiSync {
-		_, err := master.VttabletProcess.QueryTablet(disableSemiSyncMasterQuery, keyspaceUnshardedName, true)
+
 		//log error
-		if err != nil {
+		if _, err := master.VttabletProcess.QueryTablet(disableSemiSyncMasterQuery, keyspaceUnshardedName, true); err != nil {
 			log.Errorf("master.VttabletProcess.QueryTablet(disableSemi... caused an error : %v", err)
 		}
+
 	}
 
 	// Wait for replica to catch up to master.
@@ -403,17 +403,16 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 	// Use 'localhost' as hostname because Travis CI worker hostnames
 	// are too long for MySQL replication.
 	changeMasterCommands := fmt.Sprintf("RESET SLAVE;SET GLOBAL gtid_slave_pos = '%s';CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d ,MASTER_USER='vt_repl', MASTER_USE_GTID = slave_pos;START SLAVE;", gtID, "localhost", newMaster.MySQLPort)
-	_, err := oldMaster.VttabletProcess.QueryTablet(changeMasterCommands, keyspaceUnshardedName, true)
 
 	//Log error
-	if err != nil {
+	if _, err := oldMaster.VttabletProcess.QueryTablet(changeMasterCommands, keyspaceUnshardedName, true); err != nil {
 		log.Errorf("oldMaster.VttabletProcess.QueryTablet caused an error : %v", err)
 	}
 
 	// Notify the new vttablet master about the reparent.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", newMaster.Alias)
+	err1 := clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", newMaster.Alias)
 	//Log error
-	if err != nil {
+	if err1 != nil {
 		log.Errorf("clusterInstance.VtctlclientProcess.ExecuteCommand caused an error : %v", err)
 	}
 }

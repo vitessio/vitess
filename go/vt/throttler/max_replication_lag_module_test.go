@@ -19,6 +19,7 @@ package throttler
 import (
 	"errors"
 	"fmt"
+	"github.com/prometheus/common/log"
 	"testing"
 	"time"
 
@@ -456,7 +457,7 @@ func TestMaxReplicationLagModule_Increase_BadRateUpperBound(t *testing.T) {
 
 	//log error
 	if err1 != nil {
-		t.Fatal(err1)
+		log.Errorf("tf.m.memory.markBad(150, sinceZero(30*time.Second)) falied : %v",err)
 	}
 
 	// r2 @  70s, 0s lag

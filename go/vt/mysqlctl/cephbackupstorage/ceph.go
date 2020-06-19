@@ -91,12 +91,12 @@ func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string, filesi
 		// If filesize is unknown, the caller should pass in -1 and we will pass it through.
 		_, err := bh.client.PutObjectWithContext(ctx, bucket, object, reader, filesize, minio.PutObjectOptions{ContentType: "application/octet-stream"})
 		if err != nil {
+
 			// Signal the writer that an error occurred, in case it's not done writing yet.
 			err1 := reader.CloseWithError(err)
-
 			//log error
 			if err1 != nil {
-				log.Error("reader.CloseWithError(err) got an error: %v", err1)
+				log.Errorf("reader.CloseWithError(err) got an error: %v", err1)
 			}
 			// In case the error happened after the writer finished, we need to remember it.
 			bh.errors.RecordError(err)
