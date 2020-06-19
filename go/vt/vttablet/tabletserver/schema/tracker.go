@@ -48,35 +48,56 @@ type VStreamer interface {
 
 // Tracker watches the replication and saves the latest schema into _vt.schema_version when a DDL is encountered.
 type Tracker struct {
+	enabled bool
+
+	mu     sync.Mutex
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
+
 	env    tabletenv.Env
 	vs     VStreamer
 	engine *Engine
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
 }
 
 // NewTracker creates a Tracker, needs an Open SchemaEngine (which implements the trackerEngine interface)
 func NewTracker(env tabletenv.Env, vs VStreamer, engine *Engine) *Tracker {
 	return &Tracker{
-		env:    env,
-		vs:     vs,
-		engine: engine,
+		enabled: env.Config().TrackSchemaVersions,
+		env:     env,
+		vs:      vs,
+		engine:  engine,
 	}
 }
 
 // Open enables the tracker functionality
 func (tr *Tracker) Open() {
+	if !tr.enabled {
+		log.Info("Schema tracker is not enabled.")
+		return
+	}
+
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
+	if tr.cancel != nil {
+		return
+	}
+
 	ctx, cancel := context.WithCancel(tabletenv.LocalContext())
 	tr.cancel = cancel
 	tr.wg.Add(1)
+	log.Info("Schema tracker enabled.")
 	go tr.process(ctx)
 }
 
 // Close disables the tracker functionality
 func (tr *Tracker) Close() {
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
 	if tr.cancel == nil {
 		return
 	}
+
+	log.Info("Schema tracker stopped.")
 	tr.cancel()
 	tr.cancel = nil
 	tr.wg.Wait()
