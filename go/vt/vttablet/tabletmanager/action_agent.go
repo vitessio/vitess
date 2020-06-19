@@ -38,8 +38,6 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
-	"os"
-	"path"
 	"regexp"
 	"sync"
 	"time"
@@ -72,12 +70,6 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-)
-
-const (
-	// slaveStoppedFile is the file name for the file whose existence informs
-	// vttablet to NOT try to repair replication.
-	slaveStoppedFile = "do_not_replicate"
 )
 
 var (
@@ -219,7 +211,6 @@ type ActionAgent struct {
 	_ignoreHealthErrorExpr *regexp.Regexp
 
 	// _slaveStopped remembers if we've been told to stop replicating.
-	// If it's nil, we'll try to check for the slaveStoppedFile.
 	_slaveStopped *bool
 
 	// _lockTablesConnection is used to get and release the table read locks to pause replication
@@ -545,22 +536,7 @@ func (agent *ActionAgent) slaveStopped() bool {
 	agent.mutex.Lock()
 	defer agent.mutex.Unlock()
 
-	// If we already know the value, don't bother checking the file.
-	if agent._slaveStopped != nil {
-		return *agent._slaveStopped
-	}
-
-	// If there's no Cnf file, don't read state.
-	if agent.Cnf == nil {
-		return false
-	}
-
-	// If the marker file exists, we're stopped.
-	// Treat any read error as if the file doesn't exist.
-	_, err := os.Stat(path.Join(agent.Cnf.TabletDir(), slaveStoppedFile))
-	slaveStopped := err == nil
-	agent._slaveStopped = &slaveStopped
-	return slaveStopped
+	return *agent._slaveStopped
 }
 
 func (agent *ActionAgent) setSlaveStopped(slaveStopped bool) {
@@ -568,27 +544,6 @@ func (agent *ActionAgent) setSlaveStopped(slaveStopped bool) {
 	defer agent.mutex.Unlock()
 
 	agent._slaveStopped = &slaveStopped
-
-	// Make a best-effort attempt to persist the value across tablet restarts.
-	// We store a marker in the filesystem so it works regardless of whether
-	// mysqld is running, and so it's tied to this particular instance of the
-	// tablet data dir (the one that's paused at a known replication position).
-	if agent.Cnf == nil {
-		return
-	}
-	tabletDir := agent.Cnf.TabletDir()
-	if tabletDir == "" {
-		return
-	}
-	markerFile := path.Join(tabletDir, slaveStoppedFile)
-	if slaveStopped {
-		file, err := os.Create(markerFile)
-		if err == nil {
-			file.Close()
-		}
-	} else {
-		os.Remove(markerFile)
-	}
 }
 
 func (agent *ActionAgent) setServicesDesiredState(disallowQueryService string, enableUpdateStream bool) {
