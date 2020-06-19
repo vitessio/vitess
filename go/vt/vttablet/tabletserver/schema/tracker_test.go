@@ -23,6 +23,7 @@ import (
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 func TestTracker(t *testing.T) {
@@ -62,13 +63,17 @@ func TestTracker(t *testing.T) {
 			},
 		}},
 	}
-	initial := se.env.Stats().ErrorCounters.Counts()["INTERNAL"]
-	tracker := NewTracker(se.env, vs, se)
+	config := se.env.Config()
+	config.TrackSchemaVersions = true
+	env := tabletenv.NewEnv(config, "TrackerTest")
+	initial := env.Stats().ErrorCounters.Counts()["INTERNAL"]
+	tracker := NewTracker(env, vs, se)
 	tracker.Open()
 	<-vs.done
 	cancel()
 	tracker.Close()
-	final := se.env.Stats().ErrorCounters.Counts()["INTERNAL"]
+	// Two of those events should have caused an error.
+	final := env.Stats().ErrorCounters.Counts()["INTERNAL"]
 	assert.Equal(t, initial+2, final)
 }
 
