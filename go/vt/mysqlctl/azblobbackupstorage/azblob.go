@@ -127,6 +127,21 @@ func (bh *AZBlobBackupHandle) Name() string {
 	return bh.name
 }
 
+// RecordError is part of the concurrency.ErrorRecorder interface.
+func (bh *AZBlobBackupHandle) RecordError(err error) {
+	bh.errors.RecordError(err)
+}
+
+// HasErrors is part of the concurrency.ErrorRecorder interface.
+func (bh *AZBlobBackupHandle) HasErrors() bool {
+	return bh.errors.HasErrors()
+}
+
+// Error is part of the concurrency.ErrorRecorder interface.
+func (bh *AZBlobBackupHandle) Error() error {
+	return bh.errors.Error()
+}
+
 // AddFile implements BackupHandle.
 func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error) {
 	if bh.readOnly {
