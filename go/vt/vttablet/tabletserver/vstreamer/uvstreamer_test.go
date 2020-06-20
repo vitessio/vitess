@@ -236,10 +236,9 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	numCopyEvents += 2                                       /* GTID + Test event after all copy is done */
 	numCatchupEvents := 3 * 5                                /*2 t1, 1 t2 : BEGIN+FIELD+ROW+GTID+COMMIT*/
 	numFastForwardEvents := 5                                /*t1:FIELD+ROW*/
-	numIgnored := 3                                          // empty events
 	numMisc := 1                                             /* t2 insert during t1 catchup that comes in t2 copy */
 	numReplicateEvents := 3*5 /* insert into t1/t2/t3 */ + 4 /* second insert into t3, no FieldEvent */
-	numExpectedEvents := numCopyEvents + numCatchupEvents + numFastForwardEvents + numIgnored + numMisc + numReplicateEvents
+	numExpectedEvents := numCopyEvents + numCatchupEvents + numFastForwardEvents + numMisc + numReplicateEvents
 
 	var lastRowEventSeen bool
 
@@ -315,11 +314,24 @@ func initTables(t *testing.T, tables []string) {
 		positions[fmt.Sprintf("%sBulkInsert", table)] = masterPosition(t)
 
 		callbacks[fmt.Sprintf("LASTPK.*%s.*%d", table, numInitialRows)] = func() {
+			ctx := context.Background()
 			if tableName == "t1" {
-				insertRow(t, "t1", 1, numInitialRows+1)
-				//should result in empty commit ignored during catchup since t2 copy has not started
-				insertRow(t, "t2", 2, numInitialRows+1)
-				log.Infof("Position after first insert into t1 (and t2/t3): %s", masterPosition(t))
+				idx := 1
+				id := numInitialRows + 1
+				table := "t1"
+				query1 := fmt.Sprintf(insertQuery, table, idx, idx, id, id*idx*10)
+				idx = 2
+				table = "t2"
+				query2 := fmt.Sprintf(insertQuery, table, idx, idx, id, id*idx*10)
+
+				queries := []string{
+					"begin",
+					query1,
+					query2,
+					"commit",
+				}
+				env.Mysqld.ExecuteSuperQueryList(ctx, queries)
+				log.Infof("Position after first insert into t1 and t2: %s", masterPosition(t))
 			}
 		}
 	}
@@ -422,10 +434,7 @@ var expectedEvents = []string{
 	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > ",
 	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:2 lengths:3 values:\"11110\" > > > ",
 	"type:GTID",
-	"type:COMMIT",
-	"type:BEGIN", //empty commit for insert into t3
-	"type:GTID",
-	"type:COMMIT",
+	"type:COMMIT", //insert for t2 done along with t1 does not generate an event since t2 is not yet copied
 	"type:OTHER gtid:\"Copy Start t2\"",
 	"type:BEGIN",
 	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > ",
