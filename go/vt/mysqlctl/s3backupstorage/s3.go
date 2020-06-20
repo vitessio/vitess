@@ -104,6 +104,21 @@ func (bh *S3BackupHandle) Name() string {
 	return bh.name
 }
 
+// RecordError is part of the concurrency.ErrorRecorder interface.
+func (bh *S3BackupHandle) RecordError(err error) {
+	bh.errors.RecordError(err)
+}
+
+// HasErrors is part of the concurrency.ErrorRecorder interface.
+func (bh *S3BackupHandle) HasErrors() bool {
+	return bh.errors.HasErrors()
+}
+
+// Error is part of the concurrency.ErrorRecorder interface.
+func (bh *S3BackupHandle) Error() error {
+	return bh.errors.Error()
+}
+
 // AddFile is part of the backupstorage.BackupHandle interface.
 func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error) {
 	if bh.readOnly {
