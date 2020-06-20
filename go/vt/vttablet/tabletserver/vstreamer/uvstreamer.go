@@ -57,7 +57,8 @@ type uvstreamer struct {
 	startPos   string
 	filter     *binlogdatapb.Filter
 	inTablePKs []*binlogdatapb.TableLastPK
-	vschema    *localVSchema
+
+	vschema *localVSchema
 
 	// map holds tables remaining to be fully copied, it is depleted as each table gets completely copied
 	plans        map[string]*tablePlan
@@ -80,7 +81,7 @@ type uvstreamer struct {
 
 	config *uvstreamerConfig
 
-	vs *vstreamer //last vstreamer created in uvstreamer: FIXME currently used only for setting vschema, find another way?
+	vs *vstreamer //last vstreamer created in uvstreamer
 }
 
 type uvstreamerConfig struct {
@@ -367,18 +368,40 @@ func (uvs *uvstreamer) Stream() error {
 		}
 		uvs.sendTestEvent("Copy Done")
 	}
-	log.V(2).Infof("Starting replicate in uvstreamer.Stream()")
-	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, uvs.sh, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos), uvs.filter, uvs.vschema, uvs.send)
-	uvs.vs = vs
+	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, uvs.sh, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos), uvs.filter, uvs.getVSchema(), uvs.send)
+
+	uvs.setVs(vs)
 	return vs.Stream()
+}
+
+func (uvs *uvstreamer) lock(msg string) {
+	uvs.mu.Lock()
+}
+
+func (uvs *uvstreamer) unlock(msg string) {
+	uvs.mu.Unlock()
+}
+
+func (uvs *uvstreamer) setVs(vs *vstreamer) {
+	uvs.lock("setVs")
+	defer uvs.unlock("setVs")
+	uvs.vs = vs
 }
 
 // SetVSchema updates the vstreamer against the new vschema.
 func (uvs *uvstreamer) SetVSchema(vschema *localVSchema) {
+	uvs.lock("SetVSchema")
+	defer uvs.unlock("SetVSchema")
 	uvs.vschema = vschema
 	if uvs.vs != nil {
 		uvs.vs.SetVSchema(vschema)
 	}
+}
+
+func (uvs *uvstreamer) getVSchema() *localVSchema {
+	uvs.lock("getVSchema")
+	defer uvs.unlock("getVSchema")
+	return uvs.vschema
 }
 
 func (uvs *uvstreamer) setCopyState(tableName string, qr *querypb.QueryResult) {
