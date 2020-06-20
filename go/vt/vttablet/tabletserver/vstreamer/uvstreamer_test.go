@@ -97,6 +97,7 @@ func TestVStreamCopyFilterValidations(t *testing.T) {
 		"create table t2a(id21 int, id22 int, primary key(id21))",
 		"create table t2b(id21 int, id22 int, primary key(id21))",
 	})
+	engine.se.Reload(context.Background())
 
 	var getUVStreamer = func(filter *binlogdatapb.Filter, tablePKs []*binlogdatapb.TableLastPK) *uvstreamer {
 		uvs := &uvstreamer{
@@ -106,7 +107,6 @@ func TestVStreamCopyFilterValidations(t *testing.T) {
 			send:       nil,
 			cp:         dbconfigs.Connector{},
 			se:         engine.se,
-			sh:         engine.sh,
 			startPos:   "",
 			filter:     filter,
 			vschema:    nil,
