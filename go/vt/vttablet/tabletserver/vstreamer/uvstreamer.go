@@ -53,7 +53,6 @@ type uvstreamer struct {
 	send       func([]*binlogdatapb.VEvent) error
 	cp         dbconfigs.Connector
 	se         *schema.Engine
-	sh         schema.Historian
 	startPos   string
 	filter     *binlogdatapb.Filter
 	inTablePKs []*binlogdatapb.TableLastPK
@@ -89,7 +88,7 @@ type uvstreamerConfig struct {
 	CatchupRetryTime  time.Duration
 }
 
-func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, sh schema.Historian, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *uvstreamer {
+func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *uvstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	config := &uvstreamerConfig{
 		MaxReplicationLag: 1 * time.Nanosecond,
@@ -102,7 +101,6 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 		send:       send,
 		cp:         cp,
 		se:         se,
-		sh:         sh,
 		startPos:   startPos,
 		filter:     filter,
 		vschema:    vschema,
@@ -119,14 +117,10 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 //		the first time, with just the filter and an empty pos
 //		during a restart, with both the filter and list of TableLastPK from the vgtid
 func (uvs *uvstreamer) buildTablePlan() error {
-
 	uvs.plans = make(map[string]*tablePlan)
 	tableLastPKs := make(map[string]*binlogdatapb.TableLastPK)
 	for _, tablePK := range uvs.inTablePKs {
 		tableLastPKs[tablePK.TableName] = tablePK
-	}
-	if err := uvs.se.Reload(uvs.ctx); err != nil {
-		return err
 	}
 	tables := uvs.se.GetSchema()
 	for range tables {
@@ -368,7 +362,7 @@ func (uvs *uvstreamer) Stream() error {
 		}
 		uvs.sendTestEvent("Copy Done")
 	}
-	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, uvs.sh, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos), uvs.filter, uvs.getVSchema(), uvs.send)
+	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos), uvs.filter, uvs.getVSchema(), uvs.send)
 
 	uvs.setVs(vs)
 	return vs.Stream()
