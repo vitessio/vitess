@@ -62,6 +62,21 @@ type CephBackupHandle struct {
 	waitGroup sync.WaitGroup
 }
 
+// RecordError is part of the concurrency.ErrorRecorder interface.
+func (bh *CephBackupHandle) RecordError(err error) {
+	bh.errors.RecordError(err)
+}
+
+// HasErrors is part of the concurrency.ErrorRecorder interface.
+func (bh *CephBackupHandle) HasErrors() bool {
+	return bh.errors.HasErrors()
+}
+
+// Error is part of the concurrency.ErrorRecorder interface.
+func (bh *CephBackupHandle) Error() error {
+	return bh.errors.Error()
+}
+
 // Directory implements BackupHandle.
 func (bh *CephBackupHandle) Directory() string {
 	return bh.dir
