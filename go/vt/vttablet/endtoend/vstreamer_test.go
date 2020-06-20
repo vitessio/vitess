@@ -22,12 +22,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/require"
-	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
@@ -42,67 +38,19 @@ type test struct {
 	output []string
 }
 
-func TestHistorianSchemaUpdate(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	tsv := framework.Server
-	historian := tsv.Historian()
-
-	target := &querypb.Target{
-		Keyspace:   "vttest",
-		Shard:      "0",
-		TabletType: tabletpb.TabletType_MASTER,
-		Cell:       "",
-	}
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match: "/.*/",
-		}},
-	}
-	var createTableSQL = "create table historian_test1(id1 int)"
-	var mu sync.Mutex
-	mu.Lock()
-	send := func(events []*binlogdatapb.VEvent) error {
-		for _, ev := range events {
-			if ev.Type == binlogdatapb.VEventType_DDL && ev.Ddl == createTableSQL {
-				log.Info("Found DDL for table historian_test1")
-				mu.Unlock()
-			}
-		}
-		return nil
-	}
-	go func() {
-		if err := tsv.VStream(ctx, target, "current", nil, filter, send); err != nil {
-			fmt.Printf("Error in tsv.VStream: %v", err)
-			t.Error(err)
-		}
-	}()
-
-	require.Nil(t, historian.GetTableForPos(sqlparser.NewTableIdent("historian_test1"), ""))
-	require.NotNil(t, historian.GetTableForPos(sqlparser.NewTableIdent("vitess_test"), ""))
-	client := framework.NewClient()
-	client.Execute(createTableSQL, nil)
-
-	mu.Lock()
-	minSchema := historian.GetTableForPos(sqlparser.NewTableIdent("historian_test1"), "")
-	want := `name:"historian_test1" fields:<name:"id1" type:INT32 table:"historian_test1" org_table:"historian_test1" database:"vttest" org_name:"id1" column_length:11 charset:63 flags:32768 > `
-	require.Equal(t, fmt.Sprintf("%v", minSchema), want)
-
-}
-
 func TestSchemaVersioning(t *testing.T) {
 	// Let's disable the already running tracker to prevent it from
 	// picking events from the previous test, and then re-enable it at the end.
 	tsv := framework.Server
-	tsv.StopTracker()
-	tsv.Historian().SetTrackSchemaVersions(false)
-	defer tsv.StartTracker()
-	defer tsv.Historian().SetTrackSchemaVersions(true)
+	tsv.EnableHistorian(false)
+	tsv.SetTracking(false)
+	defer tsv.EnableHistorian(true)
+	defer tsv.SetTracking(true)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	tsv.Historian().SetTrackSchemaVersions(true)
-	tsv.StartTracker()
+	tsv.EnableHistorian(true)
+	tsv.SetTracking(true)
 
 	target := &querypb.Target{
 		Keyspace:   "vttest",
@@ -206,7 +154,7 @@ func TestSchemaVersioning(t *testing.T) {
 	log.Infof("\n\n\n=============================================== CURRENT EVENTS START HERE ======================\n\n\n")
 	runCases(ctx, t, cases, eventCh)
 
-	tsv.StopTracker()
+	tsv.SetTracking(false)
 	cases = []test{
 		{
 			//comment prefix required so we don't look for ddl in schema_version
@@ -295,7 +243,7 @@ func TestSchemaVersioning(t *testing.T) {
 	cancel()
 
 	log.Infof("\n\n\n=============================================== PAST EVENTS WITHOUT TRACK VERSIONS START HERE ======================\n\n\n")
-	tsv.Historian().SetTrackSchemaVersions(false)
+	tsv.EnableHistorian(false)
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 	eventCh = make(chan []*binlogdatapb.VEvent)

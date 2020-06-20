@@ -103,6 +103,19 @@ func (tr *Tracker) Close() {
 	tr.wg.Wait()
 }
 
+// Enable forces tracking to be on or off.
+// Only used for testing.
+func (tr *Tracker) Enable(enabled bool) {
+	tr.mu.Lock()
+	tr.enabled = enabled
+	tr.mu.Unlock()
+	if enabled {
+		tr.Open()
+	} else {
+		tr.Close()
+	}
+}
+
 func (tr *Tracker) process(ctx context.Context) {
 	defer tr.env.LogError()
 	defer tr.wg.Done()
@@ -151,17 +164,8 @@ func (tr *Tracker) schemaUpdated(gtid string, ddl string, timestamp int64) error
 	dbSchema := &binlogdatapb.MinimalSchema{
 		Tables: []*binlogdatapb.MinimalTable{},
 	}
-	for name, table := range tables {
-		tr := &binlogdatapb.MinimalTable{
-			Name:   name,
-			Fields: table.Fields,
-		}
-		pks := make([]int64, 0)
-		for _, pk := range table.PKColumns {
-			pks = append(pks, int64(pk))
-		}
-		tr.PKColumns = pks
-		dbSchema.Tables = append(dbSchema.Tables, tr)
+	for _, table := range tables {
+		dbSchema.Tables = append(dbSchema.Tables, newMinimalTable(table))
 	}
 	blob, _ := proto.Marshal(dbSchema)
 
@@ -183,6 +187,19 @@ func (tr *Tracker) schemaUpdated(gtid string, ddl string, timestamp int64) error
 		return err
 	}
 	return nil
+}
+
+func newMinimalTable(st *Table) *binlogdatapb.MinimalTable {
+	table := &binlogdatapb.MinimalTable{
+		Name:   st.Name.String(),
+		Fields: st.Fields,
+	}
+	var pkc []int64
+	for _, pk := range st.PKColumns {
+		pkc = append(pkc, int64(pk))
+	}
+	table.PKColumns = pkc
+	return table
 }
 
 func encodeString(in string) string {

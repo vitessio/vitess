@@ -162,7 +162,6 @@ type TabletServer struct {
 	// The following variables should only be accessed within
 	// the context of a startRequest-endRequest.
 	se        *schema.Engine
-	sh        schema.Historian
 	qe        *QueryEngine
 	te        *TxEngine
 	hw        *heartbeat.Writer
@@ -230,8 +229,6 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		alias:                  alias,
 	}
 	tsv.se = schema.NewEngine(tsv)
-	tsv.sh = schema.NewHistorian(tsv.se)
-	tsv.sh.SetTrackSchemaVersions(config.TrackSchemaVersions)
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
 	tsv.te = NewTxEngine(tsv)
 	tsv.txController = tsv.te
@@ -239,7 +236,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.hr = heartbeat.NewReader(tsv)
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
-	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.sh)
+	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se)
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
 	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
@@ -264,16 +261,16 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	return tsv
 }
 
-// StartTracker starts a new replication watcher
-// Only to be used for testing
-func (tsv *TabletServer) StartTracker() {
-	tsv.tracker.Open()
+// SetTracking forces tracking to be on or off.
+// Only to be used for testing.
+func (tsv *TabletServer) SetTracking(enabled bool) {
+	tsv.tracker.Enable(enabled)
 }
 
-// StopTracker turns the watcher off
-// Only to be used for testing
-func (tsv *TabletServer) StopTracker() {
-	tsv.tracker.Close()
+// EnableHistorian forces historian to be on or off.
+// Only to be used for testing.
+func (tsv *TabletServer) EnableHistorian(enabled bool) {
+	_ = tsv.se.EnableHistorian(enabled)
 }
 
 // Register prepares TabletServer for serving by calling
@@ -533,8 +530,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 	}
 	c.Close()
 
-	// sh opens and closes se
-	if err := tsv.sh.Open(); err != nil {
+	if err := tsv.se.Open(); err != nil {
 		log.Errorf("Could not load historian, but starting the query service anyways: %v", err)
 	}
 	if err := tsv.qe.Open(); err != nil {
@@ -1934,11 +1930,6 @@ func (tsv *TabletServer) SetPassthroughDMLs(val bool) {
 // This function should only be used for testing.
 func (tsv *TabletServer) SetConsolidatorMode(mode string) {
 	tsv.qe.consolidatorMode = mode
-}
-
-// Historian returns the associated historian service
-func (tsv *TabletServer) Historian() schema.Historian {
-	return tsv.sh
 }
 
 // queryAsString returns a readable version of query+bind variables.

@@ -60,7 +60,6 @@ type vstreamer struct {
 
 	cp       dbconfigs.Connector
 	se       *schema.Engine
-	sh       schema.Historian
 	startPos string
 	filter   *binlogdatapb.Filter
 	send     func([]*binlogdatapb.VEvent) error
@@ -106,7 +105,7 @@ type streamerPlan struct {
 //   Other constructs like joins, group by, etc. are not supported.
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
-func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, sh schema.Historian, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
+func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	//init copy state
 	return &vstreamer{
@@ -114,7 +113,6 @@ func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine
 		cancel:   cancel,
 		cp:       cp,
 		se:       se,
-		sh:       sh,
 		startPos: startPos,
 		stopPos:  stopPos,
 		filter:   filter,
@@ -156,9 +154,9 @@ func (vs *vstreamer) Stream() error {
 
 // Stream streams binlog events.
 func (vs *vstreamer) replicate(ctx context.Context) error {
-	// Ensure sh is Open. If vttablet came up in a non_serving role,
-	// the historian may not have been initialized.
-	if err := vs.sh.Open(); err != nil {
+	// Ensure se is Open. If vttablet came up in a non_serving role,
+	// the schema engine may not have been initialized.
+	if err := vs.se.Open(); err != nil {
 		return wrapError(err, vs.pos)
 	}
 
@@ -504,7 +502,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		if id == vs.journalTableID {
 			vevents, err = vs.processJournalEvent(vevents, plan, rows)
 		} else if id == vs.versionTableID {
-			vs.sh.RegisterVersionEvent()
+			vs.se.RegisterVersionEvent()
 			vevent := &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_VERSION,
 			}
@@ -634,8 +632,8 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 		})
 	}
 
-	st := vs.sh.GetTableForPos(sqlparser.NewTableIdent(tm.Name), mysql.EncodePosition(vs.pos))
-	if st == nil {
+	st, err := vs.se.GetTableForPos(sqlparser.NewTableIdent(tm.Name), mysql.EncodePosition(vs.pos))
+	if err != nil {
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
 			return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
 		}
