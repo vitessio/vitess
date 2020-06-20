@@ -81,7 +81,7 @@ type uvstreamer struct {
 
 	config *uvstreamerConfig
 
-	vs *vstreamer //last vstreamer created in uvstreamer: FIXME currently used only for setting vschema, find another way?
+	vs *vstreamer //last vstreamer created in uvstreamer
 }
 
 type uvstreamerConfig struct {
@@ -368,7 +368,6 @@ func (uvs *uvstreamer) Stream() error {
 		}
 		uvs.sendTestEvent("Copy Done")
 	}
-	log.V(2).Infof("Starting replicate in uvstreamer.Stream()")
 	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, uvs.sh, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos), uvs.filter, uvs.getVSchema(), uvs.send)
 
 	uvs.setVs(vs)
@@ -376,12 +375,10 @@ func (uvs *uvstreamer) Stream() error {
 }
 
 func (uvs *uvstreamer) lock(msg string) {
-	log.V(2).Infof("Acquiring uvs lock: %s", msg)
 	uvs.mu.Lock()
 }
 
 func (uvs *uvstreamer) unlock(msg string) {
-	log.V(2).Infof("Releasing uvs lock: %s", msg)
 	uvs.mu.Unlock()
 }
 
