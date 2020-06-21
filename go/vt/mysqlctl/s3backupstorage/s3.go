@@ -41,6 +41,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"golang.org/x/net/context"
 
@@ -85,7 +86,7 @@ var logNameMap logNameToLogLevel
 
 // S3BackupHandle implements the backupstorage.BackupHandle interface.
 type S3BackupHandle struct {
-	client    *s3.S3
+	client    s3iface.S3API
 	bs        *S3BackupStorage
 	dir       string
 	name      string
