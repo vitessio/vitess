@@ -136,7 +136,7 @@ func TestConsulTopo(t *testing.T) {
 		}
 		// Alerts command did not run successful
 		if err1 := cmd.Wait(); err1 != nil {
-			log.Errorf("cmd wait has an error: %v", err)
+			log.Errorf("cmd wait has an error: %v", err1)
 		}
 
 		os.Remove(configFilename)
