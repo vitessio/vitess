@@ -72,8 +72,6 @@ func TestSchemaVersioning(t *testing.T) {
 				`other`,
 				`gtid`, //gtid+ddl => actual query
 				`type:DDL ddl:"create table vitess_version (id1 int, id2 int)" `,
-				`gtid`, //gtid+other => insert into schema_version resulting in version+other
-				`other`,
 				`version`,
 				`gtid`,
 			},
@@ -90,8 +88,6 @@ func TestSchemaVersioning(t *testing.T) {
 			output: []string{
 				`gtid`,
 				`type:DDL ddl:"alter table vitess_version add column id3 int" `,
-				`gtid`, //gtid+other => insert into schema_version resulting in version+other
-				`other`,
 				`version`,
 				`gtid`,
 			},
@@ -107,8 +103,6 @@ func TestSchemaVersioning(t *testing.T) {
 			output: []string{
 				`gtid`,
 				`type:DDL ddl:"alter table vitess_version modify column id3 varbinary(16)" `,
-				`gtid`, //gtid+other => insert into schema_version resulting in version+other
-				`other`,
 				`version`,
 				`gtid`,
 			},
@@ -206,8 +200,6 @@ func TestSchemaVersioning(t *testing.T) {
 	output := []string{
 		`gtid`,
 		`type:DDL ddl:"create table vitess_version (id1 int, id2 int)" `,
-		`gtid`,
-		`other`,
 		`version`,
 		`gtid`,
 		`type:FIELD field_event:<table_name:"vitess_version" fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > > `,
@@ -215,8 +207,6 @@ func TestSchemaVersioning(t *testing.T) {
 		`gtid`,
 		`gtid`,
 		`type:DDL ddl:"alter table vitess_version add column id3 int" `,
-		`gtid`,
-		`other`,
 		`version`,
 		`gtid`,
 		`type:FIELD field_event:<table_name:"vitess_version" fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > fields:<name:"id3" type:INT32 > > `,
@@ -224,8 +214,6 @@ func TestSchemaVersioning(t *testing.T) {
 		`gtid`,
 		`gtid`,
 		`type:DDL ddl:"alter table vitess_version modify column id3 varbinary(16)" `,
-		`gtid`,
-		`other`,
 		`version`,
 		`gtid`,
 		`type:FIELD field_event:<table_name:"vitess_version" fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > fields:<name:"id3" type:VARBINARY > > `,
@@ -275,8 +263,6 @@ func TestSchemaVersioning(t *testing.T) {
 	output = []string{
 		`gtid`,
 		`type:DDL ddl:"create table vitess_version (id1 int, id2 int)" `,
-		`gtid`,
-		`other`,
 		`version`,
 		`gtid`,
 		`type:FIELD field_event:<table_name:"vitess_version" fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > > `,
@@ -284,8 +270,6 @@ func TestSchemaVersioning(t *testing.T) {
 		`gtid`,
 		`gtid`,
 		`type:DDL ddl:"alter table vitess_version add column id3 int" `,
-		`gtid`,
-		`other`,
 		`version`,
 		`gtid`,
 		/*at this point we only have latest schema so we have types (int32, int32, varbinary, varbinary) so the types don't match. Hence the @ fieldnames*/
@@ -294,8 +278,6 @@ func TestSchemaVersioning(t *testing.T) {
 		`gtid`,
 		`gtid`,
 		`type:DDL ddl:"alter table vitess_version modify column id3 varbinary(16)" `,
-		`gtid`,
-		`other`,
 		`version`,
 		`gtid`,
 		/*at this point we only have latest schema so we have types (int32, int32, varbinary, varbinary),

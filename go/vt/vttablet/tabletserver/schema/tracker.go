@@ -29,6 +29,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/withddl"
 )
 
 const createSchemaTrackingTable = `CREATE TABLE IF NOT EXISTS _vt.schema_version (
@@ -39,6 +40,8 @@ const createSchemaTrackingTable = `CREATE TABLE IF NOT EXISTS _vt.schema_version
 		  schemax BLOB NOT NULL,
 		  PRIMARY KEY (id)
 		) ENGINE=InnoDB`
+
+var withDDL = withddl.New([]string{createSchemaTrackingTable})
 
 // VStreamer defines  the functions of VStreamer
 // that the replicationWatcher needs.
@@ -174,15 +177,11 @@ func (tr *Tracker) schemaUpdated(gtid string, ddl string, timestamp int64) error
 		return err
 	}
 	defer conn.Recycle()
-	_, err = conn.Exec(ctx, createSchemaTrackingTable, 1, false)
-	if err != nil {
-		return err
-	}
+
 	query := fmt.Sprintf("insert into _vt.schema_version "+
 		"(pos, ddl, schemax, time_updated) "+
 		"values (%v, %v, %v, %d)", encodeString(gtid), encodeString(ddl), encodeString(string(blob)), timestamp)
-
-	_, err = conn.Exec(ctx, query, 1, false)
+	_, err = withDDL.Exec(ctx, query, conn.Exec)
 	if err != nil {
 		return err
 	}
