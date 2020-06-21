@@ -109,7 +109,7 @@ func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string, filesi
 			// Signal the writer that an error occurred, in case it's not done writing yet.
 			reader.CloseWithError(err)
 			// In case the error happened after the writer finished, we need to remember it.
-			bh.errors.RecordError(err)
+			bh.RecordError(err)
 		}
 	}()
 	// Give our caller the write end of the pipe.
@@ -123,7 +123,7 @@ func (bh *CephBackupHandle) EndBackup(ctx context.Context) error {
 	}
 	bh.waitGroup.Wait()
 	// Return the saved PutObject() errors, if any.
-	return bh.errors.Error()
+	return bh.Error()
 }
 
 // AbortBackup implements BackupHandle.

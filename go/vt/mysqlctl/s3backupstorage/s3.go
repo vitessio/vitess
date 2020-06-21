@@ -159,7 +159,7 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 		})
 		if err != nil {
 			reader.CloseWithError(err)
-			bh.errors.RecordError(err)
+			bh.RecordError(err)
 		}
 	}()
 
@@ -172,7 +172,7 @@ func (bh *S3BackupHandle) EndBackup(ctx context.Context) error {
 		return fmt.Errorf("EndBackup cannot be called on read-only backup")
 	}
 	bh.waitGroup.Wait()
-	return bh.errors.Error()
+	return bh.Error()
 }
 
 // AbortBackup is part of the backupstorage.BackupHandle interface.

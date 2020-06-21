@@ -171,7 +171,7 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 		})
 		if err != nil {
 			reader.CloseWithError(err)
-			bh.errors.RecordError(err)
+			bh.RecordError(err)
 		}
 	}()
 
@@ -184,7 +184,7 @@ func (bh *AZBlobBackupHandle) EndBackup(ctx context.Context) error {
 		return fmt.Errorf("EndBackup cannot be called on read-only backup")
 	}
 	bh.waitGroup.Wait()
-	return bh.errors.Error()
+	return bh.Error()
 }
 
 // AbortBackup implements BackupHandle.
