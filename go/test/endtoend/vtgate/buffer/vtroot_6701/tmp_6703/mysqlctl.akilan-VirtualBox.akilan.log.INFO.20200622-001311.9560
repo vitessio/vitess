@@ -1,0 +1,47 @@
+Log file created at: 2020/06/22 00:13:11
+Running on machine: akilan-VirtualBox
+Binary: Built with gc go1.13.9 for linux/amd64
+Log line format: [IWEF]mmdd hh:mm:ss.uuuuuu threadid file:line] msg
+I0622 00:13:11.598406    9560 dbconfigs.go:363] DBConfigs: allprivs:
+  password: '****'
+app:
+  password: '****'
+appdebug:
+  password: '****'
+dba:
+  password: '****'
+  useSsl: true
+  user: vt_dba
+filtered:
+  password: '****'
+repl:
+  password: '****'
+
+I0622 00:13:11.598826    9560 mysqld.go:586] execCmd: /usr/sbin/mysqld /usr/sbin/mysqld [--version]
+I0622 00:13:11.843538    9560 mysqld.go:600] execCmd: /usr/sbin/mysqld output: /usr/sbin/mysqld  Ver 8.0.20-cluster for Linux on x86_64 (MySQL Cluster Community Server - GPL)
+I0622 00:13:11.843955    9560 mysqld.go:169] Using flavor: mysql, version: {8 0 20}
+I0622 00:13:11.844337    9560 mysqld.go:639] mysqlctl.Init
+I0622 00:13:11.844346    9560 mysqld.go:621] mysqlctl.InitConfig
+I0622 00:13:11.844360    9560 mysqld.go:923] creating directory vtroot_6701/vt_0000006994
+I0622 00:13:11.844773    9560 mysqld.go:957] creating directory vtroot_6701/vt_0000006994/data
+I0622 00:13:11.844923    9560 mysqld.go:957] creating directory vtroot_6701/vt_0000006994/innodb
+I0622 00:13:11.845075    9560 mysqld.go:957] creating directory vtroot_6701/vt_0000006994/relay-logs
+I0622 00:13:11.845211    9560 mysqld.go:957] creating directory vtroot_6701/vt_0000006994/bin-logs
+I0622 00:13:11.845343    9560 mysqld.go:933] creating directory vtroot_6701/vt_0000006994/data
+I0622 00:13:11.845356    9560 mysqld.go:933] creating directory vtroot_6701/vt_0000006994/innodb/data
+I0622 00:13:11.845487    9560 mysqld.go:933] creating directory vtroot_6701/vt_0000006994/innodb/logs
+I0622 00:13:11.845620    9560 mysqld.go:933] creating directory vtroot_6701/vt_0000006994/tmp
+I0622 00:13:11.845746    9560 mysqld.go:933] creating directory vtroot_6701/vt_0000006994/relay-logs
+I0622 00:13:11.845759    9560 mysqld.go:933] creating directory vtroot_6701/vt_0000006994/bin-logs
+I0622 00:13:11.845879    9560 mysqld.go:782] make_mycnf hook doesn't exist, reading template files
+I0622 00:13:11.846909    9560 mysqld.go:738] Installing data dir with mysqld --initialize-insecure
+I0622 00:13:11.846922    9560 mysqld.go:586] execCmd: /usr/sbin/mysqld /usr/sbin/mysqld [--defaults-file=vtroot_6701/vt_0000006994/my.cnf --basedir=/usr --initialize-insecure]
+I0622 00:13:11.958261    9560 mysqld.go:597] execCmd: /usr/sbin/mysqld failed: exit status 1
+I0622 00:13:11.958296    9560 mysqld.go:600] execCmd: /usr/sbin/mysqld output: mysqld: [ERROR] Failed to open required defaults file: /usr/vtroot_6701/vt_0000006994/my.cnf
+mysqld: [ERROR] Fatal error in defaults handling. Program aborted!
+E0622 00:13:11.958352    9560 mysqld.go:745] mysqld --initialize-insecure failed: /usr/sbin/mysqld: exit status 1, output: mysqld: [ERROR] Failed to open required defaults file: /usr/vtroot_6701/vt_0000006994/my.cnf
+mysqld: [ERROR] Fatal error in defaults handling. Program aborted!
+
+could not stat mysql error log (vtroot_6701/vt_0000006994/error.log): stat vtroot_6701/vt_0000006994/error.log: no such file or directory
+E0622 00:13:11.967273    9560 mysqlctl.go:259] failed init mysql: /usr/sbin/mysqld: exit status 1, output: mysqld: [ERROR] Failed to open required defaults file: /usr/vtroot_6701/vt_0000006994/my.cnf
+mysqld: [ERROR] Fatal error in defaults handling. Program aborted!

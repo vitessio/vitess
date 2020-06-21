@@ -413,6 +413,6 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 	err1 := clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", newMaster.Alias)
 	//Log error
 	if err1 != nil {
-		log.Errorf("clusterInstance.VtctlclientProcess.ExecuteCommand caused an error : %v", err)
+		log.Errorf("clusterInstance.VtctlclientProcess.ExecuteCommand caused an error : %v", err1)
 	}
 }
