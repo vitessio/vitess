@@ -272,11 +272,9 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 		externalReparenting(ctx, t, clusterInstance)
 	} else {
 		//reparent call
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
+		if err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
 			fmt.Sprintf("%s/%s", keyspaceUnshardedName, "0"),
-			"-new_master", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias)
-
-		if err != nil {
+			"-new_master", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias); err != nil {
 			log.Errorf("clusterInstance.VtctlclientProcess.ExecuteCommand(\"PlannedRepare... caused an error : %v", err)
 		}
 	}
@@ -380,18 +378,14 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 		time.Sleep(time.Duration(w) * time.Second)
 	}
 
-	// Promote replica to new master.
-	_, err2 := replica.VttabletProcess.QueryTablet(promoteSlaveQuery, keyspaceUnshardedName, true)
-
-	//log error
-	if err2 != nil {
-		log.Errorf("replica.VttabletProcess.QueryTablet(promoteSlaveQuery... caused an error : %v", err2)
+	//Promote replica to new master and log error
+	if _, err := replica.VttabletProcess.QueryTablet(promoteSlaveQuery, keyspaceUnshardedName, true); err != nil {
+		log.Errorf("replica.VttabletProcess.QueryTablet(promoteSlaveQuery... caused an error : %v", err)
 	}
 
 	if replica.VttabletProcess.EnableSemiSync {
-		_, err := replica.VttabletProcess.QueryTablet(enableSemiSyncMasterQuery, keyspaceUnshardedName, true)
 		//Log error
-		if err != nil {
+		if _, err := replica.VttabletProcess.QueryTablet(enableSemiSyncMasterQuery, keyspaceUnshardedName, true); err != nil {
 			log.Errorf("replica.VttabletProcess.QueryTablet caused an error : %v", err)
 		}
 	}
@@ -409,10 +403,8 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 		log.Errorf("oldMaster.VttabletProcess.QueryTablet caused an error : %v", err)
 	}
 
-	// Notify the new vttablet master about the reparent.
-	err1 := clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", newMaster.Alias)
-	//Log error
-	if err1 != nil {
+	//Notify the new vttablet master about the reparent and Log error
+	if err := clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", newMaster.Alias); err != nil {
 		log.Errorf("clusterInstance.VtctlclientProcess.ExecuteCommand caused an error : %v", err1)
 	}
 }

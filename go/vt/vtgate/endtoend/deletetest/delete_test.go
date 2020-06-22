@@ -144,7 +144,7 @@ func TestMain(m *testing.M) {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			//log error
 			if err := cluster.TearDown(); err != nil {
-				log.Errorf("cluster.TearDoDoc	wn() did not work: ", err)
+				log.Errorf("cluster.TearDown() did not work: ", err)
 			}
 			return 1
 		}
