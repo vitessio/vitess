@@ -37,9 +37,7 @@ done
 ./scripts/vtctld-down.sh
 
 if [ "${TOPO}" = "zk2" ]; then
-	CELL=zone1 ./scripts/zk-down.sh
-elif [ "${TOPO}" = "k8s" ]; then
-	CELL=zone1 ./scripts/k3s-down.sh
+    CELL=zone1 ./scripts/zk-down.sh
 else
 	CELL=zone1 ./scripts/etcd-down.sh
 fi
