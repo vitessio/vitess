@@ -233,6 +233,21 @@ type (
 	// Rollback represents a Rollback statement.
 	Rollback struct{}
 
+	// SRollback represents a rollback to savepoint statement.
+	SRollback struct {
+		Name ColIdent
+	}
+
+	// Savepoint represents a savepoint statement.
+	Savepoint struct {
+		Name ColIdent
+	}
+
+	// Release represents a release savepoint statement.
+	Release struct {
+		Name ColIdent
+	}
+
 	// Explain represents an EXPLAIN statement
 	Explain struct {
 		Type      string
@@ -266,6 +281,9 @@ func (*Use) iStatement()               {}
 func (*Begin) iStatement()             {}
 func (*Commit) iStatement()            {}
 func (*Rollback) iStatement()          {}
+func (*SRollback) iStatement()         {}
+func (*Savepoint) iStatement()         {}
+func (*Release) iStatement()           {}
 func (*Explain) iStatement()           {}
 func (*OtherRead) iStatement()         {}
 func (*OtherAdmin) iStatement()        {}
@@ -1314,6 +1332,21 @@ func (node *Begin) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *Rollback) Format(buf *TrackedBuffer) {
 	buf.WriteString("rollback")
+}
+
+// Format formats the node.
+func (node *SRollback) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "rollback to %v", node.Name)
+}
+
+// Format formats the node.
+func (node *Savepoint) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "savepoint %v", node.Name)
+}
+
+// Format formats the node.
+func (node *Release) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "release savepoint %v", node.Name)
 }
 
 // Format formats the node.

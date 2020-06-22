@@ -515,6 +515,18 @@ func replaceRangeCondTo(newNode, parent SQLNode) {
 	parent.(*RangeCond).To = newNode.(Expr)
 }
 
+func replaceReleaseName(newNode, parent SQLNode) {
+	parent.(*Release).Name = newNode.(ColIdent)
+}
+
+func replaceSRollbackName(newNode, parent SQLNode) {
+	parent.(*SRollback).Name = newNode.(ColIdent)
+}
+
+func replaceSavepointName(newNode, parent SQLNode) {
+	parent.(*Savepoint).Name = newNode.(ColIdent)
+}
+
 func replaceSelectComments(newNode, parent SQLNode) {
 	parent.(*Select).Comments = newNode.(Comments)
 }
@@ -1159,9 +1171,18 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case ReferenceAction:
 
+	case *Release:
+		a.apply(node, n.Name, replaceReleaseName)
+
 	case *Rollback:
 
 	case *SQLVal:
+
+	case *SRollback:
+		a.apply(node, n.Name, replaceSRollbackName)
+
+	case *Savepoint:
+		a.apply(node, n.Name, replaceSavepointName)
 
 	case *Select:
 		a.apply(node, n.Comments, replaceSelectComments)
