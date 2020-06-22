@@ -352,7 +352,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 
 		//log error
 		if err := callback(&sqltypes.Result{}); err != nil {
-			log.Errorf("callback(&sqltypes.Result{}) failed : %v", err)
+			log.Errorf("callback failed : %v", err)
 		}
 		return nil
 	}
