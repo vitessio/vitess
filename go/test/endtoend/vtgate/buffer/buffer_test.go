@@ -144,7 +144,7 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	c.i++
 
 	if _, err := conn.ExecuteFetch("begin", 1000, true); err != nil {
-		log.Errorf("conn.ExecuteFetch(\"begin\", 1000...: %v", err2)
+		log.Errorf("begin failed:%v", err)
 	}
 
 	result, err := conn.ExecuteFetch(fmt.Sprintf("UPDATE buffer SET msg='update %d' WHERE id = %d", attempt, updateRowID), 1000, true)
