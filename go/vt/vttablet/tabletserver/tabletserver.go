@@ -230,7 +230,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.se = schema.NewEngine(tsv)
 	tsv.hw = heartbeat.NewWriter(tsv, alias)
 	tsv.hr = heartbeat.NewReader(tsv)
-	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se)
+	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, alias.Cell)
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
 	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config)
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
@@ -372,6 +372,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.hw.InitDBConfig(target)
 	tsv.hr.InitDBConfig(target)
 	tsv.txThrottler.InitDBConfig(target)
+	tsv.vstreamer.InitDBConfig(target.Keyspace)
 	return nil
 }
 
@@ -532,7 +533,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 	if err := tsv.se.Open(); err != nil {
 		return err
 	}
-	tsv.vstreamer.Open(tsv.target.Keyspace, tsv.alias.Cell)
+	tsv.vstreamer.Open()
 	if err := tsv.qe.Open(); err != nil {
 		return err
 	}
