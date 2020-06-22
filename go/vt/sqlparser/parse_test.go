@@ -1654,6 +1654,27 @@ var (
 	}, {
 		input:  "do funcCall(), 2 = 1, 3 + 1",
 		output: "otheradmin",
+	}, {
+		input: "savepoint a",
+	}, {
+		input: "savepoint `@@@;a`",
+	}, {
+		input: "rollback to a",
+	}, {
+		input: "rollback to `@@@;a`",
+	}, {
+		input:  "rollback work to a",
+		output: "rollback to a",
+	}, {
+		input:  "rollback to savepoint a",
+		output: "rollback to a",
+	}, {
+		input:  "rollback work to savepoint a",
+		output: "rollback to a",
+	}, {
+		input: "release savepoint a",
+	}, {
+		input: "release savepoint `@@@;a`",
 	}}
 )
 
