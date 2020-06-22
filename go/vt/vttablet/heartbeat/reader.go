@@ -89,11 +89,8 @@ func NewReader(env tabletenv.Env) *Reader {
 	}
 }
 
-// Init does last minute initialization of db settings, such as keyspaceShard.
-func (r *Reader) Init(target querypb.Target) {
-	if !r.enabled {
-		return
-	}
+// InitDBConfig initializes the target name for the Reader.
+func (r *Reader) InitDBConfig(target querypb.Target) {
 	r.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
 }
 

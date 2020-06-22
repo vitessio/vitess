@@ -369,6 +369,8 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.config.DB = dbcfgs
 
 	tsv.se.InitDBConfig(tsv.config.DB.DbaWithDB())
+	tsv.hw.InitDBConfig(target)
+	tsv.hr.InitDBConfig(target)
 	return nil
 }
 
@@ -413,13 +415,11 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, enforceTableACLConfi
 // StartService is a convenience function for InitDBConfig->SetServingType
 // with serving=true.
 func (tsv *TabletServer) StartService(target querypb.Target, dbcfgs *dbconfigs.DBConfigs) (err error) {
-	// Save tablet type away to prevent data races
-	tabletType := target.TabletType
 	err = tsv.InitDBConfig(target, dbcfgs)
 	if err != nil {
 		return err
 	}
-	_ /* state changed */, err = tsv.SetServingType(tabletType, true, nil)
+	_ /* state changed */, err = tsv.SetServingType(target.TabletType, true, nil)
 	return err
 }
 
@@ -537,10 +537,6 @@ func (tsv *TabletServer) fullStart() (err error) {
 	if err := tsv.te.Init(); err != nil {
 		return err
 	}
-	if err := tsv.hw.Init(tsv.target); err != nil {
-		return err
-	}
-	tsv.hr.Init(tsv.target)
 	tsv.vstreamer.Open(tsv.target.Keyspace, tsv.alias.Cell)
 	return tsv.serveNewType()
 }
@@ -551,7 +547,9 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.hr.Close()
 
 		tsv.te.AcceptReadWrite()
-		tsv.hw.Open()
+		if err := tsv.hw.Open(); err != nil {
+			return err
+		}
 		tsv.tracker.Open()
 		if err := tsv.txThrottler.Open(tsv.target.Keyspace, tsv.target.Shard); err != nil {
 			return err
