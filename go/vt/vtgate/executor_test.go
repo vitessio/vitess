@@ -2313,6 +2313,54 @@ func TestGenerateCharsetRows(t *testing.T) {
 	}
 }
 
+func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
+	saveMax := *maxPayloadSize
+	saveWarn := *warnPayloadSize
+	*maxPayloadSize = 10
+	*warnPayloadSize = 5
+	defer func() {
+		*maxPayloadSize = saveMax
+		*warnPayloadSize = saveWarn
+	}()
+
+	executor, _, _, _ := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
+	warningCount := warnings.Counts()["WarnPayloadSizeExceeded"]
+	testMaxPayloadSizeExceeded := []string{
+		"select * from main1",
+		"select * from main1",
+		"insert into main1(id) values (1), (2)",
+		"update main1 set id=1",
+		"delete from main1 where id=1",
+	}
+	for _, query := range testMaxPayloadSizeExceeded {
+		_, err := executor.Execute(context.Background(), "TestExecutorMaxPayloadSizeExceeded", session, query, nil)
+		if err == nil {
+			assert.EqualError(t, err, "query payload size above threshold")
+		}
+	}
+	assert.Equal(t, warningCount, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
+
+	testMaxPayloadSizeOverride := []string{
+		"select /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ * from main1",
+		"insert /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ into main1(id) values (1), (2)",
+		"update /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ main1 set id=1",
+		"delete /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ from main1 where id=1",
+	}
+	for _, query := range testMaxPayloadSizeOverride {
+		_, err := executor.Execute(context.Background(), "TestExecutorMaxPayloadSizeWithOverride", session, query, nil)
+		assert.Equal(t, nil, err, "err should be nil")
+	}
+	assert.Equal(t, warningCount, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
+
+	*maxPayloadSize = 1000
+	for _, query := range testMaxPayloadSizeExceeded {
+		_, err := executor.Execute(context.Background(), "TestExecutorMaxPayloadSizeExceeded", session, query, nil)
+		assert.Equal(t, nil, err, "err should be nil")
+	}
+	assert.Equal(t, warningCount+4, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
+}
+
 func TestOlapSelectDatabase(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 	executor.normalize = true
