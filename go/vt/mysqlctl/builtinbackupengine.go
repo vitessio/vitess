@@ -298,13 +298,13 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupPar
 
 	wg.Wait()
 
-	// BackupHandles now support the ErrorRecorder interface for tracking errors
+	// BackupHandle supports the ErrorRecorder interface for tracking errors
 	// across any goroutines that fan out to take the backup. This means that we
-	// can discard the local error recorder and put everything through the bh.
+	// don't need a local error recorder and can put everything through the bh.
 	//
-	// This mitigates the scenario where bh.AddFile() encounters an error asynchronously,
+	// This handles the scenario where bh.AddFile() encounters an error asynchronously,
 	// which ordinarily would be lost in the context of `be.backupFile`, i.e. if an
-	// error were encoutered
+	// error were encountered
 	// [here](https://github.com/vitessio/vitess/blob/d26b6c7975b12a87364e471e2e2dfa4e253c2a5b/go/vt/mysqlctl/s3backupstorage/s3.go#L139-L142).
 	if bh.HasErrors() {
 		return bh.Error()
