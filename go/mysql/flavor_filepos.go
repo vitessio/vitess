@@ -213,6 +213,34 @@ func parseFilePosReplicationStatus(resultMap map[string]string) (ReplicationStat
 	return status, nil
 }
 
+// masterStatus is part of the Flavor interface.
+func (flv *filePosFlavor) masterStatus(c *Conn) (MasterStatus, error) {
+	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
+	if err != nil {
+		return MasterStatus{}, err
+	}
+	if len(qr.Rows) == 0 {
+		// The query returned no data, meaning the server
+		// is not configured as a master.
+		return MasterStatus{}, ErrNotMaster
+	}
+
+	resultMap, err := resultToMap(qr)
+	if err != nil {
+		return MasterStatus{}, err
+	}
+
+	return parseFilePosMasterStatus(resultMap)
+}
+
+func parseFilePosMasterStatus(resultMap map[string]string) (MasterStatus, error) {
+	status := parseMasterStatus(resultMap)
+
+	status.Position = status.FilePosition
+
+	return status, nil
+}
+
 // waitUntilPositionCommand is part of the Flavor interface.
 func (flv *filePosFlavor) waitUntilPositionCommand(ctx context.Context, pos Position) (string, error) {
 	filePosPos, ok := pos.GTIDSet.(filePosGTID)

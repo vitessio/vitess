@@ -245,6 +245,17 @@ func (s *server) ReplicationStatus(ctx context.Context, request *tabletmanagerda
 	return response, err
 }
 
+func (s *server) MasterStatus(ctx context.Context, request *tabletmanagerdatapb.MasterStatusRequest) (response *tabletmanagerdatapb.MasterStatusResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "MasterStatus", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.MasterStatusResponse{}
+	status, err := s.agent.MasterStatus(ctx)
+	if err == nil {
+		response.Status = status
+	}
+	return response, err
+}
+
 func (s *server) MasterPosition(ctx context.Context, request *tabletmanagerdatapb.MasterPositionRequest) (response *tabletmanagerdatapb.MasterPositionResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "MasterPosition", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)

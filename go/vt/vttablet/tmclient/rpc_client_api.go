@@ -113,6 +113,9 @@ type TabletManagerClient interface {
 	// Deprecated
 	SlaveStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error)
 
+	// MasterStatus returns the tablet's mysql master status.
+	MasterStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error)
+
 	// Deprecated
 	StopSlave(ctx context.Context, tablet *topodatapb.Tablet) error
 

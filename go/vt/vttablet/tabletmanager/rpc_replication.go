@@ -48,6 +48,15 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 	return mysql.ReplicationStatusToProto(status), nil
 }
 
+// MasterStatus returns the replication status fopr a master tablet.
+func (agent *ActionAgent) MasterStatus(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
+	status, err := agent.MysqlDaemon.MasterStatus(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return mysql.MasterStatusToProto(status), nil
+}
+
 // MasterPosition returns the master position
 func (tm *TabletManager) MasterPosition(ctx context.Context) (string, error) {
 	pos, err := tm.MysqlDaemon.MasterPosition()

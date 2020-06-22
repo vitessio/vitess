@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -163,6 +164,49 @@ func parseMariadbReplicationStatus(resultMap map[string]string) (ReplicationStat
 	status.Position.GTIDSet, err = parseMariadbGTIDSet(resultMap["Gtid_Slave_Pos"])
 	if err != nil {
 		return ReplicationStatus{}, vterrors.Wrapf(err, "ReplicationStatus can't parse MariaDB GTID (Gtid_Slave_Pos: %#v)", resultMap["Gtid_Slave_Pos"])
+	}
+
+	return status, nil
+}
+
+// masterStatus is part of the Flavor interface.
+func (m mariadbFlavor) masterStatus(c *Conn) (MasterStatus, error) {
+	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
+	if err != nil {
+		return MasterStatus{}, err
+	}
+	if len(qr.Rows) == 0 {
+		// The query returned no data, meaning the server
+		// is not configured as a master.
+		return MasterStatus{}, ErrNotMaster
+	}
+
+	resultMap, err := resultToMap(qr)
+	if err != nil {
+		return MasterStatus{}, err
+	}
+
+	// SHOW MASTER STATUS does not return the executed GTIDSet for MariaDB, so we patch it in.
+	qr, err = c.ExecuteFetch("SELECT @@GLOBAL.gtid_binlog_pos", 1, false)
+	if err != nil {
+		return MasterStatus{}, err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return MasterStatus{}, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_binlog_pos: %#v", qr)
+	}
+	resultMap["Gtid_Binlog_Pos"] = qr.Rows[0][0].ToString()
+
+	return parseMariadbMasterStatus(resultMap)
+}
+
+
+func parseMariadbMasterStatus(resultMap map[string]string) (MasterStatus, error) {
+	status := parseMasterStatus(resultMap)
+
+	var err error
+	status.Position.GTIDSet, err = parseMariadbGTIDSet(resultMap["Gtid_Binlog_Pos"])
+	if err != nil {
+		return MasterStatus{}, vterrors.Wrapf(err, "MasterStatus can't parse MariaDB GTID (Gtid_Binlog_Pos: %#v)", resultMap["Gtid_Binlog_Pos"])
 	}
 
 	return status, nil

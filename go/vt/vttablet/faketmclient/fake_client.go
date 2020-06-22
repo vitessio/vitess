@@ -176,6 +176,7 @@ func (client *FakeTabletManagerClient) ReplicationStatus(ctx context.Context, ta
 	return &replicationdatapb.Status{}, nil
 }
 
+<<<<<<< HEAD
 // StopReplication is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) StopReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return nil
@@ -183,6 +184,15 @@ func (client *FakeTabletManagerClient) StopReplication(ctx context.Context, tabl
 
 // StopReplicationMinimum is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) StopReplicationMinimum(ctx context.Context, tablet *topodatapb.Tablet, stopPos string, waitTime time.Duration) (string, error) {
+=======
+// MasterStatus is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) MasterStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error) {
+	return &replicationdatapb.MasterStatus{}, nil
+}
+
+// MasterPosition is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) MasterPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+>>>>>>> 13de13f10... Added a MasterStatus() method and carried it through the entire gRPC
 	return "", nil
 }
 

@@ -81,6 +81,8 @@ type RPCTM interface {
 	//Deprecated
 	SlaveStatus(ctx context.Context) (*replicationdatapb.Status, error)
 
+	MasterStatus(ctx context.Context) (*replicationdatapb.MasterStatus, error)
+
 	//Deprecated
 	StopSlave(ctx context.Context) error
 
