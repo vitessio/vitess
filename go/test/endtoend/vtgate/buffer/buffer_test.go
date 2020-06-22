@@ -143,7 +143,7 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	// Value used in next UPDATE query. Increased after every query.
 	c.i++
 
-	if _, err2 := conn.ExecuteFetch("begin", 1000, true); err2 != nil {
+	if _, err := conn.ExecuteFetch("begin", 1000, true); err != nil {
 		log.Errorf("conn.ExecuteFetch(\"begin\", 1000...: %v", err2)
 	}
 
