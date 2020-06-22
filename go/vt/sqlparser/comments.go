@@ -32,6 +32,8 @@ const (
 	DirectiveQueryTimeout = "QUERY_TIMEOUT_MS"
 	// DirectiveScatterErrorsAsWarnings enables partial success scatter select queries
 	DirectiveScatterErrorsAsWarnings = "SCATTER_ERRORS_AS_WARNINGS"
+	// DirectiveIgnoreMaxPayloadSize skips payload size validation when set.
+	DirectiveIgnoreMaxPayloadSize = "IGNORE_MAX_PAYLOAD_SIZE"
 )
 
 func isNonSpace(r rune) bool {
@@ -297,4 +299,25 @@ func SkipQueryPlanCacheDirective(stmt Statement) bool {
 		return false
 	}
 	return false
+}
+
+// IgnoreMaxPayloadSizeDirective returns true if the max payload size override
+// directive is set to true.
+func IgnoreMaxPayloadSizeDirective(stmt Statement) bool {
+	switch stmt := stmt.(type) {
+	case *Select:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		return directives.IsSet(DirectiveIgnoreMaxPayloadSize)
+	case *Insert:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		return directives.IsSet(DirectiveIgnoreMaxPayloadSize)
+	case *Update:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		return directives.IsSet(DirectiveIgnoreMaxPayloadSize)
+	case *Delete:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		return directives.IsSet(DirectiveIgnoreMaxPayloadSize)
+	default:
+		return false
+	}
 }
