@@ -301,7 +301,7 @@ func (fmd *FakeMysqlDaemon) StopSlave(hookExtraEnv map[string]string) error {
 }
 
 // StopSlaveIOThread is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) StopSlaveIOThread() error {
+func (fmd *FakeMysqlDaemon) StopSlaveIOThread(ctx context.Context) error {
 	return fmd.ExecuteSuperQueryList(context.Background(), []string{
 		"STOP SLAVE IO_THREAD",
 	})

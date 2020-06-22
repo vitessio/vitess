@@ -115,8 +115,7 @@ func (mysqld *Mysqld) StopSlave(hookExtraEnv map[string]string) error {
 }
 
 // StopSlaveIOThread stops a slave's IO thread only.
-func (mysqld *Mysqld) StopSlaveIOThread() error {
-	ctx := context.TODO()
+func (mysqld *Mysqld) StopSlaveIOThread(ctx context.Context) error {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return err

@@ -114,7 +114,7 @@ func (agent *ActionAgent) stopSlaveIOThreadLocked(ctx context.Context) error {
 		}
 	}()
 
-	return agent.MysqlDaemon.StopSlaveIOThread()
+	return agent.MysqlDaemon.StopSlaveIOThread(ctx)
 }
 
 // StopSlaveMinimum will stop the slave after it reaches at least the
@@ -669,32 +669,22 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context, stopI
 	}
 	defer agent.unlock()
 
-	// get the status before we stop replication
-	rs, err := agent.MysqlDaemon.SlaveStatus()
-	if err != nil {
-		return nil, vterrors.Wrap(err, "before status failed")
-	}
 	if stopIOThreadOnly {
-		if !rs.SlaveIORunning {
-			return mysql.SlaveStatusToProto(rs), nil
-		}
 		if err := agent.stopSlaveIOThreadLocked(ctx); err != nil {
 			return nil, vterrors.Wrap(err, "stop slave io thread failed")
 		}
 	} else {
-		if !rs.SlaveIORunning && !rs.SlaveSQLRunning {
-			// no replication is running, just return what we got
-			return mysql.SlaveStatusToProto(rs), nil
-		}
 		if err := agent.stopSlaveLocked(ctx); err != nil {
 			return nil, vterrors.Wrap(err, "stop slave failed")
 		}
 	}
-	// now patch in the current position
-	rs.Position, err = agent.MysqlDaemon.MasterPosition()
+
+	// get the status after we stop replication
+	rs, err := agent.MysqlDaemon.SlaveStatus()
 	if err != nil {
-		return nil, vterrors.Wrap(err, "after position failed")
+		return nil, vterrors.Wrap(err, "acquiring slave status failed")
 	}
+
 	return mysql.SlaveStatusToProto(rs), nil
 }
 

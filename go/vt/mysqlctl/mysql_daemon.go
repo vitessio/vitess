@@ -45,7 +45,7 @@ type MysqlDaemon interface {
 	RestartSlave(hookExtraEnv map[string]string) error
 	StartSlaveUntilAfter(ctx context.Context, pos mysql.Position) error
 	StopSlave(hookExtraEnv map[string]string) error
-	StopSlaveIOThread() error
+	StopSlaveIOThread(ctx context.Context) error
 	SlaveStatus() (mysql.SlaveStatus, error)
 	SetSemiSyncEnabled(master, slave bool) error
 	SemiSyncEnabled() (master, slave bool)
