@@ -90,44 +90,35 @@ func NewWriter(env tabletenv.Env, alias topodatapb.TabletAlias) *Writer {
 	}
 }
 
-// Init runs at tablet startup and last minute initialization of db settings, and
-// creates the necessary tables for heartbeat.
-func (w *Writer) Init(target querypb.Target) error {
-	if !w.enabled {
-		return nil
-	}
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	log.Info("Initializing heartbeat table.")
+// InitDBConfig initializes the target name for the Writer.
+func (w *Writer) InitDBConfig(target querypb.Target) {
 	w.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
-
-	if target.TabletType == topodatapb.TabletType_MASTER {
-		err := w.initializeTables(w.env.Config().DB.AppWithDB())
-		if err != nil {
-			w.recordError(err)
-			return err
-		}
-	}
-	return nil
 }
 
 // Open sets up the Writer's db connection and launches the ticker
 // responsible for periodically writing to the heartbeat table.
 // Open may be called multiple times, as long as it was closed since
 // last invocation.
-func (w *Writer) Open() {
+func (w *Writer) Open() error {
 	if !w.enabled {
-		return
+		return nil
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.isOpen {
-		return
+		return nil
 	}
+
+	if err := w.initializeTables(w.env.Config().DB.AppWithDB()); err != nil {
+		w.recordError(err)
+		return err
+	}
+
 	log.Info("Beginning heartbeat writes")
 	w.pool.Open(w.env.Config().DB.AppWithDB(), w.env.Config().DB.DbaWithDB(), w.env.Config().DB.AppDebugWithDB())
 	w.ticks.Start(func() { w.writeHeartbeat() })
 	w.isOpen = true
+	return nil
 }
 
 // Close closes the Writer's db connection and stops the periodic ticker. A writer
