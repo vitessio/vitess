@@ -29,7 +29,7 @@ func TestAddFileError(t *testing.T) {
 
 	wc, err := bh.AddFile(aws.BackgroundContext(), "somefile", 100000)
 	require.NoErrorf(t, err, "AddFile() expected no error, got %s", err)
-	assert.NotEqual(t, nil, wc, "AddFile() expected non-nil WriteCloser")
+	assert.NotNil(t, wc, "AddFile() expected non-nil WriteCloser")
 
 	n, err := wc.Write([]byte("here are some bytes"))
 	require.NoErrorf(t, err, "TestAddFile() could not write to uploader, got %d bytes written, err %s", n, err)
