@@ -59,6 +59,27 @@ const (
 	DirectionBackward
 )
 
+// TableRemovalType specifies the way the a table will be removed
+type TableRemovalType int
+
+// The following consts define if DropSource will drop or rename the table
+const (
+	DropTable = TableRemovalType(iota)
+	RenameTable
+)
+
+func (trt TableRemovalType) String() string {
+	types := [...]string{
+		"DROP TABLE",
+		"RENAME TABLE",
+	}
+	if trt < DropTable || trt > RenameTable {
+		return "Unknown"
+	}
+
+	return types[trt]
+}
+
 // accessType specifies the type of access for a shard (allow/disallow writes).
 type accessType int
 
@@ -293,7 +314,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 }
 
 // DropSources cleans up source tables, shards and blacklisted tables after a MoveTables/Reshard is completed
-func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow string, dryRun bool) (*[]string, error) {
+func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow string, removalType TableRemovalType, dryRun bool) (*[]string, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
 	if err != nil {
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
@@ -328,7 +349,7 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow st
 	}
 	switch ts.migrationType {
 	case binlogdatapb.MigrationType_TABLES:
-		if err := sw.dropSourceTables(ctx); err != nil {
+		if err := sw.removeSourceTables(ctx, removalType); err != nil {
 			return nil, err
 		}
 		if err := sw.dropSourceBlacklistedTables(ctx); err != nil {
@@ -1122,11 +1143,16 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 
 }
 
-func (ts *trafficSwitcher) dropSourceTables(ctx context.Context) error {
+func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {
 	return ts.forAllSources(func(source *tsSource) error {
 		for _, tableName := range ts.tables {
-			ts.wr.Logger().Infof("Dropping table %s.%s\n", source.master.DbName(), tableName)
 			query := fmt.Sprintf("drop table %s.%s", source.master.DbName(), tableName)
+			if removalType == DropTable {
+				ts.wr.Logger().Infof("Dropping table %s.%s\n", source.master.DbName(), tableName)
+			} else {
+				ts.wr.Logger().Infof("Renaming table %s.%s to %s._%s\n", source.master.DbName(), tableName, source.master.DbName(), tableName)
+				query = fmt.Sprintf("rename table %s.%s TO %s._%s", source.master.DbName(), tableName, source.master.DbName(), tableName)
+			}
 			_, err := ts.wr.ExecuteFetchAsDba(ctx, source.master.Alias, query, 1, false, true)
 			if err != nil {
 				ts.wr.Logger().Errorf("Error dropping table %s: %v", tableName, err)
