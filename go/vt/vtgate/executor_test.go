@@ -1881,8 +1881,9 @@ func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
 
 	executor, _, _, _ := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
-	warningCount := warnings.Counts()["PayloadSizeExceeded"]
+	warningCount := warnings.Counts()["WarnPayloadSizeExceeded"]
 	testMaxPayloadSizeExceeded := []string{
+		"select * from main1",
 		"select * from main1",
 		"insert into main1(id) values (1), (2)",
 		"update main1 set id=1",
@@ -1890,41 +1891,30 @@ func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
 	}
 	for _, query := range testMaxPayloadSizeExceeded {
 		_, err := executor.Execute(context.Background(), "TestExecutorMaxPayloadSizeExceeded", session, query, nil)
-		want := "query payload size above threshold"
-		if err == nil || err.Error() != want {
-			t.Errorf("got: %v, want %s", err, want)
+		if err == nil {
+			assert.EqualError(t, err, "query payload size above threshold")
 		}
 	}
-	if got, want := warnings.Counts()["PayloadSizeExceeded"], warningCount; got != want {
-		t.Errorf("warnings count: %v, want %v", got, want)
-	}
+	assert.Equal(t, warningCount, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
 
 	testMaxPayloadSizeOverride := []string{
-		"select /*vt+ MAX_PAYLOAD_SIZE_OVERRIDE=1 */ * from main1",
-		"insert /*vt+ MAX_PAYLOAD_SIZE_OVERRIDE=1 */ into main1(id) values (1), (2)",
-		"update /*vt+ MAX_PAYLOAD_SIZE_OVERRIDE=1 */ main1 set id=1",
-		"delete /*vt+ MAX_PAYLOAD_SIZE_OVERRIDE=1 */ from main1 where id=1",
+		"select /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ * from main1",
+		"insert /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ into main1(id) values (1), (2)",
+		"update /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ main1 set id=1",
+		"delete /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ from main1 where id=1",
 	}
 	for _, query := range testMaxPayloadSizeOverride {
 		_, err := executor.Execute(context.Background(), "TestExecutorMaxPayloadSizeWithOverride", session, query, nil)
-		if err != nil {
-			t.Errorf("error should be nil - got: %v", err)
-		}
+		assert.Equal(t, nil, err, "err should be nil")
 	}
-	if got, want := warnings.Counts()["PayloadSizeExceeded"], warningCount; got != want {
-		t.Errorf("warnings count: %v, want %v", got, want)
-	}
+	assert.Equal(t, warningCount, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
 
 	*maxPayloadSize = 1000
 	for _, query := range testMaxPayloadSizeExceeded {
 		_, err := executor.Execute(context.Background(), "TestExecutorMaxPayloadSizeExceeded", session, query, nil)
-		if err != nil {
-			t.Errorf("error should be nil - got: %v", err)
-		}
+		assert.Equal(t, nil, err, "err should be nil")
 	}
-	if got, want := warnings.Counts()["PayloadSizeExceeded"], warningCount+4; got != want {
-		t.Errorf("warnings count: %v, want %v", got, want)
-	}
+	assert.Equal(t, warningCount+4, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
 }
 
 func TestOlapSelectDatabase(t *testing.T) {
