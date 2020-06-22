@@ -7,9 +7,11 @@ require (
 	github.com/Azure/azure-storage-blob-go v0.8.0
 	github.com/Azure/go-autorest/autorest/adal v0.8.1 // indirect
 	github.com/GeertJohan/go.rice v1.0.0
+	github.com/PuerkitoBio/goquery v1.5.1
 	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878 // indirect
 	github.com/aws/aws-sdk-go v1.28.8
 	github.com/bombsimon/wsl v1.2.8 // indirect
+	github.com/buger/jsonparser v1.0.0
 	github.com/cespare/xxhash/v2 v2.1.1
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/coreos/etcd v3.3.10+incompatible
@@ -38,6 +40,7 @@ require (
 	github.com/hashicorp/go-msgpack v0.5.5 // indirect
 	github.com/hashicorp/golang-lru v0.5.3 // indirect
 	github.com/icrowley/fake v0.0.0-20180203215853-4178557ae428
+	github.com/klauspost/compress v1.10.9 // indirect
 	github.com/klauspost/crc32 v1.2.0 // indirect
 	github.com/klauspost/pgzip v1.2.4
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
@@ -73,7 +76,7 @@ require (
 	github.com/z-division/go-zookeeper v0.0.0-20190128072838-6d7457066b9b
 	golang.org/x/crypto v0.0.0-20191206172530-e9b2fee46413
 	golang.org/x/lint v0.0.0-20190409202823-959b441ac422
-	golang.org/x/net v0.0.0-20190926025831-c00fd9afed17
+	golang.org/x/net v0.0.0-20200202094626-16171245cfb2
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
 	golang.org/x/text v0.3.2
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
@@ -85,6 +88,7 @@ require (
 	gopkg.in/ldap.v2 v2.5.0
 	honnef.co/go/tools v0.0.1-2019.2.3
 	mvdan.cc/unparam v0.0.0-20191111180625-960b1ec0f2c2 // indirect
+	sigs.k8s.io/yaml v1.2.0
 	sourcegraph.com/sqs/pbtypes v1.0.0 // indirect
 	vitess.io/vitess/examples/are-you-alive v0.0.0-20200302220708-6b7695375ce9 // indirect
 )
