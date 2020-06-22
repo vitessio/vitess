@@ -1158,7 +1158,6 @@ func getTestTableFields() []*querypb.Field {
 func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		// queries for twopc
-		sqlTurnoffBinlog:                                {},
 		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):          {},
 		fmt.Sprintf(sqlDropLegacy1, "_vt"):              {},
 		fmt.Sprintf(sqlDropLegacy2, "_vt"):              {},
