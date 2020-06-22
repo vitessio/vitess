@@ -363,7 +363,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	if key == "set names utf8" {
 		//log error
 		if err2 := callback(&sqltypes.Result{}); err2 != nil {
-			log.Errorf("callback(&sqltypes.Result{}) failed : %v", err2)
+			log.Errorf("callback failed : %v", err2)
 		}
 		return nil
 	}
