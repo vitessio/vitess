@@ -2756,7 +2756,6 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			RowsAffected: 1,
 		},
 		// queries for twopc
-		sqlTurnoffBinlog:                                {},
 		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):          {},
 		fmt.Sprintf(sqlDropLegacy1, "_vt"):              {},
 		fmt.Sprintf(sqlDropLegacy2, "_vt"):              {},

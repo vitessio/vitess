@@ -539,9 +539,6 @@ func (tsv *TabletServer) fullStart() (err error) {
 	if err := tsv.txThrottler.Open(); err != nil {
 		return err
 	}
-	if err := tsv.te.Init(); err != nil {
-		return err
-	}
 	return tsv.serveNewType()
 }
 
