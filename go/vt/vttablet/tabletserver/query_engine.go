@@ -258,6 +258,12 @@ func (qe *QueryEngine) Open() error {
 	return nil
 }
 
+// StopServing kills all streaming queries.
+// Other queries are handled by the tsv.requests Waitgroup.
+func (qe *QueryEngine) StopServing() {
+	qe.streamQList.TerminateAll()
+}
+
 // Close must be called to shut down QueryEngine.
 // You must ensure that no more queries will be sent
 // before calling Close.
