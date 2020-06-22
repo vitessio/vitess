@@ -1286,7 +1286,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	query := sql
 	statement := stmt
 	bindVarNeeds := sqlparser.BindVarNeeds{}
-	if !sqlparser.MaxPayloadSizeOverrideDirective(statement) && !isValidPayloadSize(query) {
+	if !sqlparser.IgnoreMaxPayloadSizeDirective(statement) && !isValidPayloadSize(query) {
 		return nil, vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "query payload size above threshold")
 	}
 
@@ -1500,7 +1500,7 @@ func checkLikeOpt(likeOpt string, colNames []string) (string, error) {
 }
 
 // isValidPayloadSize validates whether a query payload is above the
-// configured MaxPayloadSize threshold. The PayloadSizeExceeded will increment
+// configured MaxPayloadSize threshold. The WarnPayloadSizeExceeded will increment
 // if the payload size exceeds the warnPayloadSize.
 
 func isValidPayloadSize(query string) bool {
@@ -1509,7 +1509,7 @@ func isValidPayloadSize(query string) bool {
 		return false
 	}
 	if *warnPayloadSize > 0 && payloadSize > *warnPayloadSize {
-		warnings.Add("PayloadSizeExceeded", 1)
+		warnings.Add("WarnPayloadSizeExceeded", 1)
 	}
 	return true
 }
