@@ -26,6 +26,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -144,6 +145,16 @@ var (
 		input: "select 1 from dual union select 2 from dual union all select 3 from dual union select 4 from dual union all select 5 from dual",
 	}, {
 		input: "(select 1 from dual) order by 1 asc limit 2",
+	}, {
+		input: "(select 1 from dual order by 1 desc) order by 1 asc limit 2",
+	}, {
+		input: "(select 1 from dual)",
+	}, {
+		input: "((select 1 from dual))",
+	}, {
+		input: "select 1 from (select 1 from dual) as t",
+	}, {
+		input: "select 1 from (select 1 from dual union select 2 from dual) as t",
 	}, {
 		input: "select /* distinct */ distinct 1 from t",
 	}, {
@@ -1696,6 +1707,11 @@ func TestParallelValid(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestUnsupported(t *testing.T) {
+	_, err := Parse("select 1 from ((select 1 from dual) union select 2 from dual) as t")
+	assert.Error(t, err) // This should really work, but it doesn't currently
 }
 
 func TestInvalid(t *testing.T) {
