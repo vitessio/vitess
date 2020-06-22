@@ -1,3 +1,19 @@
+/*
+Copyright 2020 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package engine
 
 import (
@@ -54,17 +70,14 @@ func (c *Concatenate) Execute(vcursor VCursor, bindVars map[string]*querypb.Bind
 	for _, source := range c.Sources {
 		qr, err := source.Execute(vcursor, bindVars, wantfields)
 		if err != nil {
-			return nil, vterrors.Wrap(err, "Concatenate.Execute: ")
+			return nil, vterrors.Wrap(err, "Concatenate.Execute")
 		}
-		if wantfields {
-			wantfields = false
+		if result.Fields == nil {
 			result.Fields = qr.Fields
 		}
-		if result.Fields != nil {
-			err = compareFields(result.Fields, qr.Fields)
-			if err != nil {
-				return nil, err
-			}
+		err = compareFields(result.Fields, qr.Fields)
+		if err != nil {
+			return nil, err
 		}
 		if len(qr.Rows) > 0 {
 			result.Rows = append(result.Rows, qr.Rows...)
@@ -78,8 +91,37 @@ func (c *Concatenate) Execute(vcursor VCursor, bindVars map[string]*querypb.Bind
 }
 
 // StreamExecute performs a streaming exec.
-func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
-	panic("implement me")
+func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	var seenFields []*querypb.Field
+	columnCount := 0
+	for _, source := range c.Sources {
+		err := source.StreamExecute(vcursor, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
+			// if we have fields to compare, make sure all the fields are all the same
+			if seenFields == nil {
+				seenFields = resultChunk.Fields
+			} else if resultChunk.Fields != nil {
+				err := compareFields(seenFields, resultChunk.Fields)
+				if err != nil {
+					return err
+				}
+			}
+			if len(resultChunk.Rows) > 0 {
+				if columnCount == 0 {
+					columnCount = len(resultChunk.Rows[0])
+				} else {
+					if len(resultChunk.Rows[0]) != columnCount {
+						return mysql.NewSQLError(mysql.ERWrongNumberOfColumnsInSelect, "21000", "The usasdfasded SELECT statements have a different number of columns")
+					}
+				}
+			}
+
+			return callback(resultChunk)
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // GetFields fetches the field info.
