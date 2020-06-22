@@ -548,9 +548,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.watcher.Close()
 		tsv.hr.Close()
 
-		if err := tsv.hw.Open(); err != nil {
-			return err
-		}
+		tsv.hw.Open()
 		tsv.tracker.Open()
 		tsv.te.AcceptReadWrite()
 		tsv.messager.Open()
