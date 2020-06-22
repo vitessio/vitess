@@ -161,14 +161,14 @@ type TabletServer struct {
 
 	// These are sub-components of TabletServer.
 	se          *schema.Engine
-	qe          *QueryEngine
-	te          *TxEngine
 	hw          *heartbeat.Writer
 	hr          *heartbeat.Reader
 	vstreamer   *vstreamer.Engine
 	tracker     *schema.Tracker
 	watcher     *ReplicationWatcher
+	qe          *QueryEngine
 	txThrottler *txthrottler.TxThrottler
+	te          *TxEngine
 	messager    *messager.Engine
 
 	// streamHealthMutex protects all the following fields
@@ -228,14 +228,14 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	// However, gracefulStop is slightly different because only
 	// some services must be closed, while others should remain open.
 	tsv.se = schema.NewEngine(tsv)
-	tsv.qe = NewQueryEngine(tsv, tsv.se)
-	tsv.te = NewTxEngine(tsv)
 	tsv.hw = heartbeat.NewWriter(tsv, alias)
 	tsv.hr = heartbeat.NewReader(tsv)
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se)
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
 	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config)
+	tsv.qe = NewQueryEngine(tsv, tsv.se)
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
+	tsv.te = NewTxEngine(tsv)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
@@ -371,6 +371,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.se.InitDBConfig(tsv.config.DB.DbaWithDB())
 	tsv.hw.InitDBConfig(target)
 	tsv.hr.InitDBConfig(target)
+	tsv.txThrottler.InitDBConfig(target)
 	return nil
 }
 
@@ -531,13 +532,16 @@ func (tsv *TabletServer) fullStart() (err error) {
 	if err := tsv.se.Open(); err != nil {
 		return err
 	}
+	tsv.vstreamer.Open(tsv.target.Keyspace, tsv.alias.Cell)
 	if err := tsv.qe.Open(); err != nil {
+		return err
+	}
+	if err := tsv.txThrottler.Open(); err != nil {
 		return err
 	}
 	if err := tsv.te.Init(); err != nil {
 		return err
 	}
-	tsv.vstreamer.Open(tsv.target.Keyspace, tsv.alias.Cell)
 	return tsv.serveNewType()
 }
 
@@ -546,22 +550,19 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.watcher.Close()
 		tsv.hr.Close()
 
-		tsv.te.AcceptReadWrite()
 		if err := tsv.hw.Open(); err != nil {
 			return err
 		}
 		tsv.tracker.Open()
-		if err := tsv.txThrottler.Open(tsv.target.Keyspace, tsv.target.Shard); err != nil {
-			return err
-		}
+		tsv.te.AcceptReadWrite()
 		tsv.messager.Open()
 	} else {
 		tsv.messager.Close()
+		tsv.te.AcceptReadOnly()
 		tsv.tracker.Close()
 		tsv.hw.Close()
 		tsv.se.MakeNonMaster()
 
-		tsv.te.AcceptReadOnly()
 		tsv.hr.Open()
 		tsv.watcher.Open()
 	}
@@ -594,11 +595,11 @@ func (tsv *TabletServer) StopService() {
 
 	log.Info("Executing complete shutdown.")
 	tsv.waitForShutdown()
-	tsv.tracker.Close()
+	tsv.qe.Close()
+	tsv.watcher.Close()
 	tsv.vstreamer.Close()
 	tsv.hr.Close()
 	tsv.hw.Close()
-	tsv.qe.Close()
 	tsv.se.Close()
 	log.Info("Shutdown complete.")
 	tsv.transition(StateNotConnected)
@@ -606,9 +607,9 @@ func (tsv *TabletServer) StopService() {
 
 func (tsv *TabletServer) waitForShutdown() {
 	tsv.messager.Close()
-	tsv.txThrottler.Close()
-	tsv.watcher.Close()
 	tsv.te.Close()
+	tsv.txThrottler.Close()
+	tsv.tracker.Close()
 	tsv.qe.StopServing()
 	tsv.requests.Wait()
 }
@@ -617,15 +618,15 @@ func (tsv *TabletServer) waitForShutdown() {
 // It forcibly shuts down everything.
 func (tsv *TabletServer) closeAll() {
 	tsv.messager.Close()
+	tsv.te.Close()
 	tsv.txThrottler.Close()
+	tsv.qe.StopServing()
+	tsv.qe.Close()
 	tsv.watcher.Close()
 	tsv.tracker.Close()
 	tsv.vstreamer.Close()
 	tsv.hr.Close()
 	tsv.hw.Close()
-	tsv.te.Close()
-	tsv.qe.StopServing()
-	tsv.qe.Close()
 	tsv.se.Close()
 	tsv.transition(StateNotConnected)
 }
