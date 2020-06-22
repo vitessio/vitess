@@ -297,10 +297,7 @@ func TestTabletServerSingleSchemaFailure(t *testing.T) {
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	err := tsv.StartService(target, dbcfgs)
-	defer tsv.StopService()
-	if err != nil {
-		t.Fatalf("TabletServer should successfully start even if a table's schema is unloadable, but got error: %v", err)
-	}
+	assert.Error(t, err)
 }
 
 func TestTabletServerCheckMysql(t *testing.T) {
