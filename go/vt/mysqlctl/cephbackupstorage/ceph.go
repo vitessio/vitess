@@ -96,7 +96,7 @@ func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string, filesi
 			err1 := reader.CloseWithError(err)
 			//log error
 			if err1 != nil {
-				log.Errorf("reader.CloseWithError(err) got an error: %v", err1)
+				log.Errorf("reader.CloseWithError failed: %v", err1)
 			}
 			// In case the error happened after the writer finished, we need to remember it.
 			bh.errors.RecordError(err)
