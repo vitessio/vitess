@@ -72,7 +72,7 @@ func main() {
 
 		// Action to perform if there is an error
 		if err := zkd.Shutdown(); err != nil {
-			log.Errorf("failed %v", err)
+			log.Errorf("error during shutdown:%v", err)
 			exit.Return(1)
 		}
 	}
