@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/proto/vttime"
@@ -265,13 +266,17 @@ func (agent *ActionAgent) getGTIDFromTimestamp(ctx context.Context, pos mysql.Po
 
 // replicateUptoGTID replicates upto specified gtid from binlog server
 func (agent *ActionAgent) catchupToGTID(ctx context.Context, gtid string) error {
+	gtid = strings.Replace(gtid, "MySQL56/", "", 1)
+
+	gtidNew := strings.Split(gtid, ":")[0] + ":" + strings.Split(strings.Split(gtid, ":")[1], "-")[1]
 	// TODO: we can use agent.MysqlDaemon.SetMaster , but it uses replDbConfig
 	cmds := []string{
 		"STOP SLAVE FOR CHANNEL '' ",
 		"STOP SLAVE IO_THREAD FOR CHANNEL ''",
 		fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s',MASTER_PORT=%d, MASTER_USER='%s', MASTER_AUTO_POSITION = 1;", *binlogHost, *binlogPort, *binlogUser),
-		fmt.Sprintf(" START SLAVE  UNTIL SQL_BEFORE_GTIDS = '%s'", gtid),
+		fmt.Sprintf(" START SLAVE  UNTIL SQL_BEFORE_GTIDS = '%s'", gtidNew),
 	}
+	fmt.Printf("%v", cmds)
 
 	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
 		return vterrors.Wrap(err, "failed to reset slave")
