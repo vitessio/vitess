@@ -669,18 +669,31 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context, stopI
 	}
 	defer agent.unlock()
 
+	// Get the status before we stop replication.
+	// We need to do this first to bail out if the replica has already been stopped.
+	rs, err := agent.MysqlDaemon.SlaveStatus()
+	if err != nil {
+		return nil, vterrors.Wrap(err, "before status failed")
+	}
 	if stopIOThreadOnly {
+		if !rs.SlaveIORunning {
+			return mysql.SlaveStatusToProto(rs), nil
+		}
 		if err := agent.stopSlaveIOThreadLocked(ctx); err != nil {
 			return nil, vterrors.Wrap(err, "stop slave io thread failed")
 		}
 	} else {
+		if !rs.SlaveIORunning && !rs.SlaveSQLRunning {
+			// no replication is running, just return what we got
+			return mysql.SlaveStatusToProto(rs), nil
+		}
 		if err := agent.stopSlaveLocked(ctx); err != nil {
 			return nil, vterrors.Wrap(err, "stop slave failed")
 		}
 	}
 
-	// get the status after we stop replication
-	rs, err := agent.MysqlDaemon.SlaveStatus()
+	// Get the status after we stop replication so we have up to date position and relay log positions.
+	rs, err = agent.MysqlDaemon.SlaveStatus()
 	if err != nil {
 		return nil, vterrors.Wrap(err, "acquiring slave status failed")
 	}
