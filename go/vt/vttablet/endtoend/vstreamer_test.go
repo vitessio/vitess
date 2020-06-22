@@ -409,6 +409,7 @@ func TestSchemaVersioningLongDDL(t *testing.T) {
 }
 
 func runCases(ctx context.Context, t *testing.T, tests []test, eventCh chan []*binlogdatapb.VEvent) {
+	t.Helper()
 	client := framework.NewClient()
 
 	for _, test := range tests {

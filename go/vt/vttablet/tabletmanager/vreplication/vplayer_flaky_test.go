@@ -1901,7 +1901,7 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 	expectDBClientQueries(t, []string{
 		"/update _vt.vreplication set message='vstream ended'",
 	})
-	if err := streamerEngine.Open(env.KeyspaceName, env.ShardName); err != nil {
+	if err := streamerEngine.Open(); err != nil {
 		t.Fatal(err)
 	}
 
