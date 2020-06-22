@@ -1,1 +1,4 @@
-# Add your test case here for debugging and run go test -run=One.
+# union all using sharded
+"select id from user union all select id from user"
+{
+}
