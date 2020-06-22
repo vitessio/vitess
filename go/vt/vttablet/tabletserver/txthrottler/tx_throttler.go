@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -69,6 +70,8 @@ type TxThrottler struct {
 	// state holds an open transaction throttler state. It is nil
 	// if the TransactionThrottler is closed.
 	state *txThrottlerState
+
+	target querypb.Target
 }
 
 // NewTxThrottler tries to construct a TxThrottler from the
@@ -89,6 +92,11 @@ func NewTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Server) *Tx
 		log.Infof("Initialized transaction throttler with config: %+v", txThrottler.config)
 	}
 	return txThrottler
+}
+
+// InitDBConfig initializes the target parameters for the throttler.
+func (t *TxThrottler) InitDBConfig(target querypb.Target) {
+	t.target = target
 }
 
 func tryCreateTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Server) (*TxThrottler, error) {
@@ -210,7 +218,7 @@ func newTxThrottler(config *txThrottlerConfig) (*TxThrottler, error) {
 }
 
 // Open opens the transaction throttler. It must be called prior to 'Throttle'.
-func (t *TxThrottler) Open(keyspace, shard string) error {
+func (t *TxThrottler) Open() error {
 	if !t.config.enabled {
 		return nil
 	}
@@ -218,7 +226,7 @@ func (t *TxThrottler) Open(keyspace, shard string) error {
 		return fmt.Errorf("transaction throttler already opened")
 	}
 	var err error
-	t.state, err = newTxThrottlerState(t.config, keyspace, shard)
+	t.state, err = newTxThrottlerState(t.config, t.target.Keyspace, t.target.Shard)
 	return err
 }
 
