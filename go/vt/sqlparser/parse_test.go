@@ -26,7 +26,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -155,6 +154,8 @@ var (
 		input: "select 1 from (select 1 from dual) as t",
 	}, {
 		input: "select 1 from (select 1 from dual union select 2 from dual) as t",
+	}, {
+		input: "select 1 from ((select 1 from dual) union select 2 from dual) as t",
 	}, {
 		input: "select /* distinct */ distinct 1 from t",
 	}, {
@@ -1709,19 +1710,11 @@ func TestParallelValid(t *testing.T) {
 	wg.Wait()
 }
 
-func TestUnsupported(t *testing.T) {
-	_, err := Parse("select 1 from ((select 1 from dual) union select 2 from dual) as t")
-	assert.Error(t, err) // This should really work, but it doesn't currently
-}
-
 func TestInvalid(t *testing.T) {
 	invalidSQL := []struct {
 		input string
 		err   string
 	}{{
-		input: "select a from (select * from tbl)",
-		err:   "Every derived table must have its own alias",
-	}, {
 		input: "select a, b from (select * from tbl) sort by a",
 		err:   "syntax error",
 	}, {
@@ -2074,6 +2067,9 @@ func TestPositionedErr(t *testing.T) {
 	}, {
 		input:  "select * from a left join b",
 		output: PositionedErr{"syntax error", 28, nil},
+	}, {
+		input:  "select a from (select * from tbl)",
+		output: PositionedErr{"syntax error", 34, nil},
 	}}
 
 	for _, tcase := range invalidSQL {

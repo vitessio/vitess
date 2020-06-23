@@ -217,7 +217,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> FORMAT TREE VITESS TRADITIONAL
 
 %type <statement> command
-%type <selStmt> derived_table simple_select select_statement base_select union_rhs
+%type <selStmt> simple_select select_statement base_select union_rhs
 %type <statement> explain_statement explainable_statement
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
@@ -255,7 +255,7 @@ func skipToEnd(yylex interface{}) {
 %type <values> tuple_list
 %type <valTuple> row_tuple tuple_or_empty
 %type <expr> tuple_expression
-%type <subquery> subquery
+%type <subquery> subquery derived_table
 %type <colName> column_name
 %type <whens> when_expression_list
 %type <when> when_expression
