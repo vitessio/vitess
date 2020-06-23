@@ -173,7 +173,7 @@ stringData:
       SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
       ON *.* TO 'vt_filtered'@'localhost';
 
-    # User for Orchestrator (https://github.com/github/orchestrator).
+    # User for Orchestrator (https://github.com/openark/orchestrator).
     # TODO: Reenable when the password is randomly generated.
     #CREATE USER 'orc_client_user'@'%' IDENTIFIED BY 'orc_client_user_password';
     #GRANT SUPER, PROCESS, REPLICATION SLAVE, RELOAD
