@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -169,7 +171,14 @@ func addTablet(te *pickerTestEnv, id int, tabletType topodatapb.TabletType, serv
 }
 
 func deleteTablet(te *pickerTestEnv, tablet *topodatapb.Tablet) {
-	te.topoServ.DeleteTablet(context.Background(), tablet.Alias)
-	// This is not automatically removed from shard replication, which results in log spam.
-	topo.DeleteTabletReplicationData(context.Background(), te.topoServ, tablet)
+
+	//log error
+	if err := te.topoServ.DeleteTablet(context.Background(), tablet.Alias); err != nil {
+		log.Errorf("failed to DeleteTablet with alias : %v", err)
+	}
+
+	//This is not automatically removed from shard replication, which results in log spam and log error
+	if err := topo.DeleteTabletReplicationData(context.Background(), te.topoServ, tablet); err != nil {
+		log.Errorf("failed to automatically remove from shard replication: %v", err)
+	}
 }

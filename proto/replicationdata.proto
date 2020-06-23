@@ -36,6 +36,7 @@ message Status {
   string master_host = 5;
   int32 master_port = 6;
   int32 master_connect_retry = 7;
+  string master_uuid = 12;
 }
 
 // StopSlaveStatus represents the slave status before calling stop slave, and the slave status collected immediately after
