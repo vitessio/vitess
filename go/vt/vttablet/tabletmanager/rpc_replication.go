@@ -663,9 +663,9 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, parent *topodat
 
 // StopReplicationAndGetStatus stops MySQL replication, and returns the
 // current status.
-func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context, stopIOThreadOnly bool) (*replicationdatapb.Status, error) {
+func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context, stopIOThreadOnly bool) (StopReplicationAndGetStatusResponse, error) {
 	if err := agent.lock(ctx); err != nil {
-		return nil, err
+		return StopReplicationAndGetStatusResponse{}, err
 	}
 	defer agent.unlock()
 
@@ -673,36 +673,71 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context, stopI
 	// We need to do this first to bail out if the replica has already been stopped.
 	rs, err := agent.MysqlDaemon.SlaveStatus()
 	if err != nil {
-		return nil, vterrors.Wrap(err, "before status failed")
+		return StopReplicationAndGetStatusResponse{}, vterrors.Wrap(err, "before status failed")
 	}
+	before := mysql.SlaveStatusToProto(rs)
+
 	if stopIOThreadOnly {
 		if !rs.SlaveIORunning {
-			return mysql.SlaveStatusToProto(rs), nil
+			return StopReplicationAndGetStatusResponse{
+				Status: before,
+				Before: before,
+			}, nil
 		}
 		if err := agent.stopSlaveIOThreadLocked(ctx); err != nil {
-			return nil, vterrors.Wrap(err, "stop slave io thread failed")
+			return StopReplicationAndGetStatusResponse{
+				Before: before,
+			}, vterrors.Wrap(err, "stop slave io thread failed")
 		}
 	} else {
 		if !rs.SlaveIORunning && !rs.SlaveSQLRunning {
 			// no replication is running, just return what we got
-			return mysql.SlaveStatusToProto(rs), nil
+			return StopReplicationAndGetStatusResponse{
+				Status: before,
+				Before: before,
+			}, nil
 		}
 		if err := agent.stopSlaveLocked(ctx); err != nil {
-			return nil, vterrors.Wrap(err, "stop slave failed")
+			return StopReplicationAndGetStatusResponse{
+				Before: before,
+			}, vterrors.Wrap(err, "stop slave failed")
 		}
 	}
 
 	// Get the status after we stop replication so we have up to date position and relay log positions.
 	rsAfter, err := agent.MysqlDaemon.SlaveStatus()
 	if err != nil {
-		return nil, vterrors.Wrap(err, "acquiring slave status failed")
+		return StopReplicationAndGetStatusResponse{
+			Before: before,
+		}, vterrors.Wrap(err, "acquiring slave status failed")
 	}
+	after := mysql.SlaveStatusToProto(rsAfter)
+
 	rs.Position = rsAfter.Position
 	rs.RelayLogPosition = rsAfter.RelayLogPosition
 	rs.FilePosition = rsAfter.FilePosition
 	rs.FileRelayLogPosition = rsAfter.FileRelayLogPosition
 
-	return mysql.SlaveStatusToProto(rs), nil
+	return StopReplicationAndGetStatusResponse{
+		Status: mysql.SlaveStatusToProto(rs),
+		Before: before,
+		After:  after,
+	}, nil
+}
+
+// StopReplicationAndGetStatusResponse holds the original hybrid Status struct, as well as new Before and After fields, which
+// hold the result of show slave status called before stop slave, and after stop slave.
+type StopReplicationAndGetStatusResponse struct {
+	// Status is deprecated. It currently represents a hybrid struct where all data represents the before state,
+	// except for all position related data which comes from the after state. Please use before and after instead, which are
+	// discrete slave status calls before and after calling stop slave, or stop slave io_thread.
+	Status *replicationdatapb.Status
+
+	// Before represents the slave status call right before calling stop slave.
+	Before *replicationdatapb.Status
+
+	// After represents the slave status call right after calling stop slave.
+	After *replicationdatapb.Status
 }
 
 // PromoteReplica makes the current tablet the master

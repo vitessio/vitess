@@ -413,9 +413,12 @@ func (s *server) StopReplicationAndGetStatus(ctx context.Context, request *table
 	defer s.agent.HandleRPCPanic(ctx, "StopReplicationAndGetStatus", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.StopReplicationAndGetStatusResponse{}
-	status, err := s.agent.StopReplicationAndGetStatus(ctx, request.StopIOThreadOnly)
+	statusResponse, err := s.agent.StopReplicationAndGetStatus(ctx, request.StopIOThreadOnly)
 	if err == nil {
-		response.Status = status
+		response.Status = statusResponse.Status
+		response.Before = statusResponse.Before
+		response.After = statusResponse.After
+
 	}
 	return response, err
 }

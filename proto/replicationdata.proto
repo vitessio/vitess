@@ -37,3 +37,10 @@ message Status {
   int32 master_port = 6;
   int32 master_connect_retry = 7;
 }
+
+// StopSlaveStatus represents the slave status before calling stop slave, and the slave status collected immediately after
+// calling stop slave.
+message StopSlaveStatus {
+  replicationdata.Status before = 1;
+  replicationdata.Status after = 2;
+}

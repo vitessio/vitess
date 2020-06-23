@@ -418,7 +418,16 @@ message StopReplicationAndGetStatusRequest {
 }
 
 message StopReplicationAndGetStatusResponse {
-  replicationdata.Status status = 1;
+  // Status is deprecated. It currently represents a hybrid struct where all data represents the before state,
+  // except for all position related data which comes from the after state. Please use before and after instead, which are
+  // discrete slave status calls before and after calling stop slave, or stop slave io_thread.
+  replicationdata.Status status = 1 [deprecated=true];
+
+  // Before represents the slave status call right before calling stop slave.
+  replicationdata.Status before = 2;
+
+  // After represents the slave status call right after calling stop slave.
+  replicationdata.Status after = 3;
 }
 
 // Deprecated

@@ -730,19 +730,22 @@ func (client *Client) SlaveWasRestarted(ctx context.Context, tablet *topodatapb.
 }
 
 // StopReplicationAndGetStatus is part of the tmclient.TabletManagerClient interface.
-func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopIOThreadOnly bool) (*replicationdatapb.Status, error) {
+func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopIOThreadOnly bool) (hybridStatus *replicationdatapb.Status, status *replicationdatapb.StopSlaveStatus, err error) {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer cc.Close()
 	response, err := c.StopReplicationAndGetStatus(ctx, &tabletmanagerdatapb.StopReplicationAndGetStatusRequest{
 		StopIOThreadOnly: stopIOThreadOnly,
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return response.Status, nil
+	return response.Status, &replicationdatapb.StopSlaveStatus{
+		Before: response.Before,
+		After:  response.After,
+	}, nil
 }
 
 // PromoteReplica is part of the tmclient.TabletManagerClient interface.

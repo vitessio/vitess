@@ -1103,20 +1103,24 @@ func agentRPCTestSlaveWasRestartedPanic(ctx context.Context, t *testing.T, clien
 	expectHandleRPCPanic(t, "SlaveWasRestarted", true /*verbose*/, err)
 }
 
-func (fra *fakeRPCAgent) StopReplicationAndGetStatus(ctx context.Context, stopIOThreadOnly bool) (*replicationdatapb.Status, error) {
+func (fra *fakeRPCAgent) StopReplicationAndGetStatus(ctx context.Context, stopIOThreadOnly bool) (tabletmanager.StopReplicationAndGetStatusResponse, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	return testReplicationStatus, nil
+	return tabletmanager.StopReplicationAndGetStatusResponse{
+		Status: testReplicationStatus,
+		Before: testReplicationStatus,
+		After:  testReplicationStatus,
+	}, nil
 }
 
 func agentRPCTestStopReplicationAndGetStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	rp, err := client.StopReplicationAndGetStatus(ctx, tablet, false)
-	compareError(t, "StopReplicationAndGetStatus", err, rp, testReplicationStatus)
+	hybridRp, _, err := client.StopReplicationAndGetStatus(ctx, tablet, false)
+	compareError(t, "StopReplicationAndGetStatus", err, hybridRp, testReplicationStatus)
 }
 
 func agentRPCTestStopReplicationAndGetStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, err := client.StopReplicationAndGetStatus(ctx, tablet, false)
+	_, _, err := client.StopReplicationAndGetStatus(ctx, tablet, false)
 	expectHandleRPCPanic(t, "StopReplicationAndGetStatus", true /*verbose*/, err)
 }
 

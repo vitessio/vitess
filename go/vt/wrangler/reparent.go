@@ -922,7 +922,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	event.DispatchUpdate(ev, "stop replication on all slaves")
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
-	statusMap := make(map[string]*replicationdatapb.Status)
+	statusMap := make(map[string]*replicationdatapb.StopSlaveStatus)
 	for alias, tabletInfo := range tabletMap {
 		wg.Add(1)
 		go func(alias string, tabletInfo *topo.TabletInfo) {
@@ -931,13 +931,13 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 			ctx, cancel := context.WithTimeout(ctx, waitReplicasTimeout)
 			defer cancel()
 			// TODO: Once we refactor EmergencyReparent, change the stopIOThreadOnly argument to true.
-			rp, err := wr.tmc.StopReplicationAndGetStatus(ctx, tabletInfo.Tablet, false)
+			_, stopSlaveStatus, err := wr.tmc.StopReplicationAndGetStatus(ctx, tabletInfo.Tablet, false)
 			if err != nil {
 				wr.logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", alias, err)
 				return
 			}
 			mu.Lock()
-			statusMap[alias] = rp
+			statusMap[alias] = stopSlaveStatus
 			mu.Unlock()
 		}(alias, tabletInfo)
 	}
@@ -950,23 +950,25 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 
 	// Verify masterElect is alive and has the most advanced position
 	masterElectStatus, ok := statusMap[masterElectTabletAliasStr]
-	if !ok {
+	if !ok || slaveWasRunning(masterElectStatus) && masterElectStatus.After == nil {
 		return fmt.Errorf("couldn't get master elect %v replication position", topoproto.TabletAliasString(masterElectTabletAlias))
 	}
-	masterElectPos, err := mysql.DecodePosition(masterElectStatus.Position)
+	masterElectStrPos := stoppedSlaveStringPosition(masterElectStatus)
+	masterElectPos, err := mysql.DecodePosition(masterElectStrPos)
 	if err != nil {
-		return fmt.Errorf("cannot decode master elect position %v: %v", masterElectStatus.Position, err)
+		return fmt.Errorf("cannot decode master elect position %v: %v", masterElectStrPos, err)
 	}
 	for alias, status := range statusMap {
 		if alias == masterElectTabletAliasStr {
 			continue
 		}
-		pos, err := mysql.DecodePosition(status.Position)
+		posStr := stoppedSlaveStringPosition(status)
+		pos, err := mysql.DecodePosition(posStr)
 		if err != nil {
-			return fmt.Errorf("cannot decode replica %v position %v: %v", alias, status.Position, err)
+			return fmt.Errorf("cannot decode replica %v position %v: %v", alias, posStr, err)
 		}
 		if !masterElectPos.AtLeast(pos) {
-			return fmt.Errorf("tablet %v is more advanced than master elect tablet %v: %v > %v", alias, masterElectTabletAliasStr, status.Position, masterElectStatus.Position)
+			return fmt.Errorf("tablet %v is more advanced than master elect tablet %v: %v > %v", alias, masterElectTabletAliasStr, posStr, masterElectStrPos)
 		}
 	}
 
@@ -1014,7 +1016,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 				wr.logger.Infof("setting new master on slave %v", alias)
 				forceStartSlave := false
 				if status, ok := statusMap[alias]; ok {
-					forceStartSlave = status.SlaveIoRunning || status.SlaveSqlRunning
+					forceStartSlave = slaveWasRunning(status)
 				}
 				if err := wr.tmc.SetMaster(replCtx, tabletInfo.Tablet, masterElectTabletAlias, now, "", forceStartSlave); err != nil {
 					rec.RecordError(fmt.Errorf("tablet %v SetMaster failed: %v", alias, err))
@@ -1090,4 +1092,24 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newMasterAli
 		event.DispatchUpdate(ev, "finished")
 	}
 	return nil
+}
+
+func slaveWasRunning(stopSlaveStatus *replicationdatapb.StopSlaveStatus) bool {
+	if stopSlaveStatus == nil {
+		return false
+	}
+
+	return stopSlaveStatus.Before.SlaveIoRunning || stopSlaveStatus.Before.SlaveSqlRunning
+}
+
+func stoppedSlaveStringPosition(stopSlaveStatus *replicationdatapb.StopSlaveStatus) string {
+	if stopSlaveStatus == nil || (stopSlaveStatus.Before == nil && stopSlaveStatus.After == nil) {
+		return ""
+	}
+
+	if stopSlaveStatus.After != nil {
+		return stopSlaveStatus.After.Position
+	}
+
+	return stopSlaveStatus.Before.Position
 }
