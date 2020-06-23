@@ -336,11 +336,9 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Database DDL %v", sqlparser.String(stmt))
 	case *sqlparser.Show, *sqlparser.SetTransaction:
 		return nil, ErrPlanNotSupported
-	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback:
+	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint, *sqlparser.SRollback, *sqlparser.Release:
 		// Empty by design. Not executed by a plan
 		return nil, nil
-	case *sqlparser.Savepoint, *sqlparser.SRollback, *sqlparser.Release:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Savepoint construct %v", sqlparser.String(stmt))
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
