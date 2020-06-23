@@ -693,10 +693,14 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context, stopI
 	}
 
 	// Get the status after we stop replication so we have up to date position and relay log positions.
-	rs, err = agent.MysqlDaemon.SlaveStatus()
+	rsAfter, err := agent.MysqlDaemon.SlaveStatus()
 	if err != nil {
 		return nil, vterrors.Wrap(err, "acquiring slave status failed")
 	}
+	rs.Position = rsAfter.Position
+	rs.RelayLogPosition = rsAfter.RelayLogPosition
+	rs.FilePosition = rsAfter.FilePosition
+	rs.FileRelayLogPosition = rsAfter.FileRelayLogPosition
 
 	return mysql.SlaveStatusToProto(rs), nil
 }
