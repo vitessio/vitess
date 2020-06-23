@@ -64,6 +64,8 @@ var (
 	}, {
 		input: "select $ from t",
 	}, {
+		input: "select a.b as a$b from $test$",
+	}, {
 		input:  "select 1 from t // aa\n",
 		output: "select 1 from t",
 	}, {
