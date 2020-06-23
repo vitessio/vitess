@@ -1846,14 +1846,14 @@ rollback_statement:
   }
 
 work_opt:
-  { $$ = nil }
+  { $$ = struct{}{} }
 | WORK
-  { $$ = nil }
+  { $$ = struct{}{} }
 
 savepoint_opt:
-  { $$ = nil }
+  { $$ = struct{}{} }
 | SAVEPOINT
-  { $$ = nil }
+  { $$ = struct{}{} }
 
 
 savepoint_statement:

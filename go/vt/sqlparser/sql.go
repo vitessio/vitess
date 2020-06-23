@@ -5564,25 +5564,25 @@ yydefault:
 		yyDollar = yyS[yypt-0 : yypt+1]
 //line sql.y:1849
 		{
-			yyVAL.empty = nil
+			yyVAL.empty = struct{}{}
 		}
 	case 330:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:1851
 		{
-			yyVAL.empty = nil
+			yyVAL.empty = struct{}{}
 		}
 	case 331:
 		yyDollar = yyS[yypt-0 : yypt+1]
 //line sql.y:1854
 		{
-			yyVAL.empty = nil
+			yyVAL.empty = struct{}{}
 		}
 	case 332:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:1856
 		{
-			yyVAL.empty = nil
+			yyVAL.empty = struct{}{}
 		}
 	case 333:
 		yyDollar = yyS[yypt-2 : yypt+1]
