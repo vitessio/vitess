@@ -281,8 +281,8 @@ func (client *FakeTabletManagerClient) SlaveWasRestarted(ctx context.Context, ta
 }
 
 // StopReplicationAndGetStatus is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopIOThreadOnly bool) (*replicationdatapb.Status, error) {
-	return &replicationdatapb.Status{}, nil
+func (client *FakeTabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopIOThreadOnly bool) (*replicationdatapb.Status, *replicationdatapb.StopSlaveStatus, error) {
+	return &replicationdatapb.Status{}, &replicationdatapb.StopSlaveStatus{}, nil
 }
 
 // PromoteReplica is part of the tmclient.TabletManagerClient interface.
