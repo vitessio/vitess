@@ -419,15 +419,3 @@
 # ambiguous LIMIT
 "select id from user limit 1 union all select id from music limit 1"
 "Incorrect usage of UNION and LIMIT - add parens to disambiguate your query (errno 1221) (sqlstate 21000)"
-
-# Savepoint
-"savepoint a"
-"unsupported: Savepoint construct savepoint a"
-
-# Savepoint rollback
-"rollback work to savepoint a"
-"unsupported: Savepoint construct rollback to a"
-
-# Savepoint release
-"release savepoint a"
-"unsupported: Savepoint construct release savepoint a"
