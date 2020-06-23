@@ -26,10 +26,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -171,6 +172,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "use_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "set_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "set_sysvar_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "union_cases.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func TestOne(t *testing.T) {
@@ -331,7 +333,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 
 				if out != tcase.output {
 					fail = true
-					t.Errorf("File: %s, Line: %v\n %s \n%s", filename, tcase.lineno, cmp.Diff(tcase.output, out), out)
+					t.Errorf("File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output, out), tcase.output, out)
 				}
 
 				if err != nil {
@@ -339,7 +341,6 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 				}
 
 				expected.WriteString(fmt.Sprintf("%s\"%s\"\n%s\n\n", tcase.comments, tcase.input, out))
-
 			})
 		}
 		if fail && tempDir != "" {
