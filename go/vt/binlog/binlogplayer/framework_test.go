@@ -121,6 +121,6 @@ func init() {
 
 	//log error
 	if err := flag.Set("binlog_player_protocol", "test") ; err != nil {
-		log.Errorf("failed to set flag \"binlog_player_protocol\" to \"test\":%v", err)
+		log.Errorf("flag.Set(\"binlog_player_protocol\", \"test\") failed :%v", err)
 	}
 }

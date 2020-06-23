@@ -26,8 +26,8 @@ func TestMemory(t *testing.T) {
 	m := newMemory(5, 1*time.Second, 0.10)
 
 	// Add several good rates.
-	if err := m.markGood(201); err != nil {
-		log.Errorf("m.markGood(201) failed :%v ", err)
+	if err5 := m.markGood(201); err5 != nil {
+		log.Errorf("m.markGood(201) failed :%v ", err5)
 	}
 
 	want200 := int64(200)
@@ -36,8 +36,8 @@ func TestMemory(t *testing.T) {
 	}
 
 	//log error
-	if err := m.markGood(101); err != nil {
-		log.Errorf("m.markGood(101) failed :%v ", err)
+	if err4 := m.markGood(101); err4 != nil {
+		log.Errorf("m.markGood(101) failed :%v ", err4)
 	}
 
 	if got := m.highestGood(); got != want200 {
@@ -45,8 +45,8 @@ func TestMemory(t *testing.T) {
 	}
 
 	//log error
-	if err := m.markGood(301); err != nil {
-		log.Errorf(" m.markGood(301) failed :%v ", err)
+	if err3 := m.markGood(301); err3 != nil {
+		log.Errorf(" m.markGood(301) failed :%v ", err3)
 	}
 
 	want300 := int64(300)
@@ -65,7 +65,7 @@ func TestMemory(t *testing.T) {
 	}
 
 	//log error
-	if err := m.markBad(300, sinceZero(0)) ; err != nil {
+	if err2 := m.markBad(300, sinceZero(0)) ; err2 != nil {
 		log.Errorf(" m.markBad(300, sinceZero(0)) failed :%v ", err2)
 	}
 
@@ -77,7 +77,7 @@ func TestMemory(t *testing.T) {
 	}
 
 	//log error
-	if err := m.markBad(311, sinceZero(0)) ; err != nil {
+	if err1 := m.markBad(311, sinceZero(0)) ; err1 != nil {
 		log.Errorf(" m.markBad(311, sinceZero(0)) failed :%v ", err1)
 	}
 

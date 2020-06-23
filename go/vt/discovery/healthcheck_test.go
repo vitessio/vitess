@@ -53,7 +53,7 @@ func init() {
 
 	//log error
 	if err := flag.Set("tablet_protocol", "fake_gateway"); err != nil {
-		log.Errorf("failed to set flag \"tablet_protocol\" to \"fake_gateway\":%v", err)
+		log.Errorf("flag.Set(\"tablet_protocol\", \"fake_gateway\")", err)
 	}
 }
 

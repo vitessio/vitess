@@ -135,8 +135,8 @@ func TestConsulTopo(t *testing.T) {
 			log.Errorf("cmd process kill has an error: %v", err)
 		}
 		// Alerts command did not run successful
-		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd wait has an error: %v", err)
+		if err1 := cmd.Wait(); err1 != nil {
+			log.Errorf("cmd wait has an error: %v", err1)
 		}
 
 		os.Remove(configFilename)
@@ -179,8 +179,8 @@ func TestConsulTopoWithAuth(t *testing.T) {
 			log.Errorf("cmd process kill has an error: %v", err)
 		}
 		// Alerts command did not run successful
-		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd process wait has an error: %v", err)
+		if err1 := cmd.Wait(); err1 != nil {
+			log.Errorf("cmd process wait has an error: %v", err1)
 		}
 		os.Remove(configFilename)
 	}()

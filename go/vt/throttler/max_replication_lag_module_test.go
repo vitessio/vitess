@@ -19,7 +19,7 @@ package throttler
 import (
 	"errors"
 	"fmt"
-	"vitess.io/vitess/go/vt/log"
+	"github.com/prometheus/common/log"
 	"testing"
 	"time"
 
@@ -452,8 +452,11 @@ func TestMaxReplicationLagModule_Increase_BadRateUpperBound(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	//Assume that a bad value of 150 was set @ 30s and log error
-	if err := tf.m.memory.markBad(150, sinceZero(30*time.Second)); err != nil {
+	// Assume that a bad value of 150 was set @ 30s.
+	err1 := tf.m.memory.markBad(150, sinceZero(30*time.Second))
+
+	//log error
+	if err1 != nil {
 		log.Errorf("tf.m.memory.markBad(150, sinceZero(30*time.Second)) falied : %v",err)
 	}
 

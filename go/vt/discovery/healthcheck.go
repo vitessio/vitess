@@ -716,8 +716,8 @@ func (hc *HealthCheckImpl) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	b, err := json.MarshalIndent(status, "", " ")
 	if err != nil {
 		//Error logged
-		if _, err := w.Write([]byte(err.Error())); err != nil {
-			log.Errorf("write to buffer error failed: %v", err)
+		if _, err2 := w.Write([]byte(err.Error())); err2 != nil {
+			log.Errorf("w.Write([]byte(err.Error())) failed: %v", err2)
 		}
 
 		return
@@ -727,8 +727,8 @@ func (hc *HealthCheckImpl) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	json.HTMLEscape(buf, b)
 
 	//Error logged
-	if _, err := w.Write(buf.Bytes()); err != nil {
-		log.Errorf("write to buffer bytes failed: %v", err)
+	if _, err1 := w.Write(buf.Bytes()); err1 != nil {
+		log.Errorf("w.Write(buf.Bytes()) failed: %v", err1)
 	}
 }
 
