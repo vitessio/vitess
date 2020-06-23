@@ -168,7 +168,7 @@ func Init() {
 	}
 
 	if enableHeartbeat {
-		currentConfig.HeartbeatIntervalSeconds = float64(heartbeatInterval) / float64(time.Millisecond)
+		currentConfig.HeartbeatIntervalSeconds = float64(heartbeatInterval) / float64(time.Second)
 	}
 
 	switch *streamlog.QueryLogFormat {

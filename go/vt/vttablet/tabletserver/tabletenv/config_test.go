@@ -18,6 +18,7 @@ package tabletenv
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -133,6 +134,9 @@ txPool:
 }
 
 func TestClone(t *testing.T) {
+	*queryLogHandler = ""
+	*txLogHandler = ""
+
 	cfg1 := &TabletConfig{
 		OltpReadPool: ConnPoolConfig{
 			Size:               16,
@@ -146,4 +150,118 @@ func TestClone(t *testing.T) {
 	assert.Equal(t, cfg1, cfg2)
 	cfg1.OltpReadPool.Size = 10
 	assert.NotEqual(t, cfg1, cfg2)
+}
+
+func TestFlags(t *testing.T) {
+	want := TabletConfig{
+		OltpReadPool: ConnPoolConfig{
+			Size:               16,
+			IdleTimeoutSeconds: 1800,
+			MaxWaiters:         5000,
+		},
+		OlapReadPool: ConnPoolConfig{
+			Size: 200,
+		},
+		TxPool: ConnPoolConfig{
+			Size:           20,
+			TimeoutSeconds: 1,
+			MaxWaiters:     5000,
+		},
+		Oltp: OltpConfig{
+			QueryTimeoutSeconds: 30,
+			TxTimeoutSeconds:    30,
+			MaxRows:             10000,
+		},
+		HotRowProtection: HotRowProtectionConfig{
+			MaxQueueSize:       20,
+			MaxGlobalQueueSize: 1000,
+			MaxConcurrency:     5,
+		},
+		StreamBufferSize:            32768,
+		QueryCacheSize:              5000,
+		SchemaReloadIntervalSeconds: 1800,
+		MessagePostponeParallelism:  4,
+		CacheResultFields:           true,
+		TxThrottlerConfig:           "target_replication_lag_sec: 2\nmax_replication_lag_sec: 10\ninitial_rate: 100\nmax_increase: 1\nemergency_decrease: 0.5\nmin_duration_between_increases_sec: 40\nmax_duration_between_increases_sec: 62\nmin_duration_between_decreases_sec: 20\nspread_backlog_across_sec: 20\nage_bad_rate_after_sec: 180\nbad_rate_increase: 0.1\nmax_rate_approach_threshold: 0.9\n",
+		TxThrottlerHealthCheckCells: []string{},
+		TransactionLimitConfig: TransactionLimitConfig{
+			TransactionLimitPerUser:     0.4,
+			TransactionLimitByUsername:  true,
+			TransactionLimitByPrincipal: true,
+		},
+		EnforceStrictTransTables: true,
+		DB:                       &dbconfigs.DBConfigs{},
+	}
+	assert.Equal(t, want.DB, currentConfig.DB)
+	assert.Equal(t, want, currentConfig)
+
+	// Simple Init.
+	Init()
+	want.OlapReadPool.IdleTimeoutSeconds = 1800
+	want.TxPool.IdleTimeoutSeconds = 1800
+	want.HotRowProtection.Mode = Disable
+	want.Consolidator = Enable
+	assert.Equal(t, want.DB, currentConfig.DB)
+	assert.Equal(t, want, currentConfig)
+
+	enableHotRowProtection = true
+	enableHotRowProtectionDryRun = true
+	Init()
+	want.HotRowProtection.Mode = Dryrun
+	assert.Equal(t, want, currentConfig)
+
+	enableHotRowProtection = true
+	enableHotRowProtectionDryRun = false
+	Init()
+	want.HotRowProtection.Mode = Enable
+	assert.Equal(t, want, currentConfig)
+
+	enableHotRowProtection = false
+	enableHotRowProtectionDryRun = true
+	Init()
+	want.HotRowProtection.Mode = Disable
+	assert.Equal(t, want, currentConfig)
+
+	enableHotRowProtection = false
+	enableHotRowProtectionDryRun = false
+	Init()
+	want.HotRowProtection.Mode = Disable
+	assert.Equal(t, want, currentConfig)
+
+	enableConsolidator = true
+	enableConsolidatorReplicas = true
+	Init()
+	want.Consolidator = NotOnMaster
+	assert.Equal(t, want, currentConfig)
+
+	enableConsolidator = true
+	enableConsolidatorReplicas = false
+	Init()
+	want.Consolidator = Enable
+	assert.Equal(t, want, currentConfig)
+
+	enableConsolidator = false
+	enableConsolidatorReplicas = true
+	Init()
+	want.Consolidator = NotOnMaster
+	assert.Equal(t, want, currentConfig)
+
+	enableConsolidator = false
+	enableConsolidatorReplicas = false
+	Init()
+	want.Consolidator = Disable
+	assert.Equal(t, want, currentConfig)
+
+	enableHeartbeat = true
+	heartbeatInterval = 1 * time.Second
+	Init()
+	want.HeartbeatIntervalSeconds = 1
+	assert.Equal(t, want, currentConfig)
+
+	enableHeartbeat = false
+	heartbeatInterval = 1 * time.Second
+	currentConfig.HeartbeatIntervalSeconds = 0
+	Init()
+	want.HeartbeatIntervalSeconds = 0
+	assert.Equal(t, want, currentConfig)
 }
