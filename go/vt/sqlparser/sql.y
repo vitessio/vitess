@@ -217,7 +217,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> FORMAT TREE VITESS TRADITIONAL
 
 %type <statement> command
-%type <selStmt> select_statement base_select union_lhs union_rhs
+%type <selStmt> simple_select select_statement base_select union_rhs
 %type <statement> explain_statement explainable_statement
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
@@ -255,7 +255,7 @@ func skipToEnd(yylex interface{}) {
 %type <values> tuple_list
 %type <valTuple> row_tuple tuple_or_empty
 %type <expr> tuple_expression
-%type <subquery> subquery
+%type <subquery> subquery derived_table
 %type <colName> column_name
 %type <whens> when_expression_list
 %type <when> when_expression
@@ -401,13 +401,48 @@ select_statement:
     sel.Lock = $4
     $$ = sel
   }
-| union_lhs union_op union_rhs order_by_opt limit_opt lock_opt
+| openb select_statement closeb order_by_opt limit_opt lock_opt
   {
-    $$ = &Union{Type: $2, Left: $1, Right: $3, OrderBy: $4, Limit: $5, Lock: $6}
+    $$ = &Union{FirstStatement: &ParenSelect{Select: $2}, OrderBy: $4, Limit:$5, Lock:$6}
+  }
+| select_statement union_op union_rhs order_by_opt limit_opt lock_opt
+  {
+    $$ = Unionize($1, $3, $2, $4, $5, $6)
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
     $$ = NewSelect(Comments($2), SelectExprs{Nextval{Expr: $5}}, []string{$3}/*options*/, TableExprs{&AliasedTableExpr{Expr: $7}}, nil/*where*/, nil/*groupBy*/, nil/*having*/) 
+  }
+
+// simple_select is an unparenthesized select used for subquery.
+// Allowing parenthesis for subqueries leads to grammar ambiguity.
+// MySQL also seems to have run into this and resolved it the same way.
+// The specific ambiguity comes from the fact that parenthesis means
+// many things:
+// 1. Grouping: (select id from t) order by id
+// 2. Tuple: id in (1, 2, 3)
+// 3. Subquery: id in (select id from t)
+// Example:
+// ((select id from t))
+// Interpretation 1: inner () is for subquery (rule 3), and outer ()
+// is Tuple (rule 2), which degenerates to a simple expression
+// for single value expressions.
+// Interpretation 2: inner () is for grouping (rule 1), and outer
+// is for subquery.
+// Not allowing parenthesis for subselects will force the above
+// construct to use the first interpretation.
+simple_select:
+  base_select order_by_opt limit_opt lock_opt
+  {
+    sel := $1.(*Select)
+    sel.OrderBy = $2
+    sel.Limit = $3
+    sel.Lock = $4
+    $$ = sel
+  }
+| simple_select union_op union_rhs order_by_opt limit_opt lock_opt
+  {
+    $$ = Unionize($1, $3, $2, $4, $5, $6)
   }
 
 stream_statement:
@@ -422,16 +457,6 @@ base_select:
   SELECT comment_opt select_options select_expression_list from_opt where_expression_opt group_by_opt having_opt
   {
     $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*from*/, NewWhere(WhereStr, $6), GroupBy($7), NewWhere(HavingStr, $8)) 
-  }
-
-union_lhs:
-  select_statement
-  {
-    $$ = $1
-  }
-| openb select_statement closeb
-  {
-    $$ = &ParenSelect{Select: $2}
   }
 
 union_rhs:
@@ -2108,19 +2133,19 @@ table_factor:
   {
     $$ = $1
   }
-| subquery as_opt table_id
+| derived_table as_opt table_id
   {
     $$ = &AliasedTableExpr{Expr:$1, As: $3}
-  }
-| subquery
-  {
-    // missed alias for subquery
-    yylex.Error("Every derived table must have its own alias")
-    return 1
   }
 | openb table_references closeb
   {
     $$ = &ParenTableExpr{Exprs: $2}
+  }
+
+derived_table:
+  openb select_statement closeb
+  {
+    $$ = &Subquery{$2}
   }
 
 aliased_table_name:
@@ -2501,7 +2526,7 @@ col_tuple:
   }
 
 subquery:
-  openb select_statement closeb
+  openb simple_select closeb
   {
     $$ = &Subquery{$2}
   }
@@ -3164,11 +3189,6 @@ insert_data:
   {
     $$ = &Insert{Rows: $1}
   }
-| openb select_statement closeb
-  {
-    // Drop the redundant parenthesis.
-    $$ = &Insert{Rows: $2}
-  }
 | openb ins_column_list closeb VALUES tuple_list
   {
     $$ = &Insert{Columns: $2, Rows: $5}
@@ -3176,11 +3196,6 @@ insert_data:
 | openb ins_column_list closeb select_statement
   {
     $$ = &Insert{Columns: $2, Rows: $4}
-  }
-| openb ins_column_list closeb openb select_statement closeb
-  {
-    // Drop the redundant parenthesis.
-    $$ = &Insert{Columns: $2, Rows: $5}
   }
 
 ins_column_list:
