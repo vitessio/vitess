@@ -412,10 +412,10 @@
 "create database foo"
 "unsupported: Database DDL create database foo"
 
-# stupid query is not supported
+# order by inside and outside parenthesis select
 "(select 1 from user order by 1 desc) order by 1 asc limit 2"
 "expected union to produce a route"
 
-# stupid query is not supported
-"(select 1 from user order by 1 desc) union (select 1 from user order by 1 asc) order by 1 asc limit 2"
+# multiple select statement have inner order by with union
+"(select 1 from user order by 1 desc) union (select 1 from user order by 1 asc)"
 "unsupported: SELECT of UNION is non-trivial"

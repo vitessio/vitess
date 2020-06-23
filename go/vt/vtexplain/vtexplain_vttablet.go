@@ -454,7 +454,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		case *sqlparser.Select:
 			selStmt = stmt
 		case *sqlparser.Union:
-			selStmt = stmt.UnionSelects[1].Statement.(*sqlparser.Select)
+			selStmt = stmt.FirstStatement.(*sqlparser.Select)
 		default:
 			return fmt.Errorf("vtexplain: unsupported statement type +%v", reflect.TypeOf(stmt))
 		}
