@@ -20,6 +20,8 @@ import (
 	"context"
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -35,7 +37,9 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 		Cells: []string{"cell", "cell1"},
 	}
 
-	ts.CreateCellsAlias(context.Background(), "region1", cellsAlias)
+	if err := ts.CreateCellsAlias(context.Background(), "region1", cellsAlias); err != nil {
+		log.Errorf("creating cellsAlias \"region1\" failed: %v", err)
+	}
 
 	defer ts.DeleteCellsAlias(context.Background(), "region1")
 
@@ -43,7 +47,9 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 		Cells: []string{"cell2"},
 	}
 
-	ts.CreateCellsAlias(context.Background(), "region2", cellsAlias)
+	if err := ts.CreateCellsAlias(context.Background(), "region2", cellsAlias); err != nil {
+		log.Errorf("creating cellsAlias \"region2\" failed: %v", err)
+	}
 
 	defer ts.DeleteCellsAlias(context.Background(), "region2")
 
