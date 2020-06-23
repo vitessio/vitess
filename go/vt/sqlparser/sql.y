@@ -171,7 +171,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> SEQUENCE
 
 // Transaction Tokens
-%token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK
+%token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
 
 // Type Tokens
 %token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
@@ -223,7 +223,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
-%type <statement> begin_statement commit_statement rollback_statement
+%type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement
 %type <bytes2> comment_opt comment_list
 %type <str> union_op insert_or_replace explain_format_opt wild_opt
 %type <bytes> explain_synonyms
@@ -288,7 +288,7 @@ func skipToEnd(yylex interface{}) {
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id
-%type <empty> as_opt
+%type <empty> as_opt work_opt savepoint_opt
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
 %type <str> set_session_or_global show_session_or_global
@@ -363,6 +363,8 @@ command:
 | begin_statement
 | commit_statement
 | rollback_statement
+| savepoint_statement
+| release_statement
 | explain_statement
 | other_statement
 | flush_statement
@@ -1837,6 +1839,33 @@ rollback_statement:
   ROLLBACK
   {
     $$ = &Rollback{}
+  }
+| ROLLBACK work_opt TO savepoint_opt sql_id
+  {
+    $$ = &SRollback{Name: $5}
+  }
+
+work_opt:
+  { $$ = struct{}{} }
+| WORK
+  { $$ = struct{}{} }
+
+savepoint_opt:
+  { $$ = struct{}{} }
+| SAVEPOINT
+  { $$ = struct{}{} }
+
+
+savepoint_statement:
+  SAVEPOINT sql_id
+  {
+    $$ = &Savepoint{Name: $2}
+  }
+
+release_statement:
+  RELEASE SAVEPOINT sql_id
+  {
+    $$ = &Release{Name: $3}
   }
 
 explain_format_opt:

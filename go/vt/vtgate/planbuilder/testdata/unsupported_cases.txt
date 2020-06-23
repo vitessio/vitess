@@ -419,3 +419,15 @@
 # multiple select statement have inner order by with union
 "(select 1 from user order by 1 desc) union (select 1 from user order by 1 asc)"
 "unsupported: SELECT of UNION is non-trivial"
+
+# Savepoint
+"savepoint a"
+"unsupported: Savepoint construct savepoint a"
+
+# Savepoint rollback
+"rollback work to savepoint a"
+"unsupported: Savepoint construct rollback to a"
+
+# Savepoint release
+"release savepoint a"
+"unsupported: Savepoint construct release savepoint a"
