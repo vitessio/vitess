@@ -247,3 +247,8 @@ func ValuesEqual(vss1, vss2 [][]*querypb.Value) bool {
 	}
 	return true
 }
+
+// GetGateway returns the used gateway
+func (r *Resolver) GetGateway() Gateway {
+	return r.gateway
+}

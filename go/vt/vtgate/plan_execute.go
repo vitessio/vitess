@@ -83,6 +83,15 @@ func (e *Executor) newExecute(ctx context.Context, safeSession *SafeSession, sql
 	case sqlparser.StmtRollback:
 		qr, err := e.handleRollback(ctx, safeSession, logStats)
 		return sqlparser.StmtRollback, qr, err
+	case sqlparser.StmtSavepoint:
+		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, logStats)
+		return sqlparser.StmtSavepoint, qr, err
+	case sqlparser.StmtSRollback:
+		qr, err := e.handleSRollback(ctx, safeSession, plan.Original, logStats)
+		return sqlparser.StmtSRollback, qr, err
+	case sqlparser.StmtRelease:
+		qr, err := e.handleRelease(ctx, safeSession, plan.Original, logStats)
+		return sqlparser.StmtRelease, qr, err
 	}
 
 	// 3: Prepare for execution

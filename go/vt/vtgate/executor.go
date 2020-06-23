@@ -304,6 +304,90 @@ func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession,
 	return &sqltypes.Result{}, err
 }
 
+func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) (*sqltypes.Result, error) {
+	execStart := time.Now()
+	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
+	e.updateQueryCounts("Savepoint", "", "", int64(logStats.ShardQueries))
+	defer func() {
+		logStats.ExecuteTime = time.Since(execStart)
+	}()
+
+	if len(safeSession.ShardSessions) > 0 {
+		var rss []*srvtopo.ResolvedShard
+		for _, shardSession := range safeSession.ShardSessions {
+			rss = append(rss, &srvtopo.ResolvedShard{
+				Target:  shardSession.Target,
+				Gateway: e.resolver.resolver.GetGateway(),
+			})
+		}
+		queries := make([]*querypb.BoundQuery, len(rss))
+		for i := range rss {
+			queries[i] = &querypb.BoundQuery{Sql: sql}
+		}
+
+		qr, errs := e.ExecuteMultiShard(ctx, rss, queries, safeSession, false, false)
+		return qr, vterrors.Aggregate(errs)
+	}
+	return &sqltypes.Result{}, nil
+}
+
+func (e *Executor) handleSRollback(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) (*sqltypes.Result, error) {
+	execStart := time.Now()
+	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
+	e.updateQueryCounts("Rollback Savepoint", "", "", int64(logStats.ShardQueries))
+	defer func() {
+		logStats.ExecuteTime = time.Since(execStart)
+	}()
+
+	if len(safeSession.ShardSessions) > 0 {
+		var rss []*srvtopo.ResolvedShard
+		for _, shardSession := range safeSession.ShardSessions {
+			rss = append(rss, &srvtopo.ResolvedShard{
+				Target:  shardSession.Target,
+				Gateway: e.resolver.resolver.GetGateway(),
+			})
+		}
+		queries := make([]*querypb.BoundQuery, len(rss))
+		for i := range rss {
+			queries[i] = &querypb.BoundQuery{Sql: sql}
+		}
+
+		qr, errs := e.ExecuteMultiShard(ctx, rss, queries, safeSession, false, false)
+		return qr, vterrors.Aggregate(errs)
+	}
+	return &sqltypes.Result{}, nil
+}
+
+func (e *Executor) handleRelease(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) (*sqltypes.Result, error) {
+	execStart := time.Now()
+	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
+	e.updateQueryCounts("Release", "", "", int64(logStats.ShardQueries))
+	defer func() {
+		logStats.ExecuteTime = time.Since(execStart)
+	}()
+
+	if len(safeSession.ShardSessions) > 0 {
+		var rss []*srvtopo.ResolvedShard
+		for _, shardSession := range safeSession.ShardSessions {
+			rss = append(rss, &srvtopo.ResolvedShard{
+				Target:  shardSession.Target,
+				Gateway: e.resolver.resolver.GetGateway(),
+			})
+		}
+		queries := make([]*querypb.BoundQuery, len(rss))
+		for i := range rss {
+			queries[i] = &querypb.BoundQuery{Sql: sql}
+		}
+
+		qr, errs := e.ExecuteMultiShard(ctx, rss, queries, safeSession, false, false)
+		return qr, vterrors.Aggregate(errs)
+	}
+	return &sqltypes.Result{}, nil
+}
+
 // CloseSession closes the current transaction, if any. It is called both for explicit "rollback"
 // statements and implicitly when the mysql server closes the connection.
 func (e *Executor) CloseSession(ctx context.Context, safeSession *SafeSession) error {
