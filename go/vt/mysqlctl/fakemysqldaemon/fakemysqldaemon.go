@@ -50,7 +50,7 @@ type FakeMysqlDaemon struct {
 
 	// MysqlPort will be returned by GetMysqlPort(). Set to -1 to
 	// return an error.
-	MysqlPort int32
+	MysqlPort sync2.AtomicInt32
 
 	// Replicating is updated when calling StartSlave / StopSlave
 	// (it is not used at all when calling SlaveStatus, it is the
@@ -210,10 +210,10 @@ func (fmd *FakeMysqlDaemon) Wait(ctx context.Context, cnf *mysqlctl.Mycnf) error
 
 // GetMysqlPort is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) GetMysqlPort() (int32, error) {
-	if fmd.MysqlPort == -1 {
+	if fmd.MysqlPort.Get() == -1 {
 		return 0, fmt.Errorf("FakeMysqlDaemon.GetMysqlPort returns an error")
 	}
-	return fmd.MysqlPort, nil
+	return fmd.MysqlPort.Get(), nil
 }
 
 // SlaveStatus is part of the MysqlDaemon interface

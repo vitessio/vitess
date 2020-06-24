@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/golang/protobuf/proto"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -199,50 +200,14 @@ func MakeStringTypeList(types []topodatapb.TabletType) []string {
 	return strs
 }
 
-// SetMysqlPort sets the mysql port for tablet. This function
-// also handles legacy by setting the port in PortMap.
-// TODO(sougou); deprecate this function after 3.0.
-func SetMysqlPort(tablet *topodatapb.Tablet, port int32) {
-	if tablet.MysqlHostname == "" || tablet.MysqlHostname == tablet.Hostname {
-		tablet.PortMap["mysql"] = port
-	}
-	// If it's the legacy form, preserve old behavior to prevent
-	// confusion between new and old code.
-	if tablet.MysqlHostname != "" {
-		tablet.MysqlPort = port
-	}
-}
-
 // MysqlAddr returns the host:port of the mysql server.
 func MysqlAddr(tablet *topodatapb.Tablet) string {
-	return fmt.Sprintf("%v:%v", MysqlHostname(tablet), MysqlPort(tablet))
-}
-
-// MysqlHostname returns the mysql host name. This function
-// also handles legacy behavior: it uses the tablet's hostname
-// if MysqlHostname is not specified.
-// TODO(sougou); deprecate this function after 3.0.
-func MysqlHostname(tablet *topodatapb.Tablet) string {
-	if tablet.MysqlHostname == "" {
-		return tablet.Hostname
-	}
-	return tablet.MysqlHostname
-}
-
-// MysqlPort returns the mysql port. This function
-// also handles legacy behavior: it uses the tablet's port map
-// if MysqlHostname is not specified.
-// TODO(sougou); deprecate this function after 3.0.
-func MysqlPort(tablet *topodatapb.Tablet) int32 {
-	if tablet.MysqlHostname == "" {
-		return tablet.PortMap["mysql"]
-	}
-	return tablet.MysqlPort
+	return netutil.JoinHostPort(tablet.MysqlHostname, tablet.MysqlPort)
 }
 
 // MySQLIP returns the MySQL server's IP by resolvign the host name.
 func MySQLIP(tablet *topodatapb.Tablet) (string, error) {
-	ipAddrs, err := net.LookupHost(MysqlHostname(tablet))
+	ipAddrs, err := net.LookupHost(tablet.MysqlHostname)
 	if err != nil {
 		return "", err
 	}
