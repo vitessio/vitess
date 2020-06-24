@@ -48,6 +48,20 @@ func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 	return pb.bldr.Primitive(), nil
 }
 
+//IsLockingFunc returns true for all functions that are used to work with mysql advisory locks
+func IsLockingFunc(name string) bool {
+	_, foundInMap := lockingFunctions[name]
+	return foundInMap
+}
+
+var lockingFunctions = map[string]interface{}{
+	"get_lock":          nil,
+	"is_free_lock":      nil,
+	"is_used_lock":      nil,
+	"release_all_locks": nil,
+	"release_lock":      nil,
+}
+
 // processSelect builds a primitive tree for the given query or subquery.
 // The tree built by this function has the following general structure:
 //
