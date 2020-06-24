@@ -315,7 +315,7 @@ var commands = []commandGroup{
 				"[-cell=<cell>] [-tablet_types=<source_tablet_types>] -workflow=<workflow> <source_keyspace> <target_keyspace> <table_specs>",
 				`Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{""column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{""column": "id2", "name": "hash"}]}}`},
 			{"DropSources", commandDropSources,
-				"[-dry_run] [-rename_table] <keyspace.workflow>",
+				"[-dry_run] [-rename_tables] <keyspace.workflow>",
 				"After a MoveTables or Resharding workflow cleanup unused artifacts like source tables, source shards and blacklists"},
 			{"CreateLookupVindex", commandCreateLookupVindex,
 				"[-cell=<cell>] [-tablet_types=<source_tablet_types>] <keyspace> <json_spec>",
@@ -2042,7 +2042,7 @@ func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFla
 
 func commandDropSources(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of commandDropSources and only reports the actions to be taken")
-	renameTable := subFlags.Bool("rename_table", false, "Rename tables instead of dropping them")
+	renameTable := subFlags.Bool("rename_tables", false, "Rename tables instead of dropping them")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
