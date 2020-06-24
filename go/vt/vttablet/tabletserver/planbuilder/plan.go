@@ -262,7 +262,7 @@ func BuildMessageStreaming(name string, tables map[string]*schema.Table) (*Plan,
 func checkForPoolingUnsafeConstructs(expr sqlparser.SQLNode) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		if f, ok := node.(*sqlparser.FuncExpr); ok {
-			if planbuilder.IsLockingFunc(f.Name.Lowered()) {
+			if planbuilder.IsLockingFunc(f) {
 				return false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s() not allowed", f.Name.String())
 			}
 		}
