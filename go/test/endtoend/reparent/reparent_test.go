@@ -204,14 +204,6 @@ func TestReparentCrossCell(t *testing.T) {
 }
 
 func TestReparentGraceful(t *testing.T) {
-	reparentGraceful(t, false)
-}
-
-func TestReparentGracefulRecovery(t *testing.T) {
-	reparentGraceful(t, true)
-}
-
-func reparentGraceful(t *testing.T, confusedMaster bool) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
@@ -270,20 +262,7 @@ func reparentGraceful(t *testing.T, confusedMaster bool) {
 
 	checkMasterTablet(t, tablet62044)
 
-	// Simulate a master that forgets it's master and becomes replica.
-	// PlannedReparentShard should be able to recover by reparenting to the same master again,
-	// as long as all tablets are available to check that it's safe.
-	if confusedMaster {
-		tablet62044.Type = "replica"
-		err = clusterInstance.VtctlclientProcess.InitTablet(tablet62044, tablet62044.Cell, keyspaceName, hostname, shardName)
-		require.Nil(t, err)
-
-		err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshState", tablet62044.Alias)
-		require.Nil(t, err)
-	}
-
-	// Perform a graceful reparent to the same master.
-	// It should be idempotent, and should fix any inconsistencies if necessary
+	// A graceful reparent to the same master should be idempotent.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
 		"PlannedReparentShard",
 		"-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shardName),

@@ -102,20 +102,27 @@ type journalEvent struct {
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
 func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon) *Engine {
-	dbClientFactory := func() binlogplayer.DBClient {
-		return binlogplayer.NewDBClient(config.DB.FilteredWithDB())
-	}
 	vre := &Engine{
-		controllers:     make(map[int]*controller),
-		ts:              ts,
-		cell:            cell,
-		mysqld:          mysqld,
-		dbClientFactory: dbClientFactory,
-		dbName:          config.DB.DBName,
-		journaler:       make(map[string]*journalEvent),
-		ec:              newExternalConnector(config.ExternalConnections),
+		controllers: make(map[int]*controller),
+		ts:          ts,
+		cell:        cell,
+		mysqld:      mysqld,
+		journaler:   make(map[string]*journalEvent),
+		ec:          newExternalConnector(config.ExternalConnections),
 	}
 	return vre
+}
+
+// InitDBConfig should be invoked after the db name is computed.
+func (vre *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
+	// If we're already initilized, it's a test engine. Ignore the call.
+	if vre.dbClientFactory != nil {
+		return
+	}
+	vre.dbClientFactory = func() binlogplayer.DBClient {
+		return binlogplayer.NewDBClient(dbcfgs.FilteredWithDB())
+	}
+	vre.dbName = dbcfgs.DBName
 }
 
 // NewTestEngine creates a new Engine for testing.

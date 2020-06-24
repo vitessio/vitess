@@ -213,7 +213,7 @@ func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.Sha
 	for _, tablet := range tabletMap {
 		ip, err := topoproto.MySQLIP(tablet.Tablet)
 		if err != nil {
-			results <- fmt.Errorf("could not resolve IP for tablet %s: %v", topoproto.MysqlHostname(tablet.Tablet), err)
+			results <- fmt.Errorf("could not resolve IP for tablet %s: %v", tablet.Tablet.MysqlHostname, err)
 			continue
 		}
 		tabletIPMap[normalizeIP(ip)] = tablet.Tablet
@@ -235,7 +235,7 @@ func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.Sha
 
 		ip, err := topoproto.MySQLIP(tablet.Tablet)
 		if err != nil {
-			results <- fmt.Errorf("could not resolve IP for tablet %s: %v", topoproto.MysqlHostname(tablet.Tablet), err)
+			results <- fmt.Errorf("could not resolve IP for tablet %s: %v", tablet.Tablet.MysqlHostname, err)
 			continue
 		}
 		if !slaveIPMap[normalizeIP(ip)] {

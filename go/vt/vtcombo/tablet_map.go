@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"strings"
 	"time"
 
 	"golang.org/x/net/context"
@@ -29,6 +28,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/health"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -56,22 +56,23 @@ import (
 )
 
 // tablet contains all the data for an individual tablet.
-type tablet struct {
+type comboTablet struct {
 	// configuration parameters
+	alias      *topodatapb.TabletAlias
 	keyspace   string
 	shard      string
 	tabletType topodatapb.TabletType
 	dbname     string
 
 	// objects built at construction time
-	qsc   tabletserver.Controller
-	agent *tabletmanager.ActionAgent
+	qsc tabletserver.Controller
+	tm  *tabletmanager.TabletManager
 }
 
 // tabletMap maps the tablet uid to the tablet record
-var tabletMap map[uint32]*tablet
+var tabletMap map[uint32]*comboTablet
 
-// CreateTablet creates an individual tablet, with its agent, and adds
+// CreateTablet creates an individual tablet, with its tm, and adds
 // it to the map. If it's a master tablet, it also issues a TER.
 func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32, keyspace, shard, dbname string, tabletType topodatapb.TabletType, mysqld mysqlctl.MysqlDaemon, dbcfgs *dbconfigs.DBConfigs) error {
 	alias := &topodatapb.TabletAlias{
@@ -86,30 +87,58 @@ func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 	if tabletType == topodatapb.TabletType_MASTER {
 		initTabletType = topodatapb.TabletType_REPLICA
 	}
-	agent := tabletmanager.NewComboActionAgent(ctx, ts, alias, int32(8000+uid), int32(9000+uid), controller, dbcfgs, mysqld, keyspace, shard, dbname, strings.ToLower(initTabletType.String()))
+	_, kr, err := topo.ValidateShardName(shard)
+	if err != nil {
+		return err
+	}
+	tm := &tabletmanager.TabletManager{
+		BatchCtx:            context.Background(),
+		TopoServer:          ts,
+		MysqlDaemon:         mysqld,
+		DBConfigs:           dbcfgs,
+		QueryServiceControl: controller,
+		HealthReporter:      health.DefaultAggregator,
+	}
+	tablet := &topodatapb.Tablet{
+		Alias: alias,
+		PortMap: map[string]int32{
+			"vt":   int32(8000 + uid),
+			"grpc": int32(9000 + uid),
+		},
+		Keyspace:       keyspace,
+		Shard:          shard,
+		KeyRange:       kr,
+		Type:           initTabletType,
+		DbNameOverride: dbname,
+	}
+	if err := tm.Start(tablet); err != nil {
+		return err
+	}
+
 	if tabletType == topodatapb.TabletType_MASTER {
-		if err := agent.ChangeType(ctx, topodatapb.TabletType_MASTER); err != nil {
+		if err := tm.ChangeType(ctx, topodatapb.TabletType_MASTER); err != nil {
 			return fmt.Errorf("TabletExternallyReparented failed on master %v: %v", topoproto.TabletAliasString(alias), err)
 		}
 	}
 	controller.AddStatusHeader()
 	controller.AddStatusPart()
-	tabletMap[uid] = &tablet{
+	tabletMap[uid] = &comboTablet{
+		alias:      alias,
 		keyspace:   keyspace,
 		shard:      shard,
 		tabletType: tabletType,
 		dbname:     dbname,
 
-		qsc:   controller,
-		agent: agent,
+		qsc: controller,
+		tm:  tm,
 	}
 	return nil
 }
 
-// InitTabletMap creates the action agents and associated data structures
+// InitTabletMap creates the action tms and associated data structures
 // for all tablets, based on the vttest proto parameter.
 func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl.MysqlDaemon, dbcfgs *dbconfigs.DBConfigs, schemaDir string, mycnf *mysqlctl.Mycnf, ensureDatabase bool) error {
-	tabletMap = make(map[uint32]*tablet)
+	tabletMap = make(map[uint32]*comboTablet)
 
 	ctx := context.Background()
 
@@ -200,7 +229,7 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 
 						_, err = conn.ExecuteFetch("CREATE DATABASE IF NOT EXISTS `"+dbname+"`", 1, false)
 						if err != nil {
-							return fmt.Errorf("Error ensuring database exists: %v", err)
+							return fmt.Errorf("error ensuring database exists: %v", err)
 						}
 
 					}
@@ -270,9 +299,9 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 	// run healthcheck on all vttablets
 	tmc := tmclient.NewTabletManagerClient()
 	for _, tablet := range tabletMap {
-		tabletInfo, err := ts.GetTablet(ctx, tablet.agent.TabletAlias)
+		tabletInfo, err := ts.GetTablet(ctx, tablet.alias)
 		if err != nil {
-			return fmt.Errorf("cannot find tablet: %+v", tablet.agent.TabletAlias)
+			return fmt.Errorf("cannot find tablet: %+v", tablet.alias)
 		}
 		tmc.RunHealthCheck(ctx, tabletInfo.Tablet)
 	}
@@ -300,7 +329,7 @@ func dialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservi
 // internalTabletConn implements queryservice.QueryService by forwarding everything
 // to the tablet
 type internalTabletConn struct {
-	tablet     *tablet
+	tablet     *comboTablet
 	topoTablet *topodatapb.Tablet
 }
 
@@ -499,7 +528,7 @@ func (itmc *internalTabletManagerClient) Ping(ctx context.Context, tablet *topod
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	t.agent.Ping(ctx, "payload")
+	t.tm.Ping(ctx, "payload")
 	return nil
 }
 
@@ -508,7 +537,7 @@ func (itmc *internalTabletManagerClient) GetSchema(ctx context.Context, tablet *
 	if !ok {
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.agent.GetSchema(ctx, tables, excludeTables, includeViews)
+	return t.tm.GetSchema(ctx, tables, excludeTables, includeViews)
 }
 
 func (itmc *internalTabletManagerClient) GetPermissions(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.Permissions, error) {
@@ -516,7 +545,7 @@ func (itmc *internalTabletManagerClient) GetPermissions(ctx context.Context, tab
 	if !ok {
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.agent.GetPermissions(ctx)
+	return t.tm.GetPermissions(ctx)
 }
 
 func (itmc *internalTabletManagerClient) SetReadOnly(ctx context.Context, tablet *topodatapb.Tablet) error {
@@ -532,7 +561,7 @@ func (itmc *internalTabletManagerClient) ChangeType(ctx context.Context, tablet 
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	t.agent.ChangeType(ctx, dbType)
+	t.tm.ChangeType(ctx, dbType)
 	return nil
 }
 
@@ -541,7 +570,7 @@ func (itmc *internalTabletManagerClient) Sleep(ctx context.Context, tablet *topo
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	t.agent.Sleep(ctx, duration)
+	t.tm.Sleep(ctx, duration)
 	return nil
 }
 
@@ -554,7 +583,7 @@ func (itmc *internalTabletManagerClient) RefreshState(ctx context.Context, table
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.agent.RefreshState(ctx)
+	return t.tm.RefreshState(ctx)
 }
 
 func (itmc *internalTabletManagerClient) RunHealthCheck(ctx context.Context, tablet *topodatapb.Tablet) error {
@@ -562,7 +591,7 @@ func (itmc *internalTabletManagerClient) RunHealthCheck(ctx context.Context, tab
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	t.agent.RunHealthCheck(ctx)
+	t.tm.RunHealthCheck(ctx)
 	return nil
 }
 
@@ -571,7 +600,7 @@ func (itmc *internalTabletManagerClient) IgnoreHealthError(ctx context.Context, 
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	t.agent.IgnoreHealthError(ctx, pattern)
+	t.tm.IgnoreHealthError(ctx, pattern)
 	return nil
 }
 
@@ -580,7 +609,7 @@ func (itmc *internalTabletManagerClient) ReloadSchema(ctx context.Context, table
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.agent.ReloadSchema(ctx, waitPosition)
+	return t.tm.ReloadSchema(ctx, waitPosition)
 }
 
 func (itmc *internalTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
@@ -588,7 +617,7 @@ func (itmc *internalTabletManagerClient) PreflightSchema(ctx context.Context, ta
 	if !ok {
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.agent.PreflightSchema(ctx, changes)
+	return t.tm.PreflightSchema(ctx, changes)
 }
 
 func (itmc *internalTabletManagerClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
@@ -596,7 +625,7 @@ func (itmc *internalTabletManagerClient) ApplySchema(ctx context.Context, tablet
 	if !ok {
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.agent.ApplySchema(ctx, change)
+	return t.tm.ApplySchema(ctx, change)
 }
 
 func (itmc *internalTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {

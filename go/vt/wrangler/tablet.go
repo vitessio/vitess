@@ -53,7 +53,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 
 	if createShardAndKeyspace {
 		// create the parent keyspace and shard if needed
-		si, err = wr.ts.GetOrCreateShard(ctx, tablet.Keyspace, tablet.Shard, tablet.Alias.GetCell())
+		si, err = wr.ts.GetOrCreateShard(ctx, tablet.Keyspace, tablet.Shard)
 	} else {
 		si, err = wr.ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 		if topo.IsErrType(err, topo.NoNode) {
@@ -235,7 +235,7 @@ func (wr *Wrangler) isMasterTablet(ctx context.Context, ti *topo.TabletInfo) (bo
 	}
 	// Shard record has another tablet as master, so check MasterTermStartTime
 	// If tablet record's MasterTermStartTime is later than the one in the shard record, then tablet is master
-	tabletMTST := logutil.ProtoToTime(ti.MasterTermStartTime)
-	shardMTST := logutil.ProtoToTime(si.MasterTermStartTime)
+	tabletMTST := ti.GetMasterTermStartTime()
+	shardMTST := si.GetMasterTermStartTime()
 	return tabletMTST.After(shardMTST), nil
 }
