@@ -1,0 +1,18 @@
+[Unit]
+Description="etcd server"
+Requires=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=vitess
+Group=vitess
+ExecStart=/var/opt/etcd/etcd --data-dir=/var/run/etcd
+KillMode=process
+KillSignal=SIGINT
+Restart=on-failure
+LimitNOFILE=1024
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target
