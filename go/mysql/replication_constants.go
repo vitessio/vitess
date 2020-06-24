@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+//nolint:unparam
 package mysql
 
 // This file contains the constant definitions for this package.
