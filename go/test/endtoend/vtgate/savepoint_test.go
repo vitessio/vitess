@@ -27,8 +27,9 @@ func TestSavepoint(t *testing.T) {
 	exec(t, conn, "delete from t1")
 
 	exec(t, conn, "start transaction")
-	exec(t, conn, "savepoint a")
 	exec(t, conn, "insert into t1(id1, id2) values(1,1)")
+	exec(t, conn, "savepoint a")
+	exec(t, conn, "insert into t1(id1, id2) values(2,2)")
 	qr := exec(t, conn, "select id1, id2 from t1")
 	require.Equal(t, `[[INT64(1) INT64(1)]]`, fmt.Sprintf("%v", qr.Rows))
 	exec(t, conn, "rollback work to savepoint a")

@@ -313,23 +313,26 @@ func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession
 		logStats.ExecuteTime = time.Since(execStart)
 	}()
 
-	if len(safeSession.ShardSessions) > 0 {
-		var rss []*srvtopo.ResolvedShard
-		for _, shardSession := range safeSession.ShardSessions {
-			rss = append(rss, &srvtopo.ResolvedShard{
-				Target:  shardSession.Target,
-				Gateway: e.resolver.resolver.GetGateway(),
-			})
+	if len(safeSession.ShardSessions) == 0 {
+		if safeSession.InTransaction() {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported savepoint: no open transaction on the shard")
 		}
-		queries := make([]*querypb.BoundQuery, len(rss))
-		for i := range rss {
-			queries[i] = &querypb.BoundQuery{Sql: sql}
-		}
-
-		qr, errs := e.ExecuteMultiShard(ctx, rss, queries, safeSession, false, false)
-		return qr, vterrors.Aggregate(errs)
+		return &sqltypes.Result{}, nil
 	}
-	return &sqltypes.Result{}, nil
+	var rss []*srvtopo.ResolvedShard
+	for _, shardSession := range safeSession.ShardSessions {
+		rss = append(rss, &srvtopo.ResolvedShard{
+			Target:  shardSession.Target,
+			Gateway: e.resolver.resolver.GetGateway(),
+		})
+	}
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{Sql: sql}
+	}
+
+	qr, errs := e.ExecuteMultiShard(ctx, rss, queries, safeSession, false, false)
+	return qr, vterrors.Aggregate(errs)
 }
 
 func (e *Executor) handleSRollback(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) (*sqltypes.Result, error) {
@@ -341,23 +344,25 @@ func (e *Executor) handleSRollback(ctx context.Context, safeSession *SafeSession
 		logStats.ExecuteTime = time.Since(execStart)
 	}()
 
-	if len(safeSession.ShardSessions) > 0 {
-		var rss []*srvtopo.ResolvedShard
-		for _, shardSession := range safeSession.ShardSessions {
-			rss = append(rss, &srvtopo.ResolvedShard{
-				Target:  shardSession.Target,
-				Gateway: e.resolver.resolver.GetGateway(),
-			})
-		}
-		queries := make([]*querypb.BoundQuery, len(rss))
-		for i := range rss {
-			queries[i] = &querypb.BoundQuery{Sql: sql}
-		}
-
-		qr, errs := e.ExecuteMultiShard(ctx, rss, queries, safeSession, false, false)
-		return qr, vterrors.Aggregate(errs)
+	if len(safeSession.ShardSessions) == 0 {
+		return &sqltypes.Result{}, nil
 	}
-	return &sqltypes.Result{}, nil
+
+	var rss []*srvtopo.ResolvedShard
+	for _, shardSession := range safeSession.ShardSessions {
+		rss = append(rss, &srvtopo.ResolvedShard{
+			Target:  shardSession.Target,
+			Gateway: e.resolver.resolver.GetGateway(),
+		})
+	}
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{Sql: sql}
+	}
+
+	qr, errs := e.ExecuteMultiShard(ctx, rss, queries, safeSession, false, false)
+	return qr, vterrors.Aggregate(errs)
+
 }
 
 func (e *Executor) handleRelease(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) (*sqltypes.Result, error) {
@@ -369,23 +374,23 @@ func (e *Executor) handleRelease(ctx context.Context, safeSession *SafeSession, 
 		logStats.ExecuteTime = time.Since(execStart)
 	}()
 
-	if len(safeSession.ShardSessions) > 0 {
-		var rss []*srvtopo.ResolvedShard
-		for _, shardSession := range safeSession.ShardSessions {
-			rss = append(rss, &srvtopo.ResolvedShard{
-				Target:  shardSession.Target,
-				Gateway: e.resolver.resolver.GetGateway(),
-			})
-		}
-		queries := make([]*querypb.BoundQuery, len(rss))
-		for i := range rss {
-			queries[i] = &querypb.BoundQuery{Sql: sql}
-		}
-
-		qr, errs := e.ExecuteMultiShard(ctx, rss, queries, safeSession, false, false)
-		return qr, vterrors.Aggregate(errs)
+	if len(safeSession.ShardSessions) == 0 {
+		return &sqltypes.Result{}, nil
 	}
-	return &sqltypes.Result{}, nil
+	var rss []*srvtopo.ResolvedShard
+	for _, shardSession := range safeSession.ShardSessions {
+		rss = append(rss, &srvtopo.ResolvedShard{
+			Target:  shardSession.Target,
+			Gateway: e.resolver.resolver.GetGateway(),
+		})
+	}
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{Sql: sql}
+	}
+
+	qr, errs := e.ExecuteMultiShard(ctx, rss, queries, safeSession, false, false)
+	return qr, vterrors.Aggregate(errs)
 }
 
 // CloseSession closes the current transaction, if any. It is called both for explicit "rollback"
