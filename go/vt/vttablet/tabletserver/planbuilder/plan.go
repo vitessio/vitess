@@ -19,6 +19,8 @@ package planbuilder
 import (
 	"encoding/json"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
@@ -260,8 +262,8 @@ func BuildMessageStreaming(name string, tables map[string]*schema.Table) (*Plan,
 func checkForPoolingUnsafeConstructs(expr sqlparser.SQLNode) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		if f, ok := node.(*sqlparser.FuncExpr); ok {
-			if f.Name.Lowered() == "get_lock" {
-				return false, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "get_lock() not allowed")
+			if planbuilder.IsLockingFunc(f.Name.Lowered()) {
+				return false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s() not allowed", f.Name.String())
 			}
 		}
 
