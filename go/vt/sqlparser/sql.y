@@ -139,6 +139,7 @@ func skipToEnd(yylex interface{}) {
 // support all operators yet.
 // * NOTE: If you change anything here, update precedence.go as well *
 %left <bytes> OR
+%left <bytes> XOR
 %left <bytes> AND
 %right <bytes> NOT '!'
 %left <bytes> BETWEEN CASE WHEN THEN ELSE END
@@ -2396,6 +2397,10 @@ expression:
   {
     $$ = &OrExpr{Left: $1, Right: $3}
   }
+| expression XOR expression
+  {
+    $$ = &XorExpr{Left: $1, Right: $3}
+  }
 | NOT expression
   {
     $$ = &NotExpr{Expr: $2}
@@ -3589,6 +3594,7 @@ reserved_keyword:
 | WHEN
 | WHERE
 | WINDOW
+| XOR
 
 /*
   These are non-reserved Vitess, because they don't cause conflicts in the grammar.
