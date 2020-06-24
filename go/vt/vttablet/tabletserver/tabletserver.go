@@ -29,8 +29,6 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
-
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/history"
@@ -142,6 +140,8 @@ type TabletServer struct {
 	QueryTimeout           sync2.AtomicDuration
 	TerseErrors            bool
 	enableHotRowProtection bool
+	topoServer             *topo.Server
+	checkMySQLThrottler    *sync2.Semaphore
 
 	// mu is used to access state. The lock should only be held
 	// for short periods. For longer periods, you have to transition
@@ -159,28 +159,17 @@ type TabletServer struct {
 	alsoAllow []topodatapb.TabletType
 	requests  sync.WaitGroup
 
-	// The following variables should only be accessed within
-	// the context of a startRequest-endRequest.
-	se        *schema.Engine
-	sh        schema.Historian
-	qe        *QueryEngine
-	te        *TxEngine
-	hw        *heartbeat.Writer
-	hr        *heartbeat.Reader
-	tracker   *schema.Tracker
-	watcher   *ReplicationWatcher
-	vstreamer *vstreamer.Engine
-	messager  *messager.Engine
-
-	txController tx.EngineStateMachine
-
-	// checkMySQLThrottler is used to throttle the number of
-	// requests sent to CheckMySQL.
-	checkMySQLThrottler *sync2.Semaphore
-
-	// txThrottler is used to throttle transactions based on the observed replication lag.
+	// These are sub-components of TabletServer.
+	se          *schema.Engine
+	qe          *QueryEngine
+	te          *TxEngine
+	hw          *heartbeat.Writer
+	hr          *heartbeat.Reader
+	vstreamer   *vstreamer.Engine
+	tracker     *schema.Tracker
+	watcher     *ReplicationWatcher
 	txThrottler *txthrottler.TxThrottler
-	topoServer  *topo.Server
+	messager    *messager.Engine
 
 	// streamHealthMutex protects all the following fields
 	streamHealthMutex          sync.Mutex
@@ -223,26 +212,30 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.Oltp.QueryTimeoutSeconds * 1e9)),
 		TerseErrors:            config.TerseErrors,
 		enableHotRowProtection: config.HotRowProtection.Mode != tabletenv.Disable,
+		topoServer:             topoServer,
 		checkMySQLThrottler:    sync2.NewSemaphore(1, 0),
 		streamHealthMap:        make(map[int]chan<- *querypb.StreamHealthResponse),
 		history:                history.New(10),
-		topoServer:             topoServer,
 		alias:                  alias,
 	}
+
+	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
+
+	// The following services should generally be opened in the order
+	// of initialization below, and closed in reverse order.
+	// However, gracefulStop is slightly different because only
+	// some services must be closed, while others should remain open.
 	tsv.se = schema.NewEngine(tsv)
-	tsv.sh = schema.NewHistorian(tsv.se)
-	tsv.sh.SetTrackSchemaVersions(config.TrackSchemaVersions)
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
 	tsv.te = NewTxEngine(tsv)
-	tsv.txController = tsv.te
 	tsv.hw = heartbeat.NewWriter(tsv, alias)
 	tsv.hr = heartbeat.NewReader(tsv)
+	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se)
+	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
+	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config)
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
-	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
-	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.sh)
-	tsv.tracker = schema.NewTracker(tsv.se)
-	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config, tsv.tracker)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
+
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
 		tsv.mu.Lock()
 		defer tsv.mu.Unlock()
@@ -264,23 +257,16 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	return tsv
 }
 
-// StartTracker starts a new replication watcher
-// Only to be used for testing
-func (tsv *TabletServer) StartTracker() {
-	tsv.config.TrackSchemaVersions = true
-	tsv.config.WatchReplication = true
-	tsv.tracker.Open()
-	//need to close and reopen watcher since it is already opened in the tsv init and is idempotent ...
-	tsv.watcher.Close()
-	tsv.watcher.watchReplication = true
-	tsv.watcher.Open()
+// SetTracking forces tracking to be on or off.
+// Only to be used for testing.
+func (tsv *TabletServer) SetTracking(enabled bool) {
+	tsv.tracker.Enable(enabled)
 }
 
-// StopTracker turns the watcher off
-// Only to be used for testing
-func (tsv *TabletServer) StopTracker() {
-	tsv.config.TrackSchemaVersions = false
-	tsv.tracker.Close()
+// EnableHistorian forces historian to be on or off.
+// Only to be used for testing.
+func (tsv *TabletServer) EnableHistorian(enabled bool) {
+	_ = tsv.se.EnableHistorian(enabled)
 }
 
 // Register prepares TabletServer for serving by calling
@@ -540,14 +526,13 @@ func (tsv *TabletServer) fullStart() (err error) {
 	}
 	c.Close()
 
-	// sh opens and closes se
-	if err := tsv.sh.Open(); err != nil {
+	if err := tsv.se.Open(); err != nil {
 		log.Errorf("Could not load historian, but starting the query service anyways: %v", err)
 	}
 	if err := tsv.qe.Open(); err != nil {
 		return err
 	}
-	if err := tsv.txController.Init(); err != nil {
+	if err := tsv.te.Init(); err != nil {
 		return err
 	}
 	if err := tsv.hw.Init(tsv.target); err != nil {
@@ -555,39 +540,30 @@ func (tsv *TabletServer) fullStart() (err error) {
 	}
 	tsv.hr.Init(tsv.target)
 	tsv.vstreamer.Open(tsv.target.Keyspace, tsv.alias.Cell)
-	tsv.watcher.Open()
 	return tsv.serveNewType()
 }
 
 func (tsv *TabletServer) serveNewType() (err error) {
-	// Wait for in-flight transactional requests to complete
-	// before rolling back everything. In this state new
-	// transactional requests are not allowed. So, we can
-	// be sure that the tx pool won't change after the wait.
 	if tsv.target.TabletType == topodatapb.TabletType_MASTER {
-		tsv.txController.AcceptReadWrite()
+		tsv.watcher.Close()
+		tsv.hr.Close()
+
+		tsv.te.AcceptReadWrite()
+		tsv.hw.Open()
+		tsv.tracker.Open()
 		if err := tsv.txThrottler.Open(tsv.target.Keyspace, tsv.target.Shard); err != nil {
 			return err
 		}
 		tsv.messager.Open()
-		tsv.hr.Close()
-		tsv.hw.Open()
-		log.Info("Opening tracker, trackschemaversions is %t", tsv.config.TrackSchemaVersions)
-		tsv.tracker.Open()
-		if tsv.config.TrackSchemaVersions {
-			log.Info("Starting watcher")
-			tsv.watcher.Open()
-		}
 	} else {
-		tsv.txController.AcceptReadOnly()
 		tsv.messager.Close()
-		tsv.hr.Open()
-		tsv.hw.Close()
-		tsv.watcher.Open()
 		tsv.tracker.Close()
-
-		// Reset the sequences.
+		tsv.hw.Close()
 		tsv.se.MakeNonMaster()
+
+		tsv.te.AcceptReadOnly()
+		tsv.hr.Open()
+		tsv.watcher.Open()
 	}
 	tsv.transition(StateServing)
 	return nil
@@ -601,10 +577,9 @@ func (tsv *TabletServer) gracefulStop() {
 
 // StopService shuts down the tabletserver to the uninitialized state.
 // It first transitions to StateShuttingDown, then waits for active
-// services to shut down. Then it shuts down QueryEngine. This function
+// services to shut down. Then it shuts down the rest. This function
 // should be called before process termination, or if MySQL is unreachable.
-// Under normal circumstances, SetServingType should be called, which will
-// keep QueryEngine open.
+// Under normal circumstances, SetServingType should be called.
 func (tsv *TabletServer) StopService() {
 	defer close(tsv.setTimeBomb())
 	defer tsv.LogError()
@@ -617,45 +592,41 @@ func (tsv *TabletServer) StopService() {
 	tsv.setState(StateShuttingDown)
 	tsv.mu.Unlock()
 
-	log.Infof("Executing complete shutdown.")
+	log.Info("Executing complete shutdown.")
 	tsv.waitForShutdown()
-	tsv.watcher.Close()
+	tsv.tracker.Close()
 	tsv.vstreamer.Close()
+	tsv.hr.Close()
+	tsv.hw.Close()
 	tsv.qe.Close()
 	tsv.se.Close()
-	tsv.hw.Close()
-	tsv.hr.Close()
-	log.Infof("Shutdown complete.")
+	log.Info("Shutdown complete.")
 	tsv.transition(StateNotConnected)
 }
 
 func (tsv *TabletServer) waitForShutdown() {
-	// Wait till beginRequests have completed before waiting on tx pool.
-	// During this state, new Begins are not allowed. After the wait,
-	// we have the assurance that only non-begin transactional calls
-	// will be allowed. They will enable the conclusion of outstanding
-	// transactions.
 	tsv.messager.Close()
-	tsv.txController.StopGently()
-	tsv.qe.streamQList.TerminateAll()
-	tsv.watcher.Close()
-	tsv.requests.Wait()
 	tsv.txThrottler.Close()
+	tsv.watcher.Close()
+	tsv.te.Close()
+	tsv.qe.streamQList.TerminateAll()
+	tsv.requests.Wait()
 }
 
 // closeAll is called if TabletServer fails to start.
 // It forcibly shuts down everything.
 func (tsv *TabletServer) closeAll() {
 	tsv.messager.Close()
+	tsv.txThrottler.Close()
 	tsv.watcher.Close()
+	tsv.tracker.Close()
 	tsv.vstreamer.Close()
 	tsv.hr.Close()
 	tsv.hw.Close()
-	tsv.txController.StopGently()
-	tsv.watcher.Close()
+	tsv.te.Close()
+	tsv.qe.streamQList.TerminateAll()
 	tsv.qe.Close()
 	tsv.se.Close()
-	tsv.txThrottler.Close()
 	tsv.transition(StateNotConnected)
 }
 
@@ -1945,11 +1916,6 @@ func (tsv *TabletServer) SetPassthroughDMLs(val bool) {
 // This function should only be used for testing.
 func (tsv *TabletServer) SetConsolidatorMode(mode string) {
 	tsv.qe.consolidatorMode = mode
-}
-
-// Historian returns the associated historian service
-func (tsv *TabletServer) Historian() schema.Historian {
-	return tsv.sh
 }
 
 // queryAsString returns a readable version of query+bind variables.

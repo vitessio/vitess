@@ -102,6 +102,9 @@ func Init() (*Env, error) {
 	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
 	te.SchemaEngine = schema.NewEngine(te.TabletEnv)
 	te.SchemaEngine.InitDBConfig(te.Dbcfgs.DbaWithDB())
+	if err := te.SchemaEngine.Open(); err != nil {
+		return nil, err
+	}
 
 	// The first vschema should not be empty. Leads to Node not found error.
 	// TODO(sougou): need to fix the bug.
