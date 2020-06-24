@@ -47,7 +47,7 @@ lagging replicas from being promoted to master and causing errant GTID problems.
 ## 1.0.4 - 2019-01-01
 
 ### Changes
-* Use the [Orchestrator API](https://github.com/github/orchestrator/blob/master/docs/using-the-web-api.md)
+* Use the [Orchestrator API](https://github.com/openark/orchestrator/blob/master/docs/using-the-web-api.md)
 to call `begin-downtime` before running `PlannedReparentShard` in the `preStopHook`, to make sure that Orchestrator
 doesn't try to run an external failover while Vitess is reparenting. When it is complete, it calls `end-downtime`.
 Also call `forget` on the instance after calling `vtctlclient DeleteTablet`. It will be rediscovered if/when

@@ -19,7 +19,7 @@ FROM debian:stretch-slim
 RUN apt-get update && \
    apt-get upgrade -qq && \
    apt-get install wget ca-certificates jq -qq --no-install-recommends && \
-   wget https://github.com/github/orchestrator/releases/download/v3.1.1/orchestrator_3.1.0_amd64.deb && \
+   wget https://github.com/openark/orchestrator/releases/download/v3.1.1/orchestrator_3.1.0_amd64.deb && \
    dpkg -i orchestrator_3.1.0_amd64.deb && \
    rm orchestrator_3.1.0_amd64.deb && \
    apt-get purge wget -qq && \
