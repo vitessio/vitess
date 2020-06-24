@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/discovery"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -451,8 +453,10 @@ func TestMaxReplicationLagModule_Increase_BadRateUpperBound(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Assume that a bad value of 150 was set @ 30s.
-	tf.m.memory.markBad(150, sinceZero(30*time.Second))
+	//Assume that a bad value of 150 was set @ 30s and log error
+	if err := tf.m.memory.markBad(150, sinceZero(30*time.Second)); err != nil {
+		log.Errorf("tf.m.memory.markBad(150, sinceZero(30*time.Second)) falied : %v", err)
+	}
 
 	// r2 @  70s, 0s lag
 	tf.ratesHistory.add(sinceZero(69*time.Second), 100)

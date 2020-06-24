@@ -70,13 +70,19 @@ type (
 		Lock             string
 	}
 
+	// UnionSelect represents union type and select statement after first select statement.
+	UnionSelect struct {
+		Type      string
+		Statement SelectStatement
+	}
+
 	// Union represents a UNION statement.
 	Union struct {
-		Type        string
-		Left, Right SelectStatement
-		OrderBy     OrderBy
-		Limit       *Limit
-		Lock        string
+		FirstStatement SelectStatement
+		UnionSelects   []*UnionSelect
+		OrderBy        OrderBy
+		Limit          *Limit
+		Lock           string
 	}
 
 	// Stream represents a SELECT statement.
@@ -227,6 +233,21 @@ type (
 	// Rollback represents a Rollback statement.
 	Rollback struct{}
 
+	// SRollback represents a rollback to savepoint statement.
+	SRollback struct {
+		Name ColIdent
+	}
+
+	// Savepoint represents a savepoint statement.
+	Savepoint struct {
+		Name ColIdent
+	}
+
+	// Release represents a release savepoint statement.
+	Release struct {
+		Name ColIdent
+	}
+
 	// Explain represents an EXPLAIN statement
 	Explain struct {
 		Type      string
@@ -260,6 +281,9 @@ func (*Use) iStatement()               {}
 func (*Begin) iStatement()             {}
 func (*Commit) iStatement()            {}
 func (*Rollback) iStatement()          {}
+func (*SRollback) iStatement()         {}
+func (*Savepoint) iStatement()         {}
+func (*Release) iStatement()           {}
 func (*Explain) iStatement()           {}
 func (*OtherRead) iStatement()         {}
 func (*OtherAdmin) iStatement()        {}
@@ -874,8 +898,16 @@ func (node *ParenSelect) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Union) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s %v%v%v%s", node.Left, node.Type, node.Right,
-		node.OrderBy, node.Limit, node.Lock)
+	buf.astPrintf(node, "%v", node.FirstStatement)
+	for _, us := range node.UnionSelects {
+		buf.astPrintf(node, "%v", us)
+	}
+	buf.astPrintf(node, "%v%v%s", node.OrderBy, node.Limit, node.Lock)
+}
+
+// Format formats the node.
+func (node *UnionSelect) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, " %s %v", node.Type, node.Statement)
 }
 
 // Format formats the node.
@@ -1300,6 +1332,21 @@ func (node *Begin) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *Rollback) Format(buf *TrackedBuffer) {
 	buf.WriteString("rollback")
+}
+
+// Format formats the node.
+func (node *SRollback) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "rollback to %v", node.Name)
+}
+
+// Format formats the node.
+func (node *Savepoint) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "savepoint %v", node.Name)
+}
+
+// Format formats the node.
+func (node *Release) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "release savepoint %v", node.Name)
 }
 
 // Format formats the node.
