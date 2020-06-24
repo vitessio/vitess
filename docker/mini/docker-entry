@@ -1,0 +1,97 @@
+#!/bin/bash
+
+# Copyright 2020 The Vitess Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# This script probes for an existing MySQL topologies and sets up a mini vitess setup matching that topology.
+#
+
+echo_sleep() {
+  SECONDS="$1"
+  for i in $(seq 1 $SECONDS) ; do 
+    echo -n "."
+    sleep 1
+  done
+  echo
+}
+
+SCRIPTS_PATH="/vt/dist/scripts"
+export CELL=${CELL:-zone1}
+export $TOPOLOGY_USER
+export $TOPOLOGY_PASSWORD
+
+echo "############################################################"
+echo "vitess self resolve cluster"
+echo "############################################################"
+
+if [ -z  "$MYSQL_SCHEMA" ] ; then
+  echo "Expected MYSQL_SCHEMA environment variable"
+  exit 1
+fi
+
+cd $SCRIPTS_PATH
+
+. ./env.sh
+
+./orchestrator-up.sh
+
+./etcd-up.sh
+
+# start vtctld
+./vtctld-up.sh
+
+./vtgate-up.sh
+
+echo "Waiting gracefully for topology to be detected and analyzed"
+echo_sleep 5
+
+echo "vitess/orchestrator have detected the following MySQL servers:"
+orchestrator-client -c all-instances
+
+BASE_TABLET_UID=100
+for i in $(orchestrator-client -c all-instances) ; do
+  read -r mysql_host mysql_port <<<$(echo $i | tr ':' ' ') 
+  # TABLET_UID=$BASE_TABLET_UID ./scripts/mysqlctl-up.sh
+  tablet_port=$[15000 + $BASE_TABLET_UID]
+
+	KEYSPACE=$MYSQL_SCHEMA TABLET_UID=$BASE_TABLET_UID ./vttablet-mini-up.sh $mysql_host $mysql_port $tablet_port
+  echo "+ vttablet started"
+  tablet_alias="$(curl -s http://$(hostname):${tablet_port}/debug/vars | jq -r '.TabletAlias')"
+  if [ "$i" == "$(orchestrator-client -c which-cluster-master -i "$i")" ] ; then
+    echo "setting vttablet as master"
+    echo vtctlclient -server "$(hostname):$vtctld_web_port" InitShardMaster -force "${MYSQL_SCHEMA}/0" "$tablet_alias"
+    echo "+ done"
+  fi
+  BASE_TABLET_UID=$((BASE_TABLET_UID + 1))
+done
+
+
+exit
+# start vttablets for keyspace commerce
+for i in 100 101 102; do
+	CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
+	CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ./scripts/vttablet-up.sh
+done
+
+# set one of the replicas to master
+vtctlclient InitShardMaster -force commerce/0 zone1-100
+
+# create the schema
+vtctlclient ApplySchema -sql-file create_commerce_schema.sql commerce
+
+# create the vschema
+vtctlclient ApplyVSchema -vschema_file vschema_commerce_initial.json commerce
+
+# start vtgate
+CELL=zone1 ./scripts/vtgate-up.sh
