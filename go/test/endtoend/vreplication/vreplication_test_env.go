@@ -98,7 +98,7 @@ var dryRunResultsDropSourcesCustomerShard = []string{
 	"Lock keyspace product",
 	"Lock keyspace customer",
 	"Dropping following tables:",
-	"	Keyspace product Shard 0 DbName vt_product Tablet 100 Table customer RemovalType DropTable",
+	"	Keyspace product Shard 0 DbName vt_product Tablet 100 Table customer RemovalType DROP TABLE",
 	"Blacklisted tables customer will be removed from:",
 	"	Keyspace product Shard 0 Tablet 100",
 	"Delete reverse vreplication streams on source:",
