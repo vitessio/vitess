@@ -271,7 +271,7 @@ var commands = []commandGroup{
 			{"WaitForFilteredReplication", commandWaitForFilteredReplication,
 				"[-max_delay <max_delay, default 30s>] <keyspace/shard>",
 				"Blocks until the specified shard has caught up with the filtered replication of its source shard."},
-			{"typeeShardCell", commandRemoveShardCell,
+			{"RemoveShardCell", commandRemoveShardCell,
 				"[-force] [-recursive] <keyspace/shard> <cell>",
 				"Removes the cell from the shard's Cells list."},
 			{"DeleteShard", commandDeleteShard,
