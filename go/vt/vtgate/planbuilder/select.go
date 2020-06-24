@@ -33,7 +33,7 @@ import (
 func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
 	sel := stmt.(*sqlparser.Select)
 
-	p := tryAtVtgate(sel)
+	p := handleDualSelects(sel, vschema)
 	if p != nil {
 		return p, nil
 	}
@@ -49,9 +49,13 @@ func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 }
 
 //IsLockingFunc returns true for all functions that are used to work with mysql advisory locks
-func IsLockingFunc(name string) bool {
-	_, foundInMap := lockingFunctions[name]
-	return foundInMap
+func IsLockingFunc(node sqlparser.Expr) bool {
+	switch p := node.(type) {
+	case *sqlparser.FuncExpr:
+		_, found := lockingFunctions[p.Name.Lowered()]
+		return found
+	}
+	return false
 }
 
 var lockingFunctions = map[string]interface{}{
@@ -150,7 +154,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 	return nil
 }
 
-func tryAtVtgate(sel *sqlparser.Select) engine.Primitive {
+func handleDualSelects(sel *sqlparser.Select, vschema ContextVSchema) engine.Primitive {
 	if !isOnlyDual(sel.From) {
 		return nil
 	}
@@ -163,6 +167,10 @@ func tryAtVtgate(sel *sqlparser.Select) engine.Primitive {
 			return nil
 		}
 		var err error
+		if IsLockingFunc(expr.Expr) {
+			// if we are using any locking functions, we bail out here and send the whole query to a single destination
+			return buildLockingPrimitive(sel, vschema)
+		}
 		exprs[i], err = sqlparser.Convert(expr.Expr)
 		if err != nil {
 			return nil
@@ -176,6 +184,19 @@ func tryAtVtgate(sel *sqlparser.Select) engine.Primitive {
 		Exprs: exprs,
 		Cols:  cols,
 		Input: &engine.SingleRow{},
+	}
+}
+
+func buildLockingPrimitive(sel *sqlparser.Select, vschema ContextVSchema) engine.Primitive {
+	return &engine.Reserve{
+		Input: &engine.Send{
+			// TODO: ???
+			Keyspace:          nil,
+			TargetDestination: nil,
+			Query:             sqlparser.String(sel),
+			IsDML:             false,
+			SingleShardOnly:   true,
+		},
 	}
 }
 
