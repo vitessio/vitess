@@ -636,6 +636,16 @@ var (
 		input:  "select /* OR in select columns */ (a or b) from t where c = 5",
 		output: "select /* OR in select columns */ a or b from t where c = 5",
 	}, {
+		input: "select /* XOR of columns in where */ * from t where a xor b",
+	}, {
+		input: "select /* XOR of mixed columns in where */ * from t where a = 5 xor b and c is not null",
+	}, {
+		input:  "select /* XOR in select columns */ (a xor b) from t where c = 5",
+		output: "select /* XOR in select columns */ a xor b from t where c = 5",
+	}, {
+		input:  "select /* XOR in select columns */ * from t where (1 xor c1 > 0)",
+		output: "select /* XOR in select columns */ * from t where 1 xor c1 > 0",
+	}, {
 		input: "select /* bool as select value */ a, true from t",
 	}, {
 		input: "select /* bool column in ON clause */ * from t join s on t.id = s.id and s.foo where t.bar",

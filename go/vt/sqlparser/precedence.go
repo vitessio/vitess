@@ -49,8 +49,8 @@ func precedenceFor(in Expr) Precendence {
 	switch node := in.(type) {
 	case *OrExpr:
 		return P16
-	//case *XorExpr: TODO add parser support for XOR
-	//	return P15
+	case *XorExpr:
+		return P15
 	case *AndExpr:
 		return P14
 	case *NotExpr:
