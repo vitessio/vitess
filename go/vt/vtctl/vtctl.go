@@ -60,33 +60,33 @@ COMMAND ARGUMENT DEFINITIONS
             should be a positively signed value.
 
 - db type, tablet type: The vttablet's role. Valid values are:
-  -- backup: A slaved copy of data that is offline to queries other than
+  -- backup: A replica copy of data that is offline to queries other than
              for backup purposes
   -- batch: A slaved copy of data for OLAP load patterns (typically for
             MapReduce jobs)
   -- drained: A tablet that is reserved for a background process. For example,
               a tablet used by a vtworker process, where the tablet is likely
               lagging in replication.
-  -- experimental: A slaved copy of data that is ready but not serving query
+  -- experimental: A replica copy of data that is ready but not serving query
                    traffic. The value indicates a special characteristic of
                    the tablet that indicates the tablet should not be
                    considered a potential master. Vitess also does not
                    worry about lag for experimental tablets when reparenting.
   -- master: A primary copy of data
-  -- rdonly: A slaved copy of data for OLAP load patterns
-  -- replica: A slaved copy of data ready to be promoted to master
+  -- rdonly: A replica copy of data for OLAP load patterns
+  -- replica: A replica copy of data ready to be promoted to master
   -- restore: A tablet that is restoring from a snapshot. Typically, this
               happens at tablet startup, then it goes to its right state.
-  -- schema_apply: A slaved copy of data that had been serving query traffic
+  -- schema_apply: A replica copy of data that had been serving query traffic
                    but that is now applying a schema change. Following the
                    change, the tablet will revert to its serving type.
-  -- snapshot_source: A slaved copy of data where mysqld is <b>not</b>
+  -- snapshot_source: A replica copy of data where mysqld is <b>not</b>
                       running and where Vitess is serving data files to
                       clone slaves. Use this command to enter this mode:
                       <pre>vtctl Snapshot -server-mode ...</pre>
                       Use this command to exit this mode:
                       <pre>vtctl SnapshotSourceEnd ...</pre>
-  -- spare: A slaved copy of data that is ready but not serving query traffic.
+  -- spare: A replica copy of data that is ready but not serving query traffic.
             The data could be a potential master tablet.
 */
 
