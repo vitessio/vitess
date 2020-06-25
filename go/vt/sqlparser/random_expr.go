@@ -86,6 +86,7 @@ func (g *generator) booleanExpr() Expr {
 
 	options := []exprF{
 		func() Expr { return g.andExpr() },
+		func() Expr { return g.xorExpr() },
 		func() Expr { return g.orExpr() },
 		func() Expr { return g.comparison(g.intExpr) },
 		func() Expr { return g.comparison(g.stringExpr) },
@@ -245,6 +246,15 @@ func (g *generator) orExpr() Expr {
 	g.enter()
 	defer g.exit()
 	return &OrExpr{
+		Left:  g.booleanExpr(),
+		Right: g.booleanExpr(),
+	}
+}
+
+func (g *generator) xorExpr() Expr {
+	g.enter()
+	defer g.exit()
+	return &XorExpr{
 		Left:  g.booleanExpr(),
 		Right: g.booleanExpr(),
 	}

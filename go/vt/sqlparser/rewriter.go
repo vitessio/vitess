@@ -864,6 +864,14 @@ func replaceWhereExpr(newNode, parent SQLNode) {
 	parent.(*Where).Expr = newNode.(Expr)
 }
 
+func replaceXorExprLeft(newNode, parent SQLNode) {
+	parent.(*XorExpr).Left = newNode.(Expr)
+}
+
+func replaceXorExprRight(newNode, parent SQLNode) {
+	parent.(*XorExpr).Right = newNode.(Expr)
+}
+
 // apply is where the visiting happens. Here is where we keep the big switch-case that will be used
 // to do the actual visiting of SQLNodes
 func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
@@ -1376,6 +1384,10 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *Where:
 		a.apply(node, n.Expr, replaceWhereExpr)
+
+	case *XorExpr:
+		a.apply(node, n.Left, replaceXorExprLeft)
+		a.apply(node, n.Right, replaceXorExprRight)
 
 	default:
 		panic("unknown ast type " + reflect.TypeOf(node).String())
