@@ -170,10 +170,6 @@ type TabletManagerClient interface {
 	// To be used if we are unable to promote the chosen new master
 	UndoDemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) error
 
-	// PromoteSlaveWhenCaughtUp transforms the tablet from a slave to a master.
-	// Deprecated
-	PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topodatapb.Tablet, pos string) (string, error)
-
 	// SlaveWasPromoted tells the remote tablet it is now the master
 	SlaveWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error
 
@@ -188,10 +184,6 @@ type TabletManagerClient interface {
 	// StopReplicationAndGetStatus stops replication and returns the
 	// current position.
 	StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error)
-
-	// PromoteSlave makes the tablet the new master
-	// Deprecated
-	PromoteSlave(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
 
 	// PromoteReplica makes the tablet the new master
 	PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
