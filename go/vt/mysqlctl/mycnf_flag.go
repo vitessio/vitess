@@ -44,7 +44,6 @@ var (
 	flagMasterInfoFile        *string
 	flagPidFile               *string
 	flagTmpDir                *string
-	flagSlaveLoadTmpDir       *string
 
 	// the file to use to specify them all
 	flagMycnfFile *string
@@ -70,7 +69,6 @@ func RegisterFlags() {
 	flagMasterInfoFile = flag.String("mycnf_master_info_file", "", "mysql master.info file")
 	flagPidFile = flag.String("mycnf_pid_file", "", "mysql pid file")
 	flagTmpDir = flag.String("mycnf_tmp_dir", "", "mysql tmp directory")
-	flagSlaveLoadTmpDir = flag.String("mycnf_slave_load_tmp_dir", "", "slave load tmp directory")
 
 	flagMycnfFile = flag.String("mycnf-file", "", "path to my.cnf, if reading all config params from there")
 }
@@ -109,7 +107,6 @@ func NewMycnfFromFlags(uid uint32) (mycnf *Mycnf, err error) {
 			MasterInfoFile:        *flagMasterInfoFile,
 			PidFile:               *flagPidFile,
 			TmpDir:                *flagTmpDir,
-			SlaveLoadTmpDir:       *flagSlaveLoadTmpDir,
 
 			// This is probably not going to be used by anybody,
 			// but fill in a default value. (Note it's used by
