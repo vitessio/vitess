@@ -18,10 +18,10 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v1
       - name: golangci-lint
-        uses: vitess/action-golangci-lint@v1
+        uses: reviewdog/action-golangci-lint@v1
         with:
           # Can pass --config flag to change golangci-lint behavior and target
           # directory.
-          golangci_lint_flags: "go/..."
+          workdir: go/
 
 
