@@ -16,7 +16,7 @@
 
 mysql_host="$1"
 mysql_port="$2"
-tablet_port="$3"
+is_master="$3"
 
 source ./env.sh
 
@@ -24,7 +24,7 @@ cell=${CELL:-'test'}
 keyspace=${KEYSPACE:-'test_keyspace'}
 shard=${SHARD:-'0'}
 uid=$TABLET_UID
-port=$tablet_port
+port=$[15000 + $TABLET_UID]
 grpc_port=$[16000 + $uid]
 printf -v alias '%s-%010d' $cell $uid
 printf -v tablet_dir 'vt_%010d' $uid
@@ -35,7 +35,9 @@ mkdir -p "$VTDATAROOT/$tablet_dir"
 
 tablet_type=replica
 
-echo "Starting vttablet for $alias on port $port and mysql $mysql_host:$mysql_port"
+echo "> Starting vttablet for server $mysql_host:$mysql_port"
+echo "  - Tablet alias is $alias"
+echo "  - Tablet listens on http://$hostname:$port"
 # shellcheck disable=SC2086
 vttablet \
  $TOPOLOGY_FLAGS \
@@ -76,3 +78,11 @@ done
 
 # check one last time
 curl -I "http://$hostname:$port/debug/status" >/dev/null 2>&1 || fail "tablet could not be started!"
+
+echo "  + vttablet started"
+
+if [ "$is_master" == "true" ] ; then
+  echo "  > Setting this tablet as master"
+  vtctlclient TabletExternallyReparented "$alias" &&
+    echo "  + done"
+fi

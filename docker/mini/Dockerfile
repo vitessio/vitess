@@ -40,8 +40,11 @@ COPY docker/mini/systemctl.py /usr/bin/systemctl
 COPY docker/mini/docker-entry /vt/dist/docker/mini/docker-entry
 COPY examples/local/scripts /vt/dist/scripts
 COPY examples/local/env.sh /vt/dist/scripts/env.sh
+COPY docker/mini/vtctld-mini-up.sh /vt/dist/scripts/vtctld-mini-up.sh
 COPY docker/mini/vttablet-mini-up.sh /vt/dist/scripts/vttablet-mini-up.sh
 COPY docker/mini/orchestrator-up.sh /vt/dist/scripts/orchestrator-up.sh
+RUN echo "hostname=127.0.0.1" >> /vt/dist/scripts/env.sh
+RUN cat /vt/dist/scripts/env.sh | egrep "^alias" >> /etc/bash.bashrc
 
 COPY --from=base /vt/bin/vtctl /vt/bin/
 COPY --from=base /vt/bin/mysqlctl /vt/bin/
@@ -57,4 +60,5 @@ ENV TOPO="etcd"
 # Create mount point for actual data (e.g. MySQL data dir)
 VOLUME /vt/vtdataroot
 USER vitess
-CMD /vt/dist/docker/mini/docker-entry ; /bin/bash
+EXPOSE 15000-15200 16000-16200
+CMD /vt/dist/docker/mini/docker-entry && /bin/bash
