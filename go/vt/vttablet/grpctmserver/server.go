@@ -376,18 +376,6 @@ func (s *server) UndoDemoteMaster(ctx context.Context, request *tabletmanagerdat
 	return response, err
 }
 
-// Deprecated
-func (s *server) PromoteSlaveWhenCaughtUp(ctx context.Context, request *tabletmanagerdatapb.PromoteSlaveWhenCaughtUpRequest) (response *tabletmanagerdatapb.PromoteSlaveWhenCaughtUpResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "PromoteSlaveWhenCaughtUp", request, response, true /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.PromoteSlaveWhenCaughtUpResponse{}
-	position, err := s.tm.PromoteSlaveWhenCaughtUp(ctx, request.Position)
-	if err == nil {
-		response.Position = position
-	}
-	return response, err
-}
-
 func (s *server) SlaveWasPromoted(ctx context.Context, request *tabletmanagerdatapb.SlaveWasPromotedRequest) (response *tabletmanagerdatapb.SlaveWasPromotedResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "SlaveWasPromoted", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
@@ -416,18 +404,6 @@ func (s *server) StopReplicationAndGetStatus(ctx context.Context, request *table
 	status, err := s.tm.StopReplicationAndGetStatus(ctx)
 	if err == nil {
 		response.Status = status
-	}
-	return response, err
-}
-
-// Deprecated
-func (s *server) PromoteSlave(ctx context.Context, request *tabletmanagerdatapb.PromoteSlaveRequest) (response *tabletmanagerdatapb.PromoteSlaveResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "PromoteSlave", request, response, true /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.PromoteSlaveResponse{}
-	position, err := s.tm.PromoteSlave(ctx)
-	if err == nil {
-		response.Position = position
 	}
 	return response, err
 }

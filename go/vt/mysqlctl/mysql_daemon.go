@@ -60,9 +60,6 @@ type MysqlDaemon interface {
 	SetMaster(ctx context.Context, masterHost string, masterPort int, slaveStopBefore bool, slaveStartAfter bool) error
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
 
-	// Deprecated: use MasterPosition() instead
-	DemoteMaster() (mysql.Position, error)
-
 	WaitMasterPos(context.Context, mysql.Position) error
 
 	// Promote makes the current server master. It will not change
