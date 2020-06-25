@@ -578,6 +578,11 @@ type (
 		Left, Right Expr
 	}
 
+	// XorExpr represents an XOR expression.
+	XorExpr struct {
+		Left, Right Expr
+	}
+
 	// NotExpr represents a NOT expression.
 	NotExpr struct {
 		Expr Expr
@@ -759,6 +764,7 @@ type (
 // iExpr ensures that only expressions nodes can be assigned to a Expr
 func (*AndExpr) iExpr()           {}
 func (*OrExpr) iExpr()            {}
+func (*XorExpr) iExpr()           {}
 func (*NotExpr) iExpr()           {}
 func (*ComparisonExpr) iExpr()    {}
 func (*RangeCond) iExpr()         {}
@@ -1536,6 +1542,11 @@ func (node *AndExpr) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *OrExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v or %v", node.Left, node.Right)
+}
+
+// Format formats the node.
+func (node *XorExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%v xor %v", node.Left, node.Right)
 }
 
 // Format formats the node.

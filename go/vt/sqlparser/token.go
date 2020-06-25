@@ -410,7 +410,7 @@ var keywords = map[string]int{
 	"with":                WITH,
 	"work":                WORK,
 	"write":               WRITE,
-	"xor":                 UNUSED,
+	"xor":                 XOR,
 	"year":                YEAR,
 	"year_month":          UNUSED,
 	"zerofill":            ZEROFILL,
