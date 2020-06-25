@@ -33,10 +33,7 @@ RUN /vt/dist/install_mini_dependencies.sh
 
 COPY docker/mini/orchestrator-vitess-mini.conf.json /etc/orchestrator.conf.json
 RUN chown vitess:vitess /etc/orchestrator.conf.json
-# COPY docker/mini/etcd.service /etc/systemd/system/etcd.service
-# COPY docker/mini/orchestrator.service /etc/systemd/system/orchestrator.service
 
-COPY docker/mini/systemctl.py /usr/bin/systemctl
 COPY docker/mini/docker-entry /vt/dist/docker/mini/docker-entry
 COPY examples/local/scripts /vt/dist/scripts
 COPY examples/local/env.sh /vt/dist/scripts/env.sh
