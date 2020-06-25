@@ -36,16 +36,16 @@ import (
 
 // lock is used at the beginning of an RPC call, to lock the
 // action mutex. It returns ctx.Err() if <-ctx.Done() after the lock.
-func (agent *ActionAgent) lock(ctx context.Context) error {
-	agent.actionMutex.Lock()
-	agent.actionMutexLocked = true
+func (tm *TabletManager) lock(ctx context.Context) error {
+	tm.actionMutex.Lock()
+	tm.actionMutexLocked = true
 
 	// After we take the lock (which could take a long time), we
 	// check the client is still here.
 	select {
 	case <-ctx.Done():
-		agent.actionMutexLocked = false
-		agent.actionMutex.Unlock()
+		tm.actionMutexLocked = false
+		tm.actionMutex.Unlock()
 		return ctx.Err()
 	default:
 		return nil
@@ -53,23 +53,23 @@ func (agent *ActionAgent) lock(ctx context.Context) error {
 }
 
 // unlock is the symmetrical action to lock.
-func (agent *ActionAgent) unlock() {
-	agent.actionMutexLocked = false
-	agent.actionMutex.Unlock()
+func (tm *TabletManager) unlock() {
+	tm.actionMutexLocked = false
+	tm.actionMutex.Unlock()
 }
 
 // checkLock checks we have locked the actionMutex.
-func (agent *ActionAgent) checkLock() {
-	if !agent.actionMutexLocked {
+func (tm *TabletManager) checkLock() {
+	if !tm.actionMutexLocked {
 		panic("programming error: this action should have taken the actionMutex")
 	}
 }
 
-// HandleRPCPanic is part of the RPCAgent interface.
-func (agent *ActionAgent) HandleRPCPanic(ctx context.Context, name string, args, reply interface{}, verbose bool, err *error) {
+// HandleRPCPanic is part of the RPCTM interface.
+func (tm *TabletManager) HandleRPCPanic(ctx context.Context, name string, args, reply interface{}, verbose bool, err *error) {
 	// panic handling
 	if x := recover(); x != nil {
-		log.Errorf("TabletManager.%v(%v) on %v panic: %v\n%s", name, args, topoproto.TabletAliasString(agent.TabletAlias), x, tb.Stack(4))
+		log.Errorf("TabletManager.%v(%v) on %v panic: %v\n%s", name, args, topoproto.TabletAliasString(tm.tabletAlias), x, tb.Stack(4))
 		*err = fmt.Errorf("caught panic during %v: %v", name, x)
 		return
 	}
@@ -88,24 +88,24 @@ func (agent *ActionAgent) HandleRPCPanic(ctx context.Context, name string, args,
 
 	if *err != nil {
 		// error case
-		log.Warningf("TabletManager.%v(%v)(on %v from %v) error: %v", name, args, topoproto.TabletAliasString(agent.TabletAlias), from, (*err).Error())
-		*err = vterrors.Wrapf(*err, "TabletManager.%v on %v error: %v", name, topoproto.TabletAliasString(agent.TabletAlias), (*err).Error())
+		log.Warningf("TabletManager.%v(%v)(on %v from %v) error: %v", name, args, topoproto.TabletAliasString(tm.tabletAlias), from, (*err).Error())
+		*err = vterrors.Wrapf(*err, "TabletManager.%v on %v error: %v", name, topoproto.TabletAliasString(tm.tabletAlias), (*err).Error())
 	} else {
 		// success case
-		log.Infof("TabletManager.%v(%v)(on %v from %v): %#v", name, args, topoproto.TabletAliasString(agent.TabletAlias), from, reply)
+		log.Infof("TabletManager.%v(%v)(on %v from %v): %#v", name, args, topoproto.TabletAliasString(tm.tabletAlias), from, reply)
 	}
 }
 
 //
-// RegisterQueryService is used to delay registration of RPC servers until we have all the objects.
-type RegisterQueryService func(*ActionAgent)
+// RegisterTabletManager is used to delay registration of RPC servers until we have all the objects.
+type RegisterTabletManager func(*TabletManager)
 
-// RegisterQueryServices is a list of functions to call when the delayed registration is triggered.
-var RegisterQueryServices []RegisterQueryService
+// RegisterTabletManagers is a list of functions to call when the delayed registration is triggered.
+var RegisterTabletManagers []RegisterTabletManager
 
-// registerQueryService will register all the instances.
-func (agent *ActionAgent) registerQueryService() {
-	for _, f := range RegisterQueryServices {
-		f(agent)
+// registerTabletManager will register all the instances.
+func (tm *TabletManager) registerTabletManager() {
+	for _, f := range RegisterTabletManagers {
+		f(tm)
 	}
 }

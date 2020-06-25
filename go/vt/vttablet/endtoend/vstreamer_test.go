@@ -22,22 +22,15 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/require"
-	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
 type test struct {
@@ -45,65 +38,20 @@ type test struct {
 	output []string
 }
 
-func TestHistorianSchemaUpdate(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	tsv := framework.Server
-	historian := tsv.Historian()
-	srvTopo := srvtopo.NewResilientServer(framework.TopoServer, "SchemaVersionE2ETestTopo")
-
-	vstreamer.NewEngine(tabletenv.NewEnv(tsv.Config(), "SchemaVersionE2ETest"), srvTopo, tsv.SchemaEngine(), historian)
-	target := &querypb.Target{
-		Keyspace:   "vttest",
-		Shard:      "0",
-		TabletType: tabletpb.TabletType_MASTER,
-		Cell:       "",
-	}
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match: "/.*/",
-		}},
-	}
-	var createTableSQL = "create table historian_test1(id1 int)"
-	var mu sync.Mutex
-	mu.Lock()
-	send := func(events []*binlogdatapb.VEvent) error {
-		for _, ev := range events {
-			if ev.Type == binlogdatapb.VEventType_DDL && ev.Ddl == createTableSQL {
-				log.Info("Found DDL for table historian_test1")
-				mu.Unlock()
-			}
-		}
-		return nil
-	}
-	go func() {
-		if err := tsv.VStream(ctx, target, "current", nil, filter, send); err != nil {
-			fmt.Printf("Error in tsv.VStream: %v", err)
-			t.Error(err)
-		}
-	}()
-
-	require.Nil(t, historian.GetTableForPos(sqlparser.NewTableIdent("historian_test1"), ""))
-	require.NotNil(t, historian.GetTableForPos(sqlparser.NewTableIdent("vitess_test"), ""))
-	client := framework.NewClient()
-	client.Execute(createTableSQL, nil)
-
-	mu.Lock()
-	minSchema := historian.GetTableForPos(sqlparser.NewTableIdent("historian_test1"), "")
-	want := `name:"historian_test1" fields:<name:"id1" type:INT32 table:"historian_test1" org_table:"historian_test1" database:"vttest" org_name:"id1" column_length:11 charset:63 flags:32768 > `
-	require.Equal(t, fmt.Sprintf("%v", minSchema), want)
-
-}
-
 func TestSchemaVersioning(t *testing.T) {
+	// Let's disable the already running tracker to prevent it from
+	// picking events from the previous test, and then re-enable it at the end.
+	tsv := framework.Server
+	tsv.EnableHistorian(false)
+	tsv.SetTracking(false)
+	defer tsv.EnableHistorian(true)
+	defer tsv.SetTracking(true)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	tsv := framework.Server
-	tsv.Historian().SetTrackSchemaVersions(true)
-	tsv.StartTracker()
-	srvTopo := srvtopo.NewResilientServer(framework.TopoServer, "SchemaVersionE2ETestTopo")
+	tsv.EnableHistorian(true)
+	tsv.SetTracking(true)
 
-	vstreamer.NewEngine(tabletenv.NewEnv(tsv.Config(), "SchemaVersionE2ETest"), srvTopo, tsv.SchemaEngine(), tsv.Historian())
 	target := &querypb.Target{
 		Keyspace:   "vttest",
 		Shard:      "0",
@@ -124,8 +72,6 @@ func TestSchemaVersioning(t *testing.T) {
 				`other`,
 				`gtid`, //gtid+ddl => actual query
 				`type:DDL ddl:"create table vitess_version (id1 int, id2 int)" `,
-				`gtid`, //gtid+other => insert into schema_version resulting in version+other
-				`other`,
 				`version`,
 				`gtid`,
 			},
@@ -142,8 +88,6 @@ func TestSchemaVersioning(t *testing.T) {
 			output: []string{
 				`gtid`,
 				`type:DDL ddl:"alter table vitess_version add column id3 int" `,
-				`gtid`, //gtid+other => insert into schema_version resulting in version+other
-				`other`,
 				`version`,
 				`gtid`,
 			},
@@ -159,8 +103,6 @@ func TestSchemaVersioning(t *testing.T) {
 			output: []string{
 				`gtid`,
 				`type:DDL ddl:"alter table vitess_version modify column id3 varbinary(16)" `,
-				`gtid`, //gtid+other => insert into schema_version resulting in version+other
-				`other`,
 				`version`,
 				`gtid`,
 			},
@@ -192,7 +134,7 @@ func TestSchemaVersioning(t *testing.T) {
 		select {
 		case eventCh <- evs:
 		case <-ctx.Done():
-			t.Fatal("Context Done() in send")
+			return nil
 		}
 		return nil
 	}
@@ -206,7 +148,7 @@ func TestSchemaVersioning(t *testing.T) {
 	log.Infof("\n\n\n=============================================== CURRENT EVENTS START HERE ======================\n\n\n")
 	runCases(ctx, t, cases, eventCh)
 
-	tsv.StopTracker()
+	tsv.SetTracking(false)
 	cases = []test{
 		{
 			//comment prefix required so we don't look for ddl in schema_version
@@ -258,8 +200,6 @@ func TestSchemaVersioning(t *testing.T) {
 	output := []string{
 		`gtid`,
 		`type:DDL ddl:"create table vitess_version (id1 int, id2 int)" `,
-		`gtid`,
-		`other`,
 		`version`,
 		`gtid`,
 		`type:FIELD field_event:<table_name:"vitess_version" fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > > `,
@@ -267,8 +207,6 @@ func TestSchemaVersioning(t *testing.T) {
 		`gtid`,
 		`gtid`,
 		`type:DDL ddl:"alter table vitess_version add column id3 int" `,
-		`gtid`,
-		`other`,
 		`version`,
 		`gtid`,
 		`type:FIELD field_event:<table_name:"vitess_version" fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > fields:<name:"id3" type:INT32 > > `,
@@ -276,8 +214,6 @@ func TestSchemaVersioning(t *testing.T) {
 		`gtid`,
 		`gtid`,
 		`type:DDL ddl:"alter table vitess_version modify column id3 varbinary(16)" `,
-		`gtid`,
-		`other`,
 		`version`,
 		`gtid`,
 		`type:FIELD field_event:<table_name:"vitess_version" fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > fields:<name:"id3" type:VARBINARY > > `,
@@ -295,7 +231,7 @@ func TestSchemaVersioning(t *testing.T) {
 	cancel()
 
 	log.Infof("\n\n\n=============================================== PAST EVENTS WITHOUT TRACK VERSIONS START HERE ======================\n\n\n")
-	tsv.Historian().SetTrackSchemaVersions(false)
+	tsv.EnableHistorian(false)
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 	eventCh = make(chan []*binlogdatapb.VEvent)
@@ -327,8 +263,6 @@ func TestSchemaVersioning(t *testing.T) {
 	output = []string{
 		`gtid`,
 		`type:DDL ddl:"create table vitess_version (id1 int, id2 int)" `,
-		`gtid`,
-		`other`,
 		`version`,
 		`gtid`,
 		`type:FIELD field_event:<table_name:"vitess_version" fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > > `,
@@ -336,8 +270,6 @@ func TestSchemaVersioning(t *testing.T) {
 		`gtid`,
 		`gtid`,
 		`type:DDL ddl:"alter table vitess_version add column id3 int" `,
-		`gtid`,
-		`other`,
 		`version`,
 		`gtid`,
 		/*at this point we only have latest schema so we have types (int32, int32, varbinary, varbinary) so the types don't match. Hence the @ fieldnames*/
@@ -346,8 +278,6 @@ func TestSchemaVersioning(t *testing.T) {
 		`gtid`,
 		`gtid`,
 		`type:DDL ddl:"alter table vitess_version modify column id3 varbinary(16)" `,
-		`gtid`,
-		`other`,
 		`version`,
 		`gtid`,
 		/*at this point we only have latest schema so we have types (int32, int32, varbinary, varbinary),
