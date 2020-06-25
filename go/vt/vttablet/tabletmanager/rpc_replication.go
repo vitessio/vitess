@@ -437,46 +437,6 @@ func (tm *TabletManager) UndoDemoteMaster(ctx context.Context) error {
 	return nil
 }
 
-// PromoteSlaveWhenCaughtUp waits for this slave to be caught up on
-// replication up to the provided point, and then makes the slave the
-// shard master.
-// Deprecated
-func (tm *TabletManager) PromoteSlaveWhenCaughtUp(ctx context.Context, position string) (string, error) {
-	if err := tm.lock(ctx); err != nil {
-		return "", err
-	}
-	defer tm.unlock()
-
-	pos, err := mysql.DecodePosition(position)
-	if err != nil {
-		return "", err
-	}
-
-	if err := tm.MysqlDaemon.WaitMasterPos(ctx, pos); err != nil {
-		return "", err
-	}
-
-	pos, err = tm.MysqlDaemon.Promote(tm.hookExtraEnv())
-	if err != nil {
-		return "", err
-	}
-
-	// If using semi-sync, we need to enable it before going read-write.
-	if err := tm.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
-		return "", err
-	}
-
-	if err := tm.MysqlDaemon.SetReadOnly(false); err != nil {
-		return "", err
-	}
-
-	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_MASTER); err != nil {
-		return "", err
-	}
-
-	return mysql.EncodePosition(pos), nil
-}
-
 // SlaveWasPromoted promotes a slave to master, no questions asked.
 func (tm *TabletManager) SlaveWasPromoted(ctx context.Context) error {
 	return tm.ChangeType(ctx, topodatapb.TabletType_MASTER)
@@ -692,36 +652,6 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context) (string, error) {
 	// We call SetReadOnly only after the topo has been updated to avoid
 	// situations where two tablets are master at the DB level but not at the vitess level
 	if err := tm.MysqlDaemon.SetReadOnly(false); err != nil {
-		return "", err
-	}
-
-	return mysql.EncodePosition(pos), nil
-}
-
-// PromoteSlave makes the current tablet the master
-// Deprecated
-func (tm *TabletManager) PromoteSlave(ctx context.Context) (string, error) {
-	if err := tm.lock(ctx); err != nil {
-		return "", err
-	}
-	defer tm.unlock()
-
-	pos, err := tm.MysqlDaemon.Promote(tm.hookExtraEnv())
-	if err != nil {
-		return "", err
-	}
-
-	// If using semi-sync, we need to enable it before going read-write.
-	if err := tm.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
-		return "", err
-	}
-
-	// Set the server read-write
-	if err := tm.MysqlDaemon.SetReadOnly(false); err != nil {
-		return "", err
-	}
-
-	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_MASTER); err != nil {
 		return "", err
 	}
 

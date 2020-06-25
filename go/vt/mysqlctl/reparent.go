@@ -92,11 +92,6 @@ func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS 
 	}
 }
 
-// Deprecated: use mysqld.MasterPosition() instead
-func (mysqld *Mysqld) DemoteMaster() (rp mysql.Position, err error) {
-	return mysqld.MasterPosition()
-}
-
 // Promote will promote this server to be the new master.
 func (mysqld *Mysqld) Promote(hookExtraEnv map[string]string) (mysql.Position, error) {
 	ctx := context.TODO()
