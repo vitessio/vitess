@@ -11,7 +11,7 @@
   "DiscoverByShowSlaveHosts": true,
   "InstancePollSeconds": 1,
   "HostnameResolveMethod": "none",
-  "MySQLHostnameResolveMethod": "",
+  "MySQLHostnameResolveMethod": "@@report_host",
   "SkipBinlogServerUnresolveCheck": true,
   "ExpiryHostnameResolvesMinutes": 60,
   "VerifyReplicationFilters": false,
