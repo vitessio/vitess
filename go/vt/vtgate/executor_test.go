@@ -2328,16 +2328,14 @@ func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
 	warningCount := warnings.Counts()["WarnPayloadSizeExceeded"]
 	testMaxPayloadSizeExceeded := []string{
 		"select * from main1",
-		"select * from main1",
 		"insert into main1(id) values (1), (2)",
 		"update main1 set id=1",
 		"delete from main1 where id=1",
 	}
 	for _, query := range testMaxPayloadSizeExceeded {
 		_, err := executor.Execute(context.Background(), "TestExecutorMaxPayloadSizeExceeded", session, query, nil)
-		if err == nil {
-			assert.EqualError(t, err, "query payload size above threshold")
-		}
+		require.NotNil(t, err)
+		assert.EqualError(t, err, "query payload size above threshold")
 	}
 	assert.Equal(t, warningCount, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
 
