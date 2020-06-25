@@ -815,7 +815,6 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		tme.dbTargetClients[1].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
 	}
 	dropSourcesDryRun()
-
 	wantdryRunDropSources := []string{
 		"Lock keyspace ks1",
 		"Lock keyspace ks2",
@@ -832,11 +831,16 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		"Unlock keyspace ks2",
 		"Unlock keyspace ks1",
 	}
-	results, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", DropTable, false)
+	results, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", DropTable, true)
 	require.NoError(t, err)
 	require.Empty(t, cmp.Diff(wantdryRunDropSources, *results))
 	checkBlacklist(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), []string{"t1", "t2"})
 
+	dropSourcesDryRun = func() {
+		tme.dbTargetClients[0].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
+	}
+	dropSourcesDryRun()
 	wantdryRunRenameSources := []string{
 		"Lock keyspace ks1",
 		"Lock keyspace ks2",
@@ -853,7 +857,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		"Unlock keyspace ks2",
 		"Unlock keyspace ks1",
 	}
-	results, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", RenameTable, false)
+	results, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", RenameTable, true)
 	require.NoError(t, err)
 	require.Empty(t, cmp.Diff(wantdryRunRenameSources, *results))
 	checkBlacklist(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), []string{"t1", "t2"})
