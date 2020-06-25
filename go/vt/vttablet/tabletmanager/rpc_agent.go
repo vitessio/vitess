@@ -112,9 +112,6 @@ type RPCTM interface {
 
 	UndoDemoteMaster(ctx context.Context) error
 
-	// Deprecated
-	PromoteSlaveWhenCaughtUp(ctx context.Context, replicationPosition string) (string, error)
-
 	SlaveWasPromoted(ctx context.Context) error
 
 	SetMaster(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) error
@@ -124,9 +121,6 @@ type RPCTM interface {
 	StopReplicationAndGetStatus(ctx context.Context) (*replicationdatapb.Status, error)
 
 	PromoteReplica(ctx context.Context) (string, error)
-
-	// Deprecated
-	PromoteSlave(ctx context.Context) (string, error)
 
 	// Backup / restore related methods
 
