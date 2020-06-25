@@ -584,6 +584,16 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
 	}
 
+	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show table status from %v like 'unknown'", KsTestUnsharded), nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
+	wantQuery = "show table status like 'unknown'"
+	if lastQuery != wantQuery {
+		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
+	}
+
 	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show extended keys from unknown from %v", KsTestUnsharded), nil)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -594,7 +604,7 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
 	}
 
-	// Set desitation keyspace in session
+	// Set destination keyspace in session
 	session.TargetString = KsTestUnsharded
 	_, err = executor.Execute(ctx, "TestExecute", session, "show create table unknown", nil)
 	require.NoError(t, err)

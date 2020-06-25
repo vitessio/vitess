@@ -786,10 +786,12 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			break
 		}
 		sql = sqlparser.String(show)
-	case sqlparser.KeywordString(sqlparser.TABLES):
+	case sqlparser.KeywordString(sqlparser.TABLES), "table status":
 		if show.ShowTablesOpt != nil && show.ShowTablesOpt.DbName != "" {
 			if destKeyspace == "" {
 				// Change "show tables from <keyspace>" to "show tables" directed to that keyspace.
+				// "show table status from <keyspace> like X" becomes "show table status like X"
+				//   directed to that keyspace.
 				destKeyspace = show.ShowTablesOpt.DbName
 			}
 			show.ShowTablesOpt.DbName = ""

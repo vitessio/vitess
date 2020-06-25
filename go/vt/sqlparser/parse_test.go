@@ -1309,7 +1309,7 @@ var (
 		output: "show session status",
 	}, {
 		input:  "show table status",
-		output: "show table",
+		output: "show table status",
 	}, {
 		input: "show tables",
 	}, {
@@ -1650,6 +1650,18 @@ var (
 	}, {
 		input:  "SHOW EXTENDED INDEXES IN `AO_E8B6CC_PROJECT_MAPPING` IN `jiradb`",
 		output: "show extended indexes from AO_E8B6CC_PROJECT_MAPPING from jiradb",
+	}, {
+		input:  "SHOW TABLE STATUS like 't1'",
+		output: "show table status like 't1'",
+	}, {
+		input:  "SHOW TABLE STATUS where name='t1'",
+		output: "show table status where name = 't1'",
+	}, {
+		input:  "SHOW TABLE STATUS from foodb like 't1'",
+		output: "show table status from foodb like 't1'",
+	}, {
+		input:  "SHOW TABLE STATUS from foodb where name='t1'",
+		output: "show table status from foodb where name = 't1'",
 	}, {
 		input:  "do 1",
 		output: "otheradmin",

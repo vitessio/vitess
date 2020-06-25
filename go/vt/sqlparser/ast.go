@@ -1260,7 +1260,7 @@ func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
 	nodeType := strings.ToLower(node.Type)
-	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys" || nodeType == "indexes") && node.ShowTablesOpt != nil {
+	if (nodeType == "tables" || nodeType == "table status" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys" || nodeType == "indexes") && node.ShowTablesOpt != nil {
 		opt := node.ShowTablesOpt
 		if node.Extended != "" {
 			buf.astPrintf(node, "show %s%s", node.Extended, nodeType)
