@@ -135,11 +135,6 @@ service TabletManager {
   // UndoDemoteMaster reverts all changes made by DemoteMaster
   rpc UndoDemoteMaster(tabletmanagerdata.UndoDemoteMasterRequest) returns (tabletmanagerdata.UndoDemoteMasterResponse) {};
 
-  // PromoteSlaveWhenCaughtUp tells the remote tablet to catch up,
-  // and then be the master
-  // Deprecated
-  rpc PromoteSlaveWhenCaughtUp(tabletmanagerdata.PromoteSlaveWhenCaughtUpRequest) returns (tabletmanagerdata.PromoteSlaveWhenCaughtUpResponse) {};
-
   // SlaveWasPromoted tells the remote tablet it is now the master
   rpc SlaveWasPromoted(tabletmanagerdata.SlaveWasPromotedRequest) returns (tabletmanagerdata.SlaveWasPromotedResponse) {};
 
@@ -152,10 +147,6 @@ service TabletManager {
   // StopReplicationAndGetStatus stops MySQL replication, and returns the
   // replication status
   rpc StopReplicationAndGetStatus(tabletmanagerdata.StopReplicationAndGetStatusRequest) returns (tabletmanagerdata.StopReplicationAndGetStatusResponse) {};
-
-  // PromoteSlave makes the slave the new master
-  // Deprecated
-  rpc PromoteSlave(tabletmanagerdata.PromoteSlaveRequest) returns (tabletmanagerdata.PromoteSlaveResponse) {};
 
   // PromoteReplica makes the replica the new master
   rpc PromoteReplica(tabletmanagerdata.PromoteReplicaRequest) returns (tabletmanagerdata.PromoteReplicaResponse) {};
