@@ -20,6 +20,7 @@ package sandboxconn
 
 import (
 	"fmt"
+	"sync"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
@@ -93,6 +94,9 @@ type SandboxConn struct {
 
 	// transaction id generator
 	TransactionID sync2.AtomicInt64
+
+	sExecMu sync.Mutex
+	execMu  sync.Mutex
 }
 
 var _ queryservice.QueryService = (*SandboxConn)(nil) // compile-time interface check
@@ -128,6 +132,8 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 	for k, v := range bindVars {
 		bv[k] = v
 	}
+	sbc.execMu.Lock()
+	defer sbc.execMu.Unlock()
 	sbc.Queries = append(sbc.Queries, &querypb.BoundQuery{
 		Sql:           query,
 		BindVariables: bv,
@@ -164,6 +170,8 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 	for k, v := range bindVars {
 		bv[k] = v
 	}
+	sbc.sExecMu.Lock()
+	defer sbc.sExecMu.Unlock()
 	sbc.Queries = append(sbc.Queries, &querypb.BoundQuery{
 		Sql:           query,
 		BindVariables: bv,

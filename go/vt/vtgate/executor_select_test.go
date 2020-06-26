@@ -2161,26 +2161,22 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 func TestSelectWithUnionAll(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	executor.normalize = true
-	sql := "select id from user where id = 1 union select id from user where id = 1 union all select id from user where id in (1, 2, 3)"
-	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
-	require.NoError(t, err)
-	bv, err := sqltypes.BuildBindVariable([]int64{1, 2, 3})
-	require.NoError(t, err)
-	bv1, err := sqltypes.BuildBindVariable([]int64{1, 2})
-	require.NoError(t, err)
-	bv2, err := sqltypes.BuildBindVariable([]int64{3})
-	require.NoError(t, err)
+	sql := "select id from user where id in (1, 2, 3) union all select id from user where id in (1, 2, 3)"
+	bv, _ := sqltypes.BuildBindVariable([]int64{1, 2, 3})
+	bv1, _ := sqltypes.BuildBindVariable([]int64{1, 2})
+	bv2, _ := sqltypes.BuildBindVariable([]int64{3})
 	sbc1WantQueries := []*querypb.BoundQuery{{
-		Sql: "select id from user where id = :vtg1 union select id from user where id = :vtg1",
+		Sql: "select id from user where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
-			"vtg1": sqltypes.Int64BindVariable(1),
-			"vtg2": bv,
+			"__vals": bv1,
+			"vtg1":   bv,
+			"vtg2":   bv,
 		},
 	}, {
 		Sql: "select id from user where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": bv1,
-			"vtg1":   sqltypes.Int64BindVariable(1),
+			"vtg1":   bv,
 			"vtg2":   bv,
 		},
 	}}
@@ -2188,10 +2184,28 @@ func TestSelectWithUnionAll(t *testing.T) {
 		Sql: "select id from user where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": bv2,
-			"vtg1":   sqltypes.Int64BindVariable(1),
+			"vtg1":   bv,
+			"vtg2":   bv,
+		},
+	}, {
+		Sql: "select id from user where id in ::__vals",
+		BindVariables: map[string]*querypb.BindVariable{
+			"__vals": bv2,
+			"vtg1":   bv,
 			"vtg2":   bv,
 		},
 	}}
-	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "sbc2")
+	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
 	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "sbc1")
+	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "sbc2")
+
+	// Reset
+	sbc1.Queries = nil
+	sbc2.Queries = nil
+
+	_, err = executorStream(executor, sql)
+	require.NoError(t, err)
+	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "sbc1")
+	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "sbc2")
 }
