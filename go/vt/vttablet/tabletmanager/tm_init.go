@@ -113,7 +113,7 @@ var (
 
 	// demoteMasterType is deprecated.
 	// TODO(sougou); remove after release 7.0.
-	demoteMasterType = flag.String("demote_master_type", "REPLICA", "the tablet type a demoted master will transition to")
+	demoteMasterType = flag.String("demote_master_type", "REPLICA", "DEPRECATED: the tablet type a demoted master will transition to")
 )
 
 func init() {
@@ -290,7 +290,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet) error {
 		return err
 	}
 	if demoteType != tablet.Type {
-		return fmt.Errorf("deprecated demote_master_type %v must match init_tablet_type %v", demoteType, tablet.Type)
+		log.Warningf("deprecated demote_master_type %v must match init_tablet_type %v", demoteType, tablet.Type)
 	}
 	tm.baseTabletType = tablet.Type
 	tm._healthy = fmt.Errorf("healthcheck not run yet")

@@ -114,24 +114,6 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid init_tablet_type MASTER")
 }
 
-func TestDemoteMasterType(t *testing.T) {
-	defer func(saved string) { *demoteMasterType = saved }(*demoteMasterType)
-	*demoteMasterType = "rdonly"
-
-	cell := "cell1"
-	ts := memorytopo.NewServer(cell)
-	tablet := newTestTablet(t, 1, "ks", "0")
-	tm := &TabletManager{
-		BatchCtx:            context.Background(),
-		TopoServer:          ts,
-		MysqlDaemon:         &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(1)},
-		DBConfigs:           &dbconfigs.DBConfigs{},
-		QueryServiceControl: tabletservermock.NewController(),
-	}
-	err := tm.Start(tablet)
-	assert.Equal(t, "deprecated demote_master_type RDONLY must match init_tablet_type REPLICA", err.Error())
-}
-
 func TestStartCreateKeyspaceShard(t *testing.T) {
 	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
 	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
