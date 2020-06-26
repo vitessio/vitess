@@ -107,9 +107,10 @@ func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 	var seenFields []*querypb.Field
 	fieldsSent := false
 
-	var errs []error
+	errs := make([]error, len(c.Sources))
 	var wg, fieldset sync.WaitGroup
 	fieldset.Add(1)
+	var mu sync.Mutex
 	for i, source := range c.Sources {
 		wg.Add(1)
 		go func(i int, source Primitive) {
@@ -120,6 +121,7 @@ func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 					defer fieldset.Done()
 					seenFields = resultChunk.Fields
 					fieldsSent = true
+					// No other call can happen before this call.
 					return callback(resultChunk)
 				}
 				fieldset.Wait()
@@ -129,9 +131,11 @@ func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 						return err
 					}
 				}
+				mu.Lock()
+				defer mu.Unlock()
 				return callback(resultChunk)
 			})
-			errs = append(errs, err)
+			errs[i] = err
 		}(i, source)
 	}
 	wg.Wait()
