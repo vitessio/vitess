@@ -54,14 +54,14 @@ func (c *Conn) WriteComBinlogDumpGTID(serverID uint32, binlogFilename string, bi
 		4 + // data-size
 		len(gtidSet) // data
 	data, pos := c.startEphemeralPacketWithHeader(length)
-	pos = writeByte(data, pos, ComBinlogDumpGTID)
-	pos = writeUint16(data, pos, flags)
-	pos = writeUint32(data, pos, serverID)
-	pos = writeUint32(data, pos, uint32(len(binlogFilename)))
-	pos = writeEOFString(data, pos, binlogFilename)
-	pos = writeUint64(data, pos, binlogPos)
-	pos = writeUint32(data, pos, uint32(len(gtidSet)))
-	pos += copy(data[pos:], gtidSet)
+	pos = writeByte(data, pos, ComBinlogDumpGTID) //nolint
+	//pos = writeUint16(data, pos, flags)
+	//pos = writeUint32(data, pos, serverID)
+	//pos = writeUint32(data, pos, uint32(len(binlogFilename)))
+	//pos = writeEOFString(data, pos, binlogFilename)
+	//pos = writeUint64(data, pos, binlogPos)
+	//pos = writeUint32(data, pos, uint32(len(gtidSet)))
+	//pos += copy(data[pos:], gtidSet)
 	if err := c.writeEphemeralPacket(); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
 	}

@@ -307,7 +307,7 @@ func TestRowsEvent(t *testing.T) {
 	f := NewMySQL56BinlogFormat()
 	s := NewFakeBinlogStream()
 
-	tableID := uint64(0x102030405060)
+	tableID := uint64(0x102030405060) //nolint
 
 	tm := &TableMap{
 		Flags:    0x8090,

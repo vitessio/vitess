@@ -485,7 +485,9 @@ func TestMaxReplicationLagModule_Increase_MinimumProgress(t *testing.T) {
 	}
 
 	// Assume that a bad value of 105 was set @ 30s.
-	tf.m.memory.markBad(105, sinceZero(30*time.Second))
+	if err := tf.m.memory.markBad(105, sinceZero(30*time.Second));err != nil{
+		log.Errorf("tf.m.memory.markBad failed %v",err)
+	}
 
 	// r2 @  70s, 0s lag
 	// Assume that the actual rate was below the limit (95 instead of 100).
@@ -999,7 +1001,10 @@ func TestApplyLatestConfig(t *testing.T) {
 	// Change the default MaxIncrease from 100% to 200% and test that it's
 	// correctly propagated.
 	config.MaxIncrease = 2
-	tf.m.updateConfiguration(&config.Configuration, true /* copyZeroValues */)
+	if err := tf.m.updateConfiguration(&config.Configuration, true /* copyZeroValues */); err != nil{
+		log.Errorf("tf.m.updateConfiguration failed : %v",err)
+	}
+
 
 	// r2 @  70s, 0s lag
 	tf.ratesHistory.add(sinceZero(69*time.Second), 100)

@@ -209,7 +209,7 @@ const (
 	//eXAPrepareLogEvent       = 38
 
 	// MariaDB specific values. They start at 160.
-	eMariaAnnotateRowsEvent = 160
+	//eMariaAnnotateRowsEvent = 160
 	// Unused
 	//eMariaBinlogCheckpointEvent = 161
 	eMariaGTIDEvent     = 162

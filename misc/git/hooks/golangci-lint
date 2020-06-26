@@ -25,4 +25,5 @@ fi
 
 #golangci-lint run --disable=ineffassign,unused,gosimple,staticcheck,errcheck,structcheck,varcheck,deadcode
 
-golangci-lint run go/...
+golangci-lint run --timeout=10m --disable=errcheck go/mysql/...
+

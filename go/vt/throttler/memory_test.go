@@ -54,7 +54,9 @@ func TestMemory(t *testing.T) {
 	if got := m.highestGood(); got != want300 {
 		t.Fatalf("wrong order within memory: got = %v, want = %v", got, want300)
 	}
-	m.markGood(306)
+	if err := m.markGood(306); err != nil{
+		log.Errorf("m.markGood failed : %v",err)
+	}
 	want305 := int64(305)
 	if got := m.highestGood(); got != want305 {
 		t.Fatalf("wrong order within memory: got = %v, want = %v", got, want305)
@@ -117,8 +119,12 @@ func TestMemory_markDownIgnoresDrasticBadValues(t *testing.T) {
 	m := newMemory(1, 1*time.Second, 0.10)
 	good := int64(1000)
 	bad := int64(1001)
-	m.markGood(good)
-	m.markBad(bad, sinceZero(0))
+	if err := m.markGood(good); err != nil{
+		log.Errorf("m.markGood failed: %v",err)
+	}
+	if err := m.markBad(bad, sinceZero(0)); err != nil{
+		log.Errorf("m.markBad failed: %v",err)
+	}
 	if got := m.highestGood(); got != good {
 		t.Fatalf("good rate was not correctly inserted: got = %v, want = %v", got, good)
 	}
@@ -140,7 +146,9 @@ func TestMemory_markDownIgnoresDrasticBadValues(t *testing.T) {
 func TestMemory_Aging(t *testing.T) {
 	m := newMemory(1, 2*time.Second, 0.10)
 
-	m.markBad(100, sinceZero(0))
+	if err := m.markBad(100, sinceZero(0)); err != nil{
+		log.Errorf("m.markBad failed : %v",err)
+	}
 	if got, want := m.lowestBad(), int64(100); got != want {
 		t.Fatalf("bad rate was not correctly inserted: got = %v, want = %v", got, want)
 	}
@@ -158,14 +166,20 @@ func TestMemory_Aging(t *testing.T) {
 	}
 
 	// The age timer will be reset if the bad rate changes.
-	m.markBad(100, sinceZero(3*time.Second))
+	if err := m.markBad(100, sinceZero(3*time.Second)); err != nil{
+		log.Errorf("log.Errorf failed: %v",err)
+	}
+
 	m.ageBadRate(sinceZero(4 * time.Second))
 	if got, want := m.lowestBad(), int64(100); got != want {
 		t.Fatalf("bad rate must not age yet: got = %v, want = %v", got, want)
 	}
 
 	// The age timer won't be reset when the rate stays the same.
-	m.markBad(100, sinceZero(4*time.Second))
+	if err := m.markBad(100, sinceZero(4*time.Second)); err != nil{
+		log.Errorf("m.markBad failed : %v",err)
+	}
+
 	m.ageBadRate(sinceZero(5 * time.Second))
 	if got, want := m.lowestBad(), int64(110); got != want {
 		t.Fatalf("bad rate should have aged again: got = %v, want = %v", got, want)
@@ -179,7 +193,9 @@ func TestMemory_Aging(t *testing.T) {
 	}
 
 	// If the new bad rate is not higher, it should increase by the memory granularity at least.
-	m.markBad(5, sinceZero(10*time.Second))
+	if err := m.markBad(5, sinceZero(10*time.Second)); err != nil{
+		log.Errorf("m.markBad failed : %v",err)
+	}
 	m.ageBadRate(sinceZero(11 * time.Second))
 	if got, want := m.lowestBad(), int64(5+memoryGranularity); got != want {
 		t.Fatalf("bad rate should have aged after the configuration update: got = %v, want = %v", got, want)
