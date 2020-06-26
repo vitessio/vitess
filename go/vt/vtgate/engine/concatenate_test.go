@@ -36,6 +36,7 @@ func TestConcatenate_Execute(t *testing.T) {
 		inputs: []*sqltypes.Result{
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id1|col11|col12", "int64|varbinary|varbinary")),
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id2|col21|col22", "int64|varbinary|varbinary")),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id3|col31|col32", "int64|varbinary|varbinary")),
 		},
 		expectedResult: sqltypes.MakeTestResult(sqltypes.MakeTestFields("id1|col11|col12", "int64|varbinary|varbinary")),
 	}, {
