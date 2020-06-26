@@ -105,65 +105,34 @@ func (c *Concatenate) Execute(vcursor VCursor, bindVars map[string]*querypb.Bind
 // StreamExecute performs a streaming exec.
 func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var seenFields []*querypb.Field
-	columnCount := 0
-
-	// To return deterministic field names.
-	err := c.Sources[0].StreamExecute(vcursor, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
-		// if we have fields to compare, make sure all the fields are all the same
-		if seenFields == nil {
-			seenFields = resultChunk.Fields
-		} else if resultChunk.Fields != nil {
-			err := compareFields(seenFields, resultChunk.Fields)
-			if err != nil {
-				return err
-			}
-		}
-		if len(resultChunk.Rows) > 0 {
-			if columnCount == 0 {
-				columnCount = len(resultChunk.Rows[0])
-			} else {
-				if len(resultChunk.Rows[0]) != columnCount {
-					return mysql.NewSQLError(mysql.ERWrongNumberOfColumnsInSelect, "21000", "The usasdfasded SELECT statements have a different number of columns")
-				}
-			}
-		}
-
-		return callback(resultChunk)
-	})
-	if err != nil {
-		return err
-	}
+	fieldsSent := false
 
 	var errs []error
-	var wg sync.WaitGroup
-	for i := 1; i < len(c.Sources); i++ {
+	var wg, fieldset sync.WaitGroup
+	fieldset.Add(1)
+	for i, source := range c.Sources {
 		wg.Add(1)
-		go func(i int) {
+		go func(i int, source Primitive) {
 			defer wg.Done()
-			err := c.Sources[i].StreamExecute(vcursor, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
+			err := source.StreamExecute(vcursor, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
 				// if we have fields to compare, make sure all the fields are all the same
-				if seenFields == nil {
+				if i == 0 && !fieldsSent {
+					defer fieldset.Done()
 					seenFields = resultChunk.Fields
-				} else if resultChunk.Fields != nil {
+					fieldsSent = true
+					return callback(resultChunk)
+				}
+				fieldset.Wait()
+				if resultChunk.Fields != nil {
 					err := compareFields(seenFields, resultChunk.Fields)
 					if err != nil {
 						return err
 					}
 				}
-				if len(resultChunk.Rows) > 0 {
-					if columnCount == 0 {
-						columnCount = len(resultChunk.Rows[0])
-					} else {
-						if len(resultChunk.Rows[0]) != columnCount {
-							return mysql.NewSQLError(mysql.ERWrongNumberOfColumnsInSelect, "21000", "The usasdfasded SELECT statements have a different number of columns")
-						}
-					}
-				}
-
 				return callback(resultChunk)
 			})
 			errs = append(errs, err)
-		}(i)
+		}(i, source)
 	}
 	wg.Wait()
 

@@ -2157,3 +2157,41 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 }
+
+func TestSelectWithUnionAll(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor.normalize = true
+	sql := "select id from user where id = 1 union select id from user where id = 1 union all select id from user where id in (1, 2, 3)"
+	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	bv, err := sqltypes.BuildBindVariable([]int64{1, 2, 3})
+	require.NoError(t, err)
+	bv1, err := sqltypes.BuildBindVariable([]int64{1, 2})
+	require.NoError(t, err)
+	bv2, err := sqltypes.BuildBindVariable([]int64{3})
+	require.NoError(t, err)
+	sbc1WantQueries := []*querypb.BoundQuery{{
+		Sql: "select id from user where id = :vtg1 union select id from user where id = :vtg1",
+		BindVariables: map[string]*querypb.BindVariable{
+			"vtg1": sqltypes.Int64BindVariable(1),
+			"vtg2": bv,
+		},
+	}, {
+		Sql: "select id from user where id in ::__vals",
+		BindVariables: map[string]*querypb.BindVariable{
+			"__vals": bv1,
+			"vtg1":   sqltypes.Int64BindVariable(1),
+			"vtg2":   bv,
+		},
+	}}
+	sbc2WantQueries := []*querypb.BoundQuery{{
+		Sql: "select id from user where id in ::__vals",
+		BindVariables: map[string]*querypb.BindVariable{
+			"__vals": bv2,
+			"vtg1":   sqltypes.Int64BindVariable(1),
+			"vtg2":   bv,
+		},
+	}}
+	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "sbc2")
+	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "sbc1")
+}
