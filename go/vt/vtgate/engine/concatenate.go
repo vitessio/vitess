@@ -19,6 +19,7 @@ package engine
 import (
 	"sort"
 	"strings"
+	"sync"
 
 	"vitess.io/vitess/go/mysql"
 
@@ -67,15 +68,26 @@ func (c *Concatenate) GetTableName() string {
 // Execute performs a non-streaming exec.
 func (c *Concatenate) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	result := &sqltypes.Result{}
-	for _, source := range c.Sources {
-		qr, err := source.Execute(vcursor, bindVars, wantfields)
-		if err != nil {
-			return nil, vterrors.Wrap(err, "Concatenate.Execute")
+	var wg sync.WaitGroup
+	qrs := make([]*sqltypes.Result, len(c.Sources))
+	errs := make([]error, len(c.Sources))
+	for i, source := range c.Sources {
+		wg.Add(1)
+		go func(i int, source Primitive) {
+			defer wg.Done()
+			qrs[i], errs[i] = source.Execute(vcursor, bindVars, wantfields)
+		}(i, source)
+	}
+	wg.Wait()
+	for i := 0; i < len(c.Sources); i++ {
+		if errs[i] != nil {
+			return nil, vterrors.Wrap(errs[i], "Concatenate.Execute")
 		}
+		qr := qrs[i]
 		if result.Fields == nil {
 			result.Fields = qr.Fields
 		}
-		err = compareFields(result.Fields, qr.Fields)
+		err := compareFields(result.Fields, qr.Fields)
 		if err != nil {
 			return nil, err
 		}
@@ -94,29 +106,68 @@ func (c *Concatenate) Execute(vcursor VCursor, bindVars map[string]*querypb.Bind
 func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var seenFields []*querypb.Field
 	columnCount := 0
-	for _, source := range c.Sources {
-		err := source.StreamExecute(vcursor, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
-			// if we have fields to compare, make sure all the fields are all the same
-			if seenFields == nil {
-				seenFields = resultChunk.Fields
-			} else if resultChunk.Fields != nil {
-				err := compareFields(seenFields, resultChunk.Fields)
-				if err != nil {
-					return err
+
+	// To return deterministic field names.
+	err := c.Sources[0].StreamExecute(vcursor, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
+		// if we have fields to compare, make sure all the fields are all the same
+		if seenFields == nil {
+			seenFields = resultChunk.Fields
+		} else if resultChunk.Fields != nil {
+			err := compareFields(seenFields, resultChunk.Fields)
+			if err != nil {
+				return err
+			}
+		}
+		if len(resultChunk.Rows) > 0 {
+			if columnCount == 0 {
+				columnCount = len(resultChunk.Rows[0])
+			} else {
+				if len(resultChunk.Rows[0]) != columnCount {
+					return mysql.NewSQLError(mysql.ERWrongNumberOfColumnsInSelect, "21000", "The usasdfasded SELECT statements have a different number of columns")
 				}
 			}
-			if len(resultChunk.Rows) > 0 {
-				if columnCount == 0 {
-					columnCount = len(resultChunk.Rows[0])
-				} else {
-					if len(resultChunk.Rows[0]) != columnCount {
-						return mysql.NewSQLError(mysql.ERWrongNumberOfColumnsInSelect, "21000", "The usasdfasded SELECT statements have a different number of columns")
+		}
+
+		return callback(resultChunk)
+	})
+	if err != nil {
+		return err
+	}
+
+	var errs []error
+	var wg sync.WaitGroup
+	for i := 1; i < len(c.Sources); i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			err := c.Sources[i].StreamExecute(vcursor, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
+				// if we have fields to compare, make sure all the fields are all the same
+				if seenFields == nil {
+					seenFields = resultChunk.Fields
+				} else if resultChunk.Fields != nil {
+					err := compareFields(seenFields, resultChunk.Fields)
+					if err != nil {
+						return err
 					}
 				}
-			}
+				if len(resultChunk.Rows) > 0 {
+					if columnCount == 0 {
+						columnCount = len(resultChunk.Rows[0])
+					} else {
+						if len(resultChunk.Rows[0]) != columnCount {
+							return mysql.NewSQLError(mysql.ERWrongNumberOfColumnsInSelect, "21000", "The usasdfasded SELECT statements have a different number of columns")
+						}
+					}
+				}
 
-			return callback(resultChunk)
-		})
+				return callback(resultChunk)
+			})
+			errs = append(errs, err)
+		}(i)
+	}
+	wg.Wait()
+
+	for _, err := range errs {
 		if err != nil {
 			return err
 		}

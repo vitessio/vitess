@@ -34,10 +34,10 @@ func TestConcatenate_Execute(t *testing.T) {
 	testCases := []*testCase{{
 		testName: "empty results",
 		inputs: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varbinary|varbinary")),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varbinary|varbinary")),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id1|col11|col12", "int64|varbinary|varbinary")),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id2|col21|col22", "int64|varbinary|varbinary")),
 		},
-		expectedResult: sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varbinary|varbinary")),
+		expectedResult: sqltypes.MakeTestResult(sqltypes.MakeTestFields("id1|col11|col12", "int64|varbinary|varbinary")),
 	}, {
 		testName: "2 non empty result",
 		inputs: []*sqltypes.Result{
@@ -72,7 +72,7 @@ func TestConcatenate_Execute(t *testing.T) {
 		t.Run(tc.testName, func(t *testing.T) {
 			var fps []Primitive
 			for _, input := range tc.inputs {
-				fps = append(fps, &fakePrimitive{results: []*sqltypes.Result{input, input, input, input}})
+				fps = append(fps, &fakePrimitive{results: []*sqltypes.Result{input, input, input, input, input, input}})
 			}
 			concatenate := &Concatenate{Sources: fps}
 
