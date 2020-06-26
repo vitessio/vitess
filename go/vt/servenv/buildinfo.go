@@ -55,11 +55,15 @@ type versionInfo struct {
 }
 
 func (v *versionInfo) Print() {
+	fmt.Println(v)
+}
+
+func (v *versionInfo) String() string {
 	version := fmt.Sprintf("Version: %s", v.buildGitRev)
 	if v.jenkinsBuildNumber != 0 {
 		version = fmt.Sprintf("Version: %s (Jenkins build %d)", v.buildGitRev, v.jenkinsBuildNumber)
 	}
-	fmt.Printf("%s (Git branch '%s') built on %s by %s@%s using %s %s/%s\n", version, v.buildGitBranch, v.buildTimePretty, v.buildUser, v.buildHost, v.goVersion, v.goOS, v.goArch)
+	return fmt.Sprintf("%s (Git branch '%s') built on %s by %s@%s using %s %s/%s\n", version, v.buildGitBranch, v.buildTimePretty, v.buildUser, v.buildHost, v.goVersion, v.goOS, v.goArch)
 }
 
 func init() {

@@ -25,22 +25,20 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dtids"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/gateway"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // TxConn is used for executing transactional requests.
 type TxConn struct {
-	gateway gateway.Gateway
+	gateway Gateway
 	mode    vtgatepb.TransactionMode
 }
 
 // NewTxConn builds a new TxConn.
-func NewTxConn(gw gateway.Gateway, txMode vtgatepb.TransactionMode) *TxConn {
+func NewTxConn(gw Gateway, txMode vtgatepb.TransactionMode) *TxConn {
 	return &TxConn{
 		gateway: gw,
 		mode:    txMode,
@@ -53,17 +51,6 @@ func (txc *TxConn) Begin(ctx context.Context, session *SafeSession) error {
 	if session.InTransaction() {
 		if err := txc.Commit(ctx, session); err != nil {
 			return err
-		}
-	}
-	// UNSPECIFIED & SINGLE mode are always allowed.
-	switch session.TransactionMode {
-	case vtgatepb.TransactionMode_MULTI:
-		if txc.mode == vtgatepb.TransactionMode_SINGLE {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requested transaction mode %v disallowed: vtgate must be started with --transaction_mode=MULTI (or TWOPC). Current transaction mode: %v", session.TransactionMode, txc.mode)
-		}
-	case vtgatepb.TransactionMode_TWOPC:
-		if txc.mode != vtgatepb.TransactionMode_TWOPC {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requested transaction mode %v disallowed: vtgate must be started with --transaction_mode=TWOPC. Current transaction mode: %v", session.TransactionMode, txc.mode)
 		}
 	}
 	session.Session.InTransaction = true
@@ -81,10 +68,6 @@ func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
 	twopc := false
 	switch session.TransactionMode {
 	case vtgatepb.TransactionMode_TWOPC:
-		if txc.mode != vtgatepb.TransactionMode_TWOPC {
-			_ = txc.Rollback(ctx, session)
-			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "2pc transaction disallowed")
-		}
 		twopc = true
 	case vtgatepb.TransactionMode_UNSPECIFIED:
 		twopc = (txc.mode == vtgatepb.TransactionMode_TWOPC)

@@ -18,7 +18,6 @@ package tabletserver
 
 import (
 	"fmt"
-	"math/rand"
 	"strings"
 	"testing"
 	"time"
@@ -37,7 +36,6 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 )
 
 func TestTxPoolExecuteCommit(t *testing.T) {
@@ -67,7 +65,7 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	_, _ = txConn.Exec(ctx, sql, 1, true)
 	txConn.Recycle()
 
-	commitSQL, err := txPool.Commit(ctx, transactionID, &fakeMessageCommitter{})
+	commitSQL, err := txPool.Commit(ctx, transactionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +157,7 @@ func TestTxPoolTransactionKillerEnforceTimeoutEnabled(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
-	killCount := tabletenv.KillStats.Counts()["Transactions"]
+	killCount := txPool.env.Stats().KillCounters.Counts()["Transactions"]
 
 	txWithoutTimeout, err := addQuery(ctx, sqlWithoutTimeout, txPool, querypb.ExecuteOptions_DBA)
 	if err != nil {
@@ -178,13 +176,14 @@ func TestTxPoolTransactionKillerEnforceTimeoutEnabled(t *testing.T) {
 
 	// transaction killer should kill the query the second query
 	for {
-		killCountDiff = tabletenv.KillStats.Counts()["Transactions"] - killCount
+		killCountDiff = txPool.env.Stats().KillCounters.Counts()["Transactions"] - killCount
 		if killCountDiff >= expectedKills {
 			break
 		}
 
 		select {
 		case <-timeoutCh:
+			txPool.Rollback(ctx, txWithoutTimeout)
 			t.Fatal("waited too long for timed transaction to be killed by transaction killer")
 		default:
 		}
@@ -335,7 +334,7 @@ func TestTxPoolAutocommit(t *testing.T) {
 	if beginSQL != "" {
 		t.Errorf("beginSQL got %q want ''", beginSQL)
 	}
-	commitSQL, err := txPool.Commit(ctx, txid, &fakeMessageCommitter{})
+	commitSQL, err := txPool.Commit(ctx, txid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -544,12 +543,13 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	db.AddQuery("rollback", &sqltypes.Result{})
 	txPool := newTxPool()
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-	id, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	id, _, _ := txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	txPool.Close()
 
 	assertErrorMatch := func(id int64, reason string) {
-		_, err = txPool.Get(id, "for query")
+		conn, err := txPool.Get(id, "for query")
 		if err == nil {
+			conn.Recycle()
 			t.Fatalf("expected error, got nil")
 		}
 		want := fmt.Sprintf("transaction %v: ended at .* \\(%v\\)", id, reason)
@@ -563,14 +563,14 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	txPool = newTxPool()
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 
-	id, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
-	if _, err := txPool.Commit(ctx, id, &fakeMessageCommitter{}); err != nil {
+	id, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	if _, err := txPool.Commit(ctx, id); err != nil {
 		t.Fatalf("got error: %v", err)
 	}
 
 	assertErrorMatch(id, "transaction committed")
 
-	id, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	id, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	if err := txPool.Rollback(ctx, id); err != nil {
 		t.Fatalf("got error: %v", err)
 	}
@@ -583,13 +583,13 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 
-	id, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
-	time.Sleep(5 * time.Millisecond)
+	id, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	time.Sleep(20 * time.Millisecond)
 
 	assertErrorMatch(id, "exceeded timeout: 1ms")
 
 	txPool.SetTimeout(1 * time.Hour)
-	id, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	id, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	txc, err := txPool.Get(id, "for close")
 	if err != nil {
 		t.Fatalf("got error: %v", err)
@@ -599,16 +599,6 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	txc.Recycle()
 
 	assertErrorMatch(id, "closed")
-}
-
-type fakeMessageCommitter struct {
-}
-
-func (f *fakeMessageCommitter) LockDB(newMessages map[string][]*messager.MessageRow, changedMessages map[string][]string) func() {
-	return func() {}
-}
-
-func (f *fakeMessageCommitter) UpdateCaches(newMessages map[string][]*messager.MessageRow, changedMessages map[string][]string) {
 }
 
 func TestTxPoolExecFailDueToConnFail_Errno2006(t *testing.T) {
@@ -683,13 +673,13 @@ func TestTxPoolExecFailDueToConnFail_Errno2013(t *testing.T) {
 }
 
 func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
-	startingStray := tabletenv.InternalErrors.Counts()["StrayTransactions"]
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("begin", &sqltypes.Result{})
 
 	txPool := newTxPool()
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	startingStray := txPool.env.Stats().InternalErrors.Counts()["StrayTransactions"]
 
 	// Start stray transaction.
 	_, _, err := txPool.Begin(context.Background(), &querypb.ExecuteOptions{})
@@ -699,7 +689,7 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 
 	// Close kills stray transaction.
 	txPool.Close()
-	if got, want := tabletenv.InternalErrors.Counts()["StrayTransactions"]-startingStray, int64(1); got != want {
+	if got, want := txPool.env.Stats().InternalErrors.Counts()["StrayTransactions"]-startingStray, int64(1); got != want {
 		t.Fatalf("internal error count for stray transactions not increased: got = %v, want = %v", got, want)
 	}
 	if got, want := txPool.conns.Capacity(), int64(0); got != want {
@@ -708,24 +698,14 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 }
 
 func newTxPool() *TxPool {
-	randID := rand.Int63()
-	poolName := fmt.Sprintf("TestTransactionPool-%d", randID)
-	transactionCap := 300
-	transactionTimeout := time.Duration(30 * time.Second)
-	transactionPoolTimeout := time.Duration(40 * time.Second)
-	waiterCap := 500000
-	idleTimeout := time.Duration(30 * time.Second)
+	config := tabletenv.NewDefaultConfig()
+	config.TxPool.Size = 300
+	config.Oltp.TxTimeoutSeconds = 30
+	config.TxPool.TimeoutSeconds = 40
+	config.TxPool.MaxWaiters = 500000
+	config.OltpReadPool.IdleTimeoutSeconds = 30
+	config.OlapReadPool.IdleTimeoutSeconds = 30
+	config.TxPool.IdleTimeoutSeconds = 30
 	limiter := &txlimiter.TxAllowAll{}
-	return NewTxPool(
-		poolName,
-		transactionCap,
-		transactionCap,
-		0,
-		transactionTimeout,
-		transactionPoolTimeout,
-		idleTimeout,
-		waiterCap,
-		DummyChecker,
-		limiter,
-	)
+	return NewTxPool(tabletenv.NewTestEnv(config, nil, "TabletServerTest"), limiter)
 }

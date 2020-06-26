@@ -68,6 +68,9 @@ func (vc *vdbClient) Commit() error {
 }
 
 func (vc *vdbClient) Rollback() error {
+	if !vc.InTransaction {
+		return nil
+	}
 	if err := vc.DBClient.Rollback(); err != nil {
 		return err
 	}

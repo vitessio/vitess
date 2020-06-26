@@ -1,0 +1,75 @@
+topology:
+  cells:
+    - name: "zone1"
+      vtctld:
+        replicas: 1
+      vtgate:
+        replicas: 1
+      mysqlProtocol:
+        enabled: true
+        authType: "none"
+      keyspaces:
+        - name: "commerce"
+          shards:
+            - name: "0"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
+        - name: "customer"
+          shards:
+            - name: "0"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
+            - name: "-80"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
+              copySchema:
+                source: "customer/0"
+            - name: "80-"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
+              copySchema:
+                source: "customer/0"
+
+vtctld:
+  serviceType: "NodePort"
+  resources:
+
+vtgate:
+  serviceType: "NodePort"
+  resources:
+
+vttablet:
+  mysqlSize: "prod"
+  resources:
+  mysqlResources:
+  # It's generally not recommended to override this value for production usage.
+  terminationGracePeriodSeconds: 1
+
+vtworker:
+  resources:
+
+pmm:
+  enabled: false
+
+orchestrator:
+  enabled: false

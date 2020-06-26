@@ -25,11 +25,10 @@ import (
 
 // Result represents a query result.
 type Result struct {
-	Fields       []*querypb.Field      `json:"fields"`
-	RowsAffected uint64                `json:"rows_affected"`
-	InsertID     uint64                `json:"insert_id"`
-	Rows         [][]Value             `json:"rows"`
-	Extras       *querypb.ResultExtras `json:"extras"`
+	Fields       []*querypb.Field `json:"fields"`
+	RowsAffected uint64           `json:"rows_affected"`
+	InsertID     uint64           `json:"insert_id"`
+	Rows         [][]Value        `json:"rows"`
 }
 
 // ResultStream is an interface for receiving Result. It is used for
@@ -74,18 +73,6 @@ func (result *Result) Copy() *Result {
 			out.Rows = append(out.Rows, CopyRow(r))
 		}
 	}
-	if result.Extras != nil {
-		out.Extras = &querypb.ResultExtras{
-			Fresher: result.Extras.Fresher,
-		}
-		if result.Extras.EventToken != nil {
-			out.Extras.EventToken = &querypb.EventToken{
-				Timestamp: result.Extras.EventToken.Timestamp,
-				Shard:     result.Extras.EventToken.Shard,
-				Position:  result.Extras.EventToken.Position,
-			}
-		}
-	}
 	return out
 }
 
@@ -118,18 +105,6 @@ func (result *Result) Truncate(l int) *Result {
 			out.Rows = append(out.Rows, r[:l])
 		}
 	}
-	if result.Extras != nil {
-		out.Extras = &querypb.ResultExtras{
-			Fresher: result.Extras.Fresher,
-		}
-		if result.Extras.EventToken != nil {
-			out.Extras.EventToken = &querypb.EventToken{
-				Timestamp: result.Extras.EventToken.Timestamp,
-				Shard:     result.Extras.EventToken.Shard,
-				Position:  result.Extras.EventToken.Position,
-			}
-		}
-	}
 	return out
 }
 
@@ -158,12 +133,11 @@ func (result *Result) Equal(other *Result) bool {
 		return false
 	}
 
-	// Compare Fields, RowsAffected, InsertID, Rows, Extras.
+	// Compare Fields, RowsAffected, InsertID, Rows.
 	return FieldsEqual(result.Fields, other.Fields) &&
 		result.RowsAffected == other.RowsAffected &&
 		result.InsertID == other.InsertID &&
-		reflect.DeepEqual(result.Rows, other.Rows) &&
-		proto.Equal(result.Extras, other.Extras)
+		reflect.DeepEqual(result.Rows, other.Rows)
 }
 
 // ResultsEqual compares two arrays of Result.
@@ -241,31 +215,6 @@ func (result *Result) AppendResult(src *Result) {
 	result.RowsAffected += src.RowsAffected
 	if src.InsertID != 0 {
 		result.InsertID = src.InsertID
-	}
-	if len(result.Rows) == 0 {
-		// we haven't gotten any result yet, just save the new extras.
-		result.Extras = src.Extras
-	} else {
-		// Merge the EventTokens / Fresher flags within Extras.
-		if src.Extras == nil {
-			// We didn't get any from innerq. Have to clear any
-			// we'd have gotten already.
-			if result.Extras != nil {
-				result.Extras.EventToken = nil
-				result.Extras.Fresher = false
-			}
-		} else {
-			// We may have gotten an EventToken from
-			// innerqr.  If we also got one earlier, merge
-			// it. If we didn't get one earlier, we
-			// discard the new one.
-			if result.Extras != nil {
-				// Note if any of the two is nil, we get nil.
-				result.Extras.EventToken = EventTokenMinimum(result.Extras.EventToken, src.Extras.EventToken)
-
-				result.Extras.Fresher = result.Extras.Fresher && src.Extras.Fresher
-			}
-		}
 	}
 	result.Rows = append(result.Rows, src.Rows...)
 }

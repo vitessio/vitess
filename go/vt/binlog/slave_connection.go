@@ -17,13 +17,15 @@ limitations under the License.
 package binlog
 
 import (
+	crand "crypto/rand"
 	"fmt"
+	"math"
+	"math/big"
 	"sync"
 
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -40,20 +42,23 @@ var (
 // among actual slaves in the topology.
 type SlaveConnection struct {
 	*mysql.Conn
-	cp      *mysql.ConnParams
+	cp      dbconfigs.Connector
 	slaveID uint32
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
 }
 
+// We use a random slaveid deprecating IDPool which was causing problems with RDS
+// either because it was using ids in the same range that we generate or because
+// the pool reuses ids.
+func getSlaveID() uint32 {
+	max := big.NewInt(math.MaxInt32)
+	id, _ := crand.Int(crand.Reader, max)
+	return uint32(id.Int64())
+}
+
 // NewSlaveConnection creates a new slave connection to the mysqld instance.
-// It uses a pools.IDPool to ensure that the server IDs used to connect are
-// unique within this process. This is done with the assumptions that:
-//
-// 1) No other processes are making fake slave connections to our mysqld.
-// 2) No real slave servers will have IDs in the range 1-N where N is the peak
-//    number of concurrent fake slave connections we will ever make.
-func NewSlaveConnection(cp *mysql.ConnParams) (*SlaveConnection, error) {
+func NewSlaveConnection(cp dbconfigs.Connector) (*SlaveConnection, error) {
 	conn, err := connectForReplication(cp)
 	if err != nil {
 		return nil, err
@@ -62,25 +67,19 @@ func NewSlaveConnection(cp *mysql.ConnParams) (*SlaveConnection, error) {
 	sc := &SlaveConnection{
 		Conn:    conn,
 		cp:      cp,
-		slaveID: slaveIDPool.Get(),
+		slaveID: getSlaveID(),
 	}
 	log.Infof("new slave connection: slaveID=%d", sc.slaveID)
 	return sc, nil
 }
 
 // connectForReplication create a MySQL connection ready to use for replication.
-func connectForReplication(cp *mysql.ConnParams) (*mysql.Conn, error) {
-	params, err := dbconfigs.WithCredentials(cp)
-	if err != nil {
-		return nil, err
-	}
-
+func connectForReplication(cp dbconfigs.Connector) (*mysql.Conn, error) {
 	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, params)
+	conn, err := cp.Connect(ctx)
 	if err != nil {
 		return nil, err
 	}
-
 	// Tell the server that we understand the format of events
 	// that will be used if binlog_checksum is enabled on the server.
 	if _, err := conn.ExecuteFetch("SET @master_binlog_checksum=@@global.binlog_checksum", 0, false); err != nil {
@@ -89,9 +88,6 @@ func connectForReplication(cp *mysql.ConnParams) (*mysql.Conn, error) {
 
 	return conn, nil
 }
-
-// slaveIDPool is the IDPool for server IDs used to connect as a slave.
-var slaveIDPool = pools.NewIDPool()
 
 // StartBinlogDumpFromCurrent requests a replication binlog dump from
 // the current position.
@@ -286,8 +282,7 @@ func (sc *SlaveConnection) Close() {
 			sc.cancel = nil
 		}
 
-		log.Infof("closing slave MySQL client, recycling slaveID %v", sc.slaveID)
+		log.Infof("closing slave MySQL client with slaveID %v", sc.slaveID)
 		sc.Conn = nil
-		slaveIDPool.Put(sc.slaveID)
 	}
 }

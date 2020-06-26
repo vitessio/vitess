@@ -19,7 +19,6 @@ package vtgate
 import (
 	"flag"
 	"io"
-	"math/rand"
 	"sync"
 	"time"
 
@@ -29,16 +28,13 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/gateway"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -51,7 +47,7 @@ type ScatterConn struct {
 	timings              *stats.MultiTimings
 	tabletCallErrorCount *stats.CountersWithMultiLabels
 	txConn               *TxConn
-	gateway              gateway.Gateway
+	gateway              Gateway
 	healthCheck          discovery.HealthCheck
 }
 
@@ -73,7 +69,7 @@ type shardActionFunc func(rs *srvtopo.ResolvedShard, i int) error
 type shardActionTransactionFunc func(rs *srvtopo.ResolvedShard, i int, shouldBegin bool, transactionID int64) (int64, error)
 
 // NewScatterConn creates a new ScatterConn.
-func NewScatterConn(statsName string, txConn *TxConn, gw gateway.Gateway, hc discovery.HealthCheck) *ScatterConn {
+func NewScatterConn(statsName string, txConn *TxConn, gw Gateway, hc discovery.HealthCheck) *ScatterConn {
 	tabletCallErrorCountStatsName := ""
 	if statsName != "" {
 		tabletCallErrorCountStatsName = statsName + "ErrorCount"
@@ -126,6 +122,7 @@ func (stc *ScatterConn) Execute(
 	session *SafeSession,
 	notInTransaction bool,
 	options *querypb.ExecuteOptions,
+	autocommit bool,
 ) (*sqltypes.Result, error) {
 
 	// mu protects qr
@@ -140,19 +137,21 @@ func (stc *ScatterConn) Execute(
 		session,
 		notInTransaction,
 		func(rs *srvtopo.ResolvedShard, i int, shouldBegin bool, transactionID int64) (int64, error) {
-			var innerqr *sqltypes.Result
-			if shouldBegin {
-				var err error
+			var (
+				innerqr *sqltypes.Result
+				err     error
+				opts    *querypb.ExecuteOptions
+			)
+			switch {
+			case autocommit:
+				innerqr, err = stc.executeAutocommit(ctx, rs, query, bindVars, opts)
+			case shouldBegin:
 				innerqr, transactionID, err = rs.QueryService.BeginExecute(ctx, rs.Target, query, bindVars, options)
-				if err != nil {
-					return transactionID, err
-				}
-			} else {
-				var err error
+			default:
 				innerqr, err = rs.QueryService.Execute(ctx, rs.Target, query, bindVars, transactionID, options)
-				if err != nil {
-					return transactionID, err
-				}
+			}
+			if err != nil {
+				return transactionID, err
 			}
 
 			mu.Lock()
@@ -250,191 +249,6 @@ func (stc *ScatterConn) executeAutocommit(ctx context.Context, rs *srvtopo.Resol
 		return nil, err
 	}
 	return &qrs[0], nil
-}
-
-// ExecuteEntityIds executes queries that are shard specific.
-func (stc *ScatterConn) ExecuteEntityIds(
-	ctx context.Context,
-	rss []*srvtopo.ResolvedShard,
-	sqls []string,
-	bindVars []map[string]*querypb.BindVariable,
-	tabletType topodatapb.TabletType,
-	session *SafeSession,
-	notInTransaction bool,
-	options *querypb.ExecuteOptions,
-) (*sqltypes.Result, error) {
-
-	// mu protects qr
-	var mu sync.Mutex
-	qr := new(sqltypes.Result)
-
-	allErrors := stc.multiGoTransaction(
-		ctx,
-		"ExecuteEntityIds",
-		rss,
-		tabletType,
-		session,
-		notInTransaction,
-		func(rs *srvtopo.ResolvedShard, i int, shouldBegin bool, transactionID int64) (int64, error) {
-			var innerqr *sqltypes.Result
-			var err error
-
-			if shouldBegin {
-				innerqr, transactionID, err = rs.QueryService.BeginExecute(ctx, rs.Target, sqls[i], bindVars[i], options)
-			} else {
-				innerqr, err = rs.QueryService.Execute(ctx, rs.Target, sqls[i], bindVars[i], transactionID, options)
-			}
-			if err != nil {
-				return transactionID, err
-			}
-
-			mu.Lock()
-			defer mu.Unlock()
-			qr.AppendResult(innerqr)
-			return transactionID, nil
-		})
-
-	return qr, allErrors.AggrError(vterrors.Aggregate)
-}
-
-// scatterBatchRequest needs to be built to perform a scatter batch query.
-// A VTGate batch request will get translated into a different set of batches
-// for each keyspace:shard, and those results will map to different positions in the
-// results list. The length specifies the total length of the final results
-// list. In each request variable, the resultIndexes specifies the position
-// for each result from the shard.
-type scatterBatchRequest struct {
-	// length is the total number of queries we have.
-	length int
-	// requests maps the 'keyspace:shard' key to the structure below.
-	requests map[string]*shardBatchRequest
-}
-
-type shardBatchRequest struct {
-	// rs is the ResolvedShard to send the queries to.
-	rs *srvtopo.ResolvedShard
-	// queries are the queries to send to that ResolvedShard.
-	queries []*querypb.BoundQuery
-	// resultIndexes describes the index of the query and its results
-	// into the full original query array.
-	resultIndexes []int
-}
-
-func boundShardQueriesToScatterBatchRequest(ctx context.Context, resolver *srvtopo.Resolver, boundQueries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType) (*scatterBatchRequest, error) {
-	requests := &scatterBatchRequest{
-		length:   len(boundQueries),
-		requests: make(map[string]*shardBatchRequest),
-	}
-	for i, boundQuery := range boundQueries {
-		rss, err := resolver.ResolveDestination(ctx, boundQuery.Keyspace, tabletType, key.DestinationShards(boundQuery.Shards))
-		if err != nil {
-			return nil, err
-		}
-
-		for _, rs := range rss {
-			key := rs.Target.Keyspace + ":" + rs.Target.Shard
-			request := requests.requests[key]
-			if request == nil {
-				request = &shardBatchRequest{
-					rs: rs,
-				}
-				requests.requests[key] = request
-			}
-			request.queries = append(request.queries, boundQuery.Query)
-			request.resultIndexes = append(request.resultIndexes, i)
-		}
-	}
-	return requests, nil
-}
-
-func boundKeyspaceIDQueriesToScatterBatchRequest(ctx context.Context, resolver *srvtopo.Resolver, boundQueries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType) (*scatterBatchRequest, error) {
-	requests := &scatterBatchRequest{
-		length:   len(boundQueries),
-		requests: make(map[string]*shardBatchRequest),
-	}
-	for i, boundQuery := range boundQueries {
-		rss, err := resolver.ResolveDestination(ctx, boundQuery.Keyspace, tabletType, key.DestinationKeyspaceIDs(boundQuery.KeyspaceIds))
-		if err != nil {
-			return nil, err
-		}
-
-		for _, rs := range rss {
-			key := rs.Target.Keyspace + ":" + rs.Target.Shard
-			request := requests.requests[key]
-			if request == nil {
-				request = &shardBatchRequest{
-					rs: rs,
-				}
-				requests.requests[key] = request
-			}
-			request.queries = append(request.queries, boundQuery.Query)
-			request.resultIndexes = append(request.resultIndexes, i)
-		}
-	}
-	return requests, nil
-}
-
-// ExecuteBatch executes a batch of non-streaming queries on the specified shards.
-func (stc *ScatterConn) ExecuteBatch(
-	ctx context.Context,
-	batchRequest *scatterBatchRequest,
-	tabletType topodatapb.TabletType,
-	asTransaction bool,
-	session *SafeSession,
-	options *querypb.ExecuteOptions) (qrs []sqltypes.Result, err error) {
-
-	allErrors := new(concurrency.AllErrorRecorder)
-
-	results := make([]sqltypes.Result, batchRequest.length)
-	var resMutex sync.Mutex
-
-	var wg sync.WaitGroup
-	for _, req := range batchRequest.requests {
-		wg.Add(1)
-		go func(req *shardBatchRequest) {
-			defer wg.Done()
-			var err error
-			startTime, statsKey := stc.startAction("ExecuteBatch", req.rs.Target)
-			defer stc.endAction(startTime, allErrors, statsKey, &err, session)
-
-			shouldBegin, transactionID := transactionInfo(req.rs.Target, session, false)
-			var innerqrs []sqltypes.Result
-			if shouldBegin {
-				innerqrs, transactionID, err = req.rs.QueryService.BeginExecuteBatch(ctx, req.rs.Target, req.queries, asTransaction, options)
-				if transactionID != 0 {
-					if appendErr := session.Append(&vtgatepb.Session_ShardSession{
-						Target:        req.rs.Target,
-						TransactionId: transactionID,
-					}, stc.txConn.mode); appendErr != nil {
-						err = appendErr
-					}
-				}
-				if err != nil {
-					return
-				}
-			} else {
-				innerqrs, err = req.rs.QueryService.ExecuteBatch(ctx, req.rs.Target, req.queries, asTransaction, transactionID, options)
-				if err != nil {
-					return
-				}
-			}
-
-			resMutex.Lock()
-			defer resMutex.Unlock()
-			for i, result := range innerqrs {
-				results[req.resultIndexes[i]].AppendResult(&result)
-			}
-		}(req)
-	}
-	wg.Wait()
-
-	if session.MustRollback() {
-		stc.txConn.Rollback(ctx, session)
-	}
-	if allErrors.HasErrors() {
-		return nil, allErrors.AggrError(vterrors.Aggregate)
-	}
-	return results, nil
 }
 
 func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *bool, qr *sqltypes.Result, callback func(*sqltypes.Result) error) error {
@@ -595,146 +409,13 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, rss []*srvtopo.Resolv
 	return allErrors.AggrError(vterrors.Aggregate)
 }
 
-// MessageAck acks messages across multiple shards.
-func (stc *ScatterConn) MessageAck(ctx context.Context, rss []*srvtopo.ResolvedShard, values [][]*querypb.Value, name string) (int64, error) {
-	var mu sync.Mutex
-	var totalCount int64
-	allErrors := stc.multiGo(ctx, "MessageAck", rss, topodatapb.TabletType_MASTER, func(rs *srvtopo.ResolvedShard, i int) error {
-		count, err := rs.QueryService.MessageAck(ctx, rs.Target, name, values[i])
-		if err != nil {
-			return err
-		}
-		mu.Lock()
-		totalCount += count
-		mu.Unlock()
-		return nil
-	})
-	return totalCount, allErrors.AggrError(vterrors.Aggregate)
-}
-
-// UpdateStream just sends the query to the ResolvedShard,
-// and sends the results back.
-func (stc *ScatterConn) UpdateStream(ctx context.Context, rs *srvtopo.ResolvedShard, timestamp int64, position string, callback func(*querypb.StreamEvent) error) error {
-	return rs.QueryService.UpdateStream(ctx, rs.Target, position, timestamp, callback)
-}
-
-// SplitQuery scatters a SplitQuery request to the shards whose names are given in 'shards'.
-// For every set of *querypb.QuerySplit's received from a shard, it applies the given
-// 'querySplitToPartFunc' function to convert each *querypb.QuerySplit into a
-// 'SplitQueryResponse_Part' message. Finally, it aggregates the obtained
-// SplitQueryResponse_Parts across all shards and returns the resulting slice.
-func (stc *ScatterConn) SplitQuery(
-	ctx context.Context,
-	sql string,
-	bindVariables map[string]*querypb.BindVariable,
-	splitColumns []string,
-	perShardSplitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm,
-	rss []*srvtopo.ResolvedShard,
-	querySplitToQueryPartFunc func(
-		querySplit *querypb.QuerySplit, rs *srvtopo.ResolvedShard) (*vtgatepb.SplitQueryResponse_Part, error)) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-
-	tabletType := topodatapb.TabletType_RDONLY
-	// allParts will collect the query-parts from all the shards. It's protected
-	// by allPartsMutex.
-	var allParts []*vtgatepb.SplitQueryResponse_Part
-	var allPartsMutex sync.Mutex
-
-	allErrors := stc.multiGo(
-		ctx,
-		"SplitQuery",
-		rss,
-		tabletType,
-		func(rs *srvtopo.ResolvedShard, i int) error {
-			// Get all splits from this shard
-			query := &querypb.BoundQuery{
-				Sql:           sql,
-				BindVariables: bindVariables,
-			}
-			querySplits, err := rs.QueryService.SplitQuery(
-				ctx,
-				rs.Target,
-				query,
-				splitColumns,
-				perShardSplitCount,
-				numRowsPerQueryPart,
-				algorithm)
-			if err != nil {
-				return err
-			}
-			parts := make([]*vtgatepb.SplitQueryResponse_Part, len(querySplits))
-			for i, querySplit := range querySplits {
-				parts[i], err = querySplitToQueryPartFunc(querySplit, rs)
-				if err != nil {
-					return err
-				}
-			}
-			// Aggregate the parts from this shard into allParts.
-			allPartsMutex.Lock()
-			defer allPartsMutex.Unlock()
-			allParts = append(allParts, parts...)
-			return nil
-		},
-	)
-
-	if allErrors.HasErrors() {
-		err := allErrors.AggrError(vterrors.Aggregate)
-		return nil, err
-	}
-	// We shuffle the query-parts here. External frameworks like MapReduce may
-	// "deal" these jobs to workers in the order they are in the list. Without
-	// shuffling workers can be very unevenly distributed among
-	// the shards they query. E.g. all workers will first query the first shard,
-	// then most of them to the second shard, etc, which results with uneven
-	// load balancing among shards.
-	shuffleQueryParts(allParts)
-	return allParts, nil
-}
-
-// randomGenerator is the randomGenerator used for the randomness
-// of 'shuffleQueryParts'. It's initialized in 'init()' below.
-type shuffleQueryPartsRandomGeneratorInterface interface {
-	Intn(n int) int
-}
-
-var shuffleQueryPartsRandomGenerator shuffleQueryPartsRandomGeneratorInterface
-
-func init() {
-	shuffleQueryPartsRandomGenerator =
-		rand.New(rand.NewSource(time.Now().UnixNano()))
-}
-
-// injectShuffleQueryParsRandomGenerator injects the given object
-// as the random generator used by shuffleQueryParts. This function
-// should only be used in tests and should not be called concurrently.
-// It returns the previous shuffleQueryPartsRandomGenerator used.
-// lint:ignore U1000 available for tests to use
-func injectShuffleQueryPartsRandomGenerator(
-	randGen shuffleQueryPartsRandomGeneratorInterface) shuffleQueryPartsRandomGeneratorInterface {
-	oldRandGen := shuffleQueryPartsRandomGenerator
-	shuffleQueryPartsRandomGenerator = randGen
-	return oldRandGen
-}
-
-// shuffleQueryParts performs an in-place shuffle of the given array.
-// The result is a pseudo-random permutation of the array chosen uniformally
-// from the space of all permutations.
-func shuffleQueryParts(splits []*vtgatepb.SplitQueryResponse_Part) {
-	for i := len(splits) - 1; i >= 1; i-- {
-		randIndex := shuffleQueryPartsRandomGenerator.Intn(i + 1)
-		// swap splits[i], splits[randIndex]
-		splits[randIndex], splits[i] = splits[i], splits[randIndex]
-	}
-}
-
 // Close closes the underlying Gateway.
 func (stc *ScatterConn) Close() error {
 	return stc.gateway.Close(context.Background())
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
-func (stc *ScatterConn) GetGatewayCacheStatus() gateway.TabletCacheStatusList {
+func (stc *ScatterConn) GetGatewayCacheStatus() TabletCacheStatusList {
 	return stc.gateway.CacheStatus()
 }
 

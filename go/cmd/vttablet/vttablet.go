@@ -19,6 +19,7 @@ package main
 
 import (
 	"flag"
+	"io/ioutil"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -32,12 +33,15 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/yaml2"
 )
 
 var (
-	enforceTableACLConfig = flag.Bool("enforce-tableacl-config", false, "if this flag is true, vttablet will fail to start if a valid tableacl config does not exist")
-	tableACLConfig        = flag.String("table-acl-config", "", "path to table access checker config file; send SIGHUP to reload this file")
-	tabletPath            = flag.String("tablet-path", "", "tablet alias")
+	enforceTableACLConfig        = flag.Bool("enforce-tableacl-config", false, "if this flag is true, vttablet will fail to start if a valid tableacl config does not exist")
+	tableACLConfig               = flag.String("table-acl-config", "", "path to table access checker config file; send SIGHUP to reload this file")
+	tableACLConfigReloadInterval = flag.Duration("table-acl-config-reload-interval", 0, "Ticker to reload ACLs")
+	tabletPath                   = flag.String("tablet-path", "", "tablet alias")
+	tabletConfig                 = flag.String("tablet_config", "", "YAML file config for tablet")
 
 	agent *tabletmanager.ActionAgent
 )
@@ -52,11 +56,24 @@ func main() {
 
 	servenv.ParseFlags("vttablet")
 
-	if err := tabletenv.VerifyConfig(); err != nil {
+	tabletenv.Init()
+	// Load current config after tabletenv.Init, because it changes it.
+	config := tabletenv.NewCurrentConfig()
+	if err := config.Verify(); err != nil {
 		log.Exitf("invalid config: %v", err)
 	}
 
-	tabletenv.Init()
+	if *tabletConfig != "" {
+		bytes, err := ioutil.ReadFile(*tabletConfig)
+		if err != nil {
+			log.Exitf("error reading config file %s: %v", *tabletConfig, err)
+		}
+		if err := yaml2.Unmarshal(bytes, config); err != nil {
+			log.Exitf("error parsing config file %s: %v", bytes, err)
+		}
+	}
+	gotBytes, _ := yaml2.Marshal(config)
+	log.Infof("Loaded config file %s successfully:\n%s", *tabletConfig, gotBytes)
 
 	servenv.Init()
 
@@ -74,7 +91,7 @@ func main() {
 	// and use the socket from it. If connection parameters were specified,
 	// we assume that the mysql is not local, and we skip loading mycnf.
 	// This also means that backup and restore will not be allowed.
-	if !dbconfigs.HasConnectionParams() {
+	if !config.DB.HasGlobalSettings() {
 		var err error
 		if mycnf, err = mysqlctl.NewMycnfFromFlags(tabletAlias.Uid); err != nil {
 			log.Exitf("mycnf read failed: %v", err)
@@ -87,10 +104,7 @@ func main() {
 	// If connection parameters were specified, socketFile will be empty.
 	// Otherwise, the socketFile (read from mycnf) will be used to initialize
 	// dbconfigs.
-	dbcfgs, err := dbconfigs.Init(socketFile)
-	if err != nil {
-		log.Warning(err)
-	}
+	config.DB = config.DB.Init(socketFile)
 
 	if *tableACLConfig != "" {
 		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
@@ -101,7 +115,7 @@ func main() {
 
 	// creates and registers the query service
 	ts := topo.Open()
-	qsc := tabletserver.NewServer(ts, *tabletAlias)
+	qsc := tabletserver.NewTabletServer("", config, ts, *tabletAlias)
 	servenv.OnRun(func() {
 		qsc.Register()
 		addStatusParts(qsc)
@@ -112,12 +126,12 @@ func main() {
 		qsc.StopService()
 	})
 
-	qsc.InitACL(*tableACLConfig, *enforceTableACLConfig)
+	qsc.InitACL(*tableACLConfig, *enforceTableACLConfig, *tableACLConfigReloadInterval)
 
 	// Create mysqld and register the health reporter (needs to be done
 	// before initializing the agent, so the initial health check
 	// done by the agent has the right reporter)
-	mysqld := mysqlctl.NewMysqld(dbcfgs)
+	mysqld := mysqlctl.NewMysqld(config.DB)
 	servenv.OnClose(mysqld.Close)
 
 	// Depends on both query and updateStream.
@@ -125,7 +139,7 @@ func main() {
 	if servenv.GRPCPort != nil {
 		gRPCPort = int32(*servenv.GRPCPort)
 	}
-	agent, err = tabletmanager.NewActionAgent(context.Background(), ts, mysqld, qsc, tabletAlias, dbcfgs, mycnf, int32(*servenv.Port), gRPCPort)
+	agent, err = tabletmanager.NewActionAgent(context.Background(), ts, mysqld, qsc, tabletAlias, config.DB, mycnf, int32(*servenv.Port), gRPCPort)
 	if err != nil {
 		log.Exitf("NewActionAgent() failed: %v", err)
 	}

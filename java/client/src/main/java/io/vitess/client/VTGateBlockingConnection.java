@@ -18,8 +18,6 @@ package io.vitess.client;
 
 import io.vitess.client.cursor.Cursor;
 import io.vitess.client.cursor.CursorWithError;
-import io.vitess.proto.Query.SplitQueryRequest.Algorithm;
-import io.vitess.proto.Vtgate.SplitQueryResponse;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -136,34 +134,6 @@ public final class VTGateBlockingConnection implements Closeable {
       @Nullable Map<String, ?> bindVars,
       VTSession vtSession) throws SQLException {
     return vtGateConnection.streamExecute(ctx, query, bindVars, vtSession);
-  }
-
-  /**
-   * This method splits the query into small parts based on the splitColumn and Algorithm type
-   * provided.
-   *
-   * @param ctx Context on user and execution deadline if any.
-   * @param keyspace Keyspace to execute the query on.
-   * @param query Sql Query to be executed.
-   * @param bindVars Parameters to bind with sql.
-   * @param splitColumns Column to be used to split the data.
-   * @param splitCount Number of Partitions
-   * @param numRowsPerQueryPart Limit the number of records per query part.
-   * @param algorithm EQUAL_SPLITS or FULL_SCAN
-   * @return Query Parts
-   * @throws SQLException If anything fails on query execution.
-   */
-  public List<SplitQueryResponse.Part> splitQuery(Context ctx,
-      String keyspace,
-      String query,
-      @Nullable Map<String, ?> bindVars,
-      Iterable<String> splitColumns,
-      int splitCount,
-      int numRowsPerQueryPart,
-      Algorithm algorithm) throws SQLException {
-    return vtGateConnection
-        .splitQuery(ctx, keyspace, query, bindVars, splitColumns, splitCount, numRowsPerQueryPart,
-            algorithm).checkedGet();
   }
 
   /**

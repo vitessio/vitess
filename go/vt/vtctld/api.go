@@ -29,6 +29,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schemamanager"
@@ -42,11 +43,13 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 var (
 	localCell        = flag.String("cell", "", "cell to use")
 	showTopologyCRUD = flag.Bool("vtctld_show_topology_crud", true, "Controls the display of the CRUD topology actions in the vtctld UI.")
+	proxyTablets     = flag.Bool("proxy_tablets", false, "Setting this true will make vtctld proxy the tablet status instead of redirecting to them")
 )
 
 // This file implements a REST-style API for the vtctld web interface.
@@ -56,6 +59,23 @@ const (
 
 	jsonContentType = "application/json; charset=utf-8"
 )
+
+// TabletWithURL wraps topo.Tablet and adds a URL property.
+type TabletWithURL struct {
+	Alias               *topodatapb.TabletAlias `json:"alias,omitempty"`
+	Hostname            string                  `json:"hostname,omitempty"`
+	PortMap             map[string]int32        `json:"port_map,omitempty"`
+	Keyspace            string                  `json:"keyspace,omitempty"`
+	Shard               string                  `json:"shard,omitempty"`
+	KeyRange            *topodatapb.KeyRange    `json:"key_range,omitempty"`
+	Type                topodatapb.TabletType   `json:"type,omitempty"`
+	DbNameOverride      string                  `json:"db_name_override,omitempty"`
+	Tags                map[string]string       `json:"tags,omitempty"`
+	MysqlHostname       string                  `json:"mysql_hostname,omitempty"`
+	MysqlPort           int32                   `json:"mysql_port,omitempty"`
+	MasterTermStartTime *vttime.Time            `json:"master_term_start_time,omitempty"`
+	URL                 string                  `json:"url,omitempty"`
+}
 
 func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...interface{}) {
 	errMsg := fmt.Sprintf(format, args...)
@@ -90,6 +110,7 @@ func handleCollection(collection string, getFunc func(*http.Request) (interface{
 
 		// JSON encode response.
 		data, err := vtctl.MarshalJSON(obj)
+		log.Flush()
 		if err != nil {
 			return fmt.Errorf("cannot marshal data: %v", err)
 		}
@@ -266,9 +287,17 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 
 		if cell == "local" {
 			if *localCell == "" {
-				return nil, fmt.Errorf("local cell requested, but not specified. Please set with -cell flag")
+				cells, err := ts.GetCellInfoNames(ctx)
+				if err != nil {
+					return nil, fmt.Errorf("could not fetch cell info: %v", err)
+				}
+				if len(cells) == 0 {
+					return nil, fmt.Errorf("no local cells have been created yet")
+				}
+				cell = cells[0]
+			} else {
+				cell = *localCell
 			}
-			cell = *localCell
 		}
 
 		// If a keyspace is provided then return the specified srvkeyspace.
@@ -372,8 +401,27 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		if err != nil {
 			return nil, err
 		}
-		// Pass the embedded proto directly or jsonpb will panic.
-		return t.Tablet, err
+
+		tab := &TabletWithURL{
+			Alias:               t.Alias,
+			Hostname:            t.Hostname,
+			PortMap:             t.PortMap,
+			Keyspace:            t.Keyspace,
+			Shard:               t.Shard,
+			KeyRange:            t.KeyRange,
+			Type:                t.Type,
+			DbNameOverride:      t.DbNameOverride,
+			Tags:                t.Tags,
+			MysqlHostname:       t.MysqlHostname,
+			MysqlPort:           t.MysqlPort,
+			MasterTermStartTime: t.MasterTermStartTime,
+		}
+		if *proxyTablets {
+			tab.URL = fmt.Sprintf("/vttablet/%s-%d/debug/status", t.Alias.Cell, t.Alias.Uid)
+		} else {
+			tab.URL = "http://" + netutil.JoinHostPort(t.Hostname, t.PortMap["vt"])
+		}
+		return tab, nil
 	})
 
 	// Healthcheck real time status per (cell, keyspace, tablet type, metric).

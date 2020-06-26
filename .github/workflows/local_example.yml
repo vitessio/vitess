@@ -42,6 +42,7 @@ jobs:
         make build
 
     - name: local_example
+      timeout-minutes: 30
       run: |
         if [ ${{matrix.os}} = "macos-latest" ]; then
           export PATH="/usr/local/opt/mysql@5.7/bin:$PATH"

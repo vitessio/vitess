@@ -68,7 +68,10 @@ func init() {
 	tabletconn.RegisterDialer("VDiffTest", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		vdiffEnv.mu.Lock()
 		defer vdiffEnv.mu.Unlock()
-		return vdiffEnv.tablets[int(tablet.Alias.Uid)], nil
+		if qs, ok := vdiffEnv.tablets[int(tablet.Alias.Uid)]; ok {
+			return qs, nil
+		}
+		return nil, fmt.Errorf("tablet %d not found", tablet.Alias.Uid)
 	})
 }
 

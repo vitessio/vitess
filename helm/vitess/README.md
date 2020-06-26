@@ -8,13 +8,14 @@ and has been used there since 2011.
 
 This chart creates a Vitess cluster on Kubernetes in a single
 [release](https://github.com/kubernetes/helm/blob/master/docs/glossary.md#release).
-It currently includes all dependencies (e.g. etcd) and Vitess components
+It currently includes all Vitess components
 (vtctld, vtgate, vttablet) inline (in `templates/`) rather than as sub-charts.
 
-## Prerequisites
+## Using Etcd For Topology Data
 
-* Install [etcd-operator](https://github.com/coreos/etcd-operator) in the
-  namespace where you plan to install this chart.
+The chart will use Kubernetes as the topology store for Vitess. This is the preferred configuration when running Vitess in Kubernetes as it has no external dependencesi.
+
+If you do wish to use `etcd` as the toplogy service, then you will need to create an etcd cluster and provide the configuration in your `values.yaml`. Etcd can be managed manually or via the [etcd-operator](https://github.com/coreos/etcd-operator).
 
 ## Installing the Chart
 
@@ -49,8 +50,6 @@ look at the default `values.yaml` file, which is well commented.
 topology:
   cells:
     - name: "zone1"
-      etcd:
-        replicas: 3
       vtctld:
         replicas: 1
       vtgate:

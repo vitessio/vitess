@@ -27,18 +27,20 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 // TestLockAndUnlock tests the lock ability by locking a replica and asserting it does not see changes
 func TestLockAndUnlock(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer masterConn.Close()
 
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer replicaConn.Close()
 
 	// first make sure that our writes to the master make it to the replica
@@ -48,14 +50,14 @@ func TestLockAndUnlock(t *testing.T) {
 
 	// now lock the replica
 	err = tmcLockTables(ctx, replicaTablet.GrpcPort)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	// make sure that writing to the master does not show up on the replica while locked
 	exec(t, masterConn, "insert into t1(id, value) values(3,'c')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	// finally, make sure that unlocking the replica leads to the previous write showing up
 	err = tmcUnlockTables(ctx, replicaTablet.GrpcPort)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")] [VARCHAR("c")]]`)
 
 	// Unlocking when we do not have a valid lock should lead to an exception being raised
@@ -71,31 +73,32 @@ func TestLockAndUnlock(t *testing.T) {
 
 // TestStartSlaveUntilAfter tests by writing three rows, noting the gtid after each, and then replaying them one by one
 func TestStartSlaveUntilAfter(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer masterConn.Close()
 
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer replicaConn.Close()
 
 	//first we stop replication to the replica, so we can move forward step by step.
 	err = tmcStopSlave(ctx, replicaTablet.GrpcPort)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	exec(t, masterConn, "insert into t1(id, value) values(1,'a')")
 	pos1, err := tmcMasterPosition(ctx, masterTablet.GrpcPort)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	exec(t, masterConn, "insert into t1(id, value) values(2,'b')")
 	pos2, err := tmcMasterPosition(ctx, masterTablet.GrpcPort)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	exec(t, masterConn, "insert into t1(id, value) values(3,'c')")
 	pos3, err := tmcMasterPosition(ctx, masterTablet.GrpcPort)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	// Now, we'll resume stepwise position by position and make sure that we see the expected data
 	checkDataOnReplica(t, replicaConn, `[]`)
@@ -103,35 +106,36 @@ func TestStartSlaveUntilAfter(t *testing.T) {
 	// starts the mysql replication until
 	timeout := 10 * time.Second
 	err = tmcStartSlaveUntilAfter(ctx, replicaTablet.GrpcPort, pos1, timeout)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	// first row should be visible
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")]]`)
 
 	err = tmcStartSlaveUntilAfter(ctx, replicaTablet.GrpcPort, pos2, timeout)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	err = tmcStartSlaveUntilAfter(ctx, replicaTablet.GrpcPort, pos3, timeout)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")] [VARCHAR("c")]]`)
 
 	// Strat replication to the replica
 	err = tmcStartSlave(ctx, replicaTablet.GrpcPort)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	// Clean the table for further testing
 	exec(t, masterConn, "delete from t1")
 }
 
 // TestLockAndTimeout tests that the lock times out and updates can be seen after timeout
 func TestLockAndTimeout(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer masterConn.Close()
 
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer replicaConn.Close()
 
 	// first make sure that our writes to the master make it to the replica
@@ -140,7 +144,7 @@ func TestLockAndTimeout(t *testing.T) {
 
 	// now lock the replica
 	err = tmcLockTables(ctx, replicaTablet.GrpcPort)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	// make sure that writing to the master does not show up on the replica while locked
 	exec(t, masterConn, "insert into t1(id, value) values(2,'b')")

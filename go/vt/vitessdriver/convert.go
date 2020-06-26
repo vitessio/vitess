@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -31,12 +33,12 @@ type converter struct {
 
 func (cv *converter) ToNative(v sqltypes.Value) (interface{}, error) {
 	switch v.Type() {
-	case sqltypes.Datetime:
+	case sqltypes.Datetime, sqltypes.Timestamp:
 		return DatetimeToNative(v, cv.location)
 	case sqltypes.Date:
 		return DateToNative(v, cv.location)
 	}
-	return sqltypes.ToNative(v)
+	return evalengine.ToNative(v)
 }
 
 func (cv *converter) BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {

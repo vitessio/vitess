@@ -42,9 +42,19 @@ create table t3 (
 create table t4 like t3;
 
 create table t5 (like t2);
+
+create table test_partitioned (
+	id bigint,
+	date_create int,
+	primary key(id)
+) Engine=InnoDB	/*!50100 PARTITION BY RANGE (date_create)
+	(PARTITION p2018_06_14 VALUES LESS THAN (1528959600) ENGINE = InnoDB,
+	PARTITION p2018_06_15 VALUES LESS THAN (1529046000) ENGINE = InnoDB,
+	PARTITION p2018_06_16 VALUES LESS THAN (1529132400) ENGINE = InnoDB,
+	PARTITION p2018_06_17 VALUES LESS THAN (1529218800) ENGINE = InnoDB)*/;
 `
 
-	ddls, err := parseSchema(testSchema, &Options{StrictDDL: true})
+	ddls, err := parseSchema(testSchema, &Options{StrictDDL: false})
 	if err != nil {
 		t.Fatalf("parseSchema: %v", err)
 	}
@@ -62,8 +72,8 @@ create table t5 (like t2);
 		t.Fatalf("table t1 wasn't parsed properly")
 	}
 
-	wantCols := `[{"Name":"id","Type":778,"IsAuto":false,"Default":123},{"Name":"val","Type":6165,"IsAuto":false,"Default":"'default'"}]`
-	got, _ := json.Marshal(t1.Columns)
+	wantCols := `[{"name":"id","type":778},{"name":"val","type":6165}]`
+	got, _ := json.Marshal(t1.Fields)
 	if wantCols != string(got) {
 		t.Errorf("expected %s got %s", wantCols, string(got))
 	}
@@ -72,7 +82,7 @@ create table t5 (like t2);
 		t.Errorf("expected HasPrimary && t1.PKColumns == [0] got %v", t1.PKColumns)
 	}
 	pkCol := t1.GetPKColumn(0)
-	if pkCol == nil || pkCol.String() != "{Name: 'id', Type: UINT64}" {
+	if pkCol == nil || pkCol.String() != `name:"id" type:UINT64 ` {
 		t.Errorf("expected pkCol[0] == id, got %v", pkCol)
 	}
 
@@ -81,8 +91,8 @@ create table t5 (like t2);
 		t.Fatalf("table t2 wasn't parsed properly")
 	}
 
-	wantCols = `[{"Name":"val","Type":6163,"IsAuto":false,"Default":"'default2'"}]`
-	got, _ = json.Marshal(t2.Columns)
+	wantCols = `[{"name":"val","type":6163}]`
+	got, _ = json.Marshal(t2.Fields)
 	if wantCols != string(got) {
 		t.Errorf("expected %s got %s", wantCols, string(got))
 	}
@@ -95,7 +105,7 @@ create table t5 (like t2);
 	if t5 == nil {
 		t.Fatalf("table t5 wasn't parsed properly")
 	}
-	got, _ = json.Marshal(t5.Columns)
+	got, _ = json.Marshal(t5.Fields)
 	if wantCols != string(got) {
 		t.Errorf("expected %s got %s", wantCols, string(got))
 	}

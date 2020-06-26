@@ -150,7 +150,7 @@ func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *resultColumn {
 
 // MakeDistinct satisfies the builder interface.
 func (rb *route) MakeDistinct() error {
-	rb.Select.(*sqlparser.Select).Distinct = sqlparser.DistinctStr
+	rb.Select.(*sqlparser.Select).Distinct = true
 	return nil
 }
 
@@ -490,16 +490,6 @@ func (rb *route) removeMultishardOptions() bool {
 			return true
 		}
 		return false
-	})
-}
-
-// removeShardedOptions removes all sharded options from the
-// route. It returns false if no such options exist.
-// This is used for constructs that are only supported for unsharded
-// keyspaces like last_insert_id.
-func (rb *route) removeShardedOptions() bool {
-	return rb.removeOptions(func(ro *routeOption) bool {
-		return ro.eroute.Opcode == engine.SelectUnsharded
 	})
 }
 

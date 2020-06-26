@@ -24,10 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // Walk calls visit on every node.
@@ -53,11 +50,7 @@ func Walk(visit Visit, nodes ...SQLNode) error {
 			return kontinue
 		}
 		post := func(cursor *Cursor) bool {
-			if err != nil {
-				return false // now we can abort the traversal if an error was found
-			}
-
-			return true
+			return err == nil // now we can abort the traversal if an error was found
 		}
 
 		Rewrite(node, pre, post)
@@ -429,24 +422,6 @@ func (node *ComparisonExpr) IsImpossible() bool {
 	return false
 }
 
-// ExprFromValue converts the given Value into an Expr or returns an error.
-func ExprFromValue(value sqltypes.Value) (Expr, error) {
-	// The type checks here follow the rules defined in sqltypes/types.go.
-	switch {
-	case value.Type() == sqltypes.Null:
-		return &NullVal{}, nil
-	case value.IsIntegral():
-		return NewIntVal(value.ToBytes()), nil
-	case value.IsFloat() || value.Type() == sqltypes.Decimal:
-		return NewFloatVal(value.ToBytes()), nil
-	case value.IsQuoted():
-		return NewStrVal(value.ToBytes()), nil
-	default:
-		// We cannot support sqltypes.Expression, or any other invalid type.
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot convert value %v to AST", value)
-	}
-}
-
 // NewStrVal builds a new StrVal.
 func NewStrVal(in []byte) *SQLVal {
 	return &SQLVal{Type: StrVal, Val: in}
@@ -533,6 +508,49 @@ func NewColIdent(str string) ColIdent {
 	}
 }
 
+//NewSelect is used to create a select statement
+func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, from TableExprs, where *Where, groupBy GroupBy, having *Where) *Select {
+	var cache *bool
+	var distinct, straightJoinHint, sqlFoundRows bool
+
+	for _, option := range selectOptions {
+		switch strings.ToLower(option) {
+		case DistinctStr:
+			distinct = true
+		case SQLCacheStr:
+			truth := true
+			cache = &truth
+		case SQLNoCacheStr:
+			truth := false
+			cache = &truth
+		case StraightJoinHint:
+			straightJoinHint = true
+		case SQLCalcFoundRowsStr:
+			sqlFoundRows = true
+		}
+	}
+	return &Select{
+		Cache:            cache,
+		Comments:         comments,
+		Distinct:         distinct,
+		StraightJoinHint: straightJoinHint,
+		SQLCalcFoundRows: sqlFoundRows,
+		SelectExprs:      exprs,
+		From:             from,
+		Where:            where,
+		GroupBy:          groupBy,
+		Having:           having,
+	}
+}
+
+// NewColIdentWithAt makes a new ColIdent.
+func NewColIdentWithAt(str string, at AtCount) ColIdent {
+	return ColIdent{
+		val: str,
+		at:  at,
+	}
+}
+
 // IsEmpty returns true if the name is empty.
 func (node ColIdent) IsEmpty() bool {
 	return node.val == ""
@@ -543,7 +561,11 @@ func (node ColIdent) IsEmpty() bool {
 // instead. The Stringer conformance is for usage
 // in templates.
 func (node ColIdent) String() string {
-	return node.val
+	atStr := ""
+	for i := NoAt; i < node.at; i++ {
+		atStr += "@"
+	}
+	return atStr + node.val
 }
 
 // CompliantName returns a compliant id name
@@ -631,26 +653,36 @@ func (node *TableIdent) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func formatID(buf *TrackedBuffer, original, lowered string) {
-	isDbSystemVariable := false
-	if len(original) > 1 && original[:2] == "@@" {
-		isDbSystemVariable = true
-	}
+func containEscapableChars(s string, at AtCount) bool {
+	isDbSystemVariable := at != NoAt
 
-	for i, c := range original {
-		if !isLetter(uint16(c)) && (!isDbSystemVariable || !isCarat(uint16(c))) {
+	for i, c := range s {
+		letter := isLetter(uint16(c))
+		systemVarChar := isDbSystemVariable && isCarat(uint16(c))
+		if !(letter || systemVarChar) {
 			if i == 0 || !isDigit(uint16(c)) {
-				goto mustEscape
+				return true
 			}
 		}
 	}
-	if _, ok := keywords[lowered]; ok {
-		goto mustEscape
-	}
-	buf.Myprintf("%s", original)
-	return
 
-mustEscape:
+	return false
+}
+
+func isKeyword(s string) bool {
+	_, isKeyword := keywords[s]
+	return isKeyword
+}
+
+func formatID(buf *TrackedBuffer, original, lowered string, at AtCount) {
+	if containEscapableChars(original, at) || isKeyword(lowered) {
+		writeEscapedString(buf, original)
+	} else {
+		buf.Myprintf("%s", original)
+	}
+}
+
+func writeEscapedString(buf *TrackedBuffer, original string) {
 	buf.WriteByte('`')
 	for _, c := range original {
 		buf.WriteRune(c)
@@ -686,14 +718,8 @@ func (node *Select) SetLimit(limit *Limit) {
 }
 
 // AddWhere adds the boolean expression to the
-// WHERE clause as an AND condition. If the expression
-// is an OR clause, it parenthesizes it. Currently,
-// the OR operator is the only one that's lower precedence
-// than AND.
+// WHERE clause as an AND condition.
 func (node *Select) AddWhere(expr Expr) {
-	if _, ok := expr.(*OrExpr); ok {
-		expr = &ParenExpr{Expr: expr}
-	}
 	if node.Where == nil {
 		node.Where = &Where{
 			Type: WhereStr,
@@ -708,14 +734,8 @@ func (node *Select) AddWhere(expr Expr) {
 }
 
 // AddHaving adds the boolean expression to the
-// HAVING clause as an AND condition. If the expression
-// is an OR clause, it parenthesizes it. Currently,
-// the OR operator is the only one that's lower precedence
-// than AND.
+// HAVING clause as an AND condition.
 func (node *Select) AddHaving(expr Expr) {
-	if _, ok := expr.(*OrExpr); ok {
-		expr = &ParenExpr{Expr: expr}
-	}
 	if node.Having == nil {
 		node.Having = &Where{
 			Type: HavingStr,
@@ -748,3 +768,15 @@ func (node *Union) AddOrder(order *Order) {
 func (node *Union) SetLimit(limit *Limit) {
 	node.Limit = limit
 }
+
+// AtCount represents the '@' count in ColIdent
+type AtCount int
+
+const (
+	// NoAt represents no @
+	NoAt AtCount = iota
+	// SingleAt represents @
+	SingleAt
+	// DoubleAt represnts @@
+	DoubleAt
+)

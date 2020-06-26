@@ -27,7 +27,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -37,7 +36,6 @@ type TxExecutor struct {
 	ctx      context.Context
 	logStats *tabletenv.LogStats
 	te       *TxEngine
-	messager *messager.Engine
 }
 
 // Prepare performs a prepare on a connection including the redo log work.
@@ -48,7 +46,7 @@ func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 	if !txe.te.twopcEnabled {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
-	defer tabletenv.QueryStats.Record("PREPARE", time.Now())
+	defer txe.te.env.Stats().QueryTimings.Record("PREPARE", time.Now())
 	txe.logStats.TransactionID = transactionID
 
 	conn, err := txe.te.txPool.Get(transactionID, "for prepare")
@@ -79,7 +77,7 @@ func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 		return err
 	}
 
-	_, err = txe.te.txPool.LocalCommit(txe.ctx, localConn, txe.messager)
+	_, err = txe.te.txPool.LocalCommit(txe.ctx, localConn)
 	if err != nil {
 		return err
 	}
@@ -94,7 +92,7 @@ func (txe *TxExecutor) CommitPrepared(dtid string) error {
 	if !txe.te.twopcEnabled {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
-	defer tabletenv.QueryStats.Record("COMMIT_PREPARED", time.Now())
+	defer txe.te.env.Stats().QueryTimings.Record("COMMIT_PREPARED", time.Now())
 	conn, err := txe.te.preparedPool.FetchForCommit(dtid)
 	if err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot commit dtid %s, state: %v", dtid, err)
@@ -111,7 +109,7 @@ func (txe *TxExecutor) CommitPrepared(dtid string) error {
 		txe.markFailed(ctx, dtid)
 		return err
 	}
-	_, err = txe.te.txPool.LocalCommit(ctx, conn, txe.messager)
+	_, err = txe.te.txPool.LocalCommit(ctx, conn)
 	if err != nil {
 		txe.markFailed(ctx, dtid)
 		return err
@@ -128,7 +126,7 @@ func (txe *TxExecutor) CommitPrepared(dtid string) error {
 // The function uses the passed in context that has no timeout
 // instead of TxExecutor's context.
 func (txe *TxExecutor) markFailed(ctx context.Context, dtid string) {
-	tabletenv.InternalErrors.Add("TwopcCommit", 1)
+	txe.te.env.Stats().InternalErrors.Add("TwopcCommit", 1)
 	txe.te.preparedPool.SetFailed(dtid)
 	conn, _, err := txe.te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
@@ -142,7 +140,7 @@ func (txe *TxExecutor) markFailed(ctx context.Context, dtid string) {
 		return
 	}
 
-	if _, err = txe.te.txPool.LocalCommit(ctx, conn, txe.messager); err != nil {
+	if _, err = txe.te.txPool.LocalCommit(ctx, conn); err != nil {
 		log.Errorf("markFailed: Commit failed for dtid %s: %v", dtid, err)
 	}
 }
@@ -169,7 +167,7 @@ func (txe *TxExecutor) RollbackPrepared(dtid string, originalID int64) error {
 	if !txe.te.twopcEnabled {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
-	defer tabletenv.QueryStats.Record("ROLLBACK_PREPARED", time.Now())
+	defer txe.te.env.Stats().QueryTimings.Record("ROLLBACK_PREPARED", time.Now())
 	conn, _, err := txe.te.txPool.LocalBegin(txe.ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		goto returnConn
@@ -181,7 +179,7 @@ func (txe *TxExecutor) RollbackPrepared(dtid string, originalID int64) error {
 		goto returnConn
 	}
 
-	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn, txe.messager)
+	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn)
 
 returnConn:
 	if preparedConn := txe.te.preparedPool.FetchForRollback(dtid); preparedConn != nil {
@@ -199,7 +197,7 @@ func (txe *TxExecutor) CreateTransaction(dtid string, participants []*querypb.Ta
 	if !txe.te.twopcEnabled {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
-	defer tabletenv.QueryStats.Record("CREATE_TRANSACTION", time.Now())
+	defer txe.te.env.Stats().QueryTimings.Record("CREATE_TRANSACTION", time.Now())
 	conn, _, err := txe.te.txPool.LocalBegin(txe.ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		return err
@@ -210,7 +208,7 @@ func (txe *TxExecutor) CreateTransaction(dtid string, participants []*querypb.Ta
 	if err != nil {
 		return err
 	}
-	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn, txe.messager)
+	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn)
 	return err
 }
 
@@ -220,7 +218,7 @@ func (txe *TxExecutor) StartCommit(transactionID int64, dtid string) error {
 	if !txe.te.twopcEnabled {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
-	defer tabletenv.QueryStats.Record("START_COMMIT", time.Now())
+	defer txe.te.env.Stats().QueryTimings.Record("START_COMMIT", time.Now())
 	txe.logStats.TransactionID = transactionID
 
 	conn, err := txe.te.txPool.Get(transactionID, "for 2pc commit")
@@ -233,7 +231,7 @@ func (txe *TxExecutor) StartCommit(transactionID int64, dtid string) error {
 	if err != nil {
 		return err
 	}
-	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn, txe.messager)
+	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn)
 	return err
 }
 
@@ -243,7 +241,7 @@ func (txe *TxExecutor) SetRollback(dtid string, transactionID int64) error {
 	if !txe.te.twopcEnabled {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
-	defer tabletenv.QueryStats.Record("SET_ROLLBACK", time.Now())
+	defer txe.te.env.Stats().QueryTimings.Record("SET_ROLLBACK", time.Now())
 	txe.logStats.TransactionID = transactionID
 
 	if transactionID != 0 {
@@ -261,7 +259,7 @@ func (txe *TxExecutor) SetRollback(dtid string, transactionID int64) error {
 		return err
 	}
 
-	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn, txe.messager)
+	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn)
 	if err != nil {
 		return err
 	}
@@ -275,7 +273,7 @@ func (txe *TxExecutor) ConcludeTransaction(dtid string) error {
 	if !txe.te.twopcEnabled {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
-	defer tabletenv.QueryStats.Record("RESOLVE", time.Now())
+	defer txe.te.env.Stats().QueryTimings.Record("RESOLVE", time.Now())
 
 	conn, _, err := txe.te.txPool.LocalBegin(txe.ctx, &querypb.ExecuteOptions{})
 	if err != nil {
@@ -287,7 +285,7 @@ func (txe *TxExecutor) ConcludeTransaction(dtid string) error {
 	if err != nil {
 		return err
 	}
-	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn, txe.messager)
+	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn)
 	return err
 }
 

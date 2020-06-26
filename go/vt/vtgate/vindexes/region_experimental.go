@@ -21,6 +21,8 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
@@ -33,9 +35,10 @@ func init() {
 	Register("region_experimental", NewRegionExperimental)
 }
 
-// RegionExperimental defines a vindex that uses a lookup table.
-// The table is expected to define the id column as unique. It's
-// Unique and a Lookup.
+// RegionExperimental is a multi-column unique vindex. The first column is prefixed
+// to the hash of the second column to produce the keyspace id.
+// RegionExperimental can be used for geo-partitioning because the first column can denote a region,
+// and its value will dictate the shard for that region.
 type RegionExperimental struct {
 	name        string
 	regionBytes int
@@ -93,7 +96,7 @@ func (ge *RegionExperimental) Map(vcursor VCursor, rowsColValues [][]sqltypes.Va
 			continue
 		}
 		// Compute region prefix.
-		rn, err := sqltypes.ToUint64(row[0])
+		rn, err := evalengine.ToUint64(row[0])
 		if err != nil {
 			destinations = append(destinations, key.DestinationNone{})
 			continue
@@ -102,7 +105,7 @@ func (ge *RegionExperimental) Map(vcursor VCursor, rowsColValues [][]sqltypes.Va
 		binary.BigEndian.PutUint16(r, uint16(rn))
 
 		// Compute hash.
-		hn, err := sqltypes.ToUint64(row[1])
+		hn, err := evalengine.ToUint64(row[1])
 		if err != nil {
 			destinations = append(destinations, key.DestinationNone{})
 			continue

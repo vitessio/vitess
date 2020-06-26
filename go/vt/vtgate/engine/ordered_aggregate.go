@@ -18,6 +18,9 @@ package engine
 
 import (
 	"fmt"
+	"strconv"
+
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -65,6 +68,14 @@ type AggregateParams struct {
 
 func (ap AggregateParams) isDistinct() bool {
 	return ap.Opcode == AggregateCountDistinct || ap.Opcode == AggregateSumDistinct
+}
+
+func (ap AggregateParams) String() string {
+	if ap.Alias != "" {
+		return fmt.Sprintf("%s(%d) AS %s", ap.Opcode.String(), ap.Col, ap.Alias)
+	}
+
+	return fmt.Sprintf("%s(%d)", ap.Opcode.String(), ap.Col)
 }
 
 // AggregateOpcode is the aggregation Opcode.
@@ -156,7 +167,6 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 	out := &sqltypes.Result{
 		Fields: oa.convertFields(result.Fields),
 		Rows:   make([][]sqltypes.Value, 0, len(result.Rows)),
-		Extras: result.Extras,
 	}
 	// This code is similar to the one in StreamExecute.
 	var current []sqltypes.Value
@@ -290,7 +300,7 @@ func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) (newRow []sqltypes.
 		case AggregateSumDistinct:
 			curDistinct = row[aggr.Col]
 			var err error
-			newRow[aggr.Col], err = sqltypes.Cast(row[aggr.Col], opcodeType[aggr.Opcode])
+			newRow[aggr.Col], err = evalengine.Cast(row[aggr.Col], opcodeType[aggr.Opcode])
 			if err != nil {
 				newRow[aggr.Col] = sumZero
 			}
@@ -314,9 +324,13 @@ func (oa *OrderedAggregate) Inputs() []Primitive {
 	return []Primitive{oa.Input}
 }
 
+func (oa *OrderedAggregate) NeedsTransaction() bool {
+	return oa.Input.NeedsTransaction()
+}
+
 func (oa *OrderedAggregate) keysEqual(row1, row2 []sqltypes.Value) (bool, error) {
 	for _, key := range oa.Keys {
-		cmp, err := sqltypes.NullsafeCompare(row1[key], row2[key])
+		cmp, err := evalengine.NullsafeCompare(row1[key], row2[key])
 		if err != nil {
 			return false, err
 		}
@@ -334,7 +348,7 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 			if row2[aggr.Col].IsNull() {
 				continue
 			}
-			cmp, err := sqltypes.NullsafeCompare(curDistinct, row2[aggr.Col])
+			cmp, err := evalengine.NullsafeCompare(curDistinct, row2[aggr.Col])
 			if err != nil {
 				return nil, sqltypes.NULL, err
 			}
@@ -346,15 +360,15 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 		var err error
 		switch aggr.Opcode {
 		case AggregateCount, AggregateSum:
-			result[aggr.Col] = sqltypes.NullsafeAdd(row1[aggr.Col], row2[aggr.Col], fields[aggr.Col].Type)
+			result[aggr.Col] = evalengine.NullsafeAdd(row1[aggr.Col], row2[aggr.Col], fields[aggr.Col].Type)
 		case AggregateMin:
-			result[aggr.Col], err = sqltypes.Min(row1[aggr.Col], row2[aggr.Col])
+			result[aggr.Col], err = evalengine.Min(row1[aggr.Col], row2[aggr.Col])
 		case AggregateMax:
-			result[aggr.Col], err = sqltypes.Max(row1[aggr.Col], row2[aggr.Col])
+			result[aggr.Col], err = evalengine.Max(row1[aggr.Col], row2[aggr.Col])
 		case AggregateCountDistinct:
-			result[aggr.Col] = sqltypes.NullsafeAdd(row1[aggr.Col], countOne, opcodeType[aggr.Opcode])
+			result[aggr.Col] = evalengine.NullsafeAdd(row1[aggr.Col], countOne, opcodeType[aggr.Opcode])
 		case AggregateSumDistinct:
-			result[aggr.Col] = sqltypes.NullsafeAdd(row1[aggr.Col], row2[aggr.Col], opcodeType[aggr.Opcode])
+			result[aggr.Col] = evalengine.NullsafeAdd(row1[aggr.Col], row2[aggr.Col], opcodeType[aggr.Opcode])
 		default:
 			return nil, sqltypes.NULL, fmt.Errorf("BUG: Unexpected opcode: %v", aggr.Opcode)
 		}
@@ -393,4 +407,27 @@ func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
 
 	}
 	return sqltypes.NULL, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown aggregation %v", opcode)
+}
+
+func aggregateParamsToString(in interface{}) string {
+	return in.(AggregateParams).String()
+}
+
+func intToString(i interface{}) string {
+	return strconv.Itoa(i.(int))
+}
+
+func (oa *OrderedAggregate) description() PrimitiveDescription {
+	aggregates := GenericJoin(oa.Aggregates, aggregateParamsToString)
+	groupBy := GenericJoin(oa.Keys, intToString)
+	other := map[string]interface{}{
+		"Aggregates": aggregates,
+		"GroupBy":    groupBy,
+		"Distinct":   strconv.FormatBool(oa.HasDistinct),
+	}
+	return PrimitiveDescription{
+		OperatorType: "Aggregate",
+		Variant:      "Ordered",
+		Other:        other,
+	}
 }

@@ -89,6 +89,8 @@ func skipToEnd(yylex interface{}) {
   setExprs      SetExprs
   updateExpr    *UpdateExpr
   setExpr       *SetExpr
+  characteristic Characteristic
+  characteristics []Characteristic
   colIdent      ColIdent
   tableIdent    TableIdent
   convertType   *ConvertType
@@ -124,17 +126,18 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> DISTINCTROW
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
-%token <bytes> SQL_NO_CACHE SQL_CACHE
+%token <bytes> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS
 %left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <bytes> ON USING
 %token <empty> '(' ',' ')'
-%token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
+%token <bytes> ID AT_ID AT_AT_ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
 %token <bytes> NULL TRUE FALSE OFF
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
 // Some of these operators don't conflict in our situation. Nevertheless,
 // it's better to have these listed in the correct order. Also, we don't
 // support all operators yet.
+// * NOTE: If you change anything here, update precedence.go as well *
 %left <bytes> OR
 %left <bytes> AND
 %right <bytes> NOT '!'
@@ -159,7 +162,7 @@ func skipToEnd(yylex interface{}) {
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH
-%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK
+%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
@@ -183,7 +186,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> COLLATION DATABASES TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
+%token <bytes> COLLATION DATABASES TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -212,17 +215,19 @@ func skipToEnd(yylex interface{}) {
 
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
-%type <statement> stream_statement insert_statement update_statement delete_statement set_statement
+%type <statement> stream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement
 %type <bytes2> comment_opt comment_list
 %type <str> union_op insert_or_replace
-%type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt
+%type <str> distinct_opt cache_opt match_option separator_opt
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
 %type <selectExpr> select_expression
+%type <strs> select_options
+%type <str> select_option
 %type <expr> expression
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
@@ -261,14 +266,16 @@ func skipToEnd(yylex interface{}) {
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
-%type <setExprs> set_list transaction_chars
+%type <setExprs> set_list
 %type <bytes> charset_or_character_set
 %type <updateExpr> update_expression
-%type <setExpr> set_expression transaction_char
+%type <setExpr> set_expression
+%type <characteristic> transaction_char
+%type <characteristics> transaction_chars
 %type <str> isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
-%type <str> full_opt from_database_opt tables_or_processlist columns_or_fields
+%type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <byt> exists_opt
 %type <empty> not_exists_opt non_add_drop_or_rename_operation to_opt index_opt constraint_opt
@@ -294,7 +301,7 @@ func skipToEnd(yylex interface{}) {
 %type <columnDefinition> column_definition
 %type <indexDefinition> index_definition
 %type <constraintDefinition> constraint_definition
-%type <str> index_or_key
+%type <str> index_or_key index_symbols from_or_in
 %type <str> name_opt
 %type <str> equal_opt
 %type <TableSpec> table_spec table_column_list
@@ -311,7 +318,7 @@ func skipToEnd(yylex interface{}) {
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
-%type <colIdent> vindex_type vindex_type_opt
+%type <colIdent> id_or_var vindex_type vindex_type_opt
 %type <bytes> alter_object_type
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 
@@ -339,6 +346,7 @@ command:
 | update_statement
 | delete_statement
 | set_statement
+| set_transaction_statement
 | create_statement
 | alter_statement
 | rename_statement
@@ -357,6 +365,20 @@ command:
   setParseTree(yylex, nil)
 }
 
+id_or_var:
+  ID
+  {
+    $$ = NewColIdentWithAt(string($1), NoAt)
+  }
+| AT_ID
+  {
+    $$ = NewColIdentWithAt(string($1), SingleAt)
+  }
+| AT_AT_ID
+  {
+    $$ = NewColIdentWithAt(string($1), DoubleAt)
+  }
+
 select_statement:
   base_select order_by_opt limit_opt lock_opt
   {
@@ -372,7 +394,7 @@ select_statement:
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, SelectExprs: SelectExprs{Nextval{Expr: $5}}, From: TableExprs{&AliasedTableExpr{Expr: $7}}}
+    $$ = NewSelect(Comments($2), SelectExprs{Nextval{Expr: $5}}, []string{$3}/*options*/, TableExprs{&AliasedTableExpr{Expr: $7}}, nil/*where*/, nil/*groupBy*/, nil/*having*/) 
   }
 
 stream_statement:
@@ -383,9 +405,10 @@ stream_statement:
 
 // base_select is an unparenthesized SELECT with no order by clause or beyond.
 base_select:
-  SELECT comment_opt cache_opt distinct_opt straight_join_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt
+//  1         2            3              4                    5             6                7           8
+  SELECT comment_opt select_options select_expression_list from_opt where_expression_opt group_by_opt having_opt
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $5, SelectExprs: $6, From: $7, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10)}
+    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*from*/, NewWhere(WhereStr, $6), GroupBy($7), NewWhere(HavingStr, $8)) 
   }
 
 union_lhs:
@@ -505,23 +528,21 @@ set_statement:
   {
     $$ = &Set{Comments: Comments($2), Exprs: $3}
   }
-| SET comment_opt set_session_or_global set_list
+
+set_transaction_statement:
+  SET comment_opt set_session_or_global TRANSACTION transaction_chars
   {
-    $$ = &Set{Comments: Comments($2), Scope: $3, Exprs: $4}
-  }
-| SET comment_opt set_session_or_global TRANSACTION transaction_chars
-  {
-    $$ = &Set{Comments: Comments($2), Scope: $3, Exprs: $5}
+    $$ = &SetTransaction{Comments: Comments($2), Scope: $3, Characteristics: $5}
   }
 | SET comment_opt TRANSACTION transaction_chars
   {
-    $$ = &Set{Comments: Comments($2), Exprs: $4}
+    $$ = &SetTransaction{Comments: Comments($2), Characteristics: $4}
   }
 
 transaction_chars:
   transaction_char
   {
-    $$ = SetExprs{$1}
+    $$ = []Characteristic{$1}
   }
 | transaction_chars ',' transaction_char
   {
@@ -531,33 +552,33 @@ transaction_chars:
 transaction_char:
   ISOLATION LEVEL isolation_level
   {
-    $$ = &SetExpr{Name: NewColIdent(TransactionStr), Expr: NewStrVal([]byte($3))}
+    $$ = &IsolationLevel{Level: string($3)}
   }
 | READ WRITE
   {
-    $$ = &SetExpr{Name: NewColIdent(TransactionStr), Expr: NewStrVal([]byte(TxReadWrite))}
+    $$ = &AccessMode{Mode: TxReadWrite}
   }
 | READ ONLY
   {
-    $$ = &SetExpr{Name: NewColIdent(TransactionStr), Expr: NewStrVal([]byte(TxReadOnly))}
+    $$ = &AccessMode{Mode: TxReadOnly}
   }
 
 isolation_level:
   REPEATABLE READ
   {
-    $$ = IsolationLevelRepeatableRead
+    $$ = RepeatableRead
   }
 | READ COMMITTED
   {
-    $$ = IsolationLevelReadCommitted
+    $$ = ReadCommitted
   }
 | READ UNCOMMITTED
   {
-    $$ = IsolationLevelReadUncommitted
+    $$ = ReadUncommitted
   }
 | SERIALIZABLE
   {
-    $$ = IsolationLevelSerializable
+    $$ = Serializable
   }
 
 set_session_or_global:
@@ -582,7 +603,7 @@ create_statement:
     $1.OptLike = $2
     $$ = $1
   }
-| CREATE constraint_opt INDEX ID using_opt ON table_name ddl_skip_to_end
+| CREATE constraint_opt INDEX id_or_var using_opt ON table_name ddl_skip_to_end
   {
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $7}
@@ -595,13 +616,13 @@ create_statement:
   {
     $$ = &DDL{Action: CreateStr, Table: $5.ToViewName()}
   }
-| CREATE DATABASE not_exists_opt ID ddl_skip_to_end
+| CREATE DATABASE not_exists_opt id_or_var ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4.String())}
   }
-| CREATE SCHEMA not_exists_opt ID ddl_skip_to_end
+| CREATE SCHEMA not_exists_opt id_or_var ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4.String())}
   }
 
 vindex_type_opt:
@@ -614,9 +635,9 @@ vindex_type_opt:
   }
 
 vindex_type:
-  ID
+  id_or_var
   {
-    $$ = NewColIdent(string($1))
+    $$ = $1
   }
 
 vindex_params_opt:
@@ -690,7 +711,7 @@ table_column_list:
   }
 
 column_definition:
-  ID column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt
+  id_or_var column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt
   {
     $2.NotNull = $3
     $2.Default = $4
@@ -698,7 +719,7 @@ column_definition:
     $2.Autoincrement = $6
     $2.KeyOpt = $7
     $2.Comment = $8
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+    $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
 column_type:
   numeric_type unsigned_opt zero_fill_opt
@@ -1024,9 +1045,9 @@ charset_opt:
   {
     $$ = ""
   }
-| CHARACTER SET ID
+| CHARACTER SET id_or_var
   {
-    $$ = string($3)
+    $$ = string($3.String())
   }
 | CHARACTER SET BINARY
   {
@@ -1037,9 +1058,9 @@ collate_opt:
   {
     $$ = ""
   }
-| COLLATE ID
+| COLLATE id_or_var
   {
-    $$ = string($2)
+    $$ = string($2.String())
   }
 | COLLATE STRING
   {
@@ -1097,9 +1118,9 @@ index_option_list:
   }
 
 index_option:
-  USING ID
+  USING id_or_var
   {
-    $$ = &IndexOption{Name: string($1), Using: string($2)}
+    $$ = &IndexOption{Name: string($1), Using: string($2.String())}
   }
 | KEY_BLOCK_SIZE equal_opt INTEGRAL
   {
@@ -1143,6 +1164,31 @@ index_info:
     $$ = &IndexInfo{Type: string($1), Name: NewColIdent($2), Unique: false}
   }
 
+index_symbols:
+  INDEX
+  {
+    $$ = string($1)
+  }
+| KEYS
+  {
+    $$ = string($1)
+  }
+| INDEXES
+  {
+    $$ = string($1)
+  }
+
+
+from_or_in:
+  FROM
+  {
+    $$ = string($1)
+  }
+| IN
+  {
+    $$ = string($1)
+  }
+
 index_or_key:
     INDEX
   {
@@ -1157,9 +1203,9 @@ name_opt:
   {
     $$ = ""
   }
-| ID
+| id_or_var
   {
-    $$ = string($1)
+    $$ = string($1.String())
   }
 
 index_column_list:
@@ -1179,9 +1225,9 @@ index_column:
   }
 
 constraint_definition:
-  CONSTRAINT ID constraint_info
+  CONSTRAINT id_or_var constraint_info
   {
-    $$ = &ConstraintDefinition{Name: string($2), Details: $3}
+    $$ = &ConstraintDefinition{Name: string($2.String()), Details: $3}
   }
 |  constraint_info
   {
@@ -1315,13 +1361,13 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
   }
-| ALTER DATABASE ID ddl_skip_to_end
+| ALTER DATABASE id_or_var ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: AlterStr, DBName: string($3)}
+    $$ = &DBDDL{Action: AlterStr, DBName: string($3.String())}
   }
-| ALTER SCHEMA ID ddl_skip_to_end
+| ALTER SCHEMA id_or_var ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: AlterStr, DBName: string($3)}
+    $$ = &DBDDL{Action: AlterStr, DBName: string($3.String())}
   }
 | ALTER VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
   {
@@ -1399,6 +1445,8 @@ alter_object_type:
 | FOREIGN
 | FULLTEXT
 | ID
+| AT_ID
+| AT_AT_ID
 | INDEX
 | KEY
 | PRIMARY
@@ -1459,7 +1507,7 @@ drop_statement:
     }
     $$ = &DDL{Action: DropStr, FromTables: $4, IfExists: exists}
   }
-| DROP INDEX ID ON table_name ddl_skip_to_end
+| DROP INDEX id_or_var ON table_name ddl_skip_to_end
   {
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $5}
@@ -1472,13 +1520,13 @@ drop_statement:
         }
     $$ = &DDL{Action: DropStr, FromTables: TableNames{$4.ToViewName()}, IfExists: exists}
   }
-| DROP DATABASE exists_opt ID
+| DROP DATABASE exists_opt id_or_var
   {
-    $$ = &DBDDL{Action: DropStr, DBName: string($4)}
+    $$ = &DBDDL{Action: DropStr, DBName: string($4.String())}
   }
-| DROP SCHEMA exists_opt ID
+| DROP SCHEMA exists_opt id_or_var
   {
-    $$ = &DBDDL{Action: DropStr, DBName: string($4)}
+    $$ = &DBDDL{Action: DropStr, DBName: string($4.String())}
   }
 
 truncate_statement:
@@ -1493,31 +1541,33 @@ truncate_statement:
 analyze_statement:
   ANALYZE TABLE table_name
   {
-    $$ = &DDL{Action: AlterStr, Table: $3}
+    $$ = &OtherRead{}
   }
 
 show_statement:
-  SHOW BINARY ID ddl_skip_to_end /* SHOW BINARY LOGS */
+  SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY LOGS */
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{Type: string($2) + " " + string($3.String())}
   }
 /* SHOW CHARACTER SET and SHOW CHARSET are equivalent */
-| SHOW CHARACTER SET ddl_skip_to_end
+| SHOW CHARACTER SET like_or_where_opt
   {
-    $$ = &Show{Type: CharsetStr}
+    showTablesOpt := &ShowTablesOpt{Filter: $4}
+    $$ = &Show{Type: CharsetStr, ShowTablesOpt: showTablesOpt}
   }
-| SHOW CHARSET ddl_skip_to_end
+| SHOW CHARSET like_or_where_opt
   {
-    $$ = &Show{Type: string($2)}
+    showTablesOpt := &ShowTablesOpt{Filter: $3}
+    $$ = &Show{Type: string($2), ShowTablesOpt: showTablesOpt}
   }
 | SHOW CREATE DATABASE ddl_skip_to_end
   {
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
 /* Rule to handle SHOW CREATE EVENT, SHOW CREATE FUNCTION, etc. */
-| SHOW CREATE ID ddl_skip_to_end
+| SHOW CREATE id_or_var ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{Type: string($2) + " " + string($3.String())}
   }
 | SHOW CREATE PROCEDURE ddl_skip_to_end
   {
@@ -1543,14 +1593,12 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW INDEX ddl_skip_to_end
+| SHOW extended_opt index_symbols from_or_in table_name from_database_opt like_or_where_opt
   {
-    $$ = &Show{Type: string($2)}
+    showTablesOpt := &ShowTablesOpt{DbName:$6, Filter:$7}
+    $$ = &Show{Extended: string($2), Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
   }
-| SHOW KEYS ddl_skip_to_end
-  {
-    $$ = &Show{Type: string($2)}
-  }
+
 | SHOW PLUGINS
   {
     $$ = &Show{Type: string($2)}
@@ -1592,9 +1640,7 @@ show_statement:
   }
 | SHOW COLLATION WHERE expression
   {
-    // Cannot dereference $4 directly, or else the parser stackcannot be pooled. See yyParsePooled
-    showCollationFilterOpt := $4
-    $$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
+    $$ = &Show{Type: string($2), ShowCollationFilterOpt: $4}
   }
 | SHOW VITESS_METADATA VARIABLES like_opt
   {
@@ -1627,9 +1673,9 @@ show_statement:
  *  SHOW VITESS_SHARDS
  *  SHOW VITESS_TARGET
  */
-| SHOW ID ddl_skip_to_end
+| SHOW id_or_var ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{Type: string($2.String())}
   }
 
 tables_or_processlist:
@@ -1641,6 +1687,16 @@ tables_or_processlist:
   {
     $$ = string($1)
   }
+
+  extended_opt:
+    /* empty */
+    {
+      $$ = ""
+    }
+  | EXTENDED
+    {
+      $$ = "extended "
+    }
 
 full_opt:
   /* empty */
@@ -1840,15 +1896,6 @@ distinct_opt:
     $$ = DistinctStr
   }
 
-straight_join_opt:
-  {
-    $$ = ""
-  }
-| STRAIGHT_JOIN
-  {
-    $$ = StraightJoinHint
-  }
-
 select_expression_list_opt:
   {
     $$ = nil
@@ -1856,6 +1903,53 @@ select_expression_list_opt:
 | select_expression_list
   {
     $$ = $1
+  }
+
+select_options:
+  {
+    $$ = nil
+  }
+| select_option
+  {
+    $$ = []string{$1}
+  }
+| select_option select_option // TODO: figure out a way to do this recursively instead. 
+  {                           // TODO: This is a hack since I couldn't get it to work in a nicer way. I got 'conflicts: 8 shift/reduce'
+    $$ = []string{$1, $2}
+  }
+| select_option select_option select_option 
+  {
+    $$ = []string{$1, $2, $3}
+  }
+| select_option select_option select_option select_option 
+  {
+    $$ = []string{$1, $2, $3, $4}
+  }
+
+select_option:
+  SQL_NO_CACHE
+  {
+    $$ = SQLNoCacheStr
+  }
+| SQL_CACHE
+  {
+    $$ = SQLCacheStr
+  }
+| DISTINCT
+  {
+    $$ = DistinctStr
+  }
+| DISTINCTROW
+  {
+    $$ = DistinctStr
+  }
+| STRAIGHT_JOIN
+  {
+    $$ = StraightJoinHint
+  }
+| SQL_CALC_FOUND_ROWS
+  {
+    $$ = SQLCalcFoundRowsStr
   }
 
 select_expression_list:
@@ -2133,6 +2227,10 @@ index_hint_list:
   {
     $$ = &IndexHints{Type: UseStr, Indexes: $4}
   }
+| USE INDEX openb closeb
+  {
+    $$ = &IndexHints{Type: UseStr}
+  }
 | IGNORE INDEX openb column_list closeb
   {
     $$ = &IndexHints{Type: IgnoreStr, Indexes: $4}
@@ -2186,9 +2284,9 @@ default_opt:
   {
     $$ = ""
   }
-| openb ID closeb
+| openb id_or_var closeb
   {
-    $$ = string($2)
+    $$ = string($2.String())
   }
 
 boolean_value:
@@ -2541,9 +2639,9 @@ function_call_keyword:
   {
   $$ = &MatchExpr{Columns: $3, Expr: $7, Option: $8}
   }
-| GROUP_CONCAT openb distinct_opt select_expression_list order_by_opt separator_opt closeb
+| GROUP_CONCAT openb distinct_opt select_expression_list order_by_opt separator_opt limit_opt closeb
   {
-    $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6}
+    $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
   }
 | CASE expression_opt when_expression_list else_expression_opt END
   {
@@ -2657,6 +2755,10 @@ function_call_conflict:
   {
     $$ = &FuncExpr{Name: NewColIdent("database"), Exprs: $3}
   }
+| SCHEMA openb select_expression_list_opt closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent("schema"), Exprs: $3}
+  }
 | MOD openb select_expression_list closeb
   {
     $$ = &FuncExpr{Name: NewColIdent("mod"), Exprs: $3}
@@ -2697,9 +2799,9 @@ match_option:
  }
 
 charset:
-  ID
+  id_or_var
 {
-    $$ = string($1)
+    $$ = string($1.String())
 }
 | STRING
 {
@@ -2715,9 +2817,9 @@ convert_type:
   {
     $$ = &ConvertType{Type: string($1), Length: $2, Charset: $3, Operator: CharacterSetStr}
   }
-| CHAR length_opt ID
+| CHAR length_opt id_or_var
   {
-    $$ = &ConvertType{Type: string($1), Length: $2, Charset: string($3)}
+    $$ = &ConvertType{Type: string($1), Length: $2, Charset: string($3.String())}
   }
 | DATE
   {
@@ -3050,7 +3152,7 @@ tuple_expression:
   row_tuple
   {
     if len($1) == 1 {
-      $$ = &ParenExpr{$1[0]}
+      $$ = $1[0]
     } else {
       $$ = $1
     }
@@ -3076,6 +3178,11 @@ set_list:
   set_expression
   {
     $$ = SetExprs{$1}
+  }
+|  set_session_or_global set_expression
+  {
+    $2.Scope = $1
+    $$ = SetExprs{$2}
   }
 | set_list ',' set_expression
   {
@@ -3160,7 +3267,7 @@ non_add_drop_or_rename_operation:
   { $$ = struct{}{} }
 | UNUSED
   { $$ = struct{}{} }
-| ID
+| id_or_var
   { $$ = struct{}{} }
 
 to_opt:
@@ -3189,9 +3296,9 @@ using_opt:
   { $$ = $2 }
 
 sql_id:
-  ID
+  id_or_var
   {
-    $$ = NewColIdent(string($1))
+    $$ = $1
   }
 | non_reserved_keyword
   {
@@ -3206,9 +3313,9 @@ reserved_sql_id:
   }
 
 table_id:
-  ID
+  id_or_var
   {
-    $$ = NewTableIdent(string($1))
+    $$ = NewTableIdent(string($1.String()))
   }
 | non_reserved_keyword
   {
@@ -3394,6 +3501,7 @@ non_reserved_keyword:
 | ENUM
 | EXCLUDE
 | EXPANSION
+| EXTENDED
 | FLOAT_TYPE
 | FIELDS
 | FLUSH
@@ -3411,6 +3519,7 @@ non_reserved_keyword:
 | INT
 | INTEGER
 | INVISIBLE
+| INDEXES
 | ISOLATION
 | JSON
 | KEY_BLOCK_SIZE

@@ -114,6 +114,7 @@ type RPCAgent interface {
 
 	UndoDemoteMaster(ctx context.Context) error
 
+	// Deprecated
 	PromoteSlaveWhenCaughtUp(ctx context.Context, replicationPosition string) (string, error)
 
 	SlaveWasPromoted(ctx context.Context) error
@@ -124,6 +125,9 @@ type RPCAgent interface {
 
 	StopReplicationAndGetStatus(ctx context.Context) (*replicationdatapb.Status, error)
 
+	PromoteReplica(ctx context.Context) (string, error)
+
+	// Deprecated
 	PromoteSlave(ctx context.Context) (string, error)
 
 	// Backup / restore related methods

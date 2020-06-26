@@ -34,7 +34,7 @@ func TestDatabaseFunc(t *testing.T) {
 
 	exec(t, conn, "use ks")
 	qr := exec(t, conn, "select database()")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[VARCHAR("ks")]]`; got != want {
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[[VARBINARY("ks")]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 }

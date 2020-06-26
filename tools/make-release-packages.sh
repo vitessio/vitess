@@ -41,12 +41,21 @@ done;
 
 # Copy remaining files, preserving date/permissions
 # But resolving symlinks
-cp -rpfL examples "${RELEASE_DIR}/"
+cp -rpfL examples "${RELEASE_DIR}"
 
-echo "Follow the binary installation instructions at: https://vitess.io/docs/get-started/local/" > "${RELEASE_DIR}"/README.md
+echo "Follow the installation instructions at: https://vitess.io/docs/get-started/local/" > "${RELEASE_DIR}"/examples/README.md
 
 cd "${RELEASE_DIR}/.."
 tar -czf "${TAR_FILE}" "${RELEASE_ID}"
+
+cd "${RELEASE_DIR}"
+PREFIX=${PREFIX:-/usr}
+
+# For RPMs and DEBs, binaries will be in /usr/bin
+# Examples will be in /usr/share/vitess/examples
+
+mkdir -p share/vitess/
+mv examples share/vitess/
 
 fpm \
    --force \
@@ -56,10 +65,9 @@ fpm \
    --url "https://vitess.io/" \
    --description "${DESCRIPTION}" \
    --license "Apache License - Version 2.0, January 2004" \
-   --prefix "/vt" \
-   --directories "/vt" \
-   --before-install "$VTROOT/tools/preinstall.sh" \
+   --prefix "$PREFIX" \
    -C "${RELEASE_DIR}" \
+   --before-install "$VTROOT/tools/preinstall.sh" \
    --package "$(dirname "${RELEASE_DIR}")" \
    --iteration "${SHORT_REV}" \
    -t deb --deb-no-default-config-files
@@ -72,14 +80,14 @@ fpm \
    --url "https://vitess.io/" \
    --description "${DESCRIPTION}" \
    --license "Apache License - Version 2.0, January 2004" \
-   --prefix "/vt" \
-   --directories "/vt" \
-   --before-install "$VTROOT/tools/preinstall.sh" \
+   --prefix "$PREFIX" \
    -C "${RELEASE_DIR}" \
+   --before-install "$VTROOT/tools/preinstall.sh" \
    --package "$(dirname "${RELEASE_DIR}")" \
    --iteration "${SHORT_REV}" \
    -t rpm
 
+cd "${VTROOT}"/releases
 echo ""
 echo "Packages created as of $(date +"%m-%d-%y") at $(date +"%r %Z")"
 echo ""

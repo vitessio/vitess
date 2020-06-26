@@ -89,13 +89,6 @@ func getSandboxSrvVSchema() *vschemapb.SrvVSchema {
 	return result
 }
 
-func addSandboxServedFrom(keyspace, servedFrom string) {
-	sandboxMu.Lock()
-	defer sandboxMu.Unlock()
-	ksToSandbox[keyspace].KeyspaceServedFrom = servedFrom
-	ksToSandbox[servedFrom] = ksToSandbox[keyspace]
-}
-
 type sandbox struct {
 	// Use sandmu to access the variables below
 	sandmu sync.Mutex

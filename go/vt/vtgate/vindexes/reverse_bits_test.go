@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
@@ -52,9 +53,7 @@ func TestReverseBitsMap(t *testing.T) {
 		sqltypes.NewInt64(5),
 		sqltypes.NewInt64(6),
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationKeyspaceID([]byte("\x80\x00\x00\x00\x00\x00\x00\x00")),
 		key.DestinationKeyspaceID([]byte("@\x00\x00\x00\x00\x00\x00\x00")),
@@ -91,9 +90,7 @@ func TestReverseBitsVerify(t *testing.T) {
 
 func TestReverseBitsReverseMap(t *testing.T) {
 	got, err := reverseBits.(Reversible).ReverseMap(nil, [][]byte{[]byte("\x80\x00\x00\x00\x00\x00\x00\x00")})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []sqltypes.Value{sqltypes.NewUint64(uint64(1))}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ReverseMap(): %v, want %v", got, want)

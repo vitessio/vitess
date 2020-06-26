@@ -17,7 +17,9 @@ limitations under the License.
 package cluster
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -68,6 +70,9 @@ func (vtworker *VtworkerProcess) Setup(cell string) (err error) {
 		"-cell", cell,
 		"-command_display_interval", "10ms",
 	)
+	if *isCoverage {
+		vtworker.proc.Args = append(vtworker.proc.Args, "-test.coverprofile=vtworker.out", "-test.v")
+	}
 	vtworker.proc.Args = append(vtworker.proc.Args, vtworker.ExtraArgs...)
 
 	vtworker.proc.Stderr = os.Stderr
@@ -140,12 +145,26 @@ func (vtworker *VtworkerProcess) TearDown() error {
 func (vtworker *VtworkerProcess) ExecuteCommand(args ...string) (err error) {
 	args = append([]string{"-vtworker_client_protocol", "grpc",
 		"-server", vtworker.Server, "-log_dir", vtworker.LogDir, "-stderrthreshold", "info"}, args...)
+	if *isCoverage {
+		args = append([]string{"-test.coverprofile=" + getCoveragePath("vtworkerclient-exec-cmd.out")}, args...)
+	}
 	tmpProcess := exec.Command(
 		"vtworkerclient",
 		args...,
 	)
 	log.Info(fmt.Sprintf("Executing vtworkerclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	return tmpProcess.Run()
+}
+
+func (vtworker *VtworkerProcess) ExecuteCommandInBg(args ...string) (*exec.Cmd, error) {
+	args = append([]string{"-vtworker_client_protocol", "grpc",
+		"-server", vtworker.Server, "-log_dir", vtworker.LogDir, "-stderrthreshold", "info"}, args...)
+	tmpProcess := exec.Command(
+		"vtworkerclient",
+		args...,
+	)
+	log.Info(fmt.Sprintf("Executing vtworkerclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	return tmpProcess, tmpProcess.Start()
 }
 
 // ExecuteVtworkerCommand executes any vtworker command
@@ -162,6 +181,9 @@ func (vtworker *VtworkerProcess) ExecuteVtworkerCommand(port int, grpcPort int, 
 		"-grpc_port", fmt.Sprintf("%d", grpcPort),
 		"-cell", vtworker.Cell,
 		"-log_dir", vtworker.LogDir, "-stderrthreshold", "1"}, args...)
+	if *isCoverage {
+		args = append([]string{"-test.coverprofile=" + getCoveragePath("vtworker-exec-cmd.out")}, args...)
+	}
 	tmpProcess := exec.Command(
 		"vtworker",
 		args...,
@@ -190,4 +212,22 @@ func VtworkerProcessInstance(httpPort int, grpcPort int, topoPort int, hostname 
 	}
 	vtworker.VerifyURL = fmt.Sprintf("http://%s:%d/debug/vars", hostname, vtworker.Port)
 	return vtworker
+}
+
+// GetVars returns map of vars
+func (vtworker *VtworkerProcess) GetVars() (map[string]interface{}, error) {
+	resultMap := make(map[string]interface{})
+	resp, err := http.Get(vtworker.VerifyURL)
+	if err != nil {
+		return nil, fmt.Errorf("error getting response from %s", vtworker.VerifyURL)
+	}
+	if resp.StatusCode == 200 {
+		respByte, _ := ioutil.ReadAll(resp.Body)
+		err := json.Unmarshal(respByte, &resultMap)
+		if err != nil {
+			return nil, fmt.Errorf("not able to parse response body")
+		}
+		return resultMap, nil
+	}
+	return nil, fmt.Errorf("unsuccessful response")
 }

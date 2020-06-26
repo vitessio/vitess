@@ -21,10 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"math/rand"
-
 	"vitess.io/vitess/go/mysql/fakesqldb"
-	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -40,7 +37,7 @@ func TestReaderReadHeartbeat(t *testing.T) {
 	tr := newReader(db, mockNowFunc)
 	defer tr.Close()
 
-	db.AddQuery(fmt.Sprintf("SELECT ts FROM %s.heartbeat WHERE keyspaceShard='%s'", tr.dbName, tr.keyspaceShard), &sqltypes.Result{
+	db.AddQuery(fmt.Sprintf("SELECT ts FROM %s.heartbeat WHERE keyspaceShard='%s'", "_vt", tr.keyspaceShard), &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "ts", Type: sqltypes.Int64},
 		},
@@ -102,14 +99,13 @@ func TestReaderReadHeartbeatError(t *testing.T) {
 }
 
 func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {
-	randID := rand.Int63()
-	config := tabletenv.DefaultQsConfig
-	config.HeartbeatEnable = true
-	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
-	dbc := dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
+	config := tabletenv.NewDefaultConfig()
+	config.HeartbeatIntervalSeconds = 1
+	params, _ := db.ConnParams().MysqlParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
-	tr := NewReader(&fakeMysqlChecker{}, config)
-	tr.dbName = sqlescape.EscapeID(dbc.SidecarDBName.Get())
+	tr := NewReader(tabletenv.NewTestEnv(config, nil, "ReaderTest"))
 	tr.keyspaceShard = "test:0"
 	tr.now = nowFunc
 	tr.pool.Open(dbc.AppWithDB(), dbc.DbaWithDB(), dbc.AppDebugWithDB())

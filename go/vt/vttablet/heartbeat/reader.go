@@ -21,14 +21,14 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -49,12 +49,11 @@ const (
 // table against the current time at read time. This value is reported in metrics and
 // also to the healthchecks.
 type Reader struct {
-	dbconfigs *dbconfigs.DBConfigs
+	env tabletenv.Env
 
 	enabled       bool
 	interval      time.Duration
 	keyspaceShard string
-	dbName        string
 	now           func() time.Time
 	errorLog      *logutil.ThrottledLogger
 
@@ -69,33 +68,32 @@ type Reader struct {
 }
 
 // NewReader returns a new heartbeat reader.
-func NewReader(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *Reader {
-	if !config.HeartbeatEnable {
+func NewReader(env tabletenv.Env) *Reader {
+	config := env.Config()
+	if config.HeartbeatIntervalSeconds == 0 {
 		return &Reader{}
 	}
 
+	heartbeatInterval := time.Duration(config.HeartbeatIntervalSeconds * 1e9)
 	return &Reader{
+		env:      env,
 		enabled:  true,
 		now:      time.Now,
-		interval: config.HeartbeatInterval,
-		ticks:    timer.NewTimer(config.HeartbeatInterval),
+		interval: heartbeatInterval,
+		ticks:    timer.NewTimer(heartbeatInterval),
 		errorLog: logutil.NewThrottledLogger("HeartbeatReporter", 60*time.Second),
-		pool:     connpool.New(config.PoolNamePrefix+"HeartbeatReadPool", 1, 0, time.Duration(config.IdleTimeout*1e9), checker),
+		pool: connpool.NewPool(env, "HeartbeatReadPool", tabletenv.ConnPoolConfig{
+			Size:               1,
+			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
+		}),
 	}
 }
 
-// InitDBConfig must be called before Init.
-func (r *Reader) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	r.dbconfigs = dbcfgs
-}
-
-// Init does last minute initialization of db settings, such as dbName
-// and keyspaceShard
+// Init does last minute initialization of db settings, such as keyspaceShard.
 func (r *Reader) Init(target querypb.Target) {
 	if !r.enabled {
 		return
 	}
-	r.dbName = sqlescape.EscapeID(r.dbconfigs.SidecarDBName.Get())
 	r.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
 }
 
@@ -112,7 +110,7 @@ func (r *Reader) Open() {
 	}
 
 	log.Info("Beginning heartbeat reads")
-	r.pool.Open(r.dbconfigs.AppWithDB(), r.dbconfigs.DbaWithDB(), r.dbconfigs.AppDebugWithDB())
+	r.pool.Open(r.env.DBConfigs().AppWithDB(), r.env.DBConfigs().DbaWithDB(), r.env.DBConfigs().AppDebugWithDB())
 	r.ticks.Start(func() { r.readHeartbeat() })
 	r.isOpen = true
 }
@@ -147,7 +145,7 @@ func (r *Reader) GetLatest() (time.Duration, error) {
 // readHeartbeat reads from the heartbeat table exactly once, updating
 // the last known lag and/or error, and incrementing counters.
 func (r *Reader) readHeartbeat() {
-	defer tabletenv.LogError()
+	defer r.env.LogError()
 
 	ctx, cancel := context.WithDeadline(context.Background(), r.now().Add(r.interval))
 	defer cancel()
@@ -196,7 +194,7 @@ func (r *Reader) bindHeartbeatFetch() (string, error) {
 	bindVars := map[string]*querypb.BindVariable{
 		"ks": sqltypes.StringBindVariable(r.keyspaceShard),
 	}
-	parsed := sqlparser.BuildParsedQuery(sqlFetchMostRecentHeartbeat, r.dbName, ":ks")
+	parsed := sqlparser.BuildParsedQuery(sqlFetchMostRecentHeartbeat, "_vt", ":ks")
 	bound, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return "", err
@@ -209,7 +207,7 @@ func parseHeartbeatResult(res *sqltypes.Result) (int64, error) {
 	if len(res.Rows) != 1 {
 		return 0, fmt.Errorf("failed to read heartbeat: writer query did not result in 1 row. Got %v", len(res.Rows))
 	}
-	ts, err := sqltypes.ToInt64(res.Rows[0][0])
+	ts, err := evalengine.ToInt64(res.Rows[0][0])
 	if err != nil {
 		return 0, err
 	}

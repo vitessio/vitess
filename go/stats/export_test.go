@@ -24,6 +24,10 @@ import (
 func clear() {
 	defaultVarGroup.vars = make(map[string]expvar.Var)
 	defaultVarGroup.newVarHook = nil
+	*combineDimensions = ""
+	*dropVariables = ""
+	combinedDimensions = nil
+	droppedVars = nil
 }
 
 func TestNoHook(t *testing.T) {
@@ -115,4 +119,13 @@ func TestPublishFunc(t *testing.T) {
 	if gotv.String() != f() {
 		t.Errorf("want %v, got %#v", f(), gotv())
 	}
+}
+
+func TestDropVariable(t *testing.T) {
+	clear()
+	*dropVariables = "dropTest"
+
+	// This should not panic.
+	_ = NewGaugesWithSingleLabel("dropTest", "help", "label")
+	_ = NewGaugesWithSingleLabel("dropTest", "help", "label")
 }

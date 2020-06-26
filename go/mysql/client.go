@@ -45,6 +45,11 @@ type connectResult struct {
 // FIXME(alainjobart) once we have more of a server side, add test cases
 // to cover all failure scenarios.
 func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
+	if params.ConnectTimeoutMs != 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(params.ConnectTimeoutMs)*time.Millisecond)
+		defer cancel()
+	}
 	netProto := "tcp"
 	addr := ""
 	if params.UnixSocket != "" {

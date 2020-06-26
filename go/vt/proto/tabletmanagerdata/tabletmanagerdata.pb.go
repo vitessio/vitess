@@ -3220,6 +3220,7 @@ func (m *UndoDemoteMasterResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_UndoDemoteMasterResponse proto.InternalMessageInfo
 
+// Deprecated
 type PromoteSlaveWhenCaughtUpRequest struct {
 	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -3259,6 +3260,7 @@ func (m *PromoteSlaveWhenCaughtUpRequest) GetPosition() string {
 	return ""
 }
 
+// Deprecated
 type PromoteSlaveWhenCaughtUpResponse struct {
 	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -3595,6 +3597,7 @@ func (m *StopReplicationAndGetStatusResponse) GetStatus() *replicationdata.Statu
 	return nil
 }
 
+// Deprecated
 type PromoteSlaveRequest struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -3626,6 +3629,7 @@ func (m *PromoteSlaveRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_PromoteSlaveRequest proto.InternalMessageInfo
 
+// Deprecated
 type PromoteSlaveResponse struct {
 	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -3665,6 +3669,76 @@ func (m *PromoteSlaveResponse) GetPosition() string {
 	return ""
 }
 
+type PromoteReplicaRequest struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *PromoteReplicaRequest) Reset()         { *m = PromoteReplicaRequest{} }
+func (m *PromoteReplicaRequest) String() string { return proto.CompactTextString(m) }
+func (*PromoteReplicaRequest) ProtoMessage()    {}
+func (*PromoteReplicaRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{92}
+}
+
+func (m *PromoteReplicaRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_PromoteReplicaRequest.Unmarshal(m, b)
+}
+func (m *PromoteReplicaRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_PromoteReplicaRequest.Marshal(b, m, deterministic)
+}
+func (m *PromoteReplicaRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PromoteReplicaRequest.Merge(m, src)
+}
+func (m *PromoteReplicaRequest) XXX_Size() int {
+	return xxx_messageInfo_PromoteReplicaRequest.Size(m)
+}
+func (m *PromoteReplicaRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_PromoteReplicaRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_PromoteReplicaRequest proto.InternalMessageInfo
+
+type PromoteReplicaResponse struct {
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *PromoteReplicaResponse) Reset()         { *m = PromoteReplicaResponse{} }
+func (m *PromoteReplicaResponse) String() string { return proto.CompactTextString(m) }
+func (*PromoteReplicaResponse) ProtoMessage()    {}
+func (*PromoteReplicaResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{93}
+}
+
+func (m *PromoteReplicaResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_PromoteReplicaResponse.Unmarshal(m, b)
+}
+func (m *PromoteReplicaResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_PromoteReplicaResponse.Marshal(b, m, deterministic)
+}
+func (m *PromoteReplicaResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PromoteReplicaResponse.Merge(m, src)
+}
+func (m *PromoteReplicaResponse) XXX_Size() int {
+	return xxx_messageInfo_PromoteReplicaResponse.Size(m)
+}
+func (m *PromoteReplicaResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_PromoteReplicaResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_PromoteReplicaResponse proto.InternalMessageInfo
+
+func (m *PromoteReplicaResponse) GetPosition() string {
+	if m != nil {
+		return m.Position
+	}
+	return ""
+}
+
 type BackupRequest struct {
 	Concurrency          int64    `protobuf:"varint,1,opt,name=concurrency,proto3" json:"concurrency,omitempty"`
 	AllowMaster          bool     `protobuf:"varint,2,opt,name=allowMaster,proto3" json:"allowMaster,omitempty"`
@@ -3677,7 +3751,7 @@ func (m *BackupRequest) Reset()         { *m = BackupRequest{} }
 func (m *BackupRequest) String() string { return proto.CompactTextString(m) }
 func (*BackupRequest) ProtoMessage()    {}
 func (*BackupRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ff9ac4f89e61ffa4, []int{92}
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{94}
 }
 
 func (m *BackupRequest) XXX_Unmarshal(b []byte) error {
@@ -3723,7 +3797,7 @@ func (m *BackupResponse) Reset()         { *m = BackupResponse{} }
 func (m *BackupResponse) String() string { return proto.CompactTextString(m) }
 func (*BackupResponse) ProtoMessage()    {}
 func (*BackupResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ff9ac4f89e61ffa4, []int{93}
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{95}
 }
 
 func (m *BackupResponse) XXX_Unmarshal(b []byte) error {
@@ -3761,7 +3835,7 @@ func (m *RestoreFromBackupRequest) Reset()         { *m = RestoreFromBackupReque
 func (m *RestoreFromBackupRequest) String() string { return proto.CompactTextString(m) }
 func (*RestoreFromBackupRequest) ProtoMessage()    {}
 func (*RestoreFromBackupRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ff9ac4f89e61ffa4, []int{94}
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{96}
 }
 
 func (m *RestoreFromBackupRequest) XXX_Unmarshal(b []byte) error {
@@ -3793,7 +3867,7 @@ func (m *RestoreFromBackupResponse) Reset()         { *m = RestoreFromBackupResp
 func (m *RestoreFromBackupResponse) String() string { return proto.CompactTextString(m) }
 func (*RestoreFromBackupResponse) ProtoMessage()    {}
 func (*RestoreFromBackupResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ff9ac4f89e61ffa4, []int{95}
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{97}
 }
 
 func (m *RestoreFromBackupResponse) XXX_Unmarshal(b []byte) error {
@@ -3917,6 +3991,8 @@ func init() {
 	proto.RegisterType((*StopReplicationAndGetStatusResponse)(nil), "tabletmanagerdata.StopReplicationAndGetStatusResponse")
 	proto.RegisterType((*PromoteSlaveRequest)(nil), "tabletmanagerdata.PromoteSlaveRequest")
 	proto.RegisterType((*PromoteSlaveResponse)(nil), "tabletmanagerdata.PromoteSlaveResponse")
+	proto.RegisterType((*PromoteReplicaRequest)(nil), "tabletmanagerdata.PromoteReplicaRequest")
+	proto.RegisterType((*PromoteReplicaResponse)(nil), "tabletmanagerdata.PromoteReplicaResponse")
 	proto.RegisterType((*BackupRequest)(nil), "tabletmanagerdata.BackupRequest")
 	proto.RegisterType((*BackupResponse)(nil), "tabletmanagerdata.BackupResponse")
 	proto.RegisterType((*RestoreFromBackupRequest)(nil), "tabletmanagerdata.RestoreFromBackupRequest")
@@ -3926,7 +4002,7 @@ func init() {
 func init() { proto.RegisterFile("tabletmanagerdata.proto", fileDescriptor_ff9ac4f89e61ffa4) }
 
 var fileDescriptor_ff9ac4f89e61ffa4 = []byte{
-	// 2108 bytes of a gzipped FileDescriptorProto
+	// 2121 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xcc, 0x59, 0x5b, 0x6f, 0x1b, 0xc7,
 	0x15, 0x06, 0x49, 0x49, 0xa6, 0x0e, 0x2f, 0x22, 0x97, 0x94, 0x48, 0xc9, 0x8d, 0x2e, 0x6b, 0xa7,
 	0x51, 0x5d, 0x94, 0x4a, 0x94, 0x34, 0x08, 0x52, 0xa4, 0xa8, 0xac, 0x8b, 0xed, 0x44, 0x89, 0x95,
@@ -4051,12 +4127,13 @@ var fileDescriptor_ff9ac4f89e61ffa4 = []byte{
 	0x2f, 0xc6, 0xde, 0x3a, 0x58, 0x0a, 0x19, 0x8f, 0x81, 0xbb, 0x39, 0x26, 0xbe, 0x1f, 0x67, 0x88,
 	0xd2, 0x7a, 0x1e, 0x83, 0x2d, 0x06, 0xab, 0xd1, 0x8d, 0xf6, 0x42, 0x4f, 0x34, 0xf1, 0xd4, 0xa6,
 	0xf3, 0x1a, 0x1e, 0xdd, 0xc8, 0x75, 0xdf, 0xcd, 0x67, 0x19, 0x6a, 0x66, 0xba, 0x18, 0xf9, 0x9e,
-	0x86, 0x6f, 0x91, 0x39, 0xa7, 0x50, 0x7a, 0x8a, 0x3a, 0x17, 0xf1, 0x28, 0x4d, 0x37, 0xa1, 0xd0,
-	0x21, 0x61, 0x27, 0xa6, 0x14, 0x87, 0x9d, 0xa1, 0x6e, 0x6a, 0x26, 0x24, 0x38, 0xe4, 0x27, 0x9f,
-	0x0a, 0xbd, 0xfe, 0x4e, 0x34, 0x21, 0xfb, 0x4b, 0x28, 0x27, 0x42, 0xb5, 0x09, 0x8f, 0x61, 0x1e,
-	0x0f, 0xc6, 0xa1, 0x2f, 0xb7, 0x92, 0x7f, 0x7a, 0x1c, 0x0a, 0xd4, 0x51, 0x44, 0x3d, 0xc2, 0x38,
-	0xa1, 0xf8, 0x88, 0x92, 0x7e, 0xca, 0x2e, 0x7b, 0x0f, 0x56, 0x67, 0xd0, 0xee, 0x22, 0xfe, 0xe9,
-	0xa7, 0x3f, 0xb5, 0x06, 0x3e, 0xc7, 0x8c, 0xb5, 0x7c, 0xb2, 0xa3, 0x7e, 0xed, 0x74, 0xc9, 0xce,
-	0x80, 0xef, 0xc8, 0x7f, 0xbd, 0xec, 0x4c, 0x7d, 0xab, 0xb5, 0x17, 0x24, 0xe1, 0xf3, 0xff, 0x05,
-	0x00, 0x00, 0xff, 0xff, 0x05, 0x80, 0x1f, 0x06, 0x04, 0x1a, 0x00, 0x00,
+	0x86, 0x6f, 0x91, 0x39, 0x0d, 0x58, 0xd6, 0x77, 0xb4, 0x95, 0xc6, 0x12, 0x35, 0x49, 0xb8, 0x85,
+	0xb8, 0x53, 0x28, 0x3d, 0x45, 0x9d, 0x8b, 0x78, 0x94, 0xf5, 0x9b, 0x50, 0xe8, 0x90, 0xb0, 0x13,
+	0x53, 0x8a, 0xc3, 0xce, 0x50, 0xf7, 0x48, 0x13, 0x12, 0x1c, 0xf2, 0x0b, 0x52, 0xbd, 0xa4, 0xfe,
+	0xec, 0x34, 0x21, 0xfb, 0x4b, 0x28, 0x27, 0x42, 0xb5, 0x09, 0x8f, 0x61, 0x1e, 0x0f, 0xc6, 0x2f,
+	0x59, 0x6e, 0x25, 0xff, 0x43, 0x39, 0x14, 0xa8, 0xa3, 0x88, 0x7a, 0x22, 0x72, 0x42, 0xf1, 0x11,
+	0x25, 0xfd, 0x94, 0x5d, 0xf6, 0x1e, 0xac, 0xce, 0xa0, 0xdd, 0x45, 0xfc, 0xd3, 0x4f, 0x7f, 0x6a,
+	0x0d, 0x7c, 0x8e, 0x19, 0x6b, 0xf9, 0x64, 0x47, 0xfd, 0xda, 0xe9, 0x92, 0x9d, 0x01, 0xdf, 0x91,
+	0xff, 0xc9, 0xd9, 0x99, 0xfa, 0xf4, 0x6b, 0x2f, 0x48, 0xc2, 0xe7, 0xff, 0x0b, 0x00, 0x00, 0xff,
+	0xff, 0x4b, 0xd6, 0x65, 0xc3, 0x53, 0x1a, 0x00, 0x00,
 }

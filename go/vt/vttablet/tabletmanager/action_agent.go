@@ -80,8 +80,9 @@ const (
 )
 
 var (
-	tabletHostname   = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
-	demoteMasterType = flag.String("demote_master_type", "REPLICA", "the tablet type a demoted master will transition to")
+	tabletHostname       = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
+	demoteMasterType     = flag.String("demote_master_type", "REPLICA", "the tablet type a demoted master will transition to")
+	initPopulateMetadata = flag.Bool("init_populate_metadata", false, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
 )
 
 // ActionAgent is the main class for the agent.
@@ -271,7 +272,6 @@ func NewActionAgent(
 		TabletAlias:         tabletAlias,
 		Cnf:                 mycnf,
 		MysqlDaemon:         mysqld,
-		DBConfigs:           dbcfgs,
 		History:             history.New(historyLength),
 		DemoteMasterType:    demoteMasterTabletType,
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
@@ -297,7 +297,7 @@ func NewActionAgent(
 
 	var mysqlHost string
 	var mysqlPort int32
-	if appConfig := dbcfgs.AppWithDB(); appConfig.Host != "" {
+	if appConfig, _ := dbcfgs.AppWithDB().MysqlParams(); appConfig.Host != "" {
 		mysqlHost = appConfig.Host
 		mysqlPort = int32(appConfig.Port)
 
@@ -316,17 +316,18 @@ func NewActionAgent(
 	}
 
 	// Start will get the tablet info, and update our state from it
-	if err := agent.Start(batchCtx, mysqlHost, int32(mysqlPort), port, gRPCPort, true); err != nil {
+	if err := agent.Start(batchCtx, dbcfgs, mysqlHost, int32(mysqlPort), port, gRPCPort, true); err != nil {
 		return nil, err
 	}
 
 	vreplication.InitVStreamerClient(agent.DBConfigs)
 
 	// The db name is set by the Start function called above
+	filteredWithDBParams, _ := agent.DBConfigs.FilteredWithDB().MysqlParams()
 	agent.VREngine = vreplication.NewEngine(ts, tabletAlias.Cell, mysqld, func() binlogplayer.DBClient {
 		return binlogplayer.NewDBClient(agent.DBConfigs.FilteredWithDB())
 	},
-		agent.DBConfigs.FilteredWithDB().DbName,
+		filteredWithDBParams.DbName,
 	)
 	servenv.OnTerm(agent.VREngine.Close)
 
@@ -355,6 +356,24 @@ func NewActionAgent(
 			agent.initHealthCheck()
 		}()
 	} else {
+		// optionally populate metadata records
+		if *initPopulateMetadata {
+			// we use initialTablet here because it has the intended tabletType.
+			// the tablet returned by agent.Tablet() will have type UNKNOWN until we call
+			// refreshTablet
+			localMetadata := agent.getLocalMetadataValues(agent.initialTablet.Type)
+			if agent.Cnf != nil { // we are managing mysqld
+				// we'll use batchCtx here because we are still initializing and can't proceed unless this succeeds
+				if err := agent.MysqlDaemon.Wait(batchCtx, agent.Cnf); err != nil {
+					return nil, err
+				}
+			}
+			err := mysqlctl.PopulateMetadataTables(agent.MysqlDaemon, localMetadata, topoproto.TabletDbName(agent.initialTablet))
+			if err != nil {
+				return nil, vterrors.Wrap(err, "failed to -init_populate_metadata")
+			}
+		}
+
 		// Update our state (need the action lock).
 		if err := agent.lock(batchCtx); err != nil {
 			return nil, err
@@ -399,7 +418,6 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		TabletAlias:         tabletAlias,
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
-		DBConfigs:           &dbconfigs.DBConfigs{},
 		VREngine:            vreplication.NewEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient, ti.DbName()),
 		History:             history.New(historyLength),
 		DemoteMasterType:    demoteMasterTabletType,
@@ -410,7 +428,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 	}
 
 	// Start will update the topology and setup services.
-	if err := agent.Start(batchCtx, "", 0, vtPort, grpcPort, false); err != nil {
+	if err := agent.Start(batchCtx, &dbconfigs.DBConfigs{}, "", 0, vtPort, grpcPort, false); err != nil {
 		panic(vterrors.Wrapf(err, "agent.Start(%v) failed", tabletAlias))
 	}
 
@@ -444,7 +462,6 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 		TabletAlias:         tabletAlias,
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
-		DBConfigs:           dbcfgs,
 		VREngine:            vreplication.NewEngine(nil, "", nil, nil, ""),
 		gotMysqlPort:        true,
 		History:             history.New(historyLength),
@@ -463,7 +480,7 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 	}
 
 	// Start the agent.
-	if err := agent.Start(batchCtx, "", 0, vtPort, grpcPort, false); err != nil {
+	if err := agent.Start(batchCtx, dbcfgs, "", 0, vtPort, grpcPort, false); err != nil {
 		panic(vterrors.Wrapf(err, "agent.Start(%v) failed", tabletAlias))
 	}
 
@@ -614,7 +631,7 @@ func (agent *ActionAgent) verifyTopology(ctx context.Context) {
 // Start validates and updates the topology records for the tablet, and performs
 // the initial state change callback to start tablet services.
 // If initUpdateStream is set, update stream service will also be registered.
-func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort, vtPort, gRPCPort int32, initUpdateStream bool) error {
+func (agent *ActionAgent) Start(ctx context.Context, dbcfgs *dbconfigs.DBConfigs, mysqlHost string, mysqlPort, vtPort, gRPCPort int32, initUpdateStream bool) error {
 	// find our hostname as fully qualified, and IP
 	hostname := *tabletHostname
 	if hostname == "" {
@@ -666,11 +683,8 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 	// Verify the topology is correct.
 	agent.verifyTopology(ctx)
 
-	// Get and fix the dbname if necessary, only for real instances.
-	if !agent.DBConfigs.IsZero() {
-		dbname := topoproto.TabletDbName(agent.initialTablet)
-		agent.DBConfigs.DBName.Set(dbname)
-	}
+	dbname := topoproto.TabletDbName(agent.initialTablet)
+	agent.DBConfigs = dbcfgs.WithDBName(dbname)
 
 	// Create and register the RPC services from UpdateStream.
 	// (it needs the dbname, so it has to be delayed up to here,
@@ -751,7 +765,11 @@ func (agent *ActionAgent) Close() {
 		tablet.PortMap = nil
 		return nil
 	}
-	if _, err := agent.TopoServer.UpdateTabletFields(context.Background(), agent.TabletAlias, f); err != nil {
+
+	updateCtx, updateCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	defer updateCancel()
+
+	if _, err := agent.TopoServer.UpdateTabletFields(updateCtx, agent.TabletAlias, f); err != nil {
 		log.Warningf("Failed to update tablet record, may contain stale identifiers: %v", err)
 	}
 }

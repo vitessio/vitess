@@ -1,7 +1,7 @@
 # select
 "select * from a"
 {
-  "PlanID": "SELECT_STREAM",
+  "PlanID": "SelectStream",
   "TableName": "a",
   "Permissions":[{"TableName":"a","Role":0}],
   "FullQuery": "select * from a"
@@ -10,7 +10,7 @@
 # select join
 "select * from a join b"
 {
-  "PlanID": "SELECT_STREAM",
+  "PlanID": "SelectStream",
   "TableName": "",
   "Permissions":[{"TableName":"a","Role":0},{"TableName":"b","Role":0}],
   "FullQuery": "select * from a join b"
@@ -23,7 +23,7 @@
 # union
 "select * from a union select * from b"
 {
-  "PlanID": "SELECT_STREAM",
+  "PlanID": "SelectStream",
   "TableName": "",
   "Permissions":[{"TableName":"a","Role":0},{"TableName":"b","Role":0}],
   "FullQuery": "select * from a union select * from b"
@@ -32,7 +32,7 @@
 # show
 "show tables"
 {
-  "PlanID": "SELECT_STREAM",
+  "PlanID": "SelectStream",
   "TableName": "",
   "FullQuery": "show tables"
 }
@@ -40,7 +40,7 @@
 # other
 "desc foo"
 {
-  "PlanID": "SELECT_STREAM",
+  "PlanID": "SelectStream",
   "TableName": "",
   "FullQuery": "otherread"
 }

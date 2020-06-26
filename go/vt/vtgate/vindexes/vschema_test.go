@@ -207,9 +207,7 @@ func TestUnshardedVSchema(t *testing.T) {
 	}
 	got, _ := BuildVSchema(&good)
 	err := got.Keyspaces["unsharded"].Error
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	ks := &Keyspace{
 		Name: "unsharded",
 	}
@@ -264,9 +262,7 @@ func TestVSchemaColumns(t *testing.T) {
 	}
 	got, _ := BuildVSchema(&good)
 	err := got.Keyspaces["unsharded"].Error
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	ks := &Keyspace{
 		Name: "unsharded",
 	}
@@ -330,9 +326,7 @@ func TestVSchemaColumnListAuthoritative(t *testing.T) {
 		},
 	}
 	got, err := BuildVSchema(&good)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	ks := &Keyspace{
 		Name: "unsharded",
 	}
@@ -417,9 +411,7 @@ func TestVSchemaPinned(t *testing.T) {
 	}
 	got, _ := BuildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	ks := &Keyspace{
 		Name:    "sharded",
 		Sharded: true,
@@ -495,9 +487,7 @@ func TestShardedVSchemaOwned(t *testing.T) {
 	}
 	got, _ := BuildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	ks := &Keyspace{
 		Name:    "sharded",
 		Sharded: true,
@@ -625,9 +615,7 @@ func TestShardedVSchemaOwnerInfo(t *testing.T) {
 	}
 	got, _ := BuildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	results := []struct {
 		name     string
 		keyspace string
@@ -1062,9 +1050,7 @@ func TestFindVindexForSharding(t *testing.T) {
 		},
 	}
 	res, err := FindVindexForSharding(t1.Name.String(), t1.ColumnVindexes)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !reflect.DeepEqual(res, t1.ColumnVindexes[0]) {
 		t.Errorf("FindVindexForSharding:\n got\n%v, want\n%v", res, t1.ColumnVindexes[0])
 	}
@@ -1138,9 +1124,7 @@ func TestFindVindexForSharding2(t *testing.T) {
 		},
 	}
 	res, err := FindVindexForSharding(t1.Name.String(), t1.ColumnVindexes)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !reflect.DeepEqual(res, t1.ColumnVindexes[1]) {
 		t.Errorf("FindVindexForSharding:\n got\n%v, want\n%v", res, t1.ColumnVindexes[1])
 	}
@@ -1175,9 +1159,7 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 	}
 	got, _ := BuildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	ks := &Keyspace{
 		Name:    "sharded",
 		Sharded: true,
@@ -1270,9 +1252,7 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 	}
 	got, _ := BuildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	ks := &Keyspace{
 		Name:    "sharded",
 		Sharded: true,
@@ -1592,9 +1572,7 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 	got, _ := BuildVSchema(&good)
 	err := got.Keyspaces["ksa"].Error
 	err1 := got.Keyspaces["ksb"].Error
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if err1 != nil {
 		t.Error(err1)
 	}
@@ -1895,9 +1873,7 @@ func TestSequence(t *testing.T) {
 	}
 	got, _ := BuildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	err1 := got.Keyspaces["unsharded"].Error
 	if err1 != nil {
 		t.Error(err1)
@@ -2392,9 +2368,7 @@ func TestBuildKeyspaceSchema(t *testing.T) {
 	}
 	got, _ := BuildKeyspaceSchema(good, "ks")
 	err := got.Error
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	ks := &Keyspace{
 		Name: "ks",
 	}
@@ -2434,9 +2408,7 @@ func TestValidate(t *testing.T) {
 		},
 	}
 	err := ValidateKeyspace(good)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	bad := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{

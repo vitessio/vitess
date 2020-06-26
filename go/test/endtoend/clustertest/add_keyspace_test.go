@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
@@ -57,8 +59,9 @@ primary key (id)
 )
 
 func TestAddKeyspace(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	if err := clusterInstance.StartKeyspace(*testKeyspace, []string{"-80", "80-"}, 1, true); err != nil {
-		println(err.Error())
+		log.Errorf("failed to AddKeyspace %v: %v", *testKeyspace, err)
 		t.Fatal(err)
 	}
 	// Restart vtgate process

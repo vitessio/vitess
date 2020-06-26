@@ -25,10 +25,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestQPS(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	vtParams := mysql.ConnParams{
@@ -36,11 +38,11 @@ func TestQPS(t *testing.T) {
 		Port: clusterInstance.VtgateMySQLPort,
 	}
 	vtGateConn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer vtGateConn.Close()
 
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer replicaConn.Close()
 
 	// Sanity Check
@@ -69,11 +71,11 @@ func TestQPS(t *testing.T) {
 	timeout := time.Now().Add(12 * time.Second)
 	for time.Now().Before(timeout) {
 		result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", masterTablet.Alias)
-		assert.Nil(t, err)
+		require.Nil(t, err)
 		var streamHealthResponse querypb.StreamHealthResponse
 
 		err = json.Unmarshal([]byte(result), &streamHealthResponse)
-		require.NoError(t, err)
+		require.Nil(t, err)
 
 		realTimeStats := streamHealthResponse.GetRealtimeStats()
 		qps := realTimeStats.GetQps()

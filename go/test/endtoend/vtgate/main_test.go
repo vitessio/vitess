@@ -68,12 +68,41 @@ create table t2_id4_idx(
 	primary key(id),
 	key idx_id4(id4)
 ) Engine=InnoDB;
-`
+
+create table t3(
+	id5 bigint,
+	id6 bigint,
+	id7 bigint,
+	primary key(id5)
+) Engine=InnoDB;
+
+create table t3_id7_idx(
+    id bigint not null auto_increment,
+	id7 bigint,
+	id6 bigint,
+    primary key(id)
+) Engine=InnoDB;
+
+create table t4(
+	id1 bigint,
+	id2 varchar(10),
+	primary key(id1)
+) Engine=InnoDB;
+
+create table t4_id2_idx(
+	id2 varchar(10),
+	id1 bigint,
+	keyspace_id varbinary(50),
+    primary key(id2, id1)
+) Engine=InnoDB;`
 
 	VSchema = `
-	{
+{
   "sharded": true,
   "vindexes": {
+    "unicode_loose_md5" : {
+	  "type": "unicode_loose_md5"
+    },
     "hash": {
       "type": "hash"
     },
@@ -95,6 +124,24 @@ create table t2_id4_idx(
         "autocommit": "true"
       },
       "owner": "t2"
+    },
+    "t3_id7_vdx": {
+      "type": "lookup_hash",
+      "params": {
+        "table": "t3_id7_idx",
+        "from": "id7",
+        "to": "id6"
+      },
+      "owner": "t3"
+    },
+    "t4_id2_vdx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "t4_id2_idx",
+        "from": "id2,id1",
+        "to": "keyspace_id"
+      },
+      "owner": "t4"
     }
   },
   "tables": {
@@ -138,6 +185,46 @@ create table t2_id4_idx(
         }
       ]
     },
+    "t3": {
+      "column_vindexes": [
+        {
+          "column": "id6",
+          "name": "hash"
+        },
+        {
+          "column": "id7",
+          "name": "t3_id7_vdx"
+        }
+      ]
+    },
+    "t3_id7_idx": {
+      "column_vindexes": [
+        {
+          "column": "id7",
+          "name": "hash"
+        }
+      ]
+    },
+	"t4": {
+      "column_vindexes": [
+        {
+          "column": "id1",
+          "name": "hash"
+        },
+        {
+          "columns": ["id2", "id1"],
+          "name": "t4_id2_vdx"
+        }
+      ]
+    },
+    "t4_id2_idx": {
+      "column_vindexes": [
+        {
+          "column": "id2",
+          "name": "unicode_loose_md5"
+        }
+      ]
+    },
     "vstream_test": {
       "column_vindexes": [
         {
@@ -165,6 +252,7 @@ create table t2_id4_idx(
 )
 
 func TestMain(m *testing.M) {
+	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {

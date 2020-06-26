@@ -17,6 +17,7 @@ limitations under the License.
 package discovery
 
 import (
+	"math/rand"
 	"testing"
 	"time"
 
@@ -407,6 +408,100 @@ func TestFilterByShard(t *testing.T) {
 		got := fbs.isIncluded(tablet)
 		if got != tc.included {
 			t.Errorf("isIncluded(%v,%v) for filters %v returned %v but expected %v", tc.keyspace, tc.shard, tc.filters, got, tc.included)
+		}
+	}
+}
+
+var (
+	testFilterByKeyspace = []struct {
+		keyspace string
+		expected bool
+	}{
+		{"ks1", true},
+		{"ks2", true},
+		{"ks3", false},
+		{"ks4", true},
+		{"ks5", true},
+		{"ks6", false},
+		{"ks7", false},
+	}
+	testKeyspacesToWatch = []string{"ks1", "ks2", "ks4", "ks5"}
+	testCell             = "testCell"
+	testShard            = "testShard"
+	testHostName         = "testHostName"
+)
+
+func TestFilterByKeyspace(t *testing.T) {
+	hc := NewFakeHealthCheck()
+	tr := NewFilterByKeyspace(hc, testKeyspacesToWatch)
+	ts := memorytopo.NewServer(testCell)
+	tw := NewCellTabletsWatcher(context.Background(), ts, tr, testCell, 10*time.Minute, true, 5)
+
+	for _, test := range testFilterByKeyspace {
+		// Add a new tablet to the topology.
+		port := rand.Int31n(1000)
+		tablet := &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: testCell,
+				Uid:  rand.Uint32(),
+			},
+			Hostname: testHostName,
+			PortMap: map[string]int32{
+				"vt": port,
+			},
+			Keyspace: test.keyspace,
+			Shard:    testShard,
+		}
+
+		got := tr.isIncluded(tablet)
+		if got != test.expected {
+			t.Errorf("isIncluded(%v) for keyspace %v returned %v but expected %v", test.keyspace, test.keyspace, got, test.expected)
+		}
+
+		if err := ts.CreateTablet(context.Background(), tablet); err != nil {
+			t.Errorf("CreateTablet failed: %v", err)
+		}
+
+		tw.loadTablets()
+		key := TabletToMapKey(tablet)
+		allTablets := hc.GetAllTablets()
+
+		if _, ok := allTablets[key]; ok != test.expected && proto.Equal(allTablets[key], tablet) != test.expected {
+			t.Errorf("Error adding tablet - got %v; want %v", ok, test.expected)
+		}
+
+		// Replace the tablet we added above
+		tabletReplacement := &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: testCell,
+				Uid:  rand.Uint32(),
+			},
+			Hostname: testHostName,
+			PortMap: map[string]int32{
+				"vt": port,
+			},
+			Keyspace: test.keyspace,
+			Shard:    testShard,
+		}
+		got = tr.isIncluded(tabletReplacement)
+		if got != test.expected {
+			t.Errorf("isIncluded(%v) for keyspace %v returned %v but expected %v", test.keyspace, test.keyspace, got, test.expected)
+		}
+		if err := ts.CreateTablet(context.Background(), tabletReplacement); err != nil {
+			t.Errorf("CreateTablet failed: %v", err)
+		}
+
+		tw.loadTablets()
+		key = TabletToMapKey(tabletReplacement)
+		allTablets = hc.GetAllTablets()
+
+		if _, ok := allTablets[key]; ok != test.expected && proto.Equal(allTablets[key], tabletReplacement) != test.expected {
+			t.Errorf("Error replacing tablet - got %v; want %v", ok, test.expected)
+		}
+
+		// Delete the tablet
+		if err := ts.DeleteTablet(context.Background(), tabletReplacement.Alias); err != nil {
+			t.Fatalf("DeleteTablet failed: %v", err)
 		}
 	}
 }

@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 )
 
 // GenerateFullQuery generates the full query from the ast.
@@ -63,77 +62,5 @@ func GenerateLimitQuery(selStmt sqlparser.SelectStatement) *sqlparser.ParsedQuer
 		}
 	}
 	buf.Myprintf("%v", selStmt)
-	return buf.ParsedQuery()
-}
-
-// GenerateInsertOuterQuery generates the outer query for inserts.
-func GenerateInsertOuterQuery(ins *sqlparser.Insert) *sqlparser.ParsedQuery {
-	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("%s %v%sinto %v%v values %a",
-		ins.Action,
-		ins.Comments,
-		ins.Ignore,
-		ins.Table,
-		ins.Columns,
-		":#values",
-	)
-	return buf.ParsedQuery()
-}
-
-// GenerateUpdateOuterQuery generates the outer query for updates.
-// If there is no custom formatting needed, formatter can be nil.
-func GenerateUpdateOuterQuery(upd *sqlparser.Update, aliased *sqlparser.AliasedTableExpr, formatter sqlparser.NodeFormatter) *sqlparser.ParsedQuery {
-	buf := sqlparser.NewTrackedBuffer(formatter)
-	buf.Myprintf("update %v%v set %v where %a%v", upd.Comments, aliased.RemoveHints(), upd.Exprs, ":#pk", upd.OrderBy)
-	return buf.ParsedQuery()
-}
-
-// GenerateDeleteOuterQuery generates the outer query for deletes.
-func GenerateDeleteOuterQuery(del *sqlparser.Delete, aliased *sqlparser.AliasedTableExpr) *sqlparser.ParsedQuery {
-	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("delete %vfrom %v where %a%v", del.Comments, aliased.RemoveHints(), ":#pk", del.OrderBy)
-	return buf.ParsedQuery()
-}
-
-// GenerateUpdateSubquery generates the subquery for updates.
-func GenerateUpdateSubquery(upd *sqlparser.Update, table *schema.Table, aliased *sqlparser.AliasedTableExpr) *sqlparser.ParsedQuery {
-	return GenerateSubquery(
-		table.Indexes[0].Columns,
-		aliased,
-		upd.Where,
-		upd.OrderBy,
-		upd.Limit,
-		true,
-	)
-}
-
-// GenerateDeleteSubquery generates the subquery for deletes.
-func GenerateDeleteSubquery(del *sqlparser.Delete, table *schema.Table, aliased *sqlparser.AliasedTableExpr) *sqlparser.ParsedQuery {
-	return GenerateSubquery(
-		table.Indexes[0].Columns,
-		aliased,
-		del.Where,
-		del.OrderBy,
-		del.Limit,
-		true,
-	)
-}
-
-// GenerateSubquery generates a subquery based on the input parameters.
-func GenerateSubquery(columns []sqlparser.ColIdent, table *sqlparser.AliasedTableExpr, where *sqlparser.Where, order sqlparser.OrderBy, limit *sqlparser.Limit, forUpdate bool) *sqlparser.ParsedQuery {
-	buf := sqlparser.NewTrackedBuffer(nil)
-	if limit == nil {
-		limit = execLimit
-	}
-	buf.WriteString("select ")
-	prefix := ""
-	for _, c := range columns {
-		buf.Myprintf("%s%v", prefix, c)
-		prefix = ", "
-	}
-	buf.Myprintf(" from %v%v%v%v", table, where, order, limit)
-	if forUpdate {
-		buf.Myprintf(sqlparser.ForUpdateStr)
-	}
 	return buf.ParsedQuery()
 }

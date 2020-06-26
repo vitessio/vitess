@@ -23,9 +23,12 @@ import (
 	"io/ioutil"
 	"net/http"
 	"testing"
+
+	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 func TestVttabletProcess(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	firstTabletPort := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].HTTPPort
 	testURL(t, fmt.Sprintf("http://localhost:%d/debug/vars/", firstTabletPort), "tablet debug var url")
 	resp, _ := http.Get(fmt.Sprintf("http://localhost:%d/debug/vars", firstTabletPort))

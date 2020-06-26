@@ -278,7 +278,7 @@ func (wr *Wrangler) PreflightSchema(ctx context.Context, tabletAlias *topodatapb
 
 // CopySchemaShardFromShard copies the schema from a source shard to the specified destination shard.
 // For both source and destination it picks the master tablet. See also CopySchemaShard.
-func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, excludeTables []string, includeViews bool, sourceKeyspace, sourceShard, destKeyspace, destShard string, waitSlaveTimeout time.Duration) error {
+func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, excludeTables []string, includeViews bool, sourceKeyspace, sourceShard, destKeyspace, destShard string, waitSlaveTimeout time.Duration, skipVerify bool) error {
 	sourceShardInfo, err := wr.ts.GetShard(ctx, sourceKeyspace, sourceShard)
 	if err != nil {
 		return fmt.Errorf("GetShard(%v, %v) failed: %v", sourceKeyspace, sourceShard, err)
@@ -287,14 +287,14 @@ func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, exclud
 		return fmt.Errorf("no master in shard record %v/%v. Consider running 'vtctl InitShardMaster' in case of a new shard or to reparent the shard to fix the topology data, or providing a non-master tablet alias", sourceKeyspace, sourceShard)
 	}
 
-	return wr.CopySchemaShard(ctx, sourceShardInfo.MasterAlias, tables, excludeTables, includeViews, destKeyspace, destShard, waitSlaveTimeout)
+	return wr.CopySchemaShard(ctx, sourceShardInfo.MasterAlias, tables, excludeTables, includeViews, destKeyspace, destShard, waitSlaveTimeout, skipVerify)
 }
 
 // CopySchemaShard copies the schema from a source tablet to the
 // specified shard.  The schema is applied directly on the master of
 // the destination shard, and is propogated to the replicas through
 // binlogs.
-func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool, destKeyspace, destShard string, waitSlaveTimeout time.Duration) error {
+func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool, destKeyspace, destShard string, waitSlaveTimeout time.Duration, skipVerify bool) error {
 	destShardInfo, err := wr.ts.GetShard(ctx, destKeyspace, destShard)
 	if err != nil {
 		return fmt.Errorf("GetShard(%v, %v) failed: %v", destKeyspace, destShard, err)
@@ -349,12 +349,14 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 	// In that case, MySQL would have skipped our CREATE DATABASE IF NOT EXISTS
 	// statement. We want to fail early in this case because vtworker SplitDiff
 	// fails in case of such an inconsistency as well.
-	diffs, err = wr.compareSchemas(ctx, sourceTabletAlias, destShardInfo.MasterAlias, tables, excludeTables, includeViews)
-	if err != nil {
-		return fmt.Errorf("CopySchemaShard failed because schemas could not be compared finally: %v", err)
-	}
-	if diffs != nil {
-		return fmt.Errorf("CopySchemaShard was not successful because the schemas between the two tablets %v and %v differ: %v", sourceTabletAlias, destShardInfo.MasterAlias, diffs)
+	if !skipVerify {
+		diffs, err = wr.compareSchemas(ctx, sourceTabletAlias, destShardInfo.MasterAlias, tables, excludeTables, includeViews)
+		if err != nil {
+			return fmt.Errorf("CopySchemaShard failed because schemas could not be compared finally: %v", err)
+		}
+		if diffs != nil {
+			return fmt.Errorf("CopySchemaShard was not successful because the schemas between the two tablets %v and %v differ: %v", sourceTabletAlias, destShardInfo.MasterAlias, diffs)
+		}
 	}
 
 	// Notify slaves to reload schema. This is best-effort.

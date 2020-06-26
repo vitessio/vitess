@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"reflect"
 	"testing"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -100,17 +99,6 @@ func TestValEqual(t *testing.T) {
 		out := valEqual(tc.in1, tc.in2)
 		if out != tc.out {
 			t.Errorf("valEqual(%#v, %#v): %v, want %v", tc.in1, tc.in2, out, tc.out)
-		}
-	}
-}
-
-func TestSkipParenthesis(t *testing.T) {
-	baseNode := newIntVal("1")
-	paren1 := &sqlparser.ParenExpr{Expr: baseNode}
-	paren2 := &sqlparser.ParenExpr{Expr: paren1}
-	for _, tcase := range []sqlparser.Expr{baseNode, paren1, paren2} {
-		if got, want := skipParenthesis(tcase), baseNode; !reflect.DeepEqual(got, want) {
-			t.Errorf("skipParenthesis(%v): %v, want %v", sqlparser.String(tcase), sqlparser.String(got), sqlparser.String(want))
 		}
 	}
 }

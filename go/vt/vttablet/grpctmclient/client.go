@@ -686,6 +686,7 @@ func (client *Client) UndoDemoteMaster(ctx context.Context, tablet *topodatapb.T
 }
 
 // PromoteSlaveWhenCaughtUp is part of the tmclient.TabletManagerClient interface.
+// Deprecated
 func (client *Client) PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topodatapb.Tablet, pos string) (string, error) {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
@@ -755,7 +756,22 @@ func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *t
 	return response.Status, nil
 }
 
+// PromoteReplica is part of the tmclient.TabletManagerClient interface.
+func (client *Client) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+	cc, c, err := client.dial(tablet)
+	if err != nil {
+		return "", err
+	}
+	defer cc.Close()
+	response, err := c.PromoteReplica(ctx, &tabletmanagerdatapb.PromoteReplicaRequest{})
+	if err != nil {
+		return "", err
+	}
+	return response.Position, nil
+}
+
 // PromoteSlave is part of the tmclient.TabletManagerClient interface.
+// Deprecated
 func (client *Client) PromoteSlave(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	cc, c, err := client.dial(tablet)
 	if err != nil {

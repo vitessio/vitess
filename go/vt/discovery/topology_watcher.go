@@ -437,3 +437,59 @@ func (fbs *FilterByShard) isIncluded(tablet *topodatapb.Tablet) bool {
 	}
 	return false
 }
+
+// FilterByKeyspace is a TabletRecorder filter that filters tablets by
+// keyspace
+type FilterByKeyspace struct {
+	tr TabletRecorder
+
+	keyspaces map[string]bool
+}
+
+// NewFilterByKeyspace creates a new FilterByKeyspace on top of an existing
+// TabletRecorder. Each filter is a keyspace entry. All tablets that match
+// a keyspace will be forwarded to the underlying TabletRecorder.
+func NewFilterByKeyspace(tr TabletRecorder, selectedKeyspaces []string) *FilterByKeyspace {
+	m := make(map[string]bool)
+	for _, keyspace := range selectedKeyspaces {
+		m[keyspace] = true
+	}
+
+	return &FilterByKeyspace{
+		tr:        tr,
+		keyspaces: m,
+	}
+}
+
+// AddTablet is part of the TabletRecorder interface.
+func (fbk *FilterByKeyspace) AddTablet(tablet *topodatapb.Tablet, name string) {
+	if fbk.isIncluded(tablet) {
+		fbk.tr.AddTablet(tablet, name)
+	}
+}
+
+// RemoveTablet is part of the TabletRecorder interface.
+func (fbk *FilterByKeyspace) RemoveTablet(tablet *topodatapb.Tablet) {
+	if fbk.isIncluded(tablet) {
+		fbk.tr.RemoveTablet(tablet)
+	}
+}
+
+// ReplaceTablet is part of the TabletRecorder interface.
+func (fbk *FilterByKeyspace) ReplaceTablet(old *topodatapb.Tablet, new *topodatapb.Tablet, name string) {
+	if old.Keyspace != new.Keyspace {
+		log.Errorf("Error replacing old tablet in %v with new tablet in %v", old.Keyspace, new.Keyspace)
+		return
+	}
+
+	if fbk.isIncluded(new) {
+		fbk.tr.ReplaceTablet(old, new, name)
+	}
+}
+
+// isIncluded returns true if the tablet's keyspace should be
+// forwarded to the underlying TabletRecorder.
+func (fbk *FilterByKeyspace) isIncluded(tablet *topodatapb.Tablet) bool {
+	_, exist := fbk.keyspaces[tablet.Keyspace]
+	return exist
+}

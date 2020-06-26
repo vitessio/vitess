@@ -49,13 +49,6 @@ func TestResult(t *testing.T) {
 			NULL,
 			NULL,
 		}},
-		Extras: &querypb.ResultExtras{
-			EventToken: &querypb.EventToken{
-				Timestamp: 123,
-				Shard:     "shard0",
-				Position:  "position0",
-			},
-		},
 	}
 	p3Result := &querypb.QueryResult{
 		Fields:       fields,
@@ -68,13 +61,6 @@ func TestResult(t *testing.T) {
 			Lengths: []int64{2, -1, -1},
 			Values:  []byte("bb"),
 		}},
-		Extras: &querypb.ResultExtras{
-			EventToken: &querypb.EventToken{
-				Timestamp: 123,
-				Shard:     "shard0",
-				Position:  "position0",
-			},
-		},
 	}
 	p3converted := ResultToProto3(sqlResult)
 	if !proto.Equal(p3converted, p3Result) {
@@ -125,13 +111,6 @@ func TestResults(t *testing.T) {
 			TestValue(Int64, "1"),
 			TestValue(Float64, "2"),
 		}},
-		Extras: &querypb.ResultExtras{
-			EventToken: &querypb.EventToken{
-				Timestamp: 123,
-				Shard:     "shard0",
-				Position:  "position0",
-			},
-		},
 	}, {
 		Fields:       fields2,
 		InsertID:     3,
@@ -141,13 +120,6 @@ func TestResults(t *testing.T) {
 			TestValue(Int64, "3"),
 			TestValue(Float64, "4"),
 		}},
-		Extras: &querypb.ResultExtras{
-			EventToken: &querypb.EventToken{
-				Timestamp: 123,
-				Shard:     "shard1",
-				Position:  "position1",
-			},
-		},
 	}}
 	p3Results := []*querypb.QueryResult{{
 		Fields:       fields1,
@@ -157,13 +129,6 @@ func TestResults(t *testing.T) {
 			Lengths: []int64{2, 1, 1},
 			Values:  []byte("aa12"),
 		}},
-		Extras: &querypb.ResultExtras{
-			EventToken: &querypb.EventToken{
-				Timestamp: 123,
-				Shard:     "shard0",
-				Position:  "position0",
-			},
-		},
 	}, {
 		Fields:       fields2,
 		InsertId:     3,
@@ -172,13 +137,6 @@ func TestResults(t *testing.T) {
 			Lengths: []int64{2, 1, 1},
 			Values:  []byte("bb34"),
 		}},
-		Extras: &querypb.ResultExtras{
-			EventToken: &querypb.EventToken{
-				Timestamp: 123,
-				Shard:     "shard1",
-				Position:  "position1",
-			},
-		},
 	}}
 	p3converted := ResultsToProto3(sqlResults)
 	if !Proto3ResultsEqual(p3converted, p3Results) {
@@ -224,13 +182,6 @@ func TestQueryReponses(t *testing.T) {
 					TestValue(Int64, "1"),
 					TestValue(Float64, "2"),
 				}},
-				Extras: &querypb.ResultExtras{
-					EventToken: &querypb.EventToken{
-						Timestamp: 123,
-						Shard:     "shard0",
-						Position:  "position0",
-					},
-				},
 			},
 			QueryError: nil,
 		}, {
@@ -243,13 +194,6 @@ func TestQueryReponses(t *testing.T) {
 					TestValue(Int64, "3"),
 					TestValue(Float64, "4"),
 				}},
-				Extras: &querypb.ResultExtras{
-					EventToken: &querypb.EventToken{
-						Timestamp: 123,
-						Shard:     "shard1",
-						Position:  "position1",
-					},
-				},
 			},
 			QueryError: nil,
 		}, {
@@ -269,13 +213,6 @@ func TestQueryReponses(t *testing.T) {
 					Lengths: []int64{2, 1, 1},
 					Values:  []byte("aa12"),
 				}},
-				Extras: &querypb.ResultExtras{
-					EventToken: &querypb.EventToken{
-						Timestamp: 123,
-						Shard:     "shard0",
-						Position:  "position0",
-					},
-				},
 			},
 		}, {
 			Error: nil,
@@ -287,13 +224,6 @@ func TestQueryReponses(t *testing.T) {
 					Lengths: []int64{2, 1, 1},
 					Values:  []byte("bb34"),
 				}},
-				Extras: &querypb.ResultExtras{
-					EventToken: &querypb.EventToken{
-						Timestamp: 123,
-						Shard:     "shard1",
-						Position:  "position1",
-					},
-				},
 			},
 		}, {
 			Error: &vtrpcpb.RPCError{

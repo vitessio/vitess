@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -106,9 +107,7 @@ func TestRows(t *testing.T) {
 	}
 	gotRow := make([]driver.Value, len(wantRow))
 	err := ri.Next(gotRow)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !reflect.DeepEqual(gotRow, wantRow) {
 		t.Errorf("row1: %#v, want %#v type: %T", gotRow, wantRow, wantRow[3])
 		logMismatchedTypes(t, gotRow, wantRow)
@@ -122,9 +121,7 @@ func TestRows(t *testing.T) {
 		uint64(18446744073709551615),
 	}
 	err = ri.Next(gotRow)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !reflect.DeepEqual(gotRow, wantRow) {
 		t.Errorf("row1: %v, want %v", gotRow, wantRow)
 		logMismatchedTypes(t, gotRow, wantRow)

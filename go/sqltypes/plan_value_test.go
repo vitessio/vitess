@@ -17,10 +17,12 @@ limitations under the License.
 package sqltypes
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -86,7 +88,7 @@ func TestResolveRows(t *testing.T) {
 		"intstr": TestBindVariable([]interface{}{10, "aa"}),
 	}
 	intValue := MakeTrusted(Int64, []byte("10"))
-	strValue := MakeTrusted(VarChar, []byte("aa"))
+	strValue := MakeTrusted(VarBinary, []byte("aa"))
 	tcases := []struct {
 		in  []PlanValue
 		out [][]Value
@@ -187,34 +189,30 @@ func TestResolveRows(t *testing.T) {
 		in: []PlanValue{
 			{Key: "absent"},
 		},
-		err: "missing bind var",
+		err: "missing bind var absent",
 	}, {
 		in: []PlanValue{
 			{ListKey: "absent"},
 		},
-		err: "missing bind var",
+		err: "missing bind var absent",
 	}, {
 		in: []PlanValue{
 			{Values: []PlanValue{{Key: "absent"}}},
 		},
-		err: "missing bind var",
+		err: "missing bind var absent",
 	}}
 
 	for _, tc := range tcases {
-		got, err := ResolveRows(tc.in, testBindVars)
-		if err != nil {
-			if !strings.Contains(err.Error(), tc.err) {
-				t.Errorf("ResolveRows(%v) error: %v, want '%s'", tc.in, err, tc.err)
+		t.Run(fmt.Sprintf("%v", tc.in), func(t *testing.T) {
+			got, err := ResolveRows(tc.in, testBindVars)
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+			} else {
+				if !reflect.DeepEqual(got, tc.out) {
+					t.Errorf("ResolveRows(%v): %v, want %v", tc.in, got, tc.out)
+				}
 			}
-			continue
-		}
-		if tc.err != "" {
-			t.Errorf("ResolveRows(%v) error: nil, want '%s'", tc.in, tc.err)
-			continue
-		}
-		if !reflect.DeepEqual(got, tc.out) {
-			t.Errorf("ResolveRows(%v): %v, want %v", tc.in, got, tc.out)
-		}
+		})
 	}
 }
 
@@ -224,7 +222,7 @@ func TestResolveList(t *testing.T) {
 		"intstr": TestBindVariable([]interface{}{10, "aa"}),
 	}
 	intValue := MakeTrusted(Int64, []byte("10"))
-	strValue := MakeTrusted(VarChar, []byte("aa"))
+	strValue := MakeTrusted(VarBinary, []byte("aa"))
 	tcases := []struct {
 		in  PlanValue
 		out []Value
@@ -240,33 +238,29 @@ func TestResolveList(t *testing.T) {
 		out: []Value{intValue, strValue},
 	}, {
 		in:  PlanValue{ListKey: "absent"},
-		err: "missing bind var",
+		err: "missing bind var absent",
 	}, {
 		in:  PlanValue{Values: []PlanValue{{Key: "absent"}, {Value: strValue}}},
-		err: "missing bind var",
+		err: "missing bind var absent",
 	}, {
 		in:  PlanValue{ListKey: "int"},
-		err: "single value was supplied for TUPLE bind var",
+		err: "single value was supplied for TUPLE bind var int",
 	}, {
 		in:  PlanValue{Key: "int"},
 		err: "a single value was supplied where a list was expected",
 	}}
 
 	for _, tc := range tcases {
-		got, err := tc.in.ResolveList(testBindVars)
-		if err != nil {
-			if !strings.Contains(err.Error(), tc.err) {
-				t.Errorf("ResolveList(%v) error: %v, want '%s'", tc.in, err, tc.err)
+		t.Run(fmt.Sprintf("%v", tc.in), func(t *testing.T) {
+			got, err := tc.in.ResolveList(testBindVars)
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+			} else {
+				if !reflect.DeepEqual(got, tc.out) {
+					t.Errorf("ResolveList(%v): %v, want %v", tc.in, got, tc.out)
+				}
 			}
-			continue
-		}
-		if tc.err != "" {
-			t.Errorf("ResolveList(%v) error: nil, want '%s'", tc.in, tc.err)
-			continue
-		}
-		if !reflect.DeepEqual(got, tc.out) {
-			t.Errorf("ResolveList(%v): %v, want %v", tc.in, got, tc.out)
-		}
+		})
 	}
 }
 

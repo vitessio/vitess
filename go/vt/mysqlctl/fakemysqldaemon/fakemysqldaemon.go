@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -105,8 +104,11 @@ type FakeMysqlDaemon struct {
 	// same it returns nil, if different it returns an error
 	WaitMasterPosition mysql.Position
 
-	// PromoteSlaveResult is returned by PromoteSlave
-	PromoteSlaveResult mysql.Position
+	// PromoteResult is returned by Promote
+	PromoteResult mysql.Position
+
+	// PromoteError is used by Promote
+	PromoteError error
 
 	// SchemaFunc provides the return value for GetSchema.
 	// If not defined, the "Schema" field will be used instead, see below.
@@ -163,7 +165,7 @@ func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 	}
 	if db != nil {
 		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", 5, time.Minute, 0)
-		result.appPool.Open(db.ConnParams(), stats.NewTimings("", "", ""))
+		result.appPool.Open(db.ConnParams())
 	}
 	return result
 }
@@ -349,9 +351,12 @@ func (fmd *FakeMysqlDaemon) WaitMasterPos(_ context.Context, pos mysql.Position)
 	return fmt.Errorf("wrong input for WaitMasterPos: expected %v got %v", fmd.WaitMasterPosition, pos)
 }
 
-// PromoteSlave is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) PromoteSlave(hookExtraEnv map[string]string) (mysql.Position, error) {
-	return fmd.PromoteSlaveResult, nil
+// Promote is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) Promote(hookExtraEnv map[string]string) (mysql.Position, error) {
+	if fmd.PromoteError != nil {
+		return mysql.Position{}, fmd.PromoteError
+	}
+	return fmd.PromoteResult, nil
 }
 
 // ExecuteSuperQueryList is part of the MysqlDaemon interface
@@ -473,18 +478,18 @@ func (fmd *FakeMysqlDaemon) GetAppConnection(ctx context.Context) (*dbconnpool.P
 
 // GetDbaConnection is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetDbaConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(fmd.db.ConnParams(), stats.NewTimings("", "", ""))
+	return dbconnpool.NewDBConnection(context.Background(), fmd.db.ConnParams())
 }
 
 // GetAllPrivsConnection is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetAllPrivsConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(fmd.db.ConnParams(), stats.NewTimings("", "", ""))
+	return dbconnpool.NewDBConnection(context.Background(), fmd.db.ConnParams())
 }
 
 // SetSemiSyncEnabled is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SetSemiSyncEnabled(master, slave bool) error {
+func (fmd *FakeMysqlDaemon) SetSemiSyncEnabled(master, replica bool) error {
 	fmd.SemiSyncMasterEnabled = master
-	fmd.SemiSyncSlaveEnabled = slave
+	fmd.SemiSyncSlaveEnabled = replica
 	return nil
 }
 

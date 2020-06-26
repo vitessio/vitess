@@ -47,9 +47,7 @@ func TestMySQLProtocolExecute(t *testing.T) {
 	defer c.Close()
 
 	qr, err := c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !reflect.DeepEqual(sandboxconn.SingleRowResult, qr) {
 		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
 	}
@@ -74,14 +72,10 @@ func TestMySQLProtocolStreamExecute(t *testing.T) {
 	defer c.Close()
 
 	_, err = c.ExecuteFetch("set workload='olap'", 1, true /* wantfields */)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	qr, err := c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !reflect.DeepEqual(sandboxconn.SingleRowResult, qr) {
 		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
 	}
@@ -124,7 +118,7 @@ func TestMySQLProtocolExecuteUseStatement(t *testing.T) {
 	// No such keyspace this will fail
 	_, err = c.ExecuteFetch("use InvalidKeyspace", 0, false)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid keyspace provided: InvalidKeyspace")
+	assert.Contains(t, err.Error(), "Unknown database 'InvalidKeyspace' (errno 1049) (sqlstate 42000)")
 
 	// That doesn't reset the vitess_target
 	qr, err = c.ExecuteFetch("show vitess_target", 1, false)
@@ -141,18 +135,8 @@ func TestMySQLProtocolExecuteUseStatement(t *testing.T) {
 }
 
 func TestMysqlProtocolInvalidDB(t *testing.T) {
-	c, err := mysqlConnect(&mysql.ConnParams{DbName: "invalidDB"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer c.Close()
-
-	_, err = c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
-	c.Close()
-	want := "vtgate: : keyspace invalidDB not found in vschema (errno 1105) (sqlstate HY000) during query: select id from t1"
-	if err == nil || err.Error() != want {
-		t.Errorf("exec with db:\n%v, want\n%s", err, want)
-	}
+	_, err := mysqlConnect(&mysql.ConnParams{DbName: "invalidDB"})
+	require.EqualError(t, err, "vtgate: : Unknown database 'invalidDB' (errno 1049) (sqlstate 42000) (errno 1049) (sqlstate 42000)")
 }
 
 func TestMySQLProtocolClientFoundRows(t *testing.T) {
@@ -167,9 +151,7 @@ func TestMySQLProtocolClientFoundRows(t *testing.T) {
 	defer c.Close()
 
 	qr, err := c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !reflect.DeepEqual(sandboxconn.SingleRowResult, qr) {
 		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
 	}

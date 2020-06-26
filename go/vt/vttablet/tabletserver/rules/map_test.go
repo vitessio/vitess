@@ -174,7 +174,7 @@ func TestMapFilterByPlan(t *testing.T) {
 	qri.SetRules(customQueryRules, otherRules)
 
 	// Test filter by blacklist rule
-	qrs = qri.FilterByPlan("select * from bannedtable2", planbuilder.PlanPassSelect, "bannedtable2")
+	qrs = qri.FilterByPlan("select * from bannedtable2", planbuilder.PlanSelect, "bannedtable2")
 	if l := len(qrs.rules); l != 1 {
 		t.Errorf("Select from bannedtable matches %d rules, but we expect %d", l, 1)
 	}
@@ -183,7 +183,7 @@ func TestMapFilterByPlan(t *testing.T) {
 	}
 
 	// Test filter by custom rule
-	qrs = qri.FilterByPlan("select cid from t_customer limit 10", planbuilder.PlanPassSelect, "t_customer")
+	qrs = qri.FilterByPlan("select cid from t_customer limit 10", planbuilder.PlanSelect, "t_customer")
 	if l := len(qrs.rules); l != 1 {
 		t.Errorf("Select from t_customer matches %d rules, but we expect %d", l, 1)
 	}
@@ -197,7 +197,7 @@ func TestMapFilterByPlan(t *testing.T) {
 	qr.AddBindVarCond("bindvar1", true, false, QRNoOp, nil)
 	otherRules.Add(qr)
 	qri.SetRules(customQueryRules, otherRules)
-	qrs = qri.FilterByPlan("select * from bannedtable2", planbuilder.PlanPassSelect, "bannedtable2")
+	qrs = qri.FilterByPlan("select * from bannedtable2", planbuilder.PlanSelect, "bannedtable2")
 	if l := len(qrs.rules); l != 2 {
 		t.Errorf("Insert into bannedtable2 matches %d rules: %v, but we expect %d rules to be matched", l, qrs.rules, 2)
 	}

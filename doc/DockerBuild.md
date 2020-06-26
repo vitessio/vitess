@@ -1,4 +1,4 @@
-By default, the [Kubernetes configs](https://github.com/vitessio/vitess/tree/master/examples/kubernetes)
+By default, the [Helm Charts](https://github.com/vitessio/vitess/tree/master/helm)
 point to the `vitess/lite` image on [Docker Hub](https://hub.docker.com/u/vitess/).
 
 We created the `lite` image as a stripped down version of our main image `base` such that Kubernetes pods can start faster.
@@ -81,19 +81,5 @@ Then you can run our build script for the `lite` image which extracts the Vitess
     **Note:** If you chose a non-default flavor above, then change `vitess/lite` in
     the above command to `vitess/lite:<flavor>`.
 
-1.  Change the Kubernetes configs to point to your personal repository:
 
-    ```sh
-    vitess/examples/kubernetes$ sed -i -e 's,image: vitess/lite,image: yourname/vitess:latest,' *.yaml
-    ```
-
-    Adding the `:latest` label at the end of the image name tells Kubernetes
-    to check for a newer image every time a pod is launched.
-    When you push a new version of your image, any new pods will use it
-    automatically without you having to clear the Kubernetes image cache.
-
-    Once you've stabilized your image, you'll probably want to replace `:latest`
-    with a specific label that you change each time you make a new build,
-    so you can control when pods update.
-
-1.  Launch [Vitess on Kubernetes]({% link getting-started/index.md %}) as usual.
+1.  Launch [Vitess on Kubernetes](https://vitess.io/docs/get-started/index.html) as usual.

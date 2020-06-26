@@ -247,7 +247,7 @@ func TestIsFunctions(t *testing.T) {
 	if !IsBinary(Binary) {
 		t.Error("Char: !IsBinary, must be true")
 	}
-	if !isNumber(Int64) {
+	if !IsNumber(Int64) {
 		t.Error("Int64: !isNumber, must be true")
 	}
 }

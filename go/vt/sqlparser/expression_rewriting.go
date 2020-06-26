@@ -17,6 +17,8 @@ limitations under the License.
 package sqlparser
 
 import (
+	"strings"
+
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -24,49 +26,110 @@ import (
 )
 
 // PrepareAST will normalize the query
-func PrepareAST(in Statement, bindVars map[string]*querypb.BindVariable, prefix string) (*RewriteASTResult, error) {
-	Normalize(in, bindVars, prefix)
+func PrepareAST(in Statement, bindVars map[string]*querypb.BindVariable, prefix string, parameterize bool) (*RewriteASTResult, error) {
+	if parameterize {
+		Normalize(in, bindVars, prefix)
+	}
 	return RewriteAST(in)
+}
+
+// BindVarNeeds represents the bind vars that need to be provided as the result of expression rewriting.
+type BindVarNeeds struct {
+	NeedLastInsertID         bool
+	NeedDatabase             bool
+	NeedFoundRows            bool
+	NeedUserDefinedVariables []string
 }
 
 // RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries
 func RewriteAST(in Statement) (*RewriteASTResult, error) {
-	er := new(expressionRewriter)
-	Rewrite(in, er.goingDown, nil)
+	er := newExpressionRewriter()
+	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
+	setRewriter := &setNormalizer{}
+	out, ok := Rewrite(in, er.goingDown, setRewriter.rewriteSetComingUp).(Statement)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "statement rewriting returned a non statement: %s", String(out))
+	}
+	if setRewriter.err != nil {
+		return nil, setRewriter.err
+	}
 
-	return &RewriteASTResult{
-		AST:              in,
-		NeedLastInsertID: er.lastInsertID,
-		NeedDatabase:     er.database,
-	}, nil
+	r := &RewriteASTResult{
+		AST: out,
+	}
+	for k := range er.bindVars {
+		switch k {
+		case LastInsertIDName:
+			r.NeedLastInsertID = true
+		case DBVarName:
+			r.NeedDatabase = true
+		case FoundRowsName:
+			r.NeedFoundRows = true
+		default:
+			r.NeedUserDefinedVariables = append(r.NeedUserDefinedVariables, k)
+		}
+	}
+	return r, nil
+}
+
+func shouldRewriteDatabaseFunc(in Statement) bool {
+	selct, ok := in.(*Select)
+	if !ok {
+		return false
+	}
+	if len(selct.From) != 1 {
+		return false
+	}
+	aliasedTable, ok := selct.From[0].(*AliasedTableExpr)
+	if !ok {
+		return false
+	}
+	tableName, ok := aliasedTable.Expr.(TableName)
+	if !ok {
+		return false
+	}
+	return tableName.Name.String() == "dual"
 }
 
 // RewriteASTResult contains the rewritten ast and meta information about it
 type RewriteASTResult struct {
-	AST              Statement
-	NeedLastInsertID bool
-	NeedDatabase     bool
+	BindVarNeeds
+	AST Statement // The rewritten AST
 }
 
 type expressionRewriter struct {
-	lastInsertID, database bool
-	err                    error
+	bindVars                  map[string]struct{}
+	shouldRewriteDatabaseFunc bool
+	err                       error
+}
+
+func newExpressionRewriter() *expressionRewriter {
+	return &expressionRewriter{bindVars: make(map[string]struct{})}
 }
 
 const (
 	//LastInsertIDName is a reserved bind var name for last_insert_id()
 	LastInsertIDName = "__lastInsertId"
+
 	//DBVarName is a reserved bind var name for database()
 	DBVarName = "__vtdbname"
+
+	//FoundRowsName is a reserved bind var name for found_rows()
+	FoundRowsName = "__vtfrows"
+
+	//UserDefinedVariableName is what we prepend bind var names for user defined variables
+	UserDefinedVariableName = "__vtudv"
 )
 
 func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 	switch node := cursor.Node().(type) {
+	// select last_insert_id() -> select :__lastInsertId as `last_insert_id()`
 	case *AliasedExpr:
 		if node.As.IsEmpty() {
 			buf := NewTrackedBuffer(nil)
 			node.Expr.Format(buf)
-			inner := new(expressionRewriter)
+			inner := newExpressionRewriter()
+			inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
 			tmp := Rewrite(node.Expr, inner.goingDown, nil)
 			newExpr, ok := tmp.(Expr)
 			if !ok {
@@ -74,37 +137,66 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 				return false
 			}
 			node.Expr = newExpr
-			er.database = er.database || inner.database
-			er.lastInsertID = er.lastInsertID || inner.lastInsertID
 			if inner.didAnythingChange() {
 				node.As = NewColIdent(buf.String())
 			}
+			for k := range inner.bindVars {
+				er.needBindVarFor(k)
+			}
 			return false
 		}
-
 	case *FuncExpr:
-		switch {
-		case node.Name.EqualString("last_insert_id"):
-			if len(node.Exprs) > 0 {
-				er.err = vterrors.New(vtrpc.Code_UNIMPLEMENTED, "Argument to LAST_INSERT_ID() not supported")
-			} else {
-				cursor.Replace(bindVarExpression(LastInsertIDName))
-				er.lastInsertID = true
-			}
-		case node.Name.EqualString("database"):
-			if len(node.Exprs) > 0 {
-				er.err = vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Syntax error. DATABASE() takes no arguments")
-			} else {
-				cursor.Replace(bindVarExpression(DBVarName))
-				er.database = true
-			}
+		er.funcRewrite(cursor, node)
+	case *ColName:
+		if node.Name.at == SingleAt {
+			udv := strings.ToLower(node.Name.CompliantName())
+			cursor.Replace(bindVarExpression(UserDefinedVariableName + udv))
+			er.needBindVarFor(udv)
 		}
 	}
 	return true
 }
 
+func (er *expressionRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
+	switch {
+	// last_insert_id() -> :__lastInsertId
+	case node.Name.EqualString("last_insert_id"):
+		if len(node.Exprs) > 0 { //last_insert_id(x)
+			er.err = vterrors.New(vtrpc.Code_UNIMPLEMENTED, "Argument to LAST_INSERT_ID() not supported")
+		} else {
+			cursor.Replace(bindVarExpression(LastInsertIDName))
+			er.needBindVarFor(LastInsertIDName)
+		}
+	// database() -> :__vtdbname
+	case er.shouldRewriteDatabaseFunc &&
+		(node.Name.EqualString("database") ||
+			node.Name.EqualString("schema")):
+		if len(node.Exprs) > 0 {
+			er.err = vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Syntax error. %s() takes no arguments", node.Name.String())
+		} else {
+			cursor.Replace(bindVarExpression(DBVarName))
+			er.needBindVarFor(DBVarName)
+		}
+	// found_rows() -> :__vtfrows
+	case node.Name.EqualString("found_rows"):
+		if len(node.Exprs) > 0 {
+			er.err = vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Arguments to FOUND_ROWS() not supported")
+		} else {
+			cursor.Replace(bindVarExpression(FoundRowsName))
+			er.needBindVarFor(FoundRowsName)
+		}
+	}
+}
+
+// instead of creating new objects, we'll reuse this one
+var token = struct{}{}
+
+func (er *expressionRewriter) needBindVarFor(name string) {
+	er.bindVars[name] = token
+}
+
 func (er *expressionRewriter) didAnythingChange() bool {
-	return er.database || er.lastInsertID
+	return len(er.bindVars) > 0
 }
 
 func bindVarExpression(name string) *SQLVal {

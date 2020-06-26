@@ -15,6 +15,7 @@ These tests almost always launch a topology service, a few mysqld instances, a f
 All the end to end test are placed under path go/test/endtoend. 
 The main purpose of grouping them together is to make sure we have single place for reference and to combine similar test to run them in the same cluster and save test running time.  
 
+
 ### Setup
 All the tests should be launching a real cluster just like the production setup and execute the tests on that setup followed by a teardown of all the services.
 
@@ -31,22 +32,13 @@ In general the cluster is build in following order
 
 A good example to refer will be  go/test/endtoend/clustertest
 
-## Progress
-So far we have converted the following Python end to end test cases
-- Keyspace tests
-- mysqlctl tests
-- sharded tests
-- tabletmanager tests
-- vtgate v3 tests
-- Inital sharding
-- resharding
-- vsplit
-- reparent
+### Pre-Requisite 
+Make sure you have vitess binary available in bin folder. If not, then you can run `./bootstrap.sh` follow by `make build` & `source build.env`.
+
+To make it easier to re-run test please add following to you bash profile. 
  
-### In-progress 
-- Backup
-- Encryption
-
-After a Python test is migrated in Go it will be removed from end to end ci test run by updating the shard value to 5 in `test/config.json`
-
-    
+```
+export VTROOT=/<vitess path>/vitess
+export VTDATAROOT=${VTROOT}/vtdataroot
+export PATH=${VTROOT}/bin:${PATH}
+```

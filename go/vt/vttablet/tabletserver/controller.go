@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	"time"
 
@@ -35,8 +36,15 @@ import (
 type Controller interface {
 	// Register registers this query service with the RPC layer.
 	Register()
-	// AddStatusPart adds the status part to the status page
+
+	// AddStatusHeader adds the header part to the status page.
+	AddStatusHeader()
+
+	// AddStatusHeader adds the status part to the status page
 	AddStatusPart()
+
+	// Stats returns stats vars.
+	Stats() *tabletenv.Stats
 
 	// InitDBConfig sets up the db config vars.
 	InitDBConfig(querypb.Target, *dbconfigs.DBConfigs) error

@@ -29,7 +29,8 @@ import (
 )
 
 // buildInsertPlan builds the route for an INSERT statement.
-func buildInsertPlan(ins *sqlparser.Insert, vschema ContextVSchema) (engine.Primitive, error) {
+func buildInsertPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+	ins := stmt.(*sqlparser.Insert)
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(ins)))
 	exprs := sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}}
 	ro, err := pb.processDMLTable(exprs)
@@ -170,10 +171,9 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 	for _, colVindex := range eins.Table.ColumnVindexes {
 		for _, col := range colVindex.Columns {
 			colNum := findOrAddColumn(ins, col)
-			// swap bind variables
-			baseName := ":_" + col.CompliantName()
 			for rowNum, row := range rows {
-				row[colNum] = sqlparser.NewValArg([]byte(baseName + strconv.Itoa(rowNum)))
+				name := ":" + engine.InsertVarName(col, rowNum)
+				row[colNum] = sqlparser.NewValArg([]byte(name))
 			}
 		}
 	}

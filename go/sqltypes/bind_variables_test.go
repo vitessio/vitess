@@ -17,11 +17,15 @@ limitations under the License.
 package sqltypes
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -86,7 +90,7 @@ func TestBuildBindVariable(t *testing.T) {
 	}{{
 		in: "aa",
 		out: &querypb.BindVariable{
-			Type:  querypb.Type_VARCHAR,
+			Type:  querypb.Type_VARBINARY,
 			Value: []byte("aa"),
 		},
 	}, {
@@ -154,7 +158,7 @@ func TestBuildBindVariable(t *testing.T) {
 		out: &querypb.BindVariable{
 			Type: querypb.Type_TUPLE,
 			Values: []*querypb.Value{{
-				Type:  querypb.Type_VARCHAR,
+				Type:  querypb.Type_VARBINARY,
 				Value: []byte("aa"),
 			}, {
 				Type:  querypb.Type_INT64,
@@ -166,10 +170,10 @@ func TestBuildBindVariable(t *testing.T) {
 		out: &querypb.BindVariable{
 			Type: querypb.Type_TUPLE,
 			Values: []*querypb.Value{{
-				Type:  querypb.Type_VARCHAR,
+				Type:  querypb.Type_VARBINARY,
 				Value: []byte("aa"),
 			}, {
-				Type:  querypb.Type_VARCHAR,
+				Type:  querypb.Type_VARBINARY,
 				Value: []byte("bb"),
 			}},
 		},
@@ -241,20 +245,14 @@ func TestBuildBindVariable(t *testing.T) {
 		err: "type uint8 not supported as bind var: 1",
 	}}
 	for _, tcase := range tcases {
-		bv, err := BuildBindVariable(tcase.in)
-		if err != nil {
-			if err.Error() != tcase.err {
-				t.Errorf("ToBindVar(%T(%v)) error: %v, want %s", tcase.in, tcase.in, err, tcase.err)
+		t.Run(fmt.Sprintf("%v", tcase.in), func(t *testing.T) {
+			bv, err := BuildBindVariable(tcase.in)
+			if tcase.err != "" {
+				require.EqualError(t, err, tcase.err)
+			} else {
+				utils.MustMatch(t, tcase.out, bv, "binvar output did not match")
 			}
-			continue
-		}
-		if tcase.err != "" {
-			t.Errorf("ToBindVar(%T(%v)) error: nil, want %s", tcase.in, tcase.in, tcase.err)
-			continue
-		}
-		if !proto.Equal(bv, tcase.out) {
-			t.Errorf("ToBindVar(%T(%v)): %v, want %s", tcase.in, tcase.in, bv, tcase.out)
-		}
+		})
 	}
 }
 
@@ -524,9 +522,7 @@ func TestValidateBindVariable(t *testing.T) {
 
 func TestBindVariableToValue(t *testing.T) {
 	v, err := BindVariableToValue(Int64BindVariable(1))
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := MakeTrusted(querypb.Type_INT64, []byte("1"))
 	if !reflect.DeepEqual(v, want) {
 		t.Errorf("BindVarToValue(1): %v, want %v", v, want)
@@ -613,7 +609,7 @@ func TestBindVariablesFormat(t *testing.T) {
 
 	formattedStr = FormatBindVariables(bindVariables, true /* full */, true /* asJSON */)
 	t.Logf("%q", formattedStr)
-	if !strings.Contains(formattedStr, "\"key_1\": {\"type\": \"VARCHAR\", \"value\": \"val_1\"}") {
+	if !strings.Contains(formattedStr, "\"key_1\": {\"type\": \"VARBINARY\", \"value\": \"val_1\"}") {
 		t.Fatalf("bind variable 'key_1' is not formatted")
 	}
 
@@ -630,7 +626,7 @@ func TestBindVariablesFormat(t *testing.T) {
 	}
 
 	formattedStr = FormatBindVariables(bindVariables, false /* full */, true /* asJSON */)
-	if !strings.Contains(formattedStr, "\"key_1\": {\"type\": \"VARCHAR\", \"value\": \"5 bytes\"}") {
+	if !strings.Contains(formattedStr, "\"key_1\": {\"type\": \"VARBINARY\", \"value\": \"5 bytes\"}") {
 		t.Fatalf("bind variable 'key_1' is not formatted")
 	}
 
@@ -638,11 +634,11 @@ func TestBindVariablesFormat(t *testing.T) {
 		t.Fatalf("bind variable 'key_2' is not formatted")
 	}
 
-	if !strings.Contains(formattedStr, "\"key_3\": {\"type\": \"VARCHAR\", \"value\": \"5 bytes\"}") {
+	if !strings.Contains(formattedStr, "\"key_3\": {\"type\": \"VARBINARY\", \"value\": \"5 bytes\"}") {
 		t.Fatalf("bind variable 'key_3' is not formatted")
 	}
 
-	if !strings.Contains(formattedStr, "\"key_4\": {\"type\": \"VARCHAR\", \"value\": \"2 items\"}") {
+	if !strings.Contains(formattedStr, "\"key_4\": {\"type\": \"VARBINARY\", \"value\": \"2 items\"}") {
 		t.Fatalf("bind variable 'key_4' is not formatted")
 	}
 }

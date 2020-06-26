@@ -30,7 +30,7 @@ func RemoveUnhealthyTablets(tabletStatsList []TabletStats) []TabletStats {
 		// source and destination, and the source is not serving (disabled by
 		// TabletControl). When we switch the tablet to 'worker', it will
 		// go back to serving state.
-		if ts.Stats == nil || ts.Stats.HealthError != "" || IsReplicationLagHigh(&ts) {
+		if ts.Stats == nil || ts.Stats.HealthError != "" || ts.LastError != nil || IsReplicationLagHigh(&ts) {
 			continue
 		}
 		result = append(result, ts)

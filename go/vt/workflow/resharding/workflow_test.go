@@ -197,7 +197,7 @@ func splitCloneCommand(keyspace string, useConsistentSnapshot bool, excludeTable
 	return args
 }
 
-func splitDiffCommand(keyspace string, shardId string, useConsistentSnapshot bool, excludeTables, splitDiffCommand string) []string {
+func splitDiffCommand(keyspace string, shardID string, useConsistentSnapshot bool, excludeTables, splitDiffCommand string) []string {
 	args := []string{splitDiffCommand}
 	if useConsistentSnapshot {
 		args = append(args, "--use_consistent_snapshot")
@@ -208,9 +208,9 @@ func splitDiffCommand(keyspace string, shardId string, useConsistentSnapshot boo
 
 	switch splitDiffCommand {
 	case "SplitDiff":
-		args = append(args, "--min_healthy_rdonly_tablets=1", "--dest_tablet_type=RDONLY", keyspace+"/"+shardId)
+		args = append(args, "--min_healthy_rdonly_tablets=1", "--dest_tablet_type=RDONLY", keyspace+"/"+shardID)
 	case "MultiSplitDiff":
-		args = append(args, "--min_healthy_tablets=1", "--tablet_type=RDONLY", keyspace+"/"+shardId)
+		args = append(args, "--min_healthy_tablets=1", "--tablet_type=RDONLY", keyspace+"/"+shardID)
 	}
 
 	return args
@@ -219,8 +219,8 @@ func splitDiffCommand(keyspace string, shardId string, useConsistentSnapshot boo
 func setupMockWrangler(ctrl *gomock.Controller, keyspace string) *MockReshardingWrangler {
 	mockWranglerInterface := NewMockReshardingWrangler(ctrl)
 	// Set the expected behaviors for mock wrangler.
-	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(gomock.Any(), nil /* tableArray*/, gomock.Any() /* excludeTableArray */, true /*includeViews*/, keyspace, "0", keyspace, "-80", wrangler.DefaultWaitSlaveTimeout).Return(nil)
-	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(gomock.Any(), nil /* tableArray*/, gomock.Any() /* excludeTableArray */, true /*includeViews*/, keyspace, "0", keyspace, "80-", wrangler.DefaultWaitSlaveTimeout).Return(nil)
+	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(gomock.Any(), nil /* tableArray*/, gomock.Any() /* excludeTableArray */, true /*includeViews*/, keyspace, "0", keyspace, "-80", wrangler.DefaultWaitSlaveTimeout, false).Return(nil)
+	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(gomock.Any(), nil /* tableArray*/, gomock.Any() /* excludeTableArray */, true /*includeViews*/, keyspace, "0", keyspace, "80-", wrangler.DefaultWaitSlaveTimeout, false).Return(nil)
 
 	mockWranglerInterface.EXPECT().WaitForFilteredReplication(gomock.Any(), keyspace, "-80", wrangler.DefaultWaitForFilteredReplicationMaxDelay).Return(nil)
 	mockWranglerInterface.EXPECT().WaitForFilteredReplication(gomock.Any(), keyspace, "80-", wrangler.DefaultWaitForFilteredReplicationMaxDelay).Return(nil)

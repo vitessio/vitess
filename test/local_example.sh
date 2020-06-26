@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2019 The Vitess Authors.
+# Copyright 2020 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,25 +23,41 @@ source build.env
 set -xe
 
 cd "$VTROOT/examples/local"
-
 unset VTROOT # ensure that the examples can run without VTROOT now.
+
+source ./env.sh # Required so that "mysql" works from alias
 
 ./101_initial_cluster.sh
 
-mysql -h 127.0.0.1 -P 15306 < ../common/insert_commerce_data.sql
-mysql -h 127.0.0.1 -P 15306 --table < ../common/select_commerce_data.sql
-./201_customer_keyspace.sh
-./202_customer_tablets.sh
-./203_vertical_split.sh
-mysql -h 127.0.0.1 -P 15306 --table < ../common/select_customer0_data.sql
+sleep 5 # Give vtgate time to really start.
 
-./204_vertical_migrate_replicas.sh
-./205_vertical_migrate_master.sh
+mysql < ../common/insert_commerce_data.sql
+mysql --table < ../common/select_commerce_data.sql
+
+./201_customer_tablets.sh
+
+for shard in "customer/0"; do
+ while true; do
+  mysql "$shard" -e 'show tables' && break || echo "waiting for shard: $shard!"
+  sleep 1
+ done;
+done;
+
+./202_move_tables.sh
+
+sleep 3 # required for now
+
+./203_switch_reads.sh
+
+./204_switch_writes.sh
+
+mysql --table < ../common/select_customer0_data.sql
 # Expected to fail!
-mysql -h 127.0.0.1 -P 15306 --table < ../common/select_commerce_data.sql || echo "Blacklist working as expected"
-./206_clean_commerce.sh
+mysql --table < ../common/select_commerce_data.sql || echo "Blacklist working as expected"
+./205_clean_commerce.sh
 # Expected to fail!
-mysql -h 127.0.0.1 -P 15306 --table < ../common/select_commerce_data.sql || echo "Tables missing as expected"
+mysql --table < ../common/select_commerce_data.sql || echo "Tables missing as expected"
+
 
 ./301_customer_sharded.sh
 ./302_new_shards.sh
@@ -50,20 +66,20 @@ mysql -h 127.0.0.1 -P 15306 --table < ../common/select_commerce_data.sql || echo
 # TODO: Eliminate this race in the examples' scripts
 for shard in "customer/-80" "customer/80-"; do
  while true; do
-  mysql -h 127.0.0.1 -P 15306 "$shard" -e 'show tables' && break || echo "waiting for shard: $shard!"
+  mysql "$shard" -e 'show tables' && break || echo "waiting for shard: $shard!"
   sleep 1
  done;
 done;
 
-mysql -h 127.0.0.1 -P 15306 --table < ../common/select_customer-80_data.sql
-mysql -h 127.0.0.1 -P 15306 --table < ../common/select_customer80-_data.sql
+./303_reshard.sh
 
-./303_horizontal_split.sh
+sleep 3 # TODO: Required for now!
 
-./304_migrate_replicas.sh
-./305_migrate_master.sh
+./304_switch_reads.sh
+./305_switch_writes.sh
 
-mysql -h 127.0.0.1 -P 15306 --table < ../common/select_customer-80_data.sql
+mysql --table < ../common/select_customer-80_data.sql
+mysql --table < ../common/select_customer80-_data.sql
 
 ./401_teardown.sh
 

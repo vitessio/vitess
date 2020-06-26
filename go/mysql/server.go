@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"crypto/tls"
+	"fmt"
 	"io"
 	"net"
 	"strings"
@@ -55,6 +56,7 @@ var (
 	timings    = stats.NewTimings("MysqlServerTimings", "MySQL server timings", "operation")
 	connCount  = stats.NewGauge("MysqlServerConnCount", "Active MySQL server connections")
 	connAccept = stats.NewCounter("MysqlServerConnAccepted", "Connections accepted by MySQL server")
+	connRefuse = stats.NewCounter("MysqlServerConnRefused", "Connections refused by MySQL server")
 	connSlow   = stats.NewCounter("MysqlServerConnSlow", "Connections that took more than the configured mysql_slow_connect_warn_threshold to establish")
 
 	connCountByTLSVer = stats.NewGaugesWithSingleLabel("MysqlServerConnCountByTLSVer", "Active MySQL server connections by TLS version", "tls")
@@ -88,10 +90,6 @@ type Handler interface {
 
 	// ConnectionClosed is called when a connection is closed.
 	ConnectionClosed(c *Conn)
-
-	// InitDB is called once at the beginning to set db name,
-	// and subsequently for every ComInitDB event.
-	ComInitDB(c *Conn, schemaName string)
 
 	// ComQuery is called when a connection receives a query.
 	// Note the contents of the query slice may change after
@@ -248,6 +246,7 @@ func (l *Listener) Accept() {
 		conn, err := l.listener.Accept()
 		if err != nil {
 			// Close() was probably called.
+			connRefuse.Add(1)
 			return
 		}
 
@@ -277,9 +276,9 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		if x := recover(); x != nil {
 			log.Errorf("mysql_server caught panic:\n%v\n%s", x, tb.Stack(4))
 		}
-		// We call flush here in case there's a premature return after
+		// We call endWriterBuffering here in case there's a premature return after
 		// startWriterBuffering is called
-		c.flush()
+		c.endWriterBuffering()
 
 		conn.Close()
 	}()
@@ -380,9 +379,8 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		if err != nil {
 			return
 		}
-		//lint:ignore SA4006 This line is required because the binary protocol requires padding with 0
-		data := make([]byte, 21)
-		data = append(salt, byte(0x00))
+		// The binary protocol requires padding with 0
+		data := append(salt, byte(0x00))
 		if err := c.writeAuthSwitchRequest(MysqlNativePassword, data); err != nil {
 			log.Errorf("Error writing auth switch packet for %s: %v", c, err)
 			return
@@ -440,6 +438,17 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		defer connCountPerUser.Add(c.User, -1)
 	}
 
+	// Set initial db name.
+	if c.schemaName != "" {
+		err = l.handler.ComQuery(c, fmt.Sprintf("use `%s`", c.schemaName), func(result *sqltypes.Result) error {
+			return nil
+		})
+		if err != nil {
+			c.writeErrorPacketFromError(err)
+			return
+		}
+	}
+
 	// Negotiation worked, send OK packet.
 	if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
 		log.Errorf("Cannot write OK packet to %s: %v", c, err)
@@ -455,9 +464,6 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		connSlow.Add(1)
 		log.Warningf("Slow connection from %s: %v", c, connectTime)
 	}
-
-	// Set initial db name.
-	l.handler.ComInitDB(c, c.schemaName)
 
 	for {
 		err := c.handleNextCommand(l.handler)

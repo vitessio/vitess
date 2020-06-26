@@ -17,8 +17,11 @@ limitations under the License.
 package engine
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"golang.org/x/net/context"
 
@@ -39,66 +42,101 @@ const (
 	ListVarName = "__vals"
 )
 
-// VCursor defines the interface the engine will use
-// to execute routes.
-type VCursor interface {
-	// Context returns the context of the current request.
-	Context() context.Context
+type (
+	// VCursor defines the interface the engine will use
+	// to execute routes.
+	VCursor interface {
+		// Context returns the context of the current request.
+		Context() context.Context
 
-	// MaxMemoryRows returns the maxMemoryRows flag value.
-	MaxMemoryRows() int
+		// MaxMemoryRows returns the maxMemoryRows flag value.
+		MaxMemoryRows() int
 
-	// SetContextTimeout updates the context and sets a timeout.
-	SetContextTimeout(timeout time.Duration) context.CancelFunc
+		// SetContextTimeout updates the context and sets a timeout.
+		SetContextTimeout(timeout time.Duration) context.CancelFunc
 
-	// RecordWarning stores the given warning in the current session
-	RecordWarning(warning *querypb.QueryWarning)
+		// V3 functions.
+		Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
+		AutocommitApproval() bool
 
-	// V3 functions.
-	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
-	AutocommitApproval() bool
+		// Shard-level functions.
+		ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error)
+		ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error)
+		StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error
 
-	// Shard-level functions.
-	ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, []error)
-	ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error)
-	StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error
+		// Keyspace ID level functions.
+		ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
 
-	// Keyspace ID level functions.
-	ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, isDML, autocommit bool) (*sqltypes.Result, error)
+		// Resolver methods, from key.Destination to srvtopo.ResolvedShard.
+		// Will replace all of the Topo functions.
+		ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error)
 
-	// Resolver methods, from key.Destination to srvtopo.ResolvedShard.
-	// Will replace all of the Topo functions.
-	ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error)
-}
+		ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error
 
-// Plan represents the execution strategy for a given query.
-// For now it's a simple wrapper around the real instructions.
-// An instruction (aka Primitive) is typically a tree where
-// each node does its part by combining the results of the
-// sub-nodes.
-type Plan struct {
-	// Original is the original query.
-	Original string `json:",omitempty"`
-	// Instructions contains the instructions needed to
-	// fulfil the query.
-	Instructions Primitive `json:",omitempty"`
-	// Mutex to protect the stats
-	mu sync.Mutex
-	// Count of times this plan was executed
-	ExecCount uint64 `json:",omitempty"`
-	// Total execution time
-	ExecTime time.Duration `json:",omitempty"`
-	// Total number of shard queries
-	ShardQueries uint64 `json:",omitempty"`
-	// Total number of rows
-	Rows uint64 `json:",omitempty"`
-	// Total number of errors
-	Errors uint64 `json:",omitempty"`
-	// NeedsLastInsertID signals whether this plan will need to be provided with last_insert_id
-	NeedsLastInsertID bool `json:"-"` // don't include in the json representation
-	// NeedsDatabaseName signals whether this plan will need to be provided with the database name
-	NeedsDatabaseName bool `json:"-"` // don't include in the json representation
-}
+		Session() SessionActions
+	}
+
+	//SessionActions gives primitives ability to interact with the session state
+	SessionActions interface {
+		// RecordWarning stores the given warning in the current session
+		RecordWarning(warning *querypb.QueryWarning)
+
+		SetTarget(target string) error
+		SetUDV(key string, value interface{}) error
+	}
+
+	// Plan represents the execution strategy for a given query.
+	// For now it's a simple wrapper around the real instructions.
+	// An instruction (aka Primitive) is typically a tree where
+	// each node does its part by combining the results of the
+	// sub-nodes.
+	Plan struct {
+		Type                   sqlparser.StatementType // The type of query we have
+		Original               string                  // Original is the original query.
+		Instructions           Primitive               // Instructions contains the instructions needed to fulfil the query.
+		sqlparser.BindVarNeeds                         // Stores BindVars needed to be provided as part of expression rewriting
+
+		mu           sync.Mutex    // Mutex to protect the fields below
+		ExecCount    uint64        // Count of times this plan was executed
+		ExecTime     time.Duration // Total execution time
+		ShardQueries uint64        // Total number of shard queries
+		Rows         uint64        // Total number of rows
+		Errors       uint64        // Total number of errors
+	}
+
+	// Match is used to check if a Primitive matches
+	Match func(node Primitive) bool
+
+	// Primitive is the building block of the engine execution plan. They form a tree structure, where the leaves typically
+	// issue queries to one or more vttablet.
+	// During execution, the Primitive's pass Result objects up the tree structure, until reaching the root,
+	// and its result is passed to the client.
+	Primitive interface {
+		RouteType() string
+		GetKeyspaceName() string
+		GetTableName() string
+		Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
+		StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
+		GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
+		NeedsTransaction() bool
+
+		// The inputs to this Primitive
+		Inputs() []Primitive
+
+		// description is the description, sans the inputs, of this Primitive.
+		// to get the plan description with all children, use PrimitiveToPlanDescription()
+		description() PrimitiveDescription
+	}
+
+	// noInputs default implementation for Primitives that are leaves
+	noInputs struct{}
+
+	// noTxNeeded is a default implementation for Primitives that don't need transaction handling
+	noTxNeeded struct{}
+
+	// txNeeded is a default implementation for Primitives that need transaction handling
+	txNeeded struct{}
+)
 
 // AddStats updates the plan execution statistics
 func (p *Plan) AddStats(execCount uint64, execTime time.Duration, shardQueries, rows, errors uint64) {
@@ -122,9 +160,6 @@ func (p *Plan) Stats() (execCount uint64, execTime time.Duration, shardQueries, 
 	p.mu.Unlock()
 	return
 }
-
-// Match is used to check if a Primitive matches
-type Match func(node Primitive) bool
 
 // Find will return the first Primitive that matches the evaluate function. If no match is found, nil will be returned
 func Find(isMatch Match, start Primitive) Primitive {
@@ -152,25 +187,45 @@ func (p *Plan) Size() int {
 	return 1
 }
 
-// Primitive is the building block of the engine execution plan. They form a tree structure, where the leaves typically
-// issue queries to one or more vttablet.
-// During execution, the Primitive's pass Result objects up the tree structure, until reaching the root,
-// and its result is passed to the client.
-type Primitive interface {
-	RouteType() string
-	GetKeyspaceName() string
-	GetTableName() string
-	Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
-	StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
-	GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
+//MarshalJSON serializes the plan into a JSON representation.
+func (p *Plan) MarshalJSON() ([]byte, error) {
+	var instructions *PrimitiveDescription
+	if p.Instructions != nil {
+		description := PrimitiveToPlanDescription(p.Instructions)
+		instructions = &description
+	}
 
-	// The inputs to this Primitive
-	Inputs() []Primitive
+	marshalPlan := struct {
+		QueryType    string
+		Original     string                `json:",omitempty"`
+		Instructions *PrimitiveDescription `json:",omitempty"`
+		ExecCount    uint64                `json:",omitempty"`
+		ExecTime     time.Duration         `json:",omitempty"`
+		ShardQueries uint64                `json:",omitempty"`
+		Rows         uint64                `json:",omitempty"`
+		Errors       uint64                `json:",omitempty"`
+	}{
+		QueryType:    p.Type.String(),
+		Original:     p.Original,
+		Instructions: instructions,
+		ExecCount:    p.ExecCount,
+		ExecTime:     p.ExecTime,
+		ShardQueries: p.ShardQueries,
+		Rows:         p.Rows,
+		Errors:       p.Errors,
+	}
+	return json.Marshal(marshalPlan)
 }
-
-type noInputs struct{}
 
 // Inputs implements no inputs
 func (noInputs) Inputs() []Primitive {
 	return nil
+}
+
+func (noTxNeeded) NeedsTransaction() bool {
+	return false
+}
+
+func (txNeeded) NeedsTransaction() bool {
+	return true
 }

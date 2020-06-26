@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
@@ -58,9 +59,7 @@ func TestHashMap(t *testing.T) {
 		sqltypes.NewUint64(9223372036854775807),  // 2^63 - 1
 		sqltypes.NewInt64(-9223372036854775808),  // - 2^63
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationKeyspaceID([]byte("\x16k@\xb4J\xbaK\xd6")),
 		key.DestinationKeyspaceID([]byte("\x06\xe7\xea\"Βp\x8f")),
@@ -120,9 +119,7 @@ func TestHashReverseMap(t *testing.T) {
 		[]byte("\xf7}H\xaaݡ\xf1\xbb"),
 		[]byte("\x95\xf8\xa5\xe5\xdd1\xd9\x00"),
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	neg1 := int64(-1)
 	negmax := int64(-9223372036854775808)
 	want := []sqltypes.Value{

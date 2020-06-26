@@ -26,9 +26,9 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
@@ -173,42 +173,42 @@ func TestMustSendDDL(t *testing.T) {
 func TestPlanbuilder(t *testing.T) {
 	t1 := &Table{
 		Name: "t1",
-		Columns: []schema.TableColumn{{
-			Name: sqlparser.NewColIdent("id"),
+		Fields: []*querypb.Field{{
+			Name: "id",
 			Type: sqltypes.Int64,
 		}, {
-			Name: sqlparser.NewColIdent("val"),
+			Name: "val",
 			Type: sqltypes.VarBinary,
 		}},
 	}
 	// t1alt has no id column
 	t1alt := &Table{
 		Name: "t1",
-		Columns: []schema.TableColumn{{
-			Name: sqlparser.NewColIdent("val"),
+		Fields: []*querypb.Field{{
+			Name: "val",
 			Type: sqltypes.VarBinary,
 		}},
 	}
 	t2 := &Table{
 		Name: "t2",
-		Columns: []schema.TableColumn{{
-			Name: sqlparser.NewColIdent("id"),
+		Fields: []*querypb.Field{{
+			Name: "id",
 			Type: sqltypes.Int64,
 		}, {
-			Name: sqlparser.NewColIdent("val"),
+			Name: "val",
 			Type: sqltypes.VarBinary,
 		}},
 	}
 	regional := &Table{
 		Name: "regional",
-		Columns: []schema.TableColumn{{
-			Name: sqlparser.NewColIdent("region"),
+		Fields: []*querypb.Field{{
+			Name: "region",
 			Type: sqltypes.Int64,
 		}, {
-			Name: sqlparser.NewColIdent("id"),
+			Name: "id",
 			Type: sqltypes.Int64,
 		}, {
-			Name: sqlparser.NewColIdent("val"),
+			Name: "val",
 			Type: sqltypes.VarBinary,
 		}},
 	}
@@ -245,7 +245,14 @@ func TestPlanbuilder(t *testing.T) {
 				Alias:  sqlparser.NewColIdent("val"),
 				Type:   sqltypes.VarBinary,
 			}},
-			VindexColumns: []int{0},
+			Filters: []Filter{{
+				Opcode:        VindexMatch,
+				ColNum:        0,
+				Value:         sqltypes.NULL,
+				Vindex:        nil,
+				VindexColumns: []int{0},
+				KeyRange:      nil,
+			}},
 		},
 	}, {
 		inTable: t1,
@@ -302,7 +309,14 @@ func TestPlanbuilder(t *testing.T) {
 				Alias:  sqlparser.NewColIdent("id"),
 				Type:   sqltypes.Int64,
 			}},
-			VindexColumns: []int{0},
+			Filters: []Filter{{
+				Opcode:        VindexMatch,
+				ColNum:        0,
+				Value:         sqltypes.NULL,
+				Vindex:        nil,
+				VindexColumns: []int{0},
+				KeyRange:      nil,
+			}},
 		},
 	}, {
 		inTable: t1,
@@ -317,7 +331,36 @@ func TestPlanbuilder(t *testing.T) {
 				Alias:  sqlparser.NewColIdent("id"),
 				Type:   sqltypes.Int64,
 			}},
-			VindexColumns: []int{0},
+			Filters: []Filter{{
+				Opcode:        VindexMatch,
+				ColNum:        0,
+				Value:         sqltypes.NULL,
+				Vindex:        nil,
+				VindexColumns: []int{0},
+				KeyRange:      nil,
+			}},
+		},
+	}, {
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select val, id from t1 where id = 1"},
+		outPlan: &Plan{
+			ColExprs: []ColExpr{{
+				ColNum: 1,
+				Alias:  sqlparser.NewColIdent("val"),
+				Type:   sqltypes.VarBinary,
+			}, {
+				ColNum: 0,
+				Alias:  sqlparser.NewColIdent("id"),
+				Type:   sqltypes.Int64,
+			}},
+			Filters: []Filter{{
+				Opcode:        Equal,
+				ColNum:        0,
+				Value:         sqltypes.NewInt64(1),
+				Vindex:        nil,
+				VindexColumns: nil,
+				KeyRange:      nil,
+			}},
 		},
 	}, {
 		inTable: t2,
@@ -335,7 +378,14 @@ func TestPlanbuilder(t *testing.T) {
 				Alias:  sqlparser.NewColIdent("id"),
 				Type:   sqltypes.Int64,
 			}},
-			VindexColumns: []int{0, 1},
+			Filters: []Filter{{
+				Opcode:        VindexMatch,
+				ColNum:        0,
+				Value:         sqltypes.NULL,
+				Vindex:        nil,
+				VindexColumns: []int{0, 1},
+				KeyRange:      nil,
+			}},
 		},
 	}, {
 		inTable: regional,
@@ -402,12 +452,8 @@ func TestPlanbuilder(t *testing.T) {
 		outErr:  `unsupported: *, id`,
 	}, {
 		inTable: t1,
-		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where id=1"},
-		outErr:  `unsupported where clause:  where id = 1`,
-	}, {
-		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where max(id)"},
-		outErr:  `unsupported where clause:  where max(id)`,
+		outErr:  `unsupported constraint: max(id)`,
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(id)"},
@@ -463,15 +509,20 @@ func TestPlanbuilder(t *testing.T) {
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(id, 1+1, '-80')"},
 		outErr:  `unsupported: 1 + 1`,
 	}}
-
 	for _, tcase := range testcases {
 		plan, err := buildPlan(tcase.inTable, testLocalVSchema, &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{tcase.inRule},
 		})
 		if plan != nil {
 			plan.Table = nil
-			plan.Vindex = nil
-			plan.KeyRange = nil
+			for ind := range plan.Filters {
+				plan.Filters[ind].KeyRange = nil
+				if plan.Filters[ind].
+					Opcode == VindexMatch {
+					plan.Filters[ind].Value = sqltypes.NULL
+				}
+				plan.Filters[ind].Vindex = nil
+			}
 			if !reflect.DeepEqual(tcase.outPlan, plan) {
 				t.Errorf("Plan(%v, %v):\n%v, want\n%v", tcase.inTable, tcase.inRule, plan, tcase.outPlan)
 			}

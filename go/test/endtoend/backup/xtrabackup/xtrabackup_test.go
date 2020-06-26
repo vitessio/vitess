@@ -24,14 +24,5 @@ import (
 
 // TestXtraBackup - tests the backup using xtrabackup
 func TestXtrabackup(t *testing.T) {
-	code, err := backup.LaunchCluster(true, "tar", 0)
-	if err != nil {
-		t.Errorf("setup failed with status code %d", code)
-	}
-
-	// Run all the backup tests
-	backup.TestBackup(t)
-
-	// Teardown the cluster
-	backup.TearDownCluster()
+	backup.TestBackup(t, backup.ExtraBackup, "tar", 0)
 }

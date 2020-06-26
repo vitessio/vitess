@@ -1,0 +1,29 @@
+# https://www.firehydrant.io/blog/developer-a-go-app-with-docker-compose/
+version: '3'
+services:
+  app:
+    build: build/dev
+    image: are-you-alive-dev
+    volumes:
+      - .:/go/src/vitess.io/vitess/examples/are-you-alive
+    working_dir: /go/src/vitess.io/vitess/examples/are-you-alive
+    environment:
+      MYSQL_CONN_STRING: root:mysql@tcp(mysql)/testfixture
+    depends_on:
+      - mysql
+    ports:
+      - 8080:8080
+  prom:
+    image: quay.io/prometheus/prometheus:v2.0.0
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command: "--config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus"
+    ports:
+      - 9090:9090
+    depends_on:
+      - app
+  mysql:
+    image: mysql:5.7
+    environment:
+      MYSQL_DATABASE: testfixture
+      MYSQL_ROOT_PASSWORD: mysql

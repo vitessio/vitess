@@ -20,12 +20,24 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
 // buildSelectPlan is the new function to build a Select plan.
-func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
+func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+	sel := stmt.(*sqlparser.Select)
+
+	p := tryAtVtgate(sel)
+	if p != nil {
+		return p, nil
+	}
+
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(sel)))
 	if err := pb.processSelect(sel, nil); err != nil {
 		return nil, err
@@ -72,6 +84,10 @@ func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.Prim
 // pushed into a route, then a primitive is created on top of any
 // of the above trees to make it discard unwanted rows.
 func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) error {
+	if sel.SQLCalcFoundRows && sel.Limit != nil {
+		return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "sql_calc_found_rows not yet fully supported")
+	}
+
 	if err := pb.processTableExprs(sel.From); err != nil {
 		return err
 	}
@@ -118,6 +134,48 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 	}
 	pb.bldr.PushMisc(sel)
 	return nil
+}
+
+func tryAtVtgate(sel *sqlparser.Select) engine.Primitive {
+	if !isOnlyDual(sel.From) {
+		return nil
+	}
+
+	exprs := make([]evalengine.Expr, len(sel.SelectExprs))
+	cols := make([]string, len(sel.SelectExprs))
+	for i, e := range sel.SelectExprs {
+		expr, ok := e.(*sqlparser.AliasedExpr)
+		if !ok {
+			return nil
+		}
+		var err error
+		exprs[i], err = sqlparser.Convert(expr.Expr)
+		if err != nil {
+			return nil
+		}
+		cols[i] = expr.As.String()
+		if cols[i] == "" {
+			cols[i] = sqlparser.String(expr.Expr)
+		}
+	}
+	return &engine.Projection{
+		Exprs: exprs,
+		Cols:  cols,
+		Input: &engine.SingleRow{},
+	}
+}
+
+func isOnlyDual(from sqlparser.TableExprs) bool {
+	if len(from) > 1 {
+		return false
+	}
+	table, ok := from[0].(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return false
+	}
+	tableName, ok := table.Expr.(sqlparser.TableName)
+
+	return ok && tableName.Name.String() == "dual" && tableName.Qualifier.IsEmpty()
 }
 
 // pushFilter identifies the target route for the specified bool expr,

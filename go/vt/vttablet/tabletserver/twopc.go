@@ -20,12 +20,11 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
@@ -127,9 +126,9 @@ func NewTwoPC(readPool *connpool.Pool) *TwoPC {
 
 // Init initializes TwoPC. If the metadata database or tables
 // are not present, they are created.
-func (tpc *TwoPC) Init(sidecarDBName string, dbaparams *mysql.ConnParams) error {
-	dbname := sqlescape.EscapeID(sidecarDBName)
-	conn, err := dbconnpool.NewDBConnection(dbaparams, stats.NewTimings("", "", ""))
+func (tpc *TwoPC) Init(dbaparams dbconfigs.Connector) error {
+	dbname := "_vt"
+	conn, err := dbconnpool.NewDBConnection(context.TODO(), dbaparams)
 	if err != nil {
 		return err
 	}
@@ -290,12 +289,12 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*Prepared
 			// Initialize the new element.
 			// A failure in time parsing will show up as a very old time,
 			// which is harmless.
-			tm, _ := sqltypes.ToInt64(row[2])
+			tm, _ := evalengine.ToInt64(row[2])
 			curTx = &PreparedTx{
 				Dtid: dtid,
 				Time: time.Unix(0, tm),
 			}
-			st, err := sqltypes.ToInt64(row[1])
+			st, err := evalengine.ToInt64(row[1])
 			if err != nil {
 				log.Errorf("Error parsing state for dtid %s: %v.", dtid, err)
 			}
@@ -332,7 +331,7 @@ func (tpc *TwoPC) CountUnresolvedRedo(ctx context.Context, unresolvedTime time.T
 	if len(qr.Rows) < 1 {
 		return 0, nil
 	}
-	v, _ := sqltypes.ToInt64(qr.Rows[0][0])
+	v, _ := evalengine.ToInt64(qr.Rows[0][0])
 	return v, nil
 }
 
@@ -419,7 +418,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 		return result, nil
 	}
 	result.Dtid = qr.Rows[0][0].ToString()
-	st, err := sqltypes.ToInt64(qr.Rows[0][1])
+	st, err := evalengine.ToInt64(qr.Rows[0][1])
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "Error parsing state for dtid %s", dtid)
 	}
@@ -429,7 +428,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 	}
 	// A failure in time parsing will show up as a very old time,
 	// which is harmless.
-	tm, _ := sqltypes.ToInt64(qr.Rows[0][2])
+	tm, _ := evalengine.ToInt64(qr.Rows[0][2])
 	result.TimeCreated = tm
 
 	qr, err = tpc.read(ctx, conn, tpc.readParticipants, bindVars)
@@ -466,7 +465,7 @@ func (tpc *TwoPC) ReadAbandoned(ctx context.Context, abandonTime time.Time) (map
 	}
 	txs := make(map[string]time.Time, len(qr.Rows))
 	for _, row := range qr.Rows {
-		t, err := sqltypes.ToInt64(row[1])
+		t, err := evalengine.ToInt64(row[1])
 		if err != nil {
 			return nil, err
 		}
@@ -505,8 +504,8 @@ func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*DistributedTx, er
 			// Initialize the new element.
 			// A failure in time parsing will show up as a very old time,
 			// which is harmless.
-			tm, _ := sqltypes.ToInt64(row[2])
-			st, err := sqltypes.ToInt64(row[1])
+			tm, _ := evalengine.ToInt64(row[2])
+			st, err := evalengine.ToInt64(row[1])
 			// Just log on error and continue. The state will show up as UNKNOWN
 			// on the display.
 			if err != nil {

@@ -41,10 +41,39 @@ spec:
     app: vitess
   type: {{.serviceType | default $defaultVtgate.serviceType}}
 ---
+
+###################################
+# vtgate ServiceAccount
+###################################
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vtgate
+  labels:
+    app: vitess
+---
+
+###################################
+# vtgate RoleBinding
+###################################
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vtgate-topo-member
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: vt-topo-member
+subjects:
+- kind: ServiceAccount
+  name: vtgate
+  namespace: {{ $namespace }}
+---
+
 ###################################
 # vtgate Deployment
 ###################################
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: vtgate-{{ $cellClean }}
@@ -62,6 +91,7 @@ spec:
         component: vtgate
         cell: {{ $cellClean }}
     spec:
+      serviceAccountName: vtgate
 {{ include "pod-security" . | indent 6 }}
 {{ include "vtgate-affinity" (tuple $cellClean $cell.region) | indent 6 }}
 
@@ -102,9 +132,14 @@ spec:
               set -ex
 
               eval exec /vt/bin/vtgate $(cat <<END_OF_COMMAND
+                -topo_global_root=/vitess/global
+                {{- if eq ($cell.topologyProvider | default "") "etcd2" }}
                 -topo_implementation=etcd2
                 -topo_global_server_address="etcd-global-client.{{ $namespace }}:2379"
-                -topo_global_root=/vitess/global
+                {{- else }}
+                -topo_implementation="k8s"
+                -topo_global_server_address="k8s"
+                {{- end }}
                 -logtostderr=true
                 -stderrthreshold=0
                 -port=15001
@@ -158,7 +193,7 @@ metadata:
   name: vtgate-{{ $cellClean }}
 spec:
   scaleTargetRef:
-    apiVersion: apps/v1beta1
+    apiVersion: apps/v1
     kind: Deployment
     name: vtgate-{{ $cellClean }}
   minReplicas: {{ .replicas }}

@@ -641,7 +641,7 @@ All other operations are considered ‘cheap’ because they can be applied as t
 
 ## Preserving the original representation
 
-In the case of VTGate, the ‘Route’ operation is capable of performing all 9 functions, as long as all the rows needed to fulfil the query reside in a single database. However, those functions have to be expressed as an SQL query. Most often, the original query could just be passed-through to a single shard. So, the one important question is: If we converted a query to its relational representation, can we then convert it back to the original query? The answer is no, or at least not trivially; The relational operators don’t always map one-to-one with the constructs of an SQL statement. Here’s a specific example:
+In the case of VTGate, the ‘Route’ operation is capable of performing all 9 functions, as long as all the rows needed to fulfill the query reside in a single database. However, those functions have to be expressed as an SQL query. Most often, the original query could just be passed-through to a single shard. So, the one important question is: If we converted a query to its relational representation, can we then convert it back to the original query? The answer is no, or at least not trivially; The relational operators don’t always map one-to-one with the constructs of an SQL statement. Here’s a specific example:
 
 `select count(*), a+1, b from t group by a+1, b`
 

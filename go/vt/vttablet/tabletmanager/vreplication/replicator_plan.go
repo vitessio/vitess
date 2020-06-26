@@ -29,12 +29,19 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// ReplicatorPlan is the execution plan for the replicator.
-// The constructor for this is buildReplicatorPlan in table_plan_builder.go
-// The initial build identifies the tables that need to be replicated,
-// and builds partial TablePlan objects for them. The partial plan is used
-// to send streaming requests. As the responses return field info, this
-// information is used to build the final execution plan (buildExecutionPlan).
+// ReplicatorPlan is the execution plan for the replicator. It contains
+// plans for all the tables it's replicating. Every phase of vreplication
+// builds its own instance of the ReplicatorPlan. This is because the plan
+// depends on copyState, which changes on every iteration.
+// The table plans within ReplicatorPlan will not be fully populated because
+// all the information is not available initially.
+// For simplicity, the ReplicatorPlan is immutable.
+// Once we get the field info for a table from the stream response,
+// we'll have all the necessary info to build the final plan.
+// At that time, buildExecutionPlan is invoked, which will make a copy
+// of the TablePlan from ReplicatorPlan, and fill the rest
+// of the members, leaving the original plan unchanged.
+// The constructor is buildReplicatorPlan in table_plan_builder.go
 type ReplicatorPlan struct {
 	VStreamFilter *binlogdatapb.Filter
 	TargetTables  map[string]*TablePlan
@@ -50,6 +57,8 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 		// Unreachable code.
 		return nil, fmt.Errorf("plan not found for %s", fieldEvent.TableName)
 	}
+	// If Insert is initialized, then it means that we knew the column
+	// names and have already built most of the plan.
 	if prelim.Insert != nil {
 		tplanv := *prelim
 		// We know that we sent only column names, but they may be backticked.
@@ -93,6 +102,7 @@ func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Res
 		}
 		tpb.colExprs = append(tpb.colExprs, cexpr)
 	}
+	// The following actions are a subset of buildTablePlan.
 	if err := tpb.analyzePK(rp.tableKeys); err != nil {
 		return nil, err
 	}
@@ -118,19 +128,35 @@ func (rp *ReplicatorPlan) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&v)
 }
 
-// TablePlan is the execution plan for a table within a player stream.
+// TablePlan is the execution plan for a table within a replicator.
+// If the column names are not known at the time of plan building (like
+// select *), then only TargetName, SendRule and Lastpk are initialized.
+// When the stream returns the field info, those are used as column
+// names to build the final plan.
+// Lastpk comes from copyState. If it's set, then the generated plans
+// are significantly different because any events that fall beyond
+// Lastpk must be excluded.
+// If column names were known upfront, then all fields of TablePlan
+// are built except for Fields. This member is populated only after
+// the field info is received from the stream.
 // The ParsedQuery objects assume that a map of before and after values
 // will be built based on the streaming rows. Before image values will
 // be prefixed with a "b_", and after image values will be prefixed
-// with a "a_".
+// with a "a_". The TablePlan structure is used during all the phases
+// of vreplication: catchup, copy, fastforward, or regular replication.
 type TablePlan struct {
-	TargetName   string
-	SendRule     *binlogdatapb.Rule
-	PKReferences []string
-	// Lastpk is used for delayed generation of replication queries.
+	// TargetName, SendRule will always be initialized.
+	TargetName string
+	SendRule   *binlogdatapb.Rule
+	// Lastpk will be initialized if it was specified, and
+	// will be used for building the final plan after field info
+	// is received.
 	Lastpk *sqltypes.Result
 	// BulkInsertFront, BulkInsertValues and BulkInsertOnDup are used
-	// by vcopier.
+	// by vcopier. These three parts are combined to build bulk insert
+	// statements. This is functionally equivalent to generating
+	// multiple statements using the "Insert" construct, but much more
+	// efficient for the copy phase.
 	BulkInsertFront  *sqlparser.ParsedQuery
 	BulkInsertValues *sqlparser.ParsedQuery
 	BulkInsertOnDup  *sqlparser.ParsedQuery
@@ -142,6 +168,9 @@ type TablePlan struct {
 	Update *sqlparser.ParsedQuery
 	Delete *sqlparser.ParsedQuery
 	Fields []*querypb.Field
+	// PKReferences is used to check if an event changed
+	// a primary key column (row move).
+	PKReferences []string
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -149,23 +178,23 @@ func (tp *TablePlan) MarshalJSON() ([]byte, error) {
 	v := struct {
 		TargetName   string
 		SendRule     string
-		PKReferences []string               `json:",omitempty"`
 		InsertFront  *sqlparser.ParsedQuery `json:",omitempty"`
 		InsertValues *sqlparser.ParsedQuery `json:",omitempty"`
 		InsertOnDup  *sqlparser.ParsedQuery `json:",omitempty"`
 		Insert       *sqlparser.ParsedQuery `json:",omitempty"`
 		Update       *sqlparser.ParsedQuery `json:",omitempty"`
 		Delete       *sqlparser.ParsedQuery `json:",omitempty"`
+		PKReferences []string               `json:",omitempty"`
 	}{
 		TargetName:   tp.TargetName,
 		SendRule:     tp.SendRule.Match,
-		PKReferences: tp.PKReferences,
 		InsertFront:  tp.BulkInsertFront,
 		InsertValues: tp.BulkInsertValues,
 		InsertOnDup:  tp.BulkInsertOnDup,
 		Insert:       tp.Insert,
 		Update:       tp.Update,
 		Delete:       tp.Delete,
+		PKReferences: tp.PKReferences,
 	}
 	return json.Marshal(&v)
 }

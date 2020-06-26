@@ -22,6 +22,8 @@ import (
 	"sync"
 	"text/template"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"github.com/gogo/protobuf/proto"
 	"golang.org/x/net/context"
 
@@ -48,8 +50,8 @@ type materializer struct {
 	targetShards  []*topo.ShardInfo
 }
 
-// Migrate initiates a table migration.
-func (wr *Wrangler) Migrate(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs, cell, tabletTypes string) error {
+// MoveTables initiates moving table(s) over to another keyspace
+func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs, cell, tabletTypes string) error {
 	var tables []string
 	var vschema *vschemapb.Keyspace
 	if strings.HasPrefix(tableSpecs, "{") {
@@ -476,7 +478,7 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 		}
 		qr := sqltypes.Proto3ToResult(p3qr)
 		for _, row := range qr.Rows {
-			id, err := sqltypes.ToInt64(row[0])
+			id, err := evalengine.ToInt64(row[0])
 			if err != nil {
 				return err
 			}

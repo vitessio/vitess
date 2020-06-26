@@ -395,10 +395,12 @@ message UndoDemoteMasterRequest {
 message UndoDemoteMasterResponse {
 }
 
+// Deprecated
 message PromoteSlaveWhenCaughtUpRequest {
   string position = 1;
 }
 
+// Deprecated
 message PromoteSlaveWhenCaughtUpResponse {
   string position = 1;
 }
@@ -434,10 +436,19 @@ message StopReplicationAndGetStatusResponse {
   replicationdata.Status status = 1;
 }
 
+// Deprecated
 message PromoteSlaveRequest {
 }
 
+// Deprecated
 message PromoteSlaveResponse {
+  string position = 1;
+}
+
+message PromoteReplicaRequest {
+}
+
+message PromoteReplicaResponse {
   string position = 1;
 }
 

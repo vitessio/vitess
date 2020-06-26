@@ -22,7 +22,10 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -44,9 +47,7 @@ func TestSelectNext(t *testing.T) {
 	query := "select next :n values from user_seq"
 	bv := map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)}
 	_, err := executorExec(executor, query, bv)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           query,
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)},
@@ -67,9 +68,7 @@ func TestSelectDBA(t *testing.T) {
 		query,
 		map[string]*querypb.BindVariable{},
 	)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           query,
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -83,9 +82,7 @@ func TestUnsharded(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 
 	_, err := executorExec(executor, "select id from music_user_map where id = 1", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select id from music_user_map where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -99,9 +96,7 @@ func TestUnshardedComments(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 
 	_, err := executorExec(executor, "/* leading */ select id from music_user_map where id = 1 /* trailing */", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "/* leading */ select id from music_user_map where id = 1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -111,9 +106,7 @@ func TestUnshardedComments(t *testing.T) {
 	}
 
 	_, err = executorExec(executor, "update music_user_map set id = 1 /* trailing */", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "/* leading */ select id from music_user_map where id = 1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -127,9 +120,7 @@ func TestUnshardedComments(t *testing.T) {
 
 	sbclookup.Queries = nil
 	_, err = executorExec(executor, "delete from music_user_map /* trailing */", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "delete from music_user_map /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -140,9 +131,7 @@ func TestUnshardedComments(t *testing.T) {
 
 	sbclookup.Queries = nil
 	_, err = executorExec(executor, "insert into music_user_map values (1) /* trailing */", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "insert into music_user_map values (1) /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -159,9 +148,7 @@ func TestStreamUnsharded(t *testing.T) {
 
 	sql := "select id from music_user_map where id = 1"
 	result, err := executorStream(executor, sql)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantResult := sandboxconn.StreamRowResult
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
@@ -204,9 +191,7 @@ func TestStreamBuffering(t *testing.T) {
 		},
 	)
 	close(results)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantResults := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
@@ -236,22 +221,82 @@ func TestStreamBuffering(t *testing.T) {
 }
 
 func TestSelectLastInsertId(t *testing.T) {
-	executor, sbc1, _, _ := createExecutorEnv()
+	masterSession.LastInsertId = 52
+	executor, _, _, _ := createExecutorEnv()
 	executor.normalize = true
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
 	sql := "select last_insert_id()"
-	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
-	if err != nil {
-		t.Error(err)
+	masterSession.LastInsertId = 42
+	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "last_insert_id()", Type: sqltypes.Uint64},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewUint64(42),
+		}},
 	}
-	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select :__lastInsertId as `last_insert_id()` from dual",
-		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
-	}}
+	require.NoError(t, err)
+	utils.MustMatch(t, result, wantResult, "Mismatch")
+}
 
-	assert.Equal(t, wantQueries, sbc1.Queries)
+func TestSelectUserDefinedVariable(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	executor.normalize = true
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	sql := "select @foo"
+	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "@foo", Type: sqltypes.Null},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NULL,
+		}},
+	}
+	utils.MustMatch(t, result, wantResult, "Mismatch")
+
+	masterSession = &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"})}
+	result, err = executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	wantResult = &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "@foo", Type: sqltypes.VarBinary},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarBinary("bar"),
+		}},
+	}
+	utils.MustMatch(t, result, wantResult, "Mismatch")
+}
+
+func TestFoundRows(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	executor.normalize = true
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	// run this extra query so we can assert on the number of rows found
+	_, err := executorExec(executor, "select 42", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+
+	sql := "select found_rows()"
+	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "found_rows()", Type: sqltypes.Uint64},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewUint64(0),
+		}},
+	}
+	require.NoError(t, err)
+	utils.MustMatch(t, result, wantResult, "Mismatch")
 }
 
 func TestSelectLastInsertIdInUnion(t *testing.T) {
@@ -259,9 +304,7 @@ func TestSelectLastInsertIdInUnion(t *testing.T) {
 	executor.normalize = true
 	sql := "select last_insert_id() as id union select id from user"
 	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select :__lastInsertId as id from dual union select id from user",
 		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
@@ -278,9 +321,7 @@ func TestSelectLastInsertIdInWhere(t *testing.T) {
 
 	sql := "select id from music_user_map where id = last_insert_id()"
 	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select id from music_user_map where id = :__lastInsertId",
 		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
@@ -306,9 +347,7 @@ func TestLastInsertIDInVirtualTable(t *testing.T) {
 	}}
 	sbc1.SetResults(result1)
 	_, err := executorExec(executor, "select * from (select last_insert_id()) as t", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select * from (select :__lastInsertId as `last_insert_id()` from dual) as t",
 		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
@@ -334,9 +373,7 @@ func TestLastInsertIDInSubQueryExpression(t *testing.T) {
 	}}
 	sbc1.SetResults(result1)
 	_, err := executorExec(executor, "select (select last_insert_id()) as x", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select (select :__lastInsertId as `last_insert_id()` from dual) as x from dual",
 		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
@@ -346,28 +383,29 @@ func TestLastInsertIDInSubQueryExpression(t *testing.T) {
 }
 
 func TestSelectDatabase(t *testing.T) {
-	executor, sbc1, _, _ := createExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	executor.normalize = true
 	sql := "select database()"
 	newSession := *masterSession
 	session := NewSafeSession(&newSession)
 	session.TargetString = "TestExecutor@master"
-	_, err := executor.Execute(
+	result, err := executor.Execute(
 		context.Background(),
 		"TestExecute",
 		session,
 		sql,
 		map[string]*querypb.BindVariable{})
-
-	if err != nil {
-		t.Error(err)
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "database()", Type: sqltypes.VarBinary},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarBinary("TestExecutor@master"),
+		}},
 	}
-	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select :__vtdbname as `database()` from dual",
-		BindVariables: map[string]*querypb.BindVariable{"__vtdbname": sqltypes.StringBindVariable("TestExecutor")},
-	}}
+	require.NoError(t, err)
+	utils.MustMatch(t, result, wantResult, "Mismatch")
 
-	assert.Equal(t, wantQueries, sbc1.Queries)
 }
 
 func TestSelectBindvars(t *testing.T) {
@@ -379,9 +417,7 @@ func TestSelectBindvars(t *testing.T) {
 	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{
 		"id": sqltypes.Int64BindVariable(1),
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select id from user where id = :id",
 		BindVariables: map[string]*querypb.BindVariable{"id": sqltypes.Int64BindVariable(1)},
@@ -398,17 +434,15 @@ func TestSelectBindvars(t *testing.T) {
 	// Test with StringBindVariable
 	sql = "select id from user where name in (:name1, :name2)"
 	_, err = executorExec(executor, sql, map[string]*querypb.BindVariable{
-		"name1": sqltypes.StringBindVariable("foo1"),
-		"name2": sqltypes.StringBindVariable("foo2"),
+		"name1": sqltypes.BytesBindVariable([]byte("foo1")),
+		"name2": sqltypes.BytesBindVariable([]byte("foo2")),
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select id from user where name in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name1":  sqltypes.StringBindVariable("foo1"),
-			"name2":  sqltypes.StringBindVariable("foo2"),
+			"name1":  sqltypes.BytesBindVariable([]byte("foo1")),
+			"name2":  sqltypes.BytesBindVariable([]byte("foo2")),
 			"__vals": sqltypes.TestBindVariable([]interface{}{"foo1", "foo2"}),
 		},
 	}}
@@ -426,9 +460,7 @@ func TestSelectBindvars(t *testing.T) {
 		"name1": sqltypes.BytesBindVariable([]byte("foo1")),
 		"name2": sqltypes.BytesBindVariable([]byte("foo2")),
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select id from user where name in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
@@ -461,9 +493,7 @@ func TestSelectBindvars(t *testing.T) {
 	_, err = executorExec(executor, sql, map[string]*querypb.BindVariable{
 		"name": sqltypes.StringBindVariable("nonexistent"),
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	// When there are no matching rows in the vindex, vtgate still needs the field info
 	wantQueries = []*querypb.BoundQuery{{
@@ -495,9 +525,7 @@ func TestSelectEqual(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
 	_, err := executorExec(executor, "select id from user where id = 1", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select id from user where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -511,9 +539,7 @@ func TestSelectEqual(t *testing.T) {
 	sbc1.Queries = nil
 
 	_, err = executorExec(executor, "select id from user where id = 3", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "select id from user where id = 3",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -530,9 +556,7 @@ func TestSelectEqual(t *testing.T) {
 	sbc2.Queries = nil
 
 	_, err = executorExec(executor, "select id from user where id = '3'", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "select id from user where id = '3'",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -549,9 +573,7 @@ func TestSelectEqual(t *testing.T) {
 	sbc2.Queries = nil
 
 	_, err = executorExec(executor, "select id from user where name = 'foo'", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "select id from user where name = 'foo'",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -574,9 +596,7 @@ func TestSelectDual(t *testing.T) {
 	executor, sbc1, _, lookup := createExecutorEnv()
 
 	_, err := executorExec(executor, "select @@aa.bb from dual", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select @@aa.bb from dual",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -586,9 +606,7 @@ func TestSelectDual(t *testing.T) {
 	}
 
 	_, err = executorExec(executor, "select @@aa.bb from TestUnsharded.dual", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !reflect.DeepEqual(lookup.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
@@ -598,9 +616,7 @@ func TestSelectComments(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 
 	_, err := executorExec(executor, "/* leading */ select id from user where id = 1 /* trailing */", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "/* leading */ select id from user where id = 1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -619,9 +635,7 @@ func TestSelectNormalize(t *testing.T) {
 	executor.normalize = true
 
 	_, err := executorExec(executor, "/* leading */ select id from user where id = 1 /* trailing */", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "/* leading */ select id from user where id = :vtg1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
@@ -639,21 +653,15 @@ func TestSelectNormalize(t *testing.T) {
 	// Force the query to go to the "wrong" shard and ensure that normalization still happens
 	masterSession.TargetString = "TestExecutor/40-60"
 	_, err = executorExec(executor, "/* leading */ select id from user where id = 1 /* trailing */", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "/* leading */ select id from user where id = :vtg1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"vtg1": sqltypes.TestBindVariable(int64(1)),
 		},
 	}}
-	if sbc1.Queries != nil {
-		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
-	}
-	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
-		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
-	}
+	require.Empty(t, sbc1.Queries)
+	utils.MustMatch(t, sbc2.Queries, wantQueries, "sbc2.Queries")
 	sbc2.Queries = nil
 	masterSession.TargetString = ""
 }
@@ -662,9 +670,7 @@ func TestSelectCaseSensitivity(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 
 	_, err := executorExec(executor, "select Id from user where iD = 1", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select Id from user where iD = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -683,9 +689,7 @@ func TestStreamSelectEqual(t *testing.T) {
 
 	sql := "select id from user where id = 1"
 	result, err := executorStream(executor, sql)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantResult := sandboxconn.StreamRowResult
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
@@ -696,9 +700,7 @@ func TestSelectKeyRange(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 
 	_, err := executorExec(executor, "select krcol_unique, krcol from keyrange_table where krcol = 1", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select krcol_unique, krcol from keyrange_table where krcol = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -716,9 +718,7 @@ func TestSelectKeyRangeUnique(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 
 	_, err := executorExec(executor, "select krcol_unique, krcol from keyrange_table where krcol_unique = 1", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select krcol_unique, krcol from keyrange_table where krcol_unique = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -737,9 +737,7 @@ func TestSelectIN(t *testing.T) {
 
 	// Constant in IN clause is just a number, not a bind variable.
 	_, err := executorExec(executor, "select id from user where id in (1)", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "select id from user where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
@@ -758,9 +756,7 @@ func TestSelectIN(t *testing.T) {
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 	_, err = executorExec(executor, "select id from user where id in (1, 3)", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select id from user where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
@@ -787,9 +783,7 @@ func TestSelectIN(t *testing.T) {
 	_, err = executorExec(executor, "select id from user where id in ::vals", map[string]*querypb.BindVariable{
 		"vals": sqltypes.TestBindVariable([]interface{}{int64(1), int64(3)}),
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select id from user where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
@@ -815,9 +809,7 @@ func TestSelectIN(t *testing.T) {
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 	_, err = executorExec(executor, "select id from user where name = 'foo'", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql:           "select id from user where name = 'foo'",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -841,9 +833,7 @@ func TestStreamSelectIN(t *testing.T) {
 
 	sql := "select id from user where id in (1)"
 	result, err := executorStream(executor, sql)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantResult := sandboxconn.StreamRowResult
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
@@ -851,9 +841,7 @@ func TestStreamSelectIN(t *testing.T) {
 
 	sql = "select id from user where id in (1, 3)"
 	result, err = executorStream(executor, sql)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantResult = &sqltypes.Result{
 		Fields: sandboxconn.StreamRowResult.Fields,
 		Rows: [][]sqltypes.Value{
@@ -868,9 +856,7 @@ func TestStreamSelectIN(t *testing.T) {
 
 	sql = "select id from user where name = 'foo'"
 	result, err = executorStream(executor, sql)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantResult = sandboxconn.StreamRowResult
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
@@ -902,14 +888,12 @@ func TestSelectScatter(t *testing.T) {
 		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
 	_, err := executorExec(executor, "select id from user", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select id from user",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -938,7 +922,7 @@ func TestSelectScatterPartial(t *testing.T) {
 		conns = append(conns, sbc)
 	}
 
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -959,9 +943,7 @@ func TestSelectScatterPartial(t *testing.T) {
 
 	// Fail 1 of N with the directive succeeds with 7 rows
 	results, err = executorExec(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if results == nil || len(results.Rows) != 7 {
 		t.Errorf("want 7 results, got %v", results)
 	}
@@ -977,9 +959,7 @@ func TestSelectScatterPartial(t *testing.T) {
 	conns[7].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
 
 	results, err = executorExec(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if results == nil || len(results.Rows) != 0 {
 		t.Errorf("want 0 result rows, got %v", results)
 	}
@@ -999,13 +979,11 @@ func TestStreamSelectScatter(t *testing.T) {
 	for _, shard := range shards {
 		_ = hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 
 	sql := "select id from user"
 	result, err := executorStream(executor, sql)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
 		Fields: sandboxconn.SingleRowResult.Fields,
 		Rows: [][]sqltypes.Value{
@@ -1055,13 +1033,11 @@ func TestSelectScatterOrderBy(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 
 	query := "select col1, col2 from user order by col2 desc"
 	gotResult, err := executorExec(executor, query, nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           query,
@@ -1128,13 +1104,11 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 
 	query := "select col1, textcol from user order by textcol desc"
 	gotResult, err := executorExec(executor, query, nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select col1, textcol, weight_string(textcol) from user order by textcol desc",
@@ -1196,13 +1170,11 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 
 	query := "select id, col from user order by col desc"
 	gotResult, err := executorStream(executor, query)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           query,
@@ -1260,13 +1232,11 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 
 	query := "select id, textcol from user order by textcol desc"
 	gotResult, err := executorStream(executor, query)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select id, textcol, weight_string(textcol) from user order by textcol desc",
@@ -1324,13 +1294,11 @@ func TestSelectScatterAggregate(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 
 	query := "select col, sum(foo) from user group by col"
 	gotResult, err := executorExec(executor, query, nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           query + " order by col asc",
@@ -1389,13 +1357,11 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 
 	query := "select col, sum(foo) from user group by col"
 	gotResult, err := executorStream(executor, query)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           query + " order by col asc",
@@ -1454,13 +1420,11 @@ func TestSelectScatterLimit(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 
 	query := "select col1, col2 from user order by col2 desc limit 3"
 	gotResult, err := executorExec(executor, query, nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select col1, col2 from user order by col2 desc limit :__upper_limit",
@@ -1528,13 +1492,11 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 
 	query := "select col1, col2 from user order by col2 desc limit 3"
 	gotResult, err := executorStream(executor, query)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select col1, col2 from user order by col2 desc limit :__upper_limit",
@@ -1580,9 +1542,7 @@ func TestSimpleJoin(t *testing.T) {
 
 	sql := "select u1.id, u2.id from user u1 join user u2 where u1.id = 1 and u2.id = 3"
 	result, err := executorExec(executor, sql, nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select u1.id from user as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -1624,9 +1584,7 @@ func TestJoinComments(t *testing.T) {
 
 	sql := "select u1.id, u2.id from user u1 join user u2 where u1.id = 1 and u2.id = 3 /* trailing */"
 	_, err := executorExec(executor, sql, nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select u1.id from user as u1 where u1.id = 1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -1652,9 +1610,7 @@ func TestSimpleJoinStream(t *testing.T) {
 
 	sql := "select u1.id, u2.id from user u1 join user u2 where u1.id = 1 and u2.id = 3"
 	result, err := executorStream(executor, sql)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select u1.id from user as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -1709,9 +1665,7 @@ func TestVarJoin(t *testing.T) {
 	sbc1.SetResults(result1)
 	sql := "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1"
 	_, err := executorExec(executor, sql, nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select u1.id, u1.col from user as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -1749,9 +1703,7 @@ func TestVarJoinStream(t *testing.T) {
 	sbc1.SetResults(result1)
 	sql := "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1"
 	_, err := executorStream(executor, sql)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select u1.id, u1.col from user as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -1794,9 +1746,7 @@ func TestLeftJoin(t *testing.T) {
 	sbc2.SetResults(emptyResult)
 	sql := "select u1.id, u2.id from user u1 left join user u2 on u2.id = u1.col where u1.id = 1"
 	result, err := executorExec(executor, sql, nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			sandboxconn.SingleRowResult.Fields[0],
@@ -1840,9 +1790,7 @@ func TestLeftJoinStream(t *testing.T) {
 	sbc1.SetResults(result1)
 	sbc2.SetResults(emptyResult)
 	result, err := executorStream(executor, "select u1.id, u2.id from user u1 left join user u2 on u2.id = u1.col where u1.id = 1")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			sandboxconn.SingleRowResult.Fields[0],
@@ -1875,9 +1823,7 @@ func TestEmptyJoin(t *testing.T) {
 		},
 	}})
 	result, err := executorExec(executor, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select u1.id, u1.col from user as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -1915,9 +1861,7 @@ func TestEmptyJoinStream(t *testing.T) {
 		},
 	}})
 	result, err := executorStream(executor, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select u1.id, u1.col from user as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -1959,9 +1903,7 @@ func TestEmptyJoinRecursive(t *testing.T) {
 		},
 	}})
 	result, err := executorExec(executor, "select u1.id, u2.id, u3.id from user u1 join (user u2 join user u3 on u3.id = u2.col) where u1.id = 1", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select u1.id from user as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -2007,9 +1949,7 @@ func TestEmptyJoinRecursiveStream(t *testing.T) {
 		},
 	}})
 	result, err := executorStream(executor, "select u1.id, u2.id, u3.id from user u1 join (user u2 join user u3 on u3.id = u2.col) where u1.id = 1")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select u1.id from user as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -2053,9 +1993,7 @@ func TestCrossShardSubquery(t *testing.T) {
 	}}
 	sbc1.SetResults(result1)
 	result, err := executorExec(executor, "select id1 from (select u1.id id1, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1) as t", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select u1.id as id1, u1.col from user as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -2100,9 +2038,7 @@ func TestCrossShardSubqueryStream(t *testing.T) {
 	}}
 	sbc1.SetResults(result1)
 	result, err := executorStream(executor, "select id1 from (select u1.id id1, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1) as t")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select u1.id as id1, u1.col from user as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -2145,9 +2081,7 @@ func TestCrossShardSubqueryGetFields(t *testing.T) {
 	}}
 	sbc1.SetResults(result1)
 	result, err := executorExec(executor, "select main1.col, t.id1 from main1 join (select u1.id id1, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1) as t", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select u1.id as id1, u1.col from user as u1 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -2181,9 +2115,7 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 	_, err := executorPrepare(executor, sql, map[string]*querypb.BindVariable{
 		"id": sqltypes.Int64BindVariable(1),
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select id from user where 1 != 1",

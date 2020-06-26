@@ -47,7 +47,7 @@ public class VitessVTGateManager {
 
   private static Logger logger = LogManager.getLogger(VitessVTGateManager.class);
   /*
-  Current implementation have one VTGateConn for ip-port-username combination
+  Current implementation have one VTGateConnection for ip-port-username combination
   */
   private static ConcurrentHashMap<String, VTGateConnection> vtGateConnHashMap =
       new ConcurrentHashMap<>();
@@ -125,7 +125,7 @@ public class VitessVTGateManager {
   }
 
   /**
-   * Create VTGateConn and update vtGateConnHashMap.
+   * Create {@link VTGateConnection} and update vtGateConnHashMap.
    */
   private static void updateVtGateConnHashMap(String identifier, VitessJDBCUrl.HostInfo hostInfo,
       VitessConnection connection) {

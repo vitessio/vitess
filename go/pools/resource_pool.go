@@ -45,7 +45,7 @@ var (
 )
 
 // Factory is a function that can be used to create a resource.
-type Factory func() (Resource, error)
+type Factory func(context.Context) (Resource, error)
 
 // Resource defines the interface that every resource must provide.
 // Thread synchronization between Close() and IsClosed()
@@ -71,6 +71,7 @@ type ResourcePool struct {
 	resources chan resourceWrapper
 	factory   Factory
 	idleTimer *timer.Timer
+	logWait   func(time.Time)
 }
 
 type resourceWrapper struct {
@@ -89,7 +90,7 @@ type resourceWrapper struct {
 // An idleTimeout of 0 means that there is no timeout.
 // A non-zero value of prefillParallelism causes the pool to be pre-filled.
 // The value specifies how many resources can be opened in parallel.
-func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration, prefillParallelism int) *ResourcePool {
+func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration, prefillParallelism int, logWait func(time.Time)) *ResourcePool {
 	if capacity <= 0 || maxCap <= 0 || capacity > maxCap {
 		panic(errors.New("invalid/out of range capacity"))
 	}
@@ -99,6 +100,7 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 		available:   sync2.NewAtomicInt64(int64(capacity)),
 		capacity:    sync2.NewAtomicInt64(int64(capacity)),
 		idleTimeout: sync2.NewAtomicDuration(idleTimeout),
+		logWait:     logWait,
 	}
 	for i := 0; i < capacity; i++ {
 		rp.resources <- resourceWrapper{}
@@ -226,7 +228,7 @@ func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) 
 	// Unwrap
 	if wrapper.resource == nil {
 		span, _ := trace.NewSpan(ctx, "ResourcePool.factory")
-		wrapper.resource, err = rp.factory()
+		wrapper.resource, err = rp.factory(ctx)
 		span.Finish()
 		if err != nil {
 			rp.resources <- resourceWrapper{}
@@ -265,7 +267,7 @@ func (rp *ResourcePool) Put(resource Resource) {
 }
 
 func (rp *ResourcePool) reopenResource(wrapper *resourceWrapper) {
-	if r, err := rp.factory(); err == nil {
+	if r, err := rp.factory(context.TODO()); err == nil {
 		wrapper.resource = r
 		wrapper.timeUsed = time.Now()
 	} else {
@@ -325,6 +327,9 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 func (rp *ResourcePool) recordWait(start time.Time) {
 	rp.waitCount.Add(1)
 	rp.waitTime.Add(time.Since(start))
+	if rp.logWait != nil {
+		rp.logWait(start)
+	}
 }
 
 // SetIdleTimeout sets the idle timeout. It can only be used if there was an

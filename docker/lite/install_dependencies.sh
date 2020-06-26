@@ -31,6 +31,8 @@ BASE_PACKAGES=(
     libtcmalloc-minimal4
     procps
     rsync
+    strace
+    sysstat
     wget
 )
 

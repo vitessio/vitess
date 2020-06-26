@@ -279,6 +279,12 @@ func (server *ResilientServer) GetSrvKeyspaceNames(ctx context.Context, cell str
 		entry.refreshingChan = make(chan struct{})
 		entry.lastQueryTime = time.Now()
 		go func() {
+			defer func() {
+				if err := recover(); err != nil {
+					log.Errorf("GetSrvKeyspaceNames uncaught panic, cell :%v, err :%v)", cell, err)
+				}
+			}()
+
 			result, err := server.topoServer.GetSrvKeyspaceNames(ctx, cell)
 
 			entry.mutex.Lock()
@@ -526,6 +532,12 @@ func (server *ResilientServer) WatchSrvVSchema(ctx context.Context, cell string,
 	wg.Add(1)
 
 	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Errorf("WatchSrvVSchema  uncaught panic, cell :%v, err :%v)", cell, err)
+			}
+		}()
+
 		foundFirstValue := false
 
 		for {

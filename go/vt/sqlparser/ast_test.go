@@ -24,15 +24,14 @@ import (
 	"testing"
 	"unsafe"
 
-	"vitess.io/vitess/go/sqltypes"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAppend(t *testing.T) {
 	query := "select * from t where a = 1"
 	tree, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	var b strings.Builder
 	Append(&b, tree)
 	got := b.String()
@@ -50,9 +49,7 @@ func TestAppend(t *testing.T) {
 
 func TestSelect(t *testing.T) {
 	tree, err := Parse("select * from t where a = 1")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	expr := tree.(*Select).Where.Expr
 
 	sel := &Select{}
@@ -86,17 +83,14 @@ func TestSelect(t *testing.T) {
 		t.Errorf("having: %q, want %s", buf.String(), want)
 	}
 
-	// OR clauses must be parenthesized.
 	tree, err = Parse("select * from t where a = 1 or b = 1")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	expr = tree.(*Select).Where.Expr
 	sel = &Select{}
 	sel.AddWhere(expr)
 	buf = NewTrackedBuffer(nil)
 	sel.Where.Format(buf)
-	want = " where (a = 1 or b = 1)"
+	want = " where a = 1 or b = 1"
 	if buf.String() != want {
 		t.Errorf("where: %q, want %s", buf.String(), want)
 	}
@@ -104,7 +98,7 @@ func TestSelect(t *testing.T) {
 	sel.AddHaving(expr)
 	buf = NewTrackedBuffer(nil)
 	sel.Having.Format(buf)
-	want = " having (a = 1 or b = 1)"
+	want = " having a = 1 or b = 1"
 	if buf.String() != want {
 		t.Errorf("having: %q, want %s", buf.String(), want)
 	}
@@ -133,14 +127,10 @@ func TestRemoveHints(t *testing.T) {
 
 func TestAddOrder(t *testing.T) {
 	src, err := Parse("select foo, bar from baz order by foo")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	order := src.(*Select).OrderBy[0]
 	dst, err := Parse("select * from t")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	dst.(*Select).AddOrder(order)
 	buf := NewTrackedBuffer(nil)
 	dst.Format(buf)
@@ -149,9 +139,7 @@ func TestAddOrder(t *testing.T) {
 		t.Errorf("order: %q, want %s", buf.String(), want)
 	}
 	dst, err = Parse("select * from t union select * from s")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	dst.(*Union).AddOrder(order)
 	buf = NewTrackedBuffer(nil)
 	dst.Format(buf)
@@ -163,14 +151,10 @@ func TestAddOrder(t *testing.T) {
 
 func TestSetLimit(t *testing.T) {
 	src, err := Parse("select foo, bar from baz limit 4")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	limit := src.(*Select).Limit
 	dst, err := Parse("select * from t")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	dst.(*Select).SetLimit(limit)
 	buf := NewTrackedBuffer(nil)
 	dst.Format(buf)
@@ -179,9 +163,7 @@ func TestSetLimit(t *testing.T) {
 		t.Errorf("limit: %q, want %s", buf.String(), want)
 	}
 	dst, err = Parse("select * from t union select * from s")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	dst.(*Union).SetLimit(limit)
 	buf = NewTrackedBuffer(nil)
 	dst.Format(buf)
@@ -269,9 +251,7 @@ func TestDDL(t *testing.T) {
 
 func TestSetAutocommitON(t *testing.T) {
 	stmt, err := Parse("SET autocommit=ON")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	s, ok := stmt.(*Set)
 	if !ok {
 		t.Errorf("SET statement is not Set: %T", s)
@@ -296,9 +276,7 @@ func TestSetAutocommitON(t *testing.T) {
 	}
 
 	stmt, err = Parse("SET @@session.autocommit=ON")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	s, ok = stmt.(*Set)
 	if !ok {
 		t.Errorf("SET statement is not Set: %T", s)
@@ -325,9 +303,7 @@ func TestSetAutocommitON(t *testing.T) {
 
 func TestSetAutocommitOFF(t *testing.T) {
 	stmt, err := Parse("SET autocommit=OFF")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	s, ok := stmt.(*Set)
 	if !ok {
 		t.Errorf("SET statement is not Set: %T", s)
@@ -352,9 +328,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 	}
 
 	stmt, err = Parse("SET @@session.autocommit=OFF")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	s, ok = stmt.(*Set)
 	if !ok {
 		t.Errorf("SET statement is not Set: %T", s)
@@ -464,7 +438,7 @@ func TestReplaceExpr(t *testing.T) {
 		out: "not :a",
 	}, {
 		in:  "select * from t where ((select a from b))",
-		out: "(:a)",
+		out: ":a",
 	}, {
 		in:  "select * from t where (select a from b) = 1",
 		out: ":a = 1",
@@ -588,47 +562,6 @@ func TestReplaceExpr(t *testing.T) {
 	}
 }
 
-func TestExprFromValue(t *testing.T) {
-	tcases := []struct {
-		in  sqltypes.Value
-		out SQLNode
-		err string
-	}{{
-		in:  sqltypes.NULL,
-		out: &NullVal{},
-	}, {
-		in:  sqltypes.NewInt64(1),
-		out: NewIntVal([]byte("1")),
-	}, {
-		in:  sqltypes.NewFloat64(1.1),
-		out: NewFloatVal([]byte("1.1")),
-	}, {
-		in:  sqltypes.MakeTrusted(sqltypes.Decimal, []byte("1.1")),
-		out: NewFloatVal([]byte("1.1")),
-	}, {
-		in:  sqltypes.NewVarChar("aa"),
-		out: NewStrVal([]byte("aa")),
-	}, {
-		in:  sqltypes.MakeTrusted(sqltypes.Expression, []byte("rand()")),
-		err: "cannot convert value EXPRESSION(rand()) to AST",
-	}}
-	for _, tcase := range tcases {
-		got, err := ExprFromValue(tcase.in)
-		if tcase.err != "" {
-			if err == nil || err.Error() != tcase.err {
-				t.Errorf("ExprFromValue(%v) err: %v, want %s", tcase.in, err, tcase.err)
-			}
-			continue
-		}
-		if err != nil {
-			t.Error(err)
-		}
-		if got, want := got, tcase.out; !reflect.DeepEqual(got, want) {
-			t.Errorf("ExprFromValue(%v): %v, want %s", tcase.in, got, want)
-		}
-	}
-}
-
 func TestColNameEqual(t *testing.T) {
 	var c1, c2 *ColName
 	if c1.Equal(c2) {
@@ -694,7 +627,7 @@ func TestColIdentMarshal(t *testing.T) {
 
 func TestColIdentSize(t *testing.T) {
 	size := unsafe.Sizeof(NewColIdent(""))
-	want := 2 * unsafe.Sizeof("")
+	want := 2*unsafe.Sizeof("") + 8
 	if size != want {
 		t.Errorf("Size of ColIdent: %d, want 32", want)
 	}
@@ -851,4 +784,10 @@ func TestSplitStatementToPieces(t *testing.T) {
 			t.Errorf("out: %s, want %s", out, tcase.output)
 		}
 	}
+}
+
+func TestDefaultStatus(t *testing.T) {
+	assert.Equal(t,
+		String(&Default{ColName: "status"}),
+		"default(`status`)")
 }

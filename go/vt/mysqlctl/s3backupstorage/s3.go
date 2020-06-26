@@ -37,6 +37,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/client"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
@@ -353,7 +355,11 @@ func (bs *S3BackupStorage) client() (*s3.S3, error) {
 		}
 
 		if *retryCount >= 0 {
-			awsConfig.WithMaxRetries(*retryCount)
+			awsConfig = *request.WithRetryer(&awsConfig, &ClosedConnectionRetryer{
+				awsRetryer: &client.DefaultRetryer{
+					NumMaxRetries: *retryCount,
+				},
+			})
 		}
 
 		bs._client = s3.New(session, &awsConfig)

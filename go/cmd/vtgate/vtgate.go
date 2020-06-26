@@ -47,8 +47,6 @@ var (
 var resilientServer *srvtopo.ResilientServer
 var healthCheck discovery.HealthCheck
 
-var initFakeZK func()
-
 func init() {
 	rand.Seed(time.Now().UnixNano())
 	servenv.RegisterDefaultFlags()
@@ -60,9 +58,6 @@ func main() {
 	servenv.ParseFlags("vtgate")
 	servenv.Init()
 
-	if initFakeZK != nil {
-		initFakeZK()
-	}
 	ts := topo.Open()
 	defer ts.Close()
 

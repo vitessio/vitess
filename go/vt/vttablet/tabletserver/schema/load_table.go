@@ -22,13 +22,9 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // LoadTable creates a Table from the schema info in the database.
@@ -36,9 +32,6 @@ func LoadTable(conn *connpool.DBConn, tableName string, tableType string, commen
 	ta := NewTable(tableName)
 	sqlTableName := sqlparser.String(ta.Name)
 	if err := fetchColumns(ta, conn, sqlTableName); err != nil {
-		return nil, err
-	}
-	if err := fetchIndexes(ta, conn, sqlTableName); err != nil {
 		return nil, err
 	}
 	switch {
@@ -54,103 +47,28 @@ func LoadTable(conn *connpool.DBConn, tableName string, tableType string, commen
 	return ta, nil
 }
 
-// LoadTableBaisc creates a Table with just the column info loaded.
-func LoadTableBasic(conn *connpool.DBConn, tableName string) (*Table, error) {
-	ta := NewTable(tableName)
-	if err := fetchColumns(ta, conn, tableName); err != nil {
-		return nil, err
-	}
-	return ta, nil
-}
-
 func fetchColumns(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
 	qr, err := conn.Exec(tabletenv.LocalContext(), fmt.Sprintf("select * from %s where 1 != 1", sqlTableName), 0, true)
 	if err != nil {
 		return err
 	}
-	fieldTypes := make(map[string]querypb.Type, len(qr.Fields))
-	// TODO(sougou): Store the full field info in the schema.
-	for _, field := range qr.Fields {
-		fieldTypes[field.Name] = field.Type
-	}
-	columns, err := conn.Exec(tabletenv.LocalContext(), fmt.Sprintf("describe %s", sqlTableName), 10000, false)
-	if err != nil {
-		return err
-	}
-	for _, row := range columns.Rows {
-		name := row[0].ToString()
-		columnType, ok := fieldTypes[name]
-		if !ok {
-			// This code is unreachable.
-			log.Warningf("Table: %s, column %s not found in select list, skipping.", ta.Name, name)
-			continue
-		}
-		// BIT data type default value representation differs from how
-		// it's returned. It's represented as b'101', but returned in
-		// its binary form. Extract the binary form.
-		if columnType == querypb.Type_BIT && row[4].ToString() != "" {
-			query := fmt.Sprintf("select %s", row[4].ToString())
-			r, err := conn.Exec(tabletenv.LocalContext(), query, 10000, false)
-			if err != nil {
-				return err
-			}
-			if len(r.Rows) != 1 || len(r.Rows[0]) != 1 {
-				// This code is unreachable.
-				return fmt.Errorf("invalid rows returned from %s: %v", query, r.Rows)
-			}
-			// overwrite the original value with the new one.
-			row[4] = r.Rows[0][0]
-		}
-		ta.AddColumn(name, columnType, row[4], row[5].ToString())
-	}
-	return nil
-}
-
-func fetchIndexes(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
-	indexes, err := conn.Exec(tabletenv.LocalContext(), fmt.Sprintf("show index from %s", sqlTableName), 10000, false)
-	if err != nil {
-		return err
-	}
-	var currentIndex *Index
-	currentName := ""
-	for _, row := range indexes.Rows {
-		indexName := row[2].ToString()
-		if currentName != indexName {
-			currentIndex = ta.AddIndex(indexName, row[1].ToString() == "0")
-			currentName = indexName
-		}
-		var cardinality uint64
-		if !row[6].IsNull() {
-			cardinality, err = sqltypes.ToUint64(row[6])
-			if err != nil {
-				log.Warningf("%s", err)
-			}
-		}
-		currentIndex.AddColumn(row[4].ToString(), cardinality)
-	}
-	ta.Done()
+	ta.Fields = qr.Fields
 	return nil
 }
 
 func loadMessageInfo(ta *Table, comment string) error {
-	findCols := map[string]struct{}{
-		"id":             {},
-		"time_scheduled": {},
-		"time_next":      {},
-		"epoch":          {},
-		"time_created":   {},
-		"time_acked":     {},
+	hiddenCols := map[string]struct{}{
+		"priority":   {},
+		"time_next":  {},
+		"epoch":      {},
+		"time_acked": {},
 	}
 
-	// orderedColumns are necessary to ensure that they
-	// get added in the correct order to fields if they
-	// need to be returned with the stream.
-	orderedColumns := []string{
+	requiredCols := []string{
 		"id",
-		"time_scheduled",
+		"priority",
 		"time_next",
 		"epoch",
-		"time_created",
 		"time_acked",
 	}
 
@@ -165,9 +83,8 @@ func loadMessageInfo(ta *Table, comment string) error {
 		}
 		keyvals[kv[0]] = kv[1]
 	}
-	var err error
-	ta.MessageInfo.Topic = getTopic(keyvals)
 
+	var err error
 	if ta.MessageInfo.AckWaitDuration, err = getDuration(keyvals, "vt_ack_wait"); err != nil {
 		return err
 	}
@@ -183,46 +100,29 @@ func loadMessageInfo(ta *Table, comment string) error {
 	if ta.MessageInfo.PollInterval, err = getDuration(keyvals, "vt_poller_interval"); err != nil {
 		return err
 	}
-	for _, col := range orderedColumns {
+
+	// errors are ignored because these fields are optional and 0 is the default value
+	ta.MessageInfo.MinBackoff, _ = getDuration(keyvals, "vt_min_backoff")
+	// the original default minimum backoff was based on ack wait timeout, so this preserves that
+	if ta.MessageInfo.MinBackoff == 0 {
+		ta.MessageInfo.MinBackoff = ta.MessageInfo.AckWaitDuration
+	}
+
+	ta.MessageInfo.MaxBackoff, _ = getDuration(keyvals, "vt_max_backoff")
+
+	for _, col := range requiredCols {
 		num := ta.FindColumn(sqlparser.NewColIdent(col))
 		if num == -1 {
 			return fmt.Errorf("%s missing from message table: %s", col, ta.Name.String())
 		}
-
-		// id and time_scheduled must be the first two columns.
-		if col == "id" || col == "time_scheduled" {
-			ta.MessageInfo.Fields = append(ta.MessageInfo.Fields, &querypb.Field{
-				Name: ta.Columns[num].Name.String(),
-				Type: ta.Columns[num].Type,
-			})
-		}
-	}
-
-	// Store the position of the id column in the PK
-	// list. This is required to handle arbitrary updates.
-	// In such cases, we have to be able to identify the
-	// affected id and invalidate the message cache.
-	ta.MessageInfo.IDPKIndex = -1
-	for i, j := range ta.PKColumns {
-		if ta.Columns[j].Name.EqualString("id") {
-			ta.MessageInfo.IDPKIndex = i
-			break
-		}
-	}
-	if ta.MessageInfo.IDPKIndex == -1 {
-		return fmt.Errorf("id column is not part of the primary key for message table: %s", ta.Name.String())
 	}
 
 	// Load user-defined columns. Any "unrecognized" column is user-defined.
-	for _, c := range ta.Columns {
-		if _, ok := findCols[c.Name.Lowered()]; ok {
+	for _, field := range ta.Fields {
+		if _, ok := hiddenCols[strings.ToLower(field.Name)]; ok {
 			continue
 		}
-
-		ta.MessageInfo.Fields = append(ta.MessageInfo.Fields, &querypb.Field{
-			Name: c.Name.String(),
-			Type: c.Type,
-		})
+		ta.MessageInfo.Fields = append(ta.MessageInfo.Fields, field)
 	}
 	return nil
 }
@@ -249,8 +149,4 @@ func getNum(in map[string]string, key string) (int, error) {
 		return 0, err
 	}
 	return v, nil
-}
-
-func getTopic(in map[string]string) string {
-	return in["vt_topic"]
 }

@@ -27,6 +27,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
@@ -79,6 +81,8 @@ type Stats struct {
 
 	SecondsBehindMaster sync2.AtomicInt64
 	History             *history.History
+
+	State sync2.AtomicString
 }
 
 // SetLastPosition sets the last replication position.
@@ -176,17 +180,12 @@ func NewBinlogPlayerTables(dbClient DBClient, tablet *topodatapb.Tablet, tables 
 // If an error is encountered, it updates the vreplication state to "Error".
 // If a stop position was specified, and reached, the state is updated to "Stopped".
 func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
-	if err := SetVReplicationState(blp.dbClient, blp.uid, BlpRunning, ""); err != nil {
+	if err := blp.setVReplicationState(BlpRunning, ""); err != nil {
 		log.Errorf("Error writing Running state: %v", err)
 	}
 
 	if err := blp.applyEvents(ctx); err != nil {
-		msg := err.Error()
-		blp.blplStats.History.Add(&StatsHistoryRecord{
-			Time:    time.Now(),
-			Message: msg,
-		})
-		if err := SetVReplicationState(blp.dbClient, blp.uid, BlpError, msg); err != nil {
+		if err := blp.setVReplicationState(BlpError, err.Error()); err != nil {
 			log.Errorf("Error writing stop state: %v", err)
 		}
 		return err
@@ -241,14 +240,14 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 		case blp.position.Equal(blp.stopPosition):
 			msg := fmt.Sprintf("not starting BinlogPlayer, we're already at the desired position %v", blp.stopPosition)
 			log.Info(msg)
-			if err := SetVReplicationState(blp.dbClient, blp.uid, BlpStopped, msg); err != nil {
+			if err := blp.setVReplicationState(BlpStopped, msg); err != nil {
 				log.Errorf("Error writing stop state: %v", err)
 			}
 			return nil
 		case blp.position.AtLeast(blp.stopPosition):
 			msg := fmt.Sprintf("starting point %v greater than stopping point %v", blp.position, blp.stopPosition)
 			log.Error(msg)
-			if err := SetVReplicationState(blp.dbClient, blp.uid, BlpStopped, msg); err != nil {
+			if err := blp.setVReplicationState(BlpStopped, msg); err != nil {
 				log.Errorf("Error writing stop state: %v", err)
 			}
 			// Don't return an error. Otherwise, it will keep retrying.
@@ -348,7 +347,7 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 					if blp.position.AtLeast(blp.stopPosition) {
 						msg := "Reached stopping position, done playing logs"
 						log.Info(msg)
-						if err := SetVReplicationState(blp.dbClient, blp.uid, BlpStopped, msg); err != nil {
+						if err := blp.setVReplicationState(BlpStopped, msg); err != nil {
 							log.Errorf("Error writing stop state: %v", err)
 						}
 						return nil
@@ -463,6 +462,21 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransactio
 	return nil
 }
 
+func (blp *BinlogPlayer) setVReplicationState(state, message string) error {
+	if message != "" {
+		blp.blplStats.History.Add(&StatsHistoryRecord{
+			Time:    time.Now(),
+			Message: message,
+		})
+	}
+	blp.blplStats.State.Set(state)
+	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state, encodeString(MessageTruncate(message)), blp.uid)
+	if _, err := blp.dbClient.ExecuteFetch(query, 1); err != nil {
+		return fmt.Errorf("could not set state: %v: %v", query, err)
+	}
+	return nil
+}
+
 // CreateVReplicationTable returns the statements required to create
 // the _vt.vreplication table.
 // id: is an auto-increment column that identifies the stream.
@@ -507,15 +521,6 @@ func AlterVReplicationTable() []string {
 	return []string{"ALTER TABLE _vt.vreplication ADD COLUMN db_name VARBINARY(255) NOT NULL"}
 }
 
-// SetVReplicationState updates the state in the _vt.vreplication table.
-func SetVReplicationState(dbClient DBClient, uid uint32, state, message string) error {
-	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state, encodeString(MessageTruncate(message)), uid)
-	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
-		return fmt.Errorf("could not set state: %v: %v", query, err)
-	}
-	return nil
-}
-
 // VRSettings contains the settings of a vreplication table.
 type VRSettings struct {
 	StartPos          mysql.Position
@@ -539,11 +544,11 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 	}
 	vrRow := qr.Rows[0]
 
-	maxTPS, err := sqltypes.ToInt64(vrRow[2])
+	maxTPS, err := evalengine.ToInt64(vrRow[2])
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse max_tps column: %v", err)
 	}
-	maxReplicationLag, err := sqltypes.ToInt64(vrRow[3])
+	maxReplicationLag, err := evalengine.ToInt64(vrRow[3])
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse max_replication_lag column: %v", err)
 	}

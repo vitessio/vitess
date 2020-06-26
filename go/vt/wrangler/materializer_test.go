@@ -54,7 +54,7 @@ func TestMigrateTables(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 	ctx := context.Background()
-	err := env.wr.Migrate(ctx, "workflow", "sourceks", "targetks", "t1", "", "")
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "")
 	assert.NoError(t, err)
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	assert.NoError(t, err)
@@ -86,7 +86,7 @@ func TestMigrateVSchema(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 	ctx := context.Background()
-	err := env.wr.Migrate(ctx, "workflow", "sourceks", "targetks", `{"t1":{}}`, "", "")
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", `{"t1":{}}`, "", "")
 	assert.NoError(t, err)
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	assert.NoError(t, err)

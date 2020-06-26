@@ -106,6 +106,11 @@ func (cf CounterDurationFunc) Help() string {
 	return cf.help
 }
 
+// Get returns the value.
+func (cf CounterDurationFunc) Get() int64 {
+	return int64(cf.F())
+}
+
 // String is the implementation of expvar.var.
 func (cf CounterDurationFunc) String() string {
 	return strconv.FormatInt(int64(cf.F()), 10)

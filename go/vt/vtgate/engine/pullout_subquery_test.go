@@ -20,6 +20,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -59,9 +60,7 @@ func TestPulloutSubqueryValueGood(t *testing.T) {
 	}
 
 	result, err := ps.Execute(nil, bindVars, false)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	sfp.ExpectLog(t, []string{`Execute aa: type:INT64 value:"1"  false`})
 	ufp.ExpectLog(t, []string{`Execute aa: type:INT64 value:"1" sq: type:INT64 value:"1"  false`})
 	expectResult(t, "ps.Execute", result, underlyingResult)
@@ -317,9 +316,7 @@ func TestPulloutSubqueryStream(t *testing.T) {
 	}
 
 	result, err := wrapStreamExecute(ps, nil, bindVars, false)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	sfp.ExpectLog(t, []string{`Execute aa: type:INT64 value:"1"  false`})
 	ufp.ExpectLog(t, []string{`StreamExecute aa: type:INT64 value:"1" sq: type:INT64 value:"1"  false`})
 	expectResult(t, "ps.StreamExecute", result, underlyingResult)

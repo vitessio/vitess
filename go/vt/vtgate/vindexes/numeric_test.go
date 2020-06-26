@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
@@ -51,9 +52,7 @@ func TestNumericMap(t *testing.T) {
 		sqltypes.NewInt64(7),
 		sqltypes.NewInt64(8),
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x01")),
 		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x02")),
@@ -74,9 +73,7 @@ func TestNumericVerify(t *testing.T) {
 	got, err := numeric.Verify(nil,
 		[]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
 		[][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01"), []byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []bool{true, false}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("lhu.Verify(match): %v, want %v", got, want)
@@ -92,9 +89,7 @@ func TestNumericVerify(t *testing.T) {
 
 func TestNumericReverseMap(t *testing.T) {
 	got, err := numeric.(Reversible).ReverseMap(nil, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []sqltypes.Value{sqltypes.NewUint64(1)}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ReverseMap(): %v, want %v", got, want)

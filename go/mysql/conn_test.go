@@ -89,7 +89,7 @@ func useWriteEphemeralPacketBuffered(t *testing.T, cConn *Conn, data []byte) {
 		}
 	}()
 	cConn.startWriterBuffering()
-	defer cConn.flush()
+	defer cConn.endWriterBuffering()
 
 	buf := cConn.startEphemeralPacket(len(data))
 	copy(buf, data)

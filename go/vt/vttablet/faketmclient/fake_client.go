@@ -290,6 +290,11 @@ func (client *FakeTabletManagerClient) StopReplicationAndGetStatus(ctx context.C
 	return &replicationdatapb.Status{}, nil
 }
 
+// PromoteReplica is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+	return "", nil
+}
+
 // PromoteSlave is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) PromoteSlave(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	return "", nil

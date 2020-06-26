@@ -17,6 +17,9 @@
 # We will enable it for everything here, but with most of the linters disabled.
 # See: https://github.com/vitessio/vitess/issues/5503
 
+# NOTE(sougou): tool is disabled till it's fixed
+exit
+
 GOLANGCI_LINT=$(command -v golangci-lint >/dev/null 2>&1)
 if [ $? -eq 1 ]; then
   echo "Downloading golangci-lint..."

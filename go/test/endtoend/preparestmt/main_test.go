@@ -23,6 +23,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
@@ -32,9 +33,11 @@ import (
 
 // tableData is a temporary structure to hold selected data.
 type tableData struct {
-	Msg     string
-	Data    string
-	TextCol string
+	Msg            string
+	Data           string
+	TextCol        string
+	DateTime       time.Time
+	DateTimeMicros time.Time
 }
 
 // DBInfo information about the database.
@@ -119,6 +122,7 @@ var (
 		decimal_unsigned DECIMAL,
 		t_date DATE,
 		t_datetime DATETIME,
+		t_datetime_micros DATETIME(6),
 		t_time TIME,
 		t_timestamp TIMESTAMP,
 		c8 bit(8) DEFAULT NULL,
@@ -133,16 +137,36 @@ var (
 		json_col JSON,
 		text_col TEXT,
 		data longblob,
+		tinyint_min TINYINT,
+		tinyint_max TINYINT,
+		tinyint_pos TINYINT,
+		tinyint_neg TINYINT,
+		smallint_min SMALLINT,
+		smallint_max SMALLINT,
+		smallint_pos SMALLINT,
+		smallint_neg SMALLINT,
+		medint_min MEDIUMINT,
+		medint_max MEDIUMINT,
+		medint_pos MEDIUMINT,
+		medint_neg MEDIUMINT,
+		int_min INT,
+		int_max INT,
+		int_pos INT,
+		int_neg INT,
+		bigint_min BIGINT,
+		bigint_max BIGINT,
+		bigint_pos BIGINT,
+		bigint_neg BIGINT,
 		primary key (id)
 		) Engine=InnoDB`
 )
 
 func TestMain(m *testing.M) {
+	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
 		clusterInstance = cluster.NewCluster(cell, hostname)
-
 		defer clusterInstance.Teardown()
 
 		// Start topo server
@@ -231,7 +255,9 @@ func Connect(t *testing.T, params ...string) *sql.DB {
 func execWithError(t *testing.T, dbo *sql.DB, errorCodes []uint16, stmt string, params ...interface{}) {
 	_, err := dbo.Exec(stmt, params...)
 	require.NotNilf(t, err, "error expected, got nil")
-	require.Contains(t, errorCodes, err.(*mysql.MySQLError).Number)
+	mysqlErr, ok := err.(*mysql.MySQLError)
+	require.Truef(t, ok, "invalid error type")
+	require.Contains(t, errorCodes, mysqlErr.Number)
 }
 
 // exec executes the query using the params.
@@ -242,7 +268,9 @@ func exec(t *testing.T, dbo *sql.DB, stmt string, params ...interface{}) {
 // execErr executes the query and returns an error if one occurs.
 func execErr(dbo *sql.DB, stmt string, params ...interface{}) *mysql.MySQLError {
 	if _, err := dbo.Exec(stmt, params...); err != nil {
-		return err.(*mysql.MySQLError)
+		// TODO : need to handle
+		mysqlErr, _ := err.(*mysql.MySQLError)
+		return mysqlErr
 	}
 	return nil
 }
@@ -251,7 +279,7 @@ func execErr(dbo *sql.DB, stmt string, params ...interface{}) *mysql.MySQLError 
 func selectWhere(t *testing.T, dbo *sql.DB, where string, params ...interface{}) []tableData {
 	var out []tableData
 	// prepare query
-	qry := "SELECT msg, data, text_col FROM " + tableName
+	qry := "SELECT msg, data, text_col, t_datetime, t_datetime_micros FROM " + tableName
 	if where != "" {
 		qry += " WHERE (" + where + ")"
 	}
@@ -263,7 +291,7 @@ func selectWhere(t *testing.T, dbo *sql.DB, where string, params ...interface{})
 	// prepare result
 	for r.Next() {
 		var t tableData
-		r.Scan(&t.Msg, &t.Data, &t.TextCol)
+		r.Scan(&t.Msg, &t.Data, &t.TextCol, &t.DateTime, &t.DateTimeMicros)
 		out = append(out, t)
 	}
 	return out

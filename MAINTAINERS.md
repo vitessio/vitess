@@ -2,7 +2,7 @@ This page lists all active maintainers and their areas of expertise. This can be
 
 The following is the full list, alphabetically ordered.
 
-* Andres Taylor ([systay](https://github.com/systay)) antaylor@squareup.com
+* Andres Taylor ([systay](https://github.com/systay)) andres@planetscale.com
 * Anthony Yeh ([enisoc](https://github.com/enisoc)) enisoc@planetscale.com
 * Dan Kozlowski ([dkhenry](https://github.com/dkhenry)) koz@planetscale.com
 * David Weitzman ([dweitzman](https://github.com/dweitzman)) dweitzman@pinterest.com

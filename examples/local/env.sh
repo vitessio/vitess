@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-hostname=`hostname -f`
+hostname=$(hostname -f)
 vtctld_web_port=15000
 export VTDATAROOT="${VTDATAROOT:-${PWD}/vtdataroot}"
 
@@ -61,3 +61,16 @@ else
     mkdir -p "${VTDATAROOT}/tmp"
     mkdir -p "${VTDATAROOT}/etcd"
 fi
+
+mkdir -p "${VTDATAROOT}/tmp"
+
+# Set aliases to simplify instructions.
+# In your own environment you may prefer to use config files,
+# such as ~/.my.cnf
+
+alias mysql="command mysql -h 127.0.0.1 -P 15306"
+alias vtctlclient="command vtctlclient -server localhost:15999 -log_dir ${VTDATAROOT}/tmp -alsologtostderr"
+
+# Make sure aliases are expanded in non-interactive shell
+shopt -s expand_aliases
+

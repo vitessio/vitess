@@ -327,6 +327,7 @@ const (
 	ERNoDefault                     = 1230
 	EROperandColumns                = 1241
 	ERSubqueryNo1Row                = 1242
+	ERWarnDataOutOfRange            = 1264
 	ERNonUpdateableTable            = 1288
 	ERFeatureDisabled               = 1289
 	EROptionPreventsStatement       = 1290

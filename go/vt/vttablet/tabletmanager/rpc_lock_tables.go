@@ -102,7 +102,7 @@ func (agent *ActionAgent) lockTablesUsingLockTables(conn *dbconnpool.DBConnectio
 		tableNames = append(tableNames, fmt.Sprintf("%s READ", sqlescape.EscapeID(name)))
 	}
 	lockStatement := fmt.Sprintf("LOCK TABLES %v", strings.Join(tableNames, ", "))
-	_, err := conn.ExecuteFetch(fmt.Sprintf("USE %s", agent.DBConfigs.DBName.Get()), 0, false)
+	_, err := conn.ExecuteFetch(fmt.Sprintf("USE %s", agent.DBConfigs.DBName()), 0, false)
 	if err != nil {
 		return err
 	}

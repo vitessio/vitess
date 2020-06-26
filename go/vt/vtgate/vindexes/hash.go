@@ -25,6 +25,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -83,7 +85,7 @@ func (vind *Hash) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, 
 			ival, err = strconv.ParseInt(str, 10, 64)
 			num = uint64(ival)
 		} else {
-			num, err = sqltypes.ToUint64(id)
+			num, err = evalengine.ToUint64(id)
 		}
 
 		if err != nil {
@@ -99,7 +101,7 @@ func (vind *Hash) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, 
 func (vind *Hash) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i := range ids {
-		num, err := sqltypes.ToUint64(ids[i])
+		num, err := evalengine.ToUint64(ids[i])
 		if err != nil {
 			return nil, vterrors.Wrap(err, "hash.Verify")
 		}

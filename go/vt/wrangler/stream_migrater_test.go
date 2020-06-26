@@ -40,11 +40,11 @@ func TestStreamMigrateMainflow(t *testing.T) {
 	defer tme.stopTablets(t)
 
 	// Migrate reads
-	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,8 +53,8 @@ func TestStreamMigrateMainflow(t *testing.T) {
 
 	stopStreams := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
 
 		// pre-compute sourceRows because they're re-read multiple times.
 		var sourceRows [][]string
@@ -133,7 +133,7 @@ func TestStreamMigrateMainflow(t *testing.T) {
 	}
 	migrateStreams()
 
-	// mi.createJouranls (verify workflows are in the insert)
+	// mi.createJournals (verify workflows are in the insert)
 	journal := "insert into _vt.resharding_journal.*source_workflows.*t1t2"
 	tme.dbSourceClients[0].addQueryRE(journal, &sqltypes.Result{}, nil)
 	tme.dbSourceClients[1].addQueryRE(journal, &sqltypes.Result{}, nil)
@@ -161,9 +161,8 @@ func TestStreamMigrateMainflow(t *testing.T) {
 
 	tme.expectCreateReverseVReplication()
 	tme.expectStartReverseVReplication()
-	tme.expectDeleteTargetVReplication()
-
-	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true); err != nil {
+	tme.expectFrozenTargetVReplication()
+	if _, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -177,6 +176,11 @@ func TestStreamMigrateMainflow(t *testing.T) {
 	checkIsMasterServing(t, tme.ts, "ks:-80", true)
 	checkIsMasterServing(t, tme.ts, "ks:80-", true)
 
+	tme.expectDeleteReverseVReplication()
+	tme.expectDeleteTargetVReplication()
+	if _, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", false); err != nil {
+		t.Fatal(err)
+	}
 	verifyQueries(t, tme.allDBClients)
 }
 
@@ -186,11 +190,11 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 	defer tme.stopTablets(t)
 
 	// Migrate reads
-	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,8 +203,8 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 
 	stopStreams := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
 
 		// pre-compute sourceRows because they're re-read multiple times.
 		var sourceRows [][]string
@@ -328,9 +332,9 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 
 	tme.expectCreateReverseVReplication()
 	tme.expectStartReverseVReplication()
-	tme.expectDeleteTargetVReplication()
+	tme.expectFrozenTargetVReplication()
 
-	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true); err != nil {
+	if _, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -353,11 +357,11 @@ func TestStreamMigrateOneToMany(t *testing.T) {
 	defer tme.stopTablets(t)
 
 	// Migrate reads
-	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -366,7 +370,7 @@ func TestStreamMigrateOneToMany(t *testing.T) {
 
 	stopStreams := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
 
 		// pre-compute sourceRows because they're re-read multiple times.
 		var sourceRows [][]string
@@ -460,9 +464,9 @@ func TestStreamMigrateOneToMany(t *testing.T) {
 
 	tme.expectCreateReverseVReplication()
 	tme.expectStartReverseVReplication()
-	tme.expectDeleteTargetVReplication()
+	tme.expectFrozenTargetVReplication()
 
-	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true); err != nil {
+	if _, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -484,11 +488,11 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 	defer tme.stopTablets(t)
 
 	// Migrate reads
-	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -497,8 +501,8 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 
 	stopStreams := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
 
 		// pre-compute sourceRows because they're re-read multiple times.
 		var sourceRows [][]string
@@ -594,9 +598,9 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 	finalize()
 
 	tme.expectStartReverseVReplication()
-	tme.expectDeleteTargetVReplication()
+	tme.expectFrozenTargetVReplication()
 
-	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true); err != nil {
+	if _, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -617,11 +621,11 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 	defer tme.stopTablets(t)
 
 	// Migrate reads
-	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -630,8 +634,8 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 
 	stopStreams := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
 
 		var sourceRows [][]string
 		for i, sourceTargetShard := range tme.sourceShards {
@@ -782,9 +786,9 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 
 	tme.expectCreateReverseVReplication()
 	tme.expectStartReverseVReplication()
-	tme.expectDeleteTargetVReplication()
+	tme.expectFrozenTargetVReplication()
 
-	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true); err != nil {
+	if _, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -807,11 +811,11 @@ func TestStreamMigrateSyncFail(t *testing.T) {
 	defer tme.stopTablets(t)
 
 	// Migrate reads
-	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -820,8 +824,8 @@ func TestStreamMigrateSyncFail(t *testing.T) {
 
 	stopStreams := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
 
 		var sourceRows [][]string
 		for i, sourceTargetShard := range tme.sourceShards {
@@ -913,10 +917,10 @@ func TestStreamMigrateSyncFail(t *testing.T) {
 
 	tme.expectCancelMigration()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
 	want := "does not match"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("MigrateWrites err: %v, want %s", err, want)
+		t.Errorf("SwitchWrites err: %v, want %s", err, want)
 	}
 	verifyQueries(t, tme.allDBClients)
 }
@@ -927,11 +931,11 @@ func TestStreamMigrateCancel(t *testing.T) {
 	defer tme.stopTablets(t)
 
 	// Migrate reads
-	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -940,8 +944,8 @@ func TestStreamMigrateCancel(t *testing.T) {
 
 	stopStreamsFail := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
 
 		// pre-compute sourceRows because they're re-read multiple times.
 		var sourceRows [][]string
@@ -1005,10 +1009,10 @@ func TestStreamMigrateCancel(t *testing.T) {
 	}
 	cancelMigration()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
 	want := "intentionally failed"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("MigrateWrites err: %v, want %s", err, want)
+		t.Errorf("SwitchWrites err: %v, want %s", err, want)
 	}
 
 	checkServedTypes(t, tme.ts, "ks:-40", 1)
@@ -1030,11 +1034,11 @@ func TestStreamMigrateStoppedStreams(t *testing.T) {
 	defer tme.stopTablets(t)
 
 	// Migrate reads
-	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1064,7 +1068,7 @@ func TestStreamMigrateStoppedStreams(t *testing.T) {
 
 		for i, dbclient := range tme.dbSourceClients {
 			// sm.stopStreams->sm.readSourceStreams->readTabletStreams('') and VReplicationExec(_vt.copy_state)
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
@@ -1073,10 +1077,10 @@ func TestStreamMigrateStoppedStreams(t *testing.T) {
 	}
 	stopStreams()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
-	want := "cannot migrate until all streams are running: 0"
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
+	want := "cannot migrate until all streams are running: 0: 10"
 	if err == nil || err.Error() != want {
-		t.Errorf("MigrateWrites err: %v, want %v", err, want)
+		t.Errorf("SwitchWrites err: %v, want %v", err, want)
 	}
 	verifyQueries(t, tme.allDBClients)
 }
@@ -1087,11 +1091,11 @@ func TestStreamMigrateCancelWithStoppedStreams(t *testing.T) {
 	defer tme.stopTablets(t)
 
 	// Migrate reads
-	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1139,7 +1143,7 @@ func TestStreamMigrateCancelWithStoppedStreams(t *testing.T) {
 
 	tme.expectCancelMigration()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1152,11 +1156,11 @@ func TestStreamMigrateStillCopying(t *testing.T) {
 	defer tme.stopTablets(t)
 
 	// Migrate reads
-	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1165,7 +1169,7 @@ func TestStreamMigrateStillCopying(t *testing.T) {
 
 	stopStreams := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
 
 		// pre-compute sourceRows because they're re-read multiple times.
 		var sourceRows [][]string
@@ -1199,25 +1203,25 @@ func TestStreamMigrateStillCopying(t *testing.T) {
 	}
 	stopStreams()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
 	want := "cannot migrate while vreplication streams in source shards are still copying: 0"
 	if err == nil || err.Error() != want {
-		t.Errorf("MigrateWrites err: %v, want %v", err, want)
+		t.Errorf("SwitchWrites err: %v, want %v", err, want)
 	}
 	verifyQueries(t, tme.allDBClients)
 }
 
-func TestStreamMigrateEmptyWorflow(t *testing.T) {
+func TestStreamMigrateEmptyWorkflow(t *testing.T) {
 	ctx := context.Background()
 	tme := newTestShardMigrater(ctx, t, []string{"0"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
 	// Migrate reads
-	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1226,7 +1230,7 @@ func TestStreamMigrateEmptyWorflow(t *testing.T) {
 
 	stopStreams := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
 
 		// pre-compute sourceRows because they're re-read multiple times.
 		var sourceRows [][]string
@@ -1259,25 +1263,25 @@ func TestStreamMigrateEmptyWorflow(t *testing.T) {
 	}
 	stopStreams()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
 	want := "VReplication streams must have named workflows for migration: shard: ks:0, stream: 1"
 	if err == nil || err.Error() != want {
-		t.Errorf("MigrateWrites err: %v, want %v", err, want)
+		t.Errorf("SwitchWrites err: %v, want %v", err, want)
 	}
 	verifyQueries(t, tme.allDBClients)
 }
 
-func TestStreamMigrateDupWorflow(t *testing.T) {
+func TestStreamMigrateDupWorkflow(t *testing.T) {
 	ctx := context.Background()
 	tme := newTestShardMigrater(ctx, t, []string{"0"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
 	// Migrate reads
-	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1286,7 +1290,7 @@ func TestStreamMigrateDupWorflow(t *testing.T) {
 
 	stopStreams := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
 
 		// pre-compute sourceRows because they're re-read multiple times.
 		var sourceRows [][]string
@@ -1319,10 +1323,10 @@ func TestStreamMigrateDupWorflow(t *testing.T) {
 	}
 	stopStreams()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
 	want := "VReplication stream has the same workflow name as the resharding workflow: shard: ks:0, stream: 1"
 	if err == nil || err.Error() != want {
-		t.Errorf("MigrateWrites err: %v, want %v", err, want)
+		t.Errorf("SwitchWrites err: %v, want %v", err, want)
 	}
 	verifyQueries(t, tme.allDBClients)
 }
@@ -1334,11 +1338,11 @@ func TestStreamMigrateStreamsMismatch(t *testing.T) {
 	defer tme.stopTablets(t)
 
 	// Migrate reads
-	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1347,8 +1351,8 @@ func TestStreamMigrateStreamsMismatch(t *testing.T) {
 
 	stopStreams := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
 
 		// pre-compute sourceRows because they're re-read multiple times.
 		var sourceRows [][]string
@@ -1390,10 +1394,10 @@ func TestStreamMigrateStreamsMismatch(t *testing.T) {
 	}
 	stopStreams()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
 	want := "streams are mismatched across source shards"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("MigrateWrites err: %v, must contain %v", err, want)
+		t.Errorf("SwitchWrites err: %v, must contain %v", err, want)
 	}
 	verifyQueries(t, tme.allDBClients)
 }
@@ -1675,11 +1679,11 @@ func TestTemplatize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mi := &migrater{
+	ts := &trafficSwitcher{
 		sourceKSSchema: ksschema,
 	}
 	for _, tt := range tests {
-		sm := &streamMigrater{mi: mi}
+		sm := &streamMigrater{ts: ts}
 		out, err := sm.templatize(context.Background(), tt.in)
 		var gotErr string
 		if err != nil {

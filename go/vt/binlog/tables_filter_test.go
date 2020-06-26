@@ -17,6 +17,7 @@ limitations under the License.
 package binlog
 
 import (
+	"fmt"
 	"testing"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -158,4 +159,13 @@ func TestTablesFilterMalformed(t *testing.T) {
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
+}
+
+func bltToString(tx *binlogdatapb.BinlogTransaction) string {
+	result := ""
+	for _, statement := range tx.Statements {
+		result += fmt.Sprintf("statement: <%d, \"%s\"> ", statement.Category, string(statement.Sql))
+	}
+	result += fmt.Sprintf("position: \"%v\" ", tx.EventToken.Position)
+	return result
 }

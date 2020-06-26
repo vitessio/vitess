@@ -53,7 +53,9 @@ var (
 
 	schemaDir = flag.String("schema_dir", "", "Schema base directory. Should contain one directory per keyspace, with a vschema.json file if necessary.")
 
-	ts *topo.Server
+	ts              *topo.Server
+	resilientServer *srvtopo.ResilientServer
+	healthCheck     discovery.HealthCheck
 )
 
 func init() {
@@ -95,10 +97,7 @@ func main() {
 	servenv.Init()
 	tabletenv.Init()
 
-	dbcfgs, err := dbconfigs.Init("")
-	if err != nil {
-		log.Warning(err)
-	}
+	dbcfgs := dbconfigs.GlobalDBConfigs.Init("")
 	mysqld := mysqlctl.NewMysqld(dbcfgs)
 	servenv.OnClose(mysqld.Close)
 
@@ -118,8 +117,8 @@ func main() {
 	}
 
 	// vtgate configuration and init
-	resilientServer := srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer")
-	healthCheck := discovery.NewHealthCheck(1*time.Millisecond /*retryDelay*/, 1*time.Hour /*healthCheckTimeout*/)
+	resilientServer = srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer")
+	healthCheck = discovery.NewHealthCheck(1*time.Millisecond /*retryDelay*/, 1*time.Hour /*healthCheckTimeout*/)
 	tabletTypesToWait := []topodatapb.TabletType{
 		topodatapb.TabletType_MASTER,
 		topodatapb.TabletType_REPLICA,
@@ -129,10 +128,14 @@ func main() {
 	vtgate.QueryLogHandler = "/debug/vtgate/querylog"
 	vtgate.QueryLogzHandler = "/debug/vtgate/querylogz"
 	vtgate.QueryzHandler = "/debug/vtgate/queryz"
-	vtgate.Init(context.Background(), healthCheck, resilientServer, tpb.Cells[0], 2 /*retryCount*/, tabletTypesToWait)
+	vtg := vtgate.Init(context.Background(), healthCheck, resilientServer, tpb.Cells[0], 2 /*retryCount*/, tabletTypesToWait)
 
 	// vtctld configuration and init
 	vtctld.InitVtctld(ts)
+
+	servenv.OnRun(func() {
+		addStatusParts(vtg)
+	})
 
 	servenv.OnTerm(func() {
 		// FIXME(alainjobart): stop vtgate

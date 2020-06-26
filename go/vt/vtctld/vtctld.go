@@ -47,7 +47,7 @@ const (
 	appPrefix = "/app/"
 )
 
-// InitVtctld initializes all the vtctld functionnality.
+// InitVtctld initializes all the vtctld functionality.
 func InitVtctld(ts *topo.Server) {
 	actionRepo := NewActionRepository(ts)
 
@@ -145,7 +145,6 @@ func InitVtctld(ts *topo.Server) {
 			log.Errorf("Unable to open rice box %s", err)
 			http.NotFound(w, r)
 		}
-		log.Infof("Opening file from rice box : %s", rest)
 		fileToServe, err := riceBox.Open(rest)
 		if err != nil {
 			if !strings.ContainsAny(rest, "/.") {
@@ -179,4 +178,7 @@ func InitVtctld(ts *topo.Server) {
 
 	// Init workflow manager.
 	initWorkflowManager(ts)
+
+	// Setup reverse proxy for all vttablets through /vttablet/.
+	initVTTabletRedirection(ts)
 }

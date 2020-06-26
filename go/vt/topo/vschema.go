@@ -43,11 +43,15 @@ func (ts *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vsc
 	}
 
 	_, err = ts.globalCell.Update(ctx, nodePath, data, nil)
+	if err != nil {
+		log.Info("successfully updated vschema for keyspace %s: %v", keyspace, data)
+	}
 	return err
 }
 
 // DeleteVSchema delete the keyspace if it exists
 func (ts *Server) DeleteVSchema(ctx context.Context, keyspace string) error {
+	log.Info("deleting vschema for keyspace %s", keyspace)
 	nodePath := path.Join(KeyspacesPath, keyspace, VSchemaFile)
 	return ts.globalCell.Delete(ctx, nodePath, nil)
 }
@@ -68,8 +72,11 @@ func (ts *Server) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.K
 }
 
 // EnsureVSchema makes sure that a vschema is present for this keyspace or creates a blank one if it is missing
-func (ts *Server) EnsureVSchema(ctx context.Context, keyspace string) error {
+func (ts *Server) EnsureVSchema(ctx context.Context, keyspace string, cells []string) error {
 	vschema, err := ts.GetVSchema(ctx, keyspace)
+	if err != nil && !IsErrType(err, NoNode) {
+		log.Info("error in getting vschema for keyspace %s: %v", keyspace, err)
+	}
 	if vschema == nil || IsErrType(err, NoNode) {
 		err = ts.SaveVSchema(ctx, keyspace, &vschemapb.Keyspace{
 			Sharded:  false,
@@ -82,7 +89,7 @@ func (ts *Server) EnsureVSchema(ctx context.Context, keyspace string) error {
 		}
 	}
 
-	err = ts.RebuildSrvVSchema(ctx, []string{} /* cells */)
+	err = ts.RebuildSrvVSchema(ctx, cells)
 	if err != nil {
 		log.Errorf("could not rebuild SrvVschema after creating keyspace: %v", err)
 		return err

@@ -47,8 +47,6 @@ type VtbackupProcess struct {
 	ExtraArgs     []string
 	initialBackup bool
 	initDBfile    string
-	dbPassword    string
-	dbName        string
 
 	proc *exec.Cmd
 	exit chan error
@@ -87,8 +85,7 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 	vtbackup.proc.Stdout = os.Stdout
 
 	vtbackup.proc.Env = append(vtbackup.proc.Env, os.Environ()...)
-	log.Infof("%v", strings.Join(vtbackup.proc.Args, " "))
-	fmt.Println(vtbackup.proc.Args)
+	log.Infof("Running vtbackup with args: %v", strings.Join(vtbackup.proc.Args, " "))
 
 	err = vtbackup.proc.Run()
 	if err != nil {

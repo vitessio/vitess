@@ -387,6 +387,7 @@ func (s *server) UndoDemoteMaster(ctx context.Context, request *tabletmanagerdat
 	return response, err
 }
 
+// Deprecated
 func (s *server) PromoteSlaveWhenCaughtUp(ctx context.Context, request *tabletmanagerdatapb.PromoteSlaveWhenCaughtUpRequest) (response *tabletmanagerdatapb.PromoteSlaveWhenCaughtUpResponse, err error) {
 	defer s.agent.HandleRPCPanic(ctx, "PromoteSlaveWhenCaughtUp", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
@@ -430,11 +431,23 @@ func (s *server) StopReplicationAndGetStatus(ctx context.Context, request *table
 	return response, err
 }
 
+// Deprecated
 func (s *server) PromoteSlave(ctx context.Context, request *tabletmanagerdatapb.PromoteSlaveRequest) (response *tabletmanagerdatapb.PromoteSlaveResponse, err error) {
 	defer s.agent.HandleRPCPanic(ctx, "PromoteSlave", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.PromoteSlaveResponse{}
 	position, err := s.agent.PromoteSlave(ctx)
+	if err == nil {
+		response.Position = position
+	}
+	return response, err
+}
+
+func (s *server) PromoteReplica(ctx context.Context, request *tabletmanagerdatapb.PromoteReplicaRequest) (response *tabletmanagerdatapb.PromoteReplicaResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "PromoteReplica", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.PromoteReplicaResponse{}
+	position, err := s.agent.PromoteReplica(ctx)
 	if err == nil {
 		response.Position = position
 	}

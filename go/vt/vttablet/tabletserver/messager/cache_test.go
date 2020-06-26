@@ -26,6 +26,7 @@ import (
 func TestMessagerCacheOrder(t *testing.T) {
 	mc := newCache(10)
 	if !mc.Add(&MessageRow{
+		Priority: 1,
 		TimeNext: 1,
 		Epoch:    0,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
@@ -33,6 +34,7 @@ func TestMessagerCacheOrder(t *testing.T) {
 		t.Fatal("Add returned false")
 	}
 	if !mc.Add(&MessageRow{
+		Priority: 1,
 		TimeNext: 2,
 		Epoch:    0,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row02")},
@@ -40,6 +42,7 @@ func TestMessagerCacheOrder(t *testing.T) {
 		t.Fatal("Add returned false")
 	}
 	if !mc.Add(&MessageRow{
+		Priority: 2,
 		TimeNext: 2,
 		Epoch:    1,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row12")},
@@ -47,6 +50,7 @@ func TestMessagerCacheOrder(t *testing.T) {
 		t.Fatal("Add returned false")
 	}
 	if !mc.Add(&MessageRow{
+		Priority: 2,
 		TimeNext: 1,
 		Epoch:    1,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row11")},
@@ -54,6 +58,7 @@ func TestMessagerCacheOrder(t *testing.T) {
 		t.Fatal("Add returned false")
 	}
 	if !mc.Add(&MessageRow{
+		Priority: 1,
 		TimeNext: 3,
 		Epoch:    0,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row03")},
