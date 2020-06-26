@@ -110,6 +110,10 @@ var (
 	// The following variables can be changed to speed up tests.
 	mysqlPortRetryInterval       = 1 * time.Second
 	rebuildKeyspaceRetryInterval = 1 * time.Second
+
+	// demoteMasterType is deprecated.
+	// TODO(sougou); remove after release 7.0.
+	demoteMasterType = flag.String("demote_master_type", "REPLICA", "the tablet type a demoted master will transition to")
 )
 
 func init() {
@@ -281,6 +285,13 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet) error {
 	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
 	tm.History = history.New(historyLength)
 	tm.tabletAlias = tablet.Alias
+	demoteType, err := topoproto.ParseTabletType(*demoteMasterType)
+	if err != nil {
+		return err
+	}
+	if demoteType != tablet.Type {
+		return fmt.Errorf("deprecated demote_master_type %v must match init_tablet_type %v", demoteType, tablet.Type)
+	}
 	tm.baseTabletType = tablet.Type
 	tm._healthy = fmt.Errorf("healthcheck not run yet")
 
@@ -299,7 +310,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet) error {
 		return err
 	}
 
-	err := tm.QueryServiceControl.InitDBConfig(querypb.Target{
+	err = tm.QueryServiceControl.InitDBConfig(querypb.Target{
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,
