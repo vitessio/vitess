@@ -28,7 +28,6 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/sync2"
@@ -364,18 +363,15 @@ func (qe *QueryEngine) ClearQueryPlanCache() {
 	qe.plans.Clear()
 }
 
-// IsMySQLReachable returns true if we can connect to MySQL.
-func (qe *QueryEngine) IsMySQLReachable() bool {
-	conn, err := dbconnpool.NewDBConnection(context.TODO(), qe.env.Config().DB.DbaWithDB())
+// IsMySQLReachable returns an error if it cannot connect to MySQL.
+// This can be called before opening the QueryEngine.
+func (qe *QueryEngine) IsMySQLReachable() error {
+	conn, err := dbconnpool.NewDBConnection(context.TODO(), qe.env.Config().DB.AppWithDB())
 	if err != nil {
-		if mysql.IsConnErr(err) {
-			return false
-		}
-		log.Warningf("checking MySQL, unexpected error: %v", err)
-		return true
+		return err
 	}
 	conn.Close()
-	return true
+	return nil
 }
 
 func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []string) {
