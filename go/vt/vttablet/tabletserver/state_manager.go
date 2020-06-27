@@ -18,10 +18,12 @@ package tabletserver
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/history"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -70,72 +72,120 @@ var stateDetail = []string{
 	"Shutting Down",
 }
 
-// stateInfo returns a string representation of the state and optional detail
-// about the reason for the state transition
-func stateInfo(state int64) string {
-	if state == StateServing {
-		return "SERVING"
-	}
-	return fmt.Sprintf("%s (%s)", stateName[state], stateDetail[state])
+// stateManager manages state transition for all the TabletServer
+// subcomponents.
+type stateManager struct {
+	mu        sync.Mutex
+	state     int64
+	lameduck  sync2.AtomicInt32
+	target    querypb.Target
+	alsoAllow []topodatapb.TabletType
+	requests  sync.WaitGroup
+
+	se          schemaEngine
+	hw          subComponent
+	hr          subComponent
+	vstreamer   subComponent
+	tracker     subComponent
+	watcher     subComponent
+	qe          queryEngine
+	txThrottler txThrottler
+	te          txEngine
+	messager    subComponent
+
+	checkMySQLThrottler *sync2.Semaphore
+	history             *history.History
+	timebombDuration    time.Duration
+}
+
+type schemaEngine interface {
+	Open() error
+	MakeNonMaster()
+	Close()
+}
+
+type queryEngine interface {
+	Open() error
+	IsMySQLReachable() error
+	StopServing()
+	Close()
+}
+
+type txEngine interface {
+	AcceptReadWrite() error
+	AcceptReadOnly() error
+	Close()
+}
+
+type subComponent interface {
+	Open()
+	Close()
+}
+
+type txThrottler interface {
+	Open() error
+	Close()
 }
 
 // EnterLameduck causes tabletserver to enter the lameduck state. This
 // state causes health checks to fail, but the behavior of tabletserver
 // otherwise remains the same. Any subsequent calls to SetServingType will
 // cause the tabletserver to exit this mode.
-func (tsv *TabletServer) EnterLameduck() {
-	tsv.lameduck.Set(1)
+func (sm *stateManager) EnterLameduck() {
+	sm.lameduck.Set(1)
 }
 
 // ExitLameduck causes the tabletserver to exit the lameduck mode.
-func (tsv *TabletServer) ExitLameduck() {
-	tsv.lameduck.Set(0)
+func (sm *stateManager) ExitLameduck() {
+	sm.lameduck.Set(0)
 }
 
-// GetState returns the name of the current TabletServer state.
-func (tsv *TabletServer) GetState() string {
-	if tsv.lameduck.Get() != 0 {
+func (sm *stateManager) State() int64 {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	return sm.state
+}
+
+func (sm *stateManager) Target() querypb.Target {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	target := sm.target
+	return target
+}
+
+// StateByName returns the name of the current TabletServer state.
+func (sm *stateManager) StateByName() string {
+	if sm.lameduck.Get() != 0 {
 		return "NOT_SERVING"
 	}
-	tsv.mu.Lock()
-	name := stateName[tsv.state]
-	tsv.mu.Unlock()
+	sm.mu.Lock()
+	name := stateName[sm.state]
+	sm.mu.Unlock()
 	return name
 }
 
 // setState changes the state and logs the event.
 // It requires the caller to hold a lock on mu.
-func (tsv *TabletServer) setState(state int64) {
-	log.Infof("TabletServer state: %s -> %s", stateInfo(tsv.state), stateInfo(state))
-	tsv.state = state
-	tsv.history.Add(&historyRecord{
+func (sm *stateManager) setState(state int64) {
+	log.Infof("TabletServer state: %s -> %s", stateInfo(sm.state), stateInfo(state))
+	sm.state = state
+	sm.history.Add(&historyRecord{
 		Time:         time.Now(),
 		ServingState: stateInfo(state),
-		TabletType:   tsv.target.TabletType.String(),
+		TabletType:   sm.target.TabletType.String(),
 	})
 }
 
 // transition obtains a lock and changes the state.
-func (tsv *TabletServer) transition(newState int64) {
-	tsv.mu.Lock()
-	tsv.setState(newState)
-	tsv.mu.Unlock()
+func (sm *stateManager) transition(newState int64) {
+	sm.mu.Lock()
+	sm.setState(newState)
+	sm.mu.Unlock()
 }
 
 // IsServing returns true if TabletServer is in SERVING state.
-func (tsv *TabletServer) IsServing() bool {
-	return tsv.GetState() == "SERVING"
-}
-
-// StartService is a convenience function for InitDBConfig->SetServingType
-// with serving=true.
-func (tsv *TabletServer) StartService(target querypb.Target, dbcfgs *dbconfigs.DBConfigs) (err error) {
-	err = tsv.InitDBConfig(target, dbcfgs)
-	if err != nil {
-		return err
-	}
-	_ /* state changed */, err = tsv.SetServingType(target.TabletType, true, nil)
-	return err
+func (sm *stateManager) IsServing() bool {
+	return sm.StateByName() == "SERVING"
 }
 
 const (
@@ -145,15 +195,10 @@ const (
 	actionGracefulStop
 )
 
-// SetServingType changes the serving type of the tabletserver. It starts or
-// stops internal services as deemed necessary. The tabletType determines the
-// primary serving type, while alsoAllow specifies other tablet types that
-// should also be honored for serving.
-// Returns true if the state of QueryService or the tablet type changed.
-func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
-	defer tsv.ExitLameduck()
+func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
+	defer sm.ExitLameduck()
 
-	action, err := tsv.decideAction(tabletType, serving, alsoAllow)
+	action, err := sm.decideAction(tabletType, serving, alsoAllow)
 	if err != nil {
 		return false, err
 	}
@@ -161,176 +206,173 @@ func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, servin
 	case actionNone:
 		return false, nil
 	case actionFullStart:
-		if err := tsv.fullStart(); err != nil {
-			tsv.closeAll()
+		if err := sm.fullStart(); err != nil {
+			sm.closeAll()
 			return true, err
 		}
 		return true, nil
 	case actionServeNewType:
-		if err := tsv.serveNewType(); err != nil {
-			tsv.closeAll()
+		if err := sm.serveNewType(); err != nil {
+			sm.closeAll()
 			return true, err
 		}
 		return true, nil
 	case actionGracefulStop:
-		tsv.gracefulStop()
+		sm.gracefulStop()
 		return true, nil
 	}
 	panic("unreachable")
 }
 
-func (tsv *TabletServer) decideAction(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) (action int, err error) {
-	tsv.mu.Lock()
-	defer tsv.mu.Unlock()
+func (sm *stateManager) decideAction(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) (action int, err error) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
 
-	tsv.alsoAllow = alsoAllow
+	sm.alsoAllow = alsoAllow
 
 	// Handle the case where the requested TabletType and serving state
 	// match our current state. This avoids an unnecessary transition.
 	// There's no similar shortcut if serving is false, because there
 	// are different 'not serving' states that require different actions.
-	if tsv.target.TabletType == tabletType {
-		if serving && tsv.state == StateServing {
+	if sm.target.TabletType == tabletType {
+		if serving && sm.state == StateServing {
 			// We're already in the desired state.
 			return actionNone, nil
 		}
 	}
-	tsv.target.TabletType = tabletType
-	switch tsv.state {
+	sm.target.TabletType = tabletType
+	switch sm.state {
 	case StateNotConnected:
 		if serving {
-			tsv.setState(StateTransitioning)
+			sm.setState(StateTransitioning)
 			return actionFullStart, nil
 		}
 	case StateNotServing:
 		if serving {
-			tsv.setState(StateTransitioning)
+			sm.setState(StateTransitioning)
 			return actionServeNewType, nil
 		}
 	case StateServing:
 		if !serving {
-			tsv.setState(StateShuttingDown)
+			sm.setState(StateShuttingDown)
 			return actionGracefulStop, nil
 		}
-		tsv.setState(StateTransitioning)
+		sm.setState(StateTransitioning)
 		return actionServeNewType, nil
 	case StateTransitioning, StateShuttingDown:
-		return actionNone, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot SetServingType, current state: %s", stateName[tsv.state])
+		return actionNone, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot SetServingType, current state: %s", stateName[sm.state])
 	default:
 		panic("unreachable")
 	}
 	return actionNone, nil
 }
 
-func (tsv *TabletServer) fullStart() error {
-	if err := tsv.qe.IsMySQLReachable(); err != nil {
+func (sm *stateManager) fullStart() error {
+	if err := sm.qe.IsMySQLReachable(); err != nil {
 		return err
 	}
-	if err := tsv.se.Open(); err != nil {
+	if err := sm.se.Open(); err != nil {
 		return err
 	}
-	tsv.vstreamer.Open()
-	if err := tsv.qe.Open(); err != nil {
+	sm.vstreamer.Open()
+	if err := sm.qe.Open(); err != nil {
 		return err
 	}
-	if err := tsv.txThrottler.Open(); err != nil {
+	if err := sm.txThrottler.Open(); err != nil {
 		return err
 	}
-	return tsv.serveNewType()
+	return sm.serveNewType()
 }
 
-func (tsv *TabletServer) serveNewType() (err error) {
-	if tsv.target.TabletType == topodatapb.TabletType_MASTER {
-		tsv.watcher.Close()
-		tsv.hr.Close()
+func (sm *stateManager) serveNewType() (err error) {
+	if sm.target.TabletType == topodatapb.TabletType_MASTER {
+		sm.watcher.Close()
+		sm.hr.Close()
 
-		tsv.hw.Open()
-		tsv.tracker.Open()
-		tsv.te.AcceptReadWrite()
-		tsv.messager.Open()
+		sm.hw.Open()
+		sm.tracker.Open()
+		if err := sm.te.AcceptReadWrite(); err != nil {
+			return err
+		}
+		sm.messager.Open()
 	} else {
-		tsv.messager.Close()
-		tsv.te.AcceptReadOnly()
-		tsv.tracker.Close()
-		tsv.hw.Close()
-		tsv.se.MakeNonMaster()
+		sm.messager.Close()
+		if err := sm.te.AcceptReadOnly(); err != nil {
+			return err
+		}
+		sm.tracker.Close()
+		sm.hw.Close()
+		sm.se.MakeNonMaster()
 
-		tsv.hr.Open()
-		tsv.watcher.Open()
+		sm.hr.Open()
+		sm.watcher.Open()
 	}
-	tsv.transition(StateServing)
+	sm.transition(StateServing)
 	return nil
 }
 
-func (tsv *TabletServer) gracefulStop() {
-	defer close(tsv.setTimeBomb())
-	tsv.waitForShutdown()
-	tsv.transition(StateNotServing)
+func (sm *stateManager) gracefulStop() {
+	defer close(sm.setTimeBomb())
+	sm.waitForShutdown()
+	sm.transition(StateNotServing)
 }
 
-// StopService shuts down the tabletserver to the uninitialized state.
-// It first transitions to StateShuttingDown, then waits for active
-// services to shut down. Then it shuts down the rest. This function
-// should be called before process termination, or if MySQL is unreachable.
-// Under normal circumstances, SetServingType should be called.
-func (tsv *TabletServer) StopService() {
-	defer close(tsv.setTimeBomb())
-	defer tsv.LogError()
+func (sm *stateManager) StopService() {
+	defer close(sm.setTimeBomb())
 
-	tsv.mu.Lock()
-	if tsv.state != StateServing && tsv.state != StateNotServing {
-		tsv.mu.Unlock()
+	sm.mu.Lock()
+	if sm.state != StateServing && sm.state != StateNotServing {
+		sm.mu.Unlock()
 		return
 	}
-	tsv.setState(StateShuttingDown)
-	tsv.mu.Unlock()
+	sm.setState(StateShuttingDown)
+	sm.mu.Unlock()
 
 	log.Info("Executing complete shutdown.")
-	tsv.waitForShutdown()
-	tsv.qe.Close()
-	tsv.watcher.Close()
-	tsv.vstreamer.Close()
-	tsv.hr.Close()
-	tsv.hw.Close()
-	tsv.se.Close()
+	sm.waitForShutdown()
+	sm.qe.Close()
+	sm.watcher.Close()
+	sm.vstreamer.Close()
+	sm.hr.Close()
+	sm.hw.Close()
+	sm.se.Close()
 	log.Info("Shutdown complete.")
-	tsv.transition(StateNotConnected)
+	sm.transition(StateNotConnected)
 }
 
-func (tsv *TabletServer) waitForShutdown() {
-	tsv.messager.Close()
-	tsv.te.Close()
-	tsv.txThrottler.Close()
-	tsv.tracker.Close()
-	tsv.qe.StopServing()
-	tsv.requests.Wait()
+func (sm *stateManager) waitForShutdown() {
+	sm.messager.Close()
+	sm.te.Close()
+	sm.txThrottler.Close()
+	sm.tracker.Close()
+	sm.qe.StopServing()
+	sm.requests.Wait()
 }
 
 // closeAll is called if TabletServer fails to start.
 // It forcibly shuts down everything.
-func (tsv *TabletServer) closeAll() {
-	tsv.messager.Close()
-	tsv.te.Close()
-	tsv.txThrottler.Close()
-	tsv.qe.StopServing()
-	tsv.qe.Close()
-	tsv.watcher.Close()
-	tsv.tracker.Close()
-	tsv.vstreamer.Close()
-	tsv.hr.Close()
-	tsv.hw.Close()
-	tsv.se.Close()
-	tsv.transition(StateNotConnected)
+func (sm *stateManager) closeAll() {
+	sm.messager.Close()
+	sm.te.Close()
+	sm.txThrottler.Close()
+	sm.qe.StopServing()
+	sm.qe.Close()
+	sm.watcher.Close()
+	sm.tracker.Close()
+	sm.vstreamer.Close()
+	sm.hr.Close()
+	sm.hw.Close()
+	sm.se.Close()
+	sm.transition(StateNotConnected)
 }
 
-func (tsv *TabletServer) setTimeBomb() chan struct{} {
+func (sm *stateManager) setTimeBomb() chan struct{} {
 	done := make(chan struct{})
 	go func() {
-		qt := tsv.QueryTimeout.Get()
-		if qt == 0 {
+		if sm.timebombDuration == 0 {
 			return
 		}
-		tmr := time.NewTimer(10 * qt)
+		tmr := time.NewTimer(sm.timebombDuration)
 		defer tmr.Stop()
 		select {
 		case <-tmr.C:
@@ -341,52 +383,47 @@ func (tsv *TabletServer) setTimeBomb() chan struct{} {
 	return done
 }
 
-// CheckMySQL initiates a check to see if MySQL is reachable.
-// If not, it shuts down the query service. The check is rate-limited
-// to no more than once per second.
-// The function satisfies tabletenv.Env.
-func (tsv *TabletServer) CheckMySQL() {
-	if !tsv.checkMySQLThrottler.TryAcquire() {
+func (sm *stateManager) CheckMySQL() {
+	if !sm.checkMySQLThrottler.TryAcquire() {
 		return
 	}
 	go func() {
 		defer func() {
-			tsv.LogError()
 			time.Sleep(1 * time.Second)
-			tsv.checkMySQLThrottler.Release()
+			sm.checkMySQLThrottler.Release()
 		}()
-		if tsv.isMySQLReachable() {
+		if sm.isMySQLReachable() {
 			return
 		}
 		log.Info("Check MySQL failed. Shutting down query service")
-		tsv.StopService()
+		sm.StopService()
 	}()
 }
 
 // isMySQLReachable returns true if we can connect to MySQL.
 // The function returns false only if the query service is
 // in StateServing or StateNotServing.
-func (tsv *TabletServer) isMySQLReachable() bool {
-	tsv.mu.Lock()
-	switch tsv.state {
+func (sm *stateManager) isMySQLReachable() bool {
+	sm.mu.Lock()
+	switch sm.state {
 	case StateServing:
 		// Prevent transition out of this state by
 		// reserving a request.
-		tsv.requests.Add(1)
-		defer tsv.requests.Done()
+		sm.requests.Add(1)
+		defer sm.requests.Done()
 	case StateNotServing:
 		// Prevent transition out of this state by
 		// temporarily switching to StateTransitioning.
-		tsv.setState(StateTransitioning)
+		sm.setState(StateTransitioning)
 		defer func() {
-			tsv.transition(StateNotServing)
+			sm.transition(StateNotServing)
 		}()
 	default:
-		tsv.mu.Unlock()
+		sm.mu.Unlock()
 		return true
 	}
-	tsv.mu.Unlock()
-	if err := tsv.qe.IsMySQLReachable(); err != nil {
+	sm.mu.Unlock()
+	if err := sm.qe.IsMySQLReachable(); err != nil {
 		log.Errorf("Cannot connect to MySQL: %v", err)
 		return false
 	}
@@ -398,69 +435,78 @@ func (tsv *TabletServer) isMySQLReachable() bool {
 // one and only one corresponding endRequest. When the service shuts
 // down, StopService will wait on this waitgroup to ensure that there
 // are no requests in flight.
-func (tsv *TabletServer) startRequest(ctx context.Context, target *querypb.Target, allowOnShutdown bool) (err error) {
-	tsv.mu.Lock()
-	defer tsv.mu.Unlock()
-	if tsv.state == StateServing {
+func (sm *stateManager) startRequest(ctx context.Context, target *querypb.Target, allowOnShutdown bool) (err error) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	if sm.state == StateServing {
 		goto verifyTarget
 	}
-	if allowOnShutdown && tsv.state == StateShuttingDown {
+	if allowOnShutdown && sm.state == StateShuttingDown {
 		goto verifyTarget
 	}
-	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state %s", stateName[tsv.state])
+	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state %s", stateName[sm.state])
 
 verifyTarget:
 	if target != nil {
 		// a valid target needs to be used
 		switch {
-		case target.Keyspace != tsv.target.Keyspace:
+		case target.Keyspace != sm.target.Keyspace:
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace %v", target.Keyspace)
-		case target.Shard != tsv.target.Shard:
+		case target.Shard != sm.target.Shard:
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid shard %v", target.Shard)
-		case target.TabletType != tsv.target.TabletType:
-			for _, otherType := range tsv.alsoAllow {
+		case target.TabletType != sm.target.TabletType:
+			for _, otherType := range sm.alsoAllow {
 				if target.TabletType == otherType {
 					goto ok
 				}
 			}
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, tsv.target.TabletType, tsv.alsoAllow)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, sm.target.TabletType, sm.alsoAllow)
 		}
 	} else if !tabletenv.IsLocalContext(ctx) {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
 	}
 
 ok:
-	tsv.requests.Add(1)
+	sm.requests.Add(1)
 	return nil
 }
 
 // endRequest unregisters the current request (a waitgroup) as done.
-func (tsv *TabletServer) endRequest() {
-	tsv.requests.Done()
+func (sm *stateManager) endRequest() {
+	sm.requests.Done()
 }
 
 // verifyTarget allows requests to be executed even in non-serving state.
-func (tsv *TabletServer) verifyTarget(ctx context.Context, target *querypb.Target) error {
-	tsv.mu.Lock()
-	defer tsv.mu.Unlock()
+func (sm *stateManager) verifyTarget(ctx context.Context, target *querypb.Target) error {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
 
 	if target != nil {
 		// a valid target needs to be used
 		switch {
-		case target.Keyspace != tsv.target.Keyspace:
+		case target.Keyspace != sm.target.Keyspace:
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace %v", target.Keyspace)
-		case target.Shard != tsv.target.Shard:
+		case target.Shard != sm.target.Shard:
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid shard %v", target.Shard)
-		case target.TabletType != tsv.target.TabletType:
-			for _, otherType := range tsv.alsoAllow {
+		case target.TabletType != sm.target.TabletType:
+			for _, otherType := range sm.alsoAllow {
 				if target.TabletType == otherType {
 					return nil
 				}
 			}
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, tsv.target.TabletType, tsv.alsoAllow)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, sm.target.TabletType, sm.alsoAllow)
 		}
 	} else if !tabletenv.IsLocalContext(ctx) {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
 	}
 	return nil
+}
+
+// stateInfo returns a string representation of the state and optional detail
+// about the reason for the state transition
+func stateInfo(state int64) string {
+	if state == StateServing {
+		return "SERVING"
+	}
+	return fmt.Sprintf("%s (%s)", stateName[state], stateDetail[state])
 }

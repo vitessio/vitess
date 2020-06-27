@@ -100,15 +100,14 @@ func (vse *Engine) InitDBConfig(keyspace string) {
 }
 
 // Open starts the Engine service.
-func (vse *Engine) Open() error {
+func (vse *Engine) Open() {
 	vse.mu.Lock()
 	defer vse.mu.Unlock()
 	if vse.isOpen {
-		return nil
+		return
 	}
 	log.Info("VStreamer is open.")
 	vse.isOpen = true
-	return nil
 }
 
 // IsOpen checks if the engine is opened

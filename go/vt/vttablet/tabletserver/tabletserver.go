@@ -91,23 +91,6 @@ type TabletServer struct {
 	TerseErrors            bool
 	enableHotRowProtection bool
 	topoServer             *topo.Server
-	checkMySQLThrottler    *sync2.Semaphore
-
-	// mu is used to access state. The lock should only be held
-	// for short periods. For longer periods, you have to transition
-	// the state to a transient value and release the lock.
-	// Once the operation is complete, you can then transition
-	// the state back to a stable value.
-	// The lameduck mode causes tablet server to respond as unhealthy
-	// for health checks. This does not affect how queries are served.
-	// target specifies the primary target type, and also allow specifies
-	// secondary types that should be additionally allowed.
-	mu        sync.Mutex
-	state     int64
-	lameduck  sync2.AtomicInt32
-	target    querypb.Target
-	alsoAllow []topodatapb.TabletType
-	requests  sync.WaitGroup
 
 	// These are sub-components of TabletServer.
 	se          *schema.Engine
@@ -121,16 +104,15 @@ type TabletServer struct {
 	te          *TxEngine
 	messager    *messager.Engine
 
+	// sm manages state transitions.
+	sm *stateManager
+
 	// streamHealthMutex protects all the following fields
 	streamHealthMutex          sync.Mutex
 	streamHealthIndex          int
 	streamHealthMap            map[int]chan<- *querypb.StreamHealthResponse
 	lastStreamHealthResponse   *querypb.StreamHealthResponse
 	lastStreamHealthExpiration time.Time
-
-	// history records changes in state for display on the status page.
-	// It has its own internal mutex.
-	history *history.History
 
 	// alias is used for identifying this tabletserver in healthcheck responses.
 	alias topodatapb.TabletAlias
@@ -165,9 +147,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		TerseErrors:            config.TerseErrors,
 		enableHotRowProtection: config.HotRowProtection.Mode != tabletenv.Disable,
 		topoServer:             topoServer,
-		checkMySQLThrottler:    sync2.NewSemaphore(1, 0),
 		streamHealthMap:        make(map[int]chan<- *querypb.StreamHealthResponse),
-		history:                history.New(10),
 		alias:                  alias,
 	}
 
@@ -188,17 +168,30 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.te = NewTxEngine(tsv)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
-	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
-		tsv.mu.Lock()
-		defer tsv.mu.Unlock()
-		return tsv.state
-	})
-	tsv.exporter.Publish("TabletStateName", stats.StringFunc(tsv.GetState))
+	tsv.sm = &stateManager{
+		se:          tsv.se,
+		hw:          tsv.hw,
+		hr:          tsv.hr,
+		vstreamer:   tsv.vstreamer,
+		tracker:     tsv.tracker,
+		watcher:     tsv.watcher,
+		qe:          tsv.qe,
+		txThrottler: tsv.txThrottler,
+		te:          tsv.te,
+		messager:    tsv.messager,
+
+		checkMySQLThrottler: sync2.NewSemaphore(1, 0),
+		history:             history.New(10),
+		timebombDuration:    time.Duration(config.OltpReadPool.TimeoutSeconds * 10),
+	}
+
+	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", tsv.sm.State)
+	tsv.exporter.Publish("TabletStateName", stats.StringFunc(tsv.sm.StateByName))
 
 	// TabletServerState exports the same information as the above two stats (TabletState / TabletStateName),
 	// but exported with TabletStateName as a label for Prometheus, which doesn't support exporting strings as stat values.
 	tsv.exporter.NewGaugesFuncWithMultiLabels("TabletServerState", "Tablet server state labeled by state name", []string{"name"}, func() map[string]int64 {
-		return map[string]int64{tsv.GetState(): 1}
+		return map[string]int64{tsv.sm.StateByName(): 1}
 	})
 	tsv.exporter.NewGaugeDurationFunc("QueryTimeout", "Tablet server query timeout", tsv.QueryTimeout.Get)
 
@@ -209,15 +202,13 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	return tsv
 }
 
-// InitDBConfig initializes the db config variables for TabletServer. You must call this function before
-// calling SetServingType.
+// InitDBConfig initializes the db config variables for TabletServer. You must call this function
+// to complete the creation of TabletServer.
 func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.DBConfigs) error {
-	tsv.mu.Lock()
-	defer tsv.mu.Unlock()
-	if tsv.state != StateNotConnected {
-		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "InitDBConfig failed, current state: %s", stateName[tsv.state])
+	if tsv.sm.State() != StateNotConnected {
+		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "InitDBConfig failed, current state: %s", tsv.sm.StateByName())
 	}
-	tsv.target = target
+	tsv.sm.target = target
 	tsv.config.DB = dbcfgs
 
 	tsv.se.InitDBConfig(tsv.config.DB.DbaWithDB())
@@ -317,14 +308,40 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, enforceTableACLConfi
 	}
 }
 
+// SetServingType changes the serving type of the tabletserver. It starts or
+// stops internal services as deemed necessary. The tabletType determines the
+// primary serving type, while alsoAllow specifies other tablet types that
+// should also be honored for serving.
+// Returns true if the state of QueryService or the tablet type changed.
+func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
+	return tsv.sm.SetServingType(tabletType, serving, alsoAllow)
+}
+
+// StartService is a convenience function for InitDBConfig->SetServingType
+// with serving=true.
+func (tsv *TabletServer) StartService(target querypb.Target, dbcfgs *dbconfigs.DBConfigs) (err error) {
+	err = tsv.InitDBConfig(target, dbcfgs)
+	if err != nil {
+		return err
+	}
+	_ /* state changed */, err = tsv.sm.SetServingType(target.TabletType, true, nil)
+	return err
+}
+
+// StopService shuts down the tabletserver to the uninitialized state.
+// It first transitions to StateShuttingDown, then waits for active
+// services to shut down. Then it shuts down the rest. This function
+// should be called before process termination, or if MySQL is unreachable.
+// Under normal circumstances, SetServingType should be called.
+func (tsv *TabletServer) StopService() {
+	tsv.sm.StopService()
+}
+
 // IsHealthy returns nil for non-serving types or if the query service is healthy (able to
 // connect to the database and serving traffic), or an error explaining
 // the unhealthiness otherwise.
 func (tsv *TabletServer) IsHealthy() error {
-	tsv.mu.Lock()
-	tabletType := tsv.target.TabletType
-	tsv.mu.Unlock()
-	switch tabletType {
+	switch tsv.sm.Target().TabletType {
 	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH, topodatapb.TabletType_EXPERIMENTAL:
 		_, err := tsv.Execute(
 			tabletenv.LocalContext(),
@@ -717,10 +734,10 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	// tsv.convertAndLogError. That's because the methods which returned "err",
 	// e.g. tsv.Execute(), already called that function and therefore already
 	// converted and logged the error.
-	if err = tsv.startRequest(ctx, target, allowOnShutdown); err != nil {
+	if err = tsv.sm.startRequest(ctx, target, allowOnShutdown); err != nil {
 		return nil, err
 	}
-	defer tsv.endRequest()
+	defer tsv.sm.endRequest()
 	defer tsv.handlePanicAndSendLogStats("batch", nil, nil)
 
 	if options == nil {
@@ -941,10 +958,10 @@ func (tsv *TabletServer) PurgeMessages(ctx context.Context, target *querypb.Targ
 }
 
 func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, queryGenerator func() (string, map[string]*querypb.BindVariable, error)) (count int64, err error) {
-	if err = tsv.startRequest(ctx, target, false /* allowOnShutdown */); err != nil {
+	if err = tsv.sm.startRequest(ctx, target, false /* allowOnShutdown */); err != nil {
 		return 0, err
 	}
-	defer tsv.endRequest()
+	defer tsv.sm.endRequest()
 	defer tsv.handlePanicAndSendLogStats("ack", nil, nil)
 
 	query, bv, err := queryGenerator()
@@ -977,7 +994,7 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 
 // VStream streams VReplication events.
 func (tsv *TabletServer) VStream(ctx context.Context, target *querypb.Target, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	if err := tsv.verifyTarget(ctx, target); err != nil {
+	if err := tsv.sm.verifyTarget(ctx, target); err != nil {
 		return err
 	}
 	return tsv.vstreamer.Stream(ctx, startPos, tablePKs, filter, send)
@@ -985,7 +1002,7 @@ func (tsv *TabletServer) VStream(ctx context.Context, target *querypb.Target, st
 
 // VStreamRows streams rows from the specified starting point.
 func (tsv *TabletServer) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
-	if err := tsv.verifyTarget(ctx, target); err != nil {
+	if err := tsv.sm.verifyTarget(ctx, target); err != nil {
 		return err
 	}
 	var row []sqltypes.Value
@@ -1001,7 +1018,7 @@ func (tsv *TabletServer) VStreamRows(ctx context.Context, target *querypb.Target
 
 // VStreamResults streams rows from the specified starting point.
 func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
-	if err := tsv.verifyTarget(ctx, target); err != nil {
+	if err := tsv.sm.verifyTarget(ctx, target); err != nil {
 		return err
 	}
 	return tsv.vstreamer.StreamResults(ctx, query, send)
@@ -1115,14 +1132,14 @@ func (tsv *TabletServer) execRequest(
 	logStats.OriginalSQL = sql
 	logStats.BindVariables = bindVariables
 	defer tsv.handlePanicAndSendLogStats(sql, bindVariables, logStats)
-	if err = tsv.startRequest(ctx, target, allowOnShutdown); err != nil {
+	if err = tsv.sm.startRequest(ctx, target, allowOnShutdown); err != nil {
 		return err
 	}
 
 	ctx, cancel := withTimeout(ctx, timeout, options)
 	defer func() {
 		cancel()
-		tsv.endRequest()
+		tsv.sm.endRequest()
 	}()
 
 	err = exec(ctx, logStats)
@@ -1394,9 +1411,7 @@ func (tsv *TabletServer) streamHealthUnregister(id int) {
 
 // BroadcastHealth will broadcast the current health to all listeners
 func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats, maxCache time.Duration) {
-	tsv.mu.Lock()
-	target := tsv.target
-	tsv.mu.Unlock()
+	target := tsv.sm.Target()
 	shr := &querypb.StreamHealthResponse{
 		Target:      &target,
 		TabletAlias: &tsv.alias,
@@ -1431,6 +1446,32 @@ func (tsv *TabletServer) HeartbeatLag() (time.Duration, error) {
 		return 0, nil
 	}
 	return tsv.hr.GetLatest()
+}
+
+// EnterLameduck causes tabletserver to enter the lameduck state. This
+// state causes health checks to fail, but the behavior of tabletserver
+// otherwise remains the same. Any subsequent calls to SetServingType will
+// cause the tabletserver to exit this mode.
+func (tsv *TabletServer) EnterLameduck() {
+	tsv.sm.EnterLameduck()
+}
+
+// ExitLameduck causes the tabletserver to exit the lameduck mode.
+func (tsv *TabletServer) ExitLameduck() {
+	tsv.sm.ExitLameduck()
+}
+
+// IsServing returns true if TabletServer is in SERVING state.
+func (tsv *TabletServer) IsServing() bool {
+	return tsv.sm.IsServing()
+}
+
+// CheckMySQL initiates a check to see if MySQL is reachable.
+// If not, it shuts down the query service. The check is rate-limited
+// to no more than once per second.
+// The function satisfies tabletenv.Env.
+func (tsv *TabletServer) CheckMySQL() {
+	tsv.sm.CheckMySQL()
 }
 
 // TopoServer returns the topo server.

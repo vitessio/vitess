@@ -75,11 +75,11 @@ func TestTabletServerGetState(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	for i, state := range states {
-		tsv.setState(state)
-		require.Equal(t, names[i], tsv.GetState(), "GetState")
+		tsv.sm.setState(state)
+		require.Equal(t, names[i], tsv.sm.StateByName(), "StateByName")
 	}
 	tsv.EnterLameduck()
-	require.Equal(t, "NOT_SERVING", tsv.GetState(), "GetState")
+	require.Equal(t, "NOT_SERVING", tsv.sm.StateByName(), "StateByName")
 }
 
 func TestTabletServerAllowQueriesFailBadConn(t *testing.T) {
@@ -103,14 +103,14 @@ func TestTabletServerAllowQueries(t *testing.T) {
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	checkTabletServerState(t, tsv, StateNotConnected)
 	dbcfgs := newDBConfigs(db)
-	tsv.setState(StateServing)
+	tsv.sm.setState(StateServing)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	err := tsv.StartService(target, dbcfgs)
 	tsv.StopService()
 	want := "InitDBConfig failed"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
-	tsv.setState(StateShuttingDown)
+	tsv.sm.setState(StateShuttingDown)
 	err = tsv.StartService(target, dbcfgs)
 	require.Error(t, err, "TabletServer.StartService should fail")
 	tsv.StopService()
@@ -121,14 +121,14 @@ func TestTabletServerInitDBConfig(t *testing.T) {
 	defer db.Close()
 	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
-	tsv.setState(StateServing)
+	tsv.sm.setState(StateServing)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	dbcfgs := newDBConfigs(db)
 	err := tsv.InitDBConfig(target, dbcfgs)
 	want := "InitDBConfig failed"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
-	tsv.setState(StateNotConnected)
+	tsv.sm.setState(StateNotConnected)
 	err = tsv.InitDBConfig(target, dbcfgs)
 	require.NoError(t, err)
 }
@@ -143,79 +143,79 @@ func TestDecideAction(t *testing.T) {
 	err := tsv.InitDBConfig(target, dbcfgs)
 	require.NoError(t, err)
 
-	tsv.setState(StateNotConnected)
-	action, err := tsv.decideAction(topodatapb.TabletType_MASTER, false, nil)
+	tsv.sm.setState(StateNotConnected)
+	action, err := tsv.sm.decideAction(topodatapb.TabletType_MASTER, false, nil)
 	require.NoError(t, err)
 	if action != actionNone {
 		t.Errorf("decideAction: %v, want %v", action, actionNone)
 	}
 
-	tsv.setState(StateNotConnected)
-	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, true, nil)
+	tsv.sm.setState(StateNotConnected)
+	action, err = tsv.sm.decideAction(topodatapb.TabletType_MASTER, true, nil)
 	require.NoError(t, err)
 	if action != actionFullStart {
 		t.Errorf("decideAction: %v, want %v", action, actionFullStart)
 	}
-	if tsv.state != StateTransitioning {
-		t.Errorf("tsv.state: %v, want %v", tsv.state, StateTransitioning)
+	if tsv.sm.State() != StateTransitioning {
+		t.Errorf("tsv.sm.state: %v, want %v", tsv.sm.State(), StateTransitioning)
 	}
 
-	tsv.setState(StateNotServing)
-	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, false, nil)
+	tsv.sm.setState(StateNotServing)
+	action, err = tsv.sm.decideAction(topodatapb.TabletType_MASTER, false, nil)
 	require.NoError(t, err)
 	if action != actionNone {
 		t.Errorf("decideAction: %v, want %v", action, actionNone)
 	}
 
-	tsv.setState(StateNotServing)
-	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, true, nil)
+	tsv.sm.setState(StateNotServing)
+	action, err = tsv.sm.decideAction(topodatapb.TabletType_MASTER, true, nil)
 	require.NoError(t, err)
 	if action != actionServeNewType {
 		t.Errorf("decideAction: %v, want %v", action, actionServeNewType)
 	}
-	if tsv.state != StateTransitioning {
-		t.Errorf("tsv.state: %v, want %v", tsv.state, StateTransitioning)
+	if tsv.sm.State() != StateTransitioning {
+		t.Errorf("tsv.sm.state: %v, want %v", tsv.sm.State(), StateTransitioning)
 	}
 
-	tsv.setState(StateServing)
-	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, false, nil)
+	tsv.sm.setState(StateServing)
+	action, err = tsv.sm.decideAction(topodatapb.TabletType_MASTER, false, nil)
 	require.NoError(t, err)
 	if action != actionGracefulStop {
 		t.Errorf("decideAction: %v, want %v", action, actionGracefulStop)
 	}
-	if tsv.state != StateShuttingDown {
-		t.Errorf("tsv.state: %v, want %v", tsv.state, StateShuttingDown)
+	if tsv.sm.State() != StateShuttingDown {
+		t.Errorf("tsv.sm.state: %v, want %v", tsv.sm.State(), StateShuttingDown)
 	}
 
-	tsv.setState(StateServing)
-	action, err = tsv.decideAction(topodatapb.TabletType_REPLICA, true, nil)
+	tsv.sm.setState(StateServing)
+	action, err = tsv.sm.decideAction(topodatapb.TabletType_REPLICA, true, nil)
 	require.NoError(t, err)
 	if action != actionServeNewType {
 		t.Errorf("decideAction: %v, want %v", action, actionServeNewType)
 	}
-	if tsv.state != StateTransitioning {
-		t.Errorf("tsv.state: %v, want %v", tsv.state, StateTransitioning)
+	if tsv.sm.State() != StateTransitioning {
+		t.Errorf("tsv.sm.state: %v, want %v", tsv.sm.State(), StateTransitioning)
 	}
-	tsv.target.TabletType = topodatapb.TabletType_MASTER
+	tsv.sm.target.TabletType = topodatapb.TabletType_MASTER
 
-	tsv.setState(StateServing)
-	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, true, nil)
+	tsv.sm.setState(StateServing)
+	action, err = tsv.sm.decideAction(topodatapb.TabletType_MASTER, true, nil)
 	require.NoError(t, err)
 	if action != actionNone {
 		t.Errorf("decideAction: %v, want %v", action, actionNone)
 	}
-	if tsv.state != StateServing {
-		t.Errorf("tsv.state: %v, want %v", tsv.state, StateServing)
+	if tsv.sm.State() != StateServing {
+		t.Errorf("tsv.sm.state: %v, want %v", tsv.sm.State(), StateServing)
 	}
 
-	tsv.setState(StateTransitioning)
-	_, err = tsv.decideAction(topodatapb.TabletType_MASTER, false, nil)
+	tsv.sm.setState(StateTransitioning)
+	_, err = tsv.sm.decideAction(topodatapb.TabletType_MASTER, false, nil)
 	want := "cannot SetServingType"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
 
-	tsv.setState(StateShuttingDown)
-	_, err = tsv.decideAction(topodatapb.TabletType_MASTER, false, nil)
+	tsv.sm.setState(StateShuttingDown)
+	_, err = tsv.sm.decideAction(topodatapb.TabletType_MASTER, false, nil)
 	want = "cannot SetServingType"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
@@ -261,8 +261,8 @@ func TestSetServingType(t *testing.T) {
 
 	// Verify that we exit lameduck when SetServingType is called.
 	tsv.EnterLameduck()
-	if stateName := tsv.GetState(); stateName != "NOT_SERVING" {
-		t.Errorf("GetState: %s, want NOT_SERVING", stateName)
+	if stateName := tsv.sm.StateByName(); stateName != "NOT_SERVING" {
+		t.Errorf("StateByName: %s, want NOT_SERVING", stateName)
 	}
 	stateChanged, err = tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
 	if stateChanged != true {
@@ -270,8 +270,8 @@ func TestSetServingType(t *testing.T) {
 	}
 	require.NoError(t, err)
 	checkTabletServerState(t, tsv, StateServing)
-	if stateName := tsv.GetState(); stateName != "SERVING" {
-		t.Errorf("GetState: %s, want SERVING", stateName)
+	if stateName := tsv.sm.StateByName(); stateName != "SERVING" {
+		t.Errorf("StateByName: %s, want SERVING", stateName)
 	}
 
 	tsv.StopService()
@@ -310,7 +310,7 @@ func TestTabletServerCheckMysql(t *testing.T) {
 	err := tsv.StartService(target, dbcfgs)
 	defer tsv.StopService()
 	require.NoError(t, err)
-	if !tsv.isMySQLReachable() {
+	if !tsv.sm.isMySQLReachable() {
 		t.Error("isMySQLReachable should return true")
 	}
 	stateChanged, err := tsv.SetServingType(topodatapb.TabletType_SPARE, false, nil)
@@ -318,7 +318,7 @@ func TestTabletServerCheckMysql(t *testing.T) {
 	if stateChanged != true {
 		t.Errorf("SetServingType() should have changed the QueryService state, but did not")
 	}
-	if !tsv.isMySQLReachable() {
+	if !tsv.sm.isMySQLReachable() {
 		t.Error("isMySQLReachable should return true")
 	}
 	checkTabletServerState(t, tsv, StateNotServing)
@@ -338,8 +338,8 @@ func TestTabletServerReconnect(t *testing.T) {
 	err := tsv.StartService(target, dbcfgs)
 	defer tsv.StopService()
 
-	if tsv.GetState() != "SERVING" {
-		t.Errorf("GetState: %s, must be SERVING", tsv.GetState())
+	if tsv.sm.StateByName() != "SERVING" {
+		t.Errorf("StateByName: %s, must be SERVING", tsv.sm.StateByName())
 	}
 	if err != nil {
 		t.Fatalf("TabletServer.StartService should success but get error: %v", err)
@@ -354,8 +354,8 @@ func TestTabletServerReconnect(t *testing.T) {
 		t.Error("Execute: want error, got nil")
 	}
 	time.Sleep(50 * time.Millisecond)
-	if tsv.GetState() == "SERVING" {
-		t.Error("GetState is still SERVING, must be NOT_SERVING")
+	if tsv.sm.StateByName() == "SERVING" {
+		t.Error("StateByName is still SERVING, must be NOT_SERVING")
 	}
 
 	// make mysql conn work
@@ -2731,9 +2731,7 @@ func setUpTabletServerTest(t *testing.T) *fakesqldb.DB {
 }
 
 func checkTabletServerState(t *testing.T, tsv *TabletServer, expectState int64) {
-	tsv.mu.Lock()
-	state := tsv.state
-	tsv.mu.Unlock()
+	state := tsv.sm.State()
 	if state != expectState {
 		t.Fatalf("TabletServer should in state: %d, but get state: %d", expectState, state)
 	}
