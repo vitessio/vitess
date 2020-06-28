@@ -61,16 +61,12 @@ func TestTabletServerGetState(t *testing.T) {
 		StateNotConnected,
 		StateNotServing,
 		StateServing,
-		StateTransitioning,
-		StateShuttingDown,
 	}
 	// Don't reuse stateName.
 	names := []string{
 		"NOT_SERVING",
 		"NOT_SERVING",
 		"SERVING",
-		"NOT_SERVING",
-		"SHUTTING_DOWN",
 	}
 	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})

@@ -112,8 +112,9 @@ func (ep *TabletPlan) buildAuthorized() {
 // Close: There should be no more pending queries when this
 // function is called.
 type QueryEngine struct {
-	env tabletenv.Env
-	se  *schema.Engine
+	isOpen bool
+	env    tabletenv.Env
+	se     *schema.Engine
 
 	// mu protects the following fields.
 	mu               sync.RWMutex
@@ -235,6 +236,9 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 
 // Open must be called before sending requests to QueryEngine.
 func (qe *QueryEngine) Open() error {
+	if qe.isOpen {
+		return nil
+	}
 	qe.conns.Open(qe.env.Config().DB.AppWithDB(), qe.env.Config().DB.DbaWithDB(), qe.env.Config().DB.AppDebugWithDB())
 
 	conn, err := qe.conns.Get(tabletenv.LocalContext())
@@ -254,6 +258,7 @@ func (qe *QueryEngine) Open() error {
 
 	qe.streamConns.Open(qe.env.Config().DB.AppWithDB(), qe.env.Config().DB.DbaWithDB(), qe.env.Config().DB.AppDebugWithDB())
 	qe.se.RegisterNotifier("qe", qe.schemaChanged)
+	qe.isOpen = true
 	return nil
 }
 
@@ -267,12 +272,16 @@ func (qe *QueryEngine) StopServing() {
 // You must ensure that no more queries will be sent
 // before calling Close.
 func (qe *QueryEngine) Close() {
+	if !qe.isOpen {
+		return
+	}
 	// Close in reverse order of Open.
 	qe.se.UnregisterNotifier("qe")
 	qe.plans.Clear()
 	qe.tables = make(map[string]*schema.Table)
 	qe.streamConns.Close()
 	qe.conns.Close()
+	qe.isOpen = false
 }
 
 // GetPlan returns the TabletPlan that for the query. Plans are cached in a cache.LRUCache.

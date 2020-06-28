@@ -314,17 +314,20 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, enforceTableACLConfi
 // should also be honored for serving.
 // Returns true if the state of QueryService or the tablet type changed.
 func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
-	return tsv.sm.SetServingType(tabletType, serving, alsoAllow)
+	state := int64(StateNotServing)
+	if serving {
+		state = StateServing
+	}
+	return tsv.sm.SetServingType(tabletType, state, alsoAllow)
 }
 
 // StartService is a convenience function for InitDBConfig->SetServingType
 // with serving=true.
-func (tsv *TabletServer) StartService(target querypb.Target, dbcfgs *dbconfigs.DBConfigs) (err error) {
-	err = tsv.InitDBConfig(target, dbcfgs)
-	if err != nil {
+func (tsv *TabletServer) StartService(target querypb.Target, dbcfgs *dbconfigs.DBConfigs) error {
+	if err := tsv.InitDBConfig(target, dbcfgs); err != nil {
 		return err
 	}
-	_ /* state changed */, err = tsv.sm.SetServingType(target.TabletType, true, nil)
+	_, err := tsv.sm.SetServingType(target.TabletType, StateServing, nil)
 	return err
 }
 
@@ -390,7 +393,7 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, preQ
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Begin", "begin", nil,
-		target, options, false, /* allowOnShutdown */
+		target, options, false, /* allowOnTransition */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			startTime := time.Now()
 			if tsv.txThrottler.Throttle() {
@@ -422,7 +425,7 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Commit", "commit", nil,
-		target, nil, true, /* allowOnShutdown */
+		target, nil, true, /* allowOnTransition */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			startTime := time.Now()
 			logStats.TransactionID = transactionID
@@ -453,7 +456,7 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, t
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Rollback", "rollback", nil,
-		target, nil, true, /* allowOnShutdown */
+		target, nil, true, /* allowOnTransition */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("ROLLBACK", time.Now())
 			logStats.TransactionID = transactionID
@@ -473,7 +476,7 @@ func (tsv *TabletServer) Prepare(ctx context.Context, target *querypb.Target, tr
 	return tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Prepare", "prepare", nil,
-		target, nil, true, /* allowOnShutdown */
+		target, nil, true, /* allowOnTransition */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			txe := &TxExecutor{
 				ctx:      ctx,
@@ -490,7 +493,7 @@ func (tsv *TabletServer) CommitPrepared(ctx context.Context, target *querypb.Tar
 	return tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"CommitPrepared", "commit_prepared", nil,
-		target, nil, true, /* allowOnShutdown */
+		target, nil, true, /* allowOnTransition */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			txe := &TxExecutor{
 				ctx:      ctx,
@@ -507,7 +510,7 @@ func (tsv *TabletServer) RollbackPrepared(ctx context.Context, target *querypb.T
 	return tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"RollbackPrepared", "rollback_prepared", nil,
-		target, nil, true, /* allowOnShutdown */
+		target, nil, true, /* allowOnTransition */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			txe := &TxExecutor{
 				ctx:      ctx,
@@ -524,7 +527,7 @@ func (tsv *TabletServer) CreateTransaction(ctx context.Context, target *querypb.
 	return tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"CreateTransaction", "create_transaction", nil,
-		target, nil, true, /* allowOnShutdown */
+		target, nil, true, /* allowOnTransition */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			txe := &TxExecutor{
 				ctx:      ctx,
@@ -542,7 +545,7 @@ func (tsv *TabletServer) StartCommit(ctx context.Context, target *querypb.Target
 	return tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"StartCommit", "start_commit", nil,
-		target, nil, true, /* allowOnShutdown */
+		target, nil, true, /* allowOnTransition */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			txe := &TxExecutor{
 				ctx:      ctx,
@@ -560,7 +563,7 @@ func (tsv *TabletServer) SetRollback(ctx context.Context, target *querypb.Target
 	return tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"SetRollback", "set_rollback", nil,
-		target, nil, true, /* allowOnShutdown */
+		target, nil, true, /* allowOnTransition */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			txe := &TxExecutor{
 				ctx:      ctx,
@@ -578,7 +581,7 @@ func (tsv *TabletServer) ConcludeTransaction(ctx context.Context, target *queryp
 	return tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"ConcludeTransaction", "conclude_transaction", nil,
-		target, nil, true, /* allowOnShutdown */
+		target, nil, true, /* allowOnTransition */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			txe := &TxExecutor{
 				ctx:      ctx,
@@ -595,7 +598,7 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"ReadTransaction", "read_transaction", nil,
-		target, nil, true, /* allowOnShutdown */
+		target, nil, true, /* allowOnTransition */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			txe := &TxExecutor{
 				ctx:      ctx,
@@ -619,11 +622,11 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "transactionID and reserveID must match if both are non-zero")
 	}
 
-	allowOnShutdown := transactionID != 0
+	allowOnTransition := transactionID != 0
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Execute", sql, bindVariables,
-		target, options, allowOnShutdown,
+		target, options, allowOnTransition,
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			if bindVariables == nil {
 				bindVariables = make(map[string]*querypb.BindVariable)
@@ -670,7 +673,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 	return tsv.execRequest(
 		ctx, 0,
 		"StreamExecute", sql, bindVariables,
-		target, options, false, /* allowOnShutdown */
+		target, options, false, /* allowOnTransition */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			if bindVariables == nil {
 				bindVariables = make(map[string]*querypb.BindVariable)
@@ -714,9 +717,9 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 
 	if tsv.enableHotRowProtection && asTransaction {
 		// Serialize transactions which target the same hot row range.
-		// NOTE: We put this intentionally at this place *before* tsv.startRequest()
-		// gets called below. Otherwise, the startRequest()/endRequest() section from
-		// below would overlap with the startRequest()/endRequest() section executed
+		// NOTE: We put this intentionally at this place *before* StartRequest()
+		// gets called below. Otherwise, the StartRequest()/EndRequest() section from
+		// below would overlap with the StartRequest()/EndRequest() section executed
 		// by tsv.beginWaitForSameRangeTransactions().
 		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, queries[0].Sql, queries[0].BindVariables)
 		if err != nil {
@@ -727,17 +730,17 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 		}
 	}
 
-	allowOnShutdown := transactionID != 0
-	// TODO(sougou): Convert startRequest/endRequest pattern to use wrapper
+	allowOnTransition := transactionID != 0
+	// TODO(sougou): Convert StartRequest/EndRequest pattern to use wrapper
 	// function tsv.execRequest() instead.
 	// Note that below we always return "err" right away and do not call
 	// tsv.convertAndLogError. That's because the methods which returned "err",
 	// e.g. tsv.Execute(), already called that function and therefore already
 	// converted and logged the error.
-	if err = tsv.sm.startRequest(ctx, target, allowOnShutdown); err != nil {
+	if err = tsv.sm.StartRequest(ctx, target, allowOnTransition); err != nil {
 		return nil, err
 	}
-	defer tsv.sm.endRequest()
+	defer tsv.sm.EndRequest()
 	defer tsv.handlePanicAndSendLogStats("batch", nil, nil)
 
 	if options == nil {
@@ -829,7 +832,7 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 		// -queryserver-config-txpool-timeout (defaults to 1s) to limit the waiting.
 		ctx, tsv.QueryTimeout.Get(),
 		"", "waitForSameRangeTransactions", nil,
-		target, options, false, /* allowOnShutdown */
+		target, options, false, /* allowOnTransition */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			k, table := tsv.computeTxSerializerKey(ctx, logStats, sql, bindVariables)
 			if k == "" {
@@ -906,7 +909,7 @@ func (tsv *TabletServer) MessageStream(ctx context.Context, target *querypb.Targ
 	return tsv.execRequest(
 		ctx, 0,
 		"MessageStream", "stream", nil,
-		target, nil, false, /* allowOnShutdown */
+		target, nil, false, /* allowOnTransition */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			plan, err := tsv.qe.GetMessageStreamPlan(name)
 			if err != nil {
@@ -958,10 +961,10 @@ func (tsv *TabletServer) PurgeMessages(ctx context.Context, target *querypb.Targ
 }
 
 func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, queryGenerator func() (string, map[string]*querypb.BindVariable, error)) (count int64, err error) {
-	if err = tsv.sm.startRequest(ctx, target, false /* allowOnShutdown */); err != nil {
+	if err = tsv.sm.StartRequest(ctx, target, false /* allowOnTransition */); err != nil {
 		return 0, err
 	}
-	defer tsv.sm.endRequest()
+	defer tsv.sm.EndRequest()
 	defer tsv.handlePanicAndSendLogStats("ack", nil, nil)
 
 	query, bv, err := queryGenerator()
@@ -994,7 +997,7 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 
 // VStream streams VReplication events.
 func (tsv *TabletServer) VStream(ctx context.Context, target *querypb.Target, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	if err := tsv.sm.verifyTarget(ctx, target); err != nil {
+	if err := tsv.sm.VerifyTarget(ctx, target); err != nil {
 		return err
 	}
 	return tsv.vstreamer.Stream(ctx, startPos, tablePKs, filter, send)
@@ -1002,7 +1005,7 @@ func (tsv *TabletServer) VStream(ctx context.Context, target *querypb.Target, st
 
 // VStreamRows streams rows from the specified starting point.
 func (tsv *TabletServer) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
-	if err := tsv.sm.verifyTarget(ctx, target); err != nil {
+	if err := tsv.sm.VerifyTarget(ctx, target); err != nil {
 		return err
 	}
 	var row []sqltypes.Value
@@ -1018,7 +1021,7 @@ func (tsv *TabletServer) VStreamRows(ctx context.Context, target *querypb.Target
 
 // VStreamResults streams rows from the specified starting point.
 func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
-	if err := tsv.sm.verifyTarget(ctx, target); err != nil {
+	if err := tsv.sm.VerifyTarget(ctx, target); err != nil {
 		return err
 	}
 	return tsv.vstreamer.StreamResults(ctx, query, send)
@@ -1112,7 +1115,7 @@ func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, tr
 func (tsv *TabletServer) execRequest(
 	ctx context.Context, timeout time.Duration,
 	requestName, sql string, bindVariables map[string]*querypb.BindVariable,
-	target *querypb.Target, options *querypb.ExecuteOptions, allowOnShutdown bool,
+	target *querypb.Target, options *querypb.ExecuteOptions, allowOnTransition bool,
 	exec func(ctx context.Context, logStats *tabletenv.LogStats) error,
 ) (err error) {
 	span, ctx := trace.NewSpan(ctx, "TabletServer."+requestName)
@@ -1132,14 +1135,14 @@ func (tsv *TabletServer) execRequest(
 	logStats.OriginalSQL = sql
 	logStats.BindVariables = bindVariables
 	defer tsv.handlePanicAndSendLogStats(sql, bindVariables, logStats)
-	if err = tsv.sm.startRequest(ctx, target, allowOnShutdown); err != nil {
+	if err = tsv.sm.StartRequest(ctx, target, allowOnTransition); err != nil {
 		return err
 	}
 
 	ctx, cancel := withTimeout(ctx, timeout, options)
 	defer func() {
 		cancel()
-		tsv.sm.endRequest()
+		tsv.sm.EndRequest()
 	}()
 
 	err = exec(ctx, logStats)
