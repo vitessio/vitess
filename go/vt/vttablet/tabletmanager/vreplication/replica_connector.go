@@ -78,6 +78,7 @@ func (c *replicaConnector) Open(ctx context.Context) error {
 }
 
 func (c *replicaConnector) Close(ctx context.Context) error {
+	c.shutdown()
 	return nil
 }
 

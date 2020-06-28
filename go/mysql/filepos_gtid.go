@@ -146,6 +146,10 @@ func (gtid filePosGTID) Union(other GTIDSet) GTIDSet {
 	return filePosOther
 }
 
+func (gtid filePosGTID) Last() string {
+	panic("not implemented")
+}
+
 func init() {
 	gtidParsers[filePosFlavorID] = parseFilePosGTID
 	gtidSetParsers[filePosFlavorID] = parseFilePosGTIDSet
