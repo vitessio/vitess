@@ -232,6 +232,11 @@ func (gtidSet MariadbGTIDSet) Union(other GTIDSet) GTIDSet {
 	return newSet
 }
 
+//Last returns the last gtid
+func (gtidSet MariadbGTIDSet) Last() string {
+	panic("not implemented")
+}
+
 // deepCopy returns a deep copy of the set.
 func (gtidSet MariadbGTIDSet) deepCopy() MariadbGTIDSet {
 	newSet := make(MariadbGTIDSet, len(gtidSet))

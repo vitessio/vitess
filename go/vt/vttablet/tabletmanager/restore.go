@@ -19,7 +19,6 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
-	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/proto/vttime"
@@ -257,8 +256,10 @@ func (agent *ActionAgent) getGTIDFromTimestamp(ctx context.Context, pos mysql.Po
 
 	select {
 	case <-found:
+		vsClient.Close(timeoutCtx)
 		return <-found
 	case <-timeoutCtx.Done():
+		vsClient.Close(timeoutCtx)
 		log.Warningf("Can't find the GTID from restore time stamp, exiting.")
 		return ""
 	}
@@ -270,24 +271,22 @@ func (agent *ActionAgent) catchupToGTID(ctx context.Context, gtid string) error 
 	if err != nil {
 		return err
 	}
-	gtidStr := gtidParsed.GTIDSet.String()
+	gtidStr := gtidParsed.GTIDSet.Last()
+	log.Infof("gtid to restore upto %s", gtidStr)
 
-	gtidNew := strings.Split(gtidStr, ":")[0] + ":" + strings.Split(strings.Split(gtidStr, ":")[1], "-")[1]
+	//gtidNew := strings.Split(gtidStr, ":")[0] + ":" + strings.Split(strings.Split(gtidStr, ":")[1], "-")[1]
 	// TODO: we can use agent.MysqlDaemon.SetMaster , but it uses replDbConfig
 	cmds := []string{
 		"STOP SLAVE FOR CHANNEL '' ",
 		"STOP SLAVE IO_THREAD FOR CHANNEL ''",
 		fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s',MASTER_PORT=%d, MASTER_USER='%s', MASTER_AUTO_POSITION = 1;", *binlogHost, *binlogPort, *binlogUser),
-		fmt.Sprintf(" START SLAVE  UNTIL SQL_BEFORE_GTIDS = '%s'", gtidNew),
-		"STOP SLAVE",
-		"RESET SLAVE ALL",
+		fmt.Sprintf(" START SLAVE  UNTIL SQL_BEFORE_GTIDS = '%s'", gtidStr),
 	}
 	fmt.Printf("%v", cmds)
 
 	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
 		return vterrors.Wrap(err, "failed to reset slave")
 	}
-	println("it should have cought up")
 	// TODO: Wait for the replication to happen and then reset the slave, so that we don't be connected to binlog server
 	return nil
 }
