@@ -54,10 +54,11 @@ var (
 	waitForBackupInterval = flag.Duration("wait_for_backup_interval", 0, "(init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear")
 
 	// Flags for PITR
-	binlogHost = flag.String("binlog_host", "", "(init restore parameter) host name of binlog server.")
-	binlogPort = flag.Int("binlog_port", 0, "(init restore parameter) port of binlog server.")
-	binlogUser = flag.String("binlog_user", "", "(init restore parameter) username of binlog server.")
-	binlogPwd  = flag.String("binlog_password", "", "(init restore parameter) password of binlog server.")
+	binlogHost           = flag.String("binlog_host", "", "(init restore parameter) host name of binlog server.")
+	binlogPort           = flag.Int("binlog_port", 0, "(init restore parameter) port of binlog server.")
+	binlogUser           = flag.String("binlog_user", "", "(init restore parameter) username of binlog server.")
+	binlogPwd            = flag.String("binlog_password", "", "(init restore parameter) password of binlog server.")
+	timeoutForGTIDLookup = flag.Duration("binlog_timeout", 60*time.Second, "(init restore parameter) timeout for fetching gtid from timestamp.")
 )
 
 // RestoreData is the main entry point for backup restore.
@@ -236,10 +237,11 @@ func (agent *ActionAgent) getGTIDFromTimestamp(ctx context.Context, pos mysql.Po
 		}},
 	}
 
-	// Todo: we need to safely return from vstream if it takes more time
+	timeoutCtx, cancelFnc := context.WithTimeout(ctx, *timeoutForGTIDLookup)
+	defer cancelFnc()
 	found := make(chan string)
 	go func() {
-		err := vsClient.VStream(ctx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
+		err := vsClient.VStream(timeoutCtx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
 			for _, event := range events {
 				if event.Gtid != "" && event.Timestamp > restoreTime {
 					found <- event.Gtid
@@ -252,29 +254,33 @@ func (agent *ActionAgent) getGTIDFromTimestamp(ctx context.Context, pos mysql.Po
 			found <- ""
 		}
 	}()
-	timeout := time.Now().Add(60 * time.Second)
-	for time.Now().Before(timeout) {
-		select {
-		case <-found:
-			return <-found
-		default:
-			time.Sleep(300 * time.Millisecond)
-		}
+
+	select {
+	case <-found:
+		return <-found
+	case <-timeoutCtx.Done():
+		log.Warningf("Can't find the GTID from restore time stamp, exiting.")
+		return ""
 	}
-	return ""
 }
 
 // replicateUptoGTID replicates upto specified gtid from binlog server
 func (agent *ActionAgent) catchupToGTID(ctx context.Context, gtid string) error {
-	gtid = strings.Replace(gtid, "MySQL56/", "", 1)
+	gtidParsed, err := mysql.DecodePosition(gtid)
+	if err != nil {
+		return err
+	}
+	gtidStr := gtidParsed.GTIDSet.String()
 
-	gtidNew := strings.Split(gtid, ":")[0] + ":" + strings.Split(strings.Split(gtid, ":")[1], "-")[1]
+	gtidNew := strings.Split(gtidStr, ":")[0] + ":" + strings.Split(strings.Split(gtidStr, ":")[1], "-")[1]
 	// TODO: we can use agent.MysqlDaemon.SetMaster , but it uses replDbConfig
 	cmds := []string{
 		"STOP SLAVE FOR CHANNEL '' ",
 		"STOP SLAVE IO_THREAD FOR CHANNEL ''",
 		fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s',MASTER_PORT=%d, MASTER_USER='%s', MASTER_AUTO_POSITION = 1;", *binlogHost, *binlogPort, *binlogUser),
 		fmt.Sprintf(" START SLAVE  UNTIL SQL_BEFORE_GTIDS = '%s'", gtidNew),
+		"STOP SLAVE",
+		"RESET SLAVE ALL",
 	}
 	fmt.Printf("%v", cmds)
 
