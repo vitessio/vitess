@@ -1109,7 +1109,10 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbconfigs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	tsv.StartService(target, dbconfigs)
+	err := tsv.StartService(target, dbconfigs)
+	if err != nil {
+		panic(err)
+	}
 	return tsv
 }
 
