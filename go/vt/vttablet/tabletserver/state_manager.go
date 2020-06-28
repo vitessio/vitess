@@ -279,6 +279,8 @@ func (sm *stateManager) CheckMySQL() {
 // within timeBombDuration, it crashes the process.
 func (sm *stateManager) StopService() {
 	defer close(sm.setTimeBomb())
+
+	log.Info("Stopping TabletServer")
 	sm.SetServingType(sm.Target().TabletType, StateNotConnected, nil)
 }
 
