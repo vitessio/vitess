@@ -223,7 +223,7 @@ func (t *TxThrottler) Open() error {
 		return nil
 	}
 	if t.state != nil {
-		return fmt.Errorf("transaction throttler already opened")
+		return nil
 	}
 	var err error
 	t.state, err = newTxThrottlerState(t.config, t.target.Keyspace, t.target.Shard)
