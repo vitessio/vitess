@@ -68,7 +68,6 @@ type stateManager struct {
 	state          int64
 	target         querypb.Target
 	transitioning  bool
-	connecting     bool
 	// TODO(sougou): deprecate alsoAllow
 	alsoAllow []topodatapb.TabletType
 
@@ -120,30 +119,10 @@ type txThrottler interface {
 	Close()
 }
 
-const (
-	actionNone = iota
-	actionFullStart
-	actionServeNewType
-	actionGracefulStop
-)
-
 func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, state int64, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
-	// TODO(sougou): deprecate the waits after tabletmanager has been refactored.
-	startTime := time.Now()
-	stateChanged = sm.setDesiredState(tabletType, state, alsoAllow)
-	for {
-		curState, curTabletType := sm.State(), sm.Target().TabletType
-		if curState == StateNotConnected {
-			return stateChanged, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "MySQL is unavailable")
-		}
-		if curState == state && curTabletType == tabletType {
-			return stateChanged, nil
-		}
-		time.Sleep(10 * time.Millisecond)
-		if time.Since(startTime) > 1*time.Second {
-			return stateChanged, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "State transition deadline exceeded")
-		}
-	}
+	stateChanged, errch := sm.setDesiredState(tabletType, state, alsoAllow)
+	err = <-errch
+	return stateChanged, err
 }
 
 func (sm *stateManager) CheckMySQL() {
@@ -177,20 +156,15 @@ func (sm *stateManager) CheckMySQL() {
 		// of executeTransition where it waits for 1s and retries.
 		sm.closeAll()
 		time.Sleep(1 * time.Second)
-		go sm.executeTransition()
+		go sm.executeTransition(make(chan error, 1))
 	}()
 }
 
 func (sm *stateManager) StopService() {
 	defer close(sm.setTimeBomb())
 
+	log.Info("Stopping TabletServer")
 	sm.SetServingType(sm.Target().TabletType, StateNotConnected, nil)
-	for {
-		if sm.State() == StateNotConnected {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
 }
 
 // StartRequest validates the current state and target and registers
@@ -255,9 +229,11 @@ func (sm *stateManager) VerifyTarget(ctx context.Context, target *querypb.Target
 	return nil
 }
 
-func (sm *stateManager) setDesiredState(tabletType topodatapb.TabletType, state int64, alsoAllow []topodatapb.TabletType) bool {
+func (sm *stateManager) setDesiredState(tabletType topodatapb.TabletType, state int64, alsoAllow []topodatapb.TabletType) (bool, <-chan error) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
+
+	ch := make(chan error, 1)
 
 	stateChanged := false
 	if sm.wantTabletType != tabletType {
@@ -270,42 +246,49 @@ func (sm *stateManager) setDesiredState(tabletType topodatapb.TabletType, state 
 	}
 	sm.alsoAllow = alsoAllow
 	if sm.transitioning {
-		return stateChanged
+		ch <- nil
+		return stateChanged, ch
 	}
 	if sm.wantState == sm.state && sm.wantTabletType == sm.target.TabletType {
-		return stateChanged
+		ch <- nil
+		return stateChanged, ch
 	}
 	sm.transitioning = true
-	go sm.executeTransition()
-	return stateChanged
+	go sm.executeTransition(ch)
+	return stateChanged, ch
 }
 
 // executeTransition must be invoked after setting sm.transitioning to true.
 // If the flag is already set, it must not be called. The function will
 // reset the flag to false when it returns.
-func (sm *stateManager) executeTransition() {
+func (sm *stateManager) executeTransition(ch chan<- error) {
 	// Repeat until desired state is reached.
 	errorReported := false
 	for {
 		ok, wantTabletType, wantState := sm.transitionDone()
 		if ok {
+			if !errorReported {
+				ch <- nil
+			}
 			return
 		}
 
 		var err error
-		switch wantTabletType {
-		case topodatapb.TabletType_MASTER:
-			if wantState == StateServing {
+		switch wantState {
+		case StateServing:
+			if wantTabletType == topodatapb.TabletType_MASTER {
 				err = sm.serveMaster()
 			} else {
-				err = sm.unserveMaster()
-			}
-		default:
-			if wantState == StateServing {
 				err = sm.serveNonMaster(wantTabletType)
+			}
+		case StateNotServing:
+			if wantTabletType == topodatapb.TabletType_MASTER {
+				err = sm.unserveMaster()
 			} else {
 				err = sm.unserveNonMaster(wantTabletType)
 			}
+		case StateNotConnected:
+			sm.closeAll()
 		}
 		// If there was an error, shut everything down
 		// and retry after a delay.
@@ -316,6 +299,7 @@ func (sm *stateManager) executeTransition() {
 		if err != nil {
 			if !errorReported {
 				errorReported = true
+				ch <- err
 				log.Errorf("Error transitioning to the desired state: %v, %v, will keep retrying: %v", wantTabletType, stateName[wantState], err)
 			}
 			sm.closeAll()
