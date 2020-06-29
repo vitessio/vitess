@@ -19,7 +19,10 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
+
+	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
@@ -93,7 +96,7 @@ func TestConcatenate_NoSourcesErr(t *testing.T) {
 				qr, err := wrapStreamExecute(concatenate, &noopVCursor{ctx: context.Background()}, nil, true)
 				if tc.expectedError == "" {
 					require.NoError(t, err)
-					require.Equal(t, tc.expectedResult, qr)
+					require.Equal(t, utils.SortString(fmt.Sprintf("%v", tc.expectedResult.Rows)), utils.SortString(fmt.Sprintf("%v", qr.Rows)))
 				} else {
 					require.EqualError(t, err, tc.expectedError)
 				}

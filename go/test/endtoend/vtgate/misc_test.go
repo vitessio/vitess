@@ -19,9 +19,9 @@ package vtgate
 import (
 	"context"
 	"fmt"
-	"sort"
-	"strings"
 	"testing"
+
+	"vitess.io/vitess/go/test/utils"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -586,18 +586,12 @@ func TestUnionAll(t *testing.T) {
 
 	// union all between two selectuniquein tables
 	qr := exec(t, conn, "select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8) union all select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8)")
-	expected := sortString("[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)] [INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)]]")
-	assert.Equal(t, expected, sortString(fmt.Sprintf("%v", qr.Rows)))
+	expected := utils.SortString("[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)] [INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)]]")
+	assert.Equal(t, expected, utils.SortString(fmt.Sprintf("%v", qr.Rows)))
 
 	// clean up
 	exec(t, conn, "delete from t1")
 	exec(t, conn, "delete from t2")
-}
-
-func sortString(w string) string {
-	s := strings.Split(w, "")
-	sort.Strings(s)
-	return strings.Join(s, "")
 }
 
 func TestUnion(t *testing.T) {
