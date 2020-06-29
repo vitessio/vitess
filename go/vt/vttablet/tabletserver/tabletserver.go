@@ -970,6 +970,10 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 	trace.AnnotateSQL(span, sql)
 	defer span.Finish()
 
+	if transactionID != 0 && reservedID != 0 && transactionID != reservedID {
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "transactionID and reserveID must match if both are non-zero")
+	}
+
 	allowOnShutdown := transactionID != 0
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
@@ -1034,7 +1038,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 				query:          query,
 				marginComments: comments,
 				bindVars:       bindVariables,
-				connID:         txID,
+				connID:         transactionID,
 				options:        options,
 				plan:           plan,
 				ctx:            ctx,

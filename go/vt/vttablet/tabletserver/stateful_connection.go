@@ -88,7 +88,7 @@ func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows in
 
 func (sc *StatefulConnection) execWithRetry(ctx context.Context, query string, maxrows int, wantfields bool) error {
 	if sc.IsClosed() {
-		return nil
+		return vterrors.New(vtrpcpb.Code_CANCELED, "connection is closed")
 	}
 	if _, err := sc.dbConn.Exec(ctx, query, maxrows, wantfields); err != nil {
 		return err
