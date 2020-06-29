@@ -300,7 +300,7 @@ func TestPlanPrefixKey(t *testing.T) {
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1[deadbeef]",
-		expectedPlanPrefixKey: "ks1@masterDestinationKeyspaceIDsResolved(80-)",
+		expectedPlanPrefixKey: "ks1@masterKsIDsResolved(80-)",
 	}}
 
 	for i, tc := range tests {

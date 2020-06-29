@@ -431,7 +431,7 @@ func (vc *vcursorImpl) planPrefixKey() string {
 					shards[i] = resolved[i].Target.GetShard()
 				}
 				sort.Strings(shards)
-				return fmt.Sprintf("%s%sDestinationKeyspaceIDsResolved(%s)", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType], strings.Join(shards, ","))
+				return fmt.Sprintf("%s%sKsIDsResolved(%s)", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType], strings.Join(shards, ","))
 			}
 		default:
 			// use destination string (out of the switch)
