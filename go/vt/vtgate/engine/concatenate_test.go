@@ -208,8 +208,9 @@ func TestConcatenate_WithSourcesErrLast(t *testing.T) {
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varchar|varchar"), "1|a1|b1", "2|a2|b2"),
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col3|col4|col5", "int64|varchar|varchar|int32"), "1|a1|b1|5", "2|a2|b2|6"),
 		},
-		execErr:       "The used SELECT statements have a different number of columns (errno 1222) (sqlstate 21000)",
-		streamExecErr: strFailed,
+		execErr:             "The used SELECT statements have a different number of columns (errno 1222) (sqlstate 21000)",
+		streamExecErr:       strFailed,
+		nonDeterministicErr: true,
 	}, {
 		testName: "1 empty result and 1 non empty result",
 		inputs: []*sqltypes.Result{
