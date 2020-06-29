@@ -40,7 +40,7 @@ type iswitcher interface {
 	switchTableReads(ctx context.Context, cells []string, servedType topodatapb.TabletType, direction TrafficSwitchDirection) error
 	switchShardReads(ctx context.Context, cells []string, servedType topodatapb.TabletType, direction TrafficSwitchDirection) error
 	validateWorkflowHasCompleted(ctx context.Context) error
-	dropSourceTables(ctx context.Context) error
+	removeSourceTables(ctx context.Context, removalType TableRemovalType) error
 	dropSourceShards(ctx context.Context) error
 	dropSourceBlacklistedTables(ctx context.Context) error
 	freezeTargetVReplication(ctx context.Context) error

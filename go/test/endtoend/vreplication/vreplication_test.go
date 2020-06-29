@@ -209,9 +209,15 @@ func shardCustomer(t *testing.T, testReverse bool) {
 		if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "customer.p2c"); err != nil {
 			t.Fatalf("SwitchWrites error: %s\n", output)
 		}
-		want = dryRunResultsDropSourcesCustomerShard
+		want = dryRunResultsDropSourcesDropCustomerShard
 		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("DropSources", "-dry_run", "customer.p2c"); err != nil {
 			t.Fatalf("DropSources dry run error: %s\n", output)
+		}
+		validateDryRunResults(t, output, want)
+
+		want = dryRunResultsDropSourcesRenameCustomerShard
+		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("DropSources", "-dry_run", "-rename_tables", "customer.p2c"); err != nil {
+			t.Fatalf("DropSources dry run with rename error: %s\n", output)
 		}
 		validateDryRunResults(t, output, want)
 
