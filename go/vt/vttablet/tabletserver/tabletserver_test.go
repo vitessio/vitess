@@ -17,6 +17,7 @@ limitations under the License.
 package tabletserver
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -889,6 +890,147 @@ func TestTabletServerCommitPrepared(t *testing.T) {
 	defer tsv.RollbackPrepared(ctx, &target, "aa", 0)
 	err = tsv.CommitPrepared(ctx, &target, "aa")
 	require.NoError(t, err)
+}
+
+func TestTabletServerReserveConnection(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	require.NoError(t, err)
+	defer tsv.StopService()
+	options := &querypb.ExecuteOptions{}
+
+	// reserve a connection
+	_, rID, _, err := tsv.ReserveExecute(ctx, &target, "select 42", nil, nil, 0, options)
+	require.NoError(t, err)
+
+	// run a query in it
+	_, err = tsv.Execute(ctx, &target, "select 42", nil, 0, rID, options)
+	require.NoError(t, err)
+
+	// release the connection
+	err = tsv.Release(ctx, &target, 0, rID)
+	require.NoError(t, err)
+}
+
+func TestTabletServerExecNonExistentConnection(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	require.NoError(t, err)
+	defer tsv.StopService()
+	options := &querypb.ExecuteOptions{}
+
+	// run a query in a non-existingt reserved id
+	_, err = tsv.Execute(ctx, &target, "select 42", nil, 0, 123456, options)
+	require.Error(t, err)
+}
+
+func TestTabletServerReleaseNonExistentConnection(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	require.NoError(t, err)
+	defer tsv.StopService()
+
+	// run a query in a non-existingt reserved id
+	err = tsv.Release(ctx, &target, 0, 123456)
+	require.Error(t, err)
+}
+
+func TestMakeSureToCloseDbConnWhenBeginQueryFails(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+
+	db.AddRejectedQuery("begin", errors.New("it broke"))
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	require.NoError(t, err)
+	defer tsv.StopService()
+	options := &querypb.ExecuteOptions{}
+
+	// run a query in a non-existingt reserved id
+	_, _, _, _, err = tsv.ReserveBeginExecute(ctx, &target, "select 42", []string{}, nil, options)
+	require.Error(t, err)
+}
+
+func TestTabletServerReserveAndBeginCommit(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	require.NoError(t, err)
+	defer tsv.StopService()
+	options := &querypb.ExecuteOptions{}
+
+	// reserve a connection and a transaction
+	_, txID, rID, _, err := tsv.ReserveBeginExecute(ctx, &target, "select 42", nil, nil, options)
+	require.NoError(t, err)
+	defer func() {
+		// fallback so the test finishes quickly
+		tsv.Release(ctx, &target, txID, rID)
+	}()
+
+	// run a query in it
+	_, err = tsv.Execute(ctx, &target, "select 42", nil, txID, rID, options)
+	require.NoError(t, err)
+
+	// run a query in a non-existent connection
+	_, err = tsv.Execute(ctx, &target, "select 42", nil, txID, rID+100, options)
+	require.Error(t, err)
+	_, err = tsv.Execute(ctx, &target, "select 42", nil, txID+100, rID, options)
+	require.Error(t, err)
+
+	// commit
+	newRID, err := tsv.Commit(ctx, &target, txID)
+	require.NoError(t, err)
+	assert.NotEqual(t, rID, newRID)
+	rID = newRID
+
+	// begin and rollback
+	_, txID, _, err = tsv.BeginExecute(ctx, &target, "select 42", nil, rID, options)
+	require.NoError(t, err)
+	assert.Equal(t, newRID, txID)
+	rID = newRID
+
+	newRID, err = tsv.Rollback(ctx, &target, txID)
+	require.NoError(t, err)
+	assert.NotEqual(t, rID, newRID)
+	rID = newRID
+
+	// release the connection
+	err = tsv.Release(ctx, &target, 0, rID)
+	require.NoError(t, err)
+
+	// release the connection again and fail
+	err = tsv.Release(ctx, &target, 0, rID)
+	require.Error(t, err)
 }
 
 func TestTabletServerRollbackPrepared(t *testing.T) {

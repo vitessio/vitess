@@ -131,6 +131,21 @@ func TestExecWithDbconnClosedHavingTx(t *testing.T) {
 	require.EqualError(t, err, "transaction was aborted: foobar")
 }
 
+func TestFailOnConnectionRegistering(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	pool := newActivePool()
+	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	conn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	defer conn.Close()
+
+	pool.lastID.Set(conn.ConnID - 1)
+
+	_, err = pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	require.Error(t, err, "already present")
+}
+
 func newActivePool() *StatefulConnectionPool {
 	env := newEnv("ActivePoolTest")
 
