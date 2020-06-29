@@ -127,13 +127,13 @@ func (sbc *SandboxConn) SetResults(r []*sqltypes.Result) {
 
 // Execute is part of the QueryService interface.
 func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+	sbc.execMu.Lock()
+	defer sbc.execMu.Unlock()
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]*querypb.BindVariable)
 	for k, v := range bindVars {
 		bv[k] = v
 	}
-	sbc.execMu.Lock()
-	defer sbc.execMu.Unlock()
 	sbc.Queries = append(sbc.Queries, &querypb.BoundQuery{
 		Sql:           query,
 		BindVariables: bv,
@@ -165,13 +165,12 @@ func (sbc *SandboxConn) ExecuteBatch(ctx context.Context, target *querypb.Target
 
 // StreamExecute is part of the QueryService interface.
 func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+	sbc.sExecMu.Lock()
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]*querypb.BindVariable)
 	for k, v := range bindVars {
 		bv[k] = v
 	}
-	sbc.sExecMu.Lock()
-	defer sbc.sExecMu.Unlock()
 	sbc.Queries = append(sbc.Queries, &querypb.BoundQuery{
 		Sql:           query,
 		BindVariables: bv,
@@ -179,9 +178,13 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 	sbc.Options = append(sbc.Options, options)
 	err := sbc.getError()
 	if err != nil {
+		sbc.sExecMu.Unlock()
 		return err
 	}
-	return callback(sbc.getNextResult())
+	nextRs := sbc.getNextResult()
+	sbc.sExecMu.Unlock()
+
+	return callback(nextRs)
 }
 
 // Begin is part of the QueryService interface.

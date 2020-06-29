@@ -19,6 +19,8 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -579,6 +581,23 @@ func TestUnionAll(t *testing.T) {
 	// union all between two different tables
 	assertMatches(t, conn, "select tbl2.id1 FROM  ((select id1 from t1 order by id1 limit 5) union all (select id1 from t1 order by id1 desc limit 5)) as tbl1 INNER JOIN t1 as tbl2  ON tbl1.id1 = tbl2.id1",
 		"[[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]")
+
+	exec(t, conn, "insert into t1(id1, id2) values(3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8)")
+
+	// union all between two selectuniquein tables
+	qr := exec(t, conn, "select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8) union all select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8)")
+	expected := sortString("[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)] [INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)]]")
+	assert.Equal(t, expected, sortString(fmt.Sprintf("%v", qr.Rows)))
+
+	// clean up
+	exec(t, conn, "delete from t1")
+	exec(t, conn, "delete from t2")
+}
+
+func sortString(w string) string {
+	s := strings.Split(w, "")
+	sort.Strings(s)
+	return strings.Join(s, "")
 }
 
 func TestUnion(t *testing.T) {
