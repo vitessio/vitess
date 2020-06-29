@@ -23,6 +23,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/vt/callerid"
@@ -172,6 +174,13 @@ func (vc *vcursorImpl) SetContextTimeout(timeout time.Duration) context.CancelFu
 	ctx, cancel := context.WithTimeout(vc.ctx, timeout)
 	vc.ctx = ctx
 	return cancel
+}
+
+// ErrorGroupCancellableContext updates context that can be cancelled.
+func (vc *vcursorImpl) ErrorGroupCancellableContext() *errgroup.Group {
+	g, ctx := errgroup.WithContext(vc.ctx)
+	vc.ctx = ctx
+	return g
 }
 
 // RecordWarning stores the given warning in the current session

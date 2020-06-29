@@ -105,16 +105,15 @@ func (c *Concatenate) Execute(vcursor VCursor, bindVars map[string]*querypb.Bind
 // StreamExecute performs a streaming exec.
 func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var seenFields []*querypb.Field
+	var fieldset sync.WaitGroup
 	fieldsSent := false
 
-	errs := make([]error, len(c.Sources))
-	var wg, fieldset sync.WaitGroup
+	g := vcursor.ErrorGroupCancellableContext()
 	fieldset.Add(1)
 	var mu sync.Mutex
 	for i, source := range c.Sources {
-		wg.Add(1)
-		go func(i int, source Primitive) {
-			defer wg.Done()
+		i, source := i, source
+		g.Go(func() error {
 			err := source.StreamExecute(vcursor, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
 				// if we have fields to compare, make sure all the fields are all the same
 				if i == 0 && !fieldsSent {
@@ -134,21 +133,23 @@ func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 				// This to ensure only one send happens back to the client.
 				mu.Lock()
 				defer mu.Unlock()
-				return callback(resultChunk)
+				select {
+				case <-vcursor.Context().Done():
+					return nil
+				default:
+					return callback(resultChunk)
+				}
 			})
 			// This is to ensure other streams complete if the first stream failed to unlock the wait.
 			if i == 0 && !fieldsSent {
 				fieldset.Done()
 			}
-			errs[i] = err
-		}(i, source)
-	}
-	wg.Wait()
-
-	for _, err := range errs {
-		if err != nil {
 			return err
-		}
+		})
+
+	}
+	if err := g.Wait(); err != nil {
+		return err
 	}
 	return nil
 }

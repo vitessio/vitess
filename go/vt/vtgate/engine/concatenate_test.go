@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -79,7 +80,7 @@ func TestConcatenate_NoSourcesErr(t *testing.T) {
 			concatenate := &Concatenate{Sources: fps}
 
 			t.Run("Execute wantfields true", func(t *testing.T) {
-				qr, err := concatenate.Execute(&noopVCursor{}, nil, true)
+				qr, err := concatenate.Execute(&noopVCursor{ctx: context.Background()}, nil, true)
 				if tc.expectedError == "" {
 					require.NoError(t, err)
 					require.Equal(t, tc.expectedResult, qr)
@@ -89,7 +90,7 @@ func TestConcatenate_NoSourcesErr(t *testing.T) {
 			})
 
 			t.Run("StreamExecute wantfields true", func(t *testing.T) {
-				qr, err := wrapStreamExecute(concatenate, &noopVCursor{}, nil, true)
+				qr, err := wrapStreamExecute(concatenate, &noopVCursor{ctx: context.Background()}, nil, true)
 				if tc.expectedError == "" {
 					require.NoError(t, err)
 					require.Equal(t, tc.expectedResult, qr)
@@ -107,9 +108,8 @@ func TestConcatenate_WithSourcesErrFirst(t *testing.T) {
 		inputs   []*sqltypes.Result
 	}
 
-	executeErr := "Concatenate.Execute: failed"
-	streamExecuteErr := "failed"
-
+	strFailed := "failed"
+	executeErr := "Concatenate.Execute: " + strFailed
 	testCases := []*testCase{{
 		testName: "empty results",
 		inputs: []*sqltypes.Result{
@@ -146,21 +146,21 @@ func TestConcatenate_WithSourcesErrFirst(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.testName, func(t *testing.T) {
 			var fps []Primitive
-			fps = append(fps, &fakePrimitive{results: []*sqltypes.Result{nil, nil}, sendErr: errors.New("failed")})
+			fps = append(fps, &fakePrimitive{results: []*sqltypes.Result{nil, nil}, sendErr: errors.New(strFailed)})
 			for _, input := range tc.inputs {
 				fps = append(fps, &fakePrimitive{results: []*sqltypes.Result{input, input}})
 			}
 			concatenate := &Concatenate{Sources: fps}
 
 			t.Run("Execute wantfields true", func(t *testing.T) {
-				_, err := concatenate.Execute(&noopVCursor{}, nil, true)
+				_, err := concatenate.Execute(&noopVCursor{ctx: context.Background()}, nil, true)
 				require.EqualError(t, err, executeErr)
 
 			})
 
 			t.Run("StreamExecute wantfields true", func(t *testing.T) {
-				_, err := wrapStreamExecute(concatenate, &noopVCursor{}, nil, true)
-				require.EqualError(t, err, streamExecuteErr)
+				_, err := wrapStreamExecute(concatenate, &noopVCursor{ctx: context.Background()}, nil, true)
+				require.EqualError(t, err, strFailed)
 			})
 		})
 	}
@@ -171,11 +171,11 @@ func TestConcatenate_WithSourcesErrLast(t *testing.T) {
 		testName               string
 		inputs                 []*sqltypes.Result
 		execErr, streamExecErr string
+		nonDeterministicErr    bool
 	}
 
-	executeErr := "Concatenate.Execute: failed"
-	streamExecuteErr := "failed"
-
+	strFailed := "failed"
+	executeErr := "Concatenate.Execute: " + strFailed
 	testCases := []*testCase{{
 		testName: "empty results",
 		inputs: []*sqltypes.Result{
@@ -184,7 +184,7 @@ func TestConcatenate_WithSourcesErrLast(t *testing.T) {
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id3|col31|col32", "int64|varbinary|varbinary")),
 		},
 		execErr:       executeErr,
-		streamExecErr: streamExecuteErr,
+		streamExecErr: strFailed,
 	}, {
 		testName: "2 non empty result",
 		inputs: []*sqltypes.Result{
@@ -192,15 +192,16 @@ func TestConcatenate_WithSourcesErrLast(t *testing.T) {
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varchar|varbinary"), "1|a1|b1", "2|a2|b2"),
 		},
 		execErr:       executeErr,
-		streamExecErr: streamExecuteErr,
+		streamExecErr: strFailed,
 	}, {
 		testName: "mismatch field type",
 		inputs: []*sqltypes.Result{
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varbinary|varbinary"), "1|a1|b1", "2|a2|b2"),
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col3|col4", "int64|varchar|varbinary"), "1|a1|b1", "2|a2|b2"),
 		},
-		execErr:       "column field type does not match for name: (col1, col3) types: (VARBINARY, VARCHAR)",
-		streamExecErr: "column field type does not match for name: (col1, col3) types: (VARBINARY, VARCHAR)",
+		execErr:             "column field type does not match for name: (col1, col3) types: (VARBINARY, VARCHAR)",
+		streamExecErr:       "column field type does not match for name: (col1, col3) types: (VARBINARY, VARCHAR)",
+		nonDeterministicErr: true,
 	}, {
 		testName: "input source has different column count",
 		inputs: []*sqltypes.Result{
@@ -208,7 +209,7 @@ func TestConcatenate_WithSourcesErrLast(t *testing.T) {
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col3|col4|col5", "int64|varchar|varchar|int32"), "1|a1|b1|5", "2|a2|b2|6"),
 		},
 		execErr:       "The used SELECT statements have a different number of columns (errno 1222) (sqlstate 21000)",
-		streamExecErr: "The used SELECT statements have a different number of columns (errno 1222) (sqlstate 21000)",
+		streamExecErr: strFailed,
 	}, {
 		testName: "1 empty result and 1 non empty result",
 		inputs: []*sqltypes.Result{
@@ -216,7 +217,7 @@ func TestConcatenate_WithSourcesErrLast(t *testing.T) {
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varchar|varbinary"), "1|a1|b1", "2|a2|b2"),
 		},
 		execErr:       executeErr,
-		streamExecErr: streamExecuteErr,
+		streamExecErr: strFailed,
 	}}
 
 	for _, tc := range testCases {
@@ -225,17 +226,20 @@ func TestConcatenate_WithSourcesErrLast(t *testing.T) {
 			for _, input := range tc.inputs {
 				fps = append(fps, &fakePrimitive{results: []*sqltypes.Result{input, input}})
 			}
-			fps = append(fps, &fakePrimitive{results: []*sqltypes.Result{nil, nil}, sendErr: errors.New("failed")})
+			fps = append(fps, &fakePrimitive{results: []*sqltypes.Result{nil, nil}, sendErr: errors.New(strFailed)})
 			concatenate := &Concatenate{Sources: fps}
 
 			t.Run("Execute wantfields true", func(t *testing.T) {
-				_, err := concatenate.Execute(&noopVCursor{}, nil, true)
+				_, err := concatenate.Execute(&noopVCursor{ctx: context.Background()}, nil, true)
 				require.EqualError(t, err, tc.execErr)
 			})
 
 			t.Run("StreamExecute wantfields true", func(t *testing.T) {
-				_, err := wrapStreamExecute(concatenate, &noopVCursor{}, nil, true)
-				require.EqualError(t, err, tc.streamExecErr)
+				_, err := wrapStreamExecute(concatenate, &noopVCursor{ctx: context.Background()}, nil, true)
+				require.Error(t, err)
+				if !tc.nonDeterministicErr {
+					require.EqualError(t, err, tc.streamExecErr)
+				}
 			})
 		})
 	}
