@@ -131,10 +131,15 @@ func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 						return err
 					}
 				}
+				// This to ensure only one send happens back to the client.
 				mu.Lock()
 				defer mu.Unlock()
 				return callback(resultChunk)
 			})
+			// This is to ensure other streams complete if the first stream failed to unlock the wait.
+			if i == 0 && !fieldsSent {
+				fieldset.Done()
+			}
 			errs[i] = err
 		}(i, source)
 	}
