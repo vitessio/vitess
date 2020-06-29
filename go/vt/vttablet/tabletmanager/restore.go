@@ -144,6 +144,7 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	if keyspaceInfo.SnapshotTime != nil {
 		err = agent.restoreToTimeFromBinlog(ctx, pos, keyspaceInfo.SnapshotTime)
 		if err != nil {
+			log.Errorf("unable to restore to the desired point, error : %v", err)
 			return nil
 		}
 	}
@@ -187,26 +188,21 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	return nil
 }
 
+// restoreToTimeFromBinlog restores to the snapshot time of the keyspace
+// currently this works with mysql based database only (as it uses mysql specific queries for restoring
 func (agent *ActionAgent) restoreToTimeFromBinlog(ctx context.Context, pos mysql.Position, restoreTime *vttime.Time) error {
 	// validate the dependent settings
 	if *binlogHost == "" || *binlogPort <= 0 || *binlogUser == "" {
-		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "restore_to_time flag depends on binlog server flags(binlog_host, binlog_port, binlog_user, binlog_password)")
+		log.Warning("invalid binlog server setting, restoring to last available backup.")
+		return nil
 	}
 
-	//if restoreTime.Seconds > int64(time.Now().Second()) {
-	//	println(restoreTime.Seconds)
-	//	println(time.Now().Second())
-	//	log.Warning("Restore time request is a future date, so skipping it")
-	//	return nil
-	//}
-	println("restoring from below time")
-	println(restoreTime.Seconds)
 	gtid := agent.getGTIDFromTimestamp(ctx, pos, restoreTime.Seconds)
 	if gtid == "" {
 		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "unable to fetch the GTID for the specified restore_to_time")
 	}
 
-	println(fmt.Sprintf("going to restore upto the gtid - %s", gtid))
+	log.Infof("going to restore upto the gtid - %s", gtid)
 	err := agent.catchupToGTID(ctx, gtid)
 	if err != nil {
 		return vterrors.Wrapf(err, "unable to replicate upto specified gtid : %s", gtid)
@@ -274,20 +270,31 @@ func (agent *ActionAgent) catchupToGTID(ctx context.Context, gtid string) error 
 	gtidStr := gtidParsed.GTIDSet.Last()
 	log.Infof("gtid to restore upto %s", gtidStr)
 
-	//gtidNew := strings.Split(gtidStr, ":")[0] + ":" + strings.Split(strings.Split(gtidStr, ":")[1], "-")[1]
-	// TODO: we can use agent.MysqlDaemon.SetMaster , but it uses replDbConfig
+	// it uses mysql specific queries here
 	cmds := []string{
 		"STOP SLAVE FOR CHANNEL '' ",
 		"STOP SLAVE IO_THREAD FOR CHANNEL ''",
 		fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s',MASTER_PORT=%d, MASTER_USER='%s', MASTER_AUTO_POSITION = 1;", *binlogHost, *binlogPort, *binlogUser),
 		fmt.Sprintf(" START SLAVE  UNTIL SQL_BEFORE_GTIDS = '%s'", gtidStr),
 	}
-	fmt.Printf("%v", cmds)
 
 	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
 		return vterrors.Wrap(err, "failed to reset slave")
 	}
-	// TODO: Wait for the replication to happen and then reset the slave, so that we don't be connected to binlog server
+	log.Infof("Wating for position to reach")
+	err = agent.MysqlDaemon.WaitMasterPos(ctx, gtidParsed)
+	if err != nil {
+		return err
+	}
+	log.Infof("Position reached, resetting the slave")
+	// Once the position is reached, then reset the slave
+	cmds = []string{
+		"STOP SLAVE",
+		"RESET SLAVE ALL",
+	}
+	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
+		return vterrors.Wrap(err, "failed to reset slave")
+	}
 	return nil
 }
 
