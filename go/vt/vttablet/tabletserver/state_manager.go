@@ -65,6 +65,20 @@ var stateDetail = []string{
 // stateManager manages state transition for all the TabletServer
 // subcomponents.
 type stateManager struct {
+	// wantState and wantTabletType represent the desired state.
+	// If these values are changed and don't match the current
+	// state and target, transitioning is set to true, and executeTransition
+	// is invoked. This function returns after it transitions state
+	// and target to match the desired state, at which point it sets
+	// transitioning to false.
+	// wantState and wantTabletType can be changed if transitioning is true.
+	// executeTransition will check the latest values and continue transitioning
+	// until the state reaches the latest values.
+	// If a transition fails, execute transition will retry every second (dictated
+	// by transitionRetryInterval) until it reaches the desired state.
+	// If connection to MySQL is lost, the CheckMySQL function will launch
+	// executeTransition to make it retry until connection to MySQL is restored
+	// and the desired state is reached.
 	mu             sync.Mutex
 	wantState      int64
 	wantTabletType topodatapb.TabletType
@@ -77,6 +91,9 @@ type stateManager struct {
 	requests sync.WaitGroup
 	lameduck sync2.AtomicInt32
 
+	// Open must be done in forward order.
+	// Close must be done in reverse order.
+	// All Close functions must be called before Open.
 	se          schemaEngine
 	hw          subComponent
 	hr          subComponent
@@ -88,6 +105,8 @@ type stateManager struct {
 	te          txEngine
 	messager    subComponent
 
+	// checkMySQLThrottler ensures that CheckMysql
+	// doesn't get spammed.
 	checkMySQLThrottler *sync2.Semaphore
 	history             *history.History
 	timebombDuration    time.Duration
@@ -122,6 +141,13 @@ type txThrottler interface {
 	Close()
 }
 
+// SetServingType changes the state to the specified settings.
+// If sm is in the middle of a transition, it accepts the values, but returns
+// an error saying that it's in the middle of a transition.
+// If the desired state is already reached, it returns no error.
+// If the first attempt at transitioning fails, it returns the error
+// from that transition, but sm continues to retry until the desired
+// state is reached.
 func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, state int64, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
 	defer sm.ExitLameduck()
 
@@ -166,6 +192,8 @@ func (sm *stateManager) CheckMySQL() {
 	}()
 }
 
+// StopService shuts down sm. If the shutdown doesn't complete
+// within timeBombDuration, it crashes the process.
 func (sm *stateManager) StopService() {
 	defer close(sm.setTimeBomb())
 	sm.SetServingType(sm.Target().TabletType, StateNotConnected, nil)
@@ -178,11 +206,14 @@ func (sm *stateManager) StartRequest(ctx context.Context, target *querypb.Target
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
-	switch {
-	case sm.state != StateServing:
+	if sm.state != StateServing {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state %s", stateName[sm.state])
-	case sm.transitioning && !allowOnTransition:
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state %s", stateName[sm.state])
+	}
+
+	shuttingDown := sm.transitioning && sm.wantState != StateServing
+	if shuttingDown && !allowOnTransition {
+		// This specific error string needs to be returned for vtgate buffering to work.
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state SHUTTING_DOWN")
 	}
 
 	if target != nil {
@@ -259,7 +290,7 @@ func (sm *stateManager) setDesiredState(tabletType topodatapb.TabletType, state 
 	}
 	sm.alsoAllow = alsoAllow
 	if sm.transitioning {
-		ch <- nil
+		ch <- vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "a transition is already in progress")
 		return stateChanged, ch
 	}
 	if sm.wantState == sm.state && sm.wantTabletType == sm.target.TabletType {
