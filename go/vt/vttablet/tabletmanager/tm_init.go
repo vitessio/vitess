@@ -73,9 +73,9 @@ import (
 )
 
 const (
-	// slaveStoppedFile is the name of the file whose existence informs
+	// replicationStoppedFile is the name of the file whose existence informs
 	// vttablet to NOT try to repair replication.
-	slaveStoppedFile = "do_not_replicate"
+	replicationStoppedFile = "do_not_replicate"
 )
 
 var (
@@ -213,9 +213,9 @@ type TabletManager struct {
 	// healthcheck errors. It should only be accessed while holding actionMutex.
 	_ignoreHealthErrorExpr *regexp.Regexp
 
-	// _slaveStopped remembers if we've been told to stop replicating.
-	// If it's nil, we'll try to check for the slaveStoppedFile.
-	_slaveStopped *bool
+	// _replicationStopped remembers if we've been told to stop replicating.
+	// If it's nil, we'll try to check for the replicationStoppedFile.
+	_replicationStopped *bool
 
 	// _lockTablesConnection is used to get and release the table read locks to pause replication
 	_lockTablesConnection *dbconnpool.DBConnection
@@ -774,13 +774,13 @@ func (tm *TabletManager) DisallowQueryService() string {
 	return tm._disallowQueryService
 }
 
-func (tm *TabletManager) slaveStopped() bool {
+func (tm *TabletManager) replicationStopped() bool {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
 
 	// If we already know the value, don't bother checking the file.
-	if tm._slaveStopped != nil {
-		return *tm._slaveStopped
+	if tm._replicationStopped != nil {
+		return *tm._replicationStopped
 	}
 
 	// If there's no Cnf file, don't read state.
@@ -790,17 +790,17 @@ func (tm *TabletManager) slaveStopped() bool {
 
 	// If the marker file exists, we're stopped.
 	// Treat any read error as if the file doesn't exist.
-	_, err := os.Stat(path.Join(tm.Cnf.TabletDir(), slaveStoppedFile))
-	slaveStopped := err == nil
-	tm._slaveStopped = &slaveStopped
-	return slaveStopped
+	_, err := os.Stat(path.Join(tm.Cnf.TabletDir(), replicationStoppedFile))
+	replicationStopped := err == nil
+	tm._replicationStopped = &replicationStopped
+	return replicationStopped
 }
 
-func (tm *TabletManager) setSlaveStopped(slaveStopped bool) {
+func (tm *TabletManager) setReplicationStopped(stopped bool) {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
 
-	tm._slaveStopped = &slaveStopped
+	tm._replicationStopped = &stopped
 
 	// Make a best-effort attempt to persist the value across tablet restarts.
 	// We store a marker in the filesystem so it works regardless of whether
@@ -813,8 +813,8 @@ func (tm *TabletManager) setSlaveStopped(slaveStopped bool) {
 	if tabletDir == "" {
 		return
 	}
-	markerFile := path.Join(tabletDir, slaveStoppedFile)
-	if slaveStopped {
+	markerFile := path.Join(tabletDir, replicationStoppedFile)
+	if stopped {
 		file, err := os.Create(markerFile)
 		if err == nil {
 			file.Close()

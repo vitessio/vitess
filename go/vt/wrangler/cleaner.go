@@ -30,15 +30,15 @@ import (
 )
 
 const (
-	// ChangeSlaveTypeActionName is the name of the action to change a slave type
+	// ChangeTabletTypeActionName is the name of the action to change a slave type
 	// (can be used to find such an action by name)
-	ChangeSlaveTypeActionName = "ChangeSlaveTypeAction"
+	ChangeTabletTypeActionName = "ChangeTabletTypeAction"
 
 	// TabletTagActionName is the name of the Tag action
 	TabletTagActionName = "TabletTagAction"
 
-	// StartSlaveActionName is the name of the slave start action
-	StartSlaveActionName = "StartSlaveAction"
+	// StartReplicationActionName is the name of the start replication action
+	StartReplicationActionName = "StartReplicationAction"
 
 	// VReplicationActionName is the name of the action to execute VReplication commands
 	VReplicationActionName = "VReplicationAction"
@@ -118,10 +118,10 @@ func (cleaner *Cleaner) CleanUp(wr *Wrangler) error {
 	return rec.Error()
 }
 
-// RecordChangeSlaveTypeAction records a new ChangeSlaveTypeAction
+// RecordChangeTabletTypeAction records a new ChangeSlaveTypeAction
 // into the specified Cleaner
-func RecordChangeSlaveTypeAction(cleaner *Cleaner, tabletAlias *topodatapb.TabletAlias, from topodatapb.TabletType, to topodatapb.TabletType) {
-	cleaner.Record(ChangeSlaveTypeActionName, topoproto.TabletAliasString(tabletAlias), func(ctx context.Context, wr *Wrangler) error {
+func RecordChangeTabletTypeAction(cleaner *Cleaner, tabletAlias *topodatapb.TabletAlias, from topodatapb.TabletType, to topodatapb.TabletType) {
+	cleaner.Record(ChangeTabletTypeActionName, topoproto.TabletAliasString(tabletAlias), func(ctx context.Context, wr *Wrangler) error {
 		ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 		if err != nil {
 			return err
@@ -130,7 +130,7 @@ func RecordChangeSlaveTypeAction(cleaner *Cleaner, tabletAlias *topodatapb.Table
 			return fmt.Errorf("tablet %v is not of the right type (got %v expected %v), not changing it to %v", topoproto.TabletAliasString(tabletAlias), ti.Type, from, to)
 		}
 		if !topo.IsTrivialTypeChange(ti.Type, to) {
-			return fmt.Errorf("tablet %v type change %v -> %v is not an allowed transition for ChangeSlaveType", topoproto.TabletAliasString(tabletAlias), ti.Type, to)
+			return fmt.Errorf("tablet %v type change %v -> %v is not an allowed transition for ChangeTabletType", topoproto.TabletAliasString(tabletAlias), ti.Type, to)
 		}
 
 		// ask the tablet to make the change
@@ -138,10 +138,10 @@ func RecordChangeSlaveTypeAction(cleaner *Cleaner, tabletAlias *topodatapb.Table
 	})
 }
 
-// RecordStartSlaveAction records a new action to restart binlog replication on a server
+// RecordStartReplicationAction records a new action to restart binlog replication on a server
 // into the specified Cleaner
-func RecordStartSlaveAction(cleaner *Cleaner, tablet *topodatapb.Tablet) {
-	cleaner.Record(StartSlaveActionName, topoproto.TabletAliasString(tablet.Alias), func(ctx context.Context, wr *Wrangler) error {
+func RecordStartReplicationAction(cleaner *Cleaner, tablet *topodatapb.Tablet) {
+	cleaner.Record(StartReplicationActionName, topoproto.TabletAliasString(tablet.Alias), func(ctx context.Context, wr *Wrangler) error {
 		return wr.TabletManagerClient().StartSlave(ctx, tablet)
 	})
 }

@@ -126,7 +126,7 @@ type fakeHealthCheck struct {
 	reportError            error
 }
 
-func (fhc *fakeHealthCheck) Report(isSlaveType, shouldQueryServiceBeRunning bool) (replicationDelay time.Duration, err error) {
+func (fhc *fakeHealthCheck) Report(isReplicaType, shouldQueryServiceBeRunning bool) (replicationDelay time.Duration, err error) {
 	return fhc.reportReplicationDelay, fhc.reportError
 }
 
@@ -268,10 +268,10 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	}
 }
 
-// TestErrSlaveNotRunningIsHealthy verifies that a tablet whose
-// healthcheck reports health.ErrSlaveNotRunning is still considered
+// TestErrReplicationNotRunningIsHealthy verifies that a tablet whose
+// healthcheck reports health.ErrReplicationNotRunning is still considered
 // healthy with high replication lag.
-func TestErrSlaveNotRunningIsHealthy(t *testing.T) {
+func TestErrReplicationNotRunningIsHealthy(t *testing.T) {
 	*unhealthyThreshold = 10 * time.Minute
 	ctx := context.Background()
 	tm := createTestTM(ctx, t, nil)
@@ -292,11 +292,11 @@ func TestErrSlaveNotRunningIsHealthy(t *testing.T) {
 		t.Errorf("UpdateStream should be running")
 	}
 
-	// health check returning health.ErrSlaveNotRunning, should
+	// health check returning health.ErrReplicationNotRunning, should
 	// keep us as replica and serving
 	before := time.Now()
 	tm.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 12 * time.Second
-	tm.HealthReporter.(*fakeHealthCheck).reportError = health.ErrSlaveNotRunning
+	tm.HealthReporter.(*fakeHealthCheck).reportError = health.ErrReplicationNotRunning
 	tm.runHealthCheck()
 	if !tm.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should be running")

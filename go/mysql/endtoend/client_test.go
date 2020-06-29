@@ -303,7 +303,7 @@ func TestTLS(t *testing.T) {
 	}
 }
 
-func TestSlaveStatus(t *testing.T) {
+func TestReplicationStatus(t *testing.T) {
 	params := connParams
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &params)
@@ -312,8 +312,8 @@ func TestSlaveStatus(t *testing.T) {
 	}
 	defer conn.Close()
 
-	status, err := conn.ShowSlaveStatus()
-	if err != mysql.ErrNotSlave {
-		t.Errorf("Got unexpected result for ShowSlaveStatus: %v %v", status, err)
+	status, err := conn.ShowReplicationStatus()
+	if err != mysql.ErrNotReplica {
+		t.Errorf("Got unexpected result for ShowReplicationStatus: %v %v", status, err)
 	}
 }

@@ -39,10 +39,10 @@ func TestDeleteShardCleanup(t *testing.T) {
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
-	// Create a master, a couple good slaves
+	// Create a master, a couple good replicas
 	master := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil)
-	slave := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
-	remoteSlave := NewFakeTablet(t, wr, "cell2", 2, topodatapb.TabletType_REPLICA, nil)
+	replica := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
+	remoteReplica := NewFakeTablet(t, wr, "cell2", 2, topodatapb.TabletType_REPLICA, nil)
 
 	// Build keyspace graph
 	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, master.Tablet.Keyspace, []string{"cell1", "cell2"})
@@ -51,7 +51,7 @@ func TestDeleteShardCleanup(t *testing.T) {
 	}
 
 	// Delete the ShardReplication record in cell2
-	if err := ts.DeleteShardReplication(ctx, "cell2", remoteSlave.Tablet.Keyspace, remoteSlave.Tablet.Shard); err != nil {
+	if err := ts.DeleteShardReplication(ctx, "cell2", remoteReplica.Tablet.Keyspace, remoteReplica.Tablet.Shard); err != nil {
 		t.Fatalf("DeleteShardReplication failed: %v", err)
 	}
 
@@ -86,7 +86,7 @@ func TestDeleteShardCleanup(t *testing.T) {
 	}
 
 	// Make sure all tablets are gone.
-	for _, ft := range []*FakeTablet{master, slave, remoteSlave} {
+	for _, ft := range []*FakeTablet{master, replica, remoteReplica} {
 		if _, err := ts.GetTablet(ctx, ft.Tablet.Alias); !topo.IsErrType(err, topo.NoNode) {
 			t.Errorf("tablet %v is still in topo: %v", ft.Tablet.Alias, err)
 		}

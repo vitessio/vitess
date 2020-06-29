@@ -43,7 +43,7 @@ const (
 )
 
 // Reader reads the heartbeat table at a configured interval in order
-// to calculate replication lag. It is meant to be run on a slave, and paired
+// to calculate replication lag. It is meant to be run on a replica, and paired
 // with a Writer on a master. It's primarily created and launched from Reporter.
 // Lag is calculated by comparing the most recent timestamp in the heartbeat
 // table against the current time at read time. This value is reported in metrics and

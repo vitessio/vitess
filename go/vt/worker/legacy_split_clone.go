@@ -376,13 +376,13 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 		scw.sourceTablets[i] = ti.Tablet
 
 		shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-		err = scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i])
+		err = scw.wr.TabletManagerClient().StopReplication(shortCtx, scw.sourceTablets[i])
 		cancel()
 		if err != nil {
 			return fmt.Errorf("cannot stop replication on tablet %v", topoproto.TabletAliasString(alias))
 		}
 
-		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i])
+		wrangler.RecordStartReplicationAction(scw.cleaner, scw.sourceTablets[i])
 	}
 
 	// Initialize healthcheck and add destination shards to it.
@@ -606,7 +606,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 	// get the current position from the sources
 	for shardIndex := range scw.sourceShards {
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		status, err := scw.wr.TabletManagerClient().SlaveStatus(shortCtx, scw.sourceTablets[shardIndex])
+		status, err := scw.wr.TabletManagerClient().ReplicationStatus(shortCtx, scw.sourceTablets[shardIndex])
 		cancel()
 		if err != nil {
 			return err
