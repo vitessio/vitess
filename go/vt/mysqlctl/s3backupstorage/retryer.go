@@ -35,7 +35,7 @@ func (retryer *ClosedConnectionRetryer) ShouldRetry(r *request.Request) bool {
 
 	if r.Error != nil {
 		if awsErr, ok := r.Error.(awserr.Error); ok {
-			return strings.Contains(awsErr.OrigErr().Error(), "use of closed network connection")
+			return strings.Contains(awsErr.Error(), "use of closed network connection")
 		}
 	}
 
