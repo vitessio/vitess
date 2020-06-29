@@ -28,8 +28,8 @@ func TestFilePosRetrieveMasterServerId(t *testing.T) {
 		"Master_Server_Id": "1",
 	}
 
-	want := SlaveStatus{MasterServerID: 1}
-	got, err := parseFilePosSlaveStatus(resultMap)
+	want := ReplicationStatus{MasterServerID: 1}
+	got, err := parseFilePosReplicationStatus(resultMap)
 	require.NoError(t, err)
 	assert.Equalf(t, got.MasterServerID, want.MasterServerID, "got MasterServerID: %v; want MasterServerID: %v", got.MasterServerID, want.MasterServerID)
 }
@@ -42,13 +42,13 @@ func TestFilePosRetrieveExecutedPosition(t *testing.T) {
 		"Master_Log_File":       "master-bin.000003",
 	}
 
-	want := SlaveStatus{
+	want := ReplicationStatus{
 		Position:             Position{GTIDSet: filePosGTID{file: "master-bin.000002", pos: 1307}},
 		RelayLogPosition:     Position{GTIDSet: filePosGTID{file: "master-bin.000003", pos: 1308}},
 		FilePosition:         Position{GTIDSet: filePosGTID{file: "master-bin.000002", pos: 1307}},
 		FileRelayLogPosition: Position{GTIDSet: filePosGTID{file: "master-bin.000003", pos: 1308}},
 	}
-	got, err := parseFilePosSlaveStatus(resultMap)
+	got, err := parseFilePosReplicationStatus(resultMap)
 	require.NoError(t, err)
 	assert.Equalf(t, got.Position.GTIDSet, want.Position.GTIDSet, "got Position: %v; want Position: %v", got.Position.GTIDSet, want.Position.GTIDSet)
 	assert.Equalf(t, got.RelayLogPosition.GTIDSet, want.RelayLogPosition.GTIDSet, "got RelayLogPosition: %v; want RelayLogPosition: %v", got.RelayLogPosition.GTIDSet, want.RelayLogPosition.GTIDSet)

@@ -131,23 +131,23 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	params.Logger.Infof("Hook: %v, Compress: %v", *backupStorageHook, *backupStorageCompress)
 
 	// Save initial state so we can restore.
-	slaveStartRequired := false
+	replicaStartRequired := false
 	sourceIsMaster := false
 	readOnly := true //nolint
 	var replicationPosition mysql.Position
-	semiSyncMaster, semiSyncSlave := params.Mysqld.SemiSyncEnabled()
+	semiSyncMaster, semiSyncReplica := params.Mysqld.SemiSyncEnabled()
 
 	// See if we need to restart replication after backup.
 	params.Logger.Infof("getting current replication status")
-	slaveStatus, err := params.Mysqld.SlaveStatus()
+	replicaStatus, err := params.Mysqld.ReplicationStatus()
 	switch err {
 	case nil:
-		slaveStartRequired = slaveStatus.SlaveRunning()
-	case mysql.ErrNotSlave:
+		replicaStartRequired = replicaStatus.ReplicationRunning()
+	case mysql.ErrNotReplica:
 		// keep going if we're the master, might be a degenerate case
 		sourceIsMaster = true
 	default:
-		return false, vterrors.Wrap(err, "can't get slave status")
+		return false, vterrors.Wrap(err, "can't get replica status")
 	}
 
 	// get the read-only flag
@@ -169,15 +169,15 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 			return false, vterrors.Wrap(err, "can't get master position")
 		}
 	} else {
-		if err = params.Mysqld.StopSlave(params.HookExtraEnv); err != nil {
-			return false, vterrors.Wrapf(err, "can't stop slave")
+		if err = params.Mysqld.StopReplication(params.HookExtraEnv); err != nil {
+			return false, vterrors.Wrapf(err, "can't stop replica")
 		}
-		var slaveStatus mysql.SlaveStatus
-		slaveStatus, err = params.Mysqld.SlaveStatus()
+		var replicaStatus mysql.ReplicationStatus
+		replicaStatus, err = params.Mysqld.ReplicationStatus()
 		if err != nil {
-			return false, vterrors.Wrap(err, "can't get slave status")
+			return false, vterrors.Wrap(err, "can't get replica status")
 		}
-		replicationPosition = slaveStatus.Position
+		replicationPosition = replicaStatus.Position
 	}
 	params.Logger.Infof("using replication position: %v", replicationPosition)
 
@@ -204,28 +204,28 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	}
 
 	// Restore original mysqld state that we saved above.
-	if semiSyncMaster || semiSyncSlave {
+	if semiSyncMaster || semiSyncReplica {
 		// Only do this if one of them was on, since both being off could mean
 		// the plugin isn't even loaded, and the server variables don't exist.
-		params.Logger.Infof("restoring semi-sync settings from before backup: master=%v, slave=%v",
-			semiSyncMaster, semiSyncSlave)
-		err := params.Mysqld.SetSemiSyncEnabled(semiSyncMaster, semiSyncSlave)
+		params.Logger.Infof("restoring semi-sync settings from before backup: master=%v, replica=%v",
+			semiSyncMaster, semiSyncReplica)
+		err := params.Mysqld.SetSemiSyncEnabled(semiSyncMaster, semiSyncReplica)
 		if err != nil {
 			return usable, err
 		}
 	}
-	if slaveStartRequired {
+	if replicaStartRequired {
 		params.Logger.Infof("restarting mysql replication")
-		if err := params.Mysqld.StartSlave(params.HookExtraEnv); err != nil {
-			return usable, vterrors.Wrap(err, "cannot restart slave")
+		if err := params.Mysqld.StartReplication(params.HookExtraEnv); err != nil {
+			return usable, vterrors.Wrap(err, "cannot restart replica")
 		}
 
 		// this should be quick, but we might as well just wait
-		if err := WaitForSlaveStart(params.Mysqld, slaveStartDeadline); err != nil {
-			return usable, vterrors.Wrap(err, "slave is not restarting")
+		if err := WaitForReplicationStart(params.Mysqld, replicationStartDeadline); err != nil {
+			return usable, vterrors.Wrap(err, "replica is not restarting")
 		}
 
-		// Wait for a reliable value for SecondsBehindMaster from SlaveStatus()
+		// Wait for a reliable value for SecondsBehindMaster from ReplicationStatus()
 
 		// We know that we stopped at replicationPosition.
 		// If MasterPosition is the same, that means no writes
@@ -247,7 +247,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 				if err := ctx.Err(); err != nil {
 					return usable, err
 				}
-				status, err := params.Mysqld.SlaveStatus()
+				status, err := params.Mysqld.ReplicationStatus()
 				if err != nil {
 					return usable, err
 				}

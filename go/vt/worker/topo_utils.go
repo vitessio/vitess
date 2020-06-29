@@ -123,11 +123,11 @@ func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrang
 	wr.Logger().Infof("Changing tablet %v to '%v'", topoproto.TabletAliasString(tabletAlias), topodatapb.TabletType_DRAINED)
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	defer cancel()
-	if err := wr.ChangeSlaveType(shortCtx, tabletAlias, topodatapb.TabletType_DRAINED); err != nil {
+	if err := wr.ChangeTabletType(shortCtx, tabletAlias, topodatapb.TabletType_DRAINED); err != nil {
 		return nil, err
 	}
 	// Record a clean-up action to take the tablet back to tabletAlias.
-	wrangler.RecordChangeSlaveTypeAction(cleaner, tabletAlias, topodatapb.TabletType_DRAINED, tabletType)
+	wrangler.RecordChangeTabletTypeAction(cleaner, tabletAlias, topodatapb.TabletType_DRAINED, tabletType)
 	return tabletAlias, nil
 }
 

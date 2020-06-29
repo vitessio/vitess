@@ -20,36 +20,36 @@ import (
 	"testing"
 )
 
-func TestStatusSlaveRunning(t *testing.T) {
-	input := &SlaveStatus{
-		SlaveIORunning:  true,
-		SlaveSQLRunning: true,
+func TestStatusReplicationRunning(t *testing.T) {
+	input := &ReplicationStatus{
+		IOThreadRunning:  true,
+		SQLThreadRunning: true,
 	}
 	want := true
-	if got := input.SlaveRunning(); got != want {
-		t.Errorf("%#v.SlaveRunning() = %v, want %v", input, got, want)
+	if got := input.ReplicationRunning(); got != want {
+		t.Errorf("%#v.ReplicationRunning() = %v, want %v", input, got, want)
 	}
 }
 
-func TestStatusSlaveIONotRunning(t *testing.T) {
-	input := &SlaveStatus{
-		SlaveIORunning:  false,
-		SlaveSQLRunning: true,
+func TestStatusIOThreadNotRunning(t *testing.T) {
+	input := &ReplicationStatus{
+		IOThreadRunning:  false,
+		SQLThreadRunning: true,
 	}
 	want := false
-	if got := input.SlaveRunning(); got != want {
-		t.Errorf("%#v.SlaveRunning() = %v, want %v", input, got, want)
+	if got := input.ReplicationRunning(); got != want {
+		t.Errorf("%#v.ReplicationRunning() = %v, want %v", input, got, want)
 	}
 }
 
-func TestStatusSlaveSQLNotRunning(t *testing.T) {
-	input := &SlaveStatus{
-		SlaveIORunning:  true,
-		SlaveSQLRunning: false,
+func TestStatusSQLThreadNotRunning(t *testing.T) {
+	input := &ReplicationStatus{
+		IOThreadRunning:  true,
+		SQLThreadRunning: false,
 	}
 	want := false
-	if got := input.SlaveRunning(); got != want {
-		t.Errorf("%#v.SlaveRunning() = %v, want %v", input, got, want)
+	if got := input.ReplicationRunning(); got != want {
+		t.Errorf("%#v.ReplicationRunning() = %v, want %v", input, got, want)
 	}
 }
 
@@ -81,11 +81,11 @@ func TestFindErrantGTIDs(t *testing.T) {
 		masterSID: []interval{{2, 6}, {15, 45}},
 	}
 
-	slaveStatus1 := SlaveStatus{MasterUUID: masterSID, RelayLogPosition: Position{GTIDSet: set1}}
-	slaveStatus2 := SlaveStatus{MasterUUID: masterSID, RelayLogPosition: Position{GTIDSet: set2}}
-	slaveStatus3 := SlaveStatus{MasterUUID: masterSID, RelayLogPosition: Position{GTIDSet: set3}}
+	status1 := ReplicationStatus{MasterUUID: masterSID, RelayLogPosition: Position{GTIDSet: set1}}
+	status2 := ReplicationStatus{MasterUUID: masterSID, RelayLogPosition: Position{GTIDSet: set2}}
+	status3 := ReplicationStatus{MasterUUID: masterSID, RelayLogPosition: Position{GTIDSet: set3}}
 
-	got, err := slaveStatus1.FindErrantGTIDs([]*SlaveStatus{&slaveStatus2, &slaveStatus3})
+	got, err := status1.FindErrantGTIDs([]*ReplicationStatus{&status2, &status3})
 	if err != nil {
 		t.Errorf("%v", err)
 	}

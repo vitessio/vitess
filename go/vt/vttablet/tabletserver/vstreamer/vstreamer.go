@@ -160,7 +160,7 @@ func (vs *vstreamer) replicate(ctx context.Context) error {
 		return wrapError(err, vs.pos)
 	}
 
-	conn, err := binlog.NewSlaveConnection(vs.cp)
+	conn, err := binlog.NewBinlogConnection(vs.cp)
 	if err != nil {
 		return wrapError(err, vs.pos)
 	}

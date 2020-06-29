@@ -198,7 +198,7 @@ func verifyStreamHealth(t *testing.T, result string) {
 	assert.True(t, serving, "Tablet should be in serving state")
 	assert.True(t, UID > 0, "Tablet should contain uid")
 	// secondsBehindMaster varies till 7200 so setting safe limit
-	assert.True(t, secondsBehindMaster < 10000, "Slave should not be behind master")
+	assert.True(t, secondsBehindMaster < 10000, "replica should not be behind master")
 }
 
 func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
@@ -347,7 +347,7 @@ func TestNoMysqlHealthCheck(t *testing.T) {
 	exec(t, masterConn, fmt.Sprintf("create database vt_%s", keyspaceName))
 	exec(t, replicaConn, fmt.Sprintf("create database vt_%s", keyspaceName))
 
-	//Get the gtid to ensure we bring master and slave at same position
+	//Get the gtid to ensure we bring master and replica at same position
 	qr := exec(t, masterConn, "SELECT @@GLOBAL.gtid_executed")
 	gtid := string(qr.Rows[0][0].Raw())
 
@@ -381,7 +381,7 @@ func TestNoMysqlHealthCheck(t *testing.T) {
 	checkHealth(t, mTablet.HTTPPort, true)
 	checkHealth(t, rTablet.HTTPPort, true)
 
-	// Tell slave to not try to repair replication in healthcheck.
+	// Tell replica to not try to repair replication in healthcheck.
 	// The StopSlave will ultimately fail because mysqld is not running,
 	// But vttablet should remember that it's not supposed to fix replication.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopSlave", rTablet.Alias)
@@ -406,7 +406,7 @@ func TestNoMysqlHealthCheck(t *testing.T) {
 	require.NoError(t, err)
 	checkHealth(t, mTablet.HTTPPort, false)
 
-	// the slave will now be healthy, but report a very high replication
+	// the replica will now be healthy, but report a very high replication
 	// lag, because it can't figure out what it exactly is.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rTablet.Alias)
 	require.NoError(t, err)

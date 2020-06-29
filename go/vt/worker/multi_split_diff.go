@@ -387,7 +387,7 @@ func (msdw *MultiSplitDiffWorker) getMasterTabletInfoForShard(ctx context.Contex
 //  stop the source tablet at a binlog position higher than the
 //  destination masters. Return the reached position
 //  (add a cleanup task to restart binlog replication on the source tablet, and
-//   change the existing ChangeSlaveType cleanup action to 'spare' type)
+//   change the existing ChangeTabletType cleanup action to 'spare' type)
 func (msdw *MultiSplitDiffWorker) stopReplicationOnSourceTabletAt(ctx context.Context, destVreplicationPos []string) (string, error) {
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	sourceTablet, err := msdw.wr.TopoServer().GetTablet(shortCtx, msdw.sourceAlias)
@@ -401,28 +401,28 @@ func (msdw *MultiSplitDiffWorker) stopReplicationOnSourceTabletAt(ctx context.Co
 		// We need to stop the source RDONLY tablet at a position which includes ALL of the positions of the destination
 		// shards. We do this by starting replication and then stopping at a minimum of each blp position separately.
 		// TODO this is not terribly efficient but it's possible to implement without changing the existing RPC,
-		// if we make StopSlaveMinimum take multiple blp positions then this will be a lot more efficient because you just
+		// if we make StopReplicationMinimum take multiple blp positions then this will be a lot more efficient because you just
 		// check for each position using WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS and then stop replication.
 
-		msdw.wr.Logger().Infof("stopping slave %v at a minimum of %v", msdw.sourceAlias, vreplicationPos)
+		msdw.wr.Logger().Infof("stopping Replication %v at a minimum of %v", msdw.sourceAlias, vreplicationPos)
 
 		shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-		msdw.wr.TabletManagerClient().StartSlave(shortCtx, sourceTablet.Tablet)
+		msdw.wr.TabletManagerClient().StartReplication(shortCtx, sourceTablet.Tablet)
 		cancel()
 		if err != nil {
 			return "", err
 		}
 
 		shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-		mysqlPos, err = msdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet.Tablet, vreplicationPos, *remoteActionsTimeout)
+		mysqlPos, err = msdw.wr.TabletManagerClient().StopReplicationMinimum(shortCtx, sourceTablet.Tablet, vreplicationPos, *remoteActionsTimeout)
 		cancel()
 		if err != nil {
-			return "", vterrors.Wrapf(err, "cannot stop slave %v at right binlog position %v", msdw.sourceAlias, vreplicationPos)
+			return "", vterrors.Wrapf(err, "cannot stop replication %v at right binlog position %v", msdw.sourceAlias, vreplicationPos)
 		}
 	}
-	// change the cleaner actions from ChangeSlaveType(rdonly)
-	// to StartSlave() + ChangeSlaveType(spare)
-	wrangler.RecordStartSlaveAction(msdw.cleaner, sourceTablet.Tablet)
+	// change the cleaner actions from ChangeTabletType(rdonly)
+	// to StartReplication() + ChangeTabletType(spare)
+	wrangler.RecordStartReplicationAction(msdw.cleaner, sourceTablet.Tablet)
 
 	return mysqlPos, nil
 }
@@ -457,7 +457,7 @@ func (msdw *MultiSplitDiffWorker) stopVreplicationAt(ctx context.Context, shardI
 // wait until the destination tablet is equal or passed that master
 // binlog position, and stop its replication.
 // (add a cleanup task to restart binlog replication on it, and change
-//  the existing ChangeSlaveType cleanup action to 'spare' type)
+//  the existing ChangeTabletType cleanup action to 'spare' type)
 func (msdw *MultiSplitDiffWorker) stopReplicationAt(ctx context.Context, destinationAlias *topodatapb.TabletAlias, masterPos string) error {
 	if msdw.waitForFixedTimeRatherThanGtidSet {
 		msdw.wr.Logger().Infof("workaround for broken GTID set in destination RDONLY. Just waiting for 1 minute for %v and assuming replication has caught up. (should be at %v)", destinationAlias, masterPos)
@@ -477,15 +477,15 @@ func (msdw *MultiSplitDiffWorker) stopReplicationAt(ctx context.Context, destina
 
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	if msdw.waitForFixedTimeRatherThanGtidSet {
-		err = msdw.wr.TabletManagerClient().StopSlave(shortCtx, destinationTablet.Tablet)
+		err = msdw.wr.TabletManagerClient().StopReplication(shortCtx, destinationTablet.Tablet)
 	} else {
-		_, err = msdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, destinationTablet.Tablet, masterPos, *remoteActionsTimeout)
+		_, err = msdw.wr.TabletManagerClient().StopReplicationMinimum(shortCtx, destinationTablet.Tablet, masterPos, *remoteActionsTimeout)
 	}
 	cancel()
 	if err != nil {
-		return vterrors.Wrapf(err, "StopSlaveMinimum for %v at %v failed", destinationAlias, masterPos)
+		return vterrors.Wrapf(err, "StopReplicationMinimum for %v at %v failed", destinationAlias, masterPos)
 	}
-	wrangler.RecordStartSlaveAction(msdw.cleaner, destinationTablet.Tablet)
+	wrangler.RecordStartReplicationAction(msdw.cleaner, destinationTablet.Tablet)
 	return nil
 }
 

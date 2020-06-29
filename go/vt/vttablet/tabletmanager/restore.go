@@ -172,12 +172,12 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
 	}
 	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
-		return vterrors.Wrap(err, "failed to reset slave")
+		return vterrors.Wrap(err, "failed to reset replication")
 	}
 
 	// Set the position at which to resume from the master.
-	if err := tm.MysqlDaemon.SetSlavePosition(ctx, pos); err != nil {
-		return vterrors.Wrap(err, "failed to set slave position")
+	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
+		return vterrors.Wrap(err, "failed to set replication position")
 	}
 
 	// Read the shard to find the current master, and its location.
@@ -212,7 +212,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 		return err
 	}
 
-	// Set master and start slave.
+	// Set master and start replication.
 	if err := tm.MysqlDaemon.SetMaster(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), false /* slaveStopBefore */, true /* slaveStartAfter */); err != nil {
 		return vterrors.Wrap(err, "MysqlDaemon.SetMaster failed")
 	}
@@ -246,9 +246,9 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			status, err := tm.MysqlDaemon.SlaveStatus()
+			status, err := tm.MysqlDaemon.ReplicationStatus()
 			if err != nil {
-				return vterrors.Wrap(err, "can't get slave status")
+				return vterrors.Wrap(err, "can't get replication status")
 			}
 			newPos := status.Position
 			if !newPos.Equal(pos) {

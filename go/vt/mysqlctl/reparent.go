@@ -103,7 +103,7 @@ func (mysqld *Mysqld) Promote(hookExtraEnv map[string]string) (mysql.Position, e
 
 	// Since we handle replication, just stop it.
 	cmds := []string{
-		conn.StopSlaveCommand(),
+		conn.StopReplicationCommand(),
 		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
 		// When using semi-sync and GTID, a replica first connects to the new master with a given GTID set,
 		// it can take a long time to scan the current binlog file to find the corresponding position.
