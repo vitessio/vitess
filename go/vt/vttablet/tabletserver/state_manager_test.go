@@ -204,7 +204,7 @@ func (te *testWatcher1) Close() {
 	stateChanged, err := te.sm.SetServingType(topodatapb.TabletType_RDONLY, StateNotServing, nil)
 	// We are transitioning.
 	// This should return immediately with no error.
-	require.NoError(te.t, err)
+	assert.Contains(te.t, err.Error(), "a transition is already in progress")
 	assert.True(te.t, stateChanged)
 }
 
@@ -250,7 +250,7 @@ func (te *testWatcher2) Close() {
 	stateChanged, err := te.sm.SetServingType(topodatapb.TabletType_MASTER, StateServing, nil)
 	// We are transitioning.
 	// This should return immediately with no error.
-	require.NoError(te.t, err)
+	assert.Contains(te.t, err.Error(), "a transition is already in progress")
 	assert.False(te.t, stateChanged)
 }
 
