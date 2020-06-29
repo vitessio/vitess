@@ -123,6 +123,8 @@ type txThrottler interface {
 }
 
 func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, state int64, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
+	defer sm.ExitLameduck()
+
 	log.Infof("Starting transition to %v %v", tabletType, stateName[state])
 	stateChanged, errch := sm.setDesiredState(tabletType, state, alsoAllow)
 	err = <-errch
@@ -508,10 +510,7 @@ func (sm *stateManager) StateByName() string {
 	if sm.lameduck.Get() != 0 {
 		return "NOT_SERVING"
 	}
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	name := stateName[sm.state]
-	return name
+	return stateName[sm.State()]
 }
 
 // stateInfo returns a string representation of the state and optional detail

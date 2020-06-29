@@ -53,9 +53,12 @@ func TestStateManagerStateByName(t *testing.T) {
 
 func TestStateManagerServeMaster(t *testing.T) {
 	sm := newTestStateManager(t)
+	sm.EnterLameduck()
 	stateChanged, err := sm.SetServingType(topodatapb.TabletType_MASTER, StateServing, nil)
 	require.NoError(t, err)
 	assert.True(t, stateChanged)
+
+	assert.Equal(t, int32(0), sm.lameduck.Get())
 
 	verifySubcomponent(t, sm.watcher, 1, testStateClosed)
 	verifySubcomponent(t, sm.hr, 2, testStateClosed)
