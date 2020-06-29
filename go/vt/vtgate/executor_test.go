@@ -1537,6 +1537,22 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	if len(r.plans.Keys()) != 1 {
 		t.Errorf("Plan keys should be 1, got: %v", len(r.plans.Keys()))
 	}
+
+	// the target string will be resolved and become part of the plan cache key, which adds a new entry
+	ksIDVc1, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
+	_, err = r.getPlan(ksIDVc1, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	require.NoError(t, err)
+	if len(r.plans.Keys()) != 2 {
+		t.Errorf("Plan keys should be 2, got: %v", len(r.plans.Keys()))
+	}
+
+	// the target string will be resolved and become part of the plan cache key, as it's an unsharded ks, it will be the same entry as above
+	ksIDVc2, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
+	_, err = r.getPlan(ksIDVc2, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	require.NoError(t, err)
+	if len(r.plans.Keys()) != 2 {
+		t.Errorf("Plan keys should be 2, got: %v", len(r.plans.Keys()))
+	}
 }
 
 func TestGetPlanCacheNormalized(t *testing.T) {
@@ -1582,6 +1598,22 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	require.NoError(t, err)
 	if len(r.plans.Keys()) != 1 {
 		t.Errorf("Plan keys should be 1, got: %v", len(r.plans.Keys()))
+	}
+
+	// the target string will be resolved and become part of the plan cache key, which adds a new entry
+	ksIDVc1, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
+	_, err = r.getPlan(ksIDVc1, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	require.NoError(t, err)
+	if len(r.plans.Keys()) != 2 {
+		t.Errorf("Plan keys should be 2, got: %v", len(r.plans.Keys()))
+	}
+
+	// the target string will be resolved and become part of the plan cache key, as it's an unsharded ks, it will be the same entry as above
+	ksIDVc2, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
+	_, err = r.getPlan(ksIDVc2, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	require.NoError(t, err)
+	if len(r.plans.Keys()) != 2 {
+		t.Errorf("Plan keys should be 2, got: %v", len(r.plans.Keys()))
 	}
 }
 
