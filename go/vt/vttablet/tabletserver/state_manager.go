@@ -43,6 +43,9 @@ const (
 	StateServing
 )
 
+// transitionRetryInterval is for tests.
+var transitionRetryInterval = 1 * time.Second
+
 // stateName names every state. The number of elements must
 // match the number of states. Names can overlap.
 var stateName = []string{
@@ -120,6 +123,7 @@ type txThrottler interface {
 }
 
 func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, state int64, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
+	log.Infof("Starting transition to %v %v", tabletType, stateName[state])
 	stateChanged, errch := sm.setDesiredState(tabletType, state, alsoAllow)
 	err = <-errch
 	return stateChanged, err
@@ -155,15 +159,13 @@ func (sm *stateManager) CheckMySQL() {
 		// This code path emulates the error case at the end of the loop
 		// of executeTransition where it waits for 1s and retries.
 		sm.closeAll()
-		time.Sleep(1 * time.Second)
+		time.Sleep(transitionRetryInterval)
 		go sm.executeTransition(make(chan error, 1))
 	}()
 }
 
 func (sm *stateManager) StopService() {
 	defer close(sm.setTimeBomb())
-
-	log.Info("Stopping TabletServer")
 	sm.SetServingType(sm.Target().TabletType, StateNotConnected, nil)
 }
 
@@ -174,25 +176,31 @@ func (sm *stateManager) StartRequest(ctx context.Context, target *querypb.Target
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
-	// All the checks below must pass.
 	switch {
 	case sm.state != StateServing:
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state %s", stateName[sm.state])
 	case sm.transitioning && !allowOnTransition:
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state %s", stateName[sm.state])
-	case target == nil && !tabletenv.IsLocalContext(ctx):
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
-	case target.Keyspace != sm.target.Keyspace:
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace %v", target.Keyspace)
-	case target.Shard != sm.target.Shard:
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid shard %v", target.Shard)
-	case target.TabletType != sm.target.TabletType:
-		for _, otherType := range sm.alsoAllow {
-			if target.TabletType == otherType {
-				goto ok
+	}
+
+	if target != nil {
+		switch {
+		case target.Keyspace != sm.target.Keyspace:
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace %v", target.Keyspace)
+		case target.Shard != sm.target.Shard:
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid shard %v", target.Shard)
+		case target.TabletType != sm.target.TabletType:
+			for _, otherType := range sm.alsoAllow {
+				if target.TabletType == otherType {
+					goto ok
+				}
 			}
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, sm.target.TabletType, sm.alsoAllow)
 		}
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, sm.target.TabletType, sm.alsoAllow)
+	} else {
+		if !tabletenv.IsLocalContext(ctx) {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
+		}
 	}
 
 ok:
@@ -210,21 +218,24 @@ func (sm *stateManager) EndRequest() {
 func (sm *stateManager) VerifyTarget(ctx context.Context, target *querypb.Target) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-
-	switch {
-	case target == nil && !tabletenv.IsLocalContext(ctx):
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
-	case target.Keyspace != sm.target.Keyspace:
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace %v", target.Keyspace)
-	case target.Shard != sm.target.Shard:
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid shard %v", target.Shard)
-	case target.TabletType != sm.target.TabletType:
-		for _, otherType := range sm.alsoAllow {
-			if target.TabletType == otherType {
-				return nil
+	if target != nil {
+		switch {
+		case target.Keyspace != sm.target.Keyspace:
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace %v", target.Keyspace)
+		case target.Shard != sm.target.Shard:
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid shard %v", target.Shard)
+		case target.TabletType != sm.target.TabletType:
+			for _, otherType := range sm.alsoAllow {
+				if target.TabletType == otherType {
+					return nil
+				}
 			}
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, sm.target.TabletType, sm.alsoAllow)
 		}
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, sm.target.TabletType, sm.alsoAllow)
+	} else {
+		if !tabletenv.IsLocalContext(ctx) {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
+		}
 	}
 	return nil
 }
@@ -303,7 +314,7 @@ func (sm *stateManager) executeTransition(ch chan<- error) {
 				log.Errorf("Error transitioning to the desired state: %v, %v, will keep retrying: %v", wantTabletType, stateName[wantState], err)
 			}
 			sm.closeAll()
-			time.Sleep(1 * time.Second)
+			time.Sleep(transitionRetryInterval)
 		}
 	}
 }
@@ -389,7 +400,7 @@ func (sm *stateManager) unserveNonMaster(wantTabletType topodatapb.TabletType) e
 
 	sm.hr.Open()
 	sm.watcher.Open()
-	sm.setState(wantTabletType, StateServing)
+	sm.setState(wantTabletType, StateNotServing)
 	return nil
 }
 
