@@ -30,9 +30,9 @@ fi
 
 gofmt -w $CUR
 
-if ! diff -q $CUR $TMP > /dev/null ; then
+if ! diff -q -b $CUR $TMP > /dev/null ; then
         echo "ERROR: Regenerated parser $TMP does not match current version $(pwd)/sql.go:"
-        diff -u $CUR $TMP
+        diff -u -b $CUR $TMP
         mv $TMP $CUR
 
         echo
