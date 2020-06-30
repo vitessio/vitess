@@ -31,9 +31,9 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// RPCAgent defines the interface implemented by the Agent for RPCs.
+// RPCTM defines the interface implemented by the TM for RPCs.
 // It is useful for RPC implementations to test their full stack.
-type RPCAgent interface {
+type RPCTM interface {
 	// RPC calls
 
 	// Various read-only methods
@@ -112,9 +112,6 @@ type RPCAgent interface {
 
 	UndoDemoteMaster(ctx context.Context) error
 
-	// Deprecated
-	PromoteSlaveWhenCaughtUp(ctx context.Context, replicationPosition string) (string, error)
-
 	SlaveWasPromoted(ctx context.Context) error
 
 	SetMaster(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) error
@@ -124,9 +121,6 @@ type RPCAgent interface {
 	StopReplicationAndGetStatus(ctx context.Context) (*replicationdatapb.Status, error)
 
 	PromoteReplica(ctx context.Context) (string, error)
-
-	// Deprecated
-	PromoteSlave(ctx context.Context) (string, error)
 
 	// Backup / restore related methods
 

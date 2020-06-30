@@ -672,23 +672,6 @@ func (client *Client) UndoDemoteMaster(ctx context.Context, tablet *topodatapb.T
 	return err
 }
 
-// PromoteSlaveWhenCaughtUp is part of the tmclient.TabletManagerClient interface.
-// Deprecated
-func (client *Client) PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topodatapb.Tablet, pos string) (string, error) {
-	cc, c, err := client.dial(tablet)
-	if err != nil {
-		return "", err
-	}
-	defer cc.Close()
-	response, err := c.PromoteSlaveWhenCaughtUp(ctx, &tabletmanagerdatapb.PromoteSlaveWhenCaughtUpRequest{
-		Position: pos,
-	})
-	if err != nil {
-		return "", err
-	}
-	return response.Position, nil
-}
-
 // SlaveWasPromoted is part of the tmclient.TabletManagerClient interface.
 func (client *Client) SlaveWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error {
 	cc, c, err := client.dial(tablet)
@@ -751,21 +734,6 @@ func (client *Client) PromoteReplica(ctx context.Context, tablet *topodatapb.Tab
 	}
 	defer cc.Close()
 	response, err := c.PromoteReplica(ctx, &tabletmanagerdatapb.PromoteReplicaRequest{})
-	if err != nil {
-		return "", err
-	}
-	return response.Position, nil
-}
-
-// PromoteSlave is part of the tmclient.TabletManagerClient interface.
-// Deprecated
-func (client *Client) PromoteSlave(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
-	cc, c, err := client.dial(tablet)
-	if err != nil {
-		return "", err
-	}
-	defer cc.Close()
-	response, err := c.PromoteSlave(ctx, &tabletmanagerdatapb.PromoteSlaveRequest{})
 	if err != nil {
 		return "", err
 	}

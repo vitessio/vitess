@@ -220,7 +220,7 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	// On the elected master, we will respond to
 	// TabletActionSlaveWasPromoted, so we need a MysqlDaemon
 	// that returns no master, and the new port (as returned by mysql)
-	newMaster.FakeMysqlDaemon.MysqlPort = 3303
+	newMaster.FakeMysqlDaemon.MysqlPort.Set(3303)
 	newMaster.StartActionLoop(t, wr)
 	defer newMaster.StopActionLoop(t)
 
@@ -439,26 +439,19 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 }
 
 func TestRPCTabletExternallyReparentedDemotesMasterToConfiguredTabletType(t *testing.T) {
-	flag.Set("demote_master_type", "spare")
 	flag.Set("disable_active_reparents", "true")
-
-	// Reset back to default values
-	defer func() {
-		flag.Set("demote_master_type", "replica")
-		flag.Set("disable_active_reparents", "false")
-	}()
+	defer flag.Set("disable_active_reparents", "false")
 
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create an old master and a new master
-	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_SPARE, nil)
 	newMaster := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_SPARE, nil)
 
 	oldMaster.StartActionLoop(t, wr)
 	newMaster.StartActionLoop(t, wr)
-
 	defer oldMaster.StopActionLoop(t)
 	defer newMaster.StopActionLoop(t)
 
@@ -502,5 +495,5 @@ func TestRPCTabletExternallyReparentedDemotesMasterToConfiguredTabletType(t *tes
 	assert.NoError(t, err)
 
 	assert.True(t, topoproto.TabletAliasEqual(newMaster.Tablet.Alias, shardInfo.MasterAlias))
-	assert.Equal(t, topodatapb.TabletType_MASTER, newMaster.Agent.Tablet().Type)
+	assert.Equal(t, topodatapb.TabletType_MASTER, newMaster.TM.Tablet().Type)
 }

@@ -184,7 +184,7 @@ func (ti *TabletInfo) Addr() string {
 
 // MysqlAddr returns hostname:mysql port.
 func (ti *TabletInfo) MysqlAddr() string {
-	return netutil.JoinHostPort(topoproto.MysqlHostname(ti.Tablet), topoproto.MysqlPort(ti.Tablet))
+	return netutil.JoinHostPort(ti.Tablet.MysqlHostname, ti.Tablet.MysqlPort)
 }
 
 // DbName is usually implied by keyspace. Having the shard information in the
@@ -212,11 +212,6 @@ func (ti *TabletInfo) IsSlaveType() bool {
 // GetMasterTermStartTime returns the tablet's master term start time as a Time value.
 func (ti *TabletInfo) GetMasterTermStartTime() time.Time {
 	return logutil.ProtoToTime(ti.Tablet.MasterTermStartTime)
-}
-
-// SetMasterTermStartTime sets the tablet's master term start time as a Time value.
-func (ti *TabletInfo) SetMasterTermStartTime(t time.Time) {
-	ti.Tablet.MasterTermStartTime = logutil.TimeToProto(t)
 }
 
 // NewTabletInfo returns a TabletInfo basing on tablet with the

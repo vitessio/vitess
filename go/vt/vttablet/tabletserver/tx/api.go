@@ -37,15 +37,6 @@ type (
 	//DTID as type string
 	DTID = string
 
-	//EngineStateMachine is used to control the state the transactional engine -
-	//whether new connections and/or transactions are allowed or not.
-	EngineStateMachine interface {
-		Init() error
-		AcceptReadWrite() error
-		AcceptReadOnly() error
-		StopGently()
-	}
-
 	//IStatefulConnection is a connection where the user is trusted to clean things up after using the connection
 	IStatefulConnection interface {
 		// Executes a query on the connection

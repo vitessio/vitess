@@ -38,8 +38,8 @@ type RowStreamer interface {
 }
 
 // NewRowStreamer returns a RowStreamer
-func NewRowStreamer(ctx context.Context, cp dbconfigs.Connector, sh *schema.HistorianSvc, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error) RowStreamer {
-	return newRowStreamer(ctx, cp, sh, query, lastpk, &localVSchema{vschema: &vindexes.VSchema{}}, send)
+func NewRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error) RowStreamer {
+	return newRowStreamer(ctx, cp, se, query, lastpk, &localVSchema{vschema: &vindexes.VSchema{}}, send)
 }
 
 // rowStreamer is used for copying the existing rows of a table
@@ -55,7 +55,7 @@ type rowStreamer struct {
 	cancel func()
 
 	cp      dbconfigs.Connector
-	sh      schema.Historian
+	se      *schema.Engine
 	query   string
 	lastpk  []sqltypes.Value
 	send    func(*binlogdatapb.VStreamRowsResponse) error
@@ -66,13 +66,13 @@ type rowStreamer struct {
 	sendQuery string
 }
 
-func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, sh schema.Historian, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error) *rowStreamer {
+func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error) *rowStreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &rowStreamer{
 		ctx:     ctx,
 		cancel:  cancel,
 		cp:      cp,
-		sh:      sh,
+		se:      se,
 		query:   query,
 		lastpk:  lastpk,
 		send:    send,
@@ -88,7 +88,7 @@ func (rs *rowStreamer) Cancel() {
 func (rs *rowStreamer) Stream() error {
 	// Ensure sh is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
-	if err := rs.sh.Open(); err != nil {
+	if err := rs.se.Open(); err != nil {
 		return err
 	}
 
@@ -114,9 +114,9 @@ func (rs *rowStreamer) buildPlan() error {
 	if err != nil {
 		return err
 	}
-	st := rs.sh.GetTableForPos(fromTable, "")
-	if st == nil {
-		return fmt.Errorf("unknown table %v in schema", fromTable)
+	st, err := rs.se.GetTableForPos(fromTable, "")
+	if err != nil {
+		return err
 	}
 	ti := &Table{
 		Name:   st.Name,

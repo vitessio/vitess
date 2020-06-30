@@ -17,6 +17,7 @@ limitations under the License.
 package vstreamer
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -26,10 +27,11 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
-
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 
+	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
@@ -41,8 +43,6 @@ type testcase struct {
 	output [][]string
 }
 
-var numVersionEventsReceived int
-
 func TestVersion(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -53,8 +53,11 @@ func TestVersion(t *testing.T) {
 		engine = oldEngine
 	}()
 
-	mh := newMockHistorian(env.SchemaEngine)
-	engine = NewEngine(engine.env, env.SrvTopo, env.SchemaEngine, mh)
+	err := env.SchemaEngine.EnableHistorian(true)
+	require.NoError(t, err)
+	defer env.SchemaEngine.EnableHistorian(false)
+
+	engine = NewEngine(engine.env, env.SrvTopo, env.SchemaEngine)
 	engine.Open(env.KeyspaceName, env.Cells[0])
 	defer engine.Close()
 
@@ -64,10 +67,17 @@ func TestVersion(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table _vt.schema_version",
 	})
+	dbSchema := &binlogdatapb.MinimalSchema{
+		Tables: []*binlogdatapb.MinimalTable{{
+			Name: "t1",
+		}},
+	}
+	blob, _ := proto.Marshal(dbSchema)
 	engine.se.Reload(context.Background())
+	gtid := "MariaDB/0-41983-20"
 	testcases := []testcase{{
 		input: []string{
-			fmt.Sprintf("insert into _vt.schema_version values(1, 'MariaDB/0-41983-20', 123, 'create table t1', 'abc')"),
+			fmt.Sprintf("insert into _vt.schema_version values(1, '%s', 123, 'create table t1', %v)", gtid, encodeString(string(blob))),
 		},
 		// External table events don't get sent.
 		output: [][]string{{
@@ -77,7 +87,9 @@ func TestVersion(t *testing.T) {
 			`commit`}},
 	}}
 	runCases(t, nil, testcases, "", nil)
-	assert.Equal(t, 1, numVersionEventsReceived)
+	mt, err := env.SchemaEngine.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid)
+	require.NoError(t, err)
+	assert.True(t, proto.Equal(mt, dbSchema.Tables[0]))
 }
 
 func insertLotsOfData(t *testing.T, numRows int) {
@@ -1641,8 +1653,6 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 	}
 }
 
-var lastPos string
-
 func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string, tablePKs []*binlogdatapb.TableLastPK) (*sync.WaitGroup, <-chan []*binlogdatapb.VEvent) {
 	switch position {
 	case "":
@@ -1674,18 +1684,6 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 		}
 	}
 	return engine.Stream(ctx, pos, tablePKs, filter, func(evs []*binlogdatapb.VEvent) error {
-		if t.Name() == "TestVersion" { // emulate tracker only for the version test
-			for _, ev := range evs {
-				log.Infof("Original stream: %s event found %v", ev.Type, ev)
-				if ev.Type == binlogdatapb.VEventType_GTID {
-					lastPos = ev.Gtid
-				}
-				if ev.Type == binlogdatapb.VEventType_DDL {
-					schemaTracker := schema.NewTracker(env.SchemaEngine)
-					schemaTracker.SchemaUpdated(lastPos, ev.Ddl, ev.Timestamp)
-				}
-			}
-		}
 		t.Logf("Received events: %v", evs)
 		select {
 		case ch <- evs:
@@ -1749,4 +1747,10 @@ func setVSchema(t *testing.T, vschema string) {
 	if !updated {
 		t.Error("vschema did not get updated")
 	}
+}
+
+func encodeString(in string) string {
+	buf := bytes.NewBuffer(nil)
+	sqltypes.NewVarChar(in).EncodeSQL(buf)
+	return buf.String()
 }

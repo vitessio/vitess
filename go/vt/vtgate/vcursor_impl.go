@@ -18,6 +18,8 @@ package vtgate
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -420,6 +422,20 @@ func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (str
 
 func (vc *vcursorImpl) planPrefixKey() string {
 	if vc.destination != nil {
+		switch vc.destination.(type) {
+		case key.DestinationKeyspaceID, key.DestinationKeyspaceIDs:
+			resolved, _, err := vc.ResolveDestinations(vc.keyspace, nil, []key.Destination{vc.destination})
+			if err == nil && len(resolved) > 0 {
+				shards := make([]string, len(resolved))
+				for i := 0; i < len(shards); i++ {
+					shards[i] = resolved[i].Target.GetShard()
+				}
+				sort.Strings(shards)
+				return fmt.Sprintf("%s%sKsIDsResolved(%s)", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType], strings.Join(shards, ","))
+			}
+		default:
+			// use destination string (out of the switch)
+		}
 		return fmt.Sprintf("%s%s%s", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType], vc.destination.String())
 	}
 	return fmt.Sprintf("%s%s", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType])

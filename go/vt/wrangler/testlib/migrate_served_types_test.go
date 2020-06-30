@@ -150,13 +150,13 @@ func TestMigrateServedTypes(t *testing.T) {
 	dest1Master.StartActionLoop(t, wr)
 	defer dest1Master.StopActionLoop(t)
 
-	// Override with a fake VREngine after Agent is initialized in action loop.
+	// Override with a fake VREngine after TM is initialized in action loop.
 	dbClient1 := binlogplayer.NewMockDBClient(t)
 	dbClientFactory1 := func() binlogplayer.DBClient { return dbClient1 }
-	dest1Master.Agent.VREngine = vreplication.NewTestEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1, dbClient1.DBName(), nil)
+	dest1Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1, dbClient1.DBName(), nil)
 	// select * from _vt.vreplication during Open
 	dbClient1.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := dest1Master.Agent.VREngine.Open(context.Background()); err != nil {
+	if err := dest1Master.TM.VREngine.Open(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	// select pos, state, message from _vt.vreplication
@@ -178,13 +178,13 @@ func TestMigrateServedTypes(t *testing.T) {
 	dest2Master.StartActionLoop(t, wr)
 	defer dest2Master.StopActionLoop(t)
 
-	// Override with a fake VREngine after Agent is initialized in action loop.
+	// Override with a fake VREngine after TM is initialized in action loop.
 	dbClient2 := binlogplayer.NewMockDBClient(t)
 	dbClientFactory2 := func() binlogplayer.DBClient { return dbClient2 }
-	dest2Master.Agent.VREngine = vreplication.NewTestEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2, dbClient2.DBName(), nil)
+	dest2Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2, dbClient2.DBName(), nil)
 	// select * from _vt.vreplication during Open
 	dbClient2.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := dest2Master.Agent.VREngine.Open(context.Background()); err != nil {
+	if err := dest2Master.TM.VREngine.Open(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	// select pos, state, message from _vt.vreplication
@@ -414,13 +414,13 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	dest4Master.StartActionLoop(t, wr)
 	defer dest4Master.StopActionLoop(t)
 
-	// Override with a fake VREngine after Agent is initialized in action loop.
+	// Override with a fake VREngine after TM is initialized in action loop.
 	dbClient1 := binlogplayer.NewMockDBClient(t)
 	dbClientFactory1 := func() binlogplayer.DBClient { return dbClient1 }
-	dest1Master.Agent.VREngine = vreplication.NewTestEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1, "db", nil)
+	dest1Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1, "db", nil)
 	// select * from _vt.vreplication during Open
 	dbClient1.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := dest1Master.Agent.VREngine.Open(context.Background()); err != nil {
+	if err := dest1Master.TM.VREngine.Open(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	// select pos, state, message from _vt.vreplication
@@ -431,13 +431,13 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	}}}, nil)
 	expectDeleteVRepl(dbClient1)
 
-	// Override with a fake VREngine after Agent is initialized in action loop.
+	// Override with a fake VREngine after TM is initialized in action loop.
 	dbClient2 := binlogplayer.NewMockDBClient(t)
 	dbClientFactory2 := func() binlogplayer.DBClient { return dbClient2 }
-	dest2Master.Agent.VREngine = vreplication.NewTestEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2, "db", nil)
+	dest2Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2, "db", nil)
 	// select * from _vt.vreplication during Open
 	dbClient2.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := dest2Master.Agent.VREngine.Open(context.Background()); err != nil {
+	if err := dest2Master.TM.VREngine.Open(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -502,13 +502,13 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 
 	// Now migrate the second destination shard
 
-	// Override with a fake VREngine after Agent is initialized in action loop.
+	// Override with a fake VREngine after TM is initialized in action loop.
 	dbClient1 = binlogplayer.NewMockDBClient(t)
 	dbClientFactory1 = func() binlogplayer.DBClient { return dbClient1 }
-	dest3Master.Agent.VREngine = vreplication.NewTestEngine(ts, "", dest3Master.FakeMysqlDaemon, dbClientFactory1, "db", nil)
+	dest3Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest3Master.FakeMysqlDaemon, dbClientFactory1, "db", nil)
 	// select * from _vt.vreplication during Open
 	dbClient1.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := dest3Master.Agent.VREngine.Open(context.Background()); err != nil {
+	if err := dest3Master.TM.VREngine.Open(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	// select pos, state, message from _vt.vreplication
@@ -519,13 +519,13 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	}}}, nil)
 	expectDeleteVRepl(dbClient1)
 
-	// Override with a fake VREngine after Agent is initialized in action loop.
+	// Override with a fake VREngine after TM is initialized in action loop.
 	dbClient2 = binlogplayer.NewMockDBClient(t)
 	dbClientFactory2 = func() binlogplayer.DBClient { return dbClient2 }
-	dest4Master.Agent.VREngine = vreplication.NewTestEngine(ts, "", dest4Master.FakeMysqlDaemon, dbClientFactory2, "db", nil)
+	dest4Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest4Master.FakeMysqlDaemon, dbClientFactory2, "db", nil)
 	// select * from _vt.vreplication during Open
 	dbClient2.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := dest4Master.Agent.VREngine.Open(context.Background()); err != nil {
+	if err := dest4Master.TM.VREngine.Open(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 

@@ -59,12 +59,14 @@ var (
 // UpdateStreamControl is the interface an UpdateStream service implements
 // to bring it up or down.
 type UpdateStreamControl interface {
+	// InitDBConfigs is called after the db name is computed.
+	InitDBConfig(*dbconfigs.DBConfigs)
+	// RegisterService registers the UpdateStream service.
+	RegisterService()
 	// Enable will allow any new RPC calls
 	Enable()
-
 	// Disable will interrupt all current calls, and disallow any new call
 	Disable()
-
 	// IsEnabled returns true iff the service is enabled
 	IsEnabled() bool
 }
@@ -79,6 +81,14 @@ type UpdateStreamControlMock struct {
 // NewUpdateStreamControlMock creates a new UpdateStreamControlMock
 func NewUpdateStreamControlMock() *UpdateStreamControlMock {
 	return &UpdateStreamControlMock{}
+}
+
+// InitDBConfig is part of UpdateStreamControl
+func (m *UpdateStreamControlMock) InitDBConfig(*dbconfigs.DBConfigs) {
+}
+
+// RegisterService is part of UpdateStreamControl
+func (m *UpdateStreamControlMock) RegisterService() {
 }
 
 // Enable is part of UpdateStreamControl
@@ -170,14 +180,18 @@ type RegisterUpdateStreamServiceFunc func(UpdateStream)
 var RegisterUpdateStreamServices []RegisterUpdateStreamServiceFunc
 
 // NewUpdateStream returns a new UpdateStreamImpl object
-func NewUpdateStream(ts *topo.Server, keyspace string, cell string, cp dbconfigs.Connector, se *schema.Engine) *UpdateStreamImpl {
+func NewUpdateStream(ts *topo.Server, keyspace string, cell string, se *schema.Engine) *UpdateStreamImpl {
 	return &UpdateStreamImpl{
 		ts:       ts,
 		keyspace: keyspace,
 		cell:     cell,
-		cp:       cp,
 		se:       se,
 	}
+}
+
+// InitDBConfig should be invoked after the db name is computed.
+func (updateStream *UpdateStreamImpl) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
+	updateStream.cp = dbcfgs.DbaWithDB()
 }
 
 // RegisterService needs to be called to publish stats, and to start listening

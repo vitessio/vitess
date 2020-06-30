@@ -50,7 +50,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close.
 	te.open()
 	start := time.Now()
-	te.close(false)
+	te.shutdown(false)
 	if diff := time.Since(start); diff > 500*time.Millisecond {
 		t.Errorf("Close time: %v, must be under 0.5s", diff)
 	}
@@ -62,7 +62,7 @@ func TestTxEngineClose(t *testing.T) {
 	require.Equal(t, "begin", beginSQL)
 	c.Unlock()
 	start = time.Now()
-	te.close(false)
+	te.shutdown(false)
 	if diff := time.Since(start); diff < 500*time.Millisecond {
 		t.Errorf("Close time: %v, must be over 0.5s", diff)
 	}
@@ -75,7 +75,7 @@ func TestTxEngineClose(t *testing.T) {
 	}
 	c.Unlock()
 	start = time.Now()
-	te.close(true)
+	te.shutdown(true)
 	if diff := time.Since(start); diff > 500*time.Millisecond {
 		t.Errorf("Close time: %v, must be under 0.5s", diff)
 	}
@@ -89,7 +89,7 @@ func TestTxEngineClose(t *testing.T) {
 	}
 	c.Unlock()
 	start = time.Now()
-	te.close(false)
+	te.shutdown(false)
 	if diff := time.Since(start); diff > 500*time.Millisecond {
 		t.Errorf("Close time: %v, must be under 0.5s", diff)
 	}
@@ -112,7 +112,7 @@ func TestTxEngineClose(t *testing.T) {
 		te.txPool.RollbackAndRelease(ctx, c)
 	}()
 	start = time.Now()
-	te.close(false)
+	te.shutdown(false)
 	if diff := time.Since(start); diff > 250*time.Millisecond {
 		t.Errorf("Close time: %v, must be under 0.25s", diff)
 	}
@@ -129,7 +129,7 @@ func TestTxEngineClose(t *testing.T) {
 		te.txPool.RollbackAndRelease(ctx, c)
 	}()
 	start = time.Now()
-	te.close(true)
+	te.shutdown(true)
 	if diff := time.Since(start); diff > 250*time.Millisecond {
 		t.Errorf("Close time: %v, must be under 0.25s", diff)
 	}
@@ -217,7 +217,7 @@ func changeState(te *TxEngine, state txEngineState) error {
 	case AcceptingReadOnly:
 		return te.AcceptReadOnly()
 	case NotServing:
-		te.StopGently()
+		te.Close()
 		return nil
 	default:
 		return fmt.Errorf("don't know how to do that: %v", state)
