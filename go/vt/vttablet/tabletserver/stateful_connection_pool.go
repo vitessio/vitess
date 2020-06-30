@@ -194,8 +194,8 @@ func (sf *StatefulConnectionPool) Capacity() int {
 	return int(sf.conns.Capacity())
 }
 
-//RenewConn unregister and registers with new id.
-func (sf *StatefulConnectionPool) RenewConn(sc *StatefulConnection) error {
+//renewConn unregister and registers with new id.
+func (sf *StatefulConnectionPool) renewConn(sc *StatefulConnection) error {
 	sf.active.Unregister(sc.ConnID, "renew existing connection")
 	sc.ConnID = sf.lastID.Add(1)
 	return sf.active.Register(sc.ConnID, sc, sc.enforceTimeout)

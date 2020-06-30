@@ -238,7 +238,7 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 			return err
 		}
 		defer txConn.Unlock()
-		conn = txConn.UnderlyingdDBConn()
+		conn = txConn.UnderlyingDBConn()
 	} else {
 		dbConn, err := qre.getStreamConn()
 		if err != nil {
