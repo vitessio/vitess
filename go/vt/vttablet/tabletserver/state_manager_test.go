@@ -294,6 +294,18 @@ func TestStateManagerTransitionFailRetry(t *testing.T) {
 	assert.Equal(t, int64(StateServing), sm.State())
 }
 
+func TestStateManagerRestoreType(t *testing.T) {
+	sm := newTestStateManager(t)
+	sm.EnterLameduck()
+	stateChanged, err := sm.SetServingType(topodatapb.TabletType_RESTORE, StateNotServing, nil)
+	require.NoError(t, err)
+	assert.True(t, stateChanged)
+
+	assert.Equal(t, topodatapb.TabletType_RESTORE, sm.target.TabletType)
+	// RESTORE can only be in StateNotConnected.
+	assert.Equal(t, int64(StateNotConnected), sm.state)
+}
+
 func TestStateManagerCheckMySQL(t *testing.T) {
 	defer func(saved time.Duration) { transitionRetryInterval = saved }(transitionRetryInterval)
 	transitionRetryInterval = 10 * time.Millisecond
