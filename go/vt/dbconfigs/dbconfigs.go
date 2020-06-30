@@ -24,10 +24,11 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"fmt"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/yaml2"
 )
 
@@ -193,7 +194,7 @@ func (c Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 func (c Connector) MysqlParams() (*mysql.ConnParams, error) {
 	if c.connParams == nil {
 		// This is only possible during tests.
-		return nil, fmt.Errorf("parameters are empty")
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "parameters are empty")
 	}
 	params, err := withCredentials(c.connParams)
 	if err != nil {

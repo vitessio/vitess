@@ -17,11 +17,11 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
@@ -32,10 +32,12 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
+type servingState int64
+
 const (
 	// StateNotConnected is the state where tabletserver is not
 	// connected to an underlying mysql instance.
-	StateNotConnected = iota
+	StateNotConnected = servingState(iota)
 	// StateNotServing is the state where tabletserver is connected
 	// to an underlying mysql instance, but is not serving queries.
 	StateNotServing
@@ -81,9 +83,9 @@ type stateManager struct {
 	// If a transition fails, we set retrying to true and launch
 	// retryTransition which loops until the state converges.
 	mu             sync.Mutex
-	wantState      int64
+	wantState      servingState
 	wantTabletType topodatapb.TabletType
-	state          int64
+	state          servingState
 	target         querypb.Target
 	retrying       bool
 	// TODO(sougou): deprecate alsoAllow
@@ -149,7 +151,7 @@ type txThrottler interface {
 // be honored.
 // If sm is already in the requested state, it returns stateChanged as
 // false.
-func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, state int64, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
+func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, state servingState, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
 	defer sm.ExitLameduck()
 
 	if tabletType == topodatapb.TabletType_RESTORE {
@@ -168,7 +170,7 @@ func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, state i
 // state. If so, it acquires the semaphore and returns true. If a transition is
 // already in progress, it waits. If the desired state is already reached, it
 // returns false without acquiring the semaphore.
-func (sm *stateManager) mustTransition(tabletType topodatapb.TabletType, state int64, alsoAllow []topodatapb.TabletType) bool {
+func (sm *stateManager) mustTransition(tabletType topodatapb.TabletType, state servingState, alsoAllow []topodatapb.TabletType) bool {
 	sm.transitioning.Acquire()
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -183,7 +185,7 @@ func (sm *stateManager) mustTransition(tabletType topodatapb.TabletType, state i
 	return true
 }
 
-func (sm *stateManager) execTransition(tabletType topodatapb.TabletType, state int64) error {
+func (sm *stateManager) execTransition(tabletType topodatapb.TabletType, state servingState) error {
 	defer sm.transitioning.Release()
 
 	var err error
@@ -244,6 +246,9 @@ func (sm *stateManager) recheckState() bool {
 	return false
 }
 
+// CheckMySQL verifies that we can connect to mysql.
+// If it fails, then we shutdown the service and initiate
+// the retry loop.
 func (sm *stateManager) CheckMySQL() {
 	if !sm.checkMySQLThrottler.TryAcquire() {
 		return
@@ -473,7 +478,7 @@ func (sm *stateManager) setTimeBomb() chan struct{} {
 }
 
 // setState changes the state and logs the event.
-func (sm *stateManager) setState(tabletType topodatapb.TabletType, state int64) {
+func (sm *stateManager) setState(tabletType topodatapb.TabletType, state servingState) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
@@ -508,7 +513,7 @@ func (sm *stateManager) IsServing() bool {
 	return sm.StateByName() == "SERVING"
 }
 
-func (sm *stateManager) State() int64 {
+func (sm *stateManager) State() servingState {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	return sm.state
@@ -531,7 +536,7 @@ func (sm *stateManager) StateByName() string {
 
 // stateInfo returns a string representation of the state and optional detail
 // about the reason for the state transition
-func stateInfo(state int64) string {
+func stateInfo(state servingState) string {
 	if state == StateServing {
 		return "SERVING"
 	}
