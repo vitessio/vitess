@@ -933,7 +933,7 @@ func TestTabletServerExecNonExistentConnection(t *testing.T) {
 	defer tsv.StopService()
 	options := &querypb.ExecuteOptions{}
 
-	// run a query in a non-existingt reserved id
+	// run a query with a non-existent reserved id
 	_, err = tsv.Execute(ctx, &target, "select 42", nil, 0, 123456, options)
 	require.Error(t, err)
 }
@@ -951,7 +951,7 @@ func TestTabletServerReleaseNonExistentConnection(t *testing.T) {
 	require.NoError(t, err)
 	defer tsv.StopService()
 
-	// run a query in a non-existingt reserved id
+	// run a query with a non-existent reserved id
 	err = tsv.Release(ctx, &target, 0, 123456)
 	require.Error(t, err)
 }
@@ -970,7 +970,7 @@ func TestMakeSureToCloseDbConnWhenBeginQueryFails(t *testing.T) {
 	defer tsv.StopService()
 	options := &querypb.ExecuteOptions{}
 
-	// run a query in a non-existingt reserved id
+	// run a query with a non-existent reserved id
 	_, _, _, _, err = tsv.ReserveBeginExecute(ctx, &target, "select 42", []string{}, nil, options)
 	require.Error(t, err)
 }
