@@ -151,6 +151,11 @@ type txThrottler interface {
 func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, state int64, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
 	defer sm.ExitLameduck()
 
+	if tabletType == topodatapb.TabletType_RESTORE {
+		// TODO(sougou): remove this code once tm can give us more accurate state requests.
+		state = StateNotConnected
+	}
+
 	log.Infof("Starting transition to %v %v", tabletType, stateName[state])
 	stateChanged, errch := sm.setDesiredState(tabletType, state, alsoAllow)
 	err = <-errch
