@@ -19,23 +19,63 @@ package trace
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/opentracing/opentracing-go"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestExtractMapFromString(t *testing.T) {
-	expected := make(opentracing.TextMapCarrier)
-	expected["apa"] = "12"
-	expected["banan"] = "x-tracing-backend-12"
-	result, err := extractMapFromString("apa=12:banan=x-tracing-backend-12")
-	assert.NoError(t, err)
-	assert.Equal(t, expected, result)
-}
+	type testCase struct {
+		str      string
+		expected opentracing.TextMapCarrier
+		err      bool
+	}
 
-func TestErrorConditions(t *testing.T) {
-	_, err := extractMapFromString("")
-	assert.Error(t, err)
+	tests := []testCase{{
+		str: "apa=12:banan=x-tracing-backend-12",
+		expected: map[string]string{
+			"apa":   "12",
+			"banan": "x-tracing-backend-12",
+		},
+	}, {
+		str:      `uber-trace-id=123\:456\:789\:1`,
+		expected: map[string]string{"uber-trace-id": "123:456:789:1"},
+	}, {
+		str: `key:`,
+		err: true,
+	}, {
+		str:      ``,
+		expected: map[string]string{},
+	}, {
+		str:      `=`,
+		expected: map[string]string{"": ""},
+	}, {
+		str:      `so\=confusing=42`,
+		expected: map[string]string{"so=confusing": "42"},
+	}, {
+		str:      `key=\=42\=`,
+		expected: map[string]string{"key": "=42="},
+	}, {
+		str:      `key=\\`,
+		expected: map[string]string{"key": `\`},
+	}, {
+		str: `key=\r`,
+		err: true,
+	}, {
+		str: `key=r\`,
+		err: true,
+	}}
 
-	_, err = extractMapFromString("key=value:keywithnovalue")
-	assert.Error(t, err)
+	for _, tc := range tests {
+		t.Run(tc.str, func(t *testing.T) {
+			result, err := extractMapFromString(tc.str)
+			if tc.err {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.expected, result)
+			}
+		})
+	}
 }

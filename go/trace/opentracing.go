@@ -17,13 +17,11 @@ limitations under the License.
 package trace
 
 import (
-	"strings"
-
 	otgrpc "github.com/opentracing-contrib/go-grpc"
 	"github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -86,19 +84,72 @@ func (jf openTracingService) New(parent Span, label string) Span {
 }
 
 func extractMapFromString(in string) (opentracing.TextMapCarrier, error) {
-	m := make(opentracing.TextMapCarrier)
-	items := strings.Split(in, ":")
-	if len(items) < 2 {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "expected transmitted context to contain at least span id and trace id")
+	result := map[string]string{}
+	if in == "" {
+		return result, nil
 	}
-	for _, v := range items {
-		idx := strings.Index(v, "=")
-		if idx < 1 {
-			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "every element in the context string has to be in the form key=value")
+
+	// the following code is a little state machine that uses these
+	// three variables to hold it's state as it scans the input string
+	readingKey := true
+	var currentKey string
+	var currentValue string
+
+	addCurrentKV := func() error {
+		if readingKey {
+			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "every element in the context string has to be in the form key=value")
 		}
-		m[v[0:idx]] = v[idx+1:]
+		result[currentKey] = currentValue
+		currentKey = ""
+		currentValue = ""
+		readingKey = true
+		return nil
 	}
-	return m, nil
+	addChar := func(char uint8) {
+		if readingKey {
+			currentKey += string(char)
+		} else {
+			currentValue += string(char)
+		}
+	}
+	size := len(in)
+	for i := 0; i < size; i++ {
+		atEnd := i == size-1
+		char := in[i]
+		switch char {
+		case '=':
+			readingKey = false
+		case ':':
+			err := addCurrentKV()
+			if err != nil {
+				return nil, err
+			}
+
+		case '\\':
+			if atEnd { // can't end with a trailing escape char
+				return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "malformed escaping - cannot end with an escape character ")
+			}
+			nextChar := in[i+1]
+			i++
+			switch nextChar {
+			case '\\':
+				addChar('\\')
+			case ':':
+				addChar(':')
+			case '=':
+				addChar('=')
+			default:
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "malformed escaping - [\\%s] is invalid", string(nextChar))
+			}
+		default:
+			addChar(char)
+		}
+	}
+	err := addCurrentKV()
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (jf openTracingService) NewFromString(parent, label string) (Span, error) {
