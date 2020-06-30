@@ -23,6 +23,17 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+var testOutputTempDir string
+
+func defaultTestOpts() *Options {
+	return &Options{
+		ReplicationMode: "ROW",
+		NumShards:       4,
+		Normalize:       true,
+		StrictDDL:       true,
+	}
+}
+
 func TestParseSchema(t *testing.T) {
 	testSchema := `
 create table t1 (
