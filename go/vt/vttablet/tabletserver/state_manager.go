@@ -65,26 +65,27 @@ var stateDetail = []string{
 // stateManager manages state transition for all the TabletServer
 // subcomponents.
 type stateManager struct {
-	// wantState and wantTabletType represent the desired state.
-	// If these values are changed and don't match the current
-	// state and target, transitioning is set to true, and executeTransition
-	// is invoked. This function returns after it transitions state
-	// and target to match the desired state, at which point it sets
-	// transitioning to false.
-	// wantState and wantTabletType can be changed if transitioning is true.
-	// executeTransition will check the latest values and continue transitioning
-	// until the state reaches the latest values.
-	// If a transition fails, execute transition will retry every second (dictated
-	// by transitionRetryInterval) until it reaches the desired state.
-	// If connection to MySQL is lost, the CheckMySQL function will launch
-	// executeTransition to make it retry until connection to MySQL is restored
-	// and the desired state is reached.
+	// transitioning is a semaphore that must to be obtained
+	// before attempting a state transition. To prevent deadlocks,
+	// this must be acquired before the mu lock. We use a semaphore
+	// because we need TryAcquire, which is not supported by sync.Mutex.
+	// If an acquire is successful, we must either Release explicitly
+	// or invoke execTransition, which will release once it's done.
+	transitioning *sync2.Semaphore
+
+	// mu should be held to access the group of variables under it.
+	// It is required in spite of the transitioning semaphore.
+	// This is because other goroutines will still want
+	// read the values while a transition is in progress.
+	//
+	// If a transition fails, we set retrying to true and launch
+	// retryTransition which loops until the state converges.
 	mu             sync.Mutex
 	wantState      int64
 	wantTabletType topodatapb.TabletType
 	state          int64
 	target         querypb.Target
-	transitioning  bool
+	retrying       bool
 	// TODO(sougou): deprecate alsoAllow
 	alsoAllow []topodatapb.TabletType
 
@@ -142,12 +143,12 @@ type txThrottler interface {
 }
 
 // SetServingType changes the state to the specified settings.
-// If sm is in the middle of a transition, it accepts the values, but returns
-// an error saying that it's in the middle of a transition.
-// If the desired state is already reached, it returns no error.
-// If the first attempt at transitioning fails, it returns the error
-// from that transition, but sm continues to retry until the desired
-// state is reached.
+// If a transition is in progress, it waits and then executes the
+// new request. If the transition fails, it returns an error, and
+// launches retryTransition to ensure that the request will eventually
+// be honored.
+// If sm is already in the requested state, it returns stateChanged as
+// false.
 func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, state int64, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
 	defer sm.ExitLameduck()
 
@@ -157,9 +158,90 @@ func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, state i
 	}
 
 	log.Infof("Starting transition to %v %v", tabletType, stateName[state])
-	stateChanged, errch := sm.setDesiredState(tabletType, state, alsoAllow)
-	err = <-errch
-	return stateChanged, err
+	if sm.mustTransition(tabletType, state, alsoAllow) {
+		return true, sm.execTransition(tabletType, state)
+	}
+	return false, nil
+}
+
+// mustTransition returns true if the requested state does not match the current
+// state. If so, it acquires the semaphore and returns true. If a transition is
+// already in progress, it waits. If the desired state is already reached, it
+// returns false without acquiring the semaphore.
+func (sm *stateManager) mustTransition(tabletType topodatapb.TabletType, state int64, alsoAllow []topodatapb.TabletType) bool {
+	sm.transitioning.Acquire()
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	sm.wantTabletType = tabletType
+	sm.wantState = state
+	sm.alsoAllow = alsoAllow
+	if sm.target.TabletType == tabletType && sm.state == state {
+		sm.transitioning.Release()
+		return false
+	}
+	return true
+}
+
+func (sm *stateManager) execTransition(tabletType topodatapb.TabletType, state int64) error {
+	defer sm.transitioning.Release()
+
+	var err error
+	switch state {
+	case StateServing:
+		if tabletType == topodatapb.TabletType_MASTER {
+			err = sm.serveMaster()
+		} else {
+			err = sm.serveNonMaster(tabletType)
+		}
+	case StateNotServing:
+		if tabletType == topodatapb.TabletType_MASTER {
+			err = sm.unserveMaster()
+		} else {
+			err = sm.unserveNonMaster(tabletType)
+		}
+	case StateNotConnected:
+		sm.closeAll()
+	}
+	if err != nil {
+		sm.retryTransition(fmt.Sprintf("Error transitioning to the desired state: %v, %v, will keep retrying: %v", tabletType, stateName[state], err))
+	}
+	return err
+}
+
+func (sm *stateManager) retryTransition(message string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	if sm.retrying {
+		return
+	}
+	sm.retrying = true
+
+	log.Error(message)
+	go func() {
+		for {
+			time.Sleep(transitionRetryInterval)
+			if sm.recheckState() {
+				return
+			}
+		}
+	}()
+}
+
+func (sm *stateManager) recheckState() bool {
+	if !sm.transitioning.TryAcquire() {
+		return false
+	}
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	if sm.wantState == sm.state && sm.wantTabletType == sm.target.TabletType {
+		sm.retrying = false
+		sm.transitioning.Release()
+		return true
+	}
+	go sm.execTransition(sm.wantTabletType, sm.wantState)
+	return false
 }
 
 func (sm *stateManager) CheckMySQL() {
@@ -177,23 +259,14 @@ func (sm *stateManager) CheckMySQL() {
 			return
 		}
 
-		log.Errorf("Cannot connect to MySQL, shutting down query service: %v", err)
-		sm.mu.Lock()
-		// If we're already transitioning, don't interfere.
-		if sm.transitioning {
-			sm.mu.Unlock()
+		if !sm.transitioning.TryAcquire() {
+			// If we're already transitioning, don't interfere.
 			return
 		}
-		// Setting this flag will ensure that no one else will
-		// invoke sm.executeTransition while we sleep.
-		sm.transitioning = true
-		sm.mu.Unlock()
+		defer sm.transitioning.Release()
 
-		// This code path emulates the error case at the end of the loop
-		// of executeTransition where it waits for 1s and retries.
 		sm.closeAll()
-		time.Sleep(transitionRetryInterval)
-		go sm.executeTransition(make(chan error, 1))
+		sm.retryTransition(fmt.Sprintf("Cannot connect to MySQL, shutting down query service: %v", err))
 	}()
 }
 
@@ -207,7 +280,7 @@ func (sm *stateManager) StopService() {
 // StartRequest validates the current state and target and registers
 // the request (a waitgroup) as started. Every StartRequest must be
 // ended with an EndRequest.
-func (sm *stateManager) StartRequest(ctx context.Context, target *querypb.Target, allowOnTransition bool) (err error) {
+func (sm *stateManager) StartRequest(ctx context.Context, target *querypb.Target, allowOnShutdown bool) (err error) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
@@ -215,8 +288,8 @@ func (sm *stateManager) StartRequest(ctx context.Context, target *querypb.Target
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state %s", stateName[sm.state])
 	}
 
-	shuttingDown := sm.transitioning && sm.wantState != StateServing
-	if shuttingDown && !allowOnTransition {
+	shuttingDown := sm.wantState != StateServing
+	if shuttingDown && !allowOnShutdown {
 		// This specific error string needs to be returned for vtgate buffering to work.
 		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state SHUTTING_DOWN")
 	}
@@ -276,100 +349,6 @@ func (sm *stateManager) VerifyTarget(ctx context.Context, target *querypb.Target
 		}
 	}
 	return nil
-}
-
-func (sm *stateManager) setDesiredState(tabletType topodatapb.TabletType, state int64, alsoAllow []topodatapb.TabletType) (bool, <-chan error) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
-	ch := make(chan error, 1)
-
-	stateChanged := false
-	if sm.wantTabletType != tabletType {
-		stateChanged = true
-		sm.wantTabletType = tabletType
-	}
-	if sm.wantState != state {
-		stateChanged = true
-		sm.wantState = state
-	}
-	sm.alsoAllow = alsoAllow
-	if sm.transitioning {
-		ch <- vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "a transition is already in progress")
-		return stateChanged, ch
-	}
-	if sm.wantState == sm.state && sm.wantTabletType == sm.target.TabletType {
-		ch <- nil
-		return stateChanged, ch
-	}
-	sm.transitioning = true
-	go sm.executeTransition(ch)
-	return stateChanged, ch
-}
-
-// executeTransition must be invoked after setting sm.transitioning to true.
-// If the flag is already set, it must not be called. The function will
-// reset the flag to false when it returns.
-func (sm *stateManager) executeTransition(ch chan<- error) {
-	// Repeat until desired state is reached.
-	errorReported := false
-	for {
-		ok, wantTabletType, wantState := sm.transitionDone()
-		if ok {
-			if !errorReported {
-				ch <- nil
-			}
-			return
-		}
-
-		var err error
-		switch wantState {
-		case StateServing:
-			if wantTabletType == topodatapb.TabletType_MASTER {
-				err = sm.serveMaster()
-			} else {
-				err = sm.serveNonMaster(wantTabletType)
-			}
-		case StateNotServing:
-			if wantTabletType == topodatapb.TabletType_MASTER {
-				err = sm.unserveMaster()
-			} else {
-				err = sm.unserveNonMaster(wantTabletType)
-			}
-		case StateNotConnected:
-			sm.closeAll()
-		}
-		// If there was an error, shut everything down
-		// and retry after a delay.
-		// If there was no error, we restart the loop
-		// which verifies that the desired state was
-		// not changed before returning. If it was changed,
-		// it executes a new transition.
-		if err != nil {
-			if !errorReported {
-				errorReported = true
-				ch <- err
-				log.Errorf("Error transitioning to the desired state: %v, %v, will keep retrying: %v", wantTabletType, stateName[wantState], err)
-			}
-			sm.closeAll()
-			time.Sleep(transitionRetryInterval)
-		}
-	}
-}
-
-// transitionDone returns true if the desired state matches the current state.
-// Otherwise, it returns false, the desired tablet type and state.
-func (sm *stateManager) transitionDone() (bool, topodatapb.TabletType, int64) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
-	wantTabletType := sm.wantTabletType
-	wantState := sm.wantState
-	if wantState == sm.state && wantTabletType == sm.target.TabletType {
-		sm.transitioning = false
-		return true, wantTabletType, wantState
-	}
-	return false, wantTabletType, wantState
 }
 
 func (sm *stateManager) serveMaster() error {
@@ -497,6 +476,7 @@ func (sm *stateManager) setTimeBomb() chan struct{} {
 func (sm *stateManager) setState(tabletType topodatapb.TabletType, state int64) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
+
 	if tabletType == topodatapb.TabletType_UNKNOWN {
 		tabletType = sm.wantTabletType
 	}

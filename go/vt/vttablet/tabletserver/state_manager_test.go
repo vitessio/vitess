@@ -18,6 +18,7 @@ package tabletserver
 
 import (
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -191,81 +192,70 @@ func TestStateManagerStopService(t *testing.T) {
 	assert.Equal(t, int64(StateNotConnected), sm.state)
 }
 
-// testWatcher1 is used as a hook to invoke another transition
-type testWatcher1 struct {
+// testWatcher is used as a hook to invoke another transition
+type testWatcher struct {
 	t  *testing.T
 	sm *stateManager
+	wg sync.WaitGroup
 }
 
-func (te *testWatcher1) Open() {
+func (te *testWatcher) Open() {
 }
 
-func (te *testWatcher1) Close() {
-	stateChanged, err := te.sm.SetServingType(topodatapb.TabletType_RDONLY, StateNotServing, nil)
-	// We are transitioning.
-	// This should return immediately with no error.
-	assert.Contains(te.t, err.Error(), "a transition is already in progress")
-	assert.True(te.t, stateChanged)
+func (te *testWatcher) Close() {
+	te.wg.Add(1)
+	go func() {
+		defer te.wg.Done()
+
+		stateChanged, err := te.sm.SetServingType(topodatapb.TabletType_RDONLY, StateNotServing, nil)
+		assert.NoError(te.t, err)
+		assert.True(te.t, stateChanged)
+	}()
 }
 
 func TestStateManagerSetServingTypeRace(t *testing.T) {
 	sm := newTestStateManager(t)
-	sm.watcher = &testWatcher1{
+	te := &testWatcher{
 		t:  t,
 		sm: sm,
 	}
+	sm.watcher = te
 	stateChanged, err := sm.SetServingType(topodatapb.TabletType_MASTER, StateServing, nil)
 	require.NoError(t, err)
 	assert.True(t, stateChanged)
 
-	// The watcher, being special, is not counted in the ordering.
-	verifySubcomponent(t, sm.messager, 10, testStateClosed)
-	verifySubcomponent(t, sm.te, 11, testStateClosed)
-
-	verifySubcomponent(t, sm.tracker, 12, testStateClosed)
-	verifySubcomponent(t, sm.hw, 13, testStateClosed)
-
-	verifySubcomponent(t, sm.se, 14, testStateOpen)
-	verifySubcomponent(t, sm.vstreamer, 15, testStateOpen)
-	verifySubcomponent(t, sm.qe, 16, testStateOpen)
-	verifySubcomponent(t, sm.txThrottler, 17, testStateOpen)
-
-	verifySubcomponent(t, sm.hr, 18, testStateOpen)
+	// Ensure the next call waits and then succeeds.
+	te.wg.Wait()
 
 	// End state should be the final desired state.
 	assert.Equal(t, topodatapb.TabletType_RDONLY, sm.target.TabletType)
 	assert.Equal(t, int64(StateNotServing), sm.state)
 }
 
-// testWatcher2 is used as a hook to invoke another transition
-type testWatcher2 struct {
-	t  *testing.T
-	sm *stateManager
-}
-
-func (te *testWatcher2) Open() {
-}
-
-func (te *testWatcher2) Close() {
-	stateChanged, err := te.sm.SetServingType(topodatapb.TabletType_MASTER, StateServing, nil)
-	// We are transitioning.
-	// This should return immediately with no error.
-	assert.Contains(te.t, err.Error(), "a transition is already in progress")
-	assert.False(te.t, stateChanged)
-}
-
 func TestStateManagerSetServingTypeNoChange(t *testing.T) {
 	sm := newTestStateManager(t)
-	sm.watcher = &testWatcher2{
-		t:  t,
-		sm: sm,
-	}
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_MASTER, StateServing, nil)
+	stateChanged, err := sm.SetServingType(topodatapb.TabletType_REPLICA, StateServing, nil)
 	require.NoError(t, err)
 	assert.True(t, stateChanged)
 
-	// End state should be the final desired state.
-	assert.Equal(t, topodatapb.TabletType_MASTER, sm.target.TabletType)
+	stateChanged, err = sm.SetServingType(topodatapb.TabletType_REPLICA, StateServing, nil)
+	require.NoError(t, err)
+	assert.False(t, stateChanged)
+
+	verifySubcomponent(t, sm.messager, 1, testStateClosed)
+	verifySubcomponent(t, sm.tracker, 2, testStateClosed)
+	verifySubcomponent(t, sm.hw, 3, testStateClosed)
+	assert.True(t, sm.se.(*testSchemaEngine).nonMaster)
+
+	verifySubcomponent(t, sm.se, 4, testStateOpen)
+	verifySubcomponent(t, sm.vstreamer, 5, testStateOpen)
+	verifySubcomponent(t, sm.qe, 6, testStateOpen)
+	verifySubcomponent(t, sm.txThrottler, 7, testStateOpen)
+	verifySubcomponent(t, sm.te, 8, testStateAcceptReadOnly)
+	verifySubcomponent(t, sm.hr, 9, testStateOpen)
+	verifySubcomponent(t, sm.watcher, 10, testStateOpen)
+
+	assert.Equal(t, topodatapb.TabletType_REPLICA, sm.target.TabletType)
 	assert.Equal(t, int64(StateServing), sm.state)
 }
 
@@ -282,9 +272,9 @@ func TestStateManagerTransitionFailRetry(t *testing.T) {
 
 	for {
 		sm.mu.Lock()
-		transitioning := sm.transitioning
+		retrying := sm.retrying
 		sm.mu.Unlock()
-		if !transitioning {
+		if !retrying {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -330,10 +320,18 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 
 	// Wait to get out of transitioning state.
 	for {
+		if !sm.isTransitioning() {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// Wait for retry to finish.
+	for {
 		sm.mu.Lock()
-		transitioning := sm.transitioning
+		retrying := sm.retrying
 		sm.mu.Unlock()
-		if !transitioning {
+		if !retrying {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -352,14 +350,14 @@ func TestStateManagerValidations(t *testing.T) {
 	assert.Contains(t, err.Error(), "operation not allowed")
 
 	sm.state = StateServing
-	sm.transitioning = true
+	sm.wantState = StateNotServing
 	err = sm.StartRequest(ctx, target, false)
 	assert.Contains(t, err.Error(), "operation not allowed")
 
 	err = sm.StartRequest(ctx, target, true)
 	assert.NoError(t, err)
 
-	sm.transitioning = false
+	sm.wantState = StateServing
 	target.Keyspace = "a"
 	err = sm.StartRequest(ctx, target, false)
 	assert.Contains(t, err.Error(), "invalid keyspace")
@@ -414,28 +412,20 @@ func TestStateManagerWaitForRequests(t *testing.T) {
 	// Wait for that state.
 	go sm.StopService()
 	for {
-		sm.mu.Lock()
-		transitioning := sm.transitioning
-		sm.mu.Unlock()
-		if !transitioning {
+		if !sm.isTransitioning() {
+			time.Sleep(10 * time.Millisecond)
 			continue
 		}
-		time.Sleep(10 * time.Millisecond)
 		break
 	}
 
 	// Verify that we're still transitioning.
-	sm.mu.Lock()
-	assert.True(t, sm.transitioning)
-	sm.mu.Unlock()
+	assert.True(t, sm.isTransitioning())
 
 	sm.EndRequest()
 
 	for {
-		sm.mu.Lock()
-		transitioning := sm.transitioning
-		sm.mu.Unlock()
-		if transitioning {
+		if sm.isTransitioning() {
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
@@ -464,10 +454,19 @@ func newTestStateManager(t *testing.T) *stateManager {
 		te:          &testTxEngine{},
 		messager:    &testSubcomponent{},
 
+		transitioning:       sync2.NewSemaphore(1, 0),
 		checkMySQLThrottler: sync2.NewSemaphore(1, 0),
 		history:             history.New(10),
 		timebombDuration:    time.Duration(10 * time.Millisecond),
 	}
+}
+
+func (sm *stateManager) isTransitioning() bool {
+	if sm.transitioning.TryAcquire() {
+		sm.transitioning.Release()
+		return false
+	}
+	return true
 }
 
 var order sync2.AtomicInt64
