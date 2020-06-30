@@ -32,8 +32,8 @@ func TestBasicMySQLReplicationLag(t *testing.T) {
 	slaveStopped := true
 
 	rep := &replicationReporter{
-		agent: &ActionAgent{MysqlDaemon: mysqld, _slaveStopped: &slaveStopped},
-		now:   time.Now,
+		tm:  &TabletManager{MysqlDaemon: mysqld, _slaveStopped: &slaveStopped},
+		now: time.Now,
 	}
 	dur, err := rep.Report(true, true)
 	if err != nil || dur != 10*time.Second {
@@ -47,8 +47,8 @@ func TestNoKnownMySQLReplicationLag(t *testing.T) {
 	slaveStopped := true
 
 	rep := &replicationReporter{
-		agent: &ActionAgent{MysqlDaemon: mysqld, _slaveStopped: &slaveStopped},
-		now:   time.Now,
+		tm:  &TabletManager{MysqlDaemon: mysqld, _slaveStopped: &slaveStopped},
+		now: time.Now,
 	}
 	dur, err := rep.Report(true, true)
 	if err != health.ErrSlaveNotRunning {
@@ -64,8 +64,8 @@ func TestExtrapolatedMySQLReplicationLag(t *testing.T) {
 
 	now := time.Now()
 	rep := &replicationReporter{
-		agent: &ActionAgent{MysqlDaemon: mysqld, _slaveStopped: &slaveStopped},
-		now:   func() time.Time { return now },
+		tm:  &TabletManager{MysqlDaemon: mysqld, _slaveStopped: &slaveStopped},
+		now: func() time.Time { return now },
 	}
 
 	// seed the last known value with a good value
@@ -92,8 +92,8 @@ func TestNoExtrapolatedMySQLReplicationLag(t *testing.T) {
 
 	now := time.Now()
 	rep := &replicationReporter{
-		agent: &ActionAgent{MysqlDaemon: mysqld, _slaveStopped: &slaveStopped},
-		now:   func() time.Time { return now },
+		tm:  &TabletManager{MysqlDaemon: mysqld, _slaveStopped: &slaveStopped},
+		now: func() time.Time { return now },
 	}
 
 	// seed the last known value with a good value

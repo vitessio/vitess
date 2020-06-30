@@ -169,7 +169,7 @@ func (te *TxEngine) AcceptReadWrite() error {
 
 	case AcceptingReadOnly:
 		// We need to restart the tx-pool to make sure we handle 2PC correctly
-		te.close(true)
+		te.shutdown(true)
 		te.state = AcceptingReadAndWrite
 		te.open()
 		te.stateLock.Unlock()
@@ -288,7 +288,7 @@ func (te *TxEngine) transitionTo(nextState txEngineState) error {
 	te.stateLock.Unlock()
 
 	// We do this outside the lock so others can see our state while we close up waiting transactions
-	te.close(true)
+	te.shutdown(true)
 
 	te.stateLock.Lock()
 	defer func() {
@@ -346,12 +346,12 @@ func (te *TxEngine) open() {
 	}
 }
 
-// StopGently will disregard common rules for when to kill transactions
+// Close will disregard common rules for when to kill transactions
 // and wait forever for transactions to wrap up
-func (te *TxEngine) StopGently() {
+func (te *TxEngine) Close() {
 	te.stateLock.Lock()
 	defer te.stateLock.Unlock()
-	te.close(false)
+	te.shutdown(false)
 	te.state = NotServing
 }
 
@@ -361,7 +361,7 @@ func (te *TxEngine) StopGently() {
 // to conclude. If a shutdown grace period was specified,
 // the transactions are rolled back if they're not resolved
 // by that time.
-func (te *TxEngine) close(immediate bool) {
+func (te *TxEngine) shutdown(immediate bool) {
 	// Shut down functions are idempotent.
 	// No need to check if 2pc is enabled.
 	te.stopWatchdog()

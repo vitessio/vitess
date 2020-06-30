@@ -374,7 +374,7 @@ func (vc *VitessCluster) WaitForVReplicationToCatchup(vttablet *cluster.Vttablet
 	results := [3]string{"[INT64(0)]", "[INT64(1)]", "[INT64(0)]"}
 	var lastChecked time.Time
 	for ind, query := range queries {
-		waitDuration := 100 * time.Millisecond
+		waitDuration := 500 * time.Millisecond
 		for duration > 0 {
 			fmt.Printf("Executing query %s on %s\n", query, vttablet.Name)
 			lastChecked = time.Now()

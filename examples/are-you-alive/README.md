@@ -73,6 +73,14 @@ After you run docker compose, navigate to `http://localhost:9090` to see
 Prometheus and `http://localhost:8080/metrics` to see the raw metrics being
 exported.
 
+## Test Specific Tablet Types
+
+See [this vitess
+documentation](https://vitess.io/docs/user-guides/faq/#how-do-i-choose-between-master-vs-replica-for-queries)
+for how to target specific tablet types. In the configuration file you'll want
+to, for example, put "@master" or "@replica" on the ends of your connection
+strings.
+
 ## Push to Registry
 
 If you have push access to the [planetscale public

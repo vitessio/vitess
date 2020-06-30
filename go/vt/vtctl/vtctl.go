@@ -60,33 +60,33 @@ COMMAND ARGUMENT DEFINITIONS
             should be a positively signed value.
 
 - db type, tablet type: The vttablet's role. Valid values are:
-  -- backup: A slaved copy of data that is offline to queries other than
+  -- backup: A replica copy of data that is offline to queries other than
              for backup purposes
   -- batch: A slaved copy of data for OLAP load patterns (typically for
             MapReduce jobs)
   -- drained: A tablet that is reserved for a background process. For example,
               a tablet used by a vtworker process, where the tablet is likely
               lagging in replication.
-  -- experimental: A slaved copy of data that is ready but not serving query
+  -- experimental: A replica copy of data that is ready but not serving query
                    traffic. The value indicates a special characteristic of
                    the tablet that indicates the tablet should not be
                    considered a potential master. Vitess also does not
                    worry about lag for experimental tablets when reparenting.
   -- master: A primary copy of data
-  -- rdonly: A slaved copy of data for OLAP load patterns
-  -- replica: A slaved copy of data ready to be promoted to master
+  -- rdonly: A replica copy of data for OLAP load patterns
+  -- replica: A replica copy of data ready to be promoted to master
   -- restore: A tablet that is restoring from a snapshot. Typically, this
               happens at tablet startup, then it goes to its right state.
-  -- schema_apply: A slaved copy of data that had been serving query traffic
+  -- schema_apply: A replica copy of data that had been serving query traffic
                    but that is now applying a schema change. Following the
                    change, the tablet will revert to its serving type.
-  -- snapshot_source: A slaved copy of data where mysqld is <b>not</b>
+  -- snapshot_source: A replica copy of data where mysqld is <b>not</b>
                       running and where Vitess is serving data files to
                       clone slaves. Use this command to enter this mode:
                       <pre>vtctl Snapshot -server-mode ...</pre>
                       Use this command to exit this mode:
                       <pre>vtctl SnapshotSourceEnd ...</pre>
-  -- spare: A slaved copy of data that is ready but not serving query traffic.
+  -- spare: A replica copy of data that is ready but not serving query traffic.
             The data could be a potential master tablet.
 */
 
@@ -315,7 +315,7 @@ var commands = []commandGroup{
 				"[-cell=<cell>] [-tablet_types=<source_tablet_types>] -workflow=<workflow> <source_keyspace> <target_keyspace> <table_specs>",
 				`Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{""column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{""column": "id2", "name": "hash"}]}}`},
 			{"DropSources", commandDropSources,
-				"[-dry_run] <keyspace.workflow>",
+				"[-dry_run] [-rename_tables] <keyspace.workflow>",
 				"After a MoveTables or Resharding workflow cleanup unused artifacts like source tables, source shards and blacklists"},
 			{"CreateLookupVindex", commandCreateLookupVindex,
 				"[-cell=<cell>] [-tablet_types=<source_tablet_types>] <keyspace> <json_spec>",
@@ -530,14 +530,14 @@ func listTabletsByShard(ctx context.Context, wr *wrangler.Wrangler, keyspace, sh
 	var trueMasterTimestamp time.Time
 	for _, ti := range tabletMap {
 		if ti.Type == topodatapb.TabletType_MASTER {
-			masterTimestamp := logutil.ProtoToTime(ti.MasterTermStartTime)
+			masterTimestamp := ti.GetMasterTermStartTime()
 			if masterTimestamp.After(trueMasterTimestamp) {
 				trueMasterTimestamp = masterTimestamp
 			}
 		}
 	}
 	for _, ti := range tabletMap {
-		masterTimestamp := logutil.ProtoToTime(ti.MasterTermStartTime)
+		masterTimestamp := ti.GetMasterTermStartTime()
 		if ti.Type == topodatapb.TabletType_MASTER && masterTimestamp.Before(trueMasterTimestamp) {
 			ti.Type = topodatapb.TabletType_UNKNOWN
 		}
@@ -557,7 +557,7 @@ func dumpAllTablets(ctx context.Context, wr *wrangler.Wrangler, cell string) err
 	trueMasterTimestamps := findTrueMasterTimestamps(tablets)
 	for _, ti := range tablets {
 		key := ti.Keyspace + "." + ti.Shard
-		masterTimestamp := logutil.ProtoToTime(ti.MasterTermStartTime)
+		masterTimestamp := ti.GetMasterTermStartTime()
 		if ti.Type == topodatapb.TabletType_MASTER && masterTimestamp.Before(trueMasterTimestamps[key]) {
 			ti.Type = topodatapb.TabletType_UNKNOWN
 		}
@@ -571,10 +571,10 @@ func findTrueMasterTimestamps(tablets []*topo.TabletInfo) map[string]time.Time {
 	for _, ti := range tablets {
 		key := ti.Keyspace + "." + ti.Shard
 		if v, ok := result[key]; !ok {
-			result[key] = logutil.ProtoToTime(ti.MasterTermStartTime)
+			result[key] = ti.GetMasterTermStartTime()
 		} else {
-			if logutil.ProtoToTime(ti.MasterTermStartTime).After(v) {
-				result[key] = logutil.ProtoToTime(ti.MasterTermStartTime)
+			if ti.GetMasterTermStartTime().After(v) {
+				result[key] = ti.GetMasterTermStartTime()
 			}
 		}
 	}
@@ -758,7 +758,7 @@ func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		tablet.PortMap["vt"] = int32(*port)
 	}
 	if *mysqlPort != 0 {
-		topoproto.SetMysqlPort(tablet, int32(*mysqlPort))
+		tablet.MysqlPort = int32(*mysqlPort)
 	}
 	if *grpcPort != 0 {
 		tablet.PortMap["grpc"] = int32(*grpcPort)
@@ -824,7 +824,7 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 				tablet.PortMap["grpc"] = int32(*grpcPort)
 			}
 			if *mysqlPort != 0 {
-				topoproto.SetMysqlPort(tablet, int32(*mysqlPort))
+				tablet.MysqlPort = int32(*mysqlPort)
 			}
 		}
 		return nil
@@ -2042,6 +2042,7 @@ func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFla
 
 func commandDropSources(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of commandDropSources and only reports the actions to be taken")
+	renameTables := subFlags.Bool("rename_tables", false, "Rename tables instead of dropping them")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2052,8 +2053,14 @@ func commandDropSources(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
+
+	removalType := wrangler.DropTable
+	if *renameTables {
+		removalType = wrangler.RenameTable
+	}
+
 	_, _, _ = dryRun, keyspace, workflow
-	dryRunResults, err := wr.DropSources(ctx, keyspace, workflow, *dryRun)
+	dryRunResults, err := wr.DropSources(ctx, keyspace, workflow, removalType, *dryRun)
 	if err != nil {
 		return err
 	}

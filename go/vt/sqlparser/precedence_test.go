@@ -30,6 +30,8 @@ func readable(node Expr) string {
 		return fmt.Sprintf("(%s or %s)", readable(node.Left), readable(node.Right))
 	case *AndExpr:
 		return fmt.Sprintf("(%s and %s)", readable(node.Left), readable(node.Right))
+	case *XorExpr:
+		return fmt.Sprintf("(%s xor %s)", readable(node.Left), readable(node.Right))
 	case *BinaryExpr:
 		return fmt.Sprintf("(%s %s %s)", readable(node.Left), node.Operator, readable(node.Right))
 	case *IsExpr:

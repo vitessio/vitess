@@ -20,6 +20,9 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -38,18 +41,25 @@ func buildUnionPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Pr
 }
 
 func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, outer *symtab) error {
-	if err := pb.processPart(union.Left, outer); err != nil {
+	if err := pb.processPart(union.FirstStatement, outer); err != nil {
 		return err
 	}
-	rpb := newPrimitiveBuilder(pb.vschema, pb.jt)
-	if err := rpb.processPart(union.Right, outer); err != nil {
-		return err
-	}
+	for _, us := range union.UnionSelects {
+		rpb := newPrimitiveBuilder(pb.vschema, pb.jt)
+		if err := rpb.processPart(us.Statement, outer); err != nil {
+			return err
+		}
 
-	if err := unionRouteMerge(union, pb.bldr, rpb.bldr); err != nil {
-		return err
+		if err := unionRouteMerge(pb.bldr, rpb.bldr); err != nil {
+			return err
+		}
+		pb.st.Outer = outer
 	}
-	pb.st.Outer = outer
+	unionRoute, ok := pb.bldr.(*route)
+	if !ok {
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "expected union to produce a route")
+	}
+	unionRoute.Select = &sqlparser.Union{FirstStatement: union.FirstStatement, UnionSelects: union.UnionSelects, Lock: union.Lock}
 
 	if err := pb.pushOrderBy(union.OrderBy); err != nil {
 		return err
@@ -69,7 +79,7 @@ func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, outer *s
 	return fmt.Errorf("BUG: unexpected SELECT type: %T", part)
 }
 
-func unionRouteMerge(union *sqlparser.Union, left, right builder) error {
+func unionRouteMerge(left, right builder) error {
 	lroute, ok := left.(*route)
 	if !ok {
 		return errors.New("unsupported: SELECT of UNION is non-trivial")
@@ -81,6 +91,6 @@ func unionRouteMerge(union *sqlparser.Union, left, right builder) error {
 	if !lroute.MergeUnion(rroute) {
 		return errors.New("unsupported: UNION cannot be executed as a single route")
 	}
-	lroute.Select = &sqlparser.Union{Type: union.Type, Left: union.Left, Right: union.Right, Lock: union.Lock}
+
 	return nil
 }

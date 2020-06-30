@@ -77,6 +77,7 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 	db := fakesqldb.New(nil)
 
 	config := tabletenv.NewCurrentConfig()
+	config.TrackSchemaVersions = false
 	if opts.ExecutionMode == ModeTwoPC {
 		config.TwoPCCoordinatorAddress = "XXX"
 		config.TwoPCAbandonAge = 1.0
@@ -454,7 +455,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		case *sqlparser.Select:
 			selStmt = stmt
 		case *sqlparser.Union:
-			selStmt = stmt.Right.(*sqlparser.Select)
+			selStmt = stmt.FirstStatement.(*sqlparser.Select)
 		default:
 			return fmt.Errorf("vtexplain: unsupported statement type +%v", reflect.TypeOf(stmt))
 		}

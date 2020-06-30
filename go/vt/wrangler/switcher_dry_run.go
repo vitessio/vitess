@@ -225,12 +225,12 @@ func (dr *switcherDryRun) lockKeyspace(ctx context.Context, keyspace, _ string) 
 	}, nil
 }
 
-func (dr *switcherDryRun) dropSourceTables(ctx context.Context) error {
+func (dr *switcherDryRun) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {
 	logs := make([]string, 0)
 	for _, source := range dr.ts.sources {
 		for _, tableName := range dr.ts.tables {
-			logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s DbName %s Tablet %d Table %s",
-				source.master.Keyspace, source.master.Shard, source.master.DbName(), source.master.Alias.Uid, tableName))
+			logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s DbName %s Tablet %d Table %s RemovalType %s",
+				source.master.Keyspace, source.master.Shard, source.master.DbName(), source.master.Alias.Uid, tableName, TableRemovalType(removalType)))
 		}
 	}
 	if len(logs) > 0 {
