@@ -36,7 +36,7 @@ const createSchemaTrackingTable = `CREATE TABLE IF NOT EXISTS _vt.schema_version
 		 id INT AUTO_INCREMENT,
 		  pos VARBINARY(10000) NOT NULL,
 		  time_updated BIGINT(20) NOT NULL,
-		  ddl VARBINARY(1000) DEFAULT NULL,
+		  ddl BLOB NOT NULL,
 		  schemax BLOB NOT NULL,
 		  PRIMARY KEY (id)
 		) ENGINE=InnoDB`
