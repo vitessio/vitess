@@ -182,7 +182,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		timebombDuration:    time.Duration(config.OltpReadPool.TimeoutSeconds * 10),
 	}
 
-	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", tsv.sm.State)
+	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 { return int64(tsv.sm.State()) })
 	tsv.exporter.Publish("TabletStateName", stats.StringFunc(tsv.sm.StateByName))
 
 	// TabletServerState exports the same information as the above two stats (TabletState / TabletStateName),
@@ -311,7 +311,7 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, enforceTableACLConfi
 // should also be honored for serving.
 // Returns true if the state of QueryService or the tablet type changed.
 func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
-	state := int64(StateNotServing)
+	state := StateNotServing
 	if serving {
 		state = StateServing
 	}
