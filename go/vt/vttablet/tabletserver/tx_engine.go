@@ -565,7 +565,7 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 	defer span.Finish()
 	conn, err := te.reserve(ctx, options, preQueries)
 	if err != nil {
-		return 0, err
+		return 0, vterrors.Wrap(err, "TxEngine.ReserveBegin")
 	}
 	defer conn.Unlock()
 	_, err = te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn)
@@ -584,7 +584,7 @@ func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions
 	if txID == 0 {
 		conn, err := te.reserve(ctx, options, preQueries)
 		if err != nil {
-			return 0, err
+			return 0, vterrors.Wrap(err, "TxEngine.Reserve")
 		}
 		defer conn.Unlock()
 		return conn.ID(), nil
@@ -592,13 +592,13 @@ func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions
 
 	conn, err := te.txPool.GetAndLock(txID, "to reserve")
 	if err != nil {
-		return 0, err
+		return 0, vterrors.Wrap(err, "TxEngine.Reserve")
 	}
 	defer conn.Unlock()
 
 	err = te.taintConn(ctx, conn, preQueries)
 	if err != nil {
-		return 0, err
+		return 0, vterrors.Wrap(err, "TxEngine.Reserve")
 	}
 	return conn.ID(), nil
 }
@@ -611,13 +611,8 @@ func (te *TxEngine) reserve(ctx context.Context, options *querypb.ExecuteOptions
 	if !canOpenTransactions {
 		// We are not in a state where we can start new transactions. Abort.
 		te.stateLock.Unlock()
-		return nil, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "tx engine can't accept new transactions in state %v", te.state)
+		return nil, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "cannot provide new connection in state %v", te.state)
 	}
-	// By Add() to beginRequests, we block others from initiating state
-	// changes until we have finished adding this transaction
-	te.beginRequests.Add(1)
-	defer te.beginRequests.Done()
-
 	te.stateLock.Unlock()
 
 	conn, err := te.txPool.scp.NewConn(ctx, options)
