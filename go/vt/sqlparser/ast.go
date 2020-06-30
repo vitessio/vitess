@@ -901,7 +901,7 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			if ok {
 				buf.Myprintf("%s table %v drop foreign key %s", node.Action, node.Table, node.TableSpec.Constraints[0].Name)
 			} else {
-				buf.Myprintf("%s table %v", node.Action, node.Table)
+				buf.Myprintf("%s table %v drop constraint %s", node.Action, node.Table, node.TableSpec.Constraints[0].Name)
 			}
 		} else {
 			buf.Myprintf("%s table %v", node.Action, node.Table)
