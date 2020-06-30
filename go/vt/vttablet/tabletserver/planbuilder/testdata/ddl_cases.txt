@@ -68,7 +68,7 @@
   "Action": "rename"
 }
 
-"create view a asdasd"
+"create view a as select * from foo"
 {
   "Action": "create"
 }

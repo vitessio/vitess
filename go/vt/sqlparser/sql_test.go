@@ -597,6 +597,34 @@ func TestAlterDropForeignKey(t *testing.T) {
 	testForeignKey(t, tests, DropStr)
 }
 
+func TestAlterDropConstraint(t *testing.T) {
+	tests := []testForeignKeyStruct{
+		{
+			`ALTER TABLE child DROP CONSTRAINT random_foreign_key_name`,
+			[]*ConstraintDefinition{{
+				Name: "random_foreign_key_name",
+			}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%v", test.statement), func(t *testing.T) {
+			res, err := Parse(test.statement)
+			require.NoError(t, err)
+			ddlRes, ok := res.(*DDL)
+			require.True(t, ok)
+			require.NotNil(t, ddlRes.TableSpec)
+			require.Equal(t, len(test.res), len(ddlRes.TableSpec.Constraints))
+			require.Equal(t, DropStr, ddlRes.ConstraintAction)
+			for i := range test.res {
+				require.NotNil(t, ddlRes.TableSpec.Constraints[i])
+				assert.Equal(t, test.res[i].Name, ddlRes.TableSpec.Constraints[i].Name)
+				require.Nil(t, ddlRes.TableSpec.Constraints[i].Details)
+			}
+		})
+	}
+}
+
 type testIndexStruct struct {
 	statement string
 	resTable  TableName

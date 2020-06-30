@@ -973,8 +973,8 @@ var (
 		input:  "alter table a drop primary key",
 		output: "alter table a",
 	}, {
-		input:  "alter table a drop constraint",
-		output: "alter table a",
+		input:  "alter table a drop constraint b",
+		output: "alter table a drop constraint b",
 	}, {
 		input:  "alter table a drop id",
 		output: "alter table a drop column id",

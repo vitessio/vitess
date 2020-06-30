@@ -1542,6 +1542,11 @@ alter_table_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, IndexSpec: &IndexSpec{Action: CreateStr, ToName: NewColIdent($9), Type: $7, Using: $10, Columns: $12, Options: $14}}
   }
+| ALTER ignore_opt TABLE table_name DROP CONSTRAINT ID
+  {
+    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, Table: $4, TableSpec: &TableSpec{Constraints:
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($7)}}}}
+  }
 | ALTER ignore_opt TABLE table_name DROP index_or_key sql_id
   {
     $$ = &DDL{Action: AlterStr, Table: $4, IndexSpec: &IndexSpec{Action: DropStr, ToName: $7}}
