@@ -216,11 +216,6 @@ func TestVStreamCurrent(t *testing.T) {
 	gconn, conn, mconn, closeConnections := initialize(ctx, t)
 	defer closeConnections()
 
-	_, err := conn.ExecuteFetch("insert into t1(id1,id2) values(1,1), (2,2), (3,3), (4,4), (5,5), (6,6), (7,7), (8,8)", 1, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	var shardGtids []*binlogdatapb.ShardGtid
 	var vgtid = &binlogdatapb.VGtid{}
 	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
