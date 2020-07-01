@@ -1,0 +1,132 @@
+#!/bin/bash
+
+# Copyright 2020 The Vitess Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# This script probes for an existing MySQL topologies and sets up a mini vitess setup matching that topology.
+#
+
+echo_sleep() {
+  local SECONDS="$1"
+  for i in $(seq 1 $SECONDS) ; do 
+    echo -n "."
+    sleep 1
+  done
+  echo
+}
+
+echo_header() {
+  local HEADER="$1"
+  echo ""
+  echo "# $HEADER"
+}
+
+SCRIPTS_PATH="/vt/dist/scripts"
+export CELL=${CELL:-zone1}
+export $TOPOLOGY_USER
+export $TOPOLOGY_PASSWORD
+
+
+cat <<- "EOF"
+=============================================
+
+|  \/  (_)_ __ (_) \   / (_) |_ ___  ___ ___ 
+| |\/| | | '_ \| |\ \ / /| | __/ _ \/ __/ __|
+| |  | | | | | | | \ V / | | ||  __/\__ \__ \
+|_|  |_|_|_| |_|_|  \_/  |_|\__\___||___/___/
+
+=============================================
+EOF
+
+if [ -z "$MYSQL_SCHEMA" ] ; then
+  echo "Expected MYSQL_SCHEMA environment variable"
+  exit 1
+fi
+if [ -z "$TOPOLOGY_SERVER" ] ; then
+  echo "TOPOLOGY_SERVER environment variable not found. You must specify a MySQL server within your topology."
+  echo "This mini-vitess setup will attempt to discover your topology using that server and will bootstrap to match your topology"
+  exit 1
+fi
+if [ -z "$TOPOLOGY_USER" ] ; then
+  echo "TOPOLOGY_USER environment variable not found. You must specify a MySQL username accessible to vitess."
+  exit 1
+fi
+if [ -z "$TOPOLOGY_PASSWORD" ] ; then
+  echo "TOPOLOGY_PASSWORD environment variable not found. You must specify a MySQL password accessible to vitess."
+  exit 1
+fi
+
+echo "MiniVitess is starting up..."
+echo "- Given MySQL topology server: $TOPOLOGY_SERVER"
+echo "- Given MySQL schema: $MYSQL_SCHEMA"
+
+cd $SCRIPTS_PATH
+
+source ./env.sh
+
+echo_header "orchestrator"
+./orchestrator-up.sh
+echo "- orchestrator will meanwhile probe and map your MySQL replication topology"
+
+echo_header "etcd"
+./etcd-up.sh
+
+echo_header "vtctld"
+./vtctld-mini-up.sh
+
+echo_header "Waiting for topology to be detected and analyzed"
+echo_sleep 15
+
+echo_header "orchestrator has detected the following MySQL servers:"
+orchestrator-client -c all-instances
+
+echo_header "Bootstrapping vttablets for the above instances..."
+
+BASE_TABLET_UID=100
+for i in $(orchestrator-client -c all-instances) ; do
+  read -r mysql_host mysql_port <<<$(echo $i | tr ':' ' ') 
+
+  is_master=""
+  if [ "$i" == "$(orchestrator-client -c which-cluster-master -i "$i")" ] ; then
+    is_master="true"
+  fi
+
+	KEYSPACE=$MYSQL_SCHEMA TABLET_UID=$BASE_TABLET_UID ./vttablet-mini-up.sh "$mysql_host" "$mysql_port" "$is_master"
+  BASE_TABLET_UID=$((BASE_TABLET_UID + 1))
+done
+
+echo_header "vtgate"
+./vtgate-up.sh
+
+echo_header "Setup complete"
+
+echo_header "Your topology is:"
+orchestrator-client -c topology-tabulated -i ${TOPOLOGY_SERVER} | tr '|' ' '
+
+echo_header "vtgate is listening for MySQL connection on port 15306"
+
+echo_header "On this container, try running any of the following commands:"
+echo "  mysql ${MYSQL_SCHEMA} -e 'show tables'"
+echo "  mysql ${MYSQL_SCHEMA}@master -e 'select @@hostname, @@port'"
+echo "  mysql ${MYSQL_SCHEMA}@replica -e 'select @@hostname, @@port'"
+
+echo_header "Outside this container, try running any of the following commands:"
+echo "  mysql -h $(hostname) --port=15306 ${MYSQL_SCHEMA} -e 'show tables'"
+echo "  mysql -h $(hostname) --port=15306 ${MYSQL_SCHEMA}@master -e 'select @@hostname, @@port'"
+echo "  mysql -h $(hostname) --port=15306 ${MYSQL_SCHEMA}@replica -e 'select @@hostname, @@port'"
+
+echo_header "Ready"
+
+echo ""
+
