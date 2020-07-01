@@ -1389,7 +1389,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 		"ReserveBegin", "begin", bindVariables,
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			defer tsv.stats.QueryTimings.Record("ReserveBegin", time.Now())
+			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
 			connID, err = tsv.te.ReserveBegin(ctx, options, preQueries)
 			if err != nil {
 				return err
@@ -1417,7 +1417,7 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 		"Reserve", "", bindVariables,
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			defer tsv.stats.QueryTimings.Record("Reserve", time.Now())
+			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
 			connID, err = tsv.te.Reserve(ctx, options, transactionID, preQueries)
 			if err != nil {
 				return err
@@ -1449,7 +1449,7 @@ func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, tr
 			if reservedID != 0 {
 				//Release to close the underlying connection.
 				logStats.TransactionID = reservedID
-				return tsv.te.Release(ctx, reservedID)
+				return tsv.te.Release(reservedID)
 			}
 			// Rollback to cleanup the transaction before returning to the pool.
 			logStats.TransactionID = transactionID

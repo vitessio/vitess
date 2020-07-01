@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/callerid"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"golang.org/x/net/context"
@@ -629,7 +631,7 @@ func (te *TxEngine) reserve(ctx context.Context, options *querypb.ExecuteOptions
 }
 
 func (te *TxEngine) taintConn(ctx context.Context, conn *StatefulConnection, preQueries []string) error {
-	conn.Taint()
+	conn.Taint(ctx)
 	for _, query := range preQueries {
 		_, err := conn.Exec(ctx, query, 0 /*maxrows*/, false /*wantFields*/)
 		if err != nil {
@@ -641,11 +643,27 @@ func (te *TxEngine) taintConn(ctx context.Context, conn *StatefulConnection, pre
 }
 
 //Release closes the underlying connection.
-func (te *TxEngine) Release(ctx context.Context, connID int64) error {
+func (te *TxEngine) Release(connID int64) error {
 	conn, err := te.txPool.GetAndLock(connID, "for release")
 	if err != nil {
 		return err
 	}
+	reservedProps := conn.reservedProps
 	conn.Release(tx.ConnRelease)
+
+	te.logReservedConn(reservedProps, conn)
 	return nil
+}
+
+func (te *TxEngine) logReservedConn(reservedProps *Properties, conn *StatefulConnection) {
+	if reservedProps == nil {
+		return //Nothing to log as this connection is not reserved.
+	}
+	duration := time.Since(reservedProps.StartTime)
+	username := callerid.GetPrincipal(reservedProps.EffectiveCaller)
+	if username == "" {
+		username = callerid.GetUsername(reservedProps.ImmediateCaller)
+	}
+	conn.Stats().UserReservedCount.Add(username, 1)
+	conn.Stats().UserReservedTimesNs.Add(username, int64(duration))
 }

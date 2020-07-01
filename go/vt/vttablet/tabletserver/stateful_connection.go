@@ -18,6 +18,11 @@ package tabletserver
 
 import (
 	"fmt"
+	"time"
+
+	"vitess.io/vitess/go/vt/callerid"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -41,8 +46,18 @@ type StatefulConnection struct {
 	ConnID         tx.ConnID
 	env            tabletenv.Env
 	txProps        *tx.Properties
+	reservedProps  *Properties
 	tainted        bool
 	enforceTimeout bool
+}
+
+//Properties contains meta information about the connection
+type Properties struct {
+	EffectiveCaller *vtrpcpb.CallerID
+	ImmediateCaller *querypb.VTGateCallerID
+	StartTime       time.Time
+	EndTime         time.Time
+	Stats           *servenv.TimingsWrapper
 }
 
 // Close closes the underlying connection. When the connection is Unblocked, it will be Released
@@ -171,8 +186,17 @@ func (sc *StatefulConnection) Stats() *tabletenv.Stats {
 }
 
 //Taint taints the existing connection.
-func (sc *StatefulConnection) Taint() {
+func (sc *StatefulConnection) Taint(ctx context.Context) {
+	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
+	effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
+
 	sc.tainted = true
+	sc.reservedProps = &Properties{
+		EffectiveCaller: effectiveCaller,
+		ImmediateCaller: immediateCaller,
+		StartTime:       time.Now(),
+		Stats:           nil, // TODO: (harshit) ????!?!?
+	}
 	// if we don't have an active dbConn, we can silently ignore this request
 	if sc.dbConn != nil {
 		sc.dbConn.Taint()
