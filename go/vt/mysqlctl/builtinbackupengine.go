@@ -133,7 +133,6 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	// Save initial state so we can restore.
 	slaveStartRequired := false
 	sourceIsMaster := false
-	readOnly := true
 	var replicationPosition mysql.Position
 	semiSyncMaster, semiSyncSlave := params.Mysqld.SemiSyncEnabled()
 
@@ -151,7 +150,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	}
 
 	// get the read-only flag
-	readOnly, err = params.Mysqld.IsReadOnly()
+	readOnly, err := params.Mysqld.IsReadOnly()
 	if err != nil {
 		return false, vterrors.Wrap(err, "can't get read-only status")
 	}
@@ -340,7 +339,7 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupPar
 	if err != nil {
 		return vterrors.Wrapf(err, "cannot JSON encode %v", backupManifestFileName)
 	}
-	if _, err := wc.Write([]byte(data)); err != nil {
+	if _, err := wc.Write(data); err != nil {
 		return vterrors.Wrapf(err, "cannot write %v", backupManifestFileName)
 	}
 

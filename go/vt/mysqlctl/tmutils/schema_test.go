@@ -22,6 +22,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/golang/protobuf/proto"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -240,7 +242,7 @@ func TestSchemaDiff(t *testing.T) {
 	})
 
 	testDiff(t, sd4, sd5, "sd4", "sd5", []string{
-		fmt.Sprintf("schemas differ on table type for table table2:\nsd4: VIEW\n differs from:\nsd5: BASE TABLE"),
+		"schemas differ on table type for table table2:\nsd4: VIEW\n differs from:\nsd5: BASE TABLE",
 	})
 
 	sd1.DatabaseSchema = "CREATE DATABASE {{.DatabaseName}}"
@@ -450,17 +452,14 @@ func TestTableFilter(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.desc, func(t *testing.T) {
 			f, err := NewTableFilter(tc.tables, tc.excludeTables, tc.includeViews)
-			if tc.hasErr != (err != nil) {
-				t.Fatalf("hasErr not right: %v, tc: %+v", err, tc)
-			}
-
 			if tc.hasErr {
-				return
-			}
-
-			included := f.Includes(tc.tableName, tc.tableType)
-			if tc.included != included {
-				t.Fatalf("included is not right: %v\nfilter: %+v\ntc: %+v", included, f, tc)
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				included := f.Includes(tc.tableName, tc.tableType)
+				if tc.included != included {
+					t.Fatalf("included is not right: %v\nfilter: %+v\ntc: %+v", included, f, tc)
+				}
 			}
 		})
 	}

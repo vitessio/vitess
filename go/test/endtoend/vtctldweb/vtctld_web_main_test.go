@@ -38,18 +38,11 @@ import (
 
 var (
 	localCluster    *vttest.LocalCluster
-	hostname        = "localhost"
 	wd              selenium.WebDriver
 	seleniumService *selenium.Service
 	vtctldAddr      string
 	ks1             = "test_keyspace"
 	ks2             = "test_keyspace2"
-	sqlSchema       = "CREATE TABLE test_table (\n" +
-		"	`id` BIGINT(20) UNSIGNED NOT NULL,\n" +
-		"	`msg` VARCHAR(64),\n" +
-		"	`keyspace_id` BIGINT(20) UNSIGNED NOT NULL,\n" +
-		"	PRIMARY KEY (id)\n" +
-		") ENGINE=InnoDB"
 )
 
 func TestMain(m *testing.M) {
@@ -176,6 +169,9 @@ func CreateWebDriver(port int) error {
 		}
 
 		name, err := wd.CurrentWindowHandle()
+		if err != nil {
+			return err
+		}
 		return wd.ResizeWindow(name, 1280, 1024)
 	}
 
@@ -202,6 +198,9 @@ func CreateWebDriver(port int) error {
 		return err
 	}
 	name, err := wd.CurrentWindowHandle()
+	if err != nil {
+		return err
+	}
 	return wd.ResizeWindow(name, 1280, 1024)
 }
 
@@ -266,7 +265,7 @@ func changeDropdownOptions(t *testing.T, dropdownID, dropdownValue string) {
 	options, err := dropdown.FindElements(selenium.ByTagName, "li")
 	require.Nil(t, err)
 
-	triedOption := []string{}
+	var triedOption []string
 	for _, op := range options {
 		opTxt := text(t, op)
 		if opTxt == dropdownValue {
@@ -347,6 +346,7 @@ func getDashboardKeyspaces(t *testing.T) []string {
 	require.Nil(t, err)
 
 	ksCards, err := dashboardContent.FindElements(selenium.ByClassName, "vt-keyspace-card")
+	require.NoError(t, err)
 	var out []string
 	for _, ks := range ksCards {
 		out = append(out, text(t, ks))
@@ -362,6 +362,7 @@ func getDashboardShards(t *testing.T) []string {
 	require.Nil(t, err)
 
 	ksCards, err := dashboardContent.FindElements(selenium.ByClassName, "vt-shard-stats")
+	require.NoError(t, err)
 	var out []string
 	for _, ks := range ksCards {
 		out = append(out, text(t, ks))
@@ -391,6 +392,7 @@ func getShardTablets(t *testing.T) ([]string, []string) {
 	require.Nil(t, err)
 
 	tableRows, err := shardContent.FindElements(selenium.ByTagName, "tr")
+	require.NoError(t, err)
 	tableRows = tableRows[1:]
 
 	var tabletTypes, tabletUIDs []string

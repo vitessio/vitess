@@ -43,10 +43,9 @@ import (
 )
 
 const (
-	initShardMasterOperation            = "InitShardMaster"
-	plannedReparentShardOperation       = "PlannedReparentShard"
-	emergencyReparentShardOperation     = "EmergencyReparentShard"
-	tabletExternallyReparentedOperation = "TabletExternallyReparented"
+	initShardMasterOperation        = "InitShardMaster"
+	plannedReparentShardOperation   = "PlannedReparentShard"
+	emergencyReparentShardOperation = "EmergencyReparentShard"
 )
 
 // ShardReplicationStatuses returns the ReplicationStatus for each tablet in a shard.

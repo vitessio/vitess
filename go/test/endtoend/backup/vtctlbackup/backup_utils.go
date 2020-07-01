@@ -650,7 +650,6 @@ func terminateRestore(t *testing.T) {
 	reader, _ := tmpProcess.StderrPipe()
 	err := tmpProcess.Start()
 	require.Nil(t, err)
-	found := false
 
 	scanner := bufio.NewScanner(reader)
 
@@ -661,9 +660,8 @@ func terminateRestore(t *testing.T) {
 				assert.Fail(t, "restore in progress file missing")
 			}
 			tmpProcess.Process.Signal(syscall.SIGTERM)
-			found = true
 			return
 		}
 	}
-	assert.True(t, found, "Restore message not found")
+	t.Error("Restore message not found")
 }

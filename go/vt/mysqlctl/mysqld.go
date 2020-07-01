@@ -227,15 +227,15 @@ func parseVersionString(version string) (flavor mysqlFlavor, ver serverVersion, 
 	if len(v) != 4 {
 		return flavor, ver, fmt.Errorf("could not parse server version from: %s", version)
 	}
-	ver.Major, err = strconv.Atoi(string(v[1]))
+	ver.Major, err = strconv.Atoi(v[1])
 	if err != nil {
 		return flavor, ver, fmt.Errorf("could not parse server version from: %s", version)
 	}
-	ver.Minor, err = strconv.Atoi(string(v[2]))
+	ver.Minor, err = strconv.Atoi(v[2])
 	if err != nil {
 		return flavor, ver, fmt.Errorf("could not parse server version from: %s", version)
 	}
-	ver.Patch, err = strconv.Atoi(string(v[3]))
+	ver.Patch, err = strconv.Atoi(v[3])
 	if err != nil {
 		return flavor, ver, fmt.Errorf("could not parse server version from: %s", version)
 	}
@@ -327,7 +327,7 @@ func (mysqld *Mysqld) Start(ctx context.Context, cnf *Mycnf, mysqldArgs ...strin
 		return client.Start(ctx, mysqldArgs...)
 	}
 
-	if err := mysqld.startNoWait(ctx, cnf, mysqldArgs...); err != nil {
+	if err := mysqld.startNoWait(cnf, mysqldArgs...); err != nil {
 		return err
 	}
 
@@ -335,15 +335,13 @@ func (mysqld *Mysqld) Start(ctx context.Context, cnf *Mycnf, mysqldArgs ...strin
 }
 
 // startNoWait is the internal version of Start, and it doesn't wait.
-func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ...string) error {
-	var name string
+func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 	ts := fmt.Sprintf("Mysqld.Start(%v)", time.Now().Unix())
 
 	// try the mysqld start hook, if any
 	switch hr := hook.NewHook("mysqld_start", mysqldArgs).Execute(); hr.ExitStatus {
 	case hook.HOOK_SUCCESS:
 		// hook exists and worked, we can keep going
-		name = "mysqld_start hook"
 	case hook.HOOK_DOES_NOT_EXIST:
 		// hook doesn't exist, run mysqld_safe ourselves
 		log.Infof("%v: No mysqld_start hook, running mysqld_safe directly", ts)
@@ -351,7 +349,7 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 		if err != nil {
 			return err
 		}
-		name, err = binaryPath(vtMysqlRoot, "mysqld_safe")
+		name, err := binaryPath(vtMysqlRoot, "mysqld_safe")
 		if err != nil {
 			// The movement to use systemd means that mysqld_safe is not always provided.
 			// This should not be considered an issue do not generate a warning.
@@ -649,7 +647,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 
 	// Start mysqld. We do not use Start, as we have to wait using
 	// the root user.
-	if err = mysqld.startNoWait(ctx, cnf); err != nil {
+	if err = mysqld.startNoWait(cnf); err != nil {
 		log.Errorf("failed starting mysqld: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
 		return err
 	}

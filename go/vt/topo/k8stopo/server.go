@@ -150,7 +150,7 @@ func NewServer(_, root string) (*Server, error) {
 
 	var config *rest.Config
 	var err error
-	namespace := "default"
+	var namespace string
 
 	if *kubeconfigPath == "" {
 		log.Info("Creating new in-cluster Kubernetes config")

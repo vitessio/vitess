@@ -179,11 +179,6 @@ func (mysqld *Mysqld) SetReadOnly(on bool) error {
 	return mysqld.ExecuteSuperQuery(context.TODO(), query)
 }
 
-var (
-	// ErrNotMaster means there is no master status
-	ErrNotMaster = errors.New("no master status")
-)
-
 // SetSuperReadOnly set/unset the super_read_only flag
 func (mysqld *Mysqld) SetSuperReadOnly(on bool) error {
 	query := "SET GLOBAL super_read_only = "
@@ -286,7 +281,7 @@ func (mysqld *Mysqld) SetMaster(ctx context.Context, masterHost string, masterPo
 	}
 	defer conn.Recycle()
 
-	cmds := []string{}
+	var cmds []string
 	if slaveStopBefore {
 		cmds = append(cmds, conn.StopSlaveCommand())
 	}
@@ -319,10 +314,10 @@ func (mysqld *Mysqld) ResetReplication(ctx context.Context) error {
 //
 // Array indices for the results of SHOW PROCESSLIST.
 const (
-	colConnectionID = iota
-	colUsername
+	_ = iota // used to be colConnectionID
+	_        // used to be colUsername
 	colClientAddr
-	colDbName
+	// used to be colDbName
 	colCommand
 )
 
@@ -443,8 +438,8 @@ func (mysqld *Mysqld) SemiSyncEnabled() (master, slave bool) {
 	if err != nil {
 		return false, false
 	}
-	master = (vars["rpl_semi_sync_master_enabled"] == "ON")
-	slave = (vars["rpl_semi_sync_slave_enabled"] == "ON")
+	master = vars["rpl_semi_sync_master_enabled"] == "ON"
+	slave = vars["rpl_semi_sync_slave_enabled"] == "ON"
 	return master, slave
 }
 
