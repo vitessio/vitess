@@ -47,7 +47,7 @@ func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (r
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options)
+	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -112,10 +112,11 @@ func (q *query) Commit(ctx context.Context, request *querypb.CommitRequest) (res
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.Commit(ctx, request.Target, request.TransactionId); err != nil {
+	rID, err := q.server.Commit(ctx, request.Target, request.TransactionId)
+	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
-	return &querypb.CommitResponse{}, nil
+	return &querypb.CommitResponse{ReservedId: rID}, nil
 }
 
 // Rollback is part of the queryservice.QueryServer interface
@@ -125,11 +126,12 @@ func (q *query) Rollback(ctx context.Context, request *querypb.RollbackRequest) 
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.Rollback(ctx, request.Target, request.TransactionId); err != nil {
+	rID, err := q.server.Rollback(ctx, request.Target, request.TransactionId)
+	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
 
-	return &querypb.RollbackResponse{}, nil
+	return &querypb.RollbackResponse{ReservedId: rID}, nil
 }
 
 // Prepare is part of the queryservice.QueryServer interface
@@ -252,7 +254,7 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	result, transactionID, alias, err := q.server.BeginExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.Options)
+	result, transactionID, alias, err := q.server.BeginExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options)
 	if err != nil {
 		// if we have a valid transactionID, return the error in-band
 		if transactionID != 0 {
