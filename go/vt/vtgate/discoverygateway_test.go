@@ -40,11 +40,11 @@ import (
 
 func TestDiscoveryGatewayExecute(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
-		_, err := dg.Execute(context.Background(), target, "query", nil, 0, nil)
+		_, err := dg.Execute(context.Background(), target, "query", nil, 0, 0, nil)
 		return err
 	})
 	testDiscoveryGatewayTransact(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
-		_, err := dg.Execute(context.Background(), target, "query", nil, 1, nil)
+		_, err := dg.Execute(context.Background(), target, "query", nil, 1, 0, nil)
 		return err
 	})
 }
@@ -80,19 +80,21 @@ func TestDiscoveryGatewayBegin(t *testing.T) {
 
 func TestDiscoveryGatewayCommit(t *testing.T) {
 	testDiscoveryGatewayTransact(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
-		return dg.Commit(context.Background(), target, 1)
+		_, err := dg.Commit(context.Background(), target, 1)
+		return err
 	})
 }
 
 func TestDiscoveryGatewayRollback(t *testing.T) {
 	testDiscoveryGatewayTransact(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
-		return dg.Rollback(context.Background(), target, 1)
+		_, err := dg.Rollback(context.Background(), target, 1)
+		return err
 	})
 }
 
 func TestDiscoveryGatewayBeginExecute(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
-		_, _, _, err := dg.BeginExecute(context.Background(), target, "query", nil, nil)
+		_, _, _, err := dg.BeginExecute(context.Background(), target, "query", nil, 0, nil)
 		return err
 	})
 }
