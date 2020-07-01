@@ -36,12 +36,13 @@ const createSchemaTrackingTable = `CREATE TABLE IF NOT EXISTS _vt.schema_version
 		 id INT AUTO_INCREMENT,
 		  pos VARBINARY(10000) NOT NULL,
 		  time_updated BIGINT(20) NOT NULL,
-		  ddl BLOB NOT NULL,
+		  ddl VARBINARY(1000) DEFAULT NULL,
 		  schemax BLOB NOT NULL,
 		  PRIMARY KEY (id)
 		) ENGINE=InnoDB`
+const alterSchemaTrackingTable = "alter table _vt.schema_version modify column ddl BLOB NOT NULL"
 
-var withDDL = withddl.New([]string{createSchemaTrackingTable})
+var withDDL = withddl.New([]string{createSchemaTrackingTable, alterSchemaTrackingTable})
 
 // VStreamer defines  the functions of VStreamer
 // that the replicationWatcher needs.
