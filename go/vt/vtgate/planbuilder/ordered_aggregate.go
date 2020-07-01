@@ -243,6 +243,11 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 	return oa.eaggr
 }
 
+// PushLock satisfies the builder interface.
+func (oa *orderedAggregate) PushLock(lock string) error {
+	return oa.input.PushLock(lock)
+}
+
 // PushFilter satisfies the builder interface.
 func (oa *orderedAggregate) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereType string, _ builder) error {
 	return errors.New("unsupported: filtering on results of aggregates")

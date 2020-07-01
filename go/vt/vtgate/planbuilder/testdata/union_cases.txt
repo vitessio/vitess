@@ -1,0 +1,282 @@
+# union all between two scatter selects
+"select id from user union all select id from music"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user union all select id from music",
+  "Instructions": {
+    "OperatorType": "Concatenate",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from user where 1 != 1",
+        "Query": "select id from user",
+        "Table": "user"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from music where 1 != 1",
+        "Query": "select id from music",
+        "Table": "music"
+      }
+    ]
+  }
+}
+
+# union all between two SelectEqualUnique
+"select id from user where id = 1 union all select id from user where id = 5"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id = 1 union all select id from user where id = 5",
+  "Instructions": {
+    "OperatorType": "Concatenate",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from user where 1 != 1",
+        "Query": "select id from user where id = 1",
+        "Table": "user",
+        "Values": [
+          1
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from user where 1 != 1",
+        "Query": "select id from user where id = 5",
+        "Table": "user",
+        "Values": [
+          5
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+
+#almost dereks query - two queries with order by and limit being scattered to two different sets of tablets
+"(SELECT id FROM user ORDER BY id DESC LIMIT 1) UNION ALL (SELECT id FROM music ORDER BY id DESC LIMIT 1)"
+{
+  "QueryType": "SELECT",
+  "Original": "(SELECT id FROM user ORDER BY id DESC LIMIT 1) UNION ALL (SELECT id FROM music ORDER BY id DESC LIMIT 1)",
+  "Instructions": {
+    "OperatorType": "Concatenate",
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from user where 1 != 1",
+            "Query": "select id from user order by id desc limit :__upper_limit",
+            "Table": "user"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Limit",
+        "Count": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from music where 1 != 1",
+            "Query": "select id from music order by id desc limit :__upper_limit",
+            "Table": "music"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# Union all
+"select col1, col2 from user union all select col1, col2 from user_extra"
+{
+  "QueryType": "SELECT",
+  "Original": "select col1, col2 from user union all select col1, col2 from user_extra",
+  "Instructions": {
+    "OperatorType": "Concatenate",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, col2 from user where 1 != 1",
+        "Query": "select col1, col2 from user",
+        "Table": "user"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, col2 from user_extra where 1 != 1",
+        "Query": "select col1, col2 from user_extra",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+
+# union operations in subqueries (FROM)
+"select * from (select * from user union all select * from user_extra) as t"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from (select * from user union all select * from user_extra) as t",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from user where 1 != 1",
+            "Query": "select * from user",
+            "Table": "user"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from user_extra where 1 != 1",
+            "Query": "select * from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# union all between two scatter selects, with order by
+"(select id from user order by id limit 5) union all (select id from music order by id desc limit 5)"
+{
+  "QueryType": "SELECT",
+  "Original": "(select id from user order by id limit 5) union all (select id from music order by id desc limit 5)",
+  "Instructions": {
+    "OperatorType": "Concatenate",
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": 5,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from user where 1 != 1",
+            "Query": "select id from user order by id asc limit :__upper_limit",
+            "Table": "user"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Limit",
+        "Count": 5,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from music where 1 != 1",
+            "Query": "select id from music order by id desc limit :__upper_limit",
+            "Table": "music"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# union all on scatter and single route
+"select id from user where id = 1 union select id from user where id = 1  union all select id from user"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id = 1 union select id from user where id = 1  union all select id from user",
+  "Instructions": {
+    "OperatorType": "Concatenate",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from user where 1 != 1 union select id from user where 1 != 1",
+        "Query": "select id from user where id = 1 union select id from user where id = 1",
+        "Table": "user",
+        "Values": [
+          1
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from user where 1 != 1",
+        "Query": "select id from user",
+        "Table": "user"
+      }
+    ]
+  }
+}
+

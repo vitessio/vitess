@@ -20,6 +20,7 @@ package sandboxconn
 
 import (
 	"fmt"
+	"sync"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
@@ -93,6 +94,9 @@ type SandboxConn struct {
 
 	// transaction id generator
 	TransactionID sync2.AtomicInt64
+
+	sExecMu sync.Mutex
+	execMu  sync.Mutex
 }
 
 var _ queryservice.QueryService = (*SandboxConn)(nil) // compile-time interface check
@@ -123,6 +127,8 @@ func (sbc *SandboxConn) SetResults(r []*sqltypes.Result) {
 
 // Execute is part of the QueryService interface.
 func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+	sbc.execMu.Lock()
+	defer sbc.execMu.Unlock()
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]*querypb.BindVariable)
 	for k, v := range bindVars {
@@ -159,6 +165,7 @@ func (sbc *SandboxConn) ExecuteBatch(ctx context.Context, target *querypb.Target
 
 // StreamExecute is part of the QueryService interface.
 func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+	sbc.sExecMu.Lock()
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]*querypb.BindVariable)
 	for k, v := range bindVars {
@@ -171,9 +178,13 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 	sbc.Options = append(sbc.Options, options)
 	err := sbc.getError()
 	if err != nil {
+		sbc.sExecMu.Unlock()
 		return err
 	}
-	return callback(sbc.getNextResult())
+	nextRs := sbc.getNextResult()
+	sbc.sExecMu.Unlock()
+
+	return callback(nextRs)
 }
 
 // Begin is part of the QueryService interface.

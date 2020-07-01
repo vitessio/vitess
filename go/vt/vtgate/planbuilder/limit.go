@@ -50,6 +50,11 @@ func (l *limit) Primitive() engine.Primitive {
 	return l.elimit
 }
 
+// PushLock satisfies the builder interface.
+func (l *limit) PushLock(lock string) error {
+	return l.input.PushLock(lock)
+}
+
 // PushFilter satisfies the builder interface.
 func (l *limit) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereType string, _ builder) error {
 	return errors.New("limit.PushFilter: unreachable")

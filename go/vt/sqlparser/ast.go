@@ -50,6 +50,7 @@ type (
 		iInsertRows()
 		AddOrder(*Order)
 		SetLimit(*Limit)
+		SetLock(lock string)
 		SQLNode
 	}
 
