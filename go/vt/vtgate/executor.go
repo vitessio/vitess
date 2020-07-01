@@ -1604,7 +1604,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	var errCount uint64
 	if err != nil {
 		logStats.Error = err
-		errCount = 1
+		errCount = 1 //nolint
 		return nil, err
 	}
 	logStats.RowsAffected = qr.RowsAffected

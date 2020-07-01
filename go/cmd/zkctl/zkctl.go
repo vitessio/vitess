@@ -41,7 +41,8 @@ var (
 	myID = flag.Uint("zk.myid", 0,
 		"which server do you want to be? only needed when running multiple instance on one box, otherwise myid is implied by hostname")
 
-	stdin *bufio.Reader
+	// Reason for nolint : Used in line 54 (stdin = bufio.NewReader(os.Stdin)) in the init function
+	stdin *bufio.Reader //nolint
 )
 
 func init() {

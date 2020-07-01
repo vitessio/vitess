@@ -416,7 +416,7 @@ func (hw *horizontalReshardingWorkflow) Run(ctx context.Context, manager *workfl
 	if err := hw.runWorkflow(); err != nil {
 		return err
 	}
-	hw.setUIMessage(fmt.Sprintf("Horizontal Resharding is finished successfully."))
+	hw.setUIMessage(fmt.Sprintf("Horizontal Resharding is finished successfully.")) //nolint
 	return nil
 }
 
