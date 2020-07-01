@@ -38,6 +38,20 @@ type test struct {
 	output []string
 }
 
+// the schema version tests can get events related to the creation of the schema version table depending on
+// whether the table already exists or not. To avoid different behaviour when tests are run together
+// this function adds to events expected if table is not present
+func getSchemaVersionTableCreationEvents() []string {
+	tableCreationEvents := []string{"gtid", "other", "gtid", "other"}
+	client := framework.NewClient()
+	_, err := client.Execute("describe _vt.schema_version", nil)
+	if err != nil {
+		log.Errorf("_vt.schema_version not found, will expect its table creation events")
+		return tableCreationEvents
+	}
+	return nil
+}
+
 func TestSchemaVersioning(t *testing.T) {
 	// Let's disable the already running tracker to prevent it from
 	// picking events from the previous test, and then re-enable it at the end.
@@ -67,14 +81,15 @@ func TestSchemaVersioning(t *testing.T) {
 	var cases = []test{
 		{
 			query: "create table vitess_version (id1 int, id2 int)",
-			output: []string{
+			output: append(append([]string{
 				`gtid`, //gtid+other => vstream current pos
 				`other`,
 				`gtid`, //gtid+ddl => actual query
-				`type:DDL ddl:"create table vitess_version (id1 int, id2 int)" `,
+				`type:DDL ddl:"create table vitess_version (id1 int, id2 int)" `},
+				getSchemaVersionTableCreationEvents()...),
 				`version`,
 				`gtid`,
-			},
+			),
 		},
 		{
 			query: "insert into vitess_version values(1, 10)",
@@ -168,6 +183,7 @@ func TestSchemaVersioning(t *testing.T) {
 	}
 	runCases(ctx, t, cases, eventCh)
 	cancel()
+
 	log.Infof("\n\n\n=============================================== PAST EVENTS WITH TRACK VERSIONS START HERE ======================\n\n\n")
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
@@ -197,9 +213,10 @@ func TestSchemaVersioning(t *testing.T) {
 	}()
 
 	// playing events from the past: same events as original since historian is providing the latest schema
-	output := []string{
+	output := append(append([]string{
 		`gtid`,
-		`type:DDL ddl:"create table vitess_version (id1 int, id2 int)" `,
+		`type:DDL ddl:"create table vitess_version (id1 int, id2 int)" `},
+		getSchemaVersionTableCreationEvents()...),
 		`version`,
 		`gtid`,
 		`type:FIELD field_event:<table_name:"vitess_version" fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > > `,
@@ -224,7 +241,7 @@ func TestSchemaVersioning(t *testing.T) {
 		`type:FIELD field_event:<table_name:"vitess_version" fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > fields:<name:"id3" type:VARBINARY > fields:<name:"id4" type:VARBINARY > > `,
 		`type:ROW row_event:<table_name:"vitess_version" row_changes:<after:<lengths:1 lengths:2 lengths:3 lengths:4 values:"440FFFGGGG" > > > `,
 		`gtid`,
-	}
+	)
 
 	expectLogs(ctx, t, "Past stream", eventCh, output)
 
@@ -260,9 +277,10 @@ func TestSchemaVersioning(t *testing.T) {
 	}()
 
 	// playing events from the past: same as earlier except one below, see comments
-	output = []string{
+	output = append(append([]string{
 		`gtid`,
-		`type:DDL ddl:"create table vitess_version (id1 int, id2 int)" `,
+		`type:DDL ddl:"create table vitess_version (id1 int, id2 int)" `},
+		getSchemaVersionTableCreationEvents()...),
 		`version`,
 		`gtid`,
 		`type:FIELD field_event:<table_name:"vitess_version" fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > > `,
@@ -290,7 +308,7 @@ func TestSchemaVersioning(t *testing.T) {
 		`type:FIELD field_event:<table_name:"vitess_version" fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > fields:<name:"id3" type:VARBINARY > fields:<name:"id4" type:VARBINARY > > `,
 		`type:ROW row_event:<table_name:"vitess_version" row_changes:<after:<lengths:1 lengths:2 lengths:3 lengths:4 values:"440FFFGGGG" > > > `,
 		`gtid`,
-	}
+	)
 
 	expectLogs(ctx, t, "Past stream", eventCh, output)
 	cancel()
@@ -340,16 +358,15 @@ func TestSchemaVersioningLongDDL(t *testing.T) {
 	var cases = []test{
 		{
 			query: longDDL,
-			output: []string{
+			output: append(append([]string{
 				`gtid`, //gtid+other => vstream current pos
 				`other`,
 				`gtid`, //gtid+ddl => actual query
-				fmt.Sprintf("type:DDL ddl:\"%s\" ", longDDL),
-				`gtid`,
-				`other`, //gtid+other => for ddl "insert into _vt.schema_version ...", ddl is not sent
+				fmt.Sprintf(`type:DDL ddl:"%s" `, longDDL)},
+				getSchemaVersionTableCreationEvents()...),
 				`version`,
 				`gtid`,
-			},
+			),
 		},
 	}
 	eventCh := make(chan []*binlogdatapb.VEvent)
@@ -405,6 +422,8 @@ func runCases(ctx context.Context, t *testing.T, tests []test, eventCh chan []*b
 			if err != nil || !ok {
 				t.Fatalf("Query %s never got inserted into the schema_version table", query)
 			}
+			framework.Server.SchemaEngine().Reload(ctx)
+
 		}
 	}
 }
