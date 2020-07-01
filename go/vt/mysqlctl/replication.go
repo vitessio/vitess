@@ -319,10 +319,10 @@ func (mysqld *Mysqld) ResetReplication(ctx context.Context) error {
 //
 // Array indices for the results of SHOW PROCESSLIST.
 const (
-	colConnectionID = iota
-	colUsername
+	colConnectionID = iota //nolint
+	colUsername            //nolint
 	colClientAddr
-	colDbName
+	colDbName //nolint
 	colCommand
 )
 

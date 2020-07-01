@@ -46,7 +46,7 @@ const (
 	initShardMasterOperation            = "InitShardMaster"
 	plannedReparentShardOperation       = "PlannedReparentShard"
 	emergencyReparentShardOperation     = "EmergencyReparentShard"
-	tabletExternallyReparentedOperation = "TabletExternallyReparented"
+	tabletExternallyReparentedOperation = "TabletExternallyReparented" //nolint
 )
 
 // ShardReplicationStatuses returns the ReplicationStatus for each tablet in a shard.

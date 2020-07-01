@@ -133,7 +133,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	// Save initial state so we can restore.
 	slaveStartRequired := false
 	sourceIsMaster := false
-	readOnly := true
+	readOnly := true //nolint
 	var replicationPosition mysql.Position
 	semiSyncMaster, semiSyncSlave := params.Mysqld.SemiSyncEnabled()
 
