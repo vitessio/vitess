@@ -244,7 +244,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					ev := proto.Clone(event).(*binlogdatapb.VEvent)
 					ev.RowEvent.TableName = sgtid.Keyspace + "." + ev.RowEvent.TableName
 					sendevents = append(sendevents, ev)
-				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL:
+				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER:
 					sendevents = append(sendevents, event)
 					eventss = append(eventss, sendevents)
 					if err := vs.sendAll(sgtid, eventss); err != nil {

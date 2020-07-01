@@ -210,6 +210,59 @@ func TestVStreamCopyBasic(t *testing.T) {
 	}
 }
 
+func TestVStreamCurrent(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	gconn, conn, mconn, closeConnections := initialize(ctx, t)
+	defer closeConnections()
+
+	var shardGtids []*binlogdatapb.ShardGtid
+	var vgtid = &binlogdatapb.VGtid{}
+	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
+		Keyspace: "ks",
+		Shard:    "-80",
+		Gtid:     "current",
+	})
+	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
+		Keyspace: "ks",
+		Shard:    "80-",
+		Gtid:     "current",
+	})
+	vgtid.ShardGtids = shardGtids
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
+	}
+	reader, err := gconn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter)
+	_, _ = conn, mconn
+	if err != nil {
+		t.Fatal(err)
+	}
+	numExpectedEvents := 4 // vgtid+other per shard for "current"
+	require.NotNil(t, reader)
+	var evs []*binlogdatapb.VEvent
+	for {
+		e, err := reader.Recv()
+		switch err {
+		case nil:
+			evs = append(evs, e...)
+			printEvents(evs) // for debugging ci failures
+			if len(evs) == numExpectedEvents {
+				t.Logf("TestVStreamCurrent was successful")
+				return
+			}
+		case io.EOF:
+			log.Infof("stream ended\n")
+			cancel()
+		default:
+			log.Errorf("Returned err %v", err)
+			t.Fatalf("remote error: %v\n", err)
+		}
+	}
+}
+
 var printMu sync.Mutex
 
 func printEvents(evs []*binlogdatapb.VEvent) {
