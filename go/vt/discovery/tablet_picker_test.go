@@ -48,6 +48,25 @@ func TestPickSimple(t *testing.T) {
 	}
 }
 
+func TestPickFromOtherCell(t *testing.T) {
+	te := newPickerTestEnv(t)
+	te.cell = "otherCell"
+	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, true, true)
+	defer deleteTablet(te, want)
+
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, "cell,otherCell", te.keyspace, te.shard, "replica", 1*time.Second, 1*time.Second, 1*time.Minute)
+	require.NoError(t, err)
+	defer tp.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	tablet, err := tp.PickForStreaming(ctx)
+	require.NoError(t, err)
+	if !proto.Equal(want, tablet) {
+		t.Errorf("Pick: %v, want %v", tablet, want)
+	}
+}
+
 func TestPickFromTwoHealthy(t *testing.T) {
 	te := newPickerTestEnv(t)
 	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, true, true)
@@ -127,7 +146,7 @@ func newPickerTestEnv(t *testing.T) *pickerTestEnv {
 		keyspace: "ks",
 		shard:    "0",
 		cell:     "cell",
-		topoServ: memorytopo.NewServer("cell"),
+		topoServ: memorytopo.NewServer("cell", "otherCell"),
 	}
 	err := te.topoServ.CreateKeyspace(ctx, te.keyspace, &topodatapb.Keyspace{})
 	require.NoError(t, err)
