@@ -125,7 +125,12 @@ func (tp *TxPool) transactionKiller() {
 	defer tp.env.LogError()
 	for _, conn := range tp.scp.GetOutdated(tp.Timeout(), "for tx killer rollback") {
 		log.Warningf("killing transaction (exceeded timeout: %v): %s", tp.Timeout(), conn.String())
-		tp.env.Stats().KillCounters.Add("Transactions", 1)
+		if conn.IsTainted() {
+			tp.env.Stats().KillCounters.Add("ReservedConnection", 1)
+		}
+		if conn.IsInTransaction() {
+			tp.env.Stats().KillCounters.Add("Transactions", 1)
+		}
 		conn.Close()
 		conn.Releasef("exceeded timeout: %v", tp.Timeout())
 	}

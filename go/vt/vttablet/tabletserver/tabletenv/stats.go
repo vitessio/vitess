@@ -39,6 +39,8 @@ type Stats struct {
 	UserTableQueryTimesNs  *stats.CountersWithMultiLabels // Per CallerID/table latencies
 	UserTransactionCount   *stats.CountersWithMultiLabels // Per CallerID transaction counts
 	UserTransactionTimesNs *stats.CountersWithMultiLabels // Per CallerID transaction latencies
+	UserReservedCount      *stats.CountersWithSingleLabel // Per CallerID reserved counts
+	UserReservedTimesNs    *stats.CountersWithSingleLabel // Per CallerID reserved latencies
 	ResultHistogram        *stats.Histogram               // Row count histograms
 	TableaclAllowed        *stats.CountersWithMultiLabels // Number of allows
 	TableaclDenied         *stats.CountersWithMultiLabels // Number of denials
@@ -51,7 +53,7 @@ func NewStats(exporter *servenv.Exporter) *Stats {
 		MySQLTimings: exporter.NewTimings("Mysql", "MySQl query time", "operation"),
 		QueryTimings: exporter.NewTimings("Queries", "MySQL query timings", "plan_type"),
 		WaitTimings:  exporter.NewTimings("Waits", "Wait operations", "type"),
-		KillCounters: exporter.NewCountersWithSingleLabel("Kills", "Number of connections being killed", "query_type", "Transactions", "Queries"),
+		KillCounters: exporter.NewCountersWithSingleLabel("Kills", "Number of connections being killed", "query_type", "Transactions", "Queries", "ReservedConnection"),
 		ErrorCounters: exporter.NewCountersWithSingleLabel(
 			"Errors",
 			"Critical errors",
@@ -81,6 +83,8 @@ func NewStats(exporter *servenv.Exporter) *Stats {
 		UserTableQueryTimesNs:  exporter.NewCountersWithMultiLabels("UserTableQueryTimesNs", "Total latency for each CallerID/table combination", []string{"TableName", "CallerID", "Type"}),
 		UserTransactionCount:   exporter.NewCountersWithMultiLabels("UserTransactionCount", "transactions received for each CallerID", []string{"CallerID", "Conclusion"}),
 		UserTransactionTimesNs: exporter.NewCountersWithMultiLabels("UserTransactionTimesNs", "Total transaction latency for each CallerID", []string{"CallerID", "Conclusion"}),
+		UserReservedCount:      exporter.NewCountersWithSingleLabel("UserReservedCount", "reserved connection received for each CallerID", "CallerID"),
+		UserReservedTimesNs:    exporter.NewCountersWithSingleLabel("UserReservedTimesNs", "Total reserved connection latency for each CallerID", "CallerID"),
 		ResultHistogram:        exporter.NewHistogram("Results", "Distribution of rows returned", []int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000}),
 		TableaclAllowed:        exporter.NewCountersWithMultiLabels("TableACLAllowed", "ACL acceptances", []string{"TableName", "TableGroup", "PlanID", "Username"}),
 		TableaclDenied:         exporter.NewCountersWithMultiLabels("TableACLDenied", "ACL denials", []string{"TableName", "TableGroup", "PlanID", "Username"}),
