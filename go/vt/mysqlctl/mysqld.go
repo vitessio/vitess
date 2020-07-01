@@ -343,7 +343,7 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 	switch hr := hook.NewHook("mysqld_start", mysqldArgs).Execute(); hr.ExitStatus {
 	case hook.HOOK_SUCCESS:
 		// hook exists and worked, we can keep going
-		name = "mysqld_start hook"
+		name = "mysqld_start hook" //nolint
 	case hook.HOOK_DOES_NOT_EXIST:
 		// hook doesn't exist, run mysqld_safe ourselves
 		log.Infof("%v: No mysqld_start hook, running mysqld_safe directly", ts)

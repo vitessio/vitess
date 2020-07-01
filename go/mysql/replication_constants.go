@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
+//nolint:unparam
 package mysql
 
 // This file contains the constant definitions for this package.
@@ -208,7 +208,7 @@ const (
 	//eXAPrepareLogEvent       = 38
 
 	// MariaDB specific values. They start at 160.
-	eMariaAnnotateRowsEvent = 160
+	eMariaAnnotateRowsEvent = 160 //nolint
 	// Unused
 	//eMariaBinlogCheckpointEvent = 161
 	eMariaGTIDEvent     = 162

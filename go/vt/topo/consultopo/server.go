@@ -72,7 +72,7 @@ func getClientCreds() (creds map[string]*ClientAuthCred, err error) {
 	}
 
 	if err := json.Unmarshal(data, &creds); err != nil {
-		err = vterrors.Wrapf(err, fmt.Sprintf("Error parsing consul_auth_static_file"))
+		err = vterrors.Wrapf(err, fmt.Sprintf("Error parsing consul_auth_static_file")) //nolint
 		return creds, err
 	}
 	return creds, nil

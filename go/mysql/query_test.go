@@ -641,7 +641,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 	}
 }
 
-//lint:ignore U1000 for now, because deleting this function causes more errors
+//nolint
 func writeResult(conn *Conn, result *sqltypes.Result) error {
 	if len(result.Fields) == 0 {
 		return conn.writeOKPacket(result.RowsAffected, result.InsertID, conn.StatusFlags, 0)
