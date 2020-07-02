@@ -34,7 +34,7 @@ import (
 // Tablet related methods for wrangler
 
 // InitTablet creates or updates a tablet. If no parent is specified
-// in the tablet, and the tablet has a slave type, we will find the
+// in the tablet, and the tablet has a replica type, we will find the
 // appropriate parent. If createShardAndKeyspace is true and the
 // parent keyspace or shard don't exist, they will be created.  If
 // allowUpdate is true, and a tablet with the same ID exists, just update it.
@@ -150,12 +150,12 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 	return nil
 }
 
-// ChangeSlaveType changes the type of tablet and recomputes all
+// ChangeTabletType changes the type of tablet and recomputes all
 // necessary derived paths in the serving graph, if necessary.
 //
 // Note we don't update the master record in the Shard here, as we
 // can't ChangeType from and out of master anyway.
-func (wr *Wrangler) ChangeSlaveType(ctx context.Context, tabletAlias *topodatapb.TabletAlias, tabletType topodatapb.TabletType) error {
+func (wr *Wrangler) ChangeTabletType(ctx context.Context, tabletAlias *topodatapb.TabletAlias, tabletType topodatapb.TabletType) error {
 	// Load tablet to find endpoint, and keyspace and shard assignment.
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
@@ -163,7 +163,7 @@ func (wr *Wrangler) ChangeSlaveType(ctx context.Context, tabletAlias *topodatapb
 	}
 
 	if !topo.IsTrivialTypeChange(ti.Type, tabletType) {
-		return fmt.Errorf("tablet %v type change %v -> %v is not an allowed transition for ChangeSlaveType", tabletAlias, ti.Type, tabletType)
+		return fmt.Errorf("tablet %v type change %v -> %v is not an allowed transition for ChangeTabletType", tabletAlias, ti.Type, tabletType)
 	}
 
 	// and ask the tablet to make the change

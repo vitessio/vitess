@@ -54,7 +54,7 @@ const logHeaderHTML = `
 			<th>Lag Before</th>
 			<th>Recorded Ago</th>
 			<th>Master Rate</th>
-			<th>Slave Rate</th>
+			<th>Replica Rate</th>
 			<th>Old Backlog</th>
 			<th>New Backlog</th>
 			<th>Reason</th>
@@ -82,9 +82,9 @@ const logEntryHTML = `
       <td>{{.LagBefore}}</td>
       <td>{{.AgeOfBeforeLag}}</td>
       <td>{{.MasterRate}}</td>
-      <td>{{.GuessedSlaveRate}}</td>
-      <td>{{.GuessedSlaveBacklogOld}}</td>
-      <td>{{.GuessedSlaveBacklogNew}}</td>
+      <td>{{.GuessedReplicationRate}}</td>
+      <td>{{.GuessedReplicationBacklogOld}}</td>
+      <td>{{.GuessedReplicationBacklogNew}}</td>
       <td>{{.Reason}}</td>
     </tr>
 `

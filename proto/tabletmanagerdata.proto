@@ -186,7 +186,7 @@ message IgnoreHealthErrorResponse {
 
 message ReloadSchemaRequest {
   // wait_position allows scheduling a schema reload to occur after a
-  // given DDL has replicated to this slave, by specifying a replication
+  // given DDL has replicated to this server, by specifying a replication
   // position to wait for. Leave empty to trigger the reload immediately.
   string wait_position = 1;
 }
@@ -261,10 +261,10 @@ message ExecuteFetchAsAppResponse {
   query.QueryResult result = 1;
 }
 
-message SlaveStatusRequest {
+message ReplicationStatusRequest {
 }
 
-message SlaveStatusResponse {
+message ReplicationStatusResponse {
   replicationdata.Status status = 1;
 }
 
@@ -282,39 +282,39 @@ message WaitForPositionRequest {
 message WaitForPositionResponse {
 }
 
-message StopSlaveRequest {
+message StopReplicationRequest {
 }
 
-message StopSlaveResponse {
+message StopReplicationResponse {
 }
 
-message StopSlaveMinimumRequest {
+message StopReplicationMinimumRequest {
   string position = 1;
   int64 wait_timeout = 2;
 }
 
-message StopSlaveMinimumResponse {
+message StopReplicationMinimumResponse {
   string position = 1;
 }
 
-message StartSlaveRequest {
+message StartReplicationRequest {
 }
 
-message StartSlaveResponse {
+message StartReplicationResponse {
 }
 
-message StartSlaveUntilAfterRequest {
+message StartReplicationUntilAfterRequest {
   string position = 1;
   int64 wait_timeout = 2;
 }
 
-message StartSlaveUntilAfterResponse {
+message StartReplicationUntilAfterResponse {
 }
 
-message GetSlavesRequest {
+message GetReplicasRequest {
 }
 
-message GetSlavesResponse {
+message GetReplicasResponse {
   repeated string addrs = 1;
 }
 
@@ -357,13 +357,13 @@ message PopulateReparentJournalRequest {
 message PopulateReparentJournalResponse {
 }
 
-message InitSlaveRequest {
+message InitReplicaRequest {
   topodata.TabletAlias parent = 1;
   string replication_position = 2;
   int64 time_created_ns = 3;
 }
 
-message InitSlaveResponse {
+message InitReplicaResponse {
 }
 
 message DemoteMasterRequest {
@@ -379,28 +379,28 @@ message UndoDemoteMasterRequest {
 message UndoDemoteMasterResponse {
 }
 
-message SlaveWasPromotedRequest {
+message ReplicaWasPromotedRequest {
 }
 
-message SlaveWasPromotedResponse {
+message ReplicaWasPromotedResponse {
 }
 
 message SetMasterRequest {
   topodata.TabletAlias parent = 1;
   int64 time_created_ns = 2;
+  bool force_start_replication = 3;
   string wait_position = 4;
-  bool force_start_slave = 3;
 }
 
 message SetMasterResponse {
 }
 
-message SlaveWasRestartedRequest {
+message ReplicaWasRestartedRequest {
   // the parent alias the tablet should have
   topodata.TabletAlias parent = 1;
 }
 
-message SlaveWasRestartedResponse {
+message ReplicaWasRestartedResponse {
 }
 
 message StopReplicationAndGetStatusRequest {
@@ -433,4 +433,88 @@ message RestoreFromBackupRequest {
 
 message RestoreFromBackupResponse {
   logutil.Event event = 1;
+}
+
+// Deprecated
+message SlaveStatusRequest {
+}
+
+// Deprecated
+message SlaveStatusResponse {
+  replicationdata.Status status = 1;
+}
+
+// Deprecated
+message StopSlaveRequest {
+}
+
+// Deprecated
+message StopSlaveResponse {
+}
+
+// Deprecated
+message StopSlaveMinimumRequest {
+  string position = 1;
+  int64 wait_timeout = 2;
+}
+
+// Deprecated
+message StopSlaveMinimumResponse {
+  string position = 1;
+}
+
+// Deprecated
+message StartSlaveRequest {
+}
+
+// Deprecated
+message StartSlaveResponse {
+}
+
+// Deprecated
+message StartSlaveUntilAfterRequest {
+  string position = 1;
+  int64 wait_timeout = 2;
+}
+
+// Deprecated
+message StartSlaveUntilAfterResponse {
+}
+
+// Deprecated
+message GetSlavesRequest {
+}
+
+// Deprecated
+message GetSlavesResponse {
+  repeated string addrs = 1;
+}
+
+// Deprecated
+message InitSlaveRequest {
+  topodata.TabletAlias parent = 1;
+  string replication_position = 2;
+  int64 time_created_ns = 3;
+}
+
+// Deprecated
+message InitSlaveResponse {
+}
+
+// Deprecated
+message SlaveWasPromotedRequest {
+}
+
+// Deprecated
+message SlaveWasPromotedResponse {
+}
+
+// Deprecated
+message SlaveWasRestartedRequest {
+  // the parent alias the tablet should have
+  topodata.TabletAlias parent = 1;
+}
+
+// Deprecated
+message SlaveWasRestartedResponse {
 }

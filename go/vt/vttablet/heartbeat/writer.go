@@ -148,10 +148,8 @@ func (w *Writer) Close() {
 }
 
 // initializeTables attempts to create the heartbeat tables and record an
-// initial row. This happens on every tablet individually, regardless of slave
-// or master. For that reason, we use values that are common between them, such as keyspace:shard,
-// and we also execute them with an isolated connection that turns off the binlog and
-// is closed at the end.
+// initial row. The row is created only on master and is replicated to all
+// other servers.
 func (w *Writer) initializeTables(cp dbconfigs.Connector) error {
 	conn, err := dbconnpool.NewDBConnection(context.TODO(), cp)
 	if err != nil {

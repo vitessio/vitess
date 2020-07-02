@@ -55,12 +55,12 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 	}
 
 	// On the elected master, we will respond to
-	// TabletActionSlaveWasPromoted
+	// TabletActionReplicaWasPromoted
 	newMaster.StartActionLoop(t, wr)
 	defer newMaster.StopActionLoop(t)
 
 	// On the old master, we will only respond to
-	// TabletActionSlaveWasRestarted.
+	// TabletActionReplicaWasRestarted.
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
 
@@ -82,7 +82,7 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
-		"START SLAVE",
+		"START Replica",
 	}
 
 	// This tests the good case, where everything works as planned
@@ -123,7 +123,7 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 	}
 }
 
-func TestTabletExternallyReparentedToSlave(t *testing.T) {
+func TestTabletExternallyReparentedToReplica(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -141,12 +141,12 @@ func TestTabletExternallyReparentedToSlave(t *testing.T) {
 	}
 
 	// On the elected master, we will respond to
-	// TabletActionSlaveWasPromoted
+	// TabletActionReplicaWasPromoted
 	newMaster.StartActionLoop(t, wr)
 	defer newMaster.StopActionLoop(t)
 
 	// On the old master, we will only respond to
-	// TabletActionSlaveWasRestarted.
+	// TabletActionReplicaWasRestarted.
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
 
@@ -155,10 +155,10 @@ func TestTabletExternallyReparentedToSlave(t *testing.T) {
 	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
-		"START SLAVE",
+		"START Replica",
 	}
 
-	// This tests a bad case: the new designated master is a slave at mysql level,
+	// This tests a bad case: the new designated master is a replica at mysql level,
 	// but we should do what we're told anyway.
 	if err := wr.TabletExternallyReparented(ctx, newMaster.Tablet.Alias); err != nil {
 		t.Fatalf("TabletExternallyReparented(replica) error: %v", err)
@@ -218,7 +218,7 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	// but without updating the Tablet record in topology.
 
 	// On the elected master, we will respond to
-	// TabletActionSlaveWasPromoted, so we need a MysqlDaemon
+	// TabletActionReplicaWasPromoted, so we need a MysqlDaemon
 	// that returns no master, and the new port (as returned by mysql)
 	newMaster.FakeMysqlDaemon.MysqlPort.Set(3303)
 	newMaster.StartActionLoop(t, wr)
@@ -227,15 +227,15 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
-		"START SLAVE",
+		"START Replica",
 	}
 	// On the old master, we will only respond to
-	// TabletActionSlaveWasRestarted and point to the new mysql port
+	// TabletActionReplicaWasRestarted and point to the new mysql port
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
 
 	// On the good replicas, we will respond to
-	// TabletActionSlaveWasRestarted and point to the new mysql port
+	// TabletActionReplicaWasRestarted and point to the new mysql port
 	goodReplica.StartActionLoop(t, wr)
 	defer goodReplica.StopActionLoop(t)
 
@@ -294,7 +294,7 @@ func TestTabletExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
 	}
 	// On the elected master, we will respond to
-	// TabletActionSlaveWasPromoted, so we need a MysqlDaemon
+	// TabletActionReplicaWasPromoted, so we need a MysqlDaemon
 	// that returns no master, and the new port (as returned by mysql)
 	newMaster.StartActionLoop(t, wr)
 	defer newMaster.StopActionLoop(t)
@@ -302,15 +302,15 @@ func TestTabletExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
-		"START SLAVE",
+		"START Replica",
 	}
 	// On the old master, we will only respond to
-	// TabletActionSlaveWasRestarted and point to a bad host
+	// TabletActionReplicaWasRestarted and point to a bad host
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
 
 	// On the good replica, we will respond to
-	// TabletActionSlaveWasRestarted and point to a bad host
+	// TabletActionReplicaWasRestarted and point to a bad host
 	goodReplica.StartActionLoop(t, wr)
 	defer goodReplica.StopActionLoop(t)
 
@@ -366,23 +366,23 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
 	}
 	// On the elected master, we will respond to
-	// TabletActionSlaveWasPromoted.
+	// TabletActionReplicaWasPromoted.
 	newMaster.StartActionLoop(t, wr)
 	defer newMaster.StopActionLoop(t)
 
 	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
-		"START SLAVE",
+		"START Replica",
 	}
 	// On the old master, we will only respond to
-	// TabletActionSlaveWasRestarted.
+	// TabletActionReplicaWasRestarted.
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
 
 	goodReplica.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	// On the good replica, we will respond to
-	// TabletActionSlaveWasRestarted.
+	// TabletActionReplicaWasRestarted.
 	goodReplica.StartActionLoop(t, wr)
 	defer goodReplica.StopActionLoop(t)
 

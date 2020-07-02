@@ -31,11 +31,11 @@ var (
 	// programs. Use a custom one for tests.
 	DefaultAggregator *Aggregator
 
-	// ErrSlaveNotRunning is returned by health plugins when replication
+	// ErrReplicationNotRunning is returned by health plugins when replication
 	// is not running and we can't figure out the replication delay.
 	// Note everything else should be operational, and the underlying
 	// MySQL instance should be capable of answering queries.
-	ErrSlaveNotRunning = errors.New("slave is not running")
+	ErrReplicationNotRunning = errors.New("replication is not running")
 )
 
 func init() {
@@ -46,11 +46,11 @@ func init() {
 type Reporter interface {
 	// Report returns the replication delay gathered by this
 	// module (or 0 if it thinks it's not behind), assuming that
-	// it is a slave type or not, and that its query service
+	// it is a Replication type or not, and that its query service
 	// should be running or not. If Report returns an error it
 	// implies that the tablet is in a bad shape and not able to
 	// handle queries.
-	Report(isSlaveType, shouldQueryServiceBeRunning bool) (replicationDelay time.Duration, err error)
+	Report(isReplicaType, shouldQueryServiceBeRunning bool) (replicationDelay time.Duration, err error)
 
 	// HTMLName returns a displayable name for the module.
 	// Can be used to be displayed in the status page.
@@ -61,8 +61,8 @@ type Reporter interface {
 type FunctionReporter func(bool, bool) (time.Duration, error)
 
 // Report implements Reporter.Report
-func (fc FunctionReporter) Report(isSlaveType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
-	return fc(isSlaveType, shouldQueryServiceBeRunning)
+func (fc FunctionReporter) Report(isReplicaType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
+	return fc(isReplicaType, shouldQueryServiceBeRunning)
 }
 
 // HTMLName implements Reporter.HTMLName
@@ -97,7 +97,7 @@ type singleResult struct {
 // The returned replication delay will be the highest of all the replication
 // delays returned by the Reporter implementations (although typically
 // only one implementation will actually return a meaningful one).
-func (ag *Aggregator) Report(isSlaveType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
+func (ag *Aggregator) Report(isReplicaType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
 	wg := sync.WaitGroup{}
 	results := make([]singleResult, len(ag.reporters))
 	index := 0
@@ -107,7 +107,7 @@ func (ag *Aggregator) Report(isSlaveType, shouldQueryServiceBeRunning bool) (tim
 		go func(index int, name string, rep Reporter) {
 			defer wg.Done()
 			results[index].name = name
-			results[index].delay, results[index].err = rep.Report(isSlaveType, shouldQueryServiceBeRunning)
+			results[index].delay, results[index].err = rep.Report(isReplicaType, shouldQueryServiceBeRunning)
 		}(index, name, rep)
 		index++
 	}
@@ -119,10 +119,10 @@ func (ag *Aggregator) Report(isSlaveType, shouldQueryServiceBeRunning bool) (tim
 	var err error
 	for _, s := range results {
 		switch s.err {
-		case ErrSlaveNotRunning:
-			// Return the ErrSlaveNotRunning sentinel
+		case ErrReplicationNotRunning:
+			// Return the ErrReplicationNotRunning sentinel
 			// value, only if there are no other errors.
-			err = ErrSlaveNotRunning
+			err = ErrReplicationNotRunning
 		case nil:
 			if s.delay > result {
 				result = s.delay

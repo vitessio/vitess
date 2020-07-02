@@ -29,10 +29,10 @@ func TestBasicMySQLReplicationLag(t *testing.T) {
 	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 	mysqld.Replicating = true
 	mysqld.SecondsBehindMaster = 10
-	slaveStopped := true
+	replicationStopped := true
 
 	rep := &replicationReporter{
-		tm:  &TabletManager{MysqlDaemon: mysqld, _slaveStopped: &slaveStopped},
+		tm:  &TabletManager{MysqlDaemon: mysqld, _replicationStopped: &replicationStopped},
 		now: time.Now,
 	}
 	dur, err := rep.Report(true, true)
@@ -44,14 +44,14 @@ func TestBasicMySQLReplicationLag(t *testing.T) {
 func TestNoKnownMySQLReplicationLag(t *testing.T) {
 	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 	mysqld.Replicating = false
-	slaveStopped := true
+	replicationStopped := true
 
 	rep := &replicationReporter{
-		tm:  &TabletManager{MysqlDaemon: mysqld, _slaveStopped: &slaveStopped},
+		tm:  &TabletManager{MysqlDaemon: mysqld, _replicationStopped: &replicationStopped},
 		now: time.Now,
 	}
 	dur, err := rep.Report(true, true)
-	if err != health.ErrSlaveNotRunning {
+	if err != health.ErrReplicationNotRunning {
 		t.Fatalf("wrong Report result: %v %v", dur, err)
 	}
 }
@@ -60,11 +60,11 @@ func TestExtrapolatedMySQLReplicationLag(t *testing.T) {
 	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 	mysqld.Replicating = true
 	mysqld.SecondsBehindMaster = 10
-	slaveStopped := true
+	replicationStopped := true
 
 	now := time.Now()
 	rep := &replicationReporter{
-		tm:  &TabletManager{MysqlDaemon: mysqld, _slaveStopped: &slaveStopped},
+		tm:  &TabletManager{MysqlDaemon: mysqld, _replicationStopped: &replicationStopped},
 		now: func() time.Time { return now },
 	}
 
@@ -88,11 +88,11 @@ func TestNoExtrapolatedMySQLReplicationLag(t *testing.T) {
 	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 	mysqld.Replicating = true
 	mysqld.SecondsBehindMaster = 10
-	slaveStopped := true
+	replicationStopped := true
 
 	now := time.Now()
 	rep := &replicationReporter{
-		tm:  &TabletManager{MysqlDaemon: mysqld, _slaveStopped: &slaveStopped},
+		tm:  &TabletManager{MysqlDaemon: mysqld, _replicationStopped: &replicationStopped},
 		now: func() time.Time { return now },
 	}
 
@@ -104,9 +104,9 @@ func TestNoExtrapolatedMySQLReplicationLag(t *testing.T) {
 
 	// now 20 seconds later, mysqld is down
 	now = now.Add(20 * time.Second)
-	mysqld.SlaveStatusError = errors.New("mysql is down")
+	mysqld.ReplicationStatusError = errors.New("mysql is down")
 	_, err = rep.Report(true, true)
-	if err != mysqld.SlaveStatusError {
+	if err != mysqld.ReplicationStatusError {
 		t.Fatalf("wrong Report error: %v", err)
 	}
 }
