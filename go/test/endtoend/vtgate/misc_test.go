@@ -608,6 +608,45 @@ func TestUnion(t *testing.T) {
 	assertMatches(t, conn, `(SELECT 1,'a' order by 1) union (SELECT 1,'a' ORDER BY 1)`, `[[INT64(1) VARCHAR("a")]]`)
 }
 
+func TestSavepoint(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+	defer exec(t, conn, "delete from t1")
+	defer exec(t, conn, "rollback")
+
+	exec(t, conn, "savepoint a")
+	exec(t, conn, "start transaction")
+	exec(t, conn, "savepoint b")
+	exec(t, conn, "insert into t1(id1, id2) values(1,1)")
+	exec(t, conn, "savepoint c")
+	exec(t, conn, "insert into t1(id1, id2) values(4,4)")
+	exec(t, conn, "savepoint d")
+	exec(t, conn, "insert into t1(id1, id2) values(2,2)")
+	exec(t, conn, "savepoint e")
+	assertMatches(t, conn, "select id1 from t1 order by id1", `[[INT64(1)] [INT64(2)] [INT64(4)]]`)
+
+	_, err = conn.ExecuteFetch("rollback work to savepoint a", 1000, true)
+	require.Error(t, err)
+
+	exec(t, conn, "release savepoint d")
+
+	_, err = conn.ExecuteFetch("rollback to d", 1000, true)
+	require.Error(t, err)
+	assertMatches(t, conn, "select id1 from t1 order by id1", `[[INT64(1)] [INT64(2)] [INT64(4)]]`)
+
+	exec(t, conn, "rollback to c")
+	assertMatches(t, conn, "select id1 from t1 order by id1", `[[INT64(1)]]`)
+
+	exec(t, conn, "rollback to b")
+	assertMatches(t, conn, "select id1 from t1 order by id1", `[[INT64(1)]]`)
+
+	exec(t, conn, "commit")
+	assertMatches(t, conn, "select id1 from t1 order by id1", `[]`)
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)

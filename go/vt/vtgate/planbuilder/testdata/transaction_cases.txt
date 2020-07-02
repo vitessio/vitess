@@ -36,7 +36,7 @@
 # Savepoint rollback
 "rollback work to savepoint a"
 {
-  "QueryType": "ROLLBACK SAVEPOINT",
+  "QueryType": "SAVEPOINT_ROLLBACK",
   "Original": "rollback work to savepoint a"
 }
 
