@@ -249,13 +249,11 @@ func (agent *ActionAgent) getGTIDFromTimestamp(ctx context.Context, pos mysql.Po
 			found <- ""
 		}
 	}()
-
+	defer vsClient.Close(timeoutCtx)
 	select {
 	case <-found:
-		vsClient.Close(timeoutCtx)
 		return <-found
 	case <-timeoutCtx.Done():
-		vsClient.Close(timeoutCtx)
 		log.Warningf("Can't find the GTID from restore time stamp, exiting.")
 		return ""
 	}
@@ -275,27 +273,39 @@ func (agent *ActionAgent) catchupToGTID(ctx context.Context, gtid string) error 
 		"STOP SLAVE FOR CHANNEL '' ",
 		"STOP SLAVE IO_THREAD FOR CHANNEL ''",
 		fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s',MASTER_PORT=%d, MASTER_USER='%s', MASTER_AUTO_POSITION = 1;", *binlogHost, *binlogPort, *binlogUser),
-		fmt.Sprintf(" START SLAVE  UNTIL SQL_BEFORE_GTIDS = '%s'", gtidStr),
+		fmt.Sprintf(" START SLAVE UNTIL SQL_BEFORE_GTIDS = '%s'", gtidStr),
 	}
 
 	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
 		return vterrors.Wrap(err, "failed to reset slave")
 	}
-	log.Infof("Wating for position to reach")
-	err = agent.MysqlDaemon.WaitMasterPos(ctx, gtidParsed)
-	if err != nil {
-		return err
+	log.Infof("Waiting for position to reach", gtidParsed)
+	// Could not use `agent.MysqlDaemon.WaitMasterPos` as the SLAVE thread is stopped with `START SLAVE UNTIL SQL_BEFORE_GTIDS`
+	// this is as per https://dev.mysql.com/doc/refman/5.6/en/start-slave.html
+	// We need to wait till the slave catch upto the specified gtid
+	chGTIDCaughtup := make(chan bool)
+	go func() {
+		for {
+			pos, err := agent.MysqlDaemon.MasterPosition()
+			if err != nil {
+				chGTIDCaughtup <- false
+			}
+			if pos.AtLeast(gtidParsed) {
+				chGTIDCaughtup <- true
+			}
+		}
+	}()
+	select {
+	case resp := <-chGTIDCaughtup:
+		if resp {
+			return agent.ResetReplication(ctx)
+		} else {
+			return vterrors.Wrap(err, "error while fetching the current gtid position")
+		}
+	case <-ctx.Done():
+		log.Warningf("Could not copy till gtid.")
+		return vterrors.Wrap(err, "context timeout while restoring upto specified gtid")
 	}
-	log.Infof("Position reached, resetting the slave")
-	// Once the position is reached, then reset the slave
-	cmds = []string{
-		"STOP SLAVE",
-		"RESET SLAVE ALL",
-	}
-	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
-		return vterrors.Wrap(err, "failed to reset slave")
-	}
-	return nil
 }
 
 func (agent *ActionAgent) startReplication(ctx context.Context, pos mysql.Position, tabletType topodatapb.TabletType) error {
