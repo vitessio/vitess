@@ -217,7 +217,7 @@ func (s StatementType) String() string {
 	case StmtSavepoint:
 		return "SAVEPOINT"
 	case StmtSRollback:
-		return "ROLLBACK SAVEPOINT"
+		return "SAVEPOINT_ROLLBACK"
 	case StmtRelease:
 		return "RELEASE"
 	default:
