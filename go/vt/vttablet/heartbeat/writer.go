@@ -45,7 +45,6 @@ const (
   ts BIGINT UNSIGNED NOT NULL
         ) engine=InnoDB`
 	sqlUpsertHeartbeat = "INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%a, %a, %a) ON DUPLICATE KEY UPDATE ts=VALUES(ts), tabletUid=VALUES(tabletUid)"
-	sqlUpdateHeartbeat = "UPDATE %s.heartbeat SET ts=%a, tabletUid=%a WHERE keyspaceShard=%a"
 )
 
 var withDDL = withddl.New([]string{
