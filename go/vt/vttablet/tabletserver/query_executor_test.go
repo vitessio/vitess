@@ -62,6 +62,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 	fields := sqltypes.MakeTestFields("a|b", "int64|varchar")
 	fieldResult := sqltypes.MakeTestResult(fields)
 	selectResult := sqltypes.MakeTestResult(fields, "1|aaa")
+	emptyResult := &sqltypes.Result{}
 
 	// The queries are run both in and outside a transaction.
 	testcases := []struct {
@@ -208,6 +209,36 @@ func TestQueryExecutorPlans(t *testing.T) {
 		resultWant: dmlResult,
 		planWant:   "DDL",
 		logWant:    "alter table test_table add zipcode int",
+	}, {
+		input: "savepoint a",
+		dbResponses: []dbResponse{{
+			query:  "savepoint a",
+			result: emptyResult,
+		}},
+		resultWant: emptyResult,
+		planWant:   "Savepoint",
+		logWant:    "savepoint a",
+		inTxWant:   "savepoint a",
+	}, {
+		input: "ROLLBACK work to SAVEPOINT a",
+		dbResponses: []dbResponse{{
+			query:  "ROLLBACK work to SAVEPOINT a",
+			result: emptyResult,
+		}},
+		resultWant: emptyResult,
+		planWant:   "RollbackSavepoint",
+		logWant:    "ROLLBACK work to SAVEPOINT a",
+		inTxWant:   "ROLLBACK work to SAVEPOINT a",
+	}, {
+		input: "RELEASE savepoint a",
+		dbResponses: []dbResponse{{
+			query:  "RELEASE savepoint a",
+			result: emptyResult,
+		}},
+		resultWant: emptyResult,
+		planWant:   "Release",
+		logWant:    "RELEASE savepoint a",
+		inTxWant:   "RELEASE savepoint a",
 	}}
 	for _, tcase := range testcases {
 		func() {
