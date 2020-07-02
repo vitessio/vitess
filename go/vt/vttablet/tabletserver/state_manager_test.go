@@ -474,10 +474,9 @@ var order sync2.AtomicInt64
 type testState int
 
 const (
-	testStateUnknown = testState(iota)
+	_ = testState(iota)
 	testStateOpen
 	testStateClosed
-	testStateMakeNonMaster
 	testStateAcceptReadOnly
 	testStateAcceptReadWrite
 )
