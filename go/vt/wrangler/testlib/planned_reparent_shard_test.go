@@ -81,7 +81,7 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 	// old master
 	oldMaster.FakeMysqlDaemon.ReadOnly = false
 	oldMaster.FakeMysqlDaemon.Replicating = false
-	oldMaster.FakeMysqlDaemon.SlaveStatusError = mysql.ErrNotSlave
+	oldMaster.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
 	oldMaster.FakeMysqlDaemon.CurrentMasterPosition = newMaster.FakeMysqlDaemon.WaitMasterPosition
 	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -184,7 +184,7 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	// old master
 	oldMaster.FakeMysqlDaemon.ReadOnly = false
 	oldMaster.FakeMysqlDaemon.Replicating = false
-	oldMaster.FakeMysqlDaemon.SlaveStatusError = mysql.ErrNotSlave
+	oldMaster.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
 	oldMaster.FakeMysqlDaemon.CurrentMasterPosition = newMaster.FakeMysqlDaemon.WaitMasterPosition
 	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -472,7 +472,7 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 	// old master
 	master.FakeMysqlDaemon.ReadOnly = false
 	master.FakeMysqlDaemon.Replicating = false
-	master.FakeMysqlDaemon.SlaveStatusError = mysql.ErrNotSlave
+	master.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
 	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			7: mysql.MariadbGTID{
@@ -495,7 +495,7 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 	goodReplica1.FakeMysqlDaemon.ReadOnly = true
 	goodReplica1.FakeMysqlDaemon.Replicating = true
 	goodReplica1.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
-	// simulate error that will trigger a call to RestartSlave
+	// simulate error that will trigger a call to RestartReplication
 	goodReplica1.FakeMysqlDaemon.SetMasterError = errors.New("Slave failed to initialize relay log info structure from the repository")
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
@@ -537,7 +537,7 @@ func TestPlannedReparentShardRelayLogErrorStartSlave(t *testing.T) {
 	// old master
 	master.FakeMysqlDaemon.ReadOnly = false
 	master.FakeMysqlDaemon.Replicating = false
-	master.FakeMysqlDaemon.SlaveStatusError = mysql.ErrNotSlave
+	master.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
 	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			7: mysql.MariadbGTID{
@@ -559,12 +559,12 @@ func TestPlannedReparentShardRelayLogErrorStartSlave(t *testing.T) {
 	// good replica 1 is not replicating
 	goodReplica1.FakeMysqlDaemon.ReadOnly = true
 	goodReplica1.FakeMysqlDaemon.Replicating = true
-	goodReplica1.FakeMysqlDaemon.SlaveIORunning = false
+	goodReplica1.FakeMysqlDaemon.IOThreadRunning = false
 	goodReplica1.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
 	goodReplica1.FakeMysqlDaemon.CurrentMasterHost = master.Tablet.MysqlHostname
 	goodReplica1.FakeMysqlDaemon.CurrentMasterPort = int(master.Tablet.MysqlPort)
-	// simulate error that will trigger a call to RestartSlave
-	goodReplica1.FakeMysqlDaemon.StartSlaveError = errors.New("Slave failed to initialize relay log info structure from the repository")
+	// simulate error that will trigger a call to RestartReplication
+	goodReplica1.FakeMysqlDaemon.StartReplicationError = errors.New("Slave failed to initialize relay log info structure from the repository")
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
 		"RESET SLAVE",
@@ -643,7 +643,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	// old master
 	oldMaster.FakeMysqlDaemon.ReadOnly = false
 	oldMaster.FakeMysqlDaemon.Replicating = false
-	oldMaster.FakeMysqlDaemon.SlaveStatusError = mysql.ErrNotSlave
+	oldMaster.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
 	oldMaster.FakeMysqlDaemon.CurrentMasterPosition = newMaster.FakeMysqlDaemon.WaitMasterPosition
 	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -736,7 +736,7 @@ func TestPlannedReparentShardSameMaster(t *testing.T) {
 	// old master
 	oldMaster.FakeMysqlDaemon.ReadOnly = true
 	oldMaster.FakeMysqlDaemon.Replicating = false
-	oldMaster.FakeMysqlDaemon.SlaveStatusError = mysql.ErrNotSlave
+	oldMaster.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
 	oldMaster.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			7: mysql.MariadbGTID{

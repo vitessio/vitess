@@ -1226,7 +1226,7 @@ var xxx_messageInfo_IgnoreHealthErrorResponse proto.InternalMessageInfo
 
 type ReloadSchemaRequest struct {
 	// wait_position allows scheduling a schema reload to occur after a
-	// given DDL has replicated to this slave, by specifying a replication
+	// given DDL has replicated to this server, by specifying a replication
 	// position to wait for. Leave empty to trigger the reload immediately.
 	WaitPosition         string   `protobuf:"bytes,1,opt,name=wait_position,json=waitPosition,proto3" json:"wait_position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -1917,70 +1917,70 @@ func (m *ExecuteFetchAsAppResponse) GetResult() *query.QueryResult {
 	return nil
 }
 
-type SlaveStatusRequest struct {
+type ReplicationStatusRequest struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SlaveStatusRequest) Reset()         { *m = SlaveStatusRequest{} }
-func (m *SlaveStatusRequest) String() string { return proto.CompactTextString(m) }
-func (*SlaveStatusRequest) ProtoMessage()    {}
-func (*SlaveStatusRequest) Descriptor() ([]byte, []int) {
+func (m *ReplicationStatusRequest) Reset()         { *m = ReplicationStatusRequest{} }
+func (m *ReplicationStatusRequest) String() string { return proto.CompactTextString(m) }
+func (*ReplicationStatusRequest) ProtoMessage()    {}
+func (*ReplicationStatusRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{44}
 }
 
-func (m *SlaveStatusRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_SlaveStatusRequest.Unmarshal(m, b)
+func (m *ReplicationStatusRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ReplicationStatusRequest.Unmarshal(m, b)
 }
-func (m *SlaveStatusRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_SlaveStatusRequest.Marshal(b, m, deterministic)
+func (m *ReplicationStatusRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ReplicationStatusRequest.Marshal(b, m, deterministic)
 }
-func (m *SlaveStatusRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SlaveStatusRequest.Merge(m, src)
+func (m *ReplicationStatusRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ReplicationStatusRequest.Merge(m, src)
 }
-func (m *SlaveStatusRequest) XXX_Size() int {
-	return xxx_messageInfo_SlaveStatusRequest.Size(m)
+func (m *ReplicationStatusRequest) XXX_Size() int {
+	return xxx_messageInfo_ReplicationStatusRequest.Size(m)
 }
-func (m *SlaveStatusRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_SlaveStatusRequest.DiscardUnknown(m)
+func (m *ReplicationStatusRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_ReplicationStatusRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_SlaveStatusRequest proto.InternalMessageInfo
+var xxx_messageInfo_ReplicationStatusRequest proto.InternalMessageInfo
 
-type SlaveStatusResponse struct {
+type ReplicationStatusResponse struct {
 	Status               *replicationdata.Status `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
 	XXX_unrecognized     []byte                  `json:"-"`
 	XXX_sizecache        int32                   `json:"-"`
 }
 
-func (m *SlaveStatusResponse) Reset()         { *m = SlaveStatusResponse{} }
-func (m *SlaveStatusResponse) String() string { return proto.CompactTextString(m) }
-func (*SlaveStatusResponse) ProtoMessage()    {}
-func (*SlaveStatusResponse) Descriptor() ([]byte, []int) {
+func (m *ReplicationStatusResponse) Reset()         { *m = ReplicationStatusResponse{} }
+func (m *ReplicationStatusResponse) String() string { return proto.CompactTextString(m) }
+func (*ReplicationStatusResponse) ProtoMessage()    {}
+func (*ReplicationStatusResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{45}
 }
 
-func (m *SlaveStatusResponse) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_SlaveStatusResponse.Unmarshal(m, b)
+func (m *ReplicationStatusResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ReplicationStatusResponse.Unmarshal(m, b)
 }
-func (m *SlaveStatusResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_SlaveStatusResponse.Marshal(b, m, deterministic)
+func (m *ReplicationStatusResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ReplicationStatusResponse.Marshal(b, m, deterministic)
 }
-func (m *SlaveStatusResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SlaveStatusResponse.Merge(m, src)
+func (m *ReplicationStatusResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ReplicationStatusResponse.Merge(m, src)
 }
-func (m *SlaveStatusResponse) XXX_Size() int {
-	return xxx_messageInfo_SlaveStatusResponse.Size(m)
+func (m *ReplicationStatusResponse) XXX_Size() int {
+	return xxx_messageInfo_ReplicationStatusResponse.Size(m)
 }
-func (m *SlaveStatusResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_SlaveStatusResponse.DiscardUnknown(m)
+func (m *ReplicationStatusResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_ReplicationStatusResponse.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_SlaveStatusResponse proto.InternalMessageInfo
+var xxx_messageInfo_ReplicationStatusResponse proto.InternalMessageInfo
 
-func (m *SlaveStatusResponse) GetStatus() *replicationdata.Status {
+func (m *ReplicationStatusResponse) GetStatus() *replicationdata.Status {
 	if m != nil {
 		return m.Status
 	}
@@ -2127,69 +2127,69 @@ func (m *WaitForPositionResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_WaitForPositionResponse proto.InternalMessageInfo
 
-type StopSlaveRequest struct {
+type StopReplicationRequest struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *StopSlaveRequest) Reset()         { *m = StopSlaveRequest{} }
-func (m *StopSlaveRequest) String() string { return proto.CompactTextString(m) }
-func (*StopSlaveRequest) ProtoMessage()    {}
-func (*StopSlaveRequest) Descriptor() ([]byte, []int) {
+func (m *StopReplicationRequest) Reset()         { *m = StopReplicationRequest{} }
+func (m *StopReplicationRequest) String() string { return proto.CompactTextString(m) }
+func (*StopReplicationRequest) ProtoMessage()    {}
+func (*StopReplicationRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{50}
 }
 
-func (m *StopSlaveRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_StopSlaveRequest.Unmarshal(m, b)
+func (m *StopReplicationRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_StopReplicationRequest.Unmarshal(m, b)
 }
-func (m *StopSlaveRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_StopSlaveRequest.Marshal(b, m, deterministic)
+func (m *StopReplicationRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_StopReplicationRequest.Marshal(b, m, deterministic)
 }
-func (m *StopSlaveRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StopSlaveRequest.Merge(m, src)
+func (m *StopReplicationRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StopReplicationRequest.Merge(m, src)
 }
-func (m *StopSlaveRequest) XXX_Size() int {
-	return xxx_messageInfo_StopSlaveRequest.Size(m)
+func (m *StopReplicationRequest) XXX_Size() int {
+	return xxx_messageInfo_StopReplicationRequest.Size(m)
 }
-func (m *StopSlaveRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_StopSlaveRequest.DiscardUnknown(m)
+func (m *StopReplicationRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_StopReplicationRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_StopSlaveRequest proto.InternalMessageInfo
+var xxx_messageInfo_StopReplicationRequest proto.InternalMessageInfo
 
-type StopSlaveResponse struct {
+type StopReplicationResponse struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *StopSlaveResponse) Reset()         { *m = StopSlaveResponse{} }
-func (m *StopSlaveResponse) String() string { return proto.CompactTextString(m) }
-func (*StopSlaveResponse) ProtoMessage()    {}
-func (*StopSlaveResponse) Descriptor() ([]byte, []int) {
+func (m *StopReplicationResponse) Reset()         { *m = StopReplicationResponse{} }
+func (m *StopReplicationResponse) String() string { return proto.CompactTextString(m) }
+func (*StopReplicationResponse) ProtoMessage()    {}
+func (*StopReplicationResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{51}
 }
 
-func (m *StopSlaveResponse) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_StopSlaveResponse.Unmarshal(m, b)
+func (m *StopReplicationResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_StopReplicationResponse.Unmarshal(m, b)
 }
-func (m *StopSlaveResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_StopSlaveResponse.Marshal(b, m, deterministic)
+func (m *StopReplicationResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_StopReplicationResponse.Marshal(b, m, deterministic)
 }
-func (m *StopSlaveResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StopSlaveResponse.Merge(m, src)
+func (m *StopReplicationResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StopReplicationResponse.Merge(m, src)
 }
-func (m *StopSlaveResponse) XXX_Size() int {
-	return xxx_messageInfo_StopSlaveResponse.Size(m)
+func (m *StopReplicationResponse) XXX_Size() int {
+	return xxx_messageInfo_StopReplicationResponse.Size(m)
 }
-func (m *StopSlaveResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_StopSlaveResponse.DiscardUnknown(m)
+func (m *StopReplicationResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_StopReplicationResponse.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_StopSlaveResponse proto.InternalMessageInfo
+var xxx_messageInfo_StopReplicationResponse proto.InternalMessageInfo
 
-type StopSlaveMinimumRequest struct {
+type StopReplicationMinimumRequest struct {
 	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	WaitTimeout          int64    `protobuf:"varint,2,opt,name=wait_timeout,json=waitTimeout,proto3" json:"wait_timeout,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -2197,147 +2197,147 @@ type StopSlaveMinimumRequest struct {
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *StopSlaveMinimumRequest) Reset()         { *m = StopSlaveMinimumRequest{} }
-func (m *StopSlaveMinimumRequest) String() string { return proto.CompactTextString(m) }
-func (*StopSlaveMinimumRequest) ProtoMessage()    {}
-func (*StopSlaveMinimumRequest) Descriptor() ([]byte, []int) {
+func (m *StopReplicationMinimumRequest) Reset()         { *m = StopReplicationMinimumRequest{} }
+func (m *StopReplicationMinimumRequest) String() string { return proto.CompactTextString(m) }
+func (*StopReplicationMinimumRequest) ProtoMessage()    {}
+func (*StopReplicationMinimumRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{52}
 }
 
-func (m *StopSlaveMinimumRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_StopSlaveMinimumRequest.Unmarshal(m, b)
+func (m *StopReplicationMinimumRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_StopReplicationMinimumRequest.Unmarshal(m, b)
 }
-func (m *StopSlaveMinimumRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_StopSlaveMinimumRequest.Marshal(b, m, deterministic)
+func (m *StopReplicationMinimumRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_StopReplicationMinimumRequest.Marshal(b, m, deterministic)
 }
-func (m *StopSlaveMinimumRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StopSlaveMinimumRequest.Merge(m, src)
+func (m *StopReplicationMinimumRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StopReplicationMinimumRequest.Merge(m, src)
 }
-func (m *StopSlaveMinimumRequest) XXX_Size() int {
-	return xxx_messageInfo_StopSlaveMinimumRequest.Size(m)
+func (m *StopReplicationMinimumRequest) XXX_Size() int {
+	return xxx_messageInfo_StopReplicationMinimumRequest.Size(m)
 }
-func (m *StopSlaveMinimumRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_StopSlaveMinimumRequest.DiscardUnknown(m)
+func (m *StopReplicationMinimumRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_StopReplicationMinimumRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_StopSlaveMinimumRequest proto.InternalMessageInfo
+var xxx_messageInfo_StopReplicationMinimumRequest proto.InternalMessageInfo
 
-func (m *StopSlaveMinimumRequest) GetPosition() string {
+func (m *StopReplicationMinimumRequest) GetPosition() string {
 	if m != nil {
 		return m.Position
 	}
 	return ""
 }
 
-func (m *StopSlaveMinimumRequest) GetWaitTimeout() int64 {
+func (m *StopReplicationMinimumRequest) GetWaitTimeout() int64 {
 	if m != nil {
 		return m.WaitTimeout
 	}
 	return 0
 }
 
-type StopSlaveMinimumResponse struct {
+type StopReplicationMinimumResponse struct {
 	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *StopSlaveMinimumResponse) Reset()         { *m = StopSlaveMinimumResponse{} }
-func (m *StopSlaveMinimumResponse) String() string { return proto.CompactTextString(m) }
-func (*StopSlaveMinimumResponse) ProtoMessage()    {}
-func (*StopSlaveMinimumResponse) Descriptor() ([]byte, []int) {
+func (m *StopReplicationMinimumResponse) Reset()         { *m = StopReplicationMinimumResponse{} }
+func (m *StopReplicationMinimumResponse) String() string { return proto.CompactTextString(m) }
+func (*StopReplicationMinimumResponse) ProtoMessage()    {}
+func (*StopReplicationMinimumResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{53}
 }
 
-func (m *StopSlaveMinimumResponse) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_StopSlaveMinimumResponse.Unmarshal(m, b)
+func (m *StopReplicationMinimumResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_StopReplicationMinimumResponse.Unmarshal(m, b)
 }
-func (m *StopSlaveMinimumResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_StopSlaveMinimumResponse.Marshal(b, m, deterministic)
+func (m *StopReplicationMinimumResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_StopReplicationMinimumResponse.Marshal(b, m, deterministic)
 }
-func (m *StopSlaveMinimumResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StopSlaveMinimumResponse.Merge(m, src)
+func (m *StopReplicationMinimumResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StopReplicationMinimumResponse.Merge(m, src)
 }
-func (m *StopSlaveMinimumResponse) XXX_Size() int {
-	return xxx_messageInfo_StopSlaveMinimumResponse.Size(m)
+func (m *StopReplicationMinimumResponse) XXX_Size() int {
+	return xxx_messageInfo_StopReplicationMinimumResponse.Size(m)
 }
-func (m *StopSlaveMinimumResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_StopSlaveMinimumResponse.DiscardUnknown(m)
+func (m *StopReplicationMinimumResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_StopReplicationMinimumResponse.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_StopSlaveMinimumResponse proto.InternalMessageInfo
+var xxx_messageInfo_StopReplicationMinimumResponse proto.InternalMessageInfo
 
-func (m *StopSlaveMinimumResponse) GetPosition() string {
+func (m *StopReplicationMinimumResponse) GetPosition() string {
 	if m != nil {
 		return m.Position
 	}
 	return ""
 }
 
-type StartSlaveRequest struct {
+type StartReplicationRequest struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *StartSlaveRequest) Reset()         { *m = StartSlaveRequest{} }
-func (m *StartSlaveRequest) String() string { return proto.CompactTextString(m) }
-func (*StartSlaveRequest) ProtoMessage()    {}
-func (*StartSlaveRequest) Descriptor() ([]byte, []int) {
+func (m *StartReplicationRequest) Reset()         { *m = StartReplicationRequest{} }
+func (m *StartReplicationRequest) String() string { return proto.CompactTextString(m) }
+func (*StartReplicationRequest) ProtoMessage()    {}
+func (*StartReplicationRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{54}
 }
 
-func (m *StartSlaveRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_StartSlaveRequest.Unmarshal(m, b)
+func (m *StartReplicationRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_StartReplicationRequest.Unmarshal(m, b)
 }
-func (m *StartSlaveRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_StartSlaveRequest.Marshal(b, m, deterministic)
+func (m *StartReplicationRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_StartReplicationRequest.Marshal(b, m, deterministic)
 }
-func (m *StartSlaveRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StartSlaveRequest.Merge(m, src)
+func (m *StartReplicationRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StartReplicationRequest.Merge(m, src)
 }
-func (m *StartSlaveRequest) XXX_Size() int {
-	return xxx_messageInfo_StartSlaveRequest.Size(m)
+func (m *StartReplicationRequest) XXX_Size() int {
+	return xxx_messageInfo_StartReplicationRequest.Size(m)
 }
-func (m *StartSlaveRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_StartSlaveRequest.DiscardUnknown(m)
+func (m *StartReplicationRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_StartReplicationRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_StartSlaveRequest proto.InternalMessageInfo
+var xxx_messageInfo_StartReplicationRequest proto.InternalMessageInfo
 
-type StartSlaveResponse struct {
+type StartReplicationResponse struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *StartSlaveResponse) Reset()         { *m = StartSlaveResponse{} }
-func (m *StartSlaveResponse) String() string { return proto.CompactTextString(m) }
-func (*StartSlaveResponse) ProtoMessage()    {}
-func (*StartSlaveResponse) Descriptor() ([]byte, []int) {
+func (m *StartReplicationResponse) Reset()         { *m = StartReplicationResponse{} }
+func (m *StartReplicationResponse) String() string { return proto.CompactTextString(m) }
+func (*StartReplicationResponse) ProtoMessage()    {}
+func (*StartReplicationResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{55}
 }
 
-func (m *StartSlaveResponse) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_StartSlaveResponse.Unmarshal(m, b)
+func (m *StartReplicationResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_StartReplicationResponse.Unmarshal(m, b)
 }
-func (m *StartSlaveResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_StartSlaveResponse.Marshal(b, m, deterministic)
+func (m *StartReplicationResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_StartReplicationResponse.Marshal(b, m, deterministic)
 }
-func (m *StartSlaveResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StartSlaveResponse.Merge(m, src)
+func (m *StartReplicationResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StartReplicationResponse.Merge(m, src)
 }
-func (m *StartSlaveResponse) XXX_Size() int {
-	return xxx_messageInfo_StartSlaveResponse.Size(m)
+func (m *StartReplicationResponse) XXX_Size() int {
+	return xxx_messageInfo_StartReplicationResponse.Size(m)
 }
-func (m *StartSlaveResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_StartSlaveResponse.DiscardUnknown(m)
+func (m *StartReplicationResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_StartReplicationResponse.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_StartSlaveResponse proto.InternalMessageInfo
+var xxx_messageInfo_StartReplicationResponse proto.InternalMessageInfo
 
-type StartSlaveUntilAfterRequest struct {
+type StartReplicationUntilAfterRequest struct {
 	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	WaitTimeout          int64    `protobuf:"varint,2,opt,name=wait_timeout,json=waitTimeout,proto3" json:"wait_timeout,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -2345,140 +2345,140 @@ type StartSlaveUntilAfterRequest struct {
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *StartSlaveUntilAfterRequest) Reset()         { *m = StartSlaveUntilAfterRequest{} }
-func (m *StartSlaveUntilAfterRequest) String() string { return proto.CompactTextString(m) }
-func (*StartSlaveUntilAfterRequest) ProtoMessage()    {}
-func (*StartSlaveUntilAfterRequest) Descriptor() ([]byte, []int) {
+func (m *StartReplicationUntilAfterRequest) Reset()         { *m = StartReplicationUntilAfterRequest{} }
+func (m *StartReplicationUntilAfterRequest) String() string { return proto.CompactTextString(m) }
+func (*StartReplicationUntilAfterRequest) ProtoMessage()    {}
+func (*StartReplicationUntilAfterRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{56}
 }
 
-func (m *StartSlaveUntilAfterRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_StartSlaveUntilAfterRequest.Unmarshal(m, b)
+func (m *StartReplicationUntilAfterRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_StartReplicationUntilAfterRequest.Unmarshal(m, b)
 }
-func (m *StartSlaveUntilAfterRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_StartSlaveUntilAfterRequest.Marshal(b, m, deterministic)
+func (m *StartReplicationUntilAfterRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_StartReplicationUntilAfterRequest.Marshal(b, m, deterministic)
 }
-func (m *StartSlaveUntilAfterRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StartSlaveUntilAfterRequest.Merge(m, src)
+func (m *StartReplicationUntilAfterRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StartReplicationUntilAfterRequest.Merge(m, src)
 }
-func (m *StartSlaveUntilAfterRequest) XXX_Size() int {
-	return xxx_messageInfo_StartSlaveUntilAfterRequest.Size(m)
+func (m *StartReplicationUntilAfterRequest) XXX_Size() int {
+	return xxx_messageInfo_StartReplicationUntilAfterRequest.Size(m)
 }
-func (m *StartSlaveUntilAfterRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_StartSlaveUntilAfterRequest.DiscardUnknown(m)
+func (m *StartReplicationUntilAfterRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_StartReplicationUntilAfterRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_StartSlaveUntilAfterRequest proto.InternalMessageInfo
+var xxx_messageInfo_StartReplicationUntilAfterRequest proto.InternalMessageInfo
 
-func (m *StartSlaveUntilAfterRequest) GetPosition() string {
+func (m *StartReplicationUntilAfterRequest) GetPosition() string {
 	if m != nil {
 		return m.Position
 	}
 	return ""
 }
 
-func (m *StartSlaveUntilAfterRequest) GetWaitTimeout() int64 {
+func (m *StartReplicationUntilAfterRequest) GetWaitTimeout() int64 {
 	if m != nil {
 		return m.WaitTimeout
 	}
 	return 0
 }
 
-type StartSlaveUntilAfterResponse struct {
+type StartReplicationUntilAfterResponse struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *StartSlaveUntilAfterResponse) Reset()         { *m = StartSlaveUntilAfterResponse{} }
-func (m *StartSlaveUntilAfterResponse) String() string { return proto.CompactTextString(m) }
-func (*StartSlaveUntilAfterResponse) ProtoMessage()    {}
-func (*StartSlaveUntilAfterResponse) Descriptor() ([]byte, []int) {
+func (m *StartReplicationUntilAfterResponse) Reset()         { *m = StartReplicationUntilAfterResponse{} }
+func (m *StartReplicationUntilAfterResponse) String() string { return proto.CompactTextString(m) }
+func (*StartReplicationUntilAfterResponse) ProtoMessage()    {}
+func (*StartReplicationUntilAfterResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{57}
 }
 
-func (m *StartSlaveUntilAfterResponse) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_StartSlaveUntilAfterResponse.Unmarshal(m, b)
+func (m *StartReplicationUntilAfterResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_StartReplicationUntilAfterResponse.Unmarshal(m, b)
 }
-func (m *StartSlaveUntilAfterResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_StartSlaveUntilAfterResponse.Marshal(b, m, deterministic)
+func (m *StartReplicationUntilAfterResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_StartReplicationUntilAfterResponse.Marshal(b, m, deterministic)
 }
-func (m *StartSlaveUntilAfterResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StartSlaveUntilAfterResponse.Merge(m, src)
+func (m *StartReplicationUntilAfterResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StartReplicationUntilAfterResponse.Merge(m, src)
 }
-func (m *StartSlaveUntilAfterResponse) XXX_Size() int {
-	return xxx_messageInfo_StartSlaveUntilAfterResponse.Size(m)
+func (m *StartReplicationUntilAfterResponse) XXX_Size() int {
+	return xxx_messageInfo_StartReplicationUntilAfterResponse.Size(m)
 }
-func (m *StartSlaveUntilAfterResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_StartSlaveUntilAfterResponse.DiscardUnknown(m)
+func (m *StartReplicationUntilAfterResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_StartReplicationUntilAfterResponse.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_StartSlaveUntilAfterResponse proto.InternalMessageInfo
+var xxx_messageInfo_StartReplicationUntilAfterResponse proto.InternalMessageInfo
 
-type GetSlavesRequest struct {
+type GetReplicasRequest struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *GetSlavesRequest) Reset()         { *m = GetSlavesRequest{} }
-func (m *GetSlavesRequest) String() string { return proto.CompactTextString(m) }
-func (*GetSlavesRequest) ProtoMessage()    {}
-func (*GetSlavesRequest) Descriptor() ([]byte, []int) {
+func (m *GetReplicasRequest) Reset()         { *m = GetReplicasRequest{} }
+func (m *GetReplicasRequest) String() string { return proto.CompactTextString(m) }
+func (*GetReplicasRequest) ProtoMessage()    {}
+func (*GetReplicasRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{58}
 }
 
-func (m *GetSlavesRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_GetSlavesRequest.Unmarshal(m, b)
+func (m *GetReplicasRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_GetReplicasRequest.Unmarshal(m, b)
 }
-func (m *GetSlavesRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_GetSlavesRequest.Marshal(b, m, deterministic)
+func (m *GetReplicasRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_GetReplicasRequest.Marshal(b, m, deterministic)
 }
-func (m *GetSlavesRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetSlavesRequest.Merge(m, src)
+func (m *GetReplicasRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetReplicasRequest.Merge(m, src)
 }
-func (m *GetSlavesRequest) XXX_Size() int {
-	return xxx_messageInfo_GetSlavesRequest.Size(m)
+func (m *GetReplicasRequest) XXX_Size() int {
+	return xxx_messageInfo_GetReplicasRequest.Size(m)
 }
-func (m *GetSlavesRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_GetSlavesRequest.DiscardUnknown(m)
+func (m *GetReplicasRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetReplicasRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_GetSlavesRequest proto.InternalMessageInfo
+var xxx_messageInfo_GetReplicasRequest proto.InternalMessageInfo
 
-type GetSlavesResponse struct {
+type GetReplicasResponse struct {
 	Addrs                []string `protobuf:"bytes,1,rep,name=addrs,proto3" json:"addrs,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *GetSlavesResponse) Reset()         { *m = GetSlavesResponse{} }
-func (m *GetSlavesResponse) String() string { return proto.CompactTextString(m) }
-func (*GetSlavesResponse) ProtoMessage()    {}
-func (*GetSlavesResponse) Descriptor() ([]byte, []int) {
+func (m *GetReplicasResponse) Reset()         { *m = GetReplicasResponse{} }
+func (m *GetReplicasResponse) String() string { return proto.CompactTextString(m) }
+func (*GetReplicasResponse) ProtoMessage()    {}
+func (*GetReplicasResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{59}
 }
 
-func (m *GetSlavesResponse) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_GetSlavesResponse.Unmarshal(m, b)
+func (m *GetReplicasResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_GetReplicasResponse.Unmarshal(m, b)
 }
-func (m *GetSlavesResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_GetSlavesResponse.Marshal(b, m, deterministic)
+func (m *GetReplicasResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_GetReplicasResponse.Marshal(b, m, deterministic)
 }
-func (m *GetSlavesResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetSlavesResponse.Merge(m, src)
+func (m *GetReplicasResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetReplicasResponse.Merge(m, src)
 }
-func (m *GetSlavesResponse) XXX_Size() int {
-	return xxx_messageInfo_GetSlavesResponse.Size(m)
+func (m *GetReplicasResponse) XXX_Size() int {
+	return xxx_messageInfo_GetReplicasResponse.Size(m)
 }
-func (m *GetSlavesResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_GetSlavesResponse.DiscardUnknown(m)
+func (m *GetReplicasResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetReplicasResponse.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_GetSlavesResponse proto.InternalMessageInfo
+var xxx_messageInfo_GetReplicasResponse proto.InternalMessageInfo
 
-func (m *GetSlavesResponse) GetAddrs() []string {
+func (m *GetReplicasResponse) GetAddrs() []string {
 	if m != nil {
 		return m.Addrs
 	}
@@ -2867,7 +2867,7 @@ func (m *PopulateReparentJournalResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_PopulateReparentJournalResponse proto.InternalMessageInfo
 
-type InitSlaveRequest struct {
+type InitReplicaRequest struct {
 	Parent               *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
 	ReplicationPosition  string                `protobuf:"bytes,2,opt,name=replication_position,json=replicationPosition,proto3" json:"replication_position,omitempty"`
 	TimeCreatedNs        int64                 `protobuf:"varint,3,opt,name=time_created_ns,json=timeCreatedNs,proto3" json:"time_created_ns,omitempty"`
@@ -2876,82 +2876,82 @@ type InitSlaveRequest struct {
 	XXX_sizecache        int32                 `json:"-"`
 }
 
-func (m *InitSlaveRequest) Reset()         { *m = InitSlaveRequest{} }
-func (m *InitSlaveRequest) String() string { return proto.CompactTextString(m) }
-func (*InitSlaveRequest) ProtoMessage()    {}
-func (*InitSlaveRequest) Descriptor() ([]byte, []int) {
+func (m *InitReplicaRequest) Reset()         { *m = InitReplicaRequest{} }
+func (m *InitReplicaRequest) String() string { return proto.CompactTextString(m) }
+func (*InitReplicaRequest) ProtoMessage()    {}
+func (*InitReplicaRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{70}
 }
 
-func (m *InitSlaveRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_InitSlaveRequest.Unmarshal(m, b)
+func (m *InitReplicaRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_InitReplicaRequest.Unmarshal(m, b)
 }
-func (m *InitSlaveRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_InitSlaveRequest.Marshal(b, m, deterministic)
+func (m *InitReplicaRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_InitReplicaRequest.Marshal(b, m, deterministic)
 }
-func (m *InitSlaveRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_InitSlaveRequest.Merge(m, src)
+func (m *InitReplicaRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_InitReplicaRequest.Merge(m, src)
 }
-func (m *InitSlaveRequest) XXX_Size() int {
-	return xxx_messageInfo_InitSlaveRequest.Size(m)
+func (m *InitReplicaRequest) XXX_Size() int {
+	return xxx_messageInfo_InitReplicaRequest.Size(m)
 }
-func (m *InitSlaveRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_InitSlaveRequest.DiscardUnknown(m)
+func (m *InitReplicaRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_InitReplicaRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_InitSlaveRequest proto.InternalMessageInfo
+var xxx_messageInfo_InitReplicaRequest proto.InternalMessageInfo
 
-func (m *InitSlaveRequest) GetParent() *topodata.TabletAlias {
+func (m *InitReplicaRequest) GetParent() *topodata.TabletAlias {
 	if m != nil {
 		return m.Parent
 	}
 	return nil
 }
 
-func (m *InitSlaveRequest) GetReplicationPosition() string {
+func (m *InitReplicaRequest) GetReplicationPosition() string {
 	if m != nil {
 		return m.ReplicationPosition
 	}
 	return ""
 }
 
-func (m *InitSlaveRequest) GetTimeCreatedNs() int64 {
+func (m *InitReplicaRequest) GetTimeCreatedNs() int64 {
 	if m != nil {
 		return m.TimeCreatedNs
 	}
 	return 0
 }
 
-type InitSlaveResponse struct {
+type InitReplicaResponse struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *InitSlaveResponse) Reset()         { *m = InitSlaveResponse{} }
-func (m *InitSlaveResponse) String() string { return proto.CompactTextString(m) }
-func (*InitSlaveResponse) ProtoMessage()    {}
-func (*InitSlaveResponse) Descriptor() ([]byte, []int) {
+func (m *InitReplicaResponse) Reset()         { *m = InitReplicaResponse{} }
+func (m *InitReplicaResponse) String() string { return proto.CompactTextString(m) }
+func (*InitReplicaResponse) ProtoMessage()    {}
+func (*InitReplicaResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{71}
 }
 
-func (m *InitSlaveResponse) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_InitSlaveResponse.Unmarshal(m, b)
+func (m *InitReplicaResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_InitReplicaResponse.Unmarshal(m, b)
 }
-func (m *InitSlaveResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_InitSlaveResponse.Marshal(b, m, deterministic)
+func (m *InitReplicaResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_InitReplicaResponse.Marshal(b, m, deterministic)
 }
-func (m *InitSlaveResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_InitSlaveResponse.Merge(m, src)
+func (m *InitReplicaResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_InitReplicaResponse.Merge(m, src)
 }
-func (m *InitSlaveResponse) XXX_Size() int {
-	return xxx_messageInfo_InitSlaveResponse.Size(m)
+func (m *InitReplicaResponse) XXX_Size() int {
+	return xxx_messageInfo_InitReplicaResponse.Size(m)
 }
-func (m *InitSlaveResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_InitSlaveResponse.DiscardUnknown(m)
+func (m *InitReplicaResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_InitReplicaResponse.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_InitSlaveResponse proto.InternalMessageInfo
+var xxx_messageInfo_InitReplicaResponse proto.InternalMessageInfo
 
 type DemoteMasterRequest struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -3085,76 +3085,76 @@ func (m *UndoDemoteMasterResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_UndoDemoteMasterResponse proto.InternalMessageInfo
 
-type SlaveWasPromotedRequest struct {
+type ReplicaWasPromotedRequest struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SlaveWasPromotedRequest) Reset()         { *m = SlaveWasPromotedRequest{} }
-func (m *SlaveWasPromotedRequest) String() string { return proto.CompactTextString(m) }
-func (*SlaveWasPromotedRequest) ProtoMessage()    {}
-func (*SlaveWasPromotedRequest) Descriptor() ([]byte, []int) {
+func (m *ReplicaWasPromotedRequest) Reset()         { *m = ReplicaWasPromotedRequest{} }
+func (m *ReplicaWasPromotedRequest) String() string { return proto.CompactTextString(m) }
+func (*ReplicaWasPromotedRequest) ProtoMessage()    {}
+func (*ReplicaWasPromotedRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{76}
 }
 
-func (m *SlaveWasPromotedRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_SlaveWasPromotedRequest.Unmarshal(m, b)
+func (m *ReplicaWasPromotedRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ReplicaWasPromotedRequest.Unmarshal(m, b)
 }
-func (m *SlaveWasPromotedRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_SlaveWasPromotedRequest.Marshal(b, m, deterministic)
+func (m *ReplicaWasPromotedRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ReplicaWasPromotedRequest.Marshal(b, m, deterministic)
 }
-func (m *SlaveWasPromotedRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SlaveWasPromotedRequest.Merge(m, src)
+func (m *ReplicaWasPromotedRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ReplicaWasPromotedRequest.Merge(m, src)
 }
-func (m *SlaveWasPromotedRequest) XXX_Size() int {
-	return xxx_messageInfo_SlaveWasPromotedRequest.Size(m)
+func (m *ReplicaWasPromotedRequest) XXX_Size() int {
+	return xxx_messageInfo_ReplicaWasPromotedRequest.Size(m)
 }
-func (m *SlaveWasPromotedRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_SlaveWasPromotedRequest.DiscardUnknown(m)
+func (m *ReplicaWasPromotedRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_ReplicaWasPromotedRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_SlaveWasPromotedRequest proto.InternalMessageInfo
+var xxx_messageInfo_ReplicaWasPromotedRequest proto.InternalMessageInfo
 
-type SlaveWasPromotedResponse struct {
+type ReplicaWasPromotedResponse struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SlaveWasPromotedResponse) Reset()         { *m = SlaveWasPromotedResponse{} }
-func (m *SlaveWasPromotedResponse) String() string { return proto.CompactTextString(m) }
-func (*SlaveWasPromotedResponse) ProtoMessage()    {}
-func (*SlaveWasPromotedResponse) Descriptor() ([]byte, []int) {
+func (m *ReplicaWasPromotedResponse) Reset()         { *m = ReplicaWasPromotedResponse{} }
+func (m *ReplicaWasPromotedResponse) String() string { return proto.CompactTextString(m) }
+func (*ReplicaWasPromotedResponse) ProtoMessage()    {}
+func (*ReplicaWasPromotedResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{77}
 }
 
-func (m *SlaveWasPromotedResponse) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_SlaveWasPromotedResponse.Unmarshal(m, b)
+func (m *ReplicaWasPromotedResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ReplicaWasPromotedResponse.Unmarshal(m, b)
 }
-func (m *SlaveWasPromotedResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_SlaveWasPromotedResponse.Marshal(b, m, deterministic)
+func (m *ReplicaWasPromotedResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ReplicaWasPromotedResponse.Marshal(b, m, deterministic)
 }
-func (m *SlaveWasPromotedResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SlaveWasPromotedResponse.Merge(m, src)
+func (m *ReplicaWasPromotedResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ReplicaWasPromotedResponse.Merge(m, src)
 }
-func (m *SlaveWasPromotedResponse) XXX_Size() int {
-	return xxx_messageInfo_SlaveWasPromotedResponse.Size(m)
+func (m *ReplicaWasPromotedResponse) XXX_Size() int {
+	return xxx_messageInfo_ReplicaWasPromotedResponse.Size(m)
 }
-func (m *SlaveWasPromotedResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_SlaveWasPromotedResponse.DiscardUnknown(m)
+func (m *ReplicaWasPromotedResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_ReplicaWasPromotedResponse.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_SlaveWasPromotedResponse proto.InternalMessageInfo
+var xxx_messageInfo_ReplicaWasPromotedResponse proto.InternalMessageInfo
 
 type SetMasterRequest struct {
-	Parent               *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
-	TimeCreatedNs        int64                 `protobuf:"varint,2,opt,name=time_created_ns,json=timeCreatedNs,proto3" json:"time_created_ns,omitempty"`
-	WaitPosition         string                `protobuf:"bytes,4,opt,name=wait_position,json=waitPosition,proto3" json:"wait_position,omitempty"`
-	ForceStartSlave      bool                  `protobuf:"varint,3,opt,name=force_start_slave,json=forceStartSlave,proto3" json:"force_start_slave,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	Parent                *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
+	TimeCreatedNs         int64                 `protobuf:"varint,2,opt,name=time_created_ns,json=timeCreatedNs,proto3" json:"time_created_ns,omitempty"`
+	ForceStartReplication bool                  `protobuf:"varint,3,opt,name=force_start_replication,json=forceStartReplication,proto3" json:"force_start_replication,omitempty"`
+	WaitPosition          string                `protobuf:"bytes,4,opt,name=wait_position,json=waitPosition,proto3" json:"wait_position,omitempty"`
+	XXX_NoUnkeyedLiteral  struct{}              `json:"-"`
+	XXX_unrecognized      []byte                `json:"-"`
+	XXX_sizecache         int32                 `json:"-"`
 }
 
 func (m *SetMasterRequest) Reset()         { *m = SetMasterRequest{} }
@@ -3196,18 +3196,18 @@ func (m *SetMasterRequest) GetTimeCreatedNs() int64 {
 	return 0
 }
 
+func (m *SetMasterRequest) GetForceStartReplication() bool {
+	if m != nil {
+		return m.ForceStartReplication
+	}
+	return false
+}
+
 func (m *SetMasterRequest) GetWaitPosition() string {
 	if m != nil {
 		return m.WaitPosition
 	}
 	return ""
-}
-
-func (m *SetMasterRequest) GetForceStartSlave() bool {
-	if m != nil {
-		return m.ForceStartSlave
-	}
-	return false
 }
 
 type SetMasterResponse struct {
@@ -3241,7 +3241,7 @@ func (m *SetMasterResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_SetMasterResponse proto.InternalMessageInfo
 
-type SlaveWasRestartedRequest struct {
+type ReplicaWasRestartedRequest struct {
 	// the parent alias the tablet should have
 	Parent               *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
@@ -3249,68 +3249,68 @@ type SlaveWasRestartedRequest struct {
 	XXX_sizecache        int32                 `json:"-"`
 }
 
-func (m *SlaveWasRestartedRequest) Reset()         { *m = SlaveWasRestartedRequest{} }
-func (m *SlaveWasRestartedRequest) String() string { return proto.CompactTextString(m) }
-func (*SlaveWasRestartedRequest) ProtoMessage()    {}
-func (*SlaveWasRestartedRequest) Descriptor() ([]byte, []int) {
+func (m *ReplicaWasRestartedRequest) Reset()         { *m = ReplicaWasRestartedRequest{} }
+func (m *ReplicaWasRestartedRequest) String() string { return proto.CompactTextString(m) }
+func (*ReplicaWasRestartedRequest) ProtoMessage()    {}
+func (*ReplicaWasRestartedRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{80}
 }
 
-func (m *SlaveWasRestartedRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_SlaveWasRestartedRequest.Unmarshal(m, b)
+func (m *ReplicaWasRestartedRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ReplicaWasRestartedRequest.Unmarshal(m, b)
 }
-func (m *SlaveWasRestartedRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_SlaveWasRestartedRequest.Marshal(b, m, deterministic)
+func (m *ReplicaWasRestartedRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ReplicaWasRestartedRequest.Marshal(b, m, deterministic)
 }
-func (m *SlaveWasRestartedRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SlaveWasRestartedRequest.Merge(m, src)
+func (m *ReplicaWasRestartedRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ReplicaWasRestartedRequest.Merge(m, src)
 }
-func (m *SlaveWasRestartedRequest) XXX_Size() int {
-	return xxx_messageInfo_SlaveWasRestartedRequest.Size(m)
+func (m *ReplicaWasRestartedRequest) XXX_Size() int {
+	return xxx_messageInfo_ReplicaWasRestartedRequest.Size(m)
 }
-func (m *SlaveWasRestartedRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_SlaveWasRestartedRequest.DiscardUnknown(m)
+func (m *ReplicaWasRestartedRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_ReplicaWasRestartedRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_SlaveWasRestartedRequest proto.InternalMessageInfo
+var xxx_messageInfo_ReplicaWasRestartedRequest proto.InternalMessageInfo
 
-func (m *SlaveWasRestartedRequest) GetParent() *topodata.TabletAlias {
+func (m *ReplicaWasRestartedRequest) GetParent() *topodata.TabletAlias {
 	if m != nil {
 		return m.Parent
 	}
 	return nil
 }
 
-type SlaveWasRestartedResponse struct {
+type ReplicaWasRestartedResponse struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SlaveWasRestartedResponse) Reset()         { *m = SlaveWasRestartedResponse{} }
-func (m *SlaveWasRestartedResponse) String() string { return proto.CompactTextString(m) }
-func (*SlaveWasRestartedResponse) ProtoMessage()    {}
-func (*SlaveWasRestartedResponse) Descriptor() ([]byte, []int) {
+func (m *ReplicaWasRestartedResponse) Reset()         { *m = ReplicaWasRestartedResponse{} }
+func (m *ReplicaWasRestartedResponse) String() string { return proto.CompactTextString(m) }
+func (*ReplicaWasRestartedResponse) ProtoMessage()    {}
+func (*ReplicaWasRestartedResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{81}
 }
 
-func (m *SlaveWasRestartedResponse) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_SlaveWasRestartedResponse.Unmarshal(m, b)
+func (m *ReplicaWasRestartedResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ReplicaWasRestartedResponse.Unmarshal(m, b)
 }
-func (m *SlaveWasRestartedResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_SlaveWasRestartedResponse.Marshal(b, m, deterministic)
+func (m *ReplicaWasRestartedResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ReplicaWasRestartedResponse.Marshal(b, m, deterministic)
 }
-func (m *SlaveWasRestartedResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SlaveWasRestartedResponse.Merge(m, src)
+func (m *ReplicaWasRestartedResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ReplicaWasRestartedResponse.Merge(m, src)
 }
-func (m *SlaveWasRestartedResponse) XXX_Size() int {
-	return xxx_messageInfo_SlaveWasRestartedResponse.Size(m)
+func (m *ReplicaWasRestartedResponse) XXX_Size() int {
+	return xxx_messageInfo_ReplicaWasRestartedResponse.Size(m)
 }
-func (m *SlaveWasRestartedResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_SlaveWasRestartedResponse.DiscardUnknown(m)
+func (m *ReplicaWasRestartedResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_ReplicaWasRestartedResponse.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_SlaveWasRestartedResponse proto.InternalMessageInfo
+var xxx_messageInfo_ReplicaWasRestartedResponse proto.InternalMessageInfo
 
 type StopReplicationAndGetStatusRequest struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -3608,6 +3608,671 @@ func (m *RestoreFromBackupResponse) GetEvent() *logutil.Event {
 	return nil
 }
 
+// Deprecated
+type SlaveStatusRequest struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SlaveStatusRequest) Reset()         { *m = SlaveStatusRequest{} }
+func (m *SlaveStatusRequest) String() string { return proto.CompactTextString(m) }
+func (*SlaveStatusRequest) ProtoMessage()    {}
+func (*SlaveStatusRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{90}
+}
+
+func (m *SlaveStatusRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SlaveStatusRequest.Unmarshal(m, b)
+}
+func (m *SlaveStatusRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SlaveStatusRequest.Marshal(b, m, deterministic)
+}
+func (m *SlaveStatusRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SlaveStatusRequest.Merge(m, src)
+}
+func (m *SlaveStatusRequest) XXX_Size() int {
+	return xxx_messageInfo_SlaveStatusRequest.Size(m)
+}
+func (m *SlaveStatusRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_SlaveStatusRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SlaveStatusRequest proto.InternalMessageInfo
+
+// Deprecated
+type SlaveStatusResponse struct {
+	Status               *replicationdata.Status `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
+	XXX_unrecognized     []byte                  `json:"-"`
+	XXX_sizecache        int32                   `json:"-"`
+}
+
+func (m *SlaveStatusResponse) Reset()         { *m = SlaveStatusResponse{} }
+func (m *SlaveStatusResponse) String() string { return proto.CompactTextString(m) }
+func (*SlaveStatusResponse) ProtoMessage()    {}
+func (*SlaveStatusResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{91}
+}
+
+func (m *SlaveStatusResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SlaveStatusResponse.Unmarshal(m, b)
+}
+func (m *SlaveStatusResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SlaveStatusResponse.Marshal(b, m, deterministic)
+}
+func (m *SlaveStatusResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SlaveStatusResponse.Merge(m, src)
+}
+func (m *SlaveStatusResponse) XXX_Size() int {
+	return xxx_messageInfo_SlaveStatusResponse.Size(m)
+}
+func (m *SlaveStatusResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_SlaveStatusResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SlaveStatusResponse proto.InternalMessageInfo
+
+func (m *SlaveStatusResponse) GetStatus() *replicationdata.Status {
+	if m != nil {
+		return m.Status
+	}
+	return nil
+}
+
+// Deprecated
+type StopSlaveRequest struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *StopSlaveRequest) Reset()         { *m = StopSlaveRequest{} }
+func (m *StopSlaveRequest) String() string { return proto.CompactTextString(m) }
+func (*StopSlaveRequest) ProtoMessage()    {}
+func (*StopSlaveRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{92}
+}
+
+func (m *StopSlaveRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_StopSlaveRequest.Unmarshal(m, b)
+}
+func (m *StopSlaveRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_StopSlaveRequest.Marshal(b, m, deterministic)
+}
+func (m *StopSlaveRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StopSlaveRequest.Merge(m, src)
+}
+func (m *StopSlaveRequest) XXX_Size() int {
+	return xxx_messageInfo_StopSlaveRequest.Size(m)
+}
+func (m *StopSlaveRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_StopSlaveRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_StopSlaveRequest proto.InternalMessageInfo
+
+// Deprecated
+type StopSlaveResponse struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *StopSlaveResponse) Reset()         { *m = StopSlaveResponse{} }
+func (m *StopSlaveResponse) String() string { return proto.CompactTextString(m) }
+func (*StopSlaveResponse) ProtoMessage()    {}
+func (*StopSlaveResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{93}
+}
+
+func (m *StopSlaveResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_StopSlaveResponse.Unmarshal(m, b)
+}
+func (m *StopSlaveResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_StopSlaveResponse.Marshal(b, m, deterministic)
+}
+func (m *StopSlaveResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StopSlaveResponse.Merge(m, src)
+}
+func (m *StopSlaveResponse) XXX_Size() int {
+	return xxx_messageInfo_StopSlaveResponse.Size(m)
+}
+func (m *StopSlaveResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_StopSlaveResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_StopSlaveResponse proto.InternalMessageInfo
+
+// Deprecated
+type StopSlaveMinimumRequest struct {
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
+	WaitTimeout          int64    `protobuf:"varint,2,opt,name=wait_timeout,json=waitTimeout,proto3" json:"wait_timeout,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *StopSlaveMinimumRequest) Reset()         { *m = StopSlaveMinimumRequest{} }
+func (m *StopSlaveMinimumRequest) String() string { return proto.CompactTextString(m) }
+func (*StopSlaveMinimumRequest) ProtoMessage()    {}
+func (*StopSlaveMinimumRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{94}
+}
+
+func (m *StopSlaveMinimumRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_StopSlaveMinimumRequest.Unmarshal(m, b)
+}
+func (m *StopSlaveMinimumRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_StopSlaveMinimumRequest.Marshal(b, m, deterministic)
+}
+func (m *StopSlaveMinimumRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StopSlaveMinimumRequest.Merge(m, src)
+}
+func (m *StopSlaveMinimumRequest) XXX_Size() int {
+	return xxx_messageInfo_StopSlaveMinimumRequest.Size(m)
+}
+func (m *StopSlaveMinimumRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_StopSlaveMinimumRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_StopSlaveMinimumRequest proto.InternalMessageInfo
+
+func (m *StopSlaveMinimumRequest) GetPosition() string {
+	if m != nil {
+		return m.Position
+	}
+	return ""
+}
+
+func (m *StopSlaveMinimumRequest) GetWaitTimeout() int64 {
+	if m != nil {
+		return m.WaitTimeout
+	}
+	return 0
+}
+
+// Deprecated
+type StopSlaveMinimumResponse struct {
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *StopSlaveMinimumResponse) Reset()         { *m = StopSlaveMinimumResponse{} }
+func (m *StopSlaveMinimumResponse) String() string { return proto.CompactTextString(m) }
+func (*StopSlaveMinimumResponse) ProtoMessage()    {}
+func (*StopSlaveMinimumResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{95}
+}
+
+func (m *StopSlaveMinimumResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_StopSlaveMinimumResponse.Unmarshal(m, b)
+}
+func (m *StopSlaveMinimumResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_StopSlaveMinimumResponse.Marshal(b, m, deterministic)
+}
+func (m *StopSlaveMinimumResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StopSlaveMinimumResponse.Merge(m, src)
+}
+func (m *StopSlaveMinimumResponse) XXX_Size() int {
+	return xxx_messageInfo_StopSlaveMinimumResponse.Size(m)
+}
+func (m *StopSlaveMinimumResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_StopSlaveMinimumResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_StopSlaveMinimumResponse proto.InternalMessageInfo
+
+func (m *StopSlaveMinimumResponse) GetPosition() string {
+	if m != nil {
+		return m.Position
+	}
+	return ""
+}
+
+// Deprecated
+type StartSlaveRequest struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *StartSlaveRequest) Reset()         { *m = StartSlaveRequest{} }
+func (m *StartSlaveRequest) String() string { return proto.CompactTextString(m) }
+func (*StartSlaveRequest) ProtoMessage()    {}
+func (*StartSlaveRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{96}
+}
+
+func (m *StartSlaveRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_StartSlaveRequest.Unmarshal(m, b)
+}
+func (m *StartSlaveRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_StartSlaveRequest.Marshal(b, m, deterministic)
+}
+func (m *StartSlaveRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StartSlaveRequest.Merge(m, src)
+}
+func (m *StartSlaveRequest) XXX_Size() int {
+	return xxx_messageInfo_StartSlaveRequest.Size(m)
+}
+func (m *StartSlaveRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_StartSlaveRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_StartSlaveRequest proto.InternalMessageInfo
+
+// Deprecated
+type StartSlaveResponse struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *StartSlaveResponse) Reset()         { *m = StartSlaveResponse{} }
+func (m *StartSlaveResponse) String() string { return proto.CompactTextString(m) }
+func (*StartSlaveResponse) ProtoMessage()    {}
+func (*StartSlaveResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{97}
+}
+
+func (m *StartSlaveResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_StartSlaveResponse.Unmarshal(m, b)
+}
+func (m *StartSlaveResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_StartSlaveResponse.Marshal(b, m, deterministic)
+}
+func (m *StartSlaveResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StartSlaveResponse.Merge(m, src)
+}
+func (m *StartSlaveResponse) XXX_Size() int {
+	return xxx_messageInfo_StartSlaveResponse.Size(m)
+}
+func (m *StartSlaveResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_StartSlaveResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_StartSlaveResponse proto.InternalMessageInfo
+
+// Deprecated
+type StartSlaveUntilAfterRequest struct {
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
+	WaitTimeout          int64    `protobuf:"varint,2,opt,name=wait_timeout,json=waitTimeout,proto3" json:"wait_timeout,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *StartSlaveUntilAfterRequest) Reset()         { *m = StartSlaveUntilAfterRequest{} }
+func (m *StartSlaveUntilAfterRequest) String() string { return proto.CompactTextString(m) }
+func (*StartSlaveUntilAfterRequest) ProtoMessage()    {}
+func (*StartSlaveUntilAfterRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{98}
+}
+
+func (m *StartSlaveUntilAfterRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_StartSlaveUntilAfterRequest.Unmarshal(m, b)
+}
+func (m *StartSlaveUntilAfterRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_StartSlaveUntilAfterRequest.Marshal(b, m, deterministic)
+}
+func (m *StartSlaveUntilAfterRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StartSlaveUntilAfterRequest.Merge(m, src)
+}
+func (m *StartSlaveUntilAfterRequest) XXX_Size() int {
+	return xxx_messageInfo_StartSlaveUntilAfterRequest.Size(m)
+}
+func (m *StartSlaveUntilAfterRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_StartSlaveUntilAfterRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_StartSlaveUntilAfterRequest proto.InternalMessageInfo
+
+func (m *StartSlaveUntilAfterRequest) GetPosition() string {
+	if m != nil {
+		return m.Position
+	}
+	return ""
+}
+
+func (m *StartSlaveUntilAfterRequest) GetWaitTimeout() int64 {
+	if m != nil {
+		return m.WaitTimeout
+	}
+	return 0
+}
+
+// Deprecated
+type StartSlaveUntilAfterResponse struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *StartSlaveUntilAfterResponse) Reset()         { *m = StartSlaveUntilAfterResponse{} }
+func (m *StartSlaveUntilAfterResponse) String() string { return proto.CompactTextString(m) }
+func (*StartSlaveUntilAfterResponse) ProtoMessage()    {}
+func (*StartSlaveUntilAfterResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{99}
+}
+
+func (m *StartSlaveUntilAfterResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_StartSlaveUntilAfterResponse.Unmarshal(m, b)
+}
+func (m *StartSlaveUntilAfterResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_StartSlaveUntilAfterResponse.Marshal(b, m, deterministic)
+}
+func (m *StartSlaveUntilAfterResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StartSlaveUntilAfterResponse.Merge(m, src)
+}
+func (m *StartSlaveUntilAfterResponse) XXX_Size() int {
+	return xxx_messageInfo_StartSlaveUntilAfterResponse.Size(m)
+}
+func (m *StartSlaveUntilAfterResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_StartSlaveUntilAfterResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_StartSlaveUntilAfterResponse proto.InternalMessageInfo
+
+// Deprecated
+type GetSlavesRequest struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *GetSlavesRequest) Reset()         { *m = GetSlavesRequest{} }
+func (m *GetSlavesRequest) String() string { return proto.CompactTextString(m) }
+func (*GetSlavesRequest) ProtoMessage()    {}
+func (*GetSlavesRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{100}
+}
+
+func (m *GetSlavesRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_GetSlavesRequest.Unmarshal(m, b)
+}
+func (m *GetSlavesRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_GetSlavesRequest.Marshal(b, m, deterministic)
+}
+func (m *GetSlavesRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetSlavesRequest.Merge(m, src)
+}
+func (m *GetSlavesRequest) XXX_Size() int {
+	return xxx_messageInfo_GetSlavesRequest.Size(m)
+}
+func (m *GetSlavesRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetSlavesRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetSlavesRequest proto.InternalMessageInfo
+
+// Deprecated
+type GetSlavesResponse struct {
+	Addrs                []string `protobuf:"bytes,1,rep,name=addrs,proto3" json:"addrs,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *GetSlavesResponse) Reset()         { *m = GetSlavesResponse{} }
+func (m *GetSlavesResponse) String() string { return proto.CompactTextString(m) }
+func (*GetSlavesResponse) ProtoMessage()    {}
+func (*GetSlavesResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{101}
+}
+
+func (m *GetSlavesResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_GetSlavesResponse.Unmarshal(m, b)
+}
+func (m *GetSlavesResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_GetSlavesResponse.Marshal(b, m, deterministic)
+}
+func (m *GetSlavesResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetSlavesResponse.Merge(m, src)
+}
+func (m *GetSlavesResponse) XXX_Size() int {
+	return xxx_messageInfo_GetSlavesResponse.Size(m)
+}
+func (m *GetSlavesResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetSlavesResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetSlavesResponse proto.InternalMessageInfo
+
+func (m *GetSlavesResponse) GetAddrs() []string {
+	if m != nil {
+		return m.Addrs
+	}
+	return nil
+}
+
+// Deprecated
+type InitSlaveRequest struct {
+	Parent               *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
+	ReplicationPosition  string                `protobuf:"bytes,2,opt,name=replication_position,json=replicationPosition,proto3" json:"replication_position,omitempty"`
+	TimeCreatedNs        int64                 `protobuf:"varint,3,opt,name=time_created_ns,json=timeCreatedNs,proto3" json:"time_created_ns,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
+	XXX_unrecognized     []byte                `json:"-"`
+	XXX_sizecache        int32                 `json:"-"`
+}
+
+func (m *InitSlaveRequest) Reset()         { *m = InitSlaveRequest{} }
+func (m *InitSlaveRequest) String() string { return proto.CompactTextString(m) }
+func (*InitSlaveRequest) ProtoMessage()    {}
+func (*InitSlaveRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{102}
+}
+
+func (m *InitSlaveRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_InitSlaveRequest.Unmarshal(m, b)
+}
+func (m *InitSlaveRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_InitSlaveRequest.Marshal(b, m, deterministic)
+}
+func (m *InitSlaveRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_InitSlaveRequest.Merge(m, src)
+}
+func (m *InitSlaveRequest) XXX_Size() int {
+	return xxx_messageInfo_InitSlaveRequest.Size(m)
+}
+func (m *InitSlaveRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_InitSlaveRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_InitSlaveRequest proto.InternalMessageInfo
+
+func (m *InitSlaveRequest) GetParent() *topodata.TabletAlias {
+	if m != nil {
+		return m.Parent
+	}
+	return nil
+}
+
+func (m *InitSlaveRequest) GetReplicationPosition() string {
+	if m != nil {
+		return m.ReplicationPosition
+	}
+	return ""
+}
+
+func (m *InitSlaveRequest) GetTimeCreatedNs() int64 {
+	if m != nil {
+		return m.TimeCreatedNs
+	}
+	return 0
+}
+
+// Deprecated
+type InitSlaveResponse struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *InitSlaveResponse) Reset()         { *m = InitSlaveResponse{} }
+func (m *InitSlaveResponse) String() string { return proto.CompactTextString(m) }
+func (*InitSlaveResponse) ProtoMessage()    {}
+func (*InitSlaveResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{103}
+}
+
+func (m *InitSlaveResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_InitSlaveResponse.Unmarshal(m, b)
+}
+func (m *InitSlaveResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_InitSlaveResponse.Marshal(b, m, deterministic)
+}
+func (m *InitSlaveResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_InitSlaveResponse.Merge(m, src)
+}
+func (m *InitSlaveResponse) XXX_Size() int {
+	return xxx_messageInfo_InitSlaveResponse.Size(m)
+}
+func (m *InitSlaveResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_InitSlaveResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_InitSlaveResponse proto.InternalMessageInfo
+
+// Deprecated
+type SlaveWasPromotedRequest struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SlaveWasPromotedRequest) Reset()         { *m = SlaveWasPromotedRequest{} }
+func (m *SlaveWasPromotedRequest) String() string { return proto.CompactTextString(m) }
+func (*SlaveWasPromotedRequest) ProtoMessage()    {}
+func (*SlaveWasPromotedRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{104}
+}
+
+func (m *SlaveWasPromotedRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SlaveWasPromotedRequest.Unmarshal(m, b)
+}
+func (m *SlaveWasPromotedRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SlaveWasPromotedRequest.Marshal(b, m, deterministic)
+}
+func (m *SlaveWasPromotedRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SlaveWasPromotedRequest.Merge(m, src)
+}
+func (m *SlaveWasPromotedRequest) XXX_Size() int {
+	return xxx_messageInfo_SlaveWasPromotedRequest.Size(m)
+}
+func (m *SlaveWasPromotedRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_SlaveWasPromotedRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SlaveWasPromotedRequest proto.InternalMessageInfo
+
+// Deprecated
+type SlaveWasPromotedResponse struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SlaveWasPromotedResponse) Reset()         { *m = SlaveWasPromotedResponse{} }
+func (m *SlaveWasPromotedResponse) String() string { return proto.CompactTextString(m) }
+func (*SlaveWasPromotedResponse) ProtoMessage()    {}
+func (*SlaveWasPromotedResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{105}
+}
+
+func (m *SlaveWasPromotedResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SlaveWasPromotedResponse.Unmarshal(m, b)
+}
+func (m *SlaveWasPromotedResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SlaveWasPromotedResponse.Marshal(b, m, deterministic)
+}
+func (m *SlaveWasPromotedResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SlaveWasPromotedResponse.Merge(m, src)
+}
+func (m *SlaveWasPromotedResponse) XXX_Size() int {
+	return xxx_messageInfo_SlaveWasPromotedResponse.Size(m)
+}
+func (m *SlaveWasPromotedResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_SlaveWasPromotedResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SlaveWasPromotedResponse proto.InternalMessageInfo
+
+// Deprecated
+type SlaveWasRestartedRequest struct {
+	// the parent alias the tablet should have
+	Parent               *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
+	XXX_unrecognized     []byte                `json:"-"`
+	XXX_sizecache        int32                 `json:"-"`
+}
+
+func (m *SlaveWasRestartedRequest) Reset()         { *m = SlaveWasRestartedRequest{} }
+func (m *SlaveWasRestartedRequest) String() string { return proto.CompactTextString(m) }
+func (*SlaveWasRestartedRequest) ProtoMessage()    {}
+func (*SlaveWasRestartedRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{106}
+}
+
+func (m *SlaveWasRestartedRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SlaveWasRestartedRequest.Unmarshal(m, b)
+}
+func (m *SlaveWasRestartedRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SlaveWasRestartedRequest.Marshal(b, m, deterministic)
+}
+func (m *SlaveWasRestartedRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SlaveWasRestartedRequest.Merge(m, src)
+}
+func (m *SlaveWasRestartedRequest) XXX_Size() int {
+	return xxx_messageInfo_SlaveWasRestartedRequest.Size(m)
+}
+func (m *SlaveWasRestartedRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_SlaveWasRestartedRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SlaveWasRestartedRequest proto.InternalMessageInfo
+
+func (m *SlaveWasRestartedRequest) GetParent() *topodata.TabletAlias {
+	if m != nil {
+		return m.Parent
+	}
+	return nil
+}
+
+// Deprecated
+type SlaveWasRestartedResponse struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SlaveWasRestartedResponse) Reset()         { *m = SlaveWasRestartedResponse{} }
+func (m *SlaveWasRestartedResponse) String() string { return proto.CompactTextString(m) }
+func (*SlaveWasRestartedResponse) ProtoMessage()    {}
+func (*SlaveWasRestartedResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ff9ac4f89e61ffa4, []int{107}
+}
+
+func (m *SlaveWasRestartedResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SlaveWasRestartedResponse.Unmarshal(m, b)
+}
+func (m *SlaveWasRestartedResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SlaveWasRestartedResponse.Marshal(b, m, deterministic)
+}
+func (m *SlaveWasRestartedResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SlaveWasRestartedResponse.Merge(m, src)
+}
+func (m *SlaveWasRestartedResponse) XXX_Size() int {
+	return xxx_messageInfo_SlaveWasRestartedResponse.Size(m)
+}
+func (m *SlaveWasRestartedResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_SlaveWasRestartedResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SlaveWasRestartedResponse proto.InternalMessageInfo
+
 func init() {
 	proto.RegisterType((*TableDefinition)(nil), "tabletmanagerdata.TableDefinition")
 	proto.RegisterType((*SchemaDefinition)(nil), "tabletmanagerdata.SchemaDefinition")
@@ -3656,22 +4321,22 @@ func init() {
 	proto.RegisterType((*ExecuteFetchAsAllPrivsResponse)(nil), "tabletmanagerdata.ExecuteFetchAsAllPrivsResponse")
 	proto.RegisterType((*ExecuteFetchAsAppRequest)(nil), "tabletmanagerdata.ExecuteFetchAsAppRequest")
 	proto.RegisterType((*ExecuteFetchAsAppResponse)(nil), "tabletmanagerdata.ExecuteFetchAsAppResponse")
-	proto.RegisterType((*SlaveStatusRequest)(nil), "tabletmanagerdata.SlaveStatusRequest")
-	proto.RegisterType((*SlaveStatusResponse)(nil), "tabletmanagerdata.SlaveStatusResponse")
+	proto.RegisterType((*ReplicationStatusRequest)(nil), "tabletmanagerdata.ReplicationStatusRequest")
+	proto.RegisterType((*ReplicationStatusResponse)(nil), "tabletmanagerdata.ReplicationStatusResponse")
 	proto.RegisterType((*MasterPositionRequest)(nil), "tabletmanagerdata.MasterPositionRequest")
 	proto.RegisterType((*MasterPositionResponse)(nil), "tabletmanagerdata.MasterPositionResponse")
 	proto.RegisterType((*WaitForPositionRequest)(nil), "tabletmanagerdata.WaitForPositionRequest")
 	proto.RegisterType((*WaitForPositionResponse)(nil), "tabletmanagerdata.WaitForPositionResponse")
-	proto.RegisterType((*StopSlaveRequest)(nil), "tabletmanagerdata.StopSlaveRequest")
-	proto.RegisterType((*StopSlaveResponse)(nil), "tabletmanagerdata.StopSlaveResponse")
-	proto.RegisterType((*StopSlaveMinimumRequest)(nil), "tabletmanagerdata.StopSlaveMinimumRequest")
-	proto.RegisterType((*StopSlaveMinimumResponse)(nil), "tabletmanagerdata.StopSlaveMinimumResponse")
-	proto.RegisterType((*StartSlaveRequest)(nil), "tabletmanagerdata.StartSlaveRequest")
-	proto.RegisterType((*StartSlaveResponse)(nil), "tabletmanagerdata.StartSlaveResponse")
-	proto.RegisterType((*StartSlaveUntilAfterRequest)(nil), "tabletmanagerdata.StartSlaveUntilAfterRequest")
-	proto.RegisterType((*StartSlaveUntilAfterResponse)(nil), "tabletmanagerdata.StartSlaveUntilAfterResponse")
-	proto.RegisterType((*GetSlavesRequest)(nil), "tabletmanagerdata.GetSlavesRequest")
-	proto.RegisterType((*GetSlavesResponse)(nil), "tabletmanagerdata.GetSlavesResponse")
+	proto.RegisterType((*StopReplicationRequest)(nil), "tabletmanagerdata.StopReplicationRequest")
+	proto.RegisterType((*StopReplicationResponse)(nil), "tabletmanagerdata.StopReplicationResponse")
+	proto.RegisterType((*StopReplicationMinimumRequest)(nil), "tabletmanagerdata.StopReplicationMinimumRequest")
+	proto.RegisterType((*StopReplicationMinimumResponse)(nil), "tabletmanagerdata.StopReplicationMinimumResponse")
+	proto.RegisterType((*StartReplicationRequest)(nil), "tabletmanagerdata.StartReplicationRequest")
+	proto.RegisterType((*StartReplicationResponse)(nil), "tabletmanagerdata.StartReplicationResponse")
+	proto.RegisterType((*StartReplicationUntilAfterRequest)(nil), "tabletmanagerdata.StartReplicationUntilAfterRequest")
+	proto.RegisterType((*StartReplicationUntilAfterResponse)(nil), "tabletmanagerdata.StartReplicationUntilAfterResponse")
+	proto.RegisterType((*GetReplicasRequest)(nil), "tabletmanagerdata.GetReplicasRequest")
+	proto.RegisterType((*GetReplicasResponse)(nil), "tabletmanagerdata.GetReplicasResponse")
 	proto.RegisterType((*ResetReplicationRequest)(nil), "tabletmanagerdata.ResetReplicationRequest")
 	proto.RegisterType((*ResetReplicationResponse)(nil), "tabletmanagerdata.ResetReplicationResponse")
 	proto.RegisterType((*VReplicationExecRequest)(nil), "tabletmanagerdata.VReplicationExecRequest")
@@ -3682,18 +4347,18 @@ func init() {
 	proto.RegisterType((*InitMasterResponse)(nil), "tabletmanagerdata.InitMasterResponse")
 	proto.RegisterType((*PopulateReparentJournalRequest)(nil), "tabletmanagerdata.PopulateReparentJournalRequest")
 	proto.RegisterType((*PopulateReparentJournalResponse)(nil), "tabletmanagerdata.PopulateReparentJournalResponse")
-	proto.RegisterType((*InitSlaveRequest)(nil), "tabletmanagerdata.InitSlaveRequest")
-	proto.RegisterType((*InitSlaveResponse)(nil), "tabletmanagerdata.InitSlaveResponse")
+	proto.RegisterType((*InitReplicaRequest)(nil), "tabletmanagerdata.InitReplicaRequest")
+	proto.RegisterType((*InitReplicaResponse)(nil), "tabletmanagerdata.InitReplicaResponse")
 	proto.RegisterType((*DemoteMasterRequest)(nil), "tabletmanagerdata.DemoteMasterRequest")
 	proto.RegisterType((*DemoteMasterResponse)(nil), "tabletmanagerdata.DemoteMasterResponse")
 	proto.RegisterType((*UndoDemoteMasterRequest)(nil), "tabletmanagerdata.UndoDemoteMasterRequest")
 	proto.RegisterType((*UndoDemoteMasterResponse)(nil), "tabletmanagerdata.UndoDemoteMasterResponse")
-	proto.RegisterType((*SlaveWasPromotedRequest)(nil), "tabletmanagerdata.SlaveWasPromotedRequest")
-	proto.RegisterType((*SlaveWasPromotedResponse)(nil), "tabletmanagerdata.SlaveWasPromotedResponse")
+	proto.RegisterType((*ReplicaWasPromotedRequest)(nil), "tabletmanagerdata.ReplicaWasPromotedRequest")
+	proto.RegisterType((*ReplicaWasPromotedResponse)(nil), "tabletmanagerdata.ReplicaWasPromotedResponse")
 	proto.RegisterType((*SetMasterRequest)(nil), "tabletmanagerdata.SetMasterRequest")
 	proto.RegisterType((*SetMasterResponse)(nil), "tabletmanagerdata.SetMasterResponse")
-	proto.RegisterType((*SlaveWasRestartedRequest)(nil), "tabletmanagerdata.SlaveWasRestartedRequest")
-	proto.RegisterType((*SlaveWasRestartedResponse)(nil), "tabletmanagerdata.SlaveWasRestartedResponse")
+	proto.RegisterType((*ReplicaWasRestartedRequest)(nil), "tabletmanagerdata.ReplicaWasRestartedRequest")
+	proto.RegisterType((*ReplicaWasRestartedResponse)(nil), "tabletmanagerdata.ReplicaWasRestartedResponse")
 	proto.RegisterType((*StopReplicationAndGetStatusRequest)(nil), "tabletmanagerdata.StopReplicationAndGetStatusRequest")
 	proto.RegisterType((*StopReplicationAndGetStatusResponse)(nil), "tabletmanagerdata.StopReplicationAndGetStatusResponse")
 	proto.RegisterType((*PromoteReplicaRequest)(nil), "tabletmanagerdata.PromoteReplicaRequest")
@@ -3702,137 +4367,163 @@ func init() {
 	proto.RegisterType((*BackupResponse)(nil), "tabletmanagerdata.BackupResponse")
 	proto.RegisterType((*RestoreFromBackupRequest)(nil), "tabletmanagerdata.RestoreFromBackupRequest")
 	proto.RegisterType((*RestoreFromBackupResponse)(nil), "tabletmanagerdata.RestoreFromBackupResponse")
+	proto.RegisterType((*SlaveStatusRequest)(nil), "tabletmanagerdata.SlaveStatusRequest")
+	proto.RegisterType((*SlaveStatusResponse)(nil), "tabletmanagerdata.SlaveStatusResponse")
+	proto.RegisterType((*StopSlaveRequest)(nil), "tabletmanagerdata.StopSlaveRequest")
+	proto.RegisterType((*StopSlaveResponse)(nil), "tabletmanagerdata.StopSlaveResponse")
+	proto.RegisterType((*StopSlaveMinimumRequest)(nil), "tabletmanagerdata.StopSlaveMinimumRequest")
+	proto.RegisterType((*StopSlaveMinimumResponse)(nil), "tabletmanagerdata.StopSlaveMinimumResponse")
+	proto.RegisterType((*StartSlaveRequest)(nil), "tabletmanagerdata.StartSlaveRequest")
+	proto.RegisterType((*StartSlaveResponse)(nil), "tabletmanagerdata.StartSlaveResponse")
+	proto.RegisterType((*StartSlaveUntilAfterRequest)(nil), "tabletmanagerdata.StartSlaveUntilAfterRequest")
+	proto.RegisterType((*StartSlaveUntilAfterResponse)(nil), "tabletmanagerdata.StartSlaveUntilAfterResponse")
+	proto.RegisterType((*GetSlavesRequest)(nil), "tabletmanagerdata.GetSlavesRequest")
+	proto.RegisterType((*GetSlavesResponse)(nil), "tabletmanagerdata.GetSlavesResponse")
+	proto.RegisterType((*InitSlaveRequest)(nil), "tabletmanagerdata.InitSlaveRequest")
+	proto.RegisterType((*InitSlaveResponse)(nil), "tabletmanagerdata.InitSlaveResponse")
+	proto.RegisterType((*SlaveWasPromotedRequest)(nil), "tabletmanagerdata.SlaveWasPromotedRequest")
+	proto.RegisterType((*SlaveWasPromotedResponse)(nil), "tabletmanagerdata.SlaveWasPromotedResponse")
+	proto.RegisterType((*SlaveWasRestartedRequest)(nil), "tabletmanagerdata.SlaveWasRestartedRequest")
+	proto.RegisterType((*SlaveWasRestartedResponse)(nil), "tabletmanagerdata.SlaveWasRestartedResponse")
 }
 
 func init() { proto.RegisterFile("tabletmanagerdata.proto", fileDescriptor_ff9ac4f89e61ffa4) }
 
 var fileDescriptor_ff9ac4f89e61ffa4 = []byte{
-	// 2029 bytes of a gzipped FileDescriptorProto
+	// 2154 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xcc, 0x59, 0xdd, 0x6e, 0x1b, 0xc7,
-	0x15, 0x06, 0x49, 0x49, 0xa6, 0x0e, 0x7f, 0x44, 0x2e, 0x29, 0x91, 0x92, 0x1b, 0x59, 0x5e, 0x3b,
-	0x8d, 0xeb, 0xa2, 0x54, 0xa2, 0xa4, 0x41, 0x90, 0xa2, 0x40, 0x65, 0x59, 0xb2, 0x9d, 0x28, 0xb1,
-	0xb2, 0xf2, 0x4f, 0x11, 0x14, 0x58, 0x0c, 0x77, 0x47, 0xe4, 0x42, 0xcb, 0x9d, 0xf5, 0xcc, 0x2c,
-	0x25, 0xbe, 0x44, 0x9f, 0xa0, 0x77, 0x05, 0xda, 0xfb, 0x5e, 0xf6, 0x41, 0xd2, 0x47, 0xe9, 0x45,
-	0x2f, 0x5a, 0xcc, 0xcf, 0x92, 0xb3, 0xe4, 0xca, 0x96, 0x5c, 0x17, 0xe8, 0x8d, 0xc1, 0xf9, 0xce,
-	0xff, 0x99, 0x73, 0xce, 0x9c, 0xb5, 0xa0, 0xc3, 0x51, 0x3f, 0xc4, 0x7c, 0x84, 0x22, 0x34, 0xc0,
-	0xd4, 0x47, 0x1c, 0xf5, 0x62, 0x4a, 0x38, 0xb1, 0x9a, 0x0b, 0x84, 0xad, 0xca, 0x9b, 0x04, 0xd3,
-	0x89, 0xa2, 0x6f, 0xd5, 0x39, 0x89, 0xc9, 0x8c, 0x7f, 0x6b, 0x9d, 0xe2, 0x38, 0x0c, 0x3c, 0xc4,
-	0x03, 0x12, 0x19, 0x70, 0x2d, 0x24, 0x83, 0x84, 0x07, 0xa1, 0x3a, 0xda, 0xff, 0x2e, 0xc0, 0xda,
-	0x0b, 0xa1, 0xf8, 0x31, 0x3e, 0x0b, 0xa2, 0x40, 0x30, 0x5b, 0x16, 0x2c, 0x45, 0x68, 0x84, 0xbb,
-	0x85, 0x9d, 0xc2, 0x83, 0x55, 0x47, 0xfe, 0xb6, 0x36, 0x60, 0x85, 0x79, 0x43, 0x3c, 0x42, 0xdd,
-	0xa2, 0x44, 0xf5, 0xc9, 0xea, 0xc2, 0x2d, 0x8f, 0x84, 0xc9, 0x28, 0x62, 0xdd, 0xd2, 0x4e, 0xe9,
-	0xc1, 0xaa, 0x93, 0x1e, 0xad, 0x1e, 0xb4, 0x62, 0x1a, 0x8c, 0x10, 0x9d, 0xb8, 0xe7, 0x78, 0xe2,
-	0xa6, 0x5c, 0x4b, 0x92, 0xab, 0xa9, 0x49, 0xdf, 0xe2, 0xc9, 0x81, 0xe6, 0xb7, 0x60, 0x89, 0x4f,
-	0x62, 0xdc, 0x5d, 0x56, 0x56, 0xc5, 0x6f, 0xeb, 0x0e, 0x54, 0x84, 0xeb, 0x6e, 0x88, 0xa3, 0x01,
-	0x1f, 0x76, 0x57, 0x76, 0x0a, 0x0f, 0x96, 0x1c, 0x10, 0xd0, 0xb1, 0x44, 0xac, 0xdb, 0xb0, 0x4a,
-	0xc9, 0x85, 0xeb, 0x91, 0x24, 0xe2, 0xdd, 0x5b, 0x92, 0x5c, 0xa6, 0xe4, 0xe2, 0x40, 0x9c, 0xad,
-	0xfb, 0xb0, 0x72, 0x16, 0xe0, 0xd0, 0x67, 0xdd, 0xf2, 0x4e, 0xe9, 0x41, 0x65, 0xaf, 0xda, 0x53,
-	0xf9, 0x3a, 0x12, 0xa0, 0xa3, 0x69, 0xf6, 0x5f, 0x0a, 0xd0, 0x38, 0x95, 0xc1, 0x18, 0x29, 0xf8,
-	0x04, 0xd6, 0x84, 0x95, 0x3e, 0x62, 0xd8, 0xd5, 0x71, 0xab, 0x6c, 0xd4, 0x53, 0x58, 0x89, 0x58,
-	0xcf, 0x41, 0xdd, 0x8b, 0xeb, 0x4f, 0x85, 0x59, 0xb7, 0x28, 0xcd, 0xd9, 0xbd, 0xc5, 0xab, 0x9c,
-	0x4b, 0xb5, 0xd3, 0xe0, 0x59, 0x80, 0x89, 0x84, 0x8e, 0x31, 0x65, 0x01, 0x89, 0xba, 0x25, 0x69,
-	0x31, 0x3d, 0x0a, 0x47, 0x2d, 0x65, 0xf5, 0x60, 0x88, 0xa2, 0x01, 0x76, 0x30, 0x4b, 0x42, 0x6e,
-	0x3d, 0x85, 0x5a, 0x1f, 0x9f, 0x11, 0x9a, 0x71, 0xb4, 0xb2, 0x77, 0x2f, 0xc7, 0xfa, 0x7c, 0x98,
-	0x4e, 0x55, 0x49, 0xea, 0x58, 0x8e, 0xa0, 0x8a, 0xce, 0x38, 0xa6, 0xae, 0x71, 0xd3, 0xd7, 0x54,
-	0x54, 0x91, 0x82, 0x0a, 0xb6, 0xff, 0x59, 0x80, 0xfa, 0x4b, 0x86, 0xe9, 0x09, 0xa6, 0xa3, 0x80,
-	0x31, 0x5d, 0x52, 0x43, 0xc2, 0x78, 0x5a, 0x52, 0xe2, 0xb7, 0xc0, 0x12, 0x86, 0xa9, 0x2e, 0x28,
-	0xf9, 0xdb, 0xfa, 0x25, 0x34, 0x63, 0xc4, 0xd8, 0x05, 0xa1, 0xbe, 0xeb, 0x0d, 0xb1, 0x77, 0xce,
-	0x92, 0x91, 0xcc, 0xc3, 0x92, 0xd3, 0x48, 0x09, 0x07, 0x1a, 0xb7, 0x7e, 0x00, 0x88, 0x69, 0x30,
-	0x0e, 0x42, 0x3c, 0xc0, 0xaa, 0xb0, 0x2a, 0x7b, 0x9f, 0xe5, 0x78, 0x9b, 0xf5, 0xa5, 0x77, 0x32,
-	0x95, 0x39, 0x8c, 0x38, 0x9d, 0x38, 0x86, 0x92, 0xad, 0xdf, 0xc2, 0xda, 0x1c, 0xd9, 0x6a, 0x40,
-	0xe9, 0x1c, 0x4f, 0xb4, 0xe7, 0xe2, 0xa7, 0xd5, 0x86, 0xe5, 0x31, 0x0a, 0x13, 0xac, 0x3d, 0x57,
-	0x87, 0xaf, 0x8b, 0x5f, 0x15, 0xec, 0x9f, 0x0a, 0x50, 0x7d, 0xdc, 0x7f, 0x47, 0xdc, 0x75, 0x28,
-	0xfa, 0x7d, 0x2d, 0x5b, 0xf4, 0xfb, 0xd3, 0x3c, 0x94, 0x8c, 0x3c, 0x3c, 0xcf, 0x09, 0x6d, 0x37,
-	0x27, 0x34, 0xd3, 0xd8, 0xff, 0x32, 0xb0, 0x3f, 0x17, 0xa0, 0x32, 0xb3, 0xc4, 0xac, 0x63, 0x68,
-	0x08, 0x3f, 0xdd, 0x78, 0x86, 0x75, 0x0b, 0xd2, 0xcb, 0xbb, 0xef, 0xbc, 0x00, 0x67, 0x2d, 0xc9,
-	0x9c, 0x99, 0x75, 0x04, 0x75, 0xbf, 0x9f, 0xd1, 0xa5, 0x3a, 0xe8, 0xce, 0x3b, 0x22, 0x76, 0x6a,
-	0xbe, 0x71, 0x62, 0xf6, 0x27, 0x50, 0x39, 0x09, 0xa2, 0x81, 0x83, 0xdf, 0x24, 0x98, 0x71, 0xd1,
-	0x4a, 0x31, 0x9a, 0x84, 0x04, 0xf9, 0x3a, 0xc8, 0xf4, 0x68, 0x3f, 0x80, 0xaa, 0x62, 0x64, 0x31,
-	0x89, 0x18, 0x7e, 0x0b, 0xe7, 0x43, 0xa8, 0x9e, 0x86, 0x18, 0xc7, 0xa9, 0xce, 0x2d, 0x28, 0xfb,
-	0x09, 0x95, 0x43, 0x55, 0xb2, 0x96, 0x9c, 0xe9, 0xd9, 0x5e, 0x83, 0x9a, 0xe6, 0x55, 0x6a, 0xed,
-	0x7f, 0x14, 0xc0, 0x3a, 0xbc, 0xc4, 0x5e, 0xc2, 0xf1, 0x53, 0x42, 0xce, 0x53, 0x1d, 0x79, 0xf3,
-	0x75, 0x1b, 0x20, 0x46, 0x14, 0x8d, 0x30, 0xc7, 0x54, 0x85, 0xbf, 0xea, 0x18, 0x88, 0x75, 0x02,
-	0xab, 0xf8, 0x92, 0x53, 0xe4, 0xe2, 0x68, 0x2c, 0x27, 0x6d, 0x65, 0xef, 0xf3, 0x9c, 0xec, 0x2c,
-	0x5a, 0xeb, 0x1d, 0x0a, 0xb1, 0xc3, 0x68, 0xac, 0x6a, 0xa2, 0x8c, 0xf5, 0x71, 0xeb, 0x37, 0x50,
-	0xcb, 0x90, 0x6e, 0x54, 0x0f, 0x67, 0xd0, 0xca, 0x98, 0xd2, 0x79, 0xbc, 0x03, 0x15, 0x7c, 0x19,
-	0x70, 0x97, 0x71, 0xc4, 0x13, 0xa6, 0x13, 0x04, 0x02, 0x3a, 0x95, 0x88, 0x7c, 0x46, 0xb8, 0x4f,
-	0x12, 0x3e, 0x7d, 0x46, 0xe4, 0x49, 0xe3, 0x98, 0xa6, 0x5d, 0xa0, 0x4f, 0xf6, 0x18, 0x1a, 0x4f,
-	0x30, 0x57, 0x73, 0x25, 0x4d, 0xdf, 0x06, 0xac, 0xc8, 0xc0, 0x55, 0xc5, 0xad, 0x3a, 0xfa, 0x64,
-	0xdd, 0x83, 0x5a, 0x10, 0x79, 0x61, 0xe2, 0x63, 0x77, 0x1c, 0xe0, 0x0b, 0x26, 0x4d, 0x94, 0x9d,
-	0xaa, 0x06, 0x5f, 0x09, 0xcc, 0xfa, 0x18, 0xea, 0xf8, 0x52, 0x31, 0x69, 0x25, 0xea, 0xd9, 0xaa,
-	0x69, 0x54, 0x0e, 0x68, 0x66, 0x63, 0x68, 0x1a, 0x76, 0x75, 0x74, 0x27, 0xd0, 0x54, 0x93, 0xd1,
-	0x18, 0xf6, 0x37, 0x99, 0xb6, 0x0d, 0x36, 0x87, 0xd8, 0x1d, 0x58, 0x7f, 0x82, 0xb9, 0x51, 0xc2,
-	0x3a, 0x46, 0xfb, 0x47, 0xd8, 0x98, 0x27, 0x68, 0x27, 0x7e, 0x07, 0x95, 0x6c, 0xd3, 0x09, 0xf3,
-	0xdb, 0x39, 0xe6, 0x4d, 0x61, 0x53, 0xc4, 0x6e, 0x83, 0x75, 0x8a, 0xb9, 0x83, 0x91, 0xff, 0x3c,
-	0x0a, 0x27, 0xa9, 0xc5, 0x75, 0x68, 0x65, 0x50, 0x5d, 0xc2, 0x33, 0xf8, 0x35, 0x0d, 0x38, 0x4e,
-	0xb9, 0x37, 0xa0, 0x9d, 0x85, 0x35, 0xfb, 0x37, 0xd0, 0x54, 0x8f, 0xd3, 0x8b, 0x49, 0x9c, 0x32,
-	0x5b, 0xbf, 0x86, 0x8a, 0x72, 0xcf, 0x95, 0x0f, 0xbc, 0x70, 0xb9, 0xbe, 0xd7, 0xee, 0x4d, 0xf7,
-	0x15, 0x99, 0x73, 0x2e, 0x25, 0x80, 0x4f, 0x7f, 0x0b, 0x3f, 0x4d, 0x5d, 0x33, 0x87, 0x1c, 0x7c,
-	0x46, 0x31, 0x1b, 0x8a, 0x92, 0x32, 0x1d, 0xca, 0xc2, 0x9a, 0xbd, 0x03, 0xeb, 0x4e, 0x12, 0x3d,
-	0xc5, 0x28, 0xe4, 0x43, 0xf9, 0x70, 0xa4, 0x02, 0x5d, 0xd8, 0x98, 0x27, 0x68, 0x91, 0x2f, 0xa0,
-	0xfb, 0x6c, 0x10, 0x11, 0x8a, 0x15, 0xf1, 0x90, 0x52, 0x42, 0x33, 0x23, 0x85, 0x73, 0x4c, 0xa3,
-	0xd9, 0xa0, 0x90, 0x47, 0xfb, 0x36, 0x6c, 0xe6, 0x48, 0x69, 0x95, 0x5f, 0x0b, 0xa7, 0xc5, 0x3c,
-	0xc9, 0x56, 0xf2, 0x3d, 0xa8, 0x5d, 0xa0, 0x80, 0xbb, 0x31, 0x61, 0xb3, 0x62, 0x5a, 0x75, 0xaa,
-	0x02, 0x3c, 0xd1, 0x98, 0x8a, 0xcc, 0x94, 0xd5, 0x3a, 0xf7, 0x60, 0xe3, 0x84, 0xe2, 0xb3, 0x30,
-	0x18, 0x0c, 0xe7, 0x1a, 0x44, 0xec, 0x64, 0x32, 0x71, 0x69, 0x87, 0xa4, 0x47, 0x7b, 0x00, 0x9d,
-	0x05, 0x19, 0x5d, 0x57, 0xc7, 0x50, 0x57, 0x5c, 0x2e, 0x95, 0x7b, 0x45, 0x3a, 0xcf, 0x3f, 0xbe,
-	0xb2, 0xb2, 0xcd, 0x2d, 0xc4, 0xa9, 0x79, 0xc6, 0x89, 0xd9, 0xff, 0x2a, 0x80, 0xb5, 0x1f, 0xc7,
-	0xe1, 0x24, 0xeb, 0x59, 0x03, 0x4a, 0xec, 0x4d, 0x98, 0x8e, 0x18, 0xf6, 0x26, 0x14, 0x23, 0xe6,
-	0x8c, 0x50, 0x0f, 0xeb, 0x66, 0x55, 0x07, 0xb1, 0x06, 0xa0, 0x30, 0x24, 0x17, 0xae, 0xb1, 0xc3,
-	0xca, 0xc9, 0x50, 0x76, 0x1a, 0x92, 0xe0, 0xcc, 0xf0, 0xc5, 0x05, 0x68, 0xe9, 0x43, 0x2d, 0x40,
-	0xcb, 0xef, 0xb9, 0x00, 0xfd, 0xb5, 0x00, 0xad, 0x4c, 0xf4, 0x3a, 0xc7, 0xff, 0x7f, 0xab, 0x5a,
-	0x0b, 0x9a, 0xc7, 0xc4, 0x3b, 0x57, 0x53, 0x2f, 0x6d, 0x8d, 0x36, 0x58, 0x26, 0x38, 0x6b, 0xbc,
-	0x97, 0x51, 0xb8, 0xc0, 0xbc, 0x01, 0xed, 0x2c, 0xac, 0xd9, 0xff, 0x56, 0x80, 0xae, 0x7e, 0x22,
-	0x8e, 0x30, 0xf7, 0x86, 0xfb, 0xec, 0x71, 0x7f, 0x5a, 0x07, 0x6d, 0x58, 0x96, 0xab, 0xb8, 0x4c,
-	0x40, 0xd5, 0x51, 0x07, 0xab, 0x03, 0xb7, 0xfc, 0xbe, 0x2b, 0x9f, 0x46, 0xfd, 0x3a, 0xf8, 0xfd,
-	0xef, 0xc5, 0xe3, 0xb8, 0x09, 0xe5, 0x11, 0xba, 0x74, 0x29, 0xb9, 0x60, 0x7a, 0x19, 0xbc, 0x35,
-	0x42, 0x97, 0x0e, 0xb9, 0x60, 0x72, 0x51, 0x0f, 0x98, 0xdc, 0xc0, 0xfb, 0x41, 0x14, 0x92, 0x01,
-	0x93, 0xd7, 0x5f, 0x76, 0xea, 0x1a, 0x7e, 0xa4, 0x50, 0xd1, 0x6b, 0x54, 0xb6, 0x91, 0x79, 0xb9,
-	0x65, 0xa7, 0x4a, 0x8d, 0xde, 0xb2, 0x9f, 0xc0, 0x66, 0x8e, 0xcf, 0xfa, 0xf6, 0x1e, 0xc2, 0x8a,
-	0x6a, 0x0d, 0x7d, 0x6d, 0x96, 0xfe, 0x9c, 0xf8, 0x41, 0xfc, 0xab, 0xdb, 0x40, 0x73, 0xd8, 0x7f,
-	0x2c, 0xc0, 0x47, 0x59, 0x4d, 0xfb, 0x61, 0x28, 0x16, 0x30, 0xf6, 0xe1, 0x53, 0xb0, 0x10, 0xd9,
-	0x52, 0x4e, 0x64, 0xc7, 0xb0, 0x7d, 0x95, 0x3f, 0xef, 0x11, 0xde, 0xb7, 0xf3, 0x77, 0xbb, 0x1f,
-	0xc7, 0x6f, 0x0f, 0xcc, 0xf4, 0xbf, 0x98, 0xf1, 0x7f, 0x31, 0xe9, 0x52, 0xd9, 0x7b, 0x78, 0x25,
-	0x1e, 0xb6, 0x10, 0x8d, 0xb1, 0xda, 0x35, 0xd2, 0x02, 0x3d, 0x82, 0x56, 0x06, 0xd5, 0x8a, 0x77,
-	0xc5, 0xc6, 0x31, 0xdd, 0x52, 0x2a, 0x7b, 0x9d, 0xde, 0xfc, 0xf7, 0xb2, 0x16, 0xd0, 0x6c, 0xe2,
-	0x25, 0xf9, 0x0e, 0x31, 0x8e, 0x69, 0x3a, 0x99, 0x53, 0x03, 0x5f, 0xc0, 0xc6, 0x3c, 0x41, 0xdb,
-	0xd8, 0x82, 0xf2, 0xdc, 0x68, 0x9f, 0x9e, 0x85, 0xd4, 0x6b, 0x14, 0xf0, 0x23, 0x32, 0xaf, 0xef,
-	0xad, 0x52, 0x9b, 0xd0, 0x59, 0x90, 0xd2, 0x0d, 0x67, 0x41, 0xe3, 0x94, 0x93, 0x58, 0xc6, 0x9a,
-	0xba, 0xd6, 0x82, 0xa6, 0x81, 0x69, 0xc6, 0xdf, 0x43, 0x67, 0x0a, 0x7e, 0x17, 0x44, 0xc1, 0x28,
-	0x19, 0x5d, 0xc3, 0xb4, 0x75, 0x17, 0xe4, 0xbb, 0xe4, 0xf2, 0x60, 0x84, 0xd3, 0x05, 0xae, 0xe4,
-	0x54, 0x04, 0xf6, 0x42, 0x41, 0xf6, 0x97, 0xd0, 0x5d, 0xd4, 0x7c, 0x8d, 0x5c, 0x48, 0x37, 0x11,
-	0xe5, 0x19, 0xdf, 0xc5, 0x6d, 0x1a, 0xa0, 0x76, 0xfe, 0x0f, 0x70, 0x7b, 0x86, 0xbe, 0x8c, 0x78,
-	0x10, 0xee, 0x8b, 0x71, 0xf6, 0x81, 0x02, 0xd8, 0x86, 0x9f, 0xe5, 0x6b, 0x9f, 0xe5, 0x58, 0xac,
-	0x85, 0x82, 0x3a, 0xad, 0xaf, 0x5f, 0xa8, 0x55, 0x51, 0x63, 0x3a, 0xda, 0x36, 0x2c, 0x23, 0xdf,
-	0xa7, 0xe9, 0x03, 0xac, 0x0e, 0xe2, 0xf6, 0x1c, 0xcc, 0xc4, 0xde, 0x34, 0xad, 0xb4, 0x54, 0xcb,
-	0x16, 0x74, 0x17, 0x49, 0xda, 0xea, 0x2e, 0x74, 0x5e, 0x19, 0xb8, 0x68, 0x96, 0xdc, 0x66, 0x5b,
-	0xd5, 0xcd, 0x66, 0x1f, 0x41, 0x77, 0x51, 0xe0, 0xbd, 0xda, 0xfc, 0x23, 0x53, 0xcf, 0xac, 0xf2,
-	0x52, 0xf3, 0x75, 0x28, 0x06, 0xbe, 0x5e, 0xf3, 0x8b, 0x81, 0x9f, 0x49, 0x7f, 0x71, 0xee, 0x92,
-	0x77, 0x60, 0xfb, 0x2a, 0x65, 0x3a, 0xce, 0x16, 0x34, 0x9f, 0x45, 0x01, 0x57, 0xcd, 0x94, 0x26,
-	0xe6, 0x53, 0xb0, 0x4c, 0xf0, 0x1a, 0xd5, 0xf4, 0x53, 0x01, 0xb6, 0x4f, 0x48, 0x9c, 0x84, 0x72,
-	0x0f, 0x8c, 0x11, 0xc5, 0x11, 0xff, 0x86, 0x24, 0x34, 0x42, 0x61, 0xea, 0xf7, 0xcf, 0x61, 0x4d,
-	0x54, 0x81, 0xeb, 0x51, 0x8c, 0x38, 0xf6, 0xdd, 0x28, 0xfd, 0x56, 0xa9, 0x09, 0xf8, 0x40, 0xa1,
-	0xdf, 0x33, 0xf1, 0x3d, 0x83, 0x3c, 0xa1, 0xd4, 0x1c, 0xc9, 0xa0, 0x20, 0x39, 0x96, 0xbf, 0x82,
-	0xea, 0x48, 0x7a, 0xe6, 0xa2, 0x30, 0x40, 0x6a, 0x34, 0x57, 0xf6, 0xd6, 0xe7, 0x77, 0xdb, 0x7d,
-	0x41, 0x74, 0x2a, 0x8a, 0x55, 0x1e, 0xac, 0xcf, 0xa0, 0x6d, 0x0c, 0x9c, 0xd9, 0x0a, 0xb8, 0x24,
-	0x6d, 0xb4, 0x0c, 0xda, 0x74, 0x13, 0xbc, 0x0b, 0x77, 0xae, 0x8c, 0x4b, 0xa7, 0xf0, 0x4f, 0x05,
-	0x68, 0x88, 0x74, 0x99, 0x9d, 0x64, 0xfd, 0x0a, 0x56, 0x14, 0xb7, 0xbe, 0xf2, 0x2b, 0xdc, 0xd3,
-	0x4c, 0x57, 0x7a, 0x56, 0xbc, 0xd2, 0xb3, 0xbc, 0x7c, 0x96, 0x72, 0xf2, 0x99, 0xde, 0x70, 0xb6,
-	0xa5, 0xd7, 0xa1, 0xf5, 0x18, 0x8f, 0x08, 0xc7, 0xd9, 0x8b, 0xdf, 0x83, 0x76, 0x16, 0xbe, 0xc6,
-	0xd5, 0x6f, 0x42, 0xe7, 0x65, 0xe4, 0x93, 0x3c, 0x75, 0x5b, 0xd0, 0x5d, 0x24, 0x69, 0x0f, 0x36,
-	0xa1, 0x23, 0x5d, 0x7a, 0x8d, 0xd8, 0x09, 0x25, 0x82, 0xc1, 0x37, 0xc4, 0x16, 0x49, 0x5a, 0xec,
-	0xef, 0x05, 0x68, 0x9c, 0xe2, 0x6c, 0xbd, 0xde, 0x34, 0xd9, 0x39, 0x99, 0x2b, 0xe6, 0x55, 0xe2,
-	0xc2, 0xa7, 0xc2, 0xd2, 0xe2, 0xa7, 0x82, 0xf5, 0x10, 0x9a, 0x72, 0x7f, 0x16, 0xdf, 0xdf, 0x94,
-	0xbb, 0x4c, 0x38, 0xae, 0xd7, 0xe6, 0x35, 0x49, 0x98, 0x0d, 0x37, 0x39, 0x73, 0xf1, 0x5c, 0x5b,
-	0xd9, 0xcf, 0x66, 0xd1, 0x3a, 0x58, 0x2a, 0x99, 0x66, 0xe2, 0x86, 0x81, 0x89, 0xef, 0xa1, 0x1c,
-	0x55, 0xda, 0xce, 0x7d, 0xb0, 0xc5, 0x43, 0x61, 0x8c, 0x83, 0xfd, 0xc8, 0x17, 0x53, 0x34, 0xf3,
-	0x72, 0xbf, 0x82, 0x7b, 0x6f, 0xe5, 0xfa, 0x2f, 0x5e, 0x72, 0x7d, 0x97, 0x5a, 0xb5, 0xf1, 0x92,
-	0xcf, 0x13, 0xae, 0x51, 0x74, 0xa7, 0x50, 0x7b, 0x84, 0xbc, 0xf3, 0x64, 0xba, 0x01, 0xed, 0x40,
-	0xc5, 0x23, 0x91, 0x97, 0x50, 0x8a, 0x23, 0x6f, 0xa2, 0x27, 0x8b, 0x09, 0x09, 0x0e, 0xf9, 0x19,
-	0xa3, 0xd2, 0xaf, 0xbf, 0x7d, 0x4c, 0xc8, 0xfe, 0x12, 0xea, 0xa9, 0x52, 0xed, 0xc2, 0x7d, 0x58,
-	0xc6, 0xe3, 0x59, 0xfa, 0xeb, 0xbd, 0xf4, 0x3f, 0xf2, 0x0f, 0x05, 0xea, 0x28, 0xa2, 0x7e, 0x47,
-	0x38, 0xa1, 0xf8, 0x88, 0x92, 0x51, 0xc6, 0x2f, 0x7b, 0x1f, 0x36, 0x73, 0x68, 0x37, 0x51, 0xff,
-	0xe8, 0xd3, 0x1f, 0x7b, 0xe3, 0x80, 0x63, 0xc6, 0x7a, 0x01, 0xd9, 0x55, 0xbf, 0x76, 0x07, 0x64,
-	0x77, 0xcc, 0x77, 0xe5, 0x9f, 0x13, 0x76, 0x17, 0xbe, 0x3f, 0xfa, 0x2b, 0x92, 0xf0, 0xf9, 0x7f,
-	0x02, 0x00, 0x00, 0xff, 0xff, 0xb9, 0xf1, 0x1f, 0x3a, 0xd8, 0x18, 0x00, 0x00,
+	0x15, 0x06, 0xa9, 0x1f, 0x4b, 0x87, 0x3f, 0xa2, 0x56, 0x94, 0x48, 0x51, 0xb1, 0x2c, 0xaf, 0x9d,
+	0xc6, 0x4d, 0x50, 0x2a, 0x51, 0x52, 0x23, 0x48, 0x5b, 0xa0, 0xb2, 0x2d, 0xd9, 0x8e, 0x95, 0x58,
+	0x59, 0xf9, 0xa7, 0x08, 0x8a, 0x2e, 0x86, 0xdc, 0x11, 0xb5, 0xd0, 0x72, 0x67, 0x3d, 0x33, 0x4b,
+	0x89, 0x2f, 0xd1, 0x27, 0x28, 0x7a, 0x53, 0xa0, 0xbd, 0xef, 0x43, 0xf4, 0x11, 0xd2, 0x47, 0xe9,
+	0x45, 0x2f, 0x5a, 0xcc, 0xcc, 0x59, 0x72, 0x97, 0x5c, 0xc9, 0xb2, 0xa3, 0x00, 0xb9, 0x11, 0x76,
+	0xbe, 0xf3, 0x7f, 0xe6, 0xcc, 0x99, 0x33, 0x14, 0x34, 0x24, 0xe9, 0x04, 0x54, 0xf6, 0x49, 0x48,
+	0x7a, 0x94, 0x7b, 0x44, 0x92, 0x76, 0xc4, 0x99, 0x64, 0xd6, 0xf2, 0x14, 0xa1, 0x55, 0x7a, 0x13,
+	0x53, 0x3e, 0x34, 0xf4, 0x56, 0x55, 0xb2, 0x88, 0x8d, 0xf9, 0x5b, 0xab, 0x9c, 0x46, 0x81, 0xdf,
+	0x25, 0xd2, 0x67, 0x61, 0x0a, 0xae, 0x04, 0xac, 0x17, 0x4b, 0x3f, 0x30, 0x4b, 0xfb, 0x7f, 0x05,
+	0x58, 0x7a, 0xa1, 0x14, 0x3f, 0xa2, 0xc7, 0x7e, 0xe8, 0x2b, 0x66, 0xcb, 0x82, 0xd9, 0x90, 0xf4,
+	0x69, 0xb3, 0xb0, 0x55, 0xb8, 0xb7, 0xe8, 0xe8, 0x6f, 0x6b, 0x0d, 0xe6, 0x45, 0xf7, 0x84, 0xf6,
+	0x49, 0xb3, 0xa8, 0x51, 0x5c, 0x59, 0x4d, 0xb8, 0xd1, 0x65, 0x41, 0xdc, 0x0f, 0x45, 0x73, 0x66,
+	0x6b, 0xe6, 0xde, 0xa2, 0x93, 0x2c, 0xad, 0x36, 0xac, 0x44, 0xdc, 0xef, 0x13, 0x3e, 0x74, 0x4f,
+	0xe9, 0xd0, 0x4d, 0xb8, 0x66, 0x35, 0xd7, 0x32, 0x92, 0x9e, 0xd1, 0xe1, 0x43, 0xe4, 0xb7, 0x60,
+	0x56, 0x0e, 0x23, 0xda, 0x9c, 0x33, 0x56, 0xd5, 0xb7, 0x75, 0x0b, 0x4a, 0xca, 0x75, 0x37, 0xa0,
+	0x61, 0x4f, 0x9e, 0x34, 0xe7, 0xb7, 0x0a, 0xf7, 0x66, 0x1d, 0x50, 0xd0, 0x81, 0x46, 0xac, 0x0d,
+	0x58, 0xe4, 0xec, 0xcc, 0xed, 0xb2, 0x38, 0x94, 0xcd, 0x1b, 0x9a, 0xbc, 0xc0, 0xd9, 0xd9, 0x43,
+	0xb5, 0xb6, 0xee, 0xc2, 0xfc, 0xb1, 0x4f, 0x03, 0x4f, 0x34, 0x17, 0xb6, 0x66, 0xee, 0x95, 0x76,
+	0xca, 0x6d, 0x93, 0xaf, 0x7d, 0x05, 0x3a, 0x48, 0xb3, 0xff, 0x5e, 0x80, 0xda, 0x91, 0x0e, 0x26,
+	0x95, 0x82, 0x8f, 0x60, 0x49, 0x59, 0xe9, 0x10, 0x41, 0x5d, 0x8c, 0xdb, 0x64, 0xa3, 0x9a, 0xc0,
+	0x46, 0xc4, 0x7a, 0x0e, 0x66, 0x5f, 0x5c, 0x6f, 0x24, 0x2c, 0x9a, 0x45, 0x6d, 0xce, 0x6e, 0x4f,
+	0x6f, 0xe5, 0x44, 0xaa, 0x9d, 0x9a, 0xcc, 0x02, 0x42, 0x25, 0x74, 0x40, 0xb9, 0xf0, 0x59, 0xd8,
+	0x9c, 0xd1, 0x16, 0x93, 0xa5, 0x72, 0xd4, 0x32, 0x56, 0x1f, 0x9e, 0x90, 0xb0, 0x47, 0x1d, 0x2a,
+	0xe2, 0x40, 0x5a, 0x4f, 0xa0, 0xd2, 0xa1, 0xc7, 0x8c, 0x67, 0x1c, 0x2d, 0xed, 0xdc, 0xc9, 0xb1,
+	0x3e, 0x19, 0xa6, 0x53, 0x36, 0x92, 0x18, 0xcb, 0x3e, 0x94, 0xc9, 0xb1, 0xa4, 0xdc, 0x4d, 0xed,
+	0xf4, 0x15, 0x15, 0x95, 0xb4, 0xa0, 0x81, 0xed, 0xff, 0x14, 0xa0, 0xfa, 0x52, 0x50, 0x7e, 0x48,
+	0x79, 0xdf, 0x17, 0x02, 0x4b, 0xea, 0x84, 0x09, 0x99, 0x94, 0x94, 0xfa, 0x56, 0x58, 0x2c, 0x28,
+	0xc7, 0x82, 0xd2, 0xdf, 0xd6, 0x27, 0xb0, 0x1c, 0x11, 0x21, 0xce, 0x18, 0xf7, 0xdc, 0xee, 0x09,
+	0xed, 0x9e, 0x8a, 0xb8, 0xaf, 0xf3, 0x30, 0xeb, 0xd4, 0x12, 0xc2, 0x43, 0xc4, 0xad, 0xef, 0x00,
+	0x22, 0xee, 0x0f, 0xfc, 0x80, 0xf6, 0xa8, 0x29, 0xac, 0xd2, 0xce, 0x67, 0x39, 0xde, 0x66, 0x7d,
+	0x69, 0x1f, 0x8e, 0x64, 0xf6, 0x42, 0xc9, 0x87, 0x4e, 0x4a, 0x49, 0xeb, 0x77, 0xb0, 0x34, 0x41,
+	0xb6, 0x6a, 0x30, 0x73, 0x4a, 0x87, 0xe8, 0xb9, 0xfa, 0xb4, 0xea, 0x30, 0x37, 0x20, 0x41, 0x4c,
+	0xd1, 0x73, 0xb3, 0xf8, 0xaa, 0xf8, 0x65, 0xc1, 0xfe, 0xa1, 0x00, 0xe5, 0x47, 0x9d, 0xb7, 0xc4,
+	0x5d, 0x85, 0xa2, 0xd7, 0x41, 0xd9, 0xa2, 0xd7, 0x19, 0xe5, 0x61, 0x26, 0x95, 0x87, 0xe7, 0x39,
+	0xa1, 0x6d, 0xe7, 0x84, 0x96, 0x36, 0xf6, 0x53, 0x06, 0xf6, 0xb7, 0x02, 0x94, 0xc6, 0x96, 0x84,
+	0x75, 0x00, 0x35, 0xe5, 0xa7, 0x1b, 0x8d, 0xb1, 0x66, 0x41, 0x7b, 0x79, 0xfb, 0xad, 0x1b, 0xe0,
+	0x2c, 0xc5, 0x99, 0xb5, 0xb0, 0xf6, 0xa1, 0xea, 0x75, 0x32, 0xba, 0xcc, 0x09, 0xba, 0xf5, 0x96,
+	0x88, 0x9d, 0x8a, 0x97, 0x5a, 0x09, 0xfb, 0x23, 0x28, 0x1d, 0xfa, 0x61, 0xcf, 0xa1, 0x6f, 0x62,
+	0x2a, 0xa4, 0x3a, 0x4a, 0x11, 0x19, 0x06, 0x8c, 0x78, 0x18, 0x64, 0xb2, 0xb4, 0xef, 0x41, 0xd9,
+	0x30, 0x8a, 0x88, 0x85, 0x82, 0x5e, 0xc2, 0xf9, 0x31, 0x94, 0x8f, 0x02, 0x4a, 0xa3, 0x44, 0x67,
+	0x0b, 0x16, 0xbc, 0x98, 0xeb, 0xa6, 0xaa, 0x59, 0x67, 0x9c, 0xd1, 0xda, 0x5e, 0x82, 0x0a, 0xf2,
+	0x1a, 0xb5, 0xf6, 0xbf, 0x0b, 0x60, 0xed, 0x9d, 0xd3, 0x6e, 0x2c, 0xe9, 0x13, 0xc6, 0x4e, 0x13,
+	0x1d, 0x79, 0xfd, 0x75, 0x13, 0x20, 0x22, 0x9c, 0xf4, 0xa9, 0xa4, 0xdc, 0x84, 0xbf, 0xe8, 0xa4,
+	0x10, 0xeb, 0x10, 0x16, 0xe9, 0xb9, 0xe4, 0xc4, 0xa5, 0xe1, 0x40, 0x77, 0xda, 0xd2, 0xce, 0xe7,
+	0x39, 0xd9, 0x99, 0xb6, 0xd6, 0xde, 0x53, 0x62, 0x7b, 0xe1, 0xc0, 0xd4, 0xc4, 0x02, 0xc5, 0x65,
+	0xeb, 0x37, 0x50, 0xc9, 0x90, 0xde, 0xa9, 0x1e, 0x8e, 0x61, 0x25, 0x63, 0x0a, 0xf3, 0x78, 0x0b,
+	0x4a, 0xf4, 0xdc, 0x97, 0xae, 0x90, 0x44, 0xc6, 0x02, 0x13, 0x04, 0x0a, 0x3a, 0xd2, 0x88, 0xbe,
+	0x46, 0xa4, 0xc7, 0x62, 0x39, 0xba, 0x46, 0xf4, 0x0a, 0x71, 0xca, 0x93, 0x53, 0x80, 0x2b, 0x7b,
+	0x00, 0xb5, 0xc7, 0x54, 0x9a, 0xbe, 0x92, 0xa4, 0x6f, 0x0d, 0xe6, 0x75, 0xe0, 0xa6, 0xe2, 0x16,
+	0x1d, 0x5c, 0x59, 0x77, 0xa0, 0xe2, 0x87, 0xdd, 0x20, 0xf6, 0xa8, 0x3b, 0xf0, 0xe9, 0x99, 0xd0,
+	0x26, 0x16, 0x9c, 0x32, 0x82, 0xaf, 0x14, 0x66, 0x7d, 0x08, 0x55, 0x7a, 0x6e, 0x98, 0x50, 0x89,
+	0xb9, 0xb6, 0x2a, 0x88, 0xea, 0x06, 0x2d, 0x6c, 0x0a, 0xcb, 0x29, 0xbb, 0x18, 0xdd, 0x21, 0x2c,
+	0x9b, 0xce, 0x98, 0x6a, 0xf6, 0xef, 0xd2, 0x6d, 0x6b, 0x62, 0x02, 0xb1, 0x1b, 0xb0, 0xfa, 0x98,
+	0xca, 0x54, 0x09, 0x63, 0x8c, 0xf6, 0xf7, 0xb0, 0x36, 0x49, 0x40, 0x27, 0x7e, 0x0f, 0xa5, 0xec,
+	0xa1, 0x53, 0xe6, 0x37, 0x73, 0xcc, 0xa7, 0x85, 0xd3, 0x22, 0x76, 0x1d, 0xac, 0x23, 0x2a, 0x1d,
+	0x4a, 0xbc, 0xe7, 0x61, 0x30, 0x4c, 0x2c, 0xae, 0xc2, 0x4a, 0x06, 0xc5, 0x12, 0x1e, 0xc3, 0xaf,
+	0xb9, 0x2f, 0x69, 0xc2, 0xbd, 0x06, 0xf5, 0x2c, 0x8c, 0xec, 0x5f, 0xc3, 0xb2, 0xb9, 0x9c, 0x5e,
+	0x0c, 0xa3, 0x84, 0xd9, 0xfa, 0x35, 0x94, 0x8c, 0x7b, 0xae, 0xbe, 0xe0, 0x95, 0xcb, 0xd5, 0x9d,
+	0x7a, 0x7b, 0x34, 0xaf, 0xe8, 0x9c, 0x4b, 0x2d, 0x01, 0x72, 0xf4, 0xad, 0xfc, 0x4c, 0xeb, 0x1a,
+	0x3b, 0xe4, 0xd0, 0x63, 0x4e, 0xc5, 0x89, 0x2a, 0xa9, 0xb4, 0x43, 0x59, 0x18, 0xd9, 0x1b, 0xb0,
+	0xea, 0xc4, 0xe1, 0x13, 0x4a, 0x02, 0x79, 0xa2, 0x2f, 0x8e, 0x44, 0xa0, 0x09, 0x6b, 0x93, 0x04,
+	0x14, 0xf9, 0x02, 0x9a, 0x4f, 0x7b, 0x21, 0xe3, 0xd4, 0x10, 0xf7, 0x38, 0x67, 0x3c, 0xd3, 0x52,
+	0xa4, 0xa4, 0x3c, 0x1c, 0x37, 0x0a, 0xbd, 0xb4, 0x37, 0x60, 0x3d, 0x47, 0x0a, 0x55, 0x7e, 0xa5,
+	0x9c, 0x56, 0xfd, 0x24, 0x5b, 0xc9, 0x77, 0xa0, 0x72, 0x46, 0x7c, 0xe9, 0x46, 0x4c, 0x8c, 0x8b,
+	0x69, 0xd1, 0x29, 0x2b, 0xf0, 0x10, 0x31, 0x13, 0x59, 0x5a, 0x16, 0x75, 0xee, 0xc0, 0xda, 0x21,
+	0xa7, 0xc7, 0x81, 0xdf, 0x3b, 0x99, 0x38, 0x20, 0x6a, 0x26, 0xd3, 0x89, 0x4b, 0x4e, 0x48, 0xb2,
+	0xb4, 0x7b, 0xd0, 0x98, 0x92, 0xc1, 0xba, 0x3a, 0x80, 0xaa, 0xe1, 0x72, 0xb9, 0x9e, 0x2b, 0x92,
+	0x7e, 0xfe, 0xe1, 0x85, 0x95, 0x9d, 0x9e, 0x42, 0x9c, 0x4a, 0x37, 0xb5, 0x12, 0xf6, 0x7f, 0x0b,
+	0x60, 0xed, 0x46, 0x51, 0x30, 0xcc, 0x7a, 0x56, 0x83, 0x19, 0xf1, 0x26, 0x48, 0x5a, 0x8c, 0x78,
+	0x13, 0xa8, 0x16, 0x73, 0xcc, 0x78, 0x97, 0xe2, 0x61, 0x35, 0x0b, 0x35, 0x06, 0x90, 0x20, 0x60,
+	0x67, 0x6e, 0x6a, 0x86, 0xd5, 0x9d, 0x61, 0xc1, 0xa9, 0x69, 0x82, 0x33, 0xc6, 0xa7, 0x07, 0xa0,
+	0xd9, 0xeb, 0x1a, 0x80, 0xe6, 0xde, 0x73, 0x00, 0xfa, 0x47, 0x01, 0x56, 0x32, 0xd1, 0x63, 0x8e,
+	0x7f, 0x7e, 0xa3, 0xda, 0x0a, 0x2c, 0x1f, 0xb0, 0xee, 0xa9, 0xe9, 0x7a, 0xc9, 0xd1, 0xa8, 0x83,
+	0x95, 0x06, 0xc7, 0x07, 0xef, 0x65, 0x18, 0x4c, 0x31, 0xaf, 0x41, 0x3d, 0x0b, 0x23, 0xfb, 0x3f,
+	0x0b, 0xd0, 0xc4, 0x2b, 0x62, 0x9f, 0xca, 0xee, 0xc9, 0xae, 0x78, 0xd4, 0x19, 0xd5, 0x41, 0x1d,
+	0xe6, 0xf4, 0x28, 0xae, 0x13, 0x50, 0x76, 0xcc, 0xc2, 0x6a, 0xc0, 0x0d, 0xaf, 0xe3, 0xea, 0xab,
+	0x11, 0x6f, 0x07, 0xaf, 0xf3, 0xad, 0xba, 0x1c, 0xd7, 0x61, 0xa1, 0x4f, 0xce, 0x5d, 0xce, 0xce,
+	0x04, 0x0e, 0x83, 0x37, 0xfa, 0xe4, 0xdc, 0x61, 0x67, 0x42, 0x0f, 0xea, 0xbe, 0xd0, 0x13, 0x78,
+	0xc7, 0x0f, 0x03, 0xd6, 0x13, 0x7a, 0xfb, 0x17, 0x9c, 0x2a, 0xc2, 0x0f, 0x0c, 0xaa, 0xce, 0x1a,
+	0xd7, 0xc7, 0x28, 0xbd, 0xb9, 0x0b, 0x4e, 0x99, 0xa7, 0xce, 0x96, 0xfd, 0x18, 0xd6, 0x73, 0x7c,
+	0xc6, 0xdd, 0xfb, 0x18, 0xe6, 0xcd, 0xd1, 0xc0, 0x6d, 0xb3, 0xf0, 0x39, 0xf1, 0x9d, 0xfa, 0x8b,
+	0xc7, 0x00, 0x39, 0xec, 0x3f, 0x17, 0xe0, 0x66, 0x56, 0xd3, 0x6e, 0x10, 0xa8, 0x01, 0x4c, 0x5c,
+	0x7f, 0x0a, 0xa6, 0x22, 0x9b, 0xcd, 0x89, 0xec, 0x00, 0x36, 0x2f, 0xf2, 0xe7, 0x3d, 0xc2, 0x7b,
+	0x36, 0xb9, 0xb7, 0xbb, 0x51, 0x74, 0x79, 0x60, 0x69, 0xff, 0x8b, 0x19, 0xff, 0xa7, 0x93, 0xae,
+	0x95, 0xbd, 0x87, 0x57, 0x2d, 0x68, 0xa6, 0xfa, 0x82, 0x99, 0x38, 0x92, 0x32, 0x3d, 0x80, 0xf5,
+	0x1c, 0x1a, 0x1a, 0xd9, 0x56, 0xd3, 0xc7, 0x68, 0x62, 0x29, 0xed, 0x34, 0xda, 0x93, 0x6f, 0x67,
+	0x14, 0x40, 0x36, 0x75, 0xab, 0x7c, 0x43, 0x84, 0xa4, 0x3c, 0xe9, 0xd2, 0x89, 0x99, 0x2f, 0x60,
+	0x6d, 0x92, 0x80, 0x36, 0x5a, 0xb0, 0x30, 0xd1, 0xe6, 0x47, 0x6b, 0x25, 0xf5, 0x9a, 0xf8, 0x72,
+	0x9f, 0x4d, 0xea, 0xbb, 0x54, 0x6a, 0x1d, 0x1a, 0x53, 0x52, 0x78, 0xf8, 0x9a, 0xb0, 0x76, 0x24,
+	0x59, 0x94, 0x8a, 0x38, 0x71, 0x70, 0x1d, 0x1a, 0x53, 0x14, 0x14, 0xfa, 0x13, 0xdc, 0x9c, 0x20,
+	0x7d, 0xe3, 0x87, 0x7e, 0x3f, 0xee, 0x5f, 0xc1, 0x19, 0xeb, 0x36, 0xe8, 0x5b, 0xcb, 0x95, 0x7e,
+	0x9f, 0x26, 0xe3, 0xdd, 0x8c, 0x53, 0x52, 0xd8, 0x0b, 0x03, 0xd9, 0xbf, 0x85, 0xcd, 0x8b, 0xf4,
+	0x5f, 0x21, 0x47, 0xda, 0x71, 0xc2, 0x65, 0x4e, 0x4c, 0x2d, 0x68, 0x4e, 0x93, 0x30, 0xa8, 0x0e,
+	0xdc, 0x9e, 0xa4, 0xbd, 0x0c, 0xa5, 0x1f, 0xec, 0xaa, 0x26, 0x78, 0x4d, 0x81, 0xdd, 0x05, 0xfb,
+	0x32, 0x1b, 0xe8, 0x49, 0x1d, 0xac, 0xc7, 0x34, 0xe1, 0x19, 0xd5, 0xe5, 0x27, 0xb0, 0x92, 0x41,
+	0x31, 0x13, 0x75, 0x98, 0x23, 0x9e, 0xc7, 0x93, 0x0b, 0xdc, 0x2c, 0x54, 0x0e, 0x1c, 0x2a, 0xe8,
+	0x05, 0x39, 0x98, 0x26, 0xa1, 0xe5, 0x6d, 0x68, 0xbc, 0x4a, 0xe1, 0xea, 0xb0, 0xe5, 0x1e, 0xd6,
+	0x45, 0x3c, 0xac, 0xf6, 0x3e, 0x34, 0xa7, 0x05, 0xde, 0xab, 0x4d, 0xdc, 0x4c, 0xeb, 0x19, 0x57,
+	0x6b, 0x62, 0xbe, 0x0a, 0x45, 0xdf, 0xc3, 0x67, 0x42, 0xd1, 0xf7, 0x32, 0x1b, 0x51, 0x9c, 0x28,
+	0x80, 0x2d, 0xd8, 0xbc, 0x48, 0x19, 0xc6, 0xb9, 0x02, 0xcb, 0x4f, 0x43, 0x5f, 0x9a, 0x03, 0x98,
+	0x24, 0xe6, 0x53, 0xb0, 0xd2, 0xe0, 0x15, 0x2a, 0xed, 0x87, 0x02, 0x6c, 0x1e, 0xb2, 0x28, 0x0e,
+	0xf4, 0x1c, 0x19, 0x11, 0x4e, 0x43, 0xf9, 0x35, 0x8b, 0x79, 0x48, 0x82, 0xc4, 0xef, 0x5f, 0xc0,
+	0x92, 0xaa, 0x07, 0xb7, 0xcb, 0x29, 0x91, 0xd4, 0x73, 0xc3, 0xe4, 0xad, 0x53, 0x51, 0xf0, 0x43,
+	0x83, 0x7e, 0x2b, 0xd4, 0x7b, 0x88, 0x74, 0x95, 0xd2, 0x74, 0x4b, 0x07, 0x03, 0xe9, 0xb6, 0xfe,
+	0x25, 0x94, 0xfb, 0xda, 0x33, 0x97, 0x04, 0x3e, 0x31, 0xad, 0xbd, 0xb4, 0xb3, 0x3a, 0x39, 0x1b,
+	0xef, 0x2a, 0xa2, 0x53, 0x32, 0xac, 0x7a, 0x61, 0x7d, 0x06, 0xf5, 0x54, 0x93, 0x1a, 0x8f, 0x90,
+	0xb3, 0xda, 0xc6, 0x4a, 0x8a, 0x36, 0x9a, 0x24, 0x6f, 0xc3, 0xad, 0x0b, 0xe3, 0xc2, 0x14, 0xfe,
+	0xb5, 0x60, 0xd2, 0x85, 0x89, 0x4e, 0xe2, 0xfd, 0x15, 0xcc, 0x1b, 0x7e, 0xdc, 0xf4, 0x0b, 0x1c,
+	0x44, 0xa6, 0x0b, 0x7d, 0x2b, 0x5e, 0xe8, 0x5b, 0x5e, 0x46, 0x67, 0x72, 0x32, 0xaa, 0xa6, 0x90,
+	0x8c, 0x7f, 0xe3, 0xe1, 0xe4, 0x11, 0xed, 0x33, 0x49, 0xb3, 0x9b, 0xbf, 0x03, 0xf5, 0x2c, 0x7c,
+	0xb5, 0x46, 0xf3, 0x32, 0xf4, 0x58, 0x9e, 0xba, 0x16, 0x34, 0xa7, 0x49, 0xe8, 0xc1, 0xc6, 0xe8,
+	0x82, 0x79, 0x4d, 0xc4, 0x21, 0x67, 0x8a, 0xc5, 0x4b, 0x04, 0x3f, 0x80, 0x56, 0x1e, 0x11, 0x45,
+	0xff, 0x55, 0x80, 0xda, 0x11, 0xcd, 0xd6, 0xed, 0xbb, 0xa6, 0x3c, 0x27, 0x7f, 0xc5, 0xbc, 0x8a,
+	0xbc, 0x0f, 0x0d, 0x3d, 0x62, 0xab, 0x27, 0x3a, 0x97, 0x39, 0xf3, 0xf5, 0xaa, 0x26, 0x4f, 0xf6,
+	0xb3, 0xe9, 0xa7, 0xca, 0x6c, 0xce, 0x53, 0x65, 0x05, 0x96, 0x53, 0x71, 0x60, 0x74, 0xcf, 0xd2,
+	0xb1, 0x3b, 0x54, 0xdb, 0x1d, 0x65, 0xe6, 0x1d, 0xc3, 0xb4, 0x6f, 0xc2, 0x46, 0xae, 0x32, 0xb4,
+	0xa5, 0x3b, 0x71, 0xe6, 0x8a, 0xd9, 0x0d, 0x3d, 0xf5, 0x90, 0xcf, 0xcc, 0x02, 0xaf, 0xe0, 0xce,
+	0xa5, 0x5c, 0x3f, 0x62, 0x2a, 0xc0, 0xbd, 0xcd, 0x1e, 0x1f, 0x75, 0xbf, 0x4f, 0x12, 0xae, 0x50,
+	0x88, 0x47, 0x50, 0x79, 0x40, 0xba, 0xa7, 0xf1, 0x68, 0xb2, 0xda, 0x82, 0x52, 0x97, 0x85, 0xdd,
+	0x98, 0x73, 0x1a, 0x76, 0x87, 0xd8, 0x71, 0xd2, 0x90, 0xe2, 0xd0, 0xcf, 0x23, 0xb3, 0x05, 0xf8,
+	0xa6, 0x4a, 0x43, 0xf6, 0x7d, 0xa8, 0x26, 0x4a, 0xd1, 0x85, 0xbb, 0x30, 0x47, 0x07, 0xe3, 0x0d,
+	0xa8, 0xb6, 0x93, 0x7f, 0x10, 0xec, 0x29, 0xd4, 0x31, 0x44, 0xbc, 0x5f, 0x24, 0xe3, 0x74, 0x9f,
+	0xb3, 0x7e, 0xc6, 0x2f, 0x7b, 0x57, 0x95, 0xfe, 0x14, 0xed, 0x9d, 0xd4, 0xd7, 0xc1, 0x3a, 0x0a,
+	0xc8, 0x80, 0x66, 0x37, 0x6a, 0x1f, 0x56, 0x32, 0xe8, 0xfb, 0x6e, 0x8c, 0x05, 0x35, 0xb5, 0xe1,
+	0x5a, 0x57, 0xa2, 0x5b, 0xd5, 0xea, 0x18, 0xc3, 0xfa, 0xf9, 0x83, 0x99, 0x8e, 0x34, 0x78, 0xbd,
+	0xc3, 0xcf, 0x7d, 0x35, 0xa3, 0x4c, 0x6a, 0xbe, 0x42, 0x11, 0x68, 0x37, 0x09, 0x97, 0x19, 0xdf,
+	0x55, 0xb6, 0x52, 0x20, 0x3a, 0xff, 0x47, 0xd8, 0x18, 0xa3, 0xd7, 0x3e, 0xe4, 0x6c, 0xc2, 0x07,
+	0xf9, 0xda, 0xd1, 0xba, 0x65, 0x7e, 0xa9, 0x53, 0xd4, 0xd1, 0xfe, 0xfd, 0xd2, 0xfc, 0x8a, 0x86,
+	0xd8, 0xa5, 0xa3, 0xcd, 0x5f, 0x0a, 0x50, 0x53, 0x8d, 0x3d, 0x1d, 0xe7, 0xcf, 0xe8, 0xda, 0xc1,
+	0xd1, 0x22, 0x9b, 0x70, 0x35, 0x92, 0x2a, 0x20, 0xa7, 0xe1, 0xab, 0x91, 0x74, 0x8a, 0x84, 0x62,
+	0x4f, 0xc7, 0xb4, 0x1f, 0xdb, 0x0e, 0x37, 0x60, 0x3d, 0x47, 0x95, 0xb1, 0xf3, 0xe0, 0xd3, 0xef,
+	0xdb, 0x03, 0x5f, 0x52, 0x21, 0xda, 0x3e, 0xdb, 0x36, 0x5f, 0xdb, 0x3d, 0xb6, 0x3d, 0x90, 0xdb,
+	0xfa, 0x5f, 0x7f, 0xdb, 0x53, 0xbf, 0x15, 0x74, 0xe6, 0x35, 0xe1, 0xf3, 0xff, 0x07, 0x00, 0x00,
+	0xff, 0xff, 0x00, 0xaf, 0x7c, 0xe6, 0x84, 0x1c, 0x00, 0x00,
 }

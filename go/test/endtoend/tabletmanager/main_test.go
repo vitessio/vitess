@@ -168,14 +168,14 @@ func tmcUnlockTables(ctx context.Context, tabletGrpcPort int) error {
 	return tmClient.UnlockTables(ctx, vtablet)
 }
 
-func tmcStopSlave(ctx context.Context, tabletGrpcPort int) error {
+func tmcStopReplication(ctx context.Context, tabletGrpcPort int) error {
 	vtablet := getTablet(tabletGrpcPort)
-	return tmClient.StopSlave(ctx, vtablet)
+	return tmClient.StopReplication(ctx, vtablet)
 }
 
-func tmcStartSlave(ctx context.Context, tabletGrpcPort int) error {
+func tmcStartReplication(ctx context.Context, tabletGrpcPort int) error {
 	vtablet := getTablet(tabletGrpcPort)
-	return tmClient.StartSlave(ctx, vtablet)
+	return tmClient.StartReplication(ctx, vtablet)
 }
 
 func tmcMasterPosition(ctx context.Context, tabletGrpcPort int) (string, error) {
@@ -183,9 +183,9 @@ func tmcMasterPosition(ctx context.Context, tabletGrpcPort int) (string, error) 
 	return tmClient.MasterPosition(ctx, vtablet)
 }
 
-func tmcStartSlaveUntilAfter(ctx context.Context, tabletGrpcPort int, positon string, waittime time.Duration) error {
+func tmcStartReplicationUntilAfter(ctx context.Context, tabletGrpcPort int, positon string, waittime time.Duration) error {
 	vtablet := getTablet(tabletGrpcPort)
-	return tmClient.StartSlaveUntilAfter(ctx, vtablet, positon, waittime)
+	return tmClient.StartReplicationUntilAfter(ctx, vtablet, positon, waittime)
 }
 
 func getTablet(tabletGrpcPort int) *tabletpb.Tablet {

@@ -84,7 +84,6 @@ func NewMycnf(tabletUID uint32, mysqlPort int32) *Mycnf {
 	cnf.MasterInfoFile = path.Join(tabletDir, "master.info")
 	cnf.PidFile = path.Join(tabletDir, "mysql.pid")
 	cnf.TmpDir = path.Join(tabletDir, "tmp")
-	cnf.SlaveLoadTmpDir = cnf.TmpDir
 	return cnf
 }
 

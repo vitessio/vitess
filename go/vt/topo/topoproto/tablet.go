@@ -134,19 +134,6 @@ var AllTabletTypes = []topodatapb.TabletType{
 	topodatapb.TabletType_DRAINED,
 }
 
-// SlaveTabletTypes contains all the tablet type that can have replication
-// enabled.
-var SlaveTabletTypes = []topodatapb.TabletType{
-	topodatapb.TabletType_REPLICA,
-	topodatapb.TabletType_RDONLY,
-	topodatapb.TabletType_BATCH,
-	topodatapb.TabletType_SPARE,
-	topodatapb.TabletType_EXPERIMENTAL,
-	topodatapb.TabletType_BACKUP,
-	topodatapb.TabletType_RESTORE,
-	topodatapb.TabletType_DRAINED,
-}
-
 // ParseTabletType parses the tablet type into the enum.
 func ParseTabletType(param string) (topodatapb.TabletType, error) {
 	value, ok := topodatapb.TabletType_value[strings.ToUpper(param)]
@@ -180,7 +167,7 @@ func TabletTypeLString(tabletType topodatapb.TabletType) string {
 }
 
 // IsTypeInList returns true if the given type is in the list.
-// Use it with AllTabletType and SlaveTabletType for instance.
+// Use it with AllTabletTypes for instance.
 func IsTypeInList(tabletType topodatapb.TabletType, types []topodatapb.TabletType) bool {
 	for _, t := range types {
 		if tabletType == t {

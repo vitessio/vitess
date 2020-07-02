@@ -185,7 +185,7 @@ var vtInsertTest = `create table vt_insert_test (
 
 // TestBackupTransformImpl tests backups with transform hooks
 func TestBackupTransformImpl(t *testing.T) {
-	// insert data in master, validate same in slave
+	// insert data in master, validate same in replica
 	defer cluster.PanicHandler(t)
 	verifyInitialReplication(t)
 
@@ -260,7 +260,7 @@ func TestBackupTransformImpl(t *testing.T) {
 		verifyReplicationStatus(t, replica2, "OFF")
 	}
 
-	// validate that new slave has all the data
+	// validate that new replica has all the data
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 	// Remove all backups
