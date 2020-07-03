@@ -126,8 +126,8 @@ func (r *heartbeatReader) Close() {
 	r.isOpen = false
 }
 
-// GetLatest returns the most recently recorded lag measurement or error encountered.
-func (r *heartbeatReader) GetLatest() (time.Duration, error) {
+// Status returns the most recently recorded lag measurement or error encountered.
+func (r *heartbeatReader) Status() (time.Duration, error) {
 	r.lagMu.Lock()
 	defer r.lagMu.Unlock()
 	if r.lastKnownError != nil {
