@@ -100,7 +100,8 @@ func TestReaderReadHeartbeatError(t *testing.T) {
 
 func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {
 	config := tabletenv.NewDefaultConfig()
-	config.HeartbeatIntervalSeconds = 1
+	config.ReplicationTracker.Mode = tabletenv.Heartbeat
+	config.ReplicationTracker.HeartbeatIntervalSeconds = 1
 	params, _ := db.ConnParams().MysqlParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")

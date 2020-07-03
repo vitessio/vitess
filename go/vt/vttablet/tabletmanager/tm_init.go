@@ -235,6 +235,8 @@ func InitConfig(config *tabletenv.TabletConfig) {
 	healthCheckInterval = config.Healthcheck.IntervalSeconds.Get()
 	degradedThreshold = config.Healthcheck.DegradedThresholdSeconds.Get()
 	unhealthyThreshold = config.Healthcheck.UnhealthyThresholdSeconds.Get()
+
+	enableReplicationReporter = config.ReplicationTracker.Mode == tabletenv.Polling
 }
 
 // BuildTabletFromInput builds a tablet record from input parameters.

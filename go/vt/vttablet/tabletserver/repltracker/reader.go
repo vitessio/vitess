@@ -69,11 +69,11 @@ type heartbeatReader struct {
 // newHeartbeatReader returns a new heartbeatReader.
 func newHeartbeatReader(env tabletenv.Env) *heartbeatReader {
 	config := env.Config()
-	if config.HeartbeatIntervalSeconds == 0 {
+	if config.ReplicationTracker.Mode != tabletenv.Heartbeat {
 		return &heartbeatReader{}
 	}
 
-	heartbeatInterval := config.HeartbeatIntervalSeconds.Get()
+	heartbeatInterval := config.ReplicationTracker.HeartbeatIntervalSeconds.Get()
 	return &heartbeatReader{
 		env:      env,
 		enabled:  true,
