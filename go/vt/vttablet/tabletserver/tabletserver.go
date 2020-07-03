@@ -143,7 +143,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		exporter:               exporter,
 		stats:                  tabletenv.NewStats(exporter),
 		config:                 config,
-		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.Oltp.QueryTimeoutSeconds * 1e9)),
+		QueryTimeout:           sync2.NewAtomicDuration(config.Oltp.QueryTimeoutSeconds.Get()),
 		TerseErrors:            config.TerseErrors,
 		enableHotRowProtection: config.HotRowProtection.Mode != tabletenv.Disable,
 		topoServer:             topoServer,

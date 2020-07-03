@@ -232,9 +232,9 @@ type TabletManager struct {
 
 // InitConfig is a temp function to keep things working during the refactor.
 func InitConfig(config *tabletenv.TabletConfig) {
-	healthCheckInterval = time.Duration(config.Healthcheck.IntervalSeconds * 1e9)
-	degradedThreshold = time.Duration(config.Healthcheck.DegradedThresholdSeconds * 1e9)
-	unhealthyThreshold = time.Duration(config.Healthcheck.UnhealthyThresholdSeconds * 1e9)
+	healthCheckInterval = config.Healthcheck.IntervalSeconds.Get()
+	degradedThreshold = config.Healthcheck.DegradedThresholdSeconds.Get()
+	unhealthyThreshold = config.Healthcheck.UnhealthyThresholdSeconds.Get()
 }
 
 // BuildTabletFromInput builds a tablet record from input parameters.
