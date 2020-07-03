@@ -197,13 +197,16 @@ func (agent *ActionAgent) restoreToTimeFromBinlog(ctx context.Context, pos mysql
 		return nil
 	}
 
-	gtid := agent.getGTIDFromTimestamp(ctx, pos, restoreTime.Seconds)
+	timeoutCtx, cancelFnc := context.WithTimeout(ctx, *timeoutForGTIDLookup)
+	defer cancelFnc()
+	gtid, stopPosGTID := agent.getGTIDFromTimestamp(timeoutCtx, pos, restoreTime.Seconds)
 	if gtid == "" {
 		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "unable to fetch the GTID for the specified restore_to_time")
 	}
+	println(fmt.Sprintf("pos for slave unil - %s, and stop gtid %s", gtid, stopPosGTID))
 
 	log.Infof("going to restore upto the gtid - %s", gtid)
-	err := agent.catchupToGTID(ctx, gtid)
+	err := agent.catchupToGTID(timeoutCtx, gtid, stopPosGTID)
 	if err != nil {
 		return vterrors.Wrapf(err, "unable to replicate upto specified gtid : %s", gtid)
 	}
@@ -212,7 +215,7 @@ func (agent *ActionAgent) restoreToTimeFromBinlog(ctx context.Context, pos mysql
 }
 
 // getGTIDFromTimestamp gets the next GTID of the event happened on the timestamp (resore_to_time)
-func (agent *ActionAgent) getGTIDFromTimestamp(ctx context.Context, pos mysql.Position, restoreTime int64) string {
+func (agent *ActionAgent) getGTIDFromTimestamp(ctx context.Context, pos mysql.Position, restoreTime int64) (string, string) {
 	connParams := &mysql.ConnParams{
 		Host:  *binlogHost,
 		Port:  *binlogPort,
@@ -232,36 +235,43 @@ func (agent *ActionAgent) getGTIDFromTimestamp(ctx context.Context, pos mysql.Po
 		}},
 	}
 
-	timeoutCtx, cancelFnc := context.WithTimeout(ctx, *timeoutForGTIDLookup)
-	defer cancelFnc()
-	found := make(chan string)
+	sqlBeforeGTID := make(chan []string)
+	stopPos := ""
 	go func() {
-		err := vsClient.VStream(timeoutCtx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
+		err := vsClient.VStream(ctx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
 			for _, event := range events {
 				if event.Gtid != "" && event.Timestamp > restoreTime {
-					found <- event.Gtid
+					sqlBeforeGTID <- []string{event.Gtid, stopPos}
 					break
+				}
+				if event.Gtid != "" {
+					stopPos = event.Gtid
 				}
 			}
 			return nil
 		})
 		if err != nil {
-			found <- ""
+			sqlBeforeGTID <- []string{""}
 		}
 	}()
-	defer vsClient.Close(timeoutCtx)
+	defer vsClient.Close(ctx)
 	select {
-	case <-found:
-		return <-found
-	case <-timeoutCtx.Done():
+	case val := <-sqlBeforeGTID:
+		return val[0], val[1]
+	case <-ctx.Done():
 		log.Warningf("Can't find the GTID from restore time stamp, exiting.")
-		return ""
+		return "", ""
 	}
 }
 
 // replicateUptoGTID replicates upto specified gtid from binlog server
-func (agent *ActionAgent) catchupToGTID(ctx context.Context, gtid string) error {
+func (agent *ActionAgent) catchupToGTID(ctx context.Context, gtid string, stopPosGTID string) error {
 	gtidParsed, err := mysql.DecodePosition(gtid)
+	if err != nil {
+		return err
+	}
+
+	stopPosGTIDParsed, err := mysql.DecodePosition(stopPosGTID)
 	if err != nil {
 		return err
 	}
@@ -285,23 +295,41 @@ func (agent *ActionAgent) catchupToGTID(ctx context.Context, gtid string) error 
 	// We need to wait till the slave catch upto the specified gtid
 	chGTIDCaughtup := make(chan bool)
 	go func() {
-		for {
+		timeToWait := time.Now().Add(*timeoutForGTIDLookup)
+		for time.Now().Before(timeToWait) {
 			pos, err := agent.MysqlDaemon.MasterPosition()
+			println(fmt.Sprintf("got position as %s and waiting till %s", pos.GTIDSet.String(), stopPosGTIDParsed.GTIDSet.String()))
 			if err != nil {
+				println(err)
 				chGTIDCaughtup <- false
 			}
-			if pos.AtLeast(gtidParsed) {
+
+			if pos.AtLeast(stopPosGTIDParsed) {
 				chGTIDCaughtup <- true
+			}
+			select {
+			case <-ctx.Done():
+				println("context finished, exiting!")
+				chGTIDCaughtup <- false
+			default:
+				time.Sleep(300 * time.Millisecond)
 			}
 		}
 	}()
 	select {
 	case resp := <-chGTIDCaughtup:
 		if resp {
-			return agent.ResetReplication(ctx)
-		} else {
-			return vterrors.Wrap(err, "error while fetching the current gtid position")
+			println("gtid is reached, hence reseting the replication")
+			cmds := []string{
+				"STOP SLAVE",
+				"RESET SLAVE ALL",
+			}
+			if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
+				return vterrors.Wrap(err, "failed to reset slave")
+			}
+			return nil
 		}
+		return vterrors.Wrap(err, "error while fetching the current gtid position")
 	case <-ctx.Done():
 		log.Warningf("Could not copy till gtid.")
 		return vterrors.Wrap(err, "context timeout while restoring upto specified gtid")
