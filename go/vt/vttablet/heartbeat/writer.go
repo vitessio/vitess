@@ -76,7 +76,7 @@ func NewWriter(env tabletenv.Env, alias topodatapb.TabletAlias) *Writer {
 	if config.HeartbeatIntervalSeconds == 0 {
 		return &Writer{}
 	}
-	heartbeatInterval := time.Duration(config.HeartbeatIntervalSeconds * 1e9)
+	heartbeatInterval := config.HeartbeatIntervalSeconds.Get()
 	return &Writer{
 		env:         env,
 		enabled:     true,

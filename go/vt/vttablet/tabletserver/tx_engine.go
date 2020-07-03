@@ -107,7 +107,7 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 	config := env.Config()
 	te := &TxEngine{
 		env:                 env,
-		shutdownGracePeriod: time.Duration(config.ShutdownGracePeriodSeconds * 1e9),
+		shutdownGracePeriod: config.ShutdownGracePeriodSeconds.Get(),
 		reservedConnStats:   env.Exporter().NewTimings("ReservedConnections", "Reserved connections stats", "operation"),
 	}
 	limiter := txlimiter.New(env)
@@ -124,7 +124,7 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 		}
 	}
 	te.coordinatorAddress = config.TwoPCCoordinatorAddress
-	te.abandonAge = time.Duration(config.TwoPCAbandonAge * 1e9)
+	te.abandonAge = config.TwoPCAbandonAge.Get()
 	te.ticks = timer.NewTimer(te.abandonAge / 2)
 
 	// Set the prepared pool capacity to something lower than

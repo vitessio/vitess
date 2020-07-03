@@ -74,7 +74,7 @@ func NewReader(env tabletenv.Env) *Reader {
 		return &Reader{}
 	}
 
-	heartbeatInterval := time.Duration(config.HeartbeatIntervalSeconds * 1e9)
+	heartbeatInterval := config.HeartbeatIntervalSeconds.Get()
 	return &Reader{
 		env:      env,
 		enabled:  true,
