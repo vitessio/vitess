@@ -63,6 +63,7 @@ func TestConfigParse(t *testing.T) {
   repl:
     password: '****'
   socket: a
+healthcheck: {}
 hotRowProtection: {}
 olapReadPool: {}
 oltp: {}
@@ -104,6 +105,10 @@ func TestDefaultConfig(t *testing.T) {
 	require.NoError(t, err)
 	want := `cacheResultFields: true
 consolidator: enable
+healthcheck:
+  degradedThresholdSeconds: 30
+  intervalSeconds: 20
+  unhealthyThresholdSeconds: 7200
 hotRowProtection:
   maxConcurrency: 5
   maxGlobalQueueSize: 1000
@@ -202,6 +207,9 @@ func TestFlags(t *testing.T) {
 	want.TxPool.IdleTimeoutSeconds = 1800
 	want.HotRowProtection.Mode = Disable
 	want.Consolidator = Enable
+	want.Healthcheck.IntervalSeconds = 20
+	want.Healthcheck.DegradedThresholdSeconds = 30
+	want.Healthcheck.UnhealthyThresholdSeconds = 7200
 	assert.Equal(t, want.DB, currentConfig.DB)
 	assert.Equal(t, want, currentConfig)
 
@@ -264,5 +272,23 @@ func TestFlags(t *testing.T) {
 	currentConfig.HeartbeatIntervalSeconds = 0
 	Init()
 	want.HeartbeatIntervalSeconds = 0
+	assert.Equal(t, want, currentConfig)
+
+	healthCheckInterval = 1 * time.Second
+	currentConfig.Healthcheck.IntervalSeconds = 0
+	Init()
+	want.Healthcheck.IntervalSeconds = 1
+	assert.Equal(t, want, currentConfig)
+
+	degradedThreshold = 2 * time.Second
+	currentConfig.Healthcheck.DegradedThresholdSeconds = 0
+	Init()
+	want.Healthcheck.DegradedThresholdSeconds = 2
+	assert.Equal(t, want, currentConfig)
+
+	unhealthyThreshold = 3 * time.Second
+	currentConfig.Healthcheck.UnhealthyThresholdSeconds = 0
+	Init()
+	want.Healthcheck.UnhealthyThresholdSeconds = 3
 	assert.Equal(t, want, currentConfig)
 }

@@ -78,6 +78,11 @@ oltp:
   maxRows: 10000          # queryserver-config-max-result-size
   warnRows: 0             # queryserver-config-warn-result-size
 
+healthcheck:
+  intervalSeconds: 20             # health_check_interval
+  degradedThresholdSeconds: 30    # degraded_threshold
+  unhealthyThresholdSeconds: 7200 # unhealthy_threshold
+
 hotRowProtection:
   mode: disable|dryRun|enable # enable_hot_row_protection, enable_hot_row_protection_dry_run
   # Default value is same as txPool.size.

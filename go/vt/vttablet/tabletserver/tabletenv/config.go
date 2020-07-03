@@ -72,6 +72,9 @@ var (
 	enableConsolidatorReplicas   bool
 	enableHeartbeat              bool
 	heartbeatInterval            time.Duration
+	healthCheckInterval          time.Duration
+	degradedThreshold            time.Duration
+	unhealthyThreshold           time.Duration
 )
 
 func init() {
@@ -140,6 +143,10 @@ func init() {
 	flag.BoolVar(&enableConsolidator, "enable-consolidator", true, "This option enables the query consolidator.")
 	flag.BoolVar(&enableConsolidatorReplicas, "enable-consolidator-replicas", false, "This option enables the query consolidator only on replicas.")
 	flag.BoolVar(&currentConfig.CacheResultFields, "enable-query-plan-field-caching", defaultConfig.CacheResultFields, "This option fetches & caches fields (columns) when storing query plans")
+
+	flag.DurationVar(&healthCheckInterval, "health_check_interval", 20*time.Second, "Interval between health checks")
+	flag.DurationVar(&degradedThreshold, "degraded_threshold", 30*time.Second, "replication lag after which a replica is considered degraded (only used in status UI)")
+	flag.DurationVar(&unhealthyThreshold, "unhealthy_threshold", 2*time.Hour, "replication lag  after which a replica is considered unhealthy")
 }
 
 // Init must be called after flag.Parse, and before doing any other operations.
@@ -172,6 +179,10 @@ func Init() {
 		currentConfig.HeartbeatIntervalSeconds = float64(heartbeatInterval) / float64(time.Second)
 	}
 
+	currentConfig.Healthcheck.IntervalSeconds = float64(healthCheckInterval) / float64(time.Second)
+	currentConfig.Healthcheck.DegradedThresholdSeconds = float64(degradedThreshold) / float64(time.Second)
+	currentConfig.Healthcheck.UnhealthyThresholdSeconds = float64(unhealthyThreshold) / float64(time.Second)
+
 	switch *streamlog.QueryLogFormat {
 	case streamlog.QueryLogFormatText:
 	case streamlog.QueryLogFormatJSON:
@@ -198,6 +209,8 @@ type TabletConfig struct {
 
 	Oltp             OltpConfig             `json:"oltp,omitempty"`
 	HotRowProtection HotRowProtectionConfig `json:"hotRowProtection,omitempty"`
+
+	Healthcheck HealthcheckConfig `json:"healthcheck,omitempty"`
 
 	Consolidator                string  `json:"consolidator,omitempty"`
 	HeartbeatIntervalSeconds    float64 `json:"heartbeatIntervalSeconds,omitempty"`
@@ -253,6 +266,13 @@ type HotRowProtectionConfig struct {
 	MaxQueueSize       int    `json:"maxQueueSize,omitempty"`
 	MaxGlobalQueueSize int    `json:"maxGlobalQueueSize,omitempty"`
 	MaxConcurrency     int    `json:"maxConcurrency,omitempty"`
+}
+
+// HealthcheckConfig contains the config for healthcheck.
+type HealthcheckConfig struct {
+	IntervalSeconds           float64 `json:"intervalSeconds,omitempty"`
+	DegradedThresholdSeconds  float64 `json:"degradedThresholdSeconds,omitempty"`
+	UnhealthyThresholdSeconds float64 `json:"unhealthyThresholdSeconds,omitempty"`
 }
 
 // TransactionLimitConfig captures configuration of transaction pool slots
@@ -336,6 +356,8 @@ func (c *TabletConfig) verifyTransactionLimitConfig() error {
 	return nil
 }
 
+// Some of these values are for documentation purposes.
+// They actually get overwritten during Init.
 var defaultConfig = TabletConfig{
 	OltpReadPool: ConnPoolConfig{
 		Size:               16,
@@ -356,6 +378,11 @@ var defaultConfig = TabletConfig{
 		QueryTimeoutSeconds: 30,
 		TxTimeoutSeconds:    30,
 		MaxRows:             10000,
+	},
+	Healthcheck: HealthcheckConfig{
+		IntervalSeconds:           20,
+		DegradedThresholdSeconds:  30,
+		UnhealthyThresholdSeconds: 7200,
 	},
 	HotRowProtection: HotRowProtectionConfig{
 		Mode: Disable,

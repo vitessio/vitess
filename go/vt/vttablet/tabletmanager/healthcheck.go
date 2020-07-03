@@ -28,7 +28,6 @@ package tabletmanager
 // we don't need to do that any more.
 
 import (
-	"flag"
 	"fmt"
 	"html/template"
 	"time"
@@ -42,15 +41,10 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-const (
-	defaultDegradedThreshold  = time.Duration(30 * time.Second)
-	defaultUnhealthyThreshold = time.Duration(2 * time.Hour)
-)
-
 var (
-	healthCheckInterval = flag.Duration("health_check_interval", 20*time.Second, "Interval between health checks")
-	degradedThreshold   = flag.Duration("degraded_threshold", defaultDegradedThreshold, "replication lag after which a replica is considered degraded (only used in status UI)")
-	unhealthyThreshold  = flag.Duration("unhealthy_threshold", defaultUnhealthyThreshold, "replication lag  after which a replica is considered unhealthy")
+	healthCheckInterval = 20 * time.Second
+	degradedThreshold   = 30 * time.Second
+	unhealthyThreshold  = 2 * time.Hour
 )
 
 // HealthRecord records one run of the health checker.
@@ -67,7 +61,7 @@ func (r *HealthRecord) Class() string {
 	switch {
 	case r.Error != nil:
 		return "unhealthy"
-	case r.ReplicationDelay > *degradedThreshold:
+	case r.ReplicationDelay > degradedThreshold:
 		return "unhappy"
 	default:
 		return "healthy"
@@ -79,7 +73,7 @@ func (r *HealthRecord) HTML() template.HTML {
 	switch {
 	case r.Error != nil:
 		return template.HTML(fmt.Sprintf("unhealthy: %v", r.Error))
-	case r.ReplicationDelay > *degradedThreshold:
+	case r.ReplicationDelay > degradedThreshold:
 		return template.HTML(fmt.Sprintf("unhappy: %v behind on replication", r.ReplicationDelay))
 	default:
 		html := "healthy"
@@ -95,7 +89,7 @@ func (r *HealthRecord) HTML() template.HTML {
 
 // Degraded returns true if the replication delay is beyond degradedThreshold.
 func (r *HealthRecord) Degraded() bool {
-	return r.ReplicationDelay > *degradedThreshold
+	return r.ReplicationDelay > degradedThreshold
 }
 
 // ErrorString returns Error as a string.
@@ -143,8 +137,8 @@ func (tm *TabletManager) initHealthCheck() {
 	registerReplicationReporter(tm)
 	registerHeartbeatReporter(tm.QueryServiceControl)
 
-	log.Infof("Starting periodic health check every %v", *healthCheckInterval)
-	t := timer.NewTimer(*healthCheckInterval)
+	log.Infof("Starting periodic health check every %v", healthCheckInterval)
+	t := timer.NewTimer(healthCheckInterval)
 	servenv.OnTermSync(func() {
 		// When we enter lameduck mode, we want to not call
 		// the health check any more. After this returns, we
@@ -215,11 +209,11 @@ func (tm *TabletManager) runHealthCheckLocked() {
 		// delay.  Use a maximum delay, so we can let vtgate
 		// find the right replica, instead of erroring out.
 		// (this works as the check below is a strict > operator).
-		replicationDelay = *unhealthyThreshold
+		replicationDelay = unhealthyThreshold
 		healthErr = nil
 	}
 	if healthErr == nil {
-		if replicationDelay > *unhealthyThreshold {
+		if replicationDelay > unhealthyThreshold {
 			healthErr = fmt.Errorf("reported replication lag: %v higher than unhealthy threshold: %v", replicationDelay.Seconds(), unhealthyThreshold.Seconds())
 		}
 	}
