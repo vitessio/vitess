@@ -73,10 +73,10 @@ type Writer struct {
 // NewWriter creates a new Writer.
 func NewWriter(env tabletenv.Env, alias topodatapb.TabletAlias) *Writer {
 	config := env.Config()
-	if config.HeartbeatIntervalSeconds == 0 {
+	if config.ReplicationTracker.Mode != tabletenv.Heartbeat {
 		return &Writer{}
 	}
-	heartbeatInterval := config.HeartbeatIntervalSeconds.Get()
+	heartbeatInterval := config.ReplicationTracker.HeartbeatIntervalSeconds.Get()
 	return &Writer{
 		env:         env,
 		enabled:     true,

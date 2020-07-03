@@ -37,6 +37,8 @@ const (
 	Disable     = "disable"
 	Dryrun      = "dryRun"
 	NotOnMaster = "notOnMaster"
+	Polling     = "polling"
+	Heartbeat   = "heartbeat"
 )
 
 var (
@@ -75,6 +77,7 @@ var (
 	healthCheckInterval          time.Duration
 	degradedThreshold            time.Duration
 	unhealthyThreshold           time.Duration
+	enableReplicationReporter    bool
 )
 
 func init() {
@@ -147,6 +150,8 @@ func init() {
 	flag.DurationVar(&healthCheckInterval, "health_check_interval", 20*time.Second, "Interval between health checks")
 	flag.DurationVar(&degradedThreshold, "degraded_threshold", 30*time.Second, "replication lag after which a replica is considered degraded (only used in status UI)")
 	flag.DurationVar(&unhealthyThreshold, "unhealthy_threshold", 2*time.Hour, "replication lag  after which a replica is considered unhealthy")
+
+	flag.BoolVar(&enableReplicationReporter, "enable_replication_reporter", false, "Use polling to track replication lag.")
 }
 
 // Init must be called after flag.Parse, and before doing any other operations.
@@ -175,8 +180,16 @@ func Init() {
 		currentConfig.Consolidator = Disable
 	}
 
-	if enableHeartbeat {
-		currentConfig.HeartbeatIntervalSeconds.Set(heartbeatInterval)
+	switch {
+	case enableHeartbeat:
+		currentConfig.ReplicationTracker.Mode = Heartbeat
+		currentConfig.ReplicationTracker.HeartbeatIntervalSeconds.Set(heartbeatInterval)
+	case enableReplicationReporter:
+		currentConfig.ReplicationTracker.Mode = Polling
+		currentConfig.ReplicationTracker.HeartbeatIntervalSeconds = 0
+	default:
+		currentConfig.ReplicationTracker.Mode = Disable
+		currentConfig.ReplicationTracker.HeartbeatIntervalSeconds = 0
 	}
 
 	currentConfig.Healthcheck.IntervalSeconds.Set(healthCheckInterval)
@@ -212,8 +225,10 @@ type TabletConfig struct {
 
 	Healthcheck HealthcheckConfig `json:"healthcheck,omitempty"`
 
+	ReplicationTracker ReplicationTrackerConfig `json:"replicationTracker,omitempty"`
+
+	// Consolidator can be enable, disable, or notOnMaster. Default is enable.
 	Consolidator                string  `json:"consolidator,omitempty"`
-	HeartbeatIntervalSeconds    Seconds `json:"heartbeatIntervalSeconds,omitempty"`
 	ShutdownGracePeriodSeconds  Seconds `json:"shutdownGracePeriodSeconds,omitempty"`
 	PassthroughDML              bool    `json:"passthroughDML,omitempty"`
 	StreamBufferSize            int     `json:"streamBufferSize,omitempty"`
@@ -262,6 +277,7 @@ type OltpConfig struct {
 
 // HotRowProtectionConfig contains the config for hot row protection.
 type HotRowProtectionConfig struct {
+	// Mode can be disable, dryRun or enable. Default is disable.
 	Mode               string `json:"mode,omitempty"`
 	MaxQueueSize       int    `json:"maxQueueSize,omitempty"`
 	MaxGlobalQueueSize int    `json:"maxGlobalQueueSize,omitempty"`
@@ -273,6 +289,13 @@ type HealthcheckConfig struct {
 	IntervalSeconds           Seconds `json:"intervalSeconds,omitempty"`
 	DegradedThresholdSeconds  Seconds `json:"degradedThresholdSeconds,omitempty"`
 	UnhealthyThresholdSeconds Seconds `json:"unhealthyThresholdSeconds,omitempty"`
+}
+
+// ReplicationTrackerConfig contains the config for the replication tracker.
+type ReplicationTrackerConfig struct {
+	// Mode can be disable, polling or heartbeat. Default is disable.
+	Mode                     string  `json:"mode,omitempty"`
+	HeartbeatIntervalSeconds Seconds `json:"heartbeatIntervalSeconds,omitempty"`
 }
 
 // TransactionLimitConfig captures configuration of transaction pool slots
@@ -383,6 +406,9 @@ var defaultConfig = TabletConfig{
 		IntervalSeconds:           20,
 		DegradedThresholdSeconds:  30,
 		UnhealthyThresholdSeconds: 7200,
+	},
+	ReplicationTracker: ReplicationTrackerConfig{
+		Mode: Disable,
 	},
 	HotRowProtection: HotRowProtectionConfig{
 		Mode: Disable,

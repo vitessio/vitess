@@ -17,7 +17,6 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"flag"
 	"fmt"
 	"html/template"
 	"time"
@@ -33,9 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
-var (
-	enableReplicationReporter = flag.Bool("enable_replication_reporter", false, "Register the health check module that monitors MySQL replication")
-)
+var enableReplicationReporter bool
 
 // replicationReporter implements health.Reporter
 type replicationReporter struct {
@@ -157,7 +154,7 @@ func repairReplication(ctx context.Context, tm *TabletManager) error {
 }
 
 func registerReplicationReporter(tm *TabletManager) {
-	if *enableReplicationReporter {
+	if enableReplicationReporter {
 		health.DefaultAggregator.Register("replication_reporter",
 			&replicationReporter{
 				tm:  tm,
