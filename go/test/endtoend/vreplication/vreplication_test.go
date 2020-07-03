@@ -50,7 +50,7 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	vc = InitCluster(t, cellName)
 	assert.NotNil(t, vc)
 
-	defer vc.TearDown()
+	//defer vc.TearDown()
 
 	cell = vc.Cells[cellName]
 	vc.AddKeyspace(t, cell, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100)
