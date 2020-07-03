@@ -67,6 +67,7 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -227,6 +228,13 @@ type TabletManager struct {
 	// tablet has the Tablet record we last read from the topology server.
 	tablet       *topodatapb.Tablet
 	isPublishing bool
+}
+
+// InitConfig is a temp function to keep things working during the refactor.
+func InitConfig(config *tabletenv.TabletConfig) {
+	healthCheckInterval = time.Duration(config.Healthcheck.IntervalSeconds * 1e9)
+	degradedThreshold = time.Duration(config.Healthcheck.DegradedThresholdSeconds * 1e9)
+	unhealthyThreshold = time.Duration(config.Healthcheck.UnhealthyThresholdSeconds * 1e9)
 }
 
 // BuildTabletFromInput builds a tablet record from input parameters.
@@ -757,8 +765,8 @@ func (tm *TabletManager) Healthy() (time.Duration, error) {
 	healthy := tm._healthy
 	if healthy == nil {
 		timeSinceLastCheck := time.Since(tm._healthyTime)
-		if timeSinceLastCheck > *healthCheckInterval*3 {
-			healthy = fmt.Errorf("last health check is too old: %s > %s", timeSinceLastCheck, *healthCheckInterval*3)
+		if timeSinceLastCheck > healthCheckInterval*3 {
+			healthy = fmt.Errorf("last health check is too old: %s > %s", timeSinceLastCheck, healthCheckInterval*3)
 		}
 	}
 

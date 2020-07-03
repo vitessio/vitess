@@ -65,18 +65,18 @@ func TestHealthRecordDeduplication(t *testing.T) {
 			duplicate: true,
 		},
 		{
-			left:      &HealthRecord{Time: now, ReplicationDelay: defaultDegradedThreshold / 2},
-			right:     &HealthRecord{Time: later, ReplicationDelay: defaultDegradedThreshold / 3},
+			left:      &HealthRecord{Time: now, ReplicationDelay: degradedThreshold / 2},
+			right:     &HealthRecord{Time: later, ReplicationDelay: degradedThreshold / 3},
 			duplicate: true,
 		},
 		{
-			left:      &HealthRecord{Time: now, ReplicationDelay: defaultDegradedThreshold / 2},
-			right:     &HealthRecord{Time: later, ReplicationDelay: defaultDegradedThreshold * 2},
+			left:      &HealthRecord{Time: now, ReplicationDelay: degradedThreshold / 2},
+			right:     &HealthRecord{Time: later, ReplicationDelay: degradedThreshold * 2},
 			duplicate: false,
 		},
 		{
-			left:      &HealthRecord{Time: now, Error: errors.New("foo"), ReplicationDelay: defaultDegradedThreshold * 2},
-			right:     &HealthRecord{Time: later, ReplicationDelay: defaultDegradedThreshold * 2},
+			left:      &HealthRecord{Time: now, Error: errors.New("foo"), ReplicationDelay: degradedThreshold * 2},
+			right:     &HealthRecord{Time: later, ReplicationDelay: degradedThreshold * 2},
 			duplicate: false,
 		},
 	}
@@ -102,11 +102,11 @@ func TestHealthRecordClass(t *testing.T) {
 			state: "unhealthy",
 		},
 		{
-			r:     &HealthRecord{ReplicationDelay: defaultDegradedThreshold * 2},
+			r:     &HealthRecord{ReplicationDelay: degradedThreshold * 2},
 			state: "unhappy",
 		},
 		{
-			r:     &HealthRecord{ReplicationDelay: defaultDegradedThreshold / 2},
+			r:     &HealthRecord{ReplicationDelay: degradedThreshold / 2},
 			state: "healthy",
 		},
 	}
@@ -272,7 +272,7 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 // healthcheck reports health.ErrReplicationNotRunning is still considered
 // healthy with high replication lag.
 func TestErrReplicationNotRunningIsHealthy(t *testing.T) {
-	*unhealthyThreshold = 10 * time.Minute
+	unhealthyThreshold = 10 * time.Minute
 	ctx := context.Background()
 	tm := createTestTM(ctx, t, nil)
 
@@ -869,7 +869,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 func TestOldHealthCheck(t *testing.T) {
 	ctx := context.Background()
 	tm := createTestTM(ctx, t, nil)
-	*healthCheckInterval = 20 * time.Second
+	healthCheckInterval = 20 * time.Second
 	tm._healthy = nil
 
 	// last health check time is now, we're good
@@ -879,13 +879,13 @@ func TestOldHealthCheck(t *testing.T) {
 	}
 
 	// last health check time is 2x interval ago, we're good
-	tm._healthyTime = time.Now().Add(-2 * *healthCheckInterval)
+	tm._healthyTime = time.Now().Add(-2 * healthCheckInterval)
 	if _, healthy := tm.Healthy(); healthy != nil {
 		t.Errorf("Healthy returned unexpected error: %v", healthy)
 	}
 
 	// last health check time is 4x interval ago, we're not good
-	tm._healthyTime = time.Now().Add(-4 * *healthCheckInterval)
+	tm._healthyTime = time.Now().Add(-4 * healthCheckInterval)
 	if _, healthy := tm.Healthy(); healthy == nil || !strings.Contains(healthy.Error(), "last health check is too old") {
 		t.Errorf("Healthy returned wrong error: %v", healthy)
 	}
@@ -897,8 +897,8 @@ func TestBackupStateChange(t *testing.T) {
 	ctx := context.Background()
 	tm := createTestTM(ctx, t, nil)
 
-	*degradedThreshold = 7 * time.Second
-	*unhealthyThreshold = 15 * time.Second
+	degradedThreshold = 7 * time.Second
+	unhealthyThreshold = 15 * time.Second
 
 	if _, err := expectBroadcastData(tm.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
 		t.Fatal(err)
@@ -945,8 +945,8 @@ func TestRestoreStateChange(t *testing.T) {
 	ctx := context.Background()
 	tm := createTestTM(ctx, t, nil)
 
-	*degradedThreshold = 7 * time.Second
-	*unhealthyThreshold = 15 * time.Second
+	degradedThreshold = 7 * time.Second
+	unhealthyThreshold = 15 * time.Second
 
 	if _, err := expectBroadcastData(tm.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
 		t.Fatal(err)

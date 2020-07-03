@@ -71,6 +71,7 @@ func main() {
 
 	// config and mycnf intializations are intertwined.
 	config, mycnf := initConfig(tabletAlias)
+	tabletmanager.InitConfig(config)
 
 	ts := topo.Open()
 	qsc := createTabletServer(config, ts, tabletAlias)

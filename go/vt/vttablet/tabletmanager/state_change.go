@@ -117,8 +117,8 @@ func (tm *TabletManager) broadcastHealth() {
 		stats.HealthError = healthError.Error()
 	} else {
 		timeSinceLastCheck := time.Since(healthyTime)
-		if timeSinceLastCheck > *healthCheckInterval*3 {
-			stats.HealthError = fmt.Sprintf("last health check is too old: %s > %s", timeSinceLastCheck, *healthCheckInterval*3)
+		if timeSinceLastCheck > healthCheckInterval*3 {
+			stats.HealthError = fmt.Sprintf("last health check is too old: %s > %s", timeSinceLastCheck, healthCheckInterval*3)
 		}
 	}
 	var ts int64
@@ -126,7 +126,7 @@ func (tm *TabletManager) broadcastHealth() {
 	if !terTime.IsZero() {
 		ts = terTime.Unix()
 	}
-	go tm.QueryServiceControl.BroadcastHealth(ts, stats, *healthCheckInterval*3)
+	go tm.QueryServiceControl.BroadcastHealth(ts, stats, healthCheckInterval*3)
 }
 
 // refreshTablet needs to be run after an action may have changed the current
@@ -218,7 +218,7 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 						tm.mutex.Lock()
 						tm._replicationDelay = replicationDelay
 						tm.mutex.Unlock()
-						if tm._replicationDelay > *unhealthyThreshold {
+						if tm._replicationDelay > unhealthyThreshold {
 							allowQuery = false
 							disallowQueryReason = "replica tablet with unhealthy replication lag"
 						}
