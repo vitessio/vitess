@@ -51,7 +51,7 @@ func TestReaderReadHeartbeat(t *testing.T) {
 	reads.Reset()
 
 	tr.readHeartbeat()
-	lag, err := tr.GetLatest()
+	lag, err := tr.Status()
 
 	if err != nil {
 		t.Fatalf("Should not be in error: %v", tr.lastKnownError)
@@ -82,7 +82,7 @@ func TestReaderReadHeartbeatError(t *testing.T) {
 	readErrors.Reset()
 
 	tr.readHeartbeat()
-	lag, err := tr.GetLatest()
+	lag, err := tr.Status()
 
 	if err == nil {
 		t.Fatalf("Should be in error: %v", tr.lastKnownError)

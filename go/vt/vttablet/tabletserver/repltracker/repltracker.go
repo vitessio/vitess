@@ -18,19 +18,12 @@ package repltracker
 
 import (
 	"sync"
+	"time"
 
 	"vitess.io/vitess/go/stats"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-)
-
-type method int
-
-const (
-	none = method(iota)
-	polling
-	heartbeat
 )
 
 var (
@@ -53,7 +46,7 @@ var (
 type ReplTracker struct {
 	mu       sync.Mutex
 	isMaster bool
-	method   method
+	mode     string
 
 	hw *heartbeatWriter
 	hr *heartbeatReader
@@ -62,8 +55,9 @@ type ReplTracker struct {
 // NewReplTracker creates a new ReplTracker.
 func NewReplTracker(env tabletenv.Env, alias topodatapb.TabletAlias) *ReplTracker {
 	return &ReplTracker{
-		hw: newHeartbeatWriter(env, alias),
-		hr: newHeartbeatReader(env),
+		mode: env.Config().ReplicationTracker.Mode,
+		hw:   newHeartbeatWriter(env, alias),
+		hr:   newHeartbeatReader(env),
 	}
 }
 
@@ -71,4 +65,47 @@ func NewReplTracker(env tabletenv.Env, alias topodatapb.TabletAlias) *ReplTracke
 func (rt *ReplTracker) InitDBConfig(target querypb.Target) {
 	rt.hw.InitDBConfig(target)
 	rt.hr.InitDBConfig(target)
+}
+
+// MakeMaster must be called if the tablet type becomes MASTER.
+func (rt *ReplTracker) MakeMaster() {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+
+	switch rt.mode {
+	case tabletenv.Heartbeat:
+		rt.hr.Close()
+		rt.hw.Open()
+	default:
+		rt.isMaster = true
+	}
+}
+
+// MakeNonMaster must be called if the tablet type becomes non-MASTER.
+func (rt *ReplTracker) MakeNonMaster() {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+
+	switch rt.mode {
+	case tabletenv.Heartbeat:
+		rt.hw.Close()
+		rt.hr.Open()
+	default:
+		rt.isMaster = false
+	}
+}
+
+// Status reports the replication status.
+func (rt *ReplTracker) Status() (time.Duration, error) {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+
+	if rt.isMaster || rt.mode == tabletenv.Disable {
+		return 0, nil
+	}
+	switch rt.mode {
+	case tabletenv.Heartbeat:
+		return rt.hr.Status()
+	}
+	return 0, nil
 }
