@@ -169,7 +169,7 @@ func (te *TxEngine) AcceptReadWrite() error {
 
 	case AcceptingReadOnly:
 		// We need to restart the tx-pool to make sure we handle 2PC correctly
-		te.close(true)
+		te.shutdown(true)
 		te.state = AcceptingReadAndWrite
 		te.open()
 		te.stateLock.Unlock()
@@ -217,7 +217,7 @@ func (te *TxEngine) AcceptReadOnly() error {
 // statement(s) used to execute the begin (if any).
 //
 // Subsequent statements can access the connection through the transaction id.
-func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) (int64, string, error) {
+func (te *TxEngine) Begin(ctx context.Context, reservedID int64, options *querypb.ExecuteOptions) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Begin")
 	defer span.Finish()
 	te.stateLock.Lock()
@@ -235,7 +235,7 @@ func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) 
 	te.stateLock.Unlock()
 
 	defer te.beginRequests.Done()
-	conn, beginSQL, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly)
+	conn, beginSQL, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly, reservedID)
 	if err != nil {
 		return 0, "", err
 	}
@@ -243,33 +243,46 @@ func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) 
 	return conn.ID(), beginSQL, err
 }
 
-// Commit commits the specified transaction.
-func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (string, error) {
+// Commit commits the specified transaction and renews connection id if one exists.
+func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Commit")
 	defer span.Finish()
-	conn, err := te.txPool.GetAndLock(transactionID, "for commit")
-	if err != nil {
-		return "", err
-	}
-	defer conn.Release(tx.TxCommit)
-	queries, err := te.txPool.Commit(ctx, conn)
-	if err != nil {
-		return "", err
-	}
-	return queries, nil
+	var query string
+	var err error
+	connID, err := te.txFinish(transactionID, tx.TxCommit, func(conn *StatefulConnection) error {
+		query, err = te.txPool.Commit(ctx, conn)
+		return err
+	})
+
+	return connID, query, err
 }
 
 // Rollback rolls back the specified transaction.
-func (te *TxEngine) Rollback(ctx context.Context, transactionID int64) error {
+func (te *TxEngine) Rollback(ctx context.Context, transactionID int64) (int64, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Rollback")
 	defer span.Finish()
 
-	conn, err := te.txPool.GetAndLock(transactionID, "for rollback")
+	return te.txFinish(transactionID, tx.TxRollback, func(conn *StatefulConnection) error {
+		return te.txPool.Rollback(ctx, conn)
+	})
+}
+
+func (te *TxEngine) txFinish(transactionID int64, reason tx.ReleaseReason, f func(*StatefulConnection) error) (int64, error) {
+	conn, err := te.txPool.GetAndLock(transactionID, reason.String())
 	if err != nil {
-		return err
+		return 0, err
 	}
-	defer conn.Release(tx.TxRollback)
-	return te.txPool.Rollback(ctx, conn)
+	err = f(conn)
+	if err != nil || !conn.IsTainted() {
+		conn.Release(reason)
+		return 0, err
+	}
+	err = conn.Renew()
+	if err != nil {
+		conn.Release(tx.ConnRenewFail)
+		return 0, err
+	}
+	return conn.ConnID, nil
 }
 
 func (te *TxEngine) unknownStateError() error {
@@ -288,7 +301,7 @@ func (te *TxEngine) transitionTo(nextState txEngineState) error {
 	te.stateLock.Unlock()
 
 	// We do this outside the lock so others can see our state while we close up waiting transactions
-	te.close(true)
+	te.shutdown(true)
 
 	te.stateLock.Lock()
 	defer func() {
@@ -346,12 +359,12 @@ func (te *TxEngine) open() {
 	}
 }
 
-// StopGently will disregard common rules for when to kill transactions
+// Close will disregard common rules for when to kill transactions
 // and wait forever for transactions to wrap up
-func (te *TxEngine) StopGently() {
+func (te *TxEngine) Close() {
 	te.stateLock.Lock()
 	defer te.stateLock.Unlock()
-	te.close(false)
+	te.shutdown(false)
 	te.state = NotServing
 }
 
@@ -361,7 +374,7 @@ func (te *TxEngine) StopGently() {
 // to conclude. If a shutdown grace period was specified,
 // the transactions are rolled back if they're not resolved
 // by that time.
-func (te *TxEngine) close(immediate bool) {
+func (te *TxEngine) shutdown(immediate bool) {
 	// Shut down functions are idempotent.
 	// No need to check if 2pc is enabled.
 	te.stopWatchdog()
@@ -432,7 +445,7 @@ outer:
 		if txid > maxid {
 			maxid = txid
 		}
-		conn, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false)
+		conn, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0)
 		if err != nil {
 			allErr.RecordError(err)
 			continue
@@ -544,4 +557,95 @@ func (te *TxEngine) startWatchdog() {
 // stopWatchdog stops the watchdog goroutine.
 func (te *TxEngine) stopWatchdog() {
 	te.ticks.Stop()
+}
+
+//ReserveBegin creates a reserved connection, and in it opens a transaction
+func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (int64, error) {
+	span, ctx := trace.NewSpan(ctx, "TxEngine.ReserveBegin")
+	defer span.Finish()
+	conn, err := te.reserve(ctx, options, preQueries)
+	if err != nil {
+		return 0, vterrors.Wrap(err, "TxEngine.ReserveBegin")
+	}
+	defer conn.Unlock()
+	_, err = te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn)
+	if err != nil {
+		conn.Close()
+		conn.Release(tx.ConnInitFail)
+		return 0, err
+	}
+	return conn.ID(), nil
+}
+
+//Reserve creates a reserved connection and returns the id to it
+func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions, txID int64, preQueries []string) (int64, error) {
+	span, ctx := trace.NewSpan(ctx, "TxEngine.Reserve")
+	defer span.Finish()
+	if txID == 0 {
+		conn, err := te.reserve(ctx, options, preQueries)
+		if err != nil {
+			return 0, vterrors.Wrap(err, "TxEngine.Reserve")
+		}
+		defer conn.Unlock()
+		return conn.ID(), nil
+	}
+
+	conn, err := te.txPool.GetAndLock(txID, "to reserve")
+	if err != nil {
+		return 0, vterrors.Wrap(err, "TxEngine.Reserve")
+	}
+	defer conn.Unlock()
+
+	err = te.taintConn(ctx, conn, preQueries)
+	if err != nil {
+		return 0, vterrors.Wrap(err, "TxEngine.Reserve")
+	}
+	return conn.ID(), nil
+}
+
+//Reserve creates a reserved connection and returns the id to it
+func (te *TxEngine) reserve(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (*StatefulConnection, error) {
+	te.stateLock.Lock()
+
+	canOpenTransactions := te.state == AcceptingReadOnly || te.state == AcceptingReadAndWrite
+	if !canOpenTransactions {
+		// We are not in a state where we can start new transactions. Abort.
+		te.stateLock.Unlock()
+		return nil, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "cannot provide new connection in state %v", te.state)
+	}
+	te.stateLock.Unlock()
+
+	conn, err := te.txPool.scp.NewConn(ctx, options)
+	if err != nil {
+		return nil, err
+	}
+
+	err = te.taintConn(ctx, conn, preQueries)
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, err
+}
+
+func (te *TxEngine) taintConn(ctx context.Context, conn *StatefulConnection, preQueries []string) error {
+	conn.Taint()
+	for _, query := range preQueries {
+		_, err := conn.Exec(ctx, query, 0 /*maxrows*/, false /*wantFields*/)
+		if err != nil {
+			conn.Releasef("error during connection setup: %s\n%v", query, err)
+			return err
+		}
+	}
+	return nil
+}
+
+//Release closes the underlying connection.
+func (te *TxEngine) Release(ctx context.Context, connID int64) error {
+	conn, err := te.txPool.GetAndLock(connID, "for release")
+	if err != nil {
+		return err
+	}
+	conn.Release(tx.ConnRelease)
+	return nil
 }

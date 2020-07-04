@@ -14,10 +14,6 @@
 "show create database"
 "plan building not supported"
 
-# union operations in subqueries (FROM)
-"select * from (select * from user union all select * from user_extra) as t"
-"unsupported: UNION cannot be executed as a single route"
-
 # union operations in subqueries (expressions)
 "select * from user where id in (select * from user union select * from user_extra)"
 "unsupported: UNION cannot be executed as a single route"
@@ -348,14 +344,10 @@
 
 # multi-shard union
 "select 1 from music union (select id from user union all select name from unsharded)"
-"unsupported: UNION cannot be executed as a single route"
+"unsupported: SELECT of UNION is non-trivial"
 
 # multi-shard union
 "select 1 from music union (select id from user union select name from unsharded)"
-"unsupported: UNION cannot be executed as a single route"
-
-# multi-shard union
-"select id from user union all select id from music"
 "unsupported: UNION cannot be executed as a single route"
 
 # union with the same target shard because of vindex
@@ -364,10 +356,6 @@
 
 # union with different target shards
 "select 1 from music where id = 1 union select 1 from music where id = 2"
-"unsupported: UNION cannot be executed as a single route"
-
-# Union all
-"select col1, col2 from user union all select col1, col2 from user_extra"
 "unsupported: UNION cannot be executed as a single route"
 
 "(select user.id, user.name from user join user_extra where user_extra.extra = 'asdf') union select 'b','c' from user"
@@ -411,3 +399,35 @@
 # Database DDL
 "create database foo"
 "unsupported: Database DDL create database foo"
+
+# order by inside and outside parenthesis select
+"(select 1 from user order by 1 desc) order by 1 asc limit 2"
+"can't do ORDER BY on top of ORDER BY"
+
+# multiple select statement have inner order by with union
+"(select 1 from user order by 1 desc) union (select 1 from user order by 1 asc)"
+"unsupported: SELECT of UNION is non-trivial"
+
+# different number of columns
+"select id, 42 from user where id = 1 union all select id from user where id = 5"
+"The used SELECT statements have a different number of columns (errno 1222) (sqlstate 21000) during query: select id, 42 from user where id = 1 union all select id from user where id = 5"
+
+# ambiguous ORDER BY
+"select id from user order by id union all select id from music order by id desc"
+"Incorrect usage of UNION and ORDER BY - add parens to disambiguate your query (errno 1221) (sqlstate 21000)"
+
+# ambiguous LIMIT
+"select id from user limit 1 union all select id from music limit 1"
+"Incorrect usage of UNION and LIMIT - add parens to disambiguate your query (errno 1221) (sqlstate 21000)"
+
+# Savepoint
+"savepoint a"
+"unsupported: Savepoint construct savepoint a"
+
+# Savepoint rollback
+"rollback work to savepoint a"
+"unsupported: Savepoint construct rollback to a"
+
+# Savepoint release
+"release savepoint a"
+"unsupported: Savepoint construct release savepoint a"

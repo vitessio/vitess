@@ -298,10 +298,10 @@ func (hw *reshardingWorkflowGen) Run(ctx context.Context, manager *workflow.Mana
 	hw.rootUINode.BroadcastChanges(true /* updateChildren */)
 
 	if err := hw.runWorkflow(); err != nil {
-		hw.setUIMessage(hw.rootUINode, fmt.Sprintf("Keyspace resharding failed to create workflows"))
+		hw.setUIMessage(hw.rootUINode, fmt.Sprintf("Keyspace resharding failed to create workflows")) //nolint
 		return err
 	}
-	hw.setUIMessage(hw.rootUINode, fmt.Sprintf("Keyspace resharding is finished successfully."))
+	hw.setUIMessage(hw.rootUINode, fmt.Sprintf("Keyspace resharding is finished successfully.")) //nolint
 	return nil
 }
 

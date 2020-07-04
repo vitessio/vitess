@@ -179,7 +179,7 @@ func normalizeIP(ip string) string {
 	// Normalize loopback to avoid spurious validation errors.
 	if parsedIP := net.ParseIP(ip); parsedIP != nil && parsedIP.IsLoopback() {
 		// Note that this also maps IPv6 localhost to IPv4 localhost
-		// as GetSlaves() will return only IPv4 addresses.
+		// as GetReplicas() will return only IPv4 addresses.
 		return "127.0.0.1"
 	}
 	return ip
@@ -198,48 +198,48 @@ func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.Sha
 		return
 	}
 
-	slaveList, err := wr.tmc.GetSlaves(ctx, masterTabletInfo.Tablet)
+	replicaList, err := wr.tmc.GetReplicas(ctx, masterTabletInfo.Tablet)
 	if err != nil {
-		results <- fmt.Errorf("GetSlaves(%v) failed: %v", masterTabletInfo, err)
+		results <- fmt.Errorf("GetReplicas(%v) failed: %v", masterTabletInfo, err)
 		return
 	}
-	if len(slaveList) == 0 {
-		results <- fmt.Errorf("no slaves of tablet %v found", shardInfoMasterAliasStr)
+	if len(replicaList) == 0 {
+		results <- fmt.Errorf("no replicas of tablet %v found", shardInfoMasterAliasStr)
 		return
 	}
 
 	tabletIPMap := make(map[string]*topodatapb.Tablet)
-	slaveIPMap := make(map[string]bool)
+	replicaIPMap := make(map[string]bool)
 	for _, tablet := range tabletMap {
 		ip, err := topoproto.MySQLIP(tablet.Tablet)
 		if err != nil {
-			results <- fmt.Errorf("could not resolve IP for tablet %s: %v", topoproto.MysqlHostname(tablet.Tablet), err)
+			results <- fmt.Errorf("could not resolve IP for tablet %s: %v", tablet.Tablet.MysqlHostname, err)
 			continue
 		}
 		tabletIPMap[normalizeIP(ip)] = tablet.Tablet
 	}
 
-	// See if every slave is in the replication graph.
-	for _, slaveAddr := range slaveList {
-		if tabletIPMap[normalizeIP(slaveAddr)] == nil {
-			results <- fmt.Errorf("slave %v not in replication graph for shard %v/%v (mysql instance without vttablet?)", slaveAddr, shardInfo.Keyspace(), shardInfo.ShardName())
+	// See if every replica is in the replication graph.
+	for _, replicaAddr := range replicaList {
+		if tabletIPMap[normalizeIP(replicaAddr)] == nil {
+			results <- fmt.Errorf("replica %v not in replication graph for shard %v/%v (mysql instance without vttablet?)", replicaAddr, shardInfo.Keyspace(), shardInfo.ShardName())
 		}
-		slaveIPMap[normalizeIP(slaveAddr)] = true
+		replicaIPMap[normalizeIP(replicaAddr)] = true
 	}
 
 	// See if every entry in the replication graph is connected to the master.
 	for _, tablet := range tabletMap {
-		if !tablet.IsSlaveType() {
+		if !tablet.IsReplicaType() {
 			continue
 		}
 
 		ip, err := topoproto.MySQLIP(tablet.Tablet)
 		if err != nil {
-			results <- fmt.Errorf("could not resolve IP for tablet %s: %v", topoproto.MysqlHostname(tablet.Tablet), err)
+			results <- fmt.Errorf("could not resolve IP for tablet %s: %v", tablet.Tablet.MysqlHostname, err)
 			continue
 		}
-		if !slaveIPMap[normalizeIP(ip)] {
-			results <- fmt.Errorf("slave %v not replicating: %v slave list: %q", topoproto.TabletAliasString(tablet.Alias), ip, slaveList)
+		if !replicaIPMap[normalizeIP(ip)] {
+			results <- fmt.Errorf("replica %v not replicating: %v replica list: %q", topoproto.TabletAliasString(tablet.Alias), ip, replicaList)
 		}
 	}
 }

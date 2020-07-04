@@ -231,6 +231,7 @@ enum VEventType {
   VGTID = 15;
   JOURNAL = 16;
   VERSION = 17;
+  LASTPK = 18;
 }
 
 // RowChange represents one row change.
@@ -263,6 +264,7 @@ message ShardGtid {
   string keyspace = 1;
   string shard = 2;
   string gtid = 3;
+  repeated TableLastPK table_p_ks = 4;
 }
 
 // A VGtid is a list of ShardGtids.
@@ -341,6 +343,8 @@ message VEvent {
   // CurrentTime specifies the current time when the message was sent.
   // This can be used to compenssate for clock skew.
   int64 current_time = 20;
+  // LastPK is the last PK for a table
+  LastPKEvent last_p_k_event = 21;
 }
 
 message MinimalTable {
@@ -361,6 +365,7 @@ message VStreamRequest {
 
   string position = 4;
   Filter filter = 5;
+  repeated TableLastPK table_last_p_ks = 6;
 }
 
 // VStreamResponse is the response from VStreamer
@@ -385,6 +390,16 @@ message VStreamRowsResponse {
   string gtid = 3;
   repeated query.Row rows = 4;
   query.Row lastpk = 5;
+}
+
+message LastPKEvent {
+  TableLastPK table_last_p_k = 1;
+  bool completed = 2;
+}
+
+message TableLastPK {
+  string table_name = 1;
+  query.QueryResult lastpk = 3;
 }
 
 // VStreamResultsRequest is the payload for VStreamResults

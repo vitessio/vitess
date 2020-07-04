@@ -72,20 +72,22 @@ func getDbSchemaBlob(t *testing.T, tables map[string]*binlogdatapb.MinimalTable)
 func TestHistorian(t *testing.T) {
 	se, db, cancel := getTestSchemaEngine(t)
 	defer cancel()
-	h := NewHistorian(se)
-	h.Open()
 
-	h.SetTrackSchemaVersions(false)
-	require.Nil(t, h.RegisterVersionEvent())
+	se.EnableHistorian(false)
+	require.Nil(t, se.RegisterVersionEvent())
 	gtidPrefix := "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:"
 	gtid1 := gtidPrefix + "1-10"
 	ddl1 := "create table tracker_test (id int)"
 	ts1 := int64(1427325876)
 	_, _, _ = ddl1, ts1, db
-	require.Nil(t, h.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid1))
-	require.Equal(t, fmt.Sprintf("%v", h.GetTableForPos(sqlparser.NewTableIdent("dual"), gtid1)), `name:"dual" `)
-	h.SetTrackSchemaVersions(true)
-	require.Nil(t, h.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid1))
+	_, err := se.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid1)
+	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
+	tab, err := se.GetTableForPos(sqlparser.NewTableIdent("dual"), gtid1)
+	require.NoError(t, err)
+	require.Equal(t, `name:"dual" `, fmt.Sprintf("%v", tab))
+	se.EnableHistorian(true)
+	_, err = se.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid1)
+	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
 	var blob1 string
 
 	fields := []*querypb.Field{{
@@ -115,11 +117,14 @@ func TestHistorian(t *testing.T) {
 			{sqltypes.NewInt32(1), sqltypes.NewVarBinary(gtid1), sqltypes.NewVarBinary(ddl1), sqltypes.NewInt32(int32(ts1)), sqltypes.NewVarBinary(blob1)},
 		},
 	})
-	require.Nil(t, h.RegisterVersionEvent())
+	require.Nil(t, se.RegisterVersionEvent())
 	exp1 := `name:"t1" fields:<name:"id1" type:INT32 table:"t1" > fields:<name:"id2" type:INT32 table:"t1" > p_k_columns:0 `
-	require.Equal(t, exp1, fmt.Sprintf("%v", h.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid1)))
+	tab, err = se.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid1)
+	require.NoError(t, err)
+	require.Equal(t, exp1, fmt.Sprintf("%v", tab))
 	gtid2 := gtidPrefix + "1-20"
-	require.Nil(t, h.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid2))
+	_, err = se.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid2)
+	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
 
 	table = getTable("t1", []string{"id1", "id2"}, []querypb.Type{querypb.Type_INT32, querypb.Type_VARBINARY}, []int64{0})
 	tables["t1"] = table
@@ -132,11 +137,14 @@ func TestHistorian(t *testing.T) {
 			{sqltypes.NewInt32(2), sqltypes.NewVarBinary(gtid2), sqltypes.NewVarBinary(ddl2), sqltypes.NewInt32(int32(ts2)), sqltypes.NewVarBinary(blob2)},
 		},
 	})
-	require.Nil(t, h.RegisterVersionEvent())
+	require.Nil(t, se.RegisterVersionEvent())
 	exp2 := `name:"t1" fields:<name:"id1" type:INT32 table:"t1" > fields:<name:"id2" type:VARBINARY table:"t1" > p_k_columns:0 `
-	require.Equal(t, exp2, fmt.Sprintf("%v", h.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid2)))
+	tab, err = se.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid2)
+	require.NoError(t, err)
+	require.Equal(t, exp2, fmt.Sprintf("%v", tab))
 	gtid3 := gtidPrefix + "1-30"
-	require.Nil(t, h.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid3))
+	_, err = se.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid3)
+	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
 
 	table = getTable("t1", []string{"id1", "id2", "id3"}, []querypb.Type{querypb.Type_INT32, querypb.Type_VARBINARY, querypb.Type_INT32}, []int64{0})
 	tables["t1"] = table
@@ -149,11 +157,19 @@ func TestHistorian(t *testing.T) {
 			{sqltypes.NewInt32(3), sqltypes.NewVarBinary(gtid3), sqltypes.NewVarBinary(ddl3), sqltypes.NewInt32(int32(ts3)), sqltypes.NewVarBinary(blob3)},
 		},
 	})
-	require.Nil(t, h.RegisterVersionEvent())
+	require.Nil(t, se.RegisterVersionEvent())
 	exp3 := `name:"t1" fields:<name:"id1" type:INT32 table:"t1" > fields:<name:"id2" type:VARBINARY table:"t1" > fields:<name:"id3" type:INT32 table:"t1" > p_k_columns:0 `
-	require.Equal(t, exp3, fmt.Sprintf("%v", h.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid3)))
+	tab, err = se.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid3)
+	require.NoError(t, err)
+	require.Equal(t, exp3, fmt.Sprintf("%v", tab))
 
-	require.Equal(t, exp1, fmt.Sprintf("%v", h.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid1)))
-	require.Equal(t, exp2, fmt.Sprintf("%v", h.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid2)))
-	require.Equal(t, exp3, fmt.Sprintf("%v", h.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid3)))
+	tab, err = se.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid1)
+	require.NoError(t, err)
+	require.Equal(t, exp1, fmt.Sprintf("%v", tab))
+	tab, err = se.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid2)
+	require.NoError(t, err)
+	require.Equal(t, exp2, fmt.Sprintf("%v", tab))
+	tab, err = se.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid3)
+	require.NoError(t, err)
+	require.Equal(t, exp3, fmt.Sprintf("%v", tab))
 }

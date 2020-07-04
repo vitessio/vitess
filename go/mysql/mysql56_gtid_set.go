@@ -452,6 +452,128 @@ func (set Mysql56GTIDSet) SIDBlock() []byte {
 	return buf.Bytes()
 }
 
+func (set Mysql56GTIDSet) Difference(other Mysql56GTIDSet) Mysql56GTIDSet {
+	if other == nil || set == nil {
+		return set
+	}
+
+	// Make a fresh, empty set to hold the new value.
+	// This function is not supposed to modify the original set.
+	differenceSet := make(Mysql56GTIDSet)
+
+	for sid, intervals := range set {
+		otherIntervals, ok := other[sid]
+		if !ok {
+			// We didn't find SID in other set, so diff should include all intervals for sid unique to receiver.
+			differenceSet[sid] = intervals
+			continue
+		}
+
+		// Found server id match between sets, so now we need to subtract each interval.
+		var diffIntervals []interval
+		advance := func() bool {
+			if len(intervals) == 0 {
+				return false
+			}
+			diffIntervals = append(diffIntervals, intervals[0])
+			intervals = intervals[1:]
+			return true
+		}
+
+		var otherInterval interval
+		advanceOther := func() bool {
+			if len(otherIntervals) == 0 {
+				return false
+			}
+			otherInterval = otherIntervals[0]
+			otherIntervals = otherIntervals[1:]
+			return true
+		}
+
+		if !advance() {
+			continue
+		}
+		if !advanceOther() {
+			differenceSet[sid] = intervals
+			continue
+		}
+
+	diffLoop:
+		for {
+			iv := diffIntervals[len(diffIntervals)-1]
+
+			switch {
+			case iv.end < otherInterval.start:
+				// [1, 2] - [3, 5]
+				// Need to skip to next s1 interval. This one is completely before otherInterval even starts. It's a diff in whole.
+				if !advance() {
+					break diffLoop
+				}
+
+			case iv.start > otherInterval.end:
+				// [3, 5] - [1, 2]
+				// Interval is completely past other interval. We need a valid other to compare against.
+				if !advanceOther() {
+					break diffLoop
+				}
+
+			case iv.start >= otherInterval.start && iv.end <= otherInterval.end:
+				// [3, 4] - [1, 5]
+				// Interval is completed contained. Pop off diffIntervals, and advance to next s1.
+				diffIntervals = diffIntervals[:len(diffIntervals)-1]
+				if !advance() {
+					break diffLoop
+				}
+
+			case iv.start < otherInterval.start && iv.end >= otherInterval.start && iv.end <= otherInterval.end:
+				// [1, 4] - [3, 5]
+				// We have a unique interval prior to where otherInterval starts and should adjust end to match this piece.
+				diffIntervals[len(diffIntervals)-1].end = otherInterval.start - 1
+
+				if !advance() {
+					break diffLoop
+				}
+
+			case iv.start >= otherInterval.start && iv.start <= otherInterval.end && iv.end > otherInterval.end:
+				// [3, 7] - [1, 5]
+				// We have an end piece to deal with.
+				diffIntervals[len(diffIntervals)-1].start = otherInterval.end + 1
+
+				// We need to pop s2 at this point. s1's new interval is fully past otherInterval, so no point in comparing
+				// this one next round.
+				if !advanceOther() {
+					break diffLoop
+				}
+
+			case iv.start < otherInterval.start && iv.end > otherInterval.end:
+				// [1, 7] - [3, 4]
+				// End is strictly greater. In this case we need to create an extra diff interval. We'll deal with any necessary trimming of it next round.
+				diffIntervals[len(diffIntervals)-1].end = otherInterval.start - 1
+				diffIntervals = append(diffIntervals, interval{start: otherInterval.end + 1, end: iv.end})
+
+				// We need to pop s2 at this point. s1's new interval is fully past otherInterval, so no point in comparing
+				// this one next round.
+				if !advanceOther() {
+					break diffLoop
+				}
+
+			default:
+				panic("This should never happen.")
+			}
+		}
+
+		if len(intervals) != 0 {
+			// If we've gotten to this point, then we have intervals that exist beyond the bounds of any intervals in otherIntervals, and they
+			// are all diffs and should be added in whole.
+			diffIntervals = append(diffIntervals, intervals...)
+		}
+
+		differenceSet[sid] = diffIntervals
+	}
+
+	return differenceSet
+}
+
 // NewMysql56GTIDSetFromSIDBlock builds a Mysql56GTIDSet from parsing a SID Block.
 // This is the reverse of the SIDBlock method.
 //

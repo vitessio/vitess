@@ -172,7 +172,7 @@ func NewQueryEvent(f BinlogFormat, s *FakeBinlogStream, q Query) BinlogEvent {
 	if q.Charset != nil {
 		statusVarLength += 1 + 2 + 2 + 2
 	}
-	length := 4 + // slave proxy id
+	length := 4 + // proxy id
 		4 + // execution time
 		1 + // schema length
 		2 + // error code

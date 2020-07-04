@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/discovery"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -451,8 +453,10 @@ func TestMaxReplicationLagModule_Increase_BadRateUpperBound(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Assume that a bad value of 150 was set @ 30s.
-	tf.m.memory.markBad(150, sinceZero(30*time.Second))
+	//Assume that a bad value of 150 was set @ 30s and log error
+	if err := tf.m.memory.markBad(150, sinceZero(30*time.Second)); err != nil {
+		log.Errorf("tf.m.memory.markBad(150, sinceZero(30*time.Second)) falied : %v", err)
+	}
 
 	// r2 @  70s, 0s lag
 	tf.ratesHistory.add(sinceZero(69*time.Second), 100)
@@ -500,7 +504,7 @@ func TestMaxReplicationLagModule_Increase_MinimumProgress(t *testing.T) {
 }
 
 // TestMaxReplicationLagModule_Decrease verifies that we correctly calculate the
-// replica (slave) rate in the decreaseAndGuessRate state.
+// replication rate in the decreaseAndGuessRate state.
 func TestMaxReplicationLagModule_Decrease(t *testing.T) {
 	tf, err := newTestFixtureWithMaxReplicationLag(5)
 	if err != nil {
@@ -519,7 +523,7 @@ func TestMaxReplicationLagModule_Decrease(t *testing.T) {
 	tf.ratesHistory.add(sinceZero(70*time.Second), 100)
 	tf.ratesHistory.add(sinceZero(89*time.Second), 200)
 	tf.process(lagRecord(sinceZero(90*time.Second), r2, 3))
-	// The guessed replica (slave) rate is 140 because of the 3s lag increase
+	// The guessed replication rate is 140 because of the 3s lag increase
 	// within the elapsed 20s.
 	// The replica processed only 17s worth of work (20s duration - 3s lag increase)
 	// 17s / 20s * 200 QPS actual rate => 170 QPS replica rate

@@ -38,8 +38,8 @@ type RowStreamer interface {
 }
 
 // NewRowStreamer returns a RowStreamer
-func NewRowStreamer(ctx context.Context, cp dbconfigs.Connector, sh *schema.HistorianSvc, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error) RowStreamer {
-	return newRowStreamer(ctx, cp, sh, query, lastpk, &localVSchema{vschema: &vindexes.VSchema{}}, send)
+func NewRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error) RowStreamer {
+	return newRowStreamer(ctx, cp, se, query, lastpk, &localVSchema{vschema: &vindexes.VSchema{}}, send)
 }
 
 // rowStreamer is used for copying the existing rows of a table
@@ -55,7 +55,7 @@ type rowStreamer struct {
 	cancel func()
 
 	cp      dbconfigs.Connector
-	sh      schema.Historian
+	se      *schema.Engine
 	query   string
 	lastpk  []sqltypes.Value
 	send    func(*binlogdatapb.VStreamRowsResponse) error
@@ -66,13 +66,13 @@ type rowStreamer struct {
 	sendQuery string
 }
 
-func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, sh schema.Historian, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error) *rowStreamer {
+func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error) *rowStreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &rowStreamer{
 		ctx:     ctx,
 		cancel:  cancel,
 		cp:      cp,
-		sh:      sh,
+		se:      se,
 		query:   query,
 		lastpk:  lastpk,
 		send:    send,
@@ -81,13 +81,14 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, sh schema.Histo
 }
 
 func (rs *rowStreamer) Cancel() {
+	log.Info("Rowstreamer Cancel() called")
 	rs.cancel()
 }
 
 func (rs *rowStreamer) Stream() error {
 	// Ensure sh is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
-	if err := rs.sh.Open(); err != nil {
+	if err := rs.se.Open(); err != nil {
 		return err
 	}
 
@@ -113,9 +114,9 @@ func (rs *rowStreamer) buildPlan() error {
 	if err != nil {
 		return err
 	}
-	st := rs.sh.GetTableForPos(fromTable, "")
-	if st == nil {
-		return fmt.Errorf("unknown table %v in schema", fromTable)
+	st, err := rs.se.GetTableForPos(fromTable, "")
+	if err != nil {
+		return err
 	}
 	ti := &Table{
 		Name:   st.Name,
@@ -137,6 +138,7 @@ func (rs *rowStreamer) buildPlan() error {
 	if err != nil {
 		return err
 	}
+	log.Infof("Rowstreamer, table plan %v, pkColumns %v, fields %v", rs.plan, rs.pkColumns, rs.plan.fields())
 	return err
 }
 
@@ -234,8 +236,10 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	lastpk := make([]sqltypes.Value, len(rs.pkColumns))
 	byteCount := 0
 	for {
+		//log.Infof("StreamResponse for loop iteration starts")
 		select {
 		case <-rs.ctx.Done():
+			log.Infof("Stream ended because of ctx.Done")
 			return fmt.Errorf("stream ended: %v", rs.ctx.Err())
 		default:
 		}
@@ -247,7 +251,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		if row == nil {
 			break
 		}
-		// Compute lastpk here, because we'll neeed it
+		// Compute lastpk here, because we'll need it
 		// at the end after the loop exits.
 		for i, pk := range rs.pkColumns {
 			lastpk[i] = row[pk]
@@ -268,6 +272,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			response.Lastpk = sqltypes.RowToProto3(lastpk)
 			err = send(response)
 			if err != nil {
+				log.Infof("Rowstreamer send returned error %v", err)
 				return err
 			}
 			// empty the rows so we start over, but we keep the

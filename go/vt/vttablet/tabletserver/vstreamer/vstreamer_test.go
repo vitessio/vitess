@@ -17,19 +17,24 @@ limitations under the License.
 package vstreamer
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
+
+	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -37,8 +42,6 @@ type testcase struct {
 	input  interface{}
 	output [][]string
 }
-
-var numVersionEventsReceived int
 
 func TestVersion(t *testing.T) {
 	if testing.Short() {
@@ -50,8 +53,11 @@ func TestVersion(t *testing.T) {
 		engine = oldEngine
 	}()
 
-	mh := newMockHistorian(env.SchemaEngine)
-	engine = NewEngine(engine.env, env.SrvTopo, env.SchemaEngine, mh)
+	err := env.SchemaEngine.EnableHistorian(true)
+	require.NoError(t, err)
+	defer env.SchemaEngine.EnableHistorian(false)
+
+	engine = NewEngine(engine.env, env.SrvTopo, env.SchemaEngine)
 	engine.Open(env.KeyspaceName, env.Cells[0])
 	defer engine.Close()
 
@@ -61,10 +67,17 @@ func TestVersion(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table _vt.schema_version",
 	})
+	dbSchema := &binlogdatapb.MinimalSchema{
+		Tables: []*binlogdatapb.MinimalTable{{
+			Name: "t1",
+		}},
+	}
+	blob, _ := proto.Marshal(dbSchema)
 	engine.se.Reload(context.Background())
+	gtid := "MariaDB/0-41983-20"
 	testcases := []testcase{{
 		input: []string{
-			fmt.Sprintf("insert into _vt.schema_version values(1, 'MariaDB/0-41983-20', 123, 'create table t1', 'abc')"),
+			fmt.Sprintf("insert into _vt.schema_version values(1, '%s', 123, 'create table t1', %v)", gtid, encodeString(string(blob))),
 		},
 		// External table events don't get sent.
 		output: [][]string{{
@@ -73,8 +86,217 @@ func TestVersion(t *testing.T) {
 			`gtid`,
 			`commit`}},
 	}}
-	runCases(t, nil, testcases, "")
-	assert.Equal(t, 1, numVersionEventsReceived)
+	runCases(t, nil, testcases, "", nil)
+	mt, err := env.SchemaEngine.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid)
+	require.NoError(t, err)
+	assert.True(t, proto.Equal(mt, dbSchema.Tables[0]))
+}
+
+func insertLotsOfData(t *testing.T, numRows int) {
+	query1 := "insert into t1 (id11, id12) values"
+	s := ""
+	for i := 1; i <= numRows; i++ {
+		if s != "" {
+			s += ","
+		}
+		s += fmt.Sprintf("(%d,%d)", i, i*10)
+	}
+	query1 += s
+	query2 := "insert into t2 (id21, id22) values"
+	s = ""
+	for i := 1; i <= numRows; i++ {
+		if s != "" {
+			s += ","
+		}
+		s += fmt.Sprintf("(%d,%d)", i, i*20)
+	}
+	query2 += s
+	execStatements(t, []string{
+		query1,
+		query2,
+	})
+}
+
+func TestVStreamCopySimpleFlow(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	execStatements(t, []string{
+		"create table t1(id11 int, id12 int, primary key(id11))",
+		"create table t2(id21 int, id22 int, primary key(id21))",
+	})
+	log.Infof("Pos before bulk insert: %s", masterPosition(t))
+	insertLotsOfData(t, 10)
+	log.Infof("Pos after bulk insert: %s", masterPosition(t))
+	defer execStatements(t, []string{
+		"drop table t1",
+		"drop table t2",
+	})
+	engine.se.Reload(context.Background())
+	ctx := context.Background()
+	qr, err := env.Mysqld.FetchSuperQuery(ctx, "SELECT count(*) as cnt from t1, t2 where t1.id11 = t2.id21")
+	if err != nil {
+		t.Fatal("Query failed")
+	}
+	require.Equal(t, "[[INT64(10)]]", fmt.Sprintf("%v", qr.Rows))
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}, {
+			Match:  "t2",
+			Filter: "select * from t2",
+		}},
+	}
+
+	var tablePKs []*binlogdatapb.TableLastPK
+	tablePKs = append(tablePKs, getTablePK("t1", 1))
+	tablePKs = append(tablePKs, getTablePK("t2", 2))
+
+	t1FieldEvent := []string{"begin", "type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > "}
+	t2FieldEvent := []string{"begin", "type:FIELD field_event:<table_name:\"t2\" fields:<name:\"id21\" type:INT32 > fields:<name:\"id22\" type:INT32 > > "}
+	t1Events := []string{}
+	t2Events := []string{}
+	for i := 1; i <= 10; i++ {
+		t1Events = append(t1Events,
+			fmt.Sprintf("type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:%d lengths:%d values:\"%d%d\" > > > ", len(strconv.Itoa(i)), len(strconv.Itoa(i*10)), i, i*10))
+		t2Events = append(t2Events,
+			fmt.Sprintf("type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:%d lengths:%d values:\"%d%d\" > > > ", len(strconv.Itoa(i)), len(strconv.Itoa(i*20)), i, i*20))
+	}
+	t1Events = append(t1Events, "lastpk", "commit")
+	t2Events = append(t2Events, "lastpk", "commit")
+
+	insertEvents1 := []string{
+		"begin",
+		"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > ",
+		"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:3 lengths:4 values:\"1011010\" > > > ",
+		"gtid",
+		"commit"}
+	insertEvents2 := []string{
+		"begin",
+		"type:FIELD field_event:<table_name:\"t2\" fields:<name:\"id21\" type:INT32 > fields:<name:\"id22\" type:INT32 > > ",
+		"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:3 lengths:4 values:\"2022020\" > > > ",
+		"gtid",
+		"commit"}
+
+	testcases := []testcase{
+		{
+			input:  []string{},
+			output: [][]string{t1FieldEvent, {"gtid"}, t1Events, {"begin", "lastpk", "commit"}, t2FieldEvent, t2Events, {"begin", "lastpk", "commit"}},
+		},
+
+		{
+			input: []string{
+				"insert into t1 values (101, 1010)",
+			},
+			output: [][]string{insertEvents1},
+		},
+		{
+			input: []string{
+				"insert into t2 values (202, 2020)",
+			},
+			output: [][]string{insertEvents2},
+		},
+	}
+
+	runCases(t, filter, testcases, "vscopy", tablePKs)
+	log.Infof("Pos at end of test: %s", masterPosition(t))
+}
+
+func TestVStreamCopyWithDifferentFilters(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	execStatements(t, []string{
+		"create table t1(id1 int, id2 int, id3 int, primary key(id1))",
+		"create table t2a(id1 int, id2 int, primary key(id1))",
+		"create table t2b(id1 varchar(20), id2 int, primary key(id1))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		"drop table t2a",
+		"drop table t2b",
+	})
+	engine.se.Reload(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/t2.*",
+		}, {
+			Match:  "t1",
+			Filter: "select id1, id2 from t1",
+		}},
+	}
+
+	execStatements(t, []string{
+		"insert into t1(id1, id2, id3) values (1, 2, 3)",
+		"insert into t2a(id1, id2) values (1, 4)",
+		"insert into t2b(id1, id2) values ('b', 6)",
+		"insert into t2b(id1, id2) values ('a', 5)",
+	})
+
+	var expectedEvents = []string{
+		"type:BEGIN ",
+		"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id1\" type:INT32 > fields:<name:\"id2\" type:INT32 > > ",
+		"type:GTID",
+		"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:1 values:\"12\" > > > ",
+		"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t1\" lastpk:<rows:<lengths:1 values:\"1\" > > > > ",
+		"type:COMMIT ",
+		"type:BEGIN ",
+		"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t1\" > completed:true > ",
+		"type:COMMIT ",
+		"type:BEGIN ",
+		"type:FIELD field_event:<table_name:\"t2a\" fields:<name:\"id1\" type:INT32 > fields:<name:\"id2\" type:INT32 > > ",
+		"type:ROW row_event:<table_name:\"t2a\" row_changes:<after:<lengths:1 lengths:1 values:\"14\" > > > ",
+		"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t2a\" lastpk:<rows:<lengths:1 values:\"1\" > > > > ",
+		"type:COMMIT ",
+		"type:BEGIN ",
+		"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t2a\" > completed:true > ",
+		"type:COMMIT ",
+		"type:BEGIN ",
+		"type:FIELD field_event:<table_name:\"t2b\" fields:<name:\"id1\" type:VARCHAR > fields:<name:\"id2\" type:INT32 > > ",
+		"type:ROW row_event:<table_name:\"t2b\" row_changes:<after:<lengths:1 lengths:1 values:\"a5\" > > > ",
+		"type:ROW row_event:<table_name:\"t2b\" row_changes:<after:<lengths:1 lengths:1 values:\"b6\" > > > ",
+		"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t2b\" lastpk:<rows:<lengths:1 values:\"b\" > > > > ",
+		"type:COMMIT ",
+		"type:BEGIN ",
+		"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t2b\" > completed:true > ",
+		"type:COMMIT ",
+	}
+
+	var allEvents []*binlogdatapb.VEvent
+	var wg sync.WaitGroup
+	wg.Add(1)
+	ctx2, cancel2 := context.WithDeadline(ctx, time.Now().Add(10*time.Second))
+	defer cancel2()
+	go func() {
+		defer wg.Done()
+		engine.Stream(ctx2, "", nil, filter, func(evs []*binlogdatapb.VEvent) error {
+			for _, ev := range evs {
+				if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
+					continue
+				}
+				allEvents = append(allEvents, ev)
+			}
+			if len(allEvents) == len(expectedEvents) {
+				log.Infof("Got %d events as expected", len(allEvents))
+				for i, ev := range allEvents {
+					ev.Timestamp = 0
+					got := ev.String()
+					want := expectedEvents[i]
+					if !strings.HasPrefix(got, want) {
+						t.Fatalf("Event %d did not match, want %s, got %s", i, want, got)
+					}
+				}
+
+				return io.EOF
+			}
+			return nil
+		})
+	}()
+	wg.Wait()
 }
 
 func TestFilteredVarBinary(t *testing.T) {
@@ -127,7 +349,7 @@ func TestFilteredVarBinary(t *testing.T) {
 			`commit`,
 		}},
 	}}
-	runCases(t, filter, testcases, "")
+	runCases(t, filter, testcases, "", nil)
 }
 
 func TestFilteredInt(t *testing.T) {
@@ -180,7 +402,7 @@ func TestFilteredInt(t *testing.T) {
 			`commit`,
 		}},
 	}}
-	runCases(t, filter, testcases, "")
+	runCases(t, filter, testcases, "", nil)
 }
 
 func TestStatements(t *testing.T) {
@@ -260,7 +482,7 @@ func TestStatements(t *testing.T) {
 			`type:DDL ddl:"truncate table stream2" `,
 		}},
 	}}
-	runCases(t, nil, testcases, "current")
+	runCases(t, nil, testcases, "current", nil)
 
 	// Test FilePos flavor
 	savedEngine := engine
@@ -270,7 +492,7 @@ func TestStatements(t *testing.T) {
 		return in
 	})
 	defer engine.Close()
-	runCases(t, nil, testcases, "current")
+	runCases(t, nil, testcases, "current", nil)
 }
 
 // TestOther tests "other" and "priv" statements. These statements can
@@ -309,8 +531,8 @@ func TestOther(t *testing.T) {
 		t.Logf("Run mode: %v", mode)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		ch := startStream(ctx, t, nil, "")
-
+		wg, ch := startStream(ctx, t, nil, "", nil)
+		defer wg.Wait()
 		want := [][]string{{
 			`gtid`,
 			`type:OTHER `,
@@ -383,13 +605,15 @@ func TestRegexp(t *testing.T) {
 			`commit`,
 		}},
 	}}
-	runCases(t, filter, testcases, "")
+	runCases(t, filter, testcases, "", nil)
 }
 
 func TestREKeyRange(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
+	// Needed for this test to run if run standalone
+	engine.watcherOnce.Do(engine.setWatch)
 
 	execStatements(t, []string{
 		"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
@@ -411,8 +635,8 @@ func TestREKeyRange(t *testing.T) {
 			Filter: "-80",
 		}},
 	}
-	ch := startStream(ctx, t, filter, "")
-
+	wg, ch := startStream(ctx, t, filter, "", nil)
+	defer wg.Wait()
 	// 1, 2, 3 and 5 are in shard -80.
 	// 4 and 6 are in shard 80-.
 	input := []string{
@@ -474,6 +698,7 @@ func TestREKeyRange(t *testing.T) {
 		`gtid`,
 		`commit`,
 	}})
+	cancel()
 }
 
 func TestInKeyRangeMultiColumn(t *testing.T) {
@@ -501,7 +726,8 @@ func TestInKeyRangeMultiColumn(t *testing.T) {
 			Filter: "select id, region, val, keyspace_id() from t1 where in_keyrange('-80')",
 		}},
 	}
-	ch := startStream(ctx, t, filter, "")
+	wg, ch := startStream(ctx, t, filter, "", nil)
+	defer wg.Wait()
 
 	// 1, 2, 3 and 5 are in shard -80.
 	// 4 and 6 are in shard 80-.
@@ -529,6 +755,7 @@ func TestInKeyRangeMultiColumn(t *testing.T) {
 		`gtid`,
 		`commit`,
 	}})
+	cancel()
 }
 
 func TestREMultiColumnVindex(t *testing.T) {
@@ -556,7 +783,8 @@ func TestREMultiColumnVindex(t *testing.T) {
 			Filter: "-80",
 		}},
 	}
-	ch := startStream(ctx, t, filter, "")
+	wg, ch := startStream(ctx, t, filter, "", nil)
+	defer wg.Wait()
 
 	// 1, 2, 3 and 5 are in shard -80.
 	// 4 and 6 are in shard 80-.
@@ -583,6 +811,7 @@ func TestREMultiColumnVindex(t *testing.T) {
 		`gtid`,
 		`commit`,
 	}})
+	cancel()
 }
 
 func TestSelectFilter(t *testing.T) {
@@ -620,7 +849,7 @@ func TestSelectFilter(t *testing.T) {
 			`commit`,
 		}},
 	}}
-	runCases(t, filter, testcases, "")
+	runCases(t, filter, testcases, "", nil)
 }
 
 func TestDDLAddColumn(t *testing.T) {
@@ -670,7 +899,7 @@ func TestDDLAddColumn(t *testing.T) {
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {
 		defer close(ch)
-		if err := vstream(ctx, t, pos, filter, ch); err != nil {
+		if err := vstream(ctx, t, pos, nil, filter, ch); err != nil {
 			t.Error(err)
 		}
 	}()
@@ -729,7 +958,7 @@ func TestDDLDropColumn(t *testing.T) {
 		}
 	}()
 	defer close(ch)
-	err := vstream(ctx, t, pos, nil, ch)
+	err := vstream(ctx, t, pos, nil, nil, ch)
 	want := "cannot determine table columns"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
@@ -759,7 +988,7 @@ func TestUnsentDDL(t *testing.T) {
 			Match: "/none/",
 		}},
 	}
-	runCases(t, filter, testcases, "")
+	runCases(t, filter, testcases, "", nil)
 }
 
 func TestBuffering(t *testing.T) {
@@ -859,7 +1088,7 @@ func TestBuffering(t *testing.T) {
 			`type:DDL ddl:"alter table packet_test change val val varchar(128)" `,
 		}},
 	}}
-	runCases(t, nil, testcases, "")
+	runCases(t, nil, testcases, "", nil)
 }
 
 func TestBestEffortNameInFieldEvent(t *testing.T) {
@@ -909,7 +1138,7 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 			`commit`,
 		}},
 	}}
-	runCases(t, filter, testcases, position)
+	runCases(t, filter, testcases, position, nil)
 }
 
 func TestTypes(t *testing.T) {
@@ -1050,7 +1279,7 @@ func TestTypes(t *testing.T) {
 			`commit`,
 		}},
 	}}
-	runCases(t, nil, testcases, "")
+	runCases(t, nil, testcases, "", nil)
 }
 
 func TestJSON(t *testing.T) {
@@ -1079,7 +1308,7 @@ func TestJSON(t *testing.T) {
 			`commit`,
 		}},
 	}}
-	runCases(t, nil, testcases, "")
+	runCases(t, nil, testcases, "", nil)
 }
 
 func TestExternalTable(t *testing.T) {
@@ -1109,7 +1338,7 @@ func TestExternalTable(t *testing.T) {
 			`commit`,
 		}},
 	}}
-	runCases(t, nil, testcases, "")
+	runCases(t, nil, testcases, "", nil)
 }
 
 func TestJournal(t *testing.T) {
@@ -1148,7 +1377,7 @@ func TestJournal(t *testing.T) {
 			`commit`,
 		}},
 	}}
-	runCases(t, nil, testcases, "")
+	runCases(t, nil, testcases, "", nil)
 }
 
 func TestMinimalMode(t *testing.T) {
@@ -1183,7 +1412,7 @@ func TestMinimalMode(t *testing.T) {
 		}
 	}()
 	defer close(ch)
-	err := vstream(ctx, t, pos, nil, ch)
+	err := vstream(ctx, t, pos, nil, nil, ch)
 	want := "partial row image encountered"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain '%s'", err, want)
@@ -1225,7 +1454,7 @@ func TestStatementMode(t *testing.T) {
 			`commit`,
 		}},
 	}}
-	runCases(t, nil, testcases, "")
+	runCases(t, nil, testcases, "", nil)
 }
 
 func TestHeartbeat(t *testing.T) {
@@ -1236,10 +1465,12 @@ func TestHeartbeat(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ch := startStream(ctx, t, nil, "")
+	wg, ch := startStream(ctx, t, nil, "", nil)
+	defer wg.Wait()
 	evs := <-ch
 	require.Equal(t, 1, len(evs))
 	assert.Equal(t, binlogdatapb.VEventType_HEARTBEAT, evs[0].Type)
+	cancel()
 }
 
 func TestNoFutureGTID(t *testing.T) {
@@ -1275,7 +1506,7 @@ func TestNoFutureGTID(t *testing.T) {
 		}
 	}()
 	defer close(ch)
-	err = vstream(ctx, t, future, nil, ch)
+	err = vstream(ctx, t, future, nil, nil, ch)
 	want := "is ahead of current position"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
@@ -1325,15 +1556,15 @@ func TestFilteredMultipleWhere(t *testing.T) {
 			`commit`,
 		}},
 	}}
-	runCases(t, filter, testcases, "")
+	runCases(t, filter, testcases, "", nil)
 }
 
-func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string) {
+func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string, tablePK []*binlogdatapb.TableLastPK) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ch := startStream(ctx, t, filter, position)
-
+	wg, ch := startStream(ctx, t, filter, position, tablePK)
+	defer wg.Wait()
 	// If position is 'current', we wait for a heartbeat to be
 	// sure the vstreamer has started.
 	if position == "current" {
@@ -1341,6 +1572,7 @@ func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, p
 		expectLog(ctx, t, "current pos", ch, [][]string{{`gtid`, `type:OTHER `}})
 	}
 
+	log.Infof("Starting to run test cases")
 	for _, tcase := range testcases {
 		switch input := tcase.input.(type) {
 		case []string:
@@ -1352,10 +1584,12 @@ func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, p
 		}
 		expectLog(ctx, t, tcase.input, ch, tcase.output)
 	}
+
 	cancel()
 	if evs, ok := <-ch; ok {
 		t.Fatalf("unexpected evs: %v", evs)
 	}
+	log.Infof("Last line of runCases")
 }
 
 func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan []*binlogdatapb.VEvent, output [][]string) {
@@ -1401,6 +1635,10 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 				if evs[i].Type != binlogdatapb.VEventType_GTID {
 					t.Fatalf("%v (%d): event: %v, want gtid", input, i, evs[i])
 				}
+			case "lastpk":
+				if evs[i].Type != binlogdatapb.VEventType_LASTPK {
+					t.Fatalf("%v (%d): event: %v, want lastpk", input, i, evs[i])
+				}
 			case "commit":
 				if evs[i].Type != binlogdatapb.VEventType_COMMIT {
 					t.Fatalf("%v (%d): event: %v, want commit", input, i, evs[i])
@@ -1415,22 +1653,29 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 	}
 }
 
-var lastPos string
-
-func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string) <-chan []*binlogdatapb.VEvent {
-	if position == "" {
+func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string, tablePKs []*binlogdatapb.TableLastPK) (*sync.WaitGroup, <-chan []*binlogdatapb.VEvent) {
+	switch position {
+	case "":
 		position = masterPosition(t)
+	case "vscopy":
+		position = ""
 	}
 
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	ch := make(chan []*binlogdatapb.VEvent)
+
 	go func() {
 		defer close(ch)
-		_ = vstream(ctx, t, position, filter, ch)
+		defer wg.Done()
+		log.Infof(">>>>>>>>>>> before vstream")
+		vstream(ctx, t, position, tablePKs, filter, ch)
+		log.Infof(">>>>>>>>>> after vstream")
 	}()
-	return ch
+	return &wg, ch
 }
 
-func vstream(ctx context.Context, t *testing.T, pos string, filter *binlogdatapb.Filter, ch chan []*binlogdatapb.VEvent) error {
+func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, ch chan []*binlogdatapb.VEvent) error {
 	if filter == nil {
 		filter = &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
@@ -1438,19 +1683,8 @@ func vstream(ctx context.Context, t *testing.T, pos string, filter *binlogdatapb
 			}},
 		}
 	}
-	return engine.Stream(ctx, pos, filter, func(evs []*binlogdatapb.VEvent) error {
-		if t.Name() == "TestVersion" { // emulate tracker only for the version test
-			for _, ev := range evs {
-				log.Infof("Original stream: %s event found %v", ev.Type, ev)
-				if ev.Type == binlogdatapb.VEventType_GTID {
-					lastPos = ev.Gtid
-				}
-				if ev.Type == binlogdatapb.VEventType_DDL {
-					schemaTracker := schema.NewTracker(env.SchemaEngine)
-					schemaTracker.SchemaUpdated(lastPos, ev.Ddl, ev.Timestamp)
-				}
-			}
-		}
+	return engine.Stream(ctx, pos, tablePKs, filter, func(evs []*binlogdatapb.VEvent) error {
+		t.Logf("Received events: %v", evs)
 		select {
 		case ch <- evs:
 		case <-ctx.Done():
@@ -1498,11 +1732,9 @@ func setVSchema(t *testing.T, vschema string) {
 	t.Helper()
 
 	curCount := engine.vschemaUpdates.Get()
-
 	if err := env.SetVSchema(vschema); err != nil {
 		t.Fatal(err)
 	}
-
 	// Wait for curCount to go up.
 	updated := false
 	for i := 0; i < 10; i++ {
@@ -1515,4 +1747,10 @@ func setVSchema(t *testing.T, vschema string) {
 	if !updated {
 		t.Error("vschema did not get updated")
 	}
+}
+
+func encodeString(in string) string {
+	buf := bytes.NewBuffer(nil)
+	sqltypes.NewVarChar(in).EncodeSQL(buf)
+	return buf.String()
 }

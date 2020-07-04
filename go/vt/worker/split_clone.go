@@ -783,13 +783,13 @@ func (scw *SplitCloneWorker) findOfflineSourceTablets(ctx context.Context) error
 		scw.sourceTablets[i] = ti.Tablet
 
 		shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-		err = scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i])
+		err = scw.wr.TabletManagerClient().StopReplication(shortCtx, scw.sourceTablets[i])
 		cancel()
 		if err != nil {
 			return vterrors.Wrapf(err, "cannot stop replication on tablet %v", topoproto.TabletAliasString(alias))
 		}
 
-		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i])
+		wrangler.RecordStartReplicationAction(scw.cleaner, scw.sourceTablets[i])
 	}
 
 	return nil
@@ -1246,7 +1246,7 @@ func (scw *SplitCloneWorker) setUpVReplication(ctx context.Context) error {
 	} else {
 		for shardIndex := range scw.sourceShards {
 			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-			status, err := scw.wr.TabletManagerClient().SlaveStatus(shortCtx, scw.sourceTablets[shardIndex])
+			status, err := scw.wr.TabletManagerClient().ReplicationStatus(shortCtx, scw.sourceTablets[shardIndex])
 			cancel()
 			if err != nil {
 				return err

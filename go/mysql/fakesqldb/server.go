@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 
@@ -347,7 +349,11 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	// Check if we should close the connection and provoke errno 2013.
 	if db.shouldClose {
 		c.Close()
-		callback(&sqltypes.Result{})
+
+		//log error
+		if err := callback(&sqltypes.Result{}); err != nil {
+			log.Errorf("callback failed : %v", err)
+		}
 		return nil
 	}
 
@@ -355,7 +361,10 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	// may send this at connection time, and we don't want it to
 	// interfere.
 	if key == "set names utf8" {
-		callback(&sqltypes.Result{})
+		//log error
+		if err := callback(&sqltypes.Result{}); err != nil {
+			log.Errorf("callback failed : %v", err)
+		}
 		return nil
 	}
 
@@ -430,7 +439,7 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 }
 
 // ComPrepare is part of the mysql.Handler interface.
-func (db *DB) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, error) {
+func (db *DB) ComPrepare(c *mysql.Conn, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
 	return nil, nil
 }
 

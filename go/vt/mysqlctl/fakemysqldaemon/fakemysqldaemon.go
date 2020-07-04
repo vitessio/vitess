@@ -50,34 +50,34 @@ type FakeMysqlDaemon struct {
 
 	// MysqlPort will be returned by GetMysqlPort(). Set to -1 to
 	// return an error.
-	MysqlPort int32
+	MysqlPort sync2.AtomicInt32
 
-	// Replicating is updated when calling StartSlave / StopSlave
-	// (it is not used at all when calling SlaveStatus, it is the
+	// Replicating is updated when calling StartReplication / StopReplication
+	// (it is not used at all when calling ReplicationStatus, it is the
 	// test owner responsibility to have these two match)
 	Replicating bool
 
-	// SlaveIORunning is always true except in one testcase
+	// IOThreadRunning is always true except in one testcase
 	// where we want to test error handling during SetMaster
-	SlaveIORunning bool
+	IOThreadRunning bool
 
 	// CurrentMasterPosition is returned by MasterPosition
-	// and SlaveStatus
+	// and ReplicationStatus
 	CurrentMasterPosition mysql.Position
 
-	// SlaveStatusError is used by SlaveStatus
-	SlaveStatusError error
+	// ReplicationStatusError is used by ReplicationStatus
+	ReplicationStatusError error
 
-	// StartSlaveError is used by StartSlave
-	StartSlaveError error
+	// StartReplicationError is used by StartReplication
+	StartReplicationError error
 
-	// CurrentMasterHost is returned by SlaveStatus
+	// CurrentMasterHost is returned by ReplicationStatus
 	CurrentMasterHost string
 
-	// CurrentMasterport is returned by SlaveStatus
+	// CurrentMasterport is returned by ReplicationStatus
 	CurrentMasterPort int
 
-	// SecondsBehindMaster is returned by SlaveStatus
+	// SecondsBehindMaster is returned by ReplicationStatus
 	SecondsBehindMaster uint
 
 	// ReadOnly is the current value of the flag
@@ -86,12 +86,12 @@ type FakeMysqlDaemon struct {
 	// SuperReadOnly is the current value of the flag
 	SuperReadOnly bool
 
-	// SetSlavePositionPos is matched against the input of SetSlavePosition.
-	// If it doesn't match, SetSlavePosition will return an error.
-	SetSlavePositionPos mysql.Position
+	// SetReplicationPositionPos is matched against the input of SetReplicationPosition.
+	// If it doesn't match, SetReplicationPosition will return an error.
+	SetReplicationPositionPos mysql.Position
 
-	// StartSlaveUntilAfterPos is matched against the input
-	StartSlaveUntilAfterPos mysql.Position
+	// StartReplicationUntilAfterPos is matched against the input
+	StartReplicationUntilAfterPos mysql.Position
 
 	// SetMasterInput is matched against the input of SetMaster
 	// (as "%v:%v"). If it doesn't match, SetMaster will return an error.
@@ -146,8 +146,8 @@ type FakeMysqlDaemon struct {
 
 	// SemiSyncMasterEnabled represents the state of rpl_semi_sync_master_enabled.
 	SemiSyncMasterEnabled bool
-	// SemiSyncSlaveEnabled represents the state of rpl_semi_sync_slave_enabled.
-	SemiSyncSlaveEnabled bool
+	// SemiSyncReplicaEnabled represents the state of rpl_semi_sync_slave_enabled.
+	SemiSyncReplicaEnabled bool
 
 	// TimeoutHook is a func that can be called at the beginning of any method to fake a timeout.
 	// all a test needs to do is make it { return context.DeadlineExceeded }
@@ -159,9 +159,9 @@ type FakeMysqlDaemon struct {
 // 'db' can be nil if the test doesn't use a database at all.
 func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 	result := &FakeMysqlDaemon{
-		db:             db,
-		Running:        true,
-		SlaveIORunning: true,
+		db:              db,
+		Running:         true,
+		IOThreadRunning: true,
 	}
 	if db != nil {
 		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", 5, time.Minute, 0)
@@ -210,26 +210,26 @@ func (fmd *FakeMysqlDaemon) Wait(ctx context.Context, cnf *mysqlctl.Mycnf) error
 
 // GetMysqlPort is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) GetMysqlPort() (int32, error) {
-	if fmd.MysqlPort == -1 {
+	if fmd.MysqlPort.Get() == -1 {
 		return 0, fmt.Errorf("FakeMysqlDaemon.GetMysqlPort returns an error")
 	}
-	return fmd.MysqlPort, nil
+	return fmd.MysqlPort.Get(), nil
 }
 
-// SlaveStatus is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) SlaveStatus() (mysql.SlaveStatus, error) {
-	if fmd.SlaveStatusError != nil {
-		return mysql.SlaveStatus{}, fmd.SlaveStatusError
+// ReplicationStatus is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) ReplicationStatus() (mysql.ReplicationStatus, error) {
+	if fmd.ReplicationStatusError != nil {
+		return mysql.ReplicationStatus{}, fmd.ReplicationStatusError
 	}
-	return mysql.SlaveStatus{
+	return mysql.ReplicationStatus{
 		Position:            fmd.CurrentMasterPosition,
 		SecondsBehindMaster: fmd.SecondsBehindMaster,
 		// implemented as AND to avoid changing all tests that were
 		// previously using Replicating = false
-		SlaveIORunning:  fmd.Replicating && fmd.SlaveIORunning,
-		SlaveSQLRunning: fmd.Replicating,
-		MasterHost:      fmd.CurrentMasterHost,
-		MasterPort:      fmd.CurrentMasterPort,
+		IOThreadRunning:  fmd.Replicating && fmd.IOThreadRunning,
+		SQLThreadRunning: fmd.Replicating,
+		MasterHost:       fmd.CurrentMasterHost,
+		MasterPort:       fmd.CurrentMasterPort,
 	}, nil
 }
 
@@ -263,18 +263,18 @@ func (fmd *FakeMysqlDaemon) SetSuperReadOnly(on bool) error {
 	return nil
 }
 
-// StartSlave is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) StartSlave(hookExtraEnv map[string]string) error {
-	if fmd.StartSlaveError != nil {
-		return fmd.StartSlaveError
+// StartReplication is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) StartReplication(hookExtraEnv map[string]string) error {
+	if fmd.StartReplicationError != nil {
+		return fmd.StartReplicationError
 	}
 	return fmd.ExecuteSuperQueryList(context.Background(), []string{
 		"START SLAVE",
 	})
 }
 
-// RestartSlave is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) RestartSlave(hookExtraEnv map[string]string) error {
+// RestartReplication is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) RestartReplication(hookExtraEnv map[string]string) error {
 	return fmd.ExecuteSuperQueryList(context.Background(), []string{
 		"STOP SLAVE",
 		"RESET SLAVE",
@@ -282,10 +282,10 @@ func (fmd *FakeMysqlDaemon) RestartSlave(hookExtraEnv map[string]string) error {
 	})
 }
 
-// StartSlaveUntilAfter is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) StartSlaveUntilAfter(ctx context.Context, pos mysql.Position) error {
-	if !reflect.DeepEqual(fmd.StartSlaveUntilAfterPos, pos) {
-		return fmt.Errorf("wrong pos for StartSlaveUntilAfter: expected %v got %v", fmd.SetSlavePositionPos, pos)
+// StartReplicationUntilAfter is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) StartReplicationUntilAfter(ctx context.Context, pos mysql.Position) error {
+	if !reflect.DeepEqual(fmd.StartReplicationUntilAfterPos, pos) {
+		return fmt.Errorf("wrong pos for StartReplicationUntilAfter: expected %v got %v", fmd.SetReplicationPositionPos, pos)
 	}
 
 	return fmd.ExecuteSuperQueryList(context.Background(), []string{
@@ -293,17 +293,17 @@ func (fmd *FakeMysqlDaemon) StartSlaveUntilAfter(ctx context.Context, pos mysql.
 	})
 }
 
-// StopSlave is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) StopSlave(hookExtraEnv map[string]string) error {
+// StopReplication is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) StopReplication(hookExtraEnv map[string]string) error {
 	return fmd.ExecuteSuperQueryList(context.Background(), []string{
 		"STOP SLAVE",
 	})
 }
 
-// SetSlavePosition is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SetSlavePosition(ctx context.Context, pos mysql.Position) error {
-	if !reflect.DeepEqual(fmd.SetSlavePositionPos, pos) {
-		return fmt.Errorf("wrong pos for SetSlavePosition: expected %v got %v", fmd.SetSlavePositionPos, pos)
+// SetReplicationPosition is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SetReplicationPosition(ctx context.Context, pos mysql.Position) error {
+	if !reflect.DeepEqual(fmd.SetReplicationPositionPos, pos) {
+		return fmt.Errorf("wrong pos for SetReplicationPosition: expected %v got %v", fmd.SetReplicationPositionPos, pos)
 	}
 	return fmd.ExecuteSuperQueryList(ctx, []string{
 		"FAKE SET SLAVE POSITION",
@@ -311,7 +311,7 @@ func (fmd *FakeMysqlDaemon) SetSlavePosition(ctx context.Context, pos mysql.Posi
 }
 
 // SetMaster is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SetMaster(ctx context.Context, masterHost string, masterPort int, slaveStopBefore bool, slaveStartAfter bool) error {
+func (fmd *FakeMysqlDaemon) SetMaster(ctx context.Context, masterHost string, masterPort int, stopReplicationBefore bool, startReplicationAfter bool) error {
 	input := fmt.Sprintf("%v:%v", masterHost, masterPort)
 	if fmd.SetMasterInput != input {
 		return fmt.Errorf("wrong input for SetMasterCommands: expected %v got %v", fmd.SetMasterInput, input)
@@ -320,11 +320,11 @@ func (fmd *FakeMysqlDaemon) SetMaster(ctx context.Context, masterHost string, ma
 		return fmd.SetMasterError
 	}
 	cmds := []string{}
-	if slaveStopBefore {
+	if stopReplicationBefore {
 		cmds = append(cmds, "STOP SLAVE")
 	}
 	cmds = append(cmds, "FAKE SET MASTER")
-	if slaveStartAfter {
+	if startReplicationAfter {
 		cmds = append(cmds, "START SLAVE")
 	}
 	return fmd.ExecuteSuperQueryList(ctx, cmds)
@@ -489,17 +489,17 @@ func (fmd *FakeMysqlDaemon) GetAllPrivsConnection(ctx context.Context) (*dbconnp
 // SetSemiSyncEnabled is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SetSemiSyncEnabled(master, replica bool) error {
 	fmd.SemiSyncMasterEnabled = master
-	fmd.SemiSyncSlaveEnabled = replica
+	fmd.SemiSyncReplicaEnabled = replica
 	return nil
 }
 
 // SemiSyncEnabled is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SemiSyncEnabled() (master, slave bool) {
-	return fmd.SemiSyncMasterEnabled, fmd.SemiSyncSlaveEnabled
+func (fmd *FakeMysqlDaemon) SemiSyncEnabled() (master, replica bool) {
+	return fmd.SemiSyncMasterEnabled, fmd.SemiSyncReplicaEnabled
 }
 
-// SemiSyncSlaveStatus is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SemiSyncSlaveStatus() (bool, error) {
+// SemiSyncReplicationStatus is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus() (bool, error) {
 	// The fake assumes the status worked.
-	return fmd.SemiSyncSlaveEnabled, nil
+	return fmd.SemiSyncReplicaEnabled, nil
 }

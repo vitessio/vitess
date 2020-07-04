@@ -22,12 +22,114 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
+
+func TestPlayerCopyTablesWithFK(t *testing.T) {
+	testForeignKeyQueries = true
+	defer func() {
+		testForeignKeyQueries = false
+	}()
+
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table src2(id int, id2 int, primary key(id))",
+		"create table src1(id int, id2 int, primary key(id), foreign key (id2) references src2(id) on delete cascade)",
+		"insert into src2 values(1, 21), (2, 22)",
+		"insert into src1 values(1, 1), (2, 2)",
+		fmt.Sprintf("create table %s.dst2(id int, id2 int, primary key(id))", vrepldb),
+		fmt.Sprintf("create table %s.dst1(id int, id2 int, primary key(id), foreign key (id2) references dst2(id) on delete cascade)", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src1",
+		fmt.Sprintf("drop table %s.dst1", vrepldb),
+		"drop table src2",
+		fmt.Sprintf("drop table %s.dst2", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst1",
+			Filter: "select * from src1",
+		}, {
+			Match:  "dst2",
+			Filter: "select * from src2",
+		}},
+	}
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	qr, err := playerEngine.Exec(query)
+	require.NoError(t, err)
+
+	expectDBClientQueries(t, []string{
+		"/insert into _vt.vreplication",
+		"select @@foreign_key_checks;",
+		// Create the list of tables to copy and transition to Copying state.
+		"begin",
+		"/insert into _vt.copy_state",
+		"/update _vt.vreplication set state='Copying'",
+		"commit",
+		"set foreign_key_checks=0;",
+		// The first fast-forward has no starting point. So, it just saves the current position.
+		"/update _vt.vreplication set pos=",
+		"begin",
+		"insert into dst1(id,id2) values (1,1), (2,2)",
+		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		"commit",
+		// copy of dst1 is done: delete from copy_state.
+		"/delete from _vt.copy_state.*dst1",
+		// The next FF executes and updates the position before copying.
+		"set foreign_key_checks=0;",
+		"begin",
+		"/update _vt.vreplication set pos=",
+		"commit",
+		// copy dst2
+		"begin",
+		"insert into dst2(id,id2) values (1,21), (2,22)",
+		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		"commit",
+		// copy of dst1 is done: delete from copy_state.
+		"/delete from _vt.copy_state.*dst2",
+		// All tables copied. Final catch up followed by Running state.
+		"set foreign_key_checks=1;",
+		"/update _vt.vreplication set state='Running'",
+	})
+
+	expectData(t, "dst1", [][]string{
+		{"1", "1"},
+		{"2", "2"},
+	})
+	expectData(t, "dst2", [][]string{
+		{"1", "21"},
+		{"2", "22"},
+	})
+
+	query = fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+	if _, err := playerEngine.Exec(query); err != nil {
+		t.Fatal(err)
+	}
+	expectDBClientQueries(t, []string{
+		"set foreign_key_checks=1;",
+		"begin",
+		"/delete from _vt.vreplication",
+		"/delete from _vt.copy_state",
+		"commit",
+	})
+}
 
 func TestPlayerCopyTables(t *testing.T) {
 	defer deleteTablet(addTablet(100))

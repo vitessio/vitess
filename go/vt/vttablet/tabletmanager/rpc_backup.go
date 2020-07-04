@@ -35,8 +35,8 @@ const (
 )
 
 // Backup takes a db backup and sends it to the BackupStorage
-func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowMaster bool) error {
-	if agent.Cnf == nil {
+func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowMaster bool) error {
+	if tm.Cnf == nil {
 		return fmt.Errorf("cannot perform backup without my.cnf, please restart vttablet with a my.cnf file specified")
 	}
 
@@ -44,7 +44,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	// During a network partition it is possible that from the topology perspective this is no longer the master,
 	// but the process didn't find out about this.
 	// It is not safe to take backups from tablet in this state
-	currentTablet := agent.Tablet()
+	currentTablet := tm.Tablet()
 	if !allowMaster && currentTablet.Type == topodatapb.TabletType_MASTER {
 		return fmt.Errorf("type MASTER cannot take backup. if you really need to do this, rerun the backup command with -allow_master")
 	}
@@ -53,7 +53,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		return vterrors.Wrap(err, "failed to find backup engine")
 	}
 	// get Tablet info from topo so that it is up to date
-	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+	tablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -66,25 +66,25 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	if engine.ShouldDrainForBackup() {
 		backupMode = backupModeOffline
 	}
-	if err := agent.beginBackup(backupMode); err != nil {
+	if err := tm.beginBackup(backupMode); err != nil {
 		return err
 	}
-	defer agent.endBackup(backupMode)
+	defer tm.endBackup(backupMode)
 
 	var originalType topodatapb.TabletType
 	if engine.ShouldDrainForBackup() {
-		if err := agent.lock(ctx); err != nil {
+		if err := tm.lock(ctx); err != nil {
 			return err
 		}
-		defer agent.unlock()
+		defer tm.unlock()
 
-		tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+		tablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 		if err != nil {
 			return err
 		}
 		originalType = tablet.Type
 		// update our type to BACKUP
-		if err := agent.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP); err != nil {
+		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP); err != nil {
 			return err
 		}
 	}
@@ -93,12 +93,12 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 
 	// now we can run the backup
 	backupParams := mysqlctl.BackupParams{
-		Cnf:          agent.Cnf,
-		Mysqld:       agent.MysqlDaemon,
+		Cnf:          tm.Cnf,
+		Mysqld:       tm.MysqlDaemon,
 		Logger:       l,
 		Concurrency:  concurrency,
-		HookExtraEnv: agent.hookExtraEnv(),
-		TopoServer:   agent.TopoServer,
+		HookExtraEnv: tm.hookExtraEnv(),
+		TopoServer:   tm.TopoServer,
 		Keyspace:     tablet.Keyspace,
 		Shard:        tablet.Shard,
 		TabletAlias:  topoproto.TabletAliasString(tablet.Alias),
@@ -115,7 +115,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 
 		// Change our type back to the original value.
 		// Original type could be master so pass in a real value for masterTermStartTime
-		if err := agent.changeTypeLocked(bgCtx, originalType); err != nil {
+		if err := tm.changeTypeLocked(bgCtx, originalType); err != nil {
 			// failure in changing the topology type is probably worse,
 			// so returning that (we logged the snapshot error anyway)
 			if returnErr != nil {
@@ -129,13 +129,13 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 }
 
 // RestoreFromBackup deletes all local data and restores anew from the latest backup.
-func (agent *ActionAgent) RestoreFromBackup(ctx context.Context, logger logutil.Logger) error {
-	if err := agent.lock(ctx); err != nil {
+func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.Logger) error {
+	if err := tm.lock(ctx); err != nil {
 		return err
 	}
-	defer agent.unlock()
+	defer tm.unlock()
 
-	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+	tablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -147,39 +147,35 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context, logger logutil.
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
 	// now we can run restore
-	err = agent.restoreDataLocked(ctx, l, 0 /* waitForBackupInterval */, true /* deleteBeforeRestore */)
+	err = tm.restoreDataLocked(ctx, l, 0 /* waitForBackupInterval */, true /* deleteBeforeRestore */)
 
 	// re-run health check to be sure to capture any replication delay
-	agent.runHealthCheckLocked()
+	tm.runHealthCheckLocked()
 
 	return err
 }
 
-func (agent *ActionAgent) beginBackup(backupMode string) error {
-	agent.mutex.Lock()
-	defer agent.mutex.Unlock()
-	if agent._isBackupRunning {
-		return fmt.Errorf("a backup is already running on tablet: %v", agent.TabletAlias)
+func (tm *TabletManager) beginBackup(backupMode string) error {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+	if tm._isBackupRunning {
+		return fmt.Errorf("a backup is already running on tablet: %v", tm.tabletAlias)
 	}
 	// when mode is online we don't take the action lock, so we continue to serve,
 	// but let's set _isBackupRunning to true
 	// so that we only allow one online backup at a time
 	// offline backups also run only one at a time because we take the action lock
 	// so this is not really needed in that case, however we are using it to record the state
-	agent._isBackupRunning = true
-	if agent.exportStats {
-		agent.statsBackupIsRunning.Set([]string{backupMode}, 1)
-	}
+	tm._isBackupRunning = true
+	statsBackupIsRunning.Set([]string{backupMode}, 1)
 	return nil
 }
 
-func (agent *ActionAgent) endBackup(backupMode string) {
+func (tm *TabletManager) endBackup(backupMode string) {
 	// now we set _isBackupRunning back to false
 	// have to take the mutex lock before writing to _ fields
-	agent.mutex.Lock()
-	defer agent.mutex.Unlock()
-	agent._isBackupRunning = false
-	if agent.exportStats {
-		agent.statsBackupIsRunning.Set([]string{backupMode}, 0)
-	}
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+	tm._isBackupRunning = false
+	statsBackupIsRunning.Set([]string{backupMode}, 0)
 }

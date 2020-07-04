@@ -25,8 +25,8 @@ import (
 )
 
 // VReplicationExec executes a vreplication command.
-func (agent *ActionAgent) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
-	qr, err := agent.VREngine.Exec(query)
+func (tm *TabletManager) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
+	qr, err := tm.VREngine.Exec(query)
 	if err != nil {
 		return nil, err
 	}
@@ -34,6 +34,6 @@ func (agent *ActionAgent) VReplicationExec(ctx context.Context, query string) (*
 }
 
 // VReplicationWaitForPos waits for the specified position.
-func (agent *ActionAgent) VReplicationWaitForPos(ctx context.Context, id int, pos string) error {
-	return agent.VREngine.WaitForPos(ctx, id, pos)
+func (tm *TabletManager) VReplicationWaitForPos(ctx context.Context, id int, pos string) error {
+	return tm.VREngine.WaitForPos(ctx, id, pos)
 }

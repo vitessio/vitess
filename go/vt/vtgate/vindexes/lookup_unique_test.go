@@ -167,10 +167,10 @@ func TestLookupUniqueCreate(t *testing.T) {
 	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery{{
-		Sql: "insert into t(from, toc) values(:from0, :toc0)",
+		Sql: "insert into t(from, toc) values(:from_0, :toc_0)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"from0": sqltypes.Int64BindVariable(1),
-			"toc0":  sqltypes.BytesBindVariable([]byte("test")),
+			"from_0": sqltypes.Int64BindVariable(1),
+			"toc_0":  sqltypes.BytesBindVariable([]byte("test")),
 		},
 	}}
 	if !reflect.DeepEqual(vc.queries, wantqueries) {

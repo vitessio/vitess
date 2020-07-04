@@ -84,8 +84,8 @@ func TestMysqlRetrieveMasterServerId(t *testing.T) {
 		"Master_Server_Id": "1",
 	}
 
-	want := SlaveStatus{MasterServerID: 1}
-	got, err := parseMysqlSlaveStatus(resultMap)
+	want := ReplicationStatus{MasterServerID: 1}
+	got, err := parseMysqlReplicationStatus(resultMap)
 	require.NoError(t, err)
 	assert.Equalf(t, got.MasterServerID, want.MasterServerID, "got MasterServerID: %v; want MasterServerID: %v", got.MasterServerID, want.MasterServerID)
 }
@@ -98,11 +98,11 @@ func TestMysqlRetrieveFileBasedPositions(t *testing.T) {
 		"Master_Log_File":       "master-bin.000003",
 	}
 
-	want := SlaveStatus{
+	want := ReplicationStatus{
 		FilePosition:         Position{GTIDSet: filePosGTID{file: "master-bin.000002", pos: 1307}},
 		FileRelayLogPosition: Position{GTIDSet: filePosGTID{file: "master-bin.000003", pos: 1308}},
 	}
-	got, err := parseMysqlSlaveStatus(resultMap)
+	got, err := parseMysqlReplicationStatus(resultMap)
 	require.NoError(t, err)
 	assert.Equalf(t, got.FilePosition.GTIDSet, want.FilePosition.GTIDSet, "got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet)
 	assert.Equalf(t, got.FileRelayLogPosition.GTIDSet, want.FileRelayLogPosition.GTIDSet, "got FileRelayLogPosition: %v; want FileRelayLogPosition: %v", got.FileRelayLogPosition.GTIDSet, want.FileRelayLogPosition.GTIDSet)
@@ -119,11 +119,11 @@ func TestMysqlShouldGetRelayLogPosition(t *testing.T) {
 	}
 
 	sid, _ := ParseSID("3e11fa47-71ca-11e1-9e33-c80aa9429562")
-	want := SlaveStatus{
+	want := ReplicationStatus{
 		Position:         Position{GTIDSet: Mysql56GTIDSet{sid: []interval{{start: 1, end: 5}}}},
 		RelayLogPosition: Position{GTIDSet: Mysql56GTIDSet{sid: []interval{{start: 1, end: 9}}}},
 	}
-	got, err := parseMysqlSlaveStatus(resultMap)
+	got, err := parseMysqlReplicationStatus(resultMap)
 	require.NoError(t, err)
 	assert.Equalf(t, got.RelayLogPosition.GTIDSet.String(), want.RelayLogPosition.GTIDSet.String(), "got RelayLogPosition: %v; want RelayLogPosition: %v", got.RelayLogPosition.GTIDSet, want.RelayLogPosition.GTIDSet)
 }

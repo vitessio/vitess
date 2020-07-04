@@ -34,39 +34,39 @@ func TestPublishState(t *testing.T) {
 	// code path.
 
 	ctx := context.Background()
-	agent := createTestAgent(ctx, t, nil)
-	ttablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+	tm := createTestTM(ctx, t, nil)
+	ttablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
-	assert.Equal(t, agent.Tablet(), ttablet.Tablet)
+	assert.Equal(t, tm.Tablet(), ttablet.Tablet)
 
-	tab1 := agent.Tablet()
+	tab1 := tm.Tablet()
 	tab1.Keyspace = "tab1"
-	agent.setTablet(tab1)
-	agent.publishState(ctx)
-	ttablet, err = agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+	tm.setTablet(tab1)
+	tm.publishState(ctx)
+	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, tab1, ttablet.Tablet)
 
-	tab2 := agent.Tablet()
+	tab2 := tm.Tablet()
 	tab2.Keyspace = "tab2"
-	agent.setTablet(tab2)
-	agent.retryPublish()
-	ttablet, err = agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+	tm.setTablet(tab2)
+	tm.retryPublish()
+	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, tab2, ttablet.Tablet)
 
 	// If hostname doesn't match, it should not update.
-	tab3 := agent.Tablet()
+	tab3 := tm.Tablet()
 	tab3.Hostname = "tab3"
-	agent.setTablet(tab3)
-	agent.publishState(ctx)
-	ttablet, err = agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+	tm.setTablet(tab3)
+	tm.publishState(ctx)
+	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, tab2, ttablet.Tablet)
 
 	// Same for retryPublish.
-	agent.retryPublish()
-	ttablet, err = agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+	tm.retryPublish()
+	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, tab2, ttablet.Tablet)
 }

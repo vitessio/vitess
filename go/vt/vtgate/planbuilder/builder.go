@@ -110,6 +110,9 @@ type builder interface {
 	// specified column.
 	SupplyWeightString(colNumber int) (weightcolNumber int, err error)
 
+	// PushLock pushes "FOR UPDATE", "LOCK IN SHARE MODE" down to all routes
+	PushLock(lock string) error
+
 	// Primitive returns the underlying primitive.
 	// This function should only be called after Wireup is finished.
 	Primitive() engine.Primitive
@@ -336,6 +339,8 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback:
 		// Empty by design. Not executed by a plan
 		return nil, nil
+	case *sqlparser.Savepoint, *sqlparser.SRollback, *sqlparser.Release:
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Savepoint construct %v", sqlparser.String(stmt))
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
