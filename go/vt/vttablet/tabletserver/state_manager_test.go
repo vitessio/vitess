@@ -544,10 +544,6 @@ func (te *testReplTracker) Close() {
 	te.state = testStateClosed
 }
 
-func (te *testReplTracker) Status() (time.Duration, error) {
-	return 0, nil
-}
-
 type testQueryEngine struct {
 	testOrderState
 	isReachable bool
