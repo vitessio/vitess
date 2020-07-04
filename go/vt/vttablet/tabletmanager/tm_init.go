@@ -324,7 +324,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet) error {
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,
-	}, tm.DBConfigs)
+	}, tm.DBConfigs, tm.MysqlDaemon)
 	if err != nil {
 		return vterrors.Wrap(err, "failed to InitDBConfig")
 	}

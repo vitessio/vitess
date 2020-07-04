@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -56,6 +57,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/repltracker"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -96,6 +98,7 @@ type TabletServer struct {
 	se          *schema.Engine
 	hw          *heartbeat.Writer
 	hr          *heartbeat.Reader
+	rr          *repltracker.ReplTracker
 	vstreamer   *vstreamer.Engine
 	tracker     *schema.Tracker
 	watcher     *ReplicationWatcher
@@ -156,6 +159,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.se = schema.NewEngine(tsv)
 	tsv.hw = heartbeat.NewWriter(tsv, alias)
 	tsv.hr = heartbeat.NewReader(tsv)
+	tsv.rr = repltracker.NewReplTracker(tsv, alias)
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, alias.Cell)
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
 	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config)
@@ -201,7 +205,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 
 // InitDBConfig initializes the db config variables for TabletServer. You must call this function
 // to complete the creation of TabletServer.
-func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.DBConfigs) error {
+func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) error {
 	if tsv.sm.State() != StateNotConnected {
 		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "InitDBConfig failed, current state: %s", tsv.sm.StateByName())
 	}
@@ -211,6 +215,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.se.InitDBConfig(tsv.config.DB.DbaWithDB())
 	tsv.hw.InitDBConfig(target)
 	tsv.hr.InitDBConfig(target)
+	tsv.rr.InitDBConfig(target, mysqld)
 	tsv.txThrottler.InitDBConfig(target)
 	tsv.vstreamer.InitDBConfig(target.Keyspace)
 	return nil
@@ -320,8 +325,8 @@ func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, servin
 
 // StartService is a convenience function for InitDBConfig->SetServingType
 // with serving=true.
-func (tsv *TabletServer) StartService(target querypb.Target, dbcfgs *dbconfigs.DBConfigs) error {
-	if err := tsv.InitDBConfig(target, dbcfgs); err != nil {
+func (tsv *TabletServer) StartService(target querypb.Target, dbcfgs *dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) error {
+	if err := tsv.InitDBConfig(target, dbcfgs, mysqld); err != nil {
 		return err
 	}
 	_, err := tsv.sm.SetServingType(target.TabletType, StateServing, nil)

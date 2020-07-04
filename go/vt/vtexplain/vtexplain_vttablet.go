@@ -110,7 +110,7 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 		Shard:      t.Shard,
 		TabletType: topodatapb.TabletType_MASTER,
 	}
-	tsv.StartService(target, dbcfgs)
+	tsv.StartService(target, dbcfgs, nil /* mysqld */)
 
 	// clear all the schema initialization queries out of the tablet
 	// to avoid clutttering the output

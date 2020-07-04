@@ -20,6 +20,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -47,7 +48,7 @@ type Controller interface {
 	Stats() *tabletenv.Stats
 
 	// InitDBConfig sets up the db config vars.
-	InitDBConfig(querypb.Target, *dbconfigs.DBConfigs) error
+	InitDBConfig(querypb.Target, *dbconfigs.DBConfigs, mysqlctl.MysqlDaemon) error
 
 	// SetServingType transitions the query service to the required serving type.
 	// Returns true if the state of QueryService or the tablet type changed.
