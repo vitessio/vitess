@@ -62,16 +62,15 @@ func TestStateManagerServeMaster(t *testing.T) {
 	assert.Equal(t, int32(0), sm.lameduck.Get())
 
 	verifySubcomponent(t, 1, sm.watcher, testStateClosed)
-	verifySubcomponent(t, 2, sm.hr, testStateClosed)
 
-	verifySubcomponent(t, 3, sm.se, testStateOpen)
-	verifySubcomponent(t, 4, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 5, sm.qe, testStateOpen)
-	verifySubcomponent(t, 6, sm.txThrottler, testStateOpen)
-	verifySubcomponent(t, 7, sm.hw, testStateOpen)
-	verifySubcomponent(t, 8, sm.tracker, testStateOpen)
-	verifySubcomponent(t, 9, sm.te, testStateAcceptReadWrite)
-	verifySubcomponent(t, 10, sm.messager, testStateOpen)
+	verifySubcomponent(t, 2, sm.se, testStateOpen)
+	verifySubcomponent(t, 3, sm.vstreamer, testStateOpen)
+	verifySubcomponent(t, 4, sm.qe, testStateOpen)
+	verifySubcomponent(t, 5, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 6, sm.rt, testStateMaster)
+	verifySubcomponent(t, 7, sm.tracker, testStateOpen)
+	verifySubcomponent(t, 8, sm.te, testStateMaster)
+	verifySubcomponent(t, 9, sm.messager, testStateOpen)
 
 	assert.False(t, sm.se.(*testSchemaEngine).nonMaster)
 	assert.True(t, sm.qe.(*testQueryEngine).isReachable)
@@ -89,16 +88,15 @@ func TestStateManagerServeNonMaster(t *testing.T) {
 
 	verifySubcomponent(t, 1, sm.messager, testStateClosed)
 	verifySubcomponent(t, 2, sm.tracker, testStateClosed)
-	verifySubcomponent(t, 3, sm.hw, testStateClosed)
 	assert.True(t, sm.se.(*testSchemaEngine).nonMaster)
 
-	verifySubcomponent(t, 4, sm.se, testStateOpen)
-	verifySubcomponent(t, 5, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 6, sm.qe, testStateOpen)
-	verifySubcomponent(t, 7, sm.txThrottler, testStateOpen)
-	verifySubcomponent(t, 8, sm.te, testStateAcceptReadOnly)
-	verifySubcomponent(t, 9, sm.hr, testStateOpen)
-	verifySubcomponent(t, 10, sm.watcher, testStateOpen)
+	verifySubcomponent(t, 3, sm.se, testStateOpen)
+	verifySubcomponent(t, 4, sm.vstreamer, testStateOpen)
+	verifySubcomponent(t, 5, sm.qe, testStateOpen)
+	verifySubcomponent(t, 6, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 7, sm.te, testStateNonMaster)
+	verifySubcomponent(t, 8, sm.rt, testStateNonMaster)
+	verifySubcomponent(t, 9, sm.watcher, testStateOpen)
 
 	assert.Equal(t, topodatapb.TabletType_REPLICA, sm.target.TabletType)
 	assert.Equal(t, StateServing, sm.state)
@@ -115,15 +113,14 @@ func TestStateManagerUnserveMaster(t *testing.T) {
 	assert.True(t, sm.qe.(*testQueryEngine).stopServing)
 
 	verifySubcomponent(t, 3, sm.watcher, testStateClosed)
-	verifySubcomponent(t, 4, sm.hr, testStateClosed)
 
-	verifySubcomponent(t, 5, sm.se, testStateOpen)
-	verifySubcomponent(t, 6, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 7, sm.qe, testStateOpen)
-	verifySubcomponent(t, 8, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 4, sm.se, testStateOpen)
+	verifySubcomponent(t, 5, sm.vstreamer, testStateOpen)
+	verifySubcomponent(t, 6, sm.qe, testStateOpen)
+	verifySubcomponent(t, 7, sm.txThrottler, testStateOpen)
 
-	verifySubcomponent(t, 9, sm.hw, testStateOpen)
-	verifySubcomponent(t, 10, sm.tracker, testStateOpen)
+	verifySubcomponent(t, 8, sm.rt, testStateMaster)
+	verifySubcomponent(t, 9, sm.tracker, testStateOpen)
 
 	assert.Equal(t, topodatapb.TabletType_MASTER, sm.target.TabletType)
 	assert.Equal(t, StateNotServing, sm.state)
@@ -140,16 +137,15 @@ func TestStateManagerUnserveNonmaster(t *testing.T) {
 	assert.True(t, sm.qe.(*testQueryEngine).stopServing)
 
 	verifySubcomponent(t, 3, sm.tracker, testStateClosed)
-	verifySubcomponent(t, 4, sm.hw, testStateClosed)
 	assert.True(t, sm.se.(*testSchemaEngine).nonMaster)
 
-	verifySubcomponent(t, 5, sm.se, testStateOpen)
-	verifySubcomponent(t, 6, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 7, sm.qe, testStateOpen)
-	verifySubcomponent(t, 8, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 4, sm.se, testStateOpen)
+	verifySubcomponent(t, 5, sm.vstreamer, testStateOpen)
+	verifySubcomponent(t, 6, sm.qe, testStateOpen)
+	verifySubcomponent(t, 7, sm.txThrottler, testStateOpen)
 
-	verifySubcomponent(t, 9, sm.hr, testStateOpen)
-	verifySubcomponent(t, 10, sm.watcher, testStateOpen)
+	verifySubcomponent(t, 8, sm.rt, testStateNonMaster)
+	verifySubcomponent(t, 9, sm.watcher, testStateOpen)
 
 	assert.Equal(t, topodatapb.TabletType_RDONLY, sm.target.TabletType)
 	assert.Equal(t, StateNotServing, sm.state)
@@ -170,9 +166,8 @@ func TestStateManagerClose(t *testing.T) {
 	verifySubcomponent(t, 5, sm.watcher, testStateClosed)
 	verifySubcomponent(t, 6, sm.tracker, testStateClosed)
 	verifySubcomponent(t, 7, sm.vstreamer, testStateClosed)
-	verifySubcomponent(t, 8, sm.hr, testStateClosed)
-	verifySubcomponent(t, 9, sm.hw, testStateClosed)
-	verifySubcomponent(t, 10, sm.se, testStateClosed)
+	verifySubcomponent(t, 8, sm.rt, testStateClosed)
+	verifySubcomponent(t, 9, sm.se, testStateClosed)
 
 	assert.Equal(t, topodatapb.TabletType_RDONLY, sm.target.TabletType)
 	assert.Equal(t, StateNotConnected, sm.state)
@@ -244,16 +239,15 @@ func TestStateManagerSetServingTypeNoChange(t *testing.T) {
 
 	verifySubcomponent(t, 1, sm.messager, testStateClosed)
 	verifySubcomponent(t, 2, sm.tracker, testStateClosed)
-	verifySubcomponent(t, 3, sm.hw, testStateClosed)
 	assert.True(t, sm.se.(*testSchemaEngine).nonMaster)
 
-	verifySubcomponent(t, 4, sm.se, testStateOpen)
-	verifySubcomponent(t, 5, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 6, sm.qe, testStateOpen)
-	verifySubcomponent(t, 7, sm.txThrottler, testStateOpen)
-	verifySubcomponent(t, 8, sm.te, testStateAcceptReadOnly)
-	verifySubcomponent(t, 9, sm.hr, testStateOpen)
-	verifySubcomponent(t, 10, sm.watcher, testStateOpen)
+	verifySubcomponent(t, 3, sm.se, testStateOpen)
+	verifySubcomponent(t, 4, sm.vstreamer, testStateOpen)
+	verifySubcomponent(t, 5, sm.qe, testStateOpen)
+	verifySubcomponent(t, 6, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 7, sm.te, testStateNonMaster)
+	verifySubcomponent(t, 8, sm.rt, testStateNonMaster)
+	verifySubcomponent(t, 9, sm.watcher, testStateOpen)
 
 	assert.Equal(t, topodatapb.TabletType_REPLICA, sm.target.TabletType)
 	assert.Equal(t, StateServing, sm.state)
@@ -457,8 +451,7 @@ func newTestStateManager(t *testing.T) *stateManager {
 	order.Set(0)
 	return &stateManager{
 		se:          &testSchemaEngine{},
-		hw:          &testSubcomponent{},
-		hr:          &testSubcomponent{},
+		rt:          &testReplTracker{},
 		vstreamer:   &testSubcomponent{},
 		tracker:     &testSubcomponent{},
 		watcher:     &testSubcomponent{},
@@ -490,8 +483,8 @@ const (
 	_ = testState(iota)
 	testStateOpen
 	testStateClosed
-	testStateAcceptReadOnly
-	testStateAcceptReadWrite
+	testStateMaster
+	testStateNonMaster
 )
 
 type orderState interface {
@@ -532,6 +525,29 @@ func (te *testSchemaEngine) Close() {
 	te.state = testStateClosed
 }
 
+type testReplTracker struct {
+	testOrderState
+}
+
+func (te *testReplTracker) MakeMaster() {
+	te.order = order.Add(1)
+	te.state = testStateMaster
+}
+
+func (te *testReplTracker) MakeNonMaster() {
+	te.order = order.Add(1)
+	te.state = testStateNonMaster
+}
+
+func (te *testReplTracker) Close() {
+	te.order = order.Add(1)
+	te.state = testStateClosed
+}
+
+func (te *testReplTracker) Status() (time.Duration, error) {
+	return 0, nil
+}
+
 type testQueryEngine struct {
 	testOrderState
 	isReachable bool
@@ -570,13 +586,13 @@ type testTxEngine struct {
 
 func (te *testTxEngine) AcceptReadWrite() error {
 	te.order = order.Add(1)
-	te.state = testStateAcceptReadWrite
+	te.state = testStateMaster
 	return nil
 }
 
 func (te *testTxEngine) AcceptReadOnly() error {
 	te.order = order.Add(1)
-	te.state = testStateAcceptReadOnly
+	te.state = testStateNonMaster
 	return nil
 }
 

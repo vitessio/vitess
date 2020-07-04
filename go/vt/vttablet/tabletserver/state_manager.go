@@ -98,8 +98,7 @@ type stateManager struct {
 	// Close must be done in reverse order.
 	// All Close functions must be called before Open.
 	se          schemaEngine
-	hw          subComponent
-	hr          subComponent
+	rt          replTracker
 	vstreamer   subComponent
 	tracker     subComponent
 	watcher     subComponent
@@ -115,34 +114,43 @@ type stateManager struct {
 	timebombDuration    time.Duration
 }
 
-type schemaEngine interface {
-	Open() error
-	MakeNonMaster()
-	Close()
-}
+type (
+	schemaEngine interface {
+		Open() error
+		MakeNonMaster()
+		Close()
+	}
 
-type queryEngine interface {
-	Open() error
-	IsMySQLReachable() error
-	StopServing()
-	Close()
-}
+	replTracker interface {
+		MakeMaster()
+		MakeNonMaster()
+		Close()
+		Status() (time.Duration, error)
+	}
 
-type txEngine interface {
-	AcceptReadWrite() error
-	AcceptReadOnly() error
-	Close()
-}
+	queryEngine interface {
+		Open() error
+		IsMySQLReachable() error
+		StopServing()
+		Close()
+	}
 
-type subComponent interface {
-	Open()
-	Close()
-}
+	txEngine interface {
+		AcceptReadWrite() error
+		AcceptReadOnly() error
+		Close()
+	}
 
-type txThrottler interface {
-	Open() error
-	Close()
-}
+	subComponent interface {
+		Open()
+		Close()
+	}
+
+	txThrottler interface {
+		Open() error
+		Close()
+	}
+)
 
 // SetServingType changes the state to the specified settings.
 // If a transition is in progress, it waits and then executes the
@@ -360,13 +368,12 @@ func (sm *stateManager) VerifyTarget(ctx context.Context, target *querypb.Target
 
 func (sm *stateManager) serveMaster() error {
 	sm.watcher.Close()
-	sm.hr.Close()
 
 	if err := sm.connect(); err != nil {
 		return err
 	}
 
-	sm.hw.Open()
+	sm.rt.MakeMaster()
 	sm.tracker.Open()
 	if err := sm.te.AcceptReadWrite(); err != nil {
 		return err
@@ -380,13 +387,12 @@ func (sm *stateManager) unserveMaster() error {
 	sm.unserveCommon()
 
 	sm.watcher.Close()
-	sm.hr.Close()
 
 	if err := sm.connect(); err != nil {
 		return err
 	}
 
-	sm.hw.Open()
+	sm.rt.MakeMaster()
 	sm.tracker.Open()
 	sm.setState(topodatapb.TabletType_MASTER, StateNotServing)
 	return nil
@@ -395,7 +401,6 @@ func (sm *stateManager) unserveMaster() error {
 func (sm *stateManager) serveNonMaster(wantTabletType topodatapb.TabletType) error {
 	sm.messager.Close()
 	sm.tracker.Close()
-	sm.hw.Close()
 	sm.se.MakeNonMaster()
 
 	if err := sm.connect(); err != nil {
@@ -405,7 +410,7 @@ func (sm *stateManager) serveNonMaster(wantTabletType topodatapb.TabletType) err
 	if err := sm.te.AcceptReadOnly(); err != nil {
 		return err
 	}
-	sm.hr.Open()
+	sm.rt.MakeNonMaster()
 	sm.watcher.Open()
 	sm.setState(wantTabletType, StateServing)
 	return nil
@@ -415,14 +420,13 @@ func (sm *stateManager) unserveNonMaster(wantTabletType topodatapb.TabletType) e
 	sm.unserveCommon()
 
 	sm.tracker.Close()
-	sm.hw.Close()
 	sm.se.MakeNonMaster()
 
 	if err := sm.connect(); err != nil {
 		return err
 	}
 
-	sm.hr.Open()
+	sm.rt.MakeNonMaster()
 	sm.watcher.Open()
 	sm.setState(wantTabletType, StateNotServing)
 	return nil
@@ -456,8 +460,7 @@ func (sm *stateManager) closeAll() {
 	sm.watcher.Close()
 	sm.tracker.Close()
 	sm.vstreamer.Close()
-	sm.hr.Close()
-	sm.hw.Close()
+	sm.rt.Close()
 	sm.se.Close()
 	sm.setState(topodatapb.TabletType_UNKNOWN, StateNotConnected)
 }
