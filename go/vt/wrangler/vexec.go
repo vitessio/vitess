@@ -37,7 +37,6 @@ import (
 
 const (
 	vreplicationTableName = "_vt.vreplication"
-	copyStateTableName    = "_vt.copy_state"
 )
 
 type vexec struct {
@@ -101,9 +100,10 @@ func (vx *vexec) outputDryRunInfo(wr *Wrangler) error {
 	for _, master := range vx.masters {
 		key := fmt.Sprintf("%s/%s", master.Shard, master.AliasString())
 		for _, stream := range rsr.Statuses[key] {
-			table.Append([]string{key, fmt.Sprintf("%d", stream.ID), fmt.Sprintf("%v", stream.Bls), stream.State, stream.DBName, stream.Pos, fmt.Sprintf("%d", stream.MaxReplicationLag)})
+			table.Append([]string{key, fmt.Sprintf("%d", stream.ID), stream.Bls.String(), stream.State, stream.DBName, stream.Pos, fmt.Sprintf("%d", stream.MaxReplicationLag)})
 		}
 	}
+	table.SetAutoMergeCellsByColumnIndex([]int{0})
 	table.SetRowLine(true)
 	table.Render()
 	wr.Logger().Printf(tableString.String())

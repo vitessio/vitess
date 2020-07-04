@@ -167,14 +167,16 @@ func TestVExec(t *testing.T) {
 	require.NoError(t, err)
 	dryRunResults := []string{
 		"Query: delete from _vt.vreplication where db_name = 'vt_target' and workflow = 'wrWorkflow'",
-		"will be run on the following streams in keyspace target for workflow wrWorkflow:",
-		"+----------------------+----+------------------+---------+-----------+",
-		"|        TABLET        | ID |   BINLOGSOURCE   |  STATE  |  DBNAME   |",
-		"+----------------------+----+------------------+---------+-----------+",
-		"| -80/zone1-0000000200 |  1 | zone1-0000000200 | Running | vt_target |",
-		"+----------------------+----+------------------+---------+-----------+",
-		"| 80-/zone1-0000000210 |  1 | zone1-0000000210 | Running | vt_target |",
-		"+----------------------+----+------------------+---------+-----------+",
+		"will be run on the following streams in keyspace target for workflow wrWorkflow:\n\n",
+		"+----------------------+----+--------------------------------+---------+-----------+--------------+-------------------+",
+		"|        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   | CURRENT GTID | MAXREPLICATIONLAG |",
+		"+----------------------+----+--------------------------------+---------+-----------+--------------+-------------------+",
+		"| -80/zone1-0000000200 |  1 | keyspace:\"source\" shard:\"0\"    | Running | vt_target | pos          |                 0 |",
+		"|                      |    | filter:<rules:<match:\"t1\" > >  |         |           |              |                   |",
+		"+----------------------+----+--------------------------------+---------+-----------+--------------+-------------------+",
+		"| 80-/zone1-0000000210 |  1 | keyspace:\"source\" shard:\"0\"    | Running | vt_target | pos          |                 0 |",
+		"|                      |    | filter:<rules:<match:\"t1\" > >  |         |           |              |                   |",
+		"+----------------------+----+--------------------------------+---------+-----------+--------------+-------------------+",
 	}
 	require.Equal(t, strings.Join(dryRunResults, "\n")+"\n\n\n\n\n", logger.String())
 }

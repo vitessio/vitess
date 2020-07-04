@@ -52,7 +52,7 @@ require (
 	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.0 // indirect
 	github.com/mitchellh/mapstructure v1.2.3 // indirect
-	github.com/olekukonko/tablewriter v0.0.4
+	github.com/olekukonko/tablewriter v0.0.5-0.20200416053754-163badb3bac6
 	github.com/onsi/ginkgo v1.10.3 // indirect
 	github.com/onsi/gomega v1.7.1 // indirect
 	github.com/opentracing-contrib/go-grpc v0.0.0-20180928155321-4b5a12d3ff02
