@@ -2165,7 +2165,7 @@ func setupTabletServerTestCustom(t *testing.T, config *tabletenv.TabletConfig) (
 	require.Equal(t, StateNotConnected, tsv.sm.State())
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbcfgs)
+	err := tsv.StartService(target, dbcfgs, nil /* mysqld */)
 	require.NoError(t, err)
 	return db, tsv
 }

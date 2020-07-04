@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -123,7 +124,7 @@ func (tqsc *Controller) AddStatusPart() {
 }
 
 // InitDBConfig is part of the tabletserver.Controller interface
-func (tqsc *Controller) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.DBConfigs) error {
+func (tqsc *Controller) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.DBConfigs, _ mysqlctl.MysqlDaemon) error {
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
 
