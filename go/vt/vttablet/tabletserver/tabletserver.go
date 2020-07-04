@@ -103,6 +103,7 @@ type TabletServer struct {
 	txThrottler *txthrottler.TxThrottler
 	te          *TxEngine
 	messager    *messager.Engine
+	hs          *healthStreamer
 
 	// sm manages state transitions.
 	sm *stateManager
@@ -162,6 +163,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
 	tsv.te = NewTxEngine(tsv)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
+	tsv.hs = newHealthStreamer(tsv, alias, tsv.rt.Status)
 
 	tsv.sm = &stateManager{
 		se:          tsv.se,
@@ -173,6 +175,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		txThrottler: tsv.txThrottler,
 		te:          tsv.te,
 		messager:    tsv.messager,
+		notify:      tsv.hs.ChangeState,
 
 		transitioning:       sync2.NewSemaphore(1, 0),
 		checkMySQLThrottler: sync2.NewSemaphore(1, 0),
@@ -307,12 +310,12 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, enforceTableACLConfi
 // primary serving type, while alsoAllow specifies other tablet types that
 // should also be honored for serving.
 // Returns true if the state of QueryService or the tablet type changed.
-func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
+func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, terTimestamp time.Time, serving bool, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
 	state := StateNotServing
 	if serving {
 		state = StateServing
 	}
-	return tsv.sm.SetServingType(tabletType, state, alsoAllow)
+	return tsv.sm.SetServingType(tabletType, terTimestamp, state, alsoAllow)
 }
 
 // StartService is a convenience function for InitDBConfig->SetServingType
@@ -321,7 +324,7 @@ func (tsv *TabletServer) StartService(target querypb.Target, dbcfgs *dbconfigs.D
 	if err := tsv.InitDBConfig(target, dbcfgs, mysqld); err != nil {
 		return err
 	}
-	_, err := tsv.sm.SetServingType(target.TabletType, StateServing, nil)
+	_, err := tsv.sm.SetServingType(target.TabletType, time.Time{}, StateServing, nil)
 	return err
 }
 

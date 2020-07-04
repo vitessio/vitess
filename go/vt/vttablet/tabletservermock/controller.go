@@ -133,7 +133,7 @@ func (tqsc *Controller) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.DB
 }
 
 // SetServingType is part of the tabletserver.Controller interface
-func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) (bool, error) {
+func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, terTime time.Time, serving bool, alsoAllow []topodatapb.TabletType) (bool, error) {
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
 

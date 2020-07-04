@@ -25,8 +25,13 @@ import (
 	"vitess.io/vitess/go/timer"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
+
+// blpFunc is a legaacy feature.
+// TODO(sougou): remove after legacy resharding worflows are removed.
+var blpFunc = vreplication.StatusSummary
 
 // healthStreamer streams health information to callers.
 type healthStreamer struct {
@@ -35,7 +40,6 @@ type healthStreamer struct {
 	unhealthyThreshold time.Duration
 
 	replStatusFunc func() (time.Duration, error)
-	blpStatusFunc  func() (int64, int32)
 	stats          *tabletenv.Stats
 	ticks          *timer.Timer
 
@@ -48,7 +52,7 @@ type healthStreamer struct {
 	serving bool
 }
 
-func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias, replStatusFunc func() (time.Duration, error), blpStatusFunc func() (int64, int32)) *healthStreamer {
+func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias, replStatusFunc func() (time.Duration, error)) *healthStreamer {
 	hc := env.Config().Healthcheck
 	return &healthStreamer{
 		interval:           hc.IntervalSeconds.Get(),
@@ -56,12 +60,12 @@ func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias, replStat
 		unhealthyThreshold: hc.UnhealthyThresholdSeconds.Get(),
 
 		replStatusFunc: replStatusFunc,
-		blpStatusFunc:  blpStatusFunc,
 		stats:          env.Stats(),
 		clients:        make(map[chan *querypb.StreamHealthResponse]struct{}),
 		ticks:          timer.NewTimer(hc.IntervalSeconds.Get()),
 
 		state: &querypb.StreamHealthResponse{
+			Target:      &querypb.Target{},
 			TabletAlias: &alias,
 			RealtimeStats: &querypb.RealtimeStats{
 				HealthError: "tabletserver uninitialized",
@@ -137,7 +141,7 @@ func (hs *healthStreamer) Broadcast() {
 	}
 	hs.state.Serving = hs.serving && healthy
 
-	hs.state.RealtimeStats.SecondsBehindMasterFilteredReplication, hs.state.RealtimeStats.BinlogPlayersCount = hs.blpStatusFunc()
+	hs.state.RealtimeStats.SecondsBehindMasterFilteredReplication, hs.state.RealtimeStats.BinlogPlayersCount = blpFunc()
 	hs.state.RealtimeStats.Qps = hs.stats.QPSRates.TotalRate()
 
 	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)

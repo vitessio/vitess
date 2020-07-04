@@ -173,6 +173,7 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 	defer span.Finish()
 
 	allowQuery := topo.IsRunningQueryService(newTablet.Type)
+	terTime := tm.masterTermStartTime()
 
 	// Read the shard to get SourceShards / TabletControlMap if
 	// we're going to use it.
@@ -275,8 +276,7 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 			newTablet.Type == topodatapb.TabletType_MASTER {
 			// When promoting from replica to master, allow both master and replica
 			// queries to be served during gracePeriod.
-			if _, err := tm.QueryServiceControl.SetServingType(newTablet.Type,
-				true, []topodatapb.TabletType{oldTablet.Type}); err == nil {
+			if _, err := tm.QueryServiceControl.SetServingType(newTablet.Type, terTime, true, []topodatapb.TabletType{oldTablet.Type}); err == nil {
 				// If successful, broadcast to vtgate and then wait.
 				tm.broadcastHealth()
 				time.Sleep(*gracePeriod)
@@ -285,7 +285,7 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 			}
 		}
 
-		if stateChanged, err := tm.QueryServiceControl.SetServingType(newTablet.Type, true, nil); err == nil {
+		if stateChanged, err := tm.QueryServiceControl.SetServingType(newTablet.Type, terTime, true, nil); err == nil {
 			// If the state changed, broadcast to vtgate.
 			// (e.g. this happens when the tablet was already master, but it just
 			// changed from NOT_SERVING to SERVING due to
@@ -307,7 +307,7 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 		}
 
 		log.Infof("Disabling query service on type change, reason: %v", disallowQueryReason)
-		if stateChanged, err := tm.QueryServiceControl.SetServingType(newTablet.Type, false, nil); err == nil {
+		if stateChanged, err := tm.QueryServiceControl.SetServingType(newTablet.Type, terTime, false, nil); err == nil {
 			// If the state changed, broadcast to vtgate.
 			// (e.g. this happens when the tablet was already master, but it just
 			// changed from SERVING to NOT_SERVING because filtered replication was
