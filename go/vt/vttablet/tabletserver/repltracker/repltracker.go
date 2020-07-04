@@ -77,12 +77,10 @@ func (rt *ReplTracker) MakeMaster() {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 
-	switch rt.mode {
-	case tabletenv.Heartbeat:
+	rt.isMaster = true
+	if rt.mode == tabletenv.Heartbeat {
 		rt.hr.Close()
 		rt.hw.Open()
-	default:
-		rt.isMaster = true
 	}
 }
 
@@ -91,12 +89,10 @@ func (rt *ReplTracker) MakeNonMaster() {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 
-	switch rt.mode {
-	case tabletenv.Heartbeat:
+	rt.isMaster = false
+	if rt.mode == tabletenv.Heartbeat {
 		rt.hw.Close()
 		rt.hr.Open()
-	default:
-		rt.isMaster = false
 	}
 }
 
