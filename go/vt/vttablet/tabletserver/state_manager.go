@@ -125,7 +125,6 @@ type (
 		MakeMaster()
 		MakeNonMaster()
 		Close()
-		Status() (time.Duration, error)
 	}
 
 	queryEngine interface {
