@@ -53,7 +53,6 @@ import (
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/heartbeat"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
@@ -96,9 +95,7 @@ type TabletServer struct {
 
 	// These are sub-components of TabletServer.
 	se          *schema.Engine
-	hw          *heartbeat.Writer
-	hr          *heartbeat.Reader
-	rr          *repltracker.ReplTracker
+	rt          *repltracker.ReplTracker
 	vstreamer   *vstreamer.Engine
 	tracker     *schema.Tracker
 	watcher     *ReplicationWatcher
@@ -157,9 +154,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
 
 	tsv.se = schema.NewEngine(tsv)
-	tsv.hw = heartbeat.NewWriter(tsv, alias)
-	tsv.hr = heartbeat.NewReader(tsv)
-	tsv.rr = repltracker.NewReplTracker(tsv, alias)
+	tsv.rt = repltracker.NewReplTracker(tsv, alias)
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, alias.Cell)
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
 	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config)
@@ -170,8 +165,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 
 	tsv.sm = &stateManager{
 		se:          tsv.se,
-		hw:          tsv.hw,
-		hr:          tsv.hr,
+		rt:          tsv.rt,
 		vstreamer:   tsv.vstreamer,
 		tracker:     tsv.tracker,
 		watcher:     tsv.watcher,
@@ -213,9 +207,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.config.DB = dbcfgs
 
 	tsv.se.InitDBConfig(tsv.config.DB.DbaWithDB())
-	tsv.hw.InitDBConfig(target)
-	tsv.hr.InitDBConfig(target)
-	tsv.rr.InitDBConfig(target, mysqld)
+	tsv.rt.InitDBConfig(target, mysqld)
 	tsv.txThrottler.InitDBConfig(target)
 	tsv.vstreamer.InitDBConfig(target.Keyspace)
 	return nil
@@ -1442,15 +1434,7 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.Real
 // HeartbeatLag returns the current lag as calculated by the heartbeat
 // package, if heartbeat is enabled. Otherwise returns 0.
 func (tsv *TabletServer) HeartbeatLag() (time.Duration, error) {
-	// If the reader is closed and we are not serving, then the
-	// query service is shutdown and this value is not being updated.
-	// We return healthy from this as a signal to the healtcheck to attempt
-	// to start the query service again. If the query service fails to start
-	// with an error, then that error is be reported by the healthcheck.
-	if !tsv.hr.IsOpen() && !tsv.IsServing() {
-		return 0, nil
-	}
-	return tsv.hr.GetLatest()
+	return tsv.rt.Status()
 }
 
 // EnterLameduck causes tabletserver to enter the lameduck state. This
