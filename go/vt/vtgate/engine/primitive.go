@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"golang.org/x/net/context"
@@ -54,6 +56,9 @@ type (
 
 		// SetContextTimeout updates the context and sets a timeout.
 		SetContextTimeout(timeout time.Duration) context.CancelFunc
+
+		// ErrorGroupCancellableContext updates context that can be cancelled.
+		ErrorGroupCancellableContext() *errgroup.Group
 
 		// V3 functions.
 		Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)

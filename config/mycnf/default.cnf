@@ -19,7 +19,6 @@ server-id = {{.ServerID}}
 # additional configuration (like enabling semi-sync) before we connect to
 # the master.
 skip_slave_start
-slave_load_tmpdir = {{.SlaveLoadTmpDir}}
 socket = {{.SocketFile}}
 tmpdir = {{.TmpDir}}
 

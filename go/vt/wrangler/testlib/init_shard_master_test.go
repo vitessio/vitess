@@ -50,10 +50,10 @@ func TestInitMasterShard(t *testing.T) {
 
 	db.AddQuery("CREATE DATABASE IF NOT EXISTS `vt_test_keyspace`", &sqltypes.Result{})
 
-	// Create a master, a couple good slaves
+	// Create a master, a couple good replicas
 	master := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
-	goodSlave1 := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
-	goodSlave2 := NewFakeTablet(t, wr, "cell2", 2, topodatapb.TabletType_REPLICA, db)
+	goodReplica1 := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
+	goodReplica2 := NewFakeTablet(t, wr, "cell2", 2, topodatapb.TabletType_REPLICA, db)
 
 	// Master: set a plausible ReplicationPosition to return,
 	// and expect to add entry in _vt.reparent_journal
@@ -101,31 +101,31 @@ func TestInitMasterShard(t *testing.T) {
 		}
 	}
 
-	// Slave1: expect to be reset and re-parented
-	goodSlave1.FakeMysqlDaemon.ReadOnly = true
-	goodSlave1.FakeMysqlDaemon.SetSlavePositionPos = master.FakeMysqlDaemon.CurrentMasterPosition
-	goodSlave1.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
-	goodSlave1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+	// Replica1: expect to be reset and re-parented
+	goodReplica1.FakeMysqlDaemon.ReadOnly = true
+	goodReplica1.FakeMysqlDaemon.SetReplicationPositionPos = master.FakeMysqlDaemon.CurrentMasterPosition
+	goodReplica1.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
+	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET ALL REPLICATION",
 		"FAKE SET SLAVE POSITION",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
-	goodSlave1.StartActionLoop(t, wr)
-	defer goodSlave1.StopActionLoop(t)
+	goodReplica1.StartActionLoop(t, wr)
+	defer goodReplica1.StopActionLoop(t)
 
-	// Slave2: expect to be re-parented
-	goodSlave2.FakeMysqlDaemon.ReadOnly = true
-	goodSlave2.FakeMysqlDaemon.SetSlavePositionPos = master.FakeMysqlDaemon.CurrentMasterPosition
-	goodSlave2.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
-	goodSlave2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+	// Replica2: expect to be re-parented
+	goodReplica2.FakeMysqlDaemon.ReadOnly = true
+	goodReplica2.FakeMysqlDaemon.SetReplicationPositionPos = master.FakeMysqlDaemon.CurrentMasterPosition
+	goodReplica2.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
+	goodReplica2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET ALL REPLICATION",
 		"FAKE SET SLAVE POSITION",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
-	goodSlave2.StartActionLoop(t, wr)
-	defer goodSlave2.StopActionLoop(t)
+	goodReplica2.StartActionLoop(t, wr)
+	defer goodReplica2.StopActionLoop(t)
 
 	// run InitShardMaster
 	if err := vp.Run([]string{"InitShardMaster", "-wait_slave_timeout", "10s", master.Tablet.Keyspace + "/" + master.Tablet.Shard, topoproto.TabletAliasString(master.Tablet.Alias)}); err != nil {
@@ -146,14 +146,14 @@ func TestInitMasterShard(t *testing.T) {
 	if err := master.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
 		t.Fatalf("master.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
 	}
-	if err := goodSlave1.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
-		t.Fatalf("goodSlave1.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
+	if err := goodReplica1.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
+		t.Fatalf("goodReplica1.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
 	}
-	if err := goodSlave2.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
-		t.Fatalf("goodSlave2.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
+	if err := goodReplica2.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
+		t.Fatalf("goodReplica2.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
 	}
 	checkSemiSyncEnabled(t, true, true, master)
-	checkSemiSyncEnabled(t, false, true, goodSlave1, goodSlave2)
+	checkSemiSyncEnabled(t, false, true, goodReplica1, goodReplica2)
 }
 
 // TestInitMasterShardChecks makes sure the safety checks work
@@ -195,19 +195,19 @@ func TestInitMasterShardChecks(t *testing.T) {
 	}
 }
 
-// TestInitMasterShardOneSlaveFails makes sure that if one slave fails to
+// TestInitMasterShardOneReplicaFails makes sure that if one replica fails to
 // proceed, the action completes anyway
-func TestInitMasterShardOneSlaveFails(t *testing.T) {
+func TestInitMasterShardOneReplicaFails(t *testing.T) {
 	ctx := context.Background()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
-	// Create a master, a couple slaves
+	// Create a master, a couple replicas
 	master := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
-	goodSlave := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
-	badSlave := NewFakeTablet(t, wr, "cell2", 2, topodatapb.TabletType_REPLICA, db)
+	goodReplica := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
+	badReplica := NewFakeTablet(t, wr, "cell2", 2, topodatapb.TabletType_REPLICA, db)
 
 	// Master: set a plausible ReplicationPosition to return,
 	// and expect to add entry in _vt.reparent_journal
@@ -255,30 +255,30 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 		}
 	}
 
-	// goodSlave: expect to be re-parented
-	goodSlave.FakeMysqlDaemon.ReadOnly = true
-	goodSlave.FakeMysqlDaemon.SetSlavePositionPos = master.FakeMysqlDaemon.CurrentMasterPosition
-	goodSlave.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
-	goodSlave.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+	// goodReplica: expect to be re-parented
+	goodReplica.FakeMysqlDaemon.ReadOnly = true
+	goodReplica.FakeMysqlDaemon.SetReplicationPositionPos = master.FakeMysqlDaemon.CurrentMasterPosition
+	goodReplica.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
+	goodReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET ALL REPLICATION",
 		"FAKE SET SLAVE POSITION",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
-	goodSlave.StartActionLoop(t, wr)
-	defer goodSlave.StopActionLoop(t)
+	goodReplica.StartActionLoop(t, wr)
+	defer goodReplica.StopActionLoop(t)
 
-	// badSlave: insert an error by failing the master hostname input
+	// badReplica: insert an error by failing the master hostname input
 	// on purpose
-	badSlave.FakeMysqlDaemon.ReadOnly = true
-	badSlave.FakeMysqlDaemon.SetSlavePositionPos = master.FakeMysqlDaemon.CurrentMasterPosition
-	badSlave.FakeMysqlDaemon.SetMasterInput = fmt.Sprintf("%v:%v", "", topoproto.MysqlPort(master.Tablet))
-	badSlave.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+	badReplica.FakeMysqlDaemon.ReadOnly = true
+	badReplica.FakeMysqlDaemon.SetReplicationPositionPos = master.FakeMysqlDaemon.CurrentMasterPosition
+	badReplica.FakeMysqlDaemon.SetMasterInput = fmt.Sprintf("%v:%v", "", master.Tablet.MysqlPort)
+	badReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET ALL REPLICATION",
 		"FAKE SET SLAVE POSITION",
 	}
-	badSlave.StartActionLoop(t, wr)
-	defer badSlave.StopActionLoop(t)
+	badReplica.StartActionLoop(t, wr)
+	defer badReplica.StopActionLoop(t)
 
 	// also change the master alias in the Shard object, to make sure it
 	// is set back.
@@ -300,7 +300,7 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 
 	// run InitShardMaster
 	if err := wr.InitShardMaster(ctx, master.Tablet.Keyspace, master.Tablet.Shard, master.Tablet.Alias, true /*force*/, 10*time.Second); err == nil || !strings.Contains(err.Error(), "wrong input for SetMasterCommands") {
-		t.Errorf("InitShardMaster with one failed slave returned wrong error: %v", err)
+		t.Errorf("InitShardMaster with one failed replica returned wrong error: %v", err)
 	}
 
 	// check what was run: master should still be good

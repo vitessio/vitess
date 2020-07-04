@@ -91,7 +91,7 @@ GRANT SELECT, PROCESS, SUPER, REPLICATION CLIENT, RELOAD
 GRANT SELECT, UPDATE, DELETE, DROP
   ON performance_schema.* TO 'vt_monitoring'@'localhost';
 
-# User for Orchestrator (https://github.com/github/orchestrator).
+# User for Orchestrator (https://github.com/openark/orchestrator).
 CREATE USER 'orc_client_user'@'%' IDENTIFIED BY 'orc_client_user_password';
 GRANT SUPER, PROCESS, REPLICATION SLAVE, RELOAD
   ON *.* TO 'orc_client_user'@'%';

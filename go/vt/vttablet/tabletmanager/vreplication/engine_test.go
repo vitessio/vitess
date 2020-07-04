@@ -26,6 +26,7 @@ import (
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 )
@@ -37,7 +38,7 @@ func TestEngineOpen(t *testing.T) {
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
 
 	// Test Insert
 
@@ -85,7 +86,7 @@ func TestEngineExec(t *testing.T) {
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
 
 	// Test Insert
 
@@ -247,7 +248,7 @@ func TestEngineBadInsert(t *testing.T) {
 
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
 
 	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName(), nil)
 
@@ -277,7 +278,7 @@ func TestEngineSelect(t *testing.T) {
 	dbClient := binlogplayer.NewMockDBClient(t)
 
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
 
 	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName(), nil)
 
@@ -312,7 +313,7 @@ func TestWaitForPos(t *testing.T) {
 	waitRetryTime = 10 * time.Millisecond
 
 	dbClient := binlogplayer.NewMockDBClient(t)
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName(), nil)
 
@@ -342,7 +343,7 @@ func TestWaitForPos(t *testing.T) {
 
 func TestWaitForPosError(t *testing.T) {
 	dbClient := binlogplayer.NewMockDBClient(t)
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName(), nil)
 
@@ -384,7 +385,7 @@ func TestWaitForPosError(t *testing.T) {
 
 func TestWaitForPosCancel(t *testing.T) {
 	dbClient := binlogplayer.NewMockDBClient(t)
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName(), nil)
 
@@ -430,7 +431,7 @@ func TestCreateDBAndTable(t *testing.T) {
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
 
 	// Test Insert
 
@@ -447,10 +448,16 @@ func TestCreateDBAndTable(t *testing.T) {
 	dbNotFound := mysql.SQLError{Num: 1049, Message: "db not found"}
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, &dbNotFound)
 
-	dbClient.ExpectRequest("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequest("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequestRE("create table if not exists _vt.resharding_journal.*", &sqltypes.Result{}, nil)
+	expectDDLs := func() {
+		t.Helper()
+		dbClient.ExpectRequest("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequest("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequestRE("ALTER TABLE _vt.vreplication ADD COLUMN db_name.*", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequestRE("create table if not exists _vt.resharding_journal.*", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequestRE("create table if not exists _vt.copy_state.*", &sqltypes.Result{}, nil)
+	}
+	expectDDLs()
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 
 	// Non-recoverable error.
@@ -460,12 +467,7 @@ func TestCreateDBAndTable(t *testing.T) {
 	// Missing table. Statement should get retried after creating everything.
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("insert into _vt.vreplication values(null)", &sqltypes.Result{}, &tableNotFound)
-
-	dbClient.ExpectRequest("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequest("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequestRE("create table if not exists _vt.resharding_journal.*", &sqltypes.Result{}, nil)
-
+	expectDDLs()
 	dbClient.ExpectRequest("insert into _vt.vreplication values(null)", &sqltypes.Result{InsertID: 1}, nil)
 
 	// The rest of this test is normal with no db errors or extra queries.

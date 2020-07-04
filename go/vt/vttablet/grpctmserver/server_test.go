@@ -21,8 +21,8 @@ import (
 	"testing"
 
 	"google.golang.org/grpc"
-	"vitess.io/vitess/go/vt/vttablet/agentrpctest"
 	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
+	"vitess.io/vitess/go/vt/vttablet/tmrpctest"
 
 	tabletmanagerservicepb "vitess.io/vitess/go/vt/proto/tabletmanagerservice"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -41,8 +41,8 @@ func TestGRPCTMServer(t *testing.T) {
 
 	// Create a gRPC server and listen on the port.
 	s := grpc.NewServer()
-	fakeAgent := agentrpctest.NewFakeRPCAgent(t)
-	tabletmanagerservicepb.RegisterTabletManagerServer(s, &server{agent: fakeAgent})
+	fakeTM := tmrpctest.NewFakeRPCTM(t)
+	tabletmanagerservicepb.RegisterTabletManagerServer(s, &server{tm: fakeTM})
 	go s.Serve(listener)
 
 	// Create a gRPC client to talk to the fake tablet.
@@ -59,5 +59,5 @@ func TestGRPCTMServer(t *testing.T) {
 	}
 
 	// and run the test suite
-	agentrpctest.Run(t, client, tablet, fakeAgent)
+	tmrpctest.Run(t, client, tablet, fakeTM)
 }

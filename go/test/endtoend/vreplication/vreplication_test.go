@@ -63,7 +63,6 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	verifyClusterHealth(t)
 	insertInitialData(t)
 	shardCustomer(t, true)
-
 	shardOrders(t)
 	shardMerchant(t)
 
@@ -175,9 +174,11 @@ func shardCustomer(t *testing.T, testReverse bool) {
 	insertQuery2 := "insert into customer(name) values('tempCustomer2')"
 	matchInsertQuery2 := "insert into customer(name, cid) values (:vtg1, :_cid0)"
 	assert.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2))
-	insertQuery2 = "insert into customer(name) values('tempCustomer3')" //ID 101, hence due to reverse_bits in shard 80-
+
+	insertQuery2 = "insert into customer(name, cid) values('tempCustomer3', 101)" //ID 101, hence due to reverse_bits in shard 80-
 	assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery2, matchInsertQuery2))
-	insertQuery2 = "insert into customer(name) values('tempCustomer4')" //ID 102, hence due to reverse_bits in shard -80
+
+	insertQuery2 = "insert into customer(name, cid) values('tempCustomer4', 102)" //ID 102, hence due to reverse_bits in shard -80
 	assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery2, matchInsertQuery2))
 
 	if testReverse {
@@ -208,9 +209,15 @@ func shardCustomer(t *testing.T, testReverse bool) {
 		if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "customer.p2c"); err != nil {
 			t.Fatalf("SwitchWrites error: %s\n", output)
 		}
-		want = dryRunResultsDropSourcesCustomerShard
+		want = dryRunResultsDropSourcesDropCustomerShard
 		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("DropSources", "-dry_run", "customer.p2c"); err != nil {
 			t.Fatalf("DropSources dry run error: %s\n", output)
+		}
+		validateDryRunResults(t, output, want)
+
+		want = dryRunResultsDropSourcesRenameCustomerShard
+		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("DropSources", "-dry_run", "-rename_tables", "customer.p2c"); err != nil {
+			t.Fatalf("DropSources dry run with rename error: %s\n", output)
 		}
 		validateDryRunResults(t, output, want)
 
@@ -244,12 +251,12 @@ func shardCustomer(t *testing.T, testReverse bool) {
 		assert.NoError(t, err, "Customer table not deleted from zone1-200")
 		assert.True(t, found)
 
-		insertQuery2 = "insert into customer(name) values('tempCustomer8')" //ID 103, hence due to reverse_bits in shard 80-
+		insertQuery2 = "insert into customer(name, cid) values('tempCustomer8', 103)" //ID 103, hence due to reverse_bits in shard 80-
 		assert.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2))
-		insertQuery2 = "insert into customer(name) values('tempCustomer9')" //ID 104, hence due to reverse_bits in shard 80-
-		assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery2, matchInsertQuery2))
-		insertQuery2 = "insert into customer(name) values('tempCustomer10')" //ID 105, hence due to reverse_bits in shard -80
+		insertQuery2 = "insert into customer(name, cid) values('tempCustomer10', 104)" //ID 105, hence due to reverse_bits in shard -80
 		assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery2, matchInsertQuery2))
+		insertQuery2 = "insert into customer(name, cid) values('tempCustomer9', 105)" //ID 104, hence due to reverse_bits in shard 80-
+		assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery2, matchInsertQuery2))
 
 		execVtgateQuery(t, vtgateConn, "customer", "delete from customer where name like 'tempCustomer%'")
 		assert.Empty(t, validateCountInTablet(t, customerTab1, "customer", "customer", 1))
@@ -266,7 +273,7 @@ func shardCustomer(t *testing.T, testReverse bool) {
 
 func reshardCustomer2to4Split(t *testing.T) {
 	ksName := "customer"
-	counts := map[string]int{"zone1-600": 4, "zone1-700": 5, "zone1-800": 5, "zone1-900": 6}
+	counts := map[string]int{"zone1-600": 4, "zone1-700": 5, "zone1-800": 6, "zone1-900": 5}
 	reshard(t, ksName, "customer", "c2c4", "-80,80-", "-40,40-80,80-c0,c0-", 600, counts, nil)
 	assert.Empty(t, validateCount(t, vtgateConn, ksName, "customer", 20))
 	query := "insert into customer (name) values('yoko')"
@@ -329,7 +336,7 @@ func reshardMerchant3to1Merge(t *testing.T) {
 
 func reshardCustomer3to2SplitMerge(t *testing.T) { //-40,40-80,80-c0 => merge/split, c0- stays the same  ending up with 3
 	ksName := "customer"
-	counts := map[string]int{"zone1-600": 5, "zone1-700": 5, "zone1-800": 5, "zone1-900": 6}
+	counts := map[string]int{"zone1-1000": 7, "zone1-1100": 9, "zone1-1200": 5}
 	reshard(t, ksName, "customer", "c4c3", "-40,40-80,80-c0", "-60,60-c0", 1000, counts, nil)
 }
 

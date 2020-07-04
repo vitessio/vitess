@@ -41,14 +41,14 @@ type MysqlDaemon interface {
 	GetMysqlPort() (int32, error)
 
 	// replication related methods
-	StartSlave(hookExtraEnv map[string]string) error
-	RestartSlave(hookExtraEnv map[string]string) error
-	StartSlaveUntilAfter(ctx context.Context, pos mysql.Position) error
-	StopSlave(hookExtraEnv map[string]string) error
-	SlaveStatus() (mysql.SlaveStatus, error)
-	SetSemiSyncEnabled(master, slave bool) error
-	SemiSyncEnabled() (master, slave bool)
-	SemiSyncSlaveStatus() (bool, error)
+	StartReplication(hookExtraEnv map[string]string) error
+	RestartReplication(hookExtraEnv map[string]string) error
+	StartReplicationUntilAfter(ctx context.Context, pos mysql.Position) error
+	StopReplication(hookExtraEnv map[string]string) error
+	ReplicationStatus() (mysql.ReplicationStatus, error)
+	SetSemiSyncEnabled(master, replica bool) error
+	SemiSyncEnabled() (master, replica bool)
+	SemiSyncReplicationStatus() (bool, error)
 
 	// reparenting related methods
 	ResetReplication(ctx context.Context) error
@@ -56,12 +56,9 @@ type MysqlDaemon interface {
 	IsReadOnly() (bool, error)
 	SetReadOnly(on bool) error
 	SetSuperReadOnly(on bool) error
-	SetSlavePosition(ctx context.Context, pos mysql.Position) error
-	SetMaster(ctx context.Context, masterHost string, masterPort int, slaveStopBefore bool, slaveStartAfter bool) error
+	SetReplicationPosition(ctx context.Context, pos mysql.Position) error
+	SetMaster(ctx context.Context, masterHost string, masterPort int, stopReplicationBefore bool, startReplicationAfter bool) error
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
-
-	// Deprecated: use MasterPosition() instead
-	DemoteMaster() (mysql.Position, error)
 
 	WaitMasterPos(context.Context, mysql.Position) error
 

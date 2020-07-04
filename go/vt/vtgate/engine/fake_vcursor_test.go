@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -48,6 +50,7 @@ var _ SessionActions = (*noopVCursor)(nil)
 
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
+	ctx context.Context
 }
 
 func (t noopVCursor) SetUDV(key string, value interface{}) error {
@@ -61,23 +64,32 @@ func (t noopVCursor) SetSysVar(name string, expr string) {
 func (t noopVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
 	panic("implement me")
 }
+
 func (t noopVCursor) Session() SessionActions {
 	return t
 }
+
 func (t noopVCursor) SetTarget(target string) error {
 	panic("implement me")
 }
-
 func (t noopVCursor) Context() context.Context {
-	return context.Background()
+	if t.ctx == nil {
+		return context.Background()
+	}
+	return t.ctx
 }
-
 func (t noopVCursor) MaxMemoryRows() int {
 	return testMaxMemoryRows
 }
 
 func (t noopVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc {
 	return func() {}
+}
+
+func (t noopVCursor) ErrorGroupCancellableContext() *errgroup.Group {
+	g, ctx := errgroup.WithContext(t.ctx)
+	t.ctx = ctx
+	return g
 }
 
 func (t noopVCursor) RecordWarning(warning *querypb.QueryWarning) {
@@ -167,6 +179,10 @@ func (f *loggingVCursor) Context() context.Context {
 
 func (f *loggingVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc {
 	return func() {}
+}
+
+func (f *loggingVCursor) ErrorGroupCancellableContext() *errgroup.Group {
+	panic("implement me")
 }
 
 func (f *loggingVCursor) RecordWarning(warning *querypb.QueryWarning) {

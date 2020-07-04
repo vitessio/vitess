@@ -25,7 +25,7 @@ import (
 
 func TestReporters(t *testing.T) {
 	tests := []struct {
-		isSlaveType                 bool
+		isReplicaType               bool
 		shouldQueryServiceBeRunning bool
 		delay1                      time.Duration
 		delay2                      time.Duration
@@ -35,7 +35,7 @@ func TestReporters(t *testing.T) {
 	}{
 		{true, true, 10 * time.Second, 5 * time.Second, nil, 10 * time.Second, false},
 		{true, false, 10 * time.Second, 5 * time.Second, errors.New("oops"), 0, false},
-		{true, false, 10 * time.Second, 5 * time.Second, ErrSlaveNotRunning, 10 * time.Second, true},
+		{true, false, 10 * time.Second, 5 * time.Second, ErrReplicationNotRunning, 10 * time.Second, true},
 	}
 	for _, test := range tests {
 		ag := NewAggregator()
@@ -46,10 +46,10 @@ func TestReporters(t *testing.T) {
 			return test.delay2, nil
 		}))
 		ag.RegisterSimpleCheck("simplecheck", func() error { return test.err })
-		delay, err := ag.Report(test.isSlaveType, test.shouldQueryServiceBeRunning)
+		delay, err := ag.Report(test.isReplicaType, test.shouldQueryServiceBeRunning)
 		if delay != test.wantDelay || test.strict && err != test.err || (err == nil) != (test.err == nil) {
 			t.Errorf("ag.Report(%v, %v) = (%v, %v), want (%v, %v)",
-				test.isSlaveType, test.shouldQueryServiceBeRunning, delay, err, test.wantDelay, test.err)
+				test.isReplicaType, test.shouldQueryServiceBeRunning, delay, err, test.wantDelay, test.err)
 		}
 		wantHTML := template.HTML("FunctionReporter&nbsp; + &nbsp;FunctionReporter&nbsp; + &nbsp;simplecheck")
 		if got, want := ag.HTMLName(), wantHTML; got != want {

@@ -134,7 +134,7 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 			switch tablets[i].Type {
 			case topodatapb.TabletType_MASTER:
 				tabletForBackup = tablets[i].Tablet
-				secondsBehind = 0
+				secondsBehind = 0 //nolint
 				break ChooseMaster
 			default:
 				continue

@@ -74,6 +74,18 @@ install: build
 	mkdir -p "$${PREFIX}/bin"
 	cp "$${VTROOT}/bin/"{mysqlctld,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
 
+# install copies the files needed to run test Vitess using vtcombo into the given directory tree.
+# Usage: make install PREFIX=/path/to/install/root
+install-testing: build
+	# binaries
+	mkdir -p "$${PREFIX}/bin"
+	cp "$${VTROOT}/bin/"{mysqlctld,mysqlctl,vtcombo,vttestserver} "$${PREFIX}/bin/"
+	# config files
+	cp -R config "$${PREFIX}/"
+	# vtctld web UI files
+	mkdir -p "$${PREFIX}/web/vtctld2"
+	cp -R web/vtctld2/app "$${PREFIX}/web/vtctld2"
+
 parser:
 	make -C go/vt/sqlparser
 
@@ -270,6 +282,18 @@ docker_lite_ubi7.percona80:
 docker_lite_alpine:
 	chmod -R o=g *
 	docker build -f docker/lite/Dockerfile.alpine -t vitess/lite:alpine .
+
+docker_lite_testing:
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile.testing -t vitess/lite:testing .
+
+docker_local:
+	chmod -R o=g *
+	docker build -f docker/local/Dockerfile -t vitess/local .
+
+docker_mini:
+	chmod -R o=g *
+	docker build -f docker/mini/Dockerfile -t vitess/mini .
 
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.

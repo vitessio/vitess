@@ -128,7 +128,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 
 		// if streamMode is xbstream, add some additional args to test other xtrabackup flags
 		if streamMode == "xbstream" {
-			xtrabackupArgs = append(xtrabackupArgs, "-xtrabackup_prepare_flags", fmt.Sprintf("--use-memory=100M"))
+			xtrabackupArgs = append(xtrabackupArgs, "-xtrabackup_prepare_flags", fmt.Sprintf("--use-memory=100M")) //nolint
 		}
 
 		commonTabletArg = append(commonTabletArg, xtrabackupArgs...)
@@ -661,7 +661,7 @@ func terminateRestore(t *testing.T) {
 				assert.Fail(t, "restore in progress file missing")
 			}
 			tmpProcess.Process.Signal(syscall.SIGTERM)
-			found = true
+			found = true //nolint
 			return
 		}
 	}

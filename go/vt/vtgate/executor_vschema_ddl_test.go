@@ -21,6 +21,7 @@ import (
 	"sort"
 	"testing"
 	"time"
+
 	"vitess.io/vitess/go/vt/callerid"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -92,6 +93,7 @@ func waitForVschemaTables(t *testing.T, ks string, tables []string, executor *Ex
 	return nil
 }
 
+//nolint
 func waitForColVindexes(t *testing.T, ks, table string, names []string, executor *Executor) *vschemapb.SrvVSchema {
 	t.Helper()
 
@@ -383,7 +385,7 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	defer func() {
 		*vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv() //nolint
 	ks := "TestExecutor"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)

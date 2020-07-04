@@ -120,7 +120,7 @@ func TestGetOrCreateShard(t *testing.T) {
 			for j := 0; j < 100; j++ {
 				index := rand.Intn(10)
 				shard := fmt.Sprintf("%v", index)
-				si, err := ts.GetOrCreateShard(ctx, keyspace, shard, cell)
+				si, err := ts.GetOrCreateShard(ctx, keyspace, shard)
 				if err != nil {
 					t.Errorf("GetOrCreateShard(%v, %v) failed: %v", i, shard, err)
 				}

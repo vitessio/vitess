@@ -112,7 +112,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	backups, err := listBackups(shardKsName)
 	require.Nil(t, err)
 
-	// insert data on master, wait for slave to get it
+	// insert data on master, wait for replica to get it
 	_, err = master.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
 	require.Nil(t, err)
 	// Add a single row with value 'test1' to the master tablet
@@ -122,7 +122,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	// Check that the specified tablet has the expected number of rows
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
 
-	// backup the slave
+	// backup the replica
 	log.Info("taking backup %s", time.Now())
 	vtBackup(t, false)
 	log.Info("done taking backup %s", time.Now())
@@ -135,16 +135,16 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	require.Nil(t, err)
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 2)
 
-	// now bring up the other slave, letting it restore from backup.
+	// now bring up the other replica, letting it restore from backup.
 	err = localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shardName)
 	require.Nil(t, err)
 	restore(t, replica2, "replica", "SERVING")
 	// Replica2 takes time to serve. Sleeping for 5 sec.
 	time.Sleep(5 * time.Second)
-	//check the new slave has the data
+	//check the new replica has the data
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
-	// check that the restored slave has the right local_metadata
+	// check that the restored replica has the right local_metadata
 	result, err := replica2.VttabletProcess.QueryTabletWithDB("select * from local_metadata", "_vt")
 	require.Nil(t, err)
 	assert.Equal(t, replica2.Alias, result.Rows[0][1].ToString(), "Alias")
@@ -275,10 +275,10 @@ func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool)
 
 func tearDown(t *testing.T, initMysql bool) {
 	// reset replication
-	promoteSlaveCommands := "STOP SLAVE; RESET SLAVE ALL; RESET MASTER;"
+	promoteCommands := "STOP SLAVE; RESET SLAVE ALL; RESET MASTER;"
 	disableSemiSyncCommands := "SET GLOBAL rpl_semi_sync_master_enabled = false; SET GLOBAL rpl_semi_sync_slave_enabled = false"
 	for _, tablet := range []cluster.Vttablet{*master, *replica1, *replica2} {
-		_, err := tablet.VttabletProcess.QueryTablet(promoteSlaveCommands, keyspaceName, true)
+		_, err := tablet.VttabletProcess.QueryTablet(promoteCommands, keyspaceName, true)
 		require.Nil(t, err)
 		_, err = tablet.VttabletProcess.QueryTablet(disableSemiSyncCommands, keyspaceName, true)
 		require.Nil(t, err)

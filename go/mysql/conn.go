@@ -926,9 +926,15 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			prepare.BindVars = make(map[string]*querypb.BindVariable, paramsCount)
 		}
 
+		bindVars := make(map[string]*querypb.BindVariable, paramsCount)
+		for i := uint16(0); i < paramsCount; i++ {
+			parameterID := fmt.Sprintf("v%d", i+1)
+			bindVars[parameterID] = &querypb.BindVariable{}
+		}
+
 		c.PrepareData[c.StatementID] = prepare
 
-		fld, err := handler.ComPrepare(c, queries[0])
+		fld, err := handler.ComPrepare(c, queries[0], bindVars)
 
 		if err != nil {
 			if werr := c.writeErrorPacketFromError(err); werr != nil {

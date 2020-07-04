@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/withddl"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
@@ -57,6 +58,15 @@ const (
   lastpk varbinary(2000),
   primary key (vrepl_id, table_name))`
 )
+
+var withDDL *withddl.WithDDL
+
+func init() {
+	allddls := append([]string{}, binlogplayer.CreateVReplicationTable()...)
+	allddls = append(allddls, binlogplayer.AlterVReplicationTable...)
+	allddls = append(allddls, createReshardingJournalTable, createCopyState)
+	withDDL = withddl.New(allddls)
+}
 
 var tabletTypesStr = flag.String("vreplication_tablet_type", "REPLICA", "comma separated list of tablet types used as a source")
 
@@ -102,20 +112,27 @@ type journalEvent struct {
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
 func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon) *Engine {
-	dbClientFactory := func() binlogplayer.DBClient {
-		return binlogplayer.NewDBClient(config.DB.FilteredWithDB())
-	}
 	vre := &Engine{
-		controllers:     make(map[int]*controller),
-		ts:              ts,
-		cell:            cell,
-		mysqld:          mysqld,
-		dbClientFactory: dbClientFactory,
-		dbName:          config.DB.DBName,
-		journaler:       make(map[string]*journalEvent),
-		ec:              newExternalConnector(config.ExternalConnections),
+		controllers: make(map[int]*controller),
+		ts:          ts,
+		cell:        cell,
+		mysqld:      mysqld,
+		journaler:   make(map[string]*journalEvent),
+		ec:          newExternalConnector(config.ExternalConnections),
 	}
 	return vre
+}
+
+// InitDBConfig should be invoked after the db name is computed.
+func (vre *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
+	// If we're already initilized, it's a test engine. Ignore the call.
+	if vre.dbClientFactory != nil {
+		return
+	}
+	vre.dbClientFactory = func() binlogplayer.DBClient {
+		return binlogplayer.NewDBClient(dbcfgs.FilteredWithDB())
+	}
+	vre.dbName = dbcfgs.DBName
 }
 
 // NewTestEngine creates a new Engine for testing.
@@ -156,51 +173,6 @@ func (vre *Engine) Open(ctx context.Context) error {
 	return nil
 }
 
-// executeFetchMaybeCreateTable calls DBClient.ExecuteFetch and does one retry if
-// there's a failure due to mysql.ERNoSuchTable or mysql.ERBadDb which can be fixed
-// by re-creating the vreplication tables.
-func (vre *Engine) executeFetchMaybeCreateTable(dbClient binlogplayer.DBClient, query string, maxrows int) (qr *sqltypes.Result, err error) {
-	qr, err = dbClient.ExecuteFetch(query, maxrows)
-
-	if err == nil {
-		return
-	}
-
-	// If it's a bad table or db, it could be because the vreplication tables weren't created.
-	// In that case we can try creating them again.
-	merr, isSQLErr := err.(*mysql.SQLError)
-	if !isSQLErr || !(merr.Num == mysql.ERNoSuchTable || merr.Num == mysql.ERBadDb || merr.Num == mysql.ERBadFieldError) {
-		return qr, err
-	}
-
-	log.Info("Looks like the vreplication tables may not exist. Trying to recreate... ")
-	if merr.Num == mysql.ERNoSuchTable || merr.Num == mysql.ERBadDb {
-		for _, query := range binlogplayer.CreateVReplicationTable() {
-			if _, merr := dbClient.ExecuteFetch(query, 0); merr != nil {
-				log.Warningf("Failed to ensure %s exists: %v", vreplicationTableName, merr)
-				return nil, err
-			}
-		}
-		if _, merr := dbClient.ExecuteFetch(createReshardingJournalTable, 0); merr != nil {
-			log.Warningf("Failed to ensure %s exists: %v", reshardingJournalTableName, merr)
-			return nil, err
-		}
-	}
-	if merr.Num == mysql.ERBadFieldError {
-		log.Infof("Adding column to table %s", vreplicationTableName)
-		for _, query := range binlogplayer.AlterVReplicationTable {
-			if _, merr := dbClient.ExecuteFetch(query, 0); merr != nil {
-				merr, isSQLErr := err.(*mysql.SQLError)
-				if !isSQLErr || !(merr.Num == mysql.ERDupFieldName) {
-					log.Warningf("Failed to alter %s table: %v", vreplicationTableName, merr)
-					return nil, err
-				}
-			}
-		}
-	}
-	return dbClient.ExecuteFetch(query, maxrows)
-}
-
 func (vre *Engine) initAll() error {
 	dbClient := vre.dbClientFactory()
 	if err := dbClient.Connect(); err != nil {
@@ -208,18 +180,8 @@ func (vre *Engine) initAll() error {
 	}
 	defer dbClient.Close()
 
-	rows, err := readAllRows(dbClient, vre.dbName)
+	rows, err := readAllRows(vre.ctx, dbClient, vre.dbName)
 	if err != nil {
-		// Handle Table not found.
-		if merr, ok := err.(*mysql.SQLError); ok && merr.Num == mysql.ERNoSuchTable {
-			log.Info("_vt.vreplication table not found. Will create it later if needed")
-			return nil
-		}
-		// Handle missing field
-		if merr, ok := err.(*mysql.SQLError); ok && merr.Num == mysql.ERBadFieldError {
-			log.Info("_vt.vreplication table found but is missing field db_name. Will add it later if needed")
-			return nil
-		}
 		return err
 	}
 	for _, row := range rows {
@@ -295,13 +257,13 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 	// Change the database to ensure that these events don't get
 	// replicated by another vreplication. This can happen when
 	// we reverse replication.
-	if _, err := vre.executeFetchMaybeCreateTable(dbClient, "use _vt", 1); err != nil {
+	if _, err := withDDL.Exec(vre.ctx, "use _vt", dbClient.ExecuteFetch); err != nil {
 		return nil, err
 	}
 
 	switch plan.opcode {
 	case insertQuery:
-		qr, err := vre.executeFetchMaybeCreateTable(dbClient, plan.query, 1)
+		qr, err := withDDL.Exec(vre.ctx, plan.query, dbClient.ExecuteFetch)
 		if err != nil {
 			return nil, err
 		}
@@ -345,7 +307,7 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 		if err != nil {
 			return nil, err
 		}
-		qr, err := vre.executeFetchMaybeCreateTable(dbClient, query, 1)
+		qr, err := withDDL.Exec(vre.ctx, query, dbClient.ExecuteFetch)
 		if err != nil {
 			return nil, err
 		}
@@ -385,7 +347,7 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 		if err != nil {
 			return nil, err
 		}
-		qr, err := vre.executeFetchMaybeCreateTable(dbClient, query, 1)
+		qr, err := withDDL.Exec(vre.ctx, query, dbClient.ExecuteFetch)
 		if err != nil {
 			return nil, err
 		}
@@ -393,12 +355,9 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 		if err != nil {
 			return nil, err
 		}
-		if _, err := dbClient.ExecuteFetch(delQuery, 10000); err != nil {
-			// Legacy vreplication won't create this table. So, ignore table not found error.
-			merr, isSQLErr := err.(*mysql.SQLError)
-			if !isSQLErr || !(merr.Num == mysql.ERNoSuchTable) {
-				return nil, err
-			}
+		// Legacy vreplication won't create this table. So, ignore schema errors.
+		if _, err := withDDL.ExecIgnore(vre.ctx, delQuery, dbClient.ExecuteFetch); err != nil {
+			return nil, err
 		}
 		if err := dbClient.Commit(); err != nil {
 			return nil, err
@@ -406,7 +365,7 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 		return qr, nil
 	case selectQuery, reshardingJournalQuery:
 		// select and resharding journal queries are passed through.
-		return vre.executeFetchMaybeCreateTable(dbClient, plan.query, 10000)
+		return withDDL.Exec(vre.ctx, plan.query, dbClient.ExecuteFetch)
 	}
 	panic("unreachable")
 }
@@ -565,7 +524,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 		bls.Keyspace, bls.Shard = sgtid.Keyspace, sgtid.Shard
 		ig := NewInsertGenerator(binlogplayer.BlpRunning, vre.dbName)
 		ig.AddRow(params["workflow"], &bls, sgtid.Gtid, params["cell"], params["tablet_types"])
-		qr, err := vre.executeFetchMaybeCreateTable(dbClient, ig.String(), 1)
+		qr, err := withDDL.Exec(vre.ctx, ig.String(), dbClient.ExecuteFetch)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)
 			return
@@ -575,7 +534,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 	}
 	for _, ks := range participants {
 		id := je.participants[ks]
-		_, err := vre.executeFetchMaybeCreateTable(dbClient, binlogplayer.DeleteVReplication(uint32(id)), 1)
+		_, err := withDDL.Exec(vre.ctx, binlogplayer.DeleteVReplication(uint32(id)), dbClient.ExecuteFetch)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)
 			return
@@ -687,8 +646,8 @@ func (vre *Engine) updateStats() {
 	}
 }
 
-func readAllRows(dbClient binlogplayer.DBClient, dbName string) ([]map[string]string, error) {
-	qr, err := dbClient.ExecuteFetch(fmt.Sprintf("select * from _vt.vreplication where db_name=%v", encodeString(dbName)), 10000)
+func readAllRows(ctx context.Context, dbClient binlogplayer.DBClient, dbName string) ([]map[string]string, error) {
+	qr, err := withDDL.ExecIgnore(ctx, fmt.Sprintf("select * from _vt.vreplication where db_name=%v", encodeString(dbName)), dbClient.ExecuteFetch)
 	if err != nil {
 		return nil, err
 	}

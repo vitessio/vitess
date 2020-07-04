@@ -1537,6 +1537,22 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	if len(r.plans.Keys()) != 1 {
 		t.Errorf("Plan keys should be 1, got: %v", len(r.plans.Keys()))
 	}
+
+	// the target string will be resolved and become part of the plan cache key, which adds a new entry
+	ksIDVc1, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
+	_, err = r.getPlan(ksIDVc1, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	require.NoError(t, err)
+	if len(r.plans.Keys()) != 2 {
+		t.Errorf("Plan keys should be 2, got: %v", len(r.plans.Keys()))
+	}
+
+	// the target string will be resolved and become part of the plan cache key, as it's an unsharded ks, it will be the same entry as above
+	ksIDVc2, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
+	_, err = r.getPlan(ksIDVc2, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	require.NoError(t, err)
+	if len(r.plans.Keys()) != 2 {
+		t.Errorf("Plan keys should be 2, got: %v", len(r.plans.Keys()))
+	}
 }
 
 func TestGetPlanCacheNormalized(t *testing.T) {
@@ -1582,6 +1598,22 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	require.NoError(t, err)
 	if len(r.plans.Keys()) != 1 {
 		t.Errorf("Plan keys should be 1, got: %v", len(r.plans.Keys()))
+	}
+
+	// the target string will be resolved and become part of the plan cache key, which adds a new entry
+	ksIDVc1, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
+	_, err = r.getPlan(ksIDVc1, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	require.NoError(t, err)
+	if len(r.plans.Keys()) != 2 {
+		t.Errorf("Plan keys should be 2, got: %v", len(r.plans.Keys()))
+	}
+
+	// the target string will be resolved and become part of the plan cache key, as it's an unsharded ks, it will be the same entry as above
+	ksIDVc2, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
+	_, err = r.getPlan(ksIDVc2, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	require.NoError(t, err)
+	if len(r.plans.Keys()) != 2 {
+		t.Errorf("Plan keys should be 2, got: %v", len(r.plans.Keys()))
 	}
 }
 
@@ -1867,6 +1899,52 @@ func TestGenerateCharsetRows(t *testing.T) {
 			require.Equal(t, tc.expected, actual)
 		})
 	}
+}
+
+func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
+	saveMax := *maxPayloadSize
+	saveWarn := *warnPayloadSize
+	*maxPayloadSize = 10
+	*warnPayloadSize = 5
+	defer func() {
+		*maxPayloadSize = saveMax
+		*warnPayloadSize = saveWarn
+	}()
+
+	executor, _, _, _ := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
+	warningCount := warnings.Counts()["WarnPayloadSizeExceeded"]
+	testMaxPayloadSizeExceeded := []string{
+		"select * from main1",
+		"insert into main1(id) values (1), (2)",
+		"update main1 set id=1",
+		"delete from main1 where id=1",
+	}
+	for _, query := range testMaxPayloadSizeExceeded {
+		_, err := executor.Execute(context.Background(), "TestExecutorMaxPayloadSizeExceeded", session, query, nil)
+		require.NotNil(t, err)
+		assert.EqualError(t, err, "query payload size above threshold")
+	}
+	assert.Equal(t, warningCount, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
+
+	testMaxPayloadSizeOverride := []string{
+		"select /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ * from main1",
+		"insert /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ into main1(id) values (1), (2)",
+		"update /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ main1 set id=1",
+		"delete /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ from main1 where id=1",
+	}
+	for _, query := range testMaxPayloadSizeOverride {
+		_, err := executor.Execute(context.Background(), "TestExecutorMaxPayloadSizeWithOverride", session, query, nil)
+		assert.Equal(t, nil, err, "err should be nil")
+	}
+	assert.Equal(t, warningCount, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
+
+	*maxPayloadSize = 1000
+	for _, query := range testMaxPayloadSizeExceeded {
+		_, err := executor.Execute(context.Background(), "TestExecutorMaxPayloadSizeExceeded", session, query, nil)
+		assert.Equal(t, nil, err, "err should be nil")
+	}
+	assert.Equal(t, warningCount+4, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
 }
 
 func TestOlapSelectDatabase(t *testing.T) {

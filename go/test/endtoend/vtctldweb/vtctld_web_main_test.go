@@ -36,9 +36,10 @@ import (
 	"vitess.io/vitess/go/vt/vttest"
 )
 
+//nolint
 var (
 	localCluster    *vttest.LocalCluster
-	hostname        = "localhost"
+	hostname        = "localhost" //nolint
 	wd              selenium.WebDriver
 	seleniumService *selenium.Service
 	vtctldAddr      string
@@ -175,7 +176,7 @@ func CreateWebDriver(port int) error {
 			return err
 		}
 
-		name, err := wd.CurrentWindowHandle()
+		name, err := wd.CurrentWindowHandle() //nolint
 		return wd.ResizeWindow(name, 1280, 1024)
 	}
 
@@ -201,7 +202,7 @@ func CreateWebDriver(port int) error {
 	if err != nil {
 		return err
 	}
-	name, err := wd.CurrentWindowHandle()
+	name, err := wd.CurrentWindowHandle() //nolint
 	return wd.ResizeWindow(name, 1280, 1024)
 }
 
@@ -346,7 +347,7 @@ func getDashboardKeyspaces(t *testing.T) []string {
 	dashboardContent, err := wd.FindElement(selenium.ByTagName, "vt-dashboard")
 	require.Nil(t, err)
 
-	ksCards, err := dashboardContent.FindElements(selenium.ByClassName, "vt-keyspace-card")
+	ksCards, err := dashboardContent.FindElements(selenium.ByClassName, "vt-keyspace-card") //nolint
 	var out []string
 	for _, ks := range ksCards {
 		out = append(out, text(t, ks))
@@ -358,10 +359,10 @@ func getDashboardKeyspaces(t *testing.T) []string {
 func getDashboardShards(t *testing.T) []string {
 	wait(t, selenium.ByTagName, "vt-dashboard")
 
-	dashboardContent, err := wd.FindElement(selenium.ByTagName, "vt-dashboard")
+	dashboardContent, err := wd.FindElement(selenium.ByTagName, "vt-dashboard") //nolint
 	require.Nil(t, err)
 
-	ksCards, err := dashboardContent.FindElements(selenium.ByClassName, "vt-shard-stats")
+	ksCards, err := dashboardContent.FindElements(selenium.ByClassName, "vt-shard-stats") //nolint
 	var out []string
 	for _, ks := range ksCards {
 		out = append(out, text(t, ks))
@@ -390,7 +391,7 @@ func getShardTablets(t *testing.T) ([]string, []string) {
 	shardContent, err := wd.FindElement(selenium.ByTagName, "vt-shard-view")
 	require.Nil(t, err)
 
-	tableRows, err := shardContent.FindElements(selenium.ByTagName, "tr")
+	tableRows, err := shardContent.FindElements(selenium.ByTagName, "tr") //nolint
 	tableRows = tableRows[1:]
 
 	var tabletTypes, tabletUIDs []string

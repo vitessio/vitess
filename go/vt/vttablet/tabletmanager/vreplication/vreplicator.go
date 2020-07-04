@@ -59,6 +59,8 @@ type vreplicator struct {
 	// mysqld is used to fetch the local schema.
 	mysqld    mysqlctl.MysqlDaemon
 	tableKeys map[string][]string
+
+	originalFKCheckSetting int64
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
@@ -130,7 +132,11 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		return err
 	}
 	vr.tableKeys = tableKeys
-
+	if err := vr.getSettingFKCheck(); err != nil {
+		return err
+	}
+	//defensive guard, should be a no-op since it should happen after copy is done
+	defer vr.resetFKCheckAfterCopy()
 	for {
 		select {
 		case <-ctx.Done():
@@ -152,6 +158,10 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 
 		switch {
 		case numTablesToCopy != 0:
+			if err := vr.clearFKCheck(); err != nil {
+				log.Warningf("Unable to clear FK check %v", err)
+				return err
+			}
 			if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
 				return err
 			}
@@ -160,6 +170,10 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				return err
 			}
 		default:
+			if err := vr.resetFKCheckAfterCopy(); err != nil {
+				log.Warningf("Unable to reset FK check %v", err)
+				return err
+			}
 			if vr.source.StopAfterCopy {
 				return vr.setState(binlogplayer.BlpStopped, "Stopped after copy.")
 			}
@@ -194,23 +208,9 @@ func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.
 	}
 
 	query := fmt.Sprintf("select count(*) from _vt.copy_state where vrepl_id=%d", vr.id)
-	qr, err := vr.dbClient.Execute(query)
+	qr, err := withDDL.Exec(ctx, query, vr.dbClient.ExecuteFetch)
 	if err != nil {
-		// If it's a not found error, create it.
-		merr, isSQLErr := err.(*mysql.SQLError)
-		if !isSQLErr || !(merr.Num == mysql.ERNoSuchTable || merr.Num == mysql.ERBadDb) {
-			return settings, numTablesToCopy, err
-		}
-		log.Info("Looks like _vt.copy_state table may not exist. Trying to create... ")
-		if _, merr := vr.dbClient.Execute(createCopyState); merr != nil {
-			log.Errorf("Failed to ensure _vt.copy_state table exists: %v", merr)
-			return settings, numTablesToCopy, err
-		}
-		// Redo the read.
-		qr, err = vr.dbClient.Execute(query)
-		if err != nil {
-			return settings, numTablesToCopy, err
-		}
+		return settings, numTablesToCopy, err
 	}
 	if len(qr.Rows) == 0 || len(qr.Rows[0]) == 0 {
 		return settings, numTablesToCopy, fmt.Errorf("unexpected result from %s: %v", query, qr)
@@ -253,4 +253,29 @@ func encodeString(in string) string {
 	var buf strings.Builder
 	sqltypes.NewVarChar(in).EncodeSQL(&buf)
 	return buf.String()
+}
+
+func (vr *vreplicator) getSettingFKCheck() error {
+	qr, err := vr.dbClient.Execute("select @@foreign_key_checks;")
+	if err != nil {
+		return err
+	}
+	if qr.RowsAffected != 1 || len(qr.Fields) != 1 {
+		return fmt.Errorf("unable to select @@foreign_key_checks")
+	}
+	vr.originalFKCheckSetting, err = evalengine.ToInt64(qr.Rows[0][0])
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (vr *vreplicator) resetFKCheckAfterCopy() error {
+	_, err := vr.dbClient.Execute(fmt.Sprintf("set foreign_key_checks=%d;", vr.originalFKCheckSetting))
+	return err
+}
+
+func (vr *vreplicator) clearFKCheck() error {
+	_, err := vr.dbClient.Execute("set foreign_key_checks=0;")
+	return err
 }

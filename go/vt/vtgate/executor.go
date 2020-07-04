@@ -1283,10 +1283,14 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		return nil, err
 	}
 
-	// Normalize if possible and retry.
 	query := sql
 	statement := stmt
 	bindVarNeeds := sqlparser.BindVarNeeds{}
+	if !sqlparser.IgnoreMaxPayloadSizeDirective(statement) && !isValidPayloadSize(query) {
+		return nil, vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "query payload size above threshold")
+	}
+
+	// Normalize if possible and retry.
 	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.IsSetStatement(stmt) {
 		parameterize := e.normalize // the public flag is called normalize
 		result, err := sqlparser.PrepareAST(stmt, bindVars, "vtg", parameterize)
@@ -1495,6 +1499,21 @@ func checkLikeOpt(likeOpt string, colNames []string) (string, error) {
 	return "", nil
 }
 
+// isValidPayloadSize validates whether a query payload is above the
+// configured MaxPayloadSize threshold. The WarnPayloadSizeExceeded will increment
+// if the payload size exceeds the warnPayloadSize.
+
+func isValidPayloadSize(query string) bool {
+	payloadSize := len(query)
+	if *maxPayloadSize > 0 && payloadSize > *maxPayloadSize {
+		return false
+	}
+	if *warnPayloadSize > 0 && payloadSize > *warnPayloadSize {
+		warnings.Add("WarnPayloadSizeExceeded", 1)
+	}
+	return true
+}
+
 // Prepare executes a prepare statements.
 func (e *Executor) Prepare(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (fld []*querypb.Field, err error) {
 	logStats := NewLogStats(ctx, method, sql, bindVars)
@@ -1585,7 +1604,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	var errCount uint64
 	if err != nil {
 		logStats.Error = err
-		errCount = 1
+		errCount = 1 //nolint
 		return nil, err
 	}
 	logStats.RowsAffected = qr.RowsAffected

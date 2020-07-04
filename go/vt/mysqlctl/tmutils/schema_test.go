@@ -240,7 +240,7 @@ func TestSchemaDiff(t *testing.T) {
 	})
 
 	testDiff(t, sd4, sd5, "sd4", "sd5", []string{
-		fmt.Sprintf("schemas differ on table type for table table2:\nsd4: VIEW\n differs from:\nsd5: BASE TABLE"),
+		fmt.Sprintf("schemas differ on table type for table table2:\nsd4: VIEW\n differs from:\nsd5: BASE TABLE"), //nolint
 	})
 
 	sd1.DatabaseSchema = "CREATE DATABASE {{.DatabaseName}}"

@@ -17,10 +17,10 @@ limitations under the License.
 package tabletserver
 
 import (
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -31,7 +31,7 @@ import (
 // VStreamer defines  the functions of VStreamer
 // that the replicationWatcher needs.
 type VStreamer interface {
-	Stream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
+	Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
 }
 
 // ReplicationWatcher is a tabletserver service that watches the
@@ -41,18 +41,17 @@ type ReplicationWatcher struct {
 	env              tabletenv.Env
 	watchReplication bool
 	vs               VStreamer
-	subscriber       schema.Subscriber
 
 	cancel context.CancelFunc
+	wg     sync.WaitGroup
 }
 
 // NewReplicationWatcher creates a new ReplicationWatcher.
-func NewReplicationWatcher(env tabletenv.Env, vs VStreamer, config *tabletenv.TabletConfig, schemaTracker schema.Subscriber) *ReplicationWatcher {
+func NewReplicationWatcher(env tabletenv.Env, vs VStreamer, config *tabletenv.TabletConfig) *ReplicationWatcher {
 	return &ReplicationWatcher{
 		env:              env,
 		vs:               vs,
 		watchReplication: config.WatchReplication,
-		subscriber:       schemaTracker,
 	}
 }
 
@@ -64,7 +63,8 @@ func (rpw *ReplicationWatcher) Open() {
 
 	ctx, cancel := context.WithCancel(tabletenv.LocalContext())
 	rpw.cancel = cancel
-	go rpw.Process(ctx)
+	rpw.wg.Add(1)
+	go rpw.process(ctx)
 }
 
 // Close stops the ReplicationWatcher service.
@@ -74,11 +74,12 @@ func (rpw *ReplicationWatcher) Close() {
 	}
 	rpw.cancel()
 	rpw.cancel = nil
+	rpw.wg.Wait()
 }
 
-// Process processes the replication stream.
-func (rpw *ReplicationWatcher) Process(ctx context.Context) {
+func (rpw *ReplicationWatcher) process(ctx context.Context) {
 	defer rpw.env.LogError()
+	defer rpw.wg.Done()
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -86,19 +87,9 @@ func (rpw *ReplicationWatcher) Process(ctx context.Context) {
 		}},
 	}
 
-	var gtid string
 	for {
-		// The tracker will reload the schema and save it into _vt.schema_tracking when the vstream encounters a DDL.
-		err := rpw.vs.Stream(ctx, "current", filter, func(events []*binlogdatapb.VEvent) error {
-			for _, event := range events {
-				if event.Type == binlogdatapb.VEventType_GTID {
-					gtid = event.Gtid
-				}
-				if event.Type == binlogdatapb.VEventType_DDL {
-					log.Infof("Calling schema updated for %s %s", gtid, event.Ddl)
-					rpw.subscriber.SchemaUpdated(gtid, event.Ddl, event.Timestamp)
-				}
-			}
+		// VStreamer will reload the schema when it encounters a DDL.
+		err := rpw.vs.Stream(ctx, "current", nil, filter, func(events []*binlogdatapb.VEvent) error {
 			return nil
 		})
 		select {
@@ -106,7 +97,7 @@ func (rpw *ReplicationWatcher) Process(ctx context.Context) {
 			return
 		case <-time.After(5 * time.Second):
 		}
-		log.Infof("VStream ended: %v, retrying in 5 seconds", err)
+		log.Infof("ReplicatinWatcher VStream ended: %v, retrying in 5 seconds", err)
 		time.Sleep(5 * time.Second)
 	}
 }
