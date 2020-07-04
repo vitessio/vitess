@@ -36,7 +36,8 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 		Cell: "cell",
 		Uid:  1,
 	}
-	hs := newHealthStreamer(env, alias, replFunc, blpFunc)
+	blpFunc = testBlpFunc
+	hs := newHealthStreamer(env, alias, replFunc)
 	target := querypb.Target{}
 	hs.InitDBConfig(target)
 
@@ -182,6 +183,6 @@ func replFuncErr() (time.Duration, error) {
 	return 0, errors.New("repl err")
 }
 
-func blpFunc() (int64, int32) {
+func testBlpFunc() (int64, int32) {
 	return 1, 2
 }

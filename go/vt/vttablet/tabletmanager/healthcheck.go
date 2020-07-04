@@ -182,6 +182,7 @@ func (tm *TabletManager) runHealthCheckLocked() {
 	tm.checkLock()
 	// read the current tablet record and tablet control
 	tablet := tm.Tablet()
+	terTime := tm.masterTermStartTime()
 	tm.mutex.Lock()
 	shouldBeServing := tm._disallowQueryService == ""
 	ignoreErrorExpr := tm._ignoreHealthErrorExpr
@@ -237,7 +238,7 @@ func (tm *TabletManager) runHealthCheckLocked() {
 			// We don't care if the QueryService state actually
 			// changed because we'll broadcast the latest health
 			// status after this immediately anyway.
-			_ /* state changed */, healthErr = tm.QueryServiceControl.SetServingType(tablet.Type, true, nil)
+			_ /* state changed */, healthErr = tm.QueryServiceControl.SetServingType(tablet.Type, terTime, true, nil)
 		}
 	} else {
 		if isServing {
@@ -254,7 +255,7 @@ func (tm *TabletManager) runHealthCheckLocked() {
 			// changed because we'll broadcast the latest health
 			// status after this immediately anyway.
 			log.Infof("Disabling query service because of health-check failure: %v", healthErr)
-			if _ /* state changed */, err := tm.QueryServiceControl.SetServingType(tablet.Type, false, nil); err != nil {
+			if _ /* state changed */, err := tm.QueryServiceControl.SetServingType(tablet.Type, terTime, false, nil); err != nil {
 				log.Errorf("SetServingType(serving=false) failed: %v", err)
 			}
 		}
@@ -332,5 +333,5 @@ func (tm *TabletManager) terminateHealthChecks() {
 	// go?).  After servenv lameduck, the queryservice is stopped
 	// from a servenv.OnClose() hook anyway.
 	log.Infof("Disabling query service after lameduck in terminating healthchecks")
-	tm.QueryServiceControl.SetServingType(tablet.Type, false, nil)
+	tm.QueryServiceControl.SetServingType(tablet.Type, tm.masterTermStartTime(), false, nil)
 }

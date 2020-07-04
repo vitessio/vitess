@@ -89,7 +89,8 @@ type stateManager struct {
 	target         querypb.Target
 	retrying       bool
 	// TODO(sougou): deprecate alsoAllow
-	alsoAllow []topodatapb.TabletType
+	alsoAllow    []topodatapb.TabletType
+	terTimestamp time.Time
 
 	requests sync.WaitGroup
 	lameduck sync2.AtomicInt32
@@ -106,6 +107,10 @@ type stateManager struct {
 	txThrottler txThrottler
 	te          txEngine
 	messager    subComponent
+
+	// notify will be invoked by stateManager on every state change.
+	// The implementation is provided by healthStreamer.Status.
+	notify func(topodatapb.TabletType, time.Time, bool)
 
 	// checkMySQLThrottler ensures that CheckMysql
 	// doesn't get spammed.
@@ -158,7 +163,7 @@ type (
 // be honored.
 // If sm is already in the requested state, it returns stateChanged as
 // false.
-func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, state servingState, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
+func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, terTimestamp time.Time, state servingState, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
 	defer sm.ExitLameduck()
 
 	if tabletType == topodatapb.TabletType_RESTORE {
@@ -167,7 +172,7 @@ func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, state s
 	}
 
 	log.Infof("Starting transition to %v %v", tabletType, stateName[state])
-	if sm.mustTransition(tabletType, state, alsoAllow) {
+	if sm.mustTransition(tabletType, terTimestamp, state, alsoAllow) {
 		return true, sm.execTransition(tabletType, state)
 	}
 	return false, nil
@@ -177,7 +182,7 @@ func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, state s
 // state. If so, it acquires the semaphore and returns true. If a transition is
 // already in progress, it waits. If the desired state is already reached, it
 // returns false without acquiring the semaphore.
-func (sm *stateManager) mustTransition(tabletType topodatapb.TabletType, state servingState, alsoAllow []topodatapb.TabletType) bool {
+func (sm *stateManager) mustTransition(tabletType topodatapb.TabletType, terTimestamp time.Time, state servingState, alsoAllow []topodatapb.TabletType) bool {
 	sm.transitioning.Acquire()
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -185,6 +190,7 @@ func (sm *stateManager) mustTransition(tabletType topodatapb.TabletType, state s
 	sm.wantTabletType = tabletType
 	sm.wantState = state
 	sm.alsoAllow = alsoAllow
+	sm.terTimestamp = terTimestamp
 	if sm.target.TabletType == tabletType && sm.state == state {
 		sm.transitioning.Release()
 		return false
@@ -288,7 +294,7 @@ func (sm *stateManager) StopService() {
 	defer close(sm.setTimeBomb())
 
 	log.Info("Stopping TabletServer")
-	sm.SetServingType(sm.Target().TabletType, StateNotConnected, nil)
+	sm.SetServingType(sm.Target().TabletType, time.Time{}, StateNotConnected, nil)
 }
 
 // StartRequest validates the current state and target and registers
@@ -497,6 +503,7 @@ func (sm *stateManager) setState(tabletType topodatapb.TabletType, state serving
 		ServingState: stateInfo(state),
 		TabletType:   sm.target.TabletType.String(),
 	})
+	sm.notify(tabletType, sm.terTimestamp, sm.state == StateServing && sm.wantState == StateServing)
 }
 
 // EnterLameduck causes tabletserver to enter the lameduck state. This

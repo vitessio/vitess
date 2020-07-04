@@ -381,12 +381,12 @@ func (tm *TabletManager) demoteMaster(ctx context.Context, revertPartialFailure 
 		// considered successful. If we are already not serving, this will be
 		// idempotent.
 		log.Infof("DemoteMaster disabling query service")
-		if _ /* state changed */, err := tm.QueryServiceControl.SetServingType(tablet.Type, false, nil); err != nil {
+		if _ /* state changed */, err := tm.QueryServiceControl.SetServingType(tablet.Type, tm.masterTermStartTime(), false, nil); err != nil {
 			return nil, vterrors.Wrap(err, "SetServingType(serving=false) failed")
 		}
 		defer func() {
 			if finalErr != nil && revertPartialFailure && wasServing {
-				if _ /* state changed */, err := tm.QueryServiceControl.SetServingType(tablet.Type, true, nil); err != nil {
+				if _ /* state changed */, err := tm.QueryServiceControl.SetServingType(tablet.Type, tm.masterTermStartTime(), true, nil); err != nil {
 					log.Warningf("SetServingType(serving=true) failed during revert: %v", err)
 				}
 			}
@@ -460,7 +460,7 @@ func (tm *TabletManager) UndoDemoteMaster(ctx context.Context) error {
 	// Update serving graph
 	tablet := tm.Tablet()
 	log.Infof("UndoDemoteMaster re-enabling query service")
-	if _ /* state changed */, err := tm.QueryServiceControl.SetServingType(tablet.Type, true, nil); err != nil {
+	if _ /* state changed */, err := tm.QueryServiceControl.SetServingType(tablet.Type, tm.masterTermStartTime(), true, nil); err != nil {
 		return vterrors.Wrap(err, "SetServingType(serving=true) failed")
 	}
 
