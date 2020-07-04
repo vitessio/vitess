@@ -50,25 +50,26 @@ type ReplTracker struct {
 	isMaster bool
 	mode     string
 
-	mysqld mysqlctl.MysqlDaemon
 	hw     *heartbeatWriter
 	hr     *heartbeatReader
+	poller *poller
 }
 
 // NewReplTracker creates a new ReplTracker.
 func NewReplTracker(env tabletenv.Env, alias topodatapb.TabletAlias) *ReplTracker {
 	return &ReplTracker{
-		mode: env.Config().ReplicationTracker.Mode,
-		hw:   newHeartbeatWriter(env, alias),
-		hr:   newHeartbeatReader(env),
+		mode:   env.Config().ReplicationTracker.Mode,
+		hw:     newHeartbeatWriter(env, alias),
+		hr:     newHeartbeatReader(env),
+		poller: &poller{},
 	}
 }
 
 // InitDBConfig initializes the target name.
 func (rt *ReplTracker) InitDBConfig(target querypb.Target, mysqld mysqlctl.MysqlDaemon) {
-	rt.mysqld = mysqld
 	rt.hw.InitDBConfig(target)
 	rt.hr.InitDBConfig(target)
+	rt.poller.InitDBConfig(mysqld)
 }
 
 // MakeMaster must be called if the tablet type becomes MASTER.
@@ -104,12 +105,12 @@ func (rt *ReplTracker) Status() (time.Duration, error) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 
-	if rt.isMaster || rt.mode == tabletenv.Disable {
+	switch {
+	case rt.isMaster || rt.mode == tabletenv.Disable:
 		return 0, nil
-	}
-	switch rt.mode {
-	case tabletenv.Heartbeat:
+	case rt.mode == tabletenv.Heartbeat:
 		return rt.hr.Status()
 	}
-	return 0, nil
+	// rt.mode == tabletenv.Poller
+	return rt.poller.Status()
 }
