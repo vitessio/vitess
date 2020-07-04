@@ -178,11 +178,12 @@ func (set Mysql56GTIDSet) Last() string {
 	if len(set.SIDs()) > 0 {
 		sid := set.SIDs()[len(set.SIDs())-1]
 		buf.WriteString(sid.String())
-		for _, interval := range set[sid] {
+		sequences := set[sid]
+		if len(sequences) > 0 {
 			buf.WriteByte(':')
-			buf.WriteString(strconv.FormatInt(interval.end, 10))
+			lastInterval := sequences[len(sequences)-1]
+			buf.WriteString(strconv.FormatInt(lastInterval.end, 10))
 		}
-
 	}
 
 	return buf.String()
