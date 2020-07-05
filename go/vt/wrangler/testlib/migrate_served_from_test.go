@@ -108,9 +108,7 @@ func TestMigrateServedFrom(t *testing.T) {
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	destMaster.TM.VREngine = vreplication.NewTestEngine(ts, "", destMaster.FakeMysqlDaemon, dbClientFactory, dbClient.DBName(), nil)
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := destMaster.TM.VREngine.Open(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	destMaster.TM.VREngine.Open(context.Background())
 	// select pos, state, message from _vt.vreplication
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/5-456-892"),

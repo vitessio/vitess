@@ -336,11 +336,7 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 	// See if we need to start or stop vreplication.
 	if tm.VREngine != nil {
 		if newTablet.Type == topodatapb.TabletType_MASTER {
-			if err := tm.VREngine.Open(tm.BatchCtx); err != nil {
-				log.Errorf("Could not start VReplication engine: %v. Will keep retrying at health check intervals.", err)
-			} else {
-				log.Info("VReplication engine started")
-			}
+			tm.VREngine.Open(tm.BatchCtx)
 		} else {
 			tm.VREngine.Close()
 		}

@@ -273,9 +273,7 @@ func (tm *TabletManager) runHealthCheckLocked() {
 	// came up. This is because the mysql could have been in read-only mode, etc.
 	// So, start the engine if it's not already running.
 	if tablet.Type == topodatapb.TabletType_MASTER && tm.VREngine != nil && !tm.VREngine.IsOpen() {
-		if err := tm.VREngine.Open(tm.BatchCtx); err == nil {
-			log.Info("VReplication engine successfully started")
-		}
+		tm.VREngine.Open(tm.BatchCtx)
 	}
 
 	// save the health record

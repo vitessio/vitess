@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/withddl"
@@ -37,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 )
 
@@ -84,6 +86,7 @@ type Engine struct {
 	// mu synchronizes isOpen, controllers and wg.
 	mu          sync.Mutex
 	isOpen      bool
+	retrying    bool
 	controllers map[int]*controller
 	// wg is used by in-flight functions that can run for long periods.
 	wg sync.WaitGroup
@@ -151,26 +154,52 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 }
 
 // Open starts the Engine service.
-func (vre *Engine) Open(ctx context.Context) error {
+func (vre *Engine) Open(ctx context.Context) {
 	vre.mu.Lock()
 	defer vre.mu.Unlock()
 	if vre.ts == nil {
 		log.Info("ts is nil: disabling vreplication engine")
-		return nil
+		return
 	}
 	if vre.isOpen {
-		return nil
+		return
 	}
+	vre.isOpen = true
 	log.Infof("Starting VReplication engine")
 
 	vre.ctx, vre.cancel = context.WithCancel(ctx)
-	vre.isOpen = true
 	if err := vre.initAll(); err != nil {
-		go vre.Close()
-		return err
+		vre.retrying = true
+		vre.wg.Add(1)
+		go vre.retry(vre.ctx, err)
+		return
 	}
 	vre.updateStats()
-	return nil
+}
+
+var openRetryInterval = 1 * time.Second
+
+func (vre *Engine) retry(ctx context.Context, err error) {
+	defer vre.wg.Done()
+
+	log.Errorf("Error starting vreplication engine: %v, will keep retrying.", err)
+	for {
+		timer := time.NewTimer(openRetryInterval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+		vre.mu.Lock()
+		if err := vre.initAll(); err == nil {
+			vre.updateStats()
+			vre.retrying = false
+			vre.mu.Unlock()
+			return
+		}
+		vre.mu.Unlock()
+	}
 }
 
 func (vre *Engine) initAll() error {
@@ -187,7 +216,8 @@ func (vre *Engine) initAll() error {
 	for _, row := range rows {
 		ct, err := newController(vre.ctx, row, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil, vre)
 		if err != nil {
-			return err
+			log.Errorf("Controller could not be initialized for stream: %v", row)
+			continue
 		}
 		vre.controllers[int(ct.id)] = ct
 	}
@@ -240,7 +270,10 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 	vre.mu.Lock()
 	defer vre.mu.Unlock()
 	if !vre.isOpen {
-		return nil, errors.New("vreplication engine is closed")
+		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "vreplication engine is closed")
+	}
+	if vre.retrying {
+		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "engine is still trying to open")
 	}
 	defer vre.updateStats()
 
