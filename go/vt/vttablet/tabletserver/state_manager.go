@@ -22,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -115,7 +114,6 @@ type stateManager struct {
 	// checkMySQLThrottler ensures that CheckMysql
 	// doesn't get spammed.
 	checkMySQLThrottler *sync2.Semaphore
-	history             *history.History
 	timebombDuration    time.Duration
 }
 
@@ -498,11 +496,6 @@ func (sm *stateManager) setState(tabletType topodatapb.TabletType, state serving
 	log.Infof("TabletServer transition: %v -> %v, %s -> %s", sm.target.TabletType, tabletType, stateInfo(sm.state), stateInfo(state))
 	sm.target.TabletType = tabletType
 	sm.state = state
-	sm.history.Add(&historyRecord{
-		Time:         time.Now(),
-		ServingState: stateInfo(state),
-		TabletType:   sm.target.TabletType.String(),
-	})
 	sm.notify(tabletType, sm.terTimestamp, sm.state == StateServing && sm.wantState == StateServing)
 }
 

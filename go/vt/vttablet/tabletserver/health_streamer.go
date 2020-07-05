@@ -23,8 +23,8 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/timer"
-	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
@@ -56,6 +56,8 @@ type healthStreamer struct {
 	// We may still broadcast as not serving if there are
 	// replication errors, or if lag is above threshold.
 	serving bool
+
+	history *history.History
 }
 
 func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias, replStatusFunc func() (time.Duration, error)) *healthStreamer {
@@ -77,6 +79,8 @@ func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias, replStat
 				HealthError: errUnintialized,
 			},
 		},
+
+		history: history.New(5),
 	}
 }
 
@@ -93,7 +97,6 @@ func (hs *healthStreamer) Stream(ctx context.Context, callback func(*querypb.Str
 		case <-ctx.Done():
 			return nil
 		case shr := <-ch:
-			log.Infof("sending: %v", shr)
 			if err := callback(shr); err != nil {
 				if err == io.EOF {
 					return nil
@@ -158,12 +161,18 @@ func (hs *healthStreamer) Broadcast() {
 		default:
 		}
 	}
+	hs.history.Add(&historyRecord{
+		Time:       time.Now(),
+		serving:    shr.Serving,
+		tabletType: shr.Target.TabletType,
+		lag:        lag,
+		err:        shr.RealtimeStats.HealthError,
+	})
 }
 
 func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimestamp time.Time, serving bool) {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
-	log.Infof("State changed: %v %v %v", tabletType, terTimestamp, serving)
 
 	hs.state.Target.TabletType = tabletType
 	if tabletType == topodatapb.TabletType_MASTER {

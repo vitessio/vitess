@@ -24,7 +24,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/sync2"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -490,7 +489,6 @@ func newTestStateManager(t *testing.T) *stateManager {
 
 		transitioning:       sync2.NewSemaphore(1, 0),
 		checkMySQLThrottler: sync2.NewSemaphore(1, 0),
-		history:             history.New(10),
 		timebombDuration:    time.Duration(10 * time.Millisecond),
 	}
 }

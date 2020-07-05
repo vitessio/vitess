@@ -17,7 +17,12 @@ limitations under the License.
 package tabletserver
 
 import (
+	"fmt"
+	"strings"
 	"time"
+
+	"vitess.io/vitess/go/sync2"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // This file contains the status web page export for tabletserver
@@ -78,22 +83,32 @@ var (
 `
 
 	queryserviceStatusTemplate = `
-<h2>State: {{.State}}</h2>
-<h2>Queryservice History</h2>
+<div style="font-size: x-large">Current status: <span style="padding-left: 0.5em; padding-right: 0.5em; padding-bottom: 0.5ex; padding-top: 0.5ex;" class="{{.Latest.Class}}">{{.Latest.Status}}</span></div>
+<h2>Health History</h2>
 <table>
   <tr>
     <th>Time</th>
-    <th>Target Tablet Type</th>
-    <th>Serving State</th>
+    <th>Status</th>
+    <th>Tablet Type</th>
   </tr>
   {{range .History}}
-  <tr>
+  <tr class="{{.Class}}">
     <td>{{.Time.Format "Jan 2, 2006 at 15:04:05 (MST)"}}</td>
+    <td>{{.Status}}</td>
     <td>{{.TabletType}}</td>
-    <td>{{.ServingState}}</td>
   </tr>
   {{end}}
 </table>
+<dl style="font-size: small;">
+  <dt><span class="healthy">healthy</span></dt>
+  <dd>serving traffic.</dd>
+
+  <dt><span class="unhappy">unhappy</span></dt>
+  <dd>will serve traffic only if there are no fully healthy tablets.</dd>
+
+  <dt><span class="unhealthy">unhealthy</span></dt>
+  <dd>will not serve traffic.</dd>
+</dl>
 <!-- The div in the next line will be overwritten by the JavaScript graph. -->
 <div id="qps_chart">QPS: {{.CurrentQPS}}</div>
 <script type="text/javascript" src="https://www.google.com/jsapi"></script>
@@ -174,8 +189,8 @@ google.setOnLoadCallback(drawQPSChart);
 )
 
 type queryserviceStatus struct {
-	State      string
 	History    []interface{}
+	Latest     *historyRecord
 	CurrentQPS float64
 }
 
@@ -192,10 +207,19 @@ func (tsv *TabletServer) AddStatusHeader() {
 
 // AddStatusPart registers the status part for the status page.
 func (tsv *TabletServer) AddStatusPart() {
-	tsv.exporter.AddStatusPart("Queryservice", queryserviceStatusTemplate, func() interface{} {
+	// Save the threshold values for reporting.
+	degradedThreshold.Set(tsv.config.Healthcheck.DegradedThresholdSeconds.Get())
+	unhealthyThreshold.Set(tsv.config.Healthcheck.UnhealthyThresholdSeconds.Get())
+
+	tsv.exporter.AddStatusPart("Health", queryserviceStatusTemplate, func() interface{} {
 		status := queryserviceStatus{
-			State:   tsv.sm.StateByName(),
-			History: tsv.sm.history.Records(),
+			History: tsv.hs.history.Records(),
+		}
+		latest := tsv.hs.history.Latest()
+		if latest != nil {
+			status.Latest = latest.(*historyRecord)
+		} else {
+			status.Latest = &historyRecord{}
 		}
 		rates := tsv.stats.QPSRates.Get()
 		if qps, ok := rates["All"]; ok && len(qps) > 0 {
@@ -205,10 +229,45 @@ func (tsv *TabletServer) AddStatusPart() {
 	})
 }
 
+var degradedThreshold sync2.AtomicDuration
+var unhealthyThreshold sync2.AtomicDuration
+
 type historyRecord struct {
-	Time         time.Time
-	TabletType   string
-	ServingState string
+	Time       time.Time
+	serving    bool
+	tabletType topodatapb.TabletType
+	lag        time.Duration
+	err        string
+}
+
+func (r *historyRecord) Class() string {
+	if r.serving {
+		if r.lag > degradedThreshold.Get() {
+			return "unhappy"
+		}
+		return "healthy"
+	}
+	return "unhealthy"
+}
+
+func (r *historyRecord) Status() string {
+	if r.serving {
+		if r.lag > degradedThreshold.Get() {
+			return fmt.Sprintf("replication delayed: %v", r.lag)
+		}
+		return "healthy"
+	}
+	if r.lag > unhealthyThreshold.Get() {
+		return fmt.Sprintf("not serving: replication delay %v", r.lag)
+	}
+	if r.err == "" {
+		return "not serving"
+	}
+	return fmt.Sprintf("not serving: %v", r.err)
+}
+
+func (r *historyRecord) TabletType() string {
+	return strings.ToLower(r.tabletType.String())
 }
 
 // IsDuplicate implements history.Deduplicable
@@ -217,5 +276,5 @@ func (r *historyRecord) IsDuplicate(other interface{}) bool {
 	if !ok {
 		return false
 	}
-	return r.TabletType == rother.TabletType && r.ServingState == rother.ServingState
+	return r.tabletType == rother.tabletType && r.serving == rother.serving && r.err == rother.err
 }

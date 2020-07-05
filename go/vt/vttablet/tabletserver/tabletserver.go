@@ -30,7 +30,6 @@ import (
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -170,7 +169,6 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 
 		transitioning:       sync2.NewSemaphore(1, 0),
 		checkMySQLThrottler: sync2.NewSemaphore(1, 0),
-		history:             history.New(10),
 		timebombDuration:    time.Duration(config.OltpReadPool.TimeoutSeconds * 10),
 	}
 
