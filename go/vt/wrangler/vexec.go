@@ -315,7 +315,7 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	rsr.Workflow = workflow
 	rsr.TargetKeyspace = keyspace
 	var results map[*topo.TabletInfo]*querypb.QueryResult
-	query := fmt.Sprintf("select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, message from _vt.vreplication")
+	query := "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, message from _vt.vreplication"
 	results, err := wr._vexec(ctx, workflow, keyspace, query, false)
 	if err != nil {
 		return nil, err
@@ -354,10 +354,10 @@ func (wr *Wrangler) listStreams(ctx context.Context, workflow, keyspace string) 
 func updateState(message, state string, cs []copyState, timeUpdated int64) string {
 	if message != "" {
 		state = "Error"
-	} else if state == "Running" && int64(time.Now().Second())-timeUpdated > 10 /* seconds */ {
-		state = "Lagging"
 	} else if state == "Running" && len(cs) > 0 {
 		state = "Copying"
+	} else if state == "Running" && int64(time.Now().Second())-timeUpdated > 10 /* seconds */ {
+		state = "Lagging"
 	}
 	return state
 }
@@ -374,7 +374,7 @@ func dumpStreamListAsJSON(replStatus *replicationStatusResult, wr *Wrangler) err
 func (wr *Wrangler) getCopyState(ctx context.Context, tablet *topo.TabletInfo, id int64) ([]copyState, error) {
 	var cs []copyState
 	query := fmt.Sprintf(`select table_name, lastpk from _vt.copy_state where vrepl_id = %d`, id)
-	qr, err := wr.ExecuteFetchAsApp(ctx, tablet.Alias, true, query, 10000)
+	qr, err := wr.VReplicationExec(ctx, tablet.Alias, query)
 	if err != nil {
 		return nil, err
 	}
@@ -392,5 +392,3 @@ func (wr *Wrangler) getCopyState(ctx context.Context, tablet *topo.TabletInfo, i
 
 	return cs, nil
 }
-
-//TODOs: add to vreplication_test.go endtoend: definitely ListStreams, maybe stopstream/insert/check/startstream/check ...

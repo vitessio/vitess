@@ -139,6 +139,7 @@ func newWranglerTestEnv(sourceShards, targetShards []string, query string, posit
 		)
 
 		env.tmc.setVRResults(master.tablet, "update _vt.vreplication set state = 'Stopped', message = 'for wrangler test' where db_name = 'vt_target' and workflow = 'wrWorkflow'", &sqltypes.Result{RowsAffected: 1})
+		env.tmc.setVRResults(master.tablet, "update _vt.vreplication set state = 'Stopped' where db_name = 'vt_target' and workflow = 'wrWorkflow'", &sqltypes.Result{RowsAffected: 1})
 		env.tmc.setVRResults(master.tablet, "delete from _vt.vreplication where message != '' and db_name = 'vt_target' and workflow = 'wrWorkflow'", &sqltypes.Result{RowsAffected: 1})
 		env.tmc.setVRResults(master.tablet, "insert into _vt.vreplication(state, workflow, db_name) values ('Running', 'wk1', 'ks1'), ('Stopped', 'wk1', 'ks1')", &sqltypes.Result{RowsAffected: 2})
 
@@ -158,6 +159,14 @@ func newWranglerTestEnv(sourceShards, targetShards []string, query string, posit
 				posRows...,
 			),
 		)
+
+		result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"table|lastpk",
+			"varchar|varchar"),
+			"t1|pk1",
+		)
+
+		env.tmc.setVRResults(master.tablet, "select table_name, lastpk from _vt.copy_state where vrepl_id = 1", result)
 
 		env.tmc.vrpos[tabletID] = testSourceGtid
 		env.tmc.pos[tabletID] = testTargetMasterPosition
