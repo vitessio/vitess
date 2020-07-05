@@ -19,7 +19,6 @@ package tabletserver
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -108,13 +107,6 @@ type TabletServer struct {
 	// sm manages state transitions.
 	sm *stateManager
 
-	// streamHealthMutex protects all the following fields
-	streamHealthMutex          sync.Mutex
-	streamHealthIndex          int
-	streamHealthMap            map[int]chan<- *querypb.StreamHealthResponse
-	lastStreamHealthResponse   *querypb.StreamHealthResponse
-	lastStreamHealthExpiration time.Time
-
 	// alias is used for identifying this tabletserver in healthcheck responses.
 	alias topodatapb.TabletAlias
 }
@@ -148,7 +140,6 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		TerseErrors:            config.TerseErrors,
 		enableHotRowProtection: config.HotRowProtection.Mode != tabletenv.Disable,
 		topoServer:             topoServer,
-		streamHealthMap:        make(map[int]chan<- *querypb.StreamHealthResponse),
 		alias:                  alias,
 	}
 
@@ -213,6 +204,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.rt.InitDBConfig(target, mysqld)
 	tsv.txThrottler.InitDBConfig(target)
 	tsv.vstreamer.InitDBConfig(target.Keyspace)
+	tsv.hs.InitDBConfig(target)
 	return nil
 }
 
@@ -1356,82 +1348,13 @@ func convertErrorCode(err error) vtrpcpb.Code {
 }
 
 // StreamHealth streams the health status to callback.
-// At the beginning, if TabletServer has a valid health
-// state, that response is immediately sent.
 func (tsv *TabletServer) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
-	tsv.streamHealthMutex.Lock()
-	shr := tsv.lastStreamHealthResponse
-	shrExpiration := tsv.lastStreamHealthExpiration
-	tsv.streamHealthMutex.Unlock()
-	// Send current state immediately.
-	if shr != nil && time.Now().Before(shrExpiration) {
-		if err := callback(shr); err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
-	}
-
-	// Broadcast periodic updates.
-	id, ch := tsv.streamHealthRegister()
-	defer tsv.streamHealthUnregister(id)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case shr = <-ch:
-		}
-		if err := callback(shr); err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
-	}
-}
-
-func (tsv *TabletServer) streamHealthRegister() (int, chan *querypb.StreamHealthResponse) {
-	tsv.streamHealthMutex.Lock()
-	defer tsv.streamHealthMutex.Unlock()
-
-	id := tsv.streamHealthIndex
-	tsv.streamHealthIndex++
-	ch := make(chan *querypb.StreamHealthResponse, 10)
-	tsv.streamHealthMap[id] = ch
-	return id, ch
-}
-
-func (tsv *TabletServer) streamHealthUnregister(id int) {
-	tsv.streamHealthMutex.Lock()
-	defer tsv.streamHealthMutex.Unlock()
-	delete(tsv.streamHealthMap, id)
+	return tsv.hs.Stream(ctx, callback)
 }
 
 // BroadcastHealth will broadcast the current health to all listeners
 func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats, maxCache time.Duration) {
-	target := tsv.sm.Target()
-	shr := &querypb.StreamHealthResponse{
-		Target:      &target,
-		TabletAlias: &tsv.alias,
-		Serving:     tsv.IsServing(),
-
-		TabletExternallyReparentedTimestamp: terTimestamp,
-		RealtimeStats:                       stats,
-	}
-
-	tsv.streamHealthMutex.Lock()
-	defer tsv.streamHealthMutex.Unlock()
-	for _, c := range tsv.streamHealthMap {
-		// Do not block on any write.
-		select {
-		case c <- shr:
-		default:
-		}
-	}
-	tsv.lastStreamHealthResponse = shr
-	tsv.lastStreamHealthExpiration = time.Now().Add(maxCache)
+	tsv.hs.Broadcast()
 }
 
 // HeartbeatLag returns the current lag as calculated by the heartbeat
