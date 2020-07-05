@@ -215,6 +215,11 @@ func (tm *TabletManager) restoreToTimeFromBinlog(ctx context.Context, pos mysql.
 }
 
 // getGTIDFromTimestamp gets the next GTID of the event happened on the timestamp (resore_to_time)
+//
+// it returns the 2 values, 1st one is the after gtid of the timestamp,
+// the 2nd one returns gtid upto which the replication will be applied
+// 1st can be used directly in the query `START SLAVE UNTIL SQL_BEFORE_GTIDS = ''`
+// 2nd will be used to check if replication completed from the binlog server
 func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Position, restoreTime int64) (string, string) {
 	connParams := &mysql.ConnParams{
 		Host:  *binlogHost,
@@ -264,7 +269,11 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 	}
 }
 
-// replicateUptoGTID replicates upto specified gtid from binlog server
+// catchupToGTID replicates upto specified gtid from binlog server
+//
+// copies the data from binlog server by pointing to as slave
+// waits till all events to gtid replicated
+// once done, it will reset the slave
 func (tm *TabletManager) catchupToGTID(ctx context.Context, gtid string, stopPosGTID string) error {
 	gtidParsed, err := mysql.DecodePosition(gtid)
 	if err != nil {

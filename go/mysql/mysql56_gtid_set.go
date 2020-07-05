@@ -171,7 +171,9 @@ func (set Mysql56GTIDSet) String() string {
 	return buf.String()
 }
 
-//Last returns the last gtid
+// Last returns the last gtid as string
+// For gtidset having multiple SIDs or multiple intervals
+// it just returns the last SID with last interval
 func (set Mysql56GTIDSet) Last() string {
 	buf := &bytes.Buffer{}
 

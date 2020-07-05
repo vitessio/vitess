@@ -50,7 +50,7 @@ func NewReplicaConnector(connParams *mysql.ConnParams) *replicaConnector {
 	env := tabletenv.NewEnv(config, "source")
 	c.se = schema.NewEngine(env)
 	c.se.SkipMetaCheck = true
-	c.vstreamer = vstreamer.NewEngine(env, nil, c.se, nil)
+	c.vstreamer = vstreamer.NewEngine(env, nil, c.se)
 	c.se.InitDBConfig(dbconfigs.New(connParams))
 
 	// Open
@@ -83,7 +83,7 @@ func (c *replicaConnector) Close(ctx context.Context) error {
 }
 
 func (c *replicaConnector) VStream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return c.vstreamer.Stream(ctx, startPos, filter, send)
+	return c.vstreamer.Stream(ctx, startPos, nil, filter, send)
 }
 
 func (c *replicaConnector) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
