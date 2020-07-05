@@ -17,21 +17,27 @@ limitations under the License.
 package tabletserver
 
 import (
+	"io"
 	"sync"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-// blpFunc is a legaacy feature.
-// TODO(sougou): remove after legacy resharding worflows are removed.
-var blpFunc = vreplication.StatusSummary
+var (
+	// blpFunc is a legaacy feature.
+	// TODO(sougou): remove after legacy resharding worflows are removed.
+	blpFunc = vreplication.StatusSummary
+
+	errUnintialized = "tabletserver uninitialized"
+)
 
 // healthStreamer streams health information to callers.
 type healthStreamer struct {
@@ -68,7 +74,7 @@ func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias, replStat
 			Target:      &querypb.Target{},
 			TabletAlias: &alias,
 			RealtimeStats: &querypb.RealtimeStats{
-				HealthError: "tabletserver uninitialized",
+				HealthError: errUnintialized,
 			},
 		},
 	}
@@ -87,7 +93,11 @@ func (hs *healthStreamer) Stream(ctx context.Context, callback func(*querypb.Str
 		case <-ctx.Done():
 			return nil
 		case shr := <-ch:
+			log.Infof("sending: %v", shr)
 			if err := callback(shr); err != nil {
+				if err == io.EOF {
+					return nil
+				}
 				return err
 			}
 		}
@@ -124,10 +134,6 @@ func (hs *healthStreamer) Broadcast() {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 
-	if len(hs.clients) == 0 {
-		return
-	}
-
 	var healthy bool
 	lag, err := hs.replStatusFunc()
 	if err != nil {
@@ -157,6 +163,7 @@ func (hs *healthStreamer) Broadcast() {
 func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimestamp time.Time, serving bool) {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
+	log.Infof("State changed: %v %v %v", tabletType, terTimestamp, serving)
 
 	hs.state.Target.TabletType = tabletType
 	if tabletType == topodatapb.TabletType_MASTER {

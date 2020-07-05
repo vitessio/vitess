@@ -420,8 +420,7 @@ func TestNoMysqlHealthCheck(t *testing.T) {
 	err = json2.Unmarshal([]byte(result), &streamHealthResponse)
 	require.NoError(t, err)
 	realTimeStats := streamHealthResponse.GetRealtimeStats()
-	secondsBehindMaster := realTimeStats.GetSecondsBehindMaster()
-	assert.True(t, secondsBehindMaster == 7200)
+	assert.Equal(t, "replication is not running", realTimeStats.HealthError)
 
 	// restart replication, wait until health check goes small
 	// (a value of zero is default and won't be in structure)

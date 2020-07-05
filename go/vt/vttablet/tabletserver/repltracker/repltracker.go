@@ -90,9 +90,13 @@ func (rt *ReplTracker) MakeNonMaster() {
 	defer rt.mu.Unlock()
 
 	rt.isMaster = false
-	if rt.mode == tabletenv.Heartbeat {
+	switch rt.mode {
+	case tabletenv.Heartbeat:
 		rt.hw.Close()
 		rt.hr.Open()
+	case tabletenv.Polling:
+		// Run the status once to pre-initialize values.
+		rt.poller.Status()
 	}
 }
 
