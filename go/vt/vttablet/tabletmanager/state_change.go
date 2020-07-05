@@ -191,39 +191,11 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 			log.Errorf("Cannot read shard for this tablet %v, might have inaccurate SourceShards and TabletControls: %v", newTablet.Alias, err)
 			updateBlacklistedTables = false
 		} else {
-			if oldTablet.Type == topodatapb.TabletType_RESTORE {
-				// always start as NON-SERVING after a restore because
-				// healthcheck has not been initialized yet
-				allowQuery = false
-				// setting disallowQueryService permanently turns off query service
-				// since we want it to be temporary (until tablet is healthy) we don't set it
-				// disallowQueryReason is only used for logging
-				disallowQueryReason = "after restore from backup"
-			} else {
-				if newTablet.Type == topodatapb.TabletType_MASTER {
-					if len(shardInfo.SourceShards) > 0 {
-						allowQuery = false
-						disallowQueryReason = "master tablet with filtered replication on"
-						disallowQueryService = disallowQueryReason
-					}
-				} else {
-					var replicationDelay time.Duration
-					var healthErr error
-					if tm.HealthReporter != nil {
-						replicationDelay, healthErr = tm.HealthReporter.Report(true, true)
-					}
-					if healthErr != nil {
-						allowQuery = false
-						disallowQueryReason = "unable to get health"
-					} else {
-						tm.mutex.Lock()
-						tm._replicationDelay = replicationDelay
-						tm.mutex.Unlock()
-						if tm._replicationDelay > unhealthyThreshold {
-							allowQuery = false
-							disallowQueryReason = "replica tablet with unhealthy replication lag"
-						}
-					}
+			if newTablet.Type == topodatapb.TabletType_MASTER {
+				if len(shardInfo.SourceShards) > 0 {
+					allowQuery = false
+					disallowQueryReason = "master tablet with filtered replication on"
+					disallowQueryService = disallowQueryReason
 				}
 			}
 			srvKeyspace, err := tm.TopoServer.GetSrvKeyspace(ctx, newTablet.Alias.Cell, newTablet.Keyspace)
@@ -269,7 +241,6 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 		}
 	}
 
-	broadcastHealth := false
 	if allowQuery {
 		// Query service should be running.
 		if oldTablet.Type == topodatapb.TabletType_REPLICA &&
@@ -277,23 +248,13 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 			// When promoting from replica to master, allow both master and replica
 			// queries to be served during gracePeriod.
 			if _, err := tm.QueryServiceControl.SetServingType(newTablet.Type, terTime, true, []topodatapb.TabletType{oldTablet.Type}); err == nil {
-				// If successful, broadcast to vtgate and then wait.
-				tm.broadcastHealth()
 				time.Sleep(*gracePeriod)
 			} else {
 				log.Errorf("Can't start query service for MASTER+REPLICA mode: %v", err)
 			}
 		}
 
-		if stateChanged, err := tm.QueryServiceControl.SetServingType(newTablet.Type, terTime, true, nil); err == nil {
-			// If the state changed, broadcast to vtgate.
-			// (e.g. this happens when the tablet was already master, but it just
-			// changed from NOT_SERVING to SERVING due to
-			// "vtctl MigrateServedFrom ... master".)
-			if stateChanged {
-				broadcastHealth = true
-			}
-		} else {
+		if _, err := tm.QueryServiceControl.SetServingType(newTablet.Type, terTime, true, nil); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
 		}
 	} else {
@@ -307,15 +268,7 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 		}
 
 		log.Infof("Disabling query service on type change, reason: %v", disallowQueryReason)
-		if stateChanged, err := tm.QueryServiceControl.SetServingType(newTablet.Type, terTime, false, nil); err == nil {
-			// If the state changed, broadcast to vtgate.
-			// (e.g. this happens when the tablet was already master, but it just
-			// changed from SERVING to NOT_SERVING because filtered replication was
-			// enabled.)
-			if stateChanged {
-				broadcastHealth = true
-			}
-		} else {
+		if _, err := tm.QueryServiceControl.SetServingType(newTablet.Type, terTime, false, nil); err != nil {
 			log.Errorf("SetServingType(serving=false) failed: %v", err)
 		}
 	}
@@ -340,11 +293,6 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 		} else {
 			tm.VREngine.Close()
 		}
-	}
-
-	// Broadcast health changes to vtgate immediately.
-	if broadcastHealth {
-		tm.broadcastHealth()
 	}
 }
 

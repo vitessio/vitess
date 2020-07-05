@@ -341,10 +341,6 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet) error {
 		servenv.OnTerm(tm.VREngine.Close)
 	}
 
-	if err := tm.handleRestore(tm.BatchCtx); err != nil {
-		return err
-	}
-
 	// The following initializations don't need to be done
 	// in any specific order.
 	tm.startShardSync()
@@ -359,7 +355,16 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet) error {
 	}
 	servenv.OnRun(tm.registerTabletManager)
 
-	// Temporary glue code to keep things working.
+	restoring, err := tm.handleRestore(tm.BatchCtx)
+	if err != nil {
+		return err
+	}
+	if restoring {
+		// If restore was triggered, it will take care
+		// of updating the tablet state.
+		return nil
+	}
+
 	if err := tm.lock(tm.BatchCtx); err != nil {
 		return err
 	}
@@ -645,11 +650,11 @@ func (tm *TabletManager) initTablet(ctx context.Context) error {
 	return nil
 }
 
-func (tm *TabletManager) handleRestore(ctx context.Context) error {
+func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 	tablet := tm.Tablet()
 	// Sanity check for inconsistent flags
 	if tm.Cnf == nil && *restoreFromBackup {
-		return fmt.Errorf("you cannot enable -restore_from_backup without a my.cnf file")
+		return false, fmt.Errorf("you cannot enable -restore_from_backup without a my.cnf file")
 	}
 
 	// two cases then:
@@ -663,11 +668,8 @@ func (tm *TabletManager) handleRestore(ctx context.Context) error {
 			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), *waitForBackupInterval, false /* deleteBeforeRestore */); err != nil {
 				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
-
-			// after the restore is done, start health check
-			tm.initHealthCheck()
 		}()
-		return nil
+		return true, nil
 	}
 
 	// optionally populate metadata records
@@ -676,18 +678,15 @@ func (tm *TabletManager) handleRestore(ctx context.Context) error {
 		if tm.Cnf != nil { // we are managing mysqld
 			// we'll use batchCtx here because we are still initializing and can't proceed unless this succeeds
 			if err := tm.MysqlDaemon.Wait(ctx, tm.Cnf); err != nil {
-				return err
+				return false, err
 			}
 		}
 		err := mysqlctl.PopulateMetadataTables(tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet))
 		if err != nil {
-			return vterrors.Wrap(err, "failed to -init_populate_metadata")
+			return false, vterrors.Wrap(err, "failed to -init_populate_metadata")
 		}
 	}
-
-	// synchronously start health check if needed
-	tm.initHealthCheck()
-	return nil
+	return false, nil
 }
 
 func (tm *TabletManager) exportStats() {

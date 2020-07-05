@@ -86,6 +86,7 @@ func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias, replStat
 
 func (hs *healthStreamer) InitDBConfig(target querypb.Target) {
 	hs.state.Target = &target
+	hs.ticks.Start(hs.Broadcast)
 }
 
 func (hs *healthStreamer) Stream(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
@@ -114,9 +115,6 @@ func (hs *healthStreamer) register() chan *querypb.StreamHealthResponse {
 	ch := make(chan *querypb.StreamHealthResponse, 1)
 	hs.clients[ch] = struct{}{}
 
-	// Start is idempotent.
-	hs.ticks.Start(hs.Broadcast)
-
 	// Send the current state immediately.
 	ch <- proto.Clone(hs.state).(*querypb.StreamHealthResponse)
 	return ch
@@ -127,10 +125,6 @@ func (hs *healthStreamer) unregister(ch chan *querypb.StreamHealthResponse) {
 	defer hs.mu.Unlock()
 
 	delete(hs.clients, ch)
-
-	if len(hs.clients) == 0 {
-		hs.ticks.Stop()
-	}
 }
 
 func (hs *healthStreamer) Broadcast() {
