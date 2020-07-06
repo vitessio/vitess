@@ -30,14 +30,13 @@ import (
 
 func TestHealthStreamerBroadcast(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
-	config.Healthcheck.IntervalSeconds = tabletenv.Seconds(0.01)
 	env := tabletenv.NewEnv(config, "ReplTrackerTest")
 	alias := topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,
 	}
 	blpFunc = testBlpFunc
-	hs := newHealthStreamer(env, alias, replFunc)
+	hs := newHealthStreamer(env, alias)
 	target := querypb.Target{}
 	hs.InitDBConfig(target)
 
@@ -54,13 +53,14 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	}
 	assert.Equal(t, want, shr)
 
-	// The next fetch will broadcast newly obtained info.
+	hs.ChangeState(topodatapb.TabletType_REPLICA, time.Time{}, 0, nil, false)
 	shr = <-ch
 	want = &querypb.StreamHealthResponse{
-		Target:      &querypb.Target{},
+		Target: &querypb.Target{
+			TabletType: topodatapb.TabletType_REPLICA,
+		},
 		TabletAlias: &alias,
 		RealtimeStats: &querypb.RealtimeStats{
-			SecondsBehindMaster:                    1,
 			SecondsBehindMasterFilteredReplication: 1,
 			BinlogPlayersCount:                     2,
 		},
@@ -69,7 +69,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 
 	// Test master and timestamp.
 	now := time.Now()
-	hs.ChangeState(topodatapb.TabletType_MASTER, now, true)
+	hs.ChangeState(topodatapb.TabletType_MASTER, now, 0, nil, true)
 	shr = <-ch
 	want = &querypb.StreamHealthResponse{
 		Target: &querypb.Target{
@@ -79,7 +79,6 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: now.Unix(),
 		RealtimeStats: &querypb.RealtimeStats{
-			SecondsBehindMaster:                    1,
 			SecondsBehindMasterFilteredReplication: 1,
 			BinlogPlayersCount:                     2,
 		},
@@ -87,7 +86,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	assert.Equal(t, want, shr)
 
 	// Test non-serving, and 0 timestamp for non-master.
-	hs.ChangeState(topodatapb.TabletType_REPLICA, now, false)
+	hs.ChangeState(topodatapb.TabletType_REPLICA, now, 1*time.Second, nil, false)
 	shr = <-ch
 	want = &querypb.StreamHealthResponse{
 		Target: &querypb.Target{
@@ -103,10 +102,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	assert.Equal(t, want, shr)
 
 	// Test Health error.
-	hs.mu.Lock()
-	hs.replStatusFunc = replFuncErr
-	hs.mu.Unlock()
-	hs.ChangeState(topodatapb.TabletType_REPLICA, now, true)
+	hs.ChangeState(topodatapb.TabletType_REPLICA, now, 0, errors.New("repl err"), false)
 	shr = <-ch
 	want = &querypb.StreamHealthResponse{
 		Target: &querypb.Target{
@@ -115,43 +111,6 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 		TabletAlias: &alias,
 		RealtimeStats: &querypb.RealtimeStats{
 			HealthError:                            "repl err",
-			SecondsBehindMasterFilteredReplication: 1,
-			BinlogPlayersCount:                     2,
-		},
-	}
-	assert.Equal(t, want, shr)
-
-	// Test Unhealthy threshold
-	hs.mu.Lock()
-	hs.replStatusFunc = replFuncUnhealthy
-	hs.mu.Unlock()
-	shr = <-ch
-	want = &querypb.StreamHealthResponse{
-		Target: &querypb.Target{
-			TabletType: topodatapb.TabletType_REPLICA,
-		},
-		TabletAlias: &alias,
-		RealtimeStats: &querypb.RealtimeStats{
-			SecondsBehindMaster:                    10800,
-			SecondsBehindMasterFilteredReplication: 1,
-			BinlogPlayersCount:                     2,
-		},
-	}
-	assert.Equal(t, want, shr)
-
-	// Test everything back to normal.
-	hs.mu.Lock()
-	hs.replStatusFunc = replFunc
-	hs.mu.Unlock()
-	shr = <-ch
-	want = &querypb.StreamHealthResponse{
-		Target: &querypb.Target{
-			TabletType: topodatapb.TabletType_REPLICA,
-		},
-		Serving:     true,
-		TabletAlias: &alias,
-		RealtimeStats: &querypb.RealtimeStats{
-			SecondsBehindMaster:                    1,
 			SecondsBehindMasterFilteredReplication: 1,
 			BinlogPlayersCount:                     2,
 		},
@@ -169,18 +128,6 @@ func testStream(t *testing.T, hs *healthStreamer) (<-chan *querypb.StreamHealthR
 		})
 	}()
 	return ch, cancel
-}
-
-func replFunc() (time.Duration, error) {
-	return 1 * time.Second, nil
-}
-
-func replFuncUnhealthy() (time.Duration, error) {
-	return 3 * time.Hour, nil
-}
-
-func replFuncErr() (time.Duration, error) {
-	return 0, errors.New("repl err")
 }
 
 func testBlpFunc() (int64, int32) {

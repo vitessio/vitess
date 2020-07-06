@@ -237,7 +237,7 @@ type historyRecord struct {
 	serving    bool
 	tabletType topodatapb.TabletType
 	lag        time.Duration
-	err        string
+	err        error
 }
 
 func (r *historyRecord) Class() string {
@@ -260,10 +260,10 @@ func (r *historyRecord) Status() string {
 	if r.lag > unhealthyThreshold.Get() {
 		return fmt.Sprintf("not serving: replication delay %v", r.lag)
 	}
-	if r.err == "" {
-		return "not serving"
+	if r.err != nil {
+		return fmt.Sprintf("not serving: %v", r.err)
 	}
-	return fmt.Sprintf("not serving: %v", r.err)
+	return "not serving"
 }
 
 func (r *historyRecord) TabletType() string {

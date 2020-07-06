@@ -153,7 +153,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
 	tsv.te = NewTxEngine(tsv)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
-	tsv.hs = newHealthStreamer(tsv, alias, tsv.rt.Status)
+	tsv.hs = newHealthStreamer(tsv, alias)
 
 	tsv.sm = &stateManager{
 		se:          tsv.se,
@@ -166,19 +166,15 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		te:          tsv.te,
 		messager:    tsv.messager,
 		notify:      tsv.hs.ChangeState,
-
-		transitioning:       sync2.NewSemaphore(1, 0),
-		checkMySQLThrottler: sync2.NewSemaphore(1, 0),
-		timebombDuration:    time.Duration(config.OltpReadPool.TimeoutSeconds * 10),
 	}
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 { return int64(tsv.sm.State()) })
-	tsv.exporter.Publish("TabletStateName", stats.StringFunc(tsv.sm.StateByName))
+	tsv.exporter.Publish("TabletStateName", stats.StringFunc(tsv.sm.IsServingString))
 
 	// TabletServerState exports the same information as the above two stats (TabletState / TabletStateName),
 	// but exported with TabletStateName as a label for Prometheus, which doesn't support exporting strings as stat values.
 	tsv.exporter.NewGaugesFuncWithMultiLabels("TabletServerState", "Tablet server state labeled by state name", []string{"name"}, func() map[string]int64 {
-		return map[string]int64{tsv.sm.StateByName(): 1}
+		return map[string]int64{tsv.sm.IsServingString(): 1}
 	})
 	tsv.exporter.NewGaugeDurationFunc("QueryTimeout", "Tablet server query timeout", tsv.QueryTimeout.Get)
 
@@ -193,8 +189,9 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 // to complete the creation of TabletServer.
 func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) error {
 	if tsv.sm.State() != StateNotConnected {
-		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "InitDBConfig failed, current state: %s", tsv.sm.StateByName())
+		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "InitDBConfig failed, current state: %s", tsv.sm.IsServingString())
 	}
+	tsv.sm.Init(tsv, target)
 	tsv.sm.target = target
 	tsv.config.DB = dbcfgs
 
@@ -314,6 +311,8 @@ func (tsv *TabletServer) StartService(target querypb.Target, dbcfgs *dbconfigs.D
 	if err := tsv.InitDBConfig(target, dbcfgs, mysqld); err != nil {
 		return err
 	}
+	// StartService is only used for testing. So, we cheat by aggressively setting replication to healthy.
+	tsv.sm.replHealthy = true
 	_, err := tsv.sm.SetServingType(target.TabletType, time.Time{}, StateServing, nil)
 	return err
 }
@@ -1352,7 +1351,7 @@ func (tsv *TabletServer) StreamHealth(ctx context.Context, callback func(*queryp
 
 // BroadcastHealth will broadcast the current health to all listeners
 func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats, maxCache time.Duration) {
-	tsv.hs.Broadcast()
+	tsv.sm.Broadcast()
 }
 
 // HeartbeatLag returns the current lag as calculated by the heartbeat

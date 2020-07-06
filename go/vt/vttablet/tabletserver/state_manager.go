@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -47,22 +48,6 @@ const (
 // transitionRetryInterval is for tests.
 var transitionRetryInterval = 1 * time.Second
 
-// stateName names every state. The number of elements must
-// match the number of states. Names can overlap.
-var stateName = []string{
-	"NOT_SERVING",
-	"NOT_SERVING",
-	"SERVING",
-}
-
-// stateDetail matches every state and optionally more information about the reason
-// why the state is serving / not serving.
-var stateDetail = []string{
-	"Not Connected",
-	"Not Serving",
-	"",
-}
-
 // stateManager manages state transition for all the TabletServer
 // subcomponents.
 type stateManager struct {
@@ -72,6 +57,7 @@ type stateManager struct {
 	// because we need TryAcquire, which is not supported by sync.Mutex.
 	// If an acquire is successful, we must either Release explicitly
 	// or invoke execTransition, which will release once it's done.
+	// There are no ordering restrictions on using TryAcquire.
 	transitioning *sync2.Semaphore
 
 	// mu should be held to access the group of variables under it.
@@ -90,9 +76,10 @@ type stateManager struct {
 	// TODO(sougou): deprecate alsoAllow
 	alsoAllow    []topodatapb.TabletType
 	terTimestamp time.Time
+	replHealthy  bool
 
 	requests sync.WaitGroup
-	lameduck sync2.AtomicInt32
+	lameduck sync2.AtomicBool
 
 	// Open must be done in forward order.
 	// Close must be done in reverse order.
@@ -108,13 +95,18 @@ type stateManager struct {
 	messager    subComponent
 
 	// notify will be invoked by stateManager on every state change.
-	// The implementation is provided by healthStreamer.Status.
-	notify func(topodatapb.TabletType, time.Time, bool)
+	// The implementation is provided by healthStreamer.ChangeState.
+	notify func(topodatapb.TabletType, time.Time, time.Duration, error, bool)
+
+	// hcticks starts on initialiazation and runs forever.
+	hcticks *timer.Timer
 
 	// checkMySQLThrottler ensures that CheckMysql
 	// doesn't get spammed.
 	checkMySQLThrottler *sync2.Semaphore
-	timebombDuration    time.Duration
+
+	timebombDuration   time.Duration
+	unhealthyThreshold time.Duration
 }
 
 type (
@@ -128,6 +120,7 @@ type (
 		MakeMaster()
 		MakeNonMaster()
 		Close()
+		Status() (time.Duration, error)
 	}
 
 	queryEngine interface {
@@ -154,6 +147,16 @@ type (
 	}
 )
 
+// Init performs the second phase of initialization.
+func (sm *stateManager) Init(env tabletenv.Env, target querypb.Target) {
+	sm.target = target
+	sm.transitioning = sync2.NewSemaphore(1, 0)
+	sm.checkMySQLThrottler = sync2.NewSemaphore(1, 0)
+	sm.timebombDuration = env.Config().OltpReadPool.TimeoutSeconds.Get() * 10
+	sm.hcticks = timer.NewTimer(env.Config().Healthcheck.IntervalSeconds.Get())
+	sm.unhealthyThreshold = env.Config().Healthcheck.UnhealthyThresholdSeconds.Get()
+}
+
 // SetServingType changes the state to the specified settings.
 // If a transition is in progress, it waits and then executes the
 // new request. If the transition fails, it returns an error, and
@@ -164,12 +167,15 @@ type (
 func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, terTimestamp time.Time, state servingState, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
 	defer sm.ExitLameduck()
 
+	// Start is idempotent.
+	sm.hcticks.Start(sm.Broadcast)
+
 	if tabletType == topodatapb.TabletType_RESTORE {
 		// TODO(sougou): remove this code once tm can give us more accurate state requests.
 		state = StateNotConnected
 	}
 
-	log.Infof("Starting transition to %v %v", tabletType, stateName[state])
+	log.Infof("Starting transition to %v %v", tabletType, stateName(state))
 	if sm.mustTransition(tabletType, terTimestamp, state, alsoAllow) {
 		return true, sm.execTransition(tabletType, state)
 	}
@@ -217,7 +223,7 @@ func (sm *stateManager) execTransition(tabletType topodatapb.TabletType, state s
 		sm.closeAll()
 	}
 	if err != nil {
-		sm.retryTransition(fmt.Sprintf("Error transitioning to the desired state: %v, %v, will keep retrying: %v", tabletType, stateName[state], err))
+		sm.retryTransition(fmt.Sprintf("Error transitioning to the desired state: %v, %v, will keep retrying: %v", tabletType, stateName(state), err))
 	}
 	return err
 }
@@ -242,16 +248,15 @@ func (sm *stateManager) retryTransition(message string) {
 }
 
 func (sm *stateManager) recheckState() bool {
-	if !sm.transitioning.TryAcquire() {
-		return false
-	}
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
 	if sm.wantState == sm.state && sm.wantTabletType == sm.target.TabletType {
 		sm.retrying = false
-		sm.transitioning.Release()
 		return true
+	}
+	if !sm.transitioning.TryAcquire() {
+		return false
 	}
 	go sm.execTransition(sm.wantTabletType, sm.wantState)
 	return false
@@ -292,6 +297,8 @@ func (sm *stateManager) StopService() {
 	defer close(sm.setTimeBomb())
 
 	log.Info("Stopping TabletServer")
+	// Stop replica tracking because StopService is used by all tests.
+	sm.hcticks.Stop()
 	sm.SetServingType(sm.Target().TabletType, time.Time{}, StateNotConnected, nil)
 }
 
@@ -302,8 +309,9 @@ func (sm *stateManager) StartRequest(ctx context.Context, target *querypb.Target
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
-	if sm.state != StateServing {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state %s", stateName[sm.state])
+	if sm.state != StateServing || !sm.replHealthy {
+		// This specific error string needs to be returned for vtgate buffering to work.
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state NOT_SERVING")
 	}
 
 	shuttingDown := sm.wantState != StateServing
@@ -457,6 +465,8 @@ func (sm *stateManager) unserveCommon() {
 }
 
 func (sm *stateManager) closeAll() {
+	defer close(sm.setTimeBomb())
+
 	sm.unserveCommon()
 	sm.txThrottler.Close()
 	sm.qe.Close()
@@ -493,10 +503,29 @@ func (sm *stateManager) setState(tabletType topodatapb.TabletType, state serving
 	if tabletType == topodatapb.TabletType_UNKNOWN {
 		tabletType = sm.wantTabletType
 	}
-	log.Infof("TabletServer transition: %v -> %v, %s -> %s", sm.target.TabletType, tabletType, stateInfo(sm.state), stateInfo(state))
+	log.Infof("TabletServer transition: %v -> %v, %s -> %s", sm.target.TabletType, tabletType, stateName(sm.state), stateName(state))
 	sm.target.TabletType = tabletType
 	sm.state = state
-	sm.notify(tabletType, sm.terTimestamp, sm.state == StateServing && sm.wantState == StateServing)
+	// Broadcast also obtains a lock. Trigger in a goroutine to avoid a deadlock.
+	go sm.hcticks.Trigger()
+}
+
+// Broadcast fetches the replication status and broadcasts
+// the state to all subscribed.
+func (sm *stateManager) Broadcast() {
+	lag, err := sm.rt.Status()
+
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	if err != nil {
+		sm.replHealthy = false
+	} else {
+		sm.replHealthy = lag <= sm.unhealthyThreshold
+	}
+	isServing := sm.isServingLocked()
+
+	sm.notify(sm.target.TabletType, sm.terTimestamp, lag, err, isServing)
 }
 
 // EnterLameduck causes tabletserver to enter the lameduck state. This
@@ -504,22 +533,34 @@ func (sm *stateManager) setState(tabletType topodatapb.TabletType, state serving
 // otherwise remains the same. Any subsequent calls to SetServingType will
 // cause the tabletserver to exit this mode.
 func (sm *stateManager) EnterLameduck() {
-	sm.lameduck.Set(1)
+	sm.lameduck.Set(true)
 }
 
 // ExitLameduck causes the tabletserver to exit the lameduck mode.
 func (sm *stateManager) ExitLameduck() {
-	sm.lameduck.Set(0)
+	sm.lameduck.Set(false)
 }
 
 // IsServing returns true if TabletServer is in SERVING state.
 func (sm *stateManager) IsServing() bool {
-	return sm.StateByName() == "SERVING"
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	return sm.isServingLocked()
+}
+
+func (sm *stateManager) isServingLocked() bool {
+	return sm.state == StateServing && sm.wantState == StateServing && sm.replHealthy && !sm.lameduck.Get()
 }
 
 func (sm *stateManager) State() servingState {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
+	// We should not change these state numbers without
+	// an announcement. Even though this is not perfect,
+	// this behavior keeps things backward compatible.
+	if !sm.replHealthy {
+		return StateNotConnected
+	}
 	return sm.state
 }
 
@@ -530,19 +571,21 @@ func (sm *stateManager) Target() querypb.Target {
 	return target
 }
 
-// StateByName returns the name of the current TabletServer state.
-func (sm *stateManager) StateByName() string {
-	if sm.lameduck.Get() != 0 {
-		return "NOT_SERVING"
-	}
-	return stateName[sm.State()]
-}
-
-// stateInfo returns a string representation of the state and optional detail
-// about the reason for the state transition
-func stateInfo(state servingState) string {
-	if state == StateServing {
+// IsServingString returns the name of the current TabletServer state.
+func (sm *stateManager) IsServingString() string {
+	if sm.IsServing() {
 		return "SERVING"
 	}
-	return fmt.Sprintf("%s (%s)", stateName[state], stateDetail[state])
+	return "NOT_SERVING"
+}
+
+// stateName returns a string representation of the state.
+func stateName(state servingState) string {
+	switch state {
+	case StateServing:
+		return "Serving"
+	case StateNotServing:
+		return "Not Serving"
+	}
+	return "Not connected to mysql"
 }
