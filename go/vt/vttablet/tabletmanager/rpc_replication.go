@@ -677,27 +677,12 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopIO
 	before := mysql.SlaveStatusToProto(rs)
 
 	if stopIOThreadOnly {
-		if !rs.SlaveIORunning {
-			return StopReplicationAndGetStatusResponse{
-				Status: before,
-				Before: before,
-				After:  before,
-			}, nil
-		}
 		if err := tm.stopSlaveIOThreadLocked(ctx); err != nil {
 			return StopReplicationAndGetStatusResponse{
 				Before: before,
 			}, vterrors.Wrap(err, "stop slave io thread failed")
 		}
 	} else {
-		if !rs.SlaveIORunning && !rs.SlaveSQLRunning {
-			// no replication is running, just return what we got
-			return StopReplicationAndGetStatusResponse{
-				Status: before,
-				Before: before,
-				After:  before,
-			}, nil
-		}
 		if err := tm.stopSlaveLocked(ctx); err != nil {
 			return StopReplicationAndGetStatusResponse{
 				Before: before,
