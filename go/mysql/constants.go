@@ -438,6 +438,7 @@ const (
 	ERInvalidOnUpdate              = 1294
 	ERUnknownTimeZone              = 1298
 	ERInvalidCharacterString       = 1300
+	ERSavepointNotExist            = 1305
 	ERIllegalReference             = 1247
 	ERDerivedMustHaveAlias         = 1248
 	ERTableNameNotAllowedHere      = 1250
