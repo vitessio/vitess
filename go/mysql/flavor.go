@@ -272,7 +272,7 @@ func resultToMap(qr *sqltypes.Result) (map[string]string, error) {
 func parseSlaveStatus(fields map[string]string) SlaveStatus {
 	status := SlaveStatus{
 		MasterHost:      fields["Master_Host"],
-		SlaveIORunning:  fields["Slave_IO_Running"] == "Yes",
+		SlaveIORunning:  fields["Slave_IO_Running"] == "Yes" || fields["Slave_IO_Running"] == "Connecting",
 		SlaveSQLRunning: fields["Slave_SQL_Running"] == "Yes",
 	}
 	parseInt, _ := strconv.ParseInt(fields["Master_Port"], 10, 0)
