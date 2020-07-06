@@ -862,6 +862,17 @@ func checkErrorCounter(keyspace, shard string, tabletType topodatapb.TabletType,
 	return nil
 }
 
+func createFixedHealthConn(tablet *topodatapb.Tablet, fixedResult *querypb.StreamHealthResponse) *fakeConn {
+	key := TabletToMapKey(tablet)
+	conn := &fakeConn{
+		QueryService: fakes.ErrorQueryService,
+		tablet:       tablet,
+		fixedResult:  fixedResult,
+	}
+	connMap[key] = conn
+	return conn
+}
+
 var mustMatch = utils.MustMatchFn(
 	[]interface{}{ // types with unexported fields
 		TabletHealth{},

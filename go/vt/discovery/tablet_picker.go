@@ -19,7 +19,14 @@ package discovery
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"golang.org/x/net/context"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -31,64 +38,80 @@ import (
 // TabletPicker gives a simplified API for picking tablets.
 type TabletPicker struct {
 	ts          *topo.Server
-	cell        string
+	cells       []string
 	keyspace    string
 	shard       string
 	tabletTypes []topodatapb.TabletType
-
-	healthCheck LegacyHealthCheck
-	watcher     *LegacyTopologyWatcher
-	statsCache  *LegacyTabletStatsCache
 }
 
 // NewTabletPicker returns a TabletPicker.
-func NewTabletPicker(ctx context.Context, ts *topo.Server, cell, keyspace, shard, tabletTypesStr string, healthcheckTopologyRefresh, healthcheckRetryDelay, healthcheckTimeout time.Duration) (*TabletPicker, error) {
+func NewTabletPicker(ts *topo.Server, cell, keyspace, shard, tabletTypesStr string) (*TabletPicker, error) {
 	tabletTypes, err := topoproto.ParseTabletTypes(tabletTypesStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse list of tablet types: %v", tabletTypesStr)
 	}
 
-	// These have to be initialized in the following sequence (watcher must be last).
-	healthCheck := NewLegacyHealthCheck(healthcheckRetryDelay, healthcheckTimeout)
-	statsCache := NewLegacyTabletStatsCache(healthCheck, ts, cell)
-	watcher := NewLegacyShardReplicationWatcher(ctx, ts, healthCheck, cell, keyspace, shard, healthcheckTopologyRefresh, DefaultTopoReadConcurrency)
+	cells := strings.Split(cell, ",")
 
 	return &TabletPicker{
 		ts:          ts,
-		cell:        cell,
+		cells:       cells,
 		keyspace:    keyspace,
 		shard:       shard,
 		tabletTypes: tabletTypes,
-		healthCheck: healthCheck,
-		watcher:     watcher,
-		statsCache:  statsCache,
 	}, nil
 }
 
 // PickForStreaming picks all healthy tablets including the non-serving ones.
 func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Tablet, error) {
-	// wait for any of required the tablets (useful for the first run at least, fast for next runs)
-	if err := tp.statsCache.WaitByFilter(ctx, tp.keyspace, tp.shard, tp.tabletTypes, RemoveUnhealthyTablets); err != nil {
-		return nil, vterrors.Wrapf(err, "error waiting for tablets for %v %v %v", tp.cell, tp.keyspace, tp.shard)
+	// TODO: parse tp.cell and call this for one cell at a time?
+	candidates := tp.getAllTablets(ctx)
+	if len(candidates) == 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "no tablets available for %v %v %v", tp.cells, tp.keyspace, tp.shard)
 	}
-
-	// Refilter the tablets list based on the same criteria.
-	var addrs []LegacyTabletStats
-	for _, tabletType := range tp.tabletTypes {
-		list := RemoveUnhealthyTablets(tp.statsCache.GetTabletStats(tp.keyspace, tp.shard, tabletType))
-		addrs = append(addrs, list...)
+	for {
+		idx := rand.Intn(len(candidates))
+		alias := candidates[idx]
+		// get tablet
+		ti, err := tp.ts.GetTablet(ctx, alias)
+		if err != nil {
+			log.Warningf("unable to get tablet for alias %v", alias)
+			candidates = append(candidates[:idx], candidates[idx+1:]...)
+			if len(candidates) == 0 {
+				break
+			}
+			continue
+		}
+		// try to connect to tablet
+		conn, err := tabletconn.GetDialer()(ti.Tablet, true)
+		if err != nil {
+			log.Warningf("unable to connect to tablet for alias %v", alias)
+			candidates = append(candidates[:idx], candidates[idx+1:]...)
+			if len(candidates) == 0 {
+				break
+			}
+			continue
+		}
+		_ = conn.Close(ctx)
+		return ti.Tablet, nil
 	}
-	if len(addrs) > 0 {
-		return addrs[rand.Intn(len(addrs))].Tablet, nil
-	}
-	// Unreachable.
-	return nil, fmt.Errorf("can't find any healthy source tablet for %v %v %v", tp.keyspace, tp.shard, tp.tabletTypes)
+	return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "can't find any healthy source tablet for %v %v %v", tp.keyspace, tp.shard, tp.tabletTypes)
 }
 
-// Close shuts down TabletPicker.
-func (tp *TabletPicker) Close() {
-	tp.watcher.Stop()
-	tp.healthCheck.Close()
+func (tp *TabletPicker) getAllTablets(ctx context.Context) []*topodatapb.TabletAlias {
+	result := make([]*topodatapb.TabletAlias, 0)
+	for _, cell := range tp.cells {
+		sri, err := tp.ts.GetShardReplication(ctx, cell, tp.keyspace, tp.shard)
+		if err != nil {
+			log.Warningf("error %v from GetShardReplication for %v %v %v", err, cell, tp.keyspace, tp.shard)
+			continue
+		}
+
+		for _, node := range sri.Nodes {
+			result = append(result, node.TabletAlias)
+		}
+	}
+	return result
 }
 
 func init() {
