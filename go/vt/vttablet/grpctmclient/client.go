@@ -730,7 +730,7 @@ func (client *Client) SlaveWasRestarted(ctx context.Context, tablet *topodatapb.
 }
 
 // StopReplicationAndGetStatus is part of the tmclient.TabletManagerClient interface.
-func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopIOThreadOnly bool) (hybridStatus *replicationdatapb.Status, status *replicationdatapb.StopSlaveStatus, err error) {
+func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopIOThreadOnly bool) (hybridStatus *replicationdatapb.Status, status *replicationdatapb.StopReplicationStatus, err error) {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
 		return nil, nil, err
@@ -742,7 +742,7 @@ func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *t
 	if err != nil {
 		return nil, nil, err
 	}
-	return response.Status, &replicationdatapb.StopSlaveStatus{
+	return response.Status, &replicationdatapb.StopReplicationStatus{
 		Before: response.Before,
 		After:  response.After,
 	}, nil

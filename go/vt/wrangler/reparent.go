@@ -917,7 +917,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	event.DispatchUpdate(ev, "stop replication on all slaves")
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
-	statusMap := make(map[string]*replicationdatapb.StopSlaveStatus)
+	statusMap := make(map[string]*replicationdatapb.StopReplicationStatus)
 	for alias, tabletInfo := range tabletMap {
 		wg.Add(1)
 		go func(alias string, tabletInfo *topo.TabletInfo) {
@@ -1089,7 +1089,7 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newMasterAli
 	return nil
 }
 
-func slaveWasRunning(stopSlaveStatus *replicationdatapb.StopSlaveStatus) bool {
+func slaveWasRunning(stopSlaveStatus *replicationdatapb.StopReplicationStatus) bool {
 	if stopSlaveStatus == nil {
 		return false
 	}
@@ -1097,7 +1097,7 @@ func slaveWasRunning(stopSlaveStatus *replicationdatapb.StopSlaveStatus) bool {
 	return stopSlaveStatus.Before.SlaveIoRunning || stopSlaveStatus.Before.SlaveSqlRunning
 }
 
-func stoppedSlaveStringPosition(stopSlaveStatus *replicationdatapb.StopSlaveStatus) string {
+func stoppedSlaveStringPosition(stopSlaveStatus *replicationdatapb.StopReplicationStatus) string {
 	if stopSlaveStatus == nil || (stopSlaveStatus.Before == nil && stopSlaveStatus.After == nil) {
 		return ""
 	}
