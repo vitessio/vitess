@@ -262,3 +262,10 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 	}
 	session.SystemVariables[name] = expr
 }
+
+//StoreSavepoint stores the savepoint and release savepoint queries in the session
+func (session *SafeSession) StoreSavepoint(sql string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.Savepoints = append(session.Savepoints, sql)
+}
