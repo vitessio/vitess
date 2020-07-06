@@ -742,9 +742,9 @@ func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *t
 	if err != nil {
 		return nil, nil, err
 	}
-	return response.Status, &replicationdatapb.StopReplicationStatus{
-		Before: response.Before,
-		After:  response.After,
+	return response.HybridStatus, &replicationdatapb.StopReplicationStatus{
+		Before: response.Status.Before,
+		After:  response.Status.After,
 	}, nil
 }
 

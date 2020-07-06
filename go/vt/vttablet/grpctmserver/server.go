@@ -415,9 +415,9 @@ func (s *server) StopReplicationAndGetStatus(ctx context.Context, request *table
 	response = &tabletmanagerdatapb.StopReplicationAndGetStatusResponse{}
 	statusResponse, err := s.tm.StopReplicationAndGetStatus(ctx, request.StopIOThreadOnly)
 	if err == nil {
-		response.Status = statusResponse.Status
-		response.Before = statusResponse.Before
-		response.After = statusResponse.After
+		response.HybridStatus = statusResponse.Status
+		response.Status.Before = statusResponse.Before
+		response.Status.After = statusResponse.After
 
 	}
 	return response, err
