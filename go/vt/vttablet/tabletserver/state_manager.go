@@ -170,7 +170,7 @@ func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, terTime
 	// Start is idempotent.
 	sm.hcticks.Start(sm.Broadcast)
 
-	if tabletType == topodatapb.TabletType_RESTORE {
+	if tabletType == topodatapb.TabletType_RESTORE || tabletType == topodatapb.TabletType_BACKUP {
 		// TODO(sougou): remove this code once tm can give us more accurate state requests.
 		state = StateNotConnected
 	}

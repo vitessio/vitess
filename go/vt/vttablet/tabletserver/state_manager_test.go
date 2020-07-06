@@ -295,7 +295,7 @@ func TestStateManagerTransitionFailRetry(t *testing.T) {
 	assert.Equal(t, StateServing, sm.State())
 }
 
-func TestStateManagerRestoreType(t *testing.T) {
+func TestStateManagerNotConnectedType(t *testing.T) {
 	sm := newTestStateManager(t)
 	sm.EnterLameduck()
 	stateChanged, err := sm.SetServingType(topodatapb.TabletType_RESTORE, testNow, StateNotServing, nil)
@@ -303,7 +303,13 @@ func TestStateManagerRestoreType(t *testing.T) {
 	assert.True(t, stateChanged)
 
 	assert.Equal(t, topodatapb.TabletType_RESTORE, sm.target.TabletType)
-	// RESTORE can only be in StateNotConnected.
+	assert.Equal(t, StateNotConnected, sm.state)
+
+	stateChanged, err = sm.SetServingType(topodatapb.TabletType_BACKUP, testNow, StateNotServing, nil)
+	require.NoError(t, err)
+	assert.True(t, stateChanged)
+
+	assert.Equal(t, topodatapb.TabletType_BACKUP, sm.target.TabletType)
 	assert.Equal(t, StateNotConnected, sm.state)
 }
 
