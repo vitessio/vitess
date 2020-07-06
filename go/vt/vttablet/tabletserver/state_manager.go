@@ -175,7 +175,7 @@ func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, terTime
 		state = StateNotConnected
 	}
 
-	log.Infof("Starting transition to %v %v", tabletType, stateName(state))
+	log.Infof("Starting transition to %v %v, timestamp: %v", tabletType, stateName(state), terTimestamp)
 	if sm.mustTransition(tabletType, terTimestamp, state, alsoAllow) {
 		return true, sm.execTransition(tabletType, state)
 	}

@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -173,7 +174,8 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 	defer span.Finish()
 
 	allowQuery := topo.IsRunningQueryService(newTablet.Type)
-	terTime := tm.masterTermStartTime()
+	// TODO(sougou): find a better way to compute this.
+	terTime := logutil.ProtoToTime(newTablet.MasterTermStartTime)
 
 	// Read the shard to get SourceShards / TabletControlMap if
 	// we're going to use it.
