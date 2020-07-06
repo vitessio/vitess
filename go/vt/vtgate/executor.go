@@ -353,8 +353,7 @@ func (e *Executor) handleSRollback(ctx context.Context, safeSession *SafeSession
 	}()
 
 	if len(safeSession.ShardSessions) == 0 {
-		// Safely to ignore as there is no transaction.
-		return &sqltypes.Result{}, nil
+		return nil, mysql.NewSQLError(mysql.ERSavepointNotExist, "42000", "SAVEPOINT does not exist: %s", sql)
 	}
 
 	var rss []*srvtopo.ResolvedShard
@@ -389,8 +388,7 @@ func (e *Executor) handleRelease(ctx context.Context, safeSession *SafeSession, 
 			safeSession.StoreSavepoint(sql)
 			return &sqltypes.Result{}, nil
 		}
-		// Safely to ignore as there is no transaction.
-		return &sqltypes.Result{}, nil
+		return nil, mysql.NewSQLError(mysql.ERSavepointNotExist, "42000", "SAVEPOINT does not exist: %s", sql)
 	}
 	var rss []*srvtopo.ResolvedShard
 	for _, shardSession := range safeSession.ShardSessions {

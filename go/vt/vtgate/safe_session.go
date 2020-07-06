@@ -96,6 +96,7 @@ func (session *SafeSession) Reset() {
 	session.PreSessions = nil
 	session.PostSessions = nil
 	session.commitOrder = vtgatepb.CommitOrder_NORMAL
+	session.Savepoints = nil
 }
 
 // SetAutocommittable sets the state to autocommitable if true.
