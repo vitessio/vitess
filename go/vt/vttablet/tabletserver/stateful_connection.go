@@ -36,12 +36,13 @@ import (
 // This is used for transactions and reserved connections.
 // NOTE: After use, if must be returned either by doing a Unlock() or a Release().
 type StatefulConnection struct {
-	pool   *StatefulConnectionPool
-	dbConn *connpool.DBConn
-	ConnID tx.ConnID
-	env    tabletenv.Env
-
-	txProps *tx.Properties
+	pool           *StatefulConnectionPool
+	dbConn         *connpool.DBConn
+	ConnID         tx.ConnID
+	env            tabletenv.Env
+	txProps        *tx.Properties
+	tainted        bool
+	enforceTimeout bool
 }
 
 // Close closes the underlying connection. When the connection is Unblocked, it will be Released
@@ -87,7 +88,7 @@ func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows in
 
 func (sc *StatefulConnection) execWithRetry(ctx context.Context, query string, maxrows int, wantfields bool) error {
 	if sc.IsClosed() {
-		return nil
+		return vterrors.New(vtrpcpb.Code_CANCELED, "connection is closed")
 	}
 	if _, err := sc.dbConn.Exec(ctx, query, maxrows, wantfields); err != nil {
 		return err
@@ -125,6 +126,16 @@ func (sc *StatefulConnection) Releasef(reasonFormat string, a ...interface{}) {
 	sc.dbConn = nil
 }
 
+//Renew the existing connection with new connection id.
+func (sc *StatefulConnection) Renew() error {
+	err := sc.pool.renewConn(sc)
+	if err != nil {
+		sc.Close()
+		return vterrors.Wrap(err, "connection renew failed")
+	}
+	return nil
+}
+
 // String returns a printable version of the connection info.
 func (sc *StatefulConnection) String() string {
 	return fmt.Sprintf(
@@ -144,8 +155,8 @@ func (sc *StatefulConnection) ID() tx.ConnID {
 	return sc.ConnID
 }
 
-//UnderlyingdDBConn returns the underlying database connection
-func (sc *StatefulConnection) UnderlyingdDBConn() *connpool.DBConn {
+//UnderlyingDBConn returns the underlying database connection
+func (sc *StatefulConnection) UnderlyingDBConn() *connpool.DBConn {
 	return sc.dbConn
 }
 
@@ -159,4 +170,16 @@ func (sc *StatefulConnection) Stats() *tabletenv.Stats {
 	return sc.env.Stats()
 }
 
-var _ tx.IStatefulConnection = (*StatefulConnection)(nil)
+//Taint taints the existing connection.
+func (sc *StatefulConnection) Taint() {
+	sc.tainted = true
+	// if we don't have an active dbConn, we can silently ignore this request
+	if sc.dbConn != nil {
+		sc.dbConn.Taint()
+	}
+}
+
+//IsTainted tells us whether this connection is tainted
+func (sc *StatefulConnection) IsTainted() bool {
+	return sc.tainted
+}

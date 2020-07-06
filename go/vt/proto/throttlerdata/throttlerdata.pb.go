@@ -184,7 +184,7 @@ type Configuration struct {
 	// MaxReplicationLagModule tries to aim for.
 	// If it is within the target, it tries to increase the throttler
 	// rate, otherwise it will lower it based on an educated guess of the
-	// slave throughput.
+	// replica's throughput.
 	TargetReplicationLagSec int64 `protobuf:"varint,1,opt,name=target_replication_lag_sec,json=targetReplicationLagSec,proto3" json:"target_replication_lag_sec,omitempty"`
 	// max_replication_lag_sec is meant as a last resort.
 	// By default, the module tries to find out the system maximum capacity while
@@ -220,11 +220,11 @@ type Configuration struct {
 	// for the last rate decrease to have an effect on the system.
 	MinDurationBetweenDecreasesSec int64 `protobuf:"varint,8,opt,name=min_duration_between_decreases_sec,json=minDurationBetweenDecreasesSec,proto3" json:"min_duration_between_decreases_sec,omitempty"`
 	// spread_backlog_across_sec is used when we set the throttler rate after
-	// we guessed the rate of a slave and determined its backlog.
+	// we guessed the rate of a replica and determined its backlog.
 	// For example, at a guessed rate of 100 QPS and a lag of 10s, the replica has
 	// a backlog of 1000 queries.
 	// When we set the new, decreased throttler rate, we factor in how long it
-	// will take the slave to go through the backlog (in addition to new
+	// will take the replica to go through the backlog (in addition to new
 	// requests). This field specifies over which timespan we plan to spread this.
 	// For example, for a backlog of 1000 queries spread over 5s means that we
 	// have to further reduce the rate by 200 QPS or the backlog will not be

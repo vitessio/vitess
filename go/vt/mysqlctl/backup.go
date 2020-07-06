@@ -52,8 +52,8 @@ const (
 )
 
 const (
-	// slaveStartDeadline is the deadline for starting a slave
-	slaveStartDeadline = 30
+	// replicationStartDeadline is the deadline for starting replication
+	replicationStartDeadline = 30
 )
 
 var (
@@ -272,7 +272,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		}
 		// Since this is an empty database make sure we start replication at the beginning
 		if err := params.Mysqld.ResetReplication(ctx); err != nil {
-			params.Logger.Errorf("error resetting slave replication: %v. Continuing", err)
+			params.Logger.Errorf("error resetting replication: %v. Continuing", err)
 		}
 
 		if err := PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName); err != nil {

@@ -1094,13 +1094,13 @@ func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, tx
 		panic(err)
 	}
 	return &QueryExecutor{
-		ctx:           ctx,
-		query:         sql,
-		bindVars:      make(map[string]*querypb.BindVariable),
-		transactionID: txID,
-		plan:          plan,
-		logStats:      logStats,
-		tsv:           tsv,
+		ctx:      ctx,
+		query:    sql,
+		bindVars: make(map[string]*querypb.BindVariable),
+		connID:   txID,
+		plan:     plan,
+		logStats: logStats,
+		tsv:      tsv,
 	}
 }
 

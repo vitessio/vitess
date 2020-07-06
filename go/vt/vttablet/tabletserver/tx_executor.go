@@ -69,7 +69,7 @@ func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 		return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "prepare failed for transaction %d: %v", transactionID, err)
 	}
 
-	return txe.inTransaction(func(localConn tx.IStatefulConnection) error {
+	return txe.inTransaction(func(localConn *StatefulConnection) error {
 		return txe.te.twoPC.SaveRedo(txe.ctx, localConn, dtid, conn.TxProperties().Queries)
 	})
 
@@ -118,7 +118,7 @@ func (txe *TxExecutor) CommitPrepared(dtid string) error {
 func (txe *TxExecutor) markFailed(ctx context.Context, dtid string) {
 	txe.te.env.Stats().InternalErrors.Add("TwopcCommit", 1)
 	txe.te.preparedPool.SetFailed(dtid)
-	conn, _, err := txe.te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false)
+	conn, _, err := txe.te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0)
 	if err != nil {
 		log.Errorf("markFailed: Begin failed for dtid %s: %v", dtid, err)
 		return
@@ -166,7 +166,7 @@ func (txe *TxExecutor) RollbackPrepared(dtid string, originalID int64) error {
 			txe.te.Rollback(txe.ctx, originalID)
 		}
 	}()
-	return txe.inTransaction(func(conn tx.IStatefulConnection) error {
+	return txe.inTransaction(func(conn *StatefulConnection) error {
 		return txe.te.twoPC.DeleteRedo(txe.ctx, conn, dtid)
 	})
 }
@@ -177,7 +177,7 @@ func (txe *TxExecutor) CreateTransaction(dtid string, participants []*querypb.Ta
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
 	defer txe.te.env.Stats().QueryTimings.Record("CREATE_TRANSACTION", time.Now())
-	return txe.inTransaction(func(conn tx.IStatefulConnection) error {
+	return txe.inTransaction(func(conn *StatefulConnection) error {
 		return txe.te.twoPC.CreateTransaction(txe.ctx, conn, dtid, participants)
 	})
 }
@@ -218,7 +218,7 @@ func (txe *TxExecutor) SetRollback(dtid string, transactionID int64) error {
 		txe.te.Rollback(txe.ctx, transactionID)
 	}
 
-	return txe.inTransaction(func(conn tx.IStatefulConnection) error {
+	return txe.inTransaction(func(conn *StatefulConnection) error {
 		return txe.te.twoPC.Transition(txe.ctx, conn, dtid, querypb.TransactionState_ROLLBACK)
 	})
 }
@@ -231,7 +231,7 @@ func (txe *TxExecutor) ConcludeTransaction(dtid string) error {
 	}
 	defer txe.te.env.Stats().QueryTimings.Record("RESOLVE", time.Now())
 
-	return txe.inTransaction(func(conn tx.IStatefulConnection) error {
+	return txe.inTransaction(func(conn *StatefulConnection) error {
 		return txe.te.twoPC.DeleteTransaction(txe.ctx, conn, dtid)
 	})
 }
@@ -260,8 +260,8 @@ func (txe *TxExecutor) ReadTwopcInflight() (distributed []*tx.DistributedTx, pre
 	return distributed, prepared, failed, nil
 }
 
-func (txe *TxExecutor) inTransaction(f func(tx.IStatefulConnection) error) error {
-	conn, _, err := txe.te.txPool.Begin(txe.ctx, &querypb.ExecuteOptions{}, false)
+func (txe *TxExecutor) inTransaction(f func(*StatefulConnection) error) error {
+	conn, _, err := txe.te.txPool.Begin(txe.ctx, &querypb.ExecuteOptions{}, false, 0)
 	if err != nil {
 		return err
 	}

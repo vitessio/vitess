@@ -97,7 +97,9 @@ func (txc *TxConn) commitShard(ctx context.Context, s *vtgatepb.Session_ShardSes
 	if err != nil {
 		return err
 	}
-	return qs.Commit(ctx, s.Target, s.TransactionId)
+	// TODO(reserve-conn): Add logic for returned reservedID.
+	_, err = qs.Commit(ctx, s.Target, s.TransactionId)
+	return err
 }
 
 func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error {
@@ -207,7 +209,9 @@ func (txc *TxConn) Rollback(ctx context.Context, session *SafeSession) error {
 		if err != nil {
 			return err
 		}
-		return qs.Rollback(ctx, s.Target, s.TransactionId)
+		// TODO(reserve-conn): Add logic for returned reservedID.
+		_, err = qs.Rollback(ctx, s.Target, s.TransactionId)
+		return err
 	})
 }
 

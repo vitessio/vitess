@@ -282,13 +282,13 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 // 2 - stop the source tablet at a binlog position higher than the
 //   destination master. Get that new list of positions.
 //   (add a cleanup task to restart binlog replication on the source tablet, and
-//    change the existing ChangeSlaveType cleanup action to 'spare' type)
+//    change the existing ChangeTabletType cleanup action to 'spare' type)
 // 3 - ask the master of the destination shard to resume filtered replication
 //   up to the new list of positions, and return its binlog position.
 // 4 - wait until the destination tablet is equal or passed that master
 //   binlog position, and stop its replication.
 //   (add a cleanup task to restart binlog replication on it, and change
-//    the existing ChangeSlaveType cleanup action to 'spare' type)
+//    the existing ChangeTabletType cleanup action to 'spare' type)
 // 5 - restart filtered replication on the destination master.
 //   (remove the cleanup task that does the same)
 // At this point, the source and the destination tablet are stopped at the same
@@ -324,7 +324,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	vreplicationPos := qr.Rows[0][0].ToString()
 
 	// 2 - stop replication
-	sdw.wr.Logger().Infof("Stopping slave %v at a minimum of %v", sdw.sourceAlias, vreplicationPos)
+	sdw.wr.Logger().Infof("Stopping replica %v at a minimum of %v", sdw.sourceAlias, vreplicationPos)
 	// read the tablet
 	sourceTablet, err := sdw.wr.TopoServer().GetTablet(shortCtx, sdw.sourceAlias)
 	if err != nil {
@@ -333,14 +333,14 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	defer cancel()
-	mysqlPos, err := sdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet.Tablet, vreplicationPos, *remoteActionsTimeout)
+	mysqlPos, err := sdw.wr.TabletManagerClient().StopReplicationMinimum(shortCtx, sourceTablet.Tablet, vreplicationPos, *remoteActionsTimeout)
 	if err != nil {
-		return vterrors.Wrapf(err, "cannot stop slave %v at right binlog position %v", sdw.sourceAlias, vreplicationPos)
+		return vterrors.Wrapf(err, "cannot stop replica %v at right binlog position %v", sdw.sourceAlias, vreplicationPos)
 	}
 
-	// change the cleaner actions from ChangeSlaveType(rdonly)
-	// to StartSlave() + ChangeSlaveType(spare)
-	wrangler.RecordStartSlaveAction(sdw.cleaner, sourceTablet.Tablet)
+	// change the cleaner actions from ChangeTabletType(rdonly)
+	// to StartReplication() + ChangeTabletType(spare)
+	wrangler.RecordStartReplicationAction(sdw.cleaner, sourceTablet.Tablet)
 
 	// 3 - ask the master of the destination shard to resume filtered
 	//     replication up to the new list of positions
@@ -370,10 +370,10 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	}
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	defer cancel()
-	if _, err = sdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, destinationTablet.Tablet, masterPos, *remoteActionsTimeout); err != nil {
-		return vterrors.Wrapf(err, "StopSlaveMinimum for %v at %v failed", sdw.destinationAlias, masterPos)
+	if _, err = sdw.wr.TabletManagerClient().StopReplicationMinimum(shortCtx, destinationTablet.Tablet, masterPos, *remoteActionsTimeout); err != nil {
+		return vterrors.Wrapf(err, "StopReplicationMinimum for %v at %v failed", sdw.destinationAlias, masterPos)
 	}
-	wrangler.RecordStartSlaveAction(sdw.cleaner, destinationTablet.Tablet)
+	wrangler.RecordStartReplicationAction(sdw.cleaner, destinationTablet.Tablet)
 
 	// 5 - restart filtered replication on destination master
 	sdw.wr.Logger().Infof("Restarting filtered replication on master %v", sdw.shardInfo.MasterAlias)

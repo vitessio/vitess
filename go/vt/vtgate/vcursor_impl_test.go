@@ -2,9 +2,13 @@ package vtgate
 
 import (
 	"context"
+	"encoding/hex"
 	"testing"
 
 	"vitess.io/vitess/go/vt/proto/vschema"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/topo"
 
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -31,6 +35,45 @@ func (f fakeVSchemaOperator) GetCurrentVschema() (*vindexes.VSchema, error) {
 
 func (f fakeVSchemaOperator) UpdateVSchema(ctx context.Context, ksName string, vschema *vschema.SrvVSchema) error {
 	panic("implement me")
+}
+
+type fakeTopoServer struct {
+}
+
+// GetTopoServer returns the full topo.Server instance.
+func (f *fakeTopoServer) GetTopoServer() (*topo.Server, error) {
+	return nil, nil
+}
+
+// GetSrvKeyspaceNames returns the list of keyspaces served in
+// the provided cell.
+func (f *fakeTopoServer) GetSrvKeyspaceNames(ctx context.Context, cell string, staleOK bool) ([]string, error) {
+	return []string{"ks1"}, nil
+}
+
+// GetSrvKeyspace returns the SrvKeyspace for a cell/keyspace.
+func (f *fakeTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
+	zeroHexBytes, _ := hex.DecodeString("")
+	eightyHexBytes, _ := hex.DecodeString("80")
+	ks := &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			{
+				ServedType: topodatapb.TabletType_MASTER,
+				ShardReferences: []*topodatapb.ShardReference{
+					{Name: "-80", KeyRange: &topodatapb.KeyRange{Start: zeroHexBytes, End: eightyHexBytes}},
+					{Name: "80-", KeyRange: &topodatapb.KeyRange{Start: eightyHexBytes, End: zeroHexBytes}},
+				},
+			},
+		},
+	}
+	return ks, nil
+}
+
+// WatchSrvVSchema starts watching the SrvVSchema object for
+// the provided cell.  It will call the callback when
+// a new value or an error occurs.
+func (f *fakeTopoServer) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error)) {
+
 }
 
 func TestDestinationKeyspace(t *testing.T) {
@@ -215,6 +258,59 @@ func TestSetTarget(t *testing.T) {
 			} else {
 				require.EqualError(t, err, tc.expectedError)
 			}
+		})
+	}
+}
+
+func TestPlanPrefixKey(t *testing.T) {
+	ks1 := &vindexes.Keyspace{
+		Name:    "ks1",
+		Sharded: false,
+	}
+	ks1Schema := &vindexes.KeyspaceSchema{
+		Keyspace: ks1,
+		Tables:   nil,
+		Vindexes: nil,
+		Error:    nil,
+	}
+	vschemaWith1KS := &vindexes.VSchema{
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			ks1.Name: ks1Schema,
+		},
+	}
+
+	type testCase struct {
+		vschema               *vindexes.VSchema
+		targetString          string
+		expectedPlanPrefixKey string
+	}
+
+	tests := []testCase{{
+		vschema:               vschemaWith1KS,
+		targetString:          "",
+		expectedPlanPrefixKey: "ks1@master",
+	}, {
+		vschema:               vschemaWith1KS,
+		targetString:          "ks1@replica",
+		expectedPlanPrefixKey: "ks1@replica",
+	}, {
+		vschema:               vschemaWith1KS,
+		targetString:          "ks1:-80",
+		expectedPlanPrefixKey: "ks1@masterDestinationShard(-80)",
+	}, {
+		vschema:               vschemaWith1KS,
+		targetString:          "ks1[deadbeef]",
+		expectedPlanPrefixKey: "ks1@masterKsIDsResolved(80-)",
+	}}
+
+	for i, tc := range tests {
+		t.Run(string(i)+"#"+tc.targetString, func(t *testing.T) {
+			ss := NewSafeSession(&vtgatepb.Session{InTransaction: false})
+			ss.SetTargetString(tc.targetString)
+			vc, err := newVCursorImpl(context.Background(), ss, sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, srvtopo.NewResolver(&fakeTopoServer{}, nil, ""))
+			require.NoError(t, err)
+			vc.vschema = tc.vschema
+			require.Equal(t, tc.expectedPlanPrefixKey, vc.planPrefixKey())
 		})
 	}
 }

@@ -64,7 +64,7 @@ func (wd *WithDDL) Exec(ctx context.Context, query string, f interface{}) (*sqlt
 		return nil, err
 	}
 
-	log.Info("Updating schema for %v and retrying: %v", query, err)
+	log.Infof("Updating schema for %v and retrying: %v", query, err)
 	for _, query := range wd.ddls {
 		_, merr := exec(query)
 		if merr == nil {

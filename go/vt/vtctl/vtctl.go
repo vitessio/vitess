@@ -60,33 +60,24 @@ COMMAND ARGUMENT DEFINITIONS
             should be a positively signed value.
 
 - db type, tablet type: The vttablet's role. Valid values are:
-  -- backup: A slaved copy of data that is offline to queries other than
+  -- backup: A replica copy of data that is offline to queries other than
              for backup purposes
-  -- batch: A slaved copy of data for OLAP load patterns (typically for
+  -- batch: A replicated copy of data for OLAP load patterns (typically for
             MapReduce jobs)
   -- drained: A tablet that is reserved for a background process. For example,
               a tablet used by a vtworker process, where the tablet is likely
               lagging in replication.
-  -- experimental: A slaved copy of data that is ready but not serving query
+  -- experimental: A replica copy of data that is ready but not serving query
                    traffic. The value indicates a special characteristic of
                    the tablet that indicates the tablet should not be
                    considered a potential master. Vitess also does not
                    worry about lag for experimental tablets when reparenting.
   -- master: A primary copy of data
-  -- rdonly: A slaved copy of data for OLAP load patterns
-  -- replica: A slaved copy of data ready to be promoted to master
+  -- rdonly: A replica copy of data for OLAP load patterns
+  -- replica: A replica copy of data ready to be promoted to master
   -- restore: A tablet that is restoring from a snapshot. Typically, this
               happens at tablet startup, then it goes to its right state.
-  -- schema_apply: A slaved copy of data that had been serving query traffic
-                   but that is now applying a schema change. Following the
-                   change, the tablet will revert to its serving type.
-  -- snapshot_source: A slaved copy of data where mysqld is <b>not</b>
-                      running and where Vitess is serving data files to
-                      clone slaves. Use this command to enter this mode:
-                      <pre>vtctl Snapshot -server-mode ...</pre>
-                      Use this command to exit this mode:
-                      <pre>vtctl SnapshotSourceEnd ...</pre>
-  -- spare: A slaved copy of data that is ready but not serving query traffic.
+  -- spare: A replica copy of data that is ready but not serving query traffic.
             The data could be a potential master tablet.
 */
 
@@ -181,13 +172,13 @@ var commands = []commandGroup{
 			{"SetReadWrite", commandSetReadWrite,
 				"<tablet alias>",
 				"Sets the tablet as read-write."},
-			{"StartSlave", commandStartSlave,
+			{"StartSlave", commandStartReplication,
 				"<tablet alias>",
-				"Starts replication on the specified slave."},
-			{"StopSlave", commandStopSlave,
+				"Starts replication on the specified tablet."},
+			{"StopSlave", commandStopReplication,
 				"<tablet alias>",
-				"Stops replication on the specified slave."},
-			{"ChangeSlaveType", commandChangeSlaveType,
+				"Stops replication on the specified tablet."},
+			{"ChangeSlaveType", commandChangeTabletType,
 				"[-dry-run] <tablet alias> <tablet type>",
 				"Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a master.\n" +
 					"NOTE: This command automatically updates the serving graph.\n"},
@@ -237,7 +228,7 @@ var commands = []commandGroup{
 				"Validates that all nodes that are reachable from this shard are consistent."},
 			{"ShardReplicationPositions", commandShardReplicationPositions,
 				"<keyspace/shard>",
-				"Shows the replication status of each slave machine in the shard graph. In this case, the status refers to the replication lag between the master vttablet and the slave vttablet. In Vitess, data is always written to the master vttablet first and then replicated to all slave vttablets. Output is sorted by tablet type, then replication position. Use ctrl-C to interrupt command and see partial result if needed."},
+				"Shows the replication status of each replica machine in the shard graph. In this case, the status refers to the replication lag between the master vttablet and the replica vttablet. In Vitess, data is always written to the master vttablet first and then replicated to all replica vttablets. Output is sorted by tablet type, then replication position. Use ctrl-C to interrupt command and see partial result if needed."},
 			{"ListShardTablets", commandListShardTablets,
 				"<keyspace/shard>",
 				"Lists all tablets in the specified shard."},
@@ -315,7 +306,7 @@ var commands = []commandGroup{
 				"[-cell=<cell>] [-tablet_types=<source_tablet_types>] -workflow=<workflow> <source_keyspace> <target_keyspace> <table_specs>",
 				`Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{""column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{""column": "id2", "name": "hash"}]}}`},
 			{"DropSources", commandDropSources,
-				"[-dry_run] <keyspace.workflow>",
+				"[-dry_run] [-rename_tables] <keyspace.workflow>",
 				"After a MoveTables or Resharding workflow cleanup unused artifacts like source tables, source shards and blacklists"},
 			{"CreateLookupVindex", commandCreateLookupVindex,
 				"[-cell=<cell>] [-tablet_types=<source_tablet_types>] <keyspace> <json_spec>",
@@ -395,20 +386,20 @@ var commands = []commandGroup{
 				"Reloads the schema on all the tablets in a keyspace."},
 			{"ValidateSchemaShard", commandValidateSchemaShard,
 				"[-exclude_tables=''] [-include-views] <keyspace/shard>",
-				"Validates that the master schema matches all of the slaves."},
+				"Validates that the master schema matches all of the replicas."},
 			{"ValidateSchemaKeyspace", commandValidateSchemaKeyspace,
 				"[-exclude_tables=''] [-include-views] [-skip-no-master] <keyspace name>",
 				"Validates that the master schema from shard 0 matches the schema on all of the other tablets in the keyspace."},
 			{"ApplySchema", commandApplySchema,
 				"[-allow_long_unavailability] [-wait_slave_timeout=10s] {-sql=<sql> || -sql-file=<filename>} <keyspace>",
-				"Applies the schema change to the specified keyspace on every master, running in parallel on all shards. The changes are then propagated to slaves via replication. If -allow_long_unavailability is set, schema changes affecting a large number of rows (and possibly incurring a longer period of unavailability) will not be rejected."},
+				"Applies the schema change to the specified keyspace on every master, running in parallel on all shards. The changes are then propagated to replicas via replication. If -allow_long_unavailability is set, schema changes affecting a large number of rows (and possibly incurring a longer period of unavailability) will not be rejected."},
 			{"CopySchemaShard", commandCopySchemaShard,
 				"[-tables=<table1>,<table2>,...] [-exclude_tables=<table1>,<table2>,...] [-include-views] [-skip-verify] [-wait_slave_timeout=10s] {<source keyspace/shard> || <source tablet alias>} <destination keyspace/shard>",
 				"Copies the schema from a source shard's master (or a specific tablet) to a destination shard. The schema is applied directly on the master of the destination shard, and it is propagated to the replicas through binlogs."},
 
 			{"ValidateVersionShard", commandValidateVersionShard,
 				"<keyspace/shard>",
-				"Validates that the master version matches all of the slaves."},
+				"Validates that the master version matches all of the replicas."},
 			{"ValidateVersionKeyspace", commandValidateVersionKeyspace,
 				"<keyspace name>",
 				"Validates that the master version from shard 0 matches all of the other tablets in the keyspace."},
@@ -418,7 +409,7 @@ var commands = []commandGroup{
 				"Displays the permissions for a tablet."},
 			{"ValidatePermissionsShard", commandValidatePermissionsShard,
 				"<keyspace/shard>",
-				"Validates that the master permissions match all the slaves."},
+				"Validates that the master permissions match all the replicas."},
 			{"ValidatePermissionsKeyspace", commandValidatePermissionsKeyspace,
 				"<keyspace name>",
 				"Validates that the master permissions from shard 0 match those of all of the other tablets in the keyspace."},
@@ -891,7 +882,7 @@ func commandSetReadWrite(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	return wr.TabletManagerClient().SetReadWrite(ctx, ti.Tablet)
 }
 
-func commandStartSlave(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandStartReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -907,10 +898,10 @@ func commandStartSlave(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	if err != nil {
 		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 	}
-	return wr.TabletManagerClient().StartSlave(ctx, ti.Tablet)
+	return wr.TabletManagerClient().StartReplication(ctx, ti.Tablet)
 }
 
-func commandStopSlave(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandStopReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -926,17 +917,17 @@ func commandStopSlave(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 	if err != nil {
 		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 	}
-	return wr.TabletManagerClient().StopSlave(ctx, ti.Tablet)
+	return wr.TabletManagerClient().StopReplication(ctx, ti.Tablet)
 }
 
-func commandChangeSlaveType(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandChangeTabletType(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	dryRun := subFlags.Bool("dry-run", false, "Lists the proposed change without actually executing it")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("the <tablet alias> and <db type> arguments are required for the ChangeSlaveType command")
+		return fmt.Errorf("the <tablet alias> and <db type> arguments are required for the ChangeTabletType command")
 	}
 
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
@@ -960,7 +951,7 @@ func commandChangeSlaveType(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		wr.Logger().Printf("+ %v\n", fmtTabletAwkable(ti))
 		return nil
 	}
-	return wr.ChangeSlaveType(ctx, tabletAlias, newType)
+	return wr.ChangeTabletType(ctx, tabletAlias, newType)
 }
 
 func commandPing(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2042,6 +2033,7 @@ func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFla
 
 func commandDropSources(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of commandDropSources and only reports the actions to be taken")
+	renameTables := subFlags.Bool("rename_tables", false, "Rename tables instead of dropping them")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2052,8 +2044,14 @@ func commandDropSources(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
+
+	removalType := wrangler.DropTable
+	if *renameTables {
+		removalType = wrangler.RenameTable
+	}
+
 	_, _, _ = dryRun, keyspace, workflow
-	dryRunResults, err := wr.DropSources(ctx, keyspace, workflow, *dryRun)
+	dryRunResults, err := wr.DropSources(ctx, keyspace, workflow, removalType, *dryRun)
 	if err != nil {
 		return err
 	}
@@ -2366,7 +2364,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	allowLongUnavailability := subFlags.Bool("allow_long_unavailability", false, "Allow large schema changes which incur a longer unavailability of the database.")
 	sql := subFlags.String("sql", "", "A list of semicolon-delimited SQL commands")
 	sqlFile := subFlags.String("sql-file", "", "Identifies the file that contains the SQL commands")
-	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", wrangler.DefaultWaitSlaveTimeout, "The amount of time to wait for slaves to receive the schema change via replication.")
+	waitReplicasTimeout := subFlags.Duration("wait_slave_timeout", wrangler.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2380,7 +2378,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 
-	executor := schemamanager.NewTabletExecutor(wr, *waitSlaveTimeout)
+	executor := schemamanager.NewTabletExecutor(wr, *waitReplicasTimeout)
 	if *allowLongUnavailability {
 		executor.AllowBigSchemaChange()
 	}
@@ -2396,7 +2394,7 @@ func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/")
 	includeViews := subFlags.Bool("include-views", true, "Includes views in the output")
 	skipVerify := subFlags.Bool("skip-verify", false, "Skip verification of source and target schema after copy")
-	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 10*time.Second, "The amount of time to wait for slaves to receive the schema change via replication.")
+	waitReplicasTimeout := subFlags.Duration("wait_slave_timeout", 10*time.Second, "The amount of time to wait for replicas to receive the schema change via replication.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2419,11 +2417,11 @@ func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags
 
 	sourceKeyspace, sourceShard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err == nil {
-		return wr.CopySchemaShardFromShard(ctx, tableArray, excludeTableArray, *includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, *waitSlaveTimeout, *skipVerify)
+		return wr.CopySchemaShardFromShard(ctx, tableArray, excludeTableArray, *includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, *waitReplicasTimeout, *skipVerify)
 	}
 	sourceTabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err == nil {
-		return wr.CopySchemaShard(ctx, sourceTabletAlias, tableArray, excludeTableArray, *includeViews, destKeyspace, destShard, *waitSlaveTimeout, *skipVerify)
+		return wr.CopySchemaShard(ctx, sourceTabletAlias, tableArray, excludeTableArray, *includeViews, destKeyspace, destShard, *waitReplicasTimeout, *skipVerify)
 	}
 	return err
 }
@@ -2835,7 +2833,7 @@ func (rts rTablets) Less(i, j int) bool {
 		return false
 	}
 	// the type proto has MASTER first, so sort by that. Will show
-	// the MASTER first, then each slave type sorted by
+	// the MASTER first, then each replica type sorted by
 	// replication position.
 	if l.Type < r.Type {
 		return true

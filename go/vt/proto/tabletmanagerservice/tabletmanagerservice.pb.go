@@ -29,70 +29,76 @@ const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 func init() { proto.RegisterFile("tabletmanagerservice.proto", fileDescriptor_9ee75fe63cfd9360) }
 
 var fileDescriptor_9ee75fe63cfd9360 = []byte{
-	// 1002 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x98, 0xdf, 0x6f, 0x1c, 0x35,
-	0x10, 0xc7, 0x89, 0x04, 0x95, 0x30, 0x3f, 0x6b, 0x55, 0x14, 0x05, 0x89, 0x5f, 0x4d, 0xf9, 0x91,
-	0xa2, 0x5c, 0xdb, 0x08, 0xde, 0xaf, 0x69, 0xd3, 0x06, 0x35, 0xe2, 0xb8, 0x6b, 0x08, 0x02, 0x09,
-	0xc9, 0xb9, 0x9b, 0xdc, 0x2e, 0xd9, 0xb3, 0x8d, 0xed, 0x3d, 0x91, 0x27, 0x04, 0x12, 0xaf, 0xfc,
-	0xcd, 0x68, 0xf7, 0xd6, 0xde, 0xf1, 0xde, 0xac, 0xef, 0xf2, 0x16, 0xdd, 0xf7, 0x33, 0x33, 0xf6,
-	0x78, 0x66, 0xec, 0x2c, 0xdb, 0x75, 0xe2, 0xa2, 0x00, 0xb7, 0x10, 0x52, 0xcc, 0xc1, 0x58, 0x30,
-	0xcb, 0x7c, 0x0a, 0x07, 0xda, 0x28, 0xa7, 0xf8, 0x1d, 0x4a, 0xdb, 0xbd, 0x1b, 0xfd, 0x3a, 0x13,
-	0x4e, 0xac, 0xf0, 0xc7, 0x7f, 0xef, 0xb1, 0x77, 0x5e, 0xd5, 0xda, 0xe9, 0x4a, 0xe3, 0x27, 0xec,
-	0xf5, 0x51, 0x2e, 0xe7, 0xfc, 0xe3, 0x83, 0x75, 0x9b, 0x4a, 0x18, 0xc3, 0x1f, 0x25, 0x58, 0xb7,
-	0xfb, 0x49, 0xaf, 0x6e, 0xb5, 0x92, 0x16, 0x3e, 0x7f, 0x8d, 0xbf, 0x64, 0x6f, 0x4c, 0x0a, 0x00,
-	0xcd, 0x29, 0xb6, 0x56, 0xbc, 0xb3, 0x4f, 0xfb, 0x81, 0xe0, 0xed, 0x37, 0xf6, 0xd6, 0xb3, 0x3f,
-	0x61, 0x5a, 0x3a, 0x78, 0xa1, 0xd4, 0x15, 0xbf, 0x4f, 0x98, 0x20, 0xdd, 0x7b, 0xfe, 0x62, 0x13,
-	0x16, 0xfc, 0xff, 0xcc, 0xde, 0x7c, 0x0e, 0x6e, 0x32, 0xcd, 0x60, 0x21, 0xf8, 0x3d, 0xc2, 0x2c,
-	0xa8, 0xde, 0xf7, 0x5e, 0x1a, 0x0a, 0x9e, 0xe7, 0xec, 0xdd, 0xe7, 0xe0, 0x46, 0x60, 0x16, 0xb9,
-	0xb5, 0xb9, 0x92, 0x96, 0x7f, 0x45, 0x5b, 0x22, 0xc4, 0xc7, 0xf8, 0x7a, 0x0b, 0x12, 0xa7, 0x68,
-	0x02, 0x6e, 0x0c, 0x62, 0xf6, 0x83, 0x2c, 0xae, 0xc9, 0x14, 0x21, 0x3d, 0x95, 0xa2, 0x08, 0x0b,
-	0xfe, 0x05, 0x7b, 0xbb, 0x11, 0xce, 0x4d, 0xee, 0x80, 0x27, 0x2c, 0x6b, 0xc0, 0x47, 0xf8, 0x72,
-	0x23, 0x17, 0x42, 0xfc, 0xca, 0xd8, 0x51, 0x26, 0xe4, 0x1c, 0x5e, 0x5d, 0x6b, 0xe0, 0x54, 0x86,
-	0x5b, 0xd9, 0xbb, 0xbf, 0xbf, 0x81, 0xc2, 0xeb, 0x1f, 0xc3, 0xa5, 0x01, 0x9b, 0x4d, 0x9c, 0xe8,
-	0x59, 0x3f, 0x06, 0x52, 0xeb, 0x8f, 0x39, 0x7c, 0xd6, 0xe3, 0x52, 0xbe, 0x00, 0x51, 0xb8, 0xec,
-	0x28, 0x83, 0xe9, 0x15, 0x79, 0xd6, 0x31, 0x92, 0x3a, 0xeb, 0x2e, 0x19, 0x02, 0x69, 0x76, 0xfb,
-	0x64, 0x2e, 0x95, 0x81, 0x95, 0xfc, 0xcc, 0x18, 0x65, 0xf8, 0x03, 0xc2, 0xc3, 0x1a, 0xe5, 0xc3,
-	0x7d, 0xb3, 0x1d, 0x1c, 0x67, 0xaf, 0x50, 0x62, 0xd6, 0xf4, 0x08, 0x9d, 0xbd, 0x16, 0x48, 0x67,
-	0x0f, 0x73, 0x21, 0xc4, 0xef, 0xec, 0xbd, 0x91, 0x81, 0xcb, 0x22, 0x9f, 0x67, 0xbe, 0x13, 0xa9,
-	0xa4, 0x74, 0x18, 0x1f, 0x68, 0x7f, 0x1b, 0x14, 0x37, 0xcb, 0x50, 0xeb, 0xe2, 0xba, 0x89, 0x43,
-	0x15, 0x11, 0xd2, 0x53, 0xcd, 0x12, 0x61, 0xb8, 0x92, 0x5f, 0xaa, 0xe9, 0x55, 0x3d, 0x5d, 0x2d,
-	0x59, 0xc9, 0xad, 0x9c, 0xaa, 0x64, 0x4c, 0xe1, 0xb3, 0x38, 0x93, 0x45, 0xeb, 0x9e, 0x5a, 0x16,
-	0x06, 0x52, 0x67, 0x11, 0x73, 0xb8, 0xc0, 0x9a, 0x41, 0x79, 0x0c, 0x6e, 0x9a, 0x0d, 0xed, 0xd3,
-	0x0b, 0x41, 0x16, 0xd8, 0x1a, 0x95, 0x2a, 0x30, 0x02, 0x0e, 0x11, 0xff, 0x62, 0x1f, 0xc4, 0xf2,
-	0xb0, 0x28, 0x46, 0x26, 0x5f, 0x5a, 0xfe, 0x70, 0xa3, 0x27, 0x8f, 0xfa, 0xd8, 0x8f, 0x6e, 0x60,
-	0xd1, 0xbf, 0xe5, 0xa1, 0xd6, 0x5b, 0x6c, 0x79, 0xa8, 0xf5, 0xf6, 0x5b, 0xae, 0xe1, 0x68, 0x62,
-	0x17, 0x62, 0x09, 0xd5, 0x18, 0x29, 0x2d, 0x3d, 0xb1, 0x5b, 0x3d, 0x39, 0xb1, 0x31, 0x86, 0xc7,
-	0xd1, 0xa9, 0xb0, 0x0e, 0xcc, 0x48, 0xd9, 0xdc, 0xe5, 0x4a, 0x92, 0xe3, 0x28, 0x46, 0x52, 0xe3,
-	0xa8, 0x4b, 0xe2, 0xce, 0x3d, 0x17, 0xb9, 0x3b, 0x56, 0x6d, 0x24, 0xca, 0xbe, 0xc3, 0xa4, 0x3a,
-	0x77, 0x0d, 0xc5, 0x37, 0xf5, 0xc4, 0x29, 0x5d, 0xef, 0x98, 0xbc, 0xa9, 0x83, 0x9a, 0xba, 0xa9,
-	0x11, 0x14, 0x3c, 0x2f, 0xd8, 0xfb, 0xe1, 0xe7, 0xd3, 0x5c, 0xe6, 0x8b, 0x72, 0xc1, 0xf7, 0x53,
-	0xb6, 0x0d, 0xe4, 0xe3, 0x3c, 0xd8, 0x8a, 0xc5, 0x23, 0x62, 0xe2, 0x84, 0x71, 0xab, 0x9d, 0xd0,
-	0x8b, 0xf4, 0x72, 0x6a, 0x44, 0x60, 0x2a, 0x38, 0xbf, 0x66, 0x77, 0xda, 0xdf, 0xcf, 0xa4, 0xcb,
-	0x8b, 0xe1, 0xa5, 0x03, 0xc3, 0x0f, 0x92, 0x0e, 0x5a, 0xd0, 0x07, 0x1c, 0x6c, 0xcd, 0x77, 0x9f,
-	0x52, 0x95, 0x6e, 0x7b, 0x9f, 0x52, 0xb5, 0xba, 0xe9, 0x29, 0xd5, 0x40, 0xf8, 0x80, 0x7e, 0x1a,
-	0x83, 0x2e, 0xf2, 0xa9, 0xa8, 0x8a, 0xa2, 0x6a, 0x2d, 0xf2, 0x80, 0xba, 0x50, 0xea, 0x80, 0xd6,
-	0x59, 0x3c, 0x91, 0xb0, 0xda, 0x96, 0x24, 0x39, 0x91, 0x68, 0x34, 0x35, 0x91, 0xfa, 0x2c, 0xf0,
-	0x7e, 0xc7, 0x60, 0xab, 0xa7, 0x52, 0xe0, 0xc8, 0xfd, 0x76, 0xa1, 0xd4, 0x7e, 0xd7, 0x59, 0x5c,
-	0x90, 0x27, 0x32, 0x77, 0xab, 0x2e, 0x27, 0x0b, 0xb2, 0x95, 0x53, 0x05, 0x89, 0xa9, 0xe0, 0xfc,
-	0x9f, 0x1d, 0x76, 0x77, 0xa4, 0x74, 0x59, 0xd4, 0x2f, 0x26, 0x2d, 0x0c, 0x48, 0xf7, 0xbd, 0x2a,
-	0x8d, 0x14, 0x05, 0xa7, 0x92, 0xd3, 0xc3, 0xfa, 0xb8, 0x8f, 0x6f, 0x62, 0x82, 0x4b, 0xb3, 0x5a,
-	0x5c, 0xff, 0xec, 0x08, 0x6a, 0xaa, 0x34, 0x11, 0x84, 0xaf, 0xe4, 0xa7, 0xb0, 0x50, 0x0e, 0x9a,
-	0xec, 0x51, 0x43, 0x1a, 0x03, 0xa9, 0x2b, 0x39, 0xe6, 0x70, 0x35, 0x9c, 0xc9, 0x99, 0x8a, 0xc2,
-	0xec, 0x93, 0x37, 0x7a, 0x0c, 0xa5, 0xaa, 0x61, 0x9d, 0x0d, 0xe1, 0xfe, 0xdd, 0x61, 0x1f, 0x8e,
-	0x8c, 0xaa, 0xb4, 0x7a, 0xb3, 0xe7, 0x19, 0xc8, 0x23, 0x51, 0xce, 0x33, 0x77, 0xa6, 0x39, 0x99,
-	0xfe, 0x1e, 0xd8, 0xc7, 0x3f, 0xbc, 0x91, 0x4d, 0x34, 0x95, 0x6b, 0x59, 0xd8, 0x86, 0x9e, 0xd1,
-	0x53, 0xb9, 0x03, 0x25, 0xa7, 0xf2, 0x1a, 0x1b, 0x5d, 0x2f, 0xe0, 0x7b, 0xe0, 0x1e, 0xfd, 0xaf,
-	0x4b, 0x9c, 0xd7, 0xbd, 0x34, 0x84, 0xdf, 0x17, 0x3e, 0xee, 0x18, 0x6c, 0x35, 0x43, 0x61, 0xc6,
-	0x53, 0xab, 0x0b, 0x54, 0xea, 0x7d, 0x41, 0xc0, 0x21, 0xe2, 0x7f, 0x3b, 0xec, 0xa3, 0xea, 0x02,
-	0x42, 0xed, 0x3e, 0x94, 0xb3, 0x6a, 0xb2, 0xae, 0x1e, 0x1c, 0xdf, 0xf6, 0x5c, 0x58, 0x3d, 0xbc,
-	0x5f, 0xc6, 0x77, 0x37, 0x35, 0xc3, 0x5d, 0x82, 0x4f, 0x9c, 0xec, 0x12, 0x0c, 0xa4, 0xba, 0x24,
-	0xe6, 0xf0, 0x9b, 0xa7, 0x51, 0x9a, 0xe5, 0x90, 0x6f, 0x9e, 0x18, 0x49, 0xbd, 0x79, 0xba, 0x64,
-	0x08, 0xf4, 0x23, 0xbb, 0xf5, 0x44, 0x4c, 0xaf, 0x4a, 0xcd, 0xa9, 0xef, 0x17, 0x2b, 0xc9, 0x3b,
-	0xfe, 0x2c, 0x41, 0x78, 0x87, 0x0f, 0x77, 0xb8, 0x61, 0xb7, 0xab, 0x63, 0x54, 0x06, 0x8e, 0x8d,
-	0x5a, 0x34, 0xde, 0x7b, 0x86, 0x78, 0x4c, 0xa5, 0x2a, 0x84, 0x80, 0xdb, 0x98, 0x4f, 0x0e, 0x7f,
-	0x79, 0xb4, 0xcc, 0x1d, 0x58, 0x7b, 0x90, 0xab, 0xc1, 0xea, 0xaf, 0xc1, 0x5c, 0x0d, 0x96, 0x6e,
-	0x50, 0x7f, 0x23, 0x1a, 0x50, 0x5f, 0x94, 0x2e, 0x6e, 0xd5, 0xda, 0xe1, 0xff, 0x01, 0x00, 0x00,
-	0xff, 0xff, 0xd4, 0x4a, 0x50, 0x02, 0x8c, 0x12, 0x00, 0x00,
+	// 1102 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x98, 0x5b, 0x6f, 0x23, 0x35,
+	0x14, 0xc7, 0xa9, 0x04, 0x2b, 0x61, 0xee, 0x66, 0xc5, 0x4a, 0x45, 0xe2, 0xb6, 0x2d, 0x2c, 0xe9,
+	0x92, 0xec, 0x85, 0xe5, 0x3d, 0x7b, 0x69, 0xb7, 0x68, 0x2b, 0x42, 0xd2, 0x52, 0x04, 0x12, 0x92,
+	0x9b, 0x9c, 0x26, 0x43, 0x27, 0x63, 0x63, 0x3b, 0x11, 0x7d, 0x42, 0xe2, 0x15, 0x89, 0xaf, 0xc0,
+	0x57, 0x45, 0x33, 0x19, 0x7b, 0x8e, 0x67, 0xce, 0x38, 0xd3, 0xb7, 0x28, 0xff, 0x9f, 0xcf, 0xdf,
+	0xf6, 0x1c, 0x1f, 0x9f, 0x19, 0xb6, 0x6b, 0xc5, 0x45, 0x0a, 0x76, 0x29, 0x32, 0x31, 0x07, 0x6d,
+	0x40, 0xaf, 0x93, 0x29, 0xf4, 0x95, 0x96, 0x56, 0xf2, 0xdb, 0x94, 0xb6, 0x7b, 0x27, 0xf8, 0x77,
+	0x26, 0xac, 0xd8, 0xe0, 0x8f, 0xfe, 0xeb, 0xb1, 0x77, 0x4e, 0x0b, 0xed, 0x64, 0xa3, 0xf1, 0x63,
+	0xf6, 0xfa, 0x28, 0xc9, 0xe6, 0xfc, 0x93, 0x7e, 0x73, 0x4c, 0x2e, 0x8c, 0xe1, 0x8f, 0x15, 0x18,
+	0xbb, 0xfb, 0x69, 0xab, 0x6e, 0x94, 0xcc, 0x0c, 0x7c, 0xf1, 0x1a, 0x7f, 0xc5, 0xde, 0x98, 0xa4,
+	0x00, 0x8a, 0x53, 0x6c, 0xa1, 0xb8, 0x60, 0x9f, 0xb5, 0x03, 0x3e, 0xda, 0x6f, 0xec, 0xad, 0x17,
+	0x7f, 0xc2, 0x74, 0x65, 0xe1, 0xa5, 0x94, 0x57, 0x7c, 0x9f, 0x18, 0x82, 0x74, 0x17, 0xf9, 0xcb,
+	0x6d, 0x98, 0x8f, 0xff, 0x33, 0x7b, 0xf3, 0x08, 0xec, 0x64, 0xba, 0x80, 0xa5, 0xe0, 0x77, 0x89,
+	0x61, 0x5e, 0x75, 0xb1, 0xf7, 0xe2, 0x90, 0x8f, 0x3c, 0x67, 0xef, 0x1e, 0x81, 0x1d, 0x81, 0x5e,
+	0x26, 0xc6, 0x24, 0x32, 0x33, 0xfc, 0x1e, 0x3d, 0x12, 0x21, 0xce, 0xe3, 0xeb, 0x0e, 0x24, 0xde,
+	0xa2, 0x09, 0xd8, 0x31, 0x88, 0xd9, 0x0f, 0x59, 0x7a, 0x4d, 0x6e, 0x11, 0xd2, 0x63, 0x5b, 0x14,
+	0x60, 0x3e, 0xbe, 0x60, 0x6f, 0x97, 0xc2, 0xb9, 0x4e, 0x2c, 0xf0, 0xc8, 0xc8, 0x02, 0x70, 0x0e,
+	0x5f, 0x6d, 0xe5, 0xbc, 0xc5, 0xaf, 0x8c, 0x3d, 0x5b, 0x88, 0x6c, 0x0e, 0xa7, 0xd7, 0x0a, 0x38,
+	0xb5, 0xc3, 0x95, 0xec, 0xc2, 0xef, 0x6f, 0xa1, 0xf0, 0xfc, 0xc7, 0x70, 0xa9, 0xc1, 0x2c, 0x26,
+	0x56, 0xb4, 0xcc, 0x1f, 0x03, 0xb1, 0xf9, 0x87, 0x1c, 0x7e, 0xd6, 0xe3, 0x55, 0xf6, 0x12, 0x44,
+	0x6a, 0x17, 0xcf, 0x16, 0x30, 0xbd, 0x22, 0x9f, 0x75, 0x88, 0xc4, 0x9e, 0x75, 0x9d, 0xf4, 0x46,
+	0x8a, 0x7d, 0x70, 0x3c, 0xcf, 0xa4, 0x86, 0x8d, 0xfc, 0x42, 0x6b, 0xa9, 0xf9, 0x01, 0x11, 0xa1,
+	0x41, 0x39, 0xbb, 0xfb, 0xdd, 0xe0, 0x70, 0xf7, 0x52, 0x29, 0x66, 0xe5, 0x19, 0xa1, 0x77, 0xaf,
+	0x02, 0xe2, 0xbb, 0x87, 0x39, 0x6f, 0xf1, 0x3b, 0x7b, 0x6f, 0xa4, 0xe1, 0x32, 0x4d, 0xe6, 0x0b,
+	0x77, 0x12, 0xa9, 0x4d, 0xa9, 0x31, 0xce, 0xa8, 0xd7, 0x05, 0xc5, 0x87, 0x65, 0xa8, 0x54, 0x7a,
+	0x5d, 0xfa, 0x50, 0x49, 0x84, 0xf4, 0xd8, 0x61, 0x09, 0x30, 0x9c, 0xc9, 0xaf, 0xe4, 0xf4, 0xaa,
+	0xa8, 0xae, 0x86, 0xcc, 0xe4, 0x4a, 0x8e, 0x65, 0x32, 0xa6, 0xf0, 0xb3, 0x38, 0xcb, 0xd2, 0x2a,
+	0x3c, 0x35, 0x2d, 0x0c, 0xc4, 0x9e, 0x45, 0xc8, 0xe1, 0x04, 0x2b, 0x0b, 0xe5, 0x21, 0xd8, 0xe9,
+	0x62, 0x68, 0x9e, 0x5f, 0x08, 0x32, 0xc1, 0x1a, 0x54, 0x2c, 0xc1, 0x08, 0xd8, 0x3b, 0xfe, 0xc5,
+	0x3e, 0x0a, 0xe5, 0x61, 0x9a, 0x8e, 0x74, 0xb2, 0x36, 0xfc, 0xc1, 0xd6, 0x48, 0x0e, 0x75, 0xde,
+	0x0f, 0x6f, 0x30, 0xa2, 0x7d, 0xc9, 0x43, 0xa5, 0x3a, 0x2c, 0x79, 0xa8, 0x54, 0xf7, 0x25, 0x17,
+	0x30, 0x76, 0x1c, 0x83, 0x4a, 0x93, 0xa9, 0xb0, 0x89, 0xcc, 0xf2, 0x62, 0xb2, 0x32, 0xa4, 0x63,
+	0x83, 0x8a, 0x39, 0x12, 0x30, 0x2e, 0x50, 0x27, 0xc2, 0x58, 0xd0, 0x23, 0x69, 0x92, 0x9c, 0x20,
+	0x0b, 0x54, 0x88, 0xc4, 0x0a, 0x54, 0x9d, 0xc4, 0x67, 0xf9, 0x5c, 0x24, 0xf6, 0x50, 0x56, 0x4e,
+	0xd4, 0xf8, 0x1a, 0x13, 0x3b, 0xcb, 0x0d, 0x14, 0x7b, 0x4d, 0xac, 0x54, 0x68, 0xdd, 0xa4, 0x57,
+	0x8d, 0x89, 0x79, 0x35, 0x50, 0x9c, 0xa5, 0x35, 0xf1, 0x24, 0xc9, 0x92, 0xe5, 0x6a, 0x49, 0x66,
+	0x29, 0x8d, 0xc6, 0xb2, 0xb4, 0x6d, 0x84, 0x9f, 0xc0, 0x92, 0xbd, 0x3f, 0xb1, 0x42, 0x5b, 0xbc,
+	0x5a, 0x7a, 0x09, 0x21, 0xe4, 0x4c, 0x0f, 0x3a, 0xb1, 0xde, 0xee, 0x9f, 0x1d, 0xb6, 0x5b, 0x97,
+	0xcf, 0x32, 0x9b, 0xa4, 0xc3, 0x4b, 0x0b, 0x9a, 0x7f, 0xdb, 0x21, 0x5a, 0x85, 0xbb, 0x39, 0x3c,
+	0xb9, 0xe1, 0x28, 0x5c, 0xb5, 0x8f, 0xc0, 0x51, 0x86, 0xac, 0xda, 0x48, 0x8f, 0x55, 0xed, 0x00,
+	0xc3, 0x9b, 0xfb, 0x13, 0x9a, 0x43, 0x7e, 0x76, 0xc9, 0xcd, 0xad, 0x43, 0xb1, 0xcd, 0x6d, 0xb2,
+	0x38, 0x99, 0xb0, 0x5a, 0x65, 0x38, 0x99, 0x4c, 0x34, 0x1a, 0x4b, 0xa6, 0xb6, 0x11, 0x78, 0xbd,
+	0x63, 0x30, 0xb0, 0x35, 0x99, 0xea, 0x50, 0x6c, 0xbd, 0x4d, 0x16, 0x5f, 0x8a, 0xc7, 0x59, 0x62,
+	0x37, 0x45, 0x83, 0xbc, 0x14, 0x2b, 0x39, 0x76, 0x29, 0x62, 0xca, 0x07, 0xff, 0x7b, 0x87, 0xdd,
+	0x19, 0x49, 0xb5, 0x4a, 0x8b, 0x96, 0x4c, 0x09, 0x0d, 0x99, 0xfd, 0x5e, 0xae, 0x74, 0x26, 0x52,
+	0x4e, 0x6d, 0x4e, 0x0b, 0xeb, 0x7c, 0x1f, 0xdd, 0x64, 0x08, 0x4e, 0xd0, 0x7c, 0x72, 0xe5, 0xf2,
+	0x79, 0xdb, 0xe4, 0x4b, 0x3d, 0x96, 0xa0, 0x01, 0x86, 0x6f, 0xfe, 0xe7, 0xb0, 0x94, 0x16, 0xca,
+	0x3d, 0xa4, 0x46, 0x62, 0x20, 0x76, 0xf3, 0x87, 0x1c, 0xce, 0x89, 0xb3, 0x6c, 0x26, 0x03, 0x9b,
+	0x1e, 0xd9, 0x38, 0x84, 0x50, 0x2c, 0x27, 0x9a, 0xac, 0xb7, 0x33, 0x8c, 0x97, 0xcb, 0x3c, 0x17,
+	0x66, 0xa4, 0x65, 0x0e, 0xcd, 0x78, 0xe4, 0x5e, 0x43, 0x98, 0xb3, 0xfc, 0xa6, 0x23, 0x8d, 0xdf,
+	0xf6, 0x26, 0xe0, 0xf2, 0xf0, 0x2e, 0xfd, 0x7e, 0x12, 0xae, 0x6a, 0x2f, 0x0e, 0xf9, 0xc8, 0x6b,
+	0xf6, 0x61, 0xe5, 0x3c, 0x06, 0x93, 0x57, 0x35, 0x98, 0xf1, 0xf8, 0x0c, 0x3d, 0xe7, 0xdc, 0xfa,
+	0x5d, 0x71, 0xef, 0xfb, 0xef, 0x0e, 0xfb, 0xb8, 0x76, 0x77, 0x0c, 0xb3, 0x59, 0xfe, 0x3e, 0xba,
+	0xe9, 0x2a, 0x9e, 0x6c, 0xbf, 0x6b, 0x30, 0xef, 0x26, 0xf2, 0xdd, 0x4d, 0x87, 0xe1, 0x4e, 0xa3,
+	0xdc, 0x78, 0x77, 0x18, 0xee, 0x91, 0x0d, 0x3a, 0x46, 0x62, 0x9d, 0x46, 0x9d, 0xf4, 0x46, 0x3f,
+	0xb2, 0x5b, 0x4f, 0xc5, 0xf4, 0x6a, 0xa5, 0x38, 0xf5, 0x1d, 0x61, 0x23, 0xb9, 0xc0, 0x9f, 0x47,
+	0x08, 0x17, 0xf0, 0xc1, 0x0e, 0xd7, 0x79, 0x5f, 0x66, 0xac, 0xd4, 0x70, 0xa8, 0xe5, 0xb2, 0x8c,
+	0xde, 0x52, 0xeb, 0x42, 0x2a, 0xde, 0x97, 0x35, 0x60, 0xe4, 0x99, 0xbf, 0xbd, 0xa7, 0x62, 0x0d,
+	0xe5, 0xf3, 0x22, 0xdf, 0xde, 0x2b, 0x3d, 0xfa, 0xf6, 0x8e, 0xb1, 0x20, 0xe5, 0xad, 0x54, 0x85,
+	0x48, 0xa7, 0xbc, 0x53, 0xa3, 0x29, 0x5f, 0x41, 0x61, 0x47, 0x52, 0xfe, 0xed, 0x9a, 0xa1, 0x5e,
+	0x6c, 0x6c, 0xad, 0x0d, 0x3a, 0xe8, 0xc4, 0xe2, 0x4b, 0xa4, 0xe8, 0x15, 0x36, 0x2b, 0xd9, 0x6b,
+	0x6b, 0x25, 0x82, 0xa5, 0xec, 0x6f, 0xa1, 0x7c, 0xf0, 0x6b, 0x76, 0xbb, 0xfa, 0x1f, 0xf5, 0x39,
+	0xfd, 0x68, 0x80, 0x66, 0x87, 0x33, 0xe8, 0xcc, 0xd7, 0xbf, 0x40, 0xe5, 0xba, 0x69, 0xfd, 0x02,
+	0x55, 0xa8, 0xdb, 0xbe, 0x40, 0x95, 0x10, 0x8e, 0x9c, 0xdf, 0x26, 0xed, 0x8f, 0xde, 0xab, 0xb1,
+	0xc8, 0x08, 0x0a, 0x1e, 0x7d, 0xfe, 0x17, 0x2e, 0xdd, 0xbd, 0xb6, 0x94, 0x24, 0x0a, 0xf7, 0x41,
+	0x27, 0x16, 0xbf, 0x2f, 0x39, 0xb5, 0x2a, 0xad, 0xb1, 0x18, 0x8d, 0xc2, 0x7a, 0xbf, 0x1b, 0xec,
+	0x1c, 0x9f, 0x3e, 0xfe, 0xe5, 0xe1, 0x3a, 0xb1, 0x60, 0x4c, 0x3f, 0x91, 0x83, 0xcd, 0xaf, 0xc1,
+	0x5c, 0x0e, 0xd6, 0x76, 0x50, 0x7c, 0x41, 0x1d, 0x50, 0xdf, 0x5b, 0x2f, 0x6e, 0x15, 0xda, 0xe3,
+	0xff, 0x03, 0x00, 0x00, 0xff, 0xff, 0x54, 0x21, 0xd6, 0xe8, 0xaa, 0x15, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -132,24 +138,24 @@ type TabletManagerClient interface {
 	ExecuteFetchAsDba(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsDbaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsDbaResponse, error)
 	ExecuteFetchAsAllPrivs(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsAllPrivsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsAllPrivsResponse, error)
 	ExecuteFetchAsApp(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error)
-	// SlaveStatus returns the current slave status.
-	SlaveStatus(ctx context.Context, in *tabletmanagerdata.SlaveStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SlaveStatusResponse, error)
+	// ReplicationStatus returns the current replication status.
+	ReplicationStatus(ctx context.Context, in *tabletmanagerdata.ReplicationStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicationStatusResponse, error)
 	// MasterPosition returns the current master position
 	MasterPosition(ctx context.Context, in *tabletmanagerdata.MasterPositionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.MasterPositionResponse, error)
 	// WaitForPosition waits for the position to be reached
 	WaitForPosition(ctx context.Context, in *tabletmanagerdata.WaitForPositionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.WaitForPositionResponse, error)
-	// StopSlave makes mysql stop its replication
-	StopSlave(ctx context.Context, in *tabletmanagerdata.StopSlaveRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopSlaveResponse, error)
-	// StopSlaveMinimum stops the mysql replication after it reaches
+	// StopReplication makes mysql stop its replication
+	StopReplication(ctx context.Context, in *tabletmanagerdata.StopReplicationRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopReplicationResponse, error)
+	// StopReplicationMinimum stops the mysql replication after it reaches
 	// the provided minimum point
-	StopSlaveMinimum(ctx context.Context, in *tabletmanagerdata.StopSlaveMinimumRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopSlaveMinimumResponse, error)
-	// StartSlave starts the mysql replication
-	StartSlave(ctx context.Context, in *tabletmanagerdata.StartSlaveRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StartSlaveResponse, error)
-	// StartSlave starts the mysql replication until and including
+	StopReplicationMinimum(ctx context.Context, in *tabletmanagerdata.StopReplicationMinimumRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopReplicationMinimumResponse, error)
+	// StartReplication starts the mysql replication
+	StartReplication(ctx context.Context, in *tabletmanagerdata.StartReplicationRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StartReplicationResponse, error)
+	// StartReplicationUnitAfter starts the mysql replication until and including
 	// the provided position
-	StartSlaveUntilAfter(ctx context.Context, in *tabletmanagerdata.StartSlaveUntilAfterRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StartSlaveUntilAfterResponse, error)
-	// GetSlaves asks for the list of mysql slaves
-	GetSlaves(ctx context.Context, in *tabletmanagerdata.GetSlavesRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetSlavesResponse, error)
+	StartReplicationUntilAfter(ctx context.Context, in *tabletmanagerdata.StartReplicationUntilAfterRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StartReplicationUntilAfterResponse, error)
+	// GetReplicas asks for the list of mysql replicas
+	GetReplicas(ctx context.Context, in *tabletmanagerdata.GetReplicasRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetReplicasResponse, error)
 	// VReplication API
 	VReplicationExec(ctx context.Context, in *tabletmanagerdata.VReplicationExecRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationExecResponse, error)
 	VReplicationWaitForPos(ctx context.Context, in *tabletmanagerdata.VReplicationWaitForPosRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationWaitForPosResponse, error)
@@ -160,33 +166,44 @@ type TabletManagerClient interface {
 	// PopulateReparentJournal tells the tablet to add an entry to its
 	// reparent journal
 	PopulateReparentJournal(ctx context.Context, in *tabletmanagerdata.PopulateReparentJournalRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PopulateReparentJournalResponse, error)
-	// InitSlave tells the tablet to reparent to the master unconditionally
-	InitSlave(ctx context.Context, in *tabletmanagerdata.InitSlaveRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitSlaveResponse, error)
+	// InitReplica tells the tablet to reparent to the master unconditionally
+	InitReplica(ctx context.Context, in *tabletmanagerdata.InitReplicaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitReplicaResponse, error)
 	// DemoteMaster tells the soon-to-be-former master it's gonna change
 	DemoteMaster(ctx context.Context, in *tabletmanagerdata.DemoteMasterRequest, opts ...grpc.CallOption) (*tabletmanagerdata.DemoteMasterResponse, error)
 	// UndoDemoteMaster reverts all changes made by DemoteMaster
 	UndoDemoteMaster(ctx context.Context, in *tabletmanagerdata.UndoDemoteMasterRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UndoDemoteMasterResponse, error)
-	// PromoteSlaveWhenCaughtUp tells the remote tablet to catch up,
-	// and then be the master
-	// Deprecated
-	PromoteSlaveWhenCaughtUp(ctx context.Context, in *tabletmanagerdata.PromoteSlaveWhenCaughtUpRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PromoteSlaveWhenCaughtUpResponse, error)
-	// SlaveWasPromoted tells the remote tablet it is now the master
-	SlaveWasPromoted(ctx context.Context, in *tabletmanagerdata.SlaveWasPromotedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SlaveWasPromotedResponse, error)
-	// SetMaster tells the slave to reparent
+	// ReplicaWasPromoted tells the remote tablet it is now the master
+	ReplicaWasPromoted(ctx context.Context, in *tabletmanagerdata.ReplicaWasPromotedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicaWasPromotedResponse, error)
+	// SetMaster tells the replica to reparent
 	SetMaster(ctx context.Context, in *tabletmanagerdata.SetMasterRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetMasterResponse, error)
-	// SlaveWasRestarted tells the remote tablet its master has changed
-	SlaveWasRestarted(ctx context.Context, in *tabletmanagerdata.SlaveWasRestartedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SlaveWasRestartedResponse, error)
+	// ReplicaWasRestarted tells the remote tablet its master has changed
+	ReplicaWasRestarted(ctx context.Context, in *tabletmanagerdata.ReplicaWasRestartedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicaWasRestartedResponse, error)
 	// StopReplicationAndGetStatus stops MySQL replication, and returns the
 	// replication status
 	StopReplicationAndGetStatus(ctx context.Context, in *tabletmanagerdata.StopReplicationAndGetStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopReplicationAndGetStatusResponse, error)
-	// PromoteSlave makes the slave the new master
-	// Deprecated
-	PromoteSlave(ctx context.Context, in *tabletmanagerdata.PromoteSlaveRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PromoteSlaveResponse, error)
 	// PromoteReplica makes the replica the new master
 	PromoteReplica(ctx context.Context, in *tabletmanagerdata.PromoteReplicaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PromoteReplicaResponse, error)
 	Backup(ctx context.Context, in *tabletmanagerdata.BackupRequest, opts ...grpc.CallOption) (TabletManager_BackupClient, error)
 	// RestoreFromBackup deletes all local data and restores it from the latest backup.
 	RestoreFromBackup(ctx context.Context, in *tabletmanagerdata.RestoreFromBackupRequest, opts ...grpc.CallOption) (TabletManager_RestoreFromBackupClient, error)
+	// Deprecated - remove after 7.0
+	SlaveStatus(ctx context.Context, in *tabletmanagerdata.SlaveStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SlaveStatusResponse, error)
+	// Deprecated
+	StopSlave(ctx context.Context, in *tabletmanagerdata.StopSlaveRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopSlaveResponse, error)
+	// Deprecated
+	StopSlaveMinimum(ctx context.Context, in *tabletmanagerdata.StopSlaveMinimumRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopSlaveMinimumResponse, error)
+	// Deprecated
+	StartSlave(ctx context.Context, in *tabletmanagerdata.StartSlaveRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StartSlaveResponse, error)
+	// Deprecated
+	StartSlaveUntilAfter(ctx context.Context, in *tabletmanagerdata.StartSlaveUntilAfterRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StartSlaveUntilAfterResponse, error)
+	// Deprecated
+	GetSlaves(ctx context.Context, in *tabletmanagerdata.GetSlavesRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetSlavesResponse, error)
+	// Deprecated
+	InitSlave(ctx context.Context, in *tabletmanagerdata.InitSlaveRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitSlaveResponse, error)
+	// Deprecated
+	SlaveWasPromoted(ctx context.Context, in *tabletmanagerdata.SlaveWasPromotedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SlaveWasPromotedResponse, error)
+	// Deprecated
+	SlaveWasRestarted(ctx context.Context, in *tabletmanagerdata.SlaveWasRestartedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SlaveWasRestartedResponse, error)
 }
 
 type tabletManagerClient struct {
@@ -368,9 +385,9 @@ func (c *tabletManagerClient) ExecuteFetchAsApp(ctx context.Context, in *tabletm
 	return out, nil
 }
 
-func (c *tabletManagerClient) SlaveStatus(ctx context.Context, in *tabletmanagerdata.SlaveStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SlaveStatusResponse, error) {
-	out := new(tabletmanagerdata.SlaveStatusResponse)
-	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SlaveStatus", in, out, opts...)
+func (c *tabletManagerClient) ReplicationStatus(ctx context.Context, in *tabletmanagerdata.ReplicationStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicationStatusResponse, error) {
+	out := new(tabletmanagerdata.ReplicationStatusResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ReplicationStatus", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -395,45 +412,45 @@ func (c *tabletManagerClient) WaitForPosition(ctx context.Context, in *tabletman
 	return out, nil
 }
 
-func (c *tabletManagerClient) StopSlave(ctx context.Context, in *tabletmanagerdata.StopSlaveRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopSlaveResponse, error) {
-	out := new(tabletmanagerdata.StopSlaveResponse)
-	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StopSlave", in, out, opts...)
+func (c *tabletManagerClient) StopReplication(ctx context.Context, in *tabletmanagerdata.StopReplicationRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopReplicationResponse, error) {
+	out := new(tabletmanagerdata.StopReplicationResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StopReplication", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *tabletManagerClient) StopSlaveMinimum(ctx context.Context, in *tabletmanagerdata.StopSlaveMinimumRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopSlaveMinimumResponse, error) {
-	out := new(tabletmanagerdata.StopSlaveMinimumResponse)
-	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StopSlaveMinimum", in, out, opts...)
+func (c *tabletManagerClient) StopReplicationMinimum(ctx context.Context, in *tabletmanagerdata.StopReplicationMinimumRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopReplicationMinimumResponse, error) {
+	out := new(tabletmanagerdata.StopReplicationMinimumResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StopReplicationMinimum", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *tabletManagerClient) StartSlave(ctx context.Context, in *tabletmanagerdata.StartSlaveRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StartSlaveResponse, error) {
-	out := new(tabletmanagerdata.StartSlaveResponse)
-	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StartSlave", in, out, opts...)
+func (c *tabletManagerClient) StartReplication(ctx context.Context, in *tabletmanagerdata.StartReplicationRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StartReplicationResponse, error) {
+	out := new(tabletmanagerdata.StartReplicationResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StartReplication", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *tabletManagerClient) StartSlaveUntilAfter(ctx context.Context, in *tabletmanagerdata.StartSlaveUntilAfterRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StartSlaveUntilAfterResponse, error) {
-	out := new(tabletmanagerdata.StartSlaveUntilAfterResponse)
-	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StartSlaveUntilAfter", in, out, opts...)
+func (c *tabletManagerClient) StartReplicationUntilAfter(ctx context.Context, in *tabletmanagerdata.StartReplicationUntilAfterRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StartReplicationUntilAfterResponse, error) {
+	out := new(tabletmanagerdata.StartReplicationUntilAfterResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StartReplicationUntilAfter", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *tabletManagerClient) GetSlaves(ctx context.Context, in *tabletmanagerdata.GetSlavesRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetSlavesResponse, error) {
-	out := new(tabletmanagerdata.GetSlavesResponse)
-	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/GetSlaves", in, out, opts...)
+func (c *tabletManagerClient) GetReplicas(ctx context.Context, in *tabletmanagerdata.GetReplicasRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetReplicasResponse, error) {
+	out := new(tabletmanagerdata.GetReplicasResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/GetReplicas", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -485,9 +502,9 @@ func (c *tabletManagerClient) PopulateReparentJournal(ctx context.Context, in *t
 	return out, nil
 }
 
-func (c *tabletManagerClient) InitSlave(ctx context.Context, in *tabletmanagerdata.InitSlaveRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitSlaveResponse, error) {
-	out := new(tabletmanagerdata.InitSlaveResponse)
-	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/InitSlave", in, out, opts...)
+func (c *tabletManagerClient) InitReplica(ctx context.Context, in *tabletmanagerdata.InitReplicaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitReplicaResponse, error) {
+	out := new(tabletmanagerdata.InitReplicaResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/InitReplica", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -512,18 +529,9 @@ func (c *tabletManagerClient) UndoDemoteMaster(ctx context.Context, in *tabletma
 	return out, nil
 }
 
-func (c *tabletManagerClient) PromoteSlaveWhenCaughtUp(ctx context.Context, in *tabletmanagerdata.PromoteSlaveWhenCaughtUpRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PromoteSlaveWhenCaughtUpResponse, error) {
-	out := new(tabletmanagerdata.PromoteSlaveWhenCaughtUpResponse)
-	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/PromoteSlaveWhenCaughtUp", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *tabletManagerClient) SlaveWasPromoted(ctx context.Context, in *tabletmanagerdata.SlaveWasPromotedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SlaveWasPromotedResponse, error) {
-	out := new(tabletmanagerdata.SlaveWasPromotedResponse)
-	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SlaveWasPromoted", in, out, opts...)
+func (c *tabletManagerClient) ReplicaWasPromoted(ctx context.Context, in *tabletmanagerdata.ReplicaWasPromotedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicaWasPromotedResponse, error) {
+	out := new(tabletmanagerdata.ReplicaWasPromotedResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ReplicaWasPromoted", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -539,9 +547,9 @@ func (c *tabletManagerClient) SetMaster(ctx context.Context, in *tabletmanagerda
 	return out, nil
 }
 
-func (c *tabletManagerClient) SlaveWasRestarted(ctx context.Context, in *tabletmanagerdata.SlaveWasRestartedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SlaveWasRestartedResponse, error) {
-	out := new(tabletmanagerdata.SlaveWasRestartedResponse)
-	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SlaveWasRestarted", in, out, opts...)
+func (c *tabletManagerClient) ReplicaWasRestarted(ctx context.Context, in *tabletmanagerdata.ReplicaWasRestartedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicaWasRestartedResponse, error) {
+	out := new(tabletmanagerdata.ReplicaWasRestartedResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ReplicaWasRestarted", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -551,15 +559,6 @@ func (c *tabletManagerClient) SlaveWasRestarted(ctx context.Context, in *tabletm
 func (c *tabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, in *tabletmanagerdata.StopReplicationAndGetStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopReplicationAndGetStatusResponse, error) {
 	out := new(tabletmanagerdata.StopReplicationAndGetStatusResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StopReplicationAndGetStatus", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *tabletManagerClient) PromoteSlave(ctx context.Context, in *tabletmanagerdata.PromoteSlaveRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PromoteSlaveResponse, error) {
-	out := new(tabletmanagerdata.PromoteSlaveResponse)
-	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/PromoteSlave", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -639,6 +638,87 @@ func (x *tabletManagerRestoreFromBackupClient) Recv() (*tabletmanagerdata.Restor
 	return m, nil
 }
 
+func (c *tabletManagerClient) SlaveStatus(ctx context.Context, in *tabletmanagerdata.SlaveStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SlaveStatusResponse, error) {
+	out := new(tabletmanagerdata.SlaveStatusResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SlaveStatus", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) StopSlave(ctx context.Context, in *tabletmanagerdata.StopSlaveRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopSlaveResponse, error) {
+	out := new(tabletmanagerdata.StopSlaveResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StopSlave", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) StopSlaveMinimum(ctx context.Context, in *tabletmanagerdata.StopSlaveMinimumRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopSlaveMinimumResponse, error) {
+	out := new(tabletmanagerdata.StopSlaveMinimumResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StopSlaveMinimum", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) StartSlave(ctx context.Context, in *tabletmanagerdata.StartSlaveRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StartSlaveResponse, error) {
+	out := new(tabletmanagerdata.StartSlaveResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StartSlave", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) StartSlaveUntilAfter(ctx context.Context, in *tabletmanagerdata.StartSlaveUntilAfterRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StartSlaveUntilAfterResponse, error) {
+	out := new(tabletmanagerdata.StartSlaveUntilAfterResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StartSlaveUntilAfter", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) GetSlaves(ctx context.Context, in *tabletmanagerdata.GetSlavesRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetSlavesResponse, error) {
+	out := new(tabletmanagerdata.GetSlavesResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/GetSlaves", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) InitSlave(ctx context.Context, in *tabletmanagerdata.InitSlaveRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitSlaveResponse, error) {
+	out := new(tabletmanagerdata.InitSlaveResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/InitSlave", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) SlaveWasPromoted(ctx context.Context, in *tabletmanagerdata.SlaveWasPromotedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SlaveWasPromotedResponse, error) {
+	out := new(tabletmanagerdata.SlaveWasPromotedResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SlaveWasPromoted", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) SlaveWasRestarted(ctx context.Context, in *tabletmanagerdata.SlaveWasRestartedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SlaveWasRestartedResponse, error) {
+	out := new(tabletmanagerdata.SlaveWasRestartedResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SlaveWasRestarted", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TabletManagerServer is the server API for TabletManager service.
 type TabletManagerServer interface {
 	// Ping returns the input payload
@@ -666,24 +746,24 @@ type TabletManagerServer interface {
 	ExecuteFetchAsDba(context.Context, *tabletmanagerdata.ExecuteFetchAsDbaRequest) (*tabletmanagerdata.ExecuteFetchAsDbaResponse, error)
 	ExecuteFetchAsAllPrivs(context.Context, *tabletmanagerdata.ExecuteFetchAsAllPrivsRequest) (*tabletmanagerdata.ExecuteFetchAsAllPrivsResponse, error)
 	ExecuteFetchAsApp(context.Context, *tabletmanagerdata.ExecuteFetchAsAppRequest) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error)
-	// SlaveStatus returns the current slave status.
-	SlaveStatus(context.Context, *tabletmanagerdata.SlaveStatusRequest) (*tabletmanagerdata.SlaveStatusResponse, error)
+	// ReplicationStatus returns the current replication status.
+	ReplicationStatus(context.Context, *tabletmanagerdata.ReplicationStatusRequest) (*tabletmanagerdata.ReplicationStatusResponse, error)
 	// MasterPosition returns the current master position
 	MasterPosition(context.Context, *tabletmanagerdata.MasterPositionRequest) (*tabletmanagerdata.MasterPositionResponse, error)
 	// WaitForPosition waits for the position to be reached
 	WaitForPosition(context.Context, *tabletmanagerdata.WaitForPositionRequest) (*tabletmanagerdata.WaitForPositionResponse, error)
-	// StopSlave makes mysql stop its replication
-	StopSlave(context.Context, *tabletmanagerdata.StopSlaveRequest) (*tabletmanagerdata.StopSlaveResponse, error)
-	// StopSlaveMinimum stops the mysql replication after it reaches
+	// StopReplication makes mysql stop its replication
+	StopReplication(context.Context, *tabletmanagerdata.StopReplicationRequest) (*tabletmanagerdata.StopReplicationResponse, error)
+	// StopReplicationMinimum stops the mysql replication after it reaches
 	// the provided minimum point
-	StopSlaveMinimum(context.Context, *tabletmanagerdata.StopSlaveMinimumRequest) (*tabletmanagerdata.StopSlaveMinimumResponse, error)
-	// StartSlave starts the mysql replication
-	StartSlave(context.Context, *tabletmanagerdata.StartSlaveRequest) (*tabletmanagerdata.StartSlaveResponse, error)
-	// StartSlave starts the mysql replication until and including
+	StopReplicationMinimum(context.Context, *tabletmanagerdata.StopReplicationMinimumRequest) (*tabletmanagerdata.StopReplicationMinimumResponse, error)
+	// StartReplication starts the mysql replication
+	StartReplication(context.Context, *tabletmanagerdata.StartReplicationRequest) (*tabletmanagerdata.StartReplicationResponse, error)
+	// StartReplicationUnitAfter starts the mysql replication until and including
 	// the provided position
-	StartSlaveUntilAfter(context.Context, *tabletmanagerdata.StartSlaveUntilAfterRequest) (*tabletmanagerdata.StartSlaveUntilAfterResponse, error)
-	// GetSlaves asks for the list of mysql slaves
-	GetSlaves(context.Context, *tabletmanagerdata.GetSlavesRequest) (*tabletmanagerdata.GetSlavesResponse, error)
+	StartReplicationUntilAfter(context.Context, *tabletmanagerdata.StartReplicationUntilAfterRequest) (*tabletmanagerdata.StartReplicationUntilAfterResponse, error)
+	// GetReplicas asks for the list of mysql replicas
+	GetReplicas(context.Context, *tabletmanagerdata.GetReplicasRequest) (*tabletmanagerdata.GetReplicasResponse, error)
 	// VReplication API
 	VReplicationExec(context.Context, *tabletmanagerdata.VReplicationExecRequest) (*tabletmanagerdata.VReplicationExecResponse, error)
 	VReplicationWaitForPos(context.Context, *tabletmanagerdata.VReplicationWaitForPosRequest) (*tabletmanagerdata.VReplicationWaitForPosResponse, error)
@@ -694,33 +774,44 @@ type TabletManagerServer interface {
 	// PopulateReparentJournal tells the tablet to add an entry to its
 	// reparent journal
 	PopulateReparentJournal(context.Context, *tabletmanagerdata.PopulateReparentJournalRequest) (*tabletmanagerdata.PopulateReparentJournalResponse, error)
-	// InitSlave tells the tablet to reparent to the master unconditionally
-	InitSlave(context.Context, *tabletmanagerdata.InitSlaveRequest) (*tabletmanagerdata.InitSlaveResponse, error)
+	// InitReplica tells the tablet to reparent to the master unconditionally
+	InitReplica(context.Context, *tabletmanagerdata.InitReplicaRequest) (*tabletmanagerdata.InitReplicaResponse, error)
 	// DemoteMaster tells the soon-to-be-former master it's gonna change
 	DemoteMaster(context.Context, *tabletmanagerdata.DemoteMasterRequest) (*tabletmanagerdata.DemoteMasterResponse, error)
 	// UndoDemoteMaster reverts all changes made by DemoteMaster
 	UndoDemoteMaster(context.Context, *tabletmanagerdata.UndoDemoteMasterRequest) (*tabletmanagerdata.UndoDemoteMasterResponse, error)
-	// PromoteSlaveWhenCaughtUp tells the remote tablet to catch up,
-	// and then be the master
-	// Deprecated
-	PromoteSlaveWhenCaughtUp(context.Context, *tabletmanagerdata.PromoteSlaveWhenCaughtUpRequest) (*tabletmanagerdata.PromoteSlaveWhenCaughtUpResponse, error)
-	// SlaveWasPromoted tells the remote tablet it is now the master
-	SlaveWasPromoted(context.Context, *tabletmanagerdata.SlaveWasPromotedRequest) (*tabletmanagerdata.SlaveWasPromotedResponse, error)
-	// SetMaster tells the slave to reparent
+	// ReplicaWasPromoted tells the remote tablet it is now the master
+	ReplicaWasPromoted(context.Context, *tabletmanagerdata.ReplicaWasPromotedRequest) (*tabletmanagerdata.ReplicaWasPromotedResponse, error)
+	// SetMaster tells the replica to reparent
 	SetMaster(context.Context, *tabletmanagerdata.SetMasterRequest) (*tabletmanagerdata.SetMasterResponse, error)
-	// SlaveWasRestarted tells the remote tablet its master has changed
-	SlaveWasRestarted(context.Context, *tabletmanagerdata.SlaveWasRestartedRequest) (*tabletmanagerdata.SlaveWasRestartedResponse, error)
+	// ReplicaWasRestarted tells the remote tablet its master has changed
+	ReplicaWasRestarted(context.Context, *tabletmanagerdata.ReplicaWasRestartedRequest) (*tabletmanagerdata.ReplicaWasRestartedResponse, error)
 	// StopReplicationAndGetStatus stops MySQL replication, and returns the
 	// replication status
 	StopReplicationAndGetStatus(context.Context, *tabletmanagerdata.StopReplicationAndGetStatusRequest) (*tabletmanagerdata.StopReplicationAndGetStatusResponse, error)
-	// PromoteSlave makes the slave the new master
-	// Deprecated
-	PromoteSlave(context.Context, *tabletmanagerdata.PromoteSlaveRequest) (*tabletmanagerdata.PromoteSlaveResponse, error)
 	// PromoteReplica makes the replica the new master
 	PromoteReplica(context.Context, *tabletmanagerdata.PromoteReplicaRequest) (*tabletmanagerdata.PromoteReplicaResponse, error)
 	Backup(*tabletmanagerdata.BackupRequest, TabletManager_BackupServer) error
 	// RestoreFromBackup deletes all local data and restores it from the latest backup.
 	RestoreFromBackup(*tabletmanagerdata.RestoreFromBackupRequest, TabletManager_RestoreFromBackupServer) error
+	// Deprecated - remove after 7.0
+	SlaveStatus(context.Context, *tabletmanagerdata.SlaveStatusRequest) (*tabletmanagerdata.SlaveStatusResponse, error)
+	// Deprecated
+	StopSlave(context.Context, *tabletmanagerdata.StopSlaveRequest) (*tabletmanagerdata.StopSlaveResponse, error)
+	// Deprecated
+	StopSlaveMinimum(context.Context, *tabletmanagerdata.StopSlaveMinimumRequest) (*tabletmanagerdata.StopSlaveMinimumResponse, error)
+	// Deprecated
+	StartSlave(context.Context, *tabletmanagerdata.StartSlaveRequest) (*tabletmanagerdata.StartSlaveResponse, error)
+	// Deprecated
+	StartSlaveUntilAfter(context.Context, *tabletmanagerdata.StartSlaveUntilAfterRequest) (*tabletmanagerdata.StartSlaveUntilAfterResponse, error)
+	// Deprecated
+	GetSlaves(context.Context, *tabletmanagerdata.GetSlavesRequest) (*tabletmanagerdata.GetSlavesResponse, error)
+	// Deprecated
+	InitSlave(context.Context, *tabletmanagerdata.InitSlaveRequest) (*tabletmanagerdata.InitSlaveResponse, error)
+	// Deprecated
+	SlaveWasPromoted(context.Context, *tabletmanagerdata.SlaveWasPromotedRequest) (*tabletmanagerdata.SlaveWasPromotedResponse, error)
+	// Deprecated
+	SlaveWasRestarted(context.Context, *tabletmanagerdata.SlaveWasRestartedRequest) (*tabletmanagerdata.SlaveWasRestartedResponse, error)
 }
 
 // UnimplementedTabletManagerServer can be embedded to have forward compatible implementations.
@@ -784,8 +875,8 @@ func (*UnimplementedTabletManagerServer) ExecuteFetchAsAllPrivs(ctx context.Cont
 func (*UnimplementedTabletManagerServer) ExecuteFetchAsApp(ctx context.Context, req *tabletmanagerdata.ExecuteFetchAsAppRequest) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExecuteFetchAsApp not implemented")
 }
-func (*UnimplementedTabletManagerServer) SlaveStatus(ctx context.Context, req *tabletmanagerdata.SlaveStatusRequest) (*tabletmanagerdata.SlaveStatusResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SlaveStatus not implemented")
+func (*UnimplementedTabletManagerServer) ReplicationStatus(ctx context.Context, req *tabletmanagerdata.ReplicationStatusRequest) (*tabletmanagerdata.ReplicationStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReplicationStatus not implemented")
 }
 func (*UnimplementedTabletManagerServer) MasterPosition(ctx context.Context, req *tabletmanagerdata.MasterPositionRequest) (*tabletmanagerdata.MasterPositionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MasterPosition not implemented")
@@ -793,20 +884,20 @@ func (*UnimplementedTabletManagerServer) MasterPosition(ctx context.Context, req
 func (*UnimplementedTabletManagerServer) WaitForPosition(ctx context.Context, req *tabletmanagerdata.WaitForPositionRequest) (*tabletmanagerdata.WaitForPositionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WaitForPosition not implemented")
 }
-func (*UnimplementedTabletManagerServer) StopSlave(ctx context.Context, req *tabletmanagerdata.StopSlaveRequest) (*tabletmanagerdata.StopSlaveResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StopSlave not implemented")
+func (*UnimplementedTabletManagerServer) StopReplication(ctx context.Context, req *tabletmanagerdata.StopReplicationRequest) (*tabletmanagerdata.StopReplicationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopReplication not implemented")
 }
-func (*UnimplementedTabletManagerServer) StopSlaveMinimum(ctx context.Context, req *tabletmanagerdata.StopSlaveMinimumRequest) (*tabletmanagerdata.StopSlaveMinimumResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StopSlaveMinimum not implemented")
+func (*UnimplementedTabletManagerServer) StopReplicationMinimum(ctx context.Context, req *tabletmanagerdata.StopReplicationMinimumRequest) (*tabletmanagerdata.StopReplicationMinimumResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopReplicationMinimum not implemented")
 }
-func (*UnimplementedTabletManagerServer) StartSlave(ctx context.Context, req *tabletmanagerdata.StartSlaveRequest) (*tabletmanagerdata.StartSlaveResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StartSlave not implemented")
+func (*UnimplementedTabletManagerServer) StartReplication(ctx context.Context, req *tabletmanagerdata.StartReplicationRequest) (*tabletmanagerdata.StartReplicationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartReplication not implemented")
 }
-func (*UnimplementedTabletManagerServer) StartSlaveUntilAfter(ctx context.Context, req *tabletmanagerdata.StartSlaveUntilAfterRequest) (*tabletmanagerdata.StartSlaveUntilAfterResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StartSlaveUntilAfter not implemented")
+func (*UnimplementedTabletManagerServer) StartReplicationUntilAfter(ctx context.Context, req *tabletmanagerdata.StartReplicationUntilAfterRequest) (*tabletmanagerdata.StartReplicationUntilAfterResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartReplicationUntilAfter not implemented")
 }
-func (*UnimplementedTabletManagerServer) GetSlaves(ctx context.Context, req *tabletmanagerdata.GetSlavesRequest) (*tabletmanagerdata.GetSlavesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetSlaves not implemented")
+func (*UnimplementedTabletManagerServer) GetReplicas(ctx context.Context, req *tabletmanagerdata.GetReplicasRequest) (*tabletmanagerdata.GetReplicasResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetReplicas not implemented")
 }
 func (*UnimplementedTabletManagerServer) VReplicationExec(ctx context.Context, req *tabletmanagerdata.VReplicationExecRequest) (*tabletmanagerdata.VReplicationExecResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VReplicationExec not implemented")
@@ -823,8 +914,8 @@ func (*UnimplementedTabletManagerServer) InitMaster(ctx context.Context, req *ta
 func (*UnimplementedTabletManagerServer) PopulateReparentJournal(ctx context.Context, req *tabletmanagerdata.PopulateReparentJournalRequest) (*tabletmanagerdata.PopulateReparentJournalResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PopulateReparentJournal not implemented")
 }
-func (*UnimplementedTabletManagerServer) InitSlave(ctx context.Context, req *tabletmanagerdata.InitSlaveRequest) (*tabletmanagerdata.InitSlaveResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method InitSlave not implemented")
+func (*UnimplementedTabletManagerServer) InitReplica(ctx context.Context, req *tabletmanagerdata.InitReplicaRequest) (*tabletmanagerdata.InitReplicaResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method InitReplica not implemented")
 }
 func (*UnimplementedTabletManagerServer) DemoteMaster(ctx context.Context, req *tabletmanagerdata.DemoteMasterRequest) (*tabletmanagerdata.DemoteMasterResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DemoteMaster not implemented")
@@ -832,23 +923,17 @@ func (*UnimplementedTabletManagerServer) DemoteMaster(ctx context.Context, req *
 func (*UnimplementedTabletManagerServer) UndoDemoteMaster(ctx context.Context, req *tabletmanagerdata.UndoDemoteMasterRequest) (*tabletmanagerdata.UndoDemoteMasterResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UndoDemoteMaster not implemented")
 }
-func (*UnimplementedTabletManagerServer) PromoteSlaveWhenCaughtUp(ctx context.Context, req *tabletmanagerdata.PromoteSlaveWhenCaughtUpRequest) (*tabletmanagerdata.PromoteSlaveWhenCaughtUpResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PromoteSlaveWhenCaughtUp not implemented")
-}
-func (*UnimplementedTabletManagerServer) SlaveWasPromoted(ctx context.Context, req *tabletmanagerdata.SlaveWasPromotedRequest) (*tabletmanagerdata.SlaveWasPromotedResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SlaveWasPromoted not implemented")
+func (*UnimplementedTabletManagerServer) ReplicaWasPromoted(ctx context.Context, req *tabletmanagerdata.ReplicaWasPromotedRequest) (*tabletmanagerdata.ReplicaWasPromotedResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReplicaWasPromoted not implemented")
 }
 func (*UnimplementedTabletManagerServer) SetMaster(ctx context.Context, req *tabletmanagerdata.SetMasterRequest) (*tabletmanagerdata.SetMasterResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetMaster not implemented")
 }
-func (*UnimplementedTabletManagerServer) SlaveWasRestarted(ctx context.Context, req *tabletmanagerdata.SlaveWasRestartedRequest) (*tabletmanagerdata.SlaveWasRestartedResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SlaveWasRestarted not implemented")
+func (*UnimplementedTabletManagerServer) ReplicaWasRestarted(ctx context.Context, req *tabletmanagerdata.ReplicaWasRestartedRequest) (*tabletmanagerdata.ReplicaWasRestartedResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReplicaWasRestarted not implemented")
 }
 func (*UnimplementedTabletManagerServer) StopReplicationAndGetStatus(ctx context.Context, req *tabletmanagerdata.StopReplicationAndGetStatusRequest) (*tabletmanagerdata.StopReplicationAndGetStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopReplicationAndGetStatus not implemented")
-}
-func (*UnimplementedTabletManagerServer) PromoteSlave(ctx context.Context, req *tabletmanagerdata.PromoteSlaveRequest) (*tabletmanagerdata.PromoteSlaveResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PromoteSlave not implemented")
 }
 func (*UnimplementedTabletManagerServer) PromoteReplica(ctx context.Context, req *tabletmanagerdata.PromoteReplicaRequest) (*tabletmanagerdata.PromoteReplicaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PromoteReplica not implemented")
@@ -858,6 +943,33 @@ func (*UnimplementedTabletManagerServer) Backup(req *tabletmanagerdata.BackupReq
 }
 func (*UnimplementedTabletManagerServer) RestoreFromBackup(req *tabletmanagerdata.RestoreFromBackupRequest, srv TabletManager_RestoreFromBackupServer) error {
 	return status.Errorf(codes.Unimplemented, "method RestoreFromBackup not implemented")
+}
+func (*UnimplementedTabletManagerServer) SlaveStatus(ctx context.Context, req *tabletmanagerdata.SlaveStatusRequest) (*tabletmanagerdata.SlaveStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SlaveStatus not implemented")
+}
+func (*UnimplementedTabletManagerServer) StopSlave(ctx context.Context, req *tabletmanagerdata.StopSlaveRequest) (*tabletmanagerdata.StopSlaveResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopSlave not implemented")
+}
+func (*UnimplementedTabletManagerServer) StopSlaveMinimum(ctx context.Context, req *tabletmanagerdata.StopSlaveMinimumRequest) (*tabletmanagerdata.StopSlaveMinimumResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopSlaveMinimum not implemented")
+}
+func (*UnimplementedTabletManagerServer) StartSlave(ctx context.Context, req *tabletmanagerdata.StartSlaveRequest) (*tabletmanagerdata.StartSlaveResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartSlave not implemented")
+}
+func (*UnimplementedTabletManagerServer) StartSlaveUntilAfter(ctx context.Context, req *tabletmanagerdata.StartSlaveUntilAfterRequest) (*tabletmanagerdata.StartSlaveUntilAfterResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartSlaveUntilAfter not implemented")
+}
+func (*UnimplementedTabletManagerServer) GetSlaves(ctx context.Context, req *tabletmanagerdata.GetSlavesRequest) (*tabletmanagerdata.GetSlavesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSlaves not implemented")
+}
+func (*UnimplementedTabletManagerServer) InitSlave(ctx context.Context, req *tabletmanagerdata.InitSlaveRequest) (*tabletmanagerdata.InitSlaveResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method InitSlave not implemented")
+}
+func (*UnimplementedTabletManagerServer) SlaveWasPromoted(ctx context.Context, req *tabletmanagerdata.SlaveWasPromotedRequest) (*tabletmanagerdata.SlaveWasPromotedResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SlaveWasPromoted not implemented")
+}
+func (*UnimplementedTabletManagerServer) SlaveWasRestarted(ctx context.Context, req *tabletmanagerdata.SlaveWasRestartedRequest) (*tabletmanagerdata.SlaveWasRestartedResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SlaveWasRestarted not implemented")
 }
 
 func RegisterTabletManagerServer(s *grpc.Server, srv TabletManagerServer) {
@@ -1206,20 +1318,20 @@ func _TabletManager_ExecuteFetchAsApp_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_SlaveStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.SlaveStatusRequest)
+func _TabletManager_ReplicationStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.ReplicationStatusRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(TabletManagerServer).SlaveStatus(ctx, in)
+		return srv.(TabletManagerServer).ReplicationStatus(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/tabletmanagerservice.TabletManager/SlaveStatus",
+		FullMethod: "/tabletmanagerservice.TabletManager/ReplicationStatus",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).SlaveStatus(ctx, req.(*tabletmanagerdata.SlaveStatusRequest))
+		return srv.(TabletManagerServer).ReplicationStatus(ctx, req.(*tabletmanagerdata.ReplicationStatusRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1260,92 +1372,92 @@ func _TabletManager_WaitForPosition_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_StopSlave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.StopSlaveRequest)
+func _TabletManager_StopReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.StopReplicationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(TabletManagerServer).StopSlave(ctx, in)
+		return srv.(TabletManagerServer).StopReplication(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/tabletmanagerservice.TabletManager/StopSlave",
+		FullMethod: "/tabletmanagerservice.TabletManager/StopReplication",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).StopSlave(ctx, req.(*tabletmanagerdata.StopSlaveRequest))
+		return srv.(TabletManagerServer).StopReplication(ctx, req.(*tabletmanagerdata.StopReplicationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_StopSlaveMinimum_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.StopSlaveMinimumRequest)
+func _TabletManager_StopReplicationMinimum_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.StopReplicationMinimumRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(TabletManagerServer).StopSlaveMinimum(ctx, in)
+		return srv.(TabletManagerServer).StopReplicationMinimum(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/tabletmanagerservice.TabletManager/StopSlaveMinimum",
+		FullMethod: "/tabletmanagerservice.TabletManager/StopReplicationMinimum",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).StopSlaveMinimum(ctx, req.(*tabletmanagerdata.StopSlaveMinimumRequest))
+		return srv.(TabletManagerServer).StopReplicationMinimum(ctx, req.(*tabletmanagerdata.StopReplicationMinimumRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_StartSlave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.StartSlaveRequest)
+func _TabletManager_StartReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.StartReplicationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(TabletManagerServer).StartSlave(ctx, in)
+		return srv.(TabletManagerServer).StartReplication(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/tabletmanagerservice.TabletManager/StartSlave",
+		FullMethod: "/tabletmanagerservice.TabletManager/StartReplication",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).StartSlave(ctx, req.(*tabletmanagerdata.StartSlaveRequest))
+		return srv.(TabletManagerServer).StartReplication(ctx, req.(*tabletmanagerdata.StartReplicationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_StartSlaveUntilAfter_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.StartSlaveUntilAfterRequest)
+func _TabletManager_StartReplicationUntilAfter_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.StartReplicationUntilAfterRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(TabletManagerServer).StartSlaveUntilAfter(ctx, in)
+		return srv.(TabletManagerServer).StartReplicationUntilAfter(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/tabletmanagerservice.TabletManager/StartSlaveUntilAfter",
+		FullMethod: "/tabletmanagerservice.TabletManager/StartReplicationUntilAfter",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).StartSlaveUntilAfter(ctx, req.(*tabletmanagerdata.StartSlaveUntilAfterRequest))
+		return srv.(TabletManagerServer).StartReplicationUntilAfter(ctx, req.(*tabletmanagerdata.StartReplicationUntilAfterRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_GetSlaves_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.GetSlavesRequest)
+func _TabletManager_GetReplicas_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.GetReplicasRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(TabletManagerServer).GetSlaves(ctx, in)
+		return srv.(TabletManagerServer).GetReplicas(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/tabletmanagerservice.TabletManager/GetSlaves",
+		FullMethod: "/tabletmanagerservice.TabletManager/GetReplicas",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).GetSlaves(ctx, req.(*tabletmanagerdata.GetSlavesRequest))
+		return srv.(TabletManagerServer).GetReplicas(ctx, req.(*tabletmanagerdata.GetReplicasRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1440,20 +1552,20 @@ func _TabletManager_PopulateReparentJournal_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_InitSlave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.InitSlaveRequest)
+func _TabletManager_InitReplica_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.InitReplicaRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(TabletManagerServer).InitSlave(ctx, in)
+		return srv.(TabletManagerServer).InitReplica(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/tabletmanagerservice.TabletManager/InitSlave",
+		FullMethod: "/tabletmanagerservice.TabletManager/InitReplica",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).InitSlave(ctx, req.(*tabletmanagerdata.InitSlaveRequest))
+		return srv.(TabletManagerServer).InitReplica(ctx, req.(*tabletmanagerdata.InitReplicaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1494,38 +1606,20 @@ func _TabletManager_UndoDemoteMaster_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_PromoteSlaveWhenCaughtUp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.PromoteSlaveWhenCaughtUpRequest)
+func _TabletManager_ReplicaWasPromoted_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.ReplicaWasPromotedRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(TabletManagerServer).PromoteSlaveWhenCaughtUp(ctx, in)
+		return srv.(TabletManagerServer).ReplicaWasPromoted(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/tabletmanagerservice.TabletManager/PromoteSlaveWhenCaughtUp",
+		FullMethod: "/tabletmanagerservice.TabletManager/ReplicaWasPromoted",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).PromoteSlaveWhenCaughtUp(ctx, req.(*tabletmanagerdata.PromoteSlaveWhenCaughtUpRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _TabletManager_SlaveWasPromoted_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.SlaveWasPromotedRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TabletManagerServer).SlaveWasPromoted(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/tabletmanagerservice.TabletManager/SlaveWasPromoted",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).SlaveWasPromoted(ctx, req.(*tabletmanagerdata.SlaveWasPromotedRequest))
+		return srv.(TabletManagerServer).ReplicaWasPromoted(ctx, req.(*tabletmanagerdata.ReplicaWasPromotedRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1548,20 +1642,20 @@ func _TabletManager_SetMaster_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_SlaveWasRestarted_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.SlaveWasRestartedRequest)
+func _TabletManager_ReplicaWasRestarted_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.ReplicaWasRestartedRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(TabletManagerServer).SlaveWasRestarted(ctx, in)
+		return srv.(TabletManagerServer).ReplicaWasRestarted(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/tabletmanagerservice.TabletManager/SlaveWasRestarted",
+		FullMethod: "/tabletmanagerservice.TabletManager/ReplicaWasRestarted",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).SlaveWasRestarted(ctx, req.(*tabletmanagerdata.SlaveWasRestartedRequest))
+		return srv.(TabletManagerServer).ReplicaWasRestarted(ctx, req.(*tabletmanagerdata.ReplicaWasRestartedRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1580,24 +1674,6 @@ func _TabletManager_StopReplicationAndGetStatus_Handler(srv interface{}, ctx con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TabletManagerServer).StopReplicationAndGetStatus(ctx, req.(*tabletmanagerdata.StopReplicationAndGetStatusRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _TabletManager_PromoteSlave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.PromoteSlaveRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TabletManagerServer).PromoteSlave(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/tabletmanagerservice.TabletManager/PromoteSlave",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).PromoteSlave(ctx, req.(*tabletmanagerdata.PromoteSlaveRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1660,6 +1736,168 @@ type tabletManagerRestoreFromBackupServer struct {
 
 func (x *tabletManagerRestoreFromBackupServer) Send(m *tabletmanagerdata.RestoreFromBackupResponse) error {
 	return x.ServerStream.SendMsg(m)
+}
+
+func _TabletManager_SlaveStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.SlaveStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).SlaveStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/SlaveStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).SlaveStatus(ctx, req.(*tabletmanagerdata.SlaveStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_StopSlave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.StopSlaveRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).StopSlave(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/StopSlave",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).StopSlave(ctx, req.(*tabletmanagerdata.StopSlaveRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_StopSlaveMinimum_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.StopSlaveMinimumRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).StopSlaveMinimum(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/StopSlaveMinimum",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).StopSlaveMinimum(ctx, req.(*tabletmanagerdata.StopSlaveMinimumRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_StartSlave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.StartSlaveRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).StartSlave(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/StartSlave",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).StartSlave(ctx, req.(*tabletmanagerdata.StartSlaveRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_StartSlaveUntilAfter_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.StartSlaveUntilAfterRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).StartSlaveUntilAfter(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/StartSlaveUntilAfter",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).StartSlaveUntilAfter(ctx, req.(*tabletmanagerdata.StartSlaveUntilAfterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_GetSlaves_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.GetSlavesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).GetSlaves(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/GetSlaves",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).GetSlaves(ctx, req.(*tabletmanagerdata.GetSlavesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_InitSlave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.InitSlaveRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).InitSlave(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/InitSlave",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).InitSlave(ctx, req.(*tabletmanagerdata.InitSlaveRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_SlaveWasPromoted_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.SlaveWasPromotedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).SlaveWasPromoted(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/SlaveWasPromoted",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).SlaveWasPromoted(ctx, req.(*tabletmanagerdata.SlaveWasPromotedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_SlaveWasRestarted_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.SlaveWasRestartedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).SlaveWasRestarted(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/SlaveWasRestarted",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).SlaveWasRestarted(ctx, req.(*tabletmanagerdata.SlaveWasRestartedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 var _TabletManager_serviceDesc = grpc.ServiceDesc{
@@ -1743,8 +1981,8 @@ var _TabletManager_serviceDesc = grpc.ServiceDesc{
 			Handler:    _TabletManager_ExecuteFetchAsApp_Handler,
 		},
 		{
-			MethodName: "SlaveStatus",
-			Handler:    _TabletManager_SlaveStatus_Handler,
+			MethodName: "ReplicationStatus",
+			Handler:    _TabletManager_ReplicationStatus_Handler,
 		},
 		{
 			MethodName: "MasterPosition",
@@ -1755,24 +1993,24 @@ var _TabletManager_serviceDesc = grpc.ServiceDesc{
 			Handler:    _TabletManager_WaitForPosition_Handler,
 		},
 		{
-			MethodName: "StopSlave",
-			Handler:    _TabletManager_StopSlave_Handler,
+			MethodName: "StopReplication",
+			Handler:    _TabletManager_StopReplication_Handler,
 		},
 		{
-			MethodName: "StopSlaveMinimum",
-			Handler:    _TabletManager_StopSlaveMinimum_Handler,
+			MethodName: "StopReplicationMinimum",
+			Handler:    _TabletManager_StopReplicationMinimum_Handler,
 		},
 		{
-			MethodName: "StartSlave",
-			Handler:    _TabletManager_StartSlave_Handler,
+			MethodName: "StartReplication",
+			Handler:    _TabletManager_StartReplication_Handler,
 		},
 		{
-			MethodName: "StartSlaveUntilAfter",
-			Handler:    _TabletManager_StartSlaveUntilAfter_Handler,
+			MethodName: "StartReplicationUntilAfter",
+			Handler:    _TabletManager_StartReplicationUntilAfter_Handler,
 		},
 		{
-			MethodName: "GetSlaves",
-			Handler:    _TabletManager_GetSlaves_Handler,
+			MethodName: "GetReplicas",
+			Handler:    _TabletManager_GetReplicas_Handler,
 		},
 		{
 			MethodName: "VReplicationExec",
@@ -1795,8 +2033,8 @@ var _TabletManager_serviceDesc = grpc.ServiceDesc{
 			Handler:    _TabletManager_PopulateReparentJournal_Handler,
 		},
 		{
-			MethodName: "InitSlave",
-			Handler:    _TabletManager_InitSlave_Handler,
+			MethodName: "InitReplica",
+			Handler:    _TabletManager_InitReplica_Handler,
 		},
 		{
 			MethodName: "DemoteMaster",
@@ -1807,32 +2045,60 @@ var _TabletManager_serviceDesc = grpc.ServiceDesc{
 			Handler:    _TabletManager_UndoDemoteMaster_Handler,
 		},
 		{
-			MethodName: "PromoteSlaveWhenCaughtUp",
-			Handler:    _TabletManager_PromoteSlaveWhenCaughtUp_Handler,
-		},
-		{
-			MethodName: "SlaveWasPromoted",
-			Handler:    _TabletManager_SlaveWasPromoted_Handler,
+			MethodName: "ReplicaWasPromoted",
+			Handler:    _TabletManager_ReplicaWasPromoted_Handler,
 		},
 		{
 			MethodName: "SetMaster",
 			Handler:    _TabletManager_SetMaster_Handler,
 		},
 		{
-			MethodName: "SlaveWasRestarted",
-			Handler:    _TabletManager_SlaveWasRestarted_Handler,
+			MethodName: "ReplicaWasRestarted",
+			Handler:    _TabletManager_ReplicaWasRestarted_Handler,
 		},
 		{
 			MethodName: "StopReplicationAndGetStatus",
 			Handler:    _TabletManager_StopReplicationAndGetStatus_Handler,
 		},
 		{
-			MethodName: "PromoteSlave",
-			Handler:    _TabletManager_PromoteSlave_Handler,
-		},
-		{
 			MethodName: "PromoteReplica",
 			Handler:    _TabletManager_PromoteReplica_Handler,
+		},
+		{
+			MethodName: "SlaveStatus",
+			Handler:    _TabletManager_SlaveStatus_Handler,
+		},
+		{
+			MethodName: "StopSlave",
+			Handler:    _TabletManager_StopSlave_Handler,
+		},
+		{
+			MethodName: "StopSlaveMinimum",
+			Handler:    _TabletManager_StopSlaveMinimum_Handler,
+		},
+		{
+			MethodName: "StartSlave",
+			Handler:    _TabletManager_StartSlave_Handler,
+		},
+		{
+			MethodName: "StartSlaveUntilAfter",
+			Handler:    _TabletManager_StartSlaveUntilAfter_Handler,
+		},
+		{
+			MethodName: "GetSlaves",
+			Handler:    _TabletManager_GetSlaves_Handler,
+		},
+		{
+			MethodName: "InitSlave",
+			Handler:    _TabletManager_InitSlave_Handler,
+		},
+		{
+			MethodName: "SlaveWasPromoted",
+			Handler:    _TabletManager_SlaveWasPromoted_Handler,
+		},
+		{
+			MethodName: "SlaveWasRestarted",
+			Handler:    _TabletManager_SlaveWasRestarted_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

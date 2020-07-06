@@ -100,10 +100,6 @@ type Mycnf struct {
 	// (unused by vt software for now)
 	TmpDir string
 
-	// SlaveLoadTmpDir is where to create tmp files for replication
-	// (unused by vt software for now)
-	SlaveLoadTmpDir string
-
 	mycnfMap map[string]string
 	path     string // the actual path that represents this mycnf
 }
@@ -207,7 +203,6 @@ func ReadMycnf(mycnf *Mycnf) (*Mycnf, error) {
 		"master-info-file":          &mycnf.MasterInfoFile,
 		"pid-file":                  &mycnf.PidFile,
 		"tmpdir":                    &mycnf.TmpDir,
-		"slave_load_tmpdir":         &mycnf.SlaveLoadTmpDir,
 	}
 	for key, member := range mapping {
 		val, err := mycnf.lookupWithDefault(key, *member)

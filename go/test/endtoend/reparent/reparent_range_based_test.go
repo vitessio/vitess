@@ -71,7 +71,7 @@ func TestReparentGracefulRangeBased(t *testing.T) {
 	if strArray[len(strArray)-1] == "" {
 		strArray = strArray[:len(strArray)-1] // Truncate slice, remove empty line
 	}
-	assert.Equal(t, 2, len(strArray))         // one master, one slave
+	assert.Equal(t, 2, len(strArray))         // one master, one replica
 	assert.Contains(t, strArray[0], "master") // master first
 
 	// Perform a graceful reparent operation

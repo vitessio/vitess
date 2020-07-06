@@ -20,8 +20,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gotest.tools/assert"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -129,6 +129,21 @@ func TestExecWithDbconnClosedHavingTx(t *testing.T) {
 
 	_, err = conn.Exec(ctx, "", 0, false)
 	require.EqualError(t, err, "transaction was aborted: foobar")
+}
+
+func TestFailOnConnectionRegistering(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	pool := newActivePool()
+	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	conn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	defer conn.Close()
+
+	pool.lastID.Set(conn.ConnID - 1)
+
+	_, err = pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	require.Error(t, err, "already present")
 }
 
 func newActivePool() *StatefulConnectionPool {

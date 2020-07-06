@@ -110,30 +110,48 @@ type TabletManagerClient interface {
 	// Replication related methods
 	//
 
-	// SlaveStatus returns the tablet's mysql slave status.
+	// Deprecated
 	SlaveStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error)
+
+	// Deprecated
+	StopSlave(ctx context.Context, tablet *topodatapb.Tablet) error
+
+	// Deprecated
+	StopSlaveMinimum(ctx context.Context, tablet *topodatapb.Tablet, stopPos string, waitTime time.Duration) (string, error)
+
+	// Deprecated
+	StartSlave(ctx context.Context, tablet *topodatapb.Tablet) error
+
+	// Deprecated
+	StartSlaveUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, duration time.Duration) error
+
+	// Deprecated
+	GetSlaves(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error)
+
+	// ReplicationStatus returns the tablet's mysql replication status.
+	ReplicationStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error)
+
+	// StopReplication stops the mysql replication
+	StopReplication(ctx context.Context, tablet *topodatapb.Tablet) error
+
+	// StopReplicationMinimum stops the mysql replication after it reaches
+	// the provided minimum point
+	StopReplicationMinimum(ctx context.Context, tablet *topodatapb.Tablet, stopPos string, waitTime time.Duration) (string, error)
+
+	// StartReplication starts the mysql replication
+	StartReplication(ctx context.Context, tablet *topodatapb.Tablet) error
+
+	// StartReplicationUntilAfter starts replication until after the position specified
+	StartReplicationUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, duration time.Duration) error
+
+	// GetReplicas returns the addresses of the replicas
+	GetReplicas(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error)
 
 	// MasterPosition returns the tablet's master position
 	MasterPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
 
 	// WaitForPosition waits for the position to be reached
 	WaitForPosition(ctx context.Context, tablet *topodatapb.Tablet, pos string) error
-
-	// StopSlave stops the mysql replication
-	StopSlave(ctx context.Context, tablet *topodatapb.Tablet) error
-
-	// StopSlaveMinimum stops the mysql replication after it reaches
-	// the provided minimum point
-	StopSlaveMinimum(ctx context.Context, tablet *topodatapb.Tablet, stopPos string, waitTime time.Duration) (string, error)
-
-	// StartSlave starts the mysql replication
-	StartSlave(ctx context.Context, tablet *topodatapb.Tablet) error
-
-	// StartSlaveUntilAfter starts replication until after the position specified
-	StartSlaveUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, duration time.Duration) error
-
-	// GetSlaves returns the addresses of the slaves
-	GetSlaves(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error)
 
 	// VReplicationExec executes a VReplication command
 	VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error)
@@ -149,7 +167,7 @@ type TabletManagerClient interface {
 	ResetReplication(ctx context.Context, tablet *topodatapb.Tablet) error
 
 	// InitMaster tells a tablet to make itself the new master,
-	// and return the replication position the slaves should use to
+	// and return the replication position the replicas should use to
 	// reparent to it.
 	InitMaster(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
 
@@ -157,10 +175,13 @@ type TabletManagerClient interface {
 	// its reparent_journal table.
 	PopulateReparentJournal(ctx context.Context, tablet *topodatapb.Tablet, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, pos string) error
 
-	// InitSlave tells a tablet to make itself a slave to the
+	// Deprecated
+	InitSlave(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error
+
+	// InitReplica tells a tablet to start replicating from the
 	// passed in master tablet alias, and wait for the row in the
 	// reparent_journal table.
-	InitSlave(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error
+	InitReplica(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error
 
 	// DemoteMaster tells the soon-to-be-former master it's going to change,
 	// and it should go read-only and return its current position.
@@ -170,28 +191,26 @@ type TabletManagerClient interface {
 	// To be used if we are unable to promote the chosen new master
 	UndoDemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) error
 
-	// PromoteSlaveWhenCaughtUp transforms the tablet from a slave to a master.
 	// Deprecated
-	PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topodatapb.Tablet, pos string) (string, error)
-
-	// SlaveWasPromoted tells the remote tablet it is now the master
 	SlaveWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error
 
-	// SetMaster tells a tablet to make itself a slave to the
+	// ReplicaWasPromoted tells the remote tablet it is now the master
+	ReplicaWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error
+
+	// SetMaster tells a tablet to start replicating from the
 	// passed in master tablet alias, and wait for the row in the
 	// reparent_journal table (if timeCreatedNS is non-zero).
-	SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) error
+	SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error
 
-	// SlaveWasRestarted tells the remote tablet its master has changed
+	// Deprecated
 	SlaveWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias) error
+
+	// ReplicaWasRestarted tells the replica tablet its master has changed
+	ReplicaWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias) error
 
 	// StopReplicationAndGetStatus stops replication and returns the
 	// current position.
 	StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopIOThreadOnly bool) (*replicationdatapb.Status, *replicationdatapb.StopReplicationStatus, error)
-
-	// PromoteSlave makes the tablet the new master
-	// Deprecated
-	PromoteSlave(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
 
 	// PromoteReplica makes the tablet the new master
 	PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet) (string, error)

@@ -73,9 +73,9 @@ import (
 )
 
 const (
-	// slaveStoppedFile is the name of the file whose existence informs
+	// replicationStoppedFile is the name of the file whose existence informs
 	// vttablet to NOT try to repair replication.
-	slaveStoppedFile = "do_not_replicate"
+	replicationStoppedFile = "do_not_replicate"
 )
 
 var (
@@ -110,6 +110,10 @@ var (
 	// The following variables can be changed to speed up tests.
 	mysqlPortRetryInterval       = 1 * time.Second
 	rebuildKeyspaceRetryInterval = 1 * time.Second
+
+	// demoteMasterType is deprecated.
+	// TODO(sougou); remove after release 7.0.
+	demoteMasterType = flag.String("demote_master_type", "REPLICA", "DEPRECATED: the tablet type a demoted master will transition to")
 )
 
 func init() {
@@ -209,9 +213,9 @@ type TabletManager struct {
 	// healthcheck errors. It should only be accessed while holding actionMutex.
 	_ignoreHealthErrorExpr *regexp.Regexp
 
-	// _slaveStopped remembers if we've been told to stop replicating.
-	// If it's nil, we'll try to check for the slaveStoppedFile.
-	_slaveStopped *bool
+	// _replicationStopped remembers if we've been told to stop replicating.
+	// If it's nil, we'll try to check for the replicationStoppedFile.
+	_replicationStopped *bool
 
 	// _lockTablesConnection is used to get and release the table read locks to pause replication
 	_lockTablesConnection *dbconnpool.DBConnection
@@ -281,6 +285,13 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet) error {
 	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
 	tm.History = history.New(historyLength)
 	tm.tabletAlias = tablet.Alias
+	demoteType, err := topoproto.ParseTabletType(*demoteMasterType)
+	if err != nil {
+		return err
+	}
+	if demoteType != tablet.Type {
+		log.Warningf("deprecated demote_master_type %v must match init_tablet_type %v", demoteType, tablet.Type)
+	}
 	tm.baseTabletType = tablet.Type
 	tm._healthy = fmt.Errorf("healthcheck not run yet")
 
@@ -299,7 +310,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet) error {
 		return err
 	}
 
-	err := tm.QueryServiceControl.InitDBConfig(querypb.Target{
+	err = tm.QueryServiceControl.InitDBConfig(querypb.Target{
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,
@@ -763,13 +774,13 @@ func (tm *TabletManager) DisallowQueryService() string {
 	return tm._disallowQueryService
 }
 
-func (tm *TabletManager) slaveStopped() bool {
+func (tm *TabletManager) replicationStopped() bool {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
 
 	// If we already know the value, don't bother checking the file.
-	if tm._slaveStopped != nil {
-		return *tm._slaveStopped
+	if tm._replicationStopped != nil {
+		return *tm._replicationStopped
 	}
 
 	// If there's no Cnf file, don't read state.
@@ -779,17 +790,17 @@ func (tm *TabletManager) slaveStopped() bool {
 
 	// If the marker file exists, we're stopped.
 	// Treat any read error as if the file doesn't exist.
-	_, err := os.Stat(path.Join(tm.Cnf.TabletDir(), slaveStoppedFile))
-	slaveStopped := err == nil
-	tm._slaveStopped = &slaveStopped
-	return slaveStopped
+	_, err := os.Stat(path.Join(tm.Cnf.TabletDir(), replicationStoppedFile))
+	replicationStopped := err == nil
+	tm._replicationStopped = &replicationStopped
+	return replicationStopped
 }
 
-func (tm *TabletManager) setSlaveStopped(slaveStopped bool) {
+func (tm *TabletManager) setReplicationStopped(stopped bool) {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
 
-	tm._slaveStopped = &slaveStopped
+	tm._replicationStopped = &stopped
 
 	// Make a best-effort attempt to persist the value across tablet restarts.
 	// We store a marker in the filesystem so it works regardless of whether
@@ -802,8 +813,8 @@ func (tm *TabletManager) setSlaveStopped(slaveStopped bool) {
 	if tabletDir == "" {
 		return
 	}
-	markerFile := path.Join(tabletDir, slaveStoppedFile)
-	if slaveStopped {
+	markerFile := path.Join(tabletDir, replicationStoppedFile)
+	if stopped {
 		file, err := os.Create(markerFile)
 		if err == nil {
 			file.Close()

@@ -14,12 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package heartbeat contains a writer and reader of heartbeats for a master-slave cluster.
+// Package heartbeat contains a writer and reader of heartbeats for a master-replica cluster.
 // This is similar to Percona's pt-heartbeat, and is meant to supplement the information
 // returned from SHOW SLAVE STATUS. In some circumstances, lag returned from SHOW SLAVE STATUS
 // is incorrect and is at best only at 1 second resolution. The heartbeat package directly
 // tests replication by writing a record with a timestamp on the master, and comparing that
-// timestamp after reading it on the slave. This happens at the interval defined by heartbeat_interval.
+// timestamp after reading it on the replica. This happens at the interval defined by heartbeat_interval.
 // Note: the lag reported will be affected by clock drift, so it is recommended to run ntpd or similar.
 //
 // The data collected by the heartbeat package is made available in /debug/vars in counters prefixed by Heartbeat*.

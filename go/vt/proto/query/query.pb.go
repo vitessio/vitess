@@ -3885,8 +3885,8 @@ type RealtimeStats struct {
 	// or empty is the server is healthy. This is used for subset selection,
 	// we do not send queries to servers that are not healthy.
 	HealthError string `protobuf:"bytes,1,opt,name=health_error,json=healthError,proto3" json:"health_error,omitempty"`
-	// seconds_behind_master is populated for slaves only. It indicates
-	// how far behind on (MySQL) replication a slave currently is.  It is used
+	// seconds_behind_master is populated for replicas only. It indicates
+	// how far behind on (MySQL) replication a replica currently is.  It is used
 	// by clients for subset selection (so we don't try to send traffic
 	// to tablets that are too far behind).
 	// NOTE: This field must not be evaluated if "health_error" is not empty.

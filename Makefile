@@ -287,6 +287,14 @@ docker_lite_testing:
 	chmod -R o=g *
 	docker build -f docker/lite/Dockerfile.testing -t vitess/lite:testing .
 
+docker_local:
+	chmod -R o=g *
+	docker build -f docker/local/Dockerfile -t vitess/local .
+
+docker_mini:
+	chmod -R o=g *
+	docker build -f docker/mini/Dockerfile -t vitess/mini .
+
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.
 # Example: $ make docker_test flavor=mariadb

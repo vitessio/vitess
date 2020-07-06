@@ -195,14 +195,14 @@ func (tm *TabletManager) runHealthCheckLocked() {
 
 	// run the health check
 	record := &HealthRecord{}
-	isSlaveType := true
+	isReplicaType := true
 	if tablet.Type == topodatapb.TabletType_MASTER {
-		isSlaveType = false
+		isReplicaType = false
 	}
 
 	// Remember the health error as healthErr to be sure we don't
 	// accidentally overwrite it with some other err.
-	replicationDelay, healthErr := tm.HealthReporter.Report(isSlaveType, shouldBeServing)
+	replicationDelay, healthErr := tm.HealthReporter.Report(isReplicaType, shouldBeServing)
 	if healthErr != nil && ignoreErrorExpr != nil &&
 		ignoreErrorExpr.MatchString(healthErr.Error()) {
 		// we need to ignore this health error
@@ -210,8 +210,8 @@ func (tm *TabletManager) runHealthCheckLocked() {
 		record.IgnoreErrorExpr = ignoreErrorExpr.String()
 		healthErr = nil
 	}
-	if healthErr == health.ErrSlaveNotRunning {
-		// The slave is not running, so we just don't know the
+	if healthErr == health.ErrReplicationNotRunning {
+		// Replication is not running, so we just don't know the
 		// delay.  Use a maximum delay, so we can let vtgate
 		// find the right replica, instead of erroring out.
 		// (this works as the check below is a strict > operator).

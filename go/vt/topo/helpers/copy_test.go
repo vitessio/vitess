@@ -19,6 +19,8 @@ package helpers
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/topo"
@@ -72,8 +74,8 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 			"vt":   8101,
 			"grpc": 8102,
 		},
-		Hostname:      "slavehost",
-		MysqlHostname: "slavehost",
+		Hostname:      "replicahost",
+		MysqlHostname: "replicahost",
 
 		Keyspace:       "test_keyspace",
 		Shard:          "0",
@@ -82,9 +84,8 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 		KeyRange:       nil,
 	}
 	tablet2.MysqlPort = 3306
-	if err := fromTS.CreateTablet(ctx, tablet2); err != nil {
-		t.Fatalf("cannot create slave tablet: %v", err)
-	}
+	err := fromTS.CreateTablet(ctx, tablet2)
+	require.NoError(t, err, "cannot create tablet: %v", tablet2)
 
 	rr := &vschemapb.RoutingRules{
 		Rules: []*vschemapb.RoutingRule{{

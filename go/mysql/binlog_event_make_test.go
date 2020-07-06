@@ -307,7 +307,15 @@ func TestRowsEvent(t *testing.T) {
 	f := NewMySQL56BinlogFormat()
 	s := NewFakeBinlogStream()
 
-	tableID := uint64(0x102030405060)
+	/*
+		    Reason for nolint
+		    Used in line 384 to 387
+		    tableID = event.TableID(f)
+				if tableID != 0x102030405060 {
+					t.Fatalf("NewRowsEvent().TableID returned %x", tableID)
+				}
+	*/
+	tableID := uint64(0x102030405060) //nolint
 
 	tm := &TableMap{
 		Flags:    0x8090,

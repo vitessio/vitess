@@ -48,6 +48,7 @@ require (
 	github.com/magiconair/properties v1.8.1
 	github.com/mattn/go-runewidth v0.0.3 // indirect
 	github.com/minio/minio-go v0.0.0-20190131015406-c8a261de75c1
+	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.0 // indirect
 	github.com/mitchellh/mapstructure v1.2.3 // indirect
 	github.com/olekukonko/tablewriter v0.0.0-20180130162743-b8a9be070da4
@@ -77,6 +78,7 @@ require (
 	golang.org/x/lint v0.0.0-20190409202823-959b441ac422
 	golang.org/x/net v0.0.0-20200202094626-16171245cfb2
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
+	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/text v0.3.2
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	golang.org/x/tools v0.0.0-20191219041853-979b82bfef62

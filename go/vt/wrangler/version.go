@@ -87,14 +87,14 @@ func (wr *Wrangler) GetVersion(ctx context.Context, tabletAlias *topodatapb.Tabl
 func (wr *Wrangler) diffVersion(ctx context.Context, masterVersion string, masterAlias *topodatapb.TabletAlias, alias *topodatapb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	log.Infof("Gathering version for %v", topoproto.TabletAliasString(alias))
-	slaveVersion, err := wr.GetVersion(ctx, alias)
+	replicaVersion, err := wr.GetVersion(ctx, alias)
 	if err != nil {
 		er.RecordError(err)
 		return
 	}
 
-	if masterVersion != slaveVersion {
-		er.RecordError(fmt.Errorf("master %v version %v is different than slave %v version %v", topoproto.TabletAliasString(masterAlias), masterVersion, topoproto.TabletAliasString(alias), slaveVersion))
+	if masterVersion != replicaVersion {
+		er.RecordError(fmt.Errorf("master %v version %v is different than replica %v version %v", topoproto.TabletAliasString(masterAlias), masterVersion, topoproto.TabletAliasString(alias), replicaVersion))
 	}
 }
 
@@ -123,7 +123,7 @@ func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard st
 		return err
 	}
 
-	// then diff with all slaves
+	// then diff with all replicas
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for _, alias := range aliases {
