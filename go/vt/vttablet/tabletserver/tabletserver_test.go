@@ -1014,7 +1014,7 @@ func TestTabletServerReserveAndBeginCommit(t *testing.T) {
 	rID = newRID
 
 	// begin and rollback
-	_, txID, _, err = tsv.BeginExecute(ctx, &target, "select 42", nil, rID, options)
+	_, txID, _, err = tsv.BeginExecute(ctx, &target, nil, "select 42", nil, rID, options)
 	require.NoError(t, err)
 	assert.Equal(t, newRID, txID)
 	rID = newRID
@@ -1421,7 +1421,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		_, tx1, _, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, 0, nil)
+		_, tx1, _, err := tsv.BeginExecute(ctx, &target, nil, q1, bvTx1, 0, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
@@ -1436,7 +1436,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 		defer wg.Done()
 
 		<-tx1Started
-		_, tx2, _, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, 0, nil)
+		_, tx2, _, err := tsv.BeginExecute(ctx, &target, nil, q2, bvTx2, 0, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q2, err)
 		}
@@ -1456,7 +1456,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 		defer wg.Done()
 
 		<-tx1Started
-		_, tx3, _, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, 0, nil)
+		_, tx3, _, err := tsv.BeginExecute(ctx, &target, nil, q3, bvTx3, 0, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}
@@ -1493,7 +1493,7 @@ func TestDMLQueryWithoutWhereClause(t *testing.T) {
 
 	db.AddQuery(q+" limit 10001", &sqltypes.Result{})
 
-	_, txid, _, err := tsv.BeginExecute(ctx, &target, q, nil, 0, nil)
+	_, txid, _, err := tsv.BeginExecute(ctx, &target, nil, q, nil, 0, nil)
 	require.NoError(t, err)
 	_, err = tsv.Commit(ctx, &target, txid)
 	require.NoError(t, err)
@@ -1681,7 +1681,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		_, tx1, _, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, 0, nil)
+		_, tx1, _, err := tsv.BeginExecute(ctx, &target, nil, q1, bvTx1, 0, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
@@ -1700,7 +1700,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 		// In that case, we would see less than 3 pending transactions.
 		<-tx1Started
 
-		_, tx2, _, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, 0, nil)
+		_, tx2, _, err := tsv.BeginExecute(ctx, &target, nil, q2, bvTx2, 0, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q2, err)
 		}
@@ -1719,7 +1719,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 		// In that case, we would see less than 3 pending transactions.
 		<-tx1Started
 
-		_, tx3, _, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, 0, nil)
+		_, tx3, _, err := tsv.BeginExecute(ctx, &target, nil, q3, bvTx3, 0, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}
@@ -1817,7 +1817,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		_, tx1, _, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, 0, nil)
+		_, tx1, _, err := tsv.BeginExecute(ctx, &target, nil, q1, bvTx1, 0, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
@@ -1833,7 +1833,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 		defer close(tx2Failed)
 
 		<-tx1Started
-		_, _, _, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, 0, nil)
+		_, _, _, err := tsv.BeginExecute(ctx, &target, nil, q2, bvTx2, 0, nil)
 		if err == nil || vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED || err.Error() != "hot row protection: too many queued transactions (1 >= 1) for the same row (table + WHERE clause: 'test_table where pk = 1 and name = 1')" {
 			t.Errorf("tx2 should have failed because there are too many pending requests: %v", err)
 		}
@@ -2000,7 +2000,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		_, tx1, _, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, 0, nil)
+		_, tx1, _, err := tsv.BeginExecute(ctx, &target, nil, q1, bvTx1, 0, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
@@ -2020,7 +2020,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 		// Wait until tx1 has started to make the test deterministic.
 		<-tx1Started
 
-		_, _, _, err := tsv.BeginExecute(ctxTx2, &target, q2, bvTx2, 0, nil)
+		_, _, _, err := tsv.BeginExecute(ctxTx2, &target, nil, q2, bvTx2, 0, nil)
 		if err == nil || vterrors.Code(err) != vtrpcpb.Code_CANCELED || err.Error() != "context canceled" {
 			t.Errorf("tx2 should have failed because the context was canceled: %v", err)
 		}
@@ -2037,7 +2037,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 			t.Error(err)
 		}
 
-		_, tx3, _, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, 0, nil)
+		_, tx3, _, err := tsv.BeginExecute(ctx, &target, nil, q3, bvTx3, 0, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}
@@ -2639,7 +2639,7 @@ func TestRelease(t *testing.T) {
 				require.NotEqual(t, int64(0), transactionID)
 				require.NotEqual(t, int64(0), reservedID)
 			case test.begin:
-				_, transactionID, _, err = tsv.BeginExecute(ctx, &target, "select 42", nil, 0, &querypb.ExecuteOptions{})
+				_, transactionID, _, err = tsv.BeginExecute(ctx, &target, nil, "select 42", nil, 0, &querypb.ExecuteOptions{})
 				require.NotEqual(t, int64(0), transactionID)
 			case test.reserve:
 				_, reservedID, _, err = tsv.ReserveExecute(ctx, &target, "select 42", nil, nil, 0, &querypb.ExecuteOptions{})

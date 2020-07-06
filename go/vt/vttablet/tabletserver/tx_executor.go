@@ -118,7 +118,7 @@ func (txe *TxExecutor) CommitPrepared(dtid string) error {
 func (txe *TxExecutor) markFailed(ctx context.Context, dtid string) {
 	txe.te.env.Stats().InternalErrors.Add("TwopcCommit", 1)
 	txe.te.preparedPool.SetFailed(dtid)
-	conn, _, err := txe.te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0)
+	conn, _, err := txe.te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	if err != nil {
 		log.Errorf("markFailed: Begin failed for dtid %s: %v", dtid, err)
 		return
@@ -261,7 +261,7 @@ func (txe *TxExecutor) ReadTwopcInflight() (distributed []*tx.DistributedTx, pre
 }
 
 func (txe *TxExecutor) inTransaction(f func(*StatefulConnection) error) error {
-	conn, _, err := txe.te.txPool.Begin(txe.ctx, &querypb.ExecuteOptions{}, false, 0)
+	conn, _, err := txe.te.txPool.Begin(txe.ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	if err != nil {
 		return err
 	}
