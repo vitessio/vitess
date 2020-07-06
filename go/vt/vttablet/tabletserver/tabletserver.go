@@ -747,10 +747,10 @@ func (tsv *TabletServer) SchemaEngine() *schema.Engine {
 
 // Begin starts a new transaction. This is allowed only if the state is StateServing.
 func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (transactionID int64, tablet *topodatapb.TabletAlias, err error) {
-	return tsv.begin(ctx, target, 0, options)
+	return tsv.begin(ctx, target, nil, 0, options)
 }
 
-func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, reservedID int64, options *querypb.ExecuteOptions) (transactionID int64, tablet *topodatapb.TabletAlias, err error) {
+func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, preQueries []string, reservedID int64, options *querypb.ExecuteOptions) (transactionID int64, tablet *topodatapb.TabletAlias, err error) {
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Begin", "begin", nil,
@@ -761,7 +761,7 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, rese
 				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
 			}
 			var beginSQL string
-			transactionID, beginSQL, err = tsv.te.Begin(ctx, reservedID, options)
+			transactionID, beginSQL, err = tsv.te.Begin(ctx, preQueries, reservedID, options)
 			logStats.TransactionID = transactionID
 
 			// Record the actual statements that were executed in the logStats.
@@ -1142,7 +1142,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 }
 
 // BeginExecute combines Begin and Execute.
-func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 
 	// Disable hot row protection in case of reserve connection.
 	if tsv.enableHotRowProtection && reservedID == 0 {
@@ -1155,7 +1155,7 @@ func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Targe
 		}
 	}
 
-	transactionID, alias, err := tsv.begin(ctx, target, reservedID, options)
+	transactionID, alias, err := tsv.begin(ctx, target, preQueries, reservedID, options)
 	if err != nil {
 		return nil, 0, nil, err
 	}

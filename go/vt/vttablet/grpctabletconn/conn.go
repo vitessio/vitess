@@ -443,7 +443,7 @@ func (conn *gRPCQueryClient) ReadTransaction(ctx context.Context, target *queryp
 }
 
 // BeginExecute starts a transaction and runs an Execute.
-func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
+func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -454,6 +454,7 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 		Target:            target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		PreQueries:        preQueries,
 		Query: &querypb.BoundQuery{
 			Sql:           query,
 			BindVariables: bindVars,

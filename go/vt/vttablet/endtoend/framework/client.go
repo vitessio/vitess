@@ -178,6 +178,7 @@ func (client *QueryClient) BeginExecute(query string, bindvars map[string]*query
 	qr, transactionID, _, err := client.server.BeginExecute(
 		client.ctx,
 		&client.target,
+		nil,
 		query,
 		bindvars,
 		client.reservedID,

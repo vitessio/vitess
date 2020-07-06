@@ -434,7 +434,7 @@ func testBeginExecute(t *testing.T, conn queryservice.QueryService, f *FakeQuery
 	f.ExpectedTransactionID = beginTransactionID
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	qr, transactionID, alias, err := conn.BeginExecute(ctx, TestTarget, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
+	qr, transactionID, alias, err := conn.BeginExecute(ctx, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
 	if err != nil {
 		t.Fatalf("BeginExecute failed: %v", err)
 	}
@@ -451,7 +451,7 @@ func testBeginExecuteErrorInBegin(t *testing.T, conn queryservice.QueryService, 
 	t.Log("testBeginExecuteErrorInBegin")
 	f.HasBeginError = true
 	testErrorHelper(t, f, "BeginExecute.Begin", func(ctx context.Context) error {
-		_, transactionID, _, err := conn.BeginExecute(ctx, TestTarget, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
+		_, transactionID, _, err := conn.BeginExecute(ctx, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
 		if transactionID != 0 {
 			t.Errorf("Unexpected transactionID from BeginExecute: got %v wanted 0", transactionID)
 		}
@@ -465,7 +465,7 @@ func testBeginExecuteErrorInExecute(t *testing.T, conn queryservice.QueryService
 	f.HasError = true
 	testErrorHelper(t, f, "BeginExecute.Execute", func(ctx context.Context) error {
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		_, transactionID, _, err := conn.BeginExecute(ctx, TestTarget, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
+		_, transactionID, _, err := conn.BeginExecute(ctx, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
 		if transactionID != beginTransactionID {
 			t.Errorf("Unexpected transactionID from BeginExecute: got %v wanted %v", transactionID, beginTransactionID)
 		}
@@ -477,7 +477,7 @@ func testBeginExecuteErrorInExecute(t *testing.T, conn queryservice.QueryService
 func testBeginExecutePanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testBeginExecutePanics")
 	testPanicHelper(t, f, "BeginExecute", func(ctx context.Context) error {
-		_, _, _, err := conn.BeginExecute(ctx, TestTarget, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
+		_, _, _, err := conn.BeginExecute(ctx, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
 		return err
 	})
 }
