@@ -150,6 +150,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	queries []*querypb.BoundQuery,
 	session *SafeSession,
 	autocommit bool,
+	ignoreMaxMemoryRows bool,
 ) (qr *sqltypes.Result, errs []error) {
 
 	if len(rss) != len(queries) {
@@ -226,15 +227,16 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			}
 			mu.Lock()
 			defer mu.Unlock()
+
 			// Don't append more rows if row count is exceeded.
-			if len(qr.Rows) <= *maxMemoryRows {
+			if ignoreMaxMemoryRows || len(qr.Rows) <= *maxMemoryRows {
 				qr.AppendResult(innerqr)
 			}
 			return info.updateTransactionAndReservedID(transactionID, reservedID, alias), nil
 		},
 	)
 
-	if len(qr.Rows) > *maxMemoryRows {
+	if !ignoreMaxMemoryRows && len(qr.Rows) > *maxMemoryRows {
 		return nil, []error{vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "in-memory row count exceeded allowed limit of %d", *maxMemoryRows)}
 	}
 
