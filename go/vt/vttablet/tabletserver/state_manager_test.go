@@ -33,24 +33,29 @@ import (
 var testNow = time.Now()
 
 func TestStateManagerStateByName(t *testing.T) {
-	states := []servingState{
-		StateNotConnected,
-		StateNotServing,
-		StateServing,
-	}
-	// Don't reuse stateName.
-	names := []string{
-		"NOT_SERVING",
-		"NOT_SERVING",
-		"SERVING",
-	}
 	sm := &stateManager{}
-	for i, state := range states {
-		sm.state = state
-		require.Equal(t, names[i], sm.StateByName(), "StateByName")
-	}
+
+	sm.replHealthy = true
+	sm.wantState = StateServing
+	sm.state = StateNotConnected
+	assert.Equal(t, "NOT_SERVING", sm.IsServingString())
+
+	sm.state = StateNotServing
+	assert.Equal(t, "NOT_SERVING", sm.IsServingString())
+
+	sm.state = StateServing
+	assert.Equal(t, "SERVING", sm.IsServingString())
+
+	sm.wantState = StateNotServing
+	assert.Equal(t, "NOT_SERVING", sm.IsServingString())
+	sm.wantState = StateServing
+
 	sm.EnterLameduck()
-	require.Equal(t, "NOT_SERVING", sm.StateByName(), "StateByName")
+	assert.Equal(t, "NOT_SERVING", sm.IsServingString())
+	sm.ExitLameduck()
+
+	sm.replHealthy = false
+	assert.Equal(t, "NOT_SERVING", sm.IsServingString())
 }
 
 func TestStateManagerServeMaster(t *testing.T) {
@@ -60,7 +65,7 @@ func TestStateManagerServeMaster(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, stateChanged)
 
-	assert.Equal(t, int32(0), sm.lameduck.Get())
+	assert.Equal(t, false, sm.lameduck.Get())
 	assert.Equal(t, testNow, sm.terTimestamp)
 
 	verifySubcomponent(t, 1, sm.watcher, testStateClosed)
@@ -358,6 +363,13 @@ func TestStateManagerValidations(t *testing.T) {
 	err := sm.StartRequest(ctx, target, false)
 	assert.Contains(t, err.Error(), "operation not allowed")
 
+	sm.replHealthy = false
+	sm.state = StateServing
+	sm.wantState = StateServing
+	err = sm.StartRequest(ctx, target, false)
+	assert.Contains(t, err.Error(), "operation not allowed")
+
+	sm.replHealthy = true
 	sm.state = StateServing
 	sm.wantState = StateNotServing
 	err = sm.StartRequest(ctx, target, false)
@@ -411,6 +423,7 @@ func TestStateManagerWaitForRequests(t *testing.T) {
 	sm.target = *target
 	sm.timebombDuration = 10 * time.Second
 
+	sm.replHealthy = true
 	_, err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, nil)
 	require.NoError(t, err)
 
@@ -448,13 +461,19 @@ func TestStateManagerNotify(t *testing.T) {
 	var (
 		gotType    topodatapb.TabletType
 		gotts      time.Time
+		gotlag     time.Duration
+		goterr     error
 		gotServing bool
 	)
 
-	sm.notify = func(tabletType topodatapb.TabletType, terTimestamp time.Time, serving bool) {
+	ch := make(chan struct{})
+	sm.notify = func(tabletType topodatapb.TabletType, terTimestamp time.Time, lag time.Duration, err error, serving bool) {
 		gotType = tabletType
 		gotts = terTimestamp
+		gotlag = lag
+		goterr = err
 		gotServing = serving
+		ch <- struct{}{}
 	}
 	stateChanged, err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, nil)
 	require.NoError(t, err)
@@ -462,8 +481,13 @@ func TestStateManagerNotify(t *testing.T) {
 
 	assert.Equal(t, topodatapb.TabletType_MASTER, sm.target.TabletType)
 	assert.Equal(t, StateServing, sm.state)
+
+	<-ch
+	sm.hcticks.Stop()
 	assert.Equal(t, topodatapb.TabletType_MASTER, gotType)
 	assert.Equal(t, testNow, gotts)
+	assert.Equal(t, 1*time.Second, gotlag)
+	assert.Equal(t, nil, goterr)
 	assert.True(t, gotServing)
 }
 
@@ -475,7 +499,7 @@ func verifySubcomponent(t *testing.T, order int64, component interface{}, state 
 
 func newTestStateManager(t *testing.T) *stateManager {
 	order.Set(0)
-	return &stateManager{
+	sm := &stateManager{
 		se:          &testSchemaEngine{},
 		rt:          &testReplTracker{},
 		vstreamer:   &testSubcomponent{},
@@ -485,12 +509,12 @@ func newTestStateManager(t *testing.T) *stateManager {
 		txThrottler: &testTxThrottler{},
 		te:          &testTxEngine{},
 		messager:    &testSubcomponent{},
-		notify:      func(topodatapb.TabletType, time.Time, bool) {},
-
-		transitioning:       sync2.NewSemaphore(1, 0),
-		checkMySQLThrottler: sync2.NewSemaphore(1, 0),
-		timebombDuration:    time.Duration(10 * time.Millisecond),
+		notify:      func(topodatapb.TabletType, time.Time, time.Duration, error, bool) {},
 	}
+	config := tabletenv.NewDefaultConfig()
+	env := tabletenv.NewEnv(config, "StateManagerTest")
+	sm.Init(env, querypb.Target{})
+	return sm
 }
 
 func (sm *stateManager) isTransitioning() bool {
@@ -568,6 +592,10 @@ func (te *testReplTracker) MakeNonMaster() {
 func (te *testReplTracker) Close() {
 	te.order = order.Add(1)
 	te.state = testStateClosed
+}
+
+func (te *testReplTracker) Status() (time.Duration, error) {
+	return 1 * time.Second, nil
 }
 
 type testQueryEngine struct {

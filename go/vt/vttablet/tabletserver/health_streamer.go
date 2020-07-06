@@ -24,7 +24,6 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/history"
-	"vitess.io/vitess/go/timer"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
@@ -41,36 +40,19 @@ var (
 
 // healthStreamer streams health information to callers.
 type healthStreamer struct {
-	interval           time.Duration
-	degradedThreshold  time.Duration
-	unhealthyThreshold time.Duration
-
-	replStatusFunc func() (time.Duration, error)
-	stats          *tabletenv.Stats
-	ticks          *timer.Timer
+	stats *tabletenv.Stats
 
 	mu      sync.Mutex
 	clients map[chan *querypb.StreamHealthResponse]struct{}
 	state   *querypb.StreamHealthResponse
-	// serving reflects the state of stateManager.
-	// We may still broadcast as not serving if there are
-	// replication errors, or if lag is above threshold.
-	serving bool
 
 	history *history.History
 }
 
-func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias, replStatusFunc func() (time.Duration, error)) *healthStreamer {
-	hc := env.Config().Healthcheck
+func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias) *healthStreamer {
 	return &healthStreamer{
-		interval:           hc.IntervalSeconds.Get(),
-		degradedThreshold:  hc.DegradedThresholdSeconds.Get(),
-		unhealthyThreshold: hc.UnhealthyThresholdSeconds.Get(),
-
-		replStatusFunc: replStatusFunc,
-		stats:          env.Stats(),
-		clients:        make(map[chan *querypb.StreamHealthResponse]struct{}),
-		ticks:          timer.NewTimer(hc.IntervalSeconds.Get()),
+		stats:   env.Stats(),
+		clients: make(map[chan *querypb.StreamHealthResponse]struct{}),
 
 		state: &querypb.StreamHealthResponse{
 			Target:      &querypb.Target{},
@@ -86,7 +68,6 @@ func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias, replStat
 
 func (hs *healthStreamer) InitDBConfig(target querypb.Target) {
 	hs.state.Target = &target
-	hs.ticks.Start(hs.Broadcast)
 }
 
 func (hs *healthStreamer) Stream(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
@@ -127,22 +108,24 @@ func (hs *healthStreamer) unregister(ch chan *querypb.StreamHealthResponse) {
 	delete(hs.clients, ch)
 }
 
-func (hs *healthStreamer) Broadcast() {
+func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimestamp time.Time, lag time.Duration, err error, serving bool) {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 
-	var healthy bool
-	lag, err := hs.replStatusFunc()
+	hs.state.Target.TabletType = tabletType
+	if tabletType == topodatapb.TabletType_MASTER {
+		hs.state.TabletExternallyReparentedTimestamp = terTimestamp.Unix()
+	} else {
+		hs.state.TabletExternallyReparentedTimestamp = 0
+	}
 	if err != nil {
 		hs.state.RealtimeStats.HealthError = err.Error()
 		hs.state.RealtimeStats.SecondsBehindMaster = 0
-		healthy = false
 	} else {
 		hs.state.RealtimeStats.HealthError = ""
 		hs.state.RealtimeStats.SecondsBehindMaster = uint32(lag.Seconds())
-		healthy = lag <= hs.unhealthyThreshold
 	}
-	hs.state.Serving = hs.serving && healthy
+	hs.state.Serving = serving
 
 	hs.state.RealtimeStats.SecondsBehindMasterFilteredReplication, hs.state.RealtimeStats.BinlogPlayersCount = blpFunc()
 	hs.state.RealtimeStats.Qps = hs.stats.QPSRates.TotalRate()
@@ -160,20 +143,6 @@ func (hs *healthStreamer) Broadcast() {
 		serving:    shr.Serving,
 		tabletType: shr.Target.TabletType,
 		lag:        lag,
-		err:        shr.RealtimeStats.HealthError,
+		err:        err,
 	})
-}
-
-func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimestamp time.Time, serving bool) {
-	hs.mu.Lock()
-	defer hs.mu.Unlock()
-
-	hs.state.Target.TabletType = tabletType
-	if tabletType == topodatapb.TabletType_MASTER {
-		hs.state.TabletExternallyReparentedTimestamp = terTimestamp.Unix()
-	} else {
-		hs.state.TabletExternallyReparentedTimestamp = 0
-	}
-	hs.serving = serving
-	hs.ticks.Trigger()
 }
