@@ -210,7 +210,6 @@ func (db *DB) Close() {
 	db.listener.Close()
 	db.acceptWG.Wait()
 
-	db.WaitForClose(250 * time.Millisecond)
 	db.CloseAllConnections()
 
 	tmpDir := path.Dir(db.socketFile)
