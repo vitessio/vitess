@@ -218,6 +218,16 @@ func TestTxPoolBeginWithError(t *testing.T) {
 	require.Equal(t, vtrpcpb.Code_UNKNOWN, vterrors.Code(err), "wrong error code for Begin error")
 }
 
+func TestTxPoolBeginWithPreQueryError(t *testing.T) {
+	db, txPool, closer := setup(t)
+	defer closer()
+	db.AddRejectedQuery("pre_query", errRejected)
+	_, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, []string{"pre_query"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "error: rejected")
+	require.Equal(t, vtrpcpb.Code_UNKNOWN, vterrors.Code(err), "wrong error code for Begin error")
+}
+
 func TestTxPoolCancelledContextError(t *testing.T) {
 	// given
 	db, txPool, closer := setup(t)
