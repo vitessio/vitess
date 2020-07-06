@@ -683,6 +683,39 @@ func TestSavepointOutsideTx(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestSavepointAdditionalCase(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "start transaction")
+	exec(t, conn, "savepoint a")
+	exec(t, conn, "insert into t1(id1, id2) values(1,1)")             // -80
+	exec(t, conn, "insert into t1(id1, id2) values(2,2),(3,3),(4,4)") // -80 & 80-
+	assertMatches(t, conn, "select id1 from t1 order by id1", `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)]]`)
+
+	exec(t, conn, "rollback to a")
+	assertMatches(t, conn, "select id1 from t1 order by id1", `[]`)
+
+	exec(t, conn, "commit")
+	assertMatches(t, conn, "select id1 from t1 order by id1", `[]`)
+
+	exec(t, conn, "start transaction")
+	exec(t, conn, "insert into t1(id1, id2) values(1,1)") // -80
+	exec(t, conn, "savepoint a")
+	exec(t, conn, "insert into t1(id1, id2) values(2,2),(3,3)") // -80
+	exec(t, conn, "insert into t1(id1, id2) values(4,4)")       // 80-
+	assertMatches(t, conn, "select id1 from t1 order by id1", `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)]]`)
+
+	exec(t, conn, "rollback to a")
+	assertMatches(t, conn, "select id1 from t1 order by id1", `[[INT64(1)]]`)
+
+	exec(t, conn, "rollback")
+	assertMatches(t, conn, "select id1 from t1 order by id1", `[]`)
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
