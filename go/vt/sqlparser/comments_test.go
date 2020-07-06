@@ -407,3 +407,22 @@ func TestIgnoreMaxPayloadSizeDirective(t *testing.T) {
 		assert.Equalf(t, test.expected, got, fmt.Sprintf("d.IgnoreMaxPayloadSizeDirective(stmt) returned %v but expected %v", got, test.expected))
 	}
 }
+
+func TestIgnoreMaxMaxMemoryRowsDirective(t *testing.T) {
+	testCases := []struct {
+		query    string
+		expected bool
+	}{
+		{"insert /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ into user(id) values (1), (2)", true},
+		{"insert into user(id) values (1), (2)", false},
+		{"update /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ users set name=1", true},
+		{"select /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ * from users", true},
+		{"delete /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ from users", true},
+	}
+
+	for _, test := range testCases {
+		stmt, _ := Parse(test.query)
+		got := IgnoreMaxMaxMemoryRowsDirective(stmt)
+		assert.Equalf(t, test.expected, got, fmt.Sprintf("d.IgnoreMaxPayloadSizeDirective(stmt) returned %v but expected %v", got, test.expected))
+	}
+}

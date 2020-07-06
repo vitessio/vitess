@@ -34,6 +34,8 @@ const (
 	DirectiveScatterErrorsAsWarnings = "SCATTER_ERRORS_AS_WARNINGS"
 	// DirectiveIgnoreMaxPayloadSize skips payload size validation when set.
 	DirectiveIgnoreMaxPayloadSize = "IGNORE_MAX_PAYLOAD_SIZE"
+	// DirectiveIgnoreMaxMemoryRows skips memory row validation when set.
+	DirectiveIgnoreMaxMemoryRows = "IGNORE_MAX_MEMORY_ROWS"
 )
 
 func isNonSpace(r rune) bool {
@@ -317,6 +319,27 @@ func IgnoreMaxPayloadSizeDirective(stmt Statement) bool {
 	case *Delete:
 		directives := ExtractCommentDirectives(stmt.Comments)
 		return directives.IsSet(DirectiveIgnoreMaxPayloadSize)
+	default:
+		return false
+	}
+}
+
+// IgnoreMaxMaxMemoryRowsDirective returns true if the max memory rows override
+// directive is set to true.
+func IgnoreMaxMaxMemoryRowsDirective(stmt Statement) bool {
+	switch stmt := stmt.(type) {
+	case *Select:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		return directives.IsSet(DirectiveIgnoreMaxMemoryRows)
+	case *Insert:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		return directives.IsSet(DirectiveIgnoreMaxMemoryRows)
+	case *Update:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		return directives.IsSet(DirectiveIgnoreMaxMemoryRows)
+	case *Delete:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		return directives.IsSet(DirectiveIgnoreMaxMemoryRows)
 	default:
 		return false
 	}

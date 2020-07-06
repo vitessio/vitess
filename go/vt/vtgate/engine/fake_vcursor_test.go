@@ -44,6 +44,7 @@ import (
 )
 
 var testMaxMemoryRows = 100
+var testIgnoreMaxMemoryRows = false
 
 var _ VCursor = (*noopVCursor)(nil)
 var _ SessionActions = (*noopVCursor)(nil)
@@ -80,6 +81,10 @@ func (t noopVCursor) Context() context.Context {
 }
 func (t noopVCursor) MaxMemoryRows() int {
 	return testMaxMemoryRows
+}
+
+func (t noopVCursor) ExceedsMaxMemoryRows(numRows int) bool {
+	return !testIgnoreMaxMemoryRows && numRows > testMaxMemoryRows
 }
 
 func (t noopVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc {

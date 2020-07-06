@@ -54,6 +54,11 @@ type (
 		// MaxMemoryRows returns the maxMemoryRows flag value.
 		MaxMemoryRows() int
 
+		// ExceedsMaxMemoryRows returns a boolean indicating whether
+		// the maxMemoryRows value has been exceeded. Returns false
+		// if the max memory rows override directive is set to true
+		ExceedsMaxMemoryRows(numRows int) bool
+
 		// SetContextTimeout updates the context and sets a timeout.
 		SetContextTimeout(timeout time.Duration) context.CancelFunc
 
