@@ -407,11 +407,10 @@ func TestNoMysqlHealthCheck(t *testing.T) {
 	require.NoError(t, err)
 	checkHealth(t, mTablet.HTTPPort, false)
 
-	// the replica will now be healthy, but report a very high replication
-	// lag, because it can't figure out what it exactly is.
+	// the replica will not be healthy because it cannot compute replication lag.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rTablet.Alias)
 	require.NoError(t, err)
-	assert.Equal(t, "SERVING", rTablet.VttabletProcess.GetTabletStatus())
+	assert.Equal(t, "NOT_SERVING", rTablet.VttabletProcess.GetTabletStatus())
 	checkHealth(t, rTablet.HTTPPort, false)
 
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", rTablet.Alias)
