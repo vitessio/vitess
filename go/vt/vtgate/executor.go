@@ -315,8 +315,11 @@ func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession
 
 	if len(safeSession.ShardSessions) == 0 {
 		if safeSession.InTransaction() {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported savepoint: no open transaction on the shard")
+			// Storing savepoint as this needs to be executed just after starting transaction.
+			safeSession.StoreSavepoint(sql)
+			return &sqltypes.Result{}, nil
 		}
+		// Safely to ignore as there is no transaction.
 		return &sqltypes.Result{}, nil
 	}
 	var rss []*srvtopo.ResolvedShard
@@ -332,7 +335,12 @@ func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession
 	}
 
 	qr, errs := e.ExecuteMultiShard(ctx, rss, queries, safeSession, false, false)
-	return qr, vterrors.Aggregate(errs)
+	err := vterrors.Aggregate(errs)
+	if err != nil {
+		return nil, err
+	}
+	safeSession.StoreSavepoint(sql)
+	return qr, nil
 }
 
 func (e *Executor) handleSRollback(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) (*sqltypes.Result, error) {
@@ -345,6 +353,7 @@ func (e *Executor) handleSRollback(ctx context.Context, safeSession *SafeSession
 	}()
 
 	if len(safeSession.ShardSessions) == 0 {
+		// Safely to ignore as there is no transaction.
 		return &sqltypes.Result{}, nil
 	}
 
@@ -375,6 +384,12 @@ func (e *Executor) handleRelease(ctx context.Context, safeSession *SafeSession, 
 	}()
 
 	if len(safeSession.ShardSessions) == 0 {
+		if safeSession.InTransaction() {
+			// Storing release as this needs to be executed just after starting transaction to release any stored savepoint.
+			safeSession.StoreSavepoint(sql)
+			return &sqltypes.Result{}, nil
+		}
+		// Safely to ignore as there is no transaction.
 		return &sqltypes.Result{}, nil
 	}
 	var rss []*srvtopo.ResolvedShard
@@ -390,7 +405,12 @@ func (e *Executor) handleRelease(ctx context.Context, safeSession *SafeSession, 
 	}
 
 	qr, errs := e.ExecuteMultiShard(ctx, rss, queries, safeSession, false, false)
-	return qr, vterrors.Aggregate(errs)
+	err := vterrors.Aggregate(errs)
+	if err != nil {
+		return nil, err
+	}
+	safeSession.StoreSavepoint(sql)
+	return qr, nil
 }
 
 // CloseSession closes the current transaction, if any. It is called both for explicit "rollback"

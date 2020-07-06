@@ -121,6 +121,10 @@ message Session {
 
   // row_count keeps track of the last seen rows affected for this session
   int64 row_count = 15;
+
+  // Stores savepoint and release savepoint calls inside a transaction
+  // and is reset once transaction is committed or rolled back.
+  repeated string savepoints = 16;
 }
 
 // ExecuteRequest is the payload to Execute.

@@ -643,7 +643,22 @@ func TestSavepoint(t *testing.T) {
 	exec(t, conn, "rollback to b")
 	assertMatches(t, conn, "select id1 from t1 order by id1", `[[INT64(1)]]`)
 
+	exec(t, conn, "insert into t1(id1, id2) values(2,2),(3,3),(4,4)")
+	assertMatches(t, conn, "select id1 from t1 order by id1", `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)]]`)
+
+	exec(t, conn, "rollback to b")
+	assertMatches(t, conn, "select id1 from t1 order by id1", `[[INT64(1)]]`)
+
 	exec(t, conn, "commit")
+	assertMatches(t, conn, "select id1 from t1 order by id1", `[]`)
+
+	exec(t, conn, "insert into t1(id1, id2) values(2,2),(3,3),(4,4)")
+	assertMatches(t, conn, "select id1 from t1 order by id1", `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)]]`)
+
+	_, err = conn.ExecuteFetch("rollback to b", 1000, true)
+	require.Error(t, err)
+
+	exec(t, conn, "rollback")
 	assertMatches(t, conn, "select id1 from t1 order by id1", `[]`)
 }
 
