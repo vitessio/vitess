@@ -46,7 +46,7 @@ func TestTxEngineClose(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.DB = newDBConfigs(db)
 	config.TxPool.Size = 10
-	config.Oltp.TxTimeoutSeconds = 1
+	config.Oltp.TxTimeoutSeconds = 0.1
 	config.ShutdownGracePeriodSeconds = 0
 	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
 
@@ -54,9 +54,7 @@ func TestTxEngineClose(t *testing.T) {
 	te.open()
 	start := time.Now()
 	te.shutdown(false)
-	if diff := time.Since(start); diff > 500*time.Millisecond {
-		t.Errorf("Close time: %v, must be under 0.5s", diff)
-	}
+	assert.Greater(t, int64(50*time.Millisecond), int64(time.Since(start)))
 
 	// Normal close with timeout wait.
 	te.open()
@@ -66,9 +64,7 @@ func TestTxEngineClose(t *testing.T) {
 	c.Unlock()
 	start = time.Now()
 	te.shutdown(false)
-	if diff := time.Since(start); diff < 500*time.Millisecond {
-		t.Errorf("Close time: %v, must be over 0.5s", diff)
-	}
+	assert.Less(t, int64(50*time.Millisecond), int64(time.Since(start)))
 
 	// Immediate close.
 	te.open()
@@ -79,49 +75,35 @@ func TestTxEngineClose(t *testing.T) {
 	c.Unlock()
 	start = time.Now()
 	te.shutdown(true)
-	if diff := time.Since(start); diff > 500*time.Millisecond {
-		t.Errorf("Close time: %v, must be under 0.5s", diff)
-	}
+	assert.Greater(t, int64(50*time.Millisecond), int64(time.Since(start)))
 
 	// Normal close with short grace period.
-	te.shutdownGracePeriod = 250 * time.Millisecond
+	te.shutdownGracePeriod = 25 * time.Millisecond
 	te.open()
 	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	c.Unlock()
 	start = time.Now()
 	te.shutdown(false)
-	if diff := time.Since(start); diff > 500*time.Millisecond {
-		t.Errorf("Close time: %v, must be under 0.5s", diff)
-	}
-	if diff := time.Since(start); diff < 250*time.Millisecond {
-		t.Errorf("Close time: %v, must be over 0.25s", diff)
-	}
+	assert.Less(t, int64(1*time.Millisecond), int64(time.Since(start)))
+	assert.Greater(t, int64(50*time.Millisecond), int64(time.Since(start)))
 
 	// Normal close with short grace period, but pool gets empty early.
-	te.shutdownGracePeriod = 250 * time.Millisecond
+	te.shutdownGracePeriod = 25 * time.Millisecond
 	te.open()
 	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	c.Unlock()
 	go func() {
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		_, err := te.txPool.GetAndLock(c.ID(), "return")
 		assert.NoError(t, err)
 		te.txPool.RollbackAndRelease(ctx, c)
 	}()
 	start = time.Now()
 	te.shutdown(false)
-	if diff := time.Since(start); diff > 250*time.Millisecond {
-		t.Errorf("Close time: %v, must be under 0.25s", diff)
-	}
-	if diff := time.Since(start); diff < 100*time.Millisecond {
-		t.Errorf("Close time: %v, must be over 0.1", diff)
-	}
+	assert.Less(t, int64(10*time.Millisecond), int64(time.Since(start)))
+	assert.Greater(t, int64(25*time.Millisecond), int64(time.Since(start)))
 
 	// Immediate close, but connection is in use.
 	te.open()
@@ -511,7 +493,7 @@ func setupTxEngine(db *fakesqldb.DB) *TxEngine {
 	config := tabletenv.NewDefaultConfig()
 	config.DB = newDBConfigs(db)
 	config.TxPool.Size = 10
-	config.Oltp.TxTimeoutSeconds = 1
+	config.Oltp.TxTimeoutSeconds = 0.1
 	config.ShutdownGracePeriodSeconds = 0
 	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
 	return te
