@@ -343,7 +343,7 @@ func clusterSetUp(t *testing.T) (int, error) {
 }
 
 func createSignedCert(ca string, serial string, name string, commonName string) error {
-	log.Info("Creating signed cert and key %s", commonName)
+	log.Infof("Creating signed cert and key %s", commonName)
 	tmpProcess := exec.Command(
 		"vttlstest",
 		"-root", certDirectory,
