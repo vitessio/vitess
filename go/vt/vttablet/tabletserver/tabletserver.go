@@ -312,7 +312,6 @@ func (tsv *TabletServer) StartService(target querypb.Target, dbcfgs *dbconfigs.D
 		return err
 	}
 	// StartService is only used for testing. So, we cheat by aggressively setting replication to healthy.
-	tsv.sm.replHealthy = true
 	_, err := tsv.sm.SetServingType(target.TabletType, time.Time{}, StateServing, nil)
 	return err
 }

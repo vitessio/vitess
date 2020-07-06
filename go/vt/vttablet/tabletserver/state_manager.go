@@ -71,15 +71,15 @@ type stateManager struct {
 	wantState      servingState
 	wantTabletType topodatapb.TabletType
 	state          servingState
+	replHealthy    bool
+	lameduck       bool
 	target         querypb.Target
 	retrying       bool
 	// TODO(sougou): deprecate alsoAllow
 	alsoAllow    []topodatapb.TabletType
 	terTimestamp time.Time
-	replHealthy  bool
 
 	requests sync.WaitGroup
-	lameduck sync2.AtomicBool
 
 	// Open must be done in forward order.
 	// Close must be done in reverse order.
@@ -505,6 +505,11 @@ func (sm *stateManager) setState(tabletType topodatapb.TabletType, state serving
 	}
 	log.Infof("TabletServer transition: %v -> %v, %s -> %s", sm.target.TabletType, tabletType, stateName(sm.state), stateName(state))
 	sm.target.TabletType = tabletType
+	if sm.state == StateNotConnected {
+		// If we're transitioning out of StateNotConnected, we have
+		// to also ensure replication status is healthy.
+		_, _ = sm.refreshReplHealthLocked()
+	}
 	sm.state = state
 	// Broadcast also obtains a lock. Trigger in a goroutine to avoid a deadlock.
 	go sm.hcticks.Trigger()
@@ -513,19 +518,21 @@ func (sm *stateManager) setState(tabletType topodatapb.TabletType, state serving
 // Broadcast fetches the replication status and broadcasts
 // the state to all subscribed.
 func (sm *stateManager) Broadcast() {
-	lag, err := sm.rt.Status()
-
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
+	lag, err := sm.refreshReplHealthLocked()
+	sm.notify(sm.target.TabletType, sm.terTimestamp, lag, err, sm.isServingLocked())
+}
+
+func (sm *stateManager) refreshReplHealthLocked() (time.Duration, error) {
+	lag, err := sm.rt.Status()
 	if err != nil {
 		sm.replHealthy = false
 	} else {
 		sm.replHealthy = lag <= sm.unhealthyThreshold
 	}
-	isServing := sm.isServingLocked()
-
-	sm.notify(sm.target.TabletType, sm.terTimestamp, lag, err, isServing)
+	return lag, err
 }
 
 // EnterLameduck causes tabletserver to enter the lameduck state. This
@@ -533,12 +540,16 @@ func (sm *stateManager) Broadcast() {
 // otherwise remains the same. Any subsequent calls to SetServingType will
 // cause the tabletserver to exit this mode.
 func (sm *stateManager) EnterLameduck() {
-	sm.lameduck.Set(true)
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.lameduck = true
 }
 
 // ExitLameduck causes the tabletserver to exit the lameduck mode.
 func (sm *stateManager) ExitLameduck() {
-	sm.lameduck.Set(false)
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.lameduck = false
 }
 
 // IsServing returns true if TabletServer is in SERVING state.
@@ -549,7 +560,7 @@ func (sm *stateManager) IsServing() bool {
 }
 
 func (sm *stateManager) isServingLocked() bool {
-	return sm.state == StateServing && sm.wantState == StateServing && sm.replHealthy && !sm.lameduck.Get()
+	return sm.state == StateServing && sm.wantState == StateServing && sm.replHealthy && !sm.lameduck
 }
 
 func (sm *stateManager) State() servingState {
