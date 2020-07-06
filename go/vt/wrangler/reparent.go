@@ -945,10 +945,10 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 
 	// Verify masterElect is alive and has the most advanced position
 	masterElectStatus, ok := statusMap[masterElectTabletAliasStr]
-	if !ok || slaveWasRunning(masterElectStatus) && masterElectStatus.After == nil {
+	if !ok {
 		return fmt.Errorf("couldn't get master elect %v replication position", topoproto.TabletAliasString(masterElectTabletAlias))
 	}
-	masterElectStrPos := stoppedSlaveStringPosition(masterElectStatus)
+	masterElectStrPos := masterElectStatus.After.Position
 	masterElectPos, err := mysql.DecodePosition(masterElectStrPos)
 	if err != nil {
 		return fmt.Errorf("cannot decode master elect position %v: %v", masterElectStrPos, err)
@@ -957,7 +957,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		if alias == masterElectTabletAliasStr {
 			continue
 		}
-		posStr := stoppedSlaveStringPosition(status)
+		posStr := status.After.Position
 		pos, err := mysql.DecodePosition(posStr)
 		if err != nil {
 			return fmt.Errorf("cannot decode replica %v position %v: %v", alias, posStr, err)
@@ -1090,21 +1090,5 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newMasterAli
 }
 
 func slaveWasRunning(stopSlaveStatus *replicationdatapb.StopReplicationStatus) bool {
-	if stopSlaveStatus == nil {
-		return false
-	}
-
 	return stopSlaveStatus.Before.SlaveIoRunning || stopSlaveStatus.Before.SlaveSqlRunning
-}
-
-func stoppedSlaveStringPosition(stopSlaveStatus *replicationdatapb.StopReplicationStatus) string {
-	if stopSlaveStatus == nil || (stopSlaveStatus.Before == nil && stopSlaveStatus.After == nil) {
-		return ""
-	}
-
-	if stopSlaveStatus.After != nil {
-		return stopSlaveStatus.After.Position
-	}
-
-	return stopSlaveStatus.Before.Position
 }

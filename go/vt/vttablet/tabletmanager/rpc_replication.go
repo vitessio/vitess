@@ -681,6 +681,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopIO
 			return StopReplicationAndGetStatusResponse{
 				Status: before,
 				Before: before,
+				After:  before,
 			}, nil
 		}
 		if err := tm.stopSlaveIOThreadLocked(ctx); err != nil {
@@ -694,6 +695,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopIO
 			return StopReplicationAndGetStatusResponse{
 				Status: before,
 				Before: before,
+				After:  before,
 			}, nil
 		}
 		if err := tm.stopSlaveLocked(ctx); err != nil {
