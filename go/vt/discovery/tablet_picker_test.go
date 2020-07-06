@@ -37,9 +37,8 @@ func TestPickSimple(t *testing.T) {
 	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, true, true)
 	defer deleteTablet(te, want)
 
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cell, te.keyspace, te.shard, "replica", 1*time.Second, 1*time.Second, 1*time.Minute)
+	tp, err := NewTabletPicker(te.topoServ, te.cell, te.keyspace, te.shard, "replica")
 	require.NoError(t, err)
-	defer tp.Close()
 
 	tablet, err := tp.PickForStreaming(context.Background())
 	require.NoError(t, err)
@@ -54,9 +53,8 @@ func TestPickFromOtherCell(t *testing.T) {
 	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, true, true)
 	defer deleteTablet(te, want)
 
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, "cell,otherCell", te.keyspace, te.shard, "replica", 1*time.Second, 1*time.Second, 1*time.Minute)
+	tp, err := NewTabletPicker(te.topoServ, "cell,otherCell", te.keyspace, te.shard, "replica")
 	require.NoError(t, err)
-	defer tp.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -74,9 +72,8 @@ func TestPickFromTwoHealthy(t *testing.T) {
 	want2 := addTablet(te, 101, topodatapb.TabletType_RDONLY, true, true)
 	defer deleteTablet(te, want2)
 
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cell, te.keyspace, te.shard, "replica,rdonly", 1*time.Second, 1*time.Second, 1*time.Minute)
+	tp, err := NewTabletPicker(te.topoServ, te.cell, te.keyspace, te.shard, "replica,rdonly")
 	require.NoError(t, err)
-	defer tp.Close()
 
 	// In 20 attempts, both tablet types must be picked at least once.
 	var picked1, picked2 bool
@@ -94,39 +91,15 @@ func TestPickFromTwoHealthy(t *testing.T) {
 	assert.True(t, picked2)
 }
 
-func TestPickFromSomeUnhealthy(t *testing.T) {
-	te := newPickerTestEnv(t)
-	defer deleteTablet(te, addTablet(te, 100, topodatapb.TabletType_REPLICA, false, false))
-	want := addTablet(te, 101, topodatapb.TabletType_RDONLY, false, true)
-	defer deleteTablet(te, want)
-
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cell, te.keyspace, te.shard, "replica,rdonly", 1*time.Second, 1*time.Second, 1*time.Minute)
-	require.NoError(t, err)
-	defer tp.Close()
-
-	tablet, err := tp.PickForStreaming(context.Background())
-	require.NoError(t, err)
-	if !proto.Equal(tablet, want) {
-		t.Errorf("Pick:\n%v, want\n%v", tablet, want)
-	}
-}
-
 func TestPickError(t *testing.T) {
 	te := newPickerTestEnv(t)
 	defer deleteTablet(te, addTablet(te, 100, topodatapb.TabletType_REPLICA, false, false))
 
-	_, err := NewTabletPicker(context.Background(), te.topoServ, te.cell, te.keyspace, te.shard, "badtype", 1*time.Second, 1*time.Second, 1*time.Minute)
+	_, err := NewTabletPicker(te.topoServ, te.cell, te.keyspace, te.shard, "badtype")
 	assert.EqualError(t, err, "failed to parse list of tablet types: badtype")
 
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cell, te.keyspace, te.shard, "replica,rdonly", 1*time.Second, 1*time.Second, 1*time.Minute)
+	_, err = NewTabletPicker(te.topoServ, te.cell, te.keyspace, te.shard, "replica,rdonly")
 	require.NoError(t, err)
-	defer tp.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
-	_, err = tp.PickForStreaming(ctx)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "error waiting for tablets")
 }
 
 type pickerTestEnv struct {

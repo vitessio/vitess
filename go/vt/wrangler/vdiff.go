@@ -429,11 +429,10 @@ func (df *vdiff) selectTablets(ctx context.Context, healthcheckTopologyRefresh, 
 	go func() {
 		defer wg.Done()
 		err1 = df.forAll(df.sources, func(shard string, source *shardStreamer) error {
-			tp, err := discovery.NewTabletPicker(ctx, df.ts.wr.ts, df.sourceCell, df.ts.sourceKeyspace, shard, df.tabletTypesStr, healthcheckTopologyRefresh, healthcheckRetryDelay, healthcheckTimeout)
+			tp, err := discovery.NewTabletPicker(df.ts.wr.ts, df.sourceCell, df.ts.sourceKeyspace, shard, df.tabletTypesStr)
 			if err != nil {
 				return err
 			}
-			defer tp.Close()
 
 			tablet, err := tp.PickForStreaming(ctx)
 			if err != nil {
@@ -448,11 +447,10 @@ func (df *vdiff) selectTablets(ctx context.Context, healthcheckTopologyRefresh, 
 	go func() {
 		defer wg.Done()
 		err2 = df.forAll(df.targets, func(shard string, target *shardStreamer) error {
-			tp, err := discovery.NewTabletPicker(ctx, df.ts.wr.ts, df.targetCell, df.ts.targetKeyspace, shard, df.tabletTypesStr, healthcheckTopologyRefresh, healthcheckRetryDelay, healthcheckTimeout)
+			tp, err := discovery.NewTabletPicker(df.ts.wr.ts, df.targetCell, df.ts.targetKeyspace, shard, df.tabletTypesStr)
 			if err != nil {
 				return err
 			}
-			defer tp.Close()
 
 			tablet, err := tp.PickForStreaming(ctx)
 			if err != nil {
