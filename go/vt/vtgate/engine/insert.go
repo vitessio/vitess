@@ -283,7 +283,7 @@ func shouldGenerate(v sqltypes.Value) bool {
 	// Unless the NO_AUTO_VALUE_ON_ZERO sql mode is active in mysql, it also
 	// treats 0 as a value that should generate a new ID.
 	if *seqAutoValueOnZero {
-		n, err := sqltypes.ToUint64(v)
+		n, err := evalengine.ToUint64(v)
 		if err == nil && n == 0 {
 			return true
 		}
