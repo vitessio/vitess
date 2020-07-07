@@ -840,47 +840,47 @@ func (tm *TabletManager) handleRelayLogError(err error) error {
 	return err
 }
 
-// Deprecated delete after 7.0
+// SlaveStatus is deprecated
 func (tm *TabletManager) SlaveStatus(ctx context.Context) (*replicationdatapb.Status, error) {
 	return tm.ReplicationStatus(ctx)
 }
 
-// Deprecated delete after 7.0
+// StopSlave is deprecated
 func (tm *TabletManager) StopSlave(ctx context.Context) error {
 	return tm.StopReplication(ctx)
 }
 
-// Deprecated delete after 7.0
+// StopSlaveMinimum is deprecated
 func (tm *TabletManager) StopSlaveMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error) {
 	return tm.StopReplicationMinimum(ctx, position, waitTime)
 }
 
-// Deprecated delete after 7.0
+// StartSlave is deprecated
 func (tm *TabletManager) StartSlave(ctx context.Context) error {
 	return tm.StartReplication(ctx)
 }
 
-// Deprecated delete after 7.0
+// StartSlaveUntilAfter is deprecated
 func (tm *TabletManager) StartSlaveUntilAfter(ctx context.Context, position string, waitTime time.Duration) error {
 	return tm.StartReplicationUntilAfter(ctx, position, waitTime)
 }
 
-// Deprecated delete after 7.0
+// GetSlaves is deprecated
 func (tm *TabletManager) GetSlaves(ctx context.Context) ([]string, error) {
 	return tm.GetReplicas(ctx)
 }
 
-// Deprecated delete after 7.0
+// InitSlave is deprecated
 func (tm *TabletManager) InitSlave(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
 	return tm.InitReplica(ctx, parent, position, timeCreatedNS)
 }
 
-// Deprecated delete after 7.0
+// SlaveWasPromoted is deprecated
 func (tm *TabletManager) SlaveWasPromoted(ctx context.Context) error {
 	return tm.ReplicaWasPromoted(ctx)
 }
 
-// Deprecated delete after 7.0
+// SlaveWasRestarted is deprecated
 func (tm *TabletManager) SlaveWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error {
 	return tm.ReplicaWasRestarted(ctx, parent)
 }

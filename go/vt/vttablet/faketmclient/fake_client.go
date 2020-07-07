@@ -285,47 +285,47 @@ func (client *FakeTabletManagerClient) PromoteReplica(ctx context.Context, table
 	return "", nil
 }
 
-//Deprecated
+// StopSlave is deprecated
 func (client *FakeTabletManagerClient) StopSlave(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return nil
 }
 
-//Deprecated
+// StopSlaveMinimum is deprecated
 func (client *FakeTabletManagerClient) StopSlaveMinimum(ctx context.Context, tablet *topodatapb.Tablet, minPos string, waitTime time.Duration) (string, error) {
 	return "", nil
 }
 
-//Deprecated
+// StartSlave is deprecated
 func (client *FakeTabletManagerClient) StartSlave(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return nil
 }
 
-//Deprecated
+// StartSlaveUntilAfter is deprecated
 func (client *FakeTabletManagerClient) StartSlaveUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, duration time.Duration) error {
 	return nil
 }
 
-//Deprecated
+// GetSlaves is deprecated
 func (client *FakeTabletManagerClient) GetSlaves(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error) {
 	return nil, nil
 }
 
-//Deprecated
+// SlaveStatus is deprecated
 func (client *FakeTabletManagerClient) SlaveStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
 	return &replicationdatapb.Status{}, nil
 }
 
-//Deprecated
+// InitSlave is deprecated
 func (client *FakeTabletManagerClient) InitSlave(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
 	return nil
 }
 
-//Deprecated
+// SlaveWasPromoted is deprecated
 func (client *FakeTabletManagerClient) SlaveWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return nil
 }
 
-//Deprecated
+// SlaveWasRestarted is deprecated
 func (client *FakeTabletManagerClient) SlaveWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias) error {
 	return nil
 }
