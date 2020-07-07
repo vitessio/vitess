@@ -73,12 +73,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-const (
-	// replicationStoppedFile is the name of the file whose existence informs
-	// vttablet to NOT try to repair replication.
-	replicationStoppedFile = "do_not_replicate"
-)
-
 var (
 	// The following flags initialize the tablet record.
 	tabletHostname     = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
@@ -136,6 +130,9 @@ type TabletManager struct {
 	QueryServiceControl tabletserver.Controller
 	UpdateStream        binlog.UpdateStreamControl
 	VREngine            *vreplication.Engine
+
+	// replManager manages replication.
+	replManager *replManager
 
 	// HealthReporter initiates healthchecks.
 	HealthReporter health.Reporter
@@ -293,6 +290,7 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (
 func (tm *TabletManager) Start(tablet *topodatapb.Tablet) error {
 	tm.setTablet(tablet)
 	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
+	tm.replManager = newReplManager(tm.BatchCtx, tm, healthCheckInterval)
 	tm.History = history.New(historyLength)
 	tm.tabletAlias = tablet.Alias
 	demoteType, err := topoproto.ParseTabletType(*demoteMasterType)

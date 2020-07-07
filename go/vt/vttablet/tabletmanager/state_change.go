@@ -243,6 +243,8 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 		}
 	}
 
+	tm.replManager.SetTabletType(newTablet.Type)
+
 	if allowQuery {
 		// Query service should be running.
 		if oldTablet.Type == topodatapb.TabletType_REPLICA &&
