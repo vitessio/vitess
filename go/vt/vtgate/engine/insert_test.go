@@ -83,24 +83,23 @@ func TestInsertUnshardedGenerate(t *testing.T) {
 				{Value: sqltypes.NULL},
 				{Value: sqltypes.NewInt64(2)},
 				{Value: sqltypes.NULL},
-				{Value: sqltypes.NewInt64(0)},
+				{Value: sqltypes.NewInt64(3)},
 			},
 		},
 	}
 
-	vc := &loggingVCursor{
-		shards: []string{"0"},
-		results: []*sqltypes.Result{
-			sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields(
-					"nextval",
-					"int64",
-				),
-				"4",
+	vc := newDMLTestVCursor("0")
+	vc.results = []*sqltypes.Result{
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"nextval",
+				"int64",
 			),
-			{InsertID: 1},
-		},
+			"4",
+		),
+		{InsertID: 1},
 	}
+
 	result, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
@@ -111,7 +110,7 @@ func TestInsertUnshardedGenerate(t *testing.T) {
 		`ExecuteStandalone dummy_generate n: type:INT64 value:"2"  ks2 0`,
 		// Fill those values into the insert.
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.0: dummy_insert {__seq0: type:INT64 value:"1" __seq1: type:INT64 value:"4" __seq2: type:INT64 value:"2" __seq3: type:INT64 value:"5" __seq4: type:INT64 value:"0" } true true`,
+		`ExecuteMultiShard ks.0: dummy_insert {__seq0: type:INT64 value:"1" __seq1: type:INT64 value:"4" __seq2: type:INT64 value:"2" __seq3: type:INT64 value:"5" __seq4: type:INT64 value:"3" } true true`,
 	})
 
 	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerate.
