@@ -130,6 +130,8 @@ func TestReparentTablet(t *testing.T) {
 	replica.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
 	replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
+		"FAKE SET MASTER",
+		"FAKE SET MASTER",
 	}
 	replica.StartActionLoop(t, wr)
 	defer replica.StopActionLoop(t)
