@@ -404,7 +404,7 @@ message ReplicaWasRestartedResponse {
 }
 
 message StopReplicationAndGetStatusRequest {
-  bool stopIOThreadOnly = 1;
+  string stopReplicationOption = 1;
 }
 
 message StopReplicationAndGetStatusResponse {

@@ -925,8 +925,8 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 			wr.logger.Infof("getting replication position from %v", alias)
 			ctx, cancel := context.WithTimeout(ctx, waitReplicasTimeout)
 			defer cancel()
-			// TODO: Once we refactor EmergencyReparent, change the stopIOThreadOnly argument to true.
-			_, stopSlaveStatus, err := wr.tmc.StopReplicationAndGetStatus(ctx, tabletInfo.Tablet, false)
+			// TODO: Once we refactor EmergencyReparent, change the stopReplicationOption argument to IOThreadOnly.
+			_, stopSlaveStatus, err := wr.tmc.StopReplicationAndGetStatus(ctx, tabletInfo.Tablet, "")
 			if err != nil {
 				wr.logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", alias, err)
 				return

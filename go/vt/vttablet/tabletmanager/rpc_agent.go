@@ -143,7 +143,7 @@ type RPCTM interface {
 	// Deprecated
 	SlaveWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error
 
-	StopReplicationAndGetStatus(ctx context.Context, stopIOThreadOnly bool) (StopReplicationAndGetStatusResponse, error)
+	StopReplicationAndGetStatus(ctx context.Context, stopReplicationOption string) (StopReplicationAndGetStatusResponse, error)
 
 	ReplicaWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error
 

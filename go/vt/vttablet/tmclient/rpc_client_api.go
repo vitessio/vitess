@@ -210,7 +210,7 @@ type TabletManagerClient interface {
 
 	// StopReplicationAndGetStatus stops replication and returns the
 	// current position.
-	StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopIOThreadOnly bool) (*replicationdatapb.Status, *replicationdatapb.StopReplicationStatus, error)
+	StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopReplicationOption string) (*replicationdatapb.Status, *replicationdatapb.StopReplicationStatus, error)
 
 	// PromoteReplica makes the tablet the new master
 	PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
