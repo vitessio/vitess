@@ -45,3 +45,9 @@ message StopReplicationStatus {
   replicationdata.Status before = 1;
   replicationdata.Status after = 2;
 }
+
+// StopReplicationMode is used to provide controls over how replication is stopped.
+enum StopReplicationMode {
+  IOANDSQLTHREAD = 0;
+  IOTHREADONLY = 1;
+}

@@ -620,18 +620,9 @@ func (tm *TabletManager) ReplicaWasRestarted(ctx context.Context, parent *topoda
 	return nil
 }
 
-// StopReplicationType represents different options for how replication is stopped.
-// Default: Both IO thread and SQL thread.
-type StopReplicationType string
-
-const (
-	// IOThreadOnly will ensure that only the IO thread is stopped when issuing a stop to replication.
-	I0ThreadOnly StopReplicationType = "IOThreadOnly"
-)
-
 // StopReplicationAndGetStatus stops MySQL replication, and returns the
 // current status.
-func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopReplicationOption string) (StopReplicationAndGetStatusResponse, error) {
+func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (StopReplicationAndGetStatusResponse, error) {
 	if err := tm.lock(ctx); err != nil {
 		return StopReplicationAndGetStatusResponse{}, err
 	}
@@ -646,7 +637,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	}
 	before := mysql.ReplicationStatusToProto(rs)
 
-	if StopReplicationType(stopReplicationOption) == I0ThreadOnly {
+	if stopReplicationMode == replicationdatapb.StopReplicationMode_IOTHREADONLY {
 		if !rs.IOThreadRunning {
 			return StopReplicationAndGetStatusResponse{
 				HybridStatus: before,

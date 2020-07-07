@@ -404,7 +404,7 @@ message ReplicaWasRestartedResponse {
 }
 
 message StopReplicationAndGetStatusRequest {
-  string stopReplicationOption = 1;
+  replicationdata.StopReplicationMode stop_replication_mode = 1;
 }
 
 message StopReplicationAndGetStatusResponse {

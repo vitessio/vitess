@@ -926,7 +926,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 			ctx, cancel := context.WithTimeout(ctx, waitReplicasTimeout)
 			defer cancel()
 			// TODO: Once we refactor EmergencyReparent, change the stopReplicationOption argument to IOThreadOnly.
-			_, stopSlaveStatus, err := wr.tmc.StopReplicationAndGetStatus(ctx, tabletInfo.Tablet, "")
+			_, stopSlaveStatus, err := wr.tmc.StopReplicationAndGetStatus(ctx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
 			if err != nil {
 				wr.logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", alias, err)
 				return
