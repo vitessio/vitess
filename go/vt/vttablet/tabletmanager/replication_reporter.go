@@ -17,11 +17,8 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"fmt"
 	"html/template"
 	"time"
-
-	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
 
@@ -29,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/health"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 var enableReplicationReporter bool
@@ -66,7 +62,7 @@ func (r *replicationReporter) Report(isReplicaType, shouldQueryServiceBeRunning 
 			} else {
 				log.Infof("replication is stopped. Trying to reconnect to master...")
 				ctx, cancel := context.WithTimeout(r.tm.BatchCtx, 5*time.Second)
-				if err := repairReplication(ctx, r.tm); err != nil {
+				if err := r.tm.repairReplication(ctx); err != nil {
 					log.Infof("Failed to reconnect to master: %v", err)
 				}
 				cancel()
@@ -104,53 +100,6 @@ func (r *replicationReporter) Report(isReplicaType, shouldQueryServiceBeRunning 
 // HTMLName is part of the health.Reporter interface
 func (r *replicationReporter) HTMLName() template.HTML {
 	return template.HTML("MySQLReplicationLag")
-}
-
-// repairReplication tries to connect this server to whoever is
-// the current master of the shard, and start replicating.
-func repairReplication(ctx context.Context, tm *TabletManager) error {
-	if *mysqlctl.DisableActiveReparents {
-		return fmt.Errorf("can't repair replication with --disable_active_reparents")
-	}
-
-	ts := tm.TopoServer
-	tablet := tm.Tablet()
-
-	si, err := ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
-	if err != nil {
-		return err
-	}
-	if !si.HasMaster() {
-		return fmt.Errorf("no master tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
-	}
-
-	if topoproto.TabletAliasEqual(si.MasterAlias, tablet.Alias) {
-		// The shard record says we are master, but we disagree; we wouldn't
-		// reach this point unless we were told to check replication.
-		// Hopefully someone is working on fixing that, but in any case,
-		// we should not try to reparent to ourselves.
-		return fmt.Errorf("shard %v/%v record claims tablet %v is master, but its type is %v", tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(tablet.Alias), tablet.Type)
-	}
-
-	// If Orchestrator is configured and if Orchestrator is actively reparenting, we should not repairReplication
-	if tm.orc != nil {
-		re, err := tm.orc.InActiveShardRecovery(tablet)
-		if err != nil {
-			return err
-		}
-		if re {
-			return fmt.Errorf("orchestrator actively reparenting shard %v, skipping repairReplication", si)
-		}
-
-		// Before repairing replication, tell Orchestrator to enter maintenance mode for this tablet and to
-		// lock any other actions on this tablet by Orchestrator.
-		if err := tm.orc.BeginMaintenance(tm.Tablet(), "vttablet has been told to StopReplication"); err != nil {
-			log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
-			return vterrors.Wrap(err, "orchestrator BeginMaintenance failed, skipping repairReplication")
-		}
-	}
-
-	return tm.setMasterRepairReplication(ctx, si.MasterAlias, 0, "", true)
 }
 
 func registerReplicationReporter(tm *TabletManager) {

@@ -29,15 +29,15 @@ import (
 )
 
 // VStreamer defines  the functions of VStreamer
-// that the replicationWatcher needs.
+// that the BinlogWatcher needs.
 type VStreamer interface {
 	Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
 }
 
-// ReplicationWatcher is a tabletserver service that watches the
+// BinlogWatcher is a tabletserver service that watches the
 // replication stream.  It will trigger schema reloads if a DDL
 // is encountered.
-type ReplicationWatcher struct {
+type BinlogWatcher struct {
 	env              tabletenv.Env
 	watchReplication bool
 	vs               VStreamer
@@ -46,40 +46,40 @@ type ReplicationWatcher struct {
 	wg     sync.WaitGroup
 }
 
-// NewReplicationWatcher creates a new ReplicationWatcher.
-func NewReplicationWatcher(env tabletenv.Env, vs VStreamer, config *tabletenv.TabletConfig) *ReplicationWatcher {
-	return &ReplicationWatcher{
+// NewBinlogWatcher creates a new BinlogWatcher.
+func NewBinlogWatcher(env tabletenv.Env, vs VStreamer, config *tabletenv.TabletConfig) *BinlogWatcher {
+	return &BinlogWatcher{
 		env:              env,
 		vs:               vs,
 		watchReplication: config.WatchReplication,
 	}
 }
 
-// Open starts the ReplicationWatcher service.
-func (rpw *ReplicationWatcher) Open() {
-	if rpw.cancel != nil || !rpw.watchReplication {
+// Open starts the BinlogWatcher service.
+func (blw *BinlogWatcher) Open() {
+	if blw.cancel != nil || !blw.watchReplication {
 		return
 	}
 
 	ctx, cancel := context.WithCancel(tabletenv.LocalContext())
-	rpw.cancel = cancel
-	rpw.wg.Add(1)
-	go rpw.process(ctx)
+	blw.cancel = cancel
+	blw.wg.Add(1)
+	go blw.process(ctx)
 }
 
-// Close stops the ReplicationWatcher service.
-func (rpw *ReplicationWatcher) Close() {
-	if rpw.cancel == nil {
+// Close stops the BinlogWatcher service.
+func (blw *BinlogWatcher) Close() {
+	if blw.cancel == nil {
 		return
 	}
-	rpw.cancel()
-	rpw.cancel = nil
-	rpw.wg.Wait()
+	blw.cancel()
+	blw.cancel = nil
+	blw.wg.Wait()
 }
 
-func (rpw *ReplicationWatcher) process(ctx context.Context) {
-	defer rpw.env.LogError()
-	defer rpw.wg.Done()
+func (blw *BinlogWatcher) process(ctx context.Context) {
+	defer blw.env.LogError()
+	defer blw.wg.Done()
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -89,7 +89,7 @@ func (rpw *ReplicationWatcher) process(ctx context.Context) {
 
 	for {
 		// VStreamer will reload the schema when it encounters a DDL.
-		err := rpw.vs.Stream(ctx, "current", nil, filter, func(events []*binlogdatapb.VEvent) error {
+		err := blw.vs.Stream(ctx, "current", nil, filter, func(events []*binlogdatapb.VEvent) error {
 			return nil
 		})
 		select {

@@ -90,7 +90,7 @@ func (tm *TabletManager) stopReplicationLocked(ctx context.Context) error {
 
 	// Remember that we were told to stop, so we don't try to
 	// restart ourselves (in replication_reporter).
-	tm.setReplicationStopped(true)
+	tm.replManager.setReplicationStopped(true)
 
 	// Also tell Orchestrator we're stopped on purpose for some Vitess task.
 	// Do this in the background, as it's best-effort.
@@ -162,7 +162,7 @@ func (tm *TabletManager) StartReplication(ctx context.Context) error {
 	}
 	defer tm.unlock()
 
-	tm.setReplicationStopped(false)
+	tm.replManager.setReplicationStopped(false)
 
 	// Tell Orchestrator we're no longer stopped on purpose.
 	// Do this in the background, as it's best-effort.
@@ -213,7 +213,7 @@ func (tm *TabletManager) ResetReplication(ctx context.Context) error {
 	}
 	defer tm.unlock()
 
-	tm.setReplicationStopped(true)
+	tm.replManager.setReplicationStopped(true)
 	return tm.MysqlDaemon.ResetReplication(ctx)
 }
 
@@ -225,7 +225,7 @@ func (tm *TabletManager) InitMaster(ctx context.Context) (string, error) {
 	defer tm.unlock()
 
 	// Initializing as master implies undoing any previous "do not replicate".
-	tm.setReplicationStopped(false)
+	tm.replManager.setReplicationStopped(false)
 
 	// we need to insert something in the binlogs, so we can get the
 	// current position. Let's just use the mysqlctl.CreateReparentJournal commands.
@@ -296,7 +296,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 		return err
 	}
 
-	tm.setReplicationStopped(false)
+	tm.replManager.setReplicationStopped(false)
 
 	// If using semi-sync, we need to enable it before connecting to master.
 	// If we were a master type, we need to switch back to replica settings.
@@ -839,6 +839,48 @@ func (tm *TabletManager) handleRelayLogError(err error) error {
 		return nil
 	}
 	return err
+}
+
+// repairReplication tries to connect this server to whoever is
+// the current master of the shard, and start replicating.
+func (tm *TabletManager) repairReplication(ctx context.Context) error {
+	tablet := tm.Tablet()
+
+	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return err
+	}
+	if !si.HasMaster() {
+		return fmt.Errorf("no master tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
+	}
+
+	if topoproto.TabletAliasEqual(si.MasterAlias, tablet.Alias) {
+		// The shard record says we are master, but we disagree; we wouldn't
+		// reach this point unless we were told to check replication.
+		// Hopefully someone is working on fixing that, but in any case,
+		// we should not try to reparent to ourselves.
+		return fmt.Errorf("shard %v/%v record claims tablet %v is master, but its type is %v", tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(tablet.Alias), tablet.Type)
+	}
+
+	// If Orchestrator is configured and if Orchestrator is actively reparenting, we should not repairReplication
+	if tm.orc != nil {
+		re, err := tm.orc.InActiveShardRecovery(tablet)
+		if err != nil {
+			return err
+		}
+		if re {
+			return fmt.Errorf("orchestrator actively reparenting shard %v, skipping repairReplication", si)
+		}
+
+		// Before repairing replication, tell Orchestrator to enter maintenance mode for this tablet and to
+		// lock any other actions on this tablet by Orchestrator.
+		if err := tm.orc.BeginMaintenance(tm.Tablet(), "vttablet has been told to StopReplication"); err != nil {
+			log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
+			return vterrors.Wrap(err, "orchestrator BeginMaintenance failed, skipping repairReplication")
+		}
+	}
+
+	return tm.setMasterRepairReplication(ctx, si.MasterAlias, 0, "", true)
 }
 
 // SlaveStatus is deprecated

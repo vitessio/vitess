@@ -96,7 +96,7 @@ type TabletServer struct {
 	rt          *repltracker.ReplTracker
 	vstreamer   *vstreamer.Engine
 	tracker     *schema.Tracker
-	watcher     *ReplicationWatcher
+	watcher     *BinlogWatcher
 	qe          *QueryEngine
 	txThrottler *txthrottler.TxThrottler
 	te          *TxEngine
@@ -148,7 +148,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, alias.Cell)
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
-	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config)
+	tsv.watcher = NewBinlogWatcher(tsv, tsv.vstreamer, tsv.config)
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
 	tsv.te = NewTxEngine(tsv)
