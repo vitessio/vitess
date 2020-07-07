@@ -97,7 +97,7 @@ func (tm *TabletManager) stopReplicationLocked(ctx context.Context) error {
 	return tm.MysqlDaemon.StopReplication(tm.hookExtraEnv())
 }
 
-func (tm *TabletManager) stopSlaveIOThreadLocked(ctx context.Context) error {
+func (tm *TabletManager) stopIOThreadLocked(ctx context.Context) error {
 
 	// Remember that we were told to stop, so we don't try to
 	// restart ourselves (in replication_reporter).
@@ -114,7 +114,7 @@ func (tm *TabletManager) stopSlaveIOThreadLocked(ctx context.Context) error {
 		}
 	}()
 
-	return tm.MysqlDaemon.StopSlaveIOThread(ctx)
+	return tm.MysqlDaemon.StopIOThread(ctx)
 }
 
 // StopReplicationMinimum will stop the replication after it reaches at least the
@@ -647,7 +647,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopIO
 				},
 			}, nil
 		}
-		if err := tm.stopSlaveIOThreadLocked(ctx); err != nil {
+		if err := tm.stopIOThreadLocked(ctx); err != nil {
 			return StopReplicationAndGetStatusResponse{
 				Status: &replicationdatapb.StopReplicationStatus{
 					Before: before,

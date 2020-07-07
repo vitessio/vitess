@@ -75,7 +75,7 @@ func (flv *filePosFlavor) stopReplicationCommand() string {
 	return "unsupported"
 }
 
-func (flv *filePosFlavor) stopSlaveIOThreadCommand() string {
+func (flv *filePosFlavor) stopIOThreadCommand() string {
 	return "unsupported"
 }
 

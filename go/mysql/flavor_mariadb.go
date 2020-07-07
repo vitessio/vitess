@@ -63,7 +63,7 @@ func (mariadbFlavor) stopReplicationCommand() string {
 	return "STOP SLAVE"
 }
 
-func (mariadbFlavor) stopSlaveIOThreadCommand() string {
+func (mariadbFlavor) stopIOThreadCommand() string {
 	return "STOP SLAVE IO_THREAD"
 }
 

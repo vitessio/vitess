@@ -62,7 +62,7 @@ func (mysqlFlavor) stopReplicationCommand() string {
 	return "STOP SLAVE"
 }
 
-func (mysqlFlavor) stopSlaveIOThreadCommand() string {
+func (mysqlFlavor) stopIOThreadCommand() string {
 	return "STOP SLAVE IO_THREAD"
 }
 

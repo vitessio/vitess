@@ -114,15 +114,15 @@ func (mysqld *Mysqld) StopReplication(hookExtraEnv map[string]string) error {
 	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopReplicationCommand()})
 }
 
-// StopSlaveIOThread stops a slave's IO thread only.
-func (mysqld *Mysqld) StopSlaveIOThread(ctx context.Context) error {
+// StopIOThread stops a slave's IO thread only.
+func (mysqld *Mysqld) StopIOThread(ctx context.Context) error {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return err
 	}
 	defer conn.Recycle()
 
-	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopSlaveIOThreadCommand()})
+	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopIOThreadCommand()})
 }
 
 // RestartReplication stops, resets and starts replication.

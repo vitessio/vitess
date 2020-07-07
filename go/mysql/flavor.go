@@ -65,8 +65,8 @@ type flavor interface {
 	// stopReplicationCommand returns the command to stop the replication.
 	stopReplicationCommand() string
 
-	// stopSlaveIOThreadCommand returns the command to stop the slave's io thread only.
-	stopSlaveIOThreadCommand() string
+	// stopIOThreadCommand returns the command to stop the replica's io thread only.
+	stopIOThreadCommand() string
 
 	// sendBinlogDumpCommand sends the packet required to start
 	// dumping binlogs from the specified location.
@@ -186,9 +186,9 @@ func (c *Conn) StopReplicationCommand() string {
 	return c.flavor.stopReplicationCommand()
 }
 
-// StopSlaveIOThreadCommand returns the command to stop the slave's io thread.
-func (c *Conn) StopSlaveIOThreadCommand() string {
-	return c.flavor.stopSlaveIOThreadCommand()
+// StopIOThreadCommand returns the command to stop the replica's io thread.
+func (c *Conn) StopIOThreadCommand() string {
+	return c.flavor.stopIOThreadCommand()
 }
 
 // SendBinlogDumpCommand sends the flavor-specific version of
