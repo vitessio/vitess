@@ -702,6 +702,16 @@ var testReplicationStatus = &replicationdatapb.Status{
 	MasterConnectRetry:  12,
 }
 
+var testAfterStopIOThreadReplicationStatus = &replicationdatapb.Status{
+	Position:            "MariaDB/1-345-789",
+	IoThreadRunning:     false,
+	SqlThreadRunning:    true,
+	SecondsBehindMaster: 654,
+	MasterHost:          "master.host",
+	MasterPort:          3366,
+	MasterConnectRetry:  12,
+}
+
 func (fra *fakeRPCTM) SlaveStatus(ctx context.Context) (*replicationdatapb.Status, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -1285,6 +1295,8 @@ func tmRPCTestReplicaWasRestartedPanic(ctx context.Context, t *testing.T, client
 func tmRPCTestStopReplicationAndGetStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	rp, _, err := client.StopReplicationAndGetStatus(ctx, tablet, "")
 	compareError(t, "StopReplicationAndGetStatus", err, rp, testReplicationStatus)
+	_, status, err := client.StopReplicationAndGetStatus(ctx, tablet, "IOThreadOnly")
+	compareError(t, "StopReplicationAndGetStatus", err, status.After, testAfterStopIOThreadReplicationStatus)
 }
 
 func tmRPCTestStopReplicationAndGetStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
