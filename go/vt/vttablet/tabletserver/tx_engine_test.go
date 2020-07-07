@@ -138,9 +138,7 @@ func TestTxEngineClose(t *testing.T) {
 	require.NoError(t, err)
 	start = time.Now()
 	te.shutdown(false)
-	if diff := time.Since(start); diff < 500*time.Millisecond {
-		t.Errorf("Close time: %v, must be over 0.5s", diff)
-	}
+	assert.Less(t, int64(50*time.Millisecond), int64(time.Since(start)))
 	assert.EqualValues(t, 1, te.txPool.env.Stats().KillCounters.Counts()["Transactions"])
 	assert.EqualValues(t, 2, te.txPool.env.Stats().KillCounters.Counts()["ReservedConnection"])
 
