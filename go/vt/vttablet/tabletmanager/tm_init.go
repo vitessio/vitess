@@ -754,24 +754,6 @@ func (tm *TabletManager) Tablet() *topodatapb.Tablet {
 	return tablet
 }
 
-// Healthy reads the result of the latest healthcheck, protected by mutex.
-// If that status is too old, it means healthcheck hasn't run for a while,
-// and is probably stuck, this is not good, we're not healthy.
-func (tm *TabletManager) Healthy() (time.Duration, error) {
-	tm.mutex.Lock()
-	defer tm.mutex.Unlock()
-
-	healthy := tm._healthy
-	if healthy == nil {
-		timeSinceLastCheck := time.Since(tm._healthyTime)
-		if timeSinceLastCheck > healthCheckInterval*3 {
-			healthy = fmt.Errorf("last health check is too old: %s > %s", timeSinceLastCheck, healthCheckInterval*3)
-		}
-	}
-
-	return tm._replicationDelay, healthy
-}
-
 // BlacklistedTables returns the list of currently blacklisted tables.
 func (tm *TabletManager) BlacklistedTables() []string {
 	tm.mutex.Lock()

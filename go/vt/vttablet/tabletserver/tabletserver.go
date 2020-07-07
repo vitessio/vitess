@@ -178,6 +178,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	})
 	tsv.exporter.NewGaugeDurationFunc("QueryTimeout", "Tablet server query timeout", tsv.QueryTimeout.Get)
 
+	tsv.registerHealthzHealthHandler()
 	tsv.registerDebugHealthHandler()
 	tsv.registerQueryzHandler()
 	tsv.registerStreamQueryzHandlers()
@@ -1400,6 +1401,24 @@ func (tsv *TabletServer) HandlePanic(err *error) {
 // Close is a no-op.
 func (tsv *TabletServer) Close(ctx context.Context) error {
 	return nil
+}
+
+var okMessage = []byte("ok\n")
+
+func (tsv *TabletServer) registerHealthzHealthHandler() {
+	tsv.exporter.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
+			acl.SendError(w, err)
+			return
+		}
+		if state := tsv.hs.Healthy(); state != "" {
+			http.Error(w, fmt.Sprintf("500 internal server error: tablet manager not healthy: %v", state), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Length", fmt.Sprintf("%v", len(okMessage)))
+		w.WriteHeader(http.StatusOK)
+		w.Write(okMessage)
+	})
 }
 
 func (tsv *TabletServer) registerDebugHealthHandler() {
