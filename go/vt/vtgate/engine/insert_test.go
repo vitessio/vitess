@@ -855,6 +855,15 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 		" suffix",
 	)
 
+	ksid0_lookup := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"from|to",
+			"int64|varbinary",
+		),
+		"1|\x00",
+		"3|\x00",
+		"4|\x00",
+	)
 	ksid0 := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"to",
@@ -867,10 +876,7 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 	vc.shardForKsid = []string{"20-", "-20"}
 	vc.results = []*sqltypes.Result{
 		// primary vindex lookups: fail row 2.
-		ksid0,
-		noresult,
-		ksid0,
-		ksid0,
+		ksid0_lookup,
 		// insert lkp2
 		noresult,
 		// fail one verification (row 3)
@@ -889,10 +895,7 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`Execute select toc from prim where from1 = :from1 from1: type:INT64 value:"1"  false`,
-		`Execute select toc from prim where from1 = :from1 from1: type:INT64 value:"2"  false`,
-		`Execute select toc from prim where from1 = :from1 from1: type:INT64 value:"3"  false`,
-		`Execute select toc from prim where from1 = :from1 from1: type:INT64 value:"4"  false`,
+		`Execute select from1, toc from prim where from1 in ::from1 from1: type:TUPLE values:<type:INT64 value:"1" > values:<type:INT64 value:"2" > values:<type:INT64 value:"3" > values:<type:INT64 value:"4" >  false`,
 		`Execute insert ignore into lkp2(from1, from2, toc) values(:from1_0, :from2_0, :toc_0), (:from1_1, :from2_1, :toc_1), (:from1_2, :from2_2, :toc_2) ` +
 			`from1_0: type:INT64 value:"5" from1_1: type:INT64 value:"7" from1_2: type:INT64 value:"8" ` +
 			`from2_0: type:INT64 value:"9" from2_1: type:INT64 value:"11" from2_2: type:INT64 value:"12" ` +
