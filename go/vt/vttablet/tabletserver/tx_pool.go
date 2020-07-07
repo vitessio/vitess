@@ -326,28 +326,7 @@ func (tp *TxPool) SetTimeout(timeout time.Duration) {
 }
 
 func (tp *TxPool) txComplete(conn *StatefulConnection, reason tx.ReleaseReason) {
-	tp.log(conn, reason)
+	conn.LogTransaction(reason)
 	tp.limiter.Release(conn.TxProperties().ImmediateCaller, conn.TxProperties().EffectiveCaller)
 	conn.CleanTxState()
-}
-
-func (tp *TxPool) log(txc *StatefulConnection, reason tx.ReleaseReason) {
-	if txc.TxProperties() == nil {
-		return //Nothing to log as no transaction exists on this connection.
-	}
-	txc.TxProperties().Conclusion = reason.Name()
-	txc.TxProperties().EndTime = time.Now()
-
-	username := callerid.GetPrincipal(txc.TxProperties().EffectiveCaller)
-	if username == "" {
-		username = callerid.GetUsername(txc.TxProperties().ImmediateCaller)
-	}
-	duration := txc.TxProperties().EndTime.Sub(txc.TxProperties().StartTime)
-	txc.Stats().UserTransactionCount.Add([]string{username, reason.Name()}, 1)
-	txc.Stats().UserTransactionTimesNs.Add([]string{username, reason.Name()}, int64(duration))
-	txc.TxProperties().Stats.Add(reason.Name(), duration)
-	if txc.TxProperties().LogToFile {
-		log.Infof("Logged transaction: %s", txc.String())
-	}
-	tabletenv.TxLogger.Send(txc)
 }

@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/callerid"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/servenv"
@@ -56,7 +58,6 @@ type Properties struct {
 	EffectiveCaller *vtrpcpb.CallerID
 	ImmediateCaller *querypb.VTGateCallerID
 	StartTime       time.Time
-	EndTime         time.Time
 	Stats           *servenv.TimingsWrapper
 }
 
@@ -139,6 +140,7 @@ func (sc *StatefulConnection) Releasef(reasonFormat string, a ...interface{}) {
 	sc.pool.unregister(sc.ConnID, fmt.Sprintf(reasonFormat, a...))
 	sc.dbConn.Recycle()
 	sc.dbConn = nil
+	sc.logReservedConn()
 }
 
 //Renew the existing connection with new connection id.
@@ -186,7 +188,13 @@ func (sc *StatefulConnection) Stats() *tabletenv.Stats {
 }
 
 //Taint taints the existing connection.
-func (sc *StatefulConnection) Taint(ctx context.Context) {
+func (sc *StatefulConnection) Taint(ctx context.Context, stats *servenv.TimingsWrapper) error {
+	if sc.dbConn == nil {
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "connection is closed")
+	}
+	if sc.tainted {
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "connection is already reserved")
+	}
 	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
 	effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
 
@@ -195,15 +203,50 @@ func (sc *StatefulConnection) Taint(ctx context.Context) {
 		EffectiveCaller: effectiveCaller,
 		ImmediateCaller: immediateCaller,
 		StartTime:       time.Now(),
-		Stats:           nil, // TODO: (harshit) ????!?!?
+		Stats:           stats,
 	}
 	// if we don't have an active dbConn, we can silently ignore this request
-	if sc.dbConn != nil {
-		sc.dbConn.Taint()
-	}
+	sc.dbConn.Taint()
+	return nil
 }
 
 //IsTainted tells us whether this connection is tainted
 func (sc *StatefulConnection) IsTainted() bool {
 	return sc.tainted
+}
+
+//LogTransaction logs transaction related stats
+func (sc *StatefulConnection) LogTransaction(reason tx.ReleaseReason) {
+	if sc.txProps == nil {
+		return //Nothing to log as no transaction exists on this connection.
+	}
+	sc.txProps.Conclusion = reason.Name()
+	sc.txProps.EndTime = time.Now()
+
+	username := callerid.GetPrincipal(sc.txProps.EffectiveCaller)
+	if username == "" {
+		username = callerid.GetUsername(sc.txProps.ImmediateCaller)
+	}
+	duration := sc.txProps.EndTime.Sub(sc.txProps.StartTime)
+	sc.Stats().UserTransactionCount.Add([]string{username, reason.Name()}, 1)
+	sc.Stats().UserTransactionTimesNs.Add([]string{username, reason.Name()}, int64(duration))
+	sc.txProps.Stats.Add(reason.Name(), duration)
+	if sc.txProps.LogToFile {
+		log.Infof("Logged transaction: %s", sc.String())
+	}
+	tabletenv.TxLogger.Send(sc)
+}
+
+//logReservedConn logs reserved connection related stats.
+func (sc *StatefulConnection) logReservedConn() {
+	if sc.reservedProps == nil {
+		return //Nothing to log as this connection is not reserved.
+	}
+	duration := time.Since(sc.reservedProps.StartTime)
+	username := callerid.GetPrincipal(sc.reservedProps.EffectiveCaller)
+	if username == "" {
+		username = callerid.GetUsername(sc.reservedProps.ImmediateCaller)
+	}
+	sc.Stats().UserReservedCount.Add(username, 1)
+	sc.Stats().UserReservedTimesNs.Add(username, int64(duration))
 }

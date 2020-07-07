@@ -1002,7 +1002,8 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 			if transactionID != 0 {
 				connID = transactionID
 			}
-
+			logStats.ReservedID = reservedID
+			logStats.TransactionID = transactionID
 			qre := &QueryExecutor{
 				query:          query,
 				marginComments: comments,

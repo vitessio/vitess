@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
@@ -94,6 +94,9 @@ type TxEngine struct {
 	abandonAge          time.Duration
 	ticks               *timer.Timer
 
+	// reservedConnStats keeps statistics about reserved connections
+	reservedConnStats *servenv.TimingsWrapper
+
 	txPool       *TxPool
 	preparedPool *TxPreparedPool
 	twoPC        *TwoPC
@@ -105,6 +108,7 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 	te := &TxEngine{
 		env:                 env,
 		shutdownGracePeriod: time.Duration(config.ShutdownGracePeriodSeconds * 1e9),
+		reservedConnStats:   env.Exporter().NewTimings("ReservedConnections", "Reserved connections stats", "operation"),
 	}
 	limiter := txlimiter.New(env)
 	te.txPool = NewTxPool(env, limiter)
@@ -631,7 +635,10 @@ func (te *TxEngine) reserve(ctx context.Context, options *querypb.ExecuteOptions
 }
 
 func (te *TxEngine) taintConn(ctx context.Context, conn *StatefulConnection, preQueries []string) error {
-	conn.Taint(ctx)
+	err := conn.Taint(ctx, te.reservedConnStats)
+	if err != nil {
+		return err
+	}
 	for _, query := range preQueries {
 		_, err := conn.Exec(ctx, query, 0 /*maxrows*/, false /*wantFields*/)
 		if err != nil {
@@ -648,22 +655,8 @@ func (te *TxEngine) Release(connID int64) error {
 	if err != nil {
 		return err
 	}
-	reservedProps := conn.reservedProps
+
 	conn.Release(tx.ConnRelease)
 
-	te.logReservedConn(reservedProps, conn)
 	return nil
-}
-
-func (te *TxEngine) logReservedConn(reservedProps *Properties, conn *StatefulConnection) {
-	if reservedProps == nil {
-		return //Nothing to log as this connection is not reserved.
-	}
-	duration := time.Since(reservedProps.StartTime)
-	username := callerid.GetPrincipal(reservedProps.EffectiveCaller)
-	if username == "" {
-		username = callerid.GetUsername(reservedProps.ImmediateCaller)
-	}
-	conn.Stats().UserReservedCount.Add(username, 1)
-	conn.Stats().UserReservedTimesNs.Add(username, int64(duration))
 }
