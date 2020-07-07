@@ -39,12 +39,14 @@ type Stats struct {
 	UserTableQueryTimesNs  *stats.CountersWithMultiLabels // Per CallerID/table latencies
 	UserTransactionCount   *stats.CountersWithMultiLabels // Per CallerID transaction counts
 	UserTransactionTimesNs *stats.CountersWithMultiLabels // Per CallerID transaction latencies
-	UserReservedCount      *stats.CountersWithSingleLabel // Per CallerID reserved counts
-	UserReservedTimesNs    *stats.CountersWithSingleLabel // Per CallerID reserved latencies
 	ResultHistogram        *stats.Histogram               // Row count histograms
 	TableaclAllowed        *stats.CountersWithMultiLabels // Number of allows
 	TableaclDenied         *stats.CountersWithMultiLabels // Number of denials
 	TableaclPseudoDenied   *stats.CountersWithMultiLabels // Number of pseudo denials
+
+	UserActiveReservedCount *stats.CountersWithSingleLabel // Per CallerID active reserved connection counts
+	UserReservedCount       *stats.CountersWithSingleLabel // Per CallerID reserved connection counts
+	UserReservedTimesNs     *stats.CountersWithSingleLabel // Per CallerID reserved connection duration
 }
 
 // NewStats instantiates a new set of stats scoped by exporter.
@@ -83,12 +85,14 @@ func NewStats(exporter *servenv.Exporter) *Stats {
 		UserTableQueryTimesNs:  exporter.NewCountersWithMultiLabels("UserTableQueryTimesNs", "Total latency for each CallerID/table combination", []string{"TableName", "CallerID", "Type"}),
 		UserTransactionCount:   exporter.NewCountersWithMultiLabels("UserTransactionCount", "transactions received for each CallerID", []string{"CallerID", "Conclusion"}),
 		UserTransactionTimesNs: exporter.NewCountersWithMultiLabels("UserTransactionTimesNs", "Total transaction latency for each CallerID", []string{"CallerID", "Conclusion"}),
-		UserReservedCount:      exporter.NewCountersWithSingleLabel("UserReservedCount", "reserved connection received for each CallerID", "CallerID"),
-		UserReservedTimesNs:    exporter.NewCountersWithSingleLabel("UserReservedTimesNs", "Total reserved connection latency for each CallerID", "CallerID"),
 		ResultHistogram:        exporter.NewHistogram("Results", "Distribution of rows returned", []int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000}),
 		TableaclAllowed:        exporter.NewCountersWithMultiLabels("TableACLAllowed", "ACL acceptances", []string{"TableName", "TableGroup", "PlanID", "Username"}),
 		TableaclDenied:         exporter.NewCountersWithMultiLabels("TableACLDenied", "ACL denials", []string{"TableName", "TableGroup", "PlanID", "Username"}),
 		TableaclPseudoDenied:   exporter.NewCountersWithMultiLabels("TableACLPseudoDenied", "ACL pseudodenials", []string{"TableName", "TableGroup", "PlanID", "Username"}),
+
+		UserActiveReservedCount: exporter.NewCountersWithSingleLabel("UserActiveReservedCount", "active reserved connection for each CallerID", "CallerID"),
+		UserReservedCount:       exporter.NewCountersWithSingleLabel("UserReservedCount", "reserved connection received for each CallerID", "CallerID"),
+		UserReservedTimesNs:     exporter.NewCountersWithSingleLabel("UserReservedTimesNs", "Total reserved connection latency for each CallerID", "CallerID"),
 	}
 	stats.QPSRates = exporter.NewRates("QPS", stats.QueryTimings, 15*60/5, 5*time.Second)
 	return stats

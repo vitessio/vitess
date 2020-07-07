@@ -205,8 +205,8 @@ func (sc *StatefulConnection) Taint(ctx context.Context, stats *servenv.TimingsW
 		StartTime:       time.Now(),
 		Stats:           stats,
 	}
-	// if we don't have an active dbConn, we can silently ignore this request
 	sc.dbConn.Taint()
+	sc.Stats().UserActiveReservedCount.Add(sc.getUsername(), 1)
 	return nil
 }
 
@@ -243,10 +243,16 @@ func (sc *StatefulConnection) logReservedConn() {
 		return //Nothing to log as this connection is not reserved.
 	}
 	duration := time.Since(sc.reservedProps.StartTime)
-	username := callerid.GetPrincipal(sc.reservedProps.EffectiveCaller)
-	if username == "" {
-		username = callerid.GetUsername(sc.reservedProps.ImmediateCaller)
-	}
+	username := sc.getUsername()
+	sc.Stats().UserActiveReservedCount.Add(username, -1)
 	sc.Stats().UserReservedCount.Add(username, 1)
 	sc.Stats().UserReservedTimesNs.Add(username, int64(duration))
+}
+
+func (sc *StatefulConnection) getUsername() string {
+	username := callerid.GetPrincipal(sc.reservedProps.EffectiveCaller)
+	if username != "" {
+		return username
+	}
+	return callerid.GetUsername(sc.reservedProps.ImmediateCaller)
 }
