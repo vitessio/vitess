@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -217,7 +217,7 @@ func testStreamTablesPanics(t *testing.T, bpc binlogplayer.Client) {
 // HandlePanic is part of the UpdateStream interface
 func (fake *FakeBinlogStreamer) HandlePanic(err *error) {
 	if x := recover(); x != nil {
-		*err = fmt.Errorf("Caught panic: %v", x)
+		*err = fmt.Errorf("caught panic: %v", x)
 	}
 }
 

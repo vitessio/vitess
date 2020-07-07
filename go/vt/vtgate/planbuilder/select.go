@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,12 +20,24 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
 // buildSelectPlan is the new function to build a Select plan.
-func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (primitive engine.Primitive, err error) {
+func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+	sel := stmt.(*sqlparser.Select)
+
+	p := tryAtVtgate(sel)
+	if p != nil {
+		return p, nil
+	}
+
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(sel)))
 	if err := pb.processSelect(sel, nil); err != nil {
 		return nil, err
@@ -69,22 +81,29 @@ func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (primitive e
 // route primitive.
 //
 // The LIMIT clause is the last construct of a query. If it cannot be
-// pushed into a route, then a primitve is created on top of any
+// pushed into a route, then a primitive is created on top of any
 // of the above trees to make it discard unwanted rows.
 func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) error {
+	if sel.SQLCalcFoundRows && sel.Limit != nil {
+		return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "sql_calc_found_rows not yet fully supported")
+	}
+
 	if err := pb.processTableExprs(sel.From); err != nil {
 		return err
 	}
 
 	if rb, ok := pb.bldr.(*route); ok {
-		directives := sqlparser.ExtractCommentDirectives(sel.Comments)
-		rb.ERoute.QueryTimeout = queryTimeout(directives)
-		if rb.ERoute.TargetDestination != nil {
-			return errors.New("unsupported: SELECT with a target destination")
-		}
+		// TODO(sougou): this can probably be improved.
+		for _, ro := range rb.routeOptions {
+			directives := sqlparser.ExtractCommentDirectives(sel.Comments)
+			ro.eroute.QueryTimeout = queryTimeout(directives)
+			if ro.eroute.TargetDestination != nil {
+				return errors.New("unsupported: SELECT with a target destination")
+			}
 
-		if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
-			rb.ERoute.ScatterErrorsAsWarnings = true
+			if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
+				ro.eroute.ScatterErrorsAsWarnings = true
+			}
 		}
 	}
 
@@ -96,11 +115,10 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 			return err
 		}
 	}
-	grouper, err := pb.checkAggregates(sel)
-	if err != nil {
+	if err := pb.checkAggregates(sel); err != nil {
 		return err
 	}
-	if err := pb.pushSelectExprs(sel, grouper); err != nil {
+	if err := pb.pushSelectExprs(sel); err != nil {
 		return err
 	}
 	if sel.Having != nil {
@@ -118,11 +136,53 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 	return nil
 }
 
+func tryAtVtgate(sel *sqlparser.Select) engine.Primitive {
+	if !isOnlyDual(sel.From) {
+		return nil
+	}
+
+	exprs := make([]evalengine.Expr, len(sel.SelectExprs))
+	cols := make([]string, len(sel.SelectExprs))
+	for i, e := range sel.SelectExprs {
+		expr, ok := e.(*sqlparser.AliasedExpr)
+		if !ok {
+			return nil
+		}
+		var err error
+		exprs[i], err = sqlparser.Convert(expr.Expr)
+		if err != nil {
+			return nil
+		}
+		cols[i] = expr.As.String()
+		if cols[i] == "" {
+			cols[i] = sqlparser.String(expr.Expr)
+		}
+	}
+	return &engine.Projection{
+		Exprs: exprs,
+		Cols:  cols,
+		Input: &engine.SingleRow{},
+	}
+}
+
+func isOnlyDual(from sqlparser.TableExprs) bool {
+	if len(from) > 1 {
+		return false
+	}
+	table, ok := from[0].(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return false
+	}
+	tableName, ok := table.Expr.(sqlparser.TableName)
+
+	return ok && tableName.Name.String() == "dual" && tableName.Qualifier.IsEmpty()
+}
+
 // pushFilter identifies the target route for the specified bool expr,
 // pushes it down, and updates the route info if the new constraint improves
 // the primitive. This function can push to a WHERE or HAVING clause.
-func (pb *primitiveBuilder) pushFilter(boolExpr sqlparser.Expr, whereType string) error {
-	filters := splitAndExpression(nil, boolExpr)
+func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string) error {
+	filters := splitAndExpression(nil, in)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
 		pullouts, origin, expr, err := pb.findOrigin(filter)
@@ -165,21 +225,22 @@ func (pb *primitiveBuilder) addPullouts(pullouts []*pulloutSubquery) {
 	for _, pullout := range pullouts {
 		pullout.setUnderlying(pb.bldr)
 		pb.bldr = pullout
+		pb.bldr.Reorder(0)
 	}
 }
 
 // pushSelectExprs identifies the target route for the
 // select expressions and pushes them down.
-func (pb *primitiveBuilder) pushSelectExprs(sel *sqlparser.Select, grouper groupByHandler) error {
+func (pb *primitiveBuilder) pushSelectExprs(sel *sqlparser.Select) error {
 	resultColumns, err := pb.pushSelectRoutes(sel.SelectExprs)
 	if err != nil {
 		return err
 	}
 	pb.st.SetResultColumns(resultColumns)
-	return pb.pushGroupBy(sel, grouper)
+	return pb.pushGroupBy(sel)
 }
 
-// pusheSelectRoutes is a convenience function that pushes all the select
+// pushSelectRoutes is a convenience function that pushes all the select
 // expressions and returns the list of resultColumns generated for it.
 func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) ([]*resultColumn, error) {
 	resultColumns := make([]*resultColumn, 0, len(selectExprs))
@@ -191,7 +252,7 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 				return nil, err
 			}
 			node.Expr = expr
-			rc, _, err := pb.bldr.PushSelect(node, origin)
+			rc, _, err := pb.bldr.PushSelect(pb, node, origin)
 			if err != nil {
 				return nil, err
 			}
@@ -214,10 +275,8 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 			}
 			// Validate keyspace reference if any.
 			if !node.TableName.IsEmpty() {
-				if qual := node.TableName.Qualifier; !qual.IsEmpty() {
-					if qual.String() != rb.ERoute.Keyspace.Name {
-						return nil, fmt.Errorf("cannot resolve %s to keyspace %s", sqlparser.String(node), rb.ERoute.Keyspace.Name)
-					}
+				if _, err := pb.st.FindTable(node.TableName); err != nil {
+					return nil, err
 				}
 			}
 			resultColumns = append(resultColumns, rb.PushAnonymous(node))
@@ -227,12 +286,15 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 				// This code is unreachable because the parser doesn't allow joins for next val statements.
 				return nil, errors.New("unsupported: SELECT NEXT query in cross-shard query")
 			}
-			if err := rb.SetOpcode(engine.SelectNext); err != nil {
-				return nil, err
+			for _, ro := range rb.routeOptions {
+				if ro.eroute.Opcode != engine.SelectNext {
+					return nil, errors.New("NEXT used on a non-sequence table")
+				}
+				ro.eroute.Opcode = engine.SelectNext
 			}
 			resultColumns = append(resultColumns, rb.PushAnonymous(node))
 		default:
-			panic(fmt.Sprintf("BUG: unexpceted select expression type: %T", node))
+			return nil, fmt.Errorf("BUG: unexpected select expression type: %T", node)
 		}
 	}
 	return resultColumns, nil
@@ -265,7 +327,7 @@ func (pb *primitiveBuilder) expandStar(inrcs []*resultColumn, expr *sqlparser.St
 			for _, col := range t.columnNames {
 				var expr *sqlparser.AliasedExpr
 				if singleTable {
-					// If there's only one table, we use unqualifed column names.
+					// If there's only one table, we use unqualified column names.
 					expr = &sqlparser.AliasedExpr{
 						Expr: &sqlparser.ColName{
 							Metadata: t.columns[col.Lowered()],
@@ -285,7 +347,7 @@ func (pb *primitiveBuilder) expandStar(inrcs []*resultColumn, expr *sqlparser.St
 						As: col,
 					}
 				}
-				rc, _, err := pb.bldr.PushSelect(expr, t.origin)
+				rc, _, err := pb.bldr.PushSelect(pb, expr, t.Origin())
 				if err != nil {
 					// Unreachable because PushSelect won't fail on ColName.
 					return inrcs, false, err
@@ -312,7 +374,7 @@ func (pb *primitiveBuilder) expandStar(inrcs []*resultColumn, expr *sqlparser.St
 				Qualifier: expr.TableName,
 			},
 		}
-		rc, _, err := pb.bldr.PushSelect(expr, t.origin)
+		rc, _, err := pb.bldr.PushSelect(pb, expr, t.Origin())
 		if err != nil {
 			// Unreachable because PushSelect won't fail on ColName.
 			return inrcs, false, err
@@ -320,22 +382,4 @@ func (pb *primitiveBuilder) expandStar(inrcs []*resultColumn, expr *sqlparser.St
 		inrcs = append(inrcs, rc)
 	}
 	return inrcs, true, nil
-}
-
-// queryTimeout returns DirectiveQueryTimeout value if set, otherwise returns 0.
-func queryTimeout(d sqlparser.CommentDirectives) int {
-	if d == nil {
-		return 0
-	}
-
-	val, ok := d[sqlparser.DirectiveQueryTimeout]
-	if !ok {
-		return 0
-	}
-
-	intVal, ok := val.(int)
-	if ok {
-		return intVal
-	}
-	return 0
 }

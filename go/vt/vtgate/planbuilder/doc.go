@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ to eventually validate such references.
 
 Every 'builder' primitive must satisfy the builder
 interface. This allows the planbuilder to outsource
-primitive-specific handling into those implementaions.
+primitive-specific handling into those implementations.
 
 Variable naming: The AST, planbuilder and engine
 are three different worlds that use overloaded

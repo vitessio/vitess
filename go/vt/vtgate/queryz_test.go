@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
@@ -40,10 +41,8 @@ func TestQueryzHandler(t *testing.T) {
 	// single shard query
 	sql := "select id from user where id = 1"
 	_, err := executorExec(executor, sql, nil)
-	if err != nil {
-		t.Error(err)
-	}
-	result, ok := executor.plans.Get(sql)
+	require.NoError(t, err)
+	result, ok := executor.plans.Get("@master:" + sql)
 	if !ok {
 		t.Fatalf("couldn't get plan from cache")
 	}
@@ -53,10 +52,8 @@ func TestQueryzHandler(t *testing.T) {
 	// scatter
 	sql = "select id from user"
 	_, err = executorExec(executor, sql, nil)
-	if err != nil {
-		t.Error(err)
-	}
-	result, ok = executor.plans.Get(sql)
+	require.NoError(t, err)
+	result, ok = executor.plans.Get("@master:" + sql)
 	if !ok {
 		t.Fatalf("couldn't get plan from cache")
 	}
@@ -68,20 +65,17 @@ func TestQueryzHandler(t *testing.T) {
 		"id":   sqltypes.Uint64BindVariable(1),
 		"name": sqltypes.BytesBindVariable([]byte("myname")),
 	})
-	if err != nil {
-		t.Error(err)
-	}
-	result, ok = executor.plans.Get(sql)
+	require.NoError(t, err)
+	result, ok = executor.plans.Get("@master:" + sql)
 	if !ok {
 		t.Fatalf("couldn't get plan from cache")
 	}
 	plan3 := result.(*engine.Plan)
 
 	// vindex insert from above execution
-	result, ok = executor.plans.Get("insert into name_user_map(name, user_id) values(:name0, :user_id0)")
-	if !ok {
-		t.Fatalf("couldn't get plan from cache")
-	}
+	result, ok = executor.plans.Get("@master:" + "insert into name_user_map(name, user_id) values(:name_0, :user_id_0)")
+	require.True(t, ok, "couldn't get plan from cache")
+
 	plan4 := result.(*engine.Plan)
 
 	// same query again should add query counts to existing plans
@@ -91,9 +85,7 @@ func TestQueryzHandler(t *testing.T) {
 		"name": sqltypes.BytesBindVariable([]byte("myname")),
 	})
 
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	plan3.ExecTime = time.Duration(100 * time.Millisecond)
 	plan4.ExecTime = time.Duration(200 * time.Millisecond)

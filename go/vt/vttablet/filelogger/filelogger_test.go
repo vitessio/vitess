@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -60,13 +60,19 @@ func TestFileLog(t *testing.T) {
 	tabletenv.StatsLogger.Send(log2)
 
 	// Allow time for propagation
-	time.Sleep(10 * time.Millisecond)
+	for i := 0; i < 10; i++ {
+		time.Sleep(10 * time.Millisecond)
 
-	want := "\t\t\t''\t''\t0001-01-01 00:00:00.000000\t0001-01-01 00:00:00.000000\t0.000000\t\t\"test 1\"\tmap[]\t1\t\"test 1 PII\"\tmysql\t0.000000\t0.000000\t0\t0\t\"\"\t\n\t\t\t''\t''\t0001-01-01 00:00:00.000000\t0001-01-01 00:00:00.000000\t0.000000\t\t\"test 2\"\tmap[]\t1\t\"test 2 PII\"\tmysql\t0.000000\t0.000000\t0\t0\t\"\"\t\n"
-	contents, _ := ioutil.ReadFile(logPath)
-	got := string(contents)
-	if want != string(got) {
-		t.Errorf("streamlog file: want %q got %q", want, got)
+		want := "\t\t\t''\t''\t0001-01-01 00:00:00.000000\t0001-01-01 00:00:00.000000\t0.000000\t\t\"test 1\"\tmap[]\t1\t\"test 1 PII\"\tmysql\t0.000000\t0.000000\t0\t0\t\"\"\t\n\t\t\t''\t''\t0001-01-01 00:00:00.000000\t0001-01-01 00:00:00.000000\t0.000000\t\t\"test 2\"\tmap[]\t1\t\"test 2 PII\"\tmysql\t0.000000\t0.000000\t0\t0\t\"\"\t\n"
+		contents, _ := ioutil.ReadFile(logPath)
+		got := string(contents)
+		if want == got {
+			return
+		}
+		// Last iteration.
+		if i == 9 {
+			t.Errorf("streamlog file: want %q got %q", want, got)
+		}
 	}
 }
 

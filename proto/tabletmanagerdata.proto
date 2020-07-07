@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -52,6 +52,10 @@ message TableDefinition {
 
   // approximate number of rows
   uint64 row_count = 7;
+
+  // column names along with their types.
+  // NOTE: this is a superset of columns.
+  repeated query.Field fields = 8;
 }
 
 message SchemaDefinition {
@@ -182,7 +186,7 @@ message IgnoreHealthErrorResponse {
 
 message ReloadSchemaRequest {
   // wait_position allows scheduling a schema reload to occur after a
-  // given DDL has replicated to this slave, by specifying a replication
+  // given DDL has replicated to this server, by specifying a replication
   // position to wait for. Leave empty to trigger the reload immediately.
   string wait_position = 1;
 }
@@ -257,10 +261,10 @@ message ExecuteFetchAsAppResponse {
   query.QueryResult result = 1;
 }
 
-message SlaveStatusRequest {
+message ReplicationStatusRequest {
 }
 
-message SlaveStatusResponse {
+message ReplicationStatusResponse {
   replicationdata.Status status = 1;
 }
 
@@ -271,55 +275,46 @@ message MasterPositionResponse {
   string position = 1;
 }
 
-message StopSlaveRequest {
+message WaitForPositionRequest {
+  string position = 1;
 }
 
-message StopSlaveResponse {
+message WaitForPositionResponse {
 }
 
-message StopSlaveMinimumRequest {
+message StopReplicationRequest {
+}
+
+message StopReplicationResponse {
+}
+
+message StopReplicationMinimumRequest {
   string position = 1;
   int64 wait_timeout = 2;
 }
 
-message StopSlaveMinimumResponse {
+message StopReplicationMinimumResponse {
   string position = 1;
 }
 
-message StartSlaveRequest {
+message StartReplicationRequest {
 }
 
-message StartSlaveResponse {
+message StartReplicationResponse {
 }
 
-message StartSlaveUntilAfterRequest {
+message StartReplicationUntilAfterRequest {
   string position = 1;
   int64 wait_timeout = 2;
 }
 
-message StartSlaveUntilAfterResponse {
+message StartReplicationUntilAfterResponse {
 }
 
-message TabletExternallyReparentedRequest {
-  // external_id is an string value that may be provided by an external
-  // agent for tracking purposes. The tablet will emit this string in
-  // events triggered by TabletExternallyReparented, such as VitessReparent.
-  string external_id = 1;
+message GetReplicasRequest {
 }
 
-message TabletExternallyReparentedResponse {
-}
-
-message TabletExternallyElectedRequest {
-}
-
-message TabletExternallyElectedResponse {
-}
-
-message GetSlavesRequest {
-}
-
-message GetSlavesResponse {
+message GetReplicasResponse {
   repeated string addrs = 1;
 }
 
@@ -362,13 +357,13 @@ message PopulateReparentJournalRequest {
 message PopulateReparentJournalResponse {
 }
 
-message InitSlaveRequest {
+message InitReplicaRequest {
   topodata.TabletAlias parent = 1;
   string replication_position = 2;
   int64 time_created_ns = 3;
 }
 
-message InitSlaveResponse {
+message InitReplicaResponse {
 }
 
 message DemoteMasterRequest {
@@ -384,35 +379,28 @@ message UndoDemoteMasterRequest {
 message UndoDemoteMasterResponse {
 }
 
-message PromoteSlaveWhenCaughtUpRequest {
-  string position = 1;
+message ReplicaWasPromotedRequest {
 }
 
-message PromoteSlaveWhenCaughtUpResponse {
-  string position = 1;
-}
-
-message SlaveWasPromotedRequest {
-}
-
-message SlaveWasPromotedResponse {
+message ReplicaWasPromotedResponse {
 }
 
 message SetMasterRequest {
   topodata.TabletAlias parent = 1;
   int64 time_created_ns = 2;
-  bool force_start_slave = 3;
+  bool force_start_replication = 3;
+  string wait_position = 4;
 }
 
 message SetMasterResponse {
 }
 
-message SlaveWasRestartedRequest {
+message ReplicaWasRestartedRequest {
   // the parent alias the tablet should have
   topodata.TabletAlias parent = 1;
 }
 
-message SlaveWasRestartedResponse {
+message ReplicaWasRestartedResponse {
 }
 
 message StopReplicationAndGetStatusRequest {
@@ -422,10 +410,10 @@ message StopReplicationAndGetStatusResponse {
   replicationdata.Status status = 1;
 }
 
-message PromoteSlaveRequest {
+message PromoteReplicaRequest {
 }
 
-message PromoteSlaveResponse {
+message PromoteReplicaResponse {
   string position = 1;
 }
 
@@ -445,4 +433,88 @@ message RestoreFromBackupRequest {
 
 message RestoreFromBackupResponse {
   logutil.Event event = 1;
+}
+
+// Deprecated
+message SlaveStatusRequest {
+}
+
+// Deprecated
+message SlaveStatusResponse {
+  replicationdata.Status status = 1;
+}
+
+// Deprecated
+message StopSlaveRequest {
+}
+
+// Deprecated
+message StopSlaveResponse {
+}
+
+// Deprecated
+message StopSlaveMinimumRequest {
+  string position = 1;
+  int64 wait_timeout = 2;
+}
+
+// Deprecated
+message StopSlaveMinimumResponse {
+  string position = 1;
+}
+
+// Deprecated
+message StartSlaveRequest {
+}
+
+// Deprecated
+message StartSlaveResponse {
+}
+
+// Deprecated
+message StartSlaveUntilAfterRequest {
+  string position = 1;
+  int64 wait_timeout = 2;
+}
+
+// Deprecated
+message StartSlaveUntilAfterResponse {
+}
+
+// Deprecated
+message GetSlavesRequest {
+}
+
+// Deprecated
+message GetSlavesResponse {
+  repeated string addrs = 1;
+}
+
+// Deprecated
+message InitSlaveRequest {
+  topodata.TabletAlias parent = 1;
+  string replication_position = 2;
+  int64 time_created_ns = 3;
+}
+
+// Deprecated
+message InitSlaveResponse {
+}
+
+// Deprecated
+message SlaveWasPromotedRequest {
+}
+
+// Deprecated
+message SlaveWasPromotedResponse {
+}
+
+// Deprecated
+message SlaveWasRestartedRequest {
+  // the parent alias the tablet should have
+  topodata.TabletAlias parent = 1;
+}
+
+// Deprecated
+message SlaveWasRestartedResponse {
 }

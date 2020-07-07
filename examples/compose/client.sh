@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2017 GitHub Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,4 +17,12 @@
 
 set -e
 
-exec docker-compose run -v$(pwd):/vt/client vtgate go run /vt/client/client.go -server=vtgate:15999
+# Enable tty for Windows users using git-bash or cygwin
+if [[ "$OSTYPE" == "msys" ]]; then
+        # Lightweight shell and GNU utilities compiled for Windows (part of MinGW)
+        tty=winpty
+        script=//script//client.go
+fi
+
+# This is a convenience script to run the client.go script
+exec $tty docker-compose exec ${CS:-vtgate} go run ${script:-/script/client.go} -server=vtgate:15999

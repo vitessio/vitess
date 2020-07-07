@@ -29,7 +29,7 @@ spec:
 ###################################
 # pmm StatefulSet
 ###################################
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: pmm
@@ -219,7 +219,7 @@ spec:
       trap : TERM INT; sleep infinity & wait
 
 - name: pmm-client-metrics-log
-  image: vitess/logtail:helm-1.0.6
+  image: vitess/logtail:helm-2.0.0-0
   imagePullPolicy: IfNotPresent
   env:
   - name: TAIL_FILEPATH

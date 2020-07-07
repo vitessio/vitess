@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ type Server interface {
 
 	// GetSrvKeyspaceNames returns the list of keyspaces served in
 	// the provided cell.
-	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
+	GetSrvKeyspaceNames(ctx context.Context, cell string, staleOK bool) ([]string, error)
 
 	// GetSrvKeyspace returns the SrvKeyspace for a cell/keyspace.
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)

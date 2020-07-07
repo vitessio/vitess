@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -83,16 +83,14 @@ func (mp *cMasterParticipation) WaitForMastership() (context.Context, error) {
 	// we just cancel that context.
 	lockCtx, lockCancel := context.WithCancel(context.Background())
 	go func() {
-		select {
-		case <-mp.stop:
-			if ld != nil {
-				if err := ld.Unlock(context.Background()); err != nil {
-					log.Errorf("failed to unlock LockDescriptor %v: %v", electionPath, err)
-				}
+		<-mp.stop
+		if ld != nil {
+			if err := ld.Unlock(context.Background()); err != nil {
+				log.Errorf("failed to unlock LockDescriptor %v: %v", electionPath, err)
 			}
-			lockCancel()
-			close(mp.done)
 		}
+		lockCancel()
+		close(mp.done)
 	}()
 
 	// Try to get the mastership, by getting a lock.

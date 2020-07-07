@@ -1,4 +1,4 @@
-By default, the [Kubernetes configs](https://github.com/vitessio/vitess/tree/master/examples/kubernetes)
+By default, the [Helm Charts](https://github.com/vitessio/vitess/tree/master/helm)
 point to the `vitess/lite` image on [Docker Hub](https://hub.docker.com/u/vitess/).
 
 We created the `lite` image as a stripped down version of our main image `base` such that Kubernetes pods can start faster.
@@ -12,7 +12,7 @@ Another alternative is to customize our Docker images and build them yourselves.
 This is described below and involves building the `base` image first.
 Then you can run our build script for the `lite` image which extracts the Vitess binaries from the built `base` image.
 
-1.  Install [Docker](https://www.docker.com/) on your workstation.
+1.  Install [Docker](https://docs.docker.com/v17.12/install/) on your workstation.
 
     Our scripts also assume you can run the `docker` command without `sudo`,
     which you can do by [setting up a docker group](https://docs.docker.com/engine/installation/linux/ubuntulinux/#create-a-docker-group).
@@ -22,8 +22,7 @@ Then you can run our build script for the `lite` image which extracts the Vitess
 
 1.  Go to your `src/vitess.io/vitess` directory.
 
-1.  Usually, you won't need to [build your own bootstrap image]
-    (https://github.com/vitessio/vitess/blob/master/docker/bootstrap/README.md)
+1.  Usually, you won't need to [build your own bootstrap image](https://github.com/vitessio/vitess/blob/master/docker/bootstrap/README.md)
     unless you edit [bootstrap.sh](https://github.com/vitessio/vitess/blob/master/bootstrap.sh)
     or [vendor.json](https://github.com/vitessio/vitess/blob/master/vendor/vendor.json),
     for example to add new dependencies. If you do need it then build the
@@ -82,19 +81,5 @@ Then you can run our build script for the `lite` image which extracts the Vitess
     **Note:** If you chose a non-default flavor above, then change `vitess/lite` in
     the above command to `vitess/lite:<flavor>`.
 
-1.  Change the Kubernetes configs to point to your personal repository:
 
-    ```sh
-    vitess/examples/kubernetes$ sed -i -e 's,image: vitess/lite,image: yourname/vitess:latest,' *.yaml
-    ```
-
-    Adding the `:latest` label at the end of the image name tells Kubernetes
-    to check for a newer image every time a pod is launched.
-    When you push a new version of your image, any new pods will use it
-    automatically without you having to clear the Kubernetes image cache.
-
-    Once you've stabilized your image, you'll probably want to replace `:latest`
-    with a specific label that you change each time you make a new build,
-    so you can control when pods update.
-
-1.  Launch [Vitess on Kubernetes]({% link getting-started/index.md %}) as usual.
+1.  Launch [Vitess on Kubernetes](https://vitess.io/docs/get-started/index.html) as usual.

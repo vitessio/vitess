@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@ import (
 	"reflect"
 	"regexp"
 	"strconv"
+
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -72,9 +74,7 @@ func (qrs *Rules) Copy() (newqrs *Rules) {
 
 // Append merges the rules from another Rules into the receiver
 func (qrs *Rules) Append(otherqrs *Rules) {
-	for _, qr := range otherqrs.rules {
-		qrs.rules = append(qrs.rules, qr)
-	}
+	qrs.rules = append(qrs.rules, otherqrs.rules...)
 }
 
 // Add adds a Rule to Rules. It does not check
@@ -734,7 +734,7 @@ func getuint64(val *querypb.BindVariable) (uv uint64, status int) {
 	if err != nil {
 		return 0, QROutOfRange
 	}
-	v, err := sqltypes.ToUint64(bv)
+	v, err := evalengine.ToUint64(bv)
 	if err != nil {
 		return 0, QROutOfRange
 	}
@@ -747,7 +747,7 @@ func getint64(val *querypb.BindVariable) (iv int64, status int) {
 	if err != nil {
 		return 0, QROutOfRange
 	}
-	v, err := sqltypes.ToInt64(bv)
+	v, err := evalengine.ToInt64(bv)
 	if err != nil {
 		return 0, QROutOfRange
 	}

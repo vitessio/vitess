@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -441,7 +441,7 @@ func (m *NodeManager) Action(ctx context.Context, ap *ActionParameters) error {
 
 	if n.Listener == nil {
 		m.mu.Unlock()
-		return fmt.Errorf("Action %v is invoked on a node without listener (node path is %v)", ap.Name, ap.Path)
+		return fmt.Errorf("action %v is invoked on a node without listener (node path is %v)", ap.Name, ap.Path)
 	}
 	nodeListener := n.Listener
 	m.mu.Unlock()

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/mysql"
@@ -41,7 +42,8 @@ var (
 	tabletUID   = flag.Uint("tablet_uid", 41983, "tablet uid")
 	mysqlSocket = flag.String("mysql_socket", "", "path to the mysql socket")
 
-	tabletAddr string
+	// Reason for nolint : Being used in line 246 (tabletAddr = netutil.JoinHostPort("localhost", int32(*port))
+	tabletAddr string //nolint
 )
 
 func initConfigCmd(subFlags *flag.FlagSet, args []string) error {
@@ -197,11 +199,11 @@ type command struct {
 
 var commands = []command{
 	{"init", initCmd, "[-wait_time=5m] [-init_db_sql_file=]",
-		"Initalizes the directory structure and starts mysqld"},
+		"Initializes the directory structure and starts mysqld"},
 	{"init_config", initConfigCmd, "",
-		"Initalizes the directory structure, creates my.cnf file, but does not start mysqld"},
+		"Initializes the directory structure, creates my.cnf file, but does not start mysqld"},
 	{"reinit_config", reinitConfigCmd, "",
-		"Reinitalizes my.cnf file with new server_id"},
+		"Reinitializes my.cnf file with new server_id"},
 	{"teardown", teardownCmd, "[-wait_time=5m] [-force]",
 		"Shuts mysqld down, and removes the directory"},
 	{"start", startCmd, "[-wait_time=5m]",
@@ -235,6 +237,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "\n")
 	}
 
+	if cmd.IsRunningAsRoot() {
+		fmt.Fprintln(os.Stderr, "mysqlctl cannot be ran as root. Please run as a different user")
+		exit.Return(1)
+	}
 	dbconfigs.RegisterFlags(dbconfigs.Dba)
 	flag.Parse()
 

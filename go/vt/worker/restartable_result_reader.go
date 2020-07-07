@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -168,7 +168,7 @@ func (r *RestartableResultReader) getTablet() (bool, error) {
 	return false /* retryable */, nil
 }
 
-// startStream assumes that getTablet() was succesfully called before and now
+// startStream assumes that getTablet() was successfully called before and now
 // tries to connect to the set tablet and start the streaming query.
 // If the method returns an error, the first return value specifies if it is
 // okay to retry.

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2019 The Vitess Authors.
+
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+
+ *     http://www.apache.org/licenses/LICENSE-2.0
+
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.client.grpc;
 
 import com.google.common.base.Throwables;
@@ -9,7 +25,7 @@ import io.vitess.client.RpcClient;
 import io.vitess.client.RpcClientTest;
 import io.vitess.client.grpc.GrpcClientFactory;
 import io.vitess.client.grpc.StaticAuthCredentials;
-import io.vitess.proto.Vtgate.GetSrvKeyspaceRequest;
+import io.vitess.proto.Vtgate.ExecuteRequest;
 
 import org.joda.time.Duration;
 
@@ -76,7 +92,7 @@ public class GrpcClientStaticAuthTest extends RpcClientTest {
         .setCallCredentials(new StaticAuthCredentials("test-username", "WRONG-password"))
         .create(Context.getDefault(), "localhost:" + port);
     try {
-      client.getSrvKeyspace(Context.getDefault(), GetSrvKeyspaceRequest.getDefaultInstance()).get();
+      client.execute(Context.getDefault(), ExecuteRequest.getDefaultInstance()).get();
       Assert.fail();
     } catch (ExecutionException e) {
       StatusRuntimeException cause = (StatusRuntimeException) Throwables.getRootCause(e);

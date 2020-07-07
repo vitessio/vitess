@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -54,6 +54,22 @@ func TestLiteralID(t *testing.T) {
 		in:  "``",
 		id:  LEX_ERROR,
 		out: "",
+	}, {
+		in:  "@x",
+		id:  AT_ID,
+		out: "x",
+	}, {
+		in:  "@@x",
+		id:  AT_AT_ID,
+		out: "x",
+	}, {
+		in:  "@@`x y`",
+		id:  AT_AT_ID,
+		out: "x y",
+	}, {
+		in:  "@@`@x @y`",
+		id:  AT_AT_ID,
+		out: "@x @y",
 	}}
 
 	for _, tcase := range testcases {

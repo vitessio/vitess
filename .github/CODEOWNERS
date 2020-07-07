@@ -2,3 +2,5 @@
 
 /docker/ @derekperkins @dkhenry
 /helm/ @derekperkins @dkhenry
+/config/mycnf/ @morgo
+/go/vt/mysqlctl/mysqld.go @morgo

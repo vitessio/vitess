@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,14 +21,15 @@ import (
 	"regexp"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqlescape"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
@@ -37,7 +38,7 @@ var autoIncr = regexp.MustCompile(` AUTO_INCREMENT=\d+`)
 // executeSchemaCommands executes some SQL commands, using the mysql
 // command line tool. It uses the dba connection parameters, with credentials.
 func (mysqld *Mysqld) executeSchemaCommands(sql string) error {
-	params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Dba())
+	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
 	if err != nil {
 		return err
 	}
@@ -47,8 +48,7 @@ func (mysqld *Mysqld) executeSchemaCommands(sql string) error {
 
 // GetSchema returns the schema for database for tables listed in
 // tables. If tables is empty, return the schema for all tables.
-func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
-	ctx := context.TODO()
+func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	sd := &tabletmanagerdatapb.SchemaDefinition{}
 	backtickDBName := sqlescape.EscapeID(dbName)
 
@@ -84,7 +84,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 		var dataLength uint64
 		if !row[2].IsNull() {
 			// dataLength is NULL for views, then we use 0
-			dataLength, err = sqltypes.ToUint64(row[2])
+			dataLength, err = evalengine.ToUint64(row[2])
 			if err != nil {
 				return nil, err
 			}
@@ -93,7 +93,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 		// get row count
 		var rowCount uint64
 		if !row[3].IsNull() {
-			rowCount, err = sqltypes.ToUint64(row[3])
+			rowCount, err = evalengine.ToUint64(row[3])
 			if err != nil {
 				return nil, err
 			}
@@ -122,11 +122,11 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 		td.Name = tableName
 		td.Schema = norm
 
-		td.Columns, err = mysqld.GetColumns(dbName, tableName)
+		td.Fields, td.Columns, err = mysqld.GetColumns(ctx, dbName, tableName)
 		if err != nil {
 			return nil, err
 		}
-		td.PrimaryKeyColumns, err = mysqld.GetPrimaryKeyColumns(dbName, tableName)
+		td.PrimaryKeyColumns, err = mysqld.GetPrimaryKeyColumns(ctx, dbName, tableName)
 		if err != nil {
 			return nil, err
 		}
@@ -146,8 +146,8 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 
 // ResolveTables returns a list of actual tables+views matching a list
 // of regexps
-func ResolveTables(mysqld MysqlDaemon, dbName string, tables []string) ([]string, error) {
-	sd, err := mysqld.GetSchema(dbName, tables, nil, true)
+func ResolveTables(ctx context.Context, mysqld MysqlDaemon, dbName string, tables []string) ([]string, error) {
+	sd, err := mysqld.GetSchema(ctx, dbName, tables, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -159,32 +159,36 @@ func ResolveTables(mysqld MysqlDaemon, dbName string, tables []string) ([]string
 }
 
 // GetColumns returns the columns of table.
-func (mysqld *Mysqld) GetColumns(dbName, table string) ([]string, error) {
-	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
+func (mysqld *Mysqld) GetColumns(ctx context.Context, dbName, table string) ([]*querypb.Field, []string, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer conn.Recycle()
-	qr, err := conn.ExecuteFetch(fmt.Sprintf("SELECT * FROM %s.%s WHERE 1=0", sqlescape.EscapeID(dbName), sqlescape.EscapeID(table)), 0, true)
+
+	sql := fmt.Sprintf("SELECT * FROM %s.%s WHERE 1=0", sqlescape.EscapeID(dbName), sqlescape.EscapeID(table))
+	qr, err := mysqld.executeFetchContext(ctx, conn, sql, 0, true)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	columns := make([]string, len(qr.Fields))
 	for i, field := range qr.Fields {
 		columns[i] = field.Name
 	}
-	return columns, nil
+	return qr.Fields, columns, nil
 
 }
 
 // GetPrimaryKeyColumns returns the primary key columns of table.
-func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, error) {
-	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
+func (mysqld *Mysqld) GetPrimaryKeyColumns(ctx context.Context, dbName, table string) ([]string, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Recycle()
-	qr, err := conn.ExecuteFetch(fmt.Sprintf("SHOW INDEX FROM %s.%s", sqlescape.EscapeID(dbName), sqlescape.EscapeID(table)), 100, true)
+
+	sql := fmt.Sprintf("SHOW INDEX FROM %s.%s", sqlescape.EscapeID(dbName), sqlescape.EscapeID(table))
+	qr, err := mysqld.executeFetchContext(ctx, conn, sql, 100, true)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +218,7 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, erro
 		}
 
 		// check the Seq_in_index is always increasing
-		seqInIndex, err := sqltypes.ToInt64(row[seqInIndexIndex])
+		seqInIndex, err := evalengine.ToInt64(row[seqInIndexIndex])
 		if err != nil {
 			return nil, err
 		}
@@ -230,11 +234,11 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, erro
 
 // PreflightSchemaChange checks the schema changes in "changes" by applying them
 // to an intermediate database that has the same schema as the target database.
-func (mysqld *Mysqld) PreflightSchemaChange(dbName string, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
+func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
 	results := make([]*tabletmanagerdatapb.SchemaChangeResult, len(changes))
 
 	// Get current schema from the real database.
-	originalSchema, err := mysqld.GetSchema(dbName, nil, nil, true)
+	originalSchema, err := mysqld.GetSchema(ctx, dbName, nil, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -244,6 +248,9 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, changes []string) ([]
 	initialCopySQL += "DROP DATABASE IF EXISTS _vt_preflight;\n"
 	initialCopySQL += "CREATE DATABASE _vt_preflight;\n"
 	initialCopySQL += "USE _vt_preflight;\n"
+	// We're not smart enough to create the tables in a foreign-key-compatible way,
+	// so we temporarily disable foreign key checks while adding the existing tables.
+	initialCopySQL += "SET foreign_key_checks = 0;\n"
 	for _, td := range originalSchema.TableDefinitions {
 		if td.Type == tmutils.TableBaseTable {
 			initialCopySQL += td.Schema + ";\n"
@@ -263,7 +270,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, changes []string) ([]
 
 	// For each change, record the schema before and after.
 	for i, change := range changes {
-		beforeSchema, err := mysqld.GetSchema("_vt_preflight", nil, nil, true)
+		beforeSchema, err := mysqld.GetSchema(ctx, "_vt_preflight", nil, nil, true)
 		if err != nil {
 			return nil, err
 		}
@@ -277,7 +284,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, changes []string) ([]
 		}
 
 		// get the result
-		afterSchema, err := mysqld.GetSchema("_vt_preflight", nil, nil, true)
+		afterSchema, err := mysqld.GetSchema(ctx, "_vt_preflight", nil, nil, true)
 		if err != nil {
 			return nil, err
 		}
@@ -296,9 +303,9 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, changes []string) ([]
 }
 
 // ApplySchemaChange will apply the schema change to the given database.
-func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
+func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
 	// check current schema matches
-	beforeSchema, err := mysqld.GetSchema(dbName, nil, nil, true)
+	beforeSchema, err := mysqld.GetSchema(ctx, dbName, nil, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -345,7 +352,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *tmutils.SchemaCha
 	}
 
 	// get AfterSchema
-	afterSchema, err := mysqld.GetSchema(dbName, nil, nil, true)
+	afterSchema, err := mysqld.GetSchema(ctx, dbName, nil, nil, true)
 	if err != nil {
 		return nil, err
 	}

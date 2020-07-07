@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -19,6 +19,9 @@ package binlog
 import (
 	"flag"
 	"fmt"
+	"strings"
+
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"golang.org/x/net/context"
 
@@ -78,8 +81,8 @@ func newKeyspaceIDResolverFactoryV2(ctx context.Context, ts *topo.Server, keyspa
 		return nil, fmt.Errorf("unknown ShardingColumnType %v for v2 sharding key for keyspace %v", ki.ShardingColumnType, keyspace)
 	}
 	return func(table *schema.Table) (int, keyspaceIDResolver, error) {
-		for i, col := range table.Columns {
-			if col.Name.EqualString(ki.ShardingColumnName) {
+		for i, col := range table.Fields {
+			if strings.EqualFold(col.Name, ki.ShardingColumnName) {
 				// We found the column.
 				return i, &keyspaceIDResolverFactoryV2{
 					shardingColumnType: ki.ShardingColumnType,
@@ -102,7 +105,7 @@ func (r *keyspaceIDResolverFactoryV2) keyspaceID(v sqltypes.Value) ([]byte, erro
 	case topodatapb.KeyspaceIdType_BYTES:
 		return v.ToBytes(), nil
 	case topodatapb.KeyspaceIdType_UINT64:
-		i, err := sqltypes.ToUint64(v)
+		i, err := evalengine.ToUint64(v)
 		if err != nil {
 			return nil, fmt.Errorf("non numerical value: %v", err)
 		}
@@ -143,11 +146,12 @@ func newKeyspaceIDResolverFactoryV3(ctx context.Context, ts *topo.Server, keyspa
 		// TODO @rafael - when rewriting the mapping function, this will need to change.
 		// for now it's safe to assume the sharding key will be always on index 0.
 		shardingColumnName := colVindex.Columns[0].String()
-		for i, col := range table.Columns {
-			if col.Name.EqualString(shardingColumnName) {
+		for i, col := range table.Fields {
+			if strings.EqualFold(col.Name, shardingColumnName) {
 				// We found the column.
 				return i, &keyspaceIDResolverFactoryV3{
-					vindex: colVindex.Vindex,
+					// Only SingleColumn vindexes are returned by FindVindexForSharding.
+					vindex: colVindex.Vindex.(vindexes.SingleColumn),
 				}, nil
 			}
 		}
@@ -158,7 +162,7 @@ func newKeyspaceIDResolverFactoryV3(ctx context.Context, ts *topo.Server, keyspa
 
 // keyspaceIDResolverFactoryV3 uses the Vindex to compute the value.
 type keyspaceIDResolverFactoryV3 struct {
-	vindex vindexes.Vindex
+	vindex vindexes.SingleColumn
 }
 
 func (r *keyspaceIDResolverFactoryV3) keyspaceID(v sqltypes.Value) ([]byte, error) {

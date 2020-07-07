@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -99,10 +99,6 @@ type Mycnf struct {
 	// TmpDir is where to create temporary tables
 	// (unused by vt software for now)
 	TmpDir string
-
-	// SlaveLoadTmpDir is where to create tmp files for replication
-	// (unused by vt software for now)
-	SlaveLoadTmpDir string
 
 	mycnfMap map[string]string
 	path     string // the actual path that represents this mycnf
@@ -207,7 +203,6 @@ func ReadMycnf(mycnf *Mycnf) (*Mycnf, error) {
 		"master-info-file":          &mycnf.MasterInfoFile,
 		"pid-file":                  &mycnf.PidFile,
 		"tmpdir":                    &mycnf.TmpDir,
-		"slave_load_tmpdir":         &mycnf.SlaveLoadTmpDir,
 	}
 	for key, member := range mapping {
 		val, err := mycnf.lookupWithDefault(key, *member)

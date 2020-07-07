@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -126,27 +128,6 @@ func NewTransactionalQueryResultReaderForTablet(ctx context.Context, ts *topo.Se
 		fields: cols.Fields,
 		conn:   conn,
 	}, nil
-}
-
-// RollbackTransaction rolls back the transaction
-func RollbackTransaction(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, txID int64) error {
-	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	tablet, err := ts.GetTablet(shortCtx, tabletAlias)
-	cancel()
-	if err != nil {
-		return err
-	}
-
-	conn, err := tabletconn.GetDialer()(tablet.Tablet, grpcclient.FailFast(false))
-	if err != nil {
-		return err
-	}
-
-	return conn.Rollback(ctx, &querypb.Target{
-		Keyspace:   tablet.Tablet.Keyspace,
-		Shard:      tablet.Tablet.Shard,
-		TabletType: tablet.Tablet.Type,
-	}, txID)
 }
 
 // Next returns the next result on the stream. It implements ResultReader.
@@ -480,8 +461,8 @@ func RowsEqual(left, right []sqltypes.Value) int {
 // TODO: This can panic if types for left and right don't match.
 func CompareRows(fields []*querypb.Field, compareCount int, left, right []sqltypes.Value) (int, error) {
 	for i := 0; i < compareCount; i++ {
-		lv, _ := sqltypes.ToNative(left[i])
-		rv, _ := sqltypes.ToNative(right[i])
+		lv, _ := evalengine.ToNative(left[i])
+		rv, _ := evalengine.ToNative(right[i])
 		switch l := lv.(type) {
 		case int64:
 			r := rv.(int64)
@@ -578,22 +559,22 @@ func (rd *RowDiffer) Go(log logutil.Logger) (dr DiffReport, err error) {
 
 			// drain right, update count
 			log.Errorf("Draining extra row(s) found on the right starting with: %v", right)
-			if count, err := rd.right.Drain(); err != nil {
+			var count int
+			if count, err = rd.right.Drain(); err != nil {
 				return dr, err
-			} else {
-				dr.extraRowsRight += 1 + count
 			}
+			dr.extraRowsRight += 1 + count
 			return
 		}
 		if right == nil {
 			// no more rows from the right
 			// we know we have rows from left, drain, update count
 			log.Errorf("Draining extra row(s) found on the left starting with: %v", left)
-			if count, err := rd.left.Drain(); err != nil {
+			var count int
+			if count, err = rd.left.Drain(); err != nil {
 				return dr, err
-			} else {
-				dr.extraRowsLeft += 1 + count
 			}
+			dr.extraRowsLeft += 1 + count
 			return
 		}
 
@@ -658,7 +639,7 @@ func createTransactions(ctx context.Context, numberOfScanners int, wr *wrangler.
 	scanners := make([]int64, numberOfScanners)
 	for i := 0; i < numberOfScanners; i++ {
 
-		tx, err := queryService.Begin(ctx, target, &query.ExecuteOptions{
+		tx, _, err := queryService.Begin(ctx, target, &query.ExecuteOptions{
 			// Make sure our tx is not killed by tx sniper
 			Workload:             query.ExecuteOptions_DBA,
 			TransactionIsolation: query.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY,
@@ -673,7 +654,8 @@ func createTransactions(ctx context.Context, numberOfScanners int, wr *wrangler.
 			if err != nil {
 				return err
 			}
-			return queryService.Rollback(ctx, target, tx)
+			_, err = queryService.Rollback(ctx, target, tx)
+			return err
 		})
 
 		scanners[i] = tx

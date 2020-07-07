@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -46,7 +47,7 @@ func TestQuerylogzHandlerInvalidLogStats(t *testing.T) {
 func TestQuerylogzHandler(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
 	logStats := tabletenv.NewLogStats(context.Background(), "Execute")
-	logStats.PlanType = planbuilder.PlanPassSelect.String()
+	logStats.PlanType = planbuilder.PlanSelect.String()
 	logStats.OriginalSQL = "select name from test_table limit 1000"
 	logStats.RowsAffected = 1000
 	logStats.NumberOfQueries = 1
@@ -72,7 +73,7 @@ func TestQuerylogzHandler(t *testing.T) {
 		`<td>0.001</td>`,
 		`<td>0.001</td>`,
 		`<td>1e-08</td>`,
-		`<td>PASS_SELECT</td>`,
+		`<td>Select</td>`,
 		`<td>select name from test_table limit 1000</td>`,
 		`<td>1</td>`,
 		`<td>none</td>`,
@@ -102,7 +103,7 @@ func TestQuerylogzHandler(t *testing.T) {
 		`<td>0.02</td>`,
 		`<td>0.001</td>`,
 		`<td>1e-08</td>`,
-		`<td>PASS_SELECT</td>`,
+		`<td>Select</td>`,
 		`<td>select name from test_table limit 1000</td>`,
 		`<td>1</td>`,
 		`<td>none</td>`,
@@ -132,7 +133,7 @@ func TestQuerylogzHandler(t *testing.T) {
 		`<td>0.5</td>`,
 		`<td>0.001</td>`,
 		`<td>1e-08</td>`,
-		`<td>PASS_SELECT</td>`,
+		`<td>Select</td>`,
 		`<td>select name from test_table limit 1000</td>`,
 		`<td>1</td>`,
 		`<td>none</td>`,
@@ -148,9 +149,20 @@ func TestQuerylogzHandler(t *testing.T) {
 	close(ch)
 	body, _ = ioutil.ReadAll(response.Body)
 	checkQuerylogzHasStats(t, slowQueryPattern, logStats, body)
+
+	// ensure querylogz is not affected by the filter tag
+	*streamlog.QueryLogFilterTag = "XXX_SKIP_ME"
+	defer func() { *streamlog.QueryLogFilterTag = "" }()
+	ch = make(chan interface{}, 1)
+	ch <- logStats
+	querylogzHandler(ch, response, req)
+	close(ch)
+	body, _ = ioutil.ReadAll(response.Body)
+	checkQuerylogzHasStats(t, slowQueryPattern, logStats, body)
 }
 
 func checkQuerylogzHasStats(t *testing.T, pattern []string, logStats *tabletenv.LogStats, page []byte) {
+	t.Helper()
 	matcher := regexp.MustCompile(strings.Join(pattern, `\s*`))
 	if !matcher.Match(page) {
 		t.Fatalf("querylogz page does not contain stats: %v, pattern: %v, page: %s", logStats, pattern, string(page))

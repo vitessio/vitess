@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -29,8 +29,13 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+
+	"vitess.io/vitess/go/vt/dbconfigs"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 const appendEntry = -1
@@ -95,6 +100,8 @@ type DB struct {
 	patternData []exprResult
 	// queryCalled keeps track of how many times a query was called.
 	queryCalled map[string]int
+	// querylog keeps track of all called queries
+	querylog []string
 
 	// This next set of fields is used when ordering of the queries matters.
 
@@ -164,7 +171,7 @@ func New(t *testing.T) *DB {
 	authServer := &mysql.AuthServerNone{}
 
 	// Start listening.
-	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0)
+	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -211,7 +218,7 @@ func (db *DB) Close() {
 
 // CloseAllConnections can be used to provoke MySQL client errors for open
 // connections.
-// Make sure to call WaitForShutdown() as well.
+// Make sure to call WaitForClose() as well.
 func (db *DB) CloseAllConnections() {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -254,23 +261,24 @@ func (db *DB) WaitForClose(timeout time.Duration) error {
 }
 
 // ConnParams returns the ConnParams to connect to the DB.
-func (db *DB) ConnParams() *mysql.ConnParams {
-	return &mysql.ConnParams{
+func (db *DB) ConnParams() dbconfigs.Connector {
+	return dbconfigs.New(&mysql.ConnParams{
 		UnixSocket: db.socketFile,
 		Uname:      "user1",
 		Pass:       "password1",
 		Charset:    "utf8",
-	}
+	})
+
 }
 
 // ConnParamsWithUname returns  ConnParams to connect to the DB with the Uname set to the provided value.
-func (db *DB) ConnParamsWithUname(uname string) *mysql.ConnParams {
-	return &mysql.ConnParams{
+func (db *DB) ConnParamsWithUname(uname string) dbconfigs.Connector {
+	return dbconfigs.New(&mysql.ConnParams{
 		UnixSocket: db.socketFile,
 		Uname:      uname,
 		Pass:       "password1",
 		Charset:    "utf8",
-	}
+	})
 }
 
 //
@@ -281,10 +289,6 @@ func (db *DB) ConnParamsWithUname(uname string) *mysql.ConnParams {
 func (db *DB) NewConnection(c *mysql.Conn) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-
-	if db.t != nil {
-		db.t.Logf("NewConnection(%v): client %v", db.name, c.ConnectionID)
-	}
 
 	if db.isConnFail {
 		panic(fmt.Errorf("simulating a connection failure"))
@@ -305,12 +309,8 @@ func (db *DB) ConnectionClosed(c *mysql.Conn) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	if db.t != nil {
-		db.t.Logf("ConnectionClosed(%v): client %v", db.name, c.ConnectionID)
-	}
-
 	if _, ok := db.connections[c.ConnectionID]; !ok {
-		db.t.Fatalf("BUG: Cannot delete connection from list of open connections because it is not registered. ID: %v Conn: %v", c.ConnectionID, c)
+		panic(fmt.Errorf("BUG: Cannot delete connection from list of open connections because it is not registered. ID: %v Conn: %v", c.ConnectionID, c))
 	}
 	delete(db.connections, c.ConnectionID)
 }
@@ -331,9 +331,6 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		return callback(&sqltypes.Result{})
 	}
 
-	if db.t != nil {
-		db.t.Logf("ComQuery(%v): client %v: %v", db.name, c.ConnectionID, query)
-	}
 	if db.orderMatters {
 		result, err := db.comQueryOrdered(query)
 		if err != nil {
@@ -346,11 +343,16 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	db.queryCalled[key]++
+	db.querylog = append(db.querylog, key)
 
 	// Check if we should close the connection and provoke errno 2013.
 	if db.shouldClose {
 		c.Close()
-		callback(&sqltypes.Result{})
+
+		//log error
+		if err := callback(&sqltypes.Result{}); err != nil {
+			log.Errorf("callback failed : %v", err)
+		}
 		return nil
 	}
 
@@ -358,7 +360,10 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	// may send this at connection time, and we don't want it to
 	// interfere.
 	if key == "set names utf8" {
-		callback(&sqltypes.Result{})
+		//log error
+		if err := callback(&sqltypes.Result{}); err != nil {
+			log.Errorf("callback failed : %v", err)
+		}
 		return nil
 	}
 
@@ -430,6 +435,21 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 		return nil, entry.Error
 	}
 	return entry.QueryResult, nil
+}
+
+// ComPrepare is part of the mysql.Handler interface.
+func (db *DB) ComPrepare(c *mysql.Conn, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
+	return nil, nil
+}
+
+// ComStmtExecute is part of the mysql.Handler interface.
+func (db *DB) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+	return nil
+}
+
+// ComResetConnection is part of the mysql.Handler interface.
+func (db *DB) ComResetConnection(c *mysql.Conn) {
+
 }
 
 //
@@ -512,6 +532,16 @@ func (db *DB) GetQueryCalledNum(query string) int {
 		return 0
 	}
 	return num
+}
+
+//QueryLog returns the query log in a semicomma separated string
+func (db *DB) QueryLog() string {
+	return strings.Join(db.querylog, ";")
+}
+
+//ResetQueryLog resets the query log
+func (db *DB) ResetQueryLog() {
+	db.querylog = nil
 }
 
 // EnableConnFail makes connection to this fake DB fail.

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,86 +18,51 @@ package endtoend
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestCommit(t *testing.T) {
 	client := framework.NewClient()
 	defer client.Execute("delete from vitess_test where intval=4", nil)
 
-	catcher := framework.NewTxCatcher()
-	defer catcher.Close()
 	vstart := framework.DebugVars()
 
-	query := "insert into vitess_test (intval, floatval, charval, binval) " +
-		"values(4, null, null, null)"
+	query := "insert into vitess_test (intval, floatval, charval, binval) values (4, null, null, null)"
 	err := client.Begin(false)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
+
 	_, err = client.Execute(query, nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
+
 	err = client.Commit()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	tx, err := catcher.Next()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	want := []string{"insert into vitess_test(intval, floatval, charval, binval) values (4, null, null, null) /* _stream vitess_test (intval ) (4 ); */"}
-	if !reflect.DeepEqual(tx.Queries, want) {
-		t.Errorf("queries: %v, want %v", tx.Queries, want)
-	}
-	if !reflect.DeepEqual(tx.Conclusion, "commit") {
-		t.Errorf("conclusion: %s, want commit", tx.Conclusion)
-	}
+	require.NoError(t, err)
 
 	qr, err := client.Execute("select * from vitess_test", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if qr.RowsAffected != 4 {
-		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
-	}
+	require.NoError(t, err)
+	require.Equal(t, uint64(4), qr.RowsAffected, "rows affected")
 
 	_, err = client.Execute("delete from vitess_test where intval=4", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 
 	qr, err = client.Execute("select * from vitess_test", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if qr.RowsAffected != 3 {
-		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
-	}
+	require.NoError(t, err)
+	require.Equal(t, uint64(3), qr.RowsAffected, "rows affected")
 
 	expectedDiffs := []struct {
 		tag  string
@@ -118,64 +83,36 @@ func TestCommit(t *testing.T) {
 		tag:  "Queries/Histograms/COMMIT/Count",
 		diff: 1,
 	}, {
-		tag:  "Queries/Histograms/INSERT_PK/Count",
+		tag:  "Queries/Histograms/Insert/Count",
 		diff: 1,
 	}, {
-		tag:  "Queries/Histograms/DML_PK/Count",
+		tag:  "Queries/Histograms/DeleteLimit/Count",
 		diff: 1,
 	}, {
-		tag:  "Queries/Histograms/PASS_SELECT/Count",
+		tag:  "Queries/Histograms/Select/Count",
 		diff: 2,
 	}}
 	vend := framework.DebugVars()
 	for _, expected := range expectedDiffs {
-		if err := compareIntDiff(vend, expected.tag, vstart, expected.diff); err != nil {
-			t.Error(err)
-		}
+		compareIntDiff(t, vend, expected.tag, vstart, expected.diff)
 	}
 }
 
 func TestRollback(t *testing.T) {
 	client := framework.NewClient()
 
-	catcher := framework.NewTxCatcher()
-	defer catcher.Close()
 	vstart := framework.DebugVars()
 
 	query := "insert into vitess_test values(4, null, null, null)"
 	err := client.Begin(false)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	_, err = client.Execute(query, nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	err = client.Rollback()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	tx, err := catcher.Next()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	want := []string{"insert into vitess_test(intval, floatval, charval, binval) values (4, null, null, null) /* _stream vitess_test (intval ) (4 ); */"}
-	if !reflect.DeepEqual(tx.Queries, want) {
-		t.Errorf("queries: %v, want %v", tx.Queries, want)
-	}
-	if !reflect.DeepEqual(tx.Conclusion, "rollback") {
-		t.Errorf("conclusion: %s, want rollback", tx.Conclusion)
-	}
+	require.NoError(t, err)
 
 	qr, err := client.Execute("select * from vitess_test", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	if qr.RowsAffected != 3 {
 		t.Errorf("rows affected: %d, want 3", qr.RowsAffected)
 	}
@@ -196,14 +133,12 @@ func TestRollback(t *testing.T) {
 		tag:  "Queries/Histograms/ROLLBACK/Count",
 		diff: 1,
 	}, {
-		tag:  "Queries/Histograms/INSERT_PK/Count",
+		tag:  "Queries/Histograms/Insert/Count",
 		diff: 1,
 	}}
 	vend := framework.DebugVars()
 	for _, expected := range expectedDiffs {
-		if err := compareIntDiff(vend, expected.tag, vstart, expected.diff); err != nil {
-			t.Error(err)
-		}
+		compareIntDiff(t, vend, expected.tag, vstart, expected.diff)
 	}
 }
 
@@ -211,53 +146,23 @@ func TestAutoCommit(t *testing.T) {
 	client := framework.NewClient()
 	defer client.Execute("delete from vitess_test where intval=4", nil)
 
-	catcher := framework.NewTxCatcher()
-	defer catcher.Close()
 	vstart := framework.DebugVars()
 
-	query := "insert into vitess_test (intval, floatval, charval, binval) " +
-		"values(4, null, null, null)"
+	query := "insert into vitess_test (intval, floatval, charval, binval) values (4, null, null, null)"
 	_, err := client.Execute(query, nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	tx, err := catcher.Next()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	want := []string{"insert into vitess_test(intval, floatval, charval, binval) values (4, null, null, null) /* _stream vitess_test (intval ) (4 ); */"}
-	// Sometimes, no queries will be returned by the querylog because reliability
-	// is not guaranteed. If so, just move on without verifying. The subsequent
-	// rowcount check will anyway verify that the insert succeeded.
-	if len(tx.Queries) != 0 && !reflect.DeepEqual(tx.Queries, want) {
-		t.Errorf("queries: %v, want %v", tx.Queries, want)
-	}
-	if !reflect.DeepEqual(tx.Conclusion, "commit") {
-		t.Errorf("conclusion: %s, want commit", tx.Conclusion)
-	}
+	require.NoError(t, err)
 
 	qr, err := client.Execute("select * from vitess_test", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	if qr.RowsAffected != 4 {
 		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
 	}
 
 	_, err = client.Execute("delete from vitess_test where intval=4", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 
 	qr, err = client.Execute("select * from vitess_test", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	if qr.RowsAffected != 3 {
 		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
 	}
@@ -281,13 +186,13 @@ func TestAutoCommit(t *testing.T) {
 		tag:  "Queries/Histograms/COMMIT/Count",
 		diff: 0,
 	}, {
-		tag:  "Queries/Histograms/INSERT_PK/Count",
+		tag:  "Queries/Histograms/Insert/Count",
 		diff: 1,
 	}, {
-		tag:  "Queries/Histograms/DML_PK/Count",
+		tag:  "Queries/Histograms/DeleteLimit/Count",
 		diff: 1,
 	}, {
-		tag:  "Queries/Histograms/PASS_SELECT/Count",
+		tag:  "Queries/Histograms/Select/Count",
 		diff: 2,
 	}}
 	vend := framework.DebugVars()
@@ -302,92 +207,26 @@ func TestAutoCommit(t *testing.T) {
 	}
 }
 
-func TestAutoCommitOff(t *testing.T) {
-	framework.Server.SetAutoCommit(false)
-	defer framework.Server.SetAutoCommit(true)
-
-	_, err := framework.NewClient().Execute("insert into vitess_test values(4, null, null, null)", nil)
-	want := "INSERT_PK disallowed outside transaction"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("%v, must start with %s", err, want)
-	}
-}
-
 func TestTxPoolSize(t *testing.T) {
 	vstart := framework.DebugVars()
 
 	client1 := framework.NewClient()
 	err := client1.Begin(false)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	defer client1.Rollback()
-	if err := verifyIntValue(framework.DebugVars(), "TransactionPoolAvailable", tabletenv.Config.TransactionCap-1); err != nil {
-		t.Error(err)
-	}
+	verifyIntValue(t, framework.DebugVars(), "TransactionPoolAvailable", tabletenv.NewCurrentConfig().TxPool.Size-1)
 
 	defer framework.Server.SetTxPoolSize(framework.Server.TxPoolSize())
 	framework.Server.SetTxPoolSize(1)
-	defer framework.Server.BeginTimeout.Set(framework.Server.BeginTimeout.Get())
-	timeout := 1 * time.Millisecond
-	framework.Server.BeginTimeout.Set(timeout)
 	vend := framework.DebugVars()
-	if err := verifyIntValue(vend, "TransactionPoolAvailable", 0); err != nil {
-		t.Error(err)
-	}
-	if err := verifyIntValue(vend, "TransactionPoolCapacity", 1); err != nil {
-		t.Error(err)
-	}
-	if err := verifyIntValue(vend, "BeginTimeout", int(timeout)); err != nil {
-		t.Error(err)
-	}
+	verifyIntValue(t, vend, "TransactionPoolAvailable", 0)
+	verifyIntValue(t, vend, "TransactionPoolCapacity", 1)
 
 	client2 := framework.NewClient()
 	err = client2.Begin(false)
-	want := "connection limit exceeded"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("%v, must contain %s", err, want)
-	}
-	if err := compareIntDiff(framework.DebugVars(), "Errors/RESOURCE_EXHAUSTED", vstart, 1); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestTxTimeout(t *testing.T) {
-	vstart := framework.DebugVars()
-
-	defer framework.Server.SetTxTimeout(framework.Server.TxTimeout())
-	framework.Server.SetTxTimeout(1 * time.Millisecond)
-	if err := verifyIntValue(framework.DebugVars(), "TransactionPoolTimeout", int(1*time.Millisecond)); err != nil {
-		t.Error(err)
-	}
-
-	catcher := framework.NewTxCatcher()
-	defer catcher.Close()
-	client := framework.NewClient()
-	err := client.Begin(false)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	tx, err := catcher.Next()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if tx.Conclusion != "kill" {
-		t.Errorf("Conclusion: %s, want kill", tx.Conclusion)
-	}
-	if err := compareIntDiff(framework.DebugVars(), "Kills/Transactions", vstart, 1); err != nil {
-		t.Error(err)
-	}
-
-	// Ensure commit fails.
-	err = client.Commit()
-	if code := vterrors.Code(err); code != vtrpcpb.Code_ABORTED {
-		t.Errorf("Commit code: %v, want %v", code, vtrpcpb.Code_ABORTED)
-	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "connection limit exceeded")
+	compareIntDiff(t, framework.DebugVars(), "Errors/RESOURCE_EXHAUSTED", vstart, 1)
 }
 
 func TestForUpdate(t *testing.T) {
@@ -395,27 +234,18 @@ func TestForUpdate(t *testing.T) {
 		client := framework.NewClient()
 		query := fmt.Sprintf("select * from vitess_test where intval=2 %s", mode)
 		_, err := client.Execute(query, nil)
-		want := "SELECT_LOCK disallowed outside transaction"
+		want := "SelectLock disallowed outside transaction"
 		if err == nil || !strings.HasPrefix(err.Error(), want) {
 			t.Errorf("%v, must have prefix %s", err, want)
 		}
 
 		// We should not get errors here
 		err = client.Begin(false)
-		if err != nil {
-			t.Error(err)
-			return
-		}
+		require.NoError(t, err)
 		_, err = client.Execute(query, nil)
-		if err != nil {
-			t.Error(err)
-			return
-		}
+		require.NoError(t, err)
 		err = client.Commit()
-		if err != nil {
-			t.Error(err)
-			return
-		}
+		require.NoError(t, err)
 	}
 }
 
@@ -426,31 +256,18 @@ func TestPrepareRollback(t *testing.T) {
 	query := "insert into vitess_test (intval, floatval, charval, binval) " +
 		"values(4, null, null, null)"
 	err := client.Begin(false)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	_, err = client.Execute(query, nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	err = client.Prepare("aa")
 	if err != nil {
 		client.RollbackPrepared("aa", 0)
-		t.Error(err)
-		return
+		t.Fatalf(err.Error())
 	}
 	err = client.RollbackPrepared("aa", 0)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	qr, err := client.Execute("select * from vitess_test", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	if qr.RowsAffected != 3 {
 		t.Errorf("rows affected: %d, want 3", qr.RowsAffected)
 	}
@@ -463,31 +280,18 @@ func TestPrepareCommit(t *testing.T) {
 	query := "insert into vitess_test (intval, floatval, charval, binval) " +
 		"values(4, null, null, null)"
 	err := client.Begin(false)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	_, err = client.Execute(query, nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	err = client.Prepare("aa")
 	if err != nil {
 		client.RollbackPrepared("aa", 0)
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	err = client.CommitPrepared("aa")
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	qr, err := client.Execute("select * from vitess_test", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	if qr.RowsAffected != 4 {
 		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
 	}
@@ -500,43 +304,24 @@ func TestPrepareReparentCommit(t *testing.T) {
 	query := "insert into vitess_test (intval, floatval, charval, binval) " +
 		"values(4, null, null, null)"
 	err := client.Begin(false)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	_, err = client.Execute(query, nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	err = client.Prepare("aa")
 	if err != nil {
 		client.RollbackPrepared("aa", 0)
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	// Rollback all transactions
 	err = client.SetServingType(topodatapb.TabletType_REPLICA)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	// This should resurrect the prepared transaction.
 	err = client.SetServingType(topodatapb.TabletType_MASTER)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	err = client.CommitPrepared("aa")
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	qr, err := client.Execute("select * from vitess_test", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	if qr.RowsAffected != 4 {
 		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
 	}
@@ -549,13 +334,9 @@ func TestMMCommitFlow(t *testing.T) {
 	query := "insert into vitess_test (intval, floatval, charval, binval) " +
 		"values(4, null, null, null)"
 	err := client.Begin(false)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	_, err = client.Execute(query, nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	err = client.CreateTransaction("aa", []*querypb.Target{{
 		Keyspace: "test1",
@@ -564,31 +345,20 @@ func TestMMCommitFlow(t *testing.T) {
 		Keyspace: "test2",
 		Shard:    "1",
 	}})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	err = client.CreateTransaction("aa", []*querypb.Target{})
-	want := "Duplicate entry"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("%v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Duplicate entry")
 
 	err = client.StartCommit("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	err = client.SetRollback("aa", 0)
-	want = "could not transition to ROLLBACK: aa (CallerID: dev)"
-	if err == nil || err.Error() != want {
-		t.Errorf("%v, must contain %s", err, want)
-	}
+	require.EqualError(t, err, "could not transition to ROLLBACK: aa (CallerID: dev)")
 
 	info, err := client.ReadTransaction("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	info.TimeCreated = 0
 	wantInfo := &querypb.TransactionMetadata{
 		Dtid:  "aa",
@@ -603,19 +373,13 @@ func TestMMCommitFlow(t *testing.T) {
 			TabletType: topodatapb.TabletType_MASTER,
 		}},
 	}
-	if !proto.Equal(info, wantInfo) {
-		t.Errorf("ReadTransaction: %#v, want %#v", info, wantInfo)
-	}
+	utils.MustMatch(t, wantInfo, info, "ReadTransaction")
 
 	err = client.ConcludeTransaction("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	info, err = client.ReadTransaction("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantInfo = &querypb.TransactionMetadata{}
 	if !proto.Equal(info, wantInfo) {
 		t.Errorf("ReadTransaction: %#v, want %#v", info, wantInfo)
@@ -629,13 +393,9 @@ func TestMMRollbackFlow(t *testing.T) {
 	query := "insert into vitess_test (intval, floatval, charval, binval) " +
 		"values(4, null, null, null)"
 	err := client.Begin(false)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	_, err = client.Execute(query, nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	err = client.CreateTransaction("aa", []*querypb.Target{{
 		Keyspace: "test1",
@@ -644,20 +404,14 @@ func TestMMRollbackFlow(t *testing.T) {
 		Keyspace: "test2",
 		Shard:    "1",
 	}})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	client.Rollback()
 
 	err = client.SetRollback("aa", 0)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	info, err := client.ReadTransaction("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	info.TimeCreated = 0
 	wantInfo := &querypb.TransactionMetadata{
 		Dtid:  "aa",
@@ -677,9 +431,7 @@ func TestMMRollbackFlow(t *testing.T) {
 	}
 
 	err = client.ConcludeTransaction("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestWatchdog(t *testing.T) {
@@ -688,13 +440,9 @@ func TestWatchdog(t *testing.T) {
 	query := "insert into vitess_test (intval, floatval, charval, binval) " +
 		"values(4, null, null, null)"
 	err := client.Begin(false)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	_, err = client.Execute(query, nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	start := time.Now()
 	err = client.CreateTransaction("aa", []*querypb.Target{{
@@ -704,9 +452,7 @@ func TestWatchdog(t *testing.T) {
 		Keyspace: "test2",
 		Shard:    "1",
 	}})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	// The watchdog should kick in after 1 second.
 	dtid := <-framework.ResolveChan
@@ -719,13 +465,9 @@ func TestWatchdog(t *testing.T) {
 	}
 
 	err = client.SetRollback("aa", 0)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	err = client.ConcludeTransaction("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	// Make sure the watchdog stops sending messages.
 	// Check twice. Sometimes, a race can still cause
@@ -751,21 +493,12 @@ func TestUnresolvedTracking(t *testing.T) {
 	query := "insert into vitess_test (intval, floatval, charval, binval) " +
 		"values(4, null, null, null)"
 	err := client.Begin(false)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	_, err = client.Execute(query, nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	err = client.Prepare("aa")
 	defer client.RollbackPrepared("aa", 0)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	time.Sleep(10 * time.Second)
 	vars := framework.DebugVars()
 	if val := framework.FetchInt(vars, "Unresolved/Prepares"); val != 1 {
@@ -784,57 +517,30 @@ func TestManualTwopcz(t *testing.T) {
 
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &connParams)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 
 	// Successful prepare.
 	err = client.Begin(false)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	_, err = client.Execute("insert into vitess_test (intval, floatval, charval, binval) values(4, null, null, null)", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	_, err = client.Execute("insert into vitess_test (intval, floatval, charval, binval) values(5, null, null, null)", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	err = client.Prepare("dtidsuccess")
 	defer client.RollbackPrepared("dtidsuccess", 0)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 
 	// Failed transaction.
 	err = client.Begin(false)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	_, err = client.Execute("insert into vitess_test (intval, floatval, charval, binval) values(6, null, null, null)", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	_, err = client.Execute("insert into vitess_test (intval, floatval, charval, binval) values(7, null, null, null)", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	err = client.Prepare("dtidfail")
 	defer client.RollbackPrepared("dtidfail", 0)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	conn.ExecuteFetch(fmt.Sprintf("update _vt.redo_state set state = %d where dtid = 'dtidfail'", tabletserver.RedoStateFailed), 10, false)
 	conn.ExecuteFetch("commit", 10, false)
 
@@ -848,10 +554,7 @@ func TestManualTwopcz(t *testing.T) {
 	}})
 	defer client.ConcludeTransaction("distributed")
 
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	fmt.Printf("%s/twopcz\n", framework.ServerAddress)
 	fmt.Print("Sleeping for 30 seconds\n")
 	time.Sleep(30 * time.Second)

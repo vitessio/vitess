@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -39,7 +39,7 @@ func waitForInitialValue(t *testing.T, conn topo.Conn, srvKeyspace *topodatapb.S
 		current, changes, cancel = conn.Watch(ctx, "keyspaces/test_keyspace/SrvKeyspace")
 		if topo.IsErrType(current.Err, topo.NoNode) {
 			// hasn't appeared yet
-			if time.Now().Sub(start) > 10*time.Second {
+			if time.Since(start) > 10*time.Second {
 				t.Fatalf("time out waiting for file to appear")
 			}
 			time.Sleep(10 * time.Millisecond)
@@ -72,7 +72,7 @@ func checkWatch(t *testing.T, ts *topo.Server) {
 	}
 
 	// start watching something that doesn't exist -> error
-	current, changes, cancel := conn.Watch(ctx, "keyspaces/test_keyspace/SrvKeyspace")
+	current, changes, _ := conn.Watch(ctx, "keyspaces/test_keyspace/SrvKeyspace")
 	if !topo.IsErrType(current.Err, topo.NoNode) {
 		t.Errorf("watch on missing node didn't return ErrNoNode: %v %v", current, changes)
 	}
@@ -86,7 +86,7 @@ func checkWatch(t *testing.T, ts *topo.Server) {
 	}
 
 	// start watching again, it should work
-	changes, cancel = waitForInitialValue(t, conn, srvKeyspace)
+	changes, cancel := waitForInitialValue(t, conn, srvKeyspace)
 	defer cancel()
 
 	// change the data
@@ -193,7 +193,7 @@ func checkWatchInterrupt(t *testing.T, ts *topo.Server) {
 			break
 		}
 		if wd.Err != nil {
-			t.Fatalf("bad error returned for deletion: %v", wd.Err)
+			t.Fatalf("bad error returned for cancellation: %v", wd.Err)
 		}
 		// we got something, better be the right value
 		got := &topodatapb.SrvKeyspace{}

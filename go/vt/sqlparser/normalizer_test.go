@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -35,6 +35,13 @@ func TestNormalize(t *testing.T) {
 		// str val
 		in:      "select * from t where v1 = 'aa'",
 		outstmt: "select * from t where v1 = :bv1",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.BytesBindVariable([]byte("aa")),
+		},
+	}, {
+		// str val in select
+		in:      "select 'aa' from t",
+		outstmt: "select :bv1 from t",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.BytesBindVariable([]byte("aa")),
 		},
@@ -128,6 +135,16 @@ func TestNormalize(t *testing.T) {
 		outstmt: "update a set v1 = B'11'",
 		outbv:   map[string]*querypb.BindVariable{},
 	}, {
+		// ORDER BY column_position
+		in:      "select a, b from t order by 1 asc",
+		outstmt: "select a, b from t order by 1 asc",
+		outbv:   map[string]*querypb.BindVariable{},
+	}, {
+		// ORDER BY variable
+		in:      "select a, b from t order by c asc",
+		outstmt: "select a, b from t order by c asc",
+		outbv:   map[string]*querypb.BindVariable{},
+	}, {
 		// Values up to len 256 will reuse.
 		in:      fmt.Sprintf("select * from t where v1 = '%256s' and v2 = '%256s'", "a", "a"),
 		outstmt: "select * from t where v1 = :bv1 and v2 = :bv1",
@@ -177,6 +194,13 @@ func TestNormalize(t *testing.T) {
 		outstmt: "select * from t where v1 not in ::bv1",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.TestBindVariable([]interface{}{1, []byte("2")}),
+		},
+	}, {
+		// Do not normalize cast/convert types
+		in:      `select CAST("test" AS CHAR(60))`,
+		outstmt: `select convert(:bv1, CHAR(60)) from dual`,
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.StringBindVariable("test"),
 		},
 	}}
 	for _, tc := range testcases {

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -23,13 +23,14 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 var (
-	_ Vindex = (*LookupUnique)(nil)
-	_ Lookup = (*LookupUnique)(nil)
-	_ Vindex = (*LookupNonUnique)(nil)
-	_ Lookup = (*LookupNonUnique)(nil)
+	_ SingleColumn = (*LookupUnique)(nil)
+	_ Lookup       = (*LookupUnique)(nil)
+	_ SingleColumn = (*LookupNonUnique)(nil)
+	_ Lookup       = (*LookupNonUnique)(nil)
 )
 
 func init() {
@@ -60,9 +61,9 @@ func (ln *LookupNonUnique) IsUnique() bool {
 	return false
 }
 
-// IsFunctional returns false since the Vindex is not functional.
-func (ln *LookupNonUnique) IsFunctional() bool {
-	return false
+// NeedsVCursor satisfies the Vindex interface.
+func (ln *LookupNonUnique) NeedsVCursor() bool {
+	return true
 }
 
 // Map can map ids to key.Destination objects.
@@ -112,12 +113,12 @@ func (ln *LookupNonUnique) Create(vcursor VCursor, rowsColValues [][]sqltypes.Va
 
 // Delete deletes the entry from the vindex table.
 func (ln *LookupNonUnique) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
-	return ln.lkp.Delete(vcursor, rowsColValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid))
+	return ln.lkp.Delete(vcursor, rowsColValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), vtgatepb.CommitOrder_NORMAL)
 }
 
 // Update updates the entry in the vindex table.
 func (ln *LookupNonUnique) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
-	return ln.lkp.Update(vcursor, oldValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), newValues)
+	return ln.lkp.Update(vcursor, oldValues, ksid, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), newValues)
 }
 
 // MarshalJSON returns a JSON representation of LookupHash.
@@ -215,9 +216,9 @@ func (lu *LookupUnique) IsUnique() bool {
 	return true
 }
 
-// IsFunctional returns false since the Vindex is not functional.
-func (lu *LookupUnique) IsFunctional() bool {
-	return false
+// NeedsVCursor satisfies the Vindex interface.
+func (lu *LookupUnique) NeedsVCursor() bool {
+	return true
 }
 
 // Map can map ids to key.Destination objects.
@@ -265,12 +266,12 @@ func (lu *LookupUnique) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value
 
 // Update updates the entry in the vindex table.
 func (lu *LookupUnique) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
-	return lu.lkp.Update(vcursor, oldValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), newValues)
+	return lu.lkp.Update(vcursor, oldValues, ksid, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), newValues)
 }
 
 // Delete deletes the entry from the vindex table.
 func (lu *LookupUnique) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
-	return lu.lkp.Delete(vcursor, rowsColValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid))
+	return lu.lkp.Delete(vcursor, rowsColValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), vtgatepb.CommitOrder_NORMAL)
 }
 
 // MarshalJSON returns a JSON representation of LookupUnique.

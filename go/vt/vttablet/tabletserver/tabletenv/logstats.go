@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -103,7 +103,7 @@ func (stats *LogStats) AddRewrittenSQL(sql string, start time.Time) {
 	stats.QuerySources |= QuerySourceMySQL
 	stats.NumberOfQueries++
 	stats.rewrittenSqls = append(stats.rewrittenSqls, sql)
-	stats.MysqlResponseTime += time.Now().Sub(start)
+	stats.MysqlResponseTime += time.Since(start)
 }
 
 // TotalTime returns how long this query has been running
@@ -180,6 +180,10 @@ func (stats *LogStats) CallInfo() (string, string) {
 // Logf formats the log record to the given writer, either as
 // tab-separated list of logged fields or as JSON.
 func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
+	if !streamlog.ShouldEmitLog(stats.OriginalSQL) {
+		return nil
+	}
+
 	rewrittenSQL := "[REDACTED]"
 	formattedBindVars := "\"[REDACTED]\""
 

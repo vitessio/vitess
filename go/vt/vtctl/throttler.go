@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -35,11 +35,13 @@ import (
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 )
 
+const (
+	throttlerGroupName = "Resharding Throttler"
+	shortTimeout       = 15 * time.Second
+)
+
 // This file contains the commands to control the throttler which is used during
 // resharding (vtworker) and by filtered replication (vttablet).
-
-const throttlerGroupName = "Resharding Throttler"
-const shortTimeout = 15 * time.Second
 
 func init() {
 	addCommandGroup(throttlerGroupName)

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -116,8 +116,8 @@ func TestStreamTerminate(t *testing.T) {
 			return nil
 		},
 	)
-	if code := vterrors.Code(err); code != vtrpcpb.Code_DEADLINE_EXCEEDED {
-		t.Errorf("Errorcode: %v, want %v", code, vtrpcpb.Code_DEADLINE_EXCEEDED)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_CANCELED {
+		t.Errorf("Errorcode: %v, want %v", code, vtrpcpb.Code_CANCELED)
 	}
 }
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -94,7 +94,7 @@ func (ev binlogEvent) TableMap(f BinlogFormat) (*TableMap, error) {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected metadata end: got %v was expecting %v (data=%v)", pos, expectedEnd, data)
 	}
 
-	// A bit array that says if each colum can be NULL.
+	// A bit array that says if each column can be NULL.
 	result.CanBeNull, _ = newBitmap(data, pos, columnCount)
 
 	return result, nil
@@ -447,15 +447,20 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		return sqltypes.MakeTrusted(querypb.Type_DATETIME,
 			[]byte(fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second))), 8, nil
 	case TypeVarchar, TypeVarString:
+		// We trust that styp is compatible with the column type
 		// Length is encoded in 1 or 2 bytes.
+		typeToUse := querypb.Type_VARCHAR
+		if styp == querypb.Type_VARBINARY || styp == querypb.Type_BINARY || styp == querypb.Type_BLOB {
+			typeToUse = styp
+		}
 		if metadata > 255 {
 			l := int(uint64(data[pos]) |
 				uint64(data[pos+1])<<8)
-			return sqltypes.MakeTrusted(querypb.Type_VARCHAR,
+			return sqltypes.MakeTrusted(typeToUse,
 				data[pos+2:pos+2+l]), l + 2, nil
 		}
 		l := int(data[pos])
-		return sqltypes.MakeTrusted(querypb.Type_VARCHAR,
+		return sqltypes.MakeTrusted(typeToUse,
 			data[pos+1:pos+1+l]), l + 1, nil
 	case TypeBit:
 		// The contents is just the bytes, quoted.

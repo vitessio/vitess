@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -71,6 +71,16 @@ func (ps *pulloutSubquery) Primitive() engine.Primitive {
 	return ps.eSubquery
 }
 
+// PushLock satisfies the builder interface.
+func (ps *pulloutSubquery) PushLock(lock string) error {
+	err := ps.subquery.PushLock(lock)
+	if err != nil {
+		return err
+	}
+
+	return ps.underlying.PushLock(lock)
+}
+
 // First satisfies the builder interface.
 func (ps *pulloutSubquery) First() builder {
 	return ps.underlying.First()
@@ -87,18 +97,28 @@ func (ps *pulloutSubquery) PushFilter(pb *primitiveBuilder, filter sqlparser.Exp
 }
 
 // PushSelect satisfies the builder interface.
-func (ps *pulloutSubquery) PushSelect(expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
-	return ps.underlying.PushSelect(expr, origin)
+func (ps *pulloutSubquery) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
+	return ps.underlying.PushSelect(pb, expr, origin)
 }
 
-// PushOrderByNull satisfies the builder interface.
-func (ps *pulloutSubquery) PushOrderByNull() {
-	ps.underlying.PushOrderByNull()
+// MakeDistinct satisfies the builder interface.
+func (ps *pulloutSubquery) MakeDistinct() error {
+	return ps.underlying.MakeDistinct()
 }
 
-// PushOrderByRand satisfies the builder interface.
-func (ps *pulloutSubquery) PushOrderByRand() {
-	ps.underlying.PushOrderByRand()
+// PushGroupBy satisfies the builder interface.
+func (ps *pulloutSubquery) PushGroupBy(groupBy sqlparser.GroupBy) error {
+	return ps.underlying.PushGroupBy(groupBy)
+}
+
+// PushOrderBy satisfies the builder interface.
+func (ps *pulloutSubquery) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
+	bldr, err := ps.underlying.PushOrderBy(orderBy)
+	if err != nil {
+		return nil, err
+	}
+	ps.underlying = bldr
+	return ps, nil
 }
 
 // SetUpperLimit satisfies the builder interface.
@@ -132,6 +152,11 @@ func (ps *pulloutSubquery) SupplyVar(from, to int, col *sqlparser.ColName, varna
 }
 
 // SupplyCol satisfies the builder interface.
-func (ps *pulloutSubquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int) {
-	panic("BUG: unreachable")
+func (ps *pulloutSubquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
+	return ps.underlying.SupplyCol(col)
+}
+
+// SupplyWeightString satisfies the builder interface.
+func (ps *pulloutSubquery) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+	return ps.underlying.SupplyWeightString(colNumber)
 }

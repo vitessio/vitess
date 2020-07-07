@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -95,7 +95,7 @@ func TestUpdateServedFromMap(t *testing.T) {
 	}
 
 	// couple error cases
-	if err := ki.UpdateServedFromMap(topodatapb.TabletType_RDONLY, []string{"second"}, "othersource", true, allCells); err == nil || (err.Error() != "inconsistent keypace specified in migration: othersource != source for type MASTER" && err.Error() != "inconsistent keypace specified in migration: othersource != source for type RDONLY") {
+	if err := ki.UpdateServedFromMap(topodatapb.TabletType_RDONLY, []string{"second"}, "othersource", true, allCells); err == nil || (err.Error() != "inconsistent keyspace specified in migration: othersource != source for type MASTER" && err.Error() != "inconsistent keyspace specified in migration: othersource != source for type RDONLY") {
 		t.Fatalf("different keyspace should fail: %v", err)
 	}
 	if err := ki.UpdateServedFromMap(topodatapb.TabletType_MASTER, nil, "source", true, allCells); err == nil || err.Error() != "cannot migrate master into ks until everything else is migrated" {

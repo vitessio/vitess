@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -44,6 +44,8 @@ var (
 type ExecutorMode string
 
 const (
+	vtexplainCell = "explainCell"
+
 	// ModeMulti is the default mode with autocommit implemented at vtgate
 	ModeMulti = "multi"
 
@@ -141,10 +143,6 @@ type Explain struct {
 	TabletActions map[string]*TabletActions
 }
 
-const (
-	vtexplainCell = "explainCell"
-)
-
 // Init sets up the fake execution environment
 func Init(vSchemaStr, sqlSchema string, opts *Options) error {
 	// Verify options
@@ -194,7 +192,7 @@ func parseSchema(sqlSchema string, opts *Options) ([]*sqlparser.DDL, error) {
 		if sql == "" {
 			break
 		}
-		sql = sqlparser.StripComments(sql)
+		sql, _ = sqlparser.SplitMarginComments(sql)
 		if sql == "" {
 			continue
 		}
@@ -256,8 +254,11 @@ func Run(sql string) ([]*Explain, error) {
 		}
 
 		if sql != "" {
-			// Reset the global time simulator for each query
-			batchTime = sync2.NewBatcher(*batchInterval)
+			// Reset the global time simulator unless there's an open transaction
+			// in the session from the previous staement.
+			if vtgateSession == nil || !vtgateSession.GetInTransaction() {
+				batchTime = sync2.NewBatcher(*batchInterval)
+			}
 			log.V(100).Infof("explain %s", sql)
 			e, err := explain(sql)
 			if err != nil {

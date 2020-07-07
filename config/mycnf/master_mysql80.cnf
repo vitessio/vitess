@@ -1,0 +1,31 @@
+# This file is auto-included when MySQL 8.0 is detected.
+
+# MySQL 8.0 enables binlog by default with sync_binlog and TABLE info repositories
+# It does not enable GTIDs or enforced GTID consistency
+
+gtid_mode = ON
+enforce_gtid_consistency
+relay_log_recovery = 1
+binlog_expire_logs_seconds = 259200
+
+# disable mysqlx
+mysqlx = 0
+
+# 8.0 changes the default auth-plugin to caching_sha2_password
+default_authentication_plugin = mysql_native_password
+
+# Semi-sync replication is required for automated unplanned failover
+# (when the master goes away). Here we just load the plugin so it's
+# available if desired, but it's disabled at startup.
+#
+# If the -enable_semi_sync flag is used, VTTablet will enable semi-sync
+# at the proper time when replication is set up, or when masters are
+# promoted or demoted.
+plugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so
+
+# MySQL 8.0 will not load plugins during --initialize
+# which makes these options unknown. Prefixing with --loose
+# tells the server it's fine if they are not understood.
+loose_rpl_semi_sync_master_timeout = 1000000000000000000
+loose_rpl_semi_sync_master_wait_no_slave = 1
+

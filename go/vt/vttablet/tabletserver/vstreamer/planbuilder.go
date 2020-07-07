@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,72 +21,162 @@ import (
 	"regexp"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// Plan represents the streaming plan for a table.
+// Plan represents the plan for a table.
 type Plan struct {
-	Table        *Table
-	ColExprs     []ColExpr
-	VindexColumn int
-	Vindex       vindexes.Vindex
-	KeyRange     *topodatapb.KeyRange
+	Table *Table
+
+	// ColExprs is the list of column expressions to be sent
+	// in the stream.
+	ColExprs []ColExpr
+
+	// Filters is the list of filters to be applied to the columns
+	// of the table.
+	Filters []Filter
+}
+
+// Opcode enumerates the operators supported in a where clause
+type Opcode int
+
+const (
+	// Equal is used to filter an integer column on a specific value
+	Equal = Opcode(iota)
+	// VindexMatch is used for an in_keyrange() construct
+	VindexMatch
+)
+
+// Filter contains opcodes for filtering.
+type Filter struct {
+	Opcode Opcode
+	ColNum int
+	Value  sqltypes.Value
+
+	// Parameters for VindexMatch.
+	// Vindex, VindexColumns and KeyRange, if set, will be used
+	// to filter the row.
+	// VindexColumns contains the column numbers of the table,
+	// and not the column numbers of the stream to be sent.
+	Vindex        vindexes.Vindex
+	VindexColumns []int
+	KeyRange      *topodatapb.KeyRange
 }
 
 // ColExpr represents a column expression.
 type ColExpr struct {
+	// ColNum specifies the source column value.
 	ColNum int
-	Alias  sqlparser.ColIdent
-	Type   querypb.Type
+
+	// Vindex and VindexColumns, if set, will be used to generate
+	// a keyspace_id. If so, ColNum is ignored.
+	// VindexColumns contains the column numbers of the table,
+	// and not the column numbers of the stream to be sent.
+	Vindex        vindexes.Vindex
+	VindexColumns []int
+
+	// Alias is usually the column name, but it can be changed
+	// if the select expression aliases with an "AS" expression.
+	// Also, "keyspace_id()" will be aliased as "keyspace_id".
+	// This Alias is sent as field info for the returned stream.
+	Alias sqlparser.ColIdent
+	Type  querypb.Type
 }
 
-// Table contains the metadata for a table. The
-// name is dervied from mysql's Table_map_log_event.
+// Table contains the metadata for a table.
 type Table struct {
-	*mysql.TableMap
-	Columns []schema.TableColumn
+	Name   string
+	Fields []*querypb.Field
 }
 
-// The filter function needs the ability to perform expression evaluations. This is
-// because the consumer of vstream is not just VPlayer. It can also be a dumb client
-// like a mysql client that's subscribing to changes. This ability to allow users
-// to directly pull events by sending a complex select query. The same reasoning
-// applies to where clauses. For now, only simple functions like hour are supported,
-// but this can be expanded in the future.
+// fields returns the fields for the plan.
+func (plan *Plan) fields() []*querypb.Field {
+	fields := make([]*querypb.Field, len(plan.ColExprs))
+	for i, ce := range plan.ColExprs {
+		fields[i] = &querypb.Field{
+			Name: ce.Alias.String(),
+			Type: ce.Type,
+		}
+	}
+	return fields
+}
+
+// filter filters the row against the plan. It returns false if the row did not match.
+// If the row matched, it returns the columns to be sent.
 func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error) {
+	for _, filter := range plan.Filters {
+		switch filter.Opcode {
+		case Equal:
+			result, err := evalengine.NullsafeCompare(values[filter.ColNum], filter.Value)
+			if err != nil {
+				return false, nil, err
+			}
+			if result != 0 {
+				return false, nil, nil
+			}
+		case VindexMatch:
+			ksid, err := getKeyspaceID(values, filter.Vindex, filter.VindexColumns)
+			if err != nil {
+				return false, nil, err
+			}
+			if !key.KeyRangeContains(filter.KeyRange, ksid) {
+				return false, nil, nil
+			}
+		}
+	}
+
 	result := make([]sqltypes.Value, len(plan.ColExprs))
 	for i, colExpr := range plan.ColExprs {
-		result[i] = values[colExpr.ColNum]
+		if colExpr.ColNum >= len(values) {
+			return false, nil, fmt.Errorf("index out of range, colExpr.ColNum: %d, len(values): %d", colExpr.ColNum, len(values))
+		}
+		if colExpr.Vindex == nil {
+			result[i] = values[colExpr.ColNum]
+		} else {
+			ksid, err := getKeyspaceID(values, colExpr.Vindex, colExpr.VindexColumns)
+			if err != nil {
+				return false, nil, err
+			}
+			result[i] = sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(ksid))
+		}
 	}
-	if plan.Vindex == nil {
-		return true, result, nil
-	}
+	return true, result, nil
+}
 
-	// Filter by Vindex.
-	destinations, err := plan.Vindex.Map(nil, []sqltypes.Value{result[plan.VindexColumn]})
+func getKeyspaceID(values []sqltypes.Value, vindex vindexes.Vindex, vindexColumns []int) (key.DestinationKeyspaceID, error) {
+	vindexValues := make([]sqltypes.Value, 0, len(vindexColumns))
+	for _, col := range vindexColumns {
+		vindexValues = append(vindexValues, values[col])
+	}
+	destinations, err := vindexes.Map(vindex, nil, [][]sqltypes.Value{vindexValues})
 	if err != nil {
-		return false, nil, err
+		return nil, err
 	}
 	if len(destinations) != 1 {
-		return false, nil, fmt.Errorf("mapping row to keyspace id returned an invalid array of destinations: %v", key.DestinationsString(destinations))
+		return nil, fmt.Errorf("mapping row to keyspace id returned an invalid array of destinations: %v", key.DestinationsString(destinations))
 	}
 	ksid, ok := destinations[0].(key.DestinationKeyspaceID)
 	if !ok || len(ksid) == 0 {
-		return false, nil, fmt.Errorf("could not map %v to a keyspace id, got destination %v", result[plan.VindexColumn], destinations[0])
+		return nil, fmt.Errorf("could not map %v to a keyspace id, got destination %v", vindexValues, destinations[0])
 	}
-	if !key.KeyRangeContains(plan.KeyRange, ksid) {
-		return false, nil, nil
+	return ksid, nil
+}
+
+func mustSendStmt(query mysql.Query, dbname string) bool {
+	if query.Database != "" && query.Database != dbname {
+		return false
 	}
-	return true, result, nil
+	return true
 }
 
 func mustSendDDL(query mysql.Query, dbname string, filter *binlogdatapb.Filter) bool {
@@ -121,6 +211,7 @@ func mustSendDDL(query mysql.Query, dbname string, filter *binlogdatapb.Filter) 
 	return true
 }
 
+// tableMatches is similar to buildPlan below and MatchTable in vreplication/table_plan_builder.go.
 func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb.Filter) bool {
 	if !table.Qualifier.IsEmpty() && table.Qualifier.String() != dbname {
 		return false
@@ -131,7 +222,7 @@ func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb
 			expr := strings.Trim(rule.Match, "/")
 			result, err := regexp.MatchString(expr, table.Name.String())
 			if err != nil {
-				return true
+				return false
 			}
 			if !result {
 				continue
@@ -144,7 +235,7 @@ func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb
 	return false
 }
 
-func buildPlan(ti *Table, kschema *vindexes.KeyspaceSchema, filter *binlogdatapb.Filter) (*Plan, error) {
+func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter) (*Plan, error) {
 	for _, rule := range filter.Rules {
 		switch {
 		case strings.HasPrefix(rule.Match, "/"):
@@ -156,22 +247,24 @@ func buildPlan(ti *Table, kschema *vindexes.KeyspaceSchema, filter *binlogdatapb
 			if !result {
 				continue
 			}
-			return buildREPlan(ti, kschema, rule.Filter)
+			return buildREPlan(ti, vschema, rule.Filter)
 		case rule.Match == ti.Name:
-			return buildTablePlan(ti, kschema, rule.Filter)
+			return buildTablePlan(ti, vschema, rule.Filter)
 		}
 	}
 	return nil, nil
 }
 
-func buildREPlan(ti *Table, kschema *vindexes.KeyspaceSchema, filter string) (*Plan, error) {
+// buildREPlan handles cases where Match has a regular expression.
+// If so, the Filter can be an empty string or a keyrange, like "-80".
+func buildREPlan(ti *Table, vschema *localVSchema, filter string) (*Plan, error) {
 	plan := &Plan{
 		Table: ti,
 	}
-	plan.ColExprs = make([]ColExpr, len(ti.Columns))
-	for i, col := range ti.Columns {
+	plan.ColExprs = make([]ColExpr, len(ti.Fields))
+	for i, col := range ti.Fields {
 		plan.ColExprs[i].ColNum = i
-		plan.ColExprs[i].Alias = col.Name
+		plan.ColExprs[i].Alias = sqlparser.NewColIdent(col.Name)
 		plan.ColExprs[i].Type = col.Type
 	}
 	if filter == "" {
@@ -180,23 +273,18 @@ func buildREPlan(ti *Table, kschema *vindexes.KeyspaceSchema, filter string) (*P
 
 	// We need to additionally set VindexColumn, Vindex and KeyRange
 	// based on the Primary Vindex of the table.
-	// Find table in kschema.
-	table := kschema.Tables[ti.Name]
-	if table == nil {
-		return nil, fmt.Errorf("no vschema definition for table %s", ti.Name)
-	}
-	// Get Primary Vindex.
-	if len(table.ColumnVindexes) == 0 {
-		return nil, fmt.Errorf("table %s has no primary vindex", ti.Name)
-	}
-	// findColumn can be used here because result column list is same
-	// as source.
-	colnum, err := findColumn(ti, table.ColumnVindexes[0].Columns[0])
+	cv, err := vschema.FindColVindex(ti.Name)
 	if err != nil {
 		return nil, err
 	}
-	plan.VindexColumn = colnum
-	plan.Vindex = table.ColumnVindexes[0].Vindex
+	whereFilter := Filter{
+		Opcode: VindexMatch,
+		Vindex: cv.Vindex,
+	}
+	whereFilter.VindexColumns, err = buildVindexColumns(plan.Table, cv.Columns)
+	if err != nil {
+		return nil, err
+	}
 
 	// Parse keyrange.
 	keyranges, err := key.ParseShardingSpec(filter)
@@ -206,138 +294,272 @@ func buildREPlan(ti *Table, kschema *vindexes.KeyspaceSchema, filter string) (*P
 	if len(keyranges) != 1 {
 		return nil, fmt.Errorf("error parsing keyrange: %v", filter)
 	}
-	plan.KeyRange = keyranges[0]
+	whereFilter.KeyRange = keyranges[0]
+	plan.Filters = append(plan.Filters, whereFilter)
 	return plan, nil
 }
 
-func buildTablePlan(ti *Table, kschema *vindexes.KeyspaceSchema, query string) (*Plan, error) {
-	statement, err := sqlparser.Parse(query)
+// BuildTablePlan handles cases where a specific table name is specified.
+// The filter must be a select statement.
+func buildTablePlan(ti *Table, vschema *localVSchema, query string) (*Plan, error) {
+	sel, fromTable, err := analyzeSelect(query)
 	if err != nil {
 		return nil, err
-	}
-	plan := &Plan{
-		Table: ti,
-	}
-	sel, ok := statement.(*sqlparser.Select)
-	if !ok {
-		return nil, fmt.Errorf("unsupported: %v", sqlparser.String(statement))
-	}
-	if len(sel.From) > 1 {
-		return nil, fmt.Errorf("unsupported: %v", sqlparser.String(sel))
-	}
-	node, ok := sel.From[0].(*sqlparser.AliasedTableExpr)
-	if !ok {
-		return nil, fmt.Errorf("unsupported: %v", sqlparser.String(sel))
-	}
-	fromTable := sqlparser.GetTableName(node.Expr)
-	if fromTable.IsEmpty() {
-		return nil, fmt.Errorf("unsupported: %v", sqlparser.String(sel))
 	}
 	if fromTable.String() != ti.Name {
 		return nil, fmt.Errorf("unsupported: select expression table %v does not match the table entry name %s", sqlparser.String(fromTable), ti.Name)
 	}
 
-	if _, ok := sel.SelectExprs[0].(*sqlparser.StarExpr); !ok {
-		for _, expr := range sel.SelectExprs {
-			cExpr, err := analyzeExpr(ti, expr)
-			if err != nil {
-				return nil, err
-			}
-			plan.ColExprs = append(plan.ColExprs, cExpr)
-		}
-	} else {
-		if len(sel.SelectExprs) != 1 {
-			return nil, fmt.Errorf("unsupported: %v", sqlparser.String(sel))
-		}
-		plan.ColExprs = make([]ColExpr, len(ti.Columns))
-		for i, col := range ti.Columns {
-			plan.ColExprs[i].ColNum = i
-			plan.ColExprs[i].Alias = col.Name
-			plan.ColExprs[i].Type = col.Type
-		}
+	plan := &Plan{
+		Table: ti,
+	}
+	if err := plan.analyzeWhere(vschema, sel.Where); err != nil {
+		return nil, err
+	}
+	if err := plan.analyzeExprs(vschema, sel.SelectExprs); err != nil {
+		return nil, err
 	}
 
 	if sel.Where == nil {
 		return plan, nil
 	}
 
-	// Filter by Vindex.
-	funcExpr, ok := sel.Where.Expr.(*sqlparser.FuncExpr)
-	if !ok {
-		return nil, fmt.Errorf("unsupported where clause: %v", sqlparser.String(sel.Where))
-	}
-	if !funcExpr.Name.EqualString("in_keyrange") {
-		return nil, fmt.Errorf("unsupported where clause: %v", sqlparser.String(sel.Where))
-	}
-	if len(funcExpr.Exprs) != 3 {
-		return nil, fmt.Errorf("unexpected where clause: %v", sqlparser.String(sel.Where))
-	}
-	aexpr, ok := funcExpr.Exprs[0].(*sqlparser.AliasedExpr)
-	if !ok {
-		return nil, fmt.Errorf("unexpected: %v", sqlparser.String(funcExpr))
-	}
-	colname, ok := aexpr.Expr.(*sqlparser.ColName)
-	if !ok {
-		return nil, fmt.Errorf("unexpected: %v", sqlparser.String(funcExpr))
-	}
-	found := false
-	for i, cExpr := range plan.ColExprs {
-		if cExpr.Alias.Equal(colname.Name) {
-			found = true
-			plan.VindexColumn = i
-			break
-		}
-	}
-	if !found {
-		return nil, fmt.Errorf("keyrange expression does not reference a column in the select list: %v", sqlparser.String(colname))
-	}
-	vtype, err := selString(funcExpr.Exprs[1])
-	if err != nil {
-		return nil, err
-	}
-	plan.Vindex, err = vindexes.CreateVindex(vtype, vtype, map[string]string{})
-	if err != nil {
-		return nil, err
-	}
-	if !plan.Vindex.IsUnique() || !plan.Vindex.IsFunctional() {
-		return nil, fmt.Errorf("vindex must be Unique and Functional to be used for VReplication: %s", vtype)
-	}
-	kr, err := selString(funcExpr.Exprs[2])
-	if err != nil {
-		return nil, err
-	}
-	keyranges, err := key.ParseShardingSpec(kr)
-	if err != nil {
-		return nil, err
-	}
-	if len(keyranges) != 1 {
-		return nil, fmt.Errorf("unexpected where clause: %v", sqlparser.String(sel.Where))
-	}
-	plan.KeyRange = keyranges[0]
 	return plan, nil
 }
 
-func analyzeExpr(ti *Table, selExpr sqlparser.SelectExpr) (cExpr ColExpr, err error) {
+func analyzeSelect(query string) (sel *sqlparser.Select, fromTable sqlparser.TableIdent, err error) {
+	statement, err := sqlparser.Parse(query)
+	if err != nil {
+		return nil, fromTable, err
+	}
+	sel, ok := statement.(*sqlparser.Select)
+	if !ok {
+		return nil, fromTable, fmt.Errorf("unsupported: %v", sqlparser.String(statement))
+	}
+	if len(sel.From) > 1 {
+		return nil, fromTable, fmt.Errorf("unsupported: %v", sqlparser.String(sel))
+	}
+	node, ok := sel.From[0].(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return nil, fromTable, fmt.Errorf("unsupported: %v", sqlparser.String(sel))
+	}
+	fromTable = sqlparser.GetTableName(node.Expr)
+	if fromTable.IsEmpty() {
+		return nil, fromTable, fmt.Errorf("unsupported: %v", sqlparser.String(sel))
+	}
+	return sel, fromTable, nil
+}
+
+func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) error {
+	if where == nil {
+		return nil
+	}
+	exprs := splitAndExpression(nil, where.Expr)
+	for _, expr := range exprs {
+		switch expr := expr.(type) {
+		case *sqlparser.ComparisonExpr:
+			qualifiedName, ok := expr.Left.(*sqlparser.ColName)
+			if !ok {
+				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+			}
+			if !qualifiedName.Qualifier.IsEmpty() {
+				return fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(qualifiedName))
+			}
+			colnum, err := findColumn(plan.Table, qualifiedName.Name)
+			if err != nil {
+				return err
+			}
+			val, ok := expr.Right.(*sqlparser.SQLVal)
+			if !ok {
+				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+			}
+			//StrVal is varbinary, we do not support varchar since we would have to implement all collation types
+			if val.Type != sqlparser.IntVal && val.Type != sqlparser.StrVal {
+				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+			}
+			pv, err := sqlparser.NewPlanValue(val)
+			if err != nil {
+				return err
+			}
+			resolved, err := pv.ResolveValue(nil)
+			if err != nil {
+				return err
+			}
+			plan.Filters = append(plan.Filters, Filter{
+				Opcode: Equal,
+				ColNum: colnum,
+				Value:  resolved,
+			})
+		case *sqlparser.FuncExpr:
+			if !expr.Name.EqualString("in_keyrange") {
+				return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
+			}
+			if err := plan.analyzeInKeyRange(vschema, expr.Exprs); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
+		}
+	}
+	return nil
+}
+
+// splitAndExpression breaks up the Expr into AND-separated conditions
+// and appends them to filters, which can be shuffled and recombined
+// as needed.
+func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlparser.Expr {
+	if node == nil {
+		return filters
+	}
+	switch node := node.(type) {
+	case *sqlparser.AndExpr:
+		filters = splitAndExpression(filters, node.Left)
+		return splitAndExpression(filters, node.Right)
+	}
+	return append(filters, node)
+}
+
+func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs sqlparser.SelectExprs) error {
+	if _, ok := selExprs[0].(*sqlparser.StarExpr); !ok {
+		for _, expr := range selExprs {
+			cExpr, err := plan.analyzeExpr(vschema, expr)
+			if err != nil {
+				return err
+			}
+			plan.ColExprs = append(plan.ColExprs, cExpr)
+		}
+	} else {
+		if len(selExprs) != 1 {
+			return fmt.Errorf("unsupported: %v", sqlparser.String(selExprs))
+		}
+		plan.ColExprs = make([]ColExpr, len(plan.Table.Fields))
+		for i, col := range plan.Table.Fields {
+			plan.ColExprs[i].ColNum = i
+			plan.ColExprs[i].Alias = sqlparser.NewColIdent(col.Name)
+			plan.ColExprs[i].Type = col.Type
+		}
+	}
+	return nil
+}
+
+func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExpr) (cExpr ColExpr, err error) {
 	aliased, ok := selExpr.(*sqlparser.AliasedExpr)
 	if !ok {
 		return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(selExpr))
 	}
-	as := aliased.As
-	if as.IsEmpty() {
-		as = sqlparser.NewColIdent(sqlparser.String(aliased.Expr))
-	}
-	colname, ok := aliased.Expr.(*sqlparser.ColName)
-	if !ok {
+	switch inner := aliased.Expr.(type) {
+	case *sqlparser.ColName:
+		if !inner.Qualifier.IsEmpty() {
+			return ColExpr{}, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(inner))
+		}
+		colnum, err := findColumn(plan.Table, inner.Name)
+		if err != nil {
+			return ColExpr{}, err
+		}
+		as := aliased.As
+		if as.IsEmpty() {
+			as = sqlparser.NewColIdent(sqlparser.String(aliased.Expr))
+		}
+		return ColExpr{
+			ColNum: colnum,
+			Alias:  as,
+			Type:   plan.Table.Fields[colnum].Type,
+		}, nil
+	case *sqlparser.FuncExpr:
+		if inner.Name.Lowered() != "keyspace_id" {
+			return ColExpr{}, fmt.Errorf("unsupported function: %v", sqlparser.String(inner))
+		}
+		if len(inner.Exprs) != 0 {
+			return ColExpr{}, fmt.Errorf("unexpected: %v", sqlparser.String(inner))
+		}
+		cv, err := vschema.FindColVindex(plan.Table.Name)
+		if err != nil {
+			return ColExpr{}, err
+		}
+		vindexColumns, err := buildVindexColumns(plan.Table, cv.Columns)
+		if err != nil {
+			return ColExpr{}, err
+		}
+		return ColExpr{
+			Vindex:        cv.Vindex,
+			VindexColumns: vindexColumns,
+			Alias:         sqlparser.NewColIdent("keyspace_id"),
+			Type:          sqltypes.VarBinary,
+		}, nil
+	default:
 		return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(aliased.Expr))
 	}
-	if !colname.Qualifier.IsEmpty() {
-		return ColExpr{}, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(colname))
+}
+
+// analyzeInKeyRange allows the following constructs: "in_keyrange('-80')",
+// "in_keyrange(col, 'hash', '-80')", "in_keyrange(col, 'local_vindex', '-80')", or
+// "in_keyrange(col, 'ks.external_vindex', '-80')".
+func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.SelectExprs) error {
+	var colnames []sqlparser.ColIdent
+	var krExpr sqlparser.SelectExpr
+	whereFilter := Filter{
+		Opcode: VindexMatch,
 	}
-	colnum, err := findColumn(ti, colname.Name)
+	switch {
+	case len(exprs) == 1:
+		cv, err := vschema.FindColVindex(plan.Table.Name)
+		if err != nil {
+			return err
+		}
+		colnames = cv.Columns
+		whereFilter.Vindex = cv.Vindex
+		krExpr = exprs[0]
+	case len(exprs) >= 3:
+		for _, expr := range exprs[:len(exprs)-2] {
+			aexpr, ok := expr.(*sqlparser.AliasedExpr)
+			if !ok {
+				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+			}
+			qualifiedName, ok := aexpr.Expr.(*sqlparser.ColName)
+			if !ok {
+				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+			}
+			if !qualifiedName.Qualifier.IsEmpty() {
+				return fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(qualifiedName))
+			}
+			colnames = append(colnames, qualifiedName.Name)
+		}
+
+		vtype, err := selString(exprs[len(exprs)-2])
+		if err != nil {
+			return err
+		}
+		whereFilter.Vindex, err = vschema.FindOrCreateVindex(vtype)
+		if err != nil {
+			return err
+		}
+		if !whereFilter.Vindex.IsUnique() {
+			return fmt.Errorf("vindex must be Unique to be used for VReplication: %s", vtype)
+		}
+
+		krExpr = exprs[len(exprs)-1]
+	default:
+		return fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(exprs))
+	}
+	var err error
+	whereFilter.VindexColumns, err = buildVindexColumns(plan.Table, colnames)
 	if err != nil {
-		return ColExpr{}, err
+		return err
 	}
-	return ColExpr{ColNum: colnum, Alias: as, Type: ti.Columns[colnum].Type}, nil
+	kr, err := selString(krExpr)
+	if err != nil {
+		return err
+	}
+	keyranges, err := key.ParseShardingSpec(kr)
+	if err != nil {
+		return err
+	}
+	if len(keyranges) != 1 {
+		return fmt.Errorf("unexpected in_keyrange parameter: %v", sqlparser.String(krExpr))
+	}
+	whereFilter.KeyRange = keyranges[0]
+	plan.Filters = append(plan.Filters, whereFilter)
+	return nil
 }
 
 func selString(expr sqlparser.SelectExpr) (string, error) {
@@ -352,9 +574,23 @@ func selString(expr sqlparser.SelectExpr) (string, error) {
 	return string(val.Val), nil
 }
 
+// buildVindexColumns builds the list of column numbers of the table
+// that will be the input to the vindex function.
+func buildVindexColumns(ti *Table, colnames []sqlparser.ColIdent) ([]int, error) {
+	vindexColumns := make([]int, 0, len(colnames))
+	for _, colname := range colnames {
+		colnum, err := findColumn(ti, colname)
+		if err != nil {
+			return nil, err
+		}
+		vindexColumns = append(vindexColumns, colnum)
+	}
+	return vindexColumns, nil
+}
+
 func findColumn(ti *Table, name sqlparser.ColIdent) (int, error) {
-	for i, col := range ti.Columns {
-		if name.Equal(col.Name) {
+	for i, col := range ti.Fields {
+		if name.EqualString(col.Name) {
 			return i, nil
 		}
 	}

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,11 +29,12 @@ var (
 	otherRules     *Rules
 )
 
-// mimic query rules from blacklist
-const blacklistQueryRules string = "BLACKLIST_QUERY_RULES"
-
-// mimic query rules from custom source
-const customQueryRules string = "CUSTOM_QUERY_RULES"
+const (
+	// mimic query rules from blacklist
+	blacklistQueryRules string = "BLACKLIST_QUERY_RULES"
+	// mimic query rules from custom source
+	customQueryRules string = "CUSTOM_QUERY_RULES"
+)
 
 func setupRules() {
 	var qr *Rule
@@ -82,7 +83,7 @@ func TestMapSetRulesWithNil(t *testing.T) {
 		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, blacklistRules) {
-		t.Errorf("blacklistQueryRules retrived is %v, but the expected value should be %v", qrs, blacklistQueryRules)
+		t.Errorf("blacklistQueryRules retrieved is %v, but the expected value should be %v", qrs, blacklistQueryRules)
 	}
 
 	qri.SetRules(blacklistQueryRules, nil)
@@ -92,7 +93,7 @@ func TestMapSetRulesWithNil(t *testing.T) {
 		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, New()) {
-		t.Errorf("blacklistQueryRules retrived is %v, but the expected value should be %v", qrs, blacklistQueryRules)
+		t.Errorf("blacklistQueryRules retrieved is %v, but the expected value should be %v", qrs, blacklistQueryRules)
 	}
 }
 
@@ -135,13 +136,13 @@ func TestMapGetSetQueryRules(t *testing.T) {
 		t.Errorf("Failed to set custom Rules: %s", err)
 	}
 
-	// Test if we can successfully retrive rules that've been set
+	// Test if we can successfully retrieve rules that've been set
 	qrs, err = qri.Get(blacklistQueryRules)
 	if err != nil {
 		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, blacklistRules) {
-		t.Errorf("blacklistQueryRules retrived is %v, but the expected value should be %v", qrs, blacklistRules)
+		t.Errorf("blacklistQueryRules retrieved is %v, but the expected value should be %v", qrs, blacklistRules)
 	}
 
 	qrs, err = qri.Get(blacklistQueryRules)
@@ -149,7 +150,7 @@ func TestMapGetSetQueryRules(t *testing.T) {
 		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, blacklistRules) {
-		t.Errorf("blacklistQueryRules retrived is %v, but the expected value should be %v", qrs, blacklistRules)
+		t.Errorf("blacklistQueryRules retrieved is %v, but the expected value should be %v", qrs, blacklistRules)
 	}
 
 	qrs, err = qri.Get(customQueryRules)
@@ -157,7 +158,7 @@ func TestMapGetSetQueryRules(t *testing.T) {
 		t.Errorf("GetRules failed to retrieve customQueryRules that has been set: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, otherRules) {
-		t.Errorf("customQueryRules retrived is %v, but the expected value should be %v", qrs, customQueryRules)
+		t.Errorf("customQueryRules retrieved is %v, but the expected value should be %v", qrs, customQueryRules)
 	}
 }
 
@@ -173,7 +174,7 @@ func TestMapFilterByPlan(t *testing.T) {
 	qri.SetRules(customQueryRules, otherRules)
 
 	// Test filter by blacklist rule
-	qrs = qri.FilterByPlan("select * from bannedtable2", planbuilder.PlanPassSelect, "bannedtable2")
+	qrs = qri.FilterByPlan("select * from bannedtable2", planbuilder.PlanSelect, "bannedtable2")
 	if l := len(qrs.rules); l != 1 {
 		t.Errorf("Select from bannedtable matches %d rules, but we expect %d", l, 1)
 	}
@@ -182,7 +183,7 @@ func TestMapFilterByPlan(t *testing.T) {
 	}
 
 	// Test filter by custom rule
-	qrs = qri.FilterByPlan("select cid from t_customer limit 10", planbuilder.PlanPassSelect, "t_customer")
+	qrs = qri.FilterByPlan("select cid from t_customer limit 10", planbuilder.PlanSelect, "t_customer")
 	if l := len(qrs.rules); l != 1 {
 		t.Errorf("Select from t_customer matches %d rules, but we expect %d", l, 1)
 	}
@@ -196,7 +197,7 @@ func TestMapFilterByPlan(t *testing.T) {
 	qr.AddBindVarCond("bindvar1", true, false, QRNoOp, nil)
 	otherRules.Add(qr)
 	qri.SetRules(customQueryRules, otherRules)
-	qrs = qri.FilterByPlan("select * from bannedtable2", planbuilder.PlanPassSelect, "bannedtable2")
+	qrs = qri.FilterByPlan("select * from bannedtable2", planbuilder.PlanSelect, "bannedtable2")
 	if l := len(qrs.rules); l != 2 {
 		t.Errorf("Insert into bannedtable2 matches %d rules: %v, but we expect %d rules to be matched", l, qrs.rules, 2)
 	}

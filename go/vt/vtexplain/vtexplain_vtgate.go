@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -32,8 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/gateway"
-
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -44,7 +42,7 @@ import (
 var (
 	explainTopo    *ExplainTopo
 	vtgateExecutor *vtgate.Executor
-	healthCheck    *discovery.FakeHealthCheck
+	healthCheck    *discovery.FakeLegacyHealthCheck
 
 	vtgateSession = &vtgatepb.Session{
 		TargetString: "",
@@ -54,7 +52,7 @@ var (
 
 func initVtgateExecutor(vSchemaStr string, opts *Options) error {
 	explainTopo = &ExplainTopo{NumShards: opts.NumShards}
-	healthCheck = discovery.NewFakeHealthCheck()
+	healthCheck = discovery.NewFakeLegacyHealthCheck()
 
 	resolver := newFakeResolver(opts, healthCheck, explainTopo, vtexplainCell)
 
@@ -67,21 +65,24 @@ func initVtgateExecutor(vSchemaStr string, opts *Options) error {
 
 	streamSize := 10
 	queryPlanCacheSize := int64(10)
-	vtgateExecutor = vtgate.NewExecutor(context.Background(), explainTopo, vtexplainCell, "", resolver, opts.Normalize, streamSize, queryPlanCacheSize, false /* legacyAutocommit */)
+	vtgateExecutor = vtgate.NewExecutor(context.Background(), explainTopo, vtexplainCell, resolver, opts.Normalize, streamSize, queryPlanCacheSize)
 
 	return nil
 }
 
-func newFakeResolver(opts *Options, hc discovery.HealthCheck, serv srvtopo.Server, cell string) *vtgate.Resolver {
-	gw := gateway.GetCreator()(hc, serv, cell, 3)
-	gw.WaitForTablets(context.Background(), []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
+func newFakeResolver(opts *Options, hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string) *vtgate.Resolver {
+	ctx := context.Background()
+	// change this back after fixing vtexplain to work with new healthcheck
+	// gw := vtgate.GatewayCreator()(ctx, hc, serv, cell, 3)
+	gw := vtgate.NewDiscoveryGateway(ctx, hc, serv, cell, 3)
+	gw.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
 
 	txMode := vtgatepb.TransactionMode_MULTI
 	if opts.ExecutionMode == ModeTwoPC {
 		txMode = vtgatepb.TransactionMode_TWOPC
 	}
 	tc := vtgate.NewTxConn(gw, txMode)
-	sc := vtgate.NewScatterConn("", tc, gw, hc)
+	sc := vtgate.NewLegacyScatterConn("", tc, gw, hc)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	return vtgate.NewResolver(srvResolver, serv, cell, sc)
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -37,8 +37,11 @@ import (
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/client"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"golang.org/x/net/context"
 
@@ -49,6 +52,9 @@ import (
 var (
 	// AWS API region
 	region = flag.String("s3_backup_aws_region", "us-east-1", "AWS region to use")
+
+	// AWS request retries
+	retryCount = flag.Int("s3_backup_aws_retries", -1, "AWS request retries")
 
 	// AWS endpoint, defaults to amazonaws.com but appliances may use a different location
 	endpoint = flag.String("s3_backup_aws_endpoint", "", "endpoint of the S3 backend (region must be provided)")
@@ -80,7 +86,7 @@ var logNameMap logNameToLogLevel
 
 // S3BackupHandle implements the backupstorage.BackupHandle interface.
 type S3BackupHandle struct {
-	client    *s3.S3
+	client    s3iface.S3API
 	bs        *S3BackupStorage
 	dir       string
 	name      string
@@ -97,6 +103,21 @@ func (bh *S3BackupHandle) Directory() string {
 // Name is part of the backupstorage.BackupHandle interface.
 func (bh *S3BackupHandle) Name() string {
 	return bh.name
+}
+
+// RecordError is part of the concurrency.ErrorRecorder interface.
+func (bh *S3BackupHandle) RecordError(err error) {
+	bh.errors.RecordError(err)
+}
+
+// HasErrors is part of the concurrency.ErrorRecorder interface.
+func (bh *S3BackupHandle) HasErrors() bool {
+	return bh.errors.HasErrors()
+}
+
+// Error is part of the concurrency.ErrorRecorder interface.
+func (bh *S3BackupHandle) Error() error {
+	return bh.errors.Error()
 }
 
 // AddFile is part of the backupstorage.BackupHandle interface.
@@ -138,7 +159,7 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 		})
 		if err != nil {
 			reader.CloseWithError(err)
-			bh.errors.RecordError(err)
+			bh.RecordError(err)
 		}
 	}()
 
@@ -151,7 +172,7 @@ func (bh *S3BackupHandle) EndBackup(ctx context.Context) error {
 		return fmt.Errorf("EndBackup cannot be called on read-only backup")
 	}
 	bh.waitGroup.Wait()
-	return bh.errors.Error()
+	return bh.Error()
 }
 
 // AbortBackup is part of the backupstorage.BackupHandle interface.
@@ -336,14 +357,28 @@ func (bs *S3BackupStorage) client() (*s3.S3, error) {
 		httpTransport := &http.Transport{TLSClientConfig: tlsClientConf}
 		httpClient := &http.Client{Transport: httpTransport}
 
-		bs._client = s3.New(session.New(),
-			&aws.Config{
-				HTTPClient:       httpClient,
-				LogLevel:         logLevel,
-				Endpoint:         aws.String(*endpoint),
-				Region:           aws.String(*region),
-				S3ForcePathStyle: aws.Bool(*forcePath),
+		session, err := session.NewSession()
+		if err != nil {
+			return nil, err
+		}
+
+		awsConfig := aws.Config{
+			HTTPClient:       httpClient,
+			LogLevel:         logLevel,
+			Endpoint:         aws.String(*endpoint),
+			Region:           aws.String(*region),
+			S3ForcePathStyle: aws.Bool(*forcePath),
+		}
+
+		if *retryCount >= 0 {
+			awsConfig = *request.WithRetryer(&awsConfig, &ClosedConnectionRetryer{
+				awsRetryer: &client.DefaultRetryer{
+					NumMaxRetries: *retryCount,
+				},
 			})
+		}
+
+		bs._client = s3.New(session, &awsConfig)
 
 		if len(*bucket) == 0 {
 			return nil, fmt.Errorf("-s3_backup_storage_bucket required")

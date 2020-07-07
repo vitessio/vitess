@@ -1,0 +1,50 @@
+topology:
+  deploymentType: test
+  cells:
+    - name: "zone1"
+      vtctld:
+        replicas: 1
+      vtgate:
+        replicas: 1
+      mysqlProtocol:
+        enabled: true
+        authType: "none"
+      keyspaces:
+        - name: "commerce"
+          shards:
+            - name: "0"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 3
+        - name: "customer"
+          shards:
+            - name: "0"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 3
+            - name: "-80"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 3
+            - name: "80-"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 3
+
+jobs:
+  - name: "reshard"
+    kind: "vtctlclient"
+    command: "Reshard customer.cust2cust \'0\' \'-80,80-\'"
+
+vttablet:
+  terminationGracePeriodSeconds: 1
+
+pmm:
+  enabled: false
+
+orchestrator:
+  enabled: false

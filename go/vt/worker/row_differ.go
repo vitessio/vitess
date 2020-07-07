@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -165,11 +165,11 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 			}
 			advanceRight = false
 		}
-		dr.processedRows++
 		if left == nil && right == nil {
 			// No more rows from either side. We're done.
 			break
 		}
+		dr.processedRows++
 		if left == nil {
 			// No more rows on the left side.
 			// We know we have at least one row on the right side left.

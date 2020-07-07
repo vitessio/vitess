@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,6 +24,10 @@ import (
 func clear() {
 	defaultVarGroup.vars = make(map[string]expvar.Var)
 	defaultVarGroup.newVarHook = nil
+	*combineDimensions = ""
+	*dropVariables = ""
+	combinedDimensions = nil
+	droppedVars = nil
 }
 
 func TestNoHook(t *testing.T) {
@@ -114,5 +118,24 @@ func TestPublishFunc(t *testing.T) {
 	}
 	if gotv.String() != f() {
 		t.Errorf("want %v, got %#v", f(), gotv())
+	}
+}
+
+func TestDropVariable(t *testing.T) {
+	clear()
+	*dropVariables = "dropTest"
+
+	// This should not panic.
+	_ = NewGaugesWithSingleLabel("dropTest", "help", "label")
+	_ = NewGaugesWithSingleLabel("dropTest", "help", "label")
+}
+
+func TestStringMapToString(t *testing.T) {
+	expected1 := "{\"aaa\": \"111\", \"bbb\": \"222\"}"
+	expected2 := "{\"bbb\": \"222\", \"aaa\": \"111\"}"
+	got := stringMapToString(map[string]string{"aaa": "111", "bbb": "222"})
+
+	if got != expected1 && got != expected2 {
+		t.Errorf("expected %v or %v, got  %v", expected1, expected2, got)
 	}
 }

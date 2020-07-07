@@ -1,5 +1,5 @@
 /*
-Copyright 2018 GitHub Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"strings"
 
-	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -88,7 +87,63 @@ func getItemPath(url string) string {
 	return parts[1]
 }
 
-func initAPI(ctx context.Context, hc discovery.HealthCheck) {
+func initAPI(hc HealthCheck) {
+	// Healthcheck real time status per (cell, keyspace, tablet type, metric).
+	handleCollection("health-check", func(r *http.Request) (interface{}, error) {
+		cacheStatus := hc.CacheStatus()
+
+		itemPath := getItemPath(r.URL.Path)
+		if itemPath == "" {
+			return cacheStatus, nil
+		}
+		parts := strings.SplitN(itemPath, "/", 2)
+		collectionFilter := parts[0]
+		if collectionFilter == "" {
+			return cacheStatus, nil
+		}
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid health-check path: %q  expected path: / or /cell/<cell> or /keyspace/<keyspace> or /tablet/mysql_hostname", itemPath)
+		}
+		value := parts[1]
+
+		switch collectionFilter {
+		case "cell":
+			{
+				filteredStatus := make(discovery.TabletsCacheStatusList, 0)
+				for _, tabletCacheStatus := range cacheStatus {
+					if tabletCacheStatus.Cell == value {
+						filteredStatus = append(filteredStatus, tabletCacheStatus)
+					}
+				}
+				return filteredStatus, nil
+			}
+		case "keyspace":
+			{
+				filteredStatus := make(discovery.TabletsCacheStatusList, 0)
+				for _, tabletCacheStatus := range cacheStatus {
+					if tabletCacheStatus.Target.Keyspace == value {
+						filteredStatus = append(filteredStatus, tabletCacheStatus)
+					}
+				}
+				return filteredStatus, nil
+			}
+		case "tablet":
+			{
+				// Return a _specific tablet_
+				for _, tabletCacheStatus := range cacheStatus {
+					for _, tabletStats := range tabletCacheStatus.TabletsStats {
+						if tabletStats.Tablet.MysqlHostname == value {
+							return tabletStats, nil
+						}
+					}
+				}
+			}
+		}
+		return nil, fmt.Errorf("cannot find health for: %s", itemPath)
+	})
+}
+
+func legacyInitAPI(hc discovery.LegacyHealthCheck) {
 	// Healthcheck real time status per (cell, keyspace, tablet type, metric).
 	handleCollection("health-check", func(r *http.Request) (interface{}, error) {
 		cacheStatus := hc.CacheStatus()
@@ -110,7 +165,7 @@ func initAPI(ctx context.Context, hc discovery.HealthCheck) {
 		switch collectionFilter {
 		case "cell":
 			{
-				filteredStatus := make(discovery.TabletsCacheStatusList, 0)
+				filteredStatus := make(discovery.LegacyTabletsCacheStatusList, 0)
 				for _, tabletCacheStatus := range cacheStatus {
 					if tabletCacheStatus.Cell == value {
 						filteredStatus = append(filteredStatus, tabletCacheStatus)
@@ -120,7 +175,7 @@ func initAPI(ctx context.Context, hc discovery.HealthCheck) {
 			}
 		case "keyspace":
 			{
-				filteredStatus := make(discovery.TabletsCacheStatusList, 0)
+				filteredStatus := make(discovery.LegacyTabletsCacheStatusList, 0)
 				for _, tabletCacheStatus := range cacheStatus {
 					if tabletCacheStatus.Target.Keyspace == value {
 						filteredStatus = append(filteredStatus, tabletCacheStatus)

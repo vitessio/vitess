@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -41,7 +41,8 @@ var (
 	myID = flag.Uint("zk.myid", 0,
 		"which server do you want to be? only needed when running multiple instance on one box, otherwise myid is implied by hostname")
 
-	stdin *bufio.Reader
+	// Reason for nolint : Used in line 54 (stdin = bufio.NewReader(os.Stdin)) in the init function
+	stdin *bufio.Reader //nolint
 )
 
 func init() {

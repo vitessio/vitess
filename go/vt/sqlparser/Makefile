@@ -1,4 +1,4 @@
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 MAKEFLAGS = -s
 
 sql.go: sql.y
-	goyacc -o sql.go sql.y
+	go run golang.org/x/tools/cmd/goyacc -o sql.go sql.y
 	gofmt -w sql.go
 
 clean:

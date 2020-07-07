@@ -1,12 +1,12 @@
 /*
- * Copyright 2017 Google Inc.
- *
+ * Copyright 2019 The Vitess Authors.
+
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+
  *     http://www.apache.org/licenses/LICENSE-2.0
- *
+
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -43,7 +43,7 @@ import org.mockito.Mockito;
 
 public class ConnectionPropertiesTest {
 
-  private static final int NUM_PROPS = 39;
+  private static final int NUM_PROPS = 40;
 
   @Test
   public void testReflection() throws Exception {
@@ -85,6 +85,7 @@ public class ConnectionPropertiesTest {
     assertEquals("useAffectedRows", true, props.getUseAffectedRows());
     assertEquals("refreshConnection", false, props.getRefreshConnection());
     assertEquals("refreshSeconds", 60, props.getRefreshSeconds());
+    assertEquals("useTracing", false, props.getUseTracing());
   }
 
   @Test
@@ -104,6 +105,7 @@ public class ConnectionPropertiesTest {
     info.setProperty("executeType", Constants.QueryExecuteType.STREAM.name());
     info.setProperty("twopcEnabled", "yes");
     info.setProperty("includedFields", Query.ExecuteOptions.IncludedFields.TYPE_ONLY.name());
+    info.setProperty("useTracing", "false");
     info.setProperty(Constants.Property.TABLET_TYPE, Topodata.TabletType.BACKUP.name());
 
     props.initializeProperties(info);
@@ -126,6 +128,7 @@ public class ConnectionPropertiesTest {
         props.getIncludedFields());
     assertEquals("includedFieldsCache", false, props.isIncludeAllFields());
     assertEquals("tabletType", Topodata.TabletType.BACKUP, props.getTabletType());
+    assertEquals("useTracing", false, props.getUseTracing());
   }
 
   @Test

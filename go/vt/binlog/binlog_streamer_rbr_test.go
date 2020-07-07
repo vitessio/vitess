@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -23,6 +23,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
@@ -42,16 +43,13 @@ func TestStreamerParseRBREvents(t *testing.T) {
 	se := schema.NewEngineForTests()
 	se.SetTableForTests(&schema.Table{
 		Name: sqlparser.NewTableIdent("vt_a"),
-		Columns: []schema.TableColumn{
-			{
-				Name: sqlparser.NewColIdent("id"),
-				Type: querypb.Type_INT64,
-			},
-			{
-				Name: sqlparser.NewColIdent("message"),
-				Type: querypb.Type_VARCHAR,
-			},
-		},
+		Fields: []*querypb.Field{{
+			Name: "id",
+			Type: querypb.Type_INT64,
+		}, {
+			Name: "message",
+			Type: querypb.Type_VARCHAR,
+		}},
 	})
 
 	// Create a tableMap event on the table.
@@ -238,7 +236,7 @@ func TestStreamerParseRBREvents(t *testing.T) {
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
 					GTIDSet: mysql.MariadbGTIDSet{
-						mysql.MariadbGTID{
+						0: mysql.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -256,7 +254,13 @@ func TestStreamerParseRBREvents(t *testing.T) {
 		})
 		return nil
 	}
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, se, nil, mysql.Position{}, 0, sendTransaction)
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.New(mcp)
+
+	bls := NewStreamer(dbcfgs, se, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events)
@@ -284,16 +288,13 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 	se := schema.NewEngineForTests()
 	se.SetTableForTests(&schema.Table{
 		Name: sqlparser.NewTableIdent("insert"),
-		Columns: []schema.TableColumn{
-			{
-				Name: sqlparser.NewColIdent("update"),
-				Type: querypb.Type_INT64,
-			},
-			{
-				Name: sqlparser.NewColIdent("delete"),
-				Type: querypb.Type_VARCHAR,
-			},
-		},
+		Fields: []*querypb.Field{{
+			Name: "update",
+			Type: querypb.Type_INT64,
+		}, {
+			Name: "delete",
+			Type: querypb.Type_VARCHAR,
+		}},
 	})
 
 	// Create a tableMap event on the table.
@@ -480,7 +481,7 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
 					GTIDSet: mysql.MariadbGTIDSet{
-						mysql.MariadbGTID{
+						0: mysql.MariadbGTID{
 							Domain:   0,
 							Server:   62344,
 							Sequence: 0x0d,
@@ -498,7 +499,13 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 		})
 		return nil
 	}
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, se, nil, mysql.Position{}, 0, sendTransaction)
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.New(mcp)
+
+	bls := NewStreamer(dbcfgs, se, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events)

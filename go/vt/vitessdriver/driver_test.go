@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,6 +28,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -78,7 +81,9 @@ func TestOpen(t *testing.T) {
 			connStr: fmt.Sprintf(`{"address": "%s", "target": "@replica", "timeout": %d}`, testAddress, int64(30*time.Second)),
 			conn: &conn{
 				Configuration: Configuration{
-					Target: "@replica",
+					Protocol:   "grpc",
+					DriverName: "vitess",
+					Target:     "@replica",
 				},
 				convert: &converter{
 					location: time.UTC,
@@ -89,7 +94,10 @@ func TestOpen(t *testing.T) {
 			desc:    "Open() (defaults omitted)",
 			connStr: fmt.Sprintf(`{"address": "%s", "timeout": %d}`, testAddress, int64(30*time.Second)),
 			conn: &conn{
-				Configuration: Configuration{},
+				Configuration: Configuration{
+					Protocol:   "grpc",
+					DriverName: "vitess",
+				},
 				convert: &converter{
 					location: time.UTC,
 				},
@@ -100,8 +108,9 @@ func TestOpen(t *testing.T) {
 			connStr: fmt.Sprintf(`{"protocol": "grpc", "address": "%s", "target": "ks:0@replica", "timeout": %d}`, testAddress, int64(30*time.Second)),
 			conn: &conn{
 				Configuration: Configuration{
-					Protocol: "grpc",
-					Target:   "ks:0@replica",
+					Protocol:   "grpc",
+					DriverName: "vitess",
+					Target:     "ks:0@replica",
 				},
 				convert: &converter{
 					location: time.UTC,
@@ -115,6 +124,8 @@ func TestOpen(t *testing.T) {
 				testAddress, int64(30*time.Second)),
 			conn: &conn{
 				Configuration: Configuration{
+					Protocol:        "grpc",
+					DriverName:      "vitess",
 					DefaultLocation: "America/Los_Angeles",
 				},
 				convert: &converter{
@@ -160,9 +171,7 @@ func TestOpen_InvalidJson(t *testing.T) {
 
 func TestBeginIsolation(t *testing.T) {
 	db, err := Open(testAddress, "@master")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	defer db.Close()
 	_, err = db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	want := errIsolationUnsupported.Error()
@@ -417,16 +426,16 @@ func TestBindVars(t *testing.T) {
 	converter := &converter{}
 
 	for _, tc := range testcases {
-		bv, err := converter.bindVarsFromNamedValues(tc.in)
-		if bv != nil {
-			if !reflect.DeepEqual(bv, tc.out) {
-				t.Errorf("%s: %v, want %v", tc.desc, bv, tc.out)
+		t.Run(tc.desc, func(t *testing.T) {
+			bv, err := converter.bindVarsFromNamedValues(tc.in)
+			if tc.outErr != "" {
+				assert.EqualError(t, err, tc.outErr)
+			} else {
+				if !reflect.DeepEqual(bv, tc.out) {
+					t.Errorf("%s: %v, want %v", tc.desc, bv, tc.out)
+				}
 			}
-		} else {
-			if err == nil || err.Error() != tc.outErr {
-				t.Errorf("%s: %v, want %v", tc.desc, err, tc.outErr)
-			}
-		}
+		})
 	}
 }
 

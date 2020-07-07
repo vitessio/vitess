@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package vreplication
 import (
 	"bytes"
 	"html/template"
+	"strings"
 	"testing"
 	"time"
 
@@ -111,7 +112,7 @@ func TestStatusHtml(t *testing.T) {
 	tpl := template.Must(template.New("test").Parse(vreplicationTemplate))
 	buf := bytes.NewBuffer(nil)
 	tpl.Execute(buf, testStats.status())
-	if buf.String() != wantOut {
+	if strings.Contains(buf.String(), wantOut) {
 		t.Errorf("output: %v, want %v", buf, wantOut)
 	}
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -18,14 +18,66 @@ package tabletserver
 
 import (
 	"time"
-
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 // This file contains the status web page export for tabletserver
 
-var queryserviceStatusTemplate = `
+var (
+	// This template is a slight duplicate of the one in go/cmd/vttablet/status.go.
+	headerTemplate = `
+<style>
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  td, th {
+    border: 1px solid #999;
+    padding: 0.5rem;
+  }
+  .time {
+    width: 15%;
+  }
+  .healthy {
+    background-color: LightGreen;
+  }
+  .unhealthy {
+    background-color: Salmon;
+  }
+  .unhappy {
+    background-color: Khaki;
+  }
+</style>
+<table width="100%" border="" frame="">
+  <tr border="">
+    <td width="25%" border="">
+      Alias: {{.Alias}}<br>
+      Keyspace: {{.Target.Keyspace}}<br>
+      Shard: {{.Target.Shard}}<br>
+      TabletType: {{.Target.TabletType}}<br>
+    </td>
+    <td width="25%" border="">
+      <a href="{{.Prefix}}/schemaz">Schema</a></br>
+      <a href="{{.Prefix}}/debug/tablet_plans">Schema&nbsp;Query&nbsp;Plans</a></br>
+      <a href="{{.Prefix}}/debug/query_stats">Schema&nbsp;Query&nbsp;Stats</a></br>
+      <a href="{{.Prefix}}/queryz">Query&nbsp;Stats</a></br>
+      <a href="{{.Prefix}}/streamqueryz">Streaming&nbsp;Query&nbsp;Stats</a></br>
+    </td>
+    <td width="25%" border="">
+      <a href="{{.Prefix}}/debug/consolidations">Consolidations</a></br>
+      <a href="{{.Prefix}}/querylogz">Current&nbsp;Query&nbsp;Log</a></br>
+      <a href="{{.Prefix}}/txlogz">Current&nbsp;Transaction&nbsp;Log</a></br>
+      <a href="{{.Prefix}}/twopcz">In-flight&nbsp;2PC&nbsp;Transactions</a></br>
+    </td>
+    <td width="25%" border="">
+      <a href="{{.Prefix}}/healthz">Health Check</a></br>
+      <a href="{{.Prefix}}/debug/health">Query Service Health Check</a></br>
+      <a href="{{.Prefix}}/streamqueryz">Current Stream Queries</a></br>
+    </td>
+  </tr>
+</table>
+`
+
+	queryserviceStatusTemplate = `
 <h2>State: {{.State}}</h2>
 <h2>Queryservice History</h2>
 <table>
@@ -100,7 +152,7 @@ function drawQPSChart() {
           	var idx = qps[planTypes[j]].length - i - 1;
             datum.push(+qps[planTypes[j]][idx].toFixed(2));
           } else {
-            // Assume 0.0 QPS for older, non-existant data points.
+            // Assume 0.0 QPS for older, non-existent data points.
             datum.push(0);
           }
         }
@@ -119,6 +171,7 @@ google.setOnLoadCallback(drawQPSChart);
 </script>
 
 `
+)
 
 type queryserviceStatus struct {
 	State      string
@@ -126,14 +179,27 @@ type queryserviceStatus struct {
 	CurrentQPS float64
 }
 
+// AddStatusHeader registers a standlone header for the status page.
+func (tsv *TabletServer) AddStatusHeader() {
+	tsv.exporter.AddStatusPart("Tablet Server", headerTemplate, func() interface{} {
+		tsv.mu.Lock()
+		defer tsv.mu.Unlock()
+		return map[string]interface{}{
+			"Alias":  tsv.exporter.Name(),
+			"Prefix": tsv.exporter.URLPrefix(),
+			"Target": tsv.target,
+		}
+	})
+}
+
 // AddStatusPart registers the status part for the status page.
 func (tsv *TabletServer) AddStatusPart() {
-	servenv.AddStatusPart("Queryservice", queryserviceStatusTemplate, func() interface{} {
+	tsv.exporter.AddStatusPart("Queryservice", queryserviceStatusTemplate, func() interface{} {
 		status := queryserviceStatus{
 			State:   tsv.GetState(),
 			History: tsv.history.Records(),
 		}
-		rates := tabletenv.QPSRates.Get()
+		rates := tsv.stats.QPSRates.Get()
 		if qps, ok := rates["All"]; ok && len(qps) > 0 {
 			status.CurrentQPS = qps[0]
 		}

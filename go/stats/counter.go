@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -97,6 +97,11 @@ func NewCounterFunc(name string, help string, f func() int64) *CounterFunc {
 // Help returns the help string.
 func (cf CounterFunc) Help() string {
 	return cf.help
+}
+
+// Get returns the value.
+func (cf CounterFunc) Get() int64 {
+	return cf.F()
 }
 
 // String implements expvar.Var.

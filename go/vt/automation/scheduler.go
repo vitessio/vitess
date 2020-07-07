@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ type Scheduler struct {
 	// Guarded by "mu".
 	state schedulerState
 
-	// Guarded by "taskCreatorMu". May be overriden by testing code.
+	// Guarded by "taskCreatorMu". May be overridden by testing code.
 	taskCreator   taskCreator
 	taskCreatorMu sync.Mutex
 

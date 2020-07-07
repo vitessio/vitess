@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -152,54 +152,69 @@ const (
 // These constants describe the event types.
 // See: http://dev.mysql.com/doc/internals/en/binlog-event-type.html
 const (
-	eUnknownEvent           = 0
-	eStartEventV3           = 1
-	eQueryEvent             = 2
-	eStopEvent              = 3
-	eRotateEvent            = 4
-	eIntVarEvent            = 5
-	eLoadEvent              = 6
-	eSlaveEvent             = 7
-	eCreateFileEvent        = 8
-	eAppendBlockEvent       = 9
-	eExecLoadEvent          = 10
-	eDeleteFileEvent        = 11
-	eNewLoadEvent           = 12
-	eRandEvent              = 13
-	eUserVarEvent           = 14
+	//eUnknownEvent           = 0
+	// Unused
+	//eStartEventV3           = 1
+	eQueryEvent = 2
+	//eStopEvent              = 3
+	eRotateEvent = 4
+	eIntVarEvent = 5
+	// Unused
+	//eLoadEvent              = 6
+	// Unused
+	//eSlaveEvent             = 7
+	// Unused
+	//eCreateFileEvent        = 8
+	// Unused
+	//eAppendBlockEvent       = 9
+	//eExecLoadEvent          = 10
+	// Unused
+	//eDeleteFileEvent        = 11
+	// Unused
+	//eNewLoadEvent           = 12
+	eRandEvent = 13
+	// Unused
+	//eUserVarEvent           = 14
 	eFormatDescriptionEvent = 15
 	eXIDEvent               = 16
-	eBeginLoadQueryEvent    = 17
-	eExecuteLoadQueryEvent  = 18
-	eTableMapEvent          = 19
-	eWriteRowsEventV0       = 20
-	eUpdateRowsEventV0      = 21
-	eDeleteRowsEventV0      = 22
-	eWriteRowsEventV1       = 23
-	eUpdateRowsEventV1      = 24
-	eDeleteRowsEventV1      = 25
-	eIncidentEvent          = 26
-	eHeartbeatEvent         = 27
-	eIgnorableEvent         = 28
-	eRowsQueryEvent         = 29
-	eWriteRowsEventV2       = 30
-	eUpdateRowsEventV2      = 31
-	eDeleteRowsEventV2      = 32
-	eGTIDEvent              = 33
-	eAnonymousGTIDEvent     = 34
-	ePreviousGTIDsEvent     = 35
+	//Unused
+	//eBeginLoadQueryEvent    = 17
+	//Unused
+	//eExecuteLoadQueryEvent  = 18
+	eTableMapEvent     = 19
+	eWriteRowsEventV0  = 20
+	eUpdateRowsEventV0 = 21
+	eDeleteRowsEventV0 = 22
+	eWriteRowsEventV1  = 23
+	eUpdateRowsEventV1 = 24
+	eDeleteRowsEventV1 = 25
+	// Unused
+	//eIncidentEvent          = 26
+	//eHeartbeatEvent         = 27
+	// Unused
+	//eIgnorableEvent         = 28
+	// Unused
+	//eRowsQueryEvent         = 29
+	eWriteRowsEventV2   = 30
+	eUpdateRowsEventV2  = 31
+	eDeleteRowsEventV2  = 32
+	eGTIDEvent          = 33
+	eAnonymousGTIDEvent = 34
+	ePreviousGTIDsEvent = 35
 
-	// MySQL 5.7 events
-	eTransactionContextEvent = 36
-	eViewChangeEvent         = 37
-	eXAPrepareLogEvent       = 38
+	// MySQL 5.7 events. Unused.
+	//eTransactionContextEvent = 36
+	//eViewChangeEvent         = 37
+	//eXAPrepareLogEvent       = 38
 
 	// MariaDB specific values. They start at 160.
-	eMariaAnnotateRowsEvent     = 160
-	eMariaBinlogCheckpointEvent = 161
-	eMariaGTIDEvent             = 162
-	eMariaGTIDListEvent         = 163
-	eMariaStartEncryptionEvent  = 164
+	//eMariaAnnotateRowsEvent = 160
+	// Unused
+	//eMariaBinlogCheckpointEvent = 161
+	eMariaGTIDEvent     = 162
+	eMariaGTIDListEvent = 163
+	// Unused
+	//eMariaStartEncryptionEvent  = 164
 )
 
 // These constants describe the type of status variables in q Query packet.

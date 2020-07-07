@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -25,15 +25,17 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
-	"vitess.io/vitess/go/stats"
-
-	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/key"
+
+	"golang.org/x/net/context"
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/trace"
+
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 const (
@@ -51,70 +53,24 @@ var (
 		"Operation", topologyWatcherOpListTablets, topologyWatcherOpGetTablet)
 )
 
-// TabletRecorder is the part of the HealthCheck interface that can
-// add or remove tablets. We define it as a sub-interface here so we
-// can add filters on tablets if needed.
-type TabletRecorder interface {
-	// AddTablet adds the tablet.
-	// Name is an alternate name, like an address.
-	AddTablet(tablet *topodatapb.Tablet, name string)
-
-	// RemoveTablet removes the tablet.
-	RemoveTablet(tablet *topodatapb.Tablet)
-
-	// ReplaceTablet does an AddTablet and RemoveTablet in one call, effectively replacing the old tablet with the new.
-	ReplaceTablet(old, new *topodatapb.Tablet, name string)
-}
-
-// NewCellTabletsWatcher returns a TopologyWatcher that monitors all
-// the tablets in a cell, and starts refreshing.
-func NewCellTabletsWatcher(topoServer *topo.Server, tr TabletRecorder, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int) *TopologyWatcher {
-	return NewTopologyWatcher(topoServer, tr, cell, refreshInterval, refreshKnownTablets, topoReadConcurrency, func(tw *TopologyWatcher) ([]*topodatapb.TabletAlias, error) {
-		return tw.topoServer.GetTabletsByCell(tw.ctx, tw.cell)
-	})
-}
-
-// NewShardReplicationWatcher returns a TopologyWatcher that
-// monitors the tablets in a cell/keyspace/shard, and starts refreshing.
-func NewShardReplicationWatcher(topoServer *topo.Server, tr TabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) *TopologyWatcher {
-	return NewTopologyWatcher(topoServer, tr, cell, refreshInterval, true /* refreshKnownTablets */, topoReadConcurrency, func(tw *TopologyWatcher) ([]*topodatapb.TabletAlias, error) {
-		sri, err := tw.topoServer.GetShardReplication(tw.ctx, tw.cell, keyspace, shard)
-		switch {
-		case err == nil:
-			// we handle this case after this switch block
-		case topo.IsErrType(err, topo.NoNode):
-			// this is not an error
-			return nil, nil
-		default:
-			return nil, err
-		}
-
-		result := make([]*topodatapb.TabletAlias, len(sri.Nodes))
-		for i, node := range sri.Nodes {
-			result[i] = node.TabletAlias
-		}
-		return result, nil
-	})
-}
-
 // tabletInfo is used internally by the TopologyWatcher class
 type tabletInfo struct {
 	alias  string
-	key    string
-	tablet *topodatapb.Tablet
+	tablet *topodata.Tablet
 }
 
 // TopologyWatcher polls tablet from a configurable set of tablets
 // periodically. When tablets are added / removed, it calls
-// the TabletRecorder AddTablet / RemoveTablet interface appropriately.
+// the LegacyTabletRecorder AddTablet / RemoveTablet interface appropriately.
 type TopologyWatcher struct {
 	// set at construction time
 	topoServer          *topo.Server
-	tr                  TabletRecorder
+	tabletRecorder      TabletRecorder
+	tabletFilter        TabletFilter
 	cell                string
 	refreshInterval     time.Duration
 	refreshKnownTablets bool
-	getTablets          func(tw *TopologyWatcher) ([]*topodatapb.TabletAlias, error)
+	getTablets          func(tw *TopologyWatcher) ([]*topodata.TabletAlias, error)
 	sem                 chan int
 	ctx                 context.Context
 	cancelFunc          context.CancelFunc
@@ -137,10 +93,11 @@ type TopologyWatcher struct {
 
 // NewTopologyWatcher returns a TopologyWatcher that monitors all
 // the tablets in a cell, and starts refreshing.
-func NewTopologyWatcher(topoServer *topo.Server, tr TabletRecorder, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int, getTablets func(tw *TopologyWatcher) ([]*topodatapb.TabletAlias, error)) *TopologyWatcher {
+func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, tr TabletRecorder, filter TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int, getTablets func(tw *TopologyWatcher) ([]*topodata.TabletAlias, error)) *TopologyWatcher {
 	tw := &TopologyWatcher{
 		topoServer:          topoServer,
-		tr:                  tr,
+		tabletRecorder:      tr,
+		tabletFilter:        filter,
 		cell:                cell,
 		refreshInterval:     refreshInterval,
 		refreshKnownTablets: refreshKnownTablets,
@@ -149,14 +106,24 @@ func NewTopologyWatcher(topoServer *topo.Server, tr TabletRecorder, cell string,
 		tablets:             make(map[string]*tabletInfo),
 	}
 	tw.firstLoadChan = make(chan struct{})
-	tw.ctx, tw.cancelFunc = context.WithCancel(context.Background())
-	tw.wg.Add(1)
-	go tw.watch()
+
+	// We want the span from the context, but not the cancelation that comes with it
+	spanContext := trace.CopySpan(context.Background(), ctx)
+	tw.ctx, tw.cancelFunc = context.WithCancel(spanContext)
 	return tw
 }
 
-// watch polls all tablets and notifies TabletRecorder by adding/removing tablets.
-func (tw *TopologyWatcher) watch() {
+// NewCellTabletsWatcher returns a TopologyWatcher that monitors all
+// the tablets in a cell, and starts refreshing.
+func NewCellTabletsWatcher(ctx context.Context, topoServer *topo.Server, tr TabletRecorder, f TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int) *TopologyWatcher {
+	return NewTopologyWatcher(ctx, topoServer, tr, f, cell, refreshInterval, refreshKnownTablets, topoReadConcurrency, func(tw *TopologyWatcher) ([]*topodata.TabletAlias, error) {
+		return tw.topoServer.GetTabletsByCell(ctx, tw.cell)
+	})
+}
+
+// Start starts the topology watcher
+func (tw *TopologyWatcher) Start() {
+	tw.wg.Add(1)
 	defer tw.wg.Done()
 	ticker := time.NewTicker(tw.refreshInterval)
 	defer ticker.Stop()
@@ -170,12 +137,18 @@ func (tw *TopologyWatcher) watch() {
 	}
 }
 
-// loadTablets reads all tablets from topology, and updates TabletRecorder.
+// Stop stops the watcher. It does not clean up the tablets added to LegacyTabletRecorder.
+func (tw *TopologyWatcher) Stop() {
+	tw.cancelFunc()
+	// wait for watch goroutine to finish.
+	tw.wg.Wait()
+}
+
 func (tw *TopologyWatcher) loadTablets() {
 	var wg sync.WaitGroup
 	newTablets := make(map[string]*tabletInfo)
-	replacedTablets := make(map[string]*tabletInfo)
 
+	// first get the list of relevant tabletAliases
 	tabletAliases, err := tw.getTablets(tw)
 	topologyWatcherOperations.Add(topologyWatcherOpListTablets, 1)
 	if err != nil {
@@ -199,6 +172,7 @@ func (tw *TopologyWatcher) loadTablets() {
 		tabletAliasStrs = append(tabletAliasStrs, aliasStr)
 
 		if !tw.refreshKnownTablets {
+			// we already have a tabletInfo for this and the flag tells us to not refresh
 			if val, ok := tw.tablets[aliasStr]; ok {
 				newTablets[aliasStr] = val
 				continue
@@ -206,7 +180,7 @@ func (tw *TopologyWatcher) loadTablets() {
 		}
 
 		wg.Add(1)
-		go func(alias *topodatapb.TabletAlias) {
+		go func(alias *topodata.TabletAlias) {
 			defer wg.Done()
 			tw.sem <- 1 // Wait for active queue to drain.
 			tablet, err := tw.topoServer.GetTablet(tw.ctx, alias)
@@ -222,11 +196,13 @@ func (tw *TopologyWatcher) loadTablets() {
 				log.Errorf("cannot get tablet for alias %v: %v", alias, err)
 				return
 			}
+			if !(tw.tabletFilter == nil || tw.tabletFilter.IsIncluded(tablet.Tablet)) {
+				return
+			}
 			tw.mu.Lock()
 			aliasStr := topoproto.TabletAliasString(alias)
 			newTablets[aliasStr] = &tabletInfo{
 				alias:  aliasStr,
-				key:    TabletToMapKey(tablet.Tablet),
 				tablet: tablet.Tablet,
 			}
 			tw.mu.Unlock()
@@ -238,39 +214,27 @@ func (tw *TopologyWatcher) loadTablets() {
 	tw.mu.Lock()
 
 	for alias, newVal := range newTablets {
+		// trust the alias from topo and add it if it doesn't exist
 		if val, ok := tw.tablets[alias]; !ok {
-			// Check if there's a tablet with the same address key but a
-			// different alias. If so, replace it and keep track of the
-			// replaced alias to make sure it isn't removed later.
-			found := false
-			for _, otherVal := range tw.tablets {
-				if newVal.key == otherVal.key {
-					found = true
-					tw.tr.ReplaceTablet(otherVal.tablet, newVal.tablet, alias)
-					topologyWatcherOperations.Add(topologyWatcherOpReplaceTablet, 1)
-					replacedTablets[otherVal.alias] = newVal
-				}
+			tw.tabletRecorder.AddTablet(newVal.tablet)
+			topologyWatcherOperations.Add(topologyWatcherOpAddTablet, 1)
+		} else {
+			// check if the host and port have changed. If yes, replace tablet
+			oldKey := TabletToMapKey(val.tablet)
+			newKey := TabletToMapKey(newVal.tablet)
+			if oldKey != newKey {
+				// This is the case where the same tablet alias is now reporting
+				// a different address key.
+				tw.tabletRecorder.ReplaceTablet(val.tablet, newVal.tablet)
+				topologyWatcherOperations.Add(topologyWatcherOpReplaceTablet, 1)
 			}
-			if !found {
-				tw.tr.AddTablet(newVal.tablet, alias)
-				topologyWatcherOperations.Add(topologyWatcherOpAddTablet, 1)
-			}
-
-		} else if val.key != newVal.key {
-			// Handle the case where the same tablet alias is now reporting
-			// a different address key.
-			replacedTablets[alias] = newVal
-			tw.tr.ReplaceTablet(val.tablet, newVal.tablet, alias)
-			topologyWatcherOperations.Add(topologyWatcherOpReplaceTablet, 1)
 		}
 	}
 
 	for _, val := range tw.tablets {
 		if _, ok := newTablets[val.alias]; !ok {
-			if _, ok2 := replacedTablets[val.alias]; !ok2 {
-				tw.tr.RemoveTablet(val.tablet)
-				topologyWatcherOperations.Add(topologyWatcherOpRemoveTablet, 1)
-			}
+			tw.tabletRecorder.RemoveTablet(val.tablet)
+			topologyWatcherOperations.Add(topologyWatcherOpRemoveTablet, 1)
 		}
 	}
 	tw.tablets = newTablets
@@ -284,35 +248,16 @@ func (tw *TopologyWatcher) loadTablets() {
 	sort.Strings(tabletAliasStrs)
 	var buf bytes.Buffer
 	for _, alias := range tabletAliasStrs {
-		tabletInfo, ok := tw.tablets[alias]
+		_, ok := tw.tablets[alias]
 		if ok {
 			buf.WriteString(alias)
-			buf.WriteString(tabletInfo.key)
 		}
 	}
 	tw.topoChecksum = crc32.ChecksumIEEE(buf.Bytes())
 	tw.lastRefresh = time.Now()
 
 	tw.mu.Unlock()
-}
 
-// WaitForInitialTopology waits until the watcher reads all of the topology data
-// for the first time and transfers the information to TabletRecorder via its
-// AddTablet() method.
-func (tw *TopologyWatcher) WaitForInitialTopology() error {
-	select {
-	case <-tw.ctx.Done():
-		return tw.ctx.Err()
-	case <-tw.firstLoadChan:
-		return nil
-	}
-}
-
-// Stop stops the watcher. It does not clean up the tablets added to TabletRecorder.
-func (tw *TopologyWatcher) Stop() {
-	tw.cancelFunc()
-	// wait for watch goroutine to finish.
-	tw.wg.Wait()
 }
 
 // RefreshLag returns the time since the last refresh
@@ -331,12 +276,16 @@ func (tw *TopologyWatcher) TopoChecksum() uint32 {
 	return tw.topoChecksum
 }
 
-// FilterByShard is a TabletRecorder filter that filters tablets by
+// TabletFilter is an interface that can be given to a TopologyWatcher
+// to be applied as an additional filter on the list of tablets returned by its getTablets function
+type TabletFilter interface {
+	// IsIncluded returns whether tablet is included in this filter
+	IsIncluded(tablet *topodata.Tablet) bool
+}
+
+// FilterByShard is a filter that filters tablets by
 // keyspace/shard.
 type FilterByShard struct {
-	// tr is the underlying TabletRecorder to forward requests too
-	tr TabletRecorder
-
 	// filters is a map of keyspace to filters for shards
 	filters map[string][]*filterShard
 }
@@ -346,15 +295,15 @@ type FilterByShard struct {
 type filterShard struct {
 	keyspace string
 	shard    string
-	keyRange *topodatapb.KeyRange // only set if shard is also a KeyRange
+	keyRange *topodata.KeyRange // only set if shard is also a KeyRange
 }
 
 // NewFilterByShard creates a new FilterByShard on top of an existing
-// TabletRecorder. Each filter is a keyspace|shard entry, where shard
+// LegacyTabletRecorder. Each filter is a keyspace|shard entry, where shard
 // can either be a shard name, or a keyrange. All tablets that match
 // at least one keyspace|shard tuple will be forwarded to the
-// underlying TabletRecorder.
-func NewFilterByShard(tr TabletRecorder, filters []string) (*FilterByShard, error) {
+// underlying LegacyTabletRecorder.
+func NewFilterByShard(filters []string) (*FilterByShard, error) {
 	m := make(map[string][]*filterShard)
 	for _, filter := range filters {
 		parts := strings.Split(filter, "|")
@@ -386,35 +335,13 @@ func NewFilterByShard(tr TabletRecorder, filters []string) (*FilterByShard, erro
 	}
 
 	return &FilterByShard{
-		tr:      tr,
 		filters: m,
 	}, nil
 }
 
-// AddTablet is part of the TabletRecorder interface.
-func (fbs *FilterByShard) AddTablet(tablet *topodatapb.Tablet, name string) {
-	if fbs.isIncluded(tablet) {
-		fbs.tr.AddTablet(tablet, name)
-	}
-}
-
-// RemoveTablet is part of the TabletRecorder interface.
-func (fbs *FilterByShard) RemoveTablet(tablet *topodatapb.Tablet) {
-	if fbs.isIncluded(tablet) {
-		fbs.tr.RemoveTablet(tablet)
-	}
-}
-
-// ReplaceTablet is part of the TabletRecorder interface.
-func (fbs *FilterByShard) ReplaceTablet(old, new *topodatapb.Tablet, name string) {
-	if fbs.isIncluded(old) && fbs.isIncluded(new) {
-		fbs.tr.ReplaceTablet(old, new, name)
-	}
-}
-
-// isIncluded returns true iff the tablet's keyspace and shard should be
-// forwarded to the underlying TabletRecorder.
-func (fbs *FilterByShard) isIncluded(tablet *topodatapb.Tablet) bool {
+// IsIncluded returns true iff the tablet's keyspace and shard should be
+// forwarded to the underlying LegacyTabletRecorder.
+func (fbs *FilterByShard) IsIncluded(tablet *topodata.Tablet) bool {
 	canonical, kr, err := topo.ValidateShardName(tablet.Shard)
 	if err != nil {
 		log.Errorf("Error parsing shard name %v, will ignore tablet: %v", tablet.Shard, err)
@@ -432,4 +359,31 @@ func (fbs *FilterByShard) isIncluded(tablet *topodatapb.Tablet) bool {
 		}
 	}
 	return false
+}
+
+// FilterByKeyspace is a filter that filters tablets by
+// keyspace
+type FilterByKeyspace struct {
+	keyspaces map[string]bool
+}
+
+// NewFilterByKeyspace creates a new FilterByKeyspace.
+// Each filter is a keyspace entry. All tablets that match
+// a keyspace will be forwarded to the underlying LegacyTabletRecorder.
+func NewFilterByKeyspace(selectedKeyspaces []string) *FilterByKeyspace {
+	m := make(map[string]bool)
+	for _, keyspace := range selectedKeyspaces {
+		m[keyspace] = true
+	}
+
+	return &FilterByKeyspace{
+		keyspaces: m,
+	}
+}
+
+// IsIncluded returns true if the tablet's keyspace should be
+// forwarded to the underlying LegacyTabletRecorder.
+func (fbk *FilterByKeyspace) IsIncluded(tablet *topodata.Tablet) bool {
+	_, exist := fbk.keyspaces[tablet.Keyspace]
+	return exist
 }

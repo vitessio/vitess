@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCounters(t *testing.T) {
@@ -239,4 +241,33 @@ func TestCountersFuncWithMultiLabels_Hook(t *testing.T) {
 	if gotv != v {
 		t.Errorf("want %#v, got %#v", v, gotv)
 	}
+}
+
+func TestCountersCombineDimension(t *testing.T) {
+	clear()
+	// Empty labels shouldn't be combined.
+	c0 := NewCountersWithSingleLabel("counter_combine_dim0", "help", "")
+	c0.Add("c1", 1)
+	assert.Equal(t, `{"c1": 1}`, c0.String())
+
+	clear()
+	*combineDimensions = "a,c"
+
+	c1 := NewCountersWithSingleLabel("counter_combine_dim1", "help", "label")
+	c1.Add("c1", 1)
+	assert.Equal(t, `{"c1": 1}`, c1.String())
+
+	c2 := NewCountersWithSingleLabel("counter_combine_dim2", "help", "a")
+	c2.Add("c1", 1)
+	assert.Equal(t, `{"all": 1}`, c2.String())
+
+	c3 := NewCountersWithSingleLabel("counter_combine_dim3", "help", "a")
+	assert.Equal(t, `{"all": 0}`, c3.String())
+
+	// Anything under "a" and "c" should get reported under a consolidated "all" value
+	// instead of the specific supplied values.
+	c4 := NewCountersWithMultiLabels("counter_combine_dim4", "help", []string{"a", "b", "c"})
+	c4.Add([]string{"c1", "c2", "c3"}, 1)
+	c4.Add([]string{"c4", "c2", "c5"}, 1)
+	assert.Equal(t, `{"all.c2.all": 2}`, c4.String())
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -123,7 +123,6 @@ func (dc *MockDBClient) Rollback() error {
 
 // Close is part of the DBClient interface
 func (dc *MockDBClient) Close() {
-	return
 }
 
 // ExecuteFetch is part of the DBClient interface

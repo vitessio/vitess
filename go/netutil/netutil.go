@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -154,7 +154,7 @@ func FullyQualifiedHostname() (string, error) {
 	//   127.0.0.1	localhost.localdomain localhost
 	// If the FQDN isn't returned by this function, check the order in the entry
 	// in your /etc/hosts file.
-	return strings.TrimRight(resolvedHostnames[0], "."), nil
+	return strings.TrimSuffix(resolvedHostnames[0], "."), nil
 }
 
 // FullyQualifiedHostnameOrPanic is the same as FullyQualifiedHostname

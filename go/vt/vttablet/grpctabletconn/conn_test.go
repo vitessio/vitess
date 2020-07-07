@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -55,6 +55,7 @@ func TestGRPCTabletConn(t *testing.T) {
 		Keyspace: tabletconntest.TestTarget.Keyspace,
 		Shard:    tabletconntest.TestTarget.Shard,
 		Type:     tabletconntest.TestTarget.TabletType,
+		Alias:    tabletconntest.TestAlias,
 		Hostname: host,
 		PortMap: map[string]int32{
 			"grpc": int32(port),
@@ -106,6 +107,7 @@ func TestGRPCTabletAuthConn(t *testing.T) {
 		Keyspace: tabletconntest.TestTarget.Keyspace,
 		Shard:    tabletconntest.TestTarget.Shard,
 		Type:     tabletconntest.TestTarget.TabletType,
+		Alias:    tabletconntest.TestAlias,
 		Hostname: host,
 		PortMap: map[string]int32{
 			"grpc": int32(port),

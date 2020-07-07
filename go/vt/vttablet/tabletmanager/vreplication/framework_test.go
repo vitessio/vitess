@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package vreplication
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"regexp"
@@ -32,6 +33,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -46,13 +48,19 @@ import (
 )
 
 var (
-	playerEngine    *Engine
-	streamerEngine  *vstreamer.Engine
-	env             *testenv.Env
-	globalFBC       = &fakeBinlogClient{}
-	vrepldb         = "vrepl"
-	globalDBQueries = make(chan string, 1000)
+	playerEngine          *Engine
+	streamerEngine        *vstreamer.Engine
+	env                   *testenv.Env
+	globalFBC             = &fakeBinlogClient{}
+	vrepldb               = "vrepl"
+	globalDBQueries       = make(chan string, 1000)
+	testForeignKeyQueries = false
 )
+
+type LogExpectation struct {
+	Type   string
+	Detail string
+}
 
 func init() {
 	tabletconn.RegisterDialer("test", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
@@ -70,10 +78,6 @@ func init() {
 func TestMain(m *testing.M) {
 	flag.Parse() // Do not remove this comment, import into google3 depends on it
 
-	if testing.Short() {
-		os.Exit(m.Run())
-	}
-
 	exitCode := func() int {
 		var err error
 		env, err = testenv.Init()
@@ -85,8 +89,7 @@ func TestMain(m *testing.M) {
 
 		// engines cannot be initialized in testenv because it introduces
 		// circular dependencies.
-		streamerEngine = vstreamer.NewEngine(env.SrvTopo, env.SchemaEngine)
-		streamerEngine.InitDBConfig(env.Dbcfgs)
+		streamerEngine = vstreamer.NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine)
 		streamerEngine.Open(env.KeyspaceName, env.Cells[0])
 		defer streamerEngine.Close()
 
@@ -100,12 +103,26 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		playerEngine = NewEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory)
+		externalConfig := map[string]*dbconfigs.DBConfigs{
+			"exta": env.Dbcfgs,
+			"extb": env.Dbcfgs,
+		}
+		playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, vrepldb, externalConfig)
 		if err := playerEngine.Open(context.Background()); err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
 		}
 		defer playerEngine.Close()
+
+		if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), binlogplayer.CreateVReplicationTable()); err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			return 1
+		}
+
+		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), createCopyState); err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			return 1
+		}
 
 		return m.Run()
 	}()
@@ -116,51 +133,69 @@ func resetBinlogClient() {
 	globalFBC = &fakeBinlogClient{}
 }
 
+func masterPosition(t *testing.T) string {
+	t.Helper()
+	pos, err := env.Mysqld.MasterPosition()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return mysql.EncodePosition(pos)
+}
+
+func execStatements(t *testing.T, queries []string) {
+	t.Helper()
+	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
+		t.Error(err)
+	}
+}
+
 //--------------------------------------
 // Topos and tablets
 
-func addTablet(id int, shard string, tabletType topodatapb.TabletType, serving, healthy bool) *topodatapb.Tablet {
-	t := newTablet(id, shard, tabletType, serving, healthy)
-	if err := env.TopoServ.CreateTablet(context.Background(), t); err != nil {
-		panic(err)
-	}
-	return t
-}
-
-func deleteTablet(t *topodatapb.Tablet) {
-	env.TopoServ.DeleteTablet(context.Background(), t.Alias)
-}
-
-func newTablet(id int, shard string, tabletType topodatapb.TabletType, serving, healthy bool) *topodatapb.Tablet {
-	stag := "not_serving"
-	if serving {
-		stag = "serving"
-	}
-	htag := "not_healthy"
-	if healthy {
-		htag = "healthy"
-	}
-	_, kr, err := topo.ValidateShardName(shard)
-	if err != nil {
-		panic(err)
-	}
-	return &topodatapb.Tablet{
+func addTablet(id int) *topodatapb.Tablet {
+	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: env.Cells[0],
 			Uid:  uint32(id),
 		},
 		Keyspace: env.KeyspaceName,
 		Shard:    env.ShardName,
-		KeyRange: kr,
-		Type:     tabletType,
-		Tags: map[string]string{
-			"serving": stag,
-			"healthy": htag,
-		},
+		KeyRange: &topodatapb.KeyRange{},
+		Type:     topodatapb.TabletType_REPLICA,
 		PortMap: map[string]int32{
 			"test": int32(id),
 		},
 	}
+	if err := env.TopoServ.CreateTablet(context.Background(), tablet); err != nil {
+		panic(err)
+	}
+	return tablet
+}
+
+func addOtherTablet(id int, keyspace, shard string) *topodatapb.Tablet {
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: env.Cells[0],
+			Uid:  uint32(id),
+		},
+		Keyspace: keyspace,
+		Shard:    shard,
+		KeyRange: &topodatapb.KeyRange{},
+		Type:     topodatapb.TabletType_REPLICA,
+		PortMap: map[string]int32{
+			"test": int32(id),
+		},
+	}
+	if err := env.TopoServ.CreateTablet(context.Background(), tablet); err != nil {
+		panic(err)
+	}
+	return tablet
+}
+
+func deleteTablet(tablet *topodatapb.Tablet) {
+	env.TopoServ.DeleteTablet(context.Background(), tablet.Alias)
+	// This is not automatically removed from shard replication, which results in log spam.
+	topo.DeleteTabletReplicationData(context.Background(), env.TopoServ, tablet)
 }
 
 // fakeTabletConn implement TabletConn interface. We only care about the
@@ -173,29 +208,57 @@ type fakeTabletConn struct {
 
 // StreamHealth is part of queryservice.QueryService.
 func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
-	serving := true
-	if s, ok := ftc.tablet.Tags["serving"]; ok {
-		serving = (s == "serving")
-	}
-	var herr string
-	if s, ok := ftc.tablet.Tags["healthy"]; ok && s != "healthy" {
-		herr = "err"
-	}
-	callback(&querypb.StreamHealthResponse{
-		Serving: serving,
+	return callback(&querypb.StreamHealthResponse{
+		Serving: true,
 		Target: &querypb.Target{
 			Keyspace:   ftc.tablet.Keyspace,
 			Shard:      ftc.tablet.Shard,
 			TabletType: ftc.tablet.Type,
 		},
-		RealtimeStats: &querypb.RealtimeStats{HealthError: herr},
+		RealtimeStats: &querypb.RealtimeStats{},
 	})
-	return nil
 }
 
+// vstreamHook allows you to do work just before calling VStream.
+var vstreamHook func(ctx context.Context)
+
 // VStream directly calls into the pre-initialized engine.
-func (ftc *fakeTabletConn) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return streamerEngine.Stream(ctx, startPos, filter, send)
+func (ftc *fakeTabletConn) VStream(ctx context.Context, target *querypb.Target, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	if target.Keyspace != "vttest" {
+		<-ctx.Done()
+		return io.EOF
+	}
+	if vstreamHook != nil {
+		vstreamHook(ctx)
+	}
+	return streamerEngine.Stream(ctx, startPos, tablePKs, filter, send)
+}
+
+// vstreamRowsHook allows you to do work just before calling VStreamRows.
+var vstreamRowsHook func(ctx context.Context)
+
+// vstreamRowsSendHook allows you to do work just before VStreamRows calls send.
+var vstreamRowsSendHook func(ctx context.Context)
+
+// VStreamRows directly calls into the pre-initialized engine.
+func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	if vstreamRowsHook != nil {
+		vstreamRowsHook(ctx)
+	}
+	var row []sqltypes.Value
+	if lastpk != nil {
+		r := sqltypes.Proto3ToResult(lastpk)
+		if len(r.Rows) != 1 {
+			return fmt.Errorf("unexpected lastpk input: %v", lastpk)
+		}
+		row = r.Rows[0]
+	}
+	return streamerEngine.StreamRows(ctx, query, row, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		if vstreamRowsSendHook != nil {
+			vstreamRowsSendHook(ctx)
+		}
+		return send(rows)
+	})
 }
 
 //--------------------------------------
@@ -239,9 +302,9 @@ type btStream struct {
 	sent bool
 }
 
-func (t *btStream) Recv() (*binlogdatapb.BinlogTransaction, error) {
-	if !t.sent {
-		t.sent = true
+func (bts *btStream) Recv() (*binlogdatapb.BinlogTransaction, error) {
+	if !bts.sent {
+		bts.sent = true
 		return &binlogdatapb.BinlogTransaction{
 			Statements: []*binlogdatapb.BinlogTransaction_Statement{
 				{
@@ -255,8 +318,8 @@ func (t *btStream) Recv() (*binlogdatapb.BinlogTransaction, error) {
 			},
 		}, nil
 	}
-	<-t.ctx.Done()
-	return nil, t.ctx.Err()
+	<-bts.ctx.Done()
+	return nil, bts.ctx.Err()
 }
 
 func expectFBCRequest(t *testing.T, tablet *topodatapb.Tablet, pos string, tables []string, kr *topodatapb.KeyRange) {
@@ -292,7 +355,10 @@ func (dbc *realDBClient) DBName() string {
 }
 
 func (dbc *realDBClient) Connect() error {
-	app := env.Dbcfgs.AppWithDB()
+	app, err := env.Dbcfgs.AppWithDB().MysqlParams()
+	if err != nil {
+		return err
+	}
 	app.DbName = vrepldb
 	conn, err := mysql.Connect(context.Background(), app)
 	if err != nil {
@@ -319,7 +385,6 @@ func (dbc *realDBClient) Rollback() error {
 
 func (dbc *realDBClient) Close() {
 	dbc.conn.Close()
-	dbc.conn = nil
 }
 
 func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
@@ -329,8 +394,59 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 	qr, err := dbc.conn.ExecuteFetch(query, 10000, true)
 	if !strings.HasPrefix(query, "select") && !strings.HasPrefix(query, "set") && !dbc.nolog {
 		globalDBQueries <- query
+	} else if testForeignKeyQueries && strings.Contains(query, "foreign_key_checks") { //allow select/set for foreign_key_checks
+		globalDBQueries <- query
 	}
 	return qr, err
+}
+
+func expectDeleteQueries(t *testing.T) {
+	t.Helper()
+	expectDBClientQueries(t, []string{
+		"begin",
+		"/delete from _vt.vreplication",
+		"/delete from _vt.copy_state",
+		"commit",
+	})
+}
+
+func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan interface{}) {
+	t.Helper()
+	defer vrLogStatsLogger.Unsubscribe(logCh)
+	failed := false
+	for i, log := range logs {
+		if failed {
+			t.Errorf("no logs received")
+			continue
+		}
+		select {
+		case data := <-logCh:
+			got, ok := data.(*VrLogStats)
+			if !ok {
+				t.Errorf("got not ok casting to VrLogStats: %v", data)
+			}
+			var match bool
+			match = (log.Type == got.Type)
+			if match {
+				if log.Detail[0] == '/' {
+					result, err := regexp.MatchString(log.Detail[1:], got.Detail)
+					if err != nil {
+						panic(err)
+					}
+					match = result
+				} else {
+					match = (got.Detail == log.Detail)
+				}
+			}
+
+			if !match {
+				t.Errorf("log:\n%q, does not match log %d:\n%q", got, i, log)
+			}
+		case <-time.After(5 * time.Second):
+			t.Errorf("no logs received, expecting %s", log)
+			failed = true
+		}
+	}
 }
 
 func expectDBClientQueries(t *testing.T, queries []string) {
@@ -372,10 +488,70 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 	}
 }
 
+// expectNontxQueries disregards transactional statements like begin and commit.
+// It also disregards updates to _vt.vreplication.
+func expectNontxQueries(t *testing.T, queries []string) {
+	t.Helper()
+	failed := false
+	for i, query := range queries {
+		if failed {
+			t.Errorf("no query received, expecting %s", query)
+			continue
+		}
+		var got string
+	retry:
+		select {
+		case got = <-globalDBQueries:
+
+			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "update _vt.vreplication set pos") {
+				goto retry
+			}
+
+			var match bool
+			if query[0] == '/' {
+				result, err := regexp.MatchString(query[1:], got)
+				if err != nil {
+					panic(err)
+				}
+				match = result
+			} else {
+				match = (got == query)
+			}
+			if !match {
+				t.Errorf("query:\n%q, does not match query %d:\n%q", got, i, query)
+			}
+		case <-time.After(5 * time.Second):
+			t.Errorf("no query received, expecting %s", query)
+			failed = true
+		}
+	}
+	for {
+		select {
+		case got := <-globalDBQueries:
+			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "_vt.vreplication") {
+				continue
+			}
+			t.Errorf("unexpected query: %s", got)
+		default:
+			return
+		}
+	}
+}
 func expectData(t *testing.T, table string, values [][]string) {
 	t.Helper()
+	customExpectData(t, table, values, env.Mysqld.FetchSuperQuery)
+}
 
-	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), fmt.Sprintf("select * from %s.%s", vrepldb, table))
+func customExpectData(t *testing.T, table string, values [][]string, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {
+	t.Helper()
+
+	var query string
+	if len(strings.Split(table, ".")) == 1 {
+		query = fmt.Sprintf("select * from %s.%s", vrepldb, table)
+	} else {
+		query = fmt.Sprintf("select * from %s", table)
+	}
+	qr, err := exec(context.Background(), query)
 	if err != nil {
 		t.Error(err)
 		return

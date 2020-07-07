@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -295,7 +295,7 @@ func (t *Throttler) SetMaxRate(rate int64) {
 // RecordReplicationLag must be called by users to report the "ts" tablet health
 // data observed at "time".
 // Note: After Close() is called, this method must not be called anymore.
-func (t *Throttler) RecordReplicationLag(time time.Time, ts *discovery.TabletStats) {
+func (t *Throttler) RecordReplicationLag(time time.Time, ts *discovery.LegacyTabletStats) {
 	t.maxReplicationLagModule.RecordReplicationLag(time, ts)
 }
 

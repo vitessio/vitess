@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package vtexplain
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -32,6 +33,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
@@ -70,10 +73,13 @@ type explainTablet struct {
 	currentTime   int
 }
 
+var _ queryservice.QueryService = (*explainTablet)(nil)
+
 func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 	db := fakesqldb.New(nil)
 
-	config := tabletenv.DefaultQsConfig
+	config := tabletenv.NewCurrentConfig()
+	config.TrackSchemaVersions = false
 	if opts.ExecutionMode == ModeTwoPC {
 		config.TwoPCCoordinatorAddress = "XXX"
 		config.TwoPCAbandonAge = 1.0
@@ -81,7 +87,7 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 	}
 
 	// XXX much of this is cloned from the tabletserver tests
-	tsv := tabletserver.NewTabletServerWithNilTopoServer(config)
+	tsv := tabletserver.NewTabletServer(topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 
 	tablet := explainTablet{db: db, tsv: tsv}
 	db.Handler = &tablet
@@ -93,7 +99,9 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 		},
 	)
 
-	dbcfgs := dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
+	params, _ := db.ConnParams().MysqlParams()
+	cp := *params
+	dbcfgs := dbconfigs.NewTestDBConfigs(cp, cp, "")
 	cnf := mysqlctl.NewMycnf(22222, 6802)
 	cnf.ServerID = 33333
 
@@ -114,24 +122,34 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 var _ queryservice.QueryService = (*explainTablet)(nil) // compile-time interface check
 
 // Begin is part of the QueryService interface.
-func (t *explainTablet) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, error) {
+func (t *explainTablet) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, *topodatapb.TabletAlias, error) {
 	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
+	t.tabletQueries = append(t.tabletQueries, &TabletQuery{
+		Time: t.currentTime,
+		SQL:  "begin",
+	})
+
 	t.mu.Unlock()
 
 	return t.tsv.Begin(ctx, target, options)
 }
 
 // Commit is part of the QueryService interface.
-func (t *explainTablet) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
+func (t *explainTablet) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
 	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
+	t.tabletQueries = append(t.tabletQueries, &TabletQuery{
+		Time: t.currentTime,
+		SQL:  "commit",
+	})
 	t.mu.Unlock()
+
 	return t.tsv.Commit(ctx, target, transactionID)
 }
 
 // Rollback is part of the QueryService interface.
-func (t *explainTablet) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
+func (t *explainTablet) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
 	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
 	t.mu.Unlock()
@@ -139,7 +157,7 @@ func (t *explainTablet) Rollback(ctx context.Context, target *querypb.Target, tr
 }
 
 // Execute is part of the QueryService interface.
-func (t *explainTablet) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (t *explainTablet) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
 
@@ -153,7 +171,7 @@ func (t *explainTablet) Execute(ctx context.Context, target *querypb.Target, sql
 	})
 	t.mu.Unlock()
 
-	return t.tsv.Execute(ctx, target, sql, bindVariables, transactionID, options)
+	return t.tsv.Execute(ctx, target, sql, bindVariables, transactionID, reservedID, options)
 }
 
 // Prepare is part of the QueryService interface.
@@ -233,7 +251,7 @@ func (t *explainTablet) ExecuteBatch(ctx context.Context, target *querypb.Target
 }
 
 // BeginExecute is part of the QueryService interface.
-func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
+func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
 	bindVariables = sqltypes.CopyBindVariables(bindVariables)
@@ -244,7 +262,7 @@ func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target
 	})
 	t.mu.Unlock()
 
-	return t.tsv.BeginExecute(ctx, target, sql, bindVariables, options)
+	return t.tsv.BeginExecute(ctx, target, sql, bindVariables, reservedID, options)
 }
 
 // Close is part of the QueryService interface.
@@ -259,7 +277,6 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewInt32(1427325875)},
 			},
@@ -268,7 +285,6 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.VarChar,
 			}},
-			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("STRICT_TRANS_TABLES")},
 			},
@@ -277,7 +293,6 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("1")},
 			},
@@ -286,93 +301,70 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("0")},
 			},
-		},
-		"show variables like 'binlog_format'": {
-			Fields: []*querypb.Field{{
-				Type: sqltypes.VarChar,
-			}, {
-				Type: sqltypes.VarChar,
-			}},
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewVarBinary("binlog_format"),
-				sqltypes.NewVarBinary(opts.ReplicationMode),
-			}},
 		},
 		"set @@session.sql_log_bin = 0": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
+			Rows: [][]sqltypes.Value{},
 		},
 		"create database if not exists `_vt`": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
+			Rows: [][]sqltypes.Value{},
 		},
 		"drop table if exists `_vt`.redo_log_transaction": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
+			Rows: [][]sqltypes.Value{},
 		},
 		"drop table if exists `_vt`.redo_log_statement": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
+			Rows: [][]sqltypes.Value{},
 		},
 		"drop table if exists `_vt`.transaction": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
+			Rows: [][]sqltypes.Value{},
 		},
 		"drop table if exists `_vt`.participant": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
+			Rows: [][]sqltypes.Value{},
 		},
 		"create table if not exists `_vt`.redo_state(\n  dtid varbinary(512),\n  state bigint,\n  time_created bigint,\n  primary key(dtid)\n\t) engine=InnoDB": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
+			Rows: [][]sqltypes.Value{},
 		},
 		"create table if not exists `_vt`.redo_statement(\n  dtid varbinary(512),\n  id bigint,\n  statement mediumblob,\n  primary key(dtid, id)\n\t) engine=InnoDB": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
+			Rows: [][]sqltypes.Value{},
 		},
 		"create table if not exists `_vt`.dt_state(\n  dtid varbinary(512),\n  state bigint,\n  time_created bigint,\n  primary key(dtid)\n\t) engine=InnoDB": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
+			Rows: [][]sqltypes.Value{},
 		},
 		"create table if not exists `_vt`.dt_participant(\n  dtid varbinary(512),\n\tid bigint,\n\tkeyspace varchar(256),\n\tshard varchar(256),\n  primary key(dtid, id)\n\t) engine=InnoDB": {
 
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
+			Rows: [][]sqltypes.Value{},
 		},
 	}
 
@@ -382,82 +374,51 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 		showTableRows = append(showTableRows, mysql.BaseShowTablesRow(table, false, ""))
 	}
 	schemaQueries[mysql.BaseShowTables] = &sqltypes.Result{
-		Fields:       mysql.BaseShowTablesFields,
-		RowsAffected: uint64(len(showTableRows)),
-		Rows:         showTableRows,
+		Fields: mysql.BaseShowTablesFields,
+		Rows:   showTableRows,
 	}
 
-	for i, ddl := range ddls {
+	indexRows := make([][]sqltypes.Value, 0, 4)
+	for _, ddl := range ddls {
 		table := sqlparser.String(ddl.Table.Name)
-		schemaQueries[mysql.BaseShowTablesForTable(table)] = &sqltypes.Result{
-			Fields:       mysql.BaseShowTablesFields,
-			RowsAffected: 1,
-			Rows:         [][]sqltypes.Value{showTableRows[i]},
-		}
 
 		if ddl.OptLike != nil {
 			likeTable := ddl.OptLike.LikeTable.Name.String()
-			if _, ok := schemaQueries["describe "+likeTable]; !ok {
-				return fmt.Errorf("check your schema, table[%s] doesnt exist", likeTable)
+			if _, ok := schemaQueries["select * from "+likeTable+" where 1 != 1"]; !ok {
+				return fmt.Errorf("check your schema, table[%s] doesn't exist", likeTable)
 			}
-			schemaQueries["show index from "+table] = schemaQueries["show index from "+likeTable]
-			schemaQueries["describe "+table] = schemaQueries["describe "+likeTable]
 			schemaQueries["select * from "+table+" where 1 != 1"] = schemaQueries["select * from "+likeTable+" where 1 != 1"]
 			continue
 		}
-		pkColumns := make(map[string]bool)
-		indexRows := make([][]sqltypes.Value, 0, 4)
 		for _, idx := range ddl.TableSpec.Indexes {
-			for i, col := range idx.Columns {
-				row := mysql.ShowIndexFromTableRow(table, idx.Info.Unique, idx.Info.Name.String(), i+1, col.Column.String(), false)
+			if !idx.Info.Primary {
+				continue
+			}
+			for _, col := range idx.Columns {
+				row := mysql.ShowPrimaryRow(table, col.Column.String())
 				indexRows = append(indexRows, row)
-				if idx.Info.Primary {
-					pkColumns[col.Column.String()] = true
-				}
 			}
 		}
 
-		schemaQueries["show index from "+table] = &sqltypes.Result{
-			Fields:       mysql.ShowIndexFromTableFields,
-			RowsAffected: uint64(len(indexRows)),
-			Rows:         indexRows,
-		}
-
-		describeTableRows := make([][]sqltypes.Value, 0, 4)
-		rowTypes := make([]*querypb.Field, 0, 4)
 		tableColumns[table] = make(map[string]querypb.Type)
-
+		var rowTypes []*querypb.Field
 		for _, col := range ddl.TableSpec.Columns {
 			colName := strings.ToLower(col.Name.String())
-			defaultVal := ""
-			if col.Type.Default != nil {
-				defaultVal = sqlparser.String(col.Type.Default)
-			}
-			idxVal := ""
-			if pkColumns[colName] {
-				idxVal = "PRI"
-			}
-			row := mysql.DescribeTableRow(colName, col.Type.DescribeType(), !bool(col.Type.NotNull), idxVal, defaultVal)
-			describeTableRows = append(describeTableRows, row)
-
 			rowType := &querypb.Field{
 				Name: colName,
 				Type: col.Type.SQLType(),
 			}
 			rowTypes = append(rowTypes, rowType)
-
 			tableColumns[table][colName] = col.Type.SQLType()
 		}
-
-		schemaQueries["describe "+table] = &sqltypes.Result{
-			Fields:       mysql.DescribeTableFields,
-			RowsAffected: uint64(len(describeTableRows)),
-			Rows:         describeTableRows,
-		}
-
 		schemaQueries["select * from "+table+" where 1 != 1"] = &sqltypes.Result{
 			Fields: rowTypes,
 		}
+	}
+
+	schemaQueries[mysql.BaseShowPrimary] = &sqltypes.Result{
+		Fields: mysql.ShowPrimaryFields,
+		Rows:   indexRows,
 	}
 
 	return nil
@@ -491,7 +452,15 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 			return err
 		}
 
-		selStmt := stmt.(*sqlparser.Select)
+		var selStmt *sqlparser.Select
+		switch stmt := stmt.(type) {
+		case *sqlparser.Select:
+			selStmt = stmt
+		case *sqlparser.Union:
+			selStmt = stmt.FirstStatement.(*sqlparser.Select)
+		default:
+			return fmt.Errorf("vtexplain: unsupported statement type +%v", reflect.TypeOf(stmt))
+		}
 
 		if len(selStmt.From) != 1 {
 			return fmt.Errorf("unsupported select with multiple from clauses")
@@ -521,40 +490,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		for _, node := range selStmt.SelectExprs {
 			switch node := node.(type) {
 			case *sqlparser.AliasedExpr:
-				switch node := node.Expr.(type) {
-				case *sqlparser.ColName:
-					col := strings.ToLower(node.Name.String())
-					colType := colTypeMap[col]
-					if colType == querypb.Type_NULL_TYPE {
-						return fmt.Errorf("invalid column %s", col)
-					}
-					colNames = append(colNames, col)
-					colTypes = append(colTypes, colType)
-				case *sqlparser.FuncExpr:
-					// As a shortcut, functions are integral types
-					colNames = append(colNames, sqlparser.String(node))
-					colTypes = append(colTypes, querypb.Type_INT32)
-				case *sqlparser.SQLVal:
-					colNames = append(colNames, sqlparser.String(node))
-					switch node.Type {
-					case sqlparser.IntVal:
-						fallthrough
-					case sqlparser.HexNum:
-						fallthrough
-					case sqlparser.HexVal:
-						fallthrough
-					case sqlparser.BitVal:
-						colTypes = append(colTypes, querypb.Type_INT32)
-					case sqlparser.StrVal:
-						colTypes = append(colTypes, querypb.Type_VARCHAR)
-					case sqlparser.FloatVal:
-						colTypes = append(colTypes, querypb.Type_FLOAT64)
-					default:
-						return fmt.Errorf("unsupported sql value %s", sqlparser.String(node))
-					}
-				default:
-					return fmt.Errorf("unsupported select expression %s", sqlparser.String(node))
-				}
+				colNames, colTypes = inferColTypeFromExpr(node.Expr, colTypeMap, colNames, colTypes)
 			case *sqlparser.StarExpr:
 				for col, colType := range colTypeMap {
 					colNames = append(colNames, col)
@@ -584,10 +520,9 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 			}
 		}
 		result = &sqltypes.Result{
-			Fields:       fields,
-			RowsAffected: 1,
-			InsertID:     0,
-			Rows:         [][]sqltypes.Value{values},
+			Fields:   fields,
+			InsertID: 0,
+			Rows:     [][]sqltypes.Value{values},
 		}
 
 		resultJSON, _ := json.MarshalIndent(result, "", "    ")
@@ -604,4 +539,48 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 	}
 
 	return callback(result)
+}
+
+func inferColTypeFromExpr(node sqlparser.Expr, colTypeMap map[string]querypb.Type, colNames []string, colTypes []querypb.Type) ([]string, []querypb.Type) {
+	switch node := node.(type) {
+	case *sqlparser.ColName:
+		col := strings.ToLower(node.Name.String())
+		colType := colTypeMap[col]
+		if colType == querypb.Type_NULL_TYPE {
+			log.Errorf("vtexplain: invalid column %s, typeMap +%v", col, colTypeMap)
+		}
+		colNames = append(colNames, col)
+		colTypes = append(colTypes, colType)
+	case *sqlparser.FuncExpr:
+		// As a shortcut, functions are integral types
+		colNames = append(colNames, sqlparser.String(node))
+		colTypes = append(colTypes, querypb.Type_INT32)
+	case *sqlparser.SQLVal:
+		colNames = append(colNames, sqlparser.String(node))
+		switch node.Type {
+		case sqlparser.IntVal:
+			fallthrough
+		case sqlparser.HexNum:
+			fallthrough
+		case sqlparser.HexVal:
+			fallthrough
+		case sqlparser.BitVal:
+			colTypes = append(colTypes, querypb.Type_INT32)
+		case sqlparser.StrVal:
+			colTypes = append(colTypes, querypb.Type_VARCHAR)
+		case sqlparser.FloatVal:
+			colTypes = append(colTypes, querypb.Type_FLOAT64)
+		default:
+			log.Errorf("vtexplain: unsupported sql value %s", sqlparser.String(node))
+		}
+	case *sqlparser.CaseExpr:
+		colNames, colTypes = inferColTypeFromExpr(node.Whens[0].Val, colTypeMap, colNames, colTypes)
+	case *sqlparser.NullVal:
+		colNames = append(colNames, sqlparser.String(node))
+		colTypes = append(colTypes, querypb.Type_NULL_TYPE)
+	default:
+		log.Errorf("vtexplain: unsupported select expression type +%v node %s", reflect.TypeOf(node), sqlparser.String(node))
+	}
+
+	return colNames, colTypes
 }

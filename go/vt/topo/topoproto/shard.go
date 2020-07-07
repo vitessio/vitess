@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -32,12 +32,15 @@ func KeyspaceShardString(keyspace, shard string) string {
 	return fmt.Sprintf("%v/%v", keyspace, shard)
 }
 
-// ParseKeyspaceShard parse a "keyspace/shard" string and extract
-// both keyspace and shard
+// ParseKeyspaceShard parse a "keyspace/shard" or "keyspace:shard"
+// string and extract both keyspace and shard
 func ParseKeyspaceShard(param string) (string, string, error) {
 	keySpaceShard := strings.Split(param, "/")
 	if len(keySpaceShard) != 2 {
-		return "", "", fmt.Errorf("Invalid shard path: %v", param)
+		keySpaceShard = strings.Split(param, ":")
+		if len(keySpaceShard) != 2 {
+			return "", "", fmt.Errorf("invalid shard path: %v", param)
+		}
 	}
 	return keySpaceShard[0], keySpaceShard[1], nil
 }

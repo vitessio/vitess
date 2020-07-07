@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -39,12 +39,12 @@ else
   # Add the node directory to PATH to make sure that the Angular
   # installation below can find the "node" binary.
   # (dev.env does actually append it to PATH.)
-  source $VTTOP/dev.env
+  source $VTROOT/dev.env
 fi
 
 echo "Installing dependencies for building web UI"
 angular_cli_dir=$VTROOT/dist/angular-cli
-web_dir2=$VTTOP/web/vtctld2
+web_dir2=$VTROOT/web/vtctld2
 angular_cli_commit=cacaa4eff10e135016ef81076fab1086a3bce92f
 if [[ -d $angular_cli_dir && `cd $angular_cli_dir && git rev-parse HEAD` == "$angular_cli_commit" ]]; then
   echo "skipping angular cli download. remove $angular_cli_dir to force download."

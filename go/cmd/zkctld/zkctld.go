@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -69,6 +69,11 @@ func main() {
 		log.Infof("server shut down on its own")
 	case <-sig:
 		log.Infof("signal received, shutting down server")
-		zkd.Shutdown()
+
+		// Action to perform if there is an error
+		if err := zkd.Shutdown(); err != nil {
+			log.Errorf("error during shutdown:%v", err)
+			exit.Return(1)
+		}
 	}
 }

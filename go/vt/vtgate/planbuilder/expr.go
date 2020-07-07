@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -36,23 +36,8 @@ func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlpars
 	case *sqlparser.AndExpr:
 		filters = splitAndExpression(filters, node.Left)
 		return splitAndExpression(filters, node.Right)
-	case *sqlparser.ParenExpr:
-		// If the inner expression is AndExpr, then we can remove
-		// the parenthesis because they are unnecessary.
-		if node, ok := node.Expr.(*sqlparser.AndExpr); ok {
-			return splitAndExpression(filters, node)
-		}
 	}
 	return append(filters, node)
-}
-
-// skipParenthesis skips the parenthesis (if any) of an expression and
-// returns the innermost unparenthesized expression.
-func skipParenthesis(node sqlparser.Expr) sqlparser.Expr {
-	if node, ok := node.(*sqlparser.ParenExpr); ok {
-		return skipParenthesis(node.Expr)
-	}
-	return node
 }
 
 type subqueryInfo struct {
@@ -127,7 +112,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 					return false, err
 				}
 			default:
-				panic(fmt.Sprintf("BUG: unexpected SELECT type: %T", node))
+				return false, fmt.Errorf("BUG: unexpected SELECT type: %T", node)
 			}
 			sqi := subqueryInfo{
 				ast:  node,
@@ -150,15 +135,6 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 			}
 			subqueries = append(subqueries, sqi)
 			return false, nil
-		case *sqlparser.FuncExpr:
-			switch {
-			// If it's last_insert_id, ensure it's a single unsharded route.
-			case node.Name.EqualString("last_insert_id"):
-				if rb, isRoute := pb.bldr.(*route); !isRoute || rb.ERoute.Keyspace.Sharded {
-					return false, errors.New("unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces")
-				}
-			}
-			return true, nil
 		}
 		return true, nil
 	}, expr)
@@ -169,8 +145,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 	highestRoute, _ := highestOrigin.(*route)
 	for _, sqi := range subqueries {
 		subroute, _ := sqi.bldr.(*route)
-		if highestRoute != nil && subroute != nil && highestRoute.SubqueryCanMerge(pb, subroute) {
-			subroute.Redirect = highestRoute
+		if highestRoute != nil && subroute != nil && highestRoute.MergeSubquery(pb, subroute) {
 			continue
 		}
 		if sqi.origin != nil {
@@ -189,33 +164,25 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 		case *sqlparser.ComparisonExpr:
 			if construct.Operator == sqlparser.InStr {
 				// a in (subquery) -> (:__sq_has_values = 1 and (a in ::__sq))
-				newExpr := &sqlparser.ParenExpr{
-					Expr: &sqlparser.AndExpr{
-						Left: &sqlparser.ComparisonExpr{
-							Left:     sqlparser.NewValArg([]byte(":" + hasValues)),
-							Operator: sqlparser.EqualStr,
-							Right:    sqlparser.NewIntVal([]byte("1")),
-						},
-						Right: &sqlparser.ParenExpr{
-							Expr: sqlparser.ReplaceExpr(construct, sqi.ast, sqlparser.ListArg([]byte("::"+sqName))),
-						},
+				newExpr := &sqlparser.AndExpr{
+					Left: &sqlparser.ComparisonExpr{
+						Left:     sqlparser.NewValArg([]byte(":" + hasValues)),
+						Operator: sqlparser.EqualStr,
+						Right:    sqlparser.NewIntVal([]byte("1")),
 					},
+					Right: sqlparser.ReplaceExpr(construct, sqi.ast, sqlparser.ListArg([]byte("::"+sqName))),
 				}
 				expr = sqlparser.ReplaceExpr(expr, construct, newExpr)
 				pullouts = append(pullouts, newPulloutSubquery(engine.PulloutIn, sqName, hasValues, sqi.bldr))
 			} else {
 				// a not in (subquery) -> (:__sq_has_values = 0 or (a not in ::__sq))
-				newExpr := &sqlparser.ParenExpr{
-					Expr: &sqlparser.OrExpr{
-						Left: &sqlparser.ComparisonExpr{
-							Left:     sqlparser.NewValArg([]byte(":" + hasValues)),
-							Operator: sqlparser.EqualStr,
-							Right:    sqlparser.NewIntVal([]byte("0")),
-						},
-						Right: &sqlparser.ParenExpr{
-							Expr: sqlparser.ReplaceExpr(construct, sqi.ast, sqlparser.ListArg([]byte("::"+sqName))),
-						},
+				newExpr := &sqlparser.OrExpr{
+					Left: &sqlparser.ComparisonExpr{
+						Left:     sqlparser.NewValArg([]byte(":" + hasValues)),
+						Operator: sqlparser.EqualStr,
+						Right:    sqlparser.NewIntVal([]byte("0")),
 					},
+					Right: sqlparser.ReplaceExpr(construct, sqi.ast, sqlparser.ListArg([]byte("::"+sqName))),
 				}
 				expr = sqlparser.ReplaceExpr(expr, construct, newExpr)
 				pullouts = append(pullouts, newPulloutSubquery(engine.PulloutNotIn, sqName, hasValues, sqi.bldr))
@@ -241,14 +208,17 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 	return has
 }
 
-func (pb *primitiveBuilder) validateSubquerySamePlan(nodes ...sqlparser.SQLNode) bool {
+func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(nodes ...sqlparser.SQLNode) bool {
 	var keyspace string
 	if rb, ok := pb.bldr.(*route); ok {
-		keyspace = rb.ERoute.Keyspace.Name
+		keyspace = rb.routeOptions[0].eroute.Keyspace.Name
+	} else {
+		// This code is unreachable because the caller checks.
+		return false
 	}
-	samePlan := true
 
 	for _, node := range nodes {
+		samePlan := true
 		inSubQuery := false
 		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch nodeType := node.(type) {
@@ -269,9 +239,12 @@ func (pb *primitiveBuilder) validateSubquerySamePlan(nodes ...sqlparser.SQLNode)
 					samePlan = false
 					return false, errors.New("dummy")
 				}
-				if innerRoute.ERoute.Keyspace.Name != keyspace {
+				if !innerRoute.removeOptionsWithUnmatchedKeyspace(keyspace) {
 					samePlan = false
 					return false, errors.New("dummy")
+				}
+				for _, sub := range innerRoute.routeOptions[0].substitutions {
+					*sub.oldExpr = *sub.newExpr
 				}
 			case *sqlparser.Union:
 				if !inSubQuery {
@@ -287,7 +260,7 @@ func (pb *primitiveBuilder) validateSubquerySamePlan(nodes ...sqlparser.SQLNode)
 					samePlan = false
 					return false, errors.New("dummy")
 				}
-				if innerRoute.ERoute.Keyspace.Name != keyspace {
+				if !innerRoute.removeOptionsWithUnmatchedKeyspace(keyspace) {
 					samePlan = false
 					return false, errors.New("dummy")
 				}
@@ -316,12 +289,12 @@ func valEqual(a, b sqlparser.Expr) bool {
 		switch a.Type {
 		case sqlparser.ValArg:
 			if b.Type == sqlparser.ValArg {
-				return bytes.Equal([]byte(a.Val), []byte(b.Val))
+				return bytes.Equal(a.Val, b.Val)
 			}
 		case sqlparser.StrVal:
 			switch b.Type {
 			case sqlparser.StrVal:
-				return bytes.Equal([]byte(a.Val), []byte(b.Val))
+				return bytes.Equal(a.Val, b.Val)
 			case sqlparser.HexVal:
 				return hexEqual(b, a)
 			}
@@ -329,7 +302,7 @@ func valEqual(a, b sqlparser.Expr) bool {
 			return hexEqual(a, b)
 		case sqlparser.IntVal:
 			if b.Type == (sqlparser.IntVal) {
-				return bytes.Equal([]byte(a.Val), []byte(b.Val))
+				return bytes.Equal(a.Val, b.Val)
 			}
 		}
 	}

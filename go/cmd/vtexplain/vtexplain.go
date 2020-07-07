@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -55,6 +55,7 @@ var (
 		"vschema",
 		"vschema-file",
 		"dbname",
+		"queryserver-config-passthrough-dmls",
 	}
 )
 
@@ -63,7 +64,7 @@ func usage() {
 	for _, name := range vtexplainFlags {
 		f := flag.Lookup(name)
 		if f == nil {
-			panic("unkown flag " + name)
+			panic("unknown flag " + name)
 		}
 		flagUsage(f)
 	}

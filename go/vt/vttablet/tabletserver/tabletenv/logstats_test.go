@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -126,7 +126,7 @@ func TestLogStatsFormat(t *testing.T) {
 
 	*streamlog.QueryLogFormat = "text"
 	got = testFormat(logStats, url.Values(params))
-	want = "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t\t\"sql\"\tmap[strVal:type:VARCHAR value:\"abc\" ]\t1\t\"sql with pii\"\tmysql\t0.000000\t0.000000\t0\t1\t\"\"\t\n"
+	want = "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t\t\"sql\"\tmap[strVal:type:VARBINARY value:\"abc\" ]\t1\t\"sql with pii\"\tmysql\t0.000000\t0.000000\t0\t1\t\"\"\t\n"
 	if got != want {
 		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
 	}
@@ -141,12 +141,47 @@ func TestLogStatsFormat(t *testing.T) {
 	if err != nil {
 		t.Errorf("logstats format: error marshaling json: %v -- got:\n%v", err, got)
 	}
-	want = "{\n    \"BindVars\": {\n        \"strVal\": {\n            \"type\": \"VARCHAR\",\n            \"value\": \"abc\"\n        }\n    },\n    \"CallInfo\": \"\",\n    \"ConnWaitTime\": 0,\n    \"Effective Caller\": \"\",\n    \"End\": \"2017-01-01 01:02:04.000001\",\n    \"Error\": \"\",\n    \"ImmediateCaller\": \"\",\n    \"Method\": \"test\",\n    \"MysqlTime\": 0,\n    \"OriginalSQL\": \"sql\",\n    \"PlanType\": \"\",\n    \"Queries\": 1,\n    \"QuerySources\": \"mysql\",\n    \"ResponseSize\": 1,\n    \"RewrittenSQL\": \"sql with pii\",\n    \"RowsAffected\": 0,\n    \"Start\": \"2017-01-01 01:02:03.000000\",\n    \"TotalTime\": 1.000001,\n    \"Username\": \"\"\n}"
+	want = "{\n    \"BindVars\": {\n        \"strVal\": {\n            \"type\": \"VARBINARY\",\n            \"value\": \"abc\"\n        }\n    },\n    \"CallInfo\": \"\",\n    \"ConnWaitTime\": 0,\n    \"Effective Caller\": \"\",\n    \"End\": \"2017-01-01 01:02:04.000001\",\n    \"Error\": \"\",\n    \"ImmediateCaller\": \"\",\n    \"Method\": \"test\",\n    \"MysqlTime\": 0,\n    \"OriginalSQL\": \"sql\",\n    \"PlanType\": \"\",\n    \"Queries\": 1,\n    \"QuerySources\": \"mysql\",\n    \"ResponseSize\": 1,\n    \"RewrittenSQL\": \"sql with pii\",\n    \"RowsAffected\": 0,\n    \"Start\": \"2017-01-01 01:02:03.000000\",\n    \"TotalTime\": 1.000001,\n    \"Username\": \"\"\n}"
 	if string(formatted) != want {
 		t.Errorf("logstats format: got:\n%q\nwant:\n%v\n", string(formatted), want)
 	}
 
 	*streamlog.QueryLogFormat = "text"
+}
+
+func TestLogStatsFilter(t *testing.T) {
+	defer func() { *streamlog.QueryLogFilterTag = "" }()
+
+	logStats := NewLogStats(context.Background(), "test")
+	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
+	logStats.EndTime = time.Date(2017, time.January, 1, 1, 2, 4, 1234, time.UTC)
+	logStats.OriginalSQL = "sql /* LOG_THIS_QUERY */"
+	logStats.BindVariables = map[string]*querypb.BindVariable{"intVal": sqltypes.Int64BindVariable(1)}
+	logStats.AddRewrittenSQL("sql with pii", time.Now())
+	logStats.MysqlResponseTime = 0
+	logStats.Rows = [][]sqltypes.Value{{sqltypes.NewVarBinary("a")}}
+	params := map[string][]string{"full": {}}
+
+	got := testFormat(logStats, url.Values(params))
+	want := "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t\t\"sql /* LOG_THIS_QUERY */\"\tmap[intVal:type:INT64 value:\"1\" ]\t1\t\"sql with pii\"\tmysql\t0.000000\t0.000000\t0\t1\t\"\"\t\n"
+	if got != want {
+		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
+	}
+
+	*streamlog.QueryLogFilterTag = "LOG_THIS_QUERY"
+	got = testFormat(logStats, url.Values(params))
+	want = "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t\t\"sql /* LOG_THIS_QUERY */\"\tmap[intVal:type:INT64 value:\"1\" ]\t1\t\"sql with pii\"\tmysql\t0.000000\t0.000000\t0\t1\t\"\"\t\n"
+	if got != want {
+		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
+	}
+
+	*streamlog.QueryLogFilterTag = "NOT_THIS_QUERY"
+	got = testFormat(logStats, url.Values(params))
+	want = ""
+	if got != want {
+		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
+	}
+
 }
 
 func TestLogStatsFormatQuerySources(t *testing.T) {
@@ -157,12 +192,12 @@ func TestLogStatsFormatQuerySources(t *testing.T) {
 
 	logStats.QuerySources |= QuerySourceMySQL
 	if !strings.Contains(logStats.FmtQuerySources(), "mysql") {
-		t.Fatalf("'mysql' should be in formated query sources")
+		t.Fatalf("'mysql' should be in formatted query sources")
 	}
 
 	logStats.QuerySources |= QuerySourceConsolidator
 	if !strings.Contains(logStats.FmtQuerySources(), "consolidator") {
-		t.Fatalf("'consolidator' should be in formated query sources")
+		t.Fatalf("'consolidator' should be in formatted query sources")
 	}
 }
 

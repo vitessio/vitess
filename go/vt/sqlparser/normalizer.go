@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
-	"fmt"
+	"strconv"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -73,6 +73,8 @@ func (nz *normalizer) WalkStatement(node SQLNode) (bool, error) {
 		// Common node types that never contain SQLVals or ListArgs but create a lot of object
 		// allocations.
 		return false, nil
+	case *ConvertType: // we should not rewrite the type description
+		return false, nil
 	}
 	return true, nil
 }
@@ -87,6 +89,12 @@ func (nz *normalizer) WalkSelect(node SQLNode) (bool, error) {
 	case *ColName, TableName:
 		// Common node types that never contain SQLVals or ListArgs but create a lot of object
 		// allocations.
+		return false, nil
+	case OrderBy, GroupBy:
+		// do not make a bind var for order by column_position
+		return false, nil
+	case *ConvertType:
+		// we should not rewrite the type description
 		return false, nil
 	}
 	return true, nil
@@ -203,7 +211,7 @@ func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {
 
 func (nz *normalizer) newName() string {
 	for {
-		newName := fmt.Sprintf("%s%d", nz.prefix, nz.counter)
+		newName := nz.prefix + strconv.Itoa(nz.counter)
 		if _, ok := nz.reserved[newName]; !ok {
 			nz.reserved[newName] = struct{}{}
 			return newName

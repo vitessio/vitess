@@ -1,3 +1,19 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 // Package vterrors provides simple error handling primitives for Vitess
 //
 // In all Vitess code, errors should be propagated using vterrors.Wrapf()
@@ -70,12 +86,21 @@
 package vterrors
 
 import (
+	"flag"
 	"fmt"
 	"io"
 
 	"golang.org/x/net/context"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+// LogErrStacks controls whether or not printing errors includes the
+// embedded stack trace in the output.
+var LogErrStacks bool
+
+func init() {
+	flag.BoolVar(&LogErrStacks, "log_err_stacks", false, "log stack traces for errors")
+}
 
 // New returns an error with the supplied message.
 // New also records the stack trace at the point it was called.
@@ -122,7 +147,9 @@ func (f *fundamental) Format(s fmt.State, verb rune) {
 	case 'v':
 		panicIfError(io.WriteString(s, "Code: "+f.code.String()+"\n"))
 		panicIfError(io.WriteString(s, f.msg+"\n"))
-		f.stack.Format(s, verb)
+		if LogErrStacks {
+			f.stack.Format(s, verb)
+		}
 		return
 	case 's':
 		panicIfError(io.WriteString(s, f.msg))
@@ -198,7 +225,9 @@ func (w *wrapping) Format(s fmt.State, verb rune) {
 	if rune('v') == verb {
 		panicIfError(fmt.Fprintf(s, "%v\n", w.Cause()))
 		panicIfError(io.WriteString(s, w.msg))
-		w.stack.Format(s, verb)
+		if LogErrStacks {
+			w.stack.Format(s, verb)
+		}
 		return
 	}
 

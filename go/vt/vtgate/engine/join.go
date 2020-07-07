@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,9 +18,9 @@ package engine
 
 import (
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -87,6 +87,9 @@ func (jn *Join) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariab
 			result.RowsAffected++
 		} else {
 			result.RowsAffected += uint64(len(rresult.Rows))
+		}
+		if len(result.Rows) > vcursor.MaxMemoryRows() {
+			return nil, fmt.Errorf("in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
 		}
 	}
 	return result, nil
@@ -168,6 +171,11 @@ func (jn *Join) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVari
 	return result, nil
 }
 
+// Inputs returns the input primitives for this join
+func (jn *Join) Inputs() []Primitive {
+	return []Primitive{jn.Left, jn.Right}
+}
+
 func joinFields(lfields, rfields []*querypb.Field, cols []int) []*querypb.Field {
 	fields := make([]*querypb.Field, len(cols))
 	for i, index := range cols {
@@ -223,6 +231,23 @@ func (jn *Join) RouteType() string {
 	return "Join"
 }
 
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (jn *Join) GetKeyspaceName() string {
+	if jn.Left.GetKeyspaceName() == jn.Right.GetKeyspaceName() {
+		return jn.Left.GetKeyspaceName()
+	}
+	return jn.Left.GetKeyspaceName() + "_" + jn.Right.GetKeyspaceName()
+}
+
+// GetTableName specifies the table that this primitive routes to.
+func (jn *Join) GetTableName() string {
+	return jn.Left.GetTableName() + "_" + jn.Right.GetTableName()
+}
+
+func (jn *Join) NeedsTransaction() bool {
+	return jn.Right.NeedsTransaction() || jn.Left.NeedsTransaction()
+}
+
 func combineVars(bv1, bv2 map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {
 	out := make(map[string]*querypb.BindVariable)
 	for k, v := range bv1 {
@@ -232,4 +257,16 @@ func combineVars(bv1, bv2 map[string]*querypb.BindVariable) map[string]*querypb.
 		out[k] = v
 	}
 	return out
+}
+
+func (jn *Join) description() PrimitiveDescription {
+	other := map[string]interface{}{
+		"TableName":         jn.GetTableName(),
+		"JoinColumnIndexes": strings.Trim(strings.Join(strings.Fields(fmt.Sprint(jn.Cols)), ","), "[]"),
+	}
+	return PrimitiveDescription{
+		OperatorType: "Join",
+		Variant:      jn.Opcode.String(),
+		Other:        other,
+	}
 }

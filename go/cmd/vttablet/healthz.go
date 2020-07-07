@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,15 +22,15 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 )
 
-// This file registers a /healthz URL that reports the health of the agent.
+// This file registers a /healthz URL that reports the health of the tm.
 
 var okMessage = []byte("ok\n")
 
 func init() {
 	servenv.OnRun(func() {
 		http.Handle("/healthz", http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-			if _, err := agent.Healthy(); err != nil {
-				http.Error(rw, fmt.Sprintf("500 internal server error: agent not healthy: %v", err), http.StatusInternalServerError)
+			if _, err := tm.Healthy(); err != nil {
+				http.Error(rw, fmt.Sprintf("500 internal server error: tablet manager not healthy: %v", err), http.StatusInternalServerError)
 				return
 			}
 

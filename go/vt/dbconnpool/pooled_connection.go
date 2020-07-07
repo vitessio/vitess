@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@ limitations under the License.
 */
 
 package dbconnpool
+
+import "context"
 
 // PooledDBConnection re-exposes DBConnection to be used by ConnectionPool.
 type PooledDBConnection struct {
@@ -33,9 +35,9 @@ func (pc *PooledDBConnection) Recycle() {
 
 // Reconnect replaces the existing underlying connection with a new one,
 // if possible. Recycle should still be called afterwards.
-func (pc *PooledDBConnection) Reconnect() error {
+func (pc *PooledDBConnection) Reconnect(ctx context.Context) error {
 	pc.DBConnection.Close()
-	newConn, err := NewDBConnection(pc.pool.info, pc.mysqlStats)
+	newConn, err := NewDBConnection(ctx, pc.pool.info)
 	if err != nil {
 		return err
 	}

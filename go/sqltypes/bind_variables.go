@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -57,6 +57,11 @@ func BuildBindVariables(in map[string]interface{}) (map[string]*querypb.BindVari
 	return out, nil
 }
 
+// Int8BindVariable converts an int8 to a bind var.
+func Int8BindVariable(v int8) *querypb.BindVariable {
+	return ValueBindVariable(NewInt8(v))
+}
+
 // Int32BindVariable converts an int32 to a bind var.
 func Int32BindVariable(v int32) *querypb.BindVariable {
 	return ValueBindVariable(NewInt32(v))
@@ -79,7 +84,7 @@ func Float64BindVariable(v float64) *querypb.BindVariable {
 
 // StringBindVariable converts a string to a bind var.
 func StringBindVariable(v string) *querypb.BindVariable {
-	return ValueBindVariable(NewVarChar(v))
+	return ValueBindVariable(NewVarBinary(v))
 }
 
 // BytesBindVariable converts a []byte to a bind var.
@@ -96,9 +101,14 @@ func ValueBindVariable(v Value) *querypb.BindVariable {
 func BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
 	switch v := v.(type) {
 	case string:
-		return StringBindVariable(v), nil
+		return BytesBindVariable([]byte(v)), nil
 	case []byte:
 		return BytesBindVariable(v), nil
+	case bool:
+		if v {
+			return Int8BindVariable(1), nil
+		}
+		return Int8BindVariable(0), nil
 	case int:
 		return &querypb.BindVariable{
 			Type:  querypb.Type_INT64,
@@ -139,7 +149,7 @@ func BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
 		}
 		values := make([]querypb.Value, len(v))
 		for i, lv := range v {
-			values[i].Type = querypb.Type_VARCHAR
+			values[i].Type = querypb.Type_VARBINARY
 			values[i].Value = []byte(lv)
 			bv.Values[i] = &values[i]
 		}

@@ -2,15 +2,14 @@
 delete from music_extra where id=1
 
 1 ks_sharded/-40: begin
-1 ks_sharded/-40: delete from music_extra where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+1 ks_sharded/-40: delete from music_extra where id = 1 limit 10001 /* vtgate:: keyspace_id:166b40b44aba4bd6 */
 2 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
 delete from music_extra where id=1 and extra='abc'
 
 1 ks_sharded/-40: begin
-1 ks_sharded/-40: select id from music_extra where id = 1 and extra = 'abc' limit 10001 for update /* vtgate:: keyspace_id:166b40b44aba4bd6 */
-1 ks_sharded/-40: delete from music_extra where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+1 ks_sharded/-40: delete from music_extra where id = 1 and extra = 'abc' limit 10001 /* vtgate:: keyspace_id:166b40b44aba4bd6 */
 2 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
@@ -19,8 +18,8 @@ delete from user where id=1
 1 ks_sharded/-40: begin
 1 ks_sharded/-40: select name from user where id = 1 limit 10001 for update
 2 ks_sharded/80-c0: begin
-2 ks_sharded/80-c0: delete from name_user_map where (name = 'name_val_1' and user_id = 1) /* vtgate:: keyspace_id:a6e89b54b129c33051b76db219595660 */
-3 ks_sharded/-40: delete from user where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+2 ks_sharded/80-c0: delete from name_user_map where name = 'name_val_2' and user_id = 1 limit 10001 /* vtgate:: keyspace_id:73004f940e97faf0a1b54ec5586a090e */
+3 ks_sharded/-40: delete from user where id = 1 limit 10001 /* vtgate:: keyspace_id:166b40b44aba4bd6 */
 4 ks_sharded/-40: begin
 4 ks_sharded/-40: insert into `_vt`.dt_state(dtid, state, time_created) values ('ks_sharded:-40:1515392388787015722', 1, 1515392388898391433)
 4 ks_sharded/-40: insert into `_vt`.dt_participant(dtid, id, keyspace, shard) values ('ks_sharded:-40:1515392388787015722', 1, 'ks_sharded', '80-c0')

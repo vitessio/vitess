@@ -1,0 +1,60 @@
+topology:
+  deploymentType: test
+  cells:
+    - name: "zone1"
+      vtctld:
+        replicas: 1
+      vtgate:
+        replicas: 1
+      mysqlProtocol:
+        enabled: true
+        authType: "none"
+      keyspaces:
+        - name: "commerce"
+          shards:
+            - name: "0"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 3
+          schema:
+            postsplit: |-
+              drop table customer;
+              drop table corder;
+          vschema:
+            postsplit: |-
+              {
+                "tables": {
+                  "product": {}
+                }
+              }
+        - name: "customer"
+          shards:
+            - name: "0"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 3
+
+jobs:
+  - name: "vclean1"
+    kind: "vtctlclient"
+    command: "SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 rdonly"
+  - name: "vclean2"
+    kind: "vtctlclient"
+    command: "SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 replica"
+  - name: "vclean3"
+    kind: "vtctlclient"
+    command: "SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 master"
+  - name: "vclean4"
+    kind: "vtctlclient"
+    command: "ApplyRoutingRules -rules=\'{}\'"
+
+vttablet:
+  terminationGracePeriodSeconds: 1
+
+pmm:
+  enabled: false
+
+orchestrator:
+  enabled: false

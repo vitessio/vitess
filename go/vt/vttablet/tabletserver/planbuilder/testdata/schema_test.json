@@ -313,19 +313,16 @@
     "Name": "msg",
     "Columns": [
       {
-        "Name": "time_scheduled"
+        "Name": "id"
       },
       {
-        "Name": "id"
+        "Name": "priority"
       },
       {
         "Name": "time_next"
       },
       {
         "Name": "epoch"
-      },
-      {
-        "Name": "time_created"
       },
       {
         "Name": "time_acked"

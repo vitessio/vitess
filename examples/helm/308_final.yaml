@@ -1,8 +1,7 @@
 topology:
+  deploymentType: test
   cells:
     - name: "zone1"
-      etcd:
-        replicas: 1
       vtctld:
         replicas: 1
       vtgate:
@@ -17,53 +16,22 @@ topology:
               tablets:
                 - type: "replica"
                   vttablet:
-                    replicas: 2
-                - type: "rdonly"
-                  vttablet:
-                    replicas: 1
+                    replicas: 3
         - name: "customer"
           shards:
             - name: "-80"
               tablets:
                 - type: "replica"
                   vttablet:
-                    replicas: 2
-                - type: "rdonly"
-                  vttablet:
-                    replicas: 1
+                    replicas: 3
             - name: "80-"
               tablets:
                 - type: "replica"
                   vttablet:
-                    replicas: 2
-                - type: "rdonly"
-                  vttablet:
-                    replicas: 1
-
-jobs:
-  - name: "delete-shard0"
-    kind: "vtctlclient"
-    command: "DeleteShard -recursive customer/0"
-
-etcd:
-  replicas: 1
-  resources:
-
-vtctld:
-  serviceType: "NodePort"
-  resources:
-
-vtgate:
-  serviceType: "NodePort"
-  resources:
+                    replicas: 3
 
 vttablet:
-  mysqlSize: "test"
-  resources:
-  mysqlResources:
-
-vtworker:
-  resources:
+  terminationGracePeriodSeconds: 1
 
 pmm:
   enabled: false

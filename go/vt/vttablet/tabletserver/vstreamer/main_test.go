@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,6 +22,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 )
 
@@ -47,13 +51,24 @@ func TestMain(m *testing.M) {
 		defer env.Close()
 
 		// engine cannot be initialized in testenv because it introduces
-		// circular dependencies.
-		engine = NewEngine(env.SrvTopo, env.SchemaEngine)
-		engine.InitDBConfig(env.Dbcfgs)
+		// circular dependencies
+		engine = NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine)
 		engine.Open(env.KeyspaceName, env.Cells[0])
 		defer engine.Close()
 
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+func customEngine(t *testing.T, modifier func(mysql.ConnParams) mysql.ConnParams) *Engine {
+	original, err := env.Dbcfgs.AppWithDB().MysqlParams()
+	require.NoError(t, err)
+	modified := modifier(*original)
+	config := env.TabletEnv.Config().Clone()
+	config.DB = dbconfigs.NewTestDBConfigs(modified, modified, modified.DbName)
+
+	engine := NewEngine(tabletenv.NewEnv(config, "VStreamerTest"), env.SrvTopo, env.SchemaEngine)
+	engine.Open(env.KeyspaceName, env.Cells[0])
+	return engine
 }

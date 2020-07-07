@@ -9,6 +9,8 @@ export VTDATAROOT=/tmp/vtdata-dev
 export MYSQL_FLAVOR=MySQL56
 cd "$VITESS_WORKSPACE"/examples/local
 export SHARD="-"
+export TOPO="zk2"
+
 ./zk-up.sh
 ./vtctld-up.sh --enable-grpc-static-auth
 ./vttablet-up.sh --enable-grpc-static-auth

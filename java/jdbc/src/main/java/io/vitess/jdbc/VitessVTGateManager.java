@@ -1,12 +1,12 @@
 /*
- * Copyright 2017 Google Inc.
- *
+ * Copyright 2019 The Vitess Authors.
+
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+
  *     http://www.apache.org/licenses/LICENSE-2.0
- *
+
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,13 +16,18 @@
 
 package io.vitess.jdbc;
 
+import static java.lang.System.getProperty;
+
 import io.vitess.client.Context;
 import io.vitess.client.RefreshableVTGateConnection;
+import io.vitess.client.RpcClient;
 import io.vitess.client.VTGateConnection;
 import io.vitess.client.grpc.GrpcClientFactory;
 import io.vitess.client.grpc.RetryingInterceptorConfig;
 import io.vitess.client.grpc.tls.TlsOptions;
-import io.vitess.util.Constants;
+import io.vitess.util.Constants.Property;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.sql.SQLException;
@@ -34,17 +39,15 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * Created by naveen.nahata on 24/02/16.
  */
 public class VitessVTGateManager {
 
-  private static Logger logger = Logger.getLogger(VitessVTGateManager.class.getName());
+  private static Logger logger = LogManager.getLogger(VitessVTGateManager.class);
   /*
-  Current implementation have one VTGateConn for ip-port-username combination
+  Current implementation have one VTGateConnection for ip-port-username combination
   */
   private static ConcurrentHashMap<String, VTGateConnection> vtGateConnHashMap =
       new ConcurrentHashMap<>();
@@ -122,7 +125,7 @@ public class VitessVTGateManager {
   }
 
   /**
-   * Create VTGateConn and update vtGateConnHashMap.
+   * Create {@link VTGateConnection} and update vtGateConnHashMap.
    */
   private static void updateVtGateConnHashMap(String identifier, VitessJDBCUrl.HostInfo hostInfo,
       VitessConnection connection) {
@@ -145,15 +148,14 @@ public class VitessVTGateManager {
         }
       }
       if (updatedCount > 0) {
-        logger.info("refreshed " + updatedCount + " vtgate connections due to keystore update");
+        logger.info("refreshed {} vtgate connections due to keystore update", updatedCount);
       }
     }
   }
 
   private static void closeRefreshedConnection(final VTGateConnection old) {
     if (vtgateClosureTimer != null) {
-      logger.info(String
-          .format("%s Closing connection with a %s second delay", old, vtgateClosureDelaySeconds));
+      logger.info("{} Closing connection with a {} second delay", old, vtgateClosureDelaySeconds);
       vtgateClosureTimer.schedule(new TimerTask() {
         @Override
         public void run() {
@@ -167,10 +169,18 @@ public class VitessVTGateManager {
 
   private static void actuallyCloseRefreshedConnection(final VTGateConnection old) {
     try {
-      logger.info(old + " Closing connection because it had been refreshed");
+      logger.info("{} Closing connection because it had been refreshed", old);
       old.close();
     } catch (IOException ioe) {
-      logger.log(Level.WARNING, String.format("Error closing VTGateConnection %s", old), ioe);
+      logger.warn("Error closing VTGateConnection {}", old, ioe);
+    }
+  }
+
+  private static String nullIf(String ifNull, String returnThis) {
+    if (ifNull == null) {
+      return returnThis;
+    } else {
+      return ifNull;
     }
   }
 
@@ -178,39 +188,44 @@ public class VitessVTGateManager {
    * Create vtGateConn object with given identifier.
    */
   private static VTGateConnection getVtGateConn(VitessJDBCUrl.HostInfo hostInfo,
-      VitessConnection connection) {
+                                                VitessConnection connection) {
     final Context context = connection.createContext(connection.getTimeout());
     RetryingInterceptorConfig retryingConfig = getRetryingInterceptorConfig(connection);
+    GrpcClientFactory grpcClientFactory =
+        new GrpcClientFactory(retryingConfig, connection.getUseTracing());
     if (connection.getUseSSL()) {
-      final String keyStorePath = connection.getKeyStore() != null ? connection.getKeyStore()
-          : System.getProperty(Constants.Property.KEYSTORE_FULL);
-      final String keyStorePassword =
-          connection.getKeyStorePassword() != null ? connection.getKeyStorePassword()
-              : System.getProperty(Constants.Property.KEYSTORE_PASSWORD_FULL);
-      final String keyAlias = connection.getKeyAlias() != null ? connection.getKeyAlias()
-          : System.getProperty(Constants.Property.KEY_ALIAS_FULL);
-      final String keyPassword = connection.getKeyPassword() != null ? connection.getKeyPassword()
-          : System.getProperty(Constants.Property.KEY_PASSWORD_FULL);
-      final String trustStorePath = connection.getTrustStore() != null ? connection.getTrustStore()
-          : System.getProperty(Constants.Property.TRUSTSTORE_FULL);
-      final String trustStorePassword =
-          connection.getTrustStorePassword() != null ? connection.getTrustStorePassword()
-              : System.getProperty(Constants.Property.TRUSTSTORE_PASSWORD_FULL);
-      final String trustAlias = connection.getTrustAlias() != null ? connection.getTrustAlias()
-          : System.getProperty(Constants.Property.TRUST_ALIAS_FULL);
-
-      final TlsOptions tlsOptions = new TlsOptions().keyStorePath(keyStorePath)
-          .keyStorePassword(keyStorePassword).keyAlias(keyAlias).keyPassword(keyPassword)
-          .trustStorePath(trustStorePath).trustStorePassword(trustStorePassword)
-          .trustAlias(trustAlias);
-
-      return new RefreshableVTGateConnection(
-          new GrpcClientFactory(retryingConfig).createTls(context, hostInfo.toString(), tlsOptions),
-          keyStorePath, trustStorePath);
+      TlsOptions tlsOptions = getTlsOptions(connection);
+      RpcClient rpcClient = grpcClientFactory
+          .createTls(context, hostInfo.toString(), tlsOptions);
+      return new RefreshableVTGateConnection(rpcClient,
+          tlsOptions.getKeyStore().getPath(),
+          tlsOptions.getTrustStore().getPath());
     } else {
-      return new VTGateConnection(
-          new GrpcClientFactory(retryingConfig).create(context, hostInfo.toString()));
+      RpcClient client = grpcClientFactory.create(context, hostInfo.toString());
+      return new VTGateConnection(client);
     }
+  }
+
+  private static TlsOptions getTlsOptions(VitessConnection con) {
+    String keyStorePath = nullIf(con.getKeyStore(), getProperty(Property.KEYSTORE_FULL));
+    String keyStorePassword = nullIf(con.getKeyStorePassword(),
+        getProperty(Property.KEYSTORE_PASSWORD_FULL));
+    String keyAlias = nullIf(con.getKeyAlias(), getProperty(Property.KEY_ALIAS_FULL));
+    String keyPassword = nullIf(con.getKeyPassword(), getProperty(Property.KEY_PASSWORD_FULL));
+    String trustStorePath = nullIf(con.getTrustStore(), getProperty(Property.TRUSTSTORE_FULL));
+    String trustStorePassword = nullIf(
+        con.getTrustStorePassword(),
+        getProperty(Property.TRUSTSTORE_PASSWORD_FULL));
+    String trustAlias = nullIf(con.getTrustAlias(), getProperty(Property.TRUST_ALIAS_FULL));
+
+    return new TlsOptions()
+        .keyStorePath(keyStorePath)
+        .keyStorePassword(keyStorePassword)
+        .keyAlias(keyAlias)
+        .keyPassword(keyPassword)
+        .trustStorePath(trustStorePath)
+        .trustStorePassword(trustStorePassword)
+        .trustAlias(trustAlias);
   }
 
   private static RetryingInterceptorConfig getRetryingInterceptorConfig(VitessConnection conn) {

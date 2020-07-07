@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,37 +14,76 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// This file has the logic for performing merge-sorts of scatter queries.
-
 package engine
 
 import (
 	"container/heap"
 	"io"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/srvtopo"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// mergeSort performs a merge-sort of rows returned by a streaming scatter query.
-// Each shard of the scatter query is treated as a stream. One row from each stream
-// is added to the merge-sorter heap. Every time a value is pulled out of the heap,
+// StreamExecutor is a subset of Primitive that MergeSort
+// requires its inputs to satisfy.
+type StreamExecutor interface {
+	StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
+}
+
+var _ Primitive = (*MergeSort)(nil)
+
+// MergeSort performs a merge-sort of rows returned by each Input. This should
+// only be used for StreamExecute. One row from each stream is added to the
+// merge-sorter heap. Every time a value is pulled out of the heap,
 // a new value is added to it from the stream that was the source of the value that
 // was pulled out. Since the input streams are sorted the same way that the heap is
 // sorted, this guarantees that the merged stream will also be sorted the same way.
-func mergeSort(vcursor VCursor, query string, orderBy []OrderbyParams, rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+// MergeSort only supports the StreamExecute function of a Primitive. So, it cannot
+// be used like other Primitives in VTGate. However, it satisfies the Primitive API
+// so that vdiff can use it. In that situation, only StreamExecute is used.
+type MergeSort struct {
+	Primitives []StreamExecutor
+	OrderBy    []OrderbyParams
+	noInputs
+	noTxNeeded
+}
+
+// RouteType satisfies Primitive.
+func (ms *MergeSort) RouteType() string { return "MergeSort" }
+
+// GetKeyspaceName satisfies Primitive.
+func (ms *MergeSort) GetKeyspaceName() string { return "" }
+
+// GetTableName satisfies Primitive.
+func (ms *MergeSort) GetTableName() string { return "" }
+
+// Execute is not supported.
+func (ms *MergeSort) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Execute is not supported")
+}
+
+// GetFields is not supported.
+func (ms *MergeSort) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "GetFields is not supported")
+}
+
+// StreamExecute performs a streaming exec.
+func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	ctx, cancel := context.WithCancel(vcursor.Context())
 	defer cancel()
 
-	handles := make([]*streamHandle, len(rss))
-	id := 0
-	for i, rs := range rss {
-		handles[id] = runOneStream(ctx, vcursor, query, rs, bvs[i])
-		id++
+	handles := make([]*streamHandle, len(ms.Primitives))
+	for i, input := range ms.Primitives {
+		handles[i] = runOneStream(vcursor, input, bindVars, wantfields)
+		// Need fields only from first handle, if wantfields was true.
+		wantfields = false
 	}
 
 	// Fetch field info from just one stream.
@@ -59,7 +98,7 @@ func mergeSort(vcursor VCursor, query string, orderBy []OrderbyParams, rss []*sr
 
 	sh := &scatterHeap{
 		rows:    make([]streamRow, 0, len(handles)),
-		orderBy: orderBy,
+		orderBy: ms.OrderBy,
 	}
 
 	// Prime the heap. One element must be pulled from
@@ -119,11 +158,22 @@ func mergeSort(vcursor VCursor, query string, orderBy []OrderbyParams, rss []*sr
 	return nil
 }
 
+func (ms *MergeSort) description() PrimitiveDescription {
+	other := map[string]interface{}{
+		"OrderBy": ms.OrderBy,
+	}
+	return PrimitiveDescription{
+		OperatorType: "Sort",
+		Variant:      "Merge",
+		Other:        other,
+	}
+}
+
 // streamHandle is the rendez-vous point between each stream and the merge-sorter.
 // The fields channel is used by the stream to transmit the field info, which
 // is the first packet. Following this, the stream sends each row to the row
 // channel. At the end of the stream, fields and row are closed. If there
-// was an error, err is set before the channels are closed. The mergeSort
+// was an error, err is set before the channels are closed. The MergeSort
 // routine that pulls the rows out of each streamHandle can abort the stream
 // by calling canceling the context.
 type streamHandle struct {
@@ -133,20 +183,21 @@ type streamHandle struct {
 }
 
 // runOnestream starts a streaming query on one shard, and returns a streamHandle for it.
-func runOneStream(ctx context.Context, vcursor VCursor, query string, rs *srvtopo.ResolvedShard, vars map[string]*querypb.BindVariable) *streamHandle {
+func runOneStream(vcursor VCursor, input StreamExecutor, bindVars map[string]*querypb.BindVariable, wantfields bool) *streamHandle {
 	handle := &streamHandle{
 		fields: make(chan []*querypb.Field, 1),
 		row:    make(chan []sqltypes.Value, 10),
 	}
+	ctx := vcursor.Context()
 
 	go func() {
 		defer close(handle.fields)
 		defer close(handle.row)
 
-		handle.err = vcursor.StreamExecuteMulti(
-			query,
-			[]*srvtopo.ResolvedShard{rs},
-			[]map[string]*querypb.BindVariable{vars},
+		handle.err = input.StreamExecute(
+			vcursor,
+			bindVars,
+			wantfields,
 			func(qr *sqltypes.Result) error {
 				if len(qr.Fields) != 0 {
 					select {
@@ -190,16 +241,18 @@ type scatterHeap struct {
 	err     error
 }
 
+// Len satisfies sort.Interface and heap.Interface.
 func (sh *scatterHeap) Len() int {
 	return len(sh.rows)
 }
 
+// Less satisfies sort.Interface and heap.Interface.
 func (sh *scatterHeap) Less(i, j int) bool {
 	for _, order := range sh.orderBy {
 		if sh.err != nil {
 			return true
 		}
-		cmp, err := sqltypes.NullsafeCompare(sh.rows[i].row[order.Col], sh.rows[j].row[order.Col])
+		cmp, err := evalengine.NullsafeCompare(sh.rows[i].row[order.Col], sh.rows[j].row[order.Col])
 		if err != nil {
 			sh.err = err
 			return true
@@ -215,14 +268,17 @@ func (sh *scatterHeap) Less(i, j int) bool {
 	return true
 }
 
+// Swap satisfies sort.Interface and heap.Interface.
 func (sh *scatterHeap) Swap(i, j int) {
 	sh.rows[i], sh.rows[j] = sh.rows[j], sh.rows[i]
 }
 
+// Push satisfies heap.Interface.
 func (sh *scatterHeap) Push(x interface{}) {
 	sh.rows = append(sh.rows, x.(streamRow))
 }
 
+// Pop satisfies heap.Interface.
 func (sh *scatterHeap) Pop() interface{} {
 	n := len(sh.rows)
 	x := sh.rows[n-1]

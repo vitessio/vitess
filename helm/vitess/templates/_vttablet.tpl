@@ -29,8 +29,41 @@ spec:
   selector:
     app: vitess
     component: vttablet
-
+---
 {{- end -}}
+
+###################################
+# vttablet ServiceAccount
+###################################
+{{ define "vttablet-serviceaccount" -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vttablet
+  labels:
+    app: vitess
+---
+{{ end }}
+
+###################################
+# vttablet RoleBinding
+###################################
+{{ define "vttablet-topo-role-binding" -}}
+{{- $namespace := index . 0 -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vttablet-topo-member
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: vt-topo-member
+subjects:
+- kind: ServiceAccount
+  name: vttablet
+  namespace: {{ $namespace }}
+---
+{{ end }}
 
 ###################################
 # vttablet
@@ -68,7 +101,7 @@ spec:
 ###################################
 # vttablet StatefulSet
 ###################################
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: {{ $setName | quote }}
@@ -96,21 +129,29 @@ spec:
         shard: {{ $shardClean | quote }}
         type: {{ $tablet.type | quote }}
     spec:
-      terminationGracePeriodSeconds: 60000000
+      serviceAccountName: vttablet
+      terminationGracePeriodSeconds: {{ $defaultVttablet.terminationGracePeriodSeconds | default 60000000 }}
 {{ include "pod-security" . | indent 6 }}
+
+{{ if eq ($topology.deploymentType | default "prod") "prod" }}
 {{ include "vttablet-affinity" (tuple $cellClean $keyspaceClean $shardClean $cell.region) | indent 6 }}
+{{ end }}
 
       initContainers:
-{{ include "init-mysql" (tuple $vitessTag $cellClean) | indent 8 }}
-{{ include "init-vttablet" (tuple $vitessTag $cell $cellClean $namespace) | indent 8 }}
+{{ include "init-mysql" (tuple $topology $vitessTag $cellClean) | indent 8 }}
+{{ include "init-vttablet" (tuple $topology $vitessTag $cell $cellClean $namespace) | indent 8 }}
 
       containers:
 {{ include "cont-mysql" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $uid) | indent 8 }}
 {{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $defaultVtctlclient $vitessTag $uid $namespace $config $orc) | indent 8 }}
+
+{{ if eq ($topology.deploymentType | default "prod") "prod" }}
 {{ include "cont-logrotate" . | indent 8 }}
 {{ include "cont-mysql-generallog" . | indent 8 }}
 {{ include "cont-mysql-errorlog" . | indent 8 }}
 {{ include "cont-mysql-slowlog" . | indent 8 }}
+{{ end }}
+
 {{ if $pmm.enabled }}{{ include "cont-pmm-client" (tuple $pmm $namespace $keyspace) | indent 8 }}{{ end }}
 
       volumes:
@@ -162,8 +203,9 @@ spec:
 # init-container to copy binaries for mysql
 ###################################
 {{ define "init-mysql" -}}
-{{- $vitessTag := index . 0 -}}
-{{- $cellClean := index . 1 }}
+{{- $topology := index . 0 -}}
+{{- $vitessTag := index . 1 -}}
+{{- $cellClean := index . 2 }}
 
 - name: "init-mysql"
   image: "vitess/mysqlctld:{{$vitessTag}}"
@@ -195,6 +237,7 @@ spec:
 
       # remove the old socket file if it is still around
       rm -f /vtdataroot/tabletdata/mysql.sock
+      rm -f /vtdataroot/tabletdata/mysql.sock.lock
 
 {{- end -}}
 
@@ -204,10 +247,11 @@ spec:
 # into a 31-bit unsigned integer for use as a Vitess tablet UID.
 ###################################
 {{ define "init-vttablet" -}}
-{{- $vitessTag := index . 0 -}}
-{{- $cell := index . 1 -}}
-{{- $cellClean := index . 2 -}}
-{{- $namespace := index . 3 }}
+{{- $topology := index . 0 -}}
+{{- $vitessTag := index . 1 -}}
+{{- $cell := index . 2 -}}
+{{- $cellClean := index . 3 -}}
+{{- $namespace := index . 4 }}
 
 - name: init-vttablet
   image: "vitess/vtctl:{{$vitessTag}}"
@@ -240,13 +284,23 @@ spec:
 
       # make sure that etcd is initialized
       eval exec /vt/bin/vtctl $(cat <<END_OF_COMMAND
-        -topo_implementation="etcd2"
         -topo_global_root=/vitess/global
+        {{- if eq ($cell.topologyProvider | default "") "etcd2" }}
+        -topo_implementation="etcd2"
         -topo_global_server_address="etcd-global-client.{{ $namespace }}:2379"
+        {{- else }}
+        -topo_implementation=k8s
+        -topo_global_server_address=k8s
+        {{- end }}
         -logtostderr=true
         -stderrthreshold=0
         UpdateCellInfo
+        -root /vitess/{{ $cell.name }}
+        {{- if eq ($cell.topologyProvider | default "") "etcd2" }}
         -server_address="etcd-global-client.{{ $namespace }}:2379"
+        {{- else }}
+        -server_address=k8s
+        {{- end }}
         {{ $cellClean | quote}}
       END_OF_COMMAND
       )
@@ -402,9 +456,14 @@ spec:
 {{ include "backup-exec" $config.backup | indent 6 }}
 
       eval exec /vt/bin/vttablet $(cat <<END_OF_COMMAND
+        -topo_global_root /vitess/global
+        {{- if eq ($cell.topologyProvider | default "") "etcd2" }}
         -topo_implementation="etcd2"
         -topo_global_server_address="etcd-global-client.{{ $namespace }}:2379"
-        -topo_global_root=/vitess/global
+        {{- else }}
+        -topo_implementation k8s
+        -topo_global_server_address k8s
+        {{- end }}
         -logtostderr
         -port 15002
         -grpc_port 16002
@@ -509,7 +568,7 @@ spec:
     - |
       set -ex
 {{ include "mycnf-exec" (.extraMyCnf | default $defaultVttablet.extraMyCnf) | indent 6 }}
-{{- if eq (.mysqlSize | default $defaultVttablet.mysqlSize) "test" }}
+{{- if eq ($topology.deploymentType | default "prod") "test" }}
       export EXTRA_MY_CNF="$EXTRA_MY_CNF:/vt/config/mycnf/default-fast.cnf"
 {{- end }}
 
@@ -527,13 +586,17 @@ spec:
 {{- end -}}
 {{- end -}}
 
+####################################
+# Everything below here is enabled only if deploymentType is prod.
+####################################
+
 ##########################
 # run logrotate for all log files in /vtdataroot/tabletdata
 ##########################
 {{ define "cont-logrotate" }}
 
 - name: logrotate
-  image: vitess/logrotate:helm-1.0.6
+  image: vitess/logrotate:helm-2.0.0-0
   imagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
@@ -547,7 +610,7 @@ spec:
 {{ define "cont-mysql-errorlog" }}
 
 - name: error-log
-  image: vitess/logtail:helm-1.0.6
+  image: vitess/logtail:helm-2.0.0-0
   imagePullPolicy: IfNotPresent
 
   env:
@@ -565,7 +628,7 @@ spec:
 {{ define "cont-mysql-slowlog" }}
 
 - name: slow-log
-  image: vitess/logtail:helm-1.0.6
+  image: vitess/logtail:helm-2.0.0-0
   imagePullPolicy: IfNotPresent
 
   env:
@@ -583,7 +646,7 @@ spec:
 {{ define "cont-mysql-generallog" }}
 
 - name: general-log
-  image: vitess/logtail:helm-1.0.6
+  image: vitess/logtail:helm-2.0.0-0
   imagePullPolicy: IfNotPresent
 
   env:

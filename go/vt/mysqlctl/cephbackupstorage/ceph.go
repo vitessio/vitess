@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -62,6 +62,21 @@ type CephBackupHandle struct {
 	waitGroup sync.WaitGroup
 }
 
+// RecordError is part of the concurrency.ErrorRecorder interface.
+func (bh *CephBackupHandle) RecordError(err error) {
+	bh.errors.RecordError(err)
+}
+
+// HasErrors is part of the concurrency.ErrorRecorder interface.
+func (bh *CephBackupHandle) HasErrors() bool {
+	return bh.errors.HasErrors()
+}
+
+// Error is part of the concurrency.ErrorRecorder interface.
+func (bh *CephBackupHandle) Error() error {
+	return bh.errors.Error()
+}
+
 // Directory implements BackupHandle.
 func (bh *CephBackupHandle) Directory() string {
 	return bh.dir
@@ -88,12 +103,13 @@ func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string, filesi
 
 		// Give PutObject() the read end of the pipe.
 		object := objName(bh.dir, bh.name, filename)
-		_, err := bh.client.PutObjectWithContext(ctx, bucket, object, reader, -1, minio.PutObjectOptions{ContentType: "application/octet-stream"})
+		// If filesize is unknown, the caller should pass in -1 and we will pass it through.
+		_, err := bh.client.PutObjectWithContext(ctx, bucket, object, reader, filesize, minio.PutObjectOptions{ContentType: "application/octet-stream"})
 		if err != nil {
 			// Signal the writer that an error occurred, in case it's not done writing yet.
 			reader.CloseWithError(err)
 			// In case the error happened after the writer finished, we need to remember it.
-			bh.errors.RecordError(err)
+			bh.RecordError(err)
 		}
 	}()
 	// Give our caller the write end of the pipe.
@@ -107,7 +123,7 @@ func (bh *CephBackupHandle) EndBackup(ctx context.Context) error {
 	}
 	bh.waitGroup.Wait()
 	// Return the saved PutObject() errors, if any.
-	return bh.errors.Error()
+	return bh.Error()
 }
 
 // AbortBackup implements BackupHandle.
@@ -268,7 +284,7 @@ func (bs *CephBackupStorage) client() (*minio.Client, error) {
 		defer configFile.Close()
 		jsonParser := json.NewDecoder(configFile)
 		if err = jsonParser.Decode(&storageConfig); err != nil {
-			return nil, fmt.Errorf("Error parsing the json file : %v", err)
+			return nil, fmt.Errorf("error parsing the json file : %v", err)
 		}
 
 		accessKey := storageConfig.AccessKey

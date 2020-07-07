@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ import (
 // for the provided tablet types. It returns one Target object per
 // keyspace / shard / matching TabletType.
 func FindAllTargets(ctx context.Context, ts Server, cell string, tabletTypes []topodatapb.TabletType) ([]*querypb.Target, error) {
-	ksNames, err := ts.GetSrvKeyspaceNames(ctx, cell)
+	ksNames, err := ts.GetSrvKeyspaceNames(ctx, cell, true)
 	if err != nil {
 		return nil, err
 	}

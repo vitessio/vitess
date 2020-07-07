@@ -1,8 +1,7 @@
 topology:
+  deploymentType: test
   cells:
     - name: "zone1"
-      etcd:
-        replicas: 1
       vtctld:
         replicas: 1
       vtgate:
@@ -17,10 +16,7 @@ topology:
               tablets:
                 - type: "replica"
                   vttablet:
-                    replicas: 2
-                - type: "rdonly"
-                  vttablet:
-                    replicas: 1
+                    replicas: 3
           schema:
             initial: |-
               create table product(
@@ -51,25 +47,8 @@ topology:
                 }
               }
 
-etcd:
-  replicas: 1
-  resources:
-
-vtctld:
-  serviceType: "NodePort"
-  resources:
-
-vtgate:
-  serviceType: "NodePort"
-  resources:
-
 vttablet:
-  mysqlSize: "test"
-  resources:
-  mysqlResources:
-
-vtworker:
-  resources:
+  terminationGracePeriodSeconds: 1
 
 pmm:
   enabled: false

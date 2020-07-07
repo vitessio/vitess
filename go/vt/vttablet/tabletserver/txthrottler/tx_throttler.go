@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
@@ -35,11 +36,11 @@ import (
 
 // TxThrottler throttles transactions based on replication lag.
 // It's a thin wrapper around the throttler found in vitess/go/vt/throttler.
-// It uses a discovery.HealthCheck to send replication-lag updates to the wrapped throttler.
+// It uses a discovery.LegacyHealthCheck to send replication-lag updates to the wrapped throttler.
 //
 // Intended Usage:
 //   // Assuming topoServer is a topo.Server variable pointing to a Vitess topology server.
-//   t := CreateTxThrottlerFromTabletConfig(topoServer)
+//   t := NewTxThrottler(config, topoServer)
 //
 //   // A transaction throttler must be opened before its first use:
 //   if err := t.Open(keyspace, shard); err != nil {
@@ -70,13 +71,13 @@ type TxThrottler struct {
 	state *txThrottlerState
 }
 
-// CreateTxThrottlerFromTabletConfig tries to construct a TxThrottler from the
+// NewTxThrottler tries to construct a TxThrottler from the
 // relevant fields in the tabletenv.Config object. It returns a disabled TxThrottler if
 // any error occurs.
 // This function calls tryCreateTxThrottler that does the actual creation work
 // and returns an error if one occurred.
-func CreateTxThrottlerFromTabletConfig(topoServer *topo.Server) *TxThrottler {
-	txThrottler, err := tryCreateTxThrottler(topoServer)
+func NewTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Server) *TxThrottler {
+	txThrottler, err := tryCreateTxThrottler(config, topoServer)
 	if err != nil {
 		log.Errorf("Error creating transaction throttler. Transaction throttling will"+
 			" be disabled. Error: %v", err)
@@ -90,20 +91,20 @@ func CreateTxThrottlerFromTabletConfig(topoServer *topo.Server) *TxThrottler {
 	return txThrottler
 }
 
-func tryCreateTxThrottler(topoServer *topo.Server) (*TxThrottler, error) {
-	if !tabletenv.Config.EnableTxThrottler {
+func tryCreateTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Server) (*TxThrottler, error) {
+	if !config.EnableTxThrottler {
 		return newTxThrottler(&txThrottlerConfig{enabled: false})
 	}
 
 	var throttlerConfig throttlerdatapb.Configuration
-	if err := proto.UnmarshalText(tabletenv.Config.TxThrottlerConfig, &throttlerConfig); err != nil {
+	if err := proto.UnmarshalText(config.TxThrottlerConfig, &throttlerConfig); err != nil {
 		return nil, err
 	}
 
 	// Clone tsv.TxThrottlerHealthCheckCells so that we don't assume tsv.TxThrottlerHealthCheckCells
 	// is immutable.
-	healthCheckCells := make([]string, len(tabletenv.Config.TxThrottlerHealthCheckCells))
-	copy(healthCheckCells, tabletenv.Config.TxThrottlerHealthCheckCells)
+	healthCheckCells := make([]string, len(config.TxThrottlerHealthCheckCells))
+	copy(healthCheckCells, config.TxThrottlerHealthCheckCells)
 
 	return newTxThrottler(&txThrottlerConfig{
 		enabled:          true,
@@ -136,15 +137,15 @@ type ThrottlerInterface interface {
 	Close()
 	MaxRate() int64
 	SetMaxRate(rate int64)
-	RecordReplicationLag(time time.Time, ts *discovery.TabletStats)
+	RecordReplicationLag(time time.Time, ts *discovery.LegacyTabletStats)
 	GetConfiguration() *throttlerdatapb.Configuration
 	UpdateConfiguration(configuration *throttlerdatapb.Configuration, copyZeroValues bool) error
 	ResetConfiguration()
 }
 
 // TopologyWatcherInterface defines the public interface that is implemented by
-// discovery.TopologyWatcher. It is only used here to allow mocking out
-// go/vt/discovery.TopologyWatcher.
+// discovery.LegacyTopologyWatcher. It is only used here to allow mocking out
+// go/vt/discovery.LegacyTopologyWatcher.
 type TopologyWatcherInterface interface {
 	WaitForInitialTopology() error
 	Stop()
@@ -157,15 +158,15 @@ type txThrottlerState struct {
 	throttleMu sync.Mutex
 	throttler  ThrottlerInterface
 
-	healthCheck      discovery.HealthCheck
+	healthCheck      discovery.LegacyHealthCheck
 	topologyWatchers []TopologyWatcherInterface
 }
 
 // These vars store the functions used to create the topo server, healthcheck,
 // topology watchers and go/vt/throttler. These are provided here so that they can be overridden
 // in tests to generate mocks.
-type healthCheckFactoryFunc func() discovery.HealthCheck
-type topologyWatcherFactoryFunc func(topoServer *topo.Server, tr discovery.TabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface
+type healthCheckFactoryFunc func() discovery.LegacyHealthCheck
+type topologyWatcherFactoryFunc func(topoServer *topo.Server, tr discovery.LegacyTabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface
 type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate, maxReplicationLag int64) (ThrottlerInterface, error)
 
 var (
@@ -179,10 +180,9 @@ func init() {
 }
 
 func resetTxThrottlerFactories() {
-	healthCheckFactory = discovery.NewDefaultHealthCheck
-	topologyWatcherFactory = func(topoServer *topo.Server, tr discovery.TabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
-		return discovery.NewShardReplicationWatcher(
-			topoServer, tr, cell, keyspace, shard, refreshInterval, topoReadConcurrency)
+	healthCheckFactory = discovery.NewLegacyDefaultHealthCheck
+	topologyWatcherFactory = func(topoServer *topo.Server, tr discovery.LegacyTabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
+		return discovery.NewLegacyShardReplicationWatcher(context.Background(), topoServer, tr, cell, keyspace, shard, refreshInterval, topoReadConcurrency)
 	}
 	throttlerFactory = func(name, unit string, threadCount int, maxRate, maxReplicationLag int64) (ThrottlerInterface, error) {
 		return throttler.NewThrottler(name, unit, threadCount, maxRate, maxReplicationLag)
@@ -201,7 +201,7 @@ func newTxThrottler(config *txThrottlerConfig) (*TxThrottler, error) {
 			return nil, err
 		}
 		if len(config.healthCheckCells) == 0 {
-			return nil, fmt.Errorf("Empty healthCheckCells given. %+v", config)
+			return nil, fmt.Errorf("empty healthCheckCells given. %+v", config)
 		}
 	}
 	return &TxThrottler{
@@ -215,7 +215,7 @@ func (t *TxThrottler) Open(keyspace, shard string) error {
 		return nil
 	}
 	if t.state != nil {
-		return fmt.Errorf("Transaction throttler already opened")
+		return fmt.Errorf("transaction throttler already opened")
 	}
 	var err error
 	t.state, err = newTxThrottlerState(t.config, keyspace, shard)
@@ -240,7 +240,7 @@ func (t *TxThrottler) Close() {
 // Throttle should be called before a new transaction is started.
 // It returns true if the transaction should not proceed (the caller
 // should back off). Throttle requires that Open() was previously called
-// successfuly.
+// successfully.
 func (t *TxThrottler) Throttle() (result bool) {
 	if !t.config.enabled {
 		return false
@@ -278,7 +278,7 @@ func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard string,
 			result.topologyWatchers,
 			topologyWatcherFactory(
 				config.topoServer,
-				result.healthCheck, /* TabletRecorder */
+				result.healthCheck, /* LegacyTabletRecorder */
 				cell,
 				keyspace,
 				shard,
@@ -316,8 +316,8 @@ func (ts *txThrottlerState) deallocateResources() {
 	ts.throttler = nil
 }
 
-// StatsUpdate is part of the HealthCheckStatsListener interface.
-func (ts *txThrottlerState) StatsUpdate(tabletStats *discovery.TabletStats) {
+// StatsUpdate is part of the LegacyHealthCheckStatsListener interface.
+func (ts *txThrottlerState) StatsUpdate(tabletStats *discovery.LegacyTabletStats) {
 	// Ignore MASTER and RDONLY stats.
 	// We currently do not monitor RDONLY tablets for replication lag. RDONLY tablets are not
 	// candidates for becoming master during failover, and it's acceptable to serve somewhat

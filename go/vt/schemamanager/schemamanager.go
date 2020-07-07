@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -87,7 +87,7 @@ type ShardResult struct {
 	Shard  string
 	Result *querypb.QueryResult
 	// Position is a replication position that is guaranteed to be after the
-	// schema change was applied. It can be used to wait for slaves to receive
+	// schema change was applied. It can be used to wait for replicas to receive
 	// the schema change via replication.
 	Position string
 }

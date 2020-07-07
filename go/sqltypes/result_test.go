@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -61,14 +61,6 @@ func TestCopy(t *testing.T) {
 			{TestValue(Int64, "2"), MakeTrusted(VarChar, nil)},
 			{TestValue(Int64, "3"), TestValue(VarChar, "")},
 		},
-		Extras: &querypb.ResultExtras{
-			EventToken: &querypb.EventToken{
-				Timestamp: 123,
-				Shard:     "sh",
-				Position:  "po",
-			},
-			Fresher: true,
-		},
 	}
 	out := in.Copy()
 	if !reflect.DeepEqual(out, in) {
@@ -90,14 +82,6 @@ func TestTruncate(t *testing.T) {
 			{TestValue(Int64, "2"), MakeTrusted(VarChar, nil)},
 			{TestValue(Int64, "3"), TestValue(VarChar, "")},
 		},
-		Extras: &querypb.ResultExtras{
-			EventToken: &querypb.EventToken{
-				Timestamp: 123,
-				Shard:     "sh",
-				Position:  "po",
-			},
-			Fresher: true,
-		},
 	}
 
 	out := in.Truncate(0)
@@ -116,14 +100,6 @@ func TestTruncate(t *testing.T) {
 			{TestValue(Int64, "1")},
 			{TestValue(Int64, "2")},
 			{TestValue(Int64, "3")},
-		},
-		Extras: &querypb.ResultExtras{
-			EventToken: &querypb.EventToken{
-				Timestamp: 123,
-				Shard:     "sh",
-				Position:  "po",
-			},
-			Fresher: true,
 		},
 	}
 	if !reflect.DeepEqual(out, want) {

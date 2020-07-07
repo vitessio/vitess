@@ -1,5 +1,5 @@
 /*
-Copyright 2018 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,6 +25,14 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
+	"vitess.io/vitess/go/vt/sqlparser"
+
+	"github.com/stretchr/testify/require"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -32,32 +40,66 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
+
+var testMaxMemoryRows = 100
+
+var _ VCursor = (*noopVCursor)(nil)
+var _ SessionActions = (*noopVCursor)(nil)
 
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
+	ctx context.Context
 }
 
+func (t noopVCursor) SetUDV(key string, value interface{}) error {
+	panic("implement me")
+}
+
+func (t noopVCursor) SetSysVar(name string, expr string) {
+	//panic("implement me")
+}
+
+func (t noopVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
+	panic("implement me")
+}
+
+func (t noopVCursor) Session() SessionActions {
+	return t
+}
+
+func (t noopVCursor) SetTarget(target string) error {
+	panic("implement me")
+}
 func (t noopVCursor) Context() context.Context {
-	return context.Background()
+	if t.ctx == nil {
+		return context.Background()
+	}
+	return t.ctx
+}
+func (t noopVCursor) MaxMemoryRows() int {
+	return testMaxMemoryRows
 }
 
 func (t noopVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc {
 	return func() {}
 }
 
+func (t noopVCursor) ErrorGroupCancellableContext() *errgroup.Group {
+	g, ctx := errgroup.WithContext(t.ctx)
+	t.ctx = ctx
+	return g
+}
+
 func (t noopVCursor) RecordWarning(warning *querypb.QueryWarning) {
 }
 
-func (t noopVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+func (t noopVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
 
-func (t noopVCursor) ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	panic("unimplemented")
-}
-
-func (t noopVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, autocommit bool) (*sqltypes.Result, []error) {
+func (t noopVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error) {
 	panic("unimplemented")
 }
 
@@ -73,9 +115,16 @@ func (t noopVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedSha
 	panic("unimplemented")
 }
 
+func (t noopVCursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error) {
+	panic("unimplemented")
+}
+
 func (t noopVCursor) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	panic("unimplemented")
 }
+
+var _ VCursor = (*loggingVCursor)(nil)
+var _ SessionActions = (*loggingVCursor)(nil)
 
 // loggingVCursor logs requests and allows you to verify
 // that the correct requests were made.
@@ -98,6 +147,30 @@ type loggingVCursor struct {
 	multiShardErrs []error
 
 	log []string
+
+	resolvedTargetTabletType topodatapb.TabletType
+}
+
+func (f *loggingVCursor) SetUDV(key string, value interface{}) error {
+	f.log = append(f.log, fmt.Sprintf("UDV set with (%s,%v)", key, value))
+	return nil
+}
+
+func (f *loggingVCursor) SetSysVar(name string, expr string) {
+	f.log = append(f.log, fmt.Sprintf("SysVar set with (%s,%v)", name, expr))
+}
+
+func (f *loggingVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
+	panic("implement me")
+}
+
+func (f *loggingVCursor) Session() SessionActions {
+	return f
+}
+
+func (f *loggingVCursor) SetTarget(target string) error {
+	f.log = append(f.log, fmt.Sprintf("Target set to %s", target))
+	return nil
 }
 
 func (f *loggingVCursor) Context() context.Context {
@@ -108,17 +181,32 @@ func (f *loggingVCursor) SetContextTimeout(timeout time.Duration) context.Cancel
 	return func() {}
 }
 
+func (f *loggingVCursor) ErrorGroupCancellableContext() *errgroup.Group {
+	panic("implement me")
+}
+
 func (f *loggingVCursor) RecordWarning(warning *querypb.QueryWarning) {
 	f.warnings = append(f.warnings, warning)
 }
 
-func (f *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	f.log = append(f.log, fmt.Sprintf("Execute %s %v %v", query, printBindVars(bindvars), isDML))
+func (f *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+	name := "Unknown"
+	switch co {
+	case vtgatepb.CommitOrder_NORMAL:
+		name = "Execute"
+	case vtgatepb.CommitOrder_PRE:
+		name = "ExecutePre"
+	case vtgatepb.CommitOrder_POST:
+		name = "ExecutePost"
+	case vtgatepb.CommitOrder_AUTOCOMMIT:
+		name = "ExecuteAutocommit"
+	}
+	f.log = append(f.log, fmt.Sprintf("%s %s %v %v", name, query, printBindVars(bindvars), rollbackOnError))
 	return f.nextResult()
 }
 
-func (f *loggingVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, []error) {
-	f.log = append(f.log, fmt.Sprintf("ExecuteMultiShard %v%v %v", printResolvedShardQueries(rss, queries), isDML, canAutocommit))
+func (f *loggingVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error) {
+	f.log = append(f.log, fmt.Sprintf("ExecuteMultiShard %v%v %v", printResolvedShardQueries(rss, queries), rollbackOnError, canAutocommit))
 	res, err := f.nextResult()
 	if err != nil {
 		return nil, []error{err}
@@ -182,6 +270,8 @@ func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Val
 			shards = f.shards[:1]
 		case key.DestinationNone:
 			// Nothing to do here.
+		case key.DestinationShard:
+			shards = []string{destination.String()}
 		default:
 			return nil, nil, fmt.Errorf("unsupported destination: %v", destination)
 		}
@@ -193,8 +283,9 @@ func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Val
 				visited[shard] = vi
 				rss = append(rss, &srvtopo.ResolvedShard{
 					Target: &querypb.Target{
-						Keyspace: keyspace,
-						Shard:    shard,
+						Keyspace:   keyspace,
+						Shard:      shard,
+						TabletType: f.resolvedTargetTabletType,
 					},
 				})
 				if ids != nil {
@@ -211,9 +302,7 @@ func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Val
 
 func (f *loggingVCursor) ExpectLog(t *testing.T, want []string) {
 	t.Helper()
-	if !reflect.DeepEqual(f.log, want) {
-		t.Errorf("vc.log:\n%v\nwant:\n%v", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
-	}
+	require.Equal(t, strings.Join(want, "\n"), strings.Join(f.log, "\n"))
 }
 
 func (f *loggingVCursor) ExpectWarnings(t *testing.T, want []*querypb.QueryWarning) {

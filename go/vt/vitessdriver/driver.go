@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@ import (
 	"encoding/json"
 	"errors"
 
+	"google.golang.org/grpc"
+	"vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
@@ -72,11 +74,18 @@ func OpenForStreaming(address, target string) (*sql.DB, error) {
 // It allows to pass in a Configuration struct to control all possible
 // settings of the Vitess Go SQL driver.
 func OpenWithConfiguration(c Configuration) (*sql.DB, error) {
+	c.setDefaults()
+
 	json, err := c.toJSON()
 	if err != nil {
 		return nil, err
 	}
-	return sql.Open("vitess", json)
+
+	if len(c.GRPCDialOptions) != 0 {
+		vtgateconn.RegisterDialer(c.Protocol, grpcvtgateconn.DialWithOpts(context.TODO(), c.GRPCDialOptions...))
+	}
+
+	return sql.Open(c.DriverName, json)
 }
 
 type drv struct {
@@ -102,12 +111,17 @@ func (d drv) Open(name string) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	c.setDefaults()
+
 	if c.convert, err = newConverter(&c.Configuration); err != nil {
 		return nil, err
 	}
+
 	if err = c.dial(); err != nil {
 		return nil, err
 	}
+
 	return c, nil
 }
 
@@ -139,12 +153,24 @@ type Configuration struct {
 	// This setting has no effect if ConvertDatetime is not set.
 	// Default: UTC
 	DefaultLocation string
+
+	// GRPCDialOptions registers a new vtgateconn dialer with these dial options using the
+	// protocol as the key. This may overwrite the default grpcvtgateconn dial option
+	// if a custom one hasn't been specified in the config.
+	//
+	// Default: none
+	GRPCDialOptions []grpc.DialOption `json:"-"`
+
+	// Driver is the name registered with the database/sql package. This override
+	// is here in case you have wrapped the driver for stats or other interceptors.
+	//
+	// Default: "vitess"
+	DriverName string `json:"-"`
 }
 
 // toJSON converts Configuration to the JSON string which is required by the
 // Vitess driver. Default values for empty fields will be set.
 func (c Configuration) toJSON() (string, error) {
-	c.setDefaults()
 	jsonBytes, err := json.Marshal(c)
 	if err != nil {
 		return "", err
@@ -154,8 +180,14 @@ func (c Configuration) toJSON() (string, error) {
 
 // setDefaults sets the default values for empty fields.
 func (c *Configuration) setDefaults() {
+	// if no protocol is provided default to grpc so the driver is in control
+	// of the connection protocol and not the flag vtgateconn.VtgateProtocol
 	if c.Protocol == "" {
 		c.Protocol = "grpc"
+	}
+
+	if c.DriverName == "" {
+		c.DriverName = "vitess"
 	}
 }
 
@@ -168,11 +200,7 @@ type conn struct {
 
 func (c *conn) dial() error {
 	var err error
-	if c.Protocol == "" {
-		c.conn, err = vtgateconn.Dial(context.Background(), c.Address)
-	} else {
-		c.conn, err = vtgateconn.DialProtocol(context.Background(), c.Protocol, c.Address)
-	}
+	c.conn, err = vtgateconn.DialProtocol(context.Background(), c.Protocol, c.Address)
 	if err != nil {
 		return err
 	}

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -18,6 +18,7 @@ package topotests
 
 import (
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -43,7 +44,7 @@ func waitForInitialSrvKeyspace(t *testing.T, ts *topo.Server, cell, keyspace str
 		switch {
 		case topo.IsErrType(current.Err, topo.NoNode):
 			// hasn't appeared yet
-			if time.Now().Sub(start) > 10*time.Second {
+			if time.Since(start) > 10*time.Second {
 				t.Fatalf("time out waiting for file to appear")
 			}
 			time.Sleep(10 * time.Millisecond)
@@ -140,7 +141,7 @@ func TestWatchSrvKeyspace(t *testing.T) {
 	cancel()
 
 	// Bad data in topo, setting the watch should now fail.
-	current, changes, cancel = ts.WatchSrvKeyspace(ctx, cell, keyspace)
+	current, _, _ = ts.WatchSrvKeyspace(ctx, cell, keyspace)
 	if current.Err == nil || !strings.Contains(current.Err.Error(), "error unpacking initial SrvKeyspace object") {
 		t.Fatalf("expected an initial error setting watch on bad content, but got: %v", current.Err)
 	}
@@ -151,11 +152,11 @@ func TestWatchSrvKeyspace(t *testing.T) {
 	}
 	start := time.Now()
 	for {
-		current, changes, cancel = ts.WatchSrvKeyspace(ctx, cell, keyspace)
+		current, changes, _ = ts.WatchSrvKeyspace(ctx, cell, keyspace)
 		if current.Err != nil {
 			if strings.Contains(current.Err.Error(), "error unpacking initial SrvKeyspace object") {
 				// hasn't changed yet
-				if time.Now().Sub(start) > 10*time.Second {
+				if time.Since(start) > 10*time.Second {
 					t.Fatalf("time out waiting for file to appear")
 				}
 				time.Sleep(10 * time.Millisecond)
@@ -198,7 +199,7 @@ func TestWatchSrvKeyspaceCancel(t *testing.T) {
 	ts := memorytopo.NewServer(cell)
 
 	// No SrvKeyspace -> ErrNoNode
-	current, changes, cancel := ts.WatchSrvKeyspace(ctx, cell, keyspace)
+	current, _, _ := ts.WatchSrvKeyspace(ctx, cell, keyspace)
 	if !topo.IsErrType(current.Err, topo.NoNode) {
 		t.Errorf("Got invalid result from WatchSrvKeyspace(not there): %v", current.Err)
 	}
@@ -212,7 +213,7 @@ func TestWatchSrvKeyspaceCancel(t *testing.T) {
 	}
 
 	// Starting the watch should now work.
-	current, changes, cancel = waitForInitialSrvKeyspace(t, ts, cell, keyspace)
+	current, changes, cancel := waitForInitialSrvKeyspace(t, ts, cell, keyspace)
 	if !proto.Equal(current.Value, wanted) {
 		t.Fatalf("got bad data: %v expected: %v", current.Value, wanted)
 	}
@@ -254,10 +255,10 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 	// Create initial value
 	initial := &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_MASTER,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "-",
 						KeyRange: keyRange[0],
 					},
@@ -291,18 +292,18 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 
 	targetKs := &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_MASTER,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "-",
 						KeyRange: keyRange[0],
 					},
-					&topodatapb.ShardReference{
+					{
 						Name:     "-80",
 						KeyRange: leftKeyRange[0],
 					},
-					&topodatapb.ShardReference{
+					{
 						Name:     "80-",
 						KeyRange: rightKeyRange[0],
 					},
@@ -348,10 +349,10 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 	// removing works
 	targetKs = &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_MASTER,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "-",
 						KeyRange: keyRange[0],
 					},
@@ -386,23 +387,23 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 	// You can add to partitions that do not exist
 	targetKs = &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_MASTER,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "-",
 						KeyRange: keyRange[0],
 					},
 				},
 			},
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_REPLICA,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "-80",
 						KeyRange: leftKeyRange[0],
 					},
-					&topodatapb.ShardReference{
+					{
 						Name:     "80-",
 						KeyRange: rightKeyRange[0],
 					},
@@ -465,6 +466,16 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 		t.Fatalf("GetSrvKeyspace() failed: %v", err)
 	}
 
+	got, err = json2.MarshalPB(srvKeyspace)
+	if err != nil {
+		t.Fatalf("MarshalPB() failed: %v", err)
+	}
+
+	want, err = json2.MarshalPB(targetKs)
+	if err != nil {
+		t.Fatalf("MarshalPB() failed: %v", err)
+	}
+
 	if string(got) != string(want) {
 		t.Errorf("GetSrvKeyspace() failure. Got %v, want: %v", string(got), string(want))
 	}
@@ -490,14 +501,14 @@ func TestUpdateUpdateDisableQueryService(t *testing.T) {
 	// Create initial value
 	initial := &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_MASTER,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "-80",
 						KeyRange: leftKeyRange[0],
 					},
-					&topodatapb.ShardReference{
+					{
 						Name:     "80-",
 						KeyRange: rightKeyRange[0],
 					},
@@ -521,25 +532,25 @@ func TestUpdateUpdateDisableQueryService(t *testing.T) {
 
 	targetKs := &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_MASTER,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "-80",
 						KeyRange: leftKeyRange[0],
 					},
-					&topodatapb.ShardReference{
+					{
 						Name:     "80-",
 						KeyRange: rightKeyRange[0],
 					},
 				},
 				ShardTabletControls: []*topodatapb.ShardTabletControl{
-					&topodatapb.ShardTabletControl{
+					{
 						Name:                 "-80",
 						KeyRange:             leftKeyRange[0],
 						QueryServiceDisabled: true,
 					},
-					&topodatapb.ShardTabletControl{
+					{
 						Name:                 "80-",
 						KeyRange:             rightKeyRange[0],
 						QueryServiceDisabled: true,
@@ -606,25 +617,25 @@ func TestUpdateUpdateDisableQueryService(t *testing.T) {
 	// You can enable query service
 	targetKs = &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_MASTER,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "-80",
 						KeyRange: leftKeyRange[0],
 					},
-					&topodatapb.ShardReference{
+					{
 						Name:     "80-",
 						KeyRange: rightKeyRange[0],
 					},
 				},
 				ShardTabletControls: []*topodatapb.ShardTabletControl{
-					&topodatapb.ShardTabletControl{
+					{
 						Name:                 "-80",
 						KeyRange:             leftKeyRange[0],
 						QueryServiceDisabled: false,
 					},
-					&topodatapb.ShardTabletControl{
+					{
 						Name:                 "80-",
 						KeyRange:             rightKeyRange[0],
 						QueryServiceDisabled: false,
@@ -682,32 +693,32 @@ func TestGetShardServingTypes(t *testing.T) {
 	// Create initial value
 	initial := &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_MASTER,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "-80",
 						KeyRange: leftKeyRange[0],
 					},
-					&topodatapb.ShardReference{
+					{
 						Name:     "80-",
 						KeyRange: rightKeyRange[0],
 					},
 				},
 			},
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_REPLICA,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "80-",
 						KeyRange: rightKeyRange[0],
 					},
 				},
 			},
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_RDONLY,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "-80",
 						KeyRange: leftKeyRange[0],
 					},
@@ -755,7 +766,7 @@ func TestGetShardServingTypes(t *testing.T) {
 		t.Errorf("GetShardServingTypes() failure. Got %v, want: %v", got, want)
 	}
 
-	keyRange, err := key.ParseShardingSpec("-")
+	keyRange, _ := key.ParseShardingSpec("-")
 
 	shardInfo = topo.NewShardInfo(keyspace, "-", &topodatapb.Shard{KeyRange: keyRange[0]}, nil)
 
@@ -790,32 +801,32 @@ func TestGetShardServingCells(t *testing.T) {
 	// Create initial value
 	initial := &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_MASTER,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "-80",
 						KeyRange: leftKeyRange[0],
 					},
-					&topodatapb.ShardReference{
+					{
 						Name:     "80-",
 						KeyRange: rightKeyRange[0],
 					},
 				},
 			},
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_REPLICA,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "80-",
 						KeyRange: rightKeyRange[0],
 					},
 				},
 			},
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_RDONLY,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "-80",
 						KeyRange: leftKeyRange[0],
 					},
@@ -866,7 +877,9 @@ func TestGetShardServingCells(t *testing.T) {
 		t.Fatalf("GetShardServingCells() failed: %v", err)
 	}
 
-	want = []string{cell2, cell}
+	want = []string{cell, cell2}
+
+	sort.Strings(got)
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("GetShardServingTypes() failure. Got %v, want: %v", got, want)
@@ -897,42 +910,42 @@ func TestMasterMigrateServedType(t *testing.T) {
 	// Create initial value
 	initial := &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_MASTER,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "-",
 						KeyRange: initialKeyRange[0],
 					},
 				},
 				ShardTabletControls: []*topodatapb.ShardTabletControl{
-					&topodatapb.ShardTabletControl{
+					{
 						Name:                 "-",
 						KeyRange:             initialKeyRange[0],
 						QueryServiceDisabled: true,
 					},
 				},
 			},
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_REPLICA,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "-",
 						KeyRange: initialKeyRange[0],
 					},
 				},
 				ShardTabletControls: []*topodatapb.ShardTabletControl{
-					&topodatapb.ShardTabletControl{
+					{
 						Name:                 "-",
 						KeyRange:             initialKeyRange[0],
 						QueryServiceDisabled: true,
 					},
 				},
 			},
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_RDONLY,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "-",
 						KeyRange: initialKeyRange[0],
 					},
@@ -978,46 +991,46 @@ func TestMasterMigrateServedType(t *testing.T) {
 
 	targetKs := &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_MASTER,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "-",
 						KeyRange: initialKeyRange[0],
 					},
 				},
 				ShardTabletControls: []*topodatapb.ShardTabletControl{
-					&topodatapb.ShardTabletControl{
+					{
 						Name:                 "-",
 						KeyRange:             initialKeyRange[0],
 						QueryServiceDisabled: true,
 					},
 				},
 			},
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_REPLICA,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "-",
 						KeyRange: initialKeyRange[0],
 					},
 				},
 				ShardTabletControls: []*topodatapb.ShardTabletControl{
-					&topodatapb.ShardTabletControl{
+					{
 						Name:                 "-",
 						KeyRange:             initialKeyRange[0],
 						QueryServiceDisabled: true,
 					},
 				},
 			},
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_RDONLY,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "-80",
 						KeyRange: leftKeyRange[0],
 					},
-					&topodatapb.ShardReference{
+					{
 						Name:     "80-",
 						KeyRange: rightKeyRange[0],
 					},
@@ -1094,36 +1107,36 @@ func TestMasterMigrateServedType(t *testing.T) {
 
 	targetKs = &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_MASTER,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "-80",
 						KeyRange: leftKeyRange[0],
 					},
-					&topodatapb.ShardReference{
+					{
 						Name:     "80-",
 						KeyRange: rightKeyRange[0],
 					},
 				},
 			},
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_REPLICA,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "-",
 						KeyRange: initialKeyRange[0],
 					},
 				},
 			},
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_RDONLY,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name:     "-80",
 						KeyRange: leftKeyRange[0],
 					},
-					&topodatapb.ShardReference{
+					{
 						Name:     "80-",
 						KeyRange: rightKeyRange[0],
 					},

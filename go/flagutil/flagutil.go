@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,9 +19,14 @@ limitations under the License.
 package flagutil
 
 import (
+	"errors"
 	"flag"
 	"sort"
 	"strings"
+)
+
+var (
+	errInvalidKeyValuePair = errors.New("invalid key:value pair")
 )
 
 // StringListValue is a []string flag that accepts a comma separated
@@ -95,6 +100,9 @@ func (value *StringMapValue) Set(v string) error {
 	pairs := parseListWithEscapes(v, ',')
 	for _, pair := range pairs {
 		parts := strings.SplitN(pair, ":", 2)
+		if len(parts) != 2 {
+			return errInvalidKeyValuePair
+		}
 		dict[parts[0]] = parts[1]
 	}
 	*value = dict

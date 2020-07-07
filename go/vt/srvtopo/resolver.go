@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -31,6 +31,16 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+// A Gateway is the query processing module for each shard,
+// which is used by ScatterConn.
+type Gateway interface {
+	// the query service that this Gateway wraps around
+	queryservice.QueryService
+
+	// QueryServiceByAlias returns a QueryService
+	QueryServiceByAlias(alias *topodatapb.TabletAlias) (queryservice.QueryService, error)
+}
+
 // A Resolver can resolve keyspace ids and key ranges into ResolvedShard*
 // objects. It uses an underlying srvtopo.Server to find the topology,
 // and a TargetStats object to find the healthy destinations.
@@ -38,8 +48,8 @@ type Resolver struct {
 	// topoServ is the srvtopo.Server to use for topo queries.
 	topoServ Server
 
-	// stats provides the health information.
-	stats TargetStats
+	// gateway
+	gateway Gateway
 
 	// localCell is the local cell for the queries.
 	localCell string
@@ -50,10 +60,10 @@ type Resolver struct {
 }
 
 // NewResolver creates a new Resolver.
-func NewResolver(topoServ Server, stats TargetStats, localCell string) *Resolver {
+func NewResolver(topoServ Server, gateway Gateway, localCell string) *Resolver {
 	return &Resolver{
 		topoServ:  topoServ,
-		stats:     stats,
+		gateway:   gateway,
 		localCell: localCell,
 	}
 }
@@ -63,8 +73,8 @@ type ResolvedShard struct {
 	// Target describes the target shard.
 	Target *querypb.Target
 
-	// QueryService is the actual way to execute the query.
-	QueryService queryservice.QueryService
+	// Gateway is the way to execute a query on this shard
+	Gateway Gateway
 }
 
 // ResolvedShardEqual is an equality check on *ResolvedShard.
@@ -130,18 +140,13 @@ func (r *Resolver) GetAllShards(ctx context.Context, keyspace string, tabletType
 			TabletType: tabletType,
 			Cell:       r.localCell,
 		}
-		_, qs, err := r.stats.GetAggregateStats(target)
-		if err != nil {
-			return nil, nil, resolverError(err, target)
-		}
-
-		// FIXME(alainjobart) we ignore the stats for now.
+		// Right now we always set the Cell to ""
 		// Later we can fallback to another cell if needed.
 		// We would then need to read the SrvKeyspace there too.
 		target.Cell = ""
 		res[i] = &ResolvedShard{
-			Target:       target,
-			QueryService: qs,
+			Target:  target,
+			Gateway: r.gateway,
 		}
 	}
 	return res, srvKeyspace, nil
@@ -149,7 +154,7 @@ func (r *Resolver) GetAllShards(ctx context.Context, keyspace string, tabletType
 
 // GetAllKeyspaces returns all the known keyspaces in the local cell.
 func (r *Resolver) GetAllKeyspaces(ctx context.Context) ([]string, error) {
-	keyspaces, err := r.topoServ.GetSrvKeyspaceNames(ctx, r.localCell)
+	keyspaces, err := r.topoServ.GetSrvKeyspaceNames(ctx, r.localCell, true)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "keyspace names fetch error: %v", err)
 	}
@@ -193,19 +198,14 @@ func (r *Resolver) ResolveDestinations(ctx context.Context, keyspace string, tab
 					TabletType: tabletType,
 					Cell:       r.localCell,
 				}
-				_, qs, err := r.stats.GetAggregateStats(target)
-				if err != nil {
-					return resolverError(err, target)
-				}
-
-				// FIXME(alainjobart) we ignore the stats for now.
+				// Right now we always set the Cell to ""
 				// Later we can fallback to another cell if needed.
 				// We would then need to read the SrvKeyspace there too.
 				target.Cell = ""
 				s = len(result)
 				result = append(result, &ResolvedShard{
-					Target:       target,
-					QueryService: qs,
+					Target:  target,
+					Gateway: r.gateway,
 				})
 				if ids != nil {
 					values = append(values, nil)
@@ -246,8 +246,4 @@ func ValuesEqual(vss1, vss2 [][]*querypb.Value) bool {
 		}
 	}
 	return true
-}
-
-func resolverError(in error, target *querypb.Target) error {
-	return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "target: %s.%s.%s, no valid tablet: %v", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType), in)
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,10 +28,11 @@ import (
 // MessageRow represents a message row.
 // The first column in Row is always the "id".
 type MessageRow struct {
-	TimeNext    int64
-	Epoch       int64
-	TimeCreated int64
-	Row         []sqltypes.Value
+	Priority  int64
+	TimeNext  int64
+	Epoch     int64
+	TimeAcked int64
+	Row       []sqltypes.Value
 
 	// defunct is set if the row was asked to be removed
 	// from cache.
@@ -47,8 +48,8 @@ func (mh messageHeap) Len() int {
 func (mh messageHeap) Less(i, j int) bool {
 	// Lower epoch is more important.
 	// If epochs match, newer messages are more important.
-	return mh[i].Epoch < mh[j].Epoch ||
-		(mh[i].Epoch == mh[j].Epoch && mh[i].TimeNext > mh[j].TimeNext)
+	return mh[i].Priority < mh[j].Priority ||
+		(mh[i].Priority == mh[j].Priority && mh[i].TimeNext > mh[j].TimeNext)
 }
 
 func (mh messageHeap) Swap(i, j int) {
@@ -100,6 +101,12 @@ func newCache(size int) *cache {
 		inFlight: make(map[string]bool),
 	}
 	return mc
+}
+
+func (mc *cache) IsEmpty() bool {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	return len(mc.sendQueue) == 0
 }
 
 // Clear clears the cache.

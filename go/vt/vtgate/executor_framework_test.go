@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 
@@ -267,6 +268,11 @@ var unshardedVSchema = `
 }
 `
 
+const (
+	testBufferSize = 10
+	testCacheSize  = int64(10)
+)
+
 type DestinationAnyShardPickerFirstShard struct{}
 
 func (dp DestinationAnyShardPickerFirstShard) PickShard(shardCount int) int {
@@ -280,7 +286,7 @@ type keyRangeLookuper struct {
 func (v *keyRangeLookuper) String() string   { return "keyrange_lookuper" }
 func (*keyRangeLookuper) Cost() int          { return 0 }
 func (*keyRangeLookuper) IsUnique() bool     { return false }
-func (*keyRangeLookuper) IsFunctional() bool { return false }
+func (*keyRangeLookuper) NeedsVCursor() bool { return false }
 func (*keyRangeLookuper) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
@@ -305,7 +311,7 @@ type keyRangeLookuperUnique struct {
 func (v *keyRangeLookuperUnique) String() string   { return "keyrange_lookuper" }
 func (*keyRangeLookuperUnique) Cost() int          { return 0 }
 func (*keyRangeLookuperUnique) IsUnique() bool     { return true }
-func (*keyRangeLookuperUnique) IsFunctional() bool { return false }
+func (*keyRangeLookuperUnique) NeedsVCursor() bool { return false }
 func (*keyRangeLookuperUnique) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
@@ -326,18 +332,19 @@ func newKeyRangeLookuperUnique(name string, params map[string]string) (vindexes.
 func init() {
 	vindexes.Register("keyrange_lookuper", newKeyRangeLookuper)
 	vindexes.Register("keyrange_lookuper_unique", newKeyRangeLookuperUnique)
+	// Use legacy gateway until we can rewrite these tests to use new tabletgateway
+	*GatewayImplementation = GatewayImplementationDiscovery
 }
 
-const testBufferSize = 10
-const testCacheSize = int64(10)
-
 func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
+	// Use legacy gateway until we can rewrite these tests to use new tabletgateway
+	*GatewayImplementation = GatewayImplementationDiscovery
 	cell := "aa"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
 	serv := newSandboxForCells([]string{cell})
-	resolver := newTestResolver(hc, serv, cell)
+	resolver := newTestLegacyResolver(hc, serv, cell)
 	sbc1 = hc.AddTestTablet(cell, "-20", 1, "TestExecutor", "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestExecutor", "40-60", topodatapb.TabletType_MASTER, true, 1, nil)
 	// Create these connections so scatter queries don't fail.
@@ -357,19 +364,19 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	bad.VSchema = badVSchema
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 
-	executor = NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize, false)
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	return executor, sbc1, sbc2, sbclookup
 }
 
 func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeLegacyHealthCheck()
 	s := createSandbox("TestExecutor")
 	s.VSchema = vschema
 	serv := newSandboxForCells([]string{cell})
-	resolver := newTestResolver(hc, serv, cell)
+	resolver := newTestLegacyResolver(hc, serv, cell)
 	sbc1 = hc.AddTestTablet(cell, "-20", 1, "TestExecutor", "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestExecutor", "40-60", topodatapb.TabletType_MASTER, true, 1, nil)
 
@@ -377,12 +384,21 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	executor = NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize, false)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
 	return executor, sbc1, sbc2, sbclookup
 }
 
 func executorExec(executor *Executor, sql string, bv map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return executor.Execute(
+		context.Background(),
+		"TestExecute",
+		NewSafeSession(masterSession),
+		sql,
+		bv)
+}
+
+func executorPrepare(executor *Executor, sql string, bv map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
+	return executor.Prepare(
 		context.Background(),
 		"TestExecute",
 		NewSafeSession(masterSession),
@@ -543,4 +559,10 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 	}
 
 	return logStats
+}
+
+func newTestLegacyResolver(hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string) *Resolver {
+	sc := newTestLegacyScatterConn(hc, serv, cell)
+	srvResolver := srvtopo.NewResolver(serv, sc.gateway, cell)
+	return NewResolver(srvResolver, serv, cell, sc)
 }

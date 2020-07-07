@@ -1,0 +1,108 @@
+apiVersion: planetscale.com/v2
+kind: VitessCluster
+metadata:
+  name: example
+spec:
+  images:
+    vtctld: us.gcr.io/planetscale-vitess/lite:2020-04-24.228e6fe
+    vtgate: us.gcr.io/planetscale-vitess/lite:2020-04-24.228e6fe
+    vttablet: us.gcr.io/planetscale-vitess/lite:2020-04-24.228e6fe
+    vtbackup: us.gcr.io/planetscale-vitess/lite:2020-04-24.228e6fe
+    mysqld:
+      mysql56Compatible: us.gcr.io/planetscale-vitess/lite:2020-04-24.228e6fe
+    mysqldExporter: prom/mysqld-exporter:v0.11.0
+  cells:
+  - name: zone1
+    gateway:
+      authentication:
+        static:
+          secret:
+            name: example-cluster-config
+            key: users.json
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          memory: 256Mi
+  vitessDashboard:
+    cells:
+    - zone1
+    extraFlags:
+      security_policy: read-only
+    replicas: 1
+    resources:
+      limits:
+        memory: 128Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+
+  keyspaces:
+  - name: commerce
+    turndownPolicy: Immediate
+    partitionings:
+    - equal:
+        parts: 1
+        shardTemplate:
+          databaseInitScriptSecret:
+            name: example-cluster-config
+            key: init_db.sql
+          replication:
+            enforceSemiSync: false
+          tabletPools:
+          - cell: zone1
+            type: replica
+            replicas: 2
+            vttablet:
+              extraFlags:
+                db_charset: utf8mb4
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+            mysqld:
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+            dataVolumeClaimTemplate:
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 10Gi
+  - name: customer
+    turndownPolicy: Immediate
+    partitionings:
+    - equal:
+        parts: 2
+        shardTemplate:
+          databaseInitScriptSecret:
+            name: example-cluster-config
+            key: init_db.sql
+          replication:
+            enforceSemiSync: false
+          tabletPools:
+          - cell: zone1
+            type: replica
+            replicas: 2
+            vttablet:
+              extraFlags:
+                db_charset: utf8mb4
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+            mysqld:
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+            dataVolumeClaimTemplate:
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 10Gi
+  updateStrategy:
+    type: Immediate

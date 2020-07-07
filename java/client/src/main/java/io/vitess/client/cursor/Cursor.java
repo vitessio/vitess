@@ -1,12 +1,12 @@
 /*
- * Copyright 2017 Google Inc.
- *
+ * Copyright 2019 The Vitess Authors.
+
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+
  *     http://www.apache.org/licenses/LICENSE-2.0
- *
+
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -42,8 +42,8 @@ import javax.annotation.concurrent.NotThreadSafe;
  * should be called to free resources when done, regardless of whether all the rows were processed.
  *
  * <p>Each individual {@code Cursor} is not thread-safe; it must be protected if used concurrently.
- * However, two cursors from the same {@link io.vitess.client.VTGateConn VTGateConn} can be accessed
- * concurrently without additional synchronization.
+ * However, two cursors from the same {@link io.vitess.client.VTGateConnection VTGateConnection}
+ * can be accessed concurrently without additional synchronization.
  */
 @NotThreadSafe
 public abstract class Cursor implements AutoCloseable {

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ func (et *ExplainTopo) GetTopoServer() (*topo.Server, error) {
 }
 
 // GetSrvKeyspaceNames is part of the srvtopo.Server interface.
-func (et *ExplainTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
+func (et *ExplainTopo) GetSrvKeyspaceNames(ctx context.Context, cell string, staleOK bool) ([]string, error) {
 	et.Lock.Lock()
 	defer et.Lock.Unlock()
 

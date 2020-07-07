@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -19,13 +19,21 @@ package vtgate
 import (
 	"io/ioutil"
 	"os"
+	"path"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/trace"
 
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/tlstest"
 )
 
 type testHandler struct {
@@ -43,6 +51,17 @@ func (th *testHandler) ComQuery(c *mysql.Conn, q string, callback func(*sqltypes
 	return nil
 }
 
+func (th *testHandler) ComPrepare(c *mysql.Conn, q string, b map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
+	return nil, nil
+}
+
+func (th *testHandler) ComResetConnection(c *mysql.Conn) {
+}
+
+func (th *testHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+	return nil
+}
+
 func (th *testHandler) WarningCount(c *mysql.Conn) uint16 {
 	return 0
 }
@@ -50,15 +69,7 @@ func (th *testHandler) WarningCount(c *mysql.Conn) uint16 {
 func TestConnectionUnixSocket(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := mysql.NewAuthServerStatic()
-
-	authServer.Entries["user1"] = []*mysql.AuthServerStaticEntry{
-		{
-			Password:   "password1",
-			UserData:   "userData1",
-			SourceHost: "localhost",
-		},
-	}
+	authServer := newTestAuthServerStatic()
 
 	// Use tmp file to reserve a path, remove it immediately, we only care about
 	// name in this context
@@ -91,15 +102,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 func TestConnectionStaleUnixSocket(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := mysql.NewAuthServerStatic()
-
-	authServer.Entries["user1"] = []*mysql.AuthServerStaticEntry{
-		{
-			Password:   "password1",
-			UserData:   "userData1",
-			SourceHost: "localhost",
-		},
-	}
+	authServer := newTestAuthServerStatic()
 
 	// First let's create a file. In this way, we simulate
 	// having a stale socket on disk that needs to be cleaned up.
@@ -131,15 +134,7 @@ func TestConnectionStaleUnixSocket(t *testing.T) {
 func TestConnectionRespectsExistingUnixSocket(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := mysql.NewAuthServerStatic()
-
-	authServer.Entries["user1"] = []*mysql.AuthServerStaticEntry{
-		{
-			Password:   "password1",
-			UserData:   "userData1",
-			SourceHost: "localhost",
-		},
-	}
+	authServer := newTestAuthServerStatic()
 
 	unixSocket, err := ioutil.TempFile("", "mysql_vitess_test.sock")
 	if err != nil {
@@ -157,5 +152,106 @@ func TestConnectionRespectsExistingUnixSocket(t *testing.T) {
 	want := "listen unix"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, want prefix %s", err, want)
+	}
+}
+
+var newSpanOK = func(ctx context.Context, label string) (trace.Span, context.Context) {
+	return trace.NoopSpan{}, context.Background()
+}
+
+var newFromStringOK = func(ctx context.Context, spanContext, label string) (trace.Span, context.Context, error) {
+	return trace.NoopSpan{}, context.Background(), nil
+}
+
+func newFromStringFail(t *testing.T) func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
+	return func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
+		t.Fatalf("we didn't provide a parent span in the sql query. this should not have been called. got: %v", parentSpan)
+		return trace.NoopSpan{}, context.Background(), nil
+	}
+}
+
+func newFromStringExpect(t *testing.T, expected string) func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
+	return func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
+		assert.Equal(t, expected, parentSpan)
+		return trace.NoopSpan{}, context.Background(), nil
+	}
+}
+
+func newSpanFail(t *testing.T) func(ctx context.Context, label string) (trace.Span, context.Context) {
+	return func(ctx context.Context, label string) (trace.Span, context.Context) {
+		t.Fatalf("we provided a span context but newFromString was not used as expected")
+		return trace.NoopSpan{}, context.Background()
+	}
+}
+
+func TestNoSpanContextPassed(t *testing.T) {
+	_, _, err := startSpanTestable(context.Background(), "sql without comments", "someLabel", newSpanOK, newFromStringFail(t))
+	assert.NoError(t, err)
+}
+
+func TestSpanContextNoPassedInButExistsInString(t *testing.T) {
+	_, _, err := startSpanTestable(context.Background(), "SELECT * FROM SOMETABLE WHERE COL = \"/*VT_SPAN_CONTEXT=123*/", "someLabel", newSpanOK, newFromStringFail(t))
+	assert.NoError(t, err)
+}
+
+func TestSpanContextPassedIn(t *testing.T) {
+	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel", newSpanFail(t), newFromStringOK)
+	assert.NoError(t, err)
+}
+
+func TestSpanContextPassedInEvenAroundOtherComments(t *testing.T) {
+	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*/SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS */ col1, col2 FROM TABLE ", "someLabel",
+		newSpanFail(t),
+		newFromStringExpect(t, "123"))
+	assert.NoError(t, err)
+}
+
+func newTestAuthServerStatic() *mysql.AuthServerStatic {
+	jsonConfig := "{\"user1\":{\"Password\":\"password1\", \"UserData\":\"userData1\", \"SourceHost\":\"localhost\"}}"
+	return mysql.NewAuthServerStatic("", jsonConfig, 0)
+}
+
+func TestDefaultWorkloadEmpty(t *testing.T) {
+	vh := &vtgateHandler{}
+	sess := vh.session(&mysql.Conn{})
+	if sess.Options.Workload != querypb.ExecuteOptions_UNSPECIFIED {
+		t.Fatalf("Expected default workload UNSPECIFIED")
+	}
+}
+
+func TestDefaultWorkloadOLAP(t *testing.T) {
+	vh := &vtgateHandler{}
+	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLAP)
+	sess := vh.session(&mysql.Conn{})
+	if sess.Options.Workload != querypb.ExecuteOptions_OLAP {
+		t.Fatalf("Expected default workload OLAP")
+	}
+}
+
+func TestInitTLSConfig(t *testing.T) {
+	// Create the certs.
+	root, err := ioutil.TempDir("", "TestInitTLSConfig")
+	if err != nil {
+		t.Fatalf("TempDir failed: %v", err)
+	}
+	defer os.RemoveAll(root)
+	tlstest.CreateCA(root)
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
+
+	listener := &mysql.Listener{}
+	if err := initTLSConfig(listener, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), true); err != nil {
+		t.Fatalf("init tls config failure due to: +%v", err)
+	}
+
+	serverConfig := listener.TLSConfig.Load()
+	if serverConfig == nil {
+		t.Fatalf("init tls config shouldn't create nil server config")
+	}
+
+	sigChan <- syscall.SIGHUP
+	time.Sleep(100 * time.Millisecond) // wait for signal handler
+
+	if listener.TLSConfig.Load() == serverConfig {
+		t.Fatalf("init tls config should have been recreated after SIGHUP")
 	}
 }

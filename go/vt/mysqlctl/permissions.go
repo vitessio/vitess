@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,13 +22,15 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
-// GetPermissions lists the permissions on the mysqld
+// GetPermissions lists the permissions on the mysqld.
+// The rows are sorted in primary key order to help with comparing
+// permissions between tablets.
 func GetPermissions(mysqld MysqlDaemon) (*tabletmanagerdatapb.Permissions, error) {
 	ctx := context.TODO()
 	permissions := &tabletmanagerdatapb.Permissions{}
 
 	// get Users
-	qr, err := mysqld.FetchSuperQuery(ctx, "SELECT * FROM mysql.user")
+	qr, err := mysqld.FetchSuperQuery(ctx, "SELECT * FROM mysql.user ORDER BY host, user")
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +39,7 @@ func GetPermissions(mysqld MysqlDaemon) (*tabletmanagerdatapb.Permissions, error
 	}
 
 	// get Dbs
-	qr, err = mysqld.FetchSuperQuery(ctx, "SELECT * FROM mysql.db")
+	qr, err = mysqld.FetchSuperQuery(ctx, "SELECT * FROM mysql.db ORDER BY host, db, user")
 	if err != nil {
 		return nil, err
 	}

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,12 +20,13 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
+
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
@@ -127,9 +128,9 @@ func NewTwoPC(readPool *connpool.Pool) *TwoPC {
 
 // Init initializes TwoPC. If the metadata database or tables
 // are not present, they are created.
-func (tpc *TwoPC) Init(sidecarDBName string, dbaparams *mysql.ConnParams) error {
-	dbname := sqlescape.EscapeID(sidecarDBName)
-	conn, err := dbconnpool.NewDBConnection(dbaparams, stats.NewTimings("", "", ""))
+func (tpc *TwoPC) Init(dbaparams dbconfigs.Connector) error {
+	dbname := "_vt"
+	conn, err := dbconnpool.NewDBConnection(context.TODO(), dbaparams)
 	if err != nil {
 		return err
 	}
@@ -210,7 +211,7 @@ func (tpc *TwoPC) Close() {
 }
 
 // SaveRedo saves the statements in the redo log using the supplied connection.
-func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *TxConnection, dtid string, queries []string) error {
+func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *StatefulConnection, dtid string, queries []string) error {
 	bindVars := map[string]*querypb.BindVariable{
 		"dtid":         sqltypes.StringBindVariable(dtid),
 		"state":        sqltypes.Int64BindVariable(RedoStatePrepared),
@@ -241,7 +242,7 @@ func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *TxConnection, dtid string,
 }
 
 // UpdateRedo changes the state of the redo log for the dtid.
-func (tpc *TwoPC) UpdateRedo(ctx context.Context, conn *TxConnection, dtid string, state int) error {
+func (tpc *TwoPC) UpdateRedo(ctx context.Context, conn *StatefulConnection, dtid string, state int) error {
 	bindVars := map[string]*querypb.BindVariable{
 		"dtid":  sqltypes.StringBindVariable(dtid),
 		"state": sqltypes.Int64BindVariable(int64(state)),
@@ -251,7 +252,7 @@ func (tpc *TwoPC) UpdateRedo(ctx context.Context, conn *TxConnection, dtid strin
 }
 
 // DeleteRedo deletes the redo log for the dtid.
-func (tpc *TwoPC) DeleteRedo(ctx context.Context, conn *TxConnection, dtid string) error {
+func (tpc *TwoPC) DeleteRedo(ctx context.Context, conn *StatefulConnection, dtid string) error {
 	bindVars := map[string]*querypb.BindVariable{
 		"dtid": sqltypes.StringBindVariable(dtid),
 	}
@@ -263,15 +264,8 @@ func (tpc *TwoPC) DeleteRedo(ctx context.Context, conn *TxConnection, dtid strin
 	return err
 }
 
-// PreparedTx represents a displayable version of a prepared transaction.
-type PreparedTx struct {
-	Dtid    string
-	Queries []string
-	Time    time.Time
-}
-
 // ReadAllRedo returns all the prepared transactions from the redo logs.
-func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*PreparedTx, err error) {
+func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*tx.PreparedTx, err error) {
 	conn, err := tpc.readPool.Get(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -283,19 +277,19 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*Prepared
 		return nil, nil, err
 	}
 
-	var curTx *PreparedTx
+	var curTx *tx.PreparedTx
 	for _, row := range qr.Rows {
 		dtid := row[0].ToString()
 		if curTx == nil || dtid != curTx.Dtid {
 			// Initialize the new element.
 			// A failure in time parsing will show up as a very old time,
 			// which is harmless.
-			tm, _ := sqltypes.ToInt64(row[2])
-			curTx = &PreparedTx{
+			tm, _ := evalengine.ToInt64(row[2])
+			curTx = &tx.PreparedTx{
 				Dtid: dtid,
 				Time: time.Unix(0, tm),
 			}
-			st, err := sqltypes.ToInt64(row[1])
+			st, err := evalengine.ToInt64(row[1])
 			if err != nil {
 				log.Errorf("Error parsing state for dtid %s: %v.", dtid, err)
 			}
@@ -332,12 +326,12 @@ func (tpc *TwoPC) CountUnresolvedRedo(ctx context.Context, unresolvedTime time.T
 	if len(qr.Rows) < 1 {
 		return 0, nil
 	}
-	v, _ := sqltypes.ToInt64(qr.Rows[0][0])
+	v, _ := evalengine.ToInt64(qr.Rows[0][0])
 	return v, nil
 }
 
 // CreateTransaction saves the metadata of a 2pc transaction as Prepared.
-func (tpc *TwoPC) CreateTransaction(ctx context.Context, conn *TxConnection, dtid string, participants []*querypb.Target) error {
+func (tpc *TwoPC) CreateTransaction(ctx context.Context, conn *StatefulConnection, dtid string, participants []*querypb.Target) error {
 	bindVars := map[string]*querypb.BindVariable{
 		"dtid":     sqltypes.StringBindVariable(dtid),
 		"state":    sqltypes.Int64BindVariable(int64(DTStatePrepare)),
@@ -370,7 +364,7 @@ func (tpc *TwoPC) CreateTransaction(ctx context.Context, conn *TxConnection, dti
 
 // Transition performs a transition from Prepare to the specified state.
 // If the transaction is not a in the Prepare state, an error is returned.
-func (tpc *TwoPC) Transition(ctx context.Context, conn *TxConnection, dtid string, state querypb.TransactionState) error {
+func (tpc *TwoPC) Transition(ctx context.Context, conn *StatefulConnection, dtid string, state querypb.TransactionState) error {
 	bindVars := map[string]*querypb.BindVariable{
 		"dtid":    sqltypes.StringBindVariable(dtid),
 		"state":   sqltypes.Int64BindVariable(int64(state)),
@@ -387,7 +381,7 @@ func (tpc *TwoPC) Transition(ctx context.Context, conn *TxConnection, dtid strin
 }
 
 // DeleteTransaction deletes the metadata for the specified transaction.
-func (tpc *TwoPC) DeleteTransaction(ctx context.Context, conn *TxConnection, dtid string) error {
+func (tpc *TwoPC) DeleteTransaction(ctx context.Context, conn *StatefulConnection, dtid string) error {
 	bindVars := map[string]*querypb.BindVariable{
 		"dtid": sqltypes.StringBindVariable(dtid),
 	}
@@ -419,7 +413,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 		return result, nil
 	}
 	result.Dtid = qr.Rows[0][0].ToString()
-	st, err := sqltypes.ToInt64(qr.Rows[0][1])
+	st, err := evalengine.ToInt64(qr.Rows[0][1])
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "Error parsing state for dtid %s", dtid)
 	}
@@ -429,7 +423,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 	}
 	// A failure in time parsing will show up as a very old time,
 	// which is harmless.
-	tm, _ := sqltypes.ToInt64(qr.Rows[0][2])
+	tm, _ := evalengine.ToInt64(qr.Rows[0][2])
 	result.TimeCreated = tm
 
 	qr, err = tpc.read(ctx, conn, tpc.readParticipants, bindVars)
@@ -466,7 +460,7 @@ func (tpc *TwoPC) ReadAbandoned(ctx context.Context, abandonTime time.Time) (map
 	}
 	txs := make(map[string]time.Time, len(qr.Rows))
 	for _, row := range qr.Rows {
-		t, err := sqltypes.ToInt64(row[1])
+		t, err := evalengine.ToInt64(row[1])
 		if err != nil {
 			return nil, err
 		}
@@ -475,17 +469,8 @@ func (tpc *TwoPC) ReadAbandoned(ctx context.Context, abandonTime time.Time) (map
 	return txs, nil
 }
 
-// DistributedTx is similar to querypb.TransactionMetadata, but
-// is display friendly.
-type DistributedTx struct {
-	Dtid         string
-	State        string
-	Created      time.Time
-	Participants []querypb.Target
-}
-
 // ReadAllTransactions returns info about all distributed transactions.
-func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*DistributedTx, error) {
+func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*tx.DistributedTx, error) {
 	conn, err := tpc.readPool.Get(ctx)
 	if err != nil {
 		return nil, err
@@ -497,16 +482,16 @@ func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*DistributedTx, er
 		return nil, err
 	}
 
-	var curTx *DistributedTx
-	var distributed []*DistributedTx
+	var curTx *tx.DistributedTx
+	var distributed []*tx.DistributedTx
 	for _, row := range qr.Rows {
 		dtid := row[0].ToString()
 		if curTx == nil || dtid != curTx.Dtid {
 			// Initialize the new element.
 			// A failure in time parsing will show up as a very old time,
 			// which is harmless.
-			tm, _ := sqltypes.ToInt64(row[2])
-			st, err := sqltypes.ToInt64(row[1])
+			tm, _ := evalengine.ToInt64(row[2])
+			st, err := evalengine.ToInt64(row[1])
 			// Just log on error and continue. The state will show up as UNKNOWN
 			// on the display.
 			if err != nil {
@@ -516,7 +501,7 @@ func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*DistributedTx, er
 			if protostate < querypb.TransactionState_UNKNOWN || protostate > querypb.TransactionState_ROLLBACK {
 				log.Errorf("Unexpected state for dtid %s: %v.", dtid, protostate)
 			}
-			curTx = &DistributedTx{
+			curTx = &tx.DistributedTx{
 				Dtid:    dtid,
 				State:   querypb.TransactionState(st).String(),
 				Created: time.Unix(0, tm),
@@ -531,7 +516,7 @@ func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*DistributedTx, er
 	return distributed, nil
 }
 
-func (tpc *TwoPC) exec(ctx context.Context, conn *TxConnection, pq *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (tpc *TwoPC) exec(ctx context.Context, conn *StatefulConnection, pq *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	q, err := pq.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err

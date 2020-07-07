@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -21,10 +21,10 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/trace"
 
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/schemamanager/schemaswap"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl"
@@ -53,9 +53,6 @@ func initWorkflowManager(ts *topo.Server) {
 		topovalidator.RegisterKeyspaceValidator()
 		topovalidator.RegisterShardValidator()
 		topovalidator.Register()
-
-		// Register the Schema Swap workflow.
-		schemaswap.RegisterWorkflowFactory()
 
 		// Register the Horizontal Resharding workflow.
 		resharding.Register()
@@ -99,7 +96,9 @@ func runWorkflowManagerElection(ts *topo.Server) {
 	// We use servenv.ListeningURL which is only populated during Run,
 	// so we have to start this with OnRun.
 	servenv.OnRun(func() {
-		ctx := context.Background()
+		span, ctx := trace.NewSpan(context.Background(), "WorkflowManagerElection")
+		defer span.Finish()
+
 		conn, err := ts.ConnForCell(ctx, topo.GlobalCell)
 		if err != nil {
 			log.Errorf("Cannot get global cell topo connection, disabling workflow manager: %v", err)

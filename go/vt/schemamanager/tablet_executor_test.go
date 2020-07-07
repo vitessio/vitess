@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ import (
 )
 
 var (
-	testWaitSlaveTimeout = 10 * time.Second
+	testWaitReplicasTimeout = 10 * time.Second
 )
 
 func TestTabletExecutorOpen(t *testing.T) {
@@ -68,7 +68,7 @@ func TestTabletExecutorOpenWithEmptyMasterAlias(t *testing.T) {
 	if err := wr.InitTablet(ctx, tablet, false /*allowMasterOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
-	executor := NewTabletExecutor(wr, testWaitSlaveTimeout)
+	executor := NewTabletExecutor(wr, testWaitReplicasTimeout)
 	if err := executor.Open(ctx, "test_keyspace"); err == nil || !strings.Contains(err.Error(), "does not have a master") {
 		t.Fatalf("executor.Open() = '%v', want error", err)
 	}
@@ -102,12 +102,14 @@ func TestTabletExecutorValidate(t *testing.T) {
 	})
 
 	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(t), fakeTmc)
-	executor := NewTabletExecutor(wr, testWaitSlaveTimeout)
+	executor := NewTabletExecutor(wr, testWaitReplicasTimeout)
 	ctx := context.Background()
 
 	sqls := []string{
 		"ALTER TABLE test_table ADD COLUMN new_id bigint(20)",
 		"CREATE TABLE test_table_02 (pk int)",
+		"ALTER DATABASE db_name DEFAULT CHARACTER SET = utf8mb4",
+		"ALTER SCHEMA db_name CHARACTER SET = utf8mb4",
 	}
 
 	if err := executor.Validate(ctx, sqls); err == nil {
@@ -190,7 +192,7 @@ func TestTabletExecutorDML(t *testing.T) {
 	})
 
 	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(t), fakeTmc)
-	executor := NewTabletExecutor(wr, testWaitSlaveTimeout)
+	executor := NewTabletExecutor(wr, testWaitReplicasTimeout)
 	ctx := context.Background()
 
 	executor.Open(ctx, "unsharded_keyspace")

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -32,14 +32,14 @@ func TestRegisterDialer(t *testing.T) {
 
 func TestGetDialerWithProtocol(t *testing.T) {
 	protocol := "test2"
-	c, err := DialProtocol(context.Background(), protocol, "")
+	_, err := DialProtocol(context.Background(), protocol, "")
 	if err == nil || err.Error() != "no dialer registered for VTGate protocol "+protocol {
 		t.Fatalf("protocol: %s is not registered, should return error: %v", protocol, err)
 	}
 	RegisterDialer(protocol, func(context.Context, string) (Impl, error) {
 		return nil, nil
 	})
-	c, err = DialProtocol(context.Background(), protocol, "")
+	c, err := DialProtocol(context.Background(), protocol, "")
 	if err != nil || c == nil {
 		t.Fatalf("dialerFunc has been registered, should not get nil: %v %v", err, c)
 	}

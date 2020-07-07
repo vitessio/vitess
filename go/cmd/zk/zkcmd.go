@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/samuel/go-zookeeper/zk"
+	"github.com/z-division/go-zookeeper/zk"
 	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/net/context"
 
@@ -50,6 +50,8 @@ It tries to mimic unix file system commands wherever possible, but
 there are some slight differences in flag handling.
 
 zk -h - provide help on overriding cell selection
+
+zk addAuth digest user:pass
 
 zk cat /zk/path
 zk cat -l /zk/path1 /zk/path2 (list filename before file data)
@@ -111,18 +113,19 @@ var zconn *zk2topo.ZkConn
 
 func init() {
 	cmdMap = map[string]cmdFunc{
-		"cat":   cmdCat,
-		"chmod": cmdChmod,
-		"cp":    cmdCp,
-		"edit":  cmdEdit,
-		"ls":    cmdLs,
-		"rm":    cmdRm,
-		"stat":  cmdStat,
-		"touch": cmdTouch,
-		"unzip": cmdUnzip,
-		"wait":  cmdWait,
-		"watch": cmdWatch,
-		"zip":   cmdZip,
+		"addAuth": cmdAddAuth,
+		"cat":     cmdCat,
+		"chmod":   cmdChmod,
+		"cp":      cmdCp,
+		"edit":    cmdEdit,
+		"ls":      cmdLs,
+		"rm":      cmdRm,
+		"stat":    cmdStat,
+		"touch":   cmdTouch,
+		"unzip":   cmdUnzip,
+		"wait":    cmdWait,
+		"watch":   cmdWatch,
+		"zip":     cmdZip,
 	}
 }
 
@@ -174,7 +177,7 @@ func main() {
 
 func fixZkPath(zkPath string) string {
 	if zkPath != "/" {
-		zkPath = strings.TrimRight(zkPath, "/")
+		zkPath = strings.TrimSuffix(zkPath, "/")
 	}
 	return path.Clean(zkPath)
 }
@@ -500,6 +503,15 @@ func cmdRm(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 	return nil
 }
 
+func cmdAddAuth(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
+	subFlags.Parse(args)
+	if subFlags.NArg() < 2 {
+		return fmt.Errorf("addAuth: expected args <scheme> <auth>")
+	}
+	scheme, auth := subFlags.Arg(0), subFlags.Arg(1)
+	return zconn.AddAuth(ctx, scheme, []byte(auth))
+}
+
 func cmdCat(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 	var (
 		longListing = subFlags.Bool("l", false, "long listing")
@@ -536,7 +548,7 @@ func cmdCat(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 		}
 		decoded := ""
 		if *decodeProto {
-			decoded, err = vtctl.DecodeContent(zkPath, data)
+			decoded, err = vtctl.DecodeContent(zkPath, data, false)
 			if err != nil {
 				log.Warningf("cat: cannot proto decode %v: %v", zkPath, err)
 				decoded = string(data)

@@ -1,5 +1,5 @@
 /*
-Copyright 2018 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 	case *sqlparser.Delete:
 		permissions = buildTableExprsPermissions(node.TableExprs, tableacl.WRITER, permissions)
 		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
-	case *sqlparser.Set, *sqlparser.Show, *sqlparser.OtherRead:
+	case *sqlparser.Set, *sqlparser.Show, *sqlparser.OtherRead, *sqlparser.Explain:
 		// no-op
 	case *sqlparser.DDL:
 		for _, t := range node.AffectedTables() {

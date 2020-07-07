@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -31,16 +31,34 @@ var _ Primitive = (*PulloutSubquery)(nil)
 // PulloutSubquery executes a "pulled out" subquery and stores
 // the results in a bind variable.
 type PulloutSubquery struct {
-	Opcode         PulloutOpcode
+	Opcode PulloutOpcode
+
+	// SubqueryResult and HasValues are used to send in the bindvar used in the query to the underlying primitive
 	SubqueryResult string
 	HasValues      string
-	Subquery       Primitive
-	Underlying     Primitive
+
+	Subquery   Primitive
+	Underlying Primitive
+}
+
+// Inputs returns the input primitives for this join
+func (ps *PulloutSubquery) Inputs() []Primitive {
+	return []Primitive{ps.Subquery, ps.Underlying}
 }
 
 // RouteType returns a description of the query routing type used by the primitive
 func (ps *PulloutSubquery) RouteType() string {
 	return ps.Opcode.String()
+}
+
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (ps *PulloutSubquery) GetKeyspaceName() string {
+	return ps.Underlying.GetKeyspaceName()
+}
+
+// GetTableName specifies the table that this primitive routes to.
+func (ps *PulloutSubquery) GetTableName() string {
+	return ps.Underlying.GetTableName()
 }
 
 // Execute satisfies the Primitive interface.
@@ -80,6 +98,10 @@ func (ps *PulloutSubquery) GetFields(vcursor VCursor, bindVars map[string]*query
 		combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(0)
 	}
 	return ps.Underlying.GetFields(vcursor, combinedVars)
+}
+
+func (ps *PulloutSubquery) NeedsTransaction() bool {
+	return ps.Subquery.NeedsTransaction() || ps.Underlying.NeedsTransaction()
 }
 
 func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (map[string]*querypb.BindVariable, error) {
@@ -136,6 +158,13 @@ func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*qu
 		}
 	}
 	return combinedVars, nil
+}
+
+func (ps *PulloutSubquery) description() PrimitiveDescription {
+	return PrimitiveDescription{
+		OperatorType: "Subquery",
+		Variant:      ps.Opcode.String(),
+	}
 }
 
 // PulloutOpcode is a number representing the opcode

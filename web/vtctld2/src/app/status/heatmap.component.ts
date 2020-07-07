@@ -124,7 +124,7 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
     let elem = <any>(document.getElementById(this.name));
 
     // onClick handler for the heatmap.
-    // Upon clicking, the popup will display all relevent data for that data point.
+    // Upon clicking, the popup will display all relevant data for that data point.
     elem.on('plotly_click', function(data) {
       this.zone.run(() => { this.showPopup = false; });
       let shardIndex = this.xLabels.indexOf(data.points[0].x);

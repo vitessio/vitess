@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"crypto/rand"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"path"
 	"text/template"
@@ -85,7 +84,6 @@ func NewMycnf(tabletUID uint32, mysqlPort int32) *Mycnf {
 	cnf.MasterInfoFile = path.Join(tabletDir, "master.info")
 	cnf.PidFile = path.Join(tabletDir, "mysql.pid")
 	cnf.TmpDir = path.Join(tabletDir, "tmp")
-	cnf.SlaveLoadTmpDir = cnf.TmpDir
 	return cnf
 }
 
@@ -121,19 +119,9 @@ func (cnf *Mycnf) directoryList() []string {
 	}
 }
 
-// makeMycnf will join cnf files cnfPaths and substitute in the right values.
-func (cnf *Mycnf) makeMycnf(cnfFiles []string) (string, error) {
-	myTemplateSource := new(bytes.Buffer)
-	myTemplateSource.WriteString("[mysqld]\n")
-	for _, path := range cnfFiles {
-		data, dataErr := ioutil.ReadFile(path)
-		if dataErr != nil {
-			return "", dataErr
-		}
-		myTemplateSource.WriteString("## " + path + "\n")
-		myTemplateSource.Write(data)
-	}
-	return cnf.fillMycnfTemplate(myTemplateSource.String())
+// makeMycnf will substitute values
+func (cnf *Mycnf) makeMycnf(partialcnf string) (string, error) {
+	return cnf.fillMycnfTemplate(partialcnf)
 }
 
 // fillMycnfTemplate will fill in the passed in template with the values

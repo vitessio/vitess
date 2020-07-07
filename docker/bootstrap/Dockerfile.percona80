@@ -1,7 +1,7 @@
 FROM vitess/bootstrap:common
 
 # Install Percona 8.0
-RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keys.gnupg.net --recv-keys 9334A25F8507EFA5 && break; done &&
+RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keys.gnupg.net --recv-keys 9334A25F8507EFA5 && break; done \
     && echo 'deb http://repo.percona.com/ps-80/apt stretch main' > /etc/apt/sources.list.d/percona.list && \
     { \
         echo debconf debconf/frontend select Noninteractive; \
@@ -14,11 +14,24 @@ RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keys.gnupg.net --r
 	libperconaserverclient21 \
 	percona-server-tokudb \
 	percona-server-rocksdb \
-	bzip2
+	bzip2 \
+	libdbd-mysql-perl \
+	rsync \
+	libev4 \
+#    && rm -f /etc/apt/sources.list.d/percona.list \
+    && echo 'deb http://repo.percona.com/apt stretch main' > /etc/apt/sources.list.d/percona.list \
+#    { \
+#        echo debconf debconf/frontend select Noninteractive; \
+#        echo percona-server-server-8.0 percona-server-server/root_password password 'unused'; \
+#        echo percona-server-server-8.0 percona-server-server/root_password_again password 'unused'; \
+#    } | debconf-set-selections \
+    && apt-get update -y \
+    && apt-get install -y --no-install-recommends percona-xtrabackup-80 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Bootstrap Vitess
 WORKDIR /vt/src/vitess.io/vitess
 
-ENV MYSQL_FLAVOR MySQL56
+ENV MYSQL_FLAVOR MySQL80
 USER vitess
 RUN ./bootstrap.sh

@@ -1,7 +1,0 @@
-apiVersion: "etcd.database.coreos.com/v1beta2"
-kind: "EtcdCluster"
-metadata:
-  name: "etcd-{{cell}}"
-spec:
-  size: {{replicas}}
-  version: "3.1.8"

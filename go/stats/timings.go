@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package stats
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -32,13 +31,12 @@ type Timings struct {
 	totalCount sync2.AtomicInt64
 	totalTime  sync2.AtomicInt64
 
-	// mu protects get and set of hook and the map.
-	// Modification to the value in the map is not protected.
 	mu         sync.RWMutex
 	histograms map[string]*Histogram
-	hook       func(string, time.Duration)
-	help       string
-	label      string
+
+	help          string
+	label         string
+	labelCombined bool
 }
 
 // NewTimings creates a new Timings object, and publishes it if name is set.
@@ -47,9 +45,10 @@ type Timings struct {
 // first time they are updated.
 func NewTimings(name, help, label string, categories ...string) *Timings {
 	t := &Timings{
-		histograms: make(map[string]*Histogram),
-		help:       help,
-		label:      label,
+		histograms:    make(map[string]*Histogram),
+		help:          help,
+		label:         label,
+		labelCombined: IsDimensionCombined(label),
 	}
 	for _, cat := range categories {
 		t.histograms[cat] = NewGenericHistogram("", "", bucketCutoffs, bucketLabels, "Count", "Time")
@@ -63,10 +62,12 @@ func NewTimings(name, help, label string, categories ...string) *Timings {
 
 // Add will add a new value to the named histogram.
 func (t *Timings) Add(name string, elapsed time.Duration) {
+	if t.labelCombined {
+		name = StatsAllStr
+	}
 	// Get existing Histogram.
 	t.mu.RLock()
 	hist, ok := t.histograms[name]
-	hook := t.hook
 	t.mu.RUnlock()
 
 	// Create Histogram if it does not exist.
@@ -84,14 +85,14 @@ func (t *Timings) Add(name string, elapsed time.Duration) {
 	hist.Add(elapsedNs)
 	t.totalCount.Add(1)
 	t.totalTime.Add(elapsedNs)
-	if hook != nil {
-		hook(name, elapsed)
-	}
 }
 
 // Record is a convenience function that records completion
 // timing data based on the provided start time of an event.
 func (t *Timings) Record(name string, startTime time.Time) {
+	if t.labelCombined {
+		name = StatsAllStr
+	}
 	t.Add(name, time.Since(startTime))
 }
 
@@ -184,7 +185,8 @@ func init() {
 // with joining multiple strings with '.'.
 type MultiTimings struct {
 	Timings
-	labels []string
+	labels         []string
+	combinedLabels []bool
 }
 
 // NewMultiTimings creates a new MultiTimings object.
@@ -194,7 +196,11 @@ func NewMultiTimings(name string, help string, labels []string) *MultiTimings {
 			histograms: make(map[string]*Histogram),
 			help:       help,
 		},
-		labels: labels,
+		labels:         labels,
+		combinedLabels: make([]bool, len(labels)),
+	}
+	for i, label := range labels {
+		t.combinedLabels[i] = IsDimensionCombined(label)
 	}
 	if name != "" {
 		publish(name, t)
@@ -208,23 +214,12 @@ func (mt *MultiTimings) Labels() []string {
 	return mt.labels
 }
 
-// safeJoinLabels joins the label values with ".", but first replaces any existing
-// "." characters in the labels with the proper replacement, to avoid issues parsing
-// them apart later.
-func safeJoinLabels(labels []string) string {
-	sanitizedLabels := make([]string, len(labels))
-	for idx, label := range labels {
-		sanitizedLabels[idx] = safeLabel(label)
-	}
-	return strings.Join(sanitizedLabels, ".")
-}
-
 // Add will add a new value to the named histogram.
 func (mt *MultiTimings) Add(names []string, elapsed time.Duration) {
 	if len(names) != len(mt.labels) {
 		panic("MultiTimings: wrong number of values in Add")
 	}
-	mt.Timings.Add(safeJoinLabels(names), elapsed)
+	mt.Timings.Add(safeJoinLabels(names, mt.combinedLabels), elapsed)
 }
 
 // Record is a convenience function that records completion
@@ -233,7 +228,7 @@ func (mt *MultiTimings) Record(names []string, startTime time.Time) {
 	if len(names) != len(mt.labels) {
 		panic("MultiTimings: wrong number of values in Record")
 	}
-	mt.Timings.Record(safeJoinLabels(names), startTime)
+	mt.Timings.Record(safeJoinLabels(names, mt.combinedLabels), startTime)
 }
 
 // Cutoffs returns the cutoffs used in the component histograms.

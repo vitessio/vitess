@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,206 +20,230 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"reflect"
 	"syscall"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/yaml2"
 )
 
-func TestRegisterFlagsWithSomeFlags(t *testing.T) {
-	savedDBConfig := dbConfigs
-	savedBaseConfig := baseConfig
-	defer func() {
-		dbConfigs = savedDBConfig
-		baseConfig = savedBaseConfig
-	}()
-
-	dbConfigs = DBConfigs{userConfigs: make(map[string]*userConfig)}
-	RegisterFlags(Dba, Repl)
-	for k := range dbConfigs.userConfigs {
-		if k != Dba && k != Repl {
-			t.Errorf("dbConfigs.params: %v, want dba or repl", k)
-		}
-	}
-}
-
 func TestInit(t *testing.T) {
-	savedDBConfig := dbConfigs
-	savedBaseConfig := baseConfig
-	defer func() {
-		dbConfigs = savedDBConfig
-		baseConfig = savedBaseConfig
-	}()
+	dbConfigs := DBConfigs{
+		appParams: mysql.ConnParams{UnixSocket: "socket"},
+		dbaParams: mysql.ConnParams{Host: "host"},
+	}
+	dbConfigs.InitWithSocket("default")
+	assert.Equal(t, mysql.ConnParams{UnixSocket: "socket"}, dbConfigs.appParams)
+	assert.Equal(t, mysql.ConnParams{Host: "host"}, dbConfigs.dbaParams)
+	assert.Equal(t, mysql.ConnParams{UnixSocket: "default"}, dbConfigs.appdebugParams)
 
 	dbConfigs = DBConfigs{
-		userConfigs: map[string]*userConfig{
-			App:      {param: mysql.ConnParams{UnixSocket: "socket"}},
-			AppDebug: {},
-			Dba:      {param: mysql.ConnParams{Host: "host"}},
+		Host:                       "a",
+		Port:                       1,
+		Socket:                     "b",
+		Charset:                    "c",
+		Flags:                      2,
+		Flavor:                     "flavor",
+		SslCa:                      "d",
+		SslCaPath:                  "e",
+		SslCert:                    "f",
+		SslKey:                     "g",
+		ConnectTimeoutMilliseconds: 250,
+		App: UserConfig{
+			User:     "app",
+			Password: "apppass",
+		},
+		Appdebug: UserConfig{
+			UseSSL: true,
+		},
+		Dba: UserConfig{
+			User:     "dba",
+			Password: "dbapass",
+			UseSSL:   true,
+		},
+		appParams: mysql.ConnParams{
+			UnixSocket: "socket",
+		},
+		dbaParams: mysql.ConnParams{
+			Host: "host",
 		},
 	}
-	dbc, err := Init("default")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, want := dbc.userConfigs[App].param.UnixSocket, "socket"; got != want {
-		t.Errorf("dbc.app.UnixSocket: %v, want %v", got, want)
-	}
-	if got, want := dbc.userConfigs[Dba].param.Host, "host"; got != want {
-		t.Errorf("dbc.app.Host: %v, want %v", got, want)
-	}
-	if got, want := dbc.userConfigs[AppDebug].param.UnixSocket, "default"; got != want {
-		t.Errorf("dbc.app.UnixSocket: %v, want %v", got, want)
-	}
+	dbConfigs.InitWithSocket("default")
 
-	baseConfig = mysql.ConnParams{
+	want := mysql.ConnParams{
+		Host:             "a",
+		Port:             1,
+		Uname:            "app",
+		Pass:             "apppass",
+		UnixSocket:       "b",
+		Charset:          "c",
+		Flags:            2,
+		Flavor:           "flavor",
+		ConnectTimeoutMs: 250,
+	}
+	assert.Equal(t, want, dbConfigs.appParams)
+
+	want = mysql.ConnParams{
+		Host:             "a",
+		Port:             1,
+		UnixSocket:       "b",
+		Charset:          "c",
+		Flags:            2,
+		Flavor:           "flavor",
+		SslCa:            "d",
+		SslCaPath:        "e",
+		SslCert:          "f",
+		SslKey:           "g",
+		ConnectTimeoutMs: 250,
+	}
+	assert.Equal(t, want, dbConfigs.appdebugParams)
+	want = mysql.ConnParams{
+		Host:             "a",
+		Port:             1,
+		Uname:            "dba",
+		Pass:             "dbapass",
+		UnixSocket:       "b",
+		Charset:          "c",
+		Flags:            2,
+		Flavor:           "flavor",
+		SslCa:            "d",
+		SslCaPath:        "e",
+		SslCert:          "f",
+		SslKey:           "g",
+		ConnectTimeoutMs: 250,
+	}
+	assert.Equal(t, want, dbConfigs.dbaParams)
+
+	// Test that baseConfig does not override Charset and Flag if they're
+	// not specified.
+	dbConfigs = DBConfigs{
+		Host:      "a",
+		Port:      1,
+		Socket:    "b",
+		SslCa:     "d",
+		SslCaPath: "e",
+		SslCert:   "f",
+		SslKey:    "g",
+		App: UserConfig{
+			User:     "app",
+			Password: "apppass",
+		},
+		Appdebug: UserConfig{
+			UseSSL: true,
+		},
+		Dba: UserConfig{
+			User:     "dba",
+			Password: "dbapass",
+			UseSSL:   true,
+		},
+		appParams: mysql.ConnParams{
+			UnixSocket: "socket",
+			Charset:    "f",
+		},
+		dbaParams: mysql.ConnParams{
+			Host:  "host",
+			Flags: 2,
+		},
+	}
+	dbConfigs.InitWithSocket("default")
+	want = mysql.ConnParams{
 		Host:       "a",
 		Port:       1,
-		Uname:      "b",
-		Pass:       "c",
-		DbName:     "d",
-		UnixSocket: "e",
+		Uname:      "app",
+		Pass:       "apppass",
+		UnixSocket: "b",
 		Charset:    "f",
+	}
+	assert.Equal(t, want, dbConfigs.appParams)
+	want = mysql.ConnParams{
+		Host:       "a",
+		Port:       1,
+		UnixSocket: "b",
+		SslCa:      "d",
+		SslCaPath:  "e",
+		SslCert:    "f",
+		SslKey:     "g",
+	}
+	assert.Equal(t, want, dbConfigs.appdebugParams)
+	want = mysql.ConnParams{
+		Host:       "a",
+		Port:       1,
+		Uname:      "dba",
+		Pass:       "dbapass",
+		UnixSocket: "b",
 		Flags:      2,
-		SslCa:      "g",
-		SslCaPath:  "h",
-		SslCert:    "i",
-		SslKey:     "j",
+		SslCa:      "d",
+		SslCaPath:  "e",
+		SslCert:    "f",
+		SslKey:     "g",
 	}
-	dbConfigs = DBConfigs{
-		userConfigs: map[string]*userConfig{
-			App: {
-				param: mysql.ConnParams{
-					Uname:      "app",
-					Pass:       "apppass",
-					UnixSocket: "socket",
-				},
-			},
-			AppDebug: {
-				useSSL: true,
-			},
-			Dba: {
-				useSSL: true,
-				param: mysql.ConnParams{
-					Uname: "dba",
-					Pass:  "dbapass",
-					Host:  "host",
-				},
-			},
+	assert.Equal(t, want, dbConfigs.dbaParams)
+}
+
+func TestUseTCP(t *testing.T) {
+	dbConfigs := DBConfigs{
+		Host:   "a",
+		Port:   1,
+		Socket: "b",
+		App: UserConfig{
+			User:   "app",
+			UseTCP: true,
+		},
+		Dba: UserConfig{
+			User: "dba",
 		},
 	}
-	dbc, err = Init("default")
-	if err != nil {
-		t.Fatal(err)
+	dbConfigs.InitWithSocket("default")
+
+	want := mysql.ConnParams{
+		Host:  "a",
+		Port:  1,
+		Uname: "app",
 	}
-	want := &DBConfigs{
-		userConfigs: map[string]*userConfig{
-			App: {
-				param: mysql.ConnParams{
-					Host:       "a",
-					Port:       1,
-					Uname:      "app",
-					Pass:       "apppass",
-					UnixSocket: "e",
-					Charset:    "f",
-					Flags:      2,
-				},
-			},
-			AppDebug: {
-				useSSL: true,
-				param: mysql.ConnParams{
-					Host:       "a",
-					Port:       1,
-					UnixSocket: "e",
-					Charset:    "f",
-					Flags:      2,
-					SslCa:      "g",
-					SslCaPath:  "h",
-					SslCert:    "i",
-					SslKey:     "j",
-				},
-			},
-			Dba: {
-				useSSL: true,
-				param: mysql.ConnParams{
-					Host:       "a",
-					Port:       1,
-					Uname:      "dba",
-					Pass:       "dbapass",
-					UnixSocket: "e",
-					Charset:    "f",
-					Flags:      2,
-					SslCa:      "g",
-					SslCaPath:  "h",
-					SslCert:    "i",
-					SslKey:     "j",
-				},
-			},
-		},
+	assert.Equal(t, want, dbConfigs.appParams)
+
+	want = mysql.ConnParams{
+		Host:       "a",
+		Port:       1,
+		Uname:      "dba",
+		UnixSocket: "b",
 	}
-	// Compare individually, otherwise the errors are not readable.
-	if !reflect.DeepEqual(dbc.userConfigs[App].param, want.userConfigs[App].param) {
-		t.Errorf("dbc: \n%#v, want \n%#v", dbc.userConfigs[App].param, want.userConfigs[App].param)
-	}
-	if !reflect.DeepEqual(dbc.userConfigs[AppDebug].param, want.userConfigs[AppDebug].param) {
-		t.Errorf("dbc: \n%#v, want \n%#v", dbc.userConfigs[AppDebug].param, want.userConfigs[AppDebug].param)
-	}
-	if !reflect.DeepEqual(dbc.userConfigs[Dba].param, want.userConfigs[Dba].param) {
-		t.Errorf("dbc: \n%#v, want \n%#v", dbc.userConfigs[Dba].param, want.userConfigs[Dba].param)
-	}
+	assert.Equal(t, want, dbConfigs.dbaParams)
 }
 
 func TestAccessors(t *testing.T) {
 	dbc := &DBConfigs{
-		userConfigs: map[string]*userConfig{
-			App:      {},
-			AppDebug: {},
-			AllPrivs: {},
-			Dba:      {},
-			Filtered: {},
-			Repl:     {},
-		},
+		appParams:      mysql.ConnParams{},
+		appdebugParams: mysql.ConnParams{},
+		allprivsParams: mysql.ConnParams{},
+		dbaParams:      mysql.ConnParams{},
+		filteredParams: mysql.ConnParams{},
+		replParams:     mysql.ConnParams{},
+		DBName:         "db",
 	}
-	dbc.DBName.Set("db")
-	if got, want := dbc.AppWithDB().DbName, "db"; got != want {
+	if got, want := dbc.AppWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.AppWithDB().DbName: %v, want %v", got, want)
 	}
-	if got, want := dbc.AllPrivsWithDB().DbName, "db"; got != want {
+	if got, want := dbc.AllPrivsWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.AllPrivsWithDB().DbName: %v, want %v", got, want)
 	}
-	if got, want := dbc.AppDebugWithDB().DbName, "db"; got != want {
+	if got, want := dbc.AppDebugWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.AppDebugWithDB().DbName: %v, want %v", got, want)
 	}
-	if got, want := dbc.Dba().DbName, ""; got != want {
+	if got, want := dbc.DbaConnector().connParams.DbName, ""; got != want {
 		t.Errorf("dbc.Dba().DbName: %v, want %v", got, want)
 	}
-	if got, want := dbc.DbaWithDB().DbName, "db"; got != want {
+	if got, want := dbc.DbaWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.DbaWithDB().DbName: %v, want %v", got, want)
 	}
-	if got, want := dbc.FilteredWithDB().DbName, "db"; got != want {
+	if got, want := dbc.FilteredWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.FilteredWithDB().DbName: %v, want %v", got, want)
 	}
-	if got, want := dbc.Repl().DbName, ""; got != want {
+	if got, want := dbc.ReplConnector().connParams.DbName, ""; got != want {
 		t.Errorf("dbc.Repl().DbName: %v, want %v", got, want)
-	}
-}
-
-func TestCopy(t *testing.T) {
-	want := &DBConfigs{
-		userConfigs: map[string]*userConfig{
-			App:      {param: mysql.ConnParams{UnixSocket: "aa"}},
-			AppDebug: {},
-			Repl:     {},
-		},
-	}
-	want.DBName.Set("db")
-	want.SidecarDBName.Set("_vt")
-
-	got := want.Copy()
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("DBConfig: %v, want %v", got, want)
 	}
 }
 
@@ -265,4 +289,65 @@ func hupTest(t *testing.T, tmpFile *os.File, oldStr, newStr string) {
 	if pass != newStr {
 		t.Fatalf("%s's Password should be '%s'", newStr, newStr)
 	}
+}
+
+func TestYaml(t *testing.T) {
+	db := DBConfigs{
+		Socket: "a",
+		Port:   1,
+		Flags:  20,
+		App: UserConfig{
+			User:   "vt_app",
+			UseSSL: true,
+		},
+		Dba: UserConfig{
+			User: "vt_dba",
+		},
+	}
+	gotBytes, err := yaml2.Marshal(&db)
+	require.NoError(t, err)
+	wantBytes := `allprivs:
+  password: '****'
+app:
+  password: '****'
+  useSsl: true
+  user: vt_app
+appdebug:
+  password: '****'
+dba:
+  password: '****'
+  user: vt_dba
+filtered:
+  password: '****'
+flags: 20
+port: 1
+repl:
+  password: '****'
+socket: a
+`
+	assert.Equal(t, wantBytes, string(gotBytes))
+
+	inBytes := []byte(`socket: a
+port: 1
+flags: 20
+app:
+  user: vt_app
+  useSsl: true
+  useTCP: false
+dba:
+  user: vt_dba
+`)
+	gotdb := DBConfigs{
+		Port:  1,
+		Flags: 20,
+		App: UserConfig{
+			UseTCP: true,
+		},
+		Dba: UserConfig{
+			User: "aaa",
+		},
+	}
+	err = yaml2.Unmarshal(inBytes, &gotdb)
+	require.NoError(t, err)
+	assert.Equal(t, &db, &gotdb)
 }

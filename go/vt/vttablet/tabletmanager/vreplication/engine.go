@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,8 +20,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
+
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/withddl"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
@@ -29,8 +35,38 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/topo"
 )
+
+const (
+	reshardingJournalTableName = "_vt.resharding_journal"
+	vreplicationTableName      = "_vt.vreplication"
+	copyStateTableName         = "_vt.copy_state"
+
+	createReshardingJournalTable = `create table if not exists _vt.resharding_journal(
+  id bigint,
+  db_name varbinary(255),
+  val blob,
+  primary key (id)
+)`
+
+	createCopyState = `create table if not exists _vt.copy_state (
+  vrepl_id int,
+  table_name varbinary(128),
+  lastpk varbinary(2000),
+  primary key (vrepl_id, table_name))`
+)
+
+var withDDL *withddl.WithDDL
+
+func init() {
+	allddls := append([]string{}, binlogplayer.CreateVReplicationTable()...)
+	allddls = append(allddls, binlogplayer.AlterVReplicationTable...)
+	allddls = append(allddls, createReshardingJournalTable, createCopyState)
+	withDDL = withddl.New(allddls)
+}
 
 var tabletTypesStr = flag.String("vreplication_tablet_type", "REPLICA", "comma separated list of tablet types used as a source")
 
@@ -61,17 +97,55 @@ type Engine struct {
 	cell            string
 	mysqld          mysqlctl.MysqlDaemon
 	dbClientFactory func() binlogplayer.DBClient
+	dbName          string
+
+	journaler map[string]*journalEvent
+	ec        *externalConnector
+}
+
+type journalEvent struct {
+	journal      *binlogdatapb.Journal
+	participants map[string]int
+	shardGTIDs   map[string]*binlogdatapb.ShardGtid
 }
 
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
-func NewEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactory func() binlogplayer.DBClient) *Engine {
+func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon) *Engine {
+	vre := &Engine{
+		controllers: make(map[int]*controller),
+		ts:          ts,
+		cell:        cell,
+		mysqld:      mysqld,
+		journaler:   make(map[string]*journalEvent),
+		ec:          newExternalConnector(config.ExternalConnections),
+	}
+	return vre
+}
+
+// InitDBConfig should be invoked after the db name is computed.
+func (vre *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
+	// If we're already initilized, it's a test engine. Ignore the call.
+	if vre.dbClientFactory != nil {
+		return
+	}
+	vre.dbClientFactory = func() binlogplayer.DBClient {
+		return binlogplayer.NewDBClient(dbcfgs.FilteredWithDB())
+	}
+	vre.dbName = dbcfgs.DBName
+}
+
+// NewTestEngine creates a new Engine for testing.
+func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactory func() binlogplayer.DBClient, dbname string, externalConfig map[string]*dbconfigs.DBConfigs) *Engine {
 	vre := &Engine{
 		controllers:     make(map[int]*controller),
 		ts:              ts,
 		cell:            cell,
 		mysqld:          mysqld,
 		dbClientFactory: dbClientFactory,
+		dbName:          dbname,
+		journaler:       make(map[string]*journalEvent),
+		ec:              newExternalConnector(externalConfig),
 	}
 	return vre
 }
@@ -87,6 +161,7 @@ func (vre *Engine) Open(ctx context.Context) error {
 	if vre.isOpen {
 		return nil
 	}
+	log.Infof("Starting VReplication engine")
 
 	vre.ctx, vre.cancel = context.WithCancel(ctx)
 	vre.isOpen = true
@@ -98,34 +173,6 @@ func (vre *Engine) Open(ctx context.Context) error {
 	return nil
 }
 
-// executeFetchMaybeCreateTable calls DBClient.ExecuteFetch and does one retry if
-// there's a failure due to mysql.ERNoSuchTable or mysql.ERBadDb which can be fixed
-// by re-creating the _vt.vreplication table.
-func (vre *Engine) executeFetchMaybeCreateTable(dbClient binlogplayer.DBClient, query string, maxrows int) (qr *sqltypes.Result, err error) {
-	qr, err = dbClient.ExecuteFetch(query, maxrows)
-
-	if err == nil {
-		return
-	}
-
-	// If it's a bad table or db, it could be because _vt.vreplication wasn't created.
-	// In that case we can try creating it again.
-	merr, isSQLErr := err.(*mysql.SQLError)
-	if !isSQLErr || !(merr.Num == mysql.ERNoSuchTable || merr.Num == mysql.ERBadDb) {
-		return qr, err
-	}
-
-	log.Info("Looks like _vt.vreplication table may not exist. Trying to recreate... ")
-	for _, query := range binlogplayer.CreateVReplicationTable() {
-		if _, merr := dbClient.ExecuteFetch(query, 0); merr != nil {
-			log.Warningf("Failed to ensure _vt.vreplication table exists: %v", merr)
-			return nil, err
-		}
-	}
-
-	return dbClient.ExecuteFetch(query, maxrows)
-}
-
 func (vre *Engine) initAll() error {
 	dbClient := vre.dbClientFactory()
 	if err := dbClient.Connect(); err != nil {
@@ -133,17 +180,12 @@ func (vre *Engine) initAll() error {
 	}
 	defer dbClient.Close()
 
-	rows, err := readAllRows(dbClient)
+	rows, err := readAllRows(vre.ctx, dbClient, vre.dbName)
 	if err != nil {
-		// Handle Table not found.
-		if merr, ok := err.(*mysql.SQLError); ok && merr.Num == mysql.ERNoSuchTable {
-			log.Info("_vt.vreplication table not found. Will create it later if needed")
-			return nil
-		}
 		return err
 	}
 	for _, row := range rows {
-		ct, err := newController(vre.ctx, row, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil)
+		ct, err := newController(vre.ctx, row, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil, vre)
 		if err != nil {
 			return err
 		}
@@ -166,7 +208,9 @@ func (vre *Engine) Close() {
 	if !vre.isOpen {
 		return
 	}
+	log.Infof("Shutting down VReplication engine")
 
+	vre.ec.Close()
 	vre.cancel()
 	// We still have to wait for all controllers to stop.
 	for _, ct := range vre.controllers {
@@ -213,69 +257,320 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 	// Change the database to ensure that these events don't get
 	// replicated by another vreplication. This can happen when
 	// we reverse replication.
-	if _, err := vre.executeFetchMaybeCreateTable(dbClient, "use _vt", 1); err != nil {
+	if _, err := withDDL.Exec(vre.ctx, "use _vt", dbClient.ExecuteFetch); err != nil {
 		return nil, err
 	}
 
 	switch plan.opcode {
 	case insertQuery:
-		qr, err := vre.executeFetchMaybeCreateTable(dbClient, plan.query, 1)
+		qr, err := withDDL.Exec(vre.ctx, plan.query, dbClient.ExecuteFetch)
 		if err != nil {
 			return nil, err
 		}
 		if qr.InsertID == 0 {
 			return nil, fmt.Errorf("insert failed to generate an id")
 		}
-		params, err := readRow(dbClient, int(qr.InsertID))
-		if err != nil {
-			return nil, err
+		for id := int(qr.InsertID); id < int(qr.InsertID)+plan.numInserts; id++ {
+			if ct := vre.controllers[id]; ct != nil {
+				// Unreachable. Just a failsafe.
+				ct.Stop()
+				delete(vre.controllers, id)
+			}
+			params, err := readRow(dbClient, id)
+			if err != nil {
+				return nil, err
+			}
+			ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil, vre)
+			if err != nil {
+				return nil, err
+			}
+			vre.controllers[id] = ct
 		}
-		// Create a controller for the newly created row.
-		ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil)
-		if err != nil {
-			return nil, err
-		}
-		vre.controllers[int(qr.InsertID)] = ct
 		return qr, nil
 	case updateQuery:
-		var blpStats *binlogplayer.Stats
-		if ct := vre.controllers[plan.id]; ct != nil {
-			// Stop the current controller.
-			ct.Stop()
-			blpStats = ct.blpStats
-		}
-		qr, err := vre.executeFetchMaybeCreateTable(dbClient, plan.query, 1)
+		ids, bv, err := vre.fetchIDs(dbClient, plan.selector)
 		if err != nil {
 			return nil, err
 		}
-		params, err := readRow(dbClient, plan.id)
+		if len(ids) == 0 {
+			return &sqltypes.Result{}, nil
+		}
+		blpStats := make(map[int]*binlogplayer.Stats)
+		for _, id := range ids {
+			if ct := vre.controllers[id]; ct != nil {
+				// Stop the current controller.
+				ct.Stop()
+				blpStats[id] = ct.blpStats
+			}
+		}
+		query, err := plan.applier.GenerateQuery(bv, nil)
 		if err != nil {
 			return nil, err
 		}
-		// Create a new controller in place of the old one.
-		// For continuity, the new controller inherits the previous stats.
-		ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, blpStats)
+		qr, err := withDDL.Exec(vre.ctx, query, dbClient.ExecuteFetch)
 		if err != nil {
 			return nil, err
 		}
-		vre.controllers[plan.id] = ct
+		for _, id := range ids {
+			params, err := readRow(dbClient, id)
+			if err != nil {
+				return nil, err
+			}
+			// Create a new controller in place of the old one.
+			// For continuity, the new controller inherits the previous stats.
+			ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, blpStats[id], vre)
+			if err != nil {
+				return nil, err
+			}
+			vre.controllers[id] = ct
+		}
 		return qr, nil
 	case deleteQuery:
-		// Stop and delete the current controller.
-		if ct := vre.controllers[plan.id]; ct != nil {
-			ct.Stop()
-			delete(vre.controllers, plan.id)
+		ids, bv, err := vre.fetchIDs(dbClient, plan.selector)
+		if err != nil {
+			return nil, err
 		}
-		return vre.executeFetchMaybeCreateTable(dbClient, plan.query, 1)
-	case selectQuery:
-		// select queries are passed through.
-		return vre.executeFetchMaybeCreateTable(dbClient, plan.query, 10000)
+		if len(ids) == 0 {
+			return &sqltypes.Result{}, nil
+		}
+		// Stop and delete the current controllers.
+		for _, id := range ids {
+			if ct := vre.controllers[id]; ct != nil {
+				ct.Stop()
+				delete(vre.controllers, id)
+			}
+		}
+		if err := dbClient.Begin(); err != nil {
+			return nil, err
+		}
+		query, err := plan.applier.GenerateQuery(bv, nil)
+		if err != nil {
+			return nil, err
+		}
+		qr, err := withDDL.Exec(vre.ctx, query, dbClient.ExecuteFetch)
+		if err != nil {
+			return nil, err
+		}
+		delQuery, err := plan.delCopyState.GenerateQuery(bv, nil)
+		if err != nil {
+			return nil, err
+		}
+		// Legacy vreplication won't create this table. So, ignore schema errors.
+		if _, err := withDDL.ExecIgnore(vre.ctx, delQuery, dbClient.ExecuteFetch); err != nil {
+			return nil, err
+		}
+		if err := dbClient.Commit(); err != nil {
+			return nil, err
+		}
+		return qr, nil
+	case selectQuery, reshardingJournalQuery:
+		// select and resharding journal queries are passed through.
+		return withDDL.Exec(vre.ctx, plan.query, dbClient.ExecuteFetch)
 	}
 	panic("unreachable")
 }
 
+func (vre *Engine) fetchIDs(dbClient binlogplayer.DBClient, selector string) (ids []int, bv map[string]*querypb.BindVariable, err error) {
+	qr, err := dbClient.ExecuteFetch(selector, 10000)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, row := range qr.Rows {
+		id, err := evalengine.ToInt64(row[0])
+		if err != nil {
+			return nil, nil, err
+		}
+		ids = append(ids, int(id))
+	}
+	bvval, err := sqltypes.BuildBindVariable(ids)
+	if err != nil {
+		// Unreachable.
+		return nil, nil, err
+	}
+	bv = map[string]*querypb.BindVariable{"ids": bvval}
+	return ids, bv, nil
+}
+
+// registerJournal is invoked if any of the vreplication streams encounters a journal event.
+// Multiple registerJournal functions collaborate to converge on the final action.
+// The first invocation creates an entry in vre.journaler. The entry is initialized
+// with the list of participants that also need to converge.
+// The middle invocation happens on the first and subsequent calls: the current participant
+// marks itself as having joined the wait.
+// The final invocation happens for the last participant that joins. Having confirmed
+// that all the participants have joined, transitionJournal is invoked, which deletes
+// all current participant streams and creates new ones to replace them.
+// A unified journal event is identified by the workflow name and journal id.
+// Multiple independent journal events can go through this cycle concurrently.
+func (vre *Engine) registerJournal(journal *binlogdatapb.Journal, id int) error {
+	vre.mu.Lock()
+	defer vre.mu.Unlock()
+	if !vre.isOpen {
+		// Unreachable.
+		return nil
+	}
+
+	workflow := vre.controllers[id].workflow
+	key := fmt.Sprintf("%s:%d", workflow, journal.Id)
+	ks := fmt.Sprintf("%s:%s", vre.controllers[id].source.Keyspace, vre.controllers[id].source.Shard)
+	log.Infof("Journal encountered for (%s %s): %v", key, ks, journal)
+	je, ok := vre.journaler[key]
+	if !ok {
+		log.Infof("First stream for workflow %s has joined, creating journaler entry", workflow)
+		je = &journalEvent{
+			journal:      journal,
+			participants: make(map[string]int),
+			shardGTIDs:   make(map[string]*binlogdatapb.ShardGtid),
+		}
+		vre.journaler[key] = je
+	}
+	// Middle invocation. Register yourself
+	controllerSources := make(map[string]bool)
+	for _, ct := range vre.controllers {
+		if ct.workflow != workflow {
+			// Only compare with streams that belong to the current workflow.
+			continue
+		}
+		ks := fmt.Sprintf("%s:%s", ct.source.Keyspace, ct.source.Shard)
+		controllerSources[ks] = true
+	}
+	for _, jks := range journal.Participants {
+		ks := fmt.Sprintf("%s:%s", jks.Keyspace, jks.Shard)
+		if _, ok := controllerSources[ks]; !ok {
+			log.Errorf("cannot redirect on journal: not all sources are present in this workflow: missing %v", ks)
+			return fmt.Errorf("cannot redirect on journal: not all sources are present in this workflow: missing %v", ks)
+		}
+		if _, ok := je.participants[ks]; !ok {
+			log.Infof("New participant %s found for workflow %s", ks, workflow)
+			je.participants[ks] = 0
+		} else {
+			log.Infof("Participant %s:%d already exists for workflow %s", ks, je.participants[ks], workflow)
+		}
+	}
+	for _, gtid := range journal.ShardGtids {
+		je.shardGTIDs[gtid.Shard] = gtid
+	}
+
+	je.participants[ks] = id
+	// Check if all participants have joined.
+	for ks, pid := range je.participants {
+		if pid == 0 {
+			// Still need to wait.
+			log.Infof("Not all participants have joined, including %s", ks)
+			return nil
+		}
+	}
+	// Final invocation. Perform the transition.
+	delete(vre.journaler, key)
+	go vre.transitionJournal(je)
+	return nil
+}
+
+// transitionJournal stops all existing participants, deletes their vreplication
+// entries, and creates new ones as instructed by the journal metadata.
+func (vre *Engine) transitionJournal(je *journalEvent) {
+	vre.mu.Lock()
+	defer vre.mu.Unlock()
+	if !vre.isOpen {
+		return
+	}
+
+	log.Infof("Transitioning for journal:workload %v", je)
+
+	//sort both participants and shardgtids
+	participants := make([]string, 0)
+	for ks := range je.participants {
+		participants = append(participants, ks)
+	}
+	sort.Sort(ShardSorter(participants))
+	log.Infof("Participants %+v, oldParticipants %+v", participants, je.participants)
+	shardGTIDs := make([]string, 0)
+	for shard := range je.shardGTIDs {
+		shardGTIDs = append(shardGTIDs, shard)
+	}
+	sort.Strings(shardGTIDs)
+
+	// Wait for participating controllers to stop.
+	// Also collect one id reference.
+	refid := 0
+	for id := range participants {
+		ks := participants[id]
+		refid = je.participants[ks]
+		vre.controllers[refid].Stop()
+	}
+
+	dbClient := vre.dbClientFactory()
+	if err := dbClient.Connect(); err != nil {
+		log.Errorf("transitionJournal: unable to connect to the database: %v", err)
+		return
+	}
+	defer dbClient.Close()
+
+	if err := dbClient.Begin(); err != nil {
+		log.Errorf("transitionJournal: %v", err)
+		return
+	}
+
+	// Use the reference row to copy other fields like cell, tablet_types, etc.
+	params, err := readRow(dbClient, refid)
+	if err != nil {
+		log.Errorf("transitionJournal: %v", err)
+		return
+	}
+	var newids []int
+	for _, shard := range shardGTIDs {
+		sgtid := je.shardGTIDs[shard]
+		bls := vre.controllers[refid].source
+		bls.Keyspace, bls.Shard = sgtid.Keyspace, sgtid.Shard
+		ig := NewInsertGenerator(binlogplayer.BlpRunning, vre.dbName)
+		ig.AddRow(params["workflow"], &bls, sgtid.Gtid, params["cell"], params["tablet_types"])
+		qr, err := withDDL.Exec(vre.ctx, ig.String(), dbClient.ExecuteFetch)
+		if err != nil {
+			log.Errorf("transitionJournal: %v", err)
+			return
+		}
+		log.Infof("Created stream: %v for %v", qr.InsertID, sgtid)
+		newids = append(newids, int(qr.InsertID))
+	}
+	for _, ks := range participants {
+		id := je.participants[ks]
+		_, err := withDDL.Exec(vre.ctx, binlogplayer.DeleteVReplication(uint32(id)), dbClient.ExecuteFetch)
+		if err != nil {
+			log.Errorf("transitionJournal: %v", err)
+			return
+		}
+		log.Infof("Deleted stream: %v", id)
+	}
+	if err := dbClient.Commit(); err != nil {
+		log.Errorf("transitionJournal: %v", err)
+		return
+	}
+
+	for id := range participants {
+		ks := participants[id]
+		id := je.participants[ks]
+		delete(vre.controllers, id)
+	}
+
+	for _, id := range newids {
+		params, err := readRow(dbClient, id)
+		if err != nil {
+			log.Errorf("transitionJournal: %v", err)
+			return
+		}
+		ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil, vre)
+		if err != nil {
+			log.Errorf("transitionJournal: %v", err)
+			return
+		}
+		vre.controllers[id] = ct
+	}
+	log.Infof("Completed transition for journal:workload %v", je)
+}
+
 // WaitForPos waits for the replication to reach the specified position.
 func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
+	start := time.Now()
 	mPos, err := mysql.DecodePosition(pos)
 	if err != nil {
 		return err
@@ -302,6 +597,8 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 	}
 	defer dbClient.Close()
 
+	tkr := time.NewTicker(waitRetryTime)
+	defer tkr.Stop()
 	for {
 		qr, err := dbClient.ExecuteFetch(binlogplayer.ReadVReplicationStatus(uint32(id)), 10)
 		switch {
@@ -318,6 +615,7 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 		}
 
 		if current.AtLeast(mPos) {
+			log.Infof("position: %s reached, wait time: %v", pos, time.Since(start))
 			return nil
 		}
 
@@ -327,10 +625,11 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			log.Errorf("Error waiting for pos: %s, last pos: %s: %v, wait time: %v", pos, qr.Rows[0][0].ToString(), ctx.Err(), time.Since(start))
+			return fmt.Errorf("error waiting for pos: %s, last pos: %s: %v, wait time: %v", pos, qr.Rows[0][0].ToString(), ctx.Err(), time.Since(start))
 		case <-vre.ctx.Done():
 			return fmt.Errorf("vreplication is closing: %v", vre.ctx.Err())
-		case <-time.After(waitRetryTime):
+		case <-tkr.C:
 		}
 	}
 }
@@ -347,8 +646,8 @@ func (vre *Engine) updateStats() {
 	}
 }
 
-func readAllRows(dbClient binlogplayer.DBClient) ([]map[string]string, error) {
-	qr, err := dbClient.ExecuteFetch("select * from _vt.vreplication", 10000)
+func readAllRows(ctx context.Context, dbClient binlogplayer.DBClient, dbName string) ([]map[string]string, error) {
+	qr, err := withDDL.ExecIgnore(ctx, fmt.Sprintf("select * from _vt.vreplication where db_name=%v", encodeString(dbName)), dbClient.ExecuteFetch)
 	if err != nil {
 		return nil, err
 	}

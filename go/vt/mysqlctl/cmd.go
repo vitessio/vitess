@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -46,12 +46,8 @@ func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int32)
 		mycnf.SocketFile = mysqlSocket
 	}
 
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile)
-	if err != nil {
-		return nil, nil, fmt.Errorf("couldn't Init dbconfigs: %v", err)
-	}
-
-	return NewMysqld(dbcfgs), mycnf, nil
+	dbconfigs.GlobalDBConfigs.InitWithSocket(mycnf.SocketFile)
+	return NewMysqld(&dbconfigs.GlobalDBConfigs), mycnf, nil
 }
 
 // OpenMysqldAndMycnf returns a Mysqld and a Mycnf object to use for working with a MySQL
@@ -64,10 +60,6 @@ func OpenMysqldAndMycnf(tabletUID uint32) (*Mysqld, *Mycnf, error) {
 		return nil, nil, fmt.Errorf("couldn't read my.cnf file: %v", err)
 	}
 
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile)
-	if err != nil {
-		return nil, nil, fmt.Errorf("couldn't Init dbconfigs: %v", err)
-	}
-
-	return NewMysqld(dbcfgs), mycnf, nil
+	dbconfigs.GlobalDBConfigs.InitWithSocket(mycnf.SocketFile)
+	return NewMysqld(&dbconfigs.GlobalDBConfigs), mycnf, nil
 }

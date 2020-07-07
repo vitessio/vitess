@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,13 +19,15 @@ package helpers
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server) {
@@ -59,7 +61,7 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 		DbNameOverride: "",
 		KeyRange:       nil,
 	}
-	topoproto.SetMysqlPort(tablet1, 3306)
+	tablet1.MysqlPort = 3306
 	if err := fromTS.CreateTablet(ctx, tablet1); err != nil {
 		t.Fatalf("cannot create master tablet: %v", err)
 	}
@@ -72,8 +74,8 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 			"vt":   8101,
 			"grpc": 8102,
 		},
-		Hostname:      "slavehost",
-		MysqlHostname: "slavehost",
+		Hostname:      "replicahost",
+		MysqlHostname: "replicahost",
 
 		Keyspace:       "test_keyspace",
 		Shard:          "0",
@@ -81,9 +83,18 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 		DbNameOverride: "",
 		KeyRange:       nil,
 	}
-	topoproto.SetMysqlPort(tablet2, 3306)
-	if err := fromTS.CreateTablet(ctx, tablet2); err != nil {
-		t.Fatalf("cannot create slave tablet: %v", err)
+	tablet2.MysqlPort = 3306
+	err := fromTS.CreateTablet(ctx, tablet2)
+	require.NoError(t, err, "cannot create tablet: %v", tablet2)
+
+	rr := &vschemapb.RoutingRules{
+		Rules: []*vschemapb.RoutingRule{{
+			FromTable: "t1",
+			ToTables:  []string{"t2", "t3"},
+		}},
+	}
+	if err := fromTS.SaveRoutingRules(ctx, rr); err != nil {
+		t.Fatalf("cannot save routing rules: %v", err)
 	}
 
 	return fromTS, toTS
@@ -116,12 +127,12 @@ func TestBasic(t *testing.T) {
 	CopyShards(ctx, fromTS, toTS)
 
 	// check ShardReplication copy
-	sr, err := fromTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
+	_, err = fromTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("fromTS.GetShardReplication failed: %v", err)
 	}
 	CopyShardReplications(ctx, fromTS, toTS)
-	sr, err = toTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
+	sr, err := toTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("toTS.GetShardReplication failed: %v", err)
 	}

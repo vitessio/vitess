@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,12 +17,16 @@ limitations under the License.
 package sqlparser
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"math/rand"
+	"os"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -38,6 +42,9 @@ var (
 		input:  "select * from information_schema.columns",
 		output: "select * from information_schema.`columns`",
 	}, {
+		input:  "select * from information_schema.processlist",
+		output: "select * from information_schema.`processlist`",
+	}, {
 		input: "select .1 from t",
 	}, {
 		input: "select 1.2e1 from t",
@@ -52,6 +59,12 @@ var (
 	}, {
 		input:  "select - -1 from t",
 		output: "select 1 from t",
+	}, {
+		input: "select a from t",
+	}, {
+		input: "select $ from t",
+	}, {
+		input: "select a.b as a$b from $test$",
 	}, {
 		input:  "select 1 from t // aa\n",
 		output: "select 1 from t",
@@ -130,6 +143,22 @@ var (
 	}, {
 		input: "select * from t1 where exists (select a from t2 union select b from t3)",
 	}, {
+		input: "select 1 from dual union select 2 from dual union all select 3 from dual union select 4 from dual union all select 5 from dual",
+	}, {
+		input: "(select 1 from dual) order by 1 asc limit 2",
+	}, {
+		input: "(select 1 from dual order by 1 desc) order by 1 asc limit 2",
+	}, {
+		input: "(select 1 from dual)",
+	}, {
+		input: "((select 1 from dual))",
+	}, {
+		input: "select 1 from (select 1 from dual) as t",
+	}, {
+		input: "select 1 from (select 1 from dual union select 2 from dual) as t",
+	}, {
+		input: "select 1 from ((select 1 from dual) union select 2 from dual) as t",
+	}, {
 		input: "select /* distinct */ distinct 1 from t",
 	}, {
 		input: "select /* straight_join */ straight_join 1 from t",
@@ -194,6 +223,8 @@ var (
 		input: "select /* parenthessis in table list 2 */ 1 from t1, (t2)",
 	}, {
 		input: "select /* use */ 1 from t1 use index (a) where b = 1",
+	}, {
+		input: "select /* use */ 1 from t1 use index () where b = 1",
 	}, {
 		input: "select /* keyword index */ 1 from t1 use index (`By`) where b = 1",
 	}, {
@@ -307,7 +338,8 @@ var (
 	}, {
 		input: "select /* exists */ 1 from t where exists (select 1 from t)",
 	}, {
-		input: "select /* (boolean) */ 1 from t where not (a = b)",
+		input:  "select /* (boolean) */ 1 from t where not (a = b)",
+		output: "select /* (boolean) */ 1 from t where not a = b",
 	}, {
 		input: "select /* in value list */ 1 from t where a in (b, c)",
 	}, {
@@ -370,11 +402,14 @@ var (
 	}, {
 		input: "select /* select as a value expression */ 1 from t where a = (select a from t)",
 	}, {
-		input: "select /* parenthesised value */ 1 from t where a = (b)",
+		input:  "select /* parenthesised value */ 1 from t where a = (b)",
+		output: "select /* parenthesised value */ 1 from t where a = b",
 	}, {
-		input: "select /* over-parenthesize */ ((1)) from t where ((a)) in (((1))) and ((a, b)) in ((((1, 1))), ((2, 2)))",
+		input:  "select /* over-parenthesize */ ((1)) from t where ((a)) in (((1))) and ((a, b)) in ((((1, 1))), ((2, 2)))",
+		output: "select /* over-parenthesize */ 1 from t where a in (1) and (a, b) in ((1, 1), (2, 2))",
 	}, {
-		input: "select /* dot-parenthesize */ (a.b) from t where (b.c) = 2",
+		input:  "select /* dot-parenthesize */ (a.b) from t where (b.c) = 2",
+		output: "select /* dot-parenthesize */ a.b from t where b.c = 2",
 	}, {
 		input: "select /* & */ 1 from t where a = b & c",
 	}, {
@@ -423,6 +458,9 @@ var (
 		input: "select /* function with many params */ 1 from t where a = b(c, d)",
 	}, {
 		input: "select /* function with distinct */ count(distinct a) from t",
+	}, {
+		input:  "select count(distinctrow(1)) from (select (1) from dual union all select 1 from dual) a",
+		output: "select count(distinct 1) from (select 1 from dual union all select 1 from dual) as a",
 	}, {
 		input: "select /* if as func */ 1 from t where a = if(b)",
 	}, {
@@ -595,7 +633,18 @@ var (
 	}, {
 		input: "select /* OR of mixed columns in where */ * from t where a = 5 or b and c is not null",
 	}, {
-		input: "select /* OR in select columns */ (a or b) from t where c = 5",
+		input:  "select /* OR in select columns */ (a or b) from t where c = 5",
+		output: "select /* OR in select columns */ a or b from t where c = 5",
+	}, {
+		input: "select /* XOR of columns in where */ * from t where a xor b",
+	}, {
+		input: "select /* XOR of mixed columns in where */ * from t where a = 5 xor b and c is not null",
+	}, {
+		input:  "select /* XOR in select columns */ (a xor b) from t where c = 5",
+		output: "select /* XOR in select columns */ a xor b from t where c = 5",
+	}, {
+		input:  "select /* XOR in select columns */ * from t where (1 xor c1 > 0)",
+		output: "select /* XOR in select columns */ * from t where 1 xor c1 > 0",
 	}, {
 		input: "select /* bool as select value */ a, true from t",
 	}, {
@@ -659,11 +708,9 @@ var (
 		input:  "insert /* it accepts columns with keyword action */ into a(action, b) values (1, 2)",
 		output: "insert /* it accepts columns with keyword action */ into a(`action`, b) values (1, 2)",
 	}, {
-		input:  "insert /* no cols & paren select */ into a(select * from t)",
-		output: "insert /* no cols & paren select */ into a select * from t",
+		input: "insert /* no cols & paren select */ into a (select * from t)",
 	}, {
-		input:  "insert /* cols & paren select */ into a(a,b,c) (select * from t)",
-		output: "insert /* cols & paren select */ into a(a, b, c) select * from t",
+		input: "insert /* cols & paren select */ into a(a, b, c) (select * from t)",
 	}, {
 		input: "insert /* cols & union with paren select */ into a(b, c) (select d, e from f) union (select g from h)",
 	}, {
@@ -678,6 +725,8 @@ var (
 		input: "insert /* bool in on duplicate */ into a values (1, 2, 3) on duplicate key update b = values(a.b), c = d",
 	}, {
 		input: "insert /* bool expression on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = a > d",
+	}, {
+		input: "insert into user(username, `status`) values ('Chuck', default(`status`))",
 	}, {
 		input: "update /* simple */ a set b = 3",
 	}, {
@@ -807,6 +856,10 @@ var (
 	}, {
 		input: "set tx_read_only = 0",
 	}, {
+		input: "set transaction_read_only = 1",
+	}, {
+		input: "set transaction_read_only = 0",
+	}, {
 		input: "set tx_isolation = 'repeatable read'",
 	}, {
 		input: "set tx_isolation = 'read committed'",
@@ -818,6 +871,10 @@ var (
 		input: "set sql_safe_updates = 0",
 	}, {
 		input: "set sql_safe_updates = 1",
+	}, {
+		input: "set @variable = 42",
+	}, {
+		input: "set @period.variable = 42",
 	}, {
 		input:  "alter ignore table a add foo",
 		output: "alter table a",
@@ -939,6 +996,12 @@ var (
 		input:  "alter table a drop spatial index idx (id)",
 		output: "alter table a",
 	}, {
+		input:  "alter table a add check ch_1",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop check ch_1",
+		output: "alter table a",
+	}, {
 		input:  "alter table a drop foreign key",
 		output: "alter table a",
 	}, {
@@ -950,6 +1013,30 @@ var (
 	}, {
 		input:  "alter table a drop id",
 		output: "alter table a",
+	}, {
+		input:  "alter database d default character set = charset",
+		output: "alter database d",
+	}, {
+		input:  "alter database d character set = charset",
+		output: "alter database d",
+	}, {
+		input:  "alter database d default collate = collation",
+		output: "alter database d",
+	}, {
+		input:  "alter database d collate = collation",
+		output: "alter database d",
+	}, {
+		input:  "alter schema d default character set = charset",
+		output: "alter database d",
+	}, {
+		input:  "alter schema d character set = charset",
+		output: "alter database d",
+	}, {
+		input:  "alter schema d default collate = collation",
+		output: "alter database d",
+	}, {
+		input:  "alter schema d collate = collation",
+		output: "alter database d",
 	}, {
 		input: "create table a",
 	}, {
@@ -972,20 +1059,41 @@ var (
 	}, {
 		input: "alter vschema create vindex hash_vdx using hash",
 	}, {
+		input: "alter vschema create vindex keyspace.hash_vdx using hash",
+	}, {
 		input: "alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
 	}, {
 		input: "alter vschema create vindex xyz_vdx using xyz with param1=hello, param2='world', param3=123",
 	}, {
 		input: "alter vschema drop vindex hash_vdx",
 	}, {
+		input: "alter vschema drop vindex ks.hash_vdx",
+	}, {
 		input: "alter vschema add table a",
+	}, {
+		input: "alter vschema add table ks.a",
+	}, {
+		input: "alter vschema add sequence a_seq",
+	}, {
+		input: "alter vschema add sequence ks.a_seq",
+	}, {
+		input: "alter vschema on a add auto_increment id using a_seq",
+	}, {
+		input: "alter vschema on ks.a add auto_increment id using a_seq",
 	}, {
 		input: "alter vschema drop table a",
 	}, {
+		input: "alter vschema drop table ks.a",
+	}, {
 		input: "alter vschema on a add vindex hash (id)",
+	}, {
+		input: "alter vschema on ks.a add vindex hash (id)",
 	}, {
 		input:  "alter vschema on a add vindex `hash` (`id`)",
 		output: "alter vschema on a add vindex hash (id)",
+	}, {
+		input:  "alter vschema on `ks`.a add vindex `hash` (`id`)",
+		output: "alter vschema on ks.a add vindex hash (id)",
 	}, {
 		input:  "alter vschema on a add vindex hash (id) using `hash`",
 		output: "alter vschema on a add vindex hash (id) using hash",
@@ -1003,6 +1111,8 @@ var (
 		output: "alter vschema on user2 add vindex name_lastname_lookup_vdx (name, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
 	}, {
 		input: "alter vschema on a drop vindex hash",
+	}, {
+		input: "alter vschema on ks.a drop vindex hash",
 	}, {
 		input:  "alter vschema on a drop vindex `hash`",
 		output: "alter vschema on a drop vindex hash",
@@ -1062,7 +1172,7 @@ var (
 		output: "alter table a",
 	}, {
 		input:  "analyze table a",
-		output: "alter table a",
+		output: "otherread",
 	}, {
 		input:  "flush tables",
 		output: "flush",
@@ -1080,13 +1190,19 @@ var (
 		output: "show charset",
 	}, {
 		input:  "show character set like '%foo'",
-		output: "show charset",
+		output: "show charset like '%foo'",
 	}, {
 		input:  "show charset",
 		output: "show charset",
 	}, {
 		input:  "show charset like '%foo'",
-		output: "show charset",
+		output: "show charset like '%foo'",
+	}, {
+		input:  "show charset where 'charset' = 'utf8'",
+		output: "show charset where 'charset' = 'utf8'",
+	}, {
+		input:  "show charset where 'charset' = '%foo'",
+		output: "show charset where 'charset' = '%foo'",
 	}, {
 		input:  "show collation",
 		output: "show collation",
@@ -1121,6 +1237,9 @@ var (
 		input:  "show databases",
 		output: "show databases",
 	}, {
+		input:  "show schemas",
+		output: "show schemas",
+	}, {
 		input:  "show engine INNODB",
 		output: "show engine",
 	}, {
@@ -1145,14 +1264,11 @@ var (
 		input:  "show grants for 'root@localhost'",
 		output: "show grants",
 	}, {
-		input:  "show index from table",
-		output: "show index",
+		input: "show index from t",
 	}, {
-		input:  "show indexes from table",
-		output: "show indexes",
+		input: "show indexes from t",
 	}, {
-		input:  "show keys from table",
-		output: "show keys",
+		input: "show keys from t",
 	}, {
 		input:  "show master status",
 		output: "show master",
@@ -1285,14 +1401,47 @@ var (
 		input:  "use `ks:-80@master`",
 		output: "use `ks:-80@master`",
 	}, {
-		input:  "describe foobar",
-		output: "otherread",
+		input:  "use @replica",
+		output: "use `@replica`",
+	}, {
+		input:  "use ks@replica",
+		output: "use `ks@replica`",
+	}, {
+		input:  "describe select * from t",
+		output: "explain select * from t",
+	}, {
+		input:  "desc select * from t",
+		output: "explain select * from t",
 	}, {
 		input:  "desc foobar",
 		output: "otherread",
 	}, {
-		input:  "explain foobar",
+		input:  "explain t1",
 		output: "otherread",
+	}, {
+		input:  "explain t1 col",
+		output: "otherread",
+	}, {
+		input: "explain select * from t",
+	}, {
+		input: "explain format = traditional select * from t",
+	}, {
+		input: "explain analyze select * from t",
+	}, {
+		input: "explain format = tree select * from t",
+	}, {
+		input: "explain format = json select * from t",
+	}, {
+		input: "explain format = vitess select * from t",
+	}, {
+		input:  "describe format = vitess select * from t",
+		output: "explain format = vitess select * from t",
+	}, {
+		input: "explain delete from t",
+	}, {
+		input: "explain insert into t(col1, col2) values (1, 2)",
+	}, {
+		input: "explain update t set col = 2",
 	}, {
 		input:  "truncate table foo",
 		output: "truncate table foo",
@@ -1363,9 +1512,25 @@ var (
 	}, {
 		input: "select /* cache directive */ sql_no_cache 'foo' from t",
 	}, {
+		input: "select distinct sql_no_cache 'foo' from t",
+	}, {
+		input:  "select sql_no_cache distinct 'foo' from t",
+		output: "select distinct sql_no_cache 'foo' from t",
+	}, {
+		input:  "select sql_no_cache straight_join distinct 'foo' from t",
+		output: "select distinct sql_no_cache straight_join 'foo' from t",
+	}, {
+		input:  "select straight_join distinct sql_no_cache 'foo' from t",
+		output: "select distinct sql_no_cache straight_join 'foo' from t",
+	}, {
+		input:  "select sql_calc_found_rows 'foo' from t",
+		output: "select sql_calc_found_rows 'foo' from t",
+	}, {
 		input: "select binary 'a' = 'A' from t",
 	}, {
 		input: "select 1 from t where foo = _binary 'bar'",
+	}, {
+		input: "select 1 from t where foo = _utf8 'bar' and bar = _latin1 'sjösjuk'",
 	}, {
 		input:  "select 1 from t where foo = _binary'bar'",
 		output: "select 1 from t where foo = _binary 'bar'",
@@ -1379,11 +1544,21 @@ var (
 	}, {
 		input: "select match(a1, a2) against ('foo' in natural language mode with query expansion) from t",
 	}, {
+		input:  "select database()",
+		output: "select database() from dual",
+	}, {
+		input:  "select schema()",
+		output: "select schema() from dual",
+	}, {
 		input: "select title from video as v where match(v.title, v.tag) against ('DEMO' in boolean mode)",
 	}, {
 		input: "select name, group_concat(score) from t group by name",
 	}, {
 		input: "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
+	}, {
+		input: "select name, group_concat(distinct id, score order by id desc separator ':' limit 1) from t group by name",
+	}, {
+		input: "select name, group_concat(distinct id, score order by id desc separator ':' limit 10, 2) from t group by name",
 	}, {
 		input: "select * from t partition (p0)",
 	}, {
@@ -1409,6 +1584,9 @@ var (
 	}, {
 		input: "begin",
 	}, {
+		input:  "begin;",
+		output: "begin",
+	}, {
 		input:  "start transaction",
 		output: "begin",
 	}, {
@@ -1431,35 +1609,112 @@ var (
 	}, {
 		input:  "drop database if exists test_db",
 		output: "drop database test_db",
+	}, {
+		input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
+		output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.name = 'test'",
+	}, {
+		input:  "select distinctrow a.* from (select (1) from dual union all select 1 from dual) a",
+		output: "select distinct a.* from (select 1 from dual union all select 1 from dual) as a",
+	}, {
+		input: "select `weird function name`() from t",
+	}, {
+		input: "select status() from t", // should not escape function names that are keywords
+	}, {
+		input: "select * from `weird table name`",
+	}, {
+		input:  "SHOW FULL TABLES FROM `jiradb` LIKE 'AO_E8B6CC_ISSUE_MAPPING'",
+		output: "show full tables from jiradb like 'AO_E8B6CC_ISSUE_MAPPING'",
+	}, {
+		input:  "SHOW FULL COLUMNS FROM AO_E8B6CC_ISSUE_MAPPING FROM jiradb LIKE '%'",
+		output: "show full columns from AO_E8B6CC_ISSUE_MAPPING from jiradb like '%'",
+	}, {
+		input:  "SHOW KEYS FROM `AO_E8B6CC_ISSUE_MAPPING` FROM `jiradb`",
+		output: "show keys from AO_E8B6CC_ISSUE_MAPPING from jiradb",
+	}, {
+		input:  "SHOW CREATE TABLE `jiradb`.`AO_E8B6CC_ISSUE_MAPPING`",
+		output: "show create table jiradb.AO_E8B6CC_ISSUE_MAPPING",
+	}, {
+		input:  "SHOW INDEX FROM `AO_E8B6CC_ISSUE_MAPPING` FROM `jiradb`",
+		output: "show index from AO_E8B6CC_ISSUE_MAPPING from jiradb",
+	}, {
+		input:  "SHOW FULL TABLES FROM `jiradb` LIKE '%'",
+		output: "show full tables from jiradb like '%'",
+	}, {
+		input:  "SHOW EXTENDED INDEX FROM `AO_E8B6CC_PROJECT_MAPPING` FROM `jiradb`",
+		output: "show extended index from AO_E8B6CC_PROJECT_MAPPING from jiradb",
+	}, {
+		input:  "SHOW EXTENDED KEYS FROM `AO_E8B6CC_ISSUE_MAPPING` FROM `jiradb`",
+		output: "show extended keys from AO_E8B6CC_ISSUE_MAPPING from jiradb",
+	}, {
+		input:  "SHOW CREATE TABLE `jiradb`.`AO_E8B6CC_ISSUE_MAPPING`",
+		output: "show create table jiradb.AO_E8B6CC_ISSUE_MAPPING",
+	}, {
+		input:  "SHOW INDEXES FROM `AO_E8B6CC_ISSUE_MAPPING` FROM `jiradb`",
+		output: "show indexes from AO_E8B6CC_ISSUE_MAPPING from jiradb",
+	}, {
+		input:  "SHOW FULL TABLES FROM `jiradb` LIKE '%'",
+		output: "show full tables from jiradb like '%'",
+	}, {
+		input:  "SHOW EXTENDED INDEXES FROM `AO_E8B6CC_PROJECT_MAPPING` FROM `jiradb`",
+		output: "show extended indexes from AO_E8B6CC_PROJECT_MAPPING from jiradb",
+	}, {
+		input:  "SHOW EXTENDED INDEXES IN `AO_E8B6CC_PROJECT_MAPPING` IN `jiradb`",
+		output: "show extended indexes from AO_E8B6CC_PROJECT_MAPPING from jiradb",
+	}, {
+		input:  "do 1",
+		output: "otheradmin",
+	}, {
+		input:  "do funcCall(), 2 = 1, 3 + 1",
+		output: "otheradmin",
+	}, {
+		input: "savepoint a",
+	}, {
+		input: "savepoint `@@@;a`",
+	}, {
+		input: "rollback to a",
+	}, {
+		input: "rollback to `@@@;a`",
+	}, {
+		input:  "rollback work to a",
+		output: "rollback to a",
+	}, {
+		input:  "rollback to savepoint a",
+		output: "rollback to a",
+	}, {
+		input:  "rollback work to savepoint a",
+		output: "rollback to a",
+	}, {
+		input: "release savepoint a",
+	}, {
+		input: "release savepoint `@@@;a`",
 	}}
 )
 
 func TestValid(t *testing.T) {
 	for _, tcase := range validSQL {
-		if tcase.output == "" {
-			tcase.output = tcase.input
-		}
-		tree, err := Parse(tcase.input)
-		if err != nil {
-			t.Errorf("Parse(%q) err: %v, want nil", tcase.input, err)
-			continue
-		}
-		out := String(tree)
-		if out != tcase.output {
-			t.Errorf("Parse(%q) = %q, want: %q", tcase.input, out, tcase.output)
-		}
-		// This test just exercises the tree walking functionality.
-		// There's no way automated way to verify that a node calls
-		// all its children. But we can examine code coverage and
-		// ensure that all walkSubtree functions were called.
-		Walk(func(node SQLNode) (bool, error) {
-			return true, nil
-		}, tree)
+		t.Run(tcase.input, func(t *testing.T) {
+			if tcase.output == "" {
+				tcase.output = tcase.input
+			}
+			tree, err := Parse(tcase.input)
+			require.NoError(t, err, tcase.input)
+			out := String(tree)
+			if tcase.output != out {
+				t.Errorf("Parsing failed. \nExpected/Got:\n%s\n%s", tcase.output, out)
+			}
+			// This test just exercises the tree walking functionality.
+			// There's no way automated way to verify that a node calls
+			// all its children. But we can examine code coverage and
+			// ensure that all walkSubtree functions were called.
+			Walk(func(node SQLNode) (bool, error) {
+				return true, nil
+			}, tree)
+		})
 	}
 }
 
 // Ensure there is no corruption from using a pooled yyParserImpl in Parse.
-func TestValidParallel(t *testing.T) {
+func TestParallelValid(t *testing.T) {
 	parallelism := 100
 	numIters := 1000
 
@@ -1493,11 +1748,11 @@ func TestInvalid(t *testing.T) {
 		input string
 		err   string
 	}{{
-		input: "select a from (select * from tbl)",
-		err:   "Every derived table must have its own alias",
-	}, {
 		input: "select a, b from (select * from tbl) sort by a",
 		err:   "syntax error",
+	}, {
+		input: "/*!*/",
+		err:   "empty statement",
 	}}
 
 	for _, tcase := range invalidSQL {
@@ -1688,8 +1943,14 @@ func TestKeywords(t *testing.T) {
 		input:  "select status from t",
 		output: "select `status` from t",
 	}, {
+		input:  "select Status from t",
+		output: "select `Status` from t",
+	}, {
 		input:  "select variables from t",
 		output: "select `variables` from t",
+	}, {
+		input:  "select Variables from t",
+		output: "select `Variables` from t",
 	}}
 
 	for _, tcase := range validSQL {
@@ -1814,6 +2075,48 @@ func TestConvert(t *testing.T) {
 	}
 }
 
+func TestPositionedErr(t *testing.T) {
+	invalidSQL := []struct {
+		input  string
+		output PositionedErr
+	}{{
+		input:  "select convert('abc' as date) from t",
+		output: PositionedErr{"syntax error", 24, []byte("as")},
+	}, {
+		input:  "select convert from t",
+		output: PositionedErr{"syntax error", 20, []byte("from")},
+	}, {
+		input:  "select cast('foo', decimal) from t",
+		output: PositionedErr{"syntax error", 19, nil},
+	}, {
+		input:  "select convert('abc', datetime(4+9)) from t",
+		output: PositionedErr{"syntax error", 34, nil},
+	}, {
+		input:  "select convert('abc', decimal(4+9)) from t",
+		output: PositionedErr{"syntax error", 33, nil},
+	}, {
+		input:  "set transaction isolation level 12345",
+		output: PositionedErr{"syntax error", 38, []byte("12345")},
+	}, {
+		input:  "select * from a left join b",
+		output: PositionedErr{"syntax error", 28, nil},
+	}, {
+		input:  "select a from (select * from tbl)",
+		output: PositionedErr{"syntax error", 34, nil},
+	}}
+
+	for _, tcase := range invalidSQL {
+		tkn := NewStringTokenizer(tcase.input)
+		_, err := ParseNext(tkn)
+
+		if posErr, ok := err.(PositionedErr); !ok {
+			t.Errorf("%s: %v expected PositionedErr, got (%T) %v", tcase.input, err, err, tcase.output)
+		} else if posErr.Pos != tcase.output.Pos || !bytes.Equal(posErr.Near, tcase.output.Near) || err.Error() != tcase.output.Error() {
+			t.Errorf("%s: %v, want: %v", tcase.input, err, tcase.output)
+		}
+	}
+}
+
 func TestSubStr(t *testing.T) {
 
 	validSQL := []struct {
@@ -1841,6 +2144,15 @@ func TestSubStr(t *testing.T) {
 	}, {
 		input:  `select substring("foo", 1, 2) from t`,
 		output: `select substr('foo', 1, 2) from t`,
+	}, {
+		input:  `select substr(substr("foo" from 1 for 2), 1, 2) from t`,
+		output: `select substr(substr('foo', 1, 2), 1, 2) from t`,
+	}, {
+		input:  `select substr(substring("foo", 1, 2), 3, 4) from t`,
+		output: `select substr(substr('foo', 1, 2), 3, 4) from t`,
+	}, {
+		input:  `select substring(substr("foo", 1), 2) from t`,
+		output: `select substr(substr('foo', 1), 2) from t`,
 	}}
 
 	for _, tcase := range validSQL {
@@ -2339,9 +2651,6 @@ var (
 		output       string
 		excludeMulti bool // Don't use in the ParseNext multi-statement parsing tests.
 	}{{
-		input:  "select $ from t",
-		output: "syntax error at position 9 near '$'",
-	}, {
 		input:  "select : from t",
 		output: "syntax error at position 9 near ':'",
 	}, {
@@ -2432,9 +2741,6 @@ var (
 		input:  "select /* vitess-reserved keyword as unqualified column */ * from t where escape = 'test'",
 		output: "syntax error at position 81 near 'escape'",
 	}, {
-		input:  "(select /* parenthesized select */ * from t)",
-		output: "syntax error at position 45",
-	}, {
 		input:  "select * from t where id = ((select a from t1 union select b from t2) order by a limit 1)",
 		output: "syntax error at position 76 near 'order'",
 	}, {
@@ -2457,10 +2763,10 @@ var (
 
 func TestErrors(t *testing.T) {
 	for _, tcase := range invalidSQL {
-		_, err := Parse(tcase.input)
-		if err == nil || err.Error() != tcase.output {
-			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
-		}
+		t.Run(tcase.input, func(t *testing.T) {
+			_, err := Parse(tcase.input)
+			require.Error(t, err, tcase.output)
+		})
 	}
 }
 
@@ -2494,6 +2800,25 @@ func TestSkipToEnd(t *testing.T) {
 		_, err := Parse(tcase.input)
 		if err == nil || err.Error() != tcase.output {
 			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
+		}
+	}
+}
+
+func TestParseDjangoQueries(t *testing.T) {
+
+	file, err := os.Open("./test_queries/django_queries.txt")
+	if err != nil {
+		t.Errorf(" Error: %v", err)
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+
+		_, err := Parse(string(scanner.Text()))
+		if err != nil {
+			t.Error(scanner.Text())
+			t.Errorf(" Error: %v", err)
 		}
 	}
 }

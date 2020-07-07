@@ -1,0 +1,18 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "hash": {
+      "type": "hash"
+    }
+  },
+  "tables": {
+    "are_you_alive_messages": {
+      "column_vindexes": [
+        {
+          "column": "page",
+          "name": "hash"
+        }
+      ]
+    }
+  }
+}

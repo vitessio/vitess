@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -230,27 +230,6 @@ var tableACLConfig = `{
       "admins": ["dev"]
     },
     {
-      "name": "vitess_message",
-      "table_names_or_prefixes": ["vitess_message"],
-      "readers": ["dev"],
-      "writers": ["dev"],
-      "admins": ["dev"]
-    },
-    {
-      "name": "vitess_message3",
-      "table_names_or_prefixes": ["vitess_message3"],
-      "readers": ["dev"],
-      "writers": ["dev"],
-      "admins": ["dev"]
-    },
-    {
-      "name": "vitess_message_auto",
-      "table_names_or_prefixes": ["vitess_message_auto"],
-      "readers": ["dev"],
-      "writers": ["dev"],
-      "admins": ["dev"]
-    },
-    {
       "name": "vitess_acl_unmatched",
       "table_names_or_prefixes": ["vitess_acl_unmatched"],
       "readers": ["dev"],
@@ -289,6 +268,27 @@ var tableACLConfig = `{
       "table_names_or_prefixes": ["vitess_test_debuguser"],
       "readers": ["dev", "vt_appdebug"],
       "writers": ["dev", "vt_appdebug"]
+    },
+    {
+      "name": "version",
+      "table_names_or_prefixes": ["vitess_version"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "schema_version",
+      "table_names_or_prefixes": ["schema_version"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "historian_test1",
+      "table_names_or_prefixes": ["historian_test1"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
     }
   ]
 }`

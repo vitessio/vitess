@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@ import (
 	"flag"
 	"reflect"
 	"testing"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -116,5 +118,9 @@ var globalFBC *fakeBinlogClient
 
 func init() {
 	RegisterClientFactory("test", func() Client { return globalFBC })
-	flag.Set("binlog_player_protocol", "test")
+
+	//log error
+	if err := flag.Set("binlog_player_protocol", "test"); err != nil {
+		log.Errorf("failed to set flag \"binlog_player_protocol\" to \"test\":%v", err)
+	}
 }

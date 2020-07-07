@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -92,7 +92,7 @@ func main() {
 		Parameters: params.parameters,
 	}
 	fmt.Printf("Sending request:\n%v", proto.MarshalTextString(enqueueRequest))
-	enqueueResponse, err := client.EnqueueClusterOperation(context.Background(), enqueueRequest, grpc.FailFast(false))
+	enqueueResponse, err := client.EnqueueClusterOperation(context.Background(), enqueueRequest, grpc.WaitForReady(true))
 	if err != nil {
 		fmt.Println("Failed to enqueue ClusterOperation. Error:", err)
 		os.Exit(4)
@@ -106,14 +106,14 @@ func main() {
 	fmt.Printf("SUCCESS: ClusterOperation finished.\n\nDetails:\n%v", proto.MarshalTextString(resp))
 }
 
-// waitForClusterOp polls and blocks until the ClusterOperation invocation specified by "id" has finished. If an error occured, it will be returned.
+// waitForClusterOp polls and blocks until the ClusterOperation invocation specified by "id" has finished. If an error occurred, it will be returned.
 func waitForClusterOp(client automationservicepb.AutomationClient, id string) (*automationpb.GetClusterOperationDetailsResponse, error) {
 	for {
 		req := &automationpb.GetClusterOperationDetailsRequest{
 			Id: id,
 		}
 
-		resp, err := client.GetClusterOperationDetails(context.Background(), req, grpc.FailFast(false))
+		resp, err := client.GetClusterOperationDetails(context.Background(), req, grpc.WaitForReady(true))
 		if err != nil {
 			return nil, fmt.Errorf("failed to get ClusterOperation Details. Request: %v Error: %v", req, err)
 		}

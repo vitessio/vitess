@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -97,19 +97,19 @@ type SplitCloneWorker struct {
 	// MASTER tablet, b) get the list of healthy RDONLY tablets and c) track the
 	// replication lag of all REPLICA tablets.
 	// It must be closed at the end of the command.
-	healthCheck discovery.HealthCheck
-	tsc         *discovery.TabletStatsCache
+	healthCheck discovery.LegacyHealthCheck
+	tsc         *discovery.LegacyTabletStatsCache
 
 	// populated during WorkerStateFindTargets, read-only after that
 	sourceTablets []*topodatapb.Tablet
 	lastPos       string // contains the GTID position for the source
 	transactions  []int64
 
-	// shardWatchers contains a TopologyWatcher for each source and destination
+	// shardWatchers contains a LegacyTopologyWatcher for each source and destination
 	// shard. It updates the list of tablets in the healthcheck if replicas are
 	// added/removed.
 	// Each watcher must be stopped at the end of the command.
-	shardWatchers []*discovery.TopologyWatcher
+	shardWatchers []*discovery.LegacyTopologyWatcher
 	// destinationDbNames stores for each destination keyspace/shard the MySQL
 	// database name.
 	// Example Map Entry: test_keyspace/-80 => vt_test_keyspace
@@ -420,7 +420,7 @@ func (scw *SplitCloneWorker) Run(ctx context.Context) error {
 		// After Close returned, we can be sure that it won't call our listener
 		// implementation (method StatsUpdate) anymore.
 		if err := scw.healthCheck.Close(); err != nil {
-			scw.wr.Logger().Errorf2(err, "HealthCheck.Close() failed")
+			scw.wr.Logger().Errorf2(err, "LegacyHealthCheck.Close() failed")
 		}
 	}
 
@@ -558,15 +558,15 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 	}
 
 	// Initialize healthcheck and add destination shards to it.
-	scw.healthCheck = discovery.NewHealthCheck(*healthcheckRetryDelay, *healthCheckTimeout)
+	scw.healthCheck = discovery.NewLegacyHealthCheck(*healthcheckRetryDelay, *healthCheckTimeout)
 	scw.tsc = discovery.NewTabletStatsCacheDoNotSetListener(scw.wr.TopoServer(), scw.cell)
-	// We set sendDownEvents=true because it's required by TabletStatsCache.
+	// We set sendDownEvents=true because it's required by LegacyTabletStatsCache.
 	scw.healthCheck.SetListener(scw, true /* sendDownEvents */)
 
 	// Start watchers to get tablets added automatically to healthCheck.
 	allShards := append(scw.sourceShards, scw.destinationShards...)
 	for _, si := range allShards {
-		watcher := discovery.NewShardReplicationWatcher(scw.wr.TopoServer(), scw.healthCheck,
+		watcher := discovery.NewLegacyShardReplicationWatcher(ctx, scw.wr.TopoServer(), scw.healthCheck,
 			scw.cell, si.Keyspace(), si.ShardName(),
 			*healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
 		scw.shardWatchers = append(scw.shardWatchers, watcher)
@@ -592,7 +592,7 @@ func (scw *SplitCloneWorker) initShardsForHorizontalResharding(ctx context.Conte
 	scw.wr.Logger().Infof("Found overlapping shards: %+v\n", os)
 
 	// one side should have served types, the other one none,
-	// figure out wich is which, then double check them all
+	// figure out which is which, then double check them all
 	leftServingTypes, err := scw.wr.TopoServer().GetShardServingTypes(ctx, os.Left[0])
 	if err != nil {
 		return fmt.Errorf("cannot get shard serving cells for: %v", os.Left[0])
@@ -783,13 +783,13 @@ func (scw *SplitCloneWorker) findOfflineSourceTablets(ctx context.Context) error
 		scw.sourceTablets[i] = ti.Tablet
 
 		shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-		err = scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i])
+		err = scw.wr.TabletManagerClient().StopReplication(shortCtx, scw.sourceTablets[i])
 		cancel()
 		if err != nil {
 			return vterrors.Wrapf(err, "cannot stop replication on tablet %v", topoproto.TabletAliasString(alias))
 		}
 
-		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i])
+		wrangler.RecordStartReplicationAction(scw.cleaner, scw.sourceTablets[i])
 	}
 
 	return nil
@@ -844,14 +844,14 @@ func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
 	scw.wr.Logger().Infof("Finding a MASTER tablet for each destination shard...")
 	for _, si := range scw.destinationShards {
 		waitCtx, waitCancel := context.WithTimeout(ctx, *waitForHealthyTabletsTimeout)
-		err := scw.tsc.WaitForTablets(waitCtx, scw.cell, si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER)
+		err := scw.tsc.WaitForTablets(waitCtx, si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER)
 		waitCancel()
 		if err != nil {
 			return vterrors.Wrapf(err, "cannot find MASTER tablet for destination shard for %v/%v (in cell: %v)", si.Keyspace(), si.ShardName(), scw.cell)
 		}
 		masters := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER)
 		if len(masters) == 0 {
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot find MASTER tablet for destination shard for %v/%v (in cell: %v) in HealthCheck: empty TabletStats list", si.Keyspace(), si.ShardName(), scw.cell)
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot find MASTER tablet for destination shard for %v/%v (in cell: %v) in LegacyHealthCheck: empty LegacyTabletStats list", si.Keyspace(), si.ShardName(), scw.cell)
 		}
 		master := masters[0]
 
@@ -861,7 +861,7 @@ func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
 
 		scw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Tablet.Alias), si.Keyspace(), si.ShardName())
 	}
-	scw.wr.Logger().Infof("NOTE: The used master of a destination shard might change over the course of the copy e.g. due to a reparent. The HealthCheck module will track and log master changes and any error message will always refer the actually used master address.")
+	scw.wr.Logger().Infof("NOTE: The used master of a destination shard might change over the course of the copy e.g. due to a reparent. The LegacyHealthCheck module will track and log master changes and any error message will always refer the actually used master address.")
 
 	return nil
 }
@@ -1246,7 +1246,7 @@ func (scw *SplitCloneWorker) setUpVReplication(ctx context.Context) error {
 	} else {
 		for shardIndex := range scw.sourceShards {
 			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-			status, err := scw.wr.TabletManagerClient().SlaveStatus(shortCtx, scw.sourceTablets[shardIndex])
+			status, err := scw.wr.TabletManagerClient().ReplicationStatus(shortCtx, scw.sourceTablets[shardIndex])
 			cancel()
 			if err != nil {
 				return err
@@ -1262,6 +1262,9 @@ func (scw *SplitCloneWorker) setUpVReplication(ctx context.Context) error {
 	}
 
 	for _, si := range scw.destinationShards {
+		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
+		dbName := scw.destinationDbNames[keyspaceAndShard]
+
 		wg.Add(1)
 		go func(keyspace, shard string, kr *topodatapb.KeyRange) {
 			defer wg.Done()
@@ -1286,12 +1289,13 @@ func (scw *SplitCloneWorker) setUpVReplication(ctx context.Context) error {
 					bls.Tables = scw.tables
 				}
 				// TODO(mberlin): Fill in scw.maxReplicationLag once the adapative throttler is enabled by default.
-				qr, err := exc.vreplicationExec(cancelableCtx, binlogplayer.CreateVReplication("SplitClone", bls, sourcePositions[shardIndex], scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix()))
+				qr, err := exc.vreplicationExec(cancelableCtx, binlogplayer.CreateVReplication("SplitClone", bls, sourcePositions[shardIndex], scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), dbName))
 				if err != nil {
 					handleError(vterrors.Wrap(err, "vreplication queries failed"))
 					cancel()
 					return
 				}
+				scw.wr.Logger().Infof("Created replication for tablet %v/%v: %v, db: %v, pos: %v, uid: %v", keyspace, shard, bls, dbName, sourcePositions[shardIndex], uint32(qr.InsertID))
 				if err := scw.wr.SourceShardAdd(cancelableCtx, keyspace, shard, uint32(qr.InsertID), src.Keyspace(), src.ShardName(), src.Shard.KeyRange, scw.tables); err != nil {
 					handleError(vterrors.Wrap(err, "could not add source shard"))
 					break
@@ -1351,9 +1355,9 @@ func (scw *SplitCloneWorker) createKeyResolver(td *tabletmanagerdatapb.TableDefi
 
 // StatsUpdate receives replication lag updates for each destination master
 // and forwards them to the respective throttler instance.
-// It also forwards any update to the TabletStatsCache to keep it up to date.
-// It is part of the discovery.HealthCheckStatsListener interface.
-func (scw *SplitCloneWorker) StatsUpdate(ts *discovery.TabletStats) {
+// It also forwards any update to the LegacyTabletStatsCache to keep it up to date.
+// It is part of the discovery.LegacyHealthCheckStatsListener interface.
+func (scw *SplitCloneWorker) StatsUpdate(ts *discovery.LegacyTabletStats) {
 	scw.tsc.StatsUpdate(ts)
 
 	// Ignore unless REPLICA or RDONLY.

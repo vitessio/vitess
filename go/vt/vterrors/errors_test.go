@@ -1,3 +1,19 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vterrors
 
 import (
@@ -172,15 +188,16 @@ func TestStackFormat(t *testing.T) {
 	err := outer()
 	got := fmt.Sprintf("%v", err)
 
-	assertStringContains(t, got, "innerMost")
-	assertStringContains(t, got, "middle")
-	assertStringContains(t, got, "outer")
-}
+	assertContains(t, got, "innerMost", false)
+	assertContains(t, got, "middle", false)
+	assertContains(t, got, "outer", false)
 
-func assertStringContains(t *testing.T, s, substring string) {
-	if !strings.Contains(s, substring) {
-		t.Errorf("string did not contain `%v`: \n %v", substring, s)
-	}
+	LogErrStacks = true
+	defer func() { LogErrStacks = false }()
+	got = fmt.Sprintf("%v", err)
+	assertContains(t, got, "innerMost", true)
+	assertContains(t, got, "middle", true)
+	assertContains(t, got, "outer", true)
 }
 
 // errors.New, etc values are not expected to be compared by value
@@ -256,18 +273,29 @@ func TestWrapping(t *testing.T) {
 	err1 := Errorf(vtrpcpb.Code_UNAVAILABLE, "foo")
 	err2 := Wrapf(err1, "bar")
 	err3 := Wrapf(err2, "baz")
+	errorWithoutStack := fmt.Sprintf("%v", err3)
+
+	LogErrStacks = true
 	errorWithStack := fmt.Sprintf("%v", err3)
+	LogErrStacks = false
 
 	assertEquals(t, err3.Error(), "baz: bar: foo")
-	assertContains(t, errorWithStack, "foo")
-	assertContains(t, errorWithStack, "bar")
-	assertContains(t, errorWithStack, "baz")
-	assertContains(t, errorWithStack, "TestWrapping")
+	assertContains(t, errorWithoutStack, "foo", true)
+	assertContains(t, errorWithoutStack, "bar", true)
+	assertContains(t, errorWithoutStack, "baz", true)
+	assertContains(t, errorWithoutStack, "TestWrapping", false)
+
+	assertContains(t, errorWithStack, "foo", true)
+	assertContains(t, errorWithStack, "bar", true)
+	assertContains(t, errorWithStack, "baz", true)
+	assertContains(t, errorWithStack, "TestWrapping", true)
+
 }
 
-func assertContains(t *testing.T, s, substring string) {
-	if !strings.Contains(s, substring) {
-		t.Fatalf("expected string that contains [%s] but got [%s]", substring, s)
+func assertContains(t *testing.T, s, substring string, contains bool) {
+	t.Helper()
+	if doesContain := strings.Contains(s, substring); doesContain != contains {
+		t.Errorf("string `%v` contains `%v`: %v, want %v", s, substring, doesContain, contains)
 	}
 }
 

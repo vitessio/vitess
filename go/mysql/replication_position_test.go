@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -23,8 +23,8 @@ import (
 )
 
 func TestPositionEqual(t *testing.T) {
-	input1 := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
-	input2 := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
+	input1 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
+	input2 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 	want := true
 
 	if got := input1.Equal(input2); got != want {
@@ -33,8 +33,8 @@ func TestPositionEqual(t *testing.T) {
 }
 
 func TestPositionNotEqual(t *testing.T) {
-	input1 := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
-	input2 := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 12345}}}
+	input1 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
+	input2 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 12345}}}
 	want := false
 
 	if got := input1.Equal(input2); got != want {
@@ -43,7 +43,7 @@ func TestPositionNotEqual(t *testing.T) {
 }
 
 func TestPositionEqualZero(t *testing.T) {
-	input1 := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
+	input1 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 	input2 := Position{}
 	want := false
 
@@ -63,8 +63,8 @@ func TestPositionZeroEqualZero(t *testing.T) {
 }
 
 func TestPositionAtLeastLess(t *testing.T) {
-	input1 := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1233}}}
-	input2 := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
+	input1 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1233}}}
+	input2 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 	want := false
 
 	if got := input1.AtLeast(input2); got != want {
@@ -73,8 +73,8 @@ func TestPositionAtLeastLess(t *testing.T) {
 }
 
 func TestPositionAtLeastEqual(t *testing.T) {
-	input1 := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
-	input2 := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
+	input1 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
+	input2 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 	want := true
 
 	if got := input1.AtLeast(input2); got != want {
@@ -83,8 +83,8 @@ func TestPositionAtLeastEqual(t *testing.T) {
 }
 
 func TestPositionAtLeastGreater(t *testing.T) {
-	input1 := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}}}
-	input2 := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
+	input1 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}}}
+	input2 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 	want := true
 
 	if got := input1.AtLeast(input2); got != want {
@@ -93,8 +93,8 @@ func TestPositionAtLeastGreater(t *testing.T) {
 }
 
 func TestPositionAtLeastDifferentServer(t *testing.T) {
-	input1 := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}}}
-	input2 := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 4444, Sequence: 1234}}}
+	input1 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}}}
+	input2 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 4444, Sequence: 1234}}}
 	want := true
 
 	if got := input1.AtLeast(input2); got != want {
@@ -103,8 +103,8 @@ func TestPositionAtLeastDifferentServer(t *testing.T) {
 }
 
 func TestPositionAtLeastDifferentDomain(t *testing.T) {
-	input1 := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}}}
-	input2 := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 4, Server: 5555, Sequence: 1234}}}
+	input1 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}}}
+	input2 := Position{GTIDSet: MariadbGTIDSet{4: MariadbGTID{Domain: 4, Server: 5555, Sequence: 1234}}}
 	want := false
 
 	if got := input1.AtLeast(input2); got != want {
@@ -114,7 +114,7 @@ func TestPositionAtLeastDifferentDomain(t *testing.T) {
 
 func TestPositionZeroAtLeast(t *testing.T) {
 	input1 := Position{}
-	input2 := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
+	input2 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 	want := false
 
 	if got := input1.AtLeast(input2); got != want {
@@ -123,8 +123,8 @@ func TestPositionZeroAtLeast(t *testing.T) {
 }
 
 func TestPositionAtLeastZero(t *testing.T) {
-	input1 := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
-	input2 := Position{}
+	input1 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
+	input2 := Position{GTIDSet: MariadbGTIDSet(nil)}
 	want := true
 
 	if got := input1.AtLeast(input2); got != want {
@@ -143,7 +143,7 @@ func TestPositionZeroAtLeastZero(t *testing.T) {
 }
 
 func TestPositionString(t *testing.T) {
-	input := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
+	input := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 	want := "3-5555-1234"
 
 	if got := input.String(); got != want {
@@ -170,7 +170,7 @@ func TestPositionIsZero(t *testing.T) {
 }
 
 func TestPositionIsNotZero(t *testing.T) {
-	input := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
+	input := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 	want := false
 
 	if got := input.IsZero(); got != want {
@@ -179,9 +179,9 @@ func TestPositionIsNotZero(t *testing.T) {
 }
 
 func TestPositionAppend(t *testing.T) {
-	input1 := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
+	input1 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 	input2 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}
-	want := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}}}
+	want := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}}}
 
 	if got := AppendGTID(input1, input2); !got.Equal(want) {
 		t.Errorf("AppendGTID(%#v, %#v) = %#v, want %#v", input1, input2, got, want)
@@ -189,9 +189,9 @@ func TestPositionAppend(t *testing.T) {
 }
 
 func TestPositionAppendNil(t *testing.T) {
-	input1 := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
+	input1 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 	input2 := GTID(nil)
-	want := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
+	want := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 
 	if got := AppendGTID(input1, input2); !got.Equal(want) {
 		t.Errorf("AppendGTID(%#v, %#v) = %#v, want %#v", input1, input2, got, want)
@@ -201,7 +201,7 @@ func TestPositionAppendNil(t *testing.T) {
 func TestPositionAppendToZero(t *testing.T) {
 	input1 := Position{}
 	input2 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
-	want := Position{GTIDSet: MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
+	want := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 
 	if got := AppendGTID(input1, input2); !got.Equal(want) {
 		t.Errorf("AppendGTID(%#v, %#v) = %#v, want %#v", input1, input2, got, want)

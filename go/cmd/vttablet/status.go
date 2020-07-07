@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import (
 
 var (
 	// tabletTemplate contains the style sheet and the tablet itself.
+	// This template is a slight duplicate of the one in go/vt/vttablet/tabletserver/status.go.
 	tabletTemplate = `
 <style>
   table {
@@ -66,19 +67,15 @@ var (
       {{if .DisallowQueryService}}
         Query Service disabled: {{.DisallowQueryService}}<br>
       {{end}}
-      {{if .DisableUpdateStream}}
-        Update Stream disabled<br>
-      {{end}}
     </td>
     <td width="25%" border="">
       <a href="/schemaz">Schema</a></br>
       <a href="/debug/tablet_plans">Schema&nbsp;Query&nbsp;Plans</a></br>
       <a href="/debug/query_stats">Schema&nbsp;Query&nbsp;Stats</a></br>
-      <a href="/debug/table_stats">Schema&nbsp;Table&nbsp;Stats</a></br>
-    </td>
-    <td width="25%" border="">
       <a href="/queryz">Query&nbsp;Stats</a></br>
       <a href="/streamqueryz">Streaming&nbsp;Query&nbsp;Stats</a></br>
+    </td>
+    <td width="25%" border="">
       <a href="/debug/consolidations">Consolidations</a></br>
       <a href="/querylogz">Current&nbsp;Query&nbsp;Log</a></br>
       <a href="/txlogz">Current&nbsp;Transaction&nbsp;Log</a></br>
@@ -147,32 +144,25 @@ func healthHTMLName() template.HTML {
 	return health.DefaultAggregator.HTMLName()
 }
 
-// For use by plugins which wish to avoid racing when registering status page parts.
-var onStatusRegistered func()
-
 func addStatusParts(qsc tabletserver.Controller) {
 	servenv.AddStatusPart("Tablet", tabletTemplate, func() interface{} {
 		return map[string]interface{}{
-			"Tablet":               topo.NewTabletInfo(agent.Tablet(), nil),
-			"BlacklistedTables":    agent.BlacklistedTables(),
-			"DisallowQueryService": agent.DisallowQueryService(),
-			"DisableUpdateStream":  !agent.EnableUpdateStream(),
+			"Tablet":               topo.NewTabletInfo(tm.Tablet(), nil),
+			"BlacklistedTables":    tm.BlacklistedTables(),
+			"DisallowQueryService": tm.DisallowQueryService(),
 		}
 	})
 	servenv.AddStatusFuncs(template.FuncMap{
 		"github_com_vitessio_vitess_health_html_name": healthHTMLName,
 	})
 	servenv.AddStatusPart("Health", healthTemplate, func() interface{} {
-		latest, _ := agent.History.Latest().(*tabletmanager.HealthRecord)
+		latest, _ := tm.History.Latest().(*tabletmanager.HealthRecord)
 		return &healthStatus{
-			Records: agent.History.Records(),
+			Records: tm.History.Records(),
 			Config:  tabletmanager.ConfigHTML(),
 			current: latest,
 		}
 	})
 	qsc.AddStatusPart()
 	vreplication.AddStatusPart()
-	if onStatusRegistered != nil {
-		onStatusRegistered()
-	}
 }

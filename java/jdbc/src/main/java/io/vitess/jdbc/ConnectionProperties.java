@@ -1,12 +1,12 @@
 /*
- * Copyright 2017 Google Inc.
- *
+ * Copyright 2019 The Vitess Authors.
+
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+
  *     http://www.apache.org/licenses/LICENSE-2.0
- *
+
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -231,7 +231,7 @@ public class ConnectionProperties {
       "The password protecting the truststore file (if a password is set)", null, null);
   private StringConnectionProperty trustAlias = new StringConnectionProperty(
       Constants.Property.TRUST_ALIAS,
-      "Alias under which the certficate chain is stored in the truststore file (if not specified,"
+      "Alias under which the certificate chain is stored in the truststore file (if not specified,"
           + " then "
           + "the first valid `X509Certificate` will be used)", null, null);
 
@@ -246,6 +246,13 @@ public class ConnectionProperties {
           + "commit/rollback. Query timeout can be overridden by explicitly calling "
           + "setQueryTimeout",
       Constants.DEFAULT_TIMEOUT);
+
+
+  private StringConnectionProperty useTracing = new StringConnectionProperty(
+      "tracing",
+      "Pass on tracing span ids when communicating with Vitess",
+      "off",
+      new String[]{"off", "opentracing"});
 
   // Caching of some hot properties to avoid casting over and over
   private Topodata.TabletType tabletTypeCache;
@@ -582,6 +589,10 @@ public class ConnectionProperties {
 
   public void setTimeout(long timeout) {
     this.timeout.setValue(timeout);
+  }
+
+  public boolean getUseTracing() {
+    return useTracing.getValueAsString().equalsIgnoreCase("opentracing");
   }
 
   public String getTarget() {

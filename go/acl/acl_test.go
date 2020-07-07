@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -40,6 +40,10 @@ func (tp TestPolicy) CheckAccessHTTP(req *http.Request, role string) error {
 
 func init() {
 	RegisterPolicy("test", TestPolicy{})
+
+	// Run the `once` so it doesn't run during testing,
+	// since we need to override the currentPolicy.
+	once.Do(savePolicy)
 }
 
 func TestSimplePolicy(t *testing.T) {

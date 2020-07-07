@@ -1,0 +1,34 @@
+version: '2.1'
+
+volumes:
+  vol-db:
+
+services:
+  db:
+    build:
+      context: ./mysql
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-pass}
+      MYSQL_DATABASE: ${MYSQL_DB:-commerce}
+      MYSQL_USER: ${MYSQL_USER:-dbuser}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-dbpass}
+    volumes:
+      - vol-db:/var/lib/mysql
+      - ./mysql/:/docker-entrypoint-initdb.d/
+      - ./mysql/query.log:/var/log/mysql/query.log
+      - ./mysql/slow.log:/var/log/mysql/slow.log
+    healthcheck:
+      test: "/usr/bin/mysql --user=root --password=$${MYSQL_ROOT_PASSWORD} --execute \"SHOW DATABASES;\""
+      timeout: 10s
+      retries: 10
+    ports:
+      - "3306:3306"
+
+  adminer:
+    image: adminer
+    environment:
+      ADMINER_DESIGN: rmsoft
+    ports:
+      - "8081:8080"

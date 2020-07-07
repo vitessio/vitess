@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck disable=SC2164
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,67 +15,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+### This file is executed by 'make tools'. You do not need to execute it directly.
+
+source ./dev.env
 
 # Outline of this file.
 # 0. Initialization and helper methods.
 # 1. Installation of dependencies.
-# 2. Installation of Go tools and vendored Go dependencies.
-# 3. Detection of installed MySQL and setting MYSQL_FLAVOR.
-# 4. Installation of development related steps e.g. creating Git hooks.
 
-BUILD_TESTS=${BUILD_TESTS:-1}
+BUILD_JAVA=${BUILD_JAVA:-1}
+BUILD_CONSUL=${BUILD_CONSUL:-1}
+BUILD_CHROME=${BUILD_CHROME:-1}
 
 #
 # 0. Initialization and helper methods.
 #
 
-# Run parallel make, based on number of cores available.
-case $(uname) in
-  Linux)  NB_CORES=$(grep -c '^processor' /proc/cpuinfo);;
-  Darwin) NB_CORES=$(sysctl hw.ncpu | awk '{ print $2 }');;
-esac
-if [ -n "$NB_CORES" ]; then
-  export MAKEFLAGS="-j$((NB_CORES+1)) -l${NB_CORES}"
-fi
-
-function fail() {
-  echo "ERROR: $1"
-  exit 1
-}
-
 [[ "$(dirname "$0")" = "." ]] || fail "bootstrap.sh must be run from its current directory"
-
-go version &>/dev/null  || fail "Go is not installed or is not on \$PATH"
-[[ "$(go version 2>&1)" =~ go1\.[1-9][1-9] ]] || fail "Go is not version 1.11+"
-
-# Set up the proper GOPATH for go get below.
-if [ "$BUILD_TESTS" == 1 ] ; then
-    source ./dev.env
-else
-    source ./build.env
-fi
-
-# Create main directories.
-mkdir -p "$VTROOT/dist"
-mkdir -p "$VTROOT/bin"
-mkdir -p "$VTROOT/lib"
-mkdir -p "$VTROOT/vthook"
-
-if [ "$BUILD_TESTS" == 1 ] ; then
-    # Set up required soft links.
-    # TODO(mberlin): Which of these can be deleted?
-    ln -snf "$VTTOP/config" "$VTROOT/config"
-    ln -snf "$VTTOP/data" "$VTROOT/data"
-    ln -snf "$VTTOP/py" "$VTROOT/py-vtdb"
-    ln -snf "$VTTOP/go/vt/zkctl/zksrv.sh" "$VTROOT/bin/zksrv.sh"
-    ln -snf "$VTTOP/test/vthook-test.sh" "$VTROOT/vthook/test.sh"
-    ln -snf "$VTTOP/test/vthook-test_backup_error" "$VTROOT/vthook/test_backup_error"
-    ln -snf "$VTTOP/test/vthook-test_backup_transform" "$VTROOT/vthook/test_backup_transform"
-else
-    ln -snf "$VTTOP/config" "$VTROOT/config"
-    ln -snf "$VTTOP/data" "$VTROOT/data"
-    ln -snf "$VTTOP/go/vt/zkctl/zksrv.sh" "$VTROOT/bin/zksrv.sh"
-fi
 
 # install_dep is a helper function to generalize the download and installation of dependencies.
 #
@@ -126,32 +82,12 @@ function install_dep() {
 # 1. Installation of dependencies.
 #
 
-
-# Install the gRPC Python library (grpcio) and the protobuf gRPC Python plugin (grpcio-tools) from PyPI.
-# Dependencies like the Python protobuf package will be installed automatically.
-function install_grpc() {
-  local version="$1"
-  local dist="$2"
-
-  # Python requires a very recent version of virtualenv.
-  # We also require a recent version of pip, as we use it to
-  # upgrade the other tools.
-  # For instance, setuptools doesn't work with pip 6.0:
-  # https://github.com/pypa/setuptools/issues/945
-  # (and setuptools is used by grpc install).
-  grpc_virtualenv="$dist/usr/local"
-  $VIRTUALENV -v "$grpc_virtualenv"
-  PIP=$grpc_virtualenv/bin/pip
-  $PIP install --upgrade pip
-  $PIP install --upgrade --ignore-installed virtualenv
-
-  grpcio_ver=$version
-  $PIP install --upgrade grpcio=="$grpcio_ver" grpcio-tools=="$grpcio_ver"
+# We should not use the arch command, since it is not reliably
+# available on macOS or some linuxes:
+# https://www.gnu.org/software/coreutils/manual/html_node/arch-invocation.html
+function get_arch() {
+  uname -m
 }
-
-if [ "$BUILD_TESTS" == 1 ] ; then
-    install_dep "gRPC" "1.16.0" "$VTROOT/dist/grpc" install_grpc
-fi
 
 # Install protoc.
 function install_protoc() {
@@ -163,8 +99,14 @@ function install_protoc() {
     Darwin) local platform=osx;;
   esac
 
-  wget "https://github.com/google/protobuf/releases/download/v$version/protoc-$version-$platform-x86_64.zip"
-  unzip "protoc-$version-$platform-x86_64.zip"
+  case $(get_arch) in
+      aarch64)  local target=aarch_64;;
+      x86_64)  local target=x86_64;;
+      *)   echo "ERROR: unsupported architecture"; exit 1;;
+  esac
+
+  wget https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
+  unzip "protoc-$version-$platform-${target}.zip"
   ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
 }
 protoc_ver=3.6.1
@@ -177,194 +119,139 @@ function install_zookeeper() {
   local dist="$2"
 
   zk="zookeeper-$version"
-  wget "http://apache.org/dist/zookeeper/$zk/$zk.tar.gz"
+  wget "https://apache.org/dist/zookeeper/$zk/$zk.tar.gz"
   tar -xzf "$zk.tar.gz"
+  ant -f "$zk/build.xml" package
+  ant -f "$zk/zookeeper-contrib/zookeeper-contrib-fatjar/build.xml" jar
   mkdir -p lib
-  cp "$zk/contrib/fatjar/$zk-fatjar.jar" lib
-  # TODO(sougou): when version changes, see if we can drop the 'zip -d' hack to get the fatjars working.
-  #               If yes, also delete "zip" from the Dockerfile files and the manual build instructions again.
-  # 3.4.13 workaround: Delete META-INF files which should not be in there.
-  zip -d "lib/$zk-fatjar.jar" 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*SF'
+  cp "$zk/build/zookeeper-contrib/zookeeper-contrib-fatjar/zookeeper-dev-fatjar.jar" "lib/$zk-fatjar.jar"
+  zip -d "lib/$zk-fatjar.jar" 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*SF' || true # needed for >=3.4.10 <3.5
   rm -rf "$zk" "$zk.tar.gz"
 }
-zk_ver=3.4.13
-install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
 
+zk_ver=${ZK_VERSION:-3.4.14}
+if [ "$BUILD_JAVA" == 1 ] ; then
+  install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
+fi
 
 # Download and install etcd, link etcd binary into our root.
 function install_etcd() {
   local version="$1"
   local dist="$2"
 
+  case $(uname) in
+    Linux)  local platform=linux; local ext=tar.gz;;
+    Darwin) local platform=darwin; local ext=zip;;
+  esac
+
+  case $(get_arch) in
+      aarch64)  local target=arm64;;
+      x86_64)  local target=amd64;;
+      *)   echo "ERROR: unsupported architecture"; exit 1;;
+  esac
+
   download_url=https://github.com/coreos/etcd/releases/download
-  tar_file="etcd-${version}-linux-amd64.tar.gz"
+  file="etcd-${version}-${platform}-${target}.${ext}"
 
-  wget "$download_url/$version/$tar_file"
-  tar xzf "$tar_file"
-  rm "$tar_file"
-  ln -snf "$dist/etcd-${version}-linux-amd64/etcd" "$VTROOT/bin/etcd"
+  wget "$download_url/$version/$file"
+  if [ "$ext" = "tar.gz" ]; then
+    tar xzf "$file"
+  else
+    unzip "$file"
+  fi
+  rm "$file"
+  ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
+  ln -snf "$dist/etcd-${version}-${platform}-${target}/etcdctl" "$VTROOT/bin/etcdctl"
 }
-install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
+command -v etcd && echo "etcd already installed" || install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
 
+
+# Download and install k3s, link k3s binary into our root
+function install_k3s() {
+  local version="$1"
+  local dist="$2"
+
+  case $(uname) in
+    Linux)  local platform=linux;;
+    *)   echo "WARNING: unsupported platform. K3s only supports running on Linux, the k8s topology will not be available for local examples."; return;;
+  esac
+
+  case $(get_arch) in
+      aarch64)  local target="-arm64";;
+      x86_64)  local target="";;
+      *)   echo "WARNING: unsupported architecture, the k8s topology will not be available for local examples."; return;;
+  esac
+
+  download_url=https://github.com/rancher/k3s/releases/download
+  file="k3s${target}"
+
+  local dest="$dist/k3s${target}-${version}-${platform}"
+  wget -O  $dest "$download_url/$version/$file"
+  chmod +x $dest
+  ln -snf  $dest "$VTROOT/bin/k3s"
+}
+command -v  k3s || install_dep "k3s" "v1.0.0" "$VTROOT/dist/k3s" install_k3s
 
 # Download and install consul, link consul binary into our root.
 function install_consul() {
   local version="$1"
   local dist="$2"
 
+  case $(uname) in
+    Linux)  local platform=linux;;
+    Darwin) local platform=darwin;;
+  esac
+
+  case $(get_arch) in
+      aarch64)  local target=arm64;;
+      x86_64)  local target=amd64;;
+      *)   echo "ERROR: unsupported architecture"; exit 1;;
+  esac
+
   download_url=https://releases.hashicorp.com/consul
-  wget "${download_url}/${version}/consul_${version}_linux_amd64.zip"
-  unzip "consul_${version}_linux_amd64.zip"
+  wget "${download_url}/${version}/consul_${version}_${platform}_${target}.zip"
+  unzip "consul_${version}_${platform}_${target}.zip"
   ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
-install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
 
-
-# Install py-mock.
-function install_pymock() {
-  local version="$1"
-  local dist="$2"
-
-  # For some reason, it seems like setuptools won't create directories even with the --prefix argument
-  mkdir -p lib/python2.7/site-packages
-  PYTHONPATH=$(prepend_path "$PYTHONPATH" "$dist/lib/python2.7/site-packages")
-  export PYTHONPATH
-
-  pushd "$VTTOP/third_party/py" >/dev/null
-  tar -xzf "mock-$version.tar.gz"
-  cd "mock-$version"
-  $PYTHON ./setup.py install --prefix="$dist"
-  cd ..
-  rm -r "mock-$version"
-  popd >/dev/null
-}
-pymock_version=1.0.1
-if [ "$BUILD_TESTS" == 1 ] ; then
-    install_dep "py-mock" "$pymock_version" "$VTROOT/dist/py-mock-$pymock_version" install_pymock
+if [ "$BUILD_CONSUL" == 1 ] ; then
+  install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
 fi
 
-# Download Selenium (necessary to run test/vtctld_web_test.py).
-function install_selenium() {
-  local version="$1"
-  local dist="$2"
-
-  $VIRTUALENV "$dist"
-  PIP="$dist/bin/pip"
-  # PYTHONPATH is removed for `pip install` because otherwise it can pick up go/dist/grpc/usr/local/lib/python2.7/site-packages
-  # instead of go/dist/selenium/lib/python3.5/site-packages and then can't find module 'pip._vendor.requests'
-  PYTHONPATH='' $PIP install selenium
-}
-if [ "$BUILD_TESTS" == 1 ] ; then
-    install_dep "Selenium" "latest" "$VTROOT/dist/selenium" install_selenium
-fi
-
-
-# Download chromedriver (necessary to run test/vtctld_web_test.py).
+# Download chromedriver
 function install_chromedriver() {
   local version="$1"
   local dist="$2"
 
-  curl -sL "https://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip" > chromedriver_linux64.zip
-  unzip -o -q chromedriver_linux64.zip -d "$dist"
-  rm chromedriver_linux64.zip
-}
-if [ "$BUILD_TESTS" == 1 ] ; then
-    install_dep "chromedriver" "73.0.3683.20" "$VTROOT/dist/chromedriver" install_chromedriver
-fi
-
-
-#
-# 2. Installation of Go tools and vendored Go dependencies.
-#
-
-
-# Install third-party Go tools used as part of the development workflow.
-#
-# DO NOT ADD LIBRARY DEPENDENCIES HERE. Instead use govendor as described below.
-#
-# Note: We explicitly do not vendor the tools below because a) we want to stay
-# on their latest version and b) it's easier to "go install" them this way.
-gotools=" \
-       github.com/golang/mock/mockgen \
-       github.com/kardianos/govendor \
-       golang.org/x/lint/golint \
-       golang.org/x/tools/cmd/cover \
-       golang.org/x/tools/cmd/goimports \
-       golang.org/x/tools/cmd/goyacc \
-       honnef.co/go/tools/cmd/unused \
-"
-echo "Installing dev tools with 'go get'..."
-# shellcheck disable=SC2086
-go get -u $gotools || fail "Failed to download some Go tools with 'go get'. Please re-run bootstrap.sh in case of transient errors."
-
-# Download dependencies that are version-pinned via govendor.
-#
-# To add a new dependency, run:
-#   govendor fetch <package_path>
-#
-# Existing dependencies can be updated to the latest version with 'fetch' as well.
-#
-# Then:
-#   git add vendor/vendor.json
-#   git commit
-#
-# See https://github.com/kardianos/govendor for more options.
-echo "Updating govendor dependencies..."
-govendor sync || fail "Failed to download/update dependencies with govendor. Please re-run bootstrap.sh in case of transient errors."
-
-
-#
-# 3. Detection of installed MySQL and setting MYSQL_FLAVOR.
-#
-
-
-# find mysql and prepare to use libmysqlclient
-
-if [ "$BUILD_TESTS" == 1 ] ; then
-  if [ -z "$MYSQL_FLAVOR" ]; then
-    export MYSQL_FLAVOR=MySQL56
-    echo "MYSQL_FLAVOR environment variable not set. Using default: $MYSQL_FLAVOR"
-  fi
-  case "$MYSQL_FLAVOR" in
-    "MySQL56")
-      myversion="$("$VT_MYSQL_ROOT/bin/mysql" --version)"
-      [[ "$myversion" =~ Distrib\ 5\.[67] || "$myversion" =~ Ver\ 8\. ]] || fail "Couldn't find MySQL 5.6+ in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
-      echo "Found MySQL 5.6+ installation in $VT_MYSQL_ROOT."
-      ;;
-
-    "MariaDB")
-      myversion="$("$VT_MYSQL_ROOT/bin/mysql" --version)"
-      [[ "$myversion" =~ MariaDB ]] || fail "Couldn't find MariaDB in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
-      echo "Found MariaDB installation in $VT_MYSQL_ROOT."
-      ;;
-
-    *)
-      fail "Unsupported MYSQL_FLAVOR $MYSQL_FLAVOR"
-      ;;
-
+  case $(uname) in
+    Linux)  local platform=linux;;
+    *)   echo "Platform not supported for vtctl-web tests. Skipping chromedriver install."; return;;
   esac
-  # save the flavor that was used in bootstrap, so it can be restored
-  # every time dev.env is sourced.
-  echo "$MYSQL_FLAVOR" > "$VTROOT/dist/MYSQL_FLAVOR"
+
+  if [ "$(arch)" == "aarch64" ] ; then
+      os=$(cat /etc/*release | grep "^ID=" | cut -d '=' -f 2)
+      case $os in
+          ubuntu|debian)
+              sudo apt-get update -y && sudo apt install -y --no-install-recommends unzip libglib2.0-0 libnss3 libx11-6
+	      ;;
+	  centos|fedora)
+	      sudo yum update -y && yum install -y libX11 unzip wget
+	      ;;
+      esac
+      echo "For Arm64, using prebuilt binary from electron (https://github.com/electron/electron/) of version 76.0.3809.126"
+      wget https://github.com/electron/electron/releases/download/v6.0.3/chromedriver-v6.0.3-linux-arm64.zip
+      unzip -o -q chromedriver-v6.0.3-linux-arm64.zip -d "$dist"
+      rm chromedriver-v6.0.3-linux-arm64.zip
+  else
+      curl -sL "https://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip" > chromedriver_linux64.zip
+      unzip -o -q chromedriver_linux64.zip -d "$dist"
+      rm chromedriver_linux64.zip
+  fi
+}
+
+if [ "$BUILD_CHROME" == 1 ] ; then
+	install_dep "chromedriver" "73.0.3683.20" "$VTROOT/dist/chromedriver" install_chromedriver
 fi
 
-#
-# 4. Installation of development related steps e.g. creating Git hooks.
-#
-
-if [ "$BUILD_TESTS" == 1 ] ; then
- # Create the Git hooks.
- echo "creating git hooks"
- mkdir -p "$VTTOP/.git/hooks"
- ln -sf "$VTTOP/misc/git/pre-commit" "$VTTOP/.git/hooks/pre-commit"
- ln -sf "$VTTOP/misc/git/prepare-commit-msg.bugnumber" "$VTTOP/.git/hooks/prepare-commit-msg"
- ln -sf "$VTTOP/misc/git/commit-msg" "$VTTOP/.git/hooks/commit-msg"
- (cd "$VTTOP" && git config core.hooksPath "$VTTOP/.git/hooks")
- echo
- echo "bootstrap finished - run 'source dev.env' in your shell before building."
-else
- echo
- echo "bootstrap finished - run 'source build.env' in your shell before building."    
-fi
-
-
+echo
+echo "bootstrap finished - run 'make build' to compile"

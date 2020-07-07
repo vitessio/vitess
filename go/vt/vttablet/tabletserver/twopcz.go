@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
@@ -160,8 +162,8 @@ func twopczHandler(txe *TxExecutor, w http.ResponseWriter, r *http.Request) {
 	if format == "json" {
 		w.Header().Set("Content-Type", "application/json")
 		js, err := json.Marshal(struct {
-			Distributed      []*DistributedTx
-			Prepared, Failed []*PreparedTx
+			Distributed      []*tx.DistributedTx
+			Prepared, Failed []*tx.PreparedTx
 		}{
 			Distributed: distributed,
 			Prepared:    prepared,

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"golang.org/x/net/context"
 
@@ -41,7 +42,7 @@ type client struct {
 
 func factory(network, addr string) (mysqlctlclient.MysqlctlClient, error) {
 	// create the RPC client
-	cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), grpc.WithInsecure(), grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
+	cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), grpc.WithInsecure(), grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) { //nolint:staticcheck
 		return net.DialTimeout(network, addr, timeout)
 	}))
 	if err != nil {
@@ -115,10 +116,13 @@ func (c *client) withRetry(ctx context.Context, f func() error) error {
 		default:
 		}
 		if err := f(); err != nil {
-			if grpc.Code(err) == codes.Unavailable {
-				lastError = err
-				time.Sleep(100 * time.Millisecond)
-				continue
+			if st, ok := status.FromError(err); ok {
+				code := st.Code()
+				if code == codes.Unavailable {
+					lastError = err
+					time.Sleep(100 * time.Millisecond)
+					continue
+				}
 			}
 			return err
 		}

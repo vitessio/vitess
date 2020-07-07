@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/discovery"
 
@@ -127,7 +129,7 @@ func TestMaxReplicationLagModule_InitialStateAndWait(t *testing.T) {
 	}
 }
 
-// TestMaxReplicationLagModule_Increase tests only the continous increase of the
+// TestMaxReplicationLagModule_Increase tests only the continuous increase of the
 // rate and assumes that we are well below the replica capacity.
 func TestMaxReplicationLagModule_Increase(t *testing.T) {
 	tf, err := newTestFixtureWithMaxReplicationLag(5)
@@ -223,7 +225,7 @@ func TestMaxReplicationLagModule_ReplicaUnderTest_LastErrorOrNotUp(t *testing.T)
 
 	// r2 @  75s, 0s lag, LastError set
 	rError := lagRecord(sinceZero(75*time.Second), r2, 0)
-	rError.LastError = errors.New("HealthCheck reporting broken")
+	rError.LastError = errors.New("LegacyHealthCheck reporting broken")
 	tf.m.replicaLagCache.add(rError)
 
 	// r1 @ 110s, 0s lag
@@ -451,8 +453,10 @@ func TestMaxReplicationLagModule_Increase_BadRateUpperBound(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Assume that a bad value of 150 was set @ 30s.
-	tf.m.memory.markBad(150, sinceZero(30*time.Second))
+	//Assume that a bad value of 150 was set @ 30s and log error
+	if err := tf.m.memory.markBad(150, sinceZero(30*time.Second)); err != nil {
+		log.Errorf("tf.m.memory.markBad(150, sinceZero(30*time.Second)) falied : %v", err)
+	}
 
 	// r2 @  70s, 0s lag
 	tf.ratesHistory.add(sinceZero(69*time.Second), 100)
@@ -500,7 +504,7 @@ func TestMaxReplicationLagModule_Increase_MinimumProgress(t *testing.T) {
 }
 
 // TestMaxReplicationLagModule_Decrease verifies that we correctly calculate the
-// replica (slave) rate in the decreaseAndGuessRate state.
+// replication rate in the decreaseAndGuessRate state.
 func TestMaxReplicationLagModule_Decrease(t *testing.T) {
 	tf, err := newTestFixtureWithMaxReplicationLag(5)
 	if err != nil {
@@ -519,7 +523,7 @@ func TestMaxReplicationLagModule_Decrease(t *testing.T) {
 	tf.ratesHistory.add(sinceZero(70*time.Second), 100)
 	tf.ratesHistory.add(sinceZero(89*time.Second), 200)
 	tf.process(lagRecord(sinceZero(90*time.Second), r2, 3))
-	// The guessed replica (slave) rate is 140 because of the 3s lag increase
+	// The guessed replication rate is 140 because of the 3s lag increase
 	// within the elapsed 20s.
 	// The replica processed only 17s worth of work (20s duration - 3s lag increase)
 	// 17s / 20s * 200 QPS actual rate => 170 QPS replica rate
@@ -945,13 +949,13 @@ func TestMaxReplicationLagModule_NoIncreaseIfMaxRateWasNotApproached(t *testing.
 	}
 }
 
-// lagRecord creates a fake record using a fake TabletStats object.
+// lagRecord creates a fake record using a fake LegacyTabletStats object.
 func lagRecord(t time.Time, uid, lag uint32) replicationLagRecord {
 	return replicationLagRecord{t, tabletStats(uid, lag)}
 }
 
 // tabletStats creates fake tablet health data.
-func tabletStats(uid, lag uint32) discovery.TabletStats {
+func tabletStats(uid, lag uint32) discovery.LegacyTabletStats {
 	typ := topodatapb.TabletType_REPLICA
 	if uid == rdonly1 || uid == rdonly2 {
 		typ = topodatapb.TabletType_RDONLY
@@ -963,7 +967,7 @@ func tabletStats(uid, lag uint32) discovery.TabletStats {
 		Type:     typ,
 		PortMap:  map[string]int32{"vt": int32(uid)},
 	}
-	return discovery.TabletStats{
+	return discovery.LegacyTabletStats{
 		Tablet: tablet,
 		Key:    discovery.TabletToMapKey(tablet),
 		Target: &querypb.Target{

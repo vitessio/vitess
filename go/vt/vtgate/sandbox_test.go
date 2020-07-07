@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -87,13 +87,6 @@ func getSandboxSrvVSchema() *vschemapb.SrvVSchema {
 		result.Keyspaces[keyspace] = &vs
 	}
 	return result
-}
-
-func addSandboxServedFrom(keyspace, servedFrom string) {
-	sandboxMu.Lock()
-	defer sandboxMu.Unlock()
-	ksToSandbox[keyspace].KeyspaceServedFrom = servedFrom
-	ksToSandbox[servedFrom] = ksToSandbox[keyspace]
 }
 
 type sandbox struct {
@@ -240,7 +233,7 @@ func (sct *sandboxTopo) GetTopoServer() (*topo.Server, error) {
 }
 
 // GetSrvKeyspaceNames is part of the srvtopo.Server interface.
-func (sct *sandboxTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
+func (sct *sandboxTopo) GetSrvKeyspaceNames(ctx context.Context, cell string, staleOK bool) ([]string, error) {
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
 	keyspaces := make([]string, 0, 1)

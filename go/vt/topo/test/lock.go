@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -142,10 +142,10 @@ func checkLockUnblocks(ctx context.Context, t *testing.T, conn topo.Conn) {
 		<-unblock
 		lockDescriptor, err := conn.Lock(ctx, keyspacePath, "unblocks")
 		if err != nil {
-			t.Fatalf("Lock(test_keyspace) failed: %v", err)
+			t.Errorf("Lock(test_keyspace) failed: %v", err)
 		}
 		if err = lockDescriptor.Unlock(ctx); err != nil {
-			t.Fatalf("Unlock(test_keyspace): %v", err)
+			t.Errorf("Unlock(test_keyspace): %v", err)
 		}
 		close(finished)
 	}()

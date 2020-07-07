@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ func (srv *PassthroughSrvTopoServer) GetTopoServer() (*topo.Server, error) {
 }
 
 // GetSrvKeyspaceNames implements srvtopo.Server
-func (srv *PassthroughSrvTopoServer) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
+func (srv *PassthroughSrvTopoServer) GetSrvKeyspaceNames(ctx context.Context, cell string, staleOK bool) ([]string, error) {
 	return srv.SrvKeyspaceNames, srv.SrvKeyspaceNamesError
 }
 

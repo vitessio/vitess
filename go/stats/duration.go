@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -104,6 +104,11 @@ func NewCounterDurationFunc(name string, help string, f func() time.Duration) *C
 // Help implements the Variable interface.
 func (cf CounterDurationFunc) Help() string {
 	return cf.help
+}
+
+// Get returns the value.
+func (cf CounterDurationFunc) Get() int64 {
+	return int64(cf.F())
 }
 
 // String is the implementation of expvar.var.

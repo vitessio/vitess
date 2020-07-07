@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -83,7 +83,7 @@ func (f *FakeLoggerEventStreamingClient) RegisterResultForAddr(addr string, args
 			result.count++
 			return nil
 		}
-		return fmt.Errorf("A different result (%v) is already registered for command: %v", result, args)
+		return fmt.Errorf("a different result (%v) is already registered for command: %v", result, args)
 	}
 	f.results[k] = &v
 	return nil

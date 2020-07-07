@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package worker
 import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -33,7 +34,7 @@ import (
 
 // This file defines the interface and implementations of sharding key resolvers.
 
-// keyspaceIDResolver defines the interface that needs to be satisifed to get a
+// keyspaceIDResolver defines the interface that needs to be satisfied to get a
 // keyspace ID from a database row.
 type keyspaceIDResolver interface {
 	// keyspaceID takes a table row, and returns the keyspace id as bytes.
@@ -78,7 +79,7 @@ func (r *v2Resolver) keyspaceID(row []sqltypes.Value) ([]byte, error) {
 	case topodatapb.KeyspaceIdType_BYTES:
 		return v.ToBytes(), nil
 	case topodatapb.KeyspaceIdType_UINT64:
-		i, err := sqltypes.ToUint64(v)
+		i, err := evalengine.ToUint64(v)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "Non numerical value")
 		}
@@ -93,7 +94,7 @@ func (r *v2Resolver) keyspaceID(row []sqltypes.Value) ([]byte, error) {
 // table.
 type v3Resolver struct {
 	shardingColumnIndex int
-	vindex              vindexes.Vindex
+	vindex              vindexes.SingleColumn
 }
 
 // newV3ResolverFromTableDefinition returns a keyspaceIDResolver for a v3 table.
@@ -119,7 +120,8 @@ func newV3ResolverFromTableDefinition(keyspaceSchema *vindexes.KeyspaceSchema, t
 
 	return &v3Resolver{
 		shardingColumnIndex: columnIndex,
-		vindex:              colVindex.Vindex,
+		// Only SingleColumn vindexes are returned by FindVindexForSharding.
+		vindex: colVindex.Vindex.(vindexes.SingleColumn),
 	}, nil
 }
 
@@ -149,7 +151,8 @@ func newV3ResolverFromColumnList(keyspaceSchema *vindexes.KeyspaceSchema, name s
 
 	return &v3Resolver{
 		shardingColumnIndex: columnIndex,
-		vindex:              colVindex.Vindex,
+		// Only SingleColumn vindexes are returned by FindVindexForSharding.
+		vindex: colVindex.Vindex.(vindexes.SingleColumn),
 	}, nil
 }
 

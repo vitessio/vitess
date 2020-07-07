@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,8 +26,11 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/cmd"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
@@ -39,7 +42,8 @@ import (
 )
 
 var (
-	waitTime = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
+	waitTime     = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
+	detachedMode = flag.Bool("detach", false, "detached mode - run vtcl detached from the terminal")
 )
 
 func init() {
@@ -69,6 +73,11 @@ func main() {
 	defer exit.RecoverAll()
 	defer logutil.Flush()
 
+	if *detachedMode {
+		// this method will call os.Exit and kill this process
+		cmd.DetachFromTerminalAndExit()
+	}
+
 	args := servenv.ParseFlagsWithArgs("vtctl")
 	action := args[0]
 
@@ -79,6 +88,9 @@ func main() {
 	} else {
 		log.Warningf("cannot connect to syslog: %v", err)
 	}
+
+	closer := trace.StartTracing("vtctl")
+	defer trace.LogErrorsWhenClosing(closer)
 
 	servenv.FireRunHooks()
 

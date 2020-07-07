@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -28,13 +28,13 @@ import (
 
 // realtimeStats holds the objects needed to obtain realtime health stats of tablets.
 type realtimeStats struct {
-	healthCheck discovery.HealthCheck
+	healthCheck discovery.LegacyHealthCheck
 	*tabletStatsCache
-	cellWatchers []*discovery.TopologyWatcher
+	cellWatchers []*discovery.LegacyTopologyWatcher
 }
 
 func newRealtimeStats(ts *topo.Server) (*realtimeStats, error) {
-	hc := discovery.NewHealthCheck(*vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
+	hc := discovery.NewLegacyHealthCheck(*vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
 	tabletStatsCache := newTabletStatsCache()
 	// sendDownEvents is set to true here, as we want to receive
 	// Up=False events for a tablet.
@@ -49,9 +49,9 @@ func newRealtimeStats(ts *topo.Server) (*realtimeStats, error) {
 	if err != nil {
 		return r, fmt.Errorf("error when getting cells: %v", err)
 	}
-	var watchers []*discovery.TopologyWatcher
+	var watchers []*discovery.LegacyTopologyWatcher
 	for _, cell := range cells {
-		watcher := discovery.NewCellTabletsWatcher(ts, hc, cell, *vtctl.HealthCheckTopologyRefresh, true /* refreshKnownTablets */, discovery.DefaultTopoReadConcurrency)
+		watcher := discovery.NewLegacyCellTabletsWatcher(context.Background(), ts, hc, cell, *vtctl.HealthCheckTopologyRefresh, true /* refreshKnownTablets */, discovery.DefaultTopoReadConcurrency)
 		watchers = append(watchers, watcher)
 	}
 	r.cellWatchers = watchers

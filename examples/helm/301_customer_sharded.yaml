@@ -1,8 +1,7 @@
 topology:
+  deploymentType: test
   cells:
     - name: "zone1"
-      etcd:
-        replicas: 1
       vtctld:
         replicas: 1
       vtgate:
@@ -17,10 +16,7 @@ topology:
               tablets:
                 - type: "replica"
                   vttablet:
-                    replicas: 2
-                - type: "rdonly"
-                  vttablet:
-                    replicas: 1
+                    replicas: 3
           schema:
             seq: |-
               create table customer_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
@@ -46,10 +42,7 @@ topology:
               tablets:
                 - type: "replica"
                   vttablet:
-                    replicas: 2
-                - type: "rdonly"
-                  vttablet:
-                    replicas: 1
+                    replicas: 3
           schema:
             sharded: |-
               alter table customer change customer_id customer_id bigint not null;
@@ -91,25 +84,8 @@ topology:
                 }
               }
 
-etcd:
-  replicas: 1
-  resources:
-
-vtctld:
-  serviceType: "NodePort"
-  resources:
-
-vtgate:
-  serviceType: "NodePort"
-  resources:
-
 vttablet:
-  mysqlSize: "test"
-  resources:
-  mysqlResources:
-
-vtworker:
-  resources:
+  terminationGracePeriodSeconds: 1
 
 pmm:
   enabled: false

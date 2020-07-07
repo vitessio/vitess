@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -240,7 +240,7 @@ func TestSchemaDiff(t *testing.T) {
 	})
 
 	testDiff(t, sd4, sd5, "sd4", "sd5", []string{
-		fmt.Sprintf("schemas differ on table type for table table2:\nsd4: VIEW\n differs from:\nsd5: BASE TABLE"),
+		fmt.Sprintf("schemas differ on table type for table table2:\nsd4: VIEW\n differs from:\nsd5: BASE TABLE"), //nolint
 	})
 
 	sd1.DatabaseSchema = "CREATE DATABASE {{.DatabaseName}}"
@@ -254,6 +254,216 @@ func TestSchemaDiff(t *testing.T) {
 
 	sd2.TableDefinitions = append(sd2.TableDefinitions, &tabletmanagerdatapb.TableDefinition{Name: "table2", Schema: "schema3", Type: TableBaseTable})
 	testDiff(t, sd1, sd2, "sd1", "sd2", []string{"schemas differ on table table2:\nsd1: schema2\n differs from:\nsd2: schema3"})
+}
+
+func TestTableFilter(t *testing.T) {
+	includedTable := "t1"
+	includedTable2 := "t2"
+	excludedTable := "e1"
+	view := "v1"
+
+	includedTableRE := "/t.*/"
+	excludedTableRE := "/e.*/"
+
+	tcs := []struct {
+		desc          string
+		tables        []string
+		excludeTables []string
+		includeViews  bool
+
+		tableName string
+		tableType string
+
+		hasErr   bool
+		included bool
+	}{
+		{
+			desc:         "everything allowed includes table",
+			includeViews: true,
+
+			tableName: includedTable,
+			tableType: TableBaseTable,
+
+			included: true,
+		},
+		{
+			desc:         "everything allowed includes view",
+			includeViews: true,
+
+			tableName: view,
+			tableType: TableView,
+
+			included: true,
+		},
+		{
+			desc:         "table list includes matching 1st table",
+			tables:       []string{includedTable, includedTable2},
+			includeViews: true,
+
+			tableName: includedTable,
+			tableType: TableBaseTable,
+
+			included: true,
+		},
+		{
+			desc:         "table list includes matching 2nd table",
+			tables:       []string{includedTable, includedTable2},
+			includeViews: true,
+
+			tableName: includedTable2,
+			tableType: TableBaseTable,
+
+			included: true,
+		},
+		{
+			desc:         "table list excludes non-matching table",
+			tables:       []string{includedTable, includedTable2},
+			includeViews: true,
+
+			tableName: excludedTable,
+			tableType: TableBaseTable,
+
+			included: false,
+		},
+		{
+			desc:         "table list include view includes matching view",
+			tables:       []string{view},
+			includeViews: true,
+
+			tableName: view,
+			tableType: TableView,
+
+			included: true,
+		},
+		{
+			desc:         "table list exclude view excludes matching view",
+			tables:       []string{view},
+			includeViews: false,
+
+			tableName: view,
+			tableType: TableView,
+
+			included: false,
+		},
+		{
+			desc:         "table regexp list includes matching table",
+			tables:       []string{includedTableRE},
+			includeViews: false,
+
+			tableName: includedTable,
+			tableType: TableBaseTable,
+
+			included: true,
+		},
+		{
+			desc:          "exclude table list excludes matching table",
+			excludeTables: []string{excludedTable},
+
+			tableName: excludedTable,
+			tableType: TableBaseTable,
+
+			included: false,
+		},
+		{
+			desc:          "exclude table list includes non-matching table",
+			excludeTables: []string{excludedTable},
+
+			tableName: includedTable,
+			tableType: TableBaseTable,
+
+			included: true,
+		},
+		{
+			desc:          "exclude table list includes non-matching view",
+			excludeTables: []string{excludedTable},
+			includeViews:  true,
+
+			tableName: view,
+			tableType: TableView,
+
+			included: true,
+		},
+		{
+			desc:          "exclude table list excludes matching view",
+			excludeTables: []string{excludedTable},
+			includeViews:  true,
+
+			tableName: excludedTable,
+			tableType: TableView,
+
+			included: false,
+		},
+		{
+			desc:          "exclude table list excludes matching view",
+			excludeTables: []string{excludedTable},
+			includeViews:  true,
+
+			tableName: excludedTable,
+			tableType: TableView,
+
+			included: false,
+		},
+		{
+			desc:          "exclude table regexp list excludes matching table",
+			excludeTables: []string{excludedTableRE},
+			includeViews:  false,
+
+			tableName: excludedTable,
+			tableType: TableBaseTable,
+
+			included: false,
+		},
+		{
+			desc:          "table list with excludes includes matching table",
+			tables:        []string{includedTable},
+			excludeTables: []string{excludedTable},
+
+			tableName: includedTable,
+			tableType: TableBaseTable,
+
+			included: true,
+		},
+		{
+			desc:          "table list with excludes excludes matching excluded table",
+			tables:        []string{includedTable},
+			excludeTables: []string{excludedTable},
+
+			tableName: excludedTable,
+			tableType: TableBaseTable,
+
+			included: false,
+		},
+		{
+			desc:   "bad table regexp",
+			tables: []string{"/*/"},
+
+			hasErr: true,
+		},
+		{
+			desc:          "bad exclude table regexp",
+			excludeTables: []string{"/*/"},
+
+			hasErr: true,
+		},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.desc, func(t *testing.T) {
+			f, err := NewTableFilter(tc.tables, tc.excludeTables, tc.includeViews)
+			if tc.hasErr != (err != nil) {
+				t.Fatalf("hasErr not right: %v, tc: %+v", err, tc)
+			}
+
+			if tc.hasErr {
+				return
+			}
+
+			included := f.Includes(tc.tableName, tc.tableType)
+			if tc.included != included {
+				t.Fatalf("included is not right: %v\nfilter: %+v\ntc: %+v", included, f, tc)
+			}
+		})
+	}
 }
 
 func TestFilterTables(t *testing.T) {

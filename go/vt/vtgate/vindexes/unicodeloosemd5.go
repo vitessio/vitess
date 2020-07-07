@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -30,7 +30,7 @@ import (
 )
 
 var (
-	_ Vindex = (*UnicodeLooseMD5)(nil)
+	_ SingleColumn = (*UnicodeLooseMD5)(nil)
 )
 
 // UnicodeLooseMD5 is a vindex that normalizes and hashes unicode strings
@@ -62,9 +62,9 @@ func (vind *UnicodeLooseMD5) IsUnique() bool {
 	return true
 }
 
-// IsFunctional returns true since the Vindex is functional.
-func (vind *UnicodeLooseMD5) IsFunctional() bool {
-	return true
+// NeedsVCursor satisfies the Vindex interface.
+func (vind *UnicodeLooseMD5) NeedsVCursor() bool {
+	return false
 }
 
 // Verify returns true if ids maps to ksids.
@@ -75,7 +75,7 @@ func (vind *UnicodeLooseMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]b
 		if err != nil {
 			return nil, fmt.Errorf("UnicodeLooseMD5.Verify: %v", err)
 		}
-		out[i] = (bytes.Compare(data, ksids[i]) == 0)
+		out[i] = bytes.Equal(data, ksids[i])
 	}
 	return out, nil
 }
@@ -94,7 +94,7 @@ func (vind *UnicodeLooseMD5) Map(cursor VCursor, ids []sqltypes.Value) ([]key.De
 }
 
 func unicodeHash(key sqltypes.Value) ([]byte, error) {
-	collator := collatorPool.Get().(pooledCollator)
+	collator := collatorPool.Get().(*pooledCollator)
 	defer collatorPool.Put(collator)
 
 	norm, err := normalize(collator.col, collator.buf, key.ToBytes())
@@ -144,7 +144,7 @@ func newPooledCollator() interface{} {
 	// way to verify this.
 	// Also, the locale differences are not an issue for level 1,
 	// because the conservative comparison makes them all equal.
-	return pooledCollator{
+	return &pooledCollator{
 		col: collate.New(language.English, collate.Loose),
 		buf: new(collate.Buffer),
 	}

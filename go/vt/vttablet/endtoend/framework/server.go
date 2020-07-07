@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,6 +22,9 @@ import (
 	"net/http"
 	"time"
 
+	"vitess.io/vitess/go/vt/topo"
+
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -46,6 +49,8 @@ var (
 	ServerAddress string
 	// ResolveChan is the channel that sends dtids that are to be resolved.
 	ResolveChan = make(chan string, 1)
+	// TopoServer is the topology for the server
+	TopoServer *topo.Server
 )
 
 // StartServer starts the server and initializes
@@ -63,21 +68,22 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 
 	dbcfgs := dbconfigs.NewTestDBConfigs(connParams, connAppDebugParams, dbName)
 
-	config := tabletenv.DefaultQsConfig
-	config.EnableAutoCommit = true
+	config := tabletenv.NewDefaultConfig()
 	config.StrictTableACL = true
 	config.TwoPCEnable = true
 	config.TwoPCAbandonAge = 1
 	config.TwoPCCoordinatorAddress = "fake"
-	config.EnableHotRowProtection = true
+	config.HotRowProtection.Mode = tabletenv.Enable
+	config.TrackSchemaVersions = true
 
 	Target = querypb.Target{
 		Keyspace:   "vttest",
 		Shard:      "0",
 		TabletType: topodatapb.TabletType_MASTER,
 	}
+	TopoServer = memorytopo.NewServer("")
 
-	Server = tabletserver.NewTabletServerWithNilTopoServer(config)
+	Server = tabletserver.NewTabletServer("", config, TopoServer, topodatapb.TabletAlias{})
 	Server.Register()
 	err := Server.StartService(Target, dbcfgs)
 	if err != nil {

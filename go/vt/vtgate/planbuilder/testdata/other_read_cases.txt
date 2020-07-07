@@ -1,0 +1,81 @@
+# Explain statement
+"explain select * from user"
+{
+  "QueryType": "EXPLAIN",
+  "Original": "explain select * from user",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "explain select * from user",
+    "SingleShardOnly": true
+  }
+}
+
+# Explain Vitess statement
+"explain format=vitess select * from user"
+{
+  "QueryType": "EXPLAIN",
+  "Original": "explain format=vitess select * from user",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+
+# Analyze statement
+"analyze table t1"
+{
+  "QueryType": "OTHER",
+  "Original": "analyze table t1",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "analyze table t1",
+    "SingleShardOnly": true
+  }
+}
+
+# Describe statement
+"describe select * from t"
+{
+  "QueryType": "EXPLAIN",
+  "Original": "describe select * from t",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "describe select * from t",
+    "SingleShardOnly": true
+  }
+}
+
+# Desc statement
+"desc select * from t"
+{
+  "QueryType": "EXPLAIN",
+  "Original": "desc select * from t",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "desc select * from t",
+    "SingleShardOnly": true
+  }
+}

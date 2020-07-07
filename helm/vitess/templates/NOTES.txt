@@ -10,5 +10,5 @@ Then use the following URLs:
 
       vtctld: {{$proxyURL}}/services/vtctld:web/proxy/app/
       vtgate: {{$proxyURL}}/services/vtgate-{{$cell}}:web/proxy/
-{{ if $.Values.orchestrator.enabled }}orchestrator: {{$proxyURL}}/services/orchestrator:web/{{ end }}
-{{ if $.Values.pmm.enabled }}         pmm: {{$proxyURL}}/services/pmm:web/{{ end }}
+{{ if $.Values.orchestrator.enabled }}orchestrator: {{$proxyURL}}/services/orchestrator:web/proxy/{{ end }}
+{{ if $.Values.pmm.enabled }}         pmm: {{$proxyURL}}/services/pmm:web/proxy/{{ end }}

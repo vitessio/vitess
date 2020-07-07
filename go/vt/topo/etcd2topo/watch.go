@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -49,8 +49,11 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 		Version:  EtcdVersion(initial.Kvs[0].ModRevision),
 	}
 
-	// Create a context, will be used to cancel the watch.
-	watchCtx, watchCancel := context.WithCancel(context.Background())
+	// Create an outer context that will be canceled on return and will cancel all inner watches.
+	outerCtx, outerCancel := context.WithCancel(context.Background())
+
+	// Create a context, will be used to cancel the watch on retry.
+	watchCtx, watchCancel := context.WithCancel(outerCtx)
 
 	// Create the Watcher.  We start watching from the response we
 	// got, not from the file original version, as the server may
@@ -71,7 +74,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 			select {
 
 			case <-watchCtx.Done():
-				// This includes context cancelation errors.
+				// This includes context cancellation errors.
 				notifications <- &topo.WatchData{
 					Err: convertError(watchCtx.Err(), nodePath),
 				}
@@ -82,6 +85,9 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 						time.Sleep(time.Duration(watchRetries) * time.Second)
 					}
 					watchRetries++
+					// Cancel inner context on retry and create new one.
+					watchCancel()
+					watchCtx, watchCancel = context.WithCancel(outerCtx)
 					newWatcher := s.cli.Watch(watchCtx, nodePath, clientv3.WithRev(currVersion))
 					if newWatcher == nil {
 						log.Warningf("watch %v failed and get a nil channel returned, currVersion: %v", nodePath, currVersion)
@@ -127,5 +133,5 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 		}
 	}()
 
-	return wd, notifications, topo.CancelFunc(watchCancel)
+	return wd, notifications, topo.CancelFunc(outerCancel)
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -37,17 +37,12 @@ import (
 )
 
 var (
-	cell                  = flag.String("cell", "test_nj", "cell to use")
-	retryCount            = flag.Int("retry-count", 2, "retry count")
-	healthCheckRetryDelay = flag.Duration("healthcheck_retry_delay", 2*time.Millisecond, "health check retry delay")
-	healthCheckTimeout    = flag.Duration("healthcheck_timeout", time.Minute, "the health check timeout period")
-	tabletTypesToWait     = flag.String("tablet_types_to_wait", "", "wait till connected for specified tablet types during Gateway initialization")
+	cell              = flag.String("cell", "test_nj", "cell to use")
+	tabletTypesToWait = flag.String("tablet_types_to_wait", "", "wait till connected for specified tablet types during Gateway initialization")
 )
 
 var resilientServer *srvtopo.ResilientServer
-var healthCheck discovery.HealthCheck
-
-var initFakeZK func()
+var legacyHealthCheck discovery.LegacyHealthCheck
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -60,16 +55,10 @@ func main() {
 	servenv.ParseFlags("vtgate")
 	servenv.Init()
 
-	if initFakeZK != nil {
-		initFakeZK()
-	}
 	ts := topo.Open()
 	defer ts.Close()
 
 	resilientServer = srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer")
-
-	healthCheck = discovery.NewHealthCheck(*healthCheckRetryDelay, *healthCheckTimeout)
-	healthCheck.RegisterStats()
 
 	tabletTypes := make([]topodatapb.TabletType, 0, 1)
 	if len(*tabletTypesToWait) != 0 {
@@ -83,12 +72,28 @@ func main() {
 		}
 	}
 
-	vtg := vtgate.Init(context.Background(), healthCheck, resilientServer, *cell, *retryCount, tabletTypes)
+	var vtg *vtgate.VTGate
+	if *vtgate.GatewayImplementation == vtgate.GatewayImplementationDiscovery {
+		// default value
+		legacyHealthCheck = discovery.NewLegacyHealthCheck(*vtgate.HealthCheckRetryDelay, *vtgate.HealthCheckTimeout)
+		legacyHealthCheck.RegisterStats()
+
+		vtg = vtgate.LegacyInit(context.Background(), legacyHealthCheck, resilientServer, *cell, *vtgate.RetryCount, tabletTypes)
+	} else {
+		// use new Init otherwise
+		vtg = vtgate.Init(context.Background(), resilientServer, *cell, tabletTypes)
+	}
 
 	servenv.OnRun(func() {
 		// Flags are parsed now. Parse the template using the actual flag value and overwrite the current template.
 		discovery.ParseTabletURLTemplateFromFlag()
 		addStatusParts(vtg)
+	})
+	servenv.OnClose(func() {
+		_ = vtg.Gateway().Close(context.Background())
+		if legacyHealthCheck != nil {
+			_ = legacyHealthCheck.Close()
+		}
 	})
 	servenv.RunDefault()
 }

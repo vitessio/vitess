@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,8 +27,10 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
+	"vitess.io/vitess/go/vt/log"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -37,7 +39,9 @@ import (
 type LogStats struct {
 	Ctx           context.Context
 	Method        string
-	Target        *querypb.Target
+	Keyspace      string
+	TabletType    string
+	Table         string
 	StmtType      string
 	SQL           string
 	BindVariables map[string]*querypb.BindVariable
@@ -121,6 +125,18 @@ func (stats *LogStats) RemoteAddrUsername() (string, string) {
 // Logf formats the log record to the given writer, either as
 // tab-separated list of logged fields or as JSON.
 func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
+	if !streamlog.ShouldEmitLog(stats.SQL) {
+		return nil
+	}
+
+	// FormatBindVariables call might panic so we're going to catch it here
+	// and print out the stack trace for debugging.
+	defer func() {
+		if x := recover(); x != nil {
+			log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
+		}
+	}()
+
 	formattedBindVars := "\"[REDACTED]\""
 	if !*streamlog.RedactDebugUIQueries {
 		_, fullBindParams := params["full"]
@@ -137,9 +153,9 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	var fmtString string
 	switch *streamlog.QueryLogFormat {
 	case streamlog.QueryLogFormatText:
-		fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%.6f\t%.6f\t%.6f\t%v\t%q\t%v\t%v\t%v\t%q\t\n"
+		fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%.6f\t%.6f\t%.6f\t%v\t%q\t%v\t%v\t%v\t%q\t%q\t%q\t%q\t\n"
 	case streamlog.QueryLogFormatJSON:
-		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanTime\": %v, \"ExecuteTime\": %v, \"CommitTime\": %v, \"StmtType\": %q, \"SQL\": %q, \"BindVars\": %v, \"ShardQueries\": %v, \"RowsAffected\": %v, \"Error\": %q}\n"
+		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanTime\": %v, \"ExecuteTime\": %v, \"CommitTime\": %v, \"StmtType\": %q, \"SQL\": %q, \"BindVars\": %v, \"ShardQueries\": %v, \"RowsAffected\": %v, \"Error\": %q,  \"Keyspace\": %q, \"Table\": %q, \"TabletType\": %q}\n"
 	}
 
 	_, err := fmt.Fprintf(
@@ -162,6 +178,9 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 		stats.ShardQueries,
 		stats.RowsAffected,
 		stats.ErrorStr(),
+		stats.Keyspace,
+		stats.Table,
+		stats.TabletType,
 	)
 	return err
 }

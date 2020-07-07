@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -40,6 +40,12 @@ type fakePrimitive struct {
 	log []string
 }
 
+func (f *fakePrimitive) Inputs() []Primitive {
+	return []Primitive{}
+}
+
+var _ Primitive = (*fakePrimitive)(nil)
+
 func (f *fakePrimitive) rewind() {
 	f.curResult = 0
 	f.log = nil
@@ -47,6 +53,14 @@ func (f *fakePrimitive) rewind() {
 
 func (f *fakePrimitive) RouteType() string {
 	return "Fake"
+}
+
+func (f *fakePrimitive) GetKeyspaceName() string {
+	return "fakeKs"
+}
+
+func (f *fakePrimitive) GetTableName() string {
+	return "fakeTable"
 }
 
 func (f *fakePrimitive) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -108,6 +122,10 @@ func (f *fakePrimitive) ExpectLog(t *testing.T, want []string) {
 	}
 }
 
+func (f *fakePrimitive) NeedsTransaction() bool {
+	return false
+}
+
 func wrapStreamExecute(prim Primitive, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	var result *sqltypes.Result
 	err := prim.StreamExecute(vcursor, bindVars, wantfields, func(r *sqltypes.Result) error {
@@ -122,4 +140,8 @@ func wrapStreamExecute(prim Primitive, vcursor VCursor, bindVars map[string]*que
 		result.RowsAffected = uint64(len(result.Rows))
 	}
 	return result, err
+}
+
+func (f *fakePrimitive) description() PrimitiveDescription {
+	return PrimitiveDescription{OperatorType: "fake"}
 }

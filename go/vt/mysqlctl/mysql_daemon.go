@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
@@ -40,47 +41,44 @@ type MysqlDaemon interface {
 	GetMysqlPort() (int32, error)
 
 	// replication related methods
-	StartSlave(hookExtraEnv map[string]string) error
-	StartSlaveUntilAfter(ctx context.Context, pos mysql.Position) error
-	StopSlave(hookExtraEnv map[string]string) error
-	SlaveStatus() (mysql.SlaveStatus, error)
-	SetSemiSyncEnabled(master, slave bool) error
-	SemiSyncEnabled() (master, slave bool)
-	SemiSyncSlaveStatus() (bool, error)
+	StartReplication(hookExtraEnv map[string]string) error
+	RestartReplication(hookExtraEnv map[string]string) error
+	StartReplicationUntilAfter(ctx context.Context, pos mysql.Position) error
+	StopReplication(hookExtraEnv map[string]string) error
+	ReplicationStatus() (mysql.ReplicationStatus, error)
+	SetSemiSyncEnabled(master, replica bool) error
+	SemiSyncEnabled() (master, replica bool)
+	SemiSyncReplicationStatus() (bool, error)
 
 	// reparenting related methods
 	ResetReplication(ctx context.Context) error
 	MasterPosition() (mysql.Position, error)
 	IsReadOnly() (bool, error)
 	SetReadOnly(on bool) error
-	SetSlavePosition(ctx context.Context, pos mysql.Position) error
-	SetMaster(ctx context.Context, masterHost string, masterPort int, slaveStopBefore bool, slaveStartAfter bool) error
+	SetSuperReadOnly(on bool) error
+	SetReplicationPosition(ctx context.Context, pos mysql.Position) error
+	SetMaster(ctx context.Context, masterHost string, masterPort int, stopReplicationBefore bool, startReplicationAfter bool) error
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
-
-	// DemoteMaster waits for all current transactions to finish,
-	// and returns the current replication position. It will not
-	// change the read_only state of the server.
-	DemoteMaster() (mysql.Position, error)
 
 	WaitMasterPos(context.Context, mysql.Position) error
 
-	// PromoteSlave makes the slave the new master. It will not change
+	// Promote makes the current server master. It will not change
 	// the read_only state of the server.
-	PromoteSlave(map[string]string) (mysql.Position, error)
+	Promote(map[string]string) (mysql.Position, error)
 
 	// Schema related methods
-	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
-	GetColumns(dbName, table string) ([]string, error)
-	GetPrimaryKeyColumns(dbName, table string) ([]string, error)
-	PreflightSchemaChange(dbName string, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error)
-	ApplySchemaChange(dbName string, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error)
+	GetSchema(ctx context.Context, dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
+	GetColumns(ctx context.Context, dbName, table string) ([]*querypb.Field, []string, error)
+	GetPrimaryKeyColumns(ctx context.Context, dbName, table string) ([]string, error)
+	PreflightSchemaChange(ctx context.Context, dbName string, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error)
+	ApplySchemaChange(ctx context.Context, dbName string, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error)
 
 	// GetAppConnection returns a app connection to be able to talk to the database.
 	GetAppConnection(ctx context.Context) (*dbconnpool.PooledDBConnection, error)
 	// GetDbaConnection returns a dba connection.
-	GetDbaConnection() (*dbconnpool.DBConnection, error)
+	GetDbaConnection(ctx context.Context) (*dbconnpool.DBConnection, error)
 	// GetAllPrivsConnection returns an allprivs connection (for user with all privileges except SUPER).
-	GetAllPrivsConnection() (*dbconnpool.DBConnection, error)
+	GetAllPrivsConnection(ctx context.Context) (*dbconnpool.DBConnection, error)
 
 	// ExecuteSuperQueryList executes a list of queries, no result
 	ExecuteSuperQueryList(ctx context.Context, queryList []string) error

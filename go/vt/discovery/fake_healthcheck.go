@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 
@@ -29,7 +30,7 @@ import (
 )
 
 // This file contains the definitions for a FakeHealthCheck class to
-// simulate a HealthCheck module. Note it is not in a sub-package because
+// simulate a LegacyHealthCheck module. Note it is not in a sub-package because
 // otherwise it couldn't be used in this package's tests because of
 // circular dependencies.
 
@@ -40,43 +41,35 @@ func NewFakeHealthCheck() *FakeHealthCheck {
 	}
 }
 
-// FakeHealthCheck implements discovery.HealthCheck.
+// FakeHealthCheck implements discovery.LegacyHealthCheck.
 type FakeHealthCheck struct {
-	listener HealthCheckStatsListener
-
 	// mu protects the items map
 	mu    sync.RWMutex
 	items map[string]*fhcItem
 }
 
 type fhcItem struct {
-	ts   *TabletStats
+	ts   *TabletHealth
 	conn queryservice.QueryService
 }
 
 //
-// discovery.HealthCheck interface methods
+// discovery.LegacyHealthCheck interface methods
 //
 
 // RegisterStats is not implemented.
 func (fhc *FakeHealthCheck) RegisterStats() {
 }
 
-// SetListener is not implemented.
-func (fhc *FakeHealthCheck) SetListener(listener HealthCheckStatsListener, sendDownEvents bool) {
-	fhc.listener = listener
-}
-
 // WaitForInitialStatsUpdates is not implemented.
 func (fhc *FakeHealthCheck) WaitForInitialStatsUpdates() {
 }
 
-// AddTablet adds the tablet and calls the listener.
-func (fhc *FakeHealthCheck) AddTablet(tablet *topodatapb.Tablet, name string) {
+// AddTablet adds the tablet.
+func (fhc *FakeHealthCheck) AddTablet(tablet *topodatapb.Tablet) {
 	key := TabletToMapKey(tablet)
 	item := &fhcItem{
-		ts: &TabletStats{
-			Key:    key,
+		ts: &TabletHealth{
 			Tablet: tablet,
 			Target: &querypb.Target{
 				Keyspace:   tablet.Keyspace,
@@ -84,8 +77,6 @@ func (fhc *FakeHealthCheck) AddTablet(tablet *topodatapb.Tablet, name string) {
 				TabletType: tablet.Type,
 			},
 			Serving: true,
-			Up:      true,
-			Name:    name,
 			Stats:   &querypb.RealtimeStats{},
 		},
 	}
@@ -93,10 +84,6 @@ func (fhc *FakeHealthCheck) AddTablet(tablet *topodatapb.Tablet, name string) {
 	fhc.mu.Lock()
 	defer fhc.mu.Unlock()
 	fhc.items[key] = item
-
-	if fhc.listener != nil {
-		fhc.listener.StatsUpdate(item.ts)
-	}
 }
 
 // RemoveTablet removes the tablet.
@@ -104,17 +91,28 @@ func (fhc *FakeHealthCheck) RemoveTablet(tablet *topodatapb.Tablet) {
 	fhc.mu.Lock()
 	defer fhc.mu.Unlock()
 	key := TabletToMapKey(tablet)
+	item, ok := fhc.items[key]
+	if !ok {
+		return
+	}
+	// Make sure the key still corresponds to the tablet we want to delete.
+	// If it doesn't match, we should do nothing. The tablet we were asked to
+	// delete is already gone, and some other tablet is using the key
+	// (host:port) that the original tablet used to use, which is fine.
+	if !topoproto.TabletAliasEqual(tablet.Alias, item.ts.Tablet.Alias) {
+		return
+	}
 	delete(fhc.items, key)
 }
 
 // ReplaceTablet removes the old tablet and adds the new.
-func (fhc *FakeHealthCheck) ReplaceTablet(old, new *topodatapb.Tablet, name string) {
+func (fhc *FakeHealthCheck) ReplaceTablet(old, new *topodatapb.Tablet) {
 	fhc.RemoveTablet(old)
-	fhc.AddTablet(new, name)
+	fhc.AddTablet(new)
 }
 
-// GetConnection returns the TabletConn of the given tablet.
-func (fhc *FakeHealthCheck) GetConnection(key string) queryservice.QueryService {
+// TabletConnection returns the TabletConn of the given tablet.
+func (fhc *FakeHealthCheck) TabletConnection(key string) queryservice.QueryService {
 	fhc.mu.RLock()
 	defer fhc.mu.RUnlock()
 	if item := fhc.items[key]; item != nil {
@@ -174,10 +172,8 @@ func (fhc *FakeHealthCheck) AddFakeTablet(cell, host string, port int32, keyspac
 	item := fhc.items[key]
 	if item == nil {
 		item = &fhcItem{
-			ts: &TabletStats{
-				Key:    key,
+			ts: &TabletHealth{
 				Tablet: t,
-				Up:     true,
 			},
 		}
 		fhc.items[key] = item
@@ -188,15 +184,12 @@ func (fhc *FakeHealthCheck) AddFakeTablet(cell, host string, port int32, keyspac
 		TabletType: tabletType,
 	}
 	item.ts.Serving = serving
-	item.ts.TabletExternallyReparentedTimestamp = reparentTS
+	item.ts.MasterTermStartTime = reparentTS
 	item.ts.Stats = &querypb.RealtimeStats{}
 	item.ts.LastError = err
 	conn := connFactory(t)
 	item.conn = conn
 
-	if fhc.listener != nil {
-		fhc.listener.StatsUpdate(item.ts)
-	}
 	return conn
 }
 
