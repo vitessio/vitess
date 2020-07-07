@@ -438,10 +438,6 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	assert.Equal(t, streamHealthResponse.Serving, false)
 	assert.NotNil(t, streamHealthResponse.RealtimeStats)
 
-	// check the destination master 3 is healthy, even though its query
-	// service is not running (if not healthy this would exception out)
-	sharding.VerifyTabletHealth(t, *shard3Master, hostname)
-
 	// now serve rdonly from the split shards, in cell1 only
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
 		"MigrateServedTypes", shard3Ks, "rdonly")

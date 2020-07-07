@@ -650,10 +650,6 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	}
 
-	// check the destination master 3 is healthy, even though its query
-	// service is not running (if not healthy this would exception out)
-	sharding.VerifyTabletHealth(t, *shard3Master, hostname)
-
 	// now serve rdonly from the split shards, in cell1 only
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
 		"MigrateServedTypes", fmt.Sprintf("--cells=%s", cell1),
