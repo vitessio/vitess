@@ -119,7 +119,7 @@ func TestMysql56ParsePosition(t *testing.T) {
 	set = set.AddGTID(Mysql56GTID{Server: sid, Sequence: 2})
 	want := Position{GTIDSet: set}
 
-	got, err := ParsePosition(mysql56FlavorID, input)
+	got, err := ParsePosition(Mysql56FlavorID, input)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

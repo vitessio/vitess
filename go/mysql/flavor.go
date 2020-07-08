@@ -163,6 +163,18 @@ func (c *Conn) MasterPosition() (Position, error) {
 	}, nil
 }
 
+// MasterFilePosition returns the current master's file based replication position.
+func (c *Conn) MasterFilePosition() (Position, error) {
+	filePosFlavor := filePosFlavor{}
+	gtidSet, err := filePosFlavor.masterGTIDSet(c)
+	if err != nil {
+		return Position{}, err
+	}
+	return Position{
+		GTIDSet: gtidSet,
+	}, nil
+}
+
 // StartReplicationCommand returns the command to start the replication.
 func (c *Conn) StartReplicationCommand() string {
 	return c.flavor.startReplicationCommand()
@@ -315,6 +327,15 @@ func (c *Conn) ShowReplicationStatus() (ReplicationStatus, error) {
 // returns NULL if GTIDs are not enabled.
 func (c *Conn) WaitUntilPositionCommand(ctx context.Context, pos Position) (string, error) {
 	return c.flavor.waitUntilPositionCommand(ctx, pos)
+}
+
+// WaitUntilFilePositionCommand returns the SQL command to issue
+// to wait until the given position, until the context
+// expires for the file position flavor.  The command returns -1 if it times out. It
+// returns NULL if GTIDs are not enabled.
+func (c *Conn) WaitUntilFilePositionCommand(ctx context.Context, pos Position) (string, error) {
+	filePosFlavor := filePosFlavor{}
+	return filePosFlavor.waitUntilPositionCommand(ctx, pos)
 }
 
 // EnableBinlogPlaybackCommand returns a command to run to enable
