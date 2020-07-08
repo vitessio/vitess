@@ -56,14 +56,12 @@ func TestLookupHashInfo(t *testing.T) {
 	assert.Equal(t, "lookup_hash", lookuphash.String())
 	assert.False(t, lookuphash.IsUnique())
 	assert.True(t, lookuphash.NeedsVCursor())
-	assert.False(t, lookuphash.HasNullTest())
 
 	lookuphashunique := createLookup(t, "lookup_hash_unique", false)
 	assert.Equal(t, 10, lookuphashunique.Cost())
 	assert.Equal(t, "lookup_hash_unique", lookuphashunique.String())
 	assert.True(t, lookuphashunique.IsUnique())
 	assert.True(t, lookuphashunique.NeedsVCursor())
-	assert.False(t, lookuphashunique.HasNullTest())
 }
 
 func TestLookupHashMap(t *testing.T) {

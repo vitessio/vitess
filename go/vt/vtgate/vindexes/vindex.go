@@ -65,10 +65,6 @@ type Vindex interface {
 	// NeedsVCursor returns true if the Vindex makes calls into the
 	// VCursor. Such vindexes cannot be used by vreplication.
 	NeedsVCursor() bool
-
-	// HasNullTest returns true if the Vindex could map null value
-	// to a keyspace id.
-	HasNullTest() bool
 }
 
 // SingleColumn defines the interface for a single column vindex.

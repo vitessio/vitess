@@ -81,11 +81,6 @@ func (lu *ConsistentLookup) NeedsVCursor() bool {
 	return true
 }
 
-// HasNullTest satisfies the Vindex interface.
-func (lu *ConsistentLookup) HasNullTest() bool {
-	return false
-}
-
 // Map can map ids to key.Destination objects.
 func (lu *ConsistentLookup) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
@@ -149,11 +144,6 @@ func (lu *ConsistentLookupUnique) IsUnique() bool {
 // NeedsVCursor satisfies the Vindex interface.
 func (lu *ConsistentLookupUnique) NeedsVCursor() bool {
 	return true
-}
-
-// HasNullTest satisfies the Vindex interface.
-func (lu *ConsistentLookupUnique) HasNullTest() bool {
-	return false
 }
 
 // Map can map ids to key.Destination objects.

@@ -87,11 +87,6 @@ func (vind *NumericStaticMap) NeedsVCursor() bool {
 	return false
 }
 
-// HasNullTest satisfies the Vindex interface.
-func (vind *NumericStaticMap) HasNullTest() bool {
-	return true
-}
-
 // Verify returns true if ids and ksids match.
 func (vind *NumericStaticMap) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
