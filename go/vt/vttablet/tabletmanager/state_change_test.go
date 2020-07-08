@@ -23,6 +23,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/vt/binlog"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 )
 
 func TestPublishState(t *testing.T) {
@@ -69,4 +76,36 @@ func TestPublishState(t *testing.T) {
 	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, tab2, ttablet.Tablet)
+}
+
+func createTestTM(ctx context.Context, t *testing.T, preStart func(*TabletManager)) *TabletManager {
+	ts := memorytopo.NewServer("cell1")
+	tablet := &topodatapb.Tablet{
+		Alias:    tabletAlias,
+		Hostname: "host",
+		PortMap: map[string]int32{
+			"vt": int32(1234),
+		},
+		Keyspace: "test_keyspace",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_REPLICA,
+	}
+
+	tm := &TabletManager{
+		BatchCtx:            ctx,
+		TopoServer:          ts,
+		MysqlDaemon:         &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(-1)},
+		DBConfigs:           &dbconfigs.DBConfigs{},
+		QueryServiceControl: tabletservermock.NewController(),
+		UpdateStream:        binlog.NewUpdateStreamControlMock(),
+	}
+	if preStart != nil {
+		preStart(tm)
+	}
+	err := tm.Start(tablet)
+	require.NoError(t, err)
+
+	tm.HealthReporter = &fakeHealthCheck{}
+
+	return tm
 }

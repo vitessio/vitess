@@ -24,14 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
-
-	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/vt/binlog"
-	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
@@ -126,38 +118,6 @@ func (fhc *fakeHealthCheck) Report(isReplicaType, shouldQueryServiceBeRunning bo
 
 func (fhc *fakeHealthCheck) HTMLName() template.HTML {
 	return template.HTML("fakeHealthCheck")
-}
-
-func createTestTM(ctx context.Context, t *testing.T, preStart func(*TabletManager)) *TabletManager {
-	ts := memorytopo.NewServer("cell1")
-	tablet := &topodatapb.Tablet{
-		Alias:    tabletAlias,
-		Hostname: "host",
-		PortMap: map[string]int32{
-			"vt": int32(1234),
-		},
-		Keyspace: "test_keyspace",
-		Shard:    "0",
-		Type:     topodatapb.TabletType_REPLICA,
-	}
-
-	tm := &TabletManager{
-		BatchCtx:            ctx,
-		TopoServer:          ts,
-		MysqlDaemon:         &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(-1)},
-		DBConfigs:           &dbconfigs.DBConfigs{},
-		QueryServiceControl: tabletservermock.NewController(),
-		UpdateStream:        binlog.NewUpdateStreamControlMock(),
-	}
-	if preStart != nil {
-		preStart(tm)
-	}
-	err := tm.Start(tablet)
-	require.NoError(t, err)
-
-	tm.HealthReporter = &fakeHealthCheck{}
-
-	return tm
 }
 
 // expectBroadcastData checks that runHealthCheck() broadcasted the expected
