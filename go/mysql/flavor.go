@@ -65,6 +65,9 @@ type flavor interface {
 	// stopReplicationCommand returns the command to stop the replication.
 	stopReplicationCommand() string
 
+	// stopIOThreadCommand returns the command to stop the replica's io thread only.
+	stopIOThreadCommand() string
+
 	// sendBinlogDumpCommand sends the packet required to start
 	// dumping binlogs from the specified location.
 	sendBinlogDumpCommand(c *Conn, serverID uint32, startPos Position) error
@@ -195,6 +198,11 @@ func (c *Conn) StopReplicationCommand() string {
 	return c.flavor.stopReplicationCommand()
 }
 
+// StopIOThreadCommand returns the command to stop the replica's io thread.
+func (c *Conn) StopIOThreadCommand() string {
+	return c.flavor.stopIOThreadCommand()
+}
+
 // SendBinlogDumpCommand sends the flavor-specific version of
 // the COM_BINLOG_DUMP command to start dumping raw binlog
 // events over a server connection, starting at a given GTID.
@@ -277,7 +285,7 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	status := ReplicationStatus{
 		MasterHost: fields["Master_Host"],
 		// These fields are returned from the underlying DB and cannot be renamed
-		IOThreadRunning:  fields["Slave_IO_Running"] == "Yes",
+		IOThreadRunning:  fields["Slave_IO_Running"] == "Yes" || fields["Slave_IO_Running"] == "Connecting",
 		SQLThreadRunning: fields["Slave_SQL_Running"] == "Yes",
 	}
 	parseInt, _ := strconv.ParseInt(fields["Master_Port"], 10, 0)
