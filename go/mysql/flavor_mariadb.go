@@ -185,29 +185,9 @@ func (m mariadbFlavor) masterStatus(c *Conn) (MasterStatus, error) {
 		return MasterStatus{}, err
 	}
 
-	// SHOW MASTER STATUS does not return the executed GTIDSet for MariaDB, so we patch it in.
-	qr, err = c.ExecuteFetch("SELECT @@GLOBAL.gtid_binlog_pos", 1, false)
-	if err != nil {
-		return MasterStatus{}, err
-	}
-	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return MasterStatus{}, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_binlog_pos: %#v", qr)
-	}
-	resultMap["Gtid_Binlog_Pos"] = qr.Rows[0][0].ToString()
-
-	return parseMariadbMasterStatus(resultMap)
-}
-
-func parseMariadbMasterStatus(resultMap map[string]string) (MasterStatus, error) {
 	status := parseMasterStatus(resultMap)
-
-	var err error
-	status.Position.GTIDSet, err = parseMariadbGTIDSet(resultMap["Gtid_Binlog_Pos"])
-	if err != nil {
-		return MasterStatus{}, vterrors.Wrapf(err, "MasterStatus can't parse MariaDB GTID (Gtid_Binlog_Pos: %#v)", resultMap["Gtid_Binlog_Pos"])
-	}
-
-	return status, nil
+	status.Position.GTIDSet, err = m.masterGTIDSet(c)
+	return status, err
 }
 
 // waitUntilPositionCommand is part of the Flavor interface.
