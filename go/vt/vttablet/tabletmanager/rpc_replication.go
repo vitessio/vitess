@@ -49,8 +49,8 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 }
 
 // MasterStatus returns the replication status fopr a master tablet.
-func (agent *ActionAgent) MasterStatus(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
-	status, err := agent.MysqlDaemon.MasterStatus(ctx)
+func (tm *TabletManager) MasterStatus(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
+	status, err := tm.MysqlDaemon.MasterStatus(ctx)
 	if err != nil {
 		return nil, err
 	}

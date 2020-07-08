@@ -246,10 +246,10 @@ func (s *server) ReplicationStatus(ctx context.Context, request *tabletmanagerda
 }
 
 func (s *server) MasterStatus(ctx context.Context, request *tabletmanagerdatapb.MasterStatusRequest) (response *tabletmanagerdatapb.MasterStatusResponse, err error) {
-	defer s.agent.HandleRPCPanic(ctx, "MasterStatus", request, response, false /*verbose*/, &err)
+	defer s.tm.HandleRPCPanic(ctx, "MasterStatus", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.MasterStatusResponse{}
-	status, err := s.agent.MasterStatus(ctx)
+	status, err := s.tm.MasterStatus(ctx)
 	if err == nil {
 		response.Status = status
 	}
