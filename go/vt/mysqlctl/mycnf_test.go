@@ -22,6 +22,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/servenv"
 )

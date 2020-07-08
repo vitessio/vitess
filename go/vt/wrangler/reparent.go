@@ -917,7 +917,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	event.DispatchUpdate(ev, "stop replication on all replicas")
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
-	statusMap := make(map[string]*replicationdatapb.Status)
+	statusMap := make(map[string]*replicationdatapb.StopReplicationStatus)
 	for alias, tabletInfo := range tabletMap {
 		wg.Add(1)
 		go func(alias string, tabletInfo *topo.TabletInfo) {
@@ -925,13 +925,14 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 			wr.logger.Infof("getting replication position from %v", alias)
 			ctx, cancel := context.WithTimeout(ctx, waitReplicasTimeout)
 			defer cancel()
-			rp, err := wr.tmc.StopReplicationAndGetStatus(ctx, tabletInfo.Tablet)
+			// TODO: Once we refactor EmergencyReparent, change the stopReplicationOption argument to IOThreadOnly.
+			_, stopReplicationStatus, err := wr.tmc.StopReplicationAndGetStatus(ctx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
 			if err != nil {
 				wr.logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", alias, err)
 				return
 			}
 			mu.Lock()
-			statusMap[alias] = rp
+			statusMap[alias] = stopReplicationStatus
 			mu.Unlock()
 		}(alias, tabletInfo)
 	}
@@ -947,20 +948,22 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	if !ok {
 		return fmt.Errorf("couldn't get master elect %v replication position", topoproto.TabletAliasString(masterElectTabletAlias))
 	}
-	masterElectPos, err := mysql.DecodePosition(masterElectStatus.Position)
+	masterElectStrPos := masterElectStatus.After.Position
+	masterElectPos, err := mysql.DecodePosition(masterElectStrPos)
 	if err != nil {
-		return fmt.Errorf("cannot decode master elect position %v: %v", masterElectStatus.Position, err)
+		return fmt.Errorf("cannot decode master elect position %v: %v", masterElectStrPos, err)
 	}
 	for alias, status := range statusMap {
 		if alias == masterElectTabletAliasStr {
 			continue
 		}
-		pos, err := mysql.DecodePosition(status.Position)
+		posStr := status.After.Position
+		pos, err := mysql.DecodePosition(posStr)
 		if err != nil {
-			return fmt.Errorf("cannot decode replica %v position %v: %v", alias, status.Position, err)
+			return fmt.Errorf("cannot decode replica %v position %v: %v", alias, posStr, err)
 		}
 		if !masterElectPos.AtLeast(pos) {
-			return fmt.Errorf("tablet %v is more advanced than master elect tablet %v: %v > %v", alias, masterElectTabletAliasStr, status.Position, masterElectStatus.Position)
+			return fmt.Errorf("tablet %v is more advanced than master elect tablet %v: %v > %v", alias, masterElectTabletAliasStr, posStr, masterElectStrPos)
 		}
 	}
 
@@ -1008,7 +1011,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 				wr.logger.Infof("setting new master on replica %v", alias)
 				forceStart := false
 				if status, ok := statusMap[alias]; ok {
-					forceStart = status.IoThreadRunning || status.SqlThreadRunning
+					forceStart = replicaWasRunning(status)
 				}
 				if err := wr.tmc.SetMaster(replCtx, tabletInfo.Tablet, masterElectTabletAlias, now, "", forceStart); err != nil {
 					rec.RecordError(fmt.Errorf("tablet %v SetMaster failed: %v", alias, err))
@@ -1084,4 +1087,8 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newMasterAli
 		event.DispatchUpdate(ev, "finished")
 	}
 	return nil
+}
+
+func replicaWasRunning(stopReplicationStatus *replicationdatapb.StopReplicationStatus) bool {
+	return stopReplicationStatus.Before.IoThreadRunning || stopReplicationStatus.Before.SqlThreadRunning
 }
