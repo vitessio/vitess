@@ -39,8 +39,8 @@ message Status {
   string master_uuid = 12;
 }
 
-// StopReplicationStatus represents the slave status before calling stop slave, and the slave status collected immediately after
-// calling stop slave.
+// StopReplicationStatus represents the replication status before calling StopReplication, and the replication status collected immediately after
+// calling StopReplication.
 message StopReplicationStatus {
   replicationdata.Status before = 1;
   replicationdata.Status after = 2;

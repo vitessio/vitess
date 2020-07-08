@@ -926,13 +926,13 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 			ctx, cancel := context.WithTimeout(ctx, waitReplicasTimeout)
 			defer cancel()
 			// TODO: Once we refactor EmergencyReparent, change the stopReplicationOption argument to IOThreadOnly.
-			_, stopSlaveStatus, err := wr.tmc.StopReplicationAndGetStatus(ctx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
+			_, stopReplicationStatus, err := wr.tmc.StopReplicationAndGetStatus(ctx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
 			if err != nil {
 				wr.logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", alias, err)
 				return
 			}
 			mu.Lock()
-			statusMap[alias] = stopSlaveStatus
+			statusMap[alias] = stopReplicationStatus
 			mu.Unlock()
 		}(alias, tabletInfo)
 	}
@@ -1011,7 +1011,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 				wr.logger.Infof("setting new master on replica %v", alias)
 				forceStart := false
 				if status, ok := statusMap[alias]; ok {
-					forceStart = slaveWasRunning(status)
+					forceStart = replicaWasRunning(status)
 				}
 				if err := wr.tmc.SetMaster(replCtx, tabletInfo.Tablet, masterElectTabletAlias, now, "", forceStart); err != nil {
 					rec.RecordError(fmt.Errorf("tablet %v SetMaster failed: %v", alias, err))
@@ -1089,6 +1089,6 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newMasterAli
 	return nil
 }
 
-func slaveWasRunning(stopSlaveStatus *replicationdatapb.StopReplicationStatus) bool {
-	return stopSlaveStatus.Before.IoThreadRunning || stopSlaveStatus.Before.SqlThreadRunning
+func replicaWasRunning(stopReplicationStatus *replicationdatapb.StopReplicationStatus) bool {
+	return stopReplicationStatus.Before.IoThreadRunning || stopReplicationStatus.Before.SqlThreadRunning
 }

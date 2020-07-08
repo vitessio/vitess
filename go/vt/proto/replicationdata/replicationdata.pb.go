@@ -177,8 +177,8 @@ func (m *Status) GetMasterUuid() string {
 	return ""
 }
 
-// StopReplicationStatus represents the slave status before calling stop slave, and the slave status collected immediately after
-// calling stop slave.
+// StopReplicationStatus represents the replication status before calling StopReplication, and the replication status collected immediately after
+// calling StopReplication.
 type StopReplicationStatus struct {
 	Before               *Status  `protobuf:"bytes,1,opt,name=before,proto3" json:"before,omitempty"`
 	After                *Status  `protobuf:"bytes,2,opt,name=after,proto3" json:"after,omitempty"`

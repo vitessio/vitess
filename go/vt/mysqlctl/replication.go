@@ -114,7 +114,7 @@ func (mysqld *Mysqld) StopReplication(hookExtraEnv map[string]string) error {
 	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopReplicationCommand()})
 }
 
-// StopIOThread stops a slave's IO thread only.
+// StopIOThread stops a replica's IO thread only.
 func (mysqld *Mysqld) StopIOThread(ctx context.Context) error {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
