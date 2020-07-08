@@ -61,6 +61,11 @@ func (vind *XXHash) NeedsVCursor() bool {
 	return false
 }
 
+// HasNullTest satisfies the Vindex interface.
+func (vind *XXHash) HasNullTest() bool {
+	return true
+}
+
 // Map can map ids to key.Destination objects.
 func (vind *XXHash) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, len(ids))

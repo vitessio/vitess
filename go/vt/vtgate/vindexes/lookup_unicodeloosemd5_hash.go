@@ -101,6 +101,11 @@ func (lh *LookupUnicodeLooseMD5Hash) NeedsVCursor() bool {
 	return true
 }
 
+// HasNullTest satisfies the Vindex interface.
+func (lh *LookupUnicodeLooseMD5Hash) HasNullTest() bool {
+	return false
+}
+
 // Map can map ids to key.Destination objects.
 func (lh *LookupUnicodeLooseMD5Hash) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
@@ -266,6 +271,11 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) IsUnique() bool {
 // NeedsVCursor satisfies the Vindex interface.
 func (lhu *LookupUnicodeLooseMD5HashUnique) NeedsVCursor() bool {
 	return true
+}
+
+// HasNullTest satisfies the Vindex interface.
+func (lhu *LookupUnicodeLooseMD5HashUnique) HasNullTest() bool {
+	return false
 }
 
 // Map can map ids to key.Destination objects.

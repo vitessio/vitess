@@ -62,6 +62,7 @@ func TestLookupHashUniqueInfo(t *testing.T) {
 	assert.Equal(t, "lookup_hash_unique", lhu.String())
 	assert.True(t, lhu.IsUnique())
 	assert.True(t, lhu.NeedsVCursor())
+	assert.False(t, lhu.HasNullTest())
 }
 
 func TestLookupHashUniqueMap(t *testing.T) {

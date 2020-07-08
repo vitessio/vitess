@@ -39,6 +39,7 @@ func TestUnicodeLooseMD5Info(t *testing.T) {
 	assert.Equal(t, "utf8ch", charVindex.String())
 	assert.True(t, charVindex.IsUnique())
 	assert.False(t, charVindex.NeedsVCursor())
+	assert.True(t, charVindex.HasNullTest())
 }
 
 func TestUnicodeLooseMD5Map(t *testing.T) {

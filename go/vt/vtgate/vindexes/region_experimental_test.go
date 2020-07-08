@@ -33,6 +33,7 @@ func TestRegionExperimentalMisc(t *testing.T) {
 	assert.Equal(t, "region_experimental", ge.String())
 	assert.True(t, ge.IsUnique())
 	assert.False(t, ge.NeedsVCursor())
+	assert.True(t, ge.HasNullTest())
 }
 
 func TestRegionExperimentalMap(t *testing.T) {

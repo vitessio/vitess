@@ -48,6 +48,7 @@ func (v *cheapVindex) String() string                                           
 func (*cheapVindex) Cost() int                                                  { return 0 }
 func (*cheapVindex) IsUnique() bool                                             { return true }
 func (*cheapVindex) NeedsVCursor() bool                                         { return false }
+func (*cheapVindex) HasNullTest() bool                                          { return true }
 func (*cheapVindex) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error) { return []bool{}, nil }
 func (*cheapVindex) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
@@ -69,6 +70,7 @@ func (v *stFU) String() string                                                  
 func (*stFU) Cost() int                                                           { return 1 }
 func (*stFU) IsUnique() bool                                                      { return true }
 func (*stFU) NeedsVCursor() bool                                                  { return false }
+func (*stFU) HasNullTest() bool                                                   { return true }
 func (*stFU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
 func (*stFU) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 
@@ -88,6 +90,7 @@ func (v *stFN) String() string                                                  
 func (*stFN) Cost() int                                                           { return 1 }
 func (*stFN) IsUnique() bool                                                      { return false }
 func (*stFN) NeedsVCursor() bool                                                  { return false }
+func (*stFN) HasNullTest() bool                                                   { return true }
 func (*stFN) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
 func (*stFN) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 
@@ -107,6 +110,7 @@ func (v *stLN) String() string                                                  
 func (*stLN) Cost() int                                                           { return 0 }
 func (*stLN) IsUnique() bool                                                      { return false }
 func (*stLN) NeedsVCursor() bool                                                  { return true }
+func (*stLN) HasNullTest() bool                                                   { return true }
 func (*stLN) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
 func (*stLN) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 func (*stLN) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
@@ -130,6 +134,7 @@ func (v *stLU) String() string                                                  
 func (*stLU) Cost() int                                                           { return 2 }
 func (*stLU) IsUnique() bool                                                      { return true }
 func (*stLU) NeedsVCursor() bool                                                  { return true }
+func (*stLU) HasNullTest() bool                                                   { return true }
 func (*stLU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
 func (*stLU) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 func (*stLU) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
@@ -156,6 +161,7 @@ func (v *stLO) String() string                                                  
 func (*stLO) Cost() int                                                           { return 2 }
 func (*stLO) IsUnique() bool                                                      { return true }
 func (*stLO) NeedsVCursor() bool                                                  { return true }
+func (*stLO) HasNullTest() bool                                                   { return true }
 func (*stLO) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
 func (*stLO) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 func (*stLO) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }

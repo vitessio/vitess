@@ -41,6 +41,7 @@ func TestHashInfo(t *testing.T) {
 	assert.Equal(t, "nn", hash.String())
 	assert.True(t, hash.IsUnique())
 	assert.False(t, hash.NeedsVCursor())
+	assert.True(t, hash.HasNullTest())
 }
 
 func TestHashMap(t *testing.T) {

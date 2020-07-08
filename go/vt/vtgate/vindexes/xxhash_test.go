@@ -44,6 +44,7 @@ func TestXXHashInfo(t *testing.T) {
 	assert.Equal(t, "xxhash_name", xxHash.String())
 	assert.True(t, xxHash.IsUnique())
 	assert.False(t, xxHash.NeedsVCursor())
+	assert.True(t, xxHash.HasNullTest())
 }
 
 func TestXXHashMap(t *testing.T) {
