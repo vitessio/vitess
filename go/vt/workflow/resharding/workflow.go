@@ -388,7 +388,7 @@ func initTasks(tasks map[string]*workflowpb.Task, phase workflow.PhaseType, shar
 // control the horizontal resharding workflow.
 type horizontalReshardingWorkflow struct {
 	ctx        context.Context
-	wr         ReshardingWrangler
+	wr         Wrangler
 	manager    *workflow.Manager
 	topoServer *topo.Server
 	wi         *topo.WorkflowInfo
