@@ -26,7 +26,8 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-const mariadbFlavorID = "MariaDB"
+// MariadbFlavorID is the string identifier for the MariaDB flavor.
+const MariadbFlavorID = "MariaDB"
 
 // parseMariadbGTID is registered as a GTID parser.
 func parseMariadbGTID(s string) (GTID, error) {
@@ -93,7 +94,7 @@ func (gtid MariadbGTID) String() string {
 
 // Flavor implements GTID.Flavor().
 func (gtid MariadbGTID) Flavor() string {
-	return mariadbFlavorID
+	return MariadbFlavorID
 }
 
 // SequenceDomain implements GTID.SequenceDomain().
@@ -140,7 +141,7 @@ func (gtidSet MariadbGTIDSet) String() string {
 
 // Flavor implements GTIDSet.Flavor()
 func (gtidSet MariadbGTIDSet) Flavor() string {
-	return mariadbFlavorID
+	return MariadbFlavorID
 }
 
 // ContainsGTID implements GTIDSet.ContainsGTID().
@@ -251,6 +252,6 @@ func (gtidSet MariadbGTIDSet) addGTID(otherGTID MariadbGTID) {
 }
 
 func init() {
-	gtidParsers[mariadbFlavorID] = parseMariadbGTID
-	gtidSetParsers[mariadbFlavorID] = parseMariadbGTIDSet
+	gtidParsers[MariadbFlavorID] = parseMariadbGTID
+	gtidSetParsers[MariadbFlavorID] = parseMariadbGTIDSet
 }
