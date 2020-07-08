@@ -134,7 +134,7 @@ func TestHealthCheck(t *testing.T) {
 
 	// stop replication, make sure we don't go unhealthy.
 	// TODO: replace with StopReplication once StopSlave has been removed
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopSlave", rTablet.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", rTablet.Alias)
 	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rTablet.Alias)
 	require.NoError(t, err)
@@ -145,7 +145,7 @@ func TestHealthCheck(t *testing.T) {
 	verifyStreamHealth(t, result)
 
 	// then restart replication, make sure we stay healthy
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", rTablet.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", rTablet.Alias)
 	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rTablet.Alias)
 	require.NoError(t, err)

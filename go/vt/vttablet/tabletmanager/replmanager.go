@@ -76,6 +76,9 @@ func (rm *replManager) SetTabletType(tabletType topodatapb.TabletType) {
 		rm.ticks.Stop()
 		return
 	}
+	if rm.ticks.Running() {
+		return
+	}
 	// Do an explicit check and then start the timer.
 	rm.check()
 	rm.ticks.Start(rm.check)
@@ -115,16 +118,20 @@ func (rm *replManager) setReplicationStopped(stopped bool) {
 
 	rm.replStopped = &stopped
 
+	if stopped {
+		rm.ticks.Stop()
+	} else {
+		rm.ticks.Start(rm.check)
+	}
+
 	if rm.markerFile == "" {
 		return
 	}
 	if stopped {
-		rm.ticks.Stop()
 		if file, err := os.Create(rm.markerFile); err == nil {
 			file.Close()
 		}
 	} else {
-		rm.ticks.Start(rm.check)
 		os.Remove(rm.markerFile)
 	}
 }
