@@ -33,9 +33,8 @@ var (
 	// Returned by ShowReplicationStatus().
 	ErrNotReplica = errors.New("no slave status")
 
-	// ErrNotMaster means there is no master status.
-	// Returned by ShowMasterStatus().
-	ErrNotMaster = errors.New("no master status")
+	// ErrNoMasterStatus means no status was returned by ShowMasterStatus().
+	ErrNoMasterStatus = errors.New("no master status")
 )
 
 const (

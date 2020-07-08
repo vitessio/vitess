@@ -238,7 +238,7 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus() (mysql.ReplicationStatus, error)
 
 // MasterStatus is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) MasterStatus(ctx context.Context) (mysql.MasterStatus, error) {
-	if fmd.SlaveStatusError != nil {
+	if fmd.MasterStatusError != nil {
 		return mysql.MasterStatus{}, fmd.MasterStatusError
 	}
 	return mysql.MasterStatus{

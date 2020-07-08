@@ -220,9 +220,8 @@ func (flv *filePosFlavor) masterStatus(c *Conn) (MasterStatus, error) {
 		return MasterStatus{}, err
 	}
 	if len(qr.Rows) == 0 {
-		// The query returned no data, meaning the server
-		// is not configured as a master.
-		return MasterStatus{}, ErrNotMaster
+		// The query returned no data. We don't know how this could happen.
+		return MasterStatus{}, ErrNoMasterStatus
 	}
 
 	resultMap, err := resultToMap(qr)
