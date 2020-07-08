@@ -22,7 +22,9 @@ import (
 
 // MasterStatus holds replication information from SHOW MASTER STATUS.
 type MasterStatus struct {
-	Position     Position
+	// Position represents the master's GTID based position.
+	Position Position
+	// FilePosition represents the master's file based position.
 	FilePosition Position
 }
 
