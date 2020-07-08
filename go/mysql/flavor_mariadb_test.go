@@ -123,3 +123,22 @@ func TestMariadbShouldGetNilRelayLogPosition(t *testing.T) {
 	require.NoError(t, err)
 	assert.Truef(t, got.RelayLogPosition.IsZero(), "Got a filled in RelayLogPosition. For MariaDB we should get back nil, because MariaDB does not return the retrieved GTIDSet. got: %#v", got.RelayLogPosition)
 }
+
+func TestMariadbShouldGetMasterPosition(t *testing.T) {
+	resultMap := map[string]string{
+		"Gtid_Binlog_Pos": "0-101-2320",
+		"Position":        "1307",
+		"File":            "mariadb-bin.000003",
+	}
+
+	gtidSet, err := parseMariadbGTIDSet(resultMap["Gtid_Binlog_Pos"])
+	require.NoError(t, err)
+	want := MasterStatus{
+		Position:     Position{GTIDSet: gtidSet},
+		FilePosition: Position{GTIDSet: filePosGTID{file: "mariadb-bin.000003", pos: 1307}},
+	}
+	got, err := parseMariadbMasterStatus(resultMap)
+	require.NoError(t, err)
+	assert.Equalf(t, got.Position.GTIDSet.String(), want.Position.GTIDSet.String(), "got Position: %v; want Position: %v", got.Position.GTIDSet, want.Position.GTIDSet)
+	assert.Equalf(t, got.FilePosition.GTIDSet.String(), want.FilePosition.GTIDSet.String(), "got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet)
+}
