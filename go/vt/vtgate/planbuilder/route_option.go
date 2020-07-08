@@ -301,7 +301,7 @@ func (ro *routeOption) computeISPlan(pb *primitiveBuilder, comparison *sqlparser
 	}
 
 	vindex = ro.FindVindex(pb, comparison.Expr)
-	if vindex == nil {
+	if vindex == nil || !vindex.HasNullTest() {
 		return engine.SelectScatter, nil, nil
 	}
 	if vindex.IsUnique() {

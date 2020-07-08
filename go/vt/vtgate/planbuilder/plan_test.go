@@ -50,6 +50,7 @@ func (v *hashIndex) String() string   { return v.name }
 func (*hashIndex) Cost() int          { return 1 }
 func (*hashIndex) IsUnique() bool     { return true }
 func (*hashIndex) NeedsVCursor() bool { return false }
+func (*hashIndex) HasNullTest() bool  { return true }
 func (*hashIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
@@ -68,6 +69,7 @@ func (v *lookupIndex) String() string   { return v.name }
 func (*lookupIndex) Cost() int          { return 2 }
 func (*lookupIndex) IsUnique() bool     { return true }
 func (*lookupIndex) NeedsVCursor() bool { return false }
+func (*lookupIndex) HasNullTest() bool  { return true }
 func (*lookupIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
@@ -93,6 +95,7 @@ func (v *multiIndex) String() string   { return v.name }
 func (*multiIndex) Cost() int          { return 3 }
 func (*multiIndex) IsUnique() bool     { return false }
 func (*multiIndex) NeedsVCursor() bool { return false }
+func (*multiIndex) HasNullTest() bool  { return true }
 func (*multiIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
@@ -119,6 +122,7 @@ func (v *costlyIndex) String() string   { return v.name }
 func (*costlyIndex) Cost() int          { return 10 }
 func (*costlyIndex) IsUnique() bool     { return false }
 func (*costlyIndex) NeedsVCursor() bool { return false }
+func (*costlyIndex) HasNullTest() bool  { return true }
 func (*costlyIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }

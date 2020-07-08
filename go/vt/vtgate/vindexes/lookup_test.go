@@ -121,6 +121,7 @@ func TestLookupNonUniqueInfo(t *testing.T) {
 	assert.Equal(t, "lookup", lookupNonUnique.String())
 	assert.False(t, lookupNonUnique.IsUnique())
 	assert.True(t, lookupNonUnique.NeedsVCursor())
+	assert.False(t, lookupNonUnique.HasNullTest())
 }
 
 func TestLookupNilVCursor(t *testing.T) {

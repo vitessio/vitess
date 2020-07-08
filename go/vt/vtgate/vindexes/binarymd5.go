@@ -58,6 +58,11 @@ func (vind *BinaryMD5) NeedsVCursor() bool {
 	return false
 }
 
+// HasNullTest satisfies the Vindex interface.
+func (vind *BinaryMD5) HasNullTest() bool {
+	return true
+}
+
 // Verify returns true if ids maps to ksids.
 func (vind *BinaryMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))

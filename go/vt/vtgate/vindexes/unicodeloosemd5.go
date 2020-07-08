@@ -67,6 +67,11 @@ func (vind *UnicodeLooseMD5) NeedsVCursor() bool {
 	return false
 }
 
+// HasNullTest satisfies the Vindex interface.
+func (vind *UnicodeLooseMD5) HasNullTest() bool {
+	return true
+}
+
 // Verify returns true if ids maps to ksids.
 func (vind *UnicodeLooseMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))

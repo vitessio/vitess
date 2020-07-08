@@ -34,6 +34,7 @@ func (*uvindex) String() string     { return "uvindex" }
 func (*uvindex) Cost() int          { return 1 }
 func (*uvindex) IsUnique() bool     { return true }
 func (*uvindex) NeedsVCursor() bool { return false }
+func (*uvindex) HasNullTest() bool  { return true }
 func (*uvindex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	panic("unimplemented")
 }
@@ -64,6 +65,7 @@ func (*nvindex) String() string     { return "nvindex" }
 func (*nvindex) Cost() int          { return 1 }
 func (*nvindex) IsUnique() bool     { return false }
 func (*nvindex) NeedsVCursor() bool { return false }
+func (*nvindex) HasNullTest() bool  { return true }
 func (*nvindex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	panic("unimplemented")
 }
