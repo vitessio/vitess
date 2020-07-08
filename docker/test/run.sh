@@ -99,6 +99,7 @@ done
 # Positional flags.
 flavor=$1
 cmd=$2
+extra_bin=$3
 args=
 
 if [[ -z "$flavor" ]]; then
@@ -184,6 +185,11 @@ bashcmd=$(append_cmd "$bashcmd" "echo 'Checking if mvn needs installing...'; if 
 
 # Run bootstrap every time now
 bashcmd=$(append_cmd "$bashcmd" "./bootstrap.sh")
+
+if [[ ! -z "$extra_bin" ]]; then
+  args="$args -v $PWD/$extra_bin:/tmp/$extra_bin"
+  bashcmd=$(append_cmd "$bashcmd" "PATH=\"/tmp:${PATH}\"")
+fi
 
 # At last, append the user's command.
 bashcmd=$(append_cmd "$bashcmd" "$cmd")

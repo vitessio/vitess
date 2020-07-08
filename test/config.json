@@ -266,6 +266,18 @@
 				"site_test"
 			]
 		},
+		"pitr": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitr"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 25,
+			"RetryMax": 0,
+			"ExtraDockerArg" : "rippled",
+			"Tags": [
+				"site_test"
+			]
+		},
 		"recovery": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/unshardedrecovery"],
