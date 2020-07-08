@@ -13,7 +13,7 @@ import (
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// MockReshardingWrangler is a mock of ReshardingWrangler interface
+// MockReshardingWrangler is a mock of Wrangler interface from resharding_wrangler.go
 type MockReshardingWrangler struct {
 	ctrl     *gomock.Controller
 	recorder *MockReshardingWranglerMockRecorder
