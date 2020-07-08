@@ -121,7 +121,8 @@ func TestReparentDownMaster(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
 		"EmergencyReparentShard",
 		"-keyspace_shard", keyspaceShard,
-		"-new_master", tablet62044.Alias)
+		"-new_master", tablet62044.Alias,
+		"-wait_replicas_timeout", "10s")
 	require.Nil(t, err)
 
 	validateTopology(t, false)
@@ -324,7 +325,9 @@ func TestReparentReplicaOffline(t *testing.T) {
 	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"PlannedReparentShard",
 		"-keyspace_shard", keyspaceShard,
-		"-new_master", tablet62044.Alias)
+		"-new_master", tablet62044.Alias,
+		"-wait_replicas_timeout", "10s")
+
 	require.Error(t, err)
 	assert.Contains(t, out, "tablet zone2-0000031981 SetMaster failed")
 
