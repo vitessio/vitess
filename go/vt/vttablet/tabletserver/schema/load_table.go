@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -48,7 +49,7 @@ func LoadTable(conn *connpool.DBConn, tableName string, tableType string, commen
 }
 
 func fetchColumns(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
-	qr, err := conn.Exec(tabletenv.LocalContext(), fmt.Sprintf("select * from %s where 1 != 1", sqlTableName), 0, true)
+	qr, err := conn.Exec(tabletenv.LocalContext(), fmt.Sprintf("select * from %s where 1 != 1", sqlescape.EscapeID(sqlTableName)), 0, true)
 	if err != nil {
 		return err
 	}

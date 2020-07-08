@@ -446,6 +446,9 @@ func TestQueryExecutorPlanPassSelectWithLockOutsideATransaction(t *testing.T) {
 	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
 		Fields: getTestTableFields(),
 	})
+	db.AddQuery("select * from `test_table` where 1 != 1", &sqltypes.Result{
+		Fields: getTestTableFields(),
+	})
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
@@ -665,6 +668,9 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
 		Fields: getTestTableFields(),
 	})
+	db.AddQuery("select * from `test_table` where 1 != 1", &sqltypes.Result{
+		Fields: getTestTableFields(),
+	})
 
 	username := "u2"
 	callerID := &querypb.VTGateCallerID{
@@ -707,6 +713,9 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	}
 	db.AddQuery(query, want)
 	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
+		Fields: getTestTableFields(),
+	})
+	db.AddQuery("select * from `test_table` where 1 != 1", &sqltypes.Result{
 		Fields: getTestTableFields(),
 	})
 
@@ -1125,7 +1134,7 @@ func getTestTableFields() []*querypb.Field {
 }
 
 func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[string]*sqltypes.Result {
-	return map[string]*sqltypes.Result{
+	queries := map[string]*sqltypes.Result{
 		// queries for twopc
 		sqlTurnoffBinlog:                                {},
 		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):          {},
@@ -1259,4 +1268,14 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 		"rollback": {},
 		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
 	}
+
+	// Duplicate some entries that should return the same result for multiple forms.
+	// We have to support both because the schema engine always escapes table names,
+	// but the query engine only escapes table names when they are escaped in the
+	// original query.
+	queries["select * from `test_table` where 1 != 1"] = queries["select * from test_table where 1 != 1"]
+	queries["select * from `seq` where 1 != 1"] = queries["select * from seq where 1 != 1"]
+	queries["select * from `msg` where 1 != 1"] = queries["select * from msg where 1 != 1"]
+
+	return queries
 }

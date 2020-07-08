@@ -388,6 +388,7 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 				return fmt.Errorf("check your schema, table[%s] doesn't exist", likeTable)
 			}
 			schemaQueries["select * from "+table+" where 1 != 1"] = schemaQueries["select * from "+likeTable+" where 1 != 1"]
+			schemaQueries["select * from `"+table+"` where 1 != 1"] = schemaQueries["select * from "+likeTable+" where 1 != 1"]
 			continue
 		}
 		for _, idx := range ddl.TableSpec.Indexes {
@@ -412,6 +413,9 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 			tableColumns[table][colName] = col.Type.SQLType()
 		}
 		schemaQueries["select * from "+table+" where 1 != 1"] = &sqltypes.Result{
+			Fields: rowTypes,
+		}
+		schemaQueries["select * from `"+table+"` where 1 != 1"] = &sqltypes.Result{
 			Fields: rowTypes,
 		}
 	}

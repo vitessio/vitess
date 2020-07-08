@@ -86,7 +86,7 @@ func TestOpenAndReload(t *testing.T) {
 			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
 		},
 	})
-	db.AddQuery("select * from test_table_03 where 1 != 1", &sqltypes.Result{
+	db.AddQuery("select * from `test_table_03` where 1 != 1", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk1",
 			Type: sqltypes.Int32,
@@ -98,7 +98,7 @@ func TestOpenAndReload(t *testing.T) {
 			Type: sqltypes.Int32,
 		}},
 	})
-	db.AddQuery("select * from test_table_04 where 1 != 1", &sqltypes.Result{
+	db.AddQuery("select * from `test_table_04` where 1 != 1", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
@@ -293,7 +293,7 @@ func TestOpenFailedDueToTableErr(t *testing.T) {
 			mysql.BaseShowTablesRow("test_table", false, ""),
 		},
 	})
-	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
+	db.AddQuery("select * from `test_table` where 1 != 1", &sqltypes.Result{
 		// this will cause NewTable error, as it expects zero rows.
 		Fields: []*querypb.Field{
 			{

@@ -177,7 +177,7 @@ func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 
 func getTestLoadTableQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
-		"select * from test_table where 1 != 1": {
+		"select * from `test_table` where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
@@ -194,7 +194,7 @@ func getTestLoadTableQueries() map[string]*sqltypes.Result {
 
 func getMessageTableQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
-		"select * from test_table where 1 != 1": {
+		"select * from `test_table` where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "id",
 				Type: sqltypes.Int64,

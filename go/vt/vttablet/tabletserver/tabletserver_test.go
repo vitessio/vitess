@@ -2678,7 +2678,7 @@ func checkTabletServerState(t *testing.T, tsv *TabletServer, expectState int64) 
 }
 
 func getSupportedQueries() map[string]*sqltypes.Result {
-	return map[string]*sqltypes.Result{
+	queries := map[string]*sqltypes.Result{
 		// Queries for how row protection test (txserializer).
 		"update test_table set name_string = 'tx1' where pk = 1 and name = 1 limit 10001": {
 			RowsAffected: 1,
@@ -2811,6 +2811,15 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 		"rollback": {},
 		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
 	}
+
+	// Duplicate some entries that should return the same result for multiple forms.
+	// We have to support both because the schema engine always escapes table names,
+	// but the query engine only escapes table names when they are escaped in the
+	// original query.
+	queries["select * from `test_table` where 1 != 1"] = queries["select * from test_table where 1 != 1"]
+	queries["select * from `msg` where 1 != 1"] = queries["select * from msg where 1 != 1"]
+
+	return queries
 }
 
 func init() {

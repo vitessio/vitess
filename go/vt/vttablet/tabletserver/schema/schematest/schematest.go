@@ -28,7 +28,7 @@ import (
 // Queries returns a default set of queries that can
 // be added to load an initial set of tables into the schema.
 func Queries() map[string]*sqltypes.Result {
-	return map[string]*sqltypes.Result{
+	queries := map[string]*sqltypes.Result{
 		"select unix_timestamp()": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
@@ -138,4 +138,16 @@ func Queries() map[string]*sqltypes.Result {
 		"begin":  {},
 		"commit": {},
 	}
+
+	// Duplicate some entries that should return the same result for multiple forms.
+	// We have to support both because the schema engine always escapes table names,
+	// but the query engine only escapes table names when they are escaped in the
+	// original query.
+	queries["select * from `test_table_01` where 1 != 1"] = queries["select * from test_table_01 where 1 != 1"]
+	queries["select * from `test_table_02` where 1 != 1"] = queries["select * from test_table_02 where 1 != 1"]
+	queries["select * from `test_table_03` where 1 != 1"] = queries["select * from test_table_03 where 1 != 1"]
+	queries["select * from `seq` where 1 != 1"] = queries["select * from seq where 1 != 1"]
+	queries["select * from `msg` where 1 != 1"] = queries["select * from msg where 1 != 1"]
+
+	return queries
 }
