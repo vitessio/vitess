@@ -41,7 +41,6 @@ func TestNullInfo(t *testing.T) {
 	assert.Equal(t, "nn", null.String())
 	assert.True(t, null.IsUnique())
 	assert.False(t, null.NeedsVCursor())
-	assert.True(t, null.HasNullTest())
 }
 
 func TestNullMap(t *testing.T) {

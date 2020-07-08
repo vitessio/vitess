@@ -38,7 +38,6 @@ func TestBinaryMD5Info(t *testing.T) {
 	assert.Equal(t, "binary_md5_varchar", binVindex.String())
 	assert.True(t, binVindex.IsUnique())
 	assert.False(t, binVindex.NeedsVCursor())
-	assert.True(t, binVindex.HasNullTest())
 }
 
 func TestBinaryMD5Map(t *testing.T) {

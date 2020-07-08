@@ -100,11 +100,6 @@ func (lh *LookupHash) NeedsVCursor() bool {
 	return true
 }
 
-// HasNullTest satisfies the Vindex interface.
-func (lh *LookupHash) HasNullTest() bool {
-	return false
-}
-
 // Map can map ids to key.Destination objects.
 func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
@@ -259,11 +254,6 @@ func (lhu *LookupHashUnique) IsUnique() bool {
 // NeedsVCursor satisfies the Vindex interface.
 func (lhu *LookupHashUnique) NeedsVCursor() bool {
 	return true
-}
-
-// HasNullTest satisfies the Vindex interface.
-func (lhu *LookupHashUnique) HasNullTest() bool {
-	return false
 }
 
 // Map can map ids to key.Destination objects.

@@ -45,7 +45,6 @@ func TestNumericStaticMapInfo(t *testing.T) {
 	assert.Equal(t, "numericStaticMap", numericStaticMap.String())
 	assert.True(t, numericStaticMap.IsUnique())
 	assert.False(t, numericStaticMap.NeedsVCursor())
-	assert.True(t, numericStaticMap.HasNullTest())
 }
 
 func TestNumericStaticMapMap(t *testing.T) {

@@ -153,8 +153,3 @@ func (rv *RegionJSON) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, 
 func (rv *RegionJSON) NeedsVCursor() bool {
 	return false
 }
-
-// HasNullTest satisfies the Vindex interface.
-func (rv *RegionJSON) HasNullTest() bool {
-	return true
-}

@@ -41,7 +41,6 @@ func TestReverseBitsInfo(t *testing.T) {
 	assert.Equal(t, "rr", reverseBits.String())
 	assert.True(t, reverseBits.IsUnique())
 	assert.False(t, reverseBits.NeedsVCursor())
-	assert.True(t, reverseBits.HasNullTest())
 }
 
 func TestReverseBitsMap(t *testing.T) {
