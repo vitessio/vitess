@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"github.com/gogo/protobuf/proto"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
@@ -40,9 +42,14 @@ const createSchemaTrackingTable = `CREATE TABLE IF NOT EXISTS _vt.schema_version
 		  schemax BLOB NOT NULL,
 		  PRIMARY KEY (id)
 		) ENGINE=InnoDB`
-const alterSchemaTrackingTable = "alter table _vt.schema_version modify column ddl BLOB NOT NULL"
+const alterSchemaTrackingTableDDLBlob = "alter table _vt.schema_version modify column ddl BLOB NOT NULL"
+const alterSchemaTrackingTableSchemaxBlob = "alter table _vt.schema_version modify column schemax LONGBLOB NOT NULL"
 
-var withDDL = withddl.New([]string{createSchemaTrackingTable, alterSchemaTrackingTable})
+var withDDL = withddl.New([]string{
+	createSchemaTrackingTable,
+	alterSchemaTrackingTableDDLBlob,
+	alterSchemaTrackingTableSchemaxBlob,
+})
 
 // VStreamer defines  the functions of VStreamer
 // that the replicationWatcher needs.
@@ -140,7 +147,7 @@ func (tr *Tracker) process(ctx context.Context) {
 				if event.Type == binlogdatapb.VEventType_DDL {
 					if err := tr.schemaUpdated(gtid, event.Ddl, event.Timestamp); err != nil {
 						tr.env.Stats().ErrorCounters.Add(vtrpcpb.Code_INTERNAL.String(), 1)
-						log.Errorf("Error updating schema: %v", err)
+						log.Errorf("Error updating schema: %s", sqlparser.TruncateForLog(err.Error()))
 					}
 				}
 			}
