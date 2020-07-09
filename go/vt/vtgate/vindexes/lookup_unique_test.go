@@ -72,7 +72,7 @@ func TestLookupUniqueMap(t *testing.T) {
 	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationKeyspaceID([]byte("1")),
-		key.DestinationKeyspaceID([]byte("1")),
+		key.DestinationNone{},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %+v, want %+v", got, want)

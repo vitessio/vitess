@@ -61,7 +61,7 @@ func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit,
 	// TODO @rafael: update sel and ver to support multi column vindexes. This will be done
 	// as part of face 2 of https://github.com/vitessio/vitess/issues/3481
 	// For now multi column behaves as a single column for Map and Verify operations
-	lkp.sel = fmt.Sprintf("select %s from %s where %s = :%s", lkp.To, lkp.Table, lkp.FromColumns[0], lkp.FromColumns[0])
+	lkp.sel = fmt.Sprintf("select %s, %s from %s where %s in ::%s", lkp.FromColumns[0], lkp.To, lkp.Table, lkp.FromColumns[0], lkp.FromColumns[0])
 	lkp.ver = fmt.Sprintf("select %s from %s where %s = :%s and %s = :%s", lkp.FromColumns[0], lkp.Table, lkp.FromColumns[0], lkp.FromColumns[0], lkp.To, lkp.To)
 	lkp.del = lkp.initDelStmt()
 	return nil
@@ -73,21 +73,60 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sql
 		return nil, fmt.Errorf("cannot perform lookup: no vcursor provided")
 	}
 	results := make([]*sqltypes.Result, 0, len(ids))
-	for _, id := range ids {
-		bindVars := map[string]*querypb.BindVariable{
-			lkp.FromColumns[0]: sqltypes.ValueBindVariable(id),
+	if !ids[0].IsIntegral() && !ids[0].IsBinary() {
+		// for non integral and binary type, fallback to send query per id
+		for _, id := range ids {
+			vars, err := sqltypes.BuildBindVariable([]interface{}{id})
+			if err != nil {
+				return nil, fmt.Errorf("lookup.Map: %v", err)
+			}
+			bindVars := map[string]*querypb.BindVariable{
+				lkp.FromColumns[0]: vars,
+			}
+			var result *sqltypes.Result
+			co := vtgatepb.CommitOrder_NORMAL
+			if lkp.Autocommit {
+				co = vtgatepb.CommitOrder_AUTOCOMMIT
+			}
+			result, err = vcursor.Execute("VindexLookup", lkp.sel, bindVars, false /* rollbackOnError */, co)
+			if err != nil {
+				return nil, fmt.Errorf("lookup.Map: %v", err)
+			}
+			rows := make([][]sqltypes.Value, 0, len(result.Rows))
+			for _, row := range result.Rows {
+				rows = append(rows, []sqltypes.Value{row[1]})
+			}
+			results = append(results, &sqltypes.Result{
+				Rows: rows,
+			})
 		}
-		var err error
-		var result *sqltypes.Result
+	} else {
+		// for integral or binary type, batch query all ids and then map them back to the input order
+		vars, err := sqltypes.BuildBindVariable(ids)
+		if err != nil {
+			return nil, fmt.Errorf("lookup.Map: %v", err)
+		}
+		bindVars := map[string]*querypb.BindVariable{
+			lkp.FromColumns[0]: vars,
+		}
 		co := vtgatepb.CommitOrder_NORMAL
 		if lkp.Autocommit {
 			co = vtgatepb.CommitOrder_AUTOCOMMIT
 		}
-		result, err = vcursor.Execute("VindexLookup", lkp.sel, bindVars, false /* rollbackOnError */, co)
+		result, err := vcursor.Execute("VindexLookup", lkp.sel, bindVars, false /* rollbackOnError */, co)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
-		results = append(results, result)
+		resultMap := make(map[string][][]sqltypes.Value)
+		for _, row := range result.Rows {
+			resultMap[string(row[0].ToString())] = append(resultMap[string(row[0].ToString())], []sqltypes.Value{row[1]})
+		}
+
+		for _, id := range ids {
+			results = append(results, &sqltypes.Result{
+				Rows: resultMap[string(id.ToString())],
+			})
+		}
 	}
 	return results, nil
 }

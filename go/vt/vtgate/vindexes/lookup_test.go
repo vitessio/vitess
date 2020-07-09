@@ -43,6 +43,7 @@ type vcursor struct {
 	queries     []*querypb.BoundQuery
 	autocommits int
 	pre, post   int
+	keys        []sqltypes.Value
 }
 
 func (vc *vcursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
@@ -75,13 +76,19 @@ func (vc *vcursor) execute(method string, query string, bindvars map[string]*que
 			return vc.result, nil
 		}
 		result := &sqltypes.Result{
-			Fields:       sqltypes.MakeTestFields("col", "int32"),
+			Fields:       sqltypes.MakeTestFields("key|col", "int64|int32"),
 			RowsAffected: uint64(vc.numRows),
 		}
 		for i := 0; i < vc.numRows; i++ {
-			result.Rows = append(result.Rows, []sqltypes.Value{
-				sqltypes.NewInt64(int64(i + 1)),
-			})
+			for j := 0; j < vc.numRows; j++ {
+				k := sqltypes.NewInt64(int64(j + 1))
+				if vc.keys != nil {
+					k = vc.keys[j]
+				}
+				result.Rows = append(result.Rows, []sqltypes.Value{
+					k, sqltypes.NewInt64(int64(i + 1)),
+				})
+			}
 		}
 		return result, nil
 	case strings.HasPrefix(query, "insert"):
@@ -153,15 +160,12 @@ func TestLookupNonUniqueMap(t *testing.T) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
 
+	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	require.NoError(t, err)
 	wantqueries := []*querypb.BoundQuery{{
-		Sql: "select toc from t where fromc = :fromc",
+		Sql: "select fromc, toc from t where fromc in ::fromc",
 		BindVariables: map[string]*querypb.BindVariable{
-			"fromc": sqltypes.Int64BindVariable(1),
-		},
-	}, {
-		Sql: "select toc from t where fromc = :fromc",
-		BindVariables: map[string]*querypb.BindVariable{
-			"fromc": sqltypes.Int64BindVariable(2),
+			"fromc": vars,
 		},
 	}}
 	if !reflect.DeepEqual(vc.queries, wantqueries) {
@@ -207,22 +211,19 @@ func TestLookupNonUniqueMapAutocommit(t *testing.T) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
 
+	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	require.NoError(t, err)
 	wantqueries := []*querypb.BoundQuery{{
-		Sql: "select toc from t where fromc = :fromc",
+		Sql: "select fromc, toc from t where fromc in ::fromc",
 		BindVariables: map[string]*querypb.BindVariable{
-			"fromc": sqltypes.Int64BindVariable(1),
-		},
-	}, {
-		Sql: "select toc from t where fromc = :fromc",
-		BindVariables: map[string]*querypb.BindVariable{
-			"fromc": sqltypes.Int64BindVariable(2),
+			"fromc": vars,
 		},
 	}}
 	if !reflect.DeepEqual(vc.queries, wantqueries) {
 		t.Errorf("lookup.Map queries:\n%v, want\n%v", vc.queries, wantqueries)
 	}
 
-	if got, want := vc.autocommits, 2; got != want {
+	if got, want := vc.autocommits, 1; got != want {
 		t.Errorf("Create(autocommit) count: %d, want %d", got, want)
 	}
 }

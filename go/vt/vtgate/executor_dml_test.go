@@ -78,10 +78,12 @@ func TestUpdateEqual(t *testing.T) {
 	sbclookup.SetResults([]*sqltypes.Result{{}})
 	_, err = executorExec(executor, "update music set a=2 where id = 2", nil)
 	require.NoError(t, err)
+	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(2)})
+	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select user_id from music_user_map where music_id = :music_id",
+		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id",
 		BindVariables: map[string]*querypb.BindVariable{
-			"music_id": sqltypes.Int64BindVariable(2),
+			"music_id": vars,
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -384,10 +386,12 @@ func TestDeleteEqual(t *testing.T) {
 	sbclookup.SetResults([]*sqltypes.Result{{}})
 	_, err = executorExec(executor, "delete from music where id = 1", nil)
 	require.NoError(t, err)
+	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(1)})
+	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select user_id from music_user_map where music_id = :music_id",
+		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id",
 		BindVariables: map[string]*querypb.BindVariable{
-			"music_id": sqltypes.Int64BindVariable(1),
+			"music_id": vars,
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -718,32 +722,23 @@ func TestInsertShardedIgnore(t *testing.T) {
 
 	// Build the sequence of responses for sbclookup. This should
 	// match the sequence of queries we validate below.
-	fields := sqltypes.MakeTestFields("a", "int64")
+	fields := sqltypes.MakeTestFields("b|a", "int64|int64")
+	field := sqltypes.MakeTestFields("a", "int64")
 	sbclookup.SetResults([]*sqltypes.Result{
-		// select music_id 1
-		sqltypes.MakeTestResult(fields, "1"),
-		// select music_id 2
-		{},
-		// select music_id 3
-		sqltypes.MakeTestResult(fields, "1"),
-		// select music_id 4
-		sqltypes.MakeTestResult(fields, "1"),
-		// select music_id 5
-		sqltypes.MakeTestResult(fields, "1"),
-		// select music_id 6
-		sqltypes.MakeTestResult(fields, "3"),
+		// select music_id
+		sqltypes.MakeTestResult(fields, "1|1", "3|1", "4|1", "5|1", "6|3"),
 		// insert ins_lookup
 		{},
 		// select ins_lookup 1
-		sqltypes.MakeTestResult(fields, "1"),
+		sqltypes.MakeTestResult(field, "1"),
 		// select ins_lookup 3
 		{},
 		// select ins_lookup 4
-		sqltypes.MakeTestResult(fields, "4"),
+		sqltypes.MakeTestResult(field, "4"),
 		// select ins_lookup 5
-		sqltypes.MakeTestResult(fields, "5"),
+		sqltypes.MakeTestResult(field, "5"),
 		// select ins_lookup 6
-		sqltypes.MakeTestResult(fields, "6"),
+		sqltypes.MakeTestResult(field, "6"),
 	})
 	// First row: first shard.
 	// Second row: will fail because primary vindex will fail to map.
@@ -788,35 +783,20 @@ func TestInsertShardedIgnore(t *testing.T) {
 	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
 		t.Errorf("sbc2.Queries:\n%+v, want\n%+v\n", sbc2.Queries, wantQueries)
 	}
+
+	vars, err := sqltypes.BuildBindVariable([]interface{}{
+		sqltypes.NewInt64(1),
+		sqltypes.NewInt64(2),
+		sqltypes.NewInt64(3),
+		sqltypes.NewInt64(4),
+		sqltypes.NewInt64(5),
+		sqltypes.NewInt64(6),
+	})
+	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select user_id from music_user_map where music_id = :music_id",
+		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id",
 		BindVariables: map[string]*querypb.BindVariable{
-			"music_id": sqltypes.Int64BindVariable(1),
-		},
-	}, {
-		Sql: "select user_id from music_user_map where music_id = :music_id",
-		BindVariables: map[string]*querypb.BindVariable{
-			"music_id": sqltypes.Int64BindVariable(2),
-		},
-	}, {
-		Sql: "select user_id from music_user_map where music_id = :music_id",
-		BindVariables: map[string]*querypb.BindVariable{
-			"music_id": sqltypes.Int64BindVariable(3),
-		},
-	}, {
-		Sql: "select user_id from music_user_map where music_id = :music_id",
-		BindVariables: map[string]*querypb.BindVariable{
-			"music_id": sqltypes.Int64BindVariable(4),
-		},
-	}, {
-		Sql: "select user_id from music_user_map where music_id = :music_id",
-		BindVariables: map[string]*querypb.BindVariable{
-			"music_id": sqltypes.Int64BindVariable(5),
-		},
-	}, {
-		Sql: "select user_id from music_user_map where music_id = :music_id",
-		BindVariables: map[string]*querypb.BindVariable{
-			"music_id": sqltypes.Int64BindVariable(6),
+			"music_id": vars,
 		},
 	}, {
 		Sql: "insert ignore into ins_lookup(fromcol, tocol) values (:fromcol_0, :tocol_0), (:fromcol_1, :tocol_1), (:fromcol_2, :tocol_2), (:fromcol_3, :tocol_3), (:fromcol_4, :tocol_4)",
@@ -886,10 +866,12 @@ func TestInsertShardedIgnore(t *testing.T) {
 	if sbc2.Queries != nil {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
+	vars, err = sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(1)})
+	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select user_id from music_user_map where music_id = :music_id",
+		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id",
 		BindVariables: map[string]*querypb.BindVariable{
-			"music_id": sqltypes.Int64BindVariable(1),
+			"music_id": vars,
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -901,6 +883,10 @@ func TestInsertOnDupKey(t *testing.T) {
 	// This test just sanity checks that the statement is getting passed through
 	// correctly. The full set of use cases are covered by TestInsertShardedIgnore.
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	sbclookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("b|a", "int64|varbinary"),
+		"1|1",
+	)})
 	query := "insert into insert_ignore_test(pv, owned, verify) values (1, 1, 1) on duplicate key update col = 2"
 	_, err := executorExec(executor, query, nil)
 	require.NoError(t, err)
@@ -918,10 +904,12 @@ func TestInsertOnDupKey(t *testing.T) {
 	if sbc2.Queries != nil {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
+	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(1)})
+	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select user_id from music_user_map where music_id = :music_id",
+		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id",
 		BindVariables: map[string]*querypb.BindVariable{
-			"music_id": sqltypes.Int64BindVariable(1),
+			"music_id": vars,
 		},
 	}, {
 		Sql: "insert ignore into ins_lookup(fromcol, tocol) values (:fromcol_0, :tocol_0)",
@@ -1208,7 +1196,10 @@ func TestInsertLookupUnowned(t *testing.T) {
 
 func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
-
+	sbclookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("b|a", "int64|varbinary"),
+		"3|1",
+	)})
 	_, err := executorExec(executor, "insert into music_extra_reversed(music_id) values (3)", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
@@ -1221,10 +1212,12 @@ func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
 		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
 	}
+	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(3)})
+	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select user_id from music_user_map where music_id = :music_id",
+		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id",
 		BindVariables: map[string]*querypb.BindVariable{
-			"music_id": sqltypes.Int64BindVariable(3),
+			"music_id": vars,
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
