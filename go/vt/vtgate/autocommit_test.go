@@ -56,14 +56,21 @@ func TestAutocommitUpdateSharded(t *testing.T) {
 // TestAutocommitUpdateLookup: transaction: select before update.
 func TestAutocommitUpdateLookup(t *testing.T) {
 	executor, sbc1, _, sbclookup := createExecutorEnv()
+	sbclookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("b|a", "int64|varbinary"),
+		"2|1",
+	)})
 
 	_, err := autocommitExec(executor, "update music set a=2 where id = 2")
 	require.NoError(t, err)
 
+	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(2)})
+	require.NoError(t, err)
+
 	testQueries(t, "sbclookup", sbclookup, []*querypb.BoundQuery{{
-		Sql: "select user_id from music_user_map where music_id = :music_id",
+		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id",
 		BindVariables: map[string]*querypb.BindVariable{
-			"music_id": sqltypes.Int64BindVariable(2),
+			"music_id": vars,
 		},
 	}})
 	testAsTransactionCount(t, "sbclookup", sbclookup, 0)
@@ -145,14 +152,20 @@ func TestAutocommitDeleteLookup(t *testing.T) {
 		"1|1|foo",
 	),
 	})
+	sbclookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("b|a", "int64|varbinary"),
+		"1|1",
+	)})
 
 	_, err := autocommitExec(executor, "delete from music where id = 1")
 	require.NoError(t, err)
+	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(1)})
+	require.NoError(t, err)
 
 	testQueries(t, "sbclookup", sbclookup, []*querypb.BoundQuery{{
-		Sql: "select user_id from music_user_map where music_id = :music_id",
+		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id",
 		BindVariables: map[string]*querypb.BindVariable{
-			"music_id": sqltypes.Int64BindVariable(1),
+			"music_id": vars,
 		},
 	}, {
 		Sql: "delete from music_user_map where music_id = :music_id and user_id = :user_id",
