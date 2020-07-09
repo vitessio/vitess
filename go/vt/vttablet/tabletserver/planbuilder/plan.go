@@ -61,6 +61,9 @@ const (
 	PlanSelectStream
 	// PlanMessageStream is for "stream" statements.
 	PlanMessageStream
+	PlanSavepoint
+	PlanRelease
+	PlanSRollback
 	NumPlans
 )
 
@@ -82,6 +85,9 @@ var planName = [NumPlans]string{
 	"OtherAdmin",
 	"SelectStream",
 	"MessageStream",
+	"Savepoint",
+	"Release",
+	"RollbackSavepoint",
 }
 
 func (pt PlanType) String() string {
@@ -180,6 +186,12 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table) (*Pla
 		plan, err = &Plan{PlanID: PlanOtherRead}, nil
 	case *sqlparser.OtherAdmin:
 		plan, err = &Plan{PlanID: PlanOtherAdmin}, nil
+	case *sqlparser.Savepoint:
+		plan, err = &Plan{PlanID: PlanSavepoint}, nil
+	case *sqlparser.Release:
+		plan, err = &Plan{PlanID: PlanRelease}, nil
+	case *sqlparser.SRollback:
+		plan, err = &Plan{PlanID: PlanSRollback}, nil
 	default:
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid SQL")
 	}
