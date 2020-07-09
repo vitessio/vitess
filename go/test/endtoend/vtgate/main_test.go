@@ -100,6 +100,20 @@ create table t5_null_vindex(
 	id bigint not null,
 	idx varchar(50),
 	primary key(id)
+) Engine=InnoDB;
+
+create table t6(
+	id1 bigint,
+	id2 varchar(10),
+	primary key(id1)
+) Engine=InnoDB;
+
+create table t6_id2_idx(
+	id2 varchar(10),
+	id1 bigint,
+	keyspace_id varbinary(50),
+	primary key(id1),
+	key(id2)
 ) Engine=InnoDB;`
 
 	VSchema = `
@@ -151,6 +165,16 @@ create table t5_null_vindex(
         "to": "keyspace_id"
       },
       "owner": "t4"
+    },
+    "t6_id2_vdx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "t6_id2_idx",
+        "from": "id2,id1",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "t6"
     }
   },
   "tables": {
@@ -231,6 +255,26 @@ create table t5_null_vindex(
         {
           "column": "id2",
           "name": "unicode_loose_md5"
+        }
+      ]
+    },
+	"t6": {
+      "column_vindexes": [
+        {
+          "column": "id1",
+          "name": "hash"
+        },
+        {
+          "columns": ["id2", "id1"],
+          "name": "t6_id2_vdx"
+        }
+      ]
+    },
+    "t6_id2_idx": {
+      "column_vindexes": [
+        {
+          "column": "id2",
+          "name": "xxhash"
         }
       ]
     },
