@@ -1,0 +1,19 @@
+name: PITR test
+on: [push, pull_request]
+jobs:
+
+  build:
+    name: PITR Test
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Set up Go
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.13
+
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v2

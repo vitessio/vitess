@@ -271,7 +271,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitr"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 25,
+			"Shard": 26,
 			"RetryMax": 0,
 			"ExtraDockerArg" : "rippled",
 			"Tags": [
