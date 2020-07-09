@@ -173,12 +173,22 @@ var commands = []commandGroup{
 				"<tablet alias>",
 				"Sets the tablet as read-write."},
 			{"StartSlave", commandStartReplication,
-				"<tablet alias>",
+				"DEPRECATED <tablet alias>",
+				"Starts replication on the specified tablet."},
+			{"StartReplication", commandStartReplication,
+				"<table alias>",
 				"Starts replication on the specified tablet."},
 			{"StopSlave", commandStopReplication,
+				"DEPRECATED <tablet alias>",
+				"Stops replication on the specified tablet."},
+			{"StopReplication", commandStopReplication,
 				"<tablet alias>",
 				"Stops replication on the specified tablet."},
 			{"ChangeSlaveType", commandChangeTabletType,
+				"DEPRECATED [-dry-run] <tablet alias> <tablet type>",
+				"Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a master.\n" +
+					"NOTE: This command automatically updates the serving graph.\n"},
+			{"ChangeTabletType", commandChangeTabletType,
 				"[-dry-run] <tablet alias> <tablet type>",
 				"Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a master.\n" +
 					"NOTE: This command automatically updates the serving graph.\n"},
@@ -887,7 +897,7 @@ func commandStartReplication(ctx context.Context, wr *wrangler.Wrangler, subFlag
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action StartSlave requires <tablet alias>")
+		return fmt.Errorf("action StartReplication requires <tablet alias>")
 	}
 
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
@@ -906,7 +916,7 @@ func commandStopReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action StopSlave requires <tablet alias>")
+		return fmt.Errorf("action StopReplication requires <tablet alias>")
 	}
 
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
