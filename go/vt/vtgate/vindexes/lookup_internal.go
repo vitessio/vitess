@@ -102,11 +102,7 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sql
 		}
 	} else {
 		// for integral or binary type, batch query all ids and then map them back to the input order
-		idVars := make([]interface{}, len(ids))
-		for i := range ids {
-			idVars[i] = ids[i]
-		}
-		vars, err := sqltypes.BuildBindVariable(idVars)
+		vars, err := sqltypes.BuildBindVariable(ids)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
@@ -121,38 +117,15 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sql
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
-		resultMap := make(map[string][][]byte)
-		t := querypb.Type_NULL_TYPE
+		resultMap := make(map[string][][]sqltypes.Value)
 		for _, row := range result.Rows {
-			t = row[1].Type()
-			val, ok := resultMap[string(row[0].Raw())]
-			if ok {
-				val = append(val, row[1].Raw())
-			} else {
-				val = [][]byte{row[1].Raw()}
-			}
-			resultMap[string(row[0].Raw())] = val
+			resultMap[string(row[0].ToString())] = append(resultMap[string(row[0].ToString())], []sqltypes.Value{row[1]})
 		}
 
 		for _, id := range ids {
-			val, ok := resultMap[string(id.Raw())]
-			if ok {
-				rows := make([][]sqltypes.Value, 0, len(val))
-				for _, row := range val {
-					val, err := sqltypes.NewValue(t, row)
-					if err != nil {
-						return nil, err
-					}
-					rows = append(rows, []sqltypes.Value{val})
-				}
-				results = append(results, &sqltypes.Result{
-					Rows: rows,
-				})
-			} else {
-				results = append(results, &sqltypes.Result{
-					Rows: make([][]sqltypes.Value, 0),
-				})
-			}
+			results = append(results, &sqltypes.Result{
+				Rows: resultMap[string(id.ToString())],
+			})
 		}
 	}
 	return results, nil
