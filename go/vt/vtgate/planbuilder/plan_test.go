@@ -152,6 +152,7 @@ func TestPlan(t *testing.T) {
 
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
+	defer os.RemoveAll(testOutputTempDir)
 	// You will notice that some tests expect user.Id instead of user.id.
 	// This is because we now pre-create vindex columns in the symbol
 	// table, which come from vschema. In the test vschema,
@@ -186,6 +187,7 @@ func TestOne(t *testing.T) {
 func TestBypassPlanningFromFile(t *testing.T) {
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
+	defer os.RemoveAll(testOutputTempDir)
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "schema_test.json"),
 		keyspace: &vindexes.Keyspace{
@@ -203,6 +205,7 @@ func TestDDLPlanningFromFile(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
+	defer os.RemoveAll(testOutputTempDir)
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "schema_test.json"),
 		keyspace: &vindexes.Keyspace{
@@ -218,6 +221,7 @@ func TestDDLPlanningFromFile(t *testing.T) {
 func TestOtherPlanningFromFile(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	defer os.RemoveAll(testOutputTempDir)
 	require.NoError(t, err)
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "schema_test.json"),
