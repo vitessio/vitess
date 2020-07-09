@@ -2148,6 +2148,135 @@ func TestExecutorOtherAdmin(t *testing.T) {
 	}
 }
 
+func TestExecutorSavepointInTx(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	logChan := QueryLogger.Subscribe("TestExecutorSavepoint")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	session := NewSafeSession(&vtgatepb.Session{Autocommit: false, TargetString: "@master"})
+	_, err := exec(executor, session, "savepoint a")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "rollback to a")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "release savepoint a")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "select id from user where id = 1")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "savepoint b")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "rollback to b")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "release savepoint b")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "select id from user where id = 3")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "rollback")
+	require.NoError(t, err)
+	sbc1WantQueries := []*querypb.BoundQuery{{
+		Sql:           "savepoint a",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "rollback to a",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "release savepoint a",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "select id from user where id = 1",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "savepoint b",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "rollback to b",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "release savepoint b",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+
+	sbc2WantQueries := []*querypb.BoundQuery{{
+		Sql:           "savepoint a",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "rollback to a",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "release savepoint a",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "savepoint b",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "rollback to b",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "release savepoint b",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "select id from user where id = 3",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
+	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "")
+	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
+	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to a", 0)
+	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint a", 0)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 1", 1)
+	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 1)
+	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to b", 1)
+	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint b", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 3", 1)
+	testQueryLog(t, logChan, "TestExecute", "ROLLBACK", "rollback", 2)
+}
+
+func TestExecutorSavepointWithoutTx(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	logChan := QueryLogger.Subscribe("TestExecutorSavepoint")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	session := NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "@master", InTransaction: false})
+	_, err := exec(executor, session, "savepoint a")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "rollback to a")
+	require.Error(t, err)
+	_, err = exec(executor, session, "release savepoint a")
+	require.Error(t, err)
+	_, err = exec(executor, session, "select id from user where id = 1")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "savepoint b")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "rollback to b")
+	require.Error(t, err)
+	_, err = exec(executor, session, "release savepoint b")
+	require.Error(t, err)
+	_, err = exec(executor, session, "select id from user where id = 3")
+	require.NoError(t, err)
+	sbc1WantQueries := []*querypb.BoundQuery{{
+		Sql:           "select id from user where id = 1",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+
+	sbc2WantQueries := []*querypb.BoundQuery{{
+		Sql:           "select id from user where id = 3",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
+	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "")
+	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
+	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to a", 0)
+	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint a", 0)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 1", 1)
+	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 0)
+	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to b", 0)
+	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint b", 0)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 3", 1)
+}
+
+func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {
+	return executor.Execute(context.Background(), "TestExecute", session, sql, nil)
+}
+
 func makeComments(text string) sqlparser.MarginComments {
 	return sqlparser.MarginComments{Trailing: text}
 }
