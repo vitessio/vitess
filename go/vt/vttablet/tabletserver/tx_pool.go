@@ -293,7 +293,7 @@ func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, con
 	}
 
 	for _, preQuery := range preQueries {
-		if err := conn.execWithRetry(ctx, preQuery, 1, false); err != nil {
+		if _, err := conn.Exec(ctx, preQuery, 1, false); err != nil {
 			return "", false, vterrors.Wrap(err, preQuery)
 		}
 	}
