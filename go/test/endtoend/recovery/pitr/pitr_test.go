@@ -1,12 +1,14 @@
 package pitr
 
 import (
+	"flag"
 	"os/exec"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 const (
@@ -14,6 +16,9 @@ const (
 )
 
 func TestPointInTimeRecovery(t *testing.T) {
+	defer cluster.PanicHandler(nil)
+	flag.Parse()
+
 	tmpProcess := exec.Command(
 		binlogServer,
 		"--version",

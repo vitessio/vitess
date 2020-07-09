@@ -6,13 +6,17 @@ ripple=https://github.com/google/mysql-ripple.git
 #download bazel
 curl $bazel --output bazel -L
 chmod +x bazel
+ls -l
 
-#download ripple and build it
+#download ripple and build it 
 git clone $ripple
 cd mysql-ripple
-bazel build :all
+cp ../bazel .
+./bazel build :all
 
 # copy rippled and delete dependent directory
+pwd
+ls
 cp bazel-bin/rippled ../.
 cd -
 rm -rf mysql-ripple
