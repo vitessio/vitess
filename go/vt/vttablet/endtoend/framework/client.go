@@ -171,13 +171,14 @@ func (client *QueryClient) Execute(query string, bindvars map[string]*querypb.Bi
 }
 
 // BeginExecute performs a BeginExecute.
-func (client *QueryClient) BeginExecute(query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (client *QueryClient) BeginExecute(query string, bindvars map[string]*querypb.BindVariable, preQueries []string) (*sqltypes.Result, error) {
 	if client.transactionID != 0 {
 		return nil, errors.New("already in transaction")
 	}
 	qr, transactionID, _, err := client.server.BeginExecute(
 		client.ctx,
 		&client.target,
+		preQueries,
 		query,
 		bindvars,
 		client.reservedID,

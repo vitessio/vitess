@@ -58,7 +58,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Normal close with timeout wait.
 	te.open()
-	c, beginSQL, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0)
+	c, beginSQL, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	require.Equal(t, "begin", beginSQL)
 	c.Unlock()
@@ -68,7 +68,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close.
 	te.open()
-	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0)
+	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period.
 	te.shutdownGracePeriod = 25 * time.Millisecond
 	te.open()
-	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0)
+	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	c.Unlock()
 	start = time.Now()
@@ -91,7 +91,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period, but pool gets empty early.
 	te.shutdownGracePeriod = 25 * time.Millisecond
 	te.open()
-	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0)
+	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	c.Unlock()
 	go func() {
@@ -107,7 +107,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close, but connection is in use.
 	te.open()
-	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0)
+	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	go func() {
 		time.Sleep(100 * time.Millisecond)
@@ -131,7 +131,7 @@ func TestTxEngineBegin(t *testing.T) {
 	config.DB = newDBConfigs(db)
 	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
 	te.AcceptReadOnly()
-	tx1, _, err := te.Begin(ctx, 0, &querypb.ExecuteOptions{})
+	tx1, _, err := te.Begin(ctx, nil, 0, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	_, _, err = te.Commit(ctx, tx1)
 	require.NoError(t, err)
@@ -139,7 +139,7 @@ func TestTxEngineBegin(t *testing.T) {
 	db.ResetQueryLog()
 
 	te.AcceptReadWrite()
-	tx2, _, err := te.Begin(ctx, 0, &querypb.ExecuteOptions{})
+	tx2, _, err := te.Begin(ctx, nil, 0, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	_, _, err = te.Commit(ctx, tx2)
 	require.NoError(t, err)
@@ -515,7 +515,7 @@ func startTransaction(te *TxEngine, writeTransaction bool) error {
 	} else {
 		options.TransactionIsolation = querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY
 	}
-	_, _, err := te.Begin(context.Background(), 0, options)
+	_, _, err := te.Begin(context.Background(), nil, 0, options)
 	return err
 }
 
@@ -547,7 +547,7 @@ func TestTxEngineFailReserve(t *testing.T) {
 	_, err = te.Reserve(ctx, options, nonExistingID, nil)
 	require.EqualError(t, err, "TxEngine.Reserve: transaction 42: not found")
 
-	txID, _, err := te.Begin(ctx, 0, options)
+	txID, _, err := te.Begin(ctx, nil, 0, options)
 	require.NoError(t, err)
 	conn, err := te.txPool.GetAndLock(txID, "for test")
 	require.NoError(t, err)

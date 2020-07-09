@@ -251,7 +251,7 @@ func (t *explainTablet) ExecuteBatch(ctx context.Context, target *querypb.Target
 }
 
 // BeginExecute is part of the QueryService interface.
-func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
 	bindVariables = sqltypes.CopyBindVariables(bindVariables)
@@ -262,7 +262,7 @@ func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target
 	})
 	t.mu.Unlock()
 
-	return t.tsv.BeginExecute(ctx, target, sql, bindVariables, reservedID, options)
+	return t.tsv.BeginExecute(ctx, target, preQueries, sql, bindVariables, reservedID, options)
 }
 
 // Close is part of the QueryService interface.

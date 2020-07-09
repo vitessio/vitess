@@ -217,7 +217,7 @@ func (te *TxEngine) AcceptReadOnly() error {
 // statement(s) used to execute the begin (if any).
 //
 // Subsequent statements can access the connection through the transaction id.
-func (te *TxEngine) Begin(ctx context.Context, reservedID int64, options *querypb.ExecuteOptions) (int64, string, error) {
+func (te *TxEngine) Begin(ctx context.Context, preQueries []string, reservedID int64, options *querypb.ExecuteOptions) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Begin")
 	defer span.Finish()
 	te.stateLock.Lock()
@@ -235,7 +235,7 @@ func (te *TxEngine) Begin(ctx context.Context, reservedID int64, options *queryp
 	te.stateLock.Unlock()
 
 	defer te.beginRequests.Done()
-	conn, beginSQL, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly, reservedID)
+	conn, beginSQL, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly, reservedID, preQueries)
 	if err != nil {
 		return 0, "", err
 	}
@@ -445,7 +445,7 @@ outer:
 		if txid > maxid {
 			maxid = txid
 		}
-		conn, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0)
+		conn, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 		if err != nil {
 			allErr.RecordError(err)
 			continue
@@ -568,7 +568,7 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 		return 0, vterrors.Wrap(err, "TxEngine.ReserveBegin")
 	}
 	defer conn.Unlock()
-	_, err = te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn)
+	_, err = te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn, nil)
 	if err != nil {
 		conn.Close()
 		conn.Release(tx.ConnInitFail)
