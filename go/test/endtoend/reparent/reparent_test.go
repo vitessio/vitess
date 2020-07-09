@@ -122,7 +122,7 @@ func TestReparentDownMaster(t *testing.T) {
 		"EmergencyReparentShard",
 		"-keyspace_shard", keyspaceShard,
 		"-new_master", tablet62044.Alias,
-		"-wait_replicas_timeout", "10s")
+		"-wait_replicas_timeout", "31s")
 	require.Nil(t, err)
 
 	validateTopology(t, false)
@@ -326,7 +326,7 @@ func TestReparentReplicaOffline(t *testing.T) {
 		"PlannedReparentShard",
 		"-keyspace_shard", keyspaceShard,
 		"-new_master", tablet62044.Alias,
-		"-wait_replicas_timeout", "10s")
+		"-wait_replicas_timeout", "31s")
 
 	require.Error(t, err)
 	assert.Contains(t, out, "tablet zone2-0000031981 SetMaster failed")
