@@ -301,8 +301,8 @@ func (ro *routeOption) computeISPlan(pb *primitiveBuilder, comparison *sqlparser
 	}
 
 	vindex = ro.FindVindex(pb, comparison.Expr)
-	// fallback to scatter gather if there is no vindex or the vindex is lookup table based
-	if vindex == nil || vindex.NeedsVCursor() {
+	// fallback to scatter gather if there is no vindex
+	if vindex == nil {
 		return engine.SelectScatter, nil, nil
 	}
 	if vindex.IsUnique() {

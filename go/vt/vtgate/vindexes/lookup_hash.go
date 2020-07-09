@@ -110,6 +110,14 @@ func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destinat
 		return out, nil
 	}
 
+	// if ignore_nulls is set and the query is about single null value, then fallback to all shards
+	if len(ids) == 1 && ids[0].IsNull() && lh.lkp.IgnoreNulls {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
+
 	results, err := lh.lkp.Lookup(vcursor, ids)
 	if err != nil {
 		return nil, err
