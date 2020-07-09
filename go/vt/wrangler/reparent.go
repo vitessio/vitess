@@ -459,7 +459,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 				// idempotent so it's fine to call it on a replica that's
 				// already read-only.
 				wr.logger.Infof("demote tablet %v", tabletAliasStr)
-				posStr, err := wr.tmc.DemoteMaster(stopAllCtx, tablet)
+				posStr, _, err := wr.tmc.DemoteMaster(stopAllCtx, tablet)
 				if err != nil {
 					rec.RecordError(vterrors.Wrapf(err, "DemoteMaster failed on contested master %v", tabletAliasStr))
 					return
@@ -592,7 +592,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		demoteCtx, demoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 		defer demoteCancel()
 
-		rp, err := wr.tmc.DemoteMaster(demoteCtx, oldMasterTabletInfo.Tablet)
+		rp, _, err := wr.tmc.DemoteMaster(demoteCtx, oldMasterTabletInfo.Tablet)
 		if err != nil {
 			return fmt.Errorf("old master tablet %v DemoteMaster failed: %v", topoproto.TabletAliasString(shardInfo.MasterAlias), err)
 		}

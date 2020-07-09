@@ -188,7 +188,7 @@ type TabletManagerClient interface {
 
 	// DemoteMaster tells the soon-to-be-former master it's going to change,
 	// and it should go read-only and return its current position.
-	DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
+	DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (string, *replicationdatapb.MasterStatus, error)
 
 	// UndoDemoteMaster reverts all changes made by DemoteMaster
 	// To be used if we are unable to promote the chosen new master

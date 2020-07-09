@@ -662,17 +662,17 @@ func (client *Client) InitReplica(ctx context.Context, tablet *topodatapb.Tablet
 }
 
 // DemoteMaster is part of the tmclient.TabletManagerClient interface.
-func (client *Client) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+func (client *Client) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (string, *replicationdatapb.MasterStatus, error) {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	defer cc.Close()
 	response, err := c.DemoteMaster(ctx, &tabletmanagerdatapb.DemoteMasterRequest{})
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return response.Position, nil
+	return response.DeprecatedPosition, response.MasterStatus, nil
 }
 
 // UndoDemoteMaster is part of the tmclient.TabletManagerClient interface.
