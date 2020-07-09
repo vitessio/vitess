@@ -20,6 +20,8 @@ import (
 	"context"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -84,13 +86,22 @@ func (e *Executor) newExecute(ctx context.Context, safeSession *SafeSession, sql
 		qr, err := e.handleRollback(ctx, safeSession, logStats)
 		return sqlparser.StmtRollback, qr, err
 	case sqlparser.StmtSavepoint:
-		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, logStats)
+		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Savepoint", logStats, func(_ string) (*sqltypes.Result, error) {
+			// Safely to ignore as there is no transaction.
+			return &sqltypes.Result{}, nil
+		})
 		return sqlparser.StmtSavepoint, qr, err
 	case sqlparser.StmtSRollback:
-		qr, err := e.handleSRollback(ctx, safeSession, plan.Original, logStats)
+		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Rollback Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
+			// Error as there is no transaction, so there is no savepoint that exists.
+			return nil, mysql.NewSQLError(mysql.ERSavepointNotExist, "42000", "SAVEPOINT does not exist: %s", query)
+		})
 		return sqlparser.StmtSRollback, qr, err
 	case sqlparser.StmtRelease:
-		qr, err := e.handleRelease(ctx, safeSession, plan.Original, logStats)
+		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Release Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
+			// Error as there is no transaction, so there is no savepoint that exists.
+			return nil, mysql.NewSQLError(mysql.ERSavepointNotExist, "42000", "SAVEPOINT does not exist: %s", query)
+		})
 		return sqlparser.StmtRelease, qr, err
 	}
 
