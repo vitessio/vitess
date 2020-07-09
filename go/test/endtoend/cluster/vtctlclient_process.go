@@ -57,11 +57,15 @@ func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) 
 
 // ApplyVSchema applies vitess schema (JSON format) to the keyspace
 func (vtctlclient *VtctlClientProcess) ApplyVSchema(Keyspace string, JSON string) (err error) {
-	return vtctlclient.ExecuteCommand(
+	output, err := vtctlclient.ExecuteCommandWithOutput(
 		"ApplyVSchema",
 		"-vschema", JSON,
 		Keyspace,
 	)
+	if err != nil {
+		fmt.Printf("%s", output)
+	}
+	return err
 }
 
 // ExecuteCommand executes any vtctlclient command
