@@ -42,7 +42,7 @@ type test struct {
 // whether the table already exists or not. To avoid different behaviour when tests are run together
 // this function adds to events expected if table is not present
 func getSchemaVersionTableCreationEvents() []string {
-	tableCreationEvents := []string{"gtid", "other", "gtid", "other"}
+	tableCreationEvents := []string{"gtid", "other", "gtid", "other", "gtid", "other"}
 	client := framework.NewClient()
 	_, err := client.Execute("describe _vt.schema_version", nil)
 	if err != nil {
