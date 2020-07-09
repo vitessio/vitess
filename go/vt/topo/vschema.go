@@ -44,14 +44,14 @@ func (ts *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vsc
 
 	_, err = ts.globalCell.Update(ctx, nodePath, data, nil)
 	if err != nil {
-		log.Info("successfully updated vschema for keyspace %s: %v", keyspace, data)
+		log.Infof("successfully updated vschema for keyspace %s: %v", keyspace, data)
 	}
 	return err
 }
 
 // DeleteVSchema delete the keyspace if it exists
 func (ts *Server) DeleteVSchema(ctx context.Context, keyspace string) error {
-	log.Info("deleting vschema for keyspace %s", keyspace)
+	log.Infof("deleting vschema for keyspace %s", keyspace)
 	nodePath := path.Join(KeyspacesPath, keyspace, VSchemaFile)
 	return ts.globalCell.Delete(ctx, nodePath, nil)
 }
@@ -75,7 +75,7 @@ func (ts *Server) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.K
 func (ts *Server) EnsureVSchema(ctx context.Context, keyspace string) error {
 	vschema, err := ts.GetVSchema(ctx, keyspace)
 	if err != nil && !IsErrType(err, NoNode) {
-		log.Info("error in getting vschema for keyspace %s: %v", keyspace, err)
+		log.Infof("error in getting vschema for keyspace %s: %v", keyspace, err)
 	}
 	if vschema == nil || IsErrType(err, NoNode) {
 		err = ts.SaveVSchema(ctx, keyspace, &vschemapb.Keyspace{

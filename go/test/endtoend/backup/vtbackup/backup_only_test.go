@@ -123,9 +123,9 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
 
 	// backup the replica
-	log.Info("taking backup %s", time.Now())
+	log.Infof("taking backup %s", time.Now())
 	vtBackup(t, false)
-	log.Info("done taking backup %s", time.Now())
+	log.Infof("done taking backup %s", time.Now())
 
 	// check that the backup shows up in the listing
 	verifyBackupCount(t, shardKsName, len(backups)+1)
@@ -164,7 +164,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 func vtBackup(t *testing.T, initialBackup bool) {
 	// Take the back using vtbackup executable
 	extraArgs := []string{"-allow_first_backup", "-db-credentials-file", dbCredentialFile}
-	log.Info("starting backup tablet %s", time.Now())
+	log.Infof("starting backup tablet %s", time.Now())
 	err := localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
 	require.Nil(t, err)
 }
@@ -233,7 +233,7 @@ func initTablets(t *testing.T, startTablet bool, initShardMaster bool) {
 func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string) {
 	// Erase mysql/tablet dir, then start tablet with restore enabled.
 
-	log.Info("restoring tablet %s", time.Now())
+	log.Infof("restoring tablet %s", time.Now())
 	resetTabletDirectory(t, *tablet, true)
 
 	err := tablet.VttabletProcess.CreateDB(keyspaceName)

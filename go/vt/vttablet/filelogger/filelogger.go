@@ -53,7 +53,7 @@ func (l *fileLogger) Stop() {
 
 // Init starts logging to the given file path.
 func Init(path string) (FileLogger, error) {
-	log.Info("Logging queries to file %s", path)
+	log.Infof("Logging queries to file %s", path)
 	logChan, err := tabletenv.StatsLogger.LogToFile(path, streamlog.GetFormatter(tabletenv.StatsLogger))
 	if err != nil {
 		return nil, err
