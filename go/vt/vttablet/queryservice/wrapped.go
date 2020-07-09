@@ -214,10 +214,10 @@ func (ws *wrappedService) ExecuteBatch(ctx context.Context, target *querypb.Targ
 	return qrs, err
 }
 
-func (ws *wrappedService) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (qr *sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
+func (ws *wrappedService) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (qr *sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
 	err = ws.wrapper(ctx, target, ws.impl, "BeginExecute", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
-		qr, transactionID, alias, innerErr = conn.BeginExecute(ctx, target, query, bindVars, reservedID, options)
+		qr, transactionID, alias, innerErr = conn.BeginExecute(ctx, target, preQueries, query, bindVars, reservedID, options)
 		return canRetry(ctx, innerErr), innerErr
 	})
 	return qr, transactionID, alias, err

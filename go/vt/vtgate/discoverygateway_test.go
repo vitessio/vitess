@@ -94,7 +94,7 @@ func TestDiscoveryGatewayRollback(t *testing.T) {
 
 func TestDiscoveryGatewayBeginExecute(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
-		_, _, _, err := dg.BeginExecute(context.Background(), target, "query", nil, 0, nil)
+		_, _, _, err := dg.BeginExecute(context.Background(), target, nil, "query", nil, 0, nil)
 		return err
 	})
 }

@@ -597,6 +597,7 @@ message BeginExecuteRequest {
   BoundQuery query = 4;
   ExecuteOptions options = 5;
   int64 reserved_id = 6;
+  repeated string pre_queries = 7;
 }
 
 // BeginExecuteResponse is the returned value from BeginExecute

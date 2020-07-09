@@ -60,7 +60,7 @@ func TestReserveBeginRelease(t *testing.T) {
 	require.NoError(t, err)
 	defer client.Release()
 
-	qr2, err := client.BeginExecute(query, nil)
+	qr2, err := client.BeginExecute(query, nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, qr1.Rows, qr2.Rows)
 	assert.Equal(t, client.ReservedID(), client.TransactionID())
@@ -73,7 +73,7 @@ func TestBeginReserveRelease(t *testing.T) {
 
 	query := "select connection_id()"
 
-	qr1, err := client.BeginExecute(query, nil)
+	qr1, err := client.BeginExecute(query, nil, nil)
 	require.NoError(t, err)
 	defer client.Release()
 
@@ -184,7 +184,7 @@ func TestReserveBeginRollbackAndBeginCommitAgain(t *testing.T) {
 
 	oldRID = client.ReservedID()
 
-	qr2, err := client.BeginExecute(query, nil)
+	qr2, err := client.BeginExecute(query, nil, nil)
 	require.NoError(t, err)
 
 	err = client.Commit()
@@ -339,7 +339,7 @@ func TestBeginReserveCommitAndNewTransactionsOnSameReservedID(t *testing.T) {
 
 	query := "select connection_id()"
 
-	qrTx, err := client.BeginExecute(query, nil)
+	qrTx, err := client.BeginExecute(query, nil, nil)
 	require.NoError(t, err)
 
 	qrRID, err := client.ReserveExecute(query, nil, nil)
@@ -349,14 +349,14 @@ func TestBeginReserveCommitAndNewTransactionsOnSameReservedID(t *testing.T) {
 	err = client.Commit()
 	require.NoError(t, err)
 
-	qrTx, err = client.BeginExecute(query, nil)
+	qrTx, err = client.BeginExecute(query, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, qrTx.Rows, qrRID.Rows)
 
 	err = client.Commit()
 	require.NoError(t, err)
 
-	qrTx, err = client.BeginExecute(query, nil)
+	qrTx, err = client.BeginExecute(query, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, qrTx.Rows, qrRID.Rows)
 
@@ -372,7 +372,7 @@ func TestBeginReserveRollbackAndNewTransactionsOnSameReservedID(t *testing.T) {
 
 	query := "select connection_id()"
 
-	qrTx, err := client.BeginExecute(query, nil)
+	qrTx, err := client.BeginExecute(query, nil, nil)
 	require.NoError(t, err)
 
 	qrRID, err := client.ReserveExecute(query, nil, nil)
@@ -382,14 +382,14 @@ func TestBeginReserveRollbackAndNewTransactionsOnSameReservedID(t *testing.T) {
 	err = client.Rollback()
 	require.NoError(t, err)
 
-	qrTx, err = client.BeginExecute(query, nil)
+	qrTx, err = client.BeginExecute(query, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, qrTx.Rows, qrRID.Rows)
 
 	err = client.Commit()
 	require.NoError(t, err)
 
-	qrTx, err = client.BeginExecute(query, nil)
+	qrTx, err = client.BeginExecute(query, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, qrTx.Rows, qrRID.Rows)
 
@@ -405,7 +405,7 @@ func TestBeginReserveReleaseAndFailToUseReservedIDAndTxIDAgain(t *testing.T) {
 
 	query := "select 42"
 
-	_, err := client.BeginExecute(query, nil)
+	_, err := client.BeginExecute(query, nil, nil)
 	require.NoError(t, err)
 
 	_, err = client.ReserveExecute(query, nil, nil)
@@ -435,7 +435,7 @@ func TestReserveBeginReleaseAndFailToUseReservedIDAndTxIDAgain(t *testing.T) {
 	_, err := client.ReserveExecute(query, nil, nil)
 	require.NoError(t, err)
 
-	_, err = client.BeginExecute(query, nil)
+	_, err = client.BeginExecute(query, nil, nil)
 	require.NoError(t, err)
 
 	rID := client.ReservedID()
@@ -521,7 +521,7 @@ func TestReserveAndBeginExecuteWithFailingQueryAndReserveConnAndTxRemainsOpen(t 
 	qr1, err := client.ReserveExecute("select connection_id()", nil, nil)
 	require.NoError(t, err)
 
-	_, err = client.BeginExecute("select foo", nil)
+	_, err = client.BeginExecute("select foo", nil, nil)
 	require.Error(t, err)
 
 	_, err = client.Execute("insert into vitess_test (intval, floatval, charval, binval) values (4, null, null, null)", nil)
@@ -688,7 +688,7 @@ func TestBeginReserveExecuteWithFailingPreQueriesAndCheckConnectionState(t *test
 		"set @@no_sys_var = 42",
 	}
 
-	_, err := client.BeginExecute(selQuery, nil)
+	_, err := client.BeginExecute(selQuery, nil, nil)
 	require.NoError(t, err)
 
 	_, err = client.ReserveExecute(selQuery, preQueries, nil)
