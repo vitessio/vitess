@@ -304,91 +304,22 @@ func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession,
 	return &sqltypes.Result{}, err
 }
 
-func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession, sql string, planType string, logStats *LogStats, nonTxResponse func(query string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
-	e.updateQueryCounts("Savepoint", "", "", int64(logStats.ShardQueries))
+	e.updateQueryCounts(planType, "", "", int64(logStats.ShardQueries))
 	defer func() {
 		logStats.ExecuteTime = time.Since(execStart)
 	}()
 
 	if len(safeSession.ShardSessions) == 0 {
 		if safeSession.InTransaction() {
-			// Storing savepoint as this needs to be executed just after starting transaction.
+			// Storing, as this needs to be executed just after starting transaction on the shard.
 			safeSession.StoreSavepoint(sql)
 			return &sqltypes.Result{}, nil
 		}
-		// Safely to ignore as there is no transaction.
-		return &sqltypes.Result{}, nil
-	}
-	var rss []*srvtopo.ResolvedShard
-	for _, shardSession := range safeSession.ShardSessions {
-		rss = append(rss, &srvtopo.ResolvedShard{
-			Target:  shardSession.Target,
-			Gateway: e.resolver.resolver.GetGateway(),
-		})
-	}
-	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
-		queries[i] = &querypb.BoundQuery{Sql: sql}
-	}
-
-	qr, errs := e.ExecuteMultiShard(ctx, rss, queries, safeSession, false, false)
-	err := vterrors.Aggregate(errs)
-	if err != nil {
-		return nil, err
-	}
-	safeSession.StoreSavepoint(sql)
-	return qr, nil
-}
-
-func (e *Executor) handleSRollback(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) (*sqltypes.Result, error) {
-	execStart := time.Now()
-	logStats.PlanTime = execStart.Sub(logStats.StartTime)
-	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
-	e.updateQueryCounts("Rollback Savepoint", "", "", int64(logStats.ShardQueries))
-	defer func() {
-		logStats.ExecuteTime = time.Since(execStart)
-	}()
-
-	if len(safeSession.ShardSessions) == 0 {
-		return nil, mysql.NewSQLError(mysql.ERSavepointNotExist, "42000", "SAVEPOINT does not exist: %s", sql)
-	}
-
-	var rss []*srvtopo.ResolvedShard
-	for _, shardSession := range safeSession.ShardSessions {
-		rss = append(rss, &srvtopo.ResolvedShard{
-			Target:  shardSession.Target,
-			Gateway: e.resolver.resolver.GetGateway(),
-		})
-	}
-	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
-		queries[i] = &querypb.BoundQuery{Sql: sql}
-	}
-
-	qr, errs := e.ExecuteMultiShard(ctx, rss, queries, safeSession, false, false)
-	return qr, vterrors.Aggregate(errs)
-
-}
-
-func (e *Executor) handleRelease(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) (*sqltypes.Result, error) {
-	execStart := time.Now()
-	logStats.PlanTime = execStart.Sub(logStats.StartTime)
-	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
-	e.updateQueryCounts("Release", "", "", int64(logStats.ShardQueries))
-	defer func() {
-		logStats.ExecuteTime = time.Since(execStart)
-	}()
-
-	if len(safeSession.ShardSessions) == 0 {
-		if safeSession.InTransaction() {
-			// Storing release as this needs to be executed just after starting transaction to release any stored savepoint.
-			safeSession.StoreSavepoint(sql)
-			return &sqltypes.Result{}, nil
-		}
-		return nil, mysql.NewSQLError(mysql.ERSavepointNotExist, "42000", "SAVEPOINT does not exist: %s", sql)
+		return nonTxResponse(sql)
 	}
 	var rss []*srvtopo.ResolvedShard
 	for _, shardSession := range safeSession.ShardSessions {
