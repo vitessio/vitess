@@ -618,6 +618,9 @@ func TestSavepointInTx(t *testing.T) {
 	exec(t, conn, "savepoint a")
 	exec(t, conn, "start transaction")
 	exec(t, conn, "savepoint b")
+	exec(t, conn, "rollback to b")
+	exec(t, conn, "release savepoint b")
+	exec(t, conn, "savepoint b")
 	exec(t, conn, "insert into t1(id1, id2) values(1,1)") // -80
 	exec(t, conn, "savepoint c")
 	exec(t, conn, "insert into t1(id1, id2) values(4,4)") // 80-
