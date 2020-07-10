@@ -73,7 +73,11 @@ func (vtctlclient *VtctlClientProcess) ExecuteCommand(args ...string) (err error
 		pArgs...,
 	)
 	log.Infof("Executing vtctlclient with command: %v", strings.Join(tmpProcess.Args, " "))
-	return tmpProcess.Run()
+	output, err := tmpProcess.Output()
+	if err != nil {
+		log.Errorf("Error executing %s: output %s, err %v", strings.Join(tmpProcess.Args, " "), output, err)
+	}
+	return err
 }
 
 // ExecuteCommandWithOutput executes any vtctlclient command and returns output
