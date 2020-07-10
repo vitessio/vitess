@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/servenv"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"golang.org/x/net/context"
@@ -92,6 +94,9 @@ type TxEngine struct {
 	abandonAge          time.Duration
 	ticks               *timer.Timer
 
+	// reservedConnStats keeps statistics about reserved connections
+	reservedConnStats *servenv.TimingsWrapper
+
 	txPool       *TxPool
 	preparedPool *TxPreparedPool
 	twoPC        *TwoPC
@@ -103,6 +108,7 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 	te := &TxEngine{
 		env:                 env,
 		shutdownGracePeriod: time.Duration(config.ShutdownGracePeriodSeconds * 1e9),
+		reservedConnStats:   env.Exporter().NewTimings("ReservedConnections", "Reserved connections stats", "operation"),
 	}
 	limiter := txlimiter.New(env)
 	te.txPool = NewTxPool(env, limiter)
@@ -629,7 +635,10 @@ func (te *TxEngine) reserve(ctx context.Context, options *querypb.ExecuteOptions
 }
 
 func (te *TxEngine) taintConn(ctx context.Context, conn *StatefulConnection, preQueries []string) error {
-	conn.Taint()
+	err := conn.Taint(ctx, te.reservedConnStats)
+	if err != nil {
+		return err
+	}
 	for _, query := range preQueries {
 		_, err := conn.Exec(ctx, query, 0 /*maxrows*/, false /*wantFields*/)
 		if err != nil {
@@ -641,11 +650,13 @@ func (te *TxEngine) taintConn(ctx context.Context, conn *StatefulConnection, pre
 }
 
 //Release closes the underlying connection.
-func (te *TxEngine) Release(ctx context.Context, connID int64) error {
+func (te *TxEngine) Release(connID int64) error {
 	conn, err := te.txPool.GetAndLock(connID, "for release")
 	if err != nil {
 		return err
 	}
+
 	conn.Release(tx.ConnRelease)
+
 	return nil
 }

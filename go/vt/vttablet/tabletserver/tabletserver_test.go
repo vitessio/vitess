@@ -30,6 +30,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/callerid"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -2524,7 +2526,7 @@ func TestReserveBeginExecute(t *testing.T) {
 
 	_, transactionID, reservedID, _, err := tsv.ReserveBeginExecute(ctx, &target, "select 42", []string{"select 43"}, nil, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
-	defer tsv.Release(ctx, &target, transactionID, reservedID)
+
 	assert.Greater(t, transactionID, int64(0), "transactionID")
 	assert.Equal(t, reservedID, transactionID, "reservedID should equal transactionID")
 	expected := []string{
@@ -2534,6 +2536,8 @@ func TestReserveBeginExecute(t *testing.T) {
 		"select 42 from dual limit 10001",
 	}
 	assert.Contains(t, db.QueryLog(), strings.Join(expected, ";"), "expected queries to run")
+	err = tsv.Release(ctx, &target, transactionID, reservedID)
+	require.NoError(t, err)
 }
 
 func TestReserveExecute_WithoutTx(t *testing.T) {
@@ -2549,7 +2553,6 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 
 	_, reservedID, _, err := tsv.ReserveExecute(ctx, &target, "select 42", []string{"select 43"}, nil, 0, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
-	defer tsv.Release(ctx, &target, 0, reservedID)
 	assert.NotEqual(t, int64(0), reservedID, "reservedID should not be zero")
 	expected := []string{
 		"select 43",
@@ -2557,6 +2560,8 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 		"select 42 from dual limit 10001",
 	}
 	assert.Contains(t, db.QueryLog(), strings.Join(expected, ";"), "expected queries to run")
+	err = tsv.Release(ctx, &target, 0, reservedID)
+	require.NoError(t, err)
 }
 
 func TestReserveExecute_WithTx(t *testing.T) {
@@ -2585,6 +2590,8 @@ func TestReserveExecute_WithTx(t *testing.T) {
 		"select 42 from dual limit 10001",
 	}
 	assert.Contains(t, db.QueryLog(), strings.Join(expected, ";"), "expected queries to run")
+	err = tsv.Release(ctx, &target, transactionID, reservedID)
+	require.NoError(t, err)
 }
 
 func TestRelease(t *testing.T) {
@@ -2658,6 +2665,64 @@ func TestRelease(t *testing.T) {
 			assert.Contains(t, db.QueryLog(), strings.Join(test.expectedQueries, ";"), "expected queries to run")
 		})
 	}
+}
+
+func TestReserveStats(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	require.NoError(t, err)
+	defer tsv.StopService()
+
+	callerID := &querypb.VTGateCallerID{
+		Username: "test",
+	}
+	ctx := callerid.NewContext(context.Background(), nil, callerID)
+
+	// Starts reserved connection and transaction
+	_, rbeTxID, rbeRID, _, err := tsv.ReserveBeginExecute(ctx, &target, "select 42", nil, nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
+
+	// Starts reserved connection
+	_, reRID, _, err := tsv.ReserveExecute(ctx, &target, "select 42", nil, nil, 0, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
+
+	// Use previous reserved connection to start transaction
+	_, reBeTxID, _, err := tsv.BeginExecute(ctx, &target, "select 42", nil, reRID, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
+
+	// Starts transaction.
+	_, beTxID, _, err := tsv.BeginExecute(ctx, &target, "select 42", nil, 0, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
+
+	// Reserved the connection on previous transaction
+	_, beReRID, _, err := tsv.ReserveExecute(ctx, &target, "select 42", nil, nil, beTxID, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	assert.EqualValues(t, 3, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
+
+	err = tsv.Release(ctx, &target, rbeTxID, rbeRID)
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
+	assert.EqualValues(t, 1, tsv.te.txPool.env.Stats().UserReservedCount.Counts()["test"])
+
+	err = tsv.Release(ctx, &target, reBeTxID, reRID)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
+	assert.EqualValues(t, 2, tsv.te.txPool.env.Stats().UserReservedCount.Counts()["test"])
+
+	err = tsv.Release(ctx, &target, beTxID, beReRID)
+	require.NoError(t, err)
+	assert.Zero(t, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
+	assert.EqualValues(t, 3, tsv.te.txPool.env.Stats().UserReservedCount.Counts()["test"])
+	assert.NotEmpty(t, tsv.te.txPool.env.Stats().UserReservedTimesNs.Counts()["test"])
 }
 
 func setUpTabletServerTest(t *testing.T) *fakesqldb.DB {
