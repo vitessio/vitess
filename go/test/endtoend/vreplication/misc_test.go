@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"vitess.io/vitess/go/mysql"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -16,6 +17,7 @@ create table coal(cid int, type varchar(128), primary key (cid));
 `
 	newcastleSchema = `
 create table mine(mid int, name varchar(128), primary key (mid));
+create table coal(cid int, type varchar(128), primary key (cid)); 
 `
 	walesVSchema = `
 {
@@ -75,12 +77,18 @@ create table mine(mid int, name varchar(128), primary key (mid));
 `
 	initialWalesInserts = `
 insert into warehouse(wid, name) values (1, 'Cardiff'), (2, 'Swansea');
-insert into coal(cid, type) values (1, 'Lignite'), (2, 'Anthracite'), (3, 'Bituminous'), (4, 'Peat');
 `
 	initialNewcastleInserts = `
 insert into mine(mid, name) values (1, 'Elswick'), (2, 'Winlaton'), (3, 'Heworth'), (4, 'Tyneside'), (5, 'Quayside');
 `
 )
+
+func insertCoal(t *testing.T, conn *mysql.Conn) {
+	for i := 0; i < 10000; i ++ {
+		sql := fmt.Sprintf("insert into coal (cid, type) values (%d, 'coal%d')", i, i)
+		execMultipleQueries(t, conn, "wales", sql)
+	}
+}
 
 func TestShardedMoveTables(t *testing.T) {
 	cellName := "zone1"
@@ -112,7 +120,8 @@ func TestShardedMoveTables(t *testing.T) {
 
 	execMultipleQueries(t, vtgateConn, "wales", initialWalesInserts)
 	execMultipleQueries(t, vtgateConn, "newcastle", initialNewcastleInserts)
-
+	insertCoal(t, vtgateConn)
+	return
 	workflow := "c2n"
 	ksWorkflow := targetKeyspace + "." + workflow
 	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("MoveTables", "-cell="+cell.Name, "-workflow="+workflow,
