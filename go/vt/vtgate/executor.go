@@ -959,7 +959,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 	case sqlparser.KeywordString(sqlparser.WARNINGS):
 		fields := []*querypb.Field{
 			{Name: "Level", Type: sqltypes.VarChar},
-			{Name: "Type", Type: sqltypes.Uint16},
+			{Name: "Code", Type: sqltypes.Uint16},
 			{Name: "Message", Type: sqltypes.VarChar},
 		}
 		rows := make([][]sqltypes.Value, 0)
