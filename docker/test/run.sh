@@ -188,7 +188,7 @@ bashcmd=$(append_cmd "$bashcmd" "./bootstrap.sh")
 
 if [[ ! -z "$extra_bin" ]]; then
   args="$args -v $PWD/$extra_bin:/tmp/$extra_bin"
-  bashcmd=$(append_cmd "$bashcmd" "PATH=\"/tmp:${PATH}\"")
+  bashcmd=$(append_cmd "$bashcmd" "PATH=\"/tmp/$extra_bin:${PATH}\"")
 fi
 
 # At last, append the user's command.
@@ -197,6 +197,7 @@ bashcmd=$(append_cmd "$bashcmd" "$cmd")
 if tty -s; then
   # interactive shell
   # See above why we turn on "extglob" (extended Glob).
+  echo $bashcmd
   docker run -ti $args $image bash -O extglob -c "$bashcmd"
   exitcode=$?
 else
