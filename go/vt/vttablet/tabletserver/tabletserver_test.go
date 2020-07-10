@@ -2694,12 +2694,12 @@ func TestReserveStats(t *testing.T) {
 	assert.EqualValues(t, 2, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
 
 	// Use previous reserved connection to start transaction
-	_, reBeTxID, _, err := tsv.BeginExecute(ctx, &target, "select 42", nil, reRID, &querypb.ExecuteOptions{})
+	_, reBeTxID, _, err := tsv.BeginExecute(ctx, &target, nil, "select 42", nil, reRID, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	assert.EqualValues(t, 2, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
 
 	// Starts transaction.
-	_, beTxID, _, err := tsv.BeginExecute(ctx, &target, "select 42", nil, 0, &querypb.ExecuteOptions{})
+	_, beTxID, _, err := tsv.BeginExecute(ctx, &target, nil, "select 42", nil, 0, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	assert.EqualValues(t, 2, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
 

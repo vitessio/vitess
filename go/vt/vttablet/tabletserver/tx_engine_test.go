@@ -62,7 +62,7 @@ func TestTxEngineClose(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "begin", beginSQL)
 	c.Unlock()
-	c, beginSQL, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0)
+	c, beginSQL, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	require.Equal(t, "begin", beginSQL)
 	c.Unlock()
