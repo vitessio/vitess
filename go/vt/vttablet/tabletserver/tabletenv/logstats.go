@@ -59,6 +59,7 @@ type LogStats struct {
 	QuerySources         byte
 	Rows                 [][]sqltypes.Value
 	TransactionID        int64
+	ReservedID           int64
 	Error                error
 }
 
