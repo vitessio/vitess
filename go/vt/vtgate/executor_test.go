@@ -851,7 +851,7 @@ func TestExecutorShow(t *testing.T) {
 	wantqr = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "Level", Type: sqltypes.VarChar},
-			{Name: "Type", Type: sqltypes.Uint16},
+			{Name: "Code", Type: sqltypes.Uint16},
 			{Name: "Message", Type: sqltypes.VarChar},
 		},
 		Rows:         [][]sqltypes.Value{},
@@ -868,7 +868,7 @@ func TestExecutorShow(t *testing.T) {
 	wantqr = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "Level", Type: sqltypes.VarChar},
-			{Name: "Type", Type: sqltypes.Uint16},
+			{Name: "Code", Type: sqltypes.Uint16},
 			{Name: "Message", Type: sqltypes.VarChar},
 		},
 		Rows:         [][]sqltypes.Value{},
@@ -887,7 +887,7 @@ func TestExecutorShow(t *testing.T) {
 	wantqr = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "Level", Type: sqltypes.VarChar},
-			{Name: "Type", Type: sqltypes.Uint16},
+			{Name: "Code", Type: sqltypes.Uint16},
 			{Name: "Message", Type: sqltypes.VarChar},
 		},
 
