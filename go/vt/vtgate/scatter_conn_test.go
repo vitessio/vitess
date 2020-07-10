@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/stretchr/testify/assert"
 
 	"golang.org/x/net/context"
@@ -51,6 +53,67 @@ func TestScatterConnExecute(t *testing.T) {
 
 		return sc.Execute(ctx, "query", nil, rss, NewSafeSession(nil), false, nil, false)
 	})
+}
+
+func TestExecuteFailOnAutocommit(t *testing.T) {
+
+	createSandbox("TestExecuteFailOnAutocommit")
+	hc := discovery.NewFakeLegacyHealthCheck()
+	sc := newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
+	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestExecuteFailOnAutocommit", "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestExecuteFailOnAutocommit", "1", topodatapb.TabletType_MASTER, true, 1, nil)
+
+	rss := []*srvtopo.ResolvedShard{
+		{
+			Target: &querypb.Target{
+				Keyspace:   "TestExecuteFailOnAutocommit",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			Gateway: sbc0,
+		},
+		{
+			Target: &querypb.Target{
+				Keyspace:   "TestExecuteFailOnAutocommit",
+				Shard:      "1",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			Gateway: sbc1,
+		},
+	}
+	queries := []*querypb.BoundQuery{
+		{
+			// This will fail to go to shard. It will be rejected at vtgate.
+			Sql: "query1",
+			BindVariables: map[string]*querypb.BindVariable{
+				"bv0": sqltypes.Int64BindVariable(0),
+			},
+		},
+		{
+			// This will go to shard.
+			Sql: "query2",
+			BindVariables: map[string]*querypb.BindVariable{
+				"bv1": sqltypes.Int64BindVariable(1),
+			},
+		},
+	}
+	// shard 0 - has transaction
+	// shard 1 - does not have transaction.
+	session := &vtgatepb.Session{
+		InTransaction: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{
+			{
+				Target:        &querypb.Target{Keyspace: "TestExecuteFailOnAutocommit", Shard: "0", TabletType: topodatapb.TabletType_MASTER, Cell: "aa"},
+				TransactionId: 123,
+				TabletAlias:   nil,
+			},
+		},
+		Autocommit: false,
+	}
+	_, errs := sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(session), false, true)
+	require.Error(t, vterrors.Aggregate(errs))
+	utils.MustMatch(t, 0, len(sbc0.Queries), "")
+	utils.MustMatch(t, []*querypb.BoundQuery{queries[1]}, sbc1.Queries, "")
 }
 
 func TestScatterConnExecuteMulti(t *testing.T) {
