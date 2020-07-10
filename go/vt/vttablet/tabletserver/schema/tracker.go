@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/gogo/protobuf/proto"
@@ -97,6 +99,10 @@ func (tr *Tracker) Open() {
 	tr.cancel = cancel
 	tr.wg.Add(1)
 	log.Info("Schema tracker enabled.")
+	if err := tr.possiblyInsertInitialSchema(ctx); err != nil {
+		log.Errorf("possiblyInsertInitialSchema eror: %v", err)
+		return
+	}
 	go tr.process(ctx)
 }
 
@@ -163,14 +169,72 @@ func (tr *Tracker) process(ctx context.Context) {
 	}
 }
 
+func (tr *Tracker) currentPosition(ctx context.Context) (mysql.Position, error) {
+	conn, err := tr.engine.cp.Connect(ctx)
+	if err != nil {
+		return mysql.Position{}, err
+	}
+	defer conn.Close()
+	return conn.MasterPosition()
+}
+
+func (tr *Tracker) isSchemaVersionTableEmpty(ctx context.Context) (bool, error) {
+	conn, err := tr.engine.GetConnection(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer conn.Recycle()
+	result, err := withDDL.Exec(ctx, "select id from _vt.schema_version limit 1", conn.Exec)
+	if err != nil {
+		return false, err
+	}
+	if result == nil {
+		return false, fmt.Errorf("error querying _vt.schema_version")
+	}
+	if result.RowsAffected == 0 {
+		return true, nil
+	}
+	return false, nil
+}
+
+// possiblyInsertInitialSchema stores the latest schema when a tracker starts and the schema_version table is empty
+// this enables the right schema to be available between the time the tracker starts first and the first DDL is applied
+func (tr *Tracker) possiblyInsertInitialSchema(ctx context.Context) error {
+	var err error
+	needsWarming, err := tr.isSchemaVersionTableEmpty(ctx)
+	if err != nil {
+		return err
+	}
+	if !needsWarming { // _vt.schema_version is not empty, nothing to do here
+		return nil
+	}
+	if err = tr.engine.Reload(ctx); err != nil {
+		return err
+	}
+
+	timestamp := time.Now().UnixNano() / 1e9
+	ddl := ""
+	pos, err := tr.currentPosition(ctx)
+	if err != nil {
+		return err
+	}
+	gtid := mysql.EncodePosition(pos)
+	log.Infof("Saving initial schema for gtid %s", gtid)
+
+	return tr.saveCurrentSchemaToDb(ctx, gtid, ddl, timestamp)
+}
+
 func (tr *Tracker) schemaUpdated(gtid string, ddl string, timestamp int64) error {
 	log.Infof("Processing schemaUpdated event for gtid %s, ddl %s", gtid, ddl)
 	if gtid == "" || ddl == "" {
 		return fmt.Errorf("got invalid gtid or ddl in schemaUpdated")
 	}
 	ctx := context.Background()
-
 	// Engine will have reloaded the schema because vstream will reload it on a DDL
+	return tr.saveCurrentSchemaToDb(ctx, gtid, ddl, timestamp)
+}
+
+func (tr *Tracker) saveCurrentSchemaToDb(ctx context.Context, gtid, ddl string, timestamp int64) error {
 	tables := tr.engine.GetSchema()
 	dbSchema := &binlogdatapb.MinimalSchema{
 		Tables: []*binlogdatapb.MinimalTable{},
