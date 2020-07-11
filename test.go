@@ -114,9 +114,8 @@ type Config struct {
 
 // Test is an entry from the test/config.json file.
 type Test struct {
-	File           string
-	Args, Command  []string
-	ExtraDockerArg string
+	File          string
+	Args, Command []string
 
 	// Manual means it won't be run unless explicitly specified.
 	Manual bool
@@ -188,9 +187,6 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		} else {
 			// If there is no cache, we have to call 'make build' before each test.
 			args = []string{t.flavor, "make build && " + testArgs}
-		}
-		if t.ExtraDockerArg != "" {
-			args = append(args, t.ExtraDockerArg)
 		}
 
 		cmd = exec.Command(path.Join(dir, "docker/test/run.sh"), args...)

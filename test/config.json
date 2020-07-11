@@ -273,7 +273,6 @@
 			"Manual": false,
 			"Shard": 26,
 			"RetryMax": 0,
-			"ExtraDockerArg" : "test/bin/",
 			"Tags": [
 				"site_test"
 			]

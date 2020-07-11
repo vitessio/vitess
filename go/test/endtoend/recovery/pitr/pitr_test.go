@@ -2,7 +2,9 @@ package pitr
 
 import (
 	"flag"
+	"os"
 	"os/exec"
+	"path"
 	"strings"
 	"testing"
 
@@ -19,8 +21,9 @@ func TestPointInTimeRecovery(t *testing.T) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
+	exePath := path.Join(os.Getenv("EXTRA_BIN"), binlogServer)
 	tmpProcess := exec.Command(
-		binlogServer,
+		exePath,
 		"--version",
 	)
 	output, err := tmpProcess.CombinedOutput()
