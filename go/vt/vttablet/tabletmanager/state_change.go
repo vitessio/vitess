@@ -32,13 +32,11 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/events"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 )
 
@@ -94,40 +92,8 @@ func (tm *TabletManager) loadBlacklistRules(ctx context.Context, tablet *topodat
 func (tm *TabletManager) lameduck(reason string) {
 	log.Infof("TabletManager is entering lameduck, reason: %v", reason)
 	tm.QueryServiceControl.EnterLameduck()
-	tm.broadcastHealth()
 	time.Sleep(*gracePeriod)
 	log.Infof("TabletManager is leaving lameduck")
-}
-
-func (tm *TabletManager) broadcastHealth() {
-	// get the replication delays
-	tm.mutex.Lock()
-	replicationDelay := tm._replicationDelay
-	healthError := tm._healthy
-	healthyTime := tm._healthyTime
-	tm.mutex.Unlock()
-
-	// send it to our observers
-	// FIXME(alainjobart,liguo) add CpuUsage
-	stats := &querypb.RealtimeStats{
-		SecondsBehindMaster: uint32(replicationDelay.Seconds()),
-	}
-	stats.SecondsBehindMasterFilteredReplication, stats.BinlogPlayersCount = vreplication.StatusSummary()
-	stats.Qps = tm.QueryServiceControl.Stats().QPSRates.TotalRate()
-	if healthError != nil {
-		stats.HealthError = healthError.Error()
-	} else {
-		timeSinceLastCheck := time.Since(healthyTime)
-		if timeSinceLastCheck > healthCheckInterval*3 {
-			stats.HealthError = fmt.Sprintf("last health check is too old: %s > %s", timeSinceLastCheck, healthCheckInterval*3)
-		}
-	}
-	var ts int64
-	terTime := tm.masterTermStartTime()
-	if !terTime.IsZero() {
-		ts = terTime.Unix()
-	}
-	go tm.QueryServiceControl.BroadcastHealth(ts, stats, healthCheckInterval*3)
 }
 
 // refreshTablet needs to be run after an action may have changed the current

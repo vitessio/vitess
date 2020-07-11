@@ -18,7 +18,6 @@ package tabletmanager
 
 import (
 	"fmt"
-	"regexp"
 	"time"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -32,6 +31,7 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // This file contains the implementations of RPCTM methods.
@@ -137,20 +137,10 @@ func (tm *TabletManager) RefreshState(ctx context.Context) error {
 
 // RunHealthCheck will manually run the health check on the tablet.
 func (tm *TabletManager) RunHealthCheck(ctx context.Context) {
-	tm.runHealthCheck()
+	tm.QueryServiceControl.BroadcastHealth()
 }
 
 // IgnoreHealthError sets the regexp for health check errors to ignore.
 func (tm *TabletManager) IgnoreHealthError(ctx context.Context, pattern string) error {
-	var expr *regexp.Regexp
-	if pattern != "" {
-		var err error
-		if expr, err = regexp.Compile(fmt.Sprintf("^%s$", pattern)); err != nil {
-			return err
-		}
-	}
-	tm.mutex.Lock()
-	tm._ignoreHealthErrorExpr = expr
-	tm.mutex.Unlock()
-	return nil
+	return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "deprecated")
 }

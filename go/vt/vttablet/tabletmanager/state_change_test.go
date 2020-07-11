@@ -32,6 +32,8 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 )
 
+var tabletAlias = &topodatapb.TabletAlias{Cell: "cell1", Uid: 42}
+
 func TestPublishState(t *testing.T) {
 	defer func(saved time.Duration) { *publishRetryInterval = saved }(*publishRetryInterval)
 	*publishRetryInterval = 1 * time.Millisecond
@@ -104,8 +106,5 @@ func createTestTM(ctx context.Context, t *testing.T, preStart func(*TabletManage
 	}
 	err := tm.Start(tablet)
 	require.NoError(t, err)
-
-	tm.HealthReporter = &fakeHealthCheck{}
-
 	return tm
 }
