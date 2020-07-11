@@ -110,7 +110,7 @@ func (tm *TabletManager) stopIOThreadLocked(ctx context.Context) error {
 
 	// Remember that we were told to stop, so we don't try to
 	// restart ourselves (in replication_reporter).
-	tm.setReplicationStopped(true)
+	tm.replManager.setReplicationStopped(true)
 
 	// Also tell Orchestrator we're stopped on purpose for some Vitess task.
 	// Do this in the background, as it's best-effort.
