@@ -1,9 +1,9 @@
-name: misc test
+name: pitr test
 on: [push, pull_request]
 jobs:
 
   build:
-    name: Misc Test
+    name: PITR Test
     runs-on: ubuntu-latest
     steps:
 
@@ -15,9 +15,6 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v2
 
-    - name: Setup tmate session
-      uses: mxschmitt/action-tmate@v2
-
-    - name: Run Misc test which requires docker
+    - name: Run PITR test
       run: |
         go run test.go --follow pitr

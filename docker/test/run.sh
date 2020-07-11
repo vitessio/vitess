@@ -99,7 +99,6 @@ done
 # Positional flags.
 flavor=$1
 cmd=$2
-extra_bin=$3
 args=
 
 if [[ -z "$flavor" ]]; then
@@ -140,6 +139,7 @@ args="$args -v /tmp/mavencache:/home/vitess/.m2"
 
 # Add in the vitess user
 args="$args --user vitess"
+args="$args -v $PWD/test/bin:/tmp/bin"
 
 # Mount in host VTDATAROOT if one exists, since it might be a RAM disk or SSD.
 if [[ -n "$VTDATAROOT" ]]; then
@@ -173,6 +173,7 @@ fi
 # Reset the environment if this was an old bootstrap. We can detect this from VTTOP presence.
 bashcmd=$(append_cmd "$bashcmd" "export VTROOT=/vt/src/vitess.io/vitess")
 bashcmd=$(append_cmd "$bashcmd" "export VTDATAROOT=/vt/vtdataroot")
+bashcmd=$(append_cmd "$bashcmd" "export EXTRA_BIN=/tmp/bin")
 
 bashcmd=$(append_cmd "$bashcmd" "mkdir -p dist; mkdir -p bin; mkdir -p lib; mkdir -p vthook")
 bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/dist; ln -s /vt/src/vitess.io/vitess/dist /vt/dist")
@@ -186,18 +187,12 @@ bashcmd=$(append_cmd "$bashcmd" "echo 'Checking if mvn needs installing...'; if 
 # Run bootstrap every time now
 bashcmd=$(append_cmd "$bashcmd" "./bootstrap.sh")
 
-if [[ ! -z "$extra_bin" ]]; then
-  args="$args -v $PWD/$extra_bin:/tmp/$extra_bin"
-  bashcmd=$(append_cmd "$bashcmd" "PATH=\"/tmp/$extra_bin:${PATH}\"")
-fi
-
 # At last, append the user's command.
 bashcmd=$(append_cmd "$bashcmd" "$cmd")
 
 if tty -s; then
   # interactive shell
   # See above why we turn on "extglob" (extended Glob).
-  echo $bashcmd
   docker run -ti $args $image bash -O extglob -c "$bashcmd"
   exitcode=$?
 else
