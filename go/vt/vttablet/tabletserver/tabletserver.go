@@ -1350,14 +1350,8 @@ func (tsv *TabletServer) StreamHealth(ctx context.Context, callback func(*queryp
 }
 
 // BroadcastHealth will broadcast the current health to all listeners
-func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats, maxCache time.Duration) {
+func (tsv *TabletServer) BroadcastHealth() {
 	tsv.sm.Broadcast()
-}
-
-// HeartbeatLag returns the current lag as calculated by the heartbeat
-// package, if heartbeat is enabled. Otherwise returns 0.
-func (tsv *TabletServer) HeartbeatLag() (time.Duration, error) {
-	return tsv.rt.Status()
 }
 
 // EnterLameduck causes tabletserver to enter the lameduck state. This

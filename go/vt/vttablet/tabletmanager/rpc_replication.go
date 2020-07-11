@@ -626,7 +626,6 @@ func (tm *TabletManager) ReplicaWasRestarted(ctx context.Context, parent *topoda
 	tablet.Type = topodatapb.TabletType_MASTER
 	tablet.MasterTermStartTime = nil
 	tm.updateState(ctx, tablet, "ReplicaWasRestarted")
-	tm.runHealthCheckLocked()
 	return nil
 }
 

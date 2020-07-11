@@ -202,20 +202,13 @@ func (tqsc *Controller) SchemaEngine() *schema.Engine {
 }
 
 // BroadcastHealth is part of the tabletserver.Controller interface
-func (tqsc *Controller) BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats, maxCache time.Duration) {
+func (tqsc *Controller) BroadcastHealth() {
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
 
 	tqsc.BroadcastData <- &BroadcastData{
-		TERTimestamp:  terTimestamp,
-		RealtimeStats: *stats,
-		Serving:       tqsc.queryServiceEnabled && (!tqsc.isInLameduck),
+		Serving: tqsc.queryServiceEnabled && (!tqsc.isInLameduck),
 	}
-}
-
-// HeartbeatLag is part of the tabletserver.Controller interface.
-func (tqsc *Controller) HeartbeatLag() (time.Duration, error) {
-	return 0, nil
 }
 
 // TopoServer is part of the tabletserver.Controller interface.

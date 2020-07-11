@@ -38,9 +38,6 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
-	"os"
-	"path"
-	"regexp"
 	"sync"
 	"time"
 
@@ -56,7 +53,6 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/health"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -134,9 +130,6 @@ type TabletManager struct {
 	// replManager manages replication.
 	replManager *replManager
 
-	// HealthReporter initiates healthchecks.
-	HealthReporter health.Reporter
-
 	// tabletAlias is saved away from tablet for read-only access
 	tabletAlias *topodatapb.TabletAlias
 
@@ -197,24 +190,6 @@ type TabletManager struct {
 	// blacklisting.
 	_blacklistedTables []string
 
-	// if the tm is healthy, this is nil. Otherwise it contains
-	// the reason we're not healthy.
-	_healthy error
-
-	// this is the last time health check ran
-	_healthyTime time.Time
-
-	// replication delay the last time we got it
-	_replicationDelay time.Duration
-
-	// _ignoreHealthErrorExpr can be set by RPC to selectively disable certain
-	// healthcheck errors. It should only be accessed while holding actionMutex.
-	_ignoreHealthErrorExpr *regexp.Regexp
-
-	// _replicationStopped remembers if we've been told to stop replicating.
-	// If it's nil, we'll try to check for the replicationStoppedFile.
-	_replicationStopped *bool
-
 	// _lockTablesConnection is used to get and release the table read locks to pause replication
 	_lockTablesConnection *dbconnpool.DBConnection
 	_lockTablesTimer      *time.Timer
@@ -227,13 +202,11 @@ type TabletManager struct {
 	isPublishing bool
 }
 
+var healthCheckInterval time.Duration
+
 // InitConfig is a temp function to keep things working during the refactor.
 func InitConfig(config *tabletenv.TabletConfig) {
 	healthCheckInterval = config.Healthcheck.IntervalSeconds.Get()
-	degradedThreshold = config.Healthcheck.DegradedThresholdSeconds.Get()
-	unhealthyThreshold = config.Healthcheck.UnhealthyThresholdSeconds.Get()
-
-	enableReplicationReporter = config.ReplicationTracker.Mode == tabletenv.Polling
 }
 
 // BuildTabletFromInput builds a tablet record from input parameters.
@@ -301,7 +274,6 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet) error {
 		log.Warningf("deprecated demote_master_type %v must match init_tablet_type %v", demoteType, tablet.Type)
 	}
 	tm.baseTabletType = tablet.Type
-	tm._healthy = fmt.Errorf("healthcheck not run yet")
 
 	ctx, cancel := context.WithTimeout(tm.BatchCtx, *initTimeout)
 	defer cancel()
@@ -767,56 +739,6 @@ func (tm *TabletManager) DisallowQueryService() string {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
 	return tm._disallowQueryService
-}
-
-func (tm *TabletManager) replicationStopped() bool {
-	tm.mutex.Lock()
-	defer tm.mutex.Unlock()
-
-	// If we already know the value, don't bother checking the file.
-	if tm._replicationStopped != nil {
-		return *tm._replicationStopped
-	}
-
-	// If there's no Cnf file, don't read state.
-	if tm.Cnf == nil {
-		return false
-	}
-
-	// If the marker file exists, we're stopped.
-	// Treat any read error as if the file doesn't exist.
-	_, err := os.Stat(path.Join(tm.Cnf.TabletDir(), replicationStoppedFile))
-	replicationStopped := err == nil
-	tm._replicationStopped = &replicationStopped
-	return replicationStopped
-}
-
-func (tm *TabletManager) setReplicationStopped(stopped bool) {
-	tm.mutex.Lock()
-	defer tm.mutex.Unlock()
-
-	tm._replicationStopped = &stopped
-
-	// Make a best-effort attempt to persist the value across tablet restarts.
-	// We store a marker in the filesystem so it works regardless of whether
-	// mysqld is running, and so it's tied to this particular instance of the
-	// tablet data dir (the one that's paused at a known replication position).
-	if tm.Cnf == nil {
-		return
-	}
-	tabletDir := tm.Cnf.TabletDir()
-	if tabletDir == "" {
-		return
-	}
-	markerFile := path.Join(tabletDir, replicationStoppedFile)
-	if stopped {
-		file, err := os.Create(markerFile)
-		if err == nil {
-			file.Close()
-		}
-	} else {
-		os.Remove(markerFile)
-	}
 }
 
 func (tm *TabletManager) setServicesDesiredState(disallowQueryService string) {
