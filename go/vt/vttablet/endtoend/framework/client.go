@@ -162,7 +162,7 @@ func (client *QueryClient) ReadTransaction(dtid string) (*querypb.TransactionMet
 // SetServingType is for testing transitions.
 // It currently supports only master->replica and back.
 func (client *QueryClient) SetServingType(tabletType topodatapb.TabletType) error {
-	_, err := client.server.SetServingType(tabletType, time.Time{}, true, nil)
+	err := client.server.SetServingType(tabletType, time.Time{}, true)
 	return err
 }
 

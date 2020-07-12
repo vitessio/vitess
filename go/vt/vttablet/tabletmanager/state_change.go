@@ -212,19 +212,7 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 	tm.replManager.SetTabletType(newTablet.Type)
 
 	if allowQuery {
-		// Query service should be running.
-		if oldTablet.Type == topodatapb.TabletType_REPLICA &&
-			newTablet.Type == topodatapb.TabletType_MASTER {
-			// When promoting from replica to master, allow both master and replica
-			// queries to be served during gracePeriod.
-			if _, err := tm.QueryServiceControl.SetServingType(newTablet.Type, terTime, true, []topodatapb.TabletType{oldTablet.Type}); err == nil {
-				time.Sleep(gracePeriod)
-			} else {
-				log.Errorf("Can't start query service for MASTER+REPLICA mode: %v", err)
-			}
-		}
-
-		if _, err := tm.QueryServiceControl.SetServingType(newTablet.Type, terTime, true, nil); err != nil {
+		if err := tm.QueryServiceControl.SetServingType(newTablet.Type, terTime, true); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
 		}
 	} else {
@@ -238,7 +226,7 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 		}
 
 		log.Infof("Disabling query service on type change, reason: %v", disallowQueryReason)
-		if _, err := tm.QueryServiceControl.SetServingType(newTablet.Type, terTime, false, nil); err != nil {
+		if err := tm.QueryServiceControl.SetServingType(newTablet.Type, terTime, false); err != nil {
 			log.Errorf("SetServingType(serving=false) failed: %v", err)
 		}
 	}
