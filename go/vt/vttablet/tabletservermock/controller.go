@@ -133,24 +133,20 @@ func (tqsc *Controller) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.DB
 }
 
 // SetServingType is part of the tabletserver.Controller interface
-func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, terTime time.Time, serving bool, alsoAllow []topodatapb.TabletType) (bool, error) {
+func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, terTime time.Time, serving bool) error {
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
 
-	stateChanged := false
 	if tqsc.SetServingTypeError == nil {
-		stateChanged = tqsc.queryServiceEnabled != serving || tqsc.CurrentTarget.TabletType != tabletType
 		tqsc.CurrentTarget.TabletType = tabletType
 		tqsc.queryServiceEnabled = serving
 	}
-	if stateChanged {
-		tqsc.StateChanges <- &StateChange{
-			Serving:    serving,
-			TabletType: tabletType,
-		}
+	tqsc.StateChanges <- &StateChange{
+		Serving:    serving,
+		TabletType: tabletType,
 	}
 	tqsc.isInLameduck = false
-	return stateChanged, tqsc.SetServingTypeError
+	return tqsc.SetServingTypeError
 }
 
 // IsServing is part of the tabletserver.Controller interface

@@ -294,16 +294,14 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, enforceTableACLConfi
 }
 
 // SetServingType changes the serving type of the tabletserver. It starts or
-// stops internal services as deemed necessary. The tabletType determines the
-// primary serving type, while alsoAllow specifies other tablet types that
-// should also be honored for serving.
+// stops internal services as deemed necessary.
 // Returns true if the state of QueryService or the tablet type changed.
-func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, terTimestamp time.Time, serving bool, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
+func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, terTimestamp time.Time, serving bool) error {
 	state := StateNotServing
 	if serving {
 		state = StateServing
 	}
-	return tsv.sm.SetServingType(tabletType, terTimestamp, state, alsoAllow)
+	return tsv.sm.SetServingType(tabletType, terTimestamp, state)
 }
 
 // StartService is a convenience function for InitDBConfig->SetServingType
@@ -313,8 +311,7 @@ func (tsv *TabletServer) StartService(target querypb.Target, dbcfgs *dbconfigs.D
 		return err
 	}
 	// StartService is only used for testing. So, we cheat by aggressively setting replication to healthy.
-	_, err := tsv.sm.SetServingType(target.TabletType, time.Time{}, StateServing, nil)
-	return err
+	return tsv.sm.SetServingType(target.TabletType, time.Time{}, StateServing)
 }
 
 // StopService shuts down the tabletserver to the uninitialized state.

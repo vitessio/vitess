@@ -52,7 +52,7 @@ type Controller interface {
 
 	// SetServingType transitions the query service to the required serving type.
 	// Returns true if the state of QueryService or the tablet type changed.
-	SetServingType(tabletType topodatapb.TabletType, terTimestamp time.Time, serving bool, alsoAllow []topodatapb.TabletType) (bool, error)
+	SetServingType(tabletType topodatapb.TabletType, terTimestamp time.Time, serving bool) error
 
 	// EnterLameduck causes tabletserver to enter the lameduck state.
 	EnterLameduck()

@@ -61,9 +61,8 @@ func TestStateManagerStateByName(t *testing.T) {
 func TestStateManagerServeMaster(t *testing.T) {
 	sm := newTestStateManager(t)
 	sm.EnterLameduck()
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, nil)
+	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing)
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
 	assert.Equal(t, false, sm.lameduck)
 	assert.Equal(t, testNow, sm.terTimestamp)
@@ -89,9 +88,8 @@ func TestStateManagerServeMaster(t *testing.T) {
 
 func TestStateManagerServeNonMaster(t *testing.T) {
 	sm := newTestStateManager(t)
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, nil)
+	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing)
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
 	verifySubcomponent(t, 1, sm.messager, testStateClosed)
 	verifySubcomponent(t, 2, sm.tracker, testStateClosed)
@@ -111,9 +109,8 @@ func TestStateManagerServeNonMaster(t *testing.T) {
 
 func TestStateManagerUnserveMaster(t *testing.T) {
 	sm := newTestStateManager(t)
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateNotServing, nil)
+	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateNotServing)
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
 	verifySubcomponent(t, 1, sm.messager, testStateClosed)
 	verifySubcomponent(t, 2, sm.te, testStateClosed)
@@ -135,9 +132,8 @@ func TestStateManagerUnserveMaster(t *testing.T) {
 
 func TestStateManagerUnserveNonmaster(t *testing.T) {
 	sm := newTestStateManager(t)
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_RDONLY, testNow, StateNotServing, nil)
+	err := sm.SetServingType(topodatapb.TabletType_RDONLY, testNow, StateNotServing)
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
 	verifySubcomponent(t, 1, sm.messager, testStateClosed)
 	verifySubcomponent(t, 2, sm.te, testStateClosed)
@@ -160,9 +156,8 @@ func TestStateManagerUnserveNonmaster(t *testing.T) {
 
 func TestStateManagerClose(t *testing.T) {
 	sm := newTestStateManager(t)
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_RDONLY, testNow, StateNotConnected, nil)
+	err := sm.SetServingType(topodatapb.TabletType_RDONLY, testNow, StateNotConnected)
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
 	verifySubcomponent(t, 1, sm.messager, testStateClosed)
 	verifySubcomponent(t, 2, sm.te, testStateClosed)
@@ -182,9 +177,8 @@ func TestStateManagerClose(t *testing.T) {
 
 func TestStateManagerStopService(t *testing.T) {
 	sm := newTestStateManager(t)
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, nil)
+	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing)
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
 	assert.Equal(t, topodatapb.TabletType_REPLICA, sm.target.TabletType)
 	assert.Equal(t, StateServing, sm.state)
@@ -209,9 +203,8 @@ func (te *testWatcher) Close() {
 	go func() {
 		defer te.wg.Done()
 
-		stateChanged, err := te.sm.SetServingType(topodatapb.TabletType_RDONLY, testNow, StateNotServing, nil)
+		err := te.sm.SetServingType(topodatapb.TabletType_RDONLY, testNow, StateNotServing)
 		assert.NoError(te.t, err)
-		assert.True(te.t, stateChanged)
 	}()
 }
 
@@ -222,9 +215,8 @@ func TestStateManagerSetServingTypeRace(t *testing.T) {
 		sm: sm,
 	}
 	sm.watcher = te
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, nil)
+	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing)
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
 	// Ensure the next call waits and then succeeds.
 	te.wg.Wait()
@@ -236,13 +228,11 @@ func TestStateManagerSetServingTypeRace(t *testing.T) {
 
 func TestStateManagerSetServingTypeNoChange(t *testing.T) {
 	sm := newTestStateManager(t)
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, nil)
+	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing)
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
-	stateChanged, err = sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, nil)
+	err = sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing)
 	require.NoError(t, err)
-	assert.False(t, stateChanged)
 
 	verifySubcomponent(t, 1, sm.messager, testStateClosed)
 	verifySubcomponent(t, 2, sm.tracker, testStateClosed)
@@ -267,9 +257,8 @@ func TestStateManagerTransitionFailRetry(t *testing.T) {
 	sm := newTestStateManager(t)
 	sm.qe.(*testQueryEngine).failMySQL = true
 
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, nil)
+	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing)
 	require.Error(t, err)
-	assert.True(t, stateChanged)
 
 	// Calling retryTransition while retrying should be a no-op.
 	sm.retryTransition("")
@@ -298,16 +287,14 @@ func TestStateManagerTransitionFailRetry(t *testing.T) {
 func TestStateManagerNotConnectedType(t *testing.T) {
 	sm := newTestStateManager(t)
 	sm.EnterLameduck()
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_RESTORE, testNow, StateNotServing, nil)
+	err := sm.SetServingType(topodatapb.TabletType_RESTORE, testNow, StateNotServing)
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
 	assert.Equal(t, topodatapb.TabletType_RESTORE, sm.target.TabletType)
 	assert.Equal(t, StateNotConnected, sm.state)
 
-	stateChanged, err = sm.SetServingType(topodatapb.TabletType_BACKUP, testNow, StateNotServing, nil)
+	err = sm.SetServingType(topodatapb.TabletType_BACKUP, testNow, StateNotServing)
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
 	assert.Equal(t, topodatapb.TabletType_BACKUP, sm.target.TabletType)
 	assert.Equal(t, StateNotConnected, sm.state)
@@ -319,9 +306,8 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 
 	sm := newTestStateManager(t)
 
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, nil)
+	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing)
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
 	sm.qe.(*testQueryEngine).failMySQL = true
 	order.Set(0)
@@ -430,7 +416,7 @@ func TestStateManagerWaitForRequests(t *testing.T) {
 	sm.timebombDuration = 10 * time.Second
 
 	sm.replHealthy = true
-	_, err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, nil)
+	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing)
 	require.NoError(t, err)
 
 	err = sm.StartRequest(ctx, target, false)
@@ -481,9 +467,8 @@ func TestStateManagerNotify(t *testing.T) {
 		gotServing = serving
 		ch <- struct{}{}
 	}
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, nil)
+	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing)
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
 	assert.Equal(t, topodatapb.TabletType_MASTER, sm.target.TabletType)
 	assert.Equal(t, StateServing, sm.state)

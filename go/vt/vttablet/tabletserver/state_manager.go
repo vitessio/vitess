@@ -75,9 +75,8 @@ type stateManager struct {
 	lameduck       bool
 	target         querypb.Target
 	retrying       bool
-	// TODO(sougou): deprecate alsoAllow
-	alsoAllow    []topodatapb.TabletType
-	terTimestamp time.Time
+	alsoAllow      []topodatapb.TabletType
+	terTimestamp   time.Time
 
 	requests sync.WaitGroup
 
@@ -105,8 +104,9 @@ type stateManager struct {
 	// doesn't get spammed.
 	checkMySQLThrottler *sync2.Semaphore
 
-	timebombDuration   time.Duration
-	unhealthyThreshold time.Duration
+	timebombDuration      time.Duration
+	unhealthyThreshold    time.Duration
+	transitionGracePeriod time.Duration
 }
 
 type (
@@ -155,6 +155,7 @@ func (sm *stateManager) Init(env tabletenv.Env, target querypb.Target) {
 	sm.timebombDuration = env.Config().OltpReadPool.TimeoutSeconds.Get() * 10
 	sm.hcticks = timer.NewTimer(env.Config().Healthcheck.IntervalSeconds.Get())
 	sm.unhealthyThreshold = env.Config().Healthcheck.UnhealthyThresholdSeconds.Get()
+	sm.transitionGracePeriod = env.Config().GracePeriods.TransitionSeconds.Get()
 }
 
 // SetServingType changes the state to the specified settings.
@@ -164,7 +165,7 @@ func (sm *stateManager) Init(env tabletenv.Env, target querypb.Target) {
 // be honored.
 // If sm is already in the requested state, it returns stateChanged as
 // false.
-func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, terTimestamp time.Time, state servingState, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
+func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, terTimestamp time.Time, state servingState) error {
 	defer sm.ExitLameduck()
 
 	// Start is idempotent.
@@ -176,24 +177,23 @@ func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, terTime
 	}
 
 	log.Infof("Starting transition to %v %v, timestamp: %v", tabletType, stateName(state), terTimestamp)
-	if sm.mustTransition(tabletType, terTimestamp, state, alsoAllow) {
-		return true, sm.execTransition(tabletType, state)
+	if sm.mustTransition(tabletType, terTimestamp, state) {
+		return sm.execTransition(tabletType, state)
 	}
-	return false, nil
+	return nil
 }
 
 // mustTransition returns true if the requested state does not match the current
 // state. If so, it acquires the semaphore and returns true. If a transition is
 // already in progress, it waits. If the desired state is already reached, it
 // returns false without acquiring the semaphore.
-func (sm *stateManager) mustTransition(tabletType topodatapb.TabletType, terTimestamp time.Time, state servingState, alsoAllow []topodatapb.TabletType) bool {
+func (sm *stateManager) mustTransition(tabletType topodatapb.TabletType, terTimestamp time.Time, state servingState) bool {
 	sm.transitioning.Acquire()
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
 	sm.wantTabletType = tabletType
 	sm.wantState = state
-	sm.alsoAllow = alsoAllow
 	sm.terTimestamp = terTimestamp
 	if sm.target.TabletType == tabletType && sm.state == state {
 		sm.transitioning.Release()
@@ -299,7 +299,7 @@ func (sm *stateManager) StopService() {
 	log.Info("Stopping TabletServer")
 	// Stop replica tracking because StopService is used by all tests.
 	sm.hcticks.Stop()
-	sm.SetServingType(sm.Target().TabletType, time.Time{}, StateNotConnected, nil)
+	sm.SetServingType(sm.Target().TabletType, time.Time{}, StateNotConnected)
 }
 
 // StartRequest validates the current state and target and registers
@@ -503,7 +503,8 @@ func (sm *stateManager) setState(tabletType topodatapb.TabletType, state serving
 	if tabletType == topodatapb.TabletType_UNKNOWN {
 		tabletType = sm.wantTabletType
 	}
-	log.Infof("TabletServer transition: %v -> %v, %s -> %s", sm.target.TabletType, tabletType, stateName(sm.state), stateName(state))
+	log.Infof("TabletServer transition: %v(%v) -> %v(%v)", sm.target.TabletType, stateName(sm.state), tabletType, stateName(state))
+	sm.handleGracePeriod(tabletType)
 	sm.target.TabletType = tabletType
 	if sm.state == StateNotConnected {
 		// If we're transitioning out of StateNotConnected, we have
@@ -513,6 +514,31 @@ func (sm *stateManager) setState(tabletType topodatapb.TabletType, state serving
 	sm.state = state
 	// Broadcast also obtains a lock. Trigger in a goroutine to avoid a deadlock.
 	go sm.hcticks.Trigger()
+}
+
+func (sm *stateManager) handleGracePeriod(tabletType topodatapb.TabletType) {
+	if tabletType != topodatapb.TabletType_MASTER {
+		// We allow serving of previous type only for a master transition.
+		sm.alsoAllow = nil
+		return
+	}
+
+	if tabletType == topodatapb.TabletType_MASTER &&
+		sm.target.TabletType != topodatapb.TabletType_MASTER &&
+		sm.transitionGracePeriod != 0 {
+
+		sm.alsoAllow = []topodatapb.TabletType{sm.target.TabletType}
+		// This is not a perfect solution because multiple back and forth
+		// transitions will launch multiple of these goroutines. But the
+		// system will eventually converge.
+		go func() {
+			time.Sleep(sm.transitionGracePeriod)
+
+			sm.mu.Lock()
+			defer sm.mu.Unlock()
+			sm.alsoAllow = nil
+		}()
+	}
 }
 
 // Broadcast fetches the replication status and broadcasts
