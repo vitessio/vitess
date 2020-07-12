@@ -256,7 +256,7 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 			return nil
 		})
 		if err != nil {
-			sqlBeforeGTID <- []string{""}
+			sqlBeforeGTID <- []string{"", ""}
 		}
 	}()
 	defer vsClient.Close(ctx)

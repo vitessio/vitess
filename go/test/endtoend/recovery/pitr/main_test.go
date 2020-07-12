@@ -17,12 +17,15 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	masterTablet    *cluster.Vttablet
 	replicaTablet   *cluster.Vttablet
+	initDBFile      string
 
 	cell          = "zone1"
 	hostname      = "localhost"
 	keyspaceName  = "ks"
+	restoreKSName = "resoreks"
 	dbName        = "vt_ks"
 	shardName     = "0"
+	shardKsName   = "ks/0"
 	mysqlUserName = "vt_dba"
 )
 
@@ -30,19 +33,19 @@ func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
-	exitCode := func() int {
+	exitCode, err := func() (int, error) {
 		clusterInstance = cluster.NewCluster(cell, hostname)
 		defer clusterInstance.Teardown()
 
 		// Start topo server
 		if err := clusterInstance.StartTopo(); err != nil {
 			log.Error(err)
-			return 1
+			return 1, err
 		}
-		initDBFile := updateDBInitFile()
+		initDBFile = updateDBInitFile()
 		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspaceName); err != nil {
 			log.Error(err)
-			return 1
+			return 1, err
 		}
 		clusterInstance.Keyspaces = append(clusterInstance.Keyspaces, cluster.Keyspace{Name: keyspaceName})
 
@@ -51,11 +54,15 @@ func TestMain(m *testing.M) {
 
 		err := startTablets([]*cluster.Vttablet{masterTablet, replicaTablet}, initDBFile)
 		if err != nil {
-			return 1
+			return 1, err
 		}
 		err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, masterTablet.TabletUID)
-		return m.Run()
+		return m.Run(), nil
 	}()
+	if err != nil {
+		log.Error(err)
+		os.Exit(1)
+	}
 	os.Exit(exitCode)
 
 }
