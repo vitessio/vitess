@@ -34,6 +34,60 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
+func TestPlayerSavepoint(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table t1(id int, primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	// Issue a dummy change to ensure vreplication is initialized. Otherwise there
+	// is a race between the DDLs and the schema loader of vstreamer.
+	// Root cause seems to be with MySQL where t1 shows up in information_schema before
+	// the actual table is created.
+	execStatements(t, []string{"insert into t1 values(1)"})
+	expectDBClientQueries(t, []string{
+		"begin",
+		"insert into t1(id) values (1)",
+		"/update _vt.vreplication set pos=",
+		"commit",
+	})
+
+	execStatements(t, []string{
+		"begin",
+		"insert into t1(id) values (2)",
+		"savepoint a",
+		"insert into t1(id) values (3)",
+		"release savepoint a",
+		"commit",
+	})
+	expectDBClientQueries(t, []string{
+		"begin",
+		"/insert into t1.*2.*",
+		"/insert into t1.*3.*",
+		"/update _vt.vreplication set pos=",
+		"commit",
+	})
+	cancel()
+}
+
 func TestPlayerStatementModeWithFilter(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 

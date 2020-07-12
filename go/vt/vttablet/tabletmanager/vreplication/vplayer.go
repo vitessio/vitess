@@ -563,6 +563,8 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
 		// No-op: heartbeat timings are calculated in outer loop.
+	case binlogdatapb.VEventType_SAVEPOINT:
+		// No-op: savepoints are not applied
 	}
 	return nil
 }

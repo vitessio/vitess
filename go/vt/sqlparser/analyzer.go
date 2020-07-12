@@ -146,6 +146,8 @@ func Preview(sql string) StatementType {
 		return StmtUpdate
 	case "delete":
 		return StmtDelete
+	case "savepoint":
+		return StmtSavepoint
 	}
 	// For the following statements it is not sufficient to rely
 	// on loweredFirstWord. This is because they are not statements

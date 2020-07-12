@@ -243,6 +243,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 			curSize += newSize
 			bufferedEvents = append(bufferedEvents, vevent)
+		case binlogdatapb.VEventType_SAVEPOINT:
+			// no-op, we do not send savepoint event on
 		default:
 			return fmt.Errorf("unexpected event: %v", vevent)
 		}
@@ -308,6 +310,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 
 // parseEvent parses an event from the binlog and converts it to a list of VEvents.
 func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, error) {
+
 	if !ev.IsValid() {
 		return nil, fmt.Errorf("can't parse binlog event: invalid data: %#v", ev)
 	}
@@ -437,6 +440,11 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 					Type: binlogdatapb.VEventType_OTHER,
 				})
 			}
+			vs.se.ReloadAt(context.Background(), vs.pos)
+		case sqlparser.StmtSavepoint:
+			vevents = append(vevents, &binlogdatapb.VEvent{
+				Type: binlogdatapb.VEventType_SAVEPOINT,
+			})
 		case sqlparser.StmtOther, sqlparser.StmtPriv:
 			// These are either:
 			// 1) DBA statements like REPAIR that can be ignored.
