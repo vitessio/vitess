@@ -99,10 +99,7 @@ func (tr *Tracker) Open() {
 	tr.cancel = cancel
 	tr.wg.Add(1)
 	log.Info("Schema tracker enabled.")
-	if err := tr.possiblyInsertInitialSchema(ctx); err != nil {
-		log.Errorf("possiblyInsertInitialSchema eror: %v", err)
-		return
-	}
+
 	go tr.process(ctx)
 }
 
@@ -136,6 +133,10 @@ func (tr *Tracker) Enable(enabled bool) {
 func (tr *Tracker) process(ctx context.Context) {
 	defer tr.env.LogError()
 	defer tr.wg.Done()
+	if err := tr.possiblyInsertInitialSchema(ctx); err != nil {
+		log.Errorf("possiblyInsertInitialSchema eror: %v", err)
+		return
+	}
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
