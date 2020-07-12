@@ -63,6 +63,7 @@ func TestConfigParse(t *testing.T) {
   repl:
     password: '****'
   socket: a
+gracePeriods: {}
 healthcheck: {}
 hotRowProtection: {}
 olapReadPool: {}
@@ -106,6 +107,7 @@ func TestDefaultConfig(t *testing.T) {
 	require.NoError(t, err)
 	want := `cacheResultFields: true
 consolidator: enable
+gracePeriods: {}
 healthcheck:
   degradedThresholdSeconds: 30
   intervalSeconds: 20
@@ -308,5 +310,11 @@ func TestFlags(t *testing.T) {
 	currentConfig.Healthcheck.UnhealthyThresholdSeconds = 0
 	Init()
 	want.Healthcheck.UnhealthyThresholdSeconds = 3
+	assert.Equal(t, want, currentConfig)
+
+	transitionGracePeriod = 4 * time.Second
+	currentConfig.GracePeriods.TransitionSeconds = 0
+	Init()
+	want.GracePeriods.TransitionSeconds = 4
 	assert.Equal(t, want, currentConfig)
 }

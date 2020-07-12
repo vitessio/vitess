@@ -49,7 +49,7 @@ var (
 	// spare, or when being promoted to master). During this period, we expect
 	// vtgate to gracefully redirect traffic elsewhere, before we begin actually
 	// rejecting queries for that target type.
-	gracePeriod = flag.Duration("serving_state_grace_period", 0, "how long to pause after broadcasting health to vtgate, before enforcing a new serving state")
+	gracePeriod time.Duration
 
 	publishRetryInterval = flag.Duration("publish_retry_interval", 30*time.Second, "how long vttablet waits to retry publishing the tablet record")
 )
@@ -92,7 +92,7 @@ func (tm *TabletManager) loadBlacklistRules(ctx context.Context, tablet *topodat
 func (tm *TabletManager) lameduck(reason string) {
 	log.Infof("TabletManager is entering lameduck, reason: %v", reason)
 	tm.QueryServiceControl.EnterLameduck()
-	time.Sleep(*gracePeriod)
+	time.Sleep(gracePeriod)
 	log.Infof("TabletManager is leaving lameduck")
 }
 
@@ -218,7 +218,7 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 			// When promoting from replica to master, allow both master and replica
 			// queries to be served during gracePeriod.
 			if _, err := tm.QueryServiceControl.SetServingType(newTablet.Type, terTime, true, []topodatapb.TabletType{oldTablet.Type}); err == nil {
-				time.Sleep(*gracePeriod)
+				time.Sleep(gracePeriod)
 			} else {
 				log.Errorf("Can't start query service for MASTER+REPLICA mode: %v", err)
 			}
@@ -231,7 +231,7 @@ func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTable
 		// Query service should be stopped.
 		if topo.IsSubjectToLameduck(oldTablet.Type) &&
 			newTablet.Type == topodatapb.TabletType_SPARE &&
-			*gracePeriod > 0 {
+			gracePeriod > 0 {
 			// When a non-MASTER serving type is going SPARE,
 			// put query service in lameduck during gracePeriod.
 			tm.lameduck(disallowQueryReason)

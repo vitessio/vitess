@@ -207,6 +207,7 @@ var healthCheckInterval time.Duration
 // InitConfig is a temp function to keep things working during the refactor.
 func InitConfig(config *tabletenv.TabletConfig) {
 	healthCheckInterval = config.Healthcheck.IntervalSeconds.Get()
+	gracePeriod = config.GracePeriods.TransitionSeconds.Get()
 }
 
 // BuildTabletFromInput builds a tablet record from input parameters.
