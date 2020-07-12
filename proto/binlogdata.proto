@@ -232,6 +232,7 @@ enum VEventType {
   JOURNAL = 16;
   VERSION = 17;
   LASTPK = 18;
+  SAVEPOINT = 19;
 }
 
 // RowChange represents one row change.
