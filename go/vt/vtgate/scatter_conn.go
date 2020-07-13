@@ -146,7 +146,6 @@ func (stc *ScatterConn) Execute(
 	bindVars map[string]*querypb.BindVariable,
 	rss []*srvtopo.ResolvedShard,
 	session *SafeSession,
-	notInTransaction bool,
 	options *querypb.ExecuteOptions,
 	autocommit bool,
 ) (*sqltypes.Result, error) {
@@ -160,7 +159,6 @@ func (stc *ScatterConn) Execute(
 		"Execute",
 		rss,
 		session,
-		notInTransaction,
 		func(rs *srvtopo.ResolvedShard, i int, info *shardActionInfo) (int64, *topodatapb.TabletAlias, error) {
 			var (
 				innerqr       *sqltypes.Result
@@ -236,7 +234,6 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	rss []*srvtopo.ResolvedShard,
 	queries []*querypb.BoundQuery,
 	session *SafeSession,
-	notInTransaction bool,
 	autocommit bool,
 ) (qr *sqltypes.Result, errs []error) {
 
@@ -249,7 +246,6 @@ func (stc *ScatterConn) ExecuteMultiShard(
 		"Execute",
 		rss,
 		session,
-		notInTransaction,
 		func(rs *srvtopo.ResolvedShard, i int, info *shardActionInfo) (int64, *topodatapb.TabletAlias, error) {
 			var (
 				innerqr       *sqltypes.Result
@@ -552,7 +548,6 @@ func (stc *ScatterConn) multiGoTransaction(
 	name string,
 	rss []*srvtopo.ResolvedShard,
 	session *SafeSession,
-	notInTransaction bool,
 	action shardActionTransactionFunc,
 ) (allErrors *concurrency.AllErrorRecorder) {
 
@@ -567,7 +562,7 @@ func (stc *ScatterConn) multiGoTransaction(
 		startTime, statsKey := stc.startAction(name, rs.Target)
 		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
-		shardActionInfo := transactionInfo(rs.Target, session, notInTransaction)
+		shardActionInfo := transactionInfo(rs.Target, session)
 		transactionID, alias, err := action(rs, i, shardActionInfo)
 		if shardActionInfo.actionNeeded == shouldBegin && transactionID != 0 {
 			if appendErr := session.Append(&vtgatepb.Session_ShardSession{
@@ -606,7 +601,7 @@ func (stc *ScatterConn) multiGoTransaction(
 // transactionInfo looks at the current session, and returns:
 // - shouldBegin: if we should call 'Begin' to get a transactionID
 // - transactionID: the transactionID to use, or 0 if not in a transaction.
-func transactionInfo(target *querypb.Target, session *SafeSession, notInTransaction bool) *shardActionInfo {
+func transactionInfo(target *querypb.Target, session *SafeSession) *shardActionInfo {
 	if !session.InTransaction() {
 		return &shardActionInfo{}
 	}
@@ -620,12 +615,6 @@ func transactionInfo(target *querypb.Target, session *SafeSession, notInTransact
 			txID:  transactionID,
 			alias: alias,
 		}
-	}
-	// We are in a transaction at higher level,
-	// but client requires not to start a transaction for this query.
-	// If a transaction was started on this conn, we will use it (as above).
-	if notInTransaction {
-		return &shardActionInfo{}
 	}
 
 	return &shardActionInfo{actionNeeded: shouldBegin}

@@ -28,7 +28,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
@@ -120,7 +119,7 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 			}
 		}
 
-		qr, errs := sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(nil), false, false)
+		qr, errs := sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(nil), false)
 		return qr, vterrors.Aggregate(errs)
 	})
 }
@@ -315,7 +314,7 @@ func TestMaxMemoryRows(t *testing.T) {
 		Sql:           "query1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	_, errs := sc.ExecuteMultiShard(ctx, rss, queries, session, false, false)
+	_, errs := sc.ExecuteMultiShard(ctx, rss, queries, session, false)
 	assert.EqualError(t, errs[0], want)
 }
 
@@ -357,7 +356,7 @@ func TestMultiExecs(t *testing.T) {
 		},
 	}
 
-	_, _ = sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(nil), false, false)
+	_, _ = sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(nil), false)
 	if len(sbc0.Queries) == 0 || len(sbc1.Queries) == 0 {
 		t.Fatalf("didn't get expected query")
 	}
@@ -431,162 +430,6 @@ func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	}
 }
 
-func TestScatterConnQueryNotInTransaction(t *testing.T) {
-	s := createSandbox("TestScatterConnQueryNotInTransaction")
-	hc := discovery.NewFakeLegacyHealthCheck()
-
-	// case 1: read query (not in transaction) followed by write query, not in the same shard.
-	hc.Reset()
-	sc := newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
-	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestScatterConnQueryNotInTransaction", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
-	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestScatterConnQueryNotInTransaction", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
-
-	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-	rss0, err := res.ResolveDestination(ctx, "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("0"))
-	if err != nil {
-		t.Fatalf("ResolveDestination(0) failed: %v", err)
-	}
-	rss1, err := res.ResolveDestination(ctx, "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("1"))
-	if err != nil {
-		t.Fatalf("ResolveDestination(1) failed: %v", err)
-	}
-
-	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.Execute(ctx, "query1", nil, rss0, session, true, nil, false)
-	sc.Execute(ctx, "query1", nil, rss1, session, false, nil, false)
-
-	wantSession := vtgatepb.Session{
-		InTransaction: true,
-		ShardSessions: []*vtgatepb.Session_ShardSession{{
-			Target: &querypb.Target{
-				Keyspace:   "TestScatterConnQueryNotInTransaction",
-				Shard:      "1",
-				TabletType: topodatapb.TabletType_REPLICA,
-			},
-			TransactionId: 1,
-			TabletAlias:   sbc0.Tablet().Alias,
-		}},
-	}
-	if !proto.Equal(&wantSession, session.Session) {
-		t.Errorf("want\n%+v\ngot\n%+v", wantSession, *session.Session)
-	}
-	sc.txConn.Commit(ctx, session)
-	{
-		execCount0 := sbc0.ExecCount.Get()
-		execCount1 := sbc1.ExecCount.Get()
-		if execCount0 != 1 || execCount1 != 1 {
-			t.Errorf("want 1/1, got %d/%d", execCount0, execCount1)
-		}
-	}
-	if commitCount := sbc0.CommitCount.Get(); commitCount != 0 {
-		t.Errorf("want 0, got %d", commitCount)
-	}
-	if commitCount := sbc1.CommitCount.Get(); commitCount != 1 {
-		t.Errorf("want 1, got %d", commitCount)
-	}
-
-	// case 2: write query followed by read query (not in transaction), not in the same shard.
-	s.Reset()
-	hc.Reset()
-	sc = newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
-	sbc0 = hc.AddTestTablet("aa", "0", 1, "TestScatterConnQueryNotInTransaction", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
-	sbc1 = hc.AddTestTablet("aa", "1", 1, "TestScatterConnQueryNotInTransaction", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
-	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
-
-	res = srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-	rss0, err = res.ResolveDestination(ctx, "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("0"))
-	if err != nil {
-		t.Fatalf("ResolveDestination(0) failed: %v", err)
-	}
-	rss1, err = res.ResolveDestination(ctx, "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("1"))
-	if err != nil {
-		t.Fatalf("ResolveDestination(1) failed: %v", err)
-	}
-
-	sc.Execute(ctx, "query1", nil, rss0, session, false, nil, false)
-	sc.Execute(ctx, "query1", nil, rss1, session, true, nil, false)
-
-	wantSession = vtgatepb.Session{
-		InTransaction: true,
-		ShardSessions: []*vtgatepb.Session_ShardSession{{
-			Target: &querypb.Target{
-				Keyspace:   "TestScatterConnQueryNotInTransaction",
-				Shard:      "0",
-				TabletType: topodatapb.TabletType_REPLICA,
-			},
-			TransactionId: 1,
-			TabletAlias:   sbc0.Tablet().Alias,
-		}},
-	}
-	if !proto.Equal(&wantSession, session.Session) {
-		t.Errorf("want\n%+v\ngot\n%+v", wantSession, *session.Session)
-	}
-	sc.txConn.Commit(ctx, session)
-	{
-		execCount0 := sbc0.ExecCount.Get()
-		execCount1 := sbc1.ExecCount.Get()
-		if execCount0 != 1 || execCount1 != 1 {
-			t.Errorf("want 1/1, got %d/%d", execCount0, execCount1)
-		}
-	}
-	if commitCount := sbc0.CommitCount.Get(); commitCount != 1 {
-		t.Errorf("want 1, got %d", commitCount)
-	}
-	if commitCount := sbc1.CommitCount.Get(); commitCount != 0 {
-		t.Errorf("want 0, got %d", commitCount)
-	}
-
-	// case 3: write query followed by read query, in the same shard.
-	s.Reset()
-	hc.Reset()
-	sc = newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
-	sbc0 = hc.AddTestTablet("aa", "0", 1, "TestScatterConnQueryNotInTransaction", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
-	sbc1 = hc.AddTestTablet("aa", "1", 1, "TestScatterConnQueryNotInTransaction", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
-	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	noTxSession := NewSafeSession(&vtgatepb.Session{InTransaction: false})
-
-	res = srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-	rss0, err = res.ResolveDestination(ctx, "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("0"))
-	require.NoError(t, err)
-	rss1, err = res.ResolveDestination(ctx, "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShards([]string{"0", "1"}))
-	require.NoError(t, err)
-
-	_, err = sc.Execute(ctx, "query1", nil, rss0, session, false, nil, false)
-	require.NoError(t, err)
-	_, err = sc.Execute(ctx, "query1", nil, rss1, noTxSession, true, nil, false)
-	require.NoError(t, err)
-
-	wantSession = vtgatepb.Session{
-		InTransaction: true,
-		ShardSessions: []*vtgatepb.Session_ShardSession{{
-			Target: &querypb.Target{
-				Keyspace:   "TestScatterConnQueryNotInTransaction",
-				Shard:      "0",
-				TabletType: topodatapb.TabletType_REPLICA,
-			},
-			TransactionId: 1,
-			TabletAlias:   sbc0.Tablet().Alias,
-		}},
-	}
-	if !proto.Equal(&wantSession, session.Session) {
-		t.Errorf("want\n%+v\ngot\n%+v", wantSession, *session.Session)
-	}
-	err = sc.txConn.Commit(ctx, session)
-	require.NoError(t, err)
-
-	execCount0 := sbc0.ExecCount.Get()
-	execCount1 := sbc1.ExecCount.Get()
-	if execCount0 != 2 || execCount1 != 1 {
-		t.Errorf("want 2/1, got %d/%d", execCount0, execCount1)
-	}
-	if commitCount := sbc0.CommitCount.Get(); commitCount != 1 {
-		t.Errorf("want 1, got %d", commitCount)
-	}
-	if commitCount := sbc1.CommitCount.Get(); commitCount != 0 {
-		t.Errorf("want 0, got %d", commitCount)
-	}
-}
-
 func TestScatterConnSingleDB(t *testing.T) {
 	createSandbox("TestScatterConnSingleDB")
 	hc := discovery.NewFakeLegacyHealthCheck()
@@ -610,9 +453,9 @@ func TestScatterConnSingleDB(t *testing.T) {
 
 	// TransactionMode_SINGLE in session
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, TransactionMode: vtgatepb.TransactionMode_SINGLE})
-	_, err = sc.Execute(ctx, "query1", nil, rss0, session, false, nil, false)
+	_, err = sc.Execute(ctx, "query1", nil, rss0, session, nil, false)
 	require.NoError(t, err)
-	_, err = sc.Execute(ctx, "query1", nil, rss1, session, false, nil, false)
+	_, err = sc.Execute(ctx, "query1", nil, rss1, session, nil, false)
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Multi DB exec: %v, must contain %s", err, want)
 	}
@@ -620,9 +463,9 @@ func TestScatterConnSingleDB(t *testing.T) {
 	// TransactionMode_SINGLE in txconn
 	sc.txConn.mode = vtgatepb.TransactionMode_SINGLE
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	_, err = sc.Execute(ctx, "query1", nil, rss0, session, false, nil, false)
+	_, err = sc.Execute(ctx, "query1", nil, rss0, session, nil, false)
 	require.NoError(t, err)
-	_, err = sc.Execute(ctx, "query1", nil, rss1, session, false, nil, false)
+	_, err = sc.Execute(ctx, "query1", nil, rss1, session, nil, false)
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Multi DB exec: %v, must contain %s", err, want)
 	}
@@ -630,9 +473,9 @@ func TestScatterConnSingleDB(t *testing.T) {
 	// TransactionMode_MULTI in txconn. Should not fail.
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	_, err = sc.Execute(ctx, "query1", nil, rss0, session, false, nil, false)
+	_, err = sc.Execute(ctx, "query1", nil, rss0, session, nil, false)
 	require.NoError(t, err)
-	_, err = sc.Execute(ctx, "query1", nil, rss1, session, false, nil, false)
+	_, err = sc.Execute(ctx, "query1", nil, rss1, session, nil, false)
 	require.NoError(t, err)
 }
 
