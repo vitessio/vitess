@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 
@@ -36,7 +37,25 @@ var (
 func init() {
 	Register("lookup", NewLookup)
 	Register("lookup_unique", NewLookupUnique)
+	RegisterSingleValueEncoder("numeric_uint64", numericUint64)
 }
+
+// RegisterSingleValueEncoder will link an encoder that can be used on
+// lookup_unique hashes.
+func RegisterSingleValueEncoder(name string, fn SingleValueEncoderFunc) {
+	if _, ok := svEncoders[name]; ok {
+		panic(fmt.Sprintf("%s is already registered", name))
+	}
+	svEncoders[name] = fn
+}
+
+// svEncoders tracks all the functions that can be applied to LookupUnique
+// values when deriving keyspace ids
+var svEncoders = make(map[string]SingleValueEncoderFunc)
+
+// SingleValueEncoderFunc is a function that maps a single lookup result to a
+// keyspace id.
+type SingleValueEncoderFunc func(sqltypes.Value) ([]byte, error)
 
 // LookupNonUnique defines a vindex that uses a lookup table and create a mapping between from ids and KeyspaceId.
 // It's NonUnique and a Lookup.
@@ -179,6 +198,7 @@ type LookupUnique struct {
 	name      string
 	writeOnly bool
 	lkp       lookupInternal
+	encoder   SingleValueEncoderFunc
 }
 
 // NewLookupUnique creates a LookupUnique vindex.
@@ -200,6 +220,15 @@ func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 	lu.writeOnly, err = boolFromMap(m, "write_only")
 	if err != nil {
 		return nil, err
+	}
+
+	encoderName, hasEncoder := m["encoder"]
+	if hasEncoder {
+		encoder, ok := svEncoders[encoderName]
+		if !ok {
+			return nil, fmt.Errorf("vindex %s references unknown value encoder %s", name, encoderName)
+		}
+		lu.encoder = encoder
 	}
 
 	// Don't allow upserts for unique vindexes.
@@ -248,6 +277,16 @@ func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destin
 			out = append(out, key.DestinationNone{})
 		case 1:
 			out = append(out, key.DestinationKeyspaceID(result.Rows[0][0].ToBytes()))
+			value := result.Rows[0][0]
+			if lu.encoder != nil {
+				encodedBytes, err := lu.encoder(value)
+				if err != nil {
+					return nil, fmt.Errorf("Lookup.Map: couldn't apply encoding: %v", err)
+				}
+				out = append(out, key.DestinationKeyspaceID(encodedBytes))
+			} else {
+				out = append(out, key.DestinationKeyspaceID(value.ToBytes()))
+			}
 		default:
 			return nil, fmt.Errorf("Lookup.Map: unexpected multiple results from vindex %s: %v", lu.lkp.Table, ids[i])
 		}
@@ -285,4 +324,14 @@ func (lu *LookupUnique) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value
 // MarshalJSON returns a JSON representation of LookupUnique.
 func (lu *LookupUnique) MarshalJSON() ([]byte, error) {
 	return json.Marshal(lu.lkp)
+}
+
+func numericUint64(input sqltypes.Value) ([]byte, error) {
+	v, err := sqltypes.ToUint64(input)
+	if err != nil {
+		return nil, fmt.Errorf("numericUint64: couldn't parse bytes: %v", err)
+	}
+	vBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(vBytes, v)
+	return vBytes, nil
 }

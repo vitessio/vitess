@@ -57,6 +57,44 @@ func TestLookupUniqueNew(t *testing.T) {
 	}
 }
 
+func TestLookupUniqueNewHandlesEncoders(t *testing.T) {
+	lu, err := CreateVindex("lookup_unique", "lu_with_encoder", map[string]string{
+		"table":   "t",
+		"from":    "fromc",
+		"to":      "toc",
+		"encoder": "numeric_uint64",
+	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lut, ok := lu.(*LookupUnique)
+	if !ok {
+		t.Fatal("NewLookupUnique should return a *LookupUnique")
+	}
+	if lut.encoder == nil {
+		t.Errorf("LookupUnique.encoder is nil, expected a function")
+	}
+}
+
+func TestLookupUniqueNewHandlesMissingEncoder(t *testing.T) {
+	lu, err := CreateVindex("lookup_unique", "lu_with_encoder", map[string]string{
+		"table":   "t",
+		"from":    "fromc",
+		"to":      "toc",
+		"encoder": "encoder_bad_name",
+	})
+
+	if err == nil {
+		t.Errorf("expected error when constructing lookup unique referencing an unknown encoder")
+	}
+
+	if lu != nil {
+		t.Errorf("LookupUnique returned, should be nil")
+	}
+}
+
 func TestLookupUniqueInfo(t *testing.T) {
 	lookupUnique := createLookup(t, "lookup_unique", false)
 	assert.Equal(t, 10, lookupUnique.Cost())
@@ -104,6 +142,34 @@ func TestLookupUniqueMap(t *testing.T) {
 		t.Errorf("lookupUnique(query fail) err: %v, want %s", err, wantErr)
 	}
 	vc.mustFail = false
+}
+
+func TestLookupUniqueMapWithEncoder(t *testing.T) {
+	lu, err := CreateVindex("lookup_unique", "lu_with_encoder", map[string]string{
+		"table":   "t",
+		"from":    "fromc",
+		"to":      "toc",
+		"encoder": "numeric_uint64",
+	})
+	if err != nil {
+		t.Fatal("Unable to create lookup_unique vindex")
+	}
+
+	vc := &vcursor{numRows: 1}
+	got, err := lu.(SingleColumn).Map(
+		vc,
+		[]sqltypes.Value{sqltypes.NewUint64(uint64(1))},
+	)
+	if err != nil {
+		t.Errorf("Lookup.Map got: %v, want: nil", err)
+	}
+
+	wantBytes, _ := numericUint64(sqltypes.NewUint64(uint64(1)))
+	want := []key.Destination{key.DestinationKeyspaceID(wantBytes)}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("lookupUnique.Map got: %v, want: %v", got, want)
+	}
 }
 
 func TestLookupUniqueMapWriteOnly(t *testing.T) {
