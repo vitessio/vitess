@@ -131,7 +131,7 @@ type RPCTM interface {
 
 	InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error
 
-	DemoteMaster(ctx context.Context) (string, *replicationdatapb.MasterStatus, error)
+	DemoteMaster(ctx context.Context) (*replicationdatapb.MasterStatus, error)
 
 	UndoDemoteMaster(ctx context.Context) error
 

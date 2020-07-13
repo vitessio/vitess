@@ -372,9 +372,9 @@ func (s *server) DemoteMaster(ctx context.Context, request *tabletmanagerdatapb.
 	defer s.tm.HandleRPCPanic(ctx, "DemoteMaster", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.DemoteMasterResponse{}
-	position, masterStatus, err := s.tm.DemoteMaster(ctx)
+	masterStatus, err := s.tm.DemoteMaster(ctx)
 	if err == nil {
-		response.DeprecatedPosition = position
+		response.DeprecatedPosition = masterStatus.Position
 		response.MasterStatus = masterStatus
 	}
 	return response, err

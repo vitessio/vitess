@@ -1123,20 +1123,20 @@ func tmRPCTestInitReplicaPanic(ctx context.Context, t *testing.T, client tmclien
 	expectHandleRPCPanic(t, "InitReplica", true /*verbose*/, err)
 }
 
-func (fra *fakeRPCTM) DemoteMaster(ctx context.Context) (string, *replicationdatapb.MasterStatus, error) {
+func (fra *fakeRPCTM) DemoteMaster(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	return testReplicationPosition, testMasterStatus, nil
+	return testMasterStatus, nil
 }
 
 func tmRPCTestDemoteMaster(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	rp, _, err := client.DemoteMaster(ctx, tablet)
-	compareError(t, "DemoteMaster", err, rp, testReplicationPosition)
+	masterStatus, err := client.DemoteMaster(ctx, tablet)
+	compareError(t, "DemoteMaster", err, masterStatus.Position, testMasterStatus.Position)
 }
 
 func tmRPCTestDemoteMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, _, err := client.DemoteMaster(ctx, tablet)
+	_, err := client.DemoteMaster(ctx, tablet)
 	expectHandleRPCPanic(t, "DemoteMaster", true /*verbose*/, err)
 }
 

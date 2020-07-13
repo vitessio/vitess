@@ -266,8 +266,8 @@ func (client *FakeTabletManagerClient) PopulateReparentJournal(ctx context.Conte
 }
 
 // DemoteMaster is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (string, *replicationdatapb.MasterStatus, error) {
-	return "", nil, nil
+func (client *FakeTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error) {
+	return nil, nil
 }
 
 // UndoDemoteMaster is part of the tmclient.TabletManagerClient interface.
