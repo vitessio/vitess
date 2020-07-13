@@ -361,6 +361,8 @@ func (lu *LookupUnique) MarshalJSON() ([]byte, error) {
 }
 
 func numericUint64(input sqltypes.Value) ([]byte, error) {
+	// If attempting to cherry-pick this into a build <= 6.0 this needs to be
+	// rewritten as sqltypes.ToUint64
 	v, err := evalengine.ToUint64(input)
 	if err != nil {
 		return nil, fmt.Errorf("numericUint64: couldn't parse bytes: %v", err)
