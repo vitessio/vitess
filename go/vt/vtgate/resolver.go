@@ -63,7 +63,6 @@ func (res *Resolver) Execute(
 	tabletType topodatapb.TabletType,
 	destination key.Destination,
 	session *SafeSession,
-	notInTransaction bool,
 	options *querypb.ExecuteOptions,
 	logStats *LogStats,
 	canAutocommit bool,
@@ -94,7 +93,6 @@ func (res *Resolver) Execute(
 			rss,
 			queries,
 			session,
-			notInTransaction,
 			autocommit,
 		)
 		err = vterrors.Aggregate(errors)
