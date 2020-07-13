@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 var (
@@ -310,7 +311,6 @@ func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destin
 		case 0:
 			out = append(out, key.DestinationNone{})
 		case 1:
-			out = append(out, key.DestinationKeyspaceID(result.Rows[0][0].ToBytes()))
 			value := result.Rows[0][0]
 			if lu.encoder != nil {
 				encodedBytes, err := lu.encoder(value)
@@ -361,7 +361,7 @@ func (lu *LookupUnique) MarshalJSON() ([]byte, error) {
 }
 
 func numericUint64(input sqltypes.Value) ([]byte, error) {
-	v, err := sqltypes.ToUint64(input)
+	v, err := evalengine.ToUint64(input)
 	if err != nil {
 		return nil, fmt.Errorf("numericUint64: couldn't parse bytes: %v", err)
 	}

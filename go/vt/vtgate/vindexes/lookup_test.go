@@ -258,6 +258,23 @@ func TestLookupNonUniqueMapWithEncoders(t *testing.T) {
 	}
 }
 
+func TestLookupNonUniqueNewHandlesMissingEncoder(t *testing.T) {
+	lu, err := CreateVindex("lookup", "lookup", map[string]string{
+		"table":   "t",
+		"from":    "fromc",
+		"to":      "toc",
+		"encoder": "encoder_bad_name",
+	})
+
+	if err == nil {
+		t.Errorf("expected error when constructing Lookup referencing an unknown encoder")
+	}
+
+	if lu != nil {
+		t.Errorf("Lookup returned, should be nil")
+	}
+}
+
 func TestLookupNonUniqueMapWithErrorEncoder(t *testing.T) {
 	lu, err := CreateVindex("lookup", "lookup", map[string]string{
 		"table":   "t",
