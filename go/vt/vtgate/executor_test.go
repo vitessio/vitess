@@ -290,16 +290,10 @@ func TestExecutorAutocommit(t *testing.T) {
 		t.Errorf("Commit count: %d, want %d", got, want)
 	}
 
-	// In the following section, we look at AsTransaction count instead of CommitCount because
-	// the update results in a single round-trip ExecuteBatch call.
-	startCount = sbclookup.AsTransactionCount.Get()
 	_, err = executor.Execute(ctx, "TestExecute", session, "update main1 set id=1", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master", FoundRows: 1, RowCount: 1}
 	utils.MustMatch(t, wantSession, session.Session, "session does not match for autocommit=1")
-	if got, want := sbclookup.AsTransactionCount.Get(), startCount+1; got != want {
-		t.Errorf("Commit count: %d, want %d", got, want)
-	}
 
 	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id=1", 1)
 	assert.NotEqual(t, time.Duration(0), logStats.CommitTime, "logstats: expected non-zero CommitTime")
