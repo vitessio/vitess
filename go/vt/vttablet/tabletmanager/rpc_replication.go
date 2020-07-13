@@ -623,7 +623,7 @@ func (tm *TabletManager) ReplicaWasRestarted(ctx context.Context, parent *topoda
 	if tablet.Type != topodatapb.TabletType_MASTER {
 		return nil
 	}
-	tablet.Type = topodatapb.TabletType_MASTER
+	tablet.Type = topodatapb.TabletType_REPLICA
 	tablet.MasterTermStartTime = nil
 	tm.updateState(ctx, tablet, "ReplicaWasRestarted")
 	return nil
