@@ -65,11 +65,7 @@ insert into user (id, name, nickname, address) values(2, 'bob', 'bobby', '123 ma
 ----------------------------------------------------------------------
 insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into music_extra (id, extra) values (1, 'a'), (2, 'b'), (3, 'c')
 
-1 ks_sharded/-40: begin
 1 ks_sharded/-40: insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into music_extra(id, extra) values (1, 'a'), (2, 'b')
-1 ks_sharded/-40: commit
-1 ks_sharded/40-80: begin
 1 ks_sharded/40-80: insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into music_extra(id, extra) values (3, 'c')
-1 ks_sharded/40-80: commit
 
 ----------------------------------------------------------------------

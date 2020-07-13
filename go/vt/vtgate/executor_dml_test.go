@@ -712,7 +712,7 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 		},
 	}}
 	// autocommit should go as ExecuteBatch
-	if !reflect.DeepEqual(sbclookup.BatchQueries[0], wantQueries) {
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.BatchQueries[0]: \n%+v, want \n%+v", sbclookup.BatchQueries[0], wantQueries)
 	}
 }
