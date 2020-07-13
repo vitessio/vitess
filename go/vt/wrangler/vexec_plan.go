@@ -61,32 +61,75 @@ func (vx *vexec) buildVExecPlan() (*vexecPlan, error) {
 	return plan, nil
 }
 
-func (vx *vexec) addDefaultWheres(where *sqlparser.Where) *sqlparser.Where {
-	newWhere := where
-	expr := &sqlparser.ComparisonExpr{
-		Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent("db_name")},
-		Operator: sqlparser.EqualStr,
-		Right:    sqlparser.NewStrVal([]byte(vx.masters[0].DbName())),
+func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlparser.Expr {
+	if node == nil {
+		return filters
 	}
-	if newWhere == nil {
-		newWhere = &sqlparser.Where{
-			Type: sqlparser.WhereStr,
-			Expr: expr,
+	switch node := node.(type) {
+	case *sqlparser.AndExpr:
+		filters = splitAndExpression(filters, node.Left)
+		return splitAndExpression(filters, node.Right)
+	}
+	return append(filters, node)
+}
+
+func (vx *vexec) analyzeWhere(where *sqlparser.Where) []string {
+	var cols []string
+	if where == nil {
+		return cols
+	}
+	exprs := splitAndExpression(nil, where.Expr)
+	for _, expr := range exprs {
+		switch expr := expr.(type) {
+		case *sqlparser.ComparisonExpr:
+			qualifiedName, ok := expr.Left.(*sqlparser.ColName)
+			if ok {
+				cols = append(cols, qualifiedName.Name.String())
+			}
 		}
-	} else {
+	}
+	return cols
+}
+
+func (vx *vexec) addDefaultWheres(where *sqlparser.Where) *sqlparser.Where {
+	cols := vx.analyzeWhere(where)
+	var hasDBName, hasWorkflow bool
+	for _, col := range cols {
+		if col == "db_name" {
+			hasDBName = true
+		} else if col == "workflow" {
+			hasWorkflow = true
+		}
+	}
+	newWhere := where
+	if !hasDBName {
+		expr := &sqlparser.ComparisonExpr{
+			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent("db_name")},
+			Operator: sqlparser.EqualStr,
+			Right:    sqlparser.NewStrVal([]byte(vx.masters[0].DbName())),
+		}
+		if newWhere == nil {
+			newWhere = &sqlparser.Where{
+				Type: sqlparser.WhereStr,
+				Expr: expr,
+			}
+		} else {
+			newWhere.Expr = &sqlparser.AndExpr{
+				Left:  newWhere.Expr,
+				Right: expr,
+			}
+		}
+	}
+	if !hasWorkflow {
+		expr := &sqlparser.ComparisonExpr{
+			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent("workflow")},
+			Operator: sqlparser.EqualStr,
+			Right:    sqlparser.NewStrVal([]byte(vx.workflow)),
+		}
 		newWhere.Expr = &sqlparser.AndExpr{
 			Left:  newWhere.Expr,
 			Right: expr,
 		}
-	}
-	expr = &sqlparser.ComparisonExpr{
-		Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent("workflow")},
-		Operator: sqlparser.EqualStr,
-		Right:    sqlparser.NewStrVal([]byte(vx.workflow)),
-	}
-	newWhere.Expr = &sqlparser.AndExpr{
-		Left:  newWhere.Expr,
-		Right: expr,
 	}
 	return newWhere
 }
