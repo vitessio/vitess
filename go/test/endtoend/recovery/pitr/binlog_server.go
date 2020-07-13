@@ -24,7 +24,6 @@ type binLogServer struct {
 	username       string
 	dataDirectory  string
 	executablePath string
-	logDir         string
 
 	proc *exec.Cmd
 	exit chan error

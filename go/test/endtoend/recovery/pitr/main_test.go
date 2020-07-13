@@ -57,6 +57,9 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 		err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, masterTablet.TabletUID)
+		if err != nil {
+			return 1, err
+		}
 		return m.Run(), nil
 	}()
 	if err != nil {

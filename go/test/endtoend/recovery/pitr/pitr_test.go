@@ -17,7 +17,7 @@ import (
 
 var (
 	createTable       = `create table product (id bigint(20) primary key, name char(10), created bigint(20));`
-	insertTable       = `set time_zone='+00:00';insert into product (id, name, created) values(%s, '%s', unix_timestamp());`
+	insertTable       = `set time_zone='+00:00';insert into product (id, name, created) values(%d, '%s', unix_timestamp());`
 	slowInsert        = `select sleep(%d);set time_zone='+00:00';insert into product (id, name, created) values(%d, '%s', unix_timestamp());`
 	selectRecoverTime = `select created from product where id = %d`
 	selectMaxID       = `select max(id) from product`
@@ -32,7 +32,7 @@ func TestPointInTimeRecovery(t *testing.T) {
 	_, err = masterTablet.VttabletProcess.QueryTablet(fmt.Sprintf(insertTable, 2, "p2"), keyspaceName, true)
 	require.NoError(t, err)
 
-	// start the binlog server and point it to master
+	//start the binlog server and point it to master
 	bs, err := newBinlogServer(hostname, clusterInstance.GetAndReservePort())
 	defer bs.stop()
 	require.NoError(t, err)
@@ -42,6 +42,7 @@ func TestPointInTimeRecovery(t *testing.T) {
 		port:     masterTablet.MysqlctlProcess.MySQLPort,
 		username: mysqlUserName,
 	})
+	require.NoError(t, err)
 
 	// take the backup (to simulate the regular backup)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Backup", replicaTablet.Alias)
@@ -94,9 +95,11 @@ func getRecoveryTimeInUTC(t *testing.T, rowNum int) string {
 }
 
 func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *binLogServer, timeToRecover string) {
-	output, err := clusterInstance.VtctlProcess.ExecuteCommandWithOutput("CreateKeyspace",
+	tm := time.Now().UTC()
+	fmt.Println(tm.Format(time.RFC3339), timeToRecover)
+	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("CreateKeyspace",
 		"-keyspace_type=SNAPSHOT", "-base_keyspace="+keyspaceName,
-		"-snapshot_time", timeToRecover, restoreKSName)
+		"-snapshot_time", tm.Format(time.RFC3339), restoreKSName)
 	log.Info(output)
 	require.Nil(t, err)
 

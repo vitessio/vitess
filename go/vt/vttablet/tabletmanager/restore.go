@@ -206,6 +206,9 @@ func (tm *TabletManager) restoreToTimeFromBinlog(ctx context.Context, pos mysql.
 	println(fmt.Sprintf("pos for slave unil - %s, and stop gtid %s", gtid, stopPosGTID))
 
 	log.Infof("going to restore upto the gtid - %s", gtid)
+	if stopPosGTID == "" {
+		stopPosGTID = pos.GTIDSet.Last()
+	}
 	err := tm.catchupToGTID(timeoutCtx, gtid, stopPosGTID)
 	if err != nil {
 		return vterrors.Wrapf(err, "unable to replicate upto specified gtid : %s", gtid)
@@ -225,7 +228,9 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 		Host:  *binlogHost,
 		Port:  *binlogPort,
 		Uname: *binlogUser,
-		Pass:  *binlogPwd,
+	}
+	if binlogPwd != nil && *binlogPwd != "" {
+		connParams.Pass = *binlogPwd
 	}
 	dbCfgs := &dbconfigs.DBConfigs{
 		Host: connParams.Host,
@@ -242,9 +247,14 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 
 	sqlBeforeGTID := make(chan []string)
 	stopPos := ""
+
 	go func() {
 		err := vsClient.VStream(ctx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
 			for _, event := range events {
+				if event.Gtid != "" {
+					fmt.Println("event.Gtid=", event.Gtid, "event.Timestamp=", event.Timestamp, "restoreTime=", restoreTime)
+				}
+
 				if event.Gtid != "" && event.Timestamp > restoreTime {
 					sqlBeforeGTID <- []string{event.Gtid, stopPos}
 					break
@@ -256,7 +266,9 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 			return nil
 		})
 		if err != nil {
-			sqlBeforeGTID <- []string{"", ""}
+			println("--in error while vstream---")
+			fmt.Println(err)
+			sqlBeforeGTID <- []string{"", stopPos}
 		}
 	}()
 	defer vsClient.Close(ctx)
