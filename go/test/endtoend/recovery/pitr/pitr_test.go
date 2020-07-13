@@ -17,8 +17,7 @@ import (
 
 var (
 	createTable       = `create table product (id bigint(20) primary key, name char(10), created bigint(20));`
-	insertTable       = `set time_zone='+00:00';insert into product (id, name, created) values(%d, '%s', unix_timestamp());`
-	slowInsert        = `select sleep(%d);set time_zone='+00:00';insert into product (id, name, created) values(%d, '%s', unix_timestamp());`
+	insertTable       = `insert into product (id, name, created) values(%d, '%s', unix_timestamp());`
 	selectRecoverTime = `select created from product where id = %d`
 	selectMaxID       = `select max(id) from product`
 )
@@ -27,10 +26,8 @@ func TestPointInTimeRecovery(t *testing.T) {
 	// create table and insert 2 rows
 	_, err := masterTablet.VttabletProcess.QueryTablet(createTable, keyspaceName, true)
 	require.NoError(t, err)
-	_, err = masterTablet.VttabletProcess.QueryTablet(fmt.Sprintf(insertTable, 1, "p1"), keyspaceName, true)
-	require.NoError(t, err)
-	_, err = masterTablet.VttabletProcess.QueryTablet(fmt.Sprintf(insertTable, 2, "p2"), keyspaceName, true)
-	require.NoError(t, err)
+	insertRow(t, 1, "p1", false)
+	insertRow(t, 2, "p2", false)
 
 	//start the binlog server and point it to master
 	bs, err := newBinlogServer(hostname, clusterInstance.GetAndReservePort())
@@ -55,19 +52,18 @@ func TestPointInTimeRecovery(t *testing.T) {
 	// now insert some more data to simulate the changes after regular backup
 	// every insert has some time lag/difference to simulate the time gap between rows
 	// and when we recover to certain time, this time gap will be able to identify the exact eligible row
-	_, err = masterTablet.VttabletProcess.QueryTablet(fmt.Sprintf(slowInsert, 3, 3, "p3"), keyspaceName, true)
-	require.NoError(t, err)
-	_, err = masterTablet.VttabletProcess.QueryTablet(fmt.Sprintf(slowInsert, 4, 4, "p4"), keyspaceName, true)
-	require.NoError(t, err)
-	_, err = masterTablet.VttabletProcess.QueryTablet(fmt.Sprintf(slowInsert, 5, 5, "p5"), keyspaceName, true)
-	require.NoError(t, err)
-	_, err = masterTablet.VttabletProcess.QueryTablet(fmt.Sprintf(slowInsert, 6, 6, "p6"), keyspaceName, true)
-	require.NoError(t, err)
-	_, err = masterTablet.VttabletProcess.QueryTablet(fmt.Sprintf(slowInsert, 7, 7, "p7"), keyspaceName, true)
-	require.NoError(t, err)
+	var timeToRecover string
+	for counter := 3; counter <= 7; counter++ {
+		insertRow(t, counter, fmt.Sprintf("prd-%d", counter), true)
+		if counter == 5 { // we want to recovery till this, so noting the time
+			tm := time.Now().Add(1 * time.Second).UTC()
+			timeToRecover = tm.Format(time.RFC3339)
+		}
+
+	}
 
 	// fetch the time we want to recover to
-	timeToRecover := getRecoveryTimeInUTC(t, 5)
+	//timeToRecover := getRecoveryTimeInUTC(t, 5)
 
 	// start the recovery
 	recoveryTablet := clusterInstance.NewVttabletInstance("replica", 0, cell)
@@ -77,7 +73,7 @@ func TestPointInTimeRecovery(t *testing.T) {
 	require.NoError(t, err)
 
 	fmt.Println(sqlRes.Rows[0][0].String())
-	assert.Equal(t, sqlRes.Rows[0][0].String(), "INT64(2)")
+	assert.Equal(t, sqlRes.Rows[0][0].String(), "INT64(6)")
 	defer recoveryTablet.MysqlctlProcess.Stop()
 	defer recoveryTablet.VttabletProcess.TearDown()
 }
@@ -94,12 +90,20 @@ func getRecoveryTimeInUTC(t *testing.T, rowNum int) string {
 	return timeToRecover.In(loc).Format(time.RFC3339)
 }
 
+func insertRow(t *testing.T, id int, productName string, isSlow bool) {
+	_, err := masterTablet.VttabletProcess.QueryTablet(fmt.Sprintf(insertTable, id, productName), keyspaceName, true)
+	require.NoError(t, err)
+	if isSlow {
+		time.Sleep(3 * time.Second)
+	}
+}
+
 func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *binLogServer, timeToRecover string) {
 	tm := time.Now().UTC()
 	fmt.Println(tm.Format(time.RFC3339), timeToRecover)
 	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("CreateKeyspace",
 		"-keyspace_type=SNAPSHOT", "-base_keyspace="+keyspaceName,
-		"-snapshot_time", tm.Format(time.RFC3339), restoreKSName)
+		"-snapshot_time", timeToRecover, restoreKSName)
 	log.Info(output)
 	require.Nil(t, err)
 
@@ -151,5 +155,5 @@ func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *
 	require.NoError(t, err)
 
 	tablet.VttabletProcess.WaitForTabletTypesForTimeout([]string{"SERVING"}, 20*time.Second)
-	//require.Nil(t, err)
+	require.Nil(t, err)
 }
