@@ -125,6 +125,9 @@ message Session {
   // Stores savepoint and release savepoint calls inside a transaction
   // and is reset once transaction is committed or rolled back.
   repeated string savepoints = 16;
+
+  // in_reserved_conn is set to true if the session should be using reserved connections.
+  bool in_reserved_conn = 17;
 }
 
 // ExecuteRequest is the payload to Execute.
