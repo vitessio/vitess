@@ -19,7 +19,6 @@ package vtctl
 import (
 	"flag"
 	"fmt"
-	"time"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/topo"
@@ -85,7 +84,7 @@ func commandInitShardMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags
 
 	force := subFlags.Bool("force", false, "will force the reparent even if the provided tablet is not a master or the shard master")
 	// for backwards compatibility
-	deprecatedTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "time to wait for replicas to catch up in reparenting")
+	deprecatedTimeout := subFlags.Duration("wait_slave_timeout", *topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", *deprecatedTimeout, "time to wait for replicas to catch up in reparenting")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -155,7 +154,7 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 	}
 
 	// for backwards compatibility
-	deprecatedTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "time to wait for replicas to catch up in reparenting")
+	deprecatedTimeout := subFlags.Duration("wait_slave_timeout", *topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", *deprecatedTimeout, "time to wait for replicas to catch up in reparenting")
 	keyspaceShard := subFlags.String("keyspace_shard", "", "keyspace/shard of the shard that needs to be reparented")
 	newMaster := subFlags.String("new_master", "", "alias of a tablet that should be the new master")
