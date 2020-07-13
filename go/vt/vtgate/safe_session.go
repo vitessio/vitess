@@ -151,7 +151,7 @@ func (session *SafeSession) InTransaction() bool {
 }
 
 // Find returns the transactionId and tabletAlias, if any, for a session
-func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.TabletType) (transactionID int64, alias *topodatapb.TabletAlias) {
+func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.TabletType) (transactionID int64, reservedID int64, alias *topodatapb.TabletAlias) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	sessions := session.ShardSessions
@@ -163,10 +163,10 @@ func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.T
 	}
 	for _, shardSession := range sessions {
 		if keyspace == shardSession.Target.Keyspace && tabletType == shardSession.Target.TabletType && shard == shardSession.Target.Shard {
-			return shardSession.TransactionId, shardSession.TabletAlias
+			return shardSession.TransactionId, shardSession.ReservedId, shardSession.TabletAlias
 		}
 	}
-	return 0, nil
+	return 0, 0, nil
 }
 
 // Append adds a new ShardSession
@@ -178,26 +178,78 @@ func (session *SafeSession) Append(shardSession *vtgatepb.Session_ShardSession, 
 		// Unreachable.
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.Append: unexpected autocommit state")
 	}
-	if !session.Session.InTransaction {
+	if !(session.Session.InTransaction || session.Session.InReservedConn) {
 		// Unreachable.
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.Append: not in transaction")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.Append: not in transaction and not in reserved connection")
 	}
 	session.autocommitState = notAutocommittable
 
 	// Always append, in order for rollback to succeed.
 	switch session.commitOrder {
 	case vtgatepb.CommitOrder_NORMAL:
-		session.ShardSessions = append(session.ShardSessions, shardSession)
+		appendSession := true
+		for i, sess := range session.ShardSessions {
+			targetedAtSameTablet := sess.Target.Keyspace == shardSession.Target.Keyspace &&
+				sess.Target.TabletType == shardSession.Target.TabletType &&
+				sess.Target.Shard == shardSession.Target.Shard
+			if targetedAtSameTablet {
+				if sess.TabletAlias != shardSession.TabletAlias {
+					return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "got a different alias for the same target")
+				}
+				// replace the old info with the new one
+				session.ShardSessions[i] = shardSession
+				appendSession = false
+				break
+			}
+		}
+		if appendSession {
+			session.ShardSessions = append(session.ShardSessions, shardSession)
+		}
 		// isSingle is enforced only for normmal commit order operations.
 		if session.isSingleDB(txMode) && len(session.ShardSessions) > 1 {
 			session.mustRollback = true
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "multi-db transaction attempted: %v", session.ShardSessions)
 		}
 	case vtgatepb.CommitOrder_PRE:
-		session.PreSessions = append(session.PreSessions, shardSession)
+		appendSession := true
+		for i, sess := range session.PreSessions {
+			targetedAtSameTablet := sess.Target.Keyspace == shardSession.Target.Keyspace &&
+				sess.Target.TabletType == shardSession.Target.TabletType &&
+				sess.Target.Shard == shardSession.Target.Shard
+			if targetedAtSameTablet {
+				if sess.TabletAlias != shardSession.TabletAlias {
+					return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "got a different alias for the same target")
+				}
+				// replace the old info with the new one
+				session.PreSessions[i] = shardSession
+				appendSession = false
+				break
+			}
+		}
+		if appendSession {
+			session.PreSessions = append(session.PreSessions, shardSession)
+		}
 	case vtgatepb.CommitOrder_POST:
-		session.PostSessions = append(session.PostSessions, shardSession)
+		appendSession := true
+		for i, sess := range session.PostSessions {
+			targetedAtSameTablet := sess.Target.Keyspace == shardSession.Target.Keyspace &&
+				sess.Target.TabletType == shardSession.Target.TabletType &&
+				sess.Target.Shard == shardSession.Target.Shard
+			if targetedAtSameTablet {
+				if sess.TabletAlias != shardSession.TabletAlias {
+					return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "got a different alias for the same target")
+				}
+				// replace the old info with the new one
+				session.PostSessions[i] = shardSession
+				appendSession = false
+				break
+			}
+		}
+		if appendSession {
+			session.PostSessions = append(session.PostSessions, shardSession)
+		}
 	}
+
 	return nil
 }
 
@@ -276,4 +328,11 @@ func (session *SafeSession) StoreSavepoint(sql string) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.Savepoints = append(session.Savepoints, sql)
+}
+
+//InReservedConn returns true if the session needs to execute on a dedicated connection
+func (session *SafeSession) InReservedConn() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.Session.InReservedConn
 }
