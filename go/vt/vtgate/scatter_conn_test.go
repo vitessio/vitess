@@ -97,8 +97,10 @@ func TestExecuteFailOnAutocommit(t *testing.T) {
 		},
 		Autocommit: false,
 	}
-	_, errs := sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(session), false, true)
-	require.Error(t, vterrors.Aggregate(errs))
+	_, errs := sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(session), true)
+	err := vterrors.Aggregate(errs)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "In autocommit mode, transactionID is non-zero")
 	utils.MustMatch(t, 0, len(sbc0.Queries), "")
 	utils.MustMatch(t, []*querypb.BoundQuery{queries[1]}, sbc1.Queries, "")
 }
@@ -316,6 +318,76 @@ func TestMaxMemoryRows(t *testing.T) {
 	}}
 	_, errs := sc.ExecuteMultiShard(ctx, rss, queries, session, false)
 	assert.EqualError(t, errs[0], want)
+}
+
+func TestBegin(t *testing.T) {
+	keyspace := "keyspace"
+	createSandbox(keyspace)
+	hc := discovery.NewFakeLegacyHealthCheck()
+	sc := newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
+	sbc0 := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
+	sbc1 := hc.AddTestTablet("aa", "1", 1, keyspace, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
+
+	// empty results
+	sbc0.SetResults([]*sqltypes.Result{{}})
+	sbc1.SetResults([]*sqltypes.Result{{}})
+
+	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+
+	// assert that we are opening the tx only on the shard we are talking to
+	executeOnShards(t, res, keyspace, sc, session, []key.Destination{key.DestinationShard("0")})
+	assert.EqualValues(t, 1, sbc0.BeginCount.Get())
+	assert.EqualValues(t, 0, sbc1.BeginCount.Get())
+
+	// assert that we only open a tx on the tablet that did not already have a tx
+	executeOnShards(t, res, keyspace, sc, session, []key.Destination{key.DestinationShard("0"), key.DestinationShard("1")})
+	assert.EqualValues(t, 1, sbc0.BeginCount.Get())
+	assert.EqualValues(t, 1, sbc1.BeginCount.Get())
+}
+
+func TestReserved(t *testing.T) {
+	keyspace := "keyspace"
+	createSandbox(keyspace)
+	hc := discovery.NewFakeLegacyHealthCheck()
+	sc := newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
+	sbc0 := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
+	sbc1 := hc.AddTestTablet("aa", "1", 1, keyspace, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
+
+	// empty results
+	sbc0.SetResults([]*sqltypes.Result{{}})
+	sbc1.SetResults([]*sqltypes.Result{{}})
+
+	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+	session := NewSafeSession(&vtgatepb.Session{InReservedConn: true})
+
+	// assert that we are opening the reserved conn only on the shard we are talking to
+	executeOnShards(t, res, keyspace, sc, session, []key.Destination{key.DestinationShard("0")})
+	assert.EqualValues(t, 1, sbc0.ReserveCount.Get())
+	assert.EqualValues(t, 0, sbc1.ReserveCount.Get())
+
+	// assert that we only open a reserved conn on the tablet that did not already have a reserved conn
+	executeOnShards(t, res, keyspace, sc, session, []key.Destination{key.DestinationShard("0"), key.DestinationShard("1")})
+	assert.EqualValues(t, 1, sbc0.ReserveCount.Get())
+	assert.EqualValues(t, 1, sbc1.ReserveCount.Get())
+}
+
+func executeOnShards(t *testing.T, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *SafeSession, destinations []key.Destination) {
+	t.Helper()
+	rss, _, err := res.ResolveDestinations(ctx, keyspace, topodatapb.TabletType_REPLICA, nil, destinations)
+	require.NoError(t, err)
+
+	var queries []*querypb.BoundQuery
+
+	for range rss {
+		queries = append(queries, &querypb.BoundQuery{
+			Sql:           "query1",
+			BindVariables: map[string]*querypb.BindVariable{},
+		})
+	}
+
+	_, errs := sc.ExecuteMultiShard(ctx, rss, queries, session, false)
+	assert.Empty(t, errs)
 }
 
 func TestMultiExecs(t *testing.T) {

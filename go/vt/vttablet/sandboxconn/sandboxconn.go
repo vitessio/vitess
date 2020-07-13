@@ -55,6 +55,7 @@ type SandboxConn struct {
 	// functions were called.
 	ExecCount                sync2.AtomicInt64
 	BeginCount               sync2.AtomicInt64
+	ReserveCount             sync2.AtomicInt64
 	CommitCount              sync2.AtomicInt64
 	RollbackCount            sync2.AtomicInt64
 	AsTransactionCount       sync2.AtomicInt64
@@ -94,6 +95,9 @@ type SandboxConn struct {
 
 	// transaction id generator
 	TransactionID sync2.AtomicInt64
+
+	// reserve id generator
+	ReserveID sync2.AtomicInt64
 
 	sExecMu sync.Mutex
 	execMu  sync.Mutex
@@ -411,13 +415,22 @@ func (sbc *SandboxConn) HandlePanic(err *error) {
 }
 
 //ReserveBeginExecute implements the QueryService interface
-func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
+func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
 	panic("implement me")
 }
 
 //ReserveExecute implements the QueryService interface
-func (sbc *SandboxConn) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, txID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
-	panic("implement me")
+func (sbc *SandboxConn) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	sbc.ReserveCount.Add(1)
+	for _, query := range preQueries {
+		sbc.Execute(ctx, target, query, bindVariables, transactionID, 0, options)
+	}
+	reservedID := sbc.ReserveID.Add(1)
+	result, err := sbc.Execute(ctx, target, sql, bindVariables, transactionID, reservedID, options)
+	if err != nil {
+		return nil, 0, nil, err
+	}
+	return result, reservedID, sbc.tablet.Alias, nil
 }
 
 //Release implements the QueryService interface
