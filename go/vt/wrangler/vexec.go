@@ -63,7 +63,7 @@ func newVExec(ctx context.Context, workflow, keyspace, query string, wr *Wrangle
 
 // VExec executes queries on _vt.vreplication on all masters in the target keyspace of the workflow
 func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error) {
-	results, err := wr._vexec(ctx, workflow, keyspace, query, dryRun)
+	results, err := wr.runVexec(ctx, workflow, keyspace, query, dryRun)
 	retResults := make(map[*topo.TabletInfo]*sqltypes.Result)
 	for tablet, result := range results {
 		retResults[tablet] = sqltypes.Proto3ToResult(result)
@@ -71,7 +71,7 @@ func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string,
 	return retResults, err
 }
 
-func (wr *Wrangler) _vexec(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
 	if err := vx.getMasters(); err != nil {
 		return nil, err
@@ -315,7 +315,7 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	rsr.TargetKeyspace = keyspace
 	var results map[*topo.TabletInfo]*querypb.QueryResult
 	query := "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, message from _vt.vreplication"
-	results, err := wr._vexec(ctx, workflow, keyspace, query, false)
+	results, err := wr.runVexec(ctx, workflow, keyspace, query, false)
 	if err != nil {
 		return nil, err
 	}
