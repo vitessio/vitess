@@ -286,7 +286,6 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqlty
 		return nil, "", err
 	}
 	message = row[8].ToString()
-	//fmt.Printf("%d: %s\n", id, state)
 	status := &replicationStatus{
 		Shard:             master.Shard,
 		Tablet:            master.AliasString(),
@@ -321,7 +320,6 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 		return nil, err
 	}
 	for master, result := range results {
-		//fmt.Printf("master %s, result %v\n", master.Alias, result)
 		var rsrStatus []*replicationStatus
 		qr := sqltypes.Proto3ToResult(result)
 		for _, row := range qr.Rows {
