@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -32,6 +33,12 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
+
+func init() {
+	RegisterValueEncoder("encoder_err", func(_ sqltypes.Value) ([]byte, error) {
+		return nil, fmt.Errorf("an error")
+	})
+}
 
 // LookupNonUnique tests are more comprehensive than others.
 // They also test lookupInternal functionality.
@@ -122,6 +129,39 @@ func TestLookupNonUniqueNew(t *testing.T) {
 	}
 }
 
+func TestLookupNonUniqueNewWithEncoders(t *testing.T) {
+	lu, err := CreateVindex("lookup", "lookup", map[string]string{
+		"table":   "t",
+		"from":    "fromc,fromc2",
+		"to":      "toc",
+		"encoder": "nop,numeric_uint64",
+	})
+	if err != nil {
+		t.Fatal(fmt.Sprintf("Failed to construct LookupNonUnique with encoder: %v", err))
+	}
+
+	encCount := len(lu.(*LookupNonUnique).encoders)
+	if encCount != 2 {
+		t.Errorf("Expected two encoders defined for LookupNonUnique vindex, got %v", encCount)
+	}
+}
+
+func TestLookupNonUniqueNewWithTooFewEncoders(t *testing.T) {
+	ln, err := CreateVindex("lookup", "lookup", map[string]string{
+		"table":   "t",
+		"from":    "fromc,fromc2",
+		"to":      "toc",
+		"encoder": "numeric_uint64",
+	})
+	if err == nil {
+		t.Fatal("Expected to fail constructing a LookupNonUnique when not enough encoding function provided")
+	}
+
+	if ln != nil {
+		t.Errorf("Expected no LookupNonUnique when passed bad arguments")
+	}
+}
+
 func TestLookupNonUniqueInfo(t *testing.T) {
 	lookupNonUnique := createLookup(t, "lookup", false)
 	assert.Equal(t, 20, lookupNonUnique.Cost())
@@ -180,6 +220,67 @@ func TestLookupNonUniqueMap(t *testing.T) {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, wantErr)
 	}
 	vc.mustFail = false
+}
+
+func TestLookupNonUniqueMapWithEncoders(t *testing.T) {
+	vindex, err := CreateVindex("lookup", "lookup", map[string]string{
+		"table":   "t",
+		"from":    "fromc,fromc2",
+		"to":      "toc",
+		"encoder": "nop,numeric_uint64",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lookupNonUnique := vindex.(SingleColumn)
+	vc := &vcursor{numRows: 2}
+	got, err := lookupNonUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	if err != nil {
+		t.Error(err)
+	}
+
+	k2Bytes, _ := numericUint64(sqltypes.NewUint64(uint64(2)))
+
+	want := []key.Destination{
+		key.DestinationKeyspaceIDs([][]byte{
+			[]byte("1"),
+			k2Bytes,
+		}),
+		key.DestinationKeyspaceIDs([][]byte{
+			[]byte("1"),
+			k2Bytes,
+		}),
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("LookupNonUnique.Map(): mismatch\ngot:  %#v\nwant: %#v", got, want)
+	}
+}
+
+func TestLookupNonUniqueMapWithErrorEncoder(t *testing.T) {
+	lu, err := CreateVindex("lookup", "lookup", map[string]string{
+		"table":   "t",
+		"from":    "fromc",
+		"to":      "toc",
+		"encoder": "encoder_err",
+	})
+	if err != nil {
+		t.Fatal("Unable to create Lookup vindex")
+	}
+
+	vc := &vcursor{numRows: 1}
+	got, err := lu.(SingleColumn).Map(
+		vc,
+		[]sqltypes.Value{sqltypes.NewUint64(uint64(1))},
+	)
+	if err == nil {
+		t.Errorf("Lookup.Map did return an error, expected an error")
+	}
+
+	if got != nil {
+		t.Errorf("Lookup.Map returned a key.Destination, expected nil")
+	}
 }
 
 func TestLookupNonUniqueMapAutocommit(t *testing.T) {

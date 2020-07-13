@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -37,25 +38,26 @@ var (
 func init() {
 	Register("lookup", NewLookup)
 	Register("lookup_unique", NewLookupUnique)
-	RegisterSingleValueEncoder("numeric_uint64", numericUint64)
+	RegisterValueEncoder("nop", nil)
+	RegisterValueEncoder("numeric_uint64", numericUint64)
 }
 
-// RegisterSingleValueEncoder will link an encoder that can be used on
+// RegisterValueEncoder will link an encoder that can be used on
 // lookup_unique hashes.
-func RegisterSingleValueEncoder(name string, fn SingleValueEncoderFunc) {
-	if _, ok := svEncoders[name]; ok {
+func RegisterValueEncoder(name string, fn ValueEncoderFunc) {
+	if _, ok := valueEncoders[name]; ok {
 		panic(fmt.Sprintf("%s is already registered", name))
 	}
-	svEncoders[name] = fn
+	valueEncoders[name] = fn
 }
 
-// svEncoders tracks all the functions that can be applied to LookupUnique
+// valueEncoders tracks all the functions that can be applied to Lookup vindex
 // values when deriving keyspace ids
-var svEncoders = make(map[string]SingleValueEncoderFunc)
+var valueEncoders = make(map[string]ValueEncoderFunc)
 
-// SingleValueEncoderFunc is a function that maps a single lookup result to a
+// ValueEncoderFunc is a function that maps a single lookup result to a
 // keyspace id.
-type SingleValueEncoderFunc func(sqltypes.Value) ([]byte, error)
+type ValueEncoderFunc func(sqltypes.Value) ([]byte, error)
 
 // LookupNonUnique defines a vindex that uses a lookup table and create a mapping between from ids and KeyspaceId.
 // It's NonUnique and a Lookup.
@@ -63,6 +65,7 @@ type LookupNonUnique struct {
 	name      string
 	writeOnly bool
 	lkp       lookupInternal
+	encoders  []ValueEncoderFunc
 }
 
 // String returns the name of the vindex.
@@ -113,8 +116,23 @@ func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Des
 			continue
 		}
 		ksids := make([][]byte, 0, len(result.Rows))
-		for _, row := range result.Rows {
-			ksids = append(ksids, row[0].ToBytes())
+		for i, row := range result.Rows {
+			if ln.encoders != nil {
+				value := row[0]
+				var valueBytes []byte
+				if ln.encoders[i] != nil {
+					bs, err := ln.encoders[i](value)
+					if err != nil {
+						return nil, fmt.Errorf("LookupNonUnique.Map: couldn't apply encoding to column %v: %v", i, err)
+					}
+					valueBytes = bs
+				} else {
+					valueBytes = value.ToBytes()
+				}
+				ksids = append(ksids, valueBytes)
+			} else {
+				ksids = append(ksids, row[0].ToBytes())
+			}
 		}
 		out = append(out, key.DestinationKeyspaceIDs(ksids))
 	}
@@ -178,6 +196,22 @@ func NewLookup(name string, m map[string]string) (Vindex, error) {
 	if err := lookup.lkp.Init(m, autocommit, autocommit /* upsert */); err != nil {
 		return nil, err
 	}
+
+	encoders, hasEncoders := m["encoder"]
+	if hasEncoders {
+		for _, encoderName := range strings.Split(encoders, ",") {
+			encoderName = strings.TrimSpace(encoderName)
+			encoderFn, validName := valueEncoders[encoderName]
+			if !validName {
+				return nil, fmt.Errorf("Attempting to use unknown value encoder %v", encoderName)
+			}
+			lookup.encoders = append(lookup.encoders, encoderFn)
+		}
+		if len(lookup.encoders) != len(lookup.lkp.FromColumns) {
+			return nil, fmt.Errorf("Expected one encoder per from column (%v), got %v", len(lookup.lkp.FromColumns), len(lookup.encoders))
+		}
+	}
+
 	return lookup, nil
 }
 
@@ -198,7 +232,7 @@ type LookupUnique struct {
 	name      string
 	writeOnly bool
 	lkp       lookupInternal
-	encoder   SingleValueEncoderFunc
+	encoder   ValueEncoderFunc
 }
 
 // NewLookupUnique creates a LookupUnique vindex.
@@ -211,7 +245,7 @@ type LookupUnique struct {
 //   autocommit: setting this to "true" will cause deletes to be ignored.
 //   write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
-	lu := &LookupUnique{name: name}
+	lu := &LookupUnique{name: name, encoder: nil}
 
 	autocommit, err := boolFromMap(m, "autocommit")
 	if err != nil {
@@ -224,7 +258,7 @@ func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 
 	encoderName, hasEncoder := m["encoder"]
 	if hasEncoder {
-		encoder, ok := svEncoders[encoderName]
+		encoder, ok := valueEncoders[encoderName]
 		if !ok {
 			return nil, fmt.Errorf("vindex %s references unknown value encoder %s", name, encoderName)
 		}

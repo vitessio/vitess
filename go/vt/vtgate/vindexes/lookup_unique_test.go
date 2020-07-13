@@ -172,6 +172,31 @@ func TestLookupUniqueMapWithEncoder(t *testing.T) {
 	}
 }
 
+func TestLookupUniqueMapWithErrorEncoder(t *testing.T) {
+	lu, err := CreateVindex("lookup_unique", "lu_with_encoder", map[string]string{
+		"table":   "t",
+		"from":    "fromc",
+		"to":      "toc",
+		"encoder": "encoder_err",
+	})
+	if err != nil {
+		t.Fatal("Unable to create lookup_unique vindex")
+	}
+
+	vc := &vcursor{numRows: 1}
+	got, err := lu.(SingleColumn).Map(
+		vc,
+		[]sqltypes.Value{sqltypes.NewUint64(uint64(1))},
+	)
+	if err == nil {
+		t.Errorf("Lookup.Map did return an error, expected an error")
+	}
+
+	if got != nil {
+		t.Errorf("Lookup.Map returned a key.Destination, expected nil")
+	}
+}
+
 func TestLookupUniqueMapWriteOnly(t *testing.T) {
 	lookupUnique := createLookup(t, "lookup_unique", true)
 	vc := &vcursor{numRows: 0}
