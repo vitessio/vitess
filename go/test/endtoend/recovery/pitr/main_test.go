@@ -3,10 +3,8 @@ package pitr
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
-	"path"
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -22,7 +20,7 @@ var (
 	cell          = "zone1"
 	hostname      = "localhost"
 	keyspaceName  = "ks"
-	restoreKSName = "resoreks"
+	restoreKSName = "restoreks"
 	dbName        = "vt_ks"
 	shardName     = "0"
 	shardKsName   = "ks/0"
@@ -42,7 +40,7 @@ func TestMain(m *testing.M) {
 			log.Error(err)
 			return 1, err
 		}
-		initDBFile = updateDBInitFile()
+
 		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspaceName); err != nil {
 			log.Error(err)
 			return 1, err
@@ -52,7 +50,7 @@ func TestMain(m *testing.M) {
 		masterTablet = clusterInstance.NewVttabletInstance("replica", 0, cell)
 		replicaTablet = clusterInstance.NewVttabletInstance("replica", 0, cell)
 
-		err := startTablets([]*cluster.Vttablet{masterTablet, replicaTablet}, initDBFile)
+		err := startTablets([]*cluster.Vttablet{masterTablet, replicaTablet})
 		if err != nil {
 			return 1, err
 		}
@@ -70,23 +68,7 @@ func TestMain(m *testing.M) {
 
 }
 
-// crates a vt_dba user to login to the mysql without password
-func updateDBInitFile() string {
-	initDb, _ := ioutil.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
-	sql := string(initDb)
-	newInitDBFile := path.Join(clusterInstance.TmpDirectory, "init_db_custom.sql")
-	sql = sql + fmt.Sprintf(`
-CREATE USER '%s'@'%%' ;
-GRANT ALL ON *.* TO '%s'@'%%';
-GRANT GRANT OPTION ON *.* TO '%s'@'%%';
-FLUSH PRIVILEGES;
-create database %s;
-`, mysqlUserName, mysqlUserName, mysqlUserName, dbName)
-	ioutil.WriteFile(newInitDBFile, []byte(sql), 0666)
-	return newInitDBFile
-}
-
-func startTablets(tablets []*cluster.Vttablet, initDBFile string) error {
+func startTablets(tablets []*cluster.Vttablet) error {
 	var mysqlProcesses []*exec.Cmd
 	shard := &cluster.Shard{
 		Name: shardName,
@@ -122,6 +104,22 @@ func startTablets(tablets []*cluster.Vttablet, initDBFile string) error {
 	for _, proc := range mysqlProcesses {
 		proc.Wait()
 	}
+	queryCmds := []string{
+		fmt.Sprintf("CREATE USER '%s'@'%%';", mysqlUserName),
+		fmt.Sprintf("GRANT ALL ON *.* TO '%s'@'%%';", mysqlUserName),
+		fmt.Sprintf("GRANT GRANT OPTION ON *.* TO '%s'@'%%';", mysqlUserName),
+		"FLUSH PRIVILEGES;",
+		fmt.Sprintf("create database %s;", dbName),
+	}
+	for _, tablet := range tablets {
+		for _, query := range queryCmds {
+			_, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, false)
+			if err != nil {
+				log.Error(err)
+				return err
+			}
+		}
+	}
 	for _, tablet := range tablets {
 		err := tablet.VttabletProcess.Setup()
 		if err != nil {
@@ -129,6 +127,7 @@ func startTablets(tablets []*cluster.Vttablet, initDBFile string) error {
 			return err
 		}
 	}
+
 	clusterInstance.Keyspaces[0].Shards = []cluster.Shard{*shard}
 	return nil
 }

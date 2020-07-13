@@ -203,7 +203,6 @@ func (tm *TabletManager) restoreToTimeFromBinlog(ctx context.Context, pos mysql.
 	if gtid == "" {
 		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "unable to fetch the GTID for the specified restore_to_time")
 	}
-	println(fmt.Sprintf("pos for slave unil - %s, and stop gtid %s", gtid, stopPosGTID))
 
 	log.Infof("going to restore upto the gtid - %s", gtid)
 	if stopPosGTID == "" {
@@ -247,12 +246,16 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 
 	sqlBeforeGTID := make(chan []string)
 	stopPos := ""
+	currentPos := ""
 
 	go func() {
 		err := vsClient.VStream(ctx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
 			for _, event := range events {
 				if event.Gtid != "" {
 					fmt.Println("event.Gtid=", event.Gtid, "event.Timestamp=", event.Timestamp, "restoreTime=", restoreTime)
+				}
+				if event.Gtid != "" {
+					currentPos = event.Gtid
 				}
 
 				if event.Gtid != "" && event.Timestamp > restoreTime {
@@ -277,7 +280,7 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 		return val[0], val[1]
 	case <-ctx.Done():
 		log.Warningf("Can't find the GTID from restore time stamp, exiting.")
-		return "", ""
+		return currentPos, stopPos
 	}
 }
 
