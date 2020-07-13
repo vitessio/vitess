@@ -174,7 +174,7 @@ func (stc *ScatterConn) Execute(
 				}
 				innerqr, err = rs.Gateway.Execute(ctx, rs.Target, query, bindVars, 0, 0, opts)
 			case shouldBegin:
-				innerqr, transactionID, alias, err = rs.Gateway.BeginExecute(ctx, rs.Target, nil, query, bindVars, 0, options)
+				innerqr, transactionID, alias, err = rs.Gateway.BeginExecute(ctx, rs.Target, session.Savepoints, query, bindVars, 0, options)
 			default:
 				var qs queryservice.QueryService
 				_, usingLegacy := rs.Gateway.(*DiscoveryGateway)
@@ -255,7 +255,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				}
 				innerqr, err = rs.Gateway.Execute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, 0, 0, opts)
 			case shouldBegin:
-				innerqr, transactionID, alias, err = rs.Gateway.BeginExecute(ctx, rs.Target, nil, queries[i].Sql, queries[i].BindVariables, 0, opts)
+				innerqr, transactionID, alias, err = rs.Gateway.BeginExecute(ctx, rs.Target, session.Savepoints, queries[i].Sql, queries[i].BindVariables, 0, opts)
 			default:
 				var qs queryservice.QueryService
 				_, usingLegacy := rs.Gateway.(*DiscoveryGateway)

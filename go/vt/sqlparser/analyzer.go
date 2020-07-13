@@ -53,6 +53,9 @@ const (
 	StmtComment
 	StmtPriv
 	StmtExplain
+	StmtSavepoint
+	StmtSRollback
+	StmtRelease
 )
 
 //ASTToStatementType returns a StatementType from an AST stmt
@@ -84,6 +87,12 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtCommit
 	case *Rollback:
 		return StmtRollback
+	case *Savepoint:
+		return StmtSavepoint
+	case *SRollback:
+		return StmtSRollback
+	case *Release:
+		return StmtRelease
 	default:
 		return StmtUnknown
 	}
@@ -167,6 +176,12 @@ func Preview(sql string) StatementType {
 		return StmtOther
 	case "grant", "revoke":
 		return StmtPriv
+	case "savepoint":
+		return StmtSavepoint
+	case "release":
+		return StmtRelease
+	case "rollback":
+		return StmtSRollback
 	}
 	return StmtUnknown
 }
@@ -205,6 +220,12 @@ func (s StatementType) String() string {
 		return "PRIV"
 	case StmtExplain:
 		return "EXPLAIN"
+	case StmtSavepoint:
+		return "SAVEPOINT"
+	case StmtSRollback:
+		return "SAVEPOINT_ROLLBACK"
+	case StmtRelease:
+		return "RELEASE"
 	default:
 		return "UNKNOWN"
 	}

@@ -512,7 +512,9 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 
 		// fields[9] is ExecuteTime which is not set for certain statements SET,
 		// BEGIN, COMMIT, ROLLBACK, etc
-		if stmtType != "BEGIN" && stmtType != "COMMIT" && stmtType != "ROLLBACK" && stmtType != "SET" {
+		switch stmtType {
+		case "BEGIN", "COMMIT", "ROLLBACK", "SET", "SAVEPOINT", "SAVEPOINT_ROLLBACK", "RELEASE":
+		default:
 			testNonZeroDuration(t, "ExecuteTime", fields[9])
 		}
 
