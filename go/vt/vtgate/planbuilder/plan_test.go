@@ -174,6 +174,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "set_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "set_sysvar_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "union_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "transaction_cases.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func TestOne(t *testing.T) {
