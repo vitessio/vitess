@@ -43,18 +43,6 @@ import (
 
 // This file uses the sandbox_test framework.
 
-func TestScatterConnExecute(t *testing.T) {
-	testScatterConnGeneric(t, "TestScatterConnExecute", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
-		res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-		rss, err := res.ResolveDestination(ctx, "TestScatterConnExecute", topodatapb.TabletType_REPLICA, key.DestinationShards(shards))
-		if err != nil {
-			return nil, err
-		}
-
-		return sc.Execute(ctx, "query", nil, rss, NewSafeSession(nil), false, nil, false)
-	})
-}
-
 func TestExecuteFailOnAutocommit(t *testing.T) {
 
 	createSandbox("TestExecuteFailOnAutocommit")
@@ -319,10 +307,7 @@ func TestMaxMemoryRows(t *testing.T) {
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 
-	_, err = sc.Execute(ctx, "query1", nil, rss, session, true, nil, false)
 	want := "in-memory row count exceeded allowed limit of 3"
-	assert.EqualError(t, err, want)
-
 	queries := []*querypb.BoundQuery{{
 		Sql:           "query1",
 		BindVariables: map[string]*querypb.BindVariable{},

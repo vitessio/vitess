@@ -139,6 +139,7 @@ func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.Al
 }
 
 // Execute executes a non-streaming query on the specified shards.
+// TODO: systay - remove. only used by tests today
 func (stc *ScatterConn) Execute(
 	ctx context.Context,
 	query string,
