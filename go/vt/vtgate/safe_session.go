@@ -264,6 +264,13 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 	session.SystemVariables[name] = expr
 }
 
+//SetOptions sets the options
+func (session *SafeSession) SetOptions(options *querypb.ExecuteOptions) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.Options = options
+}
+
 //StoreSavepoint stores the savepoint and release savepoint queries in the session
 func (session *SafeSession) StoreSavepoint(sql string) {
 	session.mu.Lock()
