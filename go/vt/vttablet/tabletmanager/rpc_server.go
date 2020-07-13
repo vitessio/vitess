@@ -58,13 +58,6 @@ func (tm *TabletManager) unlock() {
 	tm.actionMutex.Unlock()
 }
 
-// checkLock checks we have locked the actionMutex.
-func (tm *TabletManager) checkLock() {
-	if !tm.actionMutexLocked {
-		panic("programming error: this action should have taken the actionMutex")
-	}
-}
-
 // HandleRPCPanic is part of the RPCTM interface.
 func (tm *TabletManager) HandleRPCPanic(ctx context.Context, name string, args, reply interface{}, verbose bool, err *error) {
 	// panic handling

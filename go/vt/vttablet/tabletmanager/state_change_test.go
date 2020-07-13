@@ -50,16 +50,20 @@ func TestPublishState(t *testing.T) {
 
 	tab1 := tm.Tablet()
 	tab1.Keyspace = "tab1"
-	tm.setTablet(tab1)
-	tm.publishState(ctx)
+	tm.tmState.mu.Lock()
+	tm.tmState.tablet = tab1
+	tm.tmState.publishStateLocked(ctx)
+	tm.tmState.mu.Unlock()
 	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, tab1, ttablet.Tablet)
 
 	tab2 := tm.Tablet()
 	tab2.Keyspace = "tab2"
-	tm.setTablet(tab2)
-	tm.retryPublish()
+	tm.tmState.mu.Lock()
+	tm.tmState.tablet = tab2
+	tm.tmState.mu.Unlock()
+	tm.tmState.retryPublish()
 	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, tab2, ttablet.Tablet)
@@ -67,14 +71,16 @@ func TestPublishState(t *testing.T) {
 	// If hostname doesn't match, it should not update.
 	tab3 := tm.Tablet()
 	tab3.Hostname = "tab3"
-	tm.setTablet(tab3)
-	tm.publishState(ctx)
+	tm.tmState.mu.Lock()
+	tm.tmState.tablet = tab3
+	tm.tmState.publishStateLocked(ctx)
+	tm.tmState.mu.Unlock()
 	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, tab2, ttablet.Tablet)
 
 	// Same for retryPublish.
-	tm.retryPublish()
+	tm.tmState.retryPublish()
 	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, tab2, ttablet.Tablet)

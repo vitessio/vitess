@@ -343,9 +343,7 @@ func TestStartFindMysqlPort(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int32(0), ti.MysqlPort)
 
-	tm.pubMu.Lock()
 	fmd.MysqlPort.Set(3306)
-	tm.pubMu.Unlock()
 	for i := 0; i < 10; i++ {
 		ti, err := ts.GetTablet(ctx, tm.tabletAlias)
 		require.NoError(t, err)
@@ -395,7 +393,7 @@ func TestStartDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	tm := newTestTM(t, ts, 1, "ks", "0")
-	defer tm.Stop()
+	tm.Stop()
 
 	tabletAliases, err := ts.FindAllTabletAliasesInShard(ctx, "ks", "0")
 	require.NoError(t, err)

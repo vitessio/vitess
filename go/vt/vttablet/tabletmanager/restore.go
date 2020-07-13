@@ -76,10 +76,14 @@ func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger,
 }
 
 func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool) error {
-	var originalType topodatapb.TabletType
+	// If we're called during init, tmState may not be open yet.
+	tm.tmState.Open(ctx)
+
 	tablet := tm.Tablet()
-	originalType, tablet.Type = tablet.Type, topodatapb.TabletType_RESTORE
-	tm.updateState(ctx, tablet, "restore from backup")
+	originalType := tablet.Type
+	if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_RESTORE); err != nil {
+		return err
+	}
 
 	// Try to restore. Depending on the reason for failure, we may be ok.
 	// If we're not ok, return an error and the tm will log.Fatalf,
@@ -167,8 +171,9 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		// alter replication here.
 	default:
 		// If anything failed, we should reset the original tablet type
-		tablet.Type = originalType
-		tm.updateState(ctx, tablet, "failed for restore from backup")
+		if err := tm.tmState.ChangeTabletType(ctx, originalType); err != nil {
+			log.Errorf("Could not change back to original tablet type %v: %v", originalType, err)
+		}
 		return vterrors.Wrap(err, "Can't restore backup")
 	}
 
@@ -182,10 +187,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	}
 
 	// Change type back to original type if we're ok to serve.
-	tablet.Type = originalType
-	tm.updateState(ctx, tablet, "after restore from backup")
-
-	return nil
+	return tm.tmState.ChangeTabletType(ctx, originalType)
 }
 
 // restoreToTimeFromBinlog restores to the snapshot time of the keyspace
