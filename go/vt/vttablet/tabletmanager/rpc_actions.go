@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"time"
 
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -75,24 +74,9 @@ func (tm *TabletManager) changeTypeLocked(ctx context.Context, tabletType topoda
 		return fmt.Errorf("Tablet: %v, is already drained", tm.tabletAlias)
 	}
 
-	tablet := tm.Tablet()
-	tablet.Type = tabletType
-	// If we have been told we're master, set master term start time to Now
-	// and save it topo immediately.
-	if tabletType == topodatapb.TabletType_MASTER {
-		tablet.MasterTermStartTime = logutil.TimeToProto(time.Now())
-
-		// change our type in the topology, and set masterTermStartTime on tablet record if applicable
-		_, err := topotools.ChangeType(ctx, tm.TopoServer, tm.tabletAlias, tabletType, tablet.MasterTermStartTime)
-		if err != nil {
-			return err
-		}
-	} else {
-		tablet.MasterTermStartTime = nil
+	if err := tm.tmState.ChangeTabletType(ctx, tabletType); err != nil {
+		return err
 	}
-
-	// updateState will invoke broadcastHealth if needed.
-	tm.updateState(ctx, tablet, "ChangeType")
 
 	// Let's see if we need to fix semi-sync acking.
 	if err := tm.fixSemiSyncAndReplication(tm.Tablet().Type); err != nil {
@@ -132,7 +116,7 @@ func (tm *TabletManager) RefreshState(ctx context.Context) error {
 	}
 	defer tm.unlock()
 
-	return tm.refreshTablet(ctx, "RefreshState")
+	return tm.tmState.RefreshFromTopo(ctx)
 }
 
 // RunHealthCheck will manually run the health check on the tablet.

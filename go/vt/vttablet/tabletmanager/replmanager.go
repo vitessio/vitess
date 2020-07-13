@@ -80,8 +80,6 @@ func (rm *replManager) SetTabletType(tabletType topodatapb.TabletType) {
 	if rm.ticks.Running() {
 		return
 	}
-	// Do an explicit check and then start the timer.
-	rm.check()
 	rm.ticks.Start(rm.check)
 }
 
@@ -92,12 +90,19 @@ func (rm *replManager) check() {
 			return
 		}
 	} else {
-		// TODO(sougou): this was ported from previous behavior.
-		// Need to check if this is should be &&.
+		// If only one of the threads is stopped, it's probably
+		// intentional. So, we don't repair replication.
 		if status.SQLThreadRunning || status.IOThreadRunning {
 			return
 		}
 	}
+
+	// We need to obtain the action lock if we're going to fix
+	// replication
+	if err := rm.tm.lock(rm.ctx); err != nil {
+		return
+	}
+	defer rm.tm.unlock()
 
 	if rm.firstFailure {
 		log.Infof("Replication is stopped, reconnecting to master.")

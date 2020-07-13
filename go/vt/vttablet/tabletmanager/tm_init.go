@@ -47,8 +47,6 @@ import (
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/dbconnpool"
 
-	"github.com/golang/protobuf/proto"
-	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/binlog"
@@ -68,6 +66,9 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
+
+// Query rules from blacklist
+const blacklistQueryRules string = "BlacklistQueryRules"
 
 var (
 	// The following flags initialize the tablet record.
@@ -127,6 +128,9 @@ type TabletManager struct {
 	UpdateStream        binlog.UpdateStreamControl
 	VREngine            *vreplication.Engine
 
+	// tmState manages the TabletManager state.
+	tmState *tmState
+
 	// replManager manages replication.
 	replManager *replManager
 
@@ -136,10 +140,6 @@ type TabletManager struct {
 	// baseTabletType is the tablet type we revert back to
 	// when we transition back from something like MASTER.
 	baseTabletType topodatapb.TabletType
-
-	// History of the health checks, public so status
-	// pages can display it
-	History *history.History
 
 	// actionMutex is there to run only one action at a time. If
 	// both tm.actionMutex and tm.mutex needs to be taken,
@@ -161,10 +161,6 @@ type TabletManager struct {
 	// only hold the mutex to update the fields, nothing else.
 	mutex sync.Mutex
 
-	// _shardInfo and _srvKeyspace are cached and refreshed on RefreshState.
-	_shardInfo   *topo.ShardInfo
-	_srvKeyspace *topodatapb.SrvKeyspace
-
 	// _shardSyncChan is a channel for informing the shard sync goroutine that
 	// it should wake up and recheck the tablet state, to make sure it and the
 	// shard record are in sync.
@@ -179,27 +175,11 @@ type TabletManager struct {
 	// _shardSyncCancel is the function to stop the background shard sync goroutine.
 	_shardSyncCancel context.CancelFunc
 
-	// _disallowQueryService is set to the reason we should be
-	// disallowing queries from being served. It is set from changeCallback,
-	// and used by healthcheck. If empty, we should allow queries.
-	// It is set if the current type is not serving, if a TabletControl
-	// tells us not to serve, or if filtered replication is running.
-	_disallowQueryService string
-
-	// _blacklistedTables has the list of tables we are currently
-	// blacklisting.
-	_blacklistedTables []string
-
 	// _lockTablesConnection is used to get and release the table read locks to pause replication
 	_lockTablesConnection *dbconnpool.DBConnection
 	_lockTablesTimer      *time.Timer
 	// _isBackupRunning tells us whether there is a backup that is currently running
 	_isBackupRunning bool
-
-	pubMu sync.Mutex
-	// tablet has the Tablet record we last read from the topology server.
-	tablet       *topodatapb.Tablet
-	isPublishing bool
 }
 
 var healthCheckInterval time.Duration
@@ -207,7 +187,6 @@ var healthCheckInterval time.Duration
 // InitConfig is a temp function to keep things working during the refactor.
 func InitConfig(config *tabletenv.TabletConfig) {
 	healthCheckInterval = config.Healthcheck.IntervalSeconds.Get()
-	gracePeriod = config.GracePeriods.TransitionSeconds.Get()
 }
 
 // BuildTabletFromInput builds a tablet record from input parameters.
@@ -262,11 +241,11 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (
 
 // Start starts the TabletManager.
 func (tm *TabletManager) Start(tablet *topodatapb.Tablet) error {
-	tm.setTablet(tablet)
 	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
 	tm.replManager = newReplManager(tm.BatchCtx, tm, healthCheckInterval)
-	tm.History = history.New(historyLength)
 	tm.tabletAlias = tablet.Alias
+	tm.tmState = newTMState(tm, tablet)
+
 	demoteType, err := topoproto.ParseTabletType(*demoteMasterType)
 	if err != nil {
 		return err
@@ -278,10 +257,11 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet) error {
 
 	ctx, cancel := context.WithTimeout(tm.BatchCtx, *initTimeout)
 	defer cancel()
-	if err := tm.createKeyspaceShard(ctx); err != nil {
+	si, err := tm.createKeyspaceShard(ctx)
+	if err != nil {
 		return err
 	}
-	if err := tm.checkMastership(ctx); err != nil {
+	if err := tm.checkMastership(ctx, si); err != nil {
 		return err
 	}
 	if err := tm.checkMysql(ctx); err != nil {
@@ -340,9 +320,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet) error {
 		return err
 	}
 	defer tm.unlock()
-	tablet = tm.Tablet()
-	tm.changeCallback(tm.BatchCtx, tablet, tablet)
-
+	tm.tmState.Open(tm.BatchCtx)
 	return nil
 }
 
@@ -372,6 +350,8 @@ func (tm *TabletManager) Close() {
 	if _, err := tm.TopoServer.UpdateTabletFields(updateCtx, tm.tabletAlias, f); err != nil {
 		log.Warningf("Failed to update tablet record, may contain stale identifiers: %v", err)
 	}
+
+	tm.tmState.Close()
 }
 
 // Stop shuts down the tm. Normally this is not necessary, since we use
@@ -392,9 +372,10 @@ func (tm *TabletManager) Stop() {
 	}
 
 	tm.MysqlDaemon.Close()
+	tm.tmState.Close()
 }
 
-func (tm *TabletManager) createKeyspaceShard(ctx context.Context) error {
+func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardInfo, error) {
 	// mutex is needed because we set _shardInfo and _srvKeyspace
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
@@ -403,23 +384,25 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) error {
 	log.Infof("Reading/creating keyspace and shard records for %v/%v", tablet.Keyspace, tablet.Shard)
 
 	// Read the shard, create it if necessary.
+	var shardInfo *topo.ShardInfo
 	if err := tm.withRetry(ctx, "creating keyspace and shard", func() error {
 		var err error
-		tm._shardInfo, err = tm.TopoServer.GetOrCreateShard(ctx, tablet.Keyspace, tablet.Shard)
+		shardInfo, err = tm.TopoServer.GetOrCreateShard(ctx, tablet.Keyspace, tablet.Shard)
 		return err
 	}); err != nil {
-		return vterrors.Wrap(err, "createKeyspaceShard: cannot GetOrCreateShard shard")
+		return nil, vterrors.Wrap(err, "createKeyspaceShard: cannot GetOrCreateShard shard")
 	}
+	tm.tmState.RefreshFromTopoInfo(ctx, shardInfo, nil)
 
 	// Rebuild keyspace if this the first tablet in this keyspace/cell
 	srvKeyspace, err := tm.TopoServer.GetSrvKeyspace(ctx, tm.tabletAlias.Cell, tablet.Keyspace)
 	switch {
 	case err == nil:
-		tm._srvKeyspace = srvKeyspace
+		tm.tmState.RefreshFromTopoInfo(ctx, nil, srvKeyspace)
 	case topo.IsErrType(err, topo.NoNode):
 		go tm.rebuildKeyspace(tablet.Keyspace, rebuildKeyspaceRetryInterval)
 	default:
-		return vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to read SrvKeyspace")
+		return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to read SrvKeyspace")
 	}
 
 	// Rebuild vschema graph if this is the first tablet in this keyspace/cell.
@@ -429,27 +412,25 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) error {
 		// Check if vschema was rebuilt after the initial creation of the keyspace.
 		if _, keyspaceExists := srvVSchema.GetKeyspaces()[tablet.Keyspace]; !keyspaceExists {
 			if err := tm.TopoServer.RebuildSrvVSchema(ctx, []string{tm.tabletAlias.Cell}); err != nil {
-				return vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to RebuildSrvVSchema")
+				return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to RebuildSrvVSchema")
 			}
 		}
 	case topo.IsErrType(err, topo.NoNode):
 		// There is no SrvSchema in this cell at all, so we definitely need to rebuild.
 		if err := tm.TopoServer.RebuildSrvVSchema(ctx, []string{tm.tabletAlias.Cell}); err != nil {
-			return vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to RebuildSrvVSchema")
+			return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to RebuildSrvVSchema")
 		}
 	default:
-		return vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to read SrvVSchema")
+		return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to read SrvVSchema")
 	}
-	return nil
+	return shardInfo, nil
 }
 
 func (tm *TabletManager) rebuildKeyspace(keyspace string, retryInterval time.Duration) {
 	var srvKeyspace *topodatapb.SrvKeyspace
 	defer func() {
 		log.Infof("Keyspace rebuilt: %v", keyspace)
-		tm.mutex.Lock()
-		defer tm.mutex.Unlock()
-		tm._srvKeyspace = srvKeyspace
+		tm.tmState.RefreshFromTopoInfo(tm.BatchCtx, nil, srvKeyspace)
 	}()
 
 	// RebuildKeyspace will fail until at least one tablet is up for every shard.
@@ -478,11 +459,7 @@ func (tm *TabletManager) rebuildKeyspace(keyspace string, retryInterval time.Dur
 	}
 }
 
-func (tm *TabletManager) checkMastership(ctx context.Context) error {
-	tm.mutex.Lock()
-	si := tm._shardInfo
-	tm.mutex.Unlock()
-
+func (tm *TabletManager) checkMastership(ctx context.Context, si *topo.ShardInfo) error {
 	if si.MasterAlias != nil && topoproto.TabletAliasEqual(si.MasterAlias, tm.tabletAlias) {
 		// We're marked as master in the shard record, which could mean the master
 		// tablet process was just restarted. However, we need to check if a new
@@ -493,7 +470,7 @@ func (tm *TabletManager) checkMastership(ctx context.Context) error {
 		case topo.IsErrType(err, topo.NoNode):
 			// There's no existing tablet record, so we can assume
 			// no one has left us a message to step down.
-			tm.updateTablet(func(tablet *topodatapb.Tablet) {
+			tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 				tablet.Type = topodatapb.TabletType_MASTER
 				// Update the master term start time (current value is 0) because we
 				// assume that we are actually the MASTER and in case of a tiebreak,
@@ -504,7 +481,7 @@ func (tm *TabletManager) checkMastership(ctx context.Context) error {
 			if oldTablet.Type == topodatapb.TabletType_MASTER {
 				// We're marked as master in the shard record,
 				// and our existing tablet record agrees.
-				tm.updateTablet(func(tablet *topodatapb.Tablet) {
+				tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 					tablet.Type = topodatapb.TabletType_MASTER
 					tablet.MasterTermStartTime = oldTablet.MasterTermStartTime
 				})
@@ -524,7 +501,7 @@ func (tm *TabletManager) checkMastership(ctx context.Context) error {
 				oldMasterTermStartTime := oldTablet.GetMasterTermStartTime()
 				currentShardTime := si.GetMasterTermStartTime()
 				if oldMasterTermStartTime.After(currentShardTime) {
-					tm.updateTablet(func(tablet *topodatapb.Tablet) {
+					tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 						tablet.Type = topodatapb.TabletType_MASTER
 						tablet.MasterTermStartTime = oldTablet.MasterTermStartTime
 					})
@@ -539,13 +516,13 @@ func (tm *TabletManager) checkMastership(ctx context.Context) error {
 
 func (tm *TabletManager) checkMysql(ctx context.Context) error {
 	if appConfig, _ := tm.DBConfigs.AppWithDB().MysqlParams(); appConfig.Host != "" {
-		tm.updateTablet(func(tablet *topodatapb.Tablet) {
+		tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 			tablet.MysqlHostname = appConfig.Host
 			tablet.MysqlPort = int32(appConfig.Port)
 		})
 	} else {
 		// Assume unix socket was specified and try to get the port from mysqld
-		tm.updateTablet(func(tablet *topodatapb.Tablet) {
+		tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 			tablet.MysqlHostname = tablet.Hostname
 		})
 		mysqlPort, err := tm.MysqlDaemon.GetMysqlPort()
@@ -553,7 +530,7 @@ func (tm *TabletManager) checkMysql(ctx context.Context) error {
 			log.Warningf("Cannot get current mysql port, will keep retrying every %v: %v", mysqlPortRetryInterval, err)
 			go tm.findMysqlPort(mysqlPortRetryInterval)
 		} else {
-			tm.updateTablet(func(tablet *topodatapb.Tablet) {
+			tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 				tablet.MysqlPort = mysqlPort
 			})
 		}
@@ -568,17 +545,8 @@ func (tm *TabletManager) findMysqlPort(retryInterval time.Duration) {
 		if err != nil {
 			continue
 		}
-		// We need to get the action lock to make sure no one
-		// else is updating the tablet.
-		if err := tm.lock(tm.BatchCtx); err != nil {
-			continue
-		}
-		defer tm.unlock()
 		log.Infof("Identified mysql port: %v", mport)
-		tm.pubMu.Lock()
-		tm.tablet.MysqlPort = mport
-		tm.pubMu.Unlock()
-		tm.publishState(tm.BatchCtx)
+		tm.tmState.SetMysqlPort(mport)
 		return
 	}
 }
@@ -701,57 +669,20 @@ func (tm *TabletManager) withRetry(ctx context.Context, description string, work
 	}
 }
 
-func (tm *TabletManager) setTablet(tablet *topodatapb.Tablet) {
-	tm.pubMu.Lock()
-	tm.tablet = proto.Clone(tablet).(*topodatapb.Tablet)
-	tm.pubMu.Unlock()
-
-	// Notify the shard sync loop that the tablet state changed.
-	tm.notifyShardSync()
-}
-
-func (tm *TabletManager) updateTablet(update func(tablet *topodatapb.Tablet)) {
-	tm.pubMu.Lock()
-	update(tm.tablet)
-	tm.pubMu.Unlock()
-
-	// Notify the shard sync loop that the tablet state changed.
-	tm.notifyShardSync()
-}
-
 // Tablet reads the stored Tablet from the tm.
 func (tm *TabletManager) Tablet() *topodatapb.Tablet {
-	tm.pubMu.Lock()
-	tablet := proto.Clone(tm.tablet).(*topodatapb.Tablet)
-	tm.pubMu.Unlock()
-	return tablet
+	return tm.tmState.Tablet()
 }
 
 // BlacklistedTables returns the list of currently blacklisted tables.
 func (tm *TabletManager) BlacklistedTables() []string {
-	tm.mutex.Lock()
-	defer tm.mutex.Unlock()
-	return tm._blacklistedTables
+	return tm.tmState.BlacklistedTables()
 }
 
 // DisallowQueryService returns the reason the query service should be
 // disabled, if any.
 func (tm *TabletManager) DisallowQueryService() string {
-	tm.mutex.Lock()
-	defer tm.mutex.Unlock()
-	return tm._disallowQueryService
-}
-
-func (tm *TabletManager) setServicesDesiredState(disallowQueryService string) {
-	tm.mutex.Lock()
-	tm._disallowQueryService = disallowQueryService
-	tm.mutex.Unlock()
-}
-
-func (tm *TabletManager) setBlacklistedTables(value []string) {
-	tm.mutex.Lock()
-	tm._blacklistedTables = value
-	tm.mutex.Unlock()
+	return tm.tmState.DisallowQueryService()
 }
 
 // hookExtraEnv returns the map to pass to local hooks

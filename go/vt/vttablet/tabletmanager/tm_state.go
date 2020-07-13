@@ -1,0 +1,356 @@
+/*
+Copyright 2020 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package tabletmanager
+
+import (
+	"flag"
+	"fmt"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
+	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
+)
+
+var publishRetryInterval = flag.Duration("publish_retry_interval", 30*time.Second, "how long vttablet waits to retry publishing the tablet record")
+
+// tmState manages the state of the TabletManager.
+type tmState struct {
+	tm     *TabletManager
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	// Read-only variables.
+	tabletAlias *topodatapb.TabletAlias
+	keyspace    string
+	shard       string
+	keyrange    *topodatapb.KeyRange
+
+	mu                sync.Mutex
+	isOpen            bool
+	isResharding      bool
+	tabletControls    map[topodatapb.TabletType]bool
+	blacklistedTables map[topodatapb.TabletType][]string
+	tablet            *topodatapb.Tablet
+	isPublishing      bool
+}
+
+func newTMState(tm *TabletManager, tablet *topodatapb.Tablet) *tmState {
+	return &tmState{
+		tm:          tm,
+		tabletAlias: tm.tabletAlias,
+		keyspace:    tablet.Keyspace,
+		shard:       tablet.Shard,
+		keyrange:    tablet.KeyRange,
+		tablet:      tablet,
+	}
+}
+
+func (ts *tmState) Open(ctx context.Context) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	if ts.isOpen {
+		return
+	}
+
+	ts.ctx, ts.cancel = context.WithCancel(ctx)
+	ts.isOpen = true
+	ts.updateLocked(ts.ctx)
+	ts.publishStateLocked(ctx)
+}
+
+func (ts *tmState) Close() {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+
+	ts.isOpen = false
+	ts.cancel()
+}
+
+func (ts *tmState) RefreshFromTopo(ctx context.Context) error {
+	span, ctx := trace.NewSpan(ctx, "tmState.refreshFromTopo")
+	defer span.Finish()
+
+	shardInfo, err := ts.tm.TopoServer.GetShard(ctx, ts.keyspace, ts.shard)
+	if err != nil {
+		return err
+	}
+
+	srvKeyspace, err := ts.tm.TopoServer.GetSrvKeyspace(ctx, ts.tabletAlias.Cell, ts.keyspace)
+	if err != nil {
+		return err
+	}
+	ts.RefreshFromTopoInfo(ctx, shardInfo, srvKeyspace)
+	return nil
+}
+
+func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.ShardInfo, srvKeyspace *topodatapb.SrvKeyspace) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+
+	if shardInfo != nil {
+		ts.isResharding = len(shardInfo.SourceShards) > 0
+
+		ts.blacklistedTables = make(map[topodatapb.TabletType][]string)
+		for _, tc := range shardInfo.TabletControls {
+			if topo.InCellList(ts.tabletAlias.Cell, tc.Cells) {
+				ts.blacklistedTables[tc.TabletType] = tc.BlacklistedTables
+			}
+		}
+	}
+
+	if srvKeyspace != nil {
+		ts.tabletControls = make(map[topodatapb.TabletType]bool)
+		for _, partition := range srvKeyspace.GetPartitions() {
+			for _, tabletControl := range partition.GetShardTabletControls() {
+				if key.KeyRangeEqual(tabletControl.GetKeyRange(), ts.keyrange) {
+					if tabletControl.QueryServiceDisabled {
+						ts.tabletControls[partition.GetServedType()] = true
+					}
+					break
+				}
+			}
+		}
+	}
+
+	ts.updateLocked(ctx)
+}
+
+func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.TabletType) error {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+
+	if tabletType == topodatapb.TabletType_MASTER {
+		masterTermStartTime := logutil.TimeToProto(time.Now())
+
+		// Update the tablet record first.
+		_, err := topotools.ChangeType(ctx, ts.tm.TopoServer, ts.tabletAlias, tabletType, masterTermStartTime)
+		if err != nil {
+			return err
+		}
+
+		ts.tablet.Type = tabletType
+		ts.tablet.MasterTermStartTime = masterTermStartTime
+	} else {
+		ts.tablet.Type = tabletType
+		ts.tablet.MasterTermStartTime = nil
+	}
+
+	s := topoproto.TabletTypeLString(tabletType)
+	statsTabletType.Set(s)
+	statsTabletTypeCount.Add(s, 1)
+
+	ts.updateLocked(ctx)
+	ts.publishStateLocked(ctx)
+	ts.tm.notifyShardSync()
+	return nil
+}
+
+func (ts *tmState) SetMysqlPort(mport int32) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+
+	ts.tablet.MysqlPort = mport
+	ts.publishStateLocked(ts.ctx)
+}
+
+// UpdateTablet must be called during initialization only.
+func (ts *tmState) UpdateTablet(update func(tablet *topodatapb.Tablet)) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	update(ts.tablet)
+}
+
+func (ts *tmState) Tablet() *topodatapb.Tablet {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	return proto.Clone(ts.tablet).(*topodatapb.Tablet)
+}
+
+func (ts *tmState) MasterTermStartTime() time.Time {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	if ts.tablet == nil {
+		return time.Time{}
+	}
+	return logutil.ProtoToTime(ts.tablet.MasterTermStartTime)
+}
+
+func (ts *tmState) DisallowQueryService() string {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	return ts.canServe(ts.tablet.Type)
+}
+
+func (ts *tmState) BlacklistedTables() []string {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	return ts.blacklistedTables[ts.tablet.Type]
+}
+
+func (ts *tmState) updateLocked(ctx context.Context) {
+	span, ctx := trace.NewSpan(ctx, "tmState.update")
+	defer span.Finish()
+
+	if !ts.isOpen {
+		return
+	}
+
+	ts.tm.replManager.SetTabletType(ts.tablet.Type)
+
+	if err := ts.applyBlacklist(ctx); err != nil {
+		log.Errorf("Cannot update blacklisted tables rule: %v", err)
+	}
+
+	terTime := logutil.ProtoToTime(ts.tablet.MasterTermStartTime)
+	reason := ts.canServe(ts.tablet.Type)
+	if reason == "" {
+		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, true); err != nil {
+			log.Errorf("Cannot start query service: %v", err)
+		}
+	} else {
+		log.Infof("Disabling query service: %v", reason)
+		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, false); err != nil {
+			log.Errorf("SetServingType(serving=false) failed: %v", err)
+		}
+	}
+
+	if ts.tm.UpdateStream != nil {
+		if topo.IsRunningUpdateStream(ts.tablet.Type) {
+			ts.tm.UpdateStream.Enable()
+		} else {
+			ts.tm.UpdateStream.Disable()
+		}
+	}
+
+	// See if we need to start or stop vreplication.
+	if ts.tm.VREngine != nil {
+		if ts.tablet.Type == topodatapb.TabletType_MASTER {
+			ts.tm.VREngine.Open(ts.tm.BatchCtx)
+		} else {
+			ts.tm.VREngine.Close()
+		}
+	}
+}
+
+func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
+	if !topo.IsRunningQueryService(tabletType) {
+		return fmt.Sprintf("not a serving tablet type(%v)", tabletType)
+	}
+	if tabletType == topodatapb.TabletType_MASTER && ts.isResharding {
+		return "master tablet with filtered replication on"
+	}
+	if ts.tabletControls[tabletType] {
+		return "TabletControl.DisableQueryService set"
+	}
+	return ""
+}
+
+func (ts *tmState) applyBlacklist(ctx context.Context) (err error) {
+	blacklistRules := rules.New()
+	blacklistedTables := ts.blacklistedTables[ts.tablet.Type]
+	if len(blacklistedTables) > 0 {
+		tables, err := mysqlctl.ResolveTables(ctx, ts.tm.MysqlDaemon, topoproto.TabletDbName(ts.tablet), blacklistedTables)
+		if err != nil {
+			return err
+		}
+
+		// Verify that at least one table matches the wildcards, so
+		// that we don't add a rule to blacklist all tables
+		if len(tables) > 0 {
+			log.Infof("Blacklisting tables %v", strings.Join(tables, ", "))
+			qr := rules.NewQueryRule("enforce blacklisted tables", "blacklisted_table", rules.QRFailRetry)
+			for _, t := range tables {
+				qr.AddTableCond(t)
+			}
+			blacklistRules.Add(qr)
+		}
+	}
+
+	loadRuleErr := ts.tm.QueryServiceControl.SetQueryRules(blacklistQueryRules, blacklistRules)
+	if loadRuleErr != nil {
+		log.Warningf("Fail to load query rule set %s: %s", blacklistQueryRules, loadRuleErr)
+	}
+	return nil
+}
+
+func (ts *tmState) publishStateLocked(ctx context.Context) {
+	log.Infof("Publishing state: %v", ts.tablet)
+	// If retry is in progress, there's nothing to do.
+	if ts.isPublishing {
+		return
+	}
+	// Fast path: publish immediately.
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+	_, err := ts.tm.TopoServer.UpdateTabletFields(ctx, ts.tabletAlias, func(tablet *topodatapb.Tablet) error {
+		if err := topotools.CheckOwnership(tablet, ts.tablet); err != nil {
+			log.Error(err)
+			return topo.NewError(topo.NoUpdateNeeded, "")
+		}
+		*tablet = *proto.Clone(ts.tablet).(*topodatapb.Tablet)
+		return nil
+	})
+	if err != nil {
+		log.Errorf("Unable to publish state to topo, will keep retrying: %v", err)
+		ts.isPublishing = true
+		// Keep retrying until success.
+		go ts.retryPublish()
+	}
+}
+
+func (ts *tmState) retryPublish() {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+
+	defer func() { ts.isPublishing = false }()
+
+	for {
+		// Retry immediately the first time because the previous failure might have been
+		// due to an expired context.
+		ctx, cancel := context.WithTimeout(ts.ctx, *topo.RemoteOperationTimeout)
+		_, err := ts.tm.TopoServer.UpdateTabletFields(ctx, ts.tabletAlias, func(tablet *topodatapb.Tablet) error {
+			if err := topotools.CheckOwnership(tablet, ts.tablet); err != nil {
+				log.Error(err)
+				return topo.NewError(topo.NoUpdateNeeded, "")
+			}
+			*tablet = *proto.Clone(ts.tablet).(*topodatapb.Tablet)
+			return nil
+		})
+		cancel()
+		if err != nil {
+			log.Errorf("Unable to publish state to topo, will keep retrying: %v", err)
+			ts.mu.Unlock()
+			time.Sleep(*publishRetryInterval)
+			ts.mu.Lock()
+			continue
+		}
+		log.Infof("Published state: %v", ts.tablet)
+		return
+	}
+}
