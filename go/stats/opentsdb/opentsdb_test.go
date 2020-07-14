@@ -119,7 +119,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat1",
+		      "category": "cat1",
 		      "host": "localhost"
 		    }
 		  },
@@ -128,7 +128,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat2",
+		      "category": "cat2",
 		      "host": "localhost"
 		    }
 		  },
@@ -137,7 +137,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat1",
+		      "category": "cat1",
 		      "host": "localhost"
 		    }
 		  },
@@ -146,7 +146,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat2",
+		      "category": "cat2",
 		      "host": "localhost"
 		    }
 		  },
@@ -155,7 +155,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat1",
+		      "category": "cat1",
 		      "host": "localhost"
 		    }
 		  },
@@ -164,7 +164,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat2",
+		      "category": "cat2",
 		      "host": "localhost"
 		    }
 		  },
@@ -173,7 +173,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 1,
 		    "tags": {
-		      "histograms": "cat1",
+		      "category": "cat1",
 		      "host": "localhost"
 		    }
 		  },
@@ -182,7 +182,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat2",
+		      "category": "cat2",
 		      "host": "localhost"
 		    }
 		  },
@@ -191,7 +191,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat1",
+		      "category": "cat1",
 		      "host": "localhost"
 		    }
 		  },
@@ -200,7 +200,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat2",
+		      "category": "cat2",
 		      "host": "localhost"
 		    }
 		  },
@@ -209,7 +209,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 1,
 		    "tags": {
-		      "histograms": "cat1",
+		      "category": "cat1",
 		      "host": "localhost"
 		    }
 		  },
@@ -218,7 +218,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat2",
+		      "category": "cat2",
 		      "host": "localhost"
 		    }
 		  },
@@ -227,7 +227,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat1",
+		      "category": "cat1",
 		      "host": "localhost"
 		    }
 		  },
@@ -236,7 +236,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat2",
+		      "category": "cat2",
 		      "host": "localhost"
 		    }
 		  },
@@ -245,7 +245,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat1",
+		      "category": "cat1",
 		      "host": "localhost"
 		    }
 		  },
@@ -254,7 +254,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat2",
+		      "category": "cat2",
 		      "host": "localhost"
 		    }
 		  },
@@ -263,7 +263,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat1",
+		      "category": "cat1",
 		      "host": "localhost"
 		    }
 		  },
@@ -272,7 +272,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat2",
+		      "category": "cat2",
 		      "host": "localhost"
 		    }
 		  },
@@ -281,7 +281,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat1",
+		      "category": "cat1",
 		      "host": "localhost"
 		    }
 		  },
@@ -290,7 +290,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat2",
+		      "category": "cat2",
 		      "host": "localhost"
 		    }
 		  },
@@ -299,7 +299,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 2,
 		    "tags": {
-		      "histograms": "cat1",
+		      "category": "cat1",
 		      "host": "localhost"
 		    }
 		  },
@@ -308,7 +308,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat2",
+		      "category": "cat2",
 		      "host": "localhost"
 		    }
 		  },
@@ -317,7 +317,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat1",
+		      "category": "cat1",
 		      "host": "localhost"
 		    }
 		  },
@@ -326,7 +326,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat2",
+		      "category": "cat2",
 		      "host": "localhost"
 		    }
 		  },
@@ -335,7 +335,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 1000000001,
 		    "tags": {
-		      "histograms": "cat1",
+		      "category": "cat1",
 		      "host": "localhost"
 		    }
 		  },
@@ -344,7 +344,7 @@ func TestOpenTsdbTimings(t *testing.T) {
 		    "timestamp": 1234,
 		    "value": 0,
 		    "tags": {
-		      "histograms": "cat2",
+		      "category": "cat2",
 		      "host": "localhost"
 		    }
 		  }

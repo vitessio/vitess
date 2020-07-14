@@ -26,10 +26,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -151,6 +152,7 @@ func TestPlan(t *testing.T) {
 
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
+	defer os.RemoveAll(testOutputTempDir)
 	// You will notice that some tests expect user.Id instead of user.id.
 	// This is because we now pre-create vindex columns in the symbol
 	// table, which come from vschema. In the test vschema,
@@ -171,6 +173,8 @@ func TestPlan(t *testing.T) {
 	testFile(t, "use_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "set_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "set_sysvar_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "union_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "transaction_cases.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func TestOne(t *testing.T) {
@@ -184,6 +188,7 @@ func TestOne(t *testing.T) {
 func TestBypassPlanningFromFile(t *testing.T) {
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
+	defer os.RemoveAll(testOutputTempDir)
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "schema_test.json"),
 		keyspace: &vindexes.Keyspace{
@@ -201,6 +206,7 @@ func TestDDLPlanningFromFile(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
+	defer os.RemoveAll(testOutputTempDir)
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "schema_test.json"),
 		keyspace: &vindexes.Keyspace{
@@ -216,6 +222,7 @@ func TestDDLPlanningFromFile(t *testing.T) {
 func TestOtherPlanningFromFile(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	defer os.RemoveAll(testOutputTempDir)
 	require.NoError(t, err)
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "schema_test.json"),
@@ -331,7 +338,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 
 				if out != tcase.output {
 					fail = true
-					t.Errorf("File: %s, Line: %v\n %s \n%s", filename, tcase.lineno, cmp.Diff(tcase.output, out), out)
+					t.Errorf("File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output, out), tcase.output, out)
 				}
 
 				if err != nil {
@@ -339,13 +346,12 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 				}
 
 				expected.WriteString(fmt.Sprintf("%s\"%s\"\n%s\n\n", tcase.comments, tcase.input, out))
-
 			})
 		}
 		if fail && tempDir != "" {
 			gotFile := fmt.Sprintf("%s/%s", tempDir, filename)
 			ioutil.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
-			fmt.Println(fmt.Sprintf("Errors found in plantests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir))
+			fmt.Println(fmt.Sprintf("Errors found in plantests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir)) //nolint
 		}
 	})
 }

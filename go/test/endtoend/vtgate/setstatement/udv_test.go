@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/google/go-cmp/cmp"
@@ -44,6 +46,9 @@ func TestSetUDV(t *testing.T) {
 	}
 
 	queries := []queriesWithExpectations{{
+		query:        "select @foo",
+		expectedRows: "[[NULL]]", rowsAffected: 1,
+	}, {
 		query:        "set @foo = 'abc', @bar = 42, @baz = 30.5, @tablet = concat('foo','bar')",
 		expectedRows: "", rowsAffected: 0,
 	}, {
@@ -96,12 +101,14 @@ func TestSetUDV(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
+	_, err = exec(t, conn, "delete from test")
+	require.NoError(t, err)
 
 	for i, q := range queries {
 		t.Run(fmt.Sprintf("%d-%s", i, q.query), func(t *testing.T) {
 			qr, err := exec(t, conn, q.query)
 			require.NoError(t, err)
-			require.Equal(t, uint64(q.rowsAffected), qr.RowsAffected, "rows affected wrong for query: %s", q.query)
+			assert.Equal(t, uint64(q.rowsAffected), qr.RowsAffected, "rows affected wrong for query: %s", q.query)
 			if q.expectedRows != "" {
 				result := fmt.Sprintf("%v", qr.Rows)
 				if diff := cmp.Diff(q.expectedRows, result); diff != "" {

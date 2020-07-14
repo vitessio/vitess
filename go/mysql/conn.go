@@ -39,7 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-var mysqlServerFlushDelay = flag.Duration("mysql_server_flush_delay", 100*time.Millisecond, "Delay after which buffered response will flushed to client.")
+var mysqlServerFlushDelay = flag.Duration("mysql_server_flush_delay", 100*time.Millisecond, "Delay after which buffered response will be flushed to the client.")
 
 const (
 	// connBufferSize is how much we buffer for reading and
@@ -761,13 +761,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 	data, err := c.readEphemeralPacket()
 	if err != nil {
 		// Don't log EOF errors. They cause too much spam.
-		// Note the EOF detection is not 100%
-		// guaranteed, in the case where the client
-		// connection is already closed before we call
-		// 'readEphemeralPacket'.  This is a corner
-		// case though, and very unlikely to happen,
-		// and the only downside is we log a bit more then.
-		if err != io.EOF {
+		if err != io.EOF && !strings.Contains(err.Error(), "use of closed network connection") {
 			log.Errorf("Error reading packet from %s: %v", c, err)
 		}
 		return err
@@ -926,9 +920,15 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			prepare.BindVars = make(map[string]*querypb.BindVariable, paramsCount)
 		}
 
+		bindVars := make(map[string]*querypb.BindVariable, paramsCount)
+		for i := uint16(0); i < paramsCount; i++ {
+			parameterID := fmt.Sprintf("v%d", i+1)
+			bindVars[parameterID] = &querypb.BindVariable{}
+		}
+
 		c.PrepareData[c.StatementID] = prepare
 
-		fld, err := handler.ComPrepare(c, queries[0])
+		fld, err := handler.ComPrepare(c, queries[0], bindVars)
 
 		if err != nil {
 			if werr := c.writeErrorPacketFromError(err); werr != nil {

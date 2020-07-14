@@ -19,7 +19,8 @@ package grpcqueryservice
 import (
 	"google.golang.org/grpc"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
@@ -37,6 +38,8 @@ type query struct {
 	server queryservice.QueryService
 }
 
+var _ queryservicepb.QueryServer = (*query)(nil)
+
 // Execute is part of the queryservice.QueryServer interface
 func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (response *querypb.ExecuteResponse, err error) {
 	defer q.server.HandlePanic(&err)
@@ -44,7 +47,7 @@ func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (r
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options)
+	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -91,13 +94,14 @@ func (q *query) Begin(ctx context.Context, request *querypb.BeginRequest) (respo
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	transactionID, err := q.server.Begin(ctx, request.Target, request.Options)
+	transactionID, alias, err := q.server.Begin(ctx, request.Target, request.Options)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
 
 	return &querypb.BeginResponse{
 		TransactionId: transactionID,
+		TabletAlias:   alias,
 	}, nil
 }
 
@@ -108,10 +112,11 @@ func (q *query) Commit(ctx context.Context, request *querypb.CommitRequest) (res
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.Commit(ctx, request.Target, request.TransactionId); err != nil {
+	rID, err := q.server.Commit(ctx, request.Target, request.TransactionId)
+	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
-	return &querypb.CommitResponse{}, nil
+	return &querypb.CommitResponse{ReservedId: rID}, nil
 }
 
 // Rollback is part of the queryservice.QueryServer interface
@@ -121,11 +126,12 @@ func (q *query) Rollback(ctx context.Context, request *querypb.RollbackRequest) 
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.Rollback(ctx, request.Target, request.TransactionId); err != nil {
+	rID, err := q.server.Rollback(ctx, request.Target, request.TransactionId)
+	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
 
-	return &querypb.RollbackResponse{}, nil
+	return &querypb.RollbackResponse{ReservedId: rID}, nil
 }
 
 // Prepare is part of the queryservice.QueryServer interface
@@ -248,14 +254,14 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-
-	result, transactionID, err := q.server.BeginExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.Options)
+	result, transactionID, alias, err := q.server.BeginExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options)
 	if err != nil {
 		// if we have a valid transactionID, return the error in-band
 		if transactionID != 0 {
 			return &querypb.BeginExecuteResponse{
 				Error:         vterrors.ToVTRPC(err),
 				TransactionId: transactionID,
+				TabletAlias:   alias,
 			}, nil
 		}
 		return nil, vterrors.ToGRPC(err)
@@ -263,6 +269,7 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 	return &querypb.BeginExecuteResponse{
 		Result:        sqltypes.ResultToProto3(result),
 		TransactionId: transactionID,
+		TabletAlias:   alias,
 	}, nil
 }
 
@@ -273,14 +280,14 @@ func (q *query) BeginExecuteBatch(ctx context.Context, request *querypb.BeginExe
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-
-	results, transactionID, err := q.server.BeginExecuteBatch(ctx, request.Target, request.Queries, request.AsTransaction, request.Options)
+	results, transactionID, alias, err := q.server.BeginExecuteBatch(ctx, request.Target, request.Queries, request.AsTransaction, request.Options)
 	if err != nil {
 		// if we have a valid transactionID, return the error in-band
 		if transactionID != 0 {
 			return &querypb.BeginExecuteBatchResponse{
 				Error:         vterrors.ToVTRPC(err),
 				TransactionId: transactionID,
+				TabletAlias:   alias,
 			}, nil
 		}
 		return nil, vterrors.ToGRPC(err)
@@ -288,6 +295,7 @@ func (q *query) BeginExecuteBatch(ctx context.Context, request *querypb.BeginExe
 	return &querypb.BeginExecuteBatchResponse{
 		Results:       sqltypes.ResultsToProto3(results),
 		TransactionId: transactionID,
+		TabletAlias:   alias,
 	}, nil
 }
 
@@ -338,7 +346,7 @@ func (q *query) VStream(request *binlogdatapb.VStreamRequest, stream queryservic
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	err = q.server.VStream(ctx, request.Target, request.Position, request.Filter, func(events []*binlogdatapb.VEvent) error {
+	err = q.server.VStream(ctx, request.Target, request.Position, request.TableLastPKs, request.Filter, func(events []*binlogdatapb.VEvent) error {
 		return stream.Send(&binlogdatapb.VStreamResponse{
 			Events: events,
 		})
@@ -366,6 +374,21 @@ func (q *query) VStreamResults(request *binlogdatapb.VStreamResultsRequest, stre
 	)
 	err = q.server.VStreamResults(ctx, request.Target, request.Query, stream.Send)
 	return vterrors.ToGRPC(err)
+}
+
+//ReserveExecute implements the QueryServer interface
+func (q *query) ReserveExecute(ctx context.Context, request *querypb.ReserveExecuteRequest) (*querypb.ReserveExecuteResponse, error) {
+	panic("implement me")
+}
+
+//ReserveBeginExecute implements the QueryServer interface
+func (q *query) ReserveBeginExecute(ctx context.Context, request *querypb.ReserveBeginExecuteRequest) (*querypb.ReserveBeginExecuteResponse, error) {
+	panic("implement me")
+}
+
+//Release implements the QueryServer interface
+func (q *query) Release(ctx context.Context, request *querypb.ReleaseRequest) (*querypb.ReleaseResponse, error) {
+	panic("implement me")
 }
 
 // Register registers the implementation on the provide gRPC Server.

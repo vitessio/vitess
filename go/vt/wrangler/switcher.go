@@ -41,8 +41,8 @@ func (r *switcher) validateWorkflowHasCompleted(ctx context.Context) error {
 
 //TODO: do we need to disable ForeignKey before dropping tables?
 //TODO: delete multiple tables in single statement?
-func (r *switcher) dropSourceTables(ctx context.Context) error {
-	return r.ts.dropSourceTables(ctx)
+func (r *switcher) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {
+	return r.ts.removeSourceTables(ctx, removalType)
 }
 
 func (r *switcher) dropSourceShards(ctx context.Context) error {

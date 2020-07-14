@@ -41,11 +41,11 @@ func TestTabletReshuffle(t *testing.T) {
 	ctx := context.Background()
 
 	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer masterConn.Close()
 
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer replicaConn.Close()
 
 	// Sanity Check
@@ -54,11 +54,11 @@ func TestTabletReshuffle(t *testing.T) {
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	//Create new tablet
-	rTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
+	rTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	//Init Tablets
 	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// mycnf_server_id prevents vttablet from reading the mycnf
 	// Pointing to masterTablet's socket file
@@ -67,10 +67,12 @@ func TestTabletReshuffle(t *testing.T) {
 		"-mycnf_server_id", fmt.Sprintf("%d", rTablet.TabletUID),
 		"-db_socket", fmt.Sprintf("%s/mysql.sock", masterTablet.VttabletProcess.Directory),
 	}
+	defer func() { clusterInstance.VtTabletExtraArgs = []string{} }()
+
 	// SupportsBackup=False prevents vttablet from trying to restore
 	// Start vttablet process
 	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	sql := "select value from t1"
 	args := []string{
@@ -81,14 +83,12 @@ func TestTabletReshuffle(t *testing.T) {
 		sql,
 	}
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	assertExcludeFields(t, result)
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Backup", rTablet.Alias)
 	assert.Error(t, err, "cannot perform backup without my.cnf")
 
-	// Reset the VtTabletExtraArgs
-	clusterInstance.VtTabletExtraArgs = []string{}
 	killTablets(t, rTablet)
 }
 
@@ -98,11 +98,11 @@ func TestHealthCheck(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
-	rTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
+	rTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	// Start Mysql Processes and return connection
 	replicaConn, err := cluster.StartMySQLAndGetConnection(ctx, rTablet, username, clusterInstance.TmpDirectory)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	defer replicaConn.Close()
 
@@ -111,18 +111,18 @@ func TestHealthCheck(t *testing.T) {
 
 	//Init Replica Tablet
 	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// start vttablet process, should be in SERVING state as we already have a master
 	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer masterConn.Close()
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rTablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	checkHealth(t, rTablet.HTTPPort, false)
 
 	// Make sure the master is still master
@@ -131,25 +131,25 @@ func TestHealthCheck(t *testing.T) {
 
 	// stop replication, make sure we don't go unhealthy.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopSlave", rTablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rTablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// make sure the health stream is updated
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", rTablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	verifyStreamHealth(t, result)
 
 	// then restart replication, make sure we stay healthy
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopSlave", rTablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rTablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	checkHealth(t, rTablet.HTTPPort, false)
 
 	// now test VtTabletStreamHealth returns the right thing
 	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "2", rTablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	scanner := bufio.NewScanner(strings.NewReader(result))
 	for scanner.Scan() {
 		verifyStreamHealth(t, scanner.Text())
@@ -162,7 +162,7 @@ func TestHealthCheck(t *testing.T) {
 func checkHealth(t *testing.T, port int, shouldError bool) {
 	url := fmt.Sprintf("http://localhost:%d/healthz", port)
 	resp, err := http.Get(url)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	if shouldError {
 		assert.True(t, resp.StatusCode > 400)
 	} else {
@@ -172,11 +172,11 @@ func checkHealth(t *testing.T, port int, shouldError bool) {
 
 func checkTabletType(t *testing.T, tabletAlias string, typeWant string) {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", tabletAlias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	var tablet topodatapb.Tablet
 	err = json2.Unmarshal([]byte(result), &tablet)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	actualType := tablet.GetType()
 	got := fmt.Sprintf("%d", actualType)
@@ -190,7 +190,7 @@ func checkTabletType(t *testing.T, tabletAlias string, typeWant string) {
 func verifyStreamHealth(t *testing.T, result string) {
 	var streamHealthResponse querypb.StreamHealthResponse
 	err := json2.Unmarshal([]byte(result), &streamHealthResponse)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	serving := streamHealthResponse.GetServing()
 	UID := streamHealthResponse.GetTabletAlias().GetUid()
 	realTimeStats := streamHealthResponse.GetRealtimeStats()
@@ -198,7 +198,7 @@ func verifyStreamHealth(t *testing.T, result string) {
 	assert.True(t, serving, "Tablet should be in serving state")
 	assert.True(t, UID > 0, "Tablet should contain uid")
 	// secondsBehindMaster varies till 7200 so setting safe limit
-	assert.True(t, secondsBehindMaster < 10000, "Slave should not be behind master")
+	assert.True(t, secondsBehindMaster < 10000, "replica should not be behind master")
 }
 
 func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
@@ -210,7 +210,7 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 	//Wait if tablet is not in service state
 	defer cluster.PanicHandler(t)
 	err := rdonlyTablet.VttabletProcess.WaitForTabletType("SERVING")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Check tablet health
 	checkHealth(t, rdonlyTablet.HTTPPort, false)
@@ -221,30 +221,30 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 	// implementation.)  The tablet will stay healthy, and the
 	// query service is still running.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonlyTablet.Alias, "drained")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	// Trying to drain the same tablet again, should error
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonlyTablet.Alias, "drained")
 	assert.Error(t, err, "already drained")
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopSlave", rdonlyTablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	// Trigger healthcheck explicitly to avoid waiting for the next interval.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rdonlyTablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	checkTabletType(t, rdonlyTablet.Alias, "DRAINED")
 
 	// Query service is still running.
 	err = rdonlyTablet.VttabletProcess.WaitForTabletType("SERVING")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Restart replication. Tablet will become healthy again.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonlyTablet.Alias, "rdonly")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StartSlave", rdonlyTablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rdonlyTablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	checkHealth(t, rdonlyTablet.HTTPPort, false)
 }
 
@@ -261,10 +261,10 @@ func TestIgnoreHealthError(t *testing.T) {
 	}
 
 	// Start mysql process
-	tablet := clusterInstance.GetVttabletInstance("replica", 0, "")
+	tablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 	tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
 	err := tablet.MysqlctlProcess.Start()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// start vttablet process
 	tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
@@ -287,32 +287,32 @@ func TestIgnoreHealthError(t *testing.T) {
 
 	// Init Tablet
 	err = clusterInstance.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, newShard.Name)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// create database
 	err = tablet.VttabletProcess.CreateDB(keyspaceName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Start Vttablet, it should be NOT_SERVING as there is no master
 	err = clusterInstance.StartVttablet(tablet, "NOT_SERVING", false, cell, keyspaceName, hostname, newShard.Name)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Force it healthy.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("IgnoreHealthError", tablet.Alias, ".*no slave status.*")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = tablet.VttabletProcess.WaitForTabletType("SERVING")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	checkHealth(t, tablet.HTTPPort, false)
 
 	// Turn off the force-healthy.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("IgnoreHealthError", tablet.Alias, "")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = tablet.VttabletProcess.WaitForTabletType("NOT_SERVING")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	checkHealth(t, tablet.HTTPPort, true)
 
 	// Tear down custom processes
@@ -326,23 +326,28 @@ func TestNoMysqlHealthCheck(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
-	rTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
-	mTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
+	clusterInstance.VtTabletExtraArgs = []string{
+		"-publish_retry_interval", "1s",
+	}
+	defer func() { clusterInstance.VtTabletExtraArgs = []string{} }()
+
+	rTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
+	mTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	// Start Mysql Processes and return connection
 	masterConn, err := cluster.StartMySQLAndGetConnection(ctx, mTablet, username, clusterInstance.TmpDirectory)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer masterConn.Close()
 
 	replicaConn, err := cluster.StartMySQLAndGetConnection(ctx, rTablet, username, clusterInstance.TmpDirectory)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer replicaConn.Close()
 
 	// Create database in mysql
 	exec(t, masterConn, fmt.Sprintf("create database vt_%s", keyspaceName))
 	exec(t, replicaConn, fmt.Sprintf("create database vt_%s", keyspaceName))
 
-	//Get the gtid to ensure we bring master and slave at same position
+	//Get the gtid to ensure we bring master and replica at same position
 	qr := exec(t, masterConn, "SELECT @@GLOBAL.gtid_executed")
 	gtid := string(qr.Rows[0][0].Raw())
 
@@ -356,27 +361,27 @@ func TestNoMysqlHealthCheck(t *testing.T) {
 
 	// now shutdown all mysqld
 	err = rTablet.MysqlctlProcess.Stop()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = mTablet.MysqlctlProcess.Stop()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	//Init Tablets
 	err = clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Start vttablet process, should be in NOT_SERVING state as mysqld is not running
 	err = clusterInstance.StartVttablet(mTablet, "NOT_SERVING", false, cell, keyspaceName, hostname, shardName)
-	require.Nil(t, err, "error should be Nil")
+	require.NoError(t, err)
 	err = clusterInstance.StartVttablet(rTablet, "NOT_SERVING", false, cell, keyspaceName, hostname, shardName)
-	require.Nil(t, err, "error should be Nil")
+	require.NoError(t, err)
 
 	// Check Health should fail as Mysqld is not found
 	checkHealth(t, mTablet.HTTPPort, true)
 	checkHealth(t, rTablet.HTTPPort, true)
 
-	// Tell slave to not try to repair replication in healthcheck.
+	// Tell replica to not try to repair replication in healthcheck.
 	// The StopSlave will ultimately fail because mysqld is not running,
 	// But vttablet should remember that it's not supposed to fix replication.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopSlave", rTablet.Alias)
@@ -384,35 +389,35 @@ func TestNoMysqlHealthCheck(t *testing.T) {
 
 	//The above notice to not fix replication should survive tablet restart.
 	err = rTablet.VttabletProcess.TearDown()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = rTablet.VttabletProcess.Setup()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// restart mysqld
 	rTablet.MysqlctlProcess.InitMysql = false
 	err = rTablet.MysqlctlProcess.Start()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	mTablet.MysqlctlProcess.InitMysql = false
 	err = mTablet.MysqlctlProcess.Start()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// the master should still be healthy
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", mTablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	checkHealth(t, mTablet.HTTPPort, false)
 
-	// the slave will now be healthy, but report a very high replication
+	// the replica will now be healthy, but report a very high replication
 	// lag, because it can't figure out what it exactly is.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rTablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "SERVING", rTablet.VttabletProcess.GetTabletStatus())
 	checkHealth(t, rTablet.HTTPPort, false)
 
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", rTablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	var streamHealthResponse querypb.StreamHealthResponse
 	err = json2.Unmarshal([]byte(result), &streamHealthResponse)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	realTimeStats := streamHealthResponse.GetRealtimeStats()
 	secondsBehindMaster := realTimeStats.GetSecondsBehindMaster()
 	assert.True(t, secondsBehindMaster == 7200)
@@ -420,15 +425,15 @@ func TestNoMysqlHealthCheck(t *testing.T) {
 	// restart replication, wait until health check goes small
 	// (a value of zero is default and won't be in structure)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StartSlave", rTablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
 		result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", rTablet.Alias)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		var streamHealthResponse querypb.StreamHealthResponse
 		err = json2.Unmarshal([]byte(result), &streamHealthResponse)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		realTimeStats := streamHealthResponse.GetRealtimeStats()
 		secondsBehindMaster := realTimeStats.GetSecondsBehindMaster()
 		if secondsBehindMaster < 30 {
@@ -440,13 +445,11 @@ func TestNoMysqlHealthCheck(t *testing.T) {
 
 	// wait for the tablet to fix its mysql port
 	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", rTablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	var tablet topodatapb.Tablet
 	err = json2.Unmarshal([]byte(result), &tablet)
-	require.Nil(t, err)
-	portMap := tablet.GetPortMap()
-	mysqlPort := int(portMap["mysql"])
-	assert.True(t, mysqlPort == rTablet.MySQLPort, "mysql port in tablet record")
+	require.NoError(t, err)
+	assert.Equal(t, int32(rTablet.MySQLPort), tablet.MysqlPort, "mysql port in tablet record")
 
 	// Tear down custom processes
 	killTablets(t, rTablet, mTablet)

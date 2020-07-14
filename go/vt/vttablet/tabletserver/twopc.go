@@ -40,7 +40,6 @@ import (
 )
 
 const (
-	sqlTurnoffBinlog   = "set @@session.sql_log_bin = 0"
 	sqlCreateSidecarDB = "create database if not exists %s"
 
 	sqlDropLegacy1 = "drop table if exists %s.redo_log_transaction"
@@ -123,35 +122,8 @@ type TwoPC struct {
 
 // NewTwoPC creates a TwoPC variable.
 func NewTwoPC(readPool *connpool.Pool) *TwoPC {
-	return &TwoPC{readPool: readPool}
-}
-
-// Init initializes TwoPC. If the metadata database or tables
-// are not present, they are created.
-func (tpc *TwoPC) Init(dbaparams dbconfigs.Connector) error {
+	tpc := &TwoPC{readPool: readPool}
 	dbname := "_vt"
-	conn, err := dbconnpool.NewDBConnection(context.TODO(), dbaparams)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	statements := []string{
-		sqlTurnoffBinlog,
-		fmt.Sprintf(sqlCreateSidecarDB, dbname),
-		fmt.Sprintf(sqlDropLegacy1, dbname),
-		fmt.Sprintf(sqlDropLegacy2, dbname),
-		fmt.Sprintf(sqlDropLegacy3, dbname),
-		fmt.Sprintf(sqlDropLegacy4, dbname),
-		fmt.Sprintf(sqlCreateTableRedoState, dbname),
-		fmt.Sprintf(sqlCreateTableRedoStatement, dbname),
-		fmt.Sprintf(sqlCreateTableDTState, dbname),
-		fmt.Sprintf(sqlCreateTableDTParticipant, dbname),
-	}
-	for _, s := range statements {
-		if _, err := conn.ExecuteFetch(s, 0, false); err != nil {
-			return err
-		}
-	}
 	tpc.insertRedoTx = sqlparser.BuildParsedQuery(
 		"insert into %s.redo_state(dtid, state, time_created) values (%a, %a, %a)",
 		dbname, ":dtid", ":state", ":time_created")
@@ -197,12 +169,35 @@ func (tpc *TwoPC) Init(dbaparams dbconfigs.Connector) error {
 		"select dtid, time_created from %s.dt_state where time_created < %a",
 		dbname, ":time_created")
 	tpc.readAllTransactions = fmt.Sprintf(sqlReadAllTransactions, dbname, dbname)
-	return nil
+	return tpc
 }
 
 // Open starts the TwoPC service.
-func (tpc *TwoPC) Open(dbconfigs *dbconfigs.DBConfigs) {
+func (tpc *TwoPC) Open(dbconfigs *dbconfigs.DBConfigs) error {
+	dbname := "_vt"
+	conn, err := dbconnpool.NewDBConnection(context.TODO(), dbconfigs.DbaWithDB())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	statements := []string{
+		fmt.Sprintf(sqlCreateSidecarDB, dbname),
+		fmt.Sprintf(sqlDropLegacy1, dbname),
+		fmt.Sprintf(sqlDropLegacy2, dbname),
+		fmt.Sprintf(sqlDropLegacy3, dbname),
+		fmt.Sprintf(sqlDropLegacy4, dbname),
+		fmt.Sprintf(sqlCreateTableRedoState, dbname),
+		fmt.Sprintf(sqlCreateTableRedoStatement, dbname),
+		fmt.Sprintf(sqlCreateTableDTState, dbname),
+		fmt.Sprintf(sqlCreateTableDTParticipant, dbname),
+	}
+	for _, s := range statements {
+		if _, err := conn.ExecuteFetch(s, 0, false); err != nil {
+			return err
+		}
+	}
 	tpc.readPool.Open(dbconfigs.AppWithDB(), dbconfigs.DbaWithDB(), dbconfigs.DbaWithDB())
+	return nil
 }
 
 // Close closes the TwoPC service.
@@ -211,7 +206,7 @@ func (tpc *TwoPC) Close() {
 }
 
 // SaveRedo saves the statements in the redo log using the supplied connection.
-func (tpc *TwoPC) SaveRedo(ctx context.Context, conn tx.IStatefulConnection, dtid string, queries []string) error {
+func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *StatefulConnection, dtid string, queries []string) error {
 	bindVars := map[string]*querypb.BindVariable{
 		"dtid":         sqltypes.StringBindVariable(dtid),
 		"state":        sqltypes.Int64BindVariable(RedoStatePrepared),
@@ -242,7 +237,7 @@ func (tpc *TwoPC) SaveRedo(ctx context.Context, conn tx.IStatefulConnection, dti
 }
 
 // UpdateRedo changes the state of the redo log for the dtid.
-func (tpc *TwoPC) UpdateRedo(ctx context.Context, conn tx.IStatefulConnection, dtid string, state int) error {
+func (tpc *TwoPC) UpdateRedo(ctx context.Context, conn *StatefulConnection, dtid string, state int) error {
 	bindVars := map[string]*querypb.BindVariable{
 		"dtid":  sqltypes.StringBindVariable(dtid),
 		"state": sqltypes.Int64BindVariable(int64(state)),
@@ -252,7 +247,7 @@ func (tpc *TwoPC) UpdateRedo(ctx context.Context, conn tx.IStatefulConnection, d
 }
 
 // DeleteRedo deletes the redo log for the dtid.
-func (tpc *TwoPC) DeleteRedo(ctx context.Context, conn tx.IStatefulConnection, dtid string) error {
+func (tpc *TwoPC) DeleteRedo(ctx context.Context, conn *StatefulConnection, dtid string) error {
 	bindVars := map[string]*querypb.BindVariable{
 		"dtid": sqltypes.StringBindVariable(dtid),
 	}
@@ -331,7 +326,7 @@ func (tpc *TwoPC) CountUnresolvedRedo(ctx context.Context, unresolvedTime time.T
 }
 
 // CreateTransaction saves the metadata of a 2pc transaction as Prepared.
-func (tpc *TwoPC) CreateTransaction(ctx context.Context, conn tx.IStatefulConnection, dtid string, participants []*querypb.Target) error {
+func (tpc *TwoPC) CreateTransaction(ctx context.Context, conn *StatefulConnection, dtid string, participants []*querypb.Target) error {
 	bindVars := map[string]*querypb.BindVariable{
 		"dtid":     sqltypes.StringBindVariable(dtid),
 		"state":    sqltypes.Int64BindVariable(int64(DTStatePrepare)),
@@ -364,7 +359,7 @@ func (tpc *TwoPC) CreateTransaction(ctx context.Context, conn tx.IStatefulConnec
 
 // Transition performs a transition from Prepare to the specified state.
 // If the transaction is not a in the Prepare state, an error is returned.
-func (tpc *TwoPC) Transition(ctx context.Context, conn tx.IStatefulConnection, dtid string, state querypb.TransactionState) error {
+func (tpc *TwoPC) Transition(ctx context.Context, conn *StatefulConnection, dtid string, state querypb.TransactionState) error {
 	bindVars := map[string]*querypb.BindVariable{
 		"dtid":    sqltypes.StringBindVariable(dtid),
 		"state":   sqltypes.Int64BindVariable(int64(state)),
@@ -381,7 +376,7 @@ func (tpc *TwoPC) Transition(ctx context.Context, conn tx.IStatefulConnection, d
 }
 
 // DeleteTransaction deletes the metadata for the specified transaction.
-func (tpc *TwoPC) DeleteTransaction(ctx context.Context, conn tx.IStatefulConnection, dtid string) error {
+func (tpc *TwoPC) DeleteTransaction(ctx context.Context, conn *StatefulConnection, dtid string) error {
 	bindVars := map[string]*querypb.BindVariable{
 		"dtid": sqltypes.StringBindVariable(dtid),
 	}
@@ -516,7 +511,7 @@ func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*tx.DistributedTx,
 	return distributed, nil
 }
 
-func (tpc *TwoPC) exec(ctx context.Context, conn tx.IStatefulConnection, pq *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (tpc *TwoPC) exec(ctx context.Context, conn *StatefulConnection, pq *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	q, err := pq.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err

@@ -30,7 +30,7 @@ import (
 func TestFallbackSecurityPolicy(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
-	mTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
+	mTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	//Init Tablets
 	err := clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)
@@ -42,7 +42,7 @@ func TestFallbackSecurityPolicy(t *testing.T) {
 
 	// Requesting an unregistered security_policy should fallback to deny-all.
 	clusterInstance.VtTabletExtraArgs = []string{"-security_policy", "bogus"}
-	err = clusterInstance.StartVttablet(mTablet, "NOT_SERVING", false, cell, keyspaceName, hostname, shardName)
+	err = clusterInstance.StartVttablet(mTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	require.Nil(t, err)
 
 	// It should deny ADMIN role.
@@ -89,7 +89,7 @@ func assertAllowedURLTest(t *testing.T, url string) {
 func TestDenyAllSecurityPolicy(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
-	mTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
+	mTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	//Init Tablets
 	err := clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)
@@ -101,7 +101,7 @@ func TestDenyAllSecurityPolicy(t *testing.T) {
 
 	// Requesting a deny-all security_policy.
 	clusterInstance.VtTabletExtraArgs = []string{"-security_policy", "deny-all"}
-	err = clusterInstance.StartVttablet(mTablet, "NOT_SERVING", false, cell, keyspaceName, hostname, shardName)
+	err = clusterInstance.StartVttablet(mTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	require.Nil(t, err)
 
 	// It should deny ADMIN role.
@@ -125,7 +125,7 @@ func TestDenyAllSecurityPolicy(t *testing.T) {
 func TestReadOnlySecurityPolicy(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
-	mTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
+	mTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	//Init Tablets
 	err := clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)
@@ -137,7 +137,7 @@ func TestReadOnlySecurityPolicy(t *testing.T) {
 
 	// Requesting a read-only security_policy.
 	clusterInstance.VtTabletExtraArgs = []string{"-security_policy", "read-only"}
-	err = clusterInstance.StartVttablet(mTablet, "NOT_SERVING", false, cell, keyspaceName, hostname, shardName)
+	err = clusterInstance.StartVttablet(mTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	require.Nil(t, err)
 
 	// It should deny ADMIN role.

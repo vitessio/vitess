@@ -272,8 +272,10 @@ func TestConsolidation(t *testing.T) {
 	defer framework.Server.SetPoolSize(framework.Server.PoolSize())
 	framework.Server.SetPoolSize(1)
 
+	const tag = "Waits/Histograms/Consolidations/Count"
+
 	for sleep := 0.1; sleep < 10.0; sleep *= 2 {
-		vstart := framework.DebugVars()
+		want := framework.FetchInt(framework.DebugVars(), tag) + 1
 		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() {
@@ -288,10 +290,10 @@ func TestConsolidation(t *testing.T) {
 		}()
 		wg.Wait()
 
-		vend := framework.DebugVars()
-		compareIntDiff(t, vend, "Waits/Histograms/Consolidations/Count", vstart, 1)
-		t.Logf("DebugVars properly incremented with sleep=%v", sleep)
-		return
+		if framework.FetchInt(framework.DebugVars(), tag) == want {
+			return
+		}
+		t.Logf("Consolidation didn't succeed with sleep for %v, trying a longer sleep", sleep)
 	}
 	t.Error("DebugVars for consolidation not incremented")
 }
@@ -498,7 +500,7 @@ func TestQueryStats(t *testing.T) {
 
 	// Ensure BeginExecute also updates the stats and strips comments.
 	query = "select /* begin_execute */ 1 /* trailing comment */"
-	if _, err := client.BeginExecute(query, bv); err != nil {
+	if _, err := client.BeginExecute(query, bv, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := client.Rollback(); err != nil {
@@ -756,4 +758,20 @@ func TestAppDebugRequest(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, want prefix %s", err, want)
 	}
+}
+
+func TestBeginExecuteWithFailingPreQueriesAndCheckConnectionState(t *testing.T) {
+	client := framework.NewClient()
+
+	insQuery := "insert into vitess_test (intval, floatval, charval, binval) values (4, null, null, null)"
+	preQueries := []string{
+		"savepoint a",
+		"release savepoint b",
+	}
+	_, err := client.BeginExecute(insQuery, nil, preQueries)
+	require.Error(t, err)
+
+	qr, err := client.Execute("select intval from vitess_test where intval = 4", nil)
+	require.NoError(t, err)
+	require.Empty(t, qr.Rows)
 }

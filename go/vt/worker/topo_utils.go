@@ -27,7 +27,6 @@ import (
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -123,44 +122,12 @@ func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrang
 
 	wr.Logger().Infof("Changing tablet %v to '%v'", topoproto.TabletAliasString(tabletAlias), topodatapb.TabletType_DRAINED)
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	err = wr.ChangeSlaveType(shortCtx, tabletAlias, topodatapb.TabletType_DRAINED)
-	cancel()
-	if err != nil {
+	defer cancel()
+	if err := wr.ChangeTabletType(shortCtx, tabletAlias, topodatapb.TabletType_DRAINED); err != nil {
 		return nil, err
 	}
-
-	ourURL := servenv.ListeningURL.String()
-	wr.Logger().Infof("Adding tag[worker]=%v to tablet %v", ourURL, topoproto.TabletAliasString(tabletAlias))
-	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	_, err = wr.TopoServer().UpdateTabletFields(shortCtx, tabletAlias, func(tablet *topodatapb.Tablet) error {
-		if tablet.Tags == nil {
-			tablet.Tags = make(map[string]string)
-		}
-		tablet.Tags["worker"] = ourURL
-		tablet.Tags["drain_reason"] = "Used by vtworker"
-		return nil
-	})
-	cancel()
-	if err != nil {
-		return nil, err
-	}
-	// Using "defer" here because we remove the tag *before* calling
-	// ChangeSlaveType back, so we need to record this tag change after the change
-	// slave type change in the cleaner.
-	defer wrangler.RecordTabletTagAction(cleaner, tabletAlias, "worker", "")
-	defer wrangler.RecordTabletTagAction(cleaner, tabletAlias, "drain_reason", "")
-
 	// Record a clean-up action to take the tablet back to tabletAlias.
-	wrangler.RecordChangeSlaveTypeAction(cleaner, tabletAlias, topodatapb.TabletType_DRAINED, tabletType)
-
-	// We refresh the destination vttablet reloads the worker URL when it reloads the tablet.
-	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	wr.RefreshTabletState(shortCtx, tabletAlias)
-	if err != nil {
-		return nil, err
-	}
-	cancel()
-
+	wrangler.RecordChangeTabletTypeAction(cleaner, tabletAlias, topodatapb.TabletType_DRAINED, tabletType)
 	return tabletAlias, nil
 }
 

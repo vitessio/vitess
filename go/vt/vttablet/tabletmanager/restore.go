@@ -50,43 +50,31 @@ var (
 // It will either work, fail gracefully, or return
 // an error in case of a non-recoverable error.
 // It takes the action lock so no RPC interferes.
-func (agent *ActionAgent) RestoreData(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool) error {
-	if err := agent.lock(ctx); err != nil {
+func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool) error {
+	if err := tm.lock(ctx); err != nil {
 		return err
 	}
-	defer agent.unlock()
-	if agent.Cnf == nil {
+	defer tm.unlock()
+	if tm.Cnf == nil {
 		return fmt.Errorf("cannot perform restore without my.cnf, please restart vttablet with a my.cnf file specified")
 	}
-	return agent.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore)
+	return tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore)
 }
 
-func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool) error {
-	// change type to RESTORE (using UpdateTabletFields so it's
-	// always authorized)
+func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool) error {
 	var originalType topodatapb.TabletType
-	if _, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
-		originalType = tablet.Type
-		tablet.Type = topodatapb.TabletType_RESTORE
-		return nil
-	}); err != nil {
-		return vterrors.Wrap(err, "Cannot change type to RESTORE")
-	}
-
-	// let's update our internal state (stop query service and other things)
-	if err := agent.refreshTablet(ctx, "restore from backup"); err != nil {
-		return vterrors.Wrap(err, "failed to update state before restore")
-	}
+	tablet := tm.Tablet()
+	originalType, tablet.Type = tablet.Type, topodatapb.TabletType_RESTORE
+	tm.updateState(ctx, tablet, "restore from backup")
 
 	// Try to restore. Depending on the reason for failure, we may be ok.
-	// If we're not ok, return an error and the agent will log.Fatalf,
+	// If we're not ok, return an error and the tm will log.Fatalf,
 	// causing the process to be restarted and the restore retried.
 	// Record local metadata values based on the original type.
-	localMetadata := agent.getLocalMetadataValues(originalType)
-	tablet := agent.Tablet()
+	localMetadata := tm.getLocalMetadataValues(originalType)
 
 	keyspace := tablet.Keyspace
-	keyspaceInfo, err := agent.TopoServer.GetKeyspace(ctx, keyspace)
+	keyspaceInfo, err := tm.TopoServer.GetKeyspace(ctx, keyspace)
 	if err != nil {
 		return err
 	}
@@ -101,11 +89,11 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	}
 
 	params := mysqlctl.RestoreParams{
-		Cnf:                 agent.Cnf,
-		Mysqld:              agent.MysqlDaemon,
+		Cnf:                 tm.Cnf,
+		Mysqld:              tm.MysqlDaemon,
 		Logger:              logger,
 		Concurrency:         *restoreConcurrency,
-		HookExtraEnv:        agent.hookExtraEnv(),
+		HookExtraEnv:        tm.hookExtraEnv(),
 		LocalMetadata:       localMetadata,
 		DeleteBeforeRestore: deleteBeforeRestore,
 		DbName:              topoproto.TabletDbName(tablet),
@@ -144,7 +132,7 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 		// context. Thus we use the background context to get through to the finish.
 		if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_NORMAL {
 			// Reconnect to master only for "NORMAL" keyspaces
-			if err := agent.startReplication(context.Background(), pos, originalType); err != nil {
+			if err := tm.startReplication(context.Background(), pos, originalType); err != nil {
 				return err
 			}
 		}
@@ -157,11 +145,8 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 		// alter replication here.
 	default:
 		// If anything failed, we should reset the original tablet type
-		agent.TopoServer.UpdateTabletFields(context.Background(), tablet.Alias, func(tablet *topodatapb.Tablet) error {
-			tablet.Type = originalType
-			return nil
-		})
-		agent.refreshTablet(ctx, "failed for restore from backup")
+		tablet.Type = originalType
+		tm.updateState(ctx, tablet, "failed for restore from backup")
 		return vterrors.Wrap(err, "Can't restore backup")
 	}
 
@@ -175,38 +160,29 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	}
 
 	// Change type back to original type if we're ok to serve.
-	if _, err := agent.TopoServer.UpdateTabletFields(context.Background(), tablet.Alias, func(tablet *topodatapb.Tablet) error {
-		tablet.Type = originalType
-		return nil
-	}); err != nil {
-		return vterrors.Wrapf(err, "Cannot change type back to %v", originalType)
-	}
-
-	// let's update our internal state (start query service and other things)
-	if err := agent.refreshTablet(context.Background(), "after restore from backup"); err != nil {
-		return vterrors.Wrap(err, "failed to update state after backup")
-	}
+	tablet.Type = originalType
+	tm.updateState(ctx, tablet, "after restore from backup")
 
 	return nil
 }
 
-func (agent *ActionAgent) startReplication(ctx context.Context, pos mysql.Position, tabletType topodatapb.TabletType) error {
+func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Position, tabletType topodatapb.TabletType) error {
 	cmds := []string{
 		"STOP SLAVE",
 		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
 	}
-	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
-		return vterrors.Wrap(err, "failed to reset slave")
+	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
+		return vterrors.Wrap(err, "failed to reset replication")
 	}
 
 	// Set the position at which to resume from the master.
-	if err := agent.MysqlDaemon.SetSlavePosition(ctx, pos); err != nil {
-		return vterrors.Wrap(err, "failed to set slave position")
+	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
+		return vterrors.Wrap(err, "failed to set replication position")
 	}
 
 	// Read the shard to find the current master, and its location.
-	tablet := agent.Tablet()
-	si, err := agent.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	tablet := tm.Tablet()
+	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		return vterrors.Wrap(err, "can't read shard")
 	}
@@ -226,18 +202,18 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos mysql.Positi
 		log.Warningf("Can't start replication after restore: master record still points to this tablet.")
 		return nil
 	}
-	ti, err := agent.TopoServer.GetTablet(ctx, si.MasterAlias)
+	ti, err := tm.TopoServer.GetTablet(ctx, si.MasterAlias)
 	if err != nil {
 		return vterrors.Wrapf(err, "Cannot read master tablet %v", si.MasterAlias)
 	}
 
 	// If using semi-sync, we need to enable it before connecting to master.
-	if err := agent.fixSemiSync(tabletType); err != nil {
+	if err := tm.fixSemiSync(tabletType); err != nil {
 		return err
 	}
 
-	// Set master and start slave.
-	if err := agent.MysqlDaemon.SetMaster(ctx, topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)), false /* slaveStopBefore */, true /* slaveStartAfter */); err != nil {
+	// Set master and start replication.
+	if err := tm.MysqlDaemon.SetMaster(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), false /* slaveStopBefore */, true /* slaveStartAfter */); err != nil {
 		return vterrors.Wrap(err, "MysqlDaemon.SetMaster failed")
 	}
 
@@ -270,9 +246,9 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos mysql.Positi
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			status, err := agent.MysqlDaemon.SlaveStatus()
+			status, err := tm.MysqlDaemon.ReplicationStatus()
 			if err != nil {
-				return vterrors.Wrap(err, "can't get slave status")
+				return vterrors.Wrap(err, "can't get replication status")
 			}
 			newPos := status.Position
 			if !newPos.Equal(pos) {
@@ -285,8 +261,8 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos mysql.Positi
 	return nil
 }
 
-func (agent *ActionAgent) getLocalMetadataValues(tabletType topodatapb.TabletType) map[string]string {
-	tablet := agent.Tablet()
+func (tm *TabletManager) getLocalMetadataValues(tabletType topodatapb.TabletType) map[string]string {
+	tablet := tm.Tablet()
 	values := map[string]string{
 		"Alias":         topoproto.TabletAliasString(tablet.Alias),
 		"ClusterAlias":  fmt.Sprintf("%s.%s", tablet.Keyspace, tablet.Shard),

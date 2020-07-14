@@ -59,6 +59,7 @@ var (
 		"-serving_state_grace_period", "1s"}
 )
 
+// TestMainSetup sets up the basic test cluster
 func TestMainSetup(m *testing.M, useMysqlctld bool) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
@@ -100,8 +101,8 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		var mysqlProcs []*exec.Cmd
 		for i := 0; i < 3; i++ {
 			tabletType := "replica"
-			tablet := localCluster.GetVttabletInstance(tabletType, 0, cell)
-			tablet.VttabletProcess = localCluster.GetVtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
+			tablet := localCluster.NewVttabletInstance(tabletType, 0, cell)
+			tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
 			tablet.VttabletProcess.DbPassword = dbPassword
 			tablet.VttabletProcess.ExtraArgs = commonTabletArg
 			tablet.VttabletProcess.SupportsBackup = true
@@ -182,8 +183,9 @@ var vtInsertTest = `create table vt_insert_test (
 	primary key (id)
 	) Engine=InnoDB`
 
+// TestBackupTransformImpl tests backups with transform hooks
 func TestBackupTransformImpl(t *testing.T) {
-	// insert data in master, validate same in slave
+	// insert data in master, validate same in replica
 	defer cluster.PanicHandler(t)
 	verifyInitialReplication(t)
 
@@ -258,7 +260,7 @@ func TestBackupTransformImpl(t *testing.T) {
 		verifyReplicationStatus(t, replica2, "OFF")
 	}
 
-	// validate that new slave has all the data
+	// validate that new replica has all the data
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 	// Remove all backups
@@ -266,8 +268,8 @@ func TestBackupTransformImpl(t *testing.T) {
 
 }
 
-// TestBackupTransformErrorImpl validate backup with test_backup_error
-// backup_storage_hook, which should fail.
+// TestBackupTransformErrorImpl validates backup behavior with transform hook
+// when the hook encounters an error
 func TestBackupTransformErrorImpl(t *testing.T) {
 	// restart the replica with transform hook parameter
 	defer cluster.PanicHandler(t)

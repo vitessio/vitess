@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -38,11 +40,11 @@ import (
 
 func TestDiscoveryGatewayExecute(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
-		_, err := dg.Execute(context.Background(), target, "query", nil, 0, nil)
+		_, err := dg.Execute(context.Background(), target, "query", nil, 0, 0, nil)
 		return err
 	})
 	testDiscoveryGatewayTransact(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
-		_, err := dg.Execute(context.Background(), target, "query", nil, 1, nil)
+		_, err := dg.Execute(context.Background(), target, "query", nil, 1, 0, nil)
 		return err
 	})
 }
@@ -71,26 +73,28 @@ func TestDiscoveryGatewayExecuteStream(t *testing.T) {
 
 func TestDiscoveryGatewayBegin(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
-		_, err := dg.Begin(context.Background(), target, nil)
+		_, _, err := dg.Begin(context.Background(), target, nil)
 		return err
 	})
 }
 
 func TestDiscoveryGatewayCommit(t *testing.T) {
 	testDiscoveryGatewayTransact(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
-		return dg.Commit(context.Background(), target, 1)
+		_, err := dg.Commit(context.Background(), target, 1)
+		return err
 	})
 }
 
 func TestDiscoveryGatewayRollback(t *testing.T) {
 	testDiscoveryGatewayTransact(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
-		return dg.Rollback(context.Background(), target, 1)
+		_, err := dg.Rollback(context.Background(), target, 1)
+		return err
 	})
 }
 
 func TestDiscoveryGatewayBeginExecute(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
-		_, _, err := dg.BeginExecute(context.Background(), target, "query", nil, nil)
+		_, _, _, err := dg.BeginExecute(context.Background(), target, nil, "query", nil, 0, nil)
 		return err
 	})
 }
@@ -98,7 +102,7 @@ func TestDiscoveryGatewayBeginExecute(t *testing.T) {
 func TestDiscoveryGatewayBeginExecuteBatch(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
 		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
-		_, _, err := dg.BeginExecuteBatch(context.Background(), target, queries, false, nil)
+		_, _, _, err := dg.BeginExecuteBatch(context.Background(), target, queries, false, nil)
 		return err
 	})
 }
@@ -247,7 +251,9 @@ func TestDiscoveryGatewayGetTabletsWithRegion(t *testing.T) {
 
 	dg := NewDiscoveryGateway(context.Background(), hc, srvTopo, "local", 2)
 
-	ts.CreateCellsAlias(context.Background(), "local", cellsAlias)
+	if err := ts.CreateCellsAlias(context.Background(), "local", cellsAlias); err != nil {
+		log.Errorf("ts.CreateCellsAlias(context.Background()... %v", err)
+	}
 
 	defer ts.DeleteCellsAlias(context.Background(), "local")
 

@@ -135,7 +135,7 @@ func TestBackupRestore(t *testing.T) {
 	sourceTablet.StartActionLoop(t, wr)
 	defer sourceTablet.StopActionLoop(t)
 
-	sourceTablet.Agent.Cnf = &mysqlctl.Mycnf{
+	sourceTablet.TM.Cnf = &mysqlctl.Mycnf{
 		DataDir:               sourceDataDir,
 		InnodbDataHomeDir:     sourceInnodbDataDir,
 		InnodbLogGroupHomeDir: sourceInnodbLogDir,
@@ -180,13 +180,13 @@ func TestBackupRestore(t *testing.T) {
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SHOW DATABASES": {},
 	}
-	destTablet.FakeMysqlDaemon.SetSlavePositionPos = sourceTablet.FakeMysqlDaemon.CurrentMasterPosition
+	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = sourceTablet.FakeMysqlDaemon.CurrentMasterPosition
 	destTablet.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
 
 	destTablet.StartActionLoop(t, wr)
 	defer destTablet.StopActionLoop(t)
 
-	destTablet.Agent.Cnf = &mysqlctl.Mycnf{
+	destTablet.TM.Cnf = &mysqlctl.Mycnf{
 		DataDir:               sourceDataDir,
 		InnodbDataHomeDir:     sourceInnodbDataDir,
 		InnodbLogGroupHomeDir: sourceInnodbLogDir,
@@ -196,7 +196,7 @@ func TestBackupRestore(t *testing.T) {
 		RelayLogInfoPath:      path.Join(root, "relay-log.info"),
 	}
 
-	if err := destTablet.Agent.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */); err != nil {
+	if err := destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */); err != nil {
 		t.Fatalf("RestoreData failed: %v", err)
 	}
 
@@ -306,7 +306,7 @@ func TestRestoreUnreachableMaster(t *testing.T) {
 	sourceTablet.StartActionLoop(t, wr)
 	defer sourceTablet.StopActionLoop(t)
 
-	sourceTablet.Agent.Cnf = &mysqlctl.Mycnf{
+	sourceTablet.TM.Cnf = &mysqlctl.Mycnf{
 		DataDir:               sourceDataDir,
 		InnodbDataHomeDir:     sourceInnodbDataDir,
 		InnodbLogGroupHomeDir: sourceInnodbLogDir,
@@ -340,13 +340,13 @@ func TestRestoreUnreachableMaster(t *testing.T) {
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SHOW DATABASES": {},
 	}
-	destTablet.FakeMysqlDaemon.SetSlavePositionPos = sourceTablet.FakeMysqlDaemon.CurrentMasterPosition
+	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = sourceTablet.FakeMysqlDaemon.CurrentMasterPosition
 	destTablet.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
 
 	destTablet.StartActionLoop(t, wr)
 	defer destTablet.StopActionLoop(t)
 
-	destTablet.Agent.Cnf = &mysqlctl.Mycnf{
+	destTablet.TM.Cnf = &mysqlctl.Mycnf{
 		DataDir:               sourceDataDir,
 		InnodbDataHomeDir:     sourceInnodbDataDir,
 		InnodbLogGroupHomeDir: sourceInnodbLogDir,
@@ -362,7 +362,7 @@ func TestRestoreUnreachableMaster(t *testing.T) {
 	// set a short timeout so that we don't have to wait 30 seconds
 	*topo.RemoteOperationTimeout = 2 * time.Second
 	// Restore should still succeed
-	if err := destTablet.Agent.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */); err != nil {
+	if err := destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */); err != nil {
 		t.Fatalf("RestoreData failed: %v", err)
 	}
 

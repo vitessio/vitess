@@ -150,6 +150,8 @@ func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodat
 			newvgtid.ShardGtids = append(newvgtid.ShardGtids, sgtid)
 		}
 	}
+	//TODO add tablepk validations
+
 	return newvgtid, filter, nil
 }
 
@@ -212,7 +214,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected number or shards: %v", rss)
 		}
 		// Safe to access sgtid.Gtid here (because it can't change until streaming begins).
-		err = rss[0].QueryService.VStream(ctx, rss[0].Target, sgtid.Gtid, vs.filter, func(events []*binlogdatapb.VEvent) error {
+		err = rss[0].Gateway.VStream(ctx, rss[0].Target, sgtid.Gtid, sgtid.TablePKs, vs.filter, func(events []*binlogdatapb.VEvent) error {
 			// We received a valid event. Reset error count.
 			errCount = 0
 
@@ -242,7 +244,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					ev := proto.Clone(event).(*binlogdatapb.VEvent)
 					ev.RowEvent.TableName = sgtid.Keyspace + "." + ev.RowEvent.TableName
 					sendevents = append(sendevents, ev)
-				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL:
+				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER:
 					sendevents = append(sendevents, event)
 					eventss = append(eventss, sendevents)
 					if err := vs.sendAll(sgtid, eventss); err != nil {
@@ -315,6 +317,33 @@ func (vs *vstream) sendAll(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdat
 			if event.Type == binlogdatapb.VEventType_GTID {
 				// Update the VGtid and send that instead.
 				sgtid.Gtid = event.Gtid
+				events[j] = &binlogdatapb.VEvent{
+					Type:  binlogdatapb.VEventType_VGTID,
+					Vgtid: proto.Clone(vs.vgtid).(*binlogdatapb.VGtid),
+				}
+			} else if event.Type == binlogdatapb.VEventType_LASTPK {
+				var foundIndex = -1
+				eventTablePK := event.LastPKEvent.TableLastPK
+				for idx, pk := range sgtid.TablePKs {
+					if pk.TableName == eventTablePK.TableName {
+						foundIndex = idx
+						break
+					}
+				}
+				if foundIndex == -1 {
+					if !event.LastPKEvent.Completed {
+						sgtid.TablePKs = append(sgtid.TablePKs, eventTablePK)
+					}
+				} else {
+					if event.LastPKEvent.Completed {
+						// remove tablepk from sgtid
+						sgtid.TablePKs[foundIndex] = sgtid.TablePKs[len(sgtid.TablePKs)-1]
+						sgtid.TablePKs[len(sgtid.TablePKs)-1] = nil
+						sgtid.TablePKs = sgtid.TablePKs[:len(sgtid.TablePKs)-1]
+					} else {
+						sgtid.TablePKs[foundIndex] = eventTablePK
+					}
+				}
 				events[j] = &binlogdatapb.VEvent{
 					Type:  binlogdatapb.VEventType_VGTID,
 					Vgtid: proto.Clone(vs.vgtid).(*binlogdatapb.VGtid),

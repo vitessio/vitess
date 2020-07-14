@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -61,7 +60,6 @@ type vstreamer struct {
 
 	cp       dbconfigs.Connector
 	se       *schema.Engine
-	sh       schema.Historian
 	startPos string
 	filter   *binlogdatapb.Filter
 	send     func([]*binlogdatapb.VEvent) error
@@ -73,9 +71,13 @@ type vstreamer struct {
 	versionTableID uint64
 
 	// format and pos are updated by parseEvent.
-	format mysql.BinlogFormat
-	pos    mysql.Position
+	format  mysql.BinlogFormat
+	pos     mysql.Position
+	stopPos string
 }
+
+// CopyState contains the last PK for tables to be copied
+type CopyState map[string][]*sqltypes.Result
 
 // streamerPlan extends the original plan to also include
 // the TableMap, which comes from the binlog. It's used
@@ -103,16 +105,16 @@ type streamerPlan struct {
 //   Other constructs like joins, group by, etc. are not supported.
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
-func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, sh schema.Historian, startPos string,
-	filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
+func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
+	//init copy state
 	return &vstreamer{
 		ctx:      ctx,
 		cancel:   cancel,
 		cp:       cp,
 		se:       se,
-		sh:       sh,
 		startPos: startPos,
+		stopPos:  stopPos,
 		filter:   filter,
 		send:     send,
 		vevents:  make(chan *localVSchema, 1),
@@ -138,42 +140,27 @@ func (vs *vstreamer) Cancel() {
 
 // Stream streams binlog events.
 func (vs *vstreamer) Stream() error {
-	defer vs.cancel()
-
-	// Validate the request against the current position.
-	curPos, err := vs.currentPosition()
+	//defer vs.cancel()
+	ctx := context.Background()
+	defer ctx.Done()
+	log.Infof("Starting Stream() with startPos %s", vs.startPos)
+	pos, err := mysql.DecodePosition(vs.startPos)
 	if err != nil {
-		return vterrors.Wrap(err, "could not obtain current position")
+		return err
 	}
-	if vs.startPos == "current" {
-		vs.pos = curPos
-		vevents := []*binlogdatapb.VEvent{{
-			Type: binlogdatapb.VEventType_GTID,
-			Gtid: mysql.EncodePosition(vs.pos),
-		}, {
-			Type: binlogdatapb.VEventType_OTHER,
-		}}
-		if err := vs.send(vevents); err != nil {
-			return wrapError(err, vs.pos)
-		}
-	} else {
-		pos, err := mysql.DecodePosition(vs.startPos)
-		if err != nil {
-			return vterrors.Wrap(err, "could not decode position")
-		}
-		if !curPos.AtLeast(pos) {
-			return fmt.Errorf("requested position %v is ahead of current position %v", mysql.EncodePosition(pos), mysql.EncodePosition(curPos))
-		}
-		vs.pos = pos
-	}
+	vs.pos = pos
+	return vs.replicate(ctx)
+}
 
-	// Ensure sh is Open. If vttablet came up in a non_serving role,
+// Stream streams binlog events.
+func (vs *vstreamer) replicate(ctx context.Context) error {
+	// Ensure se is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
-	if err := vs.sh.Open(); err != nil {
+	if err := vs.se.Open(); err != nil {
 		return wrapError(err, vs.pos)
 	}
 
-	conn, err := binlog.NewSlaveConnection(vs.cp)
+	conn, err := binlog.NewBinlogConnection(vs.cp)
 	if err != nil {
 		return wrapError(err, vs.pos)
 	}
@@ -185,15 +172,6 @@ func (vs *vstreamer) Stream() error {
 	}
 	err = vs.parseEvents(vs.ctx, events)
 	return wrapError(err, vs.pos)
-}
-
-func (vs *vstreamer) currentPosition() (mysql.Position, error) {
-	conn, err := vs.cp.Connect(vs.ctx)
-	if err != nil {
-		return mysql.Position{}, err
-	}
-	defer conn.Close()
-	return conn.MasterPosition()
 }
 
 // parseEvents parses and sends events.
@@ -381,7 +359,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				Type: binlogdatapb.VEventType_BEGIN,
 			})
 		}
-		vs.pos = mysql.AppendGTID(vs.pos, gtid)
+		vs.pos = mysql.AppendGTID(vs.pos, gtid) //TODO: #sugu why Append?
 	case ev.IsXID():
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_GTID,
@@ -446,9 +424,12 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 					Type: binlogdatapb.VEventType_DDL,
 					Ddl:  q.SQL,
 				})
+				// Reload schema only if the DDL change is relevant.
+				// TODO(sougou): move this back to always load after
+				// the schema reload bug is fixed.
+				vs.se.ReloadAt(context.Background(), vs.pos)
 			} else {
 				// If the DDL need not be sent, send a dummy OTHER event.
-				log.Infof("Not sending DDL for %s", q.SQL)
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_GTID,
 					Gtid: mysql.EncodePosition(vs.pos),
@@ -456,7 +437,6 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 					Type: binlogdatapb.VEventType_OTHER,
 				})
 			}
-			vs.se.ReloadAt(context.Background(), vs.pos)
 		case sqlparser.StmtOther, sqlparser.StmtPriv:
 			// These are either:
 			// 1) DBA statements like REPAIR that can be ignored.
@@ -525,8 +505,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		if id == vs.journalTableID {
 			vevents, err = vs.processJournalEvent(vevents, plan, rows)
 		} else if id == vs.versionTableID {
-			log.Infof("In vstreamer registering version event")
-			vs.sh.RegisterVersionEvent()
+			vs.se.RegisterVersionEvent()
 			vevent := &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_VERSION,
 			}
@@ -656,8 +635,8 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 		})
 	}
 
-	st := vs.sh.GetTableForPos(sqlparser.NewTableIdent(tm.Name), mysql.EncodePosition(vs.pos))
-	if st == nil {
+	st, err := vs.se.GetTableForPos(sqlparser.NewTableIdent(tm.Name), mysql.EncodePosition(vs.pos))
+	if err != nil {
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
 			return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
 		}

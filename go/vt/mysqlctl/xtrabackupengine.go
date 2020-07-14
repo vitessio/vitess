@@ -394,7 +394,7 @@ func (be *XtrabackupEngine) ExecuteRestore(ctx context.Context, params RestorePa
 		// don't delete the file here because that is how we detect an interrupted restore
 		return nil, err
 	}
-	// now find the slave position and return that
+	// now find the replication position and return that
 	params.Logger.Infof("Restore: returning replication position %v", bm.Position)
 	return &bm.BackupManifest, nil
 }

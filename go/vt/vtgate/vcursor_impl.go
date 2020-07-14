@@ -18,8 +18,12 @@ package vtgate
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 	"sync/atomic"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/mysql"
 
@@ -54,8 +58,8 @@ var _ iExecute = (*Executor)(nil)
 // vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
 type iExecute interface {
 	Execute(ctx context.Context, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
-	ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, tabletType topodatapb.TabletType, session *SafeSession, notInTransaction bool, autocommit bool) (qr *sqltypes.Result, errs []error)
-	StreamExecuteMulti(ctx context.Context, s string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error
+	ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, notInTransaction bool, autocommit bool) (qr *sqltypes.Result, errs []error)
+	StreamExecuteMulti(ctx context.Context, s string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error
 
 	// TODO: remove when resolver is gone
 	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
@@ -135,9 +139,9 @@ func newVCursorImpl(ctx context.Context, safeSession *SafeSession, marginComment
 		return nil, err
 	}
 
-	// Check for transaction to be only application in master.
-	if safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", tabletType)
+	// With DiscoveryGateway transactions are only allowed on master.
+	if UsingLegacyGateway() && safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "newVCursorImpl: transactions are supported only for master tablet types, current type: %v", tabletType)
 	}
 
 	return &vcursorImpl{
@@ -170,6 +174,13 @@ func (vc *vcursorImpl) SetContextTimeout(timeout time.Duration) context.CancelFu
 	ctx, cancel := context.WithTimeout(vc.ctx, timeout)
 	vc.ctx = ctx
 	return cancel
+}
+
+// ErrorGroupCancellableContext updates context that can be cancelled.
+func (vc *vcursorImpl) ErrorGroupCancellableContext() *errgroup.Group {
+	g, ctx := errgroup.WithContext(vc.ctx)
+	vc.ctx = ctx
+	return g
 }
 
 // RecordWarning stores the given warning in the current session
@@ -273,7 +284,7 @@ func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]
 // ExecuteMultiShard is part of the engine.VCursor interface.
 func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, autocommit bool) (*sqltypes.Result, []error) {
 	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(queries)))
-	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.tabletType, vc.safeSession, false, autocommit)
+	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.safeSession, false, autocommit)
 
 	if errs == nil && rollbackOnError {
 		vc.rollbackOnPartialExec = true
@@ -297,14 +308,14 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 	}
 	// The autocommit flag is always set to false because we currently don't
 	// execute DMLs through ExecuteStandalone.
-	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, bqs, vc.tabletType, NewAutocommitSession(vc.safeSession.Session), false, false /* autocommit */)
+	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, bqs, NewAutocommitSession(vc.safeSession.Session), false, false /* autocommit */)
 	return qr, vterrors.Aggregate(errs)
 }
 
 // StreamExeculteMulti is the streaming version of ExecuteMultiShard.
 func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
 	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(rss)))
-	return vc.executor.StreamExecuteMulti(vc.ctx, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.tabletType, vc.safeSession.Options, callback)
+	return vc.executor.StreamExecuteMulti(vc.ctx, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.safeSession.Options, callback)
 }
 
 // ExecuteKeyspaceID is part of the engine.VCursor interface.
@@ -420,6 +431,20 @@ func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (str
 
 func (vc *vcursorImpl) planPrefixKey() string {
 	if vc.destination != nil {
+		switch vc.destination.(type) {
+		case key.DestinationKeyspaceID, key.DestinationKeyspaceIDs:
+			resolved, _, err := vc.ResolveDestinations(vc.keyspace, nil, []key.Destination{vc.destination})
+			if err == nil && len(resolved) > 0 {
+				shards := make([]string, len(resolved))
+				for i := 0; i < len(shards); i++ {
+					shards[i] = resolved[i].Target.GetShard()
+				}
+				sort.Strings(shards)
+				return fmt.Sprintf("%s%sKsIDsResolved(%s)", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType], strings.Join(shards, ","))
+			}
+		default:
+			// use destination string (out of the switch)
+		}
 		return fmt.Sprintf("%s%s%s", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType], vc.destination.String())
 	}
 	return fmt.Sprintf("%s%s", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType])

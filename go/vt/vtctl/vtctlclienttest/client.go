@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -73,7 +72,7 @@ func TestSuite(t *testing.T, ts *topo.Server, client vtctlclient.VtctlClient) {
 		Keyspace:            "test_keyspace",
 		Type:                topodatapb.TabletType_MASTER,
 	}
-	topoproto.SetMysqlPort(tablet, 3334)
+	tablet.MysqlPort = 3334
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
 		t.Errorf("CreateTablet: %v", err)
 	}

@@ -71,6 +71,16 @@ func (ps *pulloutSubquery) Primitive() engine.Primitive {
 	return ps.eSubquery
 }
 
+// PushLock satisfies the builder interface.
+func (ps *pulloutSubquery) PushLock(lock string) error {
+	err := ps.subquery.PushLock(lock)
+	if err != nil {
+		return err
+	}
+
+	return ps.underlying.PushLock(lock)
+}
+
 // First satisfies the builder interface.
 func (ps *pulloutSubquery) First() builder {
 	return ps.underlying.First()

@@ -47,6 +47,11 @@ const (
 	GatewayImplementationDiscovery = "discoverygateway"
 )
 
+//UsingLegacyGateway returns true when legacy
+func UsingLegacyGateway() bool {
+	return *GatewayImplementation == GatewayImplementationDiscovery
+}
+
 func init() {
 	RegisterGatewayCreator(GatewayImplementationDiscovery, createDiscoveryGateway)
 }
@@ -74,6 +79,13 @@ type DiscoveryGateway struct {
 	// buffer, if enabled, buffers requests during a detected MASTER failover.
 	buffer *buffer.Buffer
 }
+
+//TabletsCacheStatus is not implemented for this struct
+func (dg *DiscoveryGateway) TabletsCacheStatus() discovery.TabletsCacheStatusList {
+	return nil
+}
+
+var _ Gateway = (*DiscoveryGateway)(nil)
 
 func createDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string, retryCount int) Gateway {
 	return NewDiscoveryGateway(ctx, hc, serv, cell, retryCount)
@@ -409,8 +421,7 @@ func NewShardError(in error, target *querypb.Target, tablet *topodatapb.Tablet) 
 	return in
 }
 
-// HealthCheck should never be called on a DiscoveryGateway
-// This exists only to satisfy the interface
-func (dg *DiscoveryGateway) HealthCheck() *discovery.HealthCheck {
-	return nil
+// QueryServiceByAlias satisfies the Gateway interface
+func (dg *DiscoveryGateway) QueryServiceByAlias(_ *topodatapb.TabletAlias) (queryservice.QueryService, error) {
+	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "DiscoveryGateway does not implement QueryServiceByAlias")
 }

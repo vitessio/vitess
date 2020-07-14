@@ -34,7 +34,7 @@ type Reporter struct {
 // RegisterReporter registers the heartbeat reader as a healthcheck reporter so that its
 // measurements will be picked up in healthchecks.
 func registerHeartbeatReporter(controller tabletserver.Controller) {
-	if tabletenv.NewCurrentConfig().HeartbeatIntervalMilliseconds == 0 {
+	if tabletenv.NewCurrentConfig().HeartbeatIntervalSeconds == 0 {
 		return
 	}
 
@@ -49,8 +49,8 @@ func (r *Reporter) HTMLName() template.HTML {
 
 // Report is part of the health.Reporter interface. It returns the last reported value
 // written by the watchHeartbeat goroutine. If we're the master, it just returns 0.
-func (r *Reporter) Report(isSlaveType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
-	if !isSlaveType {
+func (r *Reporter) Report(isReplicaType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
+	if !isReplicaType {
 		return 0, nil
 	}
 	return r.controller.HeartbeatLag()

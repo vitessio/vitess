@@ -34,7 +34,7 @@ func TestLocalMetadata(t *testing.T) {
 	cluster.VerifyLocalMetadata(t, &replicaTablet, keyspaceName, shardName, cell)
 
 	// Create new tablet
-	rTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
+	rTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	// Init Tablet
 	err := clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
@@ -57,7 +57,7 @@ func TestLocalMetadata(t *testing.T) {
 	cluster.VerifyLocalMetadata(t, rTablet, keyspaceName, shardName, cell)
 
 	// Create another new tablet
-	rTablet2 := clusterInstance.GetVttabletInstance("replica", 0, "")
+	rTablet2 := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	// Init Tablet
 	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet2, cell, keyspaceName, hostname, shardName)

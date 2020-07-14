@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 
@@ -208,7 +210,6 @@ func (db *DB) Close() {
 	db.listener.Close()
 	db.acceptWG.Wait()
 
-	db.WaitForClose(250 * time.Millisecond)
 	db.CloseAllConnections()
 
 	tmpDir := path.Dir(db.socketFile)
@@ -347,7 +348,11 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	// Check if we should close the connection and provoke errno 2013.
 	if db.shouldClose {
 		c.Close()
-		callback(&sqltypes.Result{})
+
+		//log error
+		if err := callback(&sqltypes.Result{}); err != nil {
+			log.Errorf("callback failed : %v", err)
+		}
 		return nil
 	}
 
@@ -355,7 +360,10 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	// may send this at connection time, and we don't want it to
 	// interfere.
 	if key == "set names utf8" {
-		callback(&sqltypes.Result{})
+		//log error
+		if err := callback(&sqltypes.Result{}); err != nil {
+			log.Errorf("callback failed : %v", err)
+		}
 		return nil
 	}
 
@@ -430,7 +438,7 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 }
 
 // ComPrepare is part of the mysql.Handler interface.
-func (db *DB) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, error) {
+func (db *DB) ComPrepare(c *mysql.Conn, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
 	return nil, nil
 }
 
@@ -529,6 +537,11 @@ func (db *DB) GetQueryCalledNum(query string) int {
 //QueryLog returns the query log in a semicomma separated string
 func (db *DB) QueryLog() string {
 	return strings.Join(db.querylog, ";")
+}
+
+//ResetQueryLog resets the query log
+func (db *DB) ResetQueryLog() {
+	db.querylog = nil
 }
 
 // EnableConnFail makes connection to this fake DB fail.

@@ -52,6 +52,7 @@ func TestSelectNext(t *testing.T) {
 		Sql:           query,
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)},
 	}}
+
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries:\n%v, want\n%v\n", sbclookup.Queries, wantQueries)
 	}
@@ -228,31 +229,42 @@ func TestSelectLastInsertId(t *testing.T) {
 	defer QueryLogger.Unsubscribe(logChan)
 
 	sql := "select last_insert_id()"
-	masterSession.LastInsertId = 42
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "last_insert_id()", Type: sqltypes.Uint64},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewUint64(42),
+			sqltypes.NewUint64(52),
 		}},
 	}
 	require.NoError(t, err)
 	utils.MustMatch(t, result, wantResult, "Mismatch")
 }
 
-func TestSelectUserDefinedVariable(t *testing.T) {
+func TestSelectUserDefindVariable(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 	executor.normalize = true
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
 	sql := "select @foo"
-	masterSession = &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"})}
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "@foo", Type: sqltypes.Null},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NULL,
+		}},
+	}
+	utils.MustMatch(t, result, wantResult, "Mismatch")
+
+	masterSession = &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"})}
+	result, err = executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	wantResult = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "@foo", Type: sqltypes.VarBinary},
 		},
@@ -260,7 +272,6 @@ func TestSelectUserDefinedVariable(t *testing.T) {
 			sqltypes.NewVarBinary("bar"),
 		}},
 	}
-	require.NoError(t, err)
 	utils.MustMatch(t, result, wantResult, "Mismatch")
 }
 
@@ -431,6 +442,16 @@ func TestSelectBindvars(t *testing.T) {
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
+	lookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("b|a", "varbinary|varbinary"),
+		"foo1|1",
+		"foo2|1",
+	), sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("b|a", "varbinary|varbinary"),
+		"foo1|1",
+		"foo2|1",
+	)})
+
 	sql := "select id from user where id = :id"
 	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{
 		"id": sqltypes.Int64BindVariable(1),
@@ -468,8 +489,7 @@ func TestSelectBindvars(t *testing.T) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
 	sbc1.Queries = nil
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select user_id from name_user_map where name = :name", 1)
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select user_id from name_user_map where name = :name", 1)
+	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select name, user_id from name_user_map where name in ::name", 1)
 	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
 
 	// Test with BytesBindVariable
@@ -491,8 +511,7 @@ func TestSelectBindvars(t *testing.T) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
 
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select user_id from name_user_map where name = :name", 1)
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select user_id from name_user_map where name = :name", 1)
+	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select name, user_id from name_user_map where name in ::name", 1)
 	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
 
 	// Test no match in the lookup vindex
@@ -524,17 +543,19 @@ func TestSelectBindvars(t *testing.T) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
 
+	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewVarBinary("nonexistent")})
+	require.NoError(t, err)
 	wantLookupQueries := []*querypb.BoundQuery{{
-		Sql: "select user_id from name_user_map where name = :name",
+		Sql: "select name, user_id from name_user_map where name in ::name",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name": sqltypes.StringBindVariable("nonexistent"),
+			"name": vars,
 		},
 	}}
 	if !reflect.DeepEqual(lookup.Queries, wantLookupQueries) {
 		t.Errorf("lookup.Queries: %+v, want %+v\n", lookup.Queries, wantLookupQueries)
 	}
 
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select user_id from name_user_map where name = :name", 1)
+	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select name, user_id from name_user_map where name in ::name", 1)
 	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
 
 }
@@ -590,6 +611,10 @@ func TestSelectEqual(t *testing.T) {
 	}
 	sbc2.Queries = nil
 
+	sbclookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("b|a", "varbinary|varbinary"),
+		"foo|1",
+	)})
 	_, err = executorExec(executor, "select id from user where name = 'foo'", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
@@ -599,10 +624,12 @@ func TestSelectEqual(t *testing.T) {
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
+	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewVarBinary("foo")})
+	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select user_id from name_user_map where name = :name",
+		Sql: "select name, user_id from name_user_map where name in ::name",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name": sqltypes.BytesBindVariable([]byte("foo")),
+			"name": vars,
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -826,6 +853,10 @@ func TestSelectIN(t *testing.T) {
 	// Convert a non-list bind variable.
 	sbc1.Queries = nil
 	sbc2.Queries = nil
+	sbclookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("b|a", "varbinary|varbinary"),
+		"foo|1",
+	)})
 	_, err = executorExec(executor, "select id from user where name = 'foo'", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
@@ -835,10 +866,12 @@ func TestSelectIN(t *testing.T) {
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
+	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewVarBinary("foo")})
+	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select user_id from name_user_map where name = :name",
+		Sql: "select name, user_id from name_user_map where name in ::name",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name": sqltypes.BytesBindVariable([]byte("foo")),
+			"name": vars,
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -880,10 +913,12 @@ func TestStreamSelectIN(t *testing.T) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 
+	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewVarBinary("foo")})
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "select user_id from name_user_map where name = :name",
+		Sql: "select name, user_id from name_user_map where name in ::name",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name": sqltypes.BytesBindVariable([]byte("foo")),
+			"name": vars,
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -899,7 +934,7 @@ func TestSelectScatter(t *testing.T) {
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
-	resolver := newTestResolver(hc, serv, cell)
+	resolver := newTestLegacyResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for _, shard := range shards {
@@ -932,7 +967,7 @@ func TestSelectScatterPartial(t *testing.T) {
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
-	resolver := newTestResolver(hc, serv, cell)
+	resolver := newTestLegacyResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for _, shard := range shards {
@@ -992,7 +1027,7 @@ func TestStreamSelectScatter(t *testing.T) {
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
-	resolver := newTestResolver(hc, serv, cell)
+	resolver := newTestLegacyResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	for _, shard := range shards {
 		_ = hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
@@ -1029,7 +1064,7 @@ func TestSelectScatterOrderBy(t *testing.T) {
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
-	resolver := newTestResolver(hc, serv, cell)
+	resolver := newTestLegacyResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for i, shard := range shards {
@@ -1099,7 +1134,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
-	resolver := newTestResolver(hc, serv, cell)
+	resolver := newTestLegacyResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for i, shard := range shards {
@@ -1169,7 +1204,7 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
-	resolver := newTestResolver(hc, serv, cell)
+	resolver := newTestLegacyResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for i, shard := range shards {
@@ -1230,7 +1265,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
-	resolver := newTestResolver(hc, serv, cell)
+	resolver := newTestLegacyResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for i, shard := range shards {
@@ -1293,7 +1328,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
-	resolver := newTestResolver(hc, serv, cell)
+	resolver := newTestLegacyResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for i, shard := range shards {
@@ -1356,7 +1391,7 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
-	resolver := newTestResolver(hc, serv, cell)
+	resolver := newTestLegacyResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for i, shard := range shards {
@@ -1419,7 +1454,7 @@ func TestSelectScatterLimit(t *testing.T) {
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
-	resolver := newTestResolver(hc, serv, cell)
+	resolver := newTestLegacyResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for i, shard := range shards {
@@ -1491,7 +1526,7 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
-	resolver := newTestResolver(hc, serv, cell)
+	resolver := newTestLegacyResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for i, shard := range shards {
@@ -2145,4 +2180,56 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 	if sbc2.Queries != nil {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
+}
+
+func TestSelectWithUnionAll(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor.normalize = true
+	sql := "select id from user where id in (1, 2, 3) union all select id from user where id in (1, 2, 3)"
+	bv, _ := sqltypes.BuildBindVariable([]int64{1, 2, 3})
+	bv1, _ := sqltypes.BuildBindVariable([]int64{1, 2})
+	bv2, _ := sqltypes.BuildBindVariable([]int64{3})
+	sbc1WantQueries := []*querypb.BoundQuery{{
+		Sql: "select id from user where id in ::__vals",
+		BindVariables: map[string]*querypb.BindVariable{
+			"__vals": bv1,
+			"vtg1":   bv,
+			"vtg2":   bv,
+		},
+	}, {
+		Sql: "select id from user where id in ::__vals",
+		BindVariables: map[string]*querypb.BindVariable{
+			"__vals": bv1,
+			"vtg1":   bv,
+			"vtg2":   bv,
+		},
+	}}
+	sbc2WantQueries := []*querypb.BoundQuery{{
+		Sql: "select id from user where id in ::__vals",
+		BindVariables: map[string]*querypb.BindVariable{
+			"__vals": bv2,
+			"vtg1":   bv,
+			"vtg2":   bv,
+		},
+	}, {
+		Sql: "select id from user where id in ::__vals",
+		BindVariables: map[string]*querypb.BindVariable{
+			"__vals": bv2,
+			"vtg1":   bv,
+			"vtg2":   bv,
+		},
+	}}
+	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "sbc1")
+	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "sbc2")
+
+	// Reset
+	sbc1.Queries = nil
+	sbc2.Queries = nil
+
+	_, err = executorStream(executor, sql)
+	require.NoError(t, err)
+	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "sbc1")
+	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "sbc2")
 }

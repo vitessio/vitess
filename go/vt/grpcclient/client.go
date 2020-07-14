@@ -36,10 +36,10 @@ import (
 )
 
 var (
-	keepaliveTime         = flag.Duration("grpc_keepalive_time", 10*time.Second, "After a duration of this time if the client doesn't see any activity it pings the server to see if the transport is still alive.")
+	keepaliveTime         = flag.Duration("grpc_keepalive_time", 10*time.Second, "After a duration of this time, if the client doesn't see any activity, it pings the server to see if the transport is still alive.")
 	keepaliveTimeout      = flag.Duration("grpc_keepalive_timeout", 10*time.Second, "After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
-	initialConnWindowSize = flag.Int("grpc_initial_conn_window_size", 0, "grpc initial connection window size")
-	initialWindowSize     = flag.Int("grpc_initial_window_size", 0, "grpc initial window size")
+	initialConnWindowSize = flag.Int("grpc_initial_conn_window_size", 0, "gRPC initial connection window size")
+	initialWindowSize     = flag.Int("grpc_initial_window_size", 0, "gRPC initial window size")
 )
 
 // FailFast is a self-documenting type for the grpc.FailFast.
@@ -62,7 +62,7 @@ func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.Clie
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(*grpccommon.MaxMessageSize),
 			grpc.MaxCallSendMsgSize(*grpccommon.MaxMessageSize),
-			grpc.FailFast(bool(failFast)),
+			grpc.WaitForReady(bool(!failFast)),
 		),
 	}
 

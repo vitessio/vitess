@@ -252,11 +252,11 @@ func TestSelectEqual(t *testing.T) {
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
-					"toc",
-					"varbinary",
+					"fromc|toc",
+					"int64|varbinary",
 				),
-				"\x00",
-				"\x80",
+				"1|\x00",
+				"1|\x80",
 			),
 			defaultSelectResult,
 		},
@@ -266,7 +266,7 @@ func TestSelectEqual(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`Execute select toc from lkp where from = :from from: type:INT64 value:"1"  false`,
+		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:<type:INT64 value:"1" >  false`,
 		`ResolveDestinations ks [type:INT64 value:"1" ] Destinations:DestinationKeyspaceIDs(00,80)`,
 		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
 	})
@@ -278,7 +278,7 @@ func TestSelectEqual(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`Execute select toc from lkp where from = :from from: type:INT64 value:"1"  false`,
+		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:<type:INT64 value:"1" >  false`,
 		`ResolveDestinations ks [type:INT64 value:"1" ] Destinations:DestinationKeyspaceIDs(00,80)`,
 		`StreamExecuteMulti dummy_select ks.-20: {} ks.20-: {} `,
 	})
@@ -309,7 +309,7 @@ func TestSelectEqualNoRoute(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`Execute select toc from lkp where from = :from from: type:INT64 value:"1"  false`,
+		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:<type:INT64 value:"1" >  false`,
 		`ResolveDestinations ks [type:INT64 value:"1" ] Destinations:DestinationNone()`,
 	})
 	expectResult(t, "sel.Execute", result, &sqltypes.Result{})
@@ -320,7 +320,7 @@ func TestSelectEqualNoRoute(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`Execute select toc from lkp where from = :from from: type:INT64 value:"1"  false`,
+		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:<type:INT64 value:"1" >  false`,
 		`ResolveDestinations ks [type:INT64 value:"1" ] Destinations:DestinationNone()`,
 	})
 	expectResult(t, "sel.StreamExecute", result, nil)
@@ -405,27 +405,21 @@ func TestSelectINNonUnique(t *testing.T) {
 	}}
 
 	fields := sqltypes.MakeTestFields(
-		"toc",
-		"varbinary",
+		"fromc|toc",
+		"int64|varbinary",
 	)
 	vc := &loggingVCursor{
 		shards: []string{"-20", "20-"},
 		results: []*sqltypes.Result{
 			// 1 will be sent to both shards.
-			sqltypes.MakeTestResult(
-				fields,
-				"\x00",
-				"\x80",
-			),
 			// 2 will go to -20.
-			sqltypes.MakeTestResult(
-				fields,
-				"\x00",
-			),
 			// 4 will go to 20-.
 			sqltypes.MakeTestResult(
 				fields,
-				"\x80",
+				"1|\x00",
+				"1|\x80",
+				"2|\x00",
+				"4|\x80",
 			),
 			defaultSelectResult,
 		},
@@ -435,9 +429,7 @@ func TestSelectINNonUnique(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`Execute select toc from lkp where from = :from from: type:INT64 value:"1"  false`,
-		`Execute select toc from lkp where from = :from from: type:INT64 value:"2"  false`,
-		`Execute select toc from lkp where from = :from from: type:INT64 value:"4"  false`,
+		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:<type:INT64 value:"1" > values:<type:INT64 value:"2" > values:<type:INT64 value:"4" >  false`,
 		`ResolveDestinations ks [type:INT64 value:"1"  type:INT64 value:"2"  type:INT64 value:"4" ] Destinations:DestinationKeyspaceIDs(00,80),DestinationKeyspaceIDs(00),DestinationKeyspaceIDs(80)`,
 		`ExecuteMultiShard ` +
 			`ks.-20: dummy_select {__vals: type:TUPLE values:<type:INT64 value:"1" > values:<type:INT64 value:"2" > } ` +
@@ -452,9 +444,7 @@ func TestSelectINNonUnique(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`Execute select toc from lkp where from = :from from: type:INT64 value:"1"  false`,
-		`Execute select toc from lkp where from = :from from: type:INT64 value:"2"  false`,
-		`Execute select toc from lkp where from = :from from: type:INT64 value:"4"  false`,
+		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:<type:INT64 value:"1" > values:<type:INT64 value:"2" > values:<type:INT64 value:"4" >  false`,
 		`ResolveDestinations ks [type:INT64 value:"1"  type:INT64 value:"2"  type:INT64 value:"4" ] Destinations:DestinationKeyspaceIDs(00,80),DestinationKeyspaceIDs(00),DestinationKeyspaceIDs(80)`,
 		`StreamExecuteMulti dummy_select ks.-20: {__vals: type:TUPLE values:<type:INT64 value:"1" > values:<type:INT64 value:"2" > } ks.20-: {__vals: type:TUPLE values:<type:INT64 value:"1" > values:<type:INT64 value:"4" > } `,
 	})
@@ -587,7 +577,7 @@ func TestRouteGetFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`Execute select toc from lkp where from = :from from: type:INT64 value:"1"  false`,
+		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:<type:INT64 value:"1" >  false`,
 		`ResolveDestinations ks [type:INT64 value:"1" ] Destinations:DestinationNone()`,
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`ExecuteMultiShard ks.-20: dummy_select_field {} false false`,
@@ -600,7 +590,7 @@ func TestRouteGetFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`Execute select toc from lkp where from = :from from: type:INT64 value:"1"  false`,
+		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:<type:INT64 value:"1" >  false`,
 		`ResolveDestinations ks [type:INT64 value:"1" ] Destinations:DestinationNone()`,
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`ExecuteMultiShard ks.-20: dummy_select_field {} false false`,

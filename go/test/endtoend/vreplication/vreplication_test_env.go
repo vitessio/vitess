@@ -94,11 +94,27 @@ var dryrunresultsswitchwritesM2m3 = []string{
 	"Unlock keyspace merchant",
 }
 
-var dryRunResultsDropSourcesCustomerShard = []string{
+var dryRunResultsDropSourcesDropCustomerShard = []string{
 	"Lock keyspace product",
 	"Lock keyspace customer",
 	"Dropping following tables:",
-	"	Keyspace product Shard 0 DbName vt_product Tablet 100 Table customer",
+	"	Keyspace product Shard 0 DbName vt_product Tablet 100 Table customer RemovalType DROP TABLE",
+	"Blacklisted tables customer will be removed from:",
+	"	Keyspace product Shard 0 Tablet 100",
+	"Delete reverse vreplication streams on source:",
+	"	Keyspace product Shard 0 Workflow p2c_reverse DbName vt_product Tablet 100",
+	"Delete vreplication streams on target:",
+	"	Keyspace customer Shard -80 Workflow p2c DbName vt_customer Tablet 200",
+	"	Keyspace customer Shard 80- Workflow p2c DbName vt_customer Tablet 300",
+	"Unlock keyspace customer",
+	"Unlock keyspace product",
+}
+
+var dryRunResultsDropSourcesRenameCustomerShard = []string{
+	"Lock keyspace product",
+	"Lock keyspace customer",
+	"Dropping following tables:",
+	"	Keyspace product Shard 0 DbName vt_product Tablet 100 Table customer RemovalType RENAME TABLE",
 	"Blacklisted tables customer will be removed from:",
 	"	Keyspace product Shard 0 Tablet 100",
 	"Delete reverse vreplication streams on source:",

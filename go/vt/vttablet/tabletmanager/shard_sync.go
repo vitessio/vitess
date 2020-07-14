@@ -48,13 +48,7 @@ var (
 // This goroutine gets woken up for shard record changes by maintaining a
 // topo watch on the shard record. It gets woken up for tablet state changes by
 // a notification signal from setTablet().
-func (agent *ActionAgent) shardSyncLoop(ctx context.Context) {
-	// Make a copy of the channels so we don't race when stopShardSync() clears them.
-	agent.mutex.Lock()
-	notifyChan := agent._shardSyncChan
-	doneChan := agent._shardSyncDone
-	agent.mutex.Unlock()
-
+func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan struct{}, doneChan chan<- struct{}) {
 	defer close(doneChan)
 
 	// retryChan is how we wake up after going to sleep between retries.
@@ -97,12 +91,12 @@ func (agent *ActionAgent) shardSyncLoop(ctx context.Context) {
 		retryChan = nil
 
 		// Get the latest internal tablet value, representing what we think we are.
-		tablet := agent.Tablet()
+		tablet := tm.Tablet()
 
 		switch tablet.Type {
 		case topodatapb.TabletType_MASTER:
 			// If we think we're master, check if we need to update the shard record.
-			masterAlias, err := syncShardMaster(ctx, agent.TopoServer, tablet, agent.masterTermStartTime())
+			masterAlias, err := syncShardMaster(ctx, tm.TopoServer, tablet, tm.masterTermStartTime())
 			if err != nil {
 				log.Errorf("Failed to sync shard record: %v", err)
 				// Start retry timer and go back to sleep.
@@ -111,7 +105,7 @@ func (agent *ActionAgent) shardSyncLoop(ctx context.Context) {
 			}
 			if !topoproto.TabletAliasEqual(masterAlias, tablet.Alias) {
 				// Another master has taken over while we still think we're master.
-				if err := agent.abortMasterTerm(ctx, masterAlias); err != nil {
+				if err := tm.abortMasterTerm(ctx, masterAlias); err != nil {
 					log.Errorf("Failed to abort master term: %v", err)
 					// Start retry timer and go back to sleep.
 					retryChan = time.After(*shardSyncRetryDelay)
@@ -128,7 +122,7 @@ func (agent *ActionAgent) shardSyncLoop(ctx context.Context) {
 				// We already have an active watch. Nothing to do.
 				continue
 			}
-			if err := shardWatch.start(ctx, agent.TopoServer, tablet.Keyspace, tablet.Shard); err != nil {
+			if err := shardWatch.start(ctx, tm.TopoServer, tablet.Keyspace, tablet.Shard); err != nil {
 				log.Errorf("Failed to start shard watch: %v", err)
 				// Start retry timer and go back to sleep.
 				retryChan = time.After(*shardSyncRetryDelay)
@@ -193,17 +187,17 @@ func syncShardMaster(ctx context.Context, ts *topo.Server, tablet *topodatapb.Ta
 //
 // If active reparents are disabled, we don't touch our MySQL.
 // We just directly update our tablet type to REPLICA.
-func (agent *ActionAgent) abortMasterTerm(ctx context.Context, masterAlias *topodatapb.TabletAlias) error {
+func (tm *TabletManager) abortMasterTerm(ctx context.Context, masterAlias *topodatapb.TabletAlias) error {
 	masterAliasStr := topoproto.TabletAliasString(masterAlias)
-	log.Warningf("Another tablet (%v) has won master election. Stepping down to %v.", masterAliasStr, agent.DemoteMasterType)
+	log.Warningf("Another tablet (%v) has won master election. Stepping down to %v.", masterAliasStr, tm.baseTabletType)
 
 	if *mysqlctl.DisableActiveReparents {
 		// Don't touch anything at the MySQL level. Just update tablet state.
 		log.Infof("Active reparents are disabled; updating tablet state only.")
 		changeTypeCtx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 		defer cancel()
-		if err := agent.ChangeType(changeTypeCtx, agent.DemoteMasterType); err != nil {
-			return vterrors.Wrapf(err, "failed to change type to %v", agent.DemoteMasterType)
+		if err := tm.ChangeType(changeTypeCtx, tm.baseTabletType); err != nil {
+			return vterrors.Wrapf(err, "failed to change type to %v", tm.baseTabletType)
 		}
 		return nil
 	}
@@ -216,50 +210,46 @@ func (agent *ActionAgent) abortMasterTerm(ctx context.Context, masterAlias *topo
 	log.Infof("Active reparents are enabled; converting MySQL to replica.")
 	demoteMasterCtx, cancelDemoteMaster := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancelDemoteMaster()
-	if _, err := agent.demoteMaster(demoteMasterCtx, false /* revertPartialFailure */); err != nil {
+	if _, err := tm.demoteMaster(demoteMasterCtx, false /* revertPartialFailure */); err != nil {
 		return vterrors.Wrap(err, "failed to demote master")
 	}
 	setMasterCtx, cancelSetMaster := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancelSetMaster()
 	log.Infof("Attempting to reparent self to new master %v.", masterAliasStr)
-	if err := agent.SetMaster(setMasterCtx, masterAlias, 0, "", true); err != nil {
+	if err := tm.SetMaster(setMasterCtx, masterAlias, 0, "", true); err != nil {
 		return vterrors.Wrap(err, "failed to reparent self to new master")
 	}
 	return nil
 }
 
-func (agent *ActionAgent) startShardSync() {
+func (tm *TabletManager) startShardSync() {
 	// Use a buffer size of 1 so we can remember we need to check the state
 	// even if the receiver is busy. We can drop any additional send attempts
 	// if the buffer is full because all we care about is that the receiver will
 	// be told it needs to recheck the state.
-	agent.mutex.Lock()
-	agent._shardSyncChan = make(chan struct{}, 1)
-	agent._shardSyncDone = make(chan struct{})
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+	tm._shardSyncChan = make(chan struct{}, 1)
+	tm._shardSyncDone = make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
-	agent._shardSyncCancel = cancel
-	agent.mutex.Unlock()
-
-	// Queue up a pending notification to force the loop to run once at startup.
-	agent.notifyShardSync()
+	tm._shardSyncCancel = cancel
 
 	// Start the sync loop in the background.
-	go agent.shardSyncLoop(ctx)
+	go tm.shardSyncLoop(ctx, tm._shardSyncChan, tm._shardSyncDone)
+
+	// Queue up a pending notification to force the loop to run once at startup.
+	go tm.notifyShardSync()
 }
 
-func (agent *ActionAgent) stopShardSync() {
+func (tm *TabletManager) stopShardSync() {
 	var doneChan <-chan struct{}
 
-	agent.mutex.Lock()
-	if agent._shardSyncCancel != nil {
-		agent._shardSyncCancel()
-		agent._shardSyncCancel = nil
-		agent._shardSyncChan = nil
-
-		doneChan = agent._shardSyncDone
-		agent._shardSyncDone = nil
+	tm.mutex.Lock()
+	if tm._shardSyncCancel != nil {
+		tm._shardSyncCancel()
 	}
-	agent.mutex.Unlock()
+	doneChan = tm._shardSyncDone
+	tm.mutex.Unlock()
 
 	// If the shard sync loop was running, wait for it to fully stop.
 	if doneChan != nil {
@@ -267,39 +257,28 @@ func (agent *ActionAgent) stopShardSync() {
 	}
 }
 
-func (agent *ActionAgent) notifyShardSync() {
+func (tm *TabletManager) notifyShardSync() {
 	// If this is called before the shard sync is started, do nothing.
-	agent.mutex.Lock()
-	defer agent.mutex.Unlock()
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
 
-	if agent._shardSyncChan == nil {
+	if tm._shardSyncChan == nil {
 		return
 	}
 
 	// Try to send. If the channel buffer is full, it means a notification is
 	// already pending, so we don't need to do anything.
 	select {
-	case agent._shardSyncChan <- struct{}{}:
+	case tm._shardSyncChan <- struct{}{}:
 	default:
 	}
 }
 
-// setMasterTermStartTime remembers the time when our term as master began.
-//
-// If another tablet claims to be master and offers a more recent time,
-// that tablet will be trusted over us.
-func (agent *ActionAgent) setMasterTermStartTime(t time.Time) {
-	agent.mutex.Lock()
-	agent._masterTermStartTime = t
-	agent._replicationDelay = 0
-	agent.mutex.Unlock()
-
-	// Notify the shard sync loop that the tablet state changed.
-	agent.notifyShardSync()
-}
-
-func (agent *ActionAgent) masterTermStartTime() time.Time {
-	agent.mutex.Lock()
-	defer agent.mutex.Unlock()
-	return agent._masterTermStartTime
+func (tm *TabletManager) masterTermStartTime() time.Time {
+	tm.pubMu.Lock()
+	defer tm.pubMu.Unlock()
+	if tm.tablet == nil {
+		return time.Time{}
+	}
+	return logutil.ProtoToTime(tm.tablet.MasterTermStartTime)
 }

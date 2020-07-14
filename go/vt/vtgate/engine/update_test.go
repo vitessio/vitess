@@ -20,6 +20,8 @@ import (
 	"errors"
 	"testing"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -41,7 +43,7 @@ func TestUpdateUnsharded(t *testing.T) {
 		},
 	}
 
-	vc := &loggingVCursor{shards: []string{"0"}}
+	vc := newDMLTestVCursor("0")
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -74,7 +76,7 @@ func TestUpdateEqual(t *testing.T) {
 		},
 	}
 
-	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
+	vc := newDMLTestVCursor("-20", "20-")
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -103,7 +105,7 @@ func TestUpdateScatter(t *testing.T) {
 		},
 	}
 
-	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
+	vc := newDMLTestVCursor("-20", "20-")
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
@@ -127,7 +129,7 @@ func TestUpdateScatter(t *testing.T) {
 		},
 	}
 
-	vc = &loggingVCursor{shards: []string{"-20", "20-"}}
+	vc = newDMLTestVCursor("-20", "20-")
 	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
@@ -156,12 +158,12 @@ func TestUpdateEqualNoRoute(t *testing.T) {
 		},
 	}
 
-	vc := &loggingVCursor{shards: []string{"0"}}
+	vc := newDMLTestVCursor("0")
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// This lookup query will return no rows. So, the DML will not be sent anywhere.
-		`Execute select toc from lkp where from = :from from: type:INT64 value:"1"  false`,
+		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:<type:INT64 value:"1" >  false`,
 	})
 }
 
@@ -185,7 +187,7 @@ func TestUpdateEqualNoScatter(t *testing.T) {
 		},
 	}
 
-	vc := &loggingVCursor{shards: []string{"0"}}
+	vc := newDMLTestVCursor("0")
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "execUpdateEqual: cannot map vindex to unique keyspace id: DestinationKeyRange(-)")
 }
@@ -221,10 +223,8 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		),
 		"1|4|5|6",
 	)}
-	vc := &loggingVCursor{
-		shards:  []string{"-20", "20-"},
-		results: results,
-	}
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.results = results
 
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
@@ -236,18 +236,17 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		// Those values are returned as 4,5 for twocol and 6 for onecol.
 		// 4,5 have to be replaced by 1,2 (the new values).
 		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
-		`Execute insert into lkp2(from1, from2, toc) values(:from10, :from20, :toc0) from10: type:INT64 value:"1" from20: type:INT64 value:"2" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp2(from1, from2, toc) values(:from1_0, :from2_0, :toc_0) from1_0: type:INT64 value:"1" from2_0: type:INT64 value:"2" toc_0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// 6 has to be replaced by 3.
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
-		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: type:INT64 value:"3" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"3" toc_0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// Finally, the actual update, which is also sent to -20, same route as the subquery.
 		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
 	})
 
 	// No rows changing
-	vc = &loggingVCursor{
-		shards: []string{"-20", "20-"},
-	}
+	vc = newDMLTestVCursor("-20", "20-")
+
 	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -268,10 +267,9 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		"1|4|5|6",
 		"1|7|8|9",
 	)}
-	vc = &loggingVCursor{
-		shards:  []string{"-20", "20-"},
-		results: results,
-	}
+	vc = newDMLTestVCursor("-20", "20-")
+	vc.results = results
+
 	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -282,14 +280,14 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		// Those values are returned as 4,5 for twocol and 6 for onecol.
 		// 4,5 have to be replaced by 1,2 (the new values).
 		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
-		`Execute insert into lkp2(from1, from2, toc) values(:from10, :from20, :toc0) from10: type:INT64 value:"1" from20: type:INT64 value:"2" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp2(from1, from2, toc) values(:from1_0, :from2_0, :toc_0) from1_0: type:INT64 value:"1" from2_0: type:INT64 value:"2" toc_0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// 6 has to be replaced by 3.
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
-		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: type:INT64 value:"3" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"3" toc_0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"7" from2: type:INT64 value:"8" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
-		`Execute insert into lkp2(from1, from2, toc) values(:from10, :from20, :toc0) from10: type:INT64 value:"1" from20: type:INT64 value:"2" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp2(from1, from2, toc) values(:from1_0, :from2_0, :toc_0) from1_0: type:INT64 value:"1" from2_0: type:INT64 value:"2" toc_0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"9" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
-		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: type:INT64 value:"3" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"3" toc_0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// Finally, the actual update, which is also sent to -20, same route as the subquery.
 		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
 	})
@@ -326,10 +324,8 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 		),
 		"1|4|5|6",
 	)}
-	vc := &loggingVCursor{
-		shards:  []string{"-20", "20-"},
-		results: results,
-	}
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.results = results
 
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
@@ -339,18 +335,17 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 		// Those values are returned as 4,5 for twocol and 6 for onecol.
 		// 4,5 have to be replaced by 1,2 (the new values).
 		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
-		`Execute insert into lkp2(from1, from2, toc) values(:from10, :from20, :toc0) from10: type:INT64 value:"1" from20: type:INT64 value:"2" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp2(from1, from2, toc) values(:from1_0, :from2_0, :toc_0) from1_0: type:INT64 value:"1" from2_0: type:INT64 value:"2" toc_0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// 6 has to be replaced by 3.
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
-		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: type:INT64 value:"3" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"3" toc_0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// Finally, the actual update, which is also sent to -20, same route as the subquery.
 		`ExecuteMultiShard sharded.-20: dummy_update {} sharded.20-: dummy_update {} true false`,
 	})
 
 	// No rows changing
-	vc = &loggingVCursor{
-		shards: []string{"-20", "20-"},
-	}
+	vc = newDMLTestVCursor("-20", "20-")
+
 	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
@@ -373,10 +368,9 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 		"1|4|5|6",
 		"1|7|8|9",
 	)}
-	vc = &loggingVCursor{
-		shards:  []string{"-20", "20-"},
-		results: results,
-	}
+	vc = newDMLTestVCursor("-20", "20-")
+	vc.results = results
+
 	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -387,17 +381,17 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 		// Those values are returned as 4,5 for twocol and 6 for onecol.
 		// 4,5 have to be replaced by 1,2 (the new values).
 		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
-		`Execute insert into lkp2(from1, from2, toc) values(:from10, :from20, :toc0) from10: type:INT64 value:"1" from20: type:INT64 value:"2" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp2(from1, from2, toc) values(:from1_0, :from2_0, :toc_0) from1_0: type:INT64 value:"1" from2_0: type:INT64 value:"2" toc_0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// 6 has to be replaced by 3.
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
-		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: type:INT64 value:"3" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"3" toc_0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// Those values are returned as 7,8 for twocol and 9 for onecol.
 		// 7,8 have to be replaced by 1,2 (the new values).
 		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"7" from2: type:INT64 value:"8" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
-		`Execute insert into lkp2(from1, from2, toc) values(:from10, :from20, :toc0) from10: type:INT64 value:"1" from20: type:INT64 value:"2" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp2(from1, from2, toc) values(:from1_0, :from2_0, :toc_0) from1_0: type:INT64 value:"1" from2_0: type:INT64 value:"2" toc_0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// 9 has to be replaced by 3.
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"9" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
-		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: type:INT64 value:"3" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"3" toc_0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// Finally, the actual update, which is also sent to -20, same route as the subquery.
 		`ExecuteMultiShard sharded.-20: dummy_update {} sharded.20-: dummy_update {} true false`,
 	})
@@ -419,7 +413,7 @@ func TestUpdateIn(t *testing.T) {
 		}},
 	}
 
-	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
+	vc := newDMLTestVCursor("-20", "20-")
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -466,10 +460,8 @@ func TestUpdateInChangedVindex(t *testing.T) {
 		"1|4|5|6",
 		"2|21|22|23",
 	)}
-	vc := &loggingVCursor{
-		shards:  []string{"-20", "20-"},
-		results: results,
-	}
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.results = results
 
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
@@ -481,24 +473,23 @@ func TestUpdateInChangedVindex(t *testing.T) {
 		// Those values are returned as 4,5 for twocol and 6 for onecol.
 		// 4,5 have to be replaced by 1,2 (the new values).
 		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
-		`Execute insert into lkp2(from1, from2, toc) values(:from10, :from20, :toc0) from10: type:INT64 value:"1" from20: type:INT64 value:"2" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp2(from1, from2, toc) values(:from1_0, :from2_0, :toc_0) from1_0: type:INT64 value:"1" from2_0: type:INT64 value:"2" toc_0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// 6 has to be replaced by 3.
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
-		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: type:INT64 value:"3" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"3" toc_0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// 21,22 have to be replaced by 1,2 (the new values).
 		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"21" from2: type:INT64 value:"22" toc: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
-		`Execute insert into lkp2(from1, from2, toc) values(:from10, :from20, :toc0) from10: type:INT64 value:"1" from20: type:INT64 value:"2" toc0: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
+		`Execute insert into lkp2(from1, from2, toc) values(:from1_0, :from2_0, :toc_0) from1_0: type:INT64 value:"1" from2_0: type:INT64 value:"2" toc_0: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
 		// 23 has to be replaced by 3.
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"23" toc: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
-		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: type:INT64 value:"3" toc0: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
+		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"3" toc_0: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
 		// Finally, the actual update, which is also sent to -20, same route as the subquery.
 		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
 	})
 
 	// No rows changing
-	vc = &loggingVCursor{
-		shards: []string{"-20", "20-"},
-	}
+	vc = newDMLTestVCursor("-20", "20-")
+
 	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -520,10 +511,9 @@ func TestUpdateInChangedVindex(t *testing.T) {
 		"1|7|8|9",
 		"2|21|22|23",
 	)}
-	vc = &loggingVCursor{
-		shards:  []string{"-20", "20-"},
-		results: results,
-	}
+	vc = newDMLTestVCursor("-20", "20-")
+	vc.results = results
+
 	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -534,26 +524,25 @@ func TestUpdateInChangedVindex(t *testing.T) {
 		// Those values are returned as 4,5 for twocol and 6 for onecol.
 		// 4,5 have to be replaced by 1,2 (the new values).
 		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
-		`Execute insert into lkp2(from1, from2, toc) values(:from10, :from20, :toc0) from10: type:INT64 value:"1" from20: type:INT64 value:"2" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp2(from1, from2, toc) values(:from1_0, :from2_0, :toc_0) from1_0: type:INT64 value:"1" from2_0: type:INT64 value:"2" toc_0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// 6 has to be replaced by 3.
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
-		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: type:INT64 value:"3" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"3" toc_0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// 7,8 have to be replaced by 1,2 (the new values).
 		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"7" from2: type:INT64 value:"8" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
-		`Execute insert into lkp2(from1, from2, toc) values(:from10, :from20, :toc0) from10: type:INT64 value:"1" from20: type:INT64 value:"2" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp2(from1, from2, toc) values(:from1_0, :from2_0, :toc_0) from1_0: type:INT64 value:"1" from2_0: type:INT64 value:"2" toc_0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// 9 has to be replaced by 3.
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"9" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
-		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: type:INT64 value:"3" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"3" toc_0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// 21,22 have to be replaced by 1,2 (the new values).
 		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"21" from2: type:INT64 value:"22" toc: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
-		`Execute insert into lkp2(from1, from2, toc) values(:from10, :from20, :toc0) from10: type:INT64 value:"1" from20: type:INT64 value:"2" toc0: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
+		`Execute insert into lkp2(from1, from2, toc) values(:from1_0, :from2_0, :toc_0) from1_0: type:INT64 value:"1" from2_0: type:INT64 value:"2" toc_0: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
 		// 23 has to be replaced by 3.
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"23" toc: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
-		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: type:INT64 value:"3" toc0: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
+		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"3" toc_0: type:VARBINARY value:"\006\347\352\"\316\222p\217"  true`,
 		// Finally, the actual update, which is also sent to -20, same route as the subquery.
 		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
 	})
-
 }
 
 func TestUpdateNoStream(t *testing.T) {
@@ -618,4 +607,8 @@ func buildTestVSchema() *vindexes.VSchema {
 		panic(err)
 	}
 	return vs
+}
+
+func newDMLTestVCursor(shards ...string) *loggingVCursor {
+	return &loggingVCursor{shards: shards, resolvedTargetTabletType: topodatapb.TabletType_MASTER}
 }

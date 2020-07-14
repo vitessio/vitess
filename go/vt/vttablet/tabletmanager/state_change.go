@@ -16,7 +16,7 @@ limitations under the License.
 
 package tabletmanager
 
-// This file handles the agent state changes.
+// This file handles the tm state changes.
 
 import (
 	"flag"
@@ -24,18 +24,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/events"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -51,17 +51,19 @@ var (
 	// vtgate to gracefully redirect traffic elsewhere, before we begin actually
 	// rejecting queries for that target type.
 	gracePeriod = flag.Duration("serving_state_grace_period", 0, "how long to pause after broadcasting health to vtgate, before enforcing a new serving state")
+
+	publishRetryInterval = flag.Duration("publish_retry_interval", 30*time.Second, "how long vttablet waits to retry publishing the tablet record")
 )
 
 // Query rules from blacklist
 const blacklistQueryRules string = "BlacklistQueryRules"
 
 // loadBlacklistRules loads and builds the blacklist query rules
-func (agent *ActionAgent) loadBlacklistRules(ctx context.Context, tablet *topodatapb.Tablet, blacklistedTables []string) (err error) {
+func (tm *TabletManager) loadBlacklistRules(ctx context.Context, tablet *topodatapb.Tablet, blacklistedTables []string) (err error) {
 	blacklistRules := rules.New()
 	if len(blacklistedTables) > 0 {
 		// tables, first resolve wildcards
-		tables, err := mysqlctl.ResolveTables(ctx, agent.MysqlDaemon, topoproto.TabletDbName(tablet), blacklistedTables)
+		tables, err := mysqlctl.ResolveTables(ctx, tm.MysqlDaemon, topoproto.TabletDbName(tablet), blacklistedTables)
 		if err != nil {
 			return err
 		}
@@ -78,7 +80,7 @@ func (agent *ActionAgent) loadBlacklistRules(ctx context.Context, tablet *topoda
 		}
 	}
 
-	loadRuleErr := agent.QueryServiceControl.SetQueryRules(blacklistQueryRules, blacklistRules)
+	loadRuleErr := tm.QueryServiceControl.SetQueryRules(blacklistQueryRules, blacklistRules)
 	if loadRuleErr != nil {
 		log.Warningf("Fail to load query rule set %s: %s", blacklistQueryRules, loadRuleErr)
 	}
@@ -88,22 +90,21 @@ func (agent *ActionAgent) loadBlacklistRules(ctx context.Context, tablet *topoda
 // lameduck changes the QueryServiceControl state to lameduck,
 // brodcasts the new health, then sleep for grace period, to give time
 // to clients to get the new status.
-func (agent *ActionAgent) lameduck(reason string) {
-	log.Infof("Agent is entering lameduck, reason: %v", reason)
-	agent.QueryServiceControl.EnterLameduck()
-	agent.broadcastHealth()
+func (tm *TabletManager) lameduck(reason string) {
+	log.Infof("TabletManager is entering lameduck, reason: %v", reason)
+	tm.QueryServiceControl.EnterLameduck()
+	tm.broadcastHealth()
 	time.Sleep(*gracePeriod)
-	log.Infof("Agent is leaving lameduck")
+	log.Infof("TabletManager is leaving lameduck")
 }
 
-func (agent *ActionAgent) broadcastHealth() {
+func (tm *TabletManager) broadcastHealth() {
 	// get the replication delays
-	agent.mutex.Lock()
-	replicationDelay := agent._replicationDelay
-	healthError := agent._healthy
-	terTime := agent._masterTermStartTime
-	healthyTime := agent._healthyTime
-	agent.mutex.Unlock()
+	tm.mutex.Lock()
+	replicationDelay := tm._replicationDelay
+	healthError := tm._healthy
+	healthyTime := tm._healthyTime
+	tm.mutex.Unlock()
 
 	// send it to our observers
 	// FIXME(alainjobart,liguo) add CpuUsage
@@ -111,7 +112,7 @@ func (agent *ActionAgent) broadcastHealth() {
 		SecondsBehindMaster: uint32(replicationDelay.Seconds()),
 	}
 	stats.SecondsBehindMasterFilteredReplication, stats.BinlogPlayersCount = vreplication.StatusSummary()
-	stats.Qps = agent.QueryServiceControl.Stats().QPSRates.TotalRate()
+	stats.Qps = tm.QueryServiceControl.Stats().QPSRates.TotalRate()
 	if healthError != nil {
 		stats.HealthError = healthError.Error()
 	} else {
@@ -121,57 +122,41 @@ func (agent *ActionAgent) broadcastHealth() {
 		}
 	}
 	var ts int64
+	terTime := tm.masterTermStartTime()
 	if !terTime.IsZero() {
 		ts = terTime.Unix()
 	}
-	go agent.QueryServiceControl.BroadcastHealth(ts, stats, *healthCheckInterval*3)
+	go tm.QueryServiceControl.BroadcastHealth(ts, stats, *healthCheckInterval*3)
 }
 
 // refreshTablet needs to be run after an action may have changed the current
 // state of the tablet.
-func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) error {
-	agent.checkLock()
+func (tm *TabletManager) refreshTablet(ctx context.Context, reason string) error {
+	tm.checkLock()
 	log.Infof("Executing post-action state refresh: %v", reason)
 
-	span, ctx := trace.NewSpan(ctx, "ActionAgent.refreshTablet")
+	span, ctx := trace.NewSpan(ctx, "TabletManager.refreshTablet")
 	span.Annotate("reason", reason)
 	defer span.Finish()
 
-	// Actions should have side effects on the tablet, so reload the data.
-	ti, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
-	if err != nil {
-		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", reason, err)
-		return vterrors.Wrapf(err, "refreshTablet failed rereading tablet after %v", reason)
-	}
-	tablet := ti.Tablet
-
-	// Also refresh the MySQL port, to be sure it's correct.
-	// Note if this run doesn't succeed, the healthcheck go routine
-	// will try again.
-	agent.gotMysqlPort = false
-	agent.waitingForMysql = false
-	if updatedTablet := agent.checkTabletMysqlPort(ctx, tablet); updatedTablet != nil {
-		tablet = updatedTablet
-	}
-	// Also refresh masterTermStartTime
-	if tablet.MasterTermStartTime != nil {
-		agent.setMasterTermStartTime(logutil.ProtoToTime(tablet.MasterTermStartTime))
-	}
-	agent.updateState(ctx, tablet, reason)
+	// TODO(sougou): change this to specifically look for global topo changes.
+	tablet := tm.Tablet()
+	tm.changeCallback(ctx, tablet, tablet)
 	log.Infof("Done with post-action state refresh")
 	return nil
 }
 
 // updateState will use the provided tablet record as the new tablet state,
 // the current tablet as a base, run changeCallback, and dispatch the event.
-func (agent *ActionAgent) updateState(ctx context.Context, newTablet *topodatapb.Tablet, reason string) {
-	oldTablet := agent.Tablet()
+func (tm *TabletManager) updateState(ctx context.Context, newTablet *topodatapb.Tablet, reason string) {
+	oldTablet := tm.Tablet()
 	if oldTablet == nil {
 		oldTablet = &topodatapb.Tablet{}
 	}
 	log.Infof("Running tablet callback because: %v", reason)
-	agent.changeCallback(ctx, oldTablet, newTablet)
-	agent.setTablet(newTablet)
+	tm.changeCallback(ctx, oldTablet, newTablet)
+	tm.setTablet(newTablet)
+	tm.publishState(ctx)
 	event.Dispatch(&events.StateChange{
 		OldTablet: *oldTablet,
 		NewTablet: *newTablet,
@@ -181,26 +166,13 @@ func (agent *ActionAgent) updateState(ctx context.Context, newTablet *topodatapb
 
 // changeCallback is run after every action that might
 // have changed something in the tablet record or in the topology.
-//
-// It owns making changes to the BinlogPlayerMap. The input for this is the
-// tablet type (has to be master), and the shard's SourceShards.
-//
-// It owns updating the blacklisted tables.
-//
-// It owns updating the stats record for 'TabletType'.
-//
-// It owns starting and stopping the update stream service.
-//
-// It owns reading the TabletControl for the current tablet, and storing it.
-func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTablet *topodatapb.Tablet) {
-	agent.checkLock()
+func (tm *TabletManager) changeCallback(ctx context.Context, oldTablet, newTablet *topodatapb.Tablet) {
+	tm.checkLock()
 
-	span, ctx := trace.NewSpan(ctx, "ActionAgent.changeCallback")
+	span, ctx := trace.NewSpan(ctx, "TabletManager.changeCallback")
 	defer span.Finish()
 
 	allowQuery := topo.IsRunningQueryService(newTablet.Type)
-	broadcastHealth := false
-	runUpdateStream := allowQuery
 
 	// Read the shard to get SourceShards / TabletControlMap if
 	// we're going to use it.
@@ -213,7 +185,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	var blacklistedTables []string
 	updateBlacklistedTables := true
 	if allowQuery {
-		shardInfo, err = agent.TopoServer.GetShard(ctx, newTablet.Keyspace, newTablet.Shard)
+		shardInfo, err = tm.TopoServer.GetShard(ctx, newTablet.Keyspace, newTablet.Shard)
 		if err != nil {
 			log.Errorf("Cannot read shard for this tablet %v, might have inaccurate SourceShards and TabletControls: %v", newTablet.Alias, err)
 			updateBlacklistedTables = false
@@ -234,22 +206,26 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 						disallowQueryService = disallowQueryReason
 					}
 				} else {
-					replicationDelay, healthErr := agent.HealthReporter.Report(true, true)
+					var replicationDelay time.Duration
+					var healthErr error
+					if tm.HealthReporter != nil {
+						replicationDelay, healthErr = tm.HealthReporter.Report(true, true)
+					}
 					if healthErr != nil {
 						allowQuery = false
 						disallowQueryReason = "unable to get health"
 					} else {
-						agent.mutex.Lock()
-						agent._replicationDelay = replicationDelay
-						agent.mutex.Unlock()
-						if agent._replicationDelay > *unhealthyThreshold {
+						tm.mutex.Lock()
+						tm._replicationDelay = replicationDelay
+						tm.mutex.Unlock()
+						if tm._replicationDelay > *unhealthyThreshold {
 							allowQuery = false
 							disallowQueryReason = "replica tablet with unhealthy replication lag"
 						}
 					}
 				}
 			}
-			srvKeyspace, err := agent.TopoServer.GetSrvKeyspace(ctx, newTablet.Alias.Cell, newTablet.Keyspace)
+			srvKeyspace, err := tm.TopoServer.GetSrvKeyspace(ctx, newTablet.Alias.Cell, newTablet.Keyspace)
 			if err != nil {
 				log.Errorf("failed to get SrvKeyspace %v with: %v", newTablet.Keyspace, err)
 			} else {
@@ -282,33 +258,34 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		disallowQueryReason = fmt.Sprintf("not a serving tablet type(%v)", newTablet.Type)
 		disallowQueryService = disallowQueryReason
 	}
-	agent.setServicesDesiredState(disallowQueryService, runUpdateStream)
+	tm.setServicesDesiredState(disallowQueryService)
 	if updateBlacklistedTables {
-		if err := agent.loadBlacklistRules(ctx, newTablet, blacklistedTables); err != nil {
+		if err := tm.loadBlacklistRules(ctx, newTablet, blacklistedTables); err != nil {
 			// FIXME(alainjobart) how to handle this error?
 			log.Errorf("Cannot update blacklisted tables rule: %v", err)
 		} else {
-			agent.setBlacklistedTables(blacklistedTables)
+			tm.setBlacklistedTables(blacklistedTables)
 		}
 	}
 
+	broadcastHealth := false
 	if allowQuery {
 		// Query service should be running.
 		if oldTablet.Type == topodatapb.TabletType_REPLICA &&
 			newTablet.Type == topodatapb.TabletType_MASTER {
 			// When promoting from replica to master, allow both master and replica
 			// queries to be served during gracePeriod.
-			if _, err := agent.QueryServiceControl.SetServingType(newTablet.Type,
+			if _, err := tm.QueryServiceControl.SetServingType(newTablet.Type,
 				true, []topodatapb.TabletType{oldTablet.Type}); err == nil {
 				// If successful, broadcast to vtgate and then wait.
-				agent.broadcastHealth()
+				tm.broadcastHealth()
 				time.Sleep(*gracePeriod)
 			} else {
 				log.Errorf("Can't start query service for MASTER+REPLICA mode: %v", err)
 			}
 		}
 
-		if stateChanged, err := agent.QueryServiceControl.SetServingType(newTablet.Type, true, nil); err == nil {
+		if stateChanged, err := tm.QueryServiceControl.SetServingType(newTablet.Type, true, nil); err == nil {
 			// If the state changed, broadcast to vtgate.
 			// (e.g. this happens when the tablet was already master, but it just
 			// changed from NOT_SERVING to SERVING due to
@@ -317,7 +294,6 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 				broadcastHealth = true
 			}
 		} else {
-			runUpdateStream = false
 			log.Errorf("Cannot start query service: %v", err)
 		}
 	} else {
@@ -327,11 +303,11 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 			*gracePeriod > 0 {
 			// When a non-MASTER serving type is going SPARE,
 			// put query service in lameduck during gracePeriod.
-			agent.lameduck(disallowQueryReason)
+			tm.lameduck(disallowQueryReason)
 		}
 
 		log.Infof("Disabling query service on type change, reason: %v", disallowQueryReason)
-		if stateChanged, err := agent.QueryServiceControl.SetServingType(newTablet.Type, false, nil); err == nil {
+		if stateChanged, err := tm.QueryServiceControl.SetServingType(newTablet.Type, false, nil); err == nil {
 			// If the state changed, broadcast to vtgate.
 			// (e.g. this happens when the tablet was already master, but it just
 			// changed from SERVING to NOT_SERVING because filtered replication was
@@ -344,33 +320,93 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		}
 	}
 
-	// UpdateStream needs to be started or stopped too.
-	if topo.IsRunningUpdateStream(newTablet.Type) && runUpdateStream {
-		agent.UpdateStream.Enable()
-	} else {
-		agent.UpdateStream.Disable()
+	if tm.UpdateStream != nil {
+		if topo.IsRunningUpdateStream(newTablet.Type) {
+			tm.UpdateStream.Enable()
+		} else {
+			tm.UpdateStream.Disable()
+		}
 	}
 
 	// Update the stats to our current type.
-	if agent.exportStats {
-		s := topoproto.TabletTypeLString(newTablet.Type)
-		agent.statsTabletType.Set(s)
-		agent.statsTabletTypeCount.Add(s, 1)
-	}
+	s := topoproto.TabletTypeLString(newTablet.Type)
+	statsTabletType.Set(s)
+	statsTabletTypeCount.Add(s, 1)
 
 	// See if we need to start or stop vreplication.
-	if newTablet.Type == topodatapb.TabletType_MASTER {
-		if err := agent.VREngine.Open(agent.batchCtx); err != nil {
-			log.Errorf("Could not start VReplication engine: %v. Will keep retrying at health check intervals.", err)
+	if tm.VREngine != nil {
+		if newTablet.Type == topodatapb.TabletType_MASTER {
+			if err := tm.VREngine.Open(tm.BatchCtx); err != nil {
+				log.Errorf("Could not start VReplication engine: %v. Will keep retrying at health check intervals.", err)
+			} else {
+				log.Info("VReplication engine started")
+			}
 		} else {
-			log.Info("VReplication engine started")
+			tm.VREngine.Close()
 		}
-	} else {
-		agent.VREngine.Close()
 	}
 
 	// Broadcast health changes to vtgate immediately.
 	if broadcastHealth {
-		agent.broadcastHealth()
+		tm.broadcastHealth()
+	}
+}
+
+func (tm *TabletManager) publishState(ctx context.Context) {
+	tm.pubMu.Lock()
+	defer tm.pubMu.Unlock()
+	log.Infof("Publishing state: %v", tm.tablet)
+	// If retry is in progress, there's nothing to do.
+	if tm.isPublishing {
+		return
+	}
+	// Common code path: publish immediately.
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+	_, err := tm.TopoServer.UpdateTabletFields(ctx, tm.tabletAlias, func(tablet *topodatapb.Tablet) error {
+		if err := topotools.CheckOwnership(tablet, tm.tablet); err != nil {
+			log.Error(err)
+			return topo.NewError(topo.NoUpdateNeeded, "")
+		}
+		*tablet = *proto.Clone(tm.tablet).(*topodatapb.Tablet)
+		return nil
+	})
+	if err != nil {
+		log.Errorf("Unable to publish state to topo, will keep retrying: %v", err)
+		tm.isPublishing = true
+		// Keep retrying until success.
+		go tm.retryPublish()
+	}
+}
+
+func (tm *TabletManager) retryPublish() {
+	tm.pubMu.Lock()
+	defer func() {
+		tm.isPublishing = false
+		tm.pubMu.Unlock()
+	}()
+
+	for {
+		// Retry immediately the first time because the previous failure might have been
+		// due to an expired context.
+		ctx, cancel := context.WithTimeout(tm.BatchCtx, *topo.RemoteOperationTimeout)
+		_, err := tm.TopoServer.UpdateTabletFields(ctx, tm.tabletAlias, func(tablet *topodatapb.Tablet) error {
+			if err := topotools.CheckOwnership(tablet, tm.tablet); err != nil {
+				log.Error(err)
+				return topo.NewError(topo.NoUpdateNeeded, "")
+			}
+			*tablet = *proto.Clone(tm.tablet).(*topodatapb.Tablet)
+			return nil
+		})
+		cancel()
+		if err != nil {
+			log.Errorf("Unable to publish state to topo, will keep retrying: %v", err)
+			tm.pubMu.Unlock()
+			time.Sleep(*publishRetryInterval)
+			tm.pubMu.Lock()
+			continue
+		}
+		log.Infof("Published state: %v", tm.tablet)
+		return
 	}
 }

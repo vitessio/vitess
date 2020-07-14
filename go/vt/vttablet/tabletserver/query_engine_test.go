@@ -277,9 +277,9 @@ func newTestQueryEngine(queryCacheSize int, idleTimeout time.Duration, strict bo
 	config := tabletenv.NewDefaultConfig()
 	config.DB = dbcfgs
 	config.QueryCacheSize = queryCacheSize
-	config.OltpReadPool.IdleTimeoutSeconds = int(idleTimeout / 1e9)
-	config.OlapReadPool.IdleTimeoutSeconds = int(idleTimeout / 1e9)
-	config.TxPool.IdleTimeoutSeconds = int(idleTimeout / 1e9)
+	config.OltpReadPool.IdleTimeoutSeconds = float64(idleTimeout / 1e9)
+	config.OlapReadPool.IdleTimeoutSeconds = float64(idleTimeout / 1e9)
+	config.TxPool.IdleTimeoutSeconds = float64(idleTimeout / 1e9)
 	env := tabletenv.NewEnv(config, "TabletServerTest")
 	se := schema.NewEngine(env)
 	qe := NewQueryEngine(env, se)

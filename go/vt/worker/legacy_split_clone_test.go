@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler/testlib"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -371,66 +370,6 @@ func TestLegacySplitCloneV2_RetryDueToReadonly(t *testing.T) {
 	}
 }
 
-// TestLegacySplitCloneV2_RetryDueToReparent tests that vtworker correctly failovers
-// during a reparent.
-// NOTE: worker.py is an end-to-end test which tests this as well.
-func TestLegacySplitCloneV2_RetryDueToReparent(t *testing.T) {
-	tc := &legacySplitCloneTestCase{t: t}
-	tc.setUp(false /* v3 */)
-	defer tc.tearDown()
-
-	// Provoke a reparent just before the copy finishes.
-	// leftReplica will take over for the last, 30th, insert and the vreplication checkpoint.
-	tc.leftReplicaFakeDb.AddExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", nil)
-
-	// Do not let leftMaster succeed the 30th write.
-	tc.leftMasterFakeDb.DeleteAllEntriesAfterIndex(28)
-	tc.leftMasterFakeDb.AddExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", errReadOnly)
-	tc.leftMasterFakeDb.EnableInfinite()
-	// When vtworker encounters the readonly error on leftMaster, do the reparent.
-	tc.leftMasterFakeDb.GetEntry(29).AfterFunc = func() {
-		// Reparent from leftMaster to leftReplica.
-		// NOTE: This step is actually not necessary due to our fakes which bypass
-		//       a lot of logic. Let's keep it for correctness though.
-		ti, err := tc.ts.GetTablet(context.Background(), tc.leftReplica.Tablet.Alias)
-		if err != nil {
-			t.Fatalf("GetTablet failed: %v", err)
-		}
-		tmc := tmclient.NewTabletManagerClient()
-		if err := tmc.TabletExternallyReparented(context.Background(), ti.Tablet, "wait id 1"); err != nil {
-			t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
-		}
-
-		// Update targets in fake query service and send out a new health response.
-		tc.leftMasterQs.UpdateType(topodatapb.TabletType_REPLICA)
-		tc.leftMasterQs.AddDefaultHealthResponse()
-		tc.leftReplicaQs.UpdateType(topodatapb.TabletType_MASTER)
-		tc.leftReplicaQs.AddDefaultHealthResponse()
-
-		// After this, vtworker will retry. The following situations can occur:
-		// 1. HealthCheck picked up leftReplica as new MASTER
-		//    => retry will succeed.
-		// 2. HealthCheck picked up no changes (leftMaster remains MASTER)
-		//    => retry will hit leftMaster which keeps responding with readonly err.
-		// 3. HealthCheck picked up leftMaster as REPLICA, but leftReplica is still
-		//    a REPLICA.
-		//    => vtworker has no MASTER to go to and will keep retrying.
-	}
-
-	// Only wait 1 ms between retries, so that the test passes faster.
-	*executeFetchRetryTime = 1 * time.Millisecond
-
-	// Run the vtworker command.
-	if err := runCommand(t, tc.wi, tc.wi.wr, tc.defaultWorkerArgs); err != nil {
-		t.Fatal(err)
-	}
-
-	wantRetryCountMin := int64(1)
-	if got := statsRetryCount.Get(); got < wantRetryCountMin {
-		t.Errorf("Wrong statsRetryCounter: got %v, wanted >= %v", got, wantRetryCountMin)
-	}
-}
-
 // TestLegacySplitCloneV2_NoMasterAvailable tests that vtworker correctly retries
 // even in a period where no MASTER tablet is available according to the
 // HealthCheck instance.
@@ -487,7 +426,7 @@ func TestLegacySplitCloneV2_NoMasterAvailable(t *testing.T) {
 		}
 
 		// Make leftReplica the new MASTER.
-		tc.leftReplica.Agent.TabletExternallyReparented(ctx, "1")
+		tc.leftReplica.TM.ChangeType(ctx, topodatapb.TabletType_MASTER)
 		tc.leftReplicaQs.UpdateType(topodatapb.TabletType_MASTER)
 		tc.leftReplicaQs.AddDefaultHealthResponse()
 		errs <- nil

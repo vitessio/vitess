@@ -40,19 +40,24 @@ import (
 
 // Engine is the engine for handling vreplication streaming requests.
 type Engine struct {
-	env tabletenv.Env
+	env  tabletenv.Env
+	ts   srvtopo.Server
+	se   *schema.Engine
+	cell string
 
-	// mu protects isOpen, streamers, streamIdx and vschema.
-	mu sync.Mutex
+	// keyspace is initialized by InitDBConfig
+	keyspace string
 
-	isOpen bool
 	// wg is incremented for every Stream, and decremented on end.
 	// Close waits for all current streams to end by waiting on wg.
-	wg              sync.WaitGroup
-	streamers       map[int]*vstreamer
+	wg sync.WaitGroup
+
+	mu              sync.Mutex
+	isOpen          bool
+	streamIdx       int
+	streamers       map[int]*uvstreamer
 	rowStreamers    map[int]*rowStreamer
 	resultStreamers map[int]*resultStreamer
-	streamIdx       int
 
 	// watcherOnce is used for initializing vschema
 	// and setting up the vschema watch. It's guaranteed that
@@ -61,13 +66,7 @@ type Engine struct {
 	watcherOnce sync.Once
 	lvschema    *localVSchema
 
-	// The following members are initialized once at the beginning.
-	ts       srvtopo.Server
-	se       *schema.Engine
-	sh       schema.Historian
-	keyspace string
-	cell     string
-
+	// stats variables
 	vschemaErrors  *stats.Counter
 	vschemaUpdates *stats.Counter
 }
@@ -75,34 +74,40 @@ type Engine struct {
 // NewEngine creates a new Engine.
 // Initialization sequence is: NewEngine->InitDBConfig->Open.
 // Open and Close can be called multiple times and are idempotent.
-func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, sh schema.Historian) *Engine {
+func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, cell string) *Engine {
 	vse := &Engine{
-		env:             env,
-		streamers:       make(map[int]*vstreamer),
+		env:  env,
+		ts:   ts,
+		se:   se,
+		cell: cell,
+
+		streamers:       make(map[int]*uvstreamer),
 		rowStreamers:    make(map[int]*rowStreamer),
 		resultStreamers: make(map[int]*resultStreamer),
-		lvschema:        &localVSchema{vschema: &vindexes.VSchema{}},
-		ts:              ts,
-		se:              se,
-		sh:              sh,
-		vschemaErrors:   env.Exporter().NewCounter("VSchemaErrors", "Count of VSchema errors"),
-		vschemaUpdates:  env.Exporter().NewCounter("VSchemaUpdates", "Count of VSchema updates. Does not include errors"),
+
+		lvschema: &localVSchema{vschema: &vindexes.VSchema{}},
+
+		vschemaErrors:  env.Exporter().NewCounter("VSchemaErrors", "Count of VSchema errors"),
+		vschemaUpdates: env.Exporter().NewCounter("VSchemaUpdates", "Count of VSchema updates. Does not include errors"),
 	}
 	env.Exporter().HandleFunc("/debug/tablet_vschema", vse.ServeHTTP)
 	return vse
 }
 
+// InitDBConfig initializes the target parameters for the Engine.
+func (vse *Engine) InitDBConfig(keyspace string) {
+	vse.keyspace = keyspace
+}
+
 // Open starts the Engine service.
-func (vse *Engine) Open(keyspace, cell string) error {
+func (vse *Engine) Open() {
 	vse.mu.Lock()
 	defer vse.mu.Unlock()
 	if vse.isOpen {
-		return nil
+		return
 	}
+	log.Info("VStreamer is open.")
 	vse.isOpen = true
-	vse.keyspace = keyspace
-	vse.cell = cell
-	return nil
 }
 
 // IsOpen checks if the engine is opened
@@ -136,6 +141,7 @@ func (vse *Engine) Close() {
 	// Wait only after releasing the lock because the end of every
 	// stream will use the lock to remove the entry from streamers.
 	vse.wg.Wait()
+	log.Info("VStreamer is closed.")
 }
 
 func (vse *Engine) vschema() *vindexes.VSchema {
@@ -145,20 +151,20 @@ func (vse *Engine) vschema() *vindexes.VSchema {
 }
 
 // Stream starts a new stream.
-func (vse *Engine) Stream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	// Ensure vschema is initialized and the watcher is started.
 	// Starting of the watcher has to be delayed till the first call to Stream
 	// because this overhead should be incurred only if someone uses this feature.
 	vse.watcherOnce.Do(vse.setWatch)
 
 	// Create stream and add it to the map.
-	streamer, idx, err := func() (*vstreamer, int, error) {
+	streamer, idx, err := func() (*uvstreamer, int, error) {
 		vse.mu.Lock()
 		defer vse.mu.Unlock()
 		if !vse.isOpen {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
-		streamer := newVStreamer(ctx, vse.env.Config().DB.AppWithDB(), vse.se, vse.sh, startPos, filter, vse.lvschema, send)
+		streamer := newUVStreamer(ctx, vse, vse.env.Config().DB.AppWithDB(), vse.se, startPos, tablePKs, filter, vse.lvschema, send)
 		idx := vse.streamIdx
 		vse.streamers[idx] = streamer
 		vse.streamIdx++
@@ -198,7 +204,7 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 		if !vse.isOpen {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
-		rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.AppWithDB(), vse.sh, query, lastpk, vse.lvschema, send)
+		rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.AppWithDB(), vse.se, query, lastpk, vse.lvschema, send)
 		idx := vse.streamIdx
 		vse.rowStreamers[idx] = rowStreamer
 		vse.streamIdx++

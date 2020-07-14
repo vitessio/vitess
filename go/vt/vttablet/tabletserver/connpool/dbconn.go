@@ -290,6 +290,15 @@ func (dbc *DBConn) Recycle() {
 	}
 }
 
+// Taint unregister connection from original pool and taints the connection.
+func (dbc *DBConn) Taint() {
+	if dbc.pool == nil {
+		return
+	}
+	dbc.pool.Put(nil)
+	dbc.pool = nil
+}
+
 // Kill kills the currently executing query both on MySQL side
 // and on the connection side. If no query is executing, it's a no-op.
 // Kill will also not kill a query more than once.

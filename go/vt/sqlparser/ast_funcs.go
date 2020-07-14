@@ -717,6 +717,11 @@ func (node *Select) SetLimit(limit *Limit) {
 	node.Limit = limit
 }
 
+// SetLock sets the lock clause
+func (node *Select) SetLock(lock string) {
+	node.Lock = lock
+}
+
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition.
 func (node *Select) AddWhere(expr Expr) {
@@ -751,12 +756,17 @@ func (node *Select) AddHaving(expr Expr) {
 
 // AddOrder adds an order by element
 func (node *ParenSelect) AddOrder(order *Order) {
-	panic("unreachable")
+	node.Select.AddOrder(order)
 }
 
 // SetLimit sets the limit clause
 func (node *ParenSelect) SetLimit(limit *Limit) {
-	panic("unreachable")
+	node.Select.SetLimit(limit)
+}
+
+// SetLock sets the lock clause
+func (node *ParenSelect) SetLock(lock string) {
+	node.Select.SetLock(lock)
 }
 
 // AddOrder adds an order by element
@@ -767,6 +777,25 @@ func (node *Union) AddOrder(order *Order) {
 // SetLimit sets the limit clause
 func (node *Union) SetLimit(limit *Limit) {
 	node.Limit = limit
+}
+
+// SetLock sets the lock clause
+func (node *Union) SetLock(lock string) {
+	node.Lock = lock
+}
+
+//Unionize returns a UNION, either creating one or adding SELECT to an existing one
+func Unionize(lhs, rhs SelectStatement, typ string, by OrderBy, limit *Limit, lock string) *Union {
+	union, isUnion := lhs.(*Union)
+	if isUnion {
+		union.UnionSelects = append(union.UnionSelects, &UnionSelect{Type: typ, Statement: rhs})
+		union.OrderBy = by
+		union.Limit = limit
+		union.Lock = lock
+		return union
+	}
+
+	return &Union{FirstStatement: lhs, UnionSelects: []*UnionSelect{{Type: typ, Statement: rhs}}, OrderBy: by, Limit: limit, Lock: lock}
 }
 
 // AtCount represents the '@' count in ColIdent

@@ -344,10 +344,10 @@ func TestStatsURL(t *testing.T) {
 func newEngine(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, strict bool, db *fakesqldb.DB) *Engine {
 	config := tabletenv.NewDefaultConfig()
 	config.QueryCacheSize = queryCacheSize
-	config.SchemaReloadIntervalSeconds = int(reloadTime) / 1e9
-	config.OltpReadPool.IdleTimeoutSeconds = int(idleTimeout / 1e9)
-	config.OlapReadPool.IdleTimeoutSeconds = int(idleTimeout / 1e9)
-	config.TxPool.IdleTimeoutSeconds = int(idleTimeout / 1e9)
+	config.SchemaReloadIntervalSeconds = float64(reloadTime) / 1e9
+	config.OltpReadPool.IdleTimeoutSeconds = float64(idleTimeout / 1e9)
+	config.OlapReadPool.IdleTimeoutSeconds = float64(idleTimeout / 1e9)
+	config.TxPool.IdleTimeoutSeconds = float64(idleTimeout / 1e9)
 	se := NewEngine(tabletenv.NewEnv(config, "SchemaTest"))
 	se.InitDBConfig(newDBConfigs(db).DbaWithDB())
 	return se

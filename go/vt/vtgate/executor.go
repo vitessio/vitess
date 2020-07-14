@@ -29,8 +29,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/logutil"
-
 	"vitess.io/vitess/go/vt/log"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
@@ -97,18 +95,7 @@ type Executor struct {
 	plans        *cache.LRUCache
 	vschemaStats *VSchemaStats
 
-	// this is a way for us to be able to write tests with one method,
-	// and run in production with an entierly different one
-	exec executeMethod
-
 	vm *VSchemaManager
-}
-
-// this interface is here to allow us to have two different implementations of the same method,
-// and use the legacy one in production until we are comfortable with the new code.
-// it's temporary and should be removed once we can do everything using the new planning strategy
-type executeMethod interface {
-	execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error)
 }
 
 var executorOnce sync.Once
@@ -128,10 +115,6 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 		plans:       cache.NewLRUCache(queryPlanCacheSize),
 		normalize:   normalize,
 		streamSize:  streamSize,
-	}
-	e.exec = &fallbackExecutor{
-		exA: &planExecute{e: e},
-		exB: e,
 	}
 
 	vschemaacl.Init()
@@ -161,7 +144,7 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 	defer span.Finish()
 
 	logStats := NewLogStats(ctx, method, sql, bindVars)
-	stmtType, result, err := e.exec.execute(ctx, safeSession, sql, bindVars, logStats)
+	stmtType, result, err := e.execute(ctx, safeSession, sql, bindVars, logStats)
 	logStats.Error = err
 	saveSessionStats(safeSession, stmtType, result, err)
 	if result != nil && len(result.Rows) > *warnMemoryRows {
@@ -190,6 +173,14 @@ func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType
 }
 
 func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
+	stmtType, qr, err := e.newExecute(ctx, safeSession, sql, bindVars, logStats)
+	if err == planbuilder.ErrPlanNotSupported {
+		return e.legacyExecute(ctx, safeSession, sql, bindVars, logStats)
+	}
+	return stmtType, qr, err
+}
+
+func (e *Executor) legacyExecute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
 	//Start an implicit transaction if necessary.
 	if !safeSession.Autocommit && !safeSession.InTransaction() {
 		if err := e.txConn.Begin(ctx, safeSession); err != nil {
@@ -202,8 +193,11 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		return 0, nil, err
 	}
 
-	if safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
-		return 0, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", destTabletType)
+	logStats.Keyspace = destKeyspace
+	logStats.TabletType = destTabletType.String()
+	// Legacy gateway allows transactions only on MASTER
+	if UsingLegacyGateway() && safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
+		return 0, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Executor.execute: transactions are supported only for master tablet types, current type: %v", destTabletType)
 	}
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
@@ -251,11 +245,16 @@ func (e *Executor) addNeededBindVars(bindVarNeeds sqlparser.BindVarNeeds, bindVa
 		bindVars[sqlparser.LastInsertIDName] = sqltypes.Uint64BindVariable(session.GetLastInsertId())
 	}
 
-	// todo: do we need to check this map for nil?
-	if bindVarNeeds.NeedUserDefinedVariables && session.UserDefinedVariables != nil {
-		for k, v := range session.UserDefinedVariables {
-			bindVars[sqlparser.UserDefinedVariableName+k] = v
+	udvMap := session.UserDefinedVariables
+	if udvMap == nil {
+		udvMap = map[string]*querypb.BindVariable{}
+	}
+	for _, udv := range bindVarNeeds.NeedUserDefinedVariables {
+		val := udvMap[udv]
+		if val == nil {
+			val = sqltypes.NullBindVariable
 		}
+		bindVars[sqlparser.UserDefinedVariableName+udv] = val
 	}
 
 	if bindVarNeeds.NeedFoundRows {
@@ -274,9 +273,6 @@ func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession
 }
 
 func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
-	if destTabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", destTabletType)
-	}
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	err := e.txConn.Begin(ctx, safeSession)
@@ -306,6 +302,44 @@ func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession,
 	err := e.CloseSession(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
 	return &sqltypes.Result{}, err
+}
+
+func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession, sql string, planType string, logStats *LogStats, nonTxResponse func(query string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+	execStart := time.Now()
+	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
+	e.updateQueryCounts(planType, "", "", int64(logStats.ShardQueries))
+	defer func() {
+		logStats.ExecuteTime = time.Since(execStart)
+	}()
+
+	if len(safeSession.ShardSessions) == 0 {
+		if safeSession.InTransaction() {
+			// Storing, as this needs to be executed just after starting transaction on the shard.
+			safeSession.StoreSavepoint(sql)
+			return &sqltypes.Result{}, nil
+		}
+		return nonTxResponse(sql)
+	}
+	var rss []*srvtopo.ResolvedShard
+	for _, shardSession := range safeSession.ShardSessions {
+		rss = append(rss, &srvtopo.ResolvedShard{
+			Target:  shardSession.Target,
+			Gateway: e.resolver.resolver.GetGateway(),
+		})
+	}
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{Sql: sql}
+	}
+
+	qr, errs := e.ExecuteMultiShard(ctx, rss, queries, safeSession, false, false)
+	err := vterrors.Aggregate(errs)
+	if err != nil {
+		return nil, err
+	}
+	safeSession.StoreSavepoint(sql)
+	return qr, nil
 }
 
 // CloseSession closes the current transaction, if any. It is called both for explicit "rollback"
@@ -841,64 +875,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			RowsAffected: uint64(len(rows)),
 		}, nil
 	case "vitess_tablets":
-		var rows [][]sqltypes.Value
-		if *GatewayImplementation == GatewayImplementationDiscovery {
-			status := e.scatterConn.GetLegacyHealthCheckCacheStatus()
-			for _, s := range status {
-				for _, ts := range s.TabletsStats {
-					state := "SERVING"
-					if !ts.Serving {
-						state = "NOT_SERVING"
-					}
-					mtst := ts.Tablet.MasterTermStartTime
-					mtstStr := ""
-					if mtst != nil && mtst.Seconds > 0 {
-						mtstStr = logutil.ProtoToTime(ts.Tablet.MasterTermStartTime).Format(time.RFC3339)
-					}
-					rows = append(rows, buildVarCharRow(
-						s.Cell,
-						s.Target.Keyspace,
-						s.Target.Shard,
-						ts.Target.TabletType.String(),
-						state,
-						topoproto.TabletAliasString(ts.Tablet.Alias),
-						ts.Tablet.Hostname,
-						mtstStr,
-					))
-				}
-			}
-		}
-		if *GatewayImplementation == tabletGatewayImplementation {
-			status := e.scatterConn.GetHealthCheckCacheStatus()
-			for _, s := range status {
-				for _, ts := range s.TabletsStats {
-					state := "SERVING"
-					if !ts.Serving {
-						state = "NOT_SERVING"
-					}
-					mtst := ts.Tablet.MasterTermStartTime
-					mtstStr := ""
-					if mtst != nil && mtst.Seconds > 0 {
-						mtstStr = logutil.ProtoToTime(ts.Tablet.MasterTermStartTime).Format(time.RFC3339)
-					}
-					rows = append(rows, buildVarCharRow(
-						s.Cell,
-						s.Target.Keyspace,
-						s.Target.Shard,
-						ts.Target.TabletType.String(),
-						state,
-						topoproto.TabletAliasString(ts.Tablet.Alias),
-						ts.Tablet.Hostname,
-						mtstStr,
-					))
-				}
-			}
-		}
-		return &sqltypes.Result{
-			Fields:       buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "MasterTermStartTime"),
-			Rows:         rows,
-			RowsAffected: uint64(len(rows)),
-		}, nil
+		return e.showTablets()
 	case "vitess_target":
 		var rows [][]sqltypes.Value
 		rows = append(rows, buildVarCharRow(safeSession.TargetString))
@@ -1020,7 +997,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 	case sqlparser.KeywordString(sqlparser.WARNINGS):
 		fields := []*querypb.Field{
 			{Name: "Level", Type: sqltypes.VarChar},
-			{Name: "Type", Type: sqltypes.Uint16},
+			{Name: "Code", Type: sqltypes.Uint16},
 			{Name: "Message", Type: sqltypes.VarChar},
 		}
 		rows := make([][]sqltypes.Value, 0)
@@ -1043,6 +1020,68 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 
 	// Any other show statement is passed through
 	return e.handleOther(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
+}
+
+func (e *Executor) showTablets() (*sqltypes.Result, error) {
+	var rows [][]sqltypes.Value
+	if UsingLegacyGateway() {
+		status := e.scatterConn.GetLegacyHealthCheckCacheStatus()
+		for _, s := range status {
+			for _, ts := range s.TabletsStats {
+				state := "SERVING"
+				if !ts.Serving {
+					state = "NOT_SERVING"
+				}
+				mtst := ts.TabletExternallyReparentedTimestamp
+				mtstStr := ""
+				if mtst > 0 {
+					// this code depends on the fact that TabletExternallyReparentedTimestamp is the seconds since epoch start
+					mtstStr = time.Unix(mtst, 0).UTC().Format(time.RFC3339)
+				}
+				rows = append(rows, buildVarCharRow(
+					s.Cell,
+					s.Target.Keyspace,
+					s.Target.Shard,
+					ts.Target.TabletType.String(),
+					state,
+					topoproto.TabletAliasString(ts.Tablet.Alias),
+					ts.Tablet.Hostname,
+					mtstStr,
+				))
+			}
+		}
+	} else {
+		status := e.scatterConn.GetHealthCheckCacheStatus()
+		for _, s := range status {
+			for _, ts := range s.TabletsStats {
+				state := "SERVING"
+				if !ts.Serving {
+					state = "NOT_SERVING"
+				}
+				mtst := ts.MasterTermStartTime
+				mtstStr := ""
+				if mtst > 0 {
+					// this code depends on the fact that MasterTermStartTime is the seconds since epoch start
+					mtstStr = time.Unix(mtst, 0).UTC().Format(time.RFC3339)
+				}
+				rows = append(rows, buildVarCharRow(
+					s.Cell,
+					s.Target.Keyspace,
+					s.Target.Shard,
+					ts.Target.TabletType.String(),
+					state,
+					topoproto.TabletAliasString(ts.Tablet.Alias),
+					ts.Tablet.Hostname,
+					mtstStr,
+				))
+			}
+		}
+	}
+	return &sqltypes.Result{
+		Fields:       buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "MasterTermStartTime"),
+		Rows:         rows,
+		RowsAffected: uint64(len(rows)),
+	}, nil
 }
 
 func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
@@ -1282,10 +1321,14 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		return nil, err
 	}
 
-	// Normalize if possible and retry.
 	query := sql
 	statement := stmt
 	bindVarNeeds := sqlparser.BindVarNeeds{}
+	if !sqlparser.IgnoreMaxPayloadSizeDirective(statement) && !isValidPayloadSize(query) {
+		return nil, vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "query payload size above threshold")
+	}
+
+	// Normalize if possible and retry.
 	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.IsSetStatement(stmt) {
 		parameterize := e.normalize // the public flag is called normalize
 		result, err := sqlparser.PrepareAST(stmt, bindVars, "vtg", parameterize)
@@ -1494,6 +1537,21 @@ func checkLikeOpt(likeOpt string, colNames []string) (string, error) {
 	return "", nil
 }
 
+// isValidPayloadSize validates whether a query payload is above the
+// configured MaxPayloadSize threshold. The WarnPayloadSizeExceeded will increment
+// if the payload size exceeds the warnPayloadSize.
+
+func isValidPayloadSize(query string) bool {
+	payloadSize := len(query)
+	if *maxPayloadSize > 0 && payloadSize > *maxPayloadSize {
+		return false
+	}
+	if *warnPayloadSize > 0 && payloadSize > *warnPayloadSize {
+		warnings.Add("WarnPayloadSizeExceeded", 1)
+	}
+	return true
+}
+
 // Prepare executes a prepare statements.
 func (e *Executor) Prepare(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (fld []*querypb.Field, err error) {
 	logStats := NewLogStats(ctx, method, sql, bindVars)
@@ -1522,8 +1580,8 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 		return nil, err
 	}
 
-	if safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", destTabletType)
+	if UsingLegacyGateway() && safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Executor.prepare: transactions are supported only for master tablet types, current type: %v", destTabletType)
 	}
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
@@ -1545,7 +1603,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 
 	switch stmtType {
 	case sqlparser.StmtSelect:
-		return e.handlePrepare(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, logStats)
+		return e.handlePrepare(ctx, safeSession, sql, bindVars, logStats)
 	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
 		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtComment, sqlparser.StmtExplain:
 		return nil, nil
@@ -1559,7 +1617,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
 
-func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) ([]*querypb.Field, error) {
+func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) ([]*querypb.Field, error) {
 	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver)
@@ -1584,7 +1642,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	var errCount uint64
 	if err != nil {
 		logStats.Error = err
-		errCount = 1
+		errCount = 1 //nolint
 		return nil, err
 	}
 	logStats.RowsAffected = qr.RowsAffected
@@ -1595,11 +1653,11 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 }
 
 // ExecuteMultiShard implements the IExecutor interface
-func (e *Executor) ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, tabletType topodatapb.TabletType, session *SafeSession, notInTransaction bool, autocommit bool) (qr *sqltypes.Result, errs []error) {
-	return e.scatterConn.ExecuteMultiShard(ctx, rss, queries, tabletType, session, notInTransaction, autocommit)
+func (e *Executor) ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, notInTransaction bool, autocommit bool) (qr *sqltypes.Result, errs []error) {
+	return e.scatterConn.ExecuteMultiShard(ctx, rss, queries, session, notInTransaction, autocommit)
 }
 
 // StreamExecuteMulti implements the IExecutor interface
-func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
-	return e.scatterConn.StreamExecuteMulti(ctx, query, rss, vars, tabletType, options, callback)
+func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
+	return e.scatterConn.StreamExecuteMulti(ctx, query, rss, vars, options, callback)
 }

@@ -19,6 +19,7 @@ package filelogger
 import (
 	"context"
 	"io/ioutil"
+	"os"
 	"path"
 	"testing"
 	"time"
@@ -33,6 +34,7 @@ func TestFileLog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error getting tempdir: %v", err)
 	}
+	defer os.RemoveAll(dir)
 
 	logPath := path.Join(dir, "test.log")
 	logger, err := Init(logPath)
@@ -87,6 +89,7 @@ func TestFileLogRedacted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error getting tempdir: %v", err)
 	}
+	defer os.RemoveAll(dir)
 
 	logPath := path.Join(dir, "test.log")
 	logger, err := Init(logPath)

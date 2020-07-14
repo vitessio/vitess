@@ -543,7 +543,7 @@ func checkClientConnRedirectionExecuteKeyrange(ctx context.Context, t *testing.T
 }
 
 func checkValues(t *testing.T, tablet *cluster.Vttablet, keyspace string, dbname string, table string, first int, count int) {
-	log.Info("Checking %d values from %s/%s starting at %d", count, dbname, table, first)
+	log.Infof("Checking %d values from %s/%s starting at %d", count, dbname, table, first)
 	qr, _ := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("select id, msg from %s where id>=%d order by id limit %d", table, first, count), keyspace, true)
 	assert.Equal(t, count, len(qr.Rows), fmt.Sprintf("got wrong number of rows: %d != %d", len(qr.Rows), count))
 	i := 0
@@ -670,11 +670,11 @@ func initializeCluster() (int, error) {
 			tabletUID := clusterInstance.GetAndReserveTabletUID()
 			var tablet *cluster.Vttablet
 			if i == 0 {
-				tablet = clusterInstance.GetVttabletInstance("replica", tabletUID, cellj)
+				tablet = clusterInstance.NewVttabletInstance("replica", tabletUID, cellj)
 			} else if i == 1 {
-				tablet = clusterInstance.GetVttabletInstance("replica", tabletUID, cellj)
+				tablet = clusterInstance.NewVttabletInstance("replica", tabletUID, cellj)
 			} else {
-				tablet = clusterInstance.GetVttabletInstance("rdonly", tabletUID, cellj)
+				tablet = clusterInstance.NewVttabletInstance("rdonly", tabletUID, cellj)
 			}
 			// Start Mysqlctl process
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)

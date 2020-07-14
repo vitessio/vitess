@@ -66,24 +66,16 @@ func TestExecutorResultsExceeded(t *testing.T) {
 	result2 := sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64"), "1", "2", "3", "4")
 	sbclookup.SetResults([]*sqltypes.Result{result1, result2})
 
-	_, err := executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, "select * from main1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, want := warnings.Counts()["ResultsExceeded"], initial; got != want {
-		t.Errorf("warnings count: %v, want %v", got, want)
-	}
+	_, err := executor.Execute(ctx, "TestExecutorResultsExceeded", session, "select * from main1", nil)
+	require.NoError(t, err)
+	assert.Equal(t, initial, warnings.Counts()["ResultsExceeded"], "warnings count")
 
-	_, err = executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, "select * from main1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, want := warnings.Counts()["ResultsExceeded"], initial+1; got != want {
-		t.Errorf("warnings count: %v, want %v", got, want)
-	}
+	_, err = executor.Execute(ctx, "TestExecutorResultsExceeded", session, "select * from main1", nil)
+	require.NoError(t, err)
+	assert.Equal(t, initial+1, warnings.Counts()["ResultsExceeded"], "warnings count")
 }
 
-func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
+func TestLegacyExecutorTransactionsNoAutoCommit(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
 
@@ -91,31 +83,19 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	defer QueryLogger.Unsubscribe(logChan)
 
 	// begin.
-	_, err := executor.Execute(context.Background(), "TestExecute", session, "begin", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err := executor.Execute(ctx, "TestExecute", session, "begin", nil)
+	require.NoError(t, err)
 	wantSession := &vtgatepb.Session{InTransaction: true, TargetString: "@master"}
-	if !proto.Equal(session.Session, wantSession) {
-		t.Errorf("begin: %v, want %v", session.Session, wantSession)
-	}
-	if commitCount := sbclookup.CommitCount.Get(); commitCount != 0 {
-		t.Errorf("want 0, got %d", commitCount)
-	}
+	utils.MustMatch(t, wantSession, session.Session, "session")
+	assert.EqualValues(t, 0, sbclookup.CommitCount.Get(), "commit count")
 	logStats := testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
-	if logStats.CommitTime != 0 {
-		t.Errorf("logstats: expected zero CommitTime")
-	}
+	assert.EqualValues(t, 0, logStats.CommitTime, "logstats: expected zero CommitTime")
 
 	// commit.
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "select id from main1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
+	require.NoError(t, err)
 	logStats = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
-	if logStats.CommitTime != 0 {
-		t.Errorf("logstats: expected zero CommitTime")
-	}
+	assert.EqualValues(t, 0, logStats.CommitTime, "logstats: expected zero CommitTime")
 
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "commit", nil)
 	if err != nil {
@@ -134,25 +114,15 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	}
 
 	// rollback.
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "begin", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "select id from main1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "rollback", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
+	require.NoError(t, err)
+	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
+	require.NoError(t, err)
+	_, err = executor.Execute(ctx, "TestExecute", session, "rollback", nil)
+	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{TargetString: "@master"}
-	if !proto.Equal(session.Session, wantSession) {
-		t.Errorf("begin: %v, want %v", session.Session, wantSession)
-	}
-	if rollbackCount := sbclookup.RollbackCount.Get(); rollbackCount != 1 {
-		t.Errorf("want 1, got %d", rollbackCount)
-	}
+	utils.MustMatch(t, wantSession, session.Session, "session")
+	assert.EqualValues(t, 1, sbclookup.RollbackCount.Get(), "rollback count")
 	_ = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
 	_ = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	logStats = testQueryLog(t, logChan, "TestExecute", "ROLLBACK", "rollback", 1)
@@ -161,10 +131,8 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	}
 
 	// CloseSession doesn't log anything
-	err = executor.CloseSession(context.Background(), session)
-	if err != nil {
-		t.Fatal(err)
-	}
+	err = executor.CloseSession(ctx, session)
+	require.NoError(t, err)
 	logStats = getQueryLog(logChan)
 	if logStats != nil {
 		t.Errorf("logstats: expected no record for no-op rollback, got %v", logStats)
@@ -172,22 +140,20 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 
 	// Prevent transactions on non-master.
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "@replica", InTransaction: true})
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "select id from main1", nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
+	require.Error(t, err)
 	want := "transactions are supported only for master tablet types, current type: REPLICA"
-	if err == nil || err.Error() != want {
-		t.Errorf("Execute(@replica, in_transaction) err: %v, want %s", err, want)
-	}
+	require.Contains(t, err.Error(), want)
 
 	// Prevent begin on non-master.
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "@replica"})
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "begin", nil)
-	if err == nil || err.Error() != want {
-		t.Errorf("Execute(@replica, in_transaction) err: %v, want %s", err, want)
-	}
+	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), want)
 
 	// Prevent use of non-master if in_transaction is on.
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "@master", InTransaction: true})
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "use @replica", nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, "use @replica", nil)
 	want = "cannot change to a non-master type in the middle of a transaction: REPLICA"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute(@replica, in_transaction) err: %v, want %s", err, want)
@@ -205,7 +171,7 @@ func TestDirectTargetRewrites(t *testing.T) {
 	}
 	sql := "select database()"
 
-	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
+	_, err := executor.Execute(ctx, "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	testQueries(t, "sbclookup", sbclookup, []*querypb.BoundQuery{{
 		Sql:           "select :__vtdbname as `database()` from dual",
@@ -221,62 +187,38 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	defer QueryLogger.Unsubscribe(logChan)
 
 	// begin.
-	_, err := executor.Execute(context.Background(), "TestExecute", session, "begin", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err := executor.Execute(ctx, "TestExecute", session, "begin", nil)
+	require.NoError(t, err)
 	wantSession := &vtgatepb.Session{InTransaction: true, TargetString: "@master", Autocommit: true}
-	if !proto.Equal(session.Session, wantSession) {
-		t.Errorf("begin: %v, want %v", session.Session, wantSession)
-	}
+	utils.MustMatch(t, wantSession, session.Session, "session")
 	if commitCount := sbclookup.CommitCount.Get(); commitCount != 0 {
 		t.Errorf("want 0, got %d", commitCount)
 	}
 	_ = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
 
 	// commit.
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "select id from main1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "commit", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
+	require.NoError(t, err)
+	_, err = executor.Execute(ctx, "TestExecute", session, "commit", nil)
+	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{TargetString: "@master", Autocommit: true}
-	if !proto.Equal(session.Session, wantSession) {
-		t.Errorf("begin: %v, want %v", session.Session, wantSession)
-	}
-	if commitCount := sbclookup.CommitCount.Get(); commitCount != 1 {
-		t.Errorf("want 1, got %d", commitCount)
-	}
+	utils.MustMatch(t, wantSession, session.Session, "session")
+	assert.EqualValues(t, 1, sbclookup.CommitCount.Get())
 
 	logStats := testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
-	if logStats.CommitTime != 0 {
-		t.Errorf("logstats: expected zero CommitTime")
-	}
+	assert.EqualValues(t, 0, logStats.CommitTime)
 	logStats = testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 1)
-	if logStats.CommitTime == 0 {
-		t.Errorf("logstats: expected non-zero CommitTime")
-	}
+	assert.NotEqual(t, 0, logStats.CommitTime)
 
 	// rollback.
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "begin", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "select id from main1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "rollback", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
+	require.NoError(t, err)
+	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
+	require.NoError(t, err)
+	_, err = executor.Execute(ctx, "TestExecute", session, "rollback", nil)
+	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{TargetString: "@master", Autocommit: true}
-	if !proto.Equal(session.Session, wantSession) {
-		t.Errorf("begin: %v, want %v", session.Session, wantSession)
-	}
+	utils.MustMatch(t, wantSession, session.Session, "session")
 	if rollbackCount := sbclookup.RollbackCount.Get(); rollbackCount != 1 {
 		t.Errorf("want 1, got %d", rollbackCount)
 	}
@@ -292,25 +234,25 @@ func TestExecutorDeleteMetadata(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
 
 	set := "set @@vitess_metadata.app_v1= '1'"
-	_, err := executor.Execute(context.Background(), "TestExecute", session, set, nil)
+	_, err := executor.Execute(ctx, "TestExecute", session, set, nil)
 	assert.NoError(t, err, "%s error: %v", set, err)
 
 	show := `show vitess_metadata variables like 'app\\_%'`
-	result, _ := executor.Execute(context.Background(), "TestExecute", session, show, nil)
+	result, _ := executor.Execute(ctx, "TestExecute", session, show, nil)
 	assert.Len(t, result.Rows, 1)
 
 	// Fails if deleting key that doesn't exist
-	delete := "set @@vitess_metadata.doesn't_exist=''"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, delete, nil)
+	delQuery := "set @@vitess_metadata.doesn't_exist=''"
+	_, err = executor.Execute(ctx, "TestExecute", session, delQuery, nil)
 	assert.True(t, topo.IsErrType(err, topo.NoNode))
 
 	// Delete existing key, show should fail given the node doesn't exist
-	delete = "set @@vitess_metadata.app_v1=''"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, delete, nil)
+	delQuery = "set @@vitess_metadata.app_v1=''"
+	_, err = executor.Execute(ctx, "TestExecute", session, delQuery, nil)
 	assert.NoError(t, err)
 
 	show = `show vitess_metadata variables like 'app\\_%'`
-	_, err = executor.Execute(context.Background(), "TestExecute", session, show, nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, show, nil)
 	assert.True(t, topo.IsErrType(err, topo.NoNode))
 }
 
@@ -323,10 +265,8 @@ func TestExecutorAutocommit(t *testing.T) {
 
 	// autocommit = 0
 	startCount := sbclookup.CommitCount.Get()
-	_, err := executor.Execute(context.Background(), "TestExecute", session, "select id from main1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err := executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
+	require.NoError(t, err)
 	wantSession := &vtgatepb.Session{TargetString: "@master", InTransaction: true, FoundRows: 1, RowCount: -1}
 	testSession := *session.Session
 	testSession.ShardSessions = nil
@@ -341,10 +281,8 @@ func TestExecutorAutocommit(t *testing.T) {
 	}
 
 	// autocommit = 1
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "set autocommit=1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err = executor.Execute(ctx, "TestExecute", session, "set autocommit=1", nil)
+	require.NoError(t, err)
 	_ = testQueryLog(t, logChan, "TestExecute", "SET", "set session autocommit = 1", 0)
 
 	// Setting autocommit=1 commits existing transaction.
@@ -352,40 +290,24 @@ func TestExecutorAutocommit(t *testing.T) {
 		t.Errorf("Commit count: %d, want %d", got, want)
 	}
 
-	// In the following section, we look at AsTransaction count instead of CommitCount because
-	// the update results in a single round-trip ExecuteBatch call.
-	startCount = sbclookup.AsTransactionCount.Get()
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "update main1 set id=1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err = executor.Execute(ctx, "TestExecute", session, "update main1 set id=1", nil)
+	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master", FoundRows: 1, RowCount: 1}
 	utils.MustMatch(t, wantSession, session.Session, "session does not match for autocommit=1")
-	if got, want := sbclookup.AsTransactionCount.Get(), startCount+1; got != want {
-		t.Errorf("Commit count: %d, want %d", got, want)
-	}
 
 	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id=1", 1)
-	if logStats.CommitTime == 0 {
-		t.Errorf("logstats: expected non-zero CommitTime")
-	}
-	if logStats.RowsAffected == 0 {
-		t.Errorf("logstats: expected non-zero RowsAffected")
-	}
+	assert.NotEqual(t, time.Duration(0), logStats.CommitTime, "logstats: expected non-zero CommitTime")
+	assert.NotEqual(t, uint64(0), logStats.RowsAffected, "logstats: expected non-zero RowsAffected")
 
 	// autocommit = 1, "begin"
 	session.Reset()
 	startCount = sbclookup.CommitCount.Get()
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "begin", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
+	require.NoError(t, err)
 	_ = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
 
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "update main1 set id=1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err = executor.Execute(ctx, "TestExecute", session, "update main1 set id=1", nil)
+	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@master", FoundRows: 1, RowCount: 1}
 	testSession = *session.Session
 	testSession.ShardSessions = nil
@@ -402,10 +324,8 @@ func TestExecutorAutocommit(t *testing.T) {
 		t.Errorf("logstats: expected non-zero RowsAffected")
 	}
 
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "commit", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err = executor.Execute(ctx, "TestExecute", session, "commit", nil)
+	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master"}
 	if !proto.Equal(session.Session, wantSession) {
 		t.Errorf("autocommit=1: %v, want %v", session.Session, wantSession)
@@ -418,21 +338,15 @@ func TestExecutorAutocommit(t *testing.T) {
 	// transition autocommit from 0 to 1 in the middle of a transaction.
 	startCount = sbclookup.CommitCount.Get()
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "begin", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "update main1 set id=1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
+	require.NoError(t, err)
+	_, err = executor.Execute(ctx, "TestExecute", session, "update main1 set id=1", nil)
+	require.NoError(t, err)
 	if got, want := sbclookup.CommitCount.Get(), startCount; got != want {
 		t.Errorf("Commit count: %d, want %d", got, want)
 	}
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "set autocommit=1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err = executor.Execute(ctx, "TestExecute", session, "set autocommit=1", nil)
+	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master"}
 	if !proto.Equal(session.Session, wantSession) {
 		t.Errorf("autocommit=1: %v, want %v", session.Session, wantSession)
@@ -454,7 +368,7 @@ func TestExecutorShowColumns(t *testing.T) {
 	}
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
-			_, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
+			_, err := executor.Execute(ctx, "TestExecute", session, query, nil)
 			require.NoError(t, err)
 
 			wantQueries := []*querypb.BoundQuery{{
@@ -485,7 +399,7 @@ func TestExecutorShow(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
 
 	for _, query := range []string{"show databases", "show vitess_keyspaces", "show keyspaces", "show DATABASES"} {
-		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
+		qr, err := executor.Execute(ctx, "TestExecute", session, query, nil)
 		if err != nil {
 			t.Error(err)
 		}
@@ -504,14 +418,14 @@ func TestExecutorShow(t *testing.T) {
 			t.Errorf("%v:\n%+v, want\n%+v", query, qr, wantqr)
 		}
 	}
-	_, err := executor.Execute(context.Background(), "TestExecute", session, "show variables", nil)
+	_, err := executor.Execute(ctx, "TestExecute", session, "show variables", nil)
 	require.NoError(t, err)
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "show collation", nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, "show collation", nil)
 	require.NoError(t, err)
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'", nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, "show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'", nil)
 	require.NoError(t, err)
 
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "show tables", nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, "show tables", nil)
 	if err != errNoKeyspace {
 		t.Errorf("'show tables' should fail without a keyspace")
 	}
@@ -533,7 +447,7 @@ func TestExecutorShow(t *testing.T) {
 	sbclookup.SetResults([]*sqltypes.Result{showResults})
 
 	query := fmt.Sprintf("show tables from %v", KsTestUnsharded)
-	qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
+	qr, err := executor.Execute(ctx, "TestExecute", session, query, nil)
 	require.NoError(t, err)
 
 	if len(sbclookup.Queries) != 1 {
@@ -552,13 +466,13 @@ func TestExecutorShow(t *testing.T) {
 	}
 
 	wantErrNoTable := "table unknown_table not found"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "show create table unknown_table", nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, "show create table unknown_table", nil)
 	if err.Error() != wantErrNoTable {
 		t.Errorf("Got: %v. Want: %v", err, wantErrNoTable)
 	}
 
 	// SHOW CREATE table using vschema to find keyspace.
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "show create table user_seq", nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, "show create table user_seq", nil)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -570,7 +484,7 @@ func TestExecutorShow(t *testing.T) {
 	}
 
 	// SHOW CREATE table with query-provided keyspace
-	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show create table %v.unknown", KsTestUnsharded), nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show create table %v.unknown", KsTestUnsharded), nil)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -581,7 +495,7 @@ func TestExecutorShow(t *testing.T) {
 	}
 
 	// SHOW KEYS with two different syntax
-	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show keys from %v.unknown", KsTestUnsharded), nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show keys from %v.unknown", KsTestUnsharded), nil)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -591,7 +505,7 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
 	}
 
-	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show keys from unknown from %v", KsTestUnsharded), nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show keys from unknown from %v", KsTestUnsharded), nil)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -602,7 +516,7 @@ func TestExecutorShow(t *testing.T) {
 	}
 
 	// SHOW INDEX with two different syntax
-	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show index from %v.unknown", KsTestUnsharded), nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show index from %v.unknown", KsTestUnsharded), nil)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -612,7 +526,7 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
 	}
 
-	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show index from unknown from %v", KsTestUnsharded), nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show index from unknown from %v", KsTestUnsharded), nil)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -623,7 +537,7 @@ func TestExecutorShow(t *testing.T) {
 	}
 
 	// SHOW INDEXES with two different syntax
-	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show indexes from %v.unknown", KsTestUnsharded), nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show indexes from %v.unknown", KsTestUnsharded), nil)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -633,7 +547,7 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
 	}
 
-	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show indexes from unknown from %v", KsTestUnsharded), nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show indexes from unknown from %v", KsTestUnsharded), nil)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -644,7 +558,7 @@ func TestExecutorShow(t *testing.T) {
 	}
 
 	// SHOW EXTENDED {INDEX | INDEXES | KEYS}
-	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show extended index from unknown from %v", KsTestUnsharded), nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show extended index from unknown from %v", KsTestUnsharded), nil)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -654,7 +568,7 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
 	}
 
-	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show extended indexes from unknown from %v", KsTestUnsharded), nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show extended indexes from unknown from %v", KsTestUnsharded), nil)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -664,7 +578,7 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
 	}
 
-	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show extended keys from unknown from %v", KsTestUnsharded), nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show extended keys from unknown from %v", KsTestUnsharded), nil)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -676,18 +590,18 @@ func TestExecutorShow(t *testing.T) {
 
 	// Set desitation keyspace in session
 	session.TargetString = KsTestUnsharded
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "show create table unknown", nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, "show create table unknown", nil)
 	require.NoError(t, err)
 
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "show full columns from table1", nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, "show full columns from table1", nil)
 	require.NoError(t, err)
 
 	// Reset target string so other tests dont fail.
 	session.TargetString = "@master"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show full columns from unknown from %v", KsTestUnsharded), nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show full columns from unknown from %v", KsTestUnsharded), nil)
 	require.NoError(t, err)
 	for _, query := range []string{"show charset", "show character set"} {
-		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
+		qr, err := executor.Execute(ctx, "TestExecute", session, query, nil)
 		require.NoError(t, err)
 		wantqr := &sqltypes.Result{
 			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}),
@@ -709,7 +623,7 @@ func TestExecutorShow(t *testing.T) {
 		}
 	}
 	for _, query := range []string{"show charset like '%foo'", "show character set like 'foo%'", "show charset like 'foo%'", "show character set where foo like 'utf8'", "show character set where charset like '%foo'", "show charset where charset = '%foo'"} {
-		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
+		qr, err := executor.Execute(ctx, "TestExecute", session, query, nil)
 		require.NoError(t, err)
 		wantqr := &sqltypes.Result{
 			Fields:       append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}),
@@ -721,7 +635,7 @@ func TestExecutorShow(t *testing.T) {
 		}
 	}
 	for _, query := range []string{"show charset like 'utf8'", "show character set like 'utf8'", "show charset where charset = 'utf8'", "show character set where charset = 'utf8'"} {
-		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
+		qr, err := executor.Execute(ctx, "TestExecute", session, query, nil)
 		require.NoError(t, err)
 		wantqr := &sqltypes.Result{
 			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}),
@@ -738,7 +652,7 @@ func TestExecutorShow(t *testing.T) {
 		}
 	}
 	for _, query := range []string{"show charset like 'utf8mb4'", "show character set like 'utf8mb4'", "show charset where charset = 'utf8mb4'", "show character set where charset = 'utf8mb4'"} {
-		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
+		qr, err := executor.Execute(ctx, "TestExecute", session, query, nil)
 		require.NoError(t, err)
 		wantqr := &sqltypes.Result{
 			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}),
@@ -756,7 +670,7 @@ func TestExecutorShow(t *testing.T) {
 		}
 	}
 
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show engines", nil)
+	qr, err = executor.Execute(ctx, "TestExecute", session, "show engines", nil)
 	require.NoError(t, err)
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Engine", "Support", "Comment", "Transactions", "XA", "Savepoints"),
@@ -774,7 +688,7 @@ func TestExecutorShow(t *testing.T) {
 	if !reflect.DeepEqual(qr, wantqr) {
 		t.Errorf("show engines:\n%+v, want\n%+v", qr, wantqr)
 	}
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show plugins", nil)
+	qr, err = executor.Execute(ctx, "TestExecute", session, "show plugins", nil)
 	require.NoError(t, err)
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Name", "Status", "Type", "Library", "License"),
@@ -792,7 +706,7 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("show plugins:\n%+v, want\n%+v", qr, wantqr)
 	}
 	for _, query := range []string{"show session status", "show session status like 'Ssl_cipher'"} {
-		qr, err = executor.Execute(context.Background(), "TestExecute", session, "show session status", nil)
+		qr, err = executor.Execute(ctx, "TestExecute", session, "show session status", nil)
 		if err != nil {
 			t.Error(err)
 		}
@@ -805,11 +719,11 @@ func TestExecutorShow(t *testing.T) {
 			t.Errorf("%v:\n%+v, want\n%+v", query, qr, wantqr)
 		}
 	}
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vitess_shards", nil)
+	qr, err = executor.Execute(ctx, "TestExecute", session, "show vitess_shards", nil)
 	require.NoError(t, err)
 
 	// Test SHOW FULL COLUMNS FROM where query has a qualifier
-	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show full columns from %v.table1", KsTestUnsharded), nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show full columns from %v.table1", KsTestUnsharded), nil)
 	require.NoError(t, err)
 
 	// Just test for first & last.
@@ -826,7 +740,7 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("show vitess_shards:\n%+v, want\n%+v", qr, wantqr)
 	}
 
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vitess_tablets", nil)
+	qr, err = executor.Execute(ctx, "TestExecute", session, "show vitess_tablets", nil)
 	require.NoError(t, err)
 	// Just test for first & last.
 	qr.Rows = [][]sqltypes.Value{qr.Rows[0], qr.Rows[len(qr.Rows)-1]}
@@ -842,7 +756,7 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("show vitess_tablets:\n%+v, want\n%+v", qr, wantqr)
 	}
 
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes", nil)
+	qr, err = executor.Execute(ctx, "TestExecute", session, "show vschema vindexes", nil)
 	require.NoError(t, err)
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
@@ -864,7 +778,7 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("show vschema vindexes:\n%+v, want\n%+v", qr, wantqr)
 	}
 
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.user", nil)
+	qr, err = executor.Execute(ctx, "TestExecute", session, "show vschema vindexes on TestExecutor.user", nil)
 	require.NoError(t, err)
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
@@ -878,20 +792,20 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("show vschema vindexes on TestExecutor.user:\n%+v, want\n%+v", qr, wantqr)
 	}
 
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on user", nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, "show vschema vindexes on user", nil)
 	wantErr := errNoKeyspace.Error()
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("show vschema vindexes on user: %v, want %v", err, wantErr)
 	}
 
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.garbage", nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, "show vschema vindexes on TestExecutor.garbage", nil)
 	wantErr = "table `garbage` does not exist in keyspace `TestExecutor`"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("show vschema vindexes on user: %v, want %v", err, wantErr)
 	}
 
 	session.TargetString = "TestExecutor"
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on user", nil)
+	qr, err = executor.Execute(ctx, "TestExecute", session, "show vschema vindexes on user", nil)
 	require.NoError(t, err)
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
@@ -906,7 +820,7 @@ func TestExecutorShow(t *testing.T) {
 	}
 
 	session.TargetString = "TestExecutor"
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on user2", nil)
+	qr, err = executor.Execute(ctx, "TestExecute", session, "show vschema vindexes on user2", nil)
 	require.NoError(t, err)
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
@@ -920,18 +834,18 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("show vschema vindexes on user2:\n%+v, want\n%+v", qr, wantqr)
 	}
 
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on garbage", nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, "show vschema vindexes on garbage", nil)
 	wantErr = "table `garbage` does not exist in keyspace `TestExecutor`"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("show vschema vindexes on user: %v, want %v", err, wantErr)
 	}
 
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show warnings", nil)
+	qr, err = executor.Execute(ctx, "TestExecute", session, "show warnings", nil)
 	require.NoError(t, err)
 	wantqr = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "Level", Type: sqltypes.VarChar},
-			{Name: "Type", Type: sqltypes.Uint16},
+			{Name: "Code", Type: sqltypes.Uint16},
 			{Name: "Message", Type: sqltypes.VarChar},
 		},
 		Rows:         [][]sqltypes.Value{},
@@ -943,12 +857,12 @@ func TestExecutorShow(t *testing.T) {
 	}
 
 	session.Warnings = []*querypb.QueryWarning{}
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show warnings", nil)
+	qr, err = executor.Execute(ctx, "TestExecute", session, "show warnings", nil)
 	require.NoError(t, err)
 	wantqr = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "Level", Type: sqltypes.VarChar},
-			{Name: "Type", Type: sqltypes.Uint16},
+			{Name: "Code", Type: sqltypes.Uint16},
 			{Name: "Message", Type: sqltypes.VarChar},
 		},
 		Rows:         [][]sqltypes.Value{},
@@ -962,12 +876,12 @@ func TestExecutorShow(t *testing.T) {
 		{Code: mysql.ERBadTable, Message: "bad table"},
 		{Code: mysql.EROutOfResources, Message: "ks/-40: query timed out"},
 	}
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show warnings", nil)
+	qr, err = executor.Execute(ctx, "TestExecute", session, "show warnings", nil)
 	require.NoError(t, err)
 	wantqr = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "Level", Type: sqltypes.VarChar},
-			{Name: "Type", Type: sqltypes.Uint16},
+			{Name: "Code", Type: sqltypes.Uint16},
 			{Name: "Message", Type: sqltypes.VarChar},
 		},
 
@@ -983,7 +897,7 @@ func TestExecutorShow(t *testing.T) {
 
 	// Make sure it still works when one of the keyspaces is in a bad state
 	getSandbox("TestExecutor").SrvKeyspaceMustFail++
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vitess_shards", nil)
+	qr, err = executor.Execute(ctx, "TestExecute", session, "show vitess_shards", nil)
 	require.NoError(t, err)
 	// Just test for first & last.
 	qr.Rows = [][]sqltypes.Value{qr.Rows[0], qr.Rows[len(qr.Rows)-1]}
@@ -1000,7 +914,7 @@ func TestExecutorShow(t *testing.T) {
 	}
 
 	session = NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema tables", nil)
+	qr, err = executor.Execute(ctx, "TestExecute", session, "show vschema tables", nil)
 	require.NoError(t, err)
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Tables"),
@@ -1022,20 +936,20 @@ func TestExecutorShow(t *testing.T) {
 	}
 
 	session = NewSafeSession(&vtgatepb.Session{})
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema tables", nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, "show vschema tables", nil)
 	want := errNoKeyspace.Error()
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema tables: %v, want %v", err, want)
 	}
 
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "show 10", nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, "show 10", nil)
 	want = "syntax error at position 8 near '10'"
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema tables: %v, want %v", err, want)
 	}
 
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "no_such_keyspace"})
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema tables", nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, "show vschema tables", nil)
 	want = "keyspace no_such_keyspace not found in vschema"
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema tables: %v, want %v", err, want)
@@ -1055,7 +969,7 @@ func TestExecutorUse(t *testing.T) {
 		"TestExecutor:-80@master",
 	}
 	for i, stmt := range stmts {
-		_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+		_, err := executor.Execute(ctx, "TestExecute", session, stmt, nil)
 		if err != nil {
 			t.Error(err)
 		}
@@ -1063,13 +977,13 @@ func TestExecutorUse(t *testing.T) {
 		utils.MustMatch(t, wantSession, session.Session, "session does not match")
 	}
 
-	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{}), "use 1", nil)
+	_, err := executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{}), "use 1", nil)
 	wantErr := "syntax error at position 6 near '1'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("got: %v, want %v", err, wantErr)
 	}
 
-	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{}), "use UnexistentKeyspace", nil)
+	_, err = executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{}), "use UnexistentKeyspace", nil)
 	wantErr = "Unknown database 'UnexistentKeyspace' (errno 1049) (sqlstate 42000)"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("got: %v, want %v", err, wantErr)
@@ -1086,7 +1000,7 @@ func TestExecutorComment(t *testing.T) {
 	wantResult := &sqltypes.Result{}
 
 	for _, stmt := range stmts {
-		gotResult, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), stmt, nil)
+		gotResult, err := executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), stmt, nil)
 		if err != nil {
 			t.Error(err)
 		}
@@ -1169,7 +1083,7 @@ func TestExecutorOther(t *testing.T) {
 			sbc2.ExecCount.Set(0)
 			sbclookup.ExecCount.Set(0)
 
-			_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
+			_, err := executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
 			if tc.hasNoKeyspaceErr {
 				assert.Error(t, err, errNoKeyspace)
 			} else if tc.hasDestinationShardErr {
@@ -1265,7 +1179,7 @@ func TestExecutorDDL(t *testing.T) {
 			sbc2.ExecCount.Set(0)
 			sbclookup.ExecCount.Set(0)
 
-			_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
+			_, err := executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
 			if tc.hasNoKeyspaceErr {
 				require.EqualError(t, err, "keyspace not specified", "expect query to fail")
 			} else {
@@ -1295,7 +1209,7 @@ func TestExecutorAlterVSchemaKeyspace(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 2)
-	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) {
+	executor.serv.WatchSrvVSchema(ctx, "aa", func(vschema *vschemapb.SrvVSchema, err error) {
 		vschemaUpdates <- vschema
 	})
 
@@ -1306,7 +1220,7 @@ func TestExecutorAlterVSchemaKeyspace(t *testing.T) {
 	}
 
 	stmt := "alter vschema create vindex TestExecutor.test_vindex using hash"
-	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	_, err := executor.Execute(ctx, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
 
 	_, vindex := waitForVindex(t, "TestExecutor", "test_vindex", vschemaUpdates, executor)
@@ -1322,7 +1236,7 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 	ks := "TestExecutor"
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
-	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) {
+	executor.serv.WatchSrvVSchema(ctx, "aa", func(vschema *vschemapb.SrvVSchema, err error) {
 		vschemaUpdates <- vschema
 	})
 
@@ -1334,7 +1248,7 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	stmt := "alter vschema create vindex test_vindex using hash"
-	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	_, err := executor.Execute(ctx, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
 
 	_, vindex := waitForVindex(t, ks, "test_vindex", vschemaUpdates, executor)
@@ -1342,7 +1256,7 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 		t.Errorf("updated vschema did not contain test_vindex")
 	}
 
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, stmt, nil)
 	wantErr := "vindex test_vindex already exists in keyspace TestExecutor"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("create duplicate vindex: %v, want %s", err, wantErr)
@@ -1358,7 +1272,7 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 	//ksNew := "test_new_keyspace"
 	session = NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	stmt = "alter vschema create vindex test_vindex2 using hash"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, stmt, nil)
 	if err != nil {
 		t.Fatalf("error in %s: %v", stmt, err)
 	}
@@ -1393,7 +1307,7 @@ func TestExecutorAddDropVschemaTableDDL(t *testing.T) {
 	ks := KsTestUnsharded
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
-	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) {
+	executor.serv.WatchSrvVSchema(ctx, "aa", func(vschema *vschemapb.SrvVSchema, err error) {
 		vschemaUpdates <- vschema
 	})
 
@@ -1403,30 +1317,27 @@ func TestExecutorAddDropVschemaTableDDL(t *testing.T) {
 		t.Fatalf("test_table should not exist in original vschema")
 	}
 
-	vschemaTables := []string{}
+	var vschemaTables []string
 	for t := range vschema.Keyspaces[ks].Tables {
 		vschemaTables = append(vschemaTables, t)
 	}
 
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	stmt := "alter vschema add table test_table"
-	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	_, err := executor.Execute(ctx, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
 	_ = waitForVschemaTables(t, ks, append(vschemaTables, "test_table"), executor)
 
 	stmt = "alter vschema add table test_table2"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	_, err = executor.Execute(ctx, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
 	_ = waitForVschemaTables(t, ks, append(vschemaTables, []string{"test_table", "test_table2"}...), executor)
 
 	// Should fail adding a table on a sharded keyspace
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	stmt = "alter vschema add table test_table"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	wantErr := "add vschema table: unsupported on sharded keyspace TestExecutor"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("want error %v got %v", wantErr, err)
-	}
+	_, err = executor.Execute(ctx, "TestExecute", session, stmt, nil)
+	require.EqualError(t, err, "add vschema table: unsupported on sharded keyspace TestExecutor")
 
 	// No queries should have gone to any tablets
 	wantCount := []int64{0, 0, 0}
@@ -1435,400 +1346,7 @@ func TestExecutorAddDropVschemaTableDDL(t *testing.T) {
 		sbc2.ExecCount.Get(),
 		sbclookup.ExecCount.Get(),
 	}
-	if !reflect.DeepEqual(gotCount, wantCount) {
-		t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
-	}
-}
-
-func TestExecutorAddSequenceDDL(t *testing.T) {
-	*vschemaacl.AuthorizedDDLUsers = "%"
-	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
-	}()
-	executor, _, _, _ := createExecutorEnv()
-	ks := KsTestUnsharded
-
-	vschema := executor.vm.GetCurrentSrvVschema()
-
-	var vschemaTables []string
-	for t := range vschema.Keyspaces[ks].Tables {
-		vschemaTables = append(vschemaTables, t)
-	}
-
-	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
-	stmt := "alter vschema add sequence test_seq"
-	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	require.NoError(t, err)
-	_ = waitForVschemaTables(t, ks, append(vschemaTables, []string{"test_seq"}...), executor)
-	vschema = executor.vm.GetCurrentSrvVschema()
-	table := vschema.Keyspaces[ks].Tables["test_seq"]
-	wantType := "sequence"
-	if table.Type != wantType {
-		t.Errorf("want table type sequence got %v", table)
-	}
-
-	// Should fail adding a table on a sharded keyspace
-	ksSharded := "TestExecutor"
-	session = NewSafeSession(&vtgatepb.Session{TargetString: ksSharded})
-
-	stmt = "alter vschema add sequence sequence_table"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-
-	wantErr := "add sequence table: unsupported on sharded keyspace TestExecutor"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("want error %v got %v", wantErr, err)
-	}
-
-	// Should be able to add autoincrement to table in sharded keyspace
-	stmt = "alter vschema on test_table add vindex hash_index (id)"
-	if _, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil); err != nil {
-		t.Error(err)
-	}
-	time.Sleep(10 * time.Millisecond)
-
-	stmt = "alter vschema on test_table add auto_increment id using test_seq"
-	if _, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil); err != nil {
-		t.Error(err)
-	}
-	time.Sleep(10 * time.Millisecond)
-
-	wantAutoInc := &vschemapb.AutoIncrement{Column: "id", Sequence: "test_seq"}
-	gotAutoInc := executor.vm.GetCurrentSrvVschema().Keyspaces[ksSharded].Tables["test_table"].AutoIncrement
-
-	if !reflect.DeepEqual(wantAutoInc, gotAutoInc) {
-		t.Errorf("want autoinc %v, got autoinc %v", wantAutoInc, gotAutoInc)
-	}
-}
-
-func TestExecutorAddDropVindexDDL(t *testing.T) {
-	*vschemaacl.AuthorizedDDLUsers = "%"
-	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
-	}()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
-	ks := "TestExecutor"
-	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
-	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
-	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) {
-		vschemaUpdates <- vschema
-	})
-
-	vschema := <-vschemaUpdates
-	_, ok := vschema.Keyspaces[ks].Vindexes["test_hash"]
-	if ok {
-		t.Fatalf("test_hash should not exist in original vschema")
-	}
-
-	// Create a new vindex implicitly with the statement
-	stmt := "alter vschema on test add vindex test_hash (id) using hash "
-	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	if err != nil {
-		t.Fatalf("error in %s: %v", stmt, err)
-	}
-
-	_, vindex := waitForVindex(t, ks, "test_hash", vschemaUpdates, executor)
-	if vindex.Type != "hash" {
-		t.Errorf("vindex type %s not hash", vindex.Type)
-	}
-
-	_ = waitForColVindexes(t, ks, "test", []string{"test_hash"}, executor)
-	qr, err := executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test", nil)
-	if err != nil {
-		t.Fatalf("error in show vschema vindexes on TestExecutor.test: %v", err)
-	}
-	wantqr := &sqltypes.Result{
-		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
-		Rows: [][]sqltypes.Value{
-			buildVarCharRow("id", "test_hash", "hash", "", ""),
-		},
-		RowsAffected: 1,
-	}
-	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("show vschema vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
-	}
-
-	// Drop it
-	stmt = "alter vschema on test drop vindex test_hash"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	if err != nil {
-		t.Fatalf("error in %s: %v", stmt, err)
-	}
-
-	_, _ = waitForVindex(t, ks, "test_hash", vschemaUpdates, executor)
-	_ = waitForColVindexes(t, ks, "test", []string{}, executor)
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test", nil)
-	wantErr := "table `test` does not exist in keyspace `TestExecutor`"
-	if err == nil || err.Error() != wantErr {
-		t.Fatalf("expected error in show vschema vindexes on TestExecutor.test %v: got %v", wantErr, err)
-	}
-
-	// add it again using the same syntax
-	stmt = "alter vschema on test add vindex test_hash (id) using hash "
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	if err != nil {
-		t.Fatalf("error in %s: %v", stmt, err)
-	}
-
-	_, vindex = waitForVindex(t, ks, "test_hash", vschemaUpdates, executor)
-	if vindex.Type != "hash" {
-		t.Errorf("vindex type %s not hash", vindex.Type)
-	}
-
-	_ = waitForColVindexes(t, ks, "test", []string{"test_hash"}, executor)
-
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test", nil)
-	if err != nil {
-		t.Fatalf("error in show vschema vindexes on TestExecutor.test: %v", err)
-	}
-	wantqr = &sqltypes.Result{
-		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
-		Rows: [][]sqltypes.Value{
-			buildVarCharRow("id", "test_hash", "hash", "", ""),
-		},
-		RowsAffected: 1,
-	}
-	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("show vschema vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
-	}
-
-	// add another
-	stmt = "alter vschema on test add vindex test_lookup (c1,c2) using lookup with owner=`test`, from=`c1,c2`, table=test_lookup, to=keyspace_id"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	if err != nil {
-		t.Fatalf("error in %s: %v", stmt, err)
-	}
-
-	vschema, vindex = waitForVindex(t, ks, "test_lookup", vschemaUpdates, executor)
-	if vindex.Type != "lookup" {
-		t.Errorf("vindex type %s not hash", vindex.Type)
-	}
-
-	if table, ok := vschema.Keyspaces[ks].Tables["test"]; ok {
-		if len(table.ColumnVindexes) != 2 {
-			t.Fatalf("table vindexes want 1 got %d", len(table.ColumnVindexes))
-		}
-		if table.ColumnVindexes[1].Name != "test_lookup" {
-			t.Fatalf("table vindexes didn't contain test_lookup")
-		}
-	} else {
-		t.Fatalf("table test not defined in vschema")
-	}
-
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test", nil)
-	if err != nil {
-		t.Fatalf("error in show vschema vindexes on TestExecutor.test: %v", err)
-	}
-	wantqr = &sqltypes.Result{
-		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
-		Rows: [][]sqltypes.Value{
-			buildVarCharRow("id", "test_hash", "hash", "", ""),
-			buildVarCharRow("c1, c2", "test_lookup", "lookup", "from=c1,c2; table=test_lookup; to=keyspace_id", "test"),
-		},
-		RowsAffected: 2,
-	}
-	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("show vschema vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
-	}
-
-	stmt = "alter vschema on test add vindex test_hash_id2 (id2) using hash"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	if err != nil {
-		t.Fatalf("error in %s: %v", stmt, err)
-	}
-
-	vschema, vindex = waitForVindex(t, ks, "test_hash_id2", vschemaUpdates, executor)
-	if vindex.Type != "hash" {
-		t.Errorf("vindex type %s not hash", vindex.Type)
-	}
-
-	if table, ok := vschema.Keyspaces[ks].Tables["test"]; ok {
-		if len(table.ColumnVindexes) != 3 {
-			t.Fatalf("table vindexes want 1 got %d", len(table.ColumnVindexes))
-		}
-		if table.ColumnVindexes[2].Name != "test_hash_id2" {
-			t.Fatalf("table vindexes didn't contain test_hash_id2")
-		}
-	} else {
-		t.Fatalf("table test not defined in vschema")
-	}
-
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test", nil)
-	if err != nil {
-		t.Fatalf("error in show vschema vindexes on TestExecutor.test: %v", err)
-	}
-	wantqr = &sqltypes.Result{
-		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
-		Rows: [][]sqltypes.Value{
-			buildVarCharRow("id", "test_hash", "hash", "", ""),
-			buildVarCharRow("c1, c2", "test_lookup", "lookup", "from=c1,c2; table=test_lookup; to=keyspace_id", "test"),
-			buildVarCharRow("id2", "test_hash_id2", "hash", "", ""),
-		},
-		RowsAffected: 3,
-	}
-	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("show vschema vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
-	}
-
-	// drop one
-	stmt = "alter vschema on test drop vindex test_lookup"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	if err != nil {
-		t.Fatalf("error in %s: %v", stmt, err)
-	}
-
-	// wait for up to 50ms for it to disappear
-	deadline := time.Now().Add(50 * time.Millisecond)
-	for {
-		qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test", nil)
-		if err != nil {
-			t.Fatalf("error in show vschema vindexes on TestExecutor.test: %v", err)
-		}
-		wantqr = &sqltypes.Result{
-			Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
-			Rows: [][]sqltypes.Value{
-				buildVarCharRow("id", "test_hash", "hash", "", ""),
-				buildVarCharRow("id2", "test_hash_id2", "hash", "", ""),
-			},
-			RowsAffected: 2,
-		}
-		if reflect.DeepEqual(qr, wantqr) {
-			break
-		}
-
-		if time.Now().After(deadline) {
-			t.Errorf("timed out waiting for test_lookup vindex to be removed")
-		}
-		time.Sleep(1 * time.Millisecond)
-	}
-
-	// use the newly created vindex on a new table
-	stmt = "alter vschema on test2 add vindex test_hash (id)"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	if err != nil {
-		t.Fatalf("error in %s: %v", stmt, err)
-	}
-
-	vschema, vindex = waitForVindex(t, ks, "test_hash", vschemaUpdates, executor)
-	if vindex.Type != "hash" {
-		t.Errorf("vindex type %s not hash", vindex.Type)
-	}
-
-	if table, ok := vschema.Keyspaces[ks].Tables["test2"]; ok {
-		if len(table.ColumnVindexes) != 1 {
-			t.Fatalf("table vindexes want 1 got %d", len(table.ColumnVindexes))
-		}
-		if table.ColumnVindexes[0].Name != "test_hash" {
-			t.Fatalf("table vindexes didn't contain test_hash")
-		}
-	} else {
-		t.Fatalf("table test2 not defined in vschema")
-	}
-
-	// create an identical vindex definition on a different table
-	stmt = "alter vschema on test2 add vindex test_lookup (c1,c2) using lookup with owner=`test`, from=`c1,c2`, table=test_lookup, to=keyspace_id"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	if err != nil {
-		t.Fatalf("error in %s: %v", stmt, err)
-	}
-
-	vschema, vindex = waitForVindex(t, ks, "test_lookup", vschemaUpdates, executor)
-	if vindex.Type != "lookup" {
-		t.Errorf("vindex type %s not hash", vindex.Type)
-	}
-
-	if table, ok := vschema.Keyspaces[ks].Tables["test2"]; ok {
-		if len(table.ColumnVindexes) != 2 {
-			t.Fatalf("table vindexes want 1 got %d", len(table.ColumnVindexes))
-		}
-		if table.ColumnVindexes[1].Name != "test_lookup" {
-			t.Fatalf("table vindexes didn't contain test_lookup")
-		}
-	} else {
-		t.Fatalf("table test2 not defined in vschema")
-	}
-
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test2", nil)
-	if err != nil {
-		t.Fatalf("error in show vschema vindexes on TestExecutor.test2: %v", err)
-	}
-	wantqr = &sqltypes.Result{
-		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
-		Rows: [][]sqltypes.Value{
-			buildVarCharRow("id", "test_hash", "hash", "", ""),
-			buildVarCharRow("c1, c2", "test_lookup", "lookup", "from=c1,c2; table=test_lookup; to=keyspace_id", "test"),
-		},
-		RowsAffected: 2,
-	}
-	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("show vschema vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
-	}
-
-	stmt = "alter vschema on test2 add vindex nonexistent (c1,c2)"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	wantErr = "vindex nonexistent does not exist in keyspace TestExecutor"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("got %v want err %s", err, wantErr)
-	}
-
-	stmt = "alter vschema on test2 add vindex test_hash (c1,c2) using lookup"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	wantErr = "vindex test_hash defined with type hash not lookup"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("got %v want err %s", err, wantErr)
-	}
-
-	stmt = "alter vschema on test2 add vindex test_lookup (c1,c2) using lookup with owner=xyz"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	wantErr = "vindex test_lookup defined with owner test not xyz"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("got %v want err %s", err, wantErr)
-	}
-
-	stmt = "alter vschema on test2 add vindex test_lookup (c1,c2) using lookup with owner=`test`, foo=bar"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	wantErr = "vindex test_lookup defined with different parameters"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("got %v want err %s", err, wantErr)
-	}
-
-	stmt = "alter vschema on nonexistent drop vindex test_lookup"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	wantErr = "table TestExecutor.nonexistent not defined in vschema"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("got %v want err %s", err, wantErr)
-	}
-
-	stmt = "alter vschema on nonexistent drop vindex test_lookup"
-	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: "InvalidKeyspace"}), stmt, nil)
-	wantErr = "no keyspace with name [InvalidKeyspace] found"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("got %v want err %s", err, wantErr)
-	}
-
-	stmt = "alter vschema on nowhere.nohow drop vindex test_lookup"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	wantErr = "no keyspace with name [nowhere] found"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("got %v want err %s", err, wantErr)
-	}
-
-	stmt = "alter vschema on test drop vindex test_lookup"
-	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	wantErr = "vindex test_lookup not defined in table TestExecutor.test"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("got %v want err %s", err, wantErr)
-	}
-
-	// no queries should have gone to any tablets
-	wantCount := []int64{0, 0, 0}
-	gotCount := []int64{
-		sbc1.ExecCount.Get(),
-		sbc2.ExecCount.Get(),
-		sbclookup.ExecCount.Get(),
-	}
-	if !reflect.DeepEqual(gotCount, wantCount) {
-		t.Errorf("Exec %s: %v, want %v", "", gotCount, wantCount)
-	}
+	utils.MustMatch(t, wantCount, gotCount, "")
 }
 
 func TestExecutorVindexDDLACL(t *testing.T) {
@@ -1836,8 +1354,8 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 	ks := "TestExecutor"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
 
-	ctxRedUser := callerid.NewContext(context.Background(), &vtrpcpb.CallerID{}, &querypb.VTGateCallerID{Username: "redUser"})
-	ctxBlueUser := callerid.NewContext(context.Background(), &vtrpcpb.CallerID{}, &querypb.VTGateCallerID{Username: "blueUser"})
+	ctxRedUser := callerid.NewContext(ctx, &vtrpcpb.CallerID{}, &querypb.VTGateCallerID{Username: "redUser"})
+	ctxBlueUser := callerid.NewContext(ctx, &vtrpcpb.CallerID{}, &querypb.VTGateCallerID{Username: "blueUser"})
 
 	// test that by default no users can perform the operation
 	stmt := "alter vschema create vindex test_hash using hash"
@@ -1884,7 +1402,7 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 
 func TestExecutorUnrecognized(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
-	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{}), "invalid statement", nil)
+	_, err := executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{}), "invalid statement", nil)
 	require.Error(t, err, "unrecognized statement: invalid statement'")
 }
 
@@ -1913,10 +1431,10 @@ func TestVSchemaStats(t *testing.T) {
 
 func TestGetPlanUnnormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
-	emptyvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
-	unshardedvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
+	emptyvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
+	unshardedvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
 
-	logStats1 := NewLogStats(context.Background(), "Test", "", nil)
+	logStats1 := NewLogStats(ctx, "Test", "", nil)
 	query1 := "select * from music_user_map where id = 1"
 	plan1, err := r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
 	require.NoError(t, err)
@@ -1925,7 +1443,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
 	}
 
-	logStats2 := NewLogStats(context.Background(), "Test", "", nil)
+	logStats2 := NewLogStats(ctx, "Test", "", nil)
 	plan2, err := r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats2)
 	require.NoError(t, err)
 	if plan1 != plan2 {
@@ -1940,7 +1458,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	if logStats2.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
 	}
-	logStats3 := NewLogStats(context.Background(), "Test", "", nil)
+	logStats3 := NewLogStats(ctx, "Test", "", nil)
 	plan3, err := r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats3)
 	require.NoError(t, err)
 	if plan1 == plan3 {
@@ -1949,7 +1467,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	if logStats3.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats3.SQL)
 	}
-	logStats4 := NewLogStats(context.Background(), "Test", "", nil)
+	logStats4 := NewLogStats(ctx, "Test", "", nil)
 	plan4, err := r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats4)
 	require.NoError(t, err)
 	if plan3 != plan4 {
@@ -1972,9 +1490,9 @@ func TestGetPlanUnnormalized(t *testing.T) {
 
 func TestGetPlanCacheUnnormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
-	emptyvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
+	emptyvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
 	query1 := "select * from music_user_map where id = 1"
-	logStats1 := NewLogStats(context.Background(), "Test", "", nil)
+	logStats1 := NewLogStats(ctx, "Test", "", nil)
 	_, err := r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
 	require.NoError(t, err)
 	if r.plans.Size() != 0 {
@@ -1984,7 +1502,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	if logStats1.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
 	}
-	logStats2 := NewLogStats(context.Background(), "Test", "", nil)
+	logStats2 := NewLogStats(ctx, "Test", "", nil)
 	_, err = r.getPlan(emptyvc, query1, makeComments(" /* comment 2 */"), map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */, logStats2)
 	require.NoError(t, err)
 	if r.plans.Size() != 1 {
@@ -1997,10 +1515,10 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 
 	// Skip cache using directive
 	r, _, _, _ = createExecutorEnv()
-	unshardedvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
+	unshardedvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
 
 	query1 = "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
-	logStats1 = NewLogStats(context.Background(), "Test", "", nil)
+	logStats1 = NewLogStats(ctx, "Test", "", nil)
 	_, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
 	require.NoError(t, err)
 	if len(r.plans.Keys()) != 0 {
@@ -2013,14 +1531,30 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	if len(r.plans.Keys()) != 1 {
 		t.Errorf("Plan keys should be 1, got: %v", len(r.plans.Keys()))
 	}
+
+	// the target string will be resolved and become part of the plan cache key, which adds a new entry
+	ksIDVc1, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
+	_, err = r.getPlan(ksIDVc1, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	require.NoError(t, err)
+	if len(r.plans.Keys()) != 2 {
+		t.Errorf("Plan keys should be 2, got: %v", len(r.plans.Keys()))
+	}
+
+	// the target string will be resolved and become part of the plan cache key, as it's an unsharded ks, it will be the same entry as above
+	ksIDVc2, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
+	_, err = r.getPlan(ksIDVc2, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	require.NoError(t, err)
+	if len(r.plans.Keys()) != 2 {
+		t.Errorf("Plan keys should be 2, got: %v", len(r.plans.Keys()))
+	}
 }
 
 func TestGetPlanCacheNormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
 	r.normalize = true
-	emptyvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
+	emptyvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
 	query1 := "select * from music_user_map where id = 1"
-	logStats1 := NewLogStats(context.Background(), "Test", "", nil)
+	logStats1 := NewLogStats(ctx, "Test", "", nil)
 	_, err := r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
 	require.NoError(t, err)
 	if r.plans.Size() != 0 {
@@ -2030,7 +1564,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	if logStats1.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
 	}
-	logStats2 := NewLogStats(context.Background(), "Test", "", nil)
+	logStats2 := NewLogStats(ctx, "Test", "", nil)
 	_, err = r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */, logStats2)
 	require.NoError(t, err)
 	if r.plans.Size() != 1 {
@@ -2043,10 +1577,10 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	// Skip cache using directive
 	r, _, _, _ = createExecutorEnv()
 	r.normalize = true
-	unshardedvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
+	unshardedvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
 
 	query1 = "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
-	logStats1 = NewLogStats(context.Background(), "Test", "", nil)
+	logStats1 = NewLogStats(ctx, "Test", "", nil)
 	_, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
 	require.NoError(t, err)
 	if len(r.plans.Keys()) != 0 {
@@ -2059,21 +1593,37 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	if len(r.plans.Keys()) != 1 {
 		t.Errorf("Plan keys should be 1, got: %v", len(r.plans.Keys()))
 	}
+
+	// the target string will be resolved and become part of the plan cache key, which adds a new entry
+	ksIDVc1, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
+	_, err = r.getPlan(ksIDVc1, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	require.NoError(t, err)
+	if len(r.plans.Keys()) != 2 {
+		t.Errorf("Plan keys should be 2, got: %v", len(r.plans.Keys()))
+	}
+
+	// the target string will be resolved and become part of the plan cache key, as it's an unsharded ks, it will be the same entry as above
+	ksIDVc2, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
+	_, err = r.getPlan(ksIDVc2, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	require.NoError(t, err)
+	if len(r.plans.Keys()) != 2 {
+		t.Errorf("Plan keys should be 2, got: %v", len(r.plans.Keys()))
+	}
 }
 
 func TestGetPlanNormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
 	r.normalize = true
-	emptyvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
-	unshardedvc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
+	emptyvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
+	unshardedvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver)
 
 	query1 := "select * from music_user_map where id = 1"
 	query2 := "select * from music_user_map where id = 2"
 	normalized := "select * from music_user_map where id = :vtg1"
-	logStats1 := NewLogStats(context.Background(), "Test", "", nil)
+	logStats1 := NewLogStats(ctx, "Test", "", nil)
 	plan1, err := r.getPlan(emptyvc, query1, makeComments(" /* comment 1 */"), map[string]*querypb.BindVariable{}, false, logStats1)
 	require.NoError(t, err)
-	logStats2 := NewLogStats(context.Background(), "Test", "", nil)
+	logStats2 := NewLogStats(ctx, "Test", "", nil)
 	plan2, err := r.getPlan(emptyvc, query1, makeComments(" /* comment 2 */"), map[string]*querypb.BindVariable{}, false, logStats2)
 	require.NoError(t, err)
 	if plan1 != plan2 {
@@ -2095,7 +1645,7 @@ func TestGetPlanNormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
 	}
 
-	logStats3 := NewLogStats(context.Background(), "Test", "", nil)
+	logStats3 := NewLogStats(ctx, "Test", "", nil)
 	plan3, err := r.getPlan(emptyvc, query2, makeComments(" /* comment 3 */"), map[string]*querypb.BindVariable{}, false, logStats3)
 	require.NoError(t, err)
 	if plan1 != plan3 {
@@ -2106,7 +1656,7 @@ func TestGetPlanNormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats3.SQL)
 	}
 
-	logStats4 := NewLogStats(context.Background(), "Test", "", nil)
+	logStats4 := NewLogStats(ctx, "Test", "", nil)
 	plan4, err := r.getPlan(emptyvc, normalized, makeComments(" /* comment 4 */"), map[string]*querypb.BindVariable{}, false, logStats4)
 	require.NoError(t, err)
 	if plan1 != plan4 {
@@ -2117,7 +1667,7 @@ func TestGetPlanNormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats4.SQL)
 	}
 
-	logStats5 := NewLogStats(context.Background(), "Test", "", nil)
+	logStats5 := NewLogStats(ctx, "Test", "", nil)
 	plan3, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment 5 */"), map[string]*querypb.BindVariable{}, false, logStats5)
 	require.NoError(t, err)
 	if plan1 == plan3 {
@@ -2128,7 +1678,7 @@ func TestGetPlanNormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats5.SQL)
 	}
 
-	logStats6 := NewLogStats(context.Background(), "Test", "", nil)
+	logStats6 := NewLogStats(ctx, "Test", "", nil)
 	plan4, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment 6 */"), map[string]*querypb.BindVariable{}, false, logStats6)
 	require.NoError(t, err)
 	if plan3 != plan4 {
@@ -2143,7 +1693,7 @@ func TestGetPlanNormalized(t *testing.T) {
 	}
 
 	// Errors
-	logStats7 := NewLogStats(context.Background(), "Test", "", nil)
+	logStats7 := NewLogStats(ctx, "Test", "", nil)
 	_, err = r.getPlan(emptyvc, "syntax", makeComments(""), map[string]*querypb.BindVariable{}, false, logStats7)
 	wantErr := "syntax error at position 7 near 'syntax'"
 	if err == nil || err.Error() != wantErr {
@@ -2345,6 +1895,52 @@ func TestGenerateCharsetRows(t *testing.T) {
 	}
 }
 
+func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
+	saveMax := *maxPayloadSize
+	saveWarn := *warnPayloadSize
+	*maxPayloadSize = 10
+	*warnPayloadSize = 5
+	defer func() {
+		*maxPayloadSize = saveMax
+		*warnPayloadSize = saveWarn
+	}()
+
+	executor, _, _, _ := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
+	warningCount := warnings.Counts()["WarnPayloadSizeExceeded"]
+	testMaxPayloadSizeExceeded := []string{
+		"select * from main1",
+		"insert into main1(id) values (1), (2)",
+		"update main1 set id=1",
+		"delete from main1 where id=1",
+	}
+	for _, query := range testMaxPayloadSizeExceeded {
+		_, err := executor.Execute(context.Background(), "TestExecutorMaxPayloadSizeExceeded", session, query, nil)
+		require.NotNil(t, err)
+		assert.EqualError(t, err, "query payload size above threshold")
+	}
+	assert.Equal(t, warningCount, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
+
+	testMaxPayloadSizeOverride := []string{
+		"select /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ * from main1",
+		"insert /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ into main1(id) values (1), (2)",
+		"update /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ main1 set id=1",
+		"delete /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ from main1 where id=1",
+	}
+	for _, query := range testMaxPayloadSizeOverride {
+		_, err := executor.Execute(context.Background(), "TestExecutorMaxPayloadSizeWithOverride", session, query, nil)
+		assert.Equal(t, nil, err, "err should be nil")
+	}
+	assert.Equal(t, warningCount, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
+
+	*maxPayloadSize = 1000
+	for _, query := range testMaxPayloadSizeExceeded {
+		_, err := executor.Execute(context.Background(), "TestExecutorMaxPayloadSizeExceeded", session, query, nil)
+		assert.Equal(t, nil, err, "err should be nil")
+	}
+	assert.Equal(t, warningCount+4, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
+}
+
 func TestOlapSelectDatabase(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 	executor.normalize = true
@@ -2361,4 +1957,320 @@ func TestOlapSelectDatabase(t *testing.T) {
 	err := executor.StreamExecute(context.Background(), "TestExecute", NewSafeSession(session), sql, nil, target, cb)
 	assert.NoError(t, err)
 	assert.True(t, cbInvoked)
+}
+
+func TestExecutorClearsWarnings(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{
+		Warnings: []*querypb.QueryWarning{{Code: 234, Message: "oh noes"}},
+	})
+	_, err := executor.Execute(context.Background(), "TestExecute", session, "select 42", nil)
+	require.NoError(t, err)
+	require.Empty(t, session.Warnings)
+}
+
+func TestExecutorOtherRead(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+
+	type cnts struct {
+		Sbc1Cnt      int64
+		Sbc2Cnt      int64
+		SbcLookupCnt int64
+	}
+
+	tcs := []struct {
+		targetStr string
+
+		hasNoKeyspaceErr       bool
+		hasDestinationShardErr bool
+		wantCnts               cnts
+	}{
+		{
+			targetStr:        "",
+			hasNoKeyspaceErr: true,
+		},
+		{
+			targetStr:              "TestExecutor[-]",
+			hasDestinationShardErr: true,
+		},
+		{
+			targetStr: KsTestUnsharded,
+			wantCnts: cnts{
+				Sbc1Cnt:      0,
+				Sbc2Cnt:      0,
+				SbcLookupCnt: 1,
+			},
+		},
+		{
+			targetStr: "TestExecutor",
+			wantCnts: cnts{
+				Sbc1Cnt:      1,
+				Sbc2Cnt:      0,
+				SbcLookupCnt: 0,
+			},
+		},
+	}
+
+	stmts := []string{
+		"analyze table t1",
+		"describe select * from t1",
+		"explain select * from t1",
+		"do 1",
+	}
+
+	for _, stmt := range stmts {
+		for _, tc := range tcs {
+			sbc1.ExecCount.Set(0)
+			sbc2.ExecCount.Set(0)
+			sbclookup.ExecCount.Set(0)
+
+			_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
+			if tc.hasNoKeyspaceErr {
+				assert.EqualError(t, err, "keyspace not specified")
+			} else if tc.hasDestinationShardErr {
+				assert.Errorf(t, err, "Destination can only be a single shard for statement: %s, got: DestinationExactKeyRange(-)", stmt)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			utils.MustMatch(t, tc.wantCnts, cnts{
+				Sbc1Cnt:      sbc1.ExecCount.Get(),
+				Sbc2Cnt:      sbc2.ExecCount.Get(),
+				SbcLookupCnt: sbclookup.ExecCount.Get(),
+			}, "count did not match")
+		}
+	}
+}
+
+func TestExecutorExplain(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	executor.normalize = true
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	bindVars := map[string]*querypb.BindVariable{}
+	result, err := executorExec(executor, "explain format = vitess select * from user", bindVars)
+	require.NoError(t, err)
+
+	require.Equal(t,
+		`[[VARCHAR("Route") VARCHAR("SelectScatter") VARCHAR("TestExecutor") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("select * from user")]]`,
+		fmt.Sprintf("%v", result.Rows))
+
+	result, err = executorExec(executor, "explain format = vitess select 42", bindVars)
+	require.NoError(t, err)
+	expected :=
+		`[[VARCHAR("Projection") VARCHAR("") VARCHAR("") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("")] ` +
+			`[VARCHAR("└─ SingleRow") VARCHAR("") VARCHAR("") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("")]]`
+	require.Equal(t,
+		`[[VARCHAR("Projection") VARCHAR("") VARCHAR("") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("")] `+
+			`[VARCHAR("└─ SingleRow") VARCHAR("") VARCHAR("") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("")]]`,
+		expected,
+		fmt.Sprintf("%v", result.Rows), fmt.Sprintf("%v", result.Rows))
+}
+
+func TestExecutorOtherAdmin(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+
+	type cnts struct {
+		Sbc1Cnt      int64
+		Sbc2Cnt      int64
+		SbcLookupCnt int64
+	}
+
+	tcs := []struct {
+		targetStr string
+
+		hasNoKeyspaceErr       bool
+		hasDestinationShardErr bool
+		wantCnts               cnts
+	}{
+		{
+			targetStr:        "",
+			hasNoKeyspaceErr: true,
+		},
+		{
+			targetStr:              "TestExecutor[-]",
+			hasDestinationShardErr: true,
+		},
+		{
+			targetStr: KsTestUnsharded,
+			wantCnts: cnts{
+				Sbc1Cnt:      0,
+				Sbc2Cnt:      0,
+				SbcLookupCnt: 1,
+			},
+		},
+		{
+			targetStr: "TestExecutor",
+			wantCnts: cnts{
+				Sbc1Cnt:      1,
+				Sbc2Cnt:      0,
+				SbcLookupCnt: 0,
+			},
+		},
+	}
+
+	stmts := []string{
+		"repair table t1",
+		"optimize table t1",
+	}
+
+	for _, stmt := range stmts {
+		for _, tc := range tcs {
+			sbc1.ExecCount.Set(0)
+			sbc2.ExecCount.Set(0)
+			sbclookup.ExecCount.Set(0)
+
+			_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
+			if tc.hasNoKeyspaceErr {
+				assert.Error(t, err, errNoKeyspace)
+			} else if tc.hasDestinationShardErr {
+				assert.Errorf(t, err, "Destination can only be a single shard for statement: %s, got: DestinationExactKeyRange(-)", stmt)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			diff := cmp.Diff(tc.wantCnts, cnts{
+				Sbc1Cnt:      sbc1.ExecCount.Get(),
+				Sbc2Cnt:      sbc2.ExecCount.Get(),
+				SbcLookupCnt: sbclookup.ExecCount.Get(),
+			})
+			if diff != "" {
+				t.Errorf("stmt: %s\ntc: %+v\n-want,+got:\n%s", stmt, tc, diff)
+			}
+		}
+	}
+}
+
+func TestExecutorSavepointInTx(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	logChan := QueryLogger.Subscribe("TestExecutorSavepoint")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	session := NewSafeSession(&vtgatepb.Session{Autocommit: false, TargetString: "@master"})
+	_, err := exec(executor, session, "savepoint a")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "rollback to a")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "release savepoint a")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "select id from user where id = 1")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "savepoint b")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "rollback to b")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "release savepoint b")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "select id from user where id = 3")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "rollback")
+	require.NoError(t, err)
+	sbc1WantQueries := []*querypb.BoundQuery{{
+		Sql:           "savepoint a",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "rollback to a",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "release savepoint a",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "select id from user where id = 1",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "savepoint b",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "rollback to b",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "release savepoint b",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+
+	sbc2WantQueries := []*querypb.BoundQuery{{
+		Sql:           "savepoint a",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "rollback to a",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "release savepoint a",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "savepoint b",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "rollback to b",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "release savepoint b",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "select id from user where id = 3",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
+	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "")
+	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
+	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to a", 0)
+	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint a", 0)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 1", 1)
+	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 1)
+	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to b", 1)
+	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint b", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 3", 1)
+	testQueryLog(t, logChan, "TestExecute", "ROLLBACK", "rollback", 2)
+}
+
+func TestExecutorSavepointWithoutTx(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	logChan := QueryLogger.Subscribe("TestExecutorSavepoint")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	session := NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "@master", InTransaction: false})
+	_, err := exec(executor, session, "savepoint a")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "rollback to a")
+	require.Error(t, err)
+	_, err = exec(executor, session, "release savepoint a")
+	require.Error(t, err)
+	_, err = exec(executor, session, "select id from user where id = 1")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "savepoint b")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "rollback to b")
+	require.Error(t, err)
+	_, err = exec(executor, session, "release savepoint b")
+	require.Error(t, err)
+	_, err = exec(executor, session, "select id from user where id = 3")
+	require.NoError(t, err)
+	sbc1WantQueries := []*querypb.BoundQuery{{
+		Sql:           "select id from user where id = 1",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+
+	sbc2WantQueries := []*querypb.BoundQuery{{
+		Sql:           "select id from user where id = 3",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
+	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "")
+	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
+	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to a", 0)
+	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint a", 0)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 1", 1)
+	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 0)
+	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to b", 0)
+	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint b", 0)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 3", 1)
+}
+
+func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {
+	return executor.Execute(context.Background(), "TestExecute", session, sql, nil)
+}
+
+func makeComments(text string) sqlparser.MarginComments {
+	return sqlparser.MarginComments{Trailing: text}
 }
