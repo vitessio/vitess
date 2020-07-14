@@ -239,6 +239,15 @@ func (stc *ScatterConn) ExecuteMultiShard(
 						newInfo.alias = alias
 						return &newInfo, err
 					}
+				case reserveBegin:
+					innerqr, transactionID, reservedID, alias, err = rs.Gateway.ReserveBeginExecute(ctx, rs.Target, nil, queries[i].Sql, queries[i].BindVariables, opts)
+					if err != nil {
+						newInfo := *info
+						newInfo.rID = reservedID
+						newInfo.txID = transactionID
+						newInfo.alias = alias
+						return &newInfo, err
+					}
 
 				default:
 					panic("not expected yet" + string(info.actionNeeded))

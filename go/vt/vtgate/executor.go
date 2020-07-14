@@ -333,7 +333,7 @@ func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession
 		queries[i] = &querypb.BoundQuery{Sql: sql}
 	}
 
-	qr, errs := e.ExecuteMultiShard(ctx, rss, queries, safeSession, false, false)
+	qr, errs := e.ExecuteMultiShard(ctx, rss, queries, safeSession, false)
 	err := vterrors.Aggregate(errs)
 	if err != nil {
 		return nil, err
