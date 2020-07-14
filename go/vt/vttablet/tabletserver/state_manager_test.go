@@ -270,6 +270,16 @@ func TestStateManagerTransitionFailRetry(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, stateChanged)
 
+	// Calling retryTransition while retrying should be a no-op.
+	sm.retryTransition("")
+
+	// Steal the lock and wait long enough for the retry
+	// to fail, and then release it. The retry will have
+	// to keep retrying.
+	sm.transitioning.Acquire()
+	time.Sleep(30 * time.Millisecond)
+	sm.transitioning.Release()
+
 	for {
 		sm.mu.Lock()
 		retrying := sm.retrying
@@ -308,6 +318,9 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 
 	sm.qe.(*testQueryEngine).failMySQL = true
 	order.Set(0)
+	sm.CheckMySQL()
+
+	// Rechecking immediately should be a no-op:
 	sm.CheckMySQL()
 
 	// Wait for closeAll to get under way.
