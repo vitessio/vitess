@@ -525,7 +525,11 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 	assert.True(t, goodReplica1.FakeMysqlDaemon.Replicating, "goodReplica1.FakeMysqlDaemon.Replicating not set")
 }
 
-func TestPlannedReparentShardRelayLogErrorStartSlave(t *testing.T) {
+// TestPlannedReparentShardRelayLogErrorStartReplication is similar to
+// TestPlannedReparentShardRelayLogError with the difference that goodReplica1
+// is not replicating to start with (IO_Thread is not running) and we
+// simulate an error from the attempt to start replication
+func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 	ts := memorytopo.NewServer("cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
@@ -557,7 +561,7 @@ func TestPlannedReparentShardRelayLogErrorStartSlave(t *testing.T) {
 	defer master.StopActionLoop(t)
 	master.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 
-	// good replica 1 is not replicating
+	// goodReplica1 is not replicating
 	goodReplica1.FakeMysqlDaemon.ReadOnly = true
 	goodReplica1.FakeMysqlDaemon.Replicating = true
 	goodReplica1.FakeMysqlDaemon.IOThreadRunning = false
