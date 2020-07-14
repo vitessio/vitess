@@ -182,12 +182,10 @@ type queryserviceStatus struct {
 // AddStatusHeader registers a standlone header for the status page.
 func (tsv *TabletServer) AddStatusHeader() {
 	tsv.exporter.AddStatusPart("Tablet Server", headerTemplate, func() interface{} {
-		tsv.mu.Lock()
-		defer tsv.mu.Unlock()
 		return map[string]interface{}{
 			"Alias":  tsv.exporter.Name(),
 			"Prefix": tsv.exporter.URLPrefix(),
-			"Target": tsv.target,
+			"Target": tsv.sm.Target(),
 		}
 	})
 }
@@ -196,8 +194,8 @@ func (tsv *TabletServer) AddStatusHeader() {
 func (tsv *TabletServer) AddStatusPart() {
 	tsv.exporter.AddStatusPart("Queryservice", queryserviceStatusTemplate, func() interface{} {
 		status := queryserviceStatus{
-			State:   tsv.GetState(),
-			History: tsv.history.Records(),
+			State:   tsv.sm.StateByName(),
+			History: tsv.sm.history.Records(),
 		}
 		rates := tsv.stats.QPSRates.Get()
 		if qps, ok := rates["All"]; ok && len(qps) > 0 {

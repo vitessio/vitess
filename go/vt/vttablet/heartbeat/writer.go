@@ -21,14 +21,12 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/withddl"
 
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
-	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -46,9 +44,13 @@ const (
   tabletUid INT UNSIGNED NOT NULL,
   ts BIGINT UNSIGNED NOT NULL
         ) engine=InnoDB`
-	sqlInsertInitialRow = "INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%a, %a, %a) ON DUPLICATE KEY UPDATE ts=VALUES(ts)"
-	sqlUpdateHeartbeat  = "UPDATE %s.heartbeat SET ts=%a, tabletUid=%a WHERE keyspaceShard=%a"
+	sqlUpsertHeartbeat = "INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%a, %a, %a) ON DUPLICATE KEY UPDATE ts=VALUES(ts), tabletUid=VALUES(tabletUid)"
 )
+
+var withDDL = withddl.New([]string{
+	fmt.Sprintf(sqlCreateSidecarDB, "_vt"),
+	fmt.Sprintf(sqlCreateHeartbeatTable, "_vt"),
+})
 
 // Writer runs on master tablets and writes heartbeats to the _vt.heartbeat
 // table at a regular interval, defined by heartbeat_interval.
@@ -90,25 +92,9 @@ func NewWriter(env tabletenv.Env, alias topodatapb.TabletAlias) *Writer {
 	}
 }
 
-// Init runs at tablet startup and last minute initialization of db settings, and
-// creates the necessary tables for heartbeat.
-func (w *Writer) Init(target querypb.Target) error {
-	if !w.enabled {
-		return nil
-	}
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	log.Info("Initializing heartbeat table.")
+// InitDBConfig initializes the target name for the Writer.
+func (w *Writer) InitDBConfig(target querypb.Target) {
 	w.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
-
-	if target.TabletType == topodatapb.TabletType_MASTER {
-		err := w.initializeTables(w.env.Config().DB.AppWithDB())
-		if err != nil {
-			w.recordError(err)
-			return err
-		}
-	}
-	return nil
 }
 
 // Open sets up the Writer's db connection and launches the ticker
@@ -124,9 +110,10 @@ func (w *Writer) Open() {
 	if w.isOpen {
 		return
 	}
+
 	log.Info("Beginning heartbeat writes")
 	w.pool.Open(w.env.Config().DB.AppWithDB(), w.env.Config().DB.DbaWithDB(), w.env.Config().DB.AppDebugWithDB())
-	w.ticks.Start(func() { w.writeHeartbeat() })
+	w.ticks.Start(w.writeHeartbeat)
 	w.isOpen = true
 }
 
@@ -145,36 +132,6 @@ func (w *Writer) Close() {
 	w.pool.Close()
 	log.Info("Stopped heartbeat writes.")
 	w.isOpen = false
-}
-
-// initializeTables attempts to create the heartbeat tables and record an
-// initial row. The row is created only on master and is replicated to all
-// other servers.
-func (w *Writer) initializeTables(cp dbconfigs.Connector) error {
-	conn, err := dbconnpool.NewDBConnection(context.TODO(), cp)
-	if err != nil {
-		return vterrors.Wrap(err, "Failed to create connection for heartbeat")
-	}
-	defer conn.Close()
-	statements := []string{
-		fmt.Sprintf(sqlCreateSidecarDB, "_vt"),
-		fmt.Sprintf(sqlCreateHeartbeatTable, "_vt"),
-	}
-	for _, s := range statements {
-		if _, err := conn.ExecuteFetch(s, 0, false); err != nil {
-			return vterrors.Wrap(err, "Failed to execute heartbeat init query")
-		}
-	}
-	insert, err := w.bindHeartbeatVars(sqlInsertInitialRow)
-	if err != nil {
-		return vterrors.Wrap(err, "Failed to bindHeartbeatVars initial heartbeat insert")
-	}
-	_, err = conn.ExecuteFetch(insert, 0, false)
-	if err != nil {
-		return vterrors.Wrap(err, "Failed to execute initial heartbeat insert")
-	}
-	writes.Add(1)
-	return nil
 }
 
 // bindHeartbeatVars takes a heartbeat write (insert or update) and
@@ -196,29 +153,27 @@ func (w *Writer) bindHeartbeatVars(query string) (string, error) {
 
 // writeHeartbeat updates the heartbeat row for this tablet with the current time in nanoseconds.
 func (w *Writer) writeHeartbeat() {
-	defer w.env.LogError()
-	ctx, cancel := context.WithDeadline(context.Background(), w.now().Add(w.interval))
-	defer cancel()
-	update, err := w.bindHeartbeatVars(sqlUpdateHeartbeat)
-	if err != nil {
-		w.recordError(err)
-		return
-	}
-	err = w.exec(ctx, update)
-	if err != nil {
+	if err := w.write(); err != nil {
 		w.recordError(err)
 		return
 	}
 	writes.Add(1)
 }
 
-func (w *Writer) exec(ctx context.Context, query string) error {
+func (w *Writer) write() error {
+	defer w.env.LogError()
+	ctx, cancel := context.WithDeadline(context.Background(), w.now().Add(w.interval))
+	defer cancel()
+	upsert, err := w.bindHeartbeatVars(sqlUpsertHeartbeat)
+	if err != nil {
+		return err
+	}
 	conn, err := w.pool.Get(ctx)
 	if err != nil {
 		return err
 	}
 	defer conn.Recycle()
-	_, err = conn.Exec(ctx, query, 0, false)
+	_, err = withDDL.Exec(ctx, upsert, conn.Exec)
 	if err != nil {
 		return err
 	}

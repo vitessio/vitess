@@ -1901,9 +1901,7 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 	expectDBClientQueries(t, []string{
 		"/update _vt.vreplication set message='vstream ended'",
 	})
-	if err := streamerEngine.Open(env.KeyspaceName, env.ShardName); err != nil {
-		t.Fatal(err)
-	}
+	streamerEngine.Open()
 
 	execStatements(t, []string{
 		"insert into t1 values(2, 'aaa')",

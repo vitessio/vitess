@@ -337,15 +337,6 @@ func (te *TxEngine) transitionTo(nextState txEngineState) error {
 	return nil
 }
 
-// Init must be called once when vttablet starts for setting
-// up the metadata tables.
-func (te *TxEngine) Init() error {
-	if te.twopcEnabled {
-		return te.twoPC.Init(te.env.Config().DB.DbaWithDB())
-	}
-	return nil
-}
-
 // open opens the TxEngine. If 2pc is enabled, it restores
 // all previously prepared transactions from the redo log.
 // this should only be called when the state is already locked
@@ -353,11 +344,14 @@ func (te *TxEngine) open() {
 	te.txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
 
 	if te.twopcEnabled && te.state == AcceptingReadAndWrite {
-		te.twoPC.Open(te.env.Config().DB)
+		// If there are errors, we choose to raise an alert and
+		// continue anyway. Serving traffic is considered more important
+		// than blocking everything for the sake of a few transactions.
+		if err := te.twoPC.Open(te.env.Config().DB); err != nil {
+			te.env.Stats().InternalErrors.Add("TwopcOpen", 1)
+			log.Errorf("Could not open TwoPC engine: %v", err)
+		}
 		if err := te.prepareFromRedo(); err != nil {
-			// If this operation fails, we choose to raise an alert and
-			// continue anyway. Serving traffic is considered more important
-			// than blocking everything for the sake of a few transactions.
 			te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)
 			log.Errorf("Could not prepare transactions: %v", err)
 		}

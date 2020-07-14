@@ -424,6 +424,10 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 					Type: binlogdatapb.VEventType_DDL,
 					Ddl:  q.SQL,
 				})
+				// Reload schema only if the DDL change is relevant.
+				// TODO(sougou): move this back to always load after
+				// the schema reload bug is fixed.
+				vs.se.ReloadAt(context.Background(), vs.pos)
 			} else {
 				// If the DDL need not be sent, send a dummy OTHER event.
 				vevents = append(vevents, &binlogdatapb.VEvent{
@@ -433,7 +437,6 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 					Type: binlogdatapb.VEventType_OTHER,
 				})
 			}
-			vs.se.ReloadAt(context.Background(), vs.pos)
 		case sqlparser.StmtOther, sqlparser.StmtPriv:
 			// These are either:
 			// 1) DBA statements like REPAIR that can be ignored.
