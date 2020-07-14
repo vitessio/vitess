@@ -1,9 +1,9 @@
-name: pitr test
+name: docker test 2
 on: [push, pull_request]
 jobs:
 
   build:
-    name: PITR Test
+    name: docker test 2
     runs-on: ubuntu-latest
     steps:
 
@@ -15,6 +15,7 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v2
 
-    - name: Run PITR test
+    - name: Run tests which requires docker (part-2)
       run: |
-        go run test.go --follow pitr
+        go run test.go -docker=true --follow -shard 10
+

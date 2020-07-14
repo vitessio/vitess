@@ -271,7 +271,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitr"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 26,
+			"Shard": 10,
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"

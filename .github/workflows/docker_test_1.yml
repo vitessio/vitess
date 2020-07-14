@@ -1,9 +1,9 @@
-name: cluster_vtctl_web
+name: docker test 1
 on: [push, pull_request]
 jobs:
 
   build:
-    name: cluster vtctl web
+    name: Docker Test 1
     runs-on: ubuntu-latest
     steps:
 
@@ -15,8 +15,6 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v2
 
-    - name: Run vtctl web
+    - name: Run tests which requires docker (part-1)
       run: |
-        # Running web test inside docker
-        go run test.go -docker=true -print-log -shard 10
-
+        go run test.go -docker=true -shard 25
