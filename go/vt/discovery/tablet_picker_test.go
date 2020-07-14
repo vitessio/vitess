@@ -90,6 +90,25 @@ func TestPickFromTwoHealthy(t *testing.T) {
 	assert.True(t, picked2)
 }
 
+func TestPickRespectsTabletType(t *testing.T) {
+	te := newPickerTestEnv(t, []string{"cell"})
+	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
+	defer deleteTablet(te, want)
+	dont := addTablet(te, 101, topodatapb.TabletType_MASTER, "cell", true, true)
+	defer deleteTablet(te, dont)
+
+	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica,rdonly")
+	require.NoError(t, err)
+
+	// In 20 attempts, master tablet must be never picked
+	for i := 0; i < 20; i++ {
+		tablet, err := tp.PickForStreaming(context.Background())
+		require.NoError(t, err)
+		require.NotNil(t, tablet)
+		require.True(t, proto.Equal(tablet, want), "picked wrong tablet type")
+	}
+}
+
 func TestPickUsingCellAlias(t *testing.T) {
 	// test env puts all cells into an alias called "cella"
 	te := newPickerTestEnv(t, []string{"cell"})
