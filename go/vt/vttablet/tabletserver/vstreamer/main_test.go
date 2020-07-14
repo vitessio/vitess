@@ -52,8 +52,9 @@ func TestMain(m *testing.M) {
 
 		// engine cannot be initialized in testenv because it introduces
 		// circular dependencies
-		engine = NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine)
-		engine.Open(env.KeyspaceName, env.Cells[0])
+		engine = NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine, env.Cells[0])
+		engine.InitDBConfig(env.KeyspaceName)
+		engine.Open()
 		defer engine.Close()
 
 		return m.Run()
@@ -68,7 +69,8 @@ func customEngine(t *testing.T, modifier func(mysql.ConnParams) mysql.ConnParams
 	config := env.TabletEnv.Config().Clone()
 	config.DB = dbconfigs.NewTestDBConfigs(modified, modified, modified.DbName)
 
-	engine := NewEngine(tabletenv.NewEnv(config, "VStreamerTest"), env.SrvTopo, env.SchemaEngine)
-	engine.Open(env.KeyspaceName, env.Cells[0])
+	engine := NewEngine(tabletenv.NewEnv(config, "VStreamerTest"), env.SrvTopo, env.SchemaEngine, env.Cells[0])
+	engine.InitDBConfig(env.KeyspaceName)
+	engine.Open()
 	return engine
 }

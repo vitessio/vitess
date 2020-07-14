@@ -437,26 +437,6 @@ func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err er
 	return qr, nil
 }
 
-// testBatchQuery verifies that a single (or no) query ExecuteBatch was performed on the SandboxConn.
-func testBatchQuery(t *testing.T, sbcName string, sbc *sandboxconn.SandboxConn, boundQuery *querypb.BoundQuery) {
-	t.Helper()
-
-	var wantQueries [][]*querypb.BoundQuery
-	if boundQuery != nil {
-		wantQueries = [][]*querypb.BoundQuery{{boundQuery}}
-	}
-	if !reflect.DeepEqual(sbc.BatchQueries, wantQueries) {
-		t.Errorf("%s.BatchQueries:\n%+v, want\n%+v\n", sbcName, sbc.BatchQueries, wantQueries)
-	}
-}
-
-func testAsTransactionCount(t *testing.T, sbcName string, sbc *sandboxconn.SandboxConn, want int) {
-	t.Helper()
-	if got, want := sbc.AsTransactionCount.Get(), int64(want); got != want {
-		t.Errorf("%s.AsTransactionCount: %d, want %d\n", sbcName, got, want)
-	}
-}
-
 func testQueries(t *testing.T, sbcName string, sbc *sandboxconn.SandboxConn, wantQueries []*querypb.BoundQuery) {
 	t.Helper()
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
@@ -532,7 +512,9 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 
 		// fields[9] is ExecuteTime which is not set for certain statements SET,
 		// BEGIN, COMMIT, ROLLBACK, etc
-		if stmtType != "BEGIN" && stmtType != "COMMIT" && stmtType != "ROLLBACK" && stmtType != "SET" {
+		switch stmtType {
+		case "BEGIN", "COMMIT", "ROLLBACK", "SET", "SAVEPOINT", "SAVEPOINT_ROLLBACK", "RELEASE":
+		default:
 			testNonZeroDuration(t, "ExecuteTime", fields[9])
 		}
 

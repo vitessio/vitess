@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/servenv"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"golang.org/x/net/context"
@@ -92,6 +94,9 @@ type TxEngine struct {
 	abandonAge          time.Duration
 	ticks               *timer.Timer
 
+	// reservedConnStats keeps statistics about reserved connections
+	reservedConnStats *servenv.TimingsWrapper
+
 	txPool       *TxPool
 	preparedPool *TxPreparedPool
 	twoPC        *TwoPC
@@ -103,6 +108,7 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 	te := &TxEngine{
 		env:                 env,
 		shutdownGracePeriod: time.Duration(config.ShutdownGracePeriodSeconds * 1e9),
+		reservedConnStats:   env.Exporter().NewTimings("ReservedConnections", "Reserved connections stats", "operation"),
 	}
 	limiter := txlimiter.New(env)
 	te.txPool = NewTxPool(env, limiter)
@@ -217,7 +223,7 @@ func (te *TxEngine) AcceptReadOnly() error {
 // statement(s) used to execute the begin (if any).
 //
 // Subsequent statements can access the connection through the transaction id.
-func (te *TxEngine) Begin(ctx context.Context, reservedID int64, options *querypb.ExecuteOptions) (int64, string, error) {
+func (te *TxEngine) Begin(ctx context.Context, preQueries []string, reservedID int64, options *querypb.ExecuteOptions) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Begin")
 	defer span.Finish()
 	te.stateLock.Lock()
@@ -235,7 +241,7 @@ func (te *TxEngine) Begin(ctx context.Context, reservedID int64, options *queryp
 	te.stateLock.Unlock()
 
 	defer te.beginRequests.Done()
-	conn, beginSQL, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly, reservedID)
+	conn, beginSQL, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly, reservedID, preQueries)
 	if err != nil {
 		return 0, "", err
 	}
@@ -331,15 +337,6 @@ func (te *TxEngine) transitionTo(nextState txEngineState) error {
 	return nil
 }
 
-// Init must be called once when vttablet starts for setting
-// up the metadata tables.
-func (te *TxEngine) Init() error {
-	if te.twopcEnabled {
-		return te.twoPC.Init(te.env.Config().DB.DbaWithDB())
-	}
-	return nil
-}
-
 // open opens the TxEngine. If 2pc is enabled, it restores
 // all previously prepared transactions from the redo log.
 // this should only be called when the state is already locked
@@ -347,11 +344,14 @@ func (te *TxEngine) open() {
 	te.txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
 
 	if te.twopcEnabled && te.state == AcceptingReadAndWrite {
-		te.twoPC.Open(te.env.Config().DB)
+		// If there are errors, we choose to raise an alert and
+		// continue anyway. Serving traffic is considered more important
+		// than blocking everything for the sake of a few transactions.
+		if err := te.twoPC.Open(te.env.Config().DB); err != nil {
+			te.env.Stats().InternalErrors.Add("TwopcOpen", 1)
+			log.Errorf("Could not open TwoPC engine: %v", err)
+		}
 		if err := te.prepareFromRedo(); err != nil {
-			// If this operation fails, we choose to raise an alert and
-			// continue anyway. Serving traffic is considered more important
-			// than blocking everything for the sake of a few transactions.
 			te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)
 			log.Errorf("Could not prepare transactions: %v", err)
 		}
@@ -445,7 +445,7 @@ outer:
 		if txid > maxid {
 			maxid = txid
 		}
-		conn, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0)
+		conn, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 		if err != nil {
 			allErr.RecordError(err)
 			continue
@@ -568,7 +568,7 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 		return 0, vterrors.Wrap(err, "TxEngine.ReserveBegin")
 	}
 	defer conn.Unlock()
-	_, err = te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn)
+	_, err = te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn, nil)
 	if err != nil {
 		conn.Close()
 		conn.Release(tx.ConnInitFail)
@@ -629,7 +629,10 @@ func (te *TxEngine) reserve(ctx context.Context, options *querypb.ExecuteOptions
 }
 
 func (te *TxEngine) taintConn(ctx context.Context, conn *StatefulConnection, preQueries []string) error {
-	conn.Taint()
+	err := conn.Taint(ctx, te.reservedConnStats)
+	if err != nil {
+		return err
+	}
 	for _, query := range preQueries {
 		_, err := conn.Exec(ctx, query, 0 /*maxrows*/, false /*wantFields*/)
 		if err != nil {
@@ -641,11 +644,13 @@ func (te *TxEngine) taintConn(ctx context.Context, conn *StatefulConnection, pre
 }
 
 //Release closes the underlying connection.
-func (te *TxEngine) Release(ctx context.Context, connID int64) error {
+func (te *TxEngine) Release(connID int64) error {
 	conn, err := te.txPool.GetAndLock(connID, "for release")
 	if err != nil {
 		return err
 	}
+
 	conn.Release(tx.ConnRelease)
+
 	return nil
 }

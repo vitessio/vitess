@@ -168,9 +168,13 @@ func (stc *ScatterConn) Execute(
 			)
 			switch {
 			case autocommit:
-				innerqr, err = stc.executeAutocommit(ctx, rs, query, bindVars, opts)
+				// As this is auto-commit, the transactionID is supposed to be zero.
+				if transactionID != 0 {
+					return 0, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "In autocommit mode, transactionID is non-zero: %d", transactionID)
+				}
+				innerqr, err = rs.Gateway.Execute(ctx, rs.Target, query, bindVars, 0, 0, opts)
 			case shouldBegin:
-				innerqr, transactionID, alias, err = rs.Gateway.BeginExecute(ctx, rs.Target, query, bindVars, 0, options)
+				innerqr, transactionID, alias, err = rs.Gateway.BeginExecute(ctx, rs.Target, session.Savepoints, query, bindVars, 0, options)
 			default:
 				var qs queryservice.QueryService
 				_, usingLegacy := rs.Gateway.(*DiscoveryGateway)
@@ -245,10 +249,13 @@ func (stc *ScatterConn) ExecuteMultiShard(
 
 			switch {
 			case autocommit:
-				// tansactionID and alias are not used by this call, it is one round trip
-				innerqr, err = stc.executeAutocommit(ctx, rs, queries[i].Sql, queries[i].BindVariables, opts)
+				// As this is auto-commit, the transactionID is supposed to be zero.
+				if transactionID != 0 {
+					return 0, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "In autocommit mode, transactionID is non-zero: %d", transactionID)
+				}
+				innerqr, err = rs.Gateway.Execute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, 0, 0, opts)
 			case shouldBegin:
-				innerqr, transactionID, alias, err = rs.Gateway.BeginExecute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, 0, opts)
+				innerqr, transactionID, alias, err = rs.Gateway.BeginExecute(ctx, rs.Target, session.Savepoints, queries[i].Sql, queries[i].BindVariables, 0, opts)
 			default:
 				var qs queryservice.QueryService
 				_, usingLegacy := rs.Gateway.(*DiscoveryGateway)
@@ -280,20 +287,6 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	}
 
 	return qr, allErrors.GetErrors()
-}
-
-func (stc *ScatterConn) executeAutocommit(ctx context.Context, rs *srvtopo.ResolvedShard, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
-	queries := []*querypb.BoundQuery{{
-		Sql:           sql,
-		BindVariables: bindVariables,
-	}}
-	// ExecuteBatch is a stop-gap because it's the only function that can currently do
-	// single round-trip commit.
-	qrs, err := rs.Gateway.ExecuteBatch(ctx, rs.Target, queries, true /* asTransaction */, 0, options)
-	if err != nil {
-		return nil, err
-	}
-	return &qrs[0], nil
 }
 
 func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *bool, qr *sqltypes.Result, callback func(*sqltypes.Result) error) error {

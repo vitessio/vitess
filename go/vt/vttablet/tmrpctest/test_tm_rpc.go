@@ -1244,6 +1244,19 @@ func tmRPCTestSlaveWasRestartedPanic(ctx context.Context, t *testing.T, client t
 	expectHandleRPCPanic(t, "SlaveWasRestarted", true /*verbose*/, err)
 }
 
+func (fra *fakeRPCTM) StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (tabletmanager.StopReplicationAndGetStatusResponse, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return tabletmanager.StopReplicationAndGetStatusResponse{
+		HybridStatus: testReplicationStatus,
+		Status: &replicationdatapb.StopReplicationStatus{
+			Before: testReplicationStatus,
+			After:  testReplicationStatus,
+		},
+	}, nil
+}
+
 var testReplicaWasRestartedParent = &topodatapb.TabletAlias{
 	Cell: "prison",
 	Uid:  42,
@@ -1269,20 +1282,15 @@ func tmRPCTestReplicaWasRestartedPanic(ctx context.Context, t *testing.T, client
 	expectHandleRPCPanic(t, "ReplicaWasRestarted", true /*verbose*/, err)
 }
 
-func (fra *fakeRPCTM) StopReplicationAndGetStatus(ctx context.Context) (*replicationdatapb.Status, error) {
-	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
-	}
-	return testReplicationStatus, nil
-}
-
 func tmRPCTestStopReplicationAndGetStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	rp, err := client.StopReplicationAndGetStatus(ctx, tablet)
+	rp, _, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
+	compareError(t, "StopReplicationAndGetStatus", err, rp, testReplicationStatus)
+	rp, _, err = client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
 	compareError(t, "StopReplicationAndGetStatus", err, rp, testReplicationStatus)
 }
 
 func tmRPCTestStopReplicationAndGetStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, err := client.StopReplicationAndGetStatus(ctx, tablet)
+	_, _, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
 	expectHandleRPCPanic(t, "StopReplicationAndGetStatus", true /*verbose*/, err)
 }
 

@@ -42,7 +42,7 @@ delete from user where id=1
 delete from user where name='billy'
 
 1 ks_sharded/c0-: begin
-1 ks_sharded/c0-: select user_id from name_user_map where name = 'billy' limit 10001
+1 ks_sharded/c0-: select name, user_id from name_user_map where name in ('billy') limit 10001
 2 ks_sharded/-40: begin
 2 ks_sharded/-40: select name from user where name = 'billy' limit 10001 for update
 3 ks_sharded/80-c0: begin

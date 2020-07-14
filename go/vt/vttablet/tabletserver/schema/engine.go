@@ -122,7 +122,18 @@ func (se *Engine) Open() error {
 	}
 
 	ctx := tabletenv.LocalContext()
+
+	// The function we're in is supposed to be idempotent, but this conns.Open()
+	// call is not itself idempotent. Therefore, if we return for any reason
+	// without marking ourselves as open, we need to call conns.Close() so the
+	// pools aren't leaked the next time we call Open().
 	se.conns.Open(se.cp, se.cp, se.cp)
+	defer func() {
+		if !se.isOpen {
+			se.conns.Close()
+		}
+	}()
+
 	se.tables = map[string]*Table{
 		"dual": NewTable("dual"),
 	}
@@ -259,6 +270,8 @@ func (se *Engine) reload(ctx context.Context) error {
 		tableName := row[0].ToString()
 		curTables[tableName] = true
 		createTime, _ := evalengine.ToInt64(row[2])
+		// TODO(sougou); find a better way detect changed tables. This method
+		// seems unreliable. The endtoend test flags all tables as changed.
 		if _, ok := se.tables[tableName]; ok && createTime < se.lastChange {
 			continue
 		}

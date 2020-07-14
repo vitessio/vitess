@@ -114,6 +114,17 @@ func (mysqld *Mysqld) StopReplication(hookExtraEnv map[string]string) error {
 	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopReplicationCommand()})
 }
 
+// StopIOThread stops a replica's IO thread only.
+func (mysqld *Mysqld) StopIOThread(ctx context.Context) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopIOThreadCommand()})
+}
+
 // RestartReplication stops, resets and starts replication.
 func (mysqld *Mysqld) RestartReplication(hookExtraEnv map[string]string) error {
 	h := hook.NewSimpleHook("preflight_stop_slave")
@@ -204,32 +215,58 @@ func (mysqld *Mysqld) WaitMasterPos(ctx context.Context, targetPos mysql.Positio
 	}
 	defer conn.Recycle()
 
-	// If we are the master, WaitUntilPositionCommand will fail.
-	// But position is most likely reached. So, check the position
-	// first.
-	mpos, err := conn.MasterPosition()
-	if err != nil {
-		return fmt.Errorf("WaitMasterPos: MasterPosition failed: %v", err)
-	}
-	if mpos.AtLeast(targetPos) {
-		return nil
+	// First check if filePos flavored Position was passed in. If so, we can't defer to the flavor in the connection,
+	// unless that flavor is also filePos.
+	waitCommandName := "WaitUntilPositionCommand"
+	var query string
+	if targetPos.MatchesFlavor(mysql.FilePosFlavorID) {
+		// If we are the master, WaitUntilFilePositionCommand will fail.
+		// But position is most likely reached. So, check the position
+		// first.
+		mpos, err := conn.MasterFilePosition()
+		if err != nil {
+			return fmt.Errorf("WaitMasterPos: MasterFilePosition failed: %v", err)
+		}
+		if mpos.AtLeast(targetPos) {
+			return nil
+		}
+
+		// Find the query to run, run it.
+		query, err = conn.WaitUntilFilePositionCommand(ctx, targetPos)
+		if err != nil {
+			return err
+		}
+		waitCommandName = "WaitUntilFilePositionCommand"
+	} else {
+		// If we are the master, WaitUntilPositionCommand will fail.
+		// But position is most likely reached. So, check the position
+		// first.
+		mpos, err := conn.MasterPosition()
+		if err != nil {
+			return fmt.Errorf("WaitMasterPos: MasterPosition failed: %v", err)
+		}
+		if mpos.AtLeast(targetPos) {
+			return nil
+		}
+
+		// Find the query to run, run it.
+		query, err = conn.WaitUntilPositionCommand(ctx, targetPos)
+		if err != nil {
+			return err
+		}
 	}
 
-	// Find the query to run, run it.
-	query, err := conn.WaitUntilPositionCommand(ctx, targetPos)
-	if err != nil {
-		return err
-	}
 	qr, err := mysqld.FetchSuperQuery(ctx, query)
 	if err != nil {
-		return fmt.Errorf("WaitUntilPositionCommand(%v) failed: %v", query, err)
+		return fmt.Errorf("%v(%v) failed: %v", waitCommandName, query, err)
 	}
+
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return fmt.Errorf("unexpected result format from WaitUntilPositionCommand(%v): %#v", query, qr)
+		return fmt.Errorf("unexpected result format from %v(%v): %#v", waitCommandName, query, qr)
 	}
 	result := qr.Rows[0][0]
 	if result.IsNull() {
-		return fmt.Errorf("WaitUntilPositionCommand(%v) failed: replication is probably stopped", query)
+		return fmt.Errorf("%v(%v) failed: replication is probably stopped", waitCommandName, query)
 	}
 	if result.ToString() == "-1" {
 		return fmt.Errorf("timed out waiting for position %v", targetPos)

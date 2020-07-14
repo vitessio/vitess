@@ -713,17 +713,22 @@ func (client *Client) ReplicaWasRestarted(ctx context.Context, tablet *topodatap
 }
 
 // StopReplicationAndGetStatus is part of the tmclient.TabletManagerClient interface.
-func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
+func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopReplicationMode replicationdatapb.StopReplicationMode) (hybridStatus *replicationdatapb.Status, status *replicationdatapb.StopReplicationStatus, err error) {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer cc.Close()
-	response, err := c.StopReplicationAndGetStatus(ctx, &tabletmanagerdatapb.StopReplicationAndGetStatusRequest{})
+	response, err := c.StopReplicationAndGetStatus(ctx, &tabletmanagerdatapb.StopReplicationAndGetStatusRequest{
+		StopReplicationMode: stopReplicationMode,
+	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return response.Status, nil
+	return response.HybridStatus, &replicationdatapb.StopReplicationStatus{
+		Before: response.Status.Before,
+		After:  response.Status.After,
+	}, nil
 }
 
 // PromoteReplica is part of the tmclient.TabletManagerClient interface.
@@ -823,7 +828,7 @@ func (client *Client) Close() {
 	client.rpcClientMap = nil
 }
 
-// Deprecated
+// SlaveStatus is deprecated
 func (client *Client) SlaveStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
@@ -837,7 +842,7 @@ func (client *Client) SlaveStatus(ctx context.Context, tablet *topodatapb.Tablet
 	return response.Status, nil
 }
 
-// Deprecated
+// StopSlave is deprecated
 func (client *Client) StopSlave(ctx context.Context, tablet *topodatapb.Tablet) error {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
@@ -848,7 +853,7 @@ func (client *Client) StopSlave(ctx context.Context, tablet *topodatapb.Tablet) 
 	return err
 }
 
-// Deprecated
+// StopSlaveMinimum is deprecated
 func (client *Client) StopSlaveMinimum(ctx context.Context, tablet *topodatapb.Tablet, minPos string, waitTime time.Duration) (string, error) {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
@@ -865,7 +870,7 @@ func (client *Client) StopSlaveMinimum(ctx context.Context, tablet *topodatapb.T
 	return response.Position, nil
 }
 
-// Deprecated
+// StartSlave is deprecated
 func (client *Client) StartSlave(ctx context.Context, tablet *topodatapb.Tablet) error {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
@@ -876,7 +881,7 @@ func (client *Client) StartSlave(ctx context.Context, tablet *topodatapb.Tablet)
 	return err
 }
 
-// Deprecated
+// StartSlaveUntilAfter is deprecated
 func (client *Client) StartSlaveUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, waitTime time.Duration) error {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
@@ -890,7 +895,7 @@ func (client *Client) StartSlaveUntilAfter(ctx context.Context, tablet *topodata
 	return err
 }
 
-// Deprecated
+// GetSlaves is deprecated
 func (client *Client) GetSlaves(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error) {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
@@ -904,7 +909,7 @@ func (client *Client) GetSlaves(ctx context.Context, tablet *topodatapb.Tablet) 
 	return response.Addrs, nil
 }
 
-// Deprecated
+// InitSlave is deprecated
 func (client *Client) InitSlave(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
@@ -919,7 +924,7 @@ func (client *Client) InitSlave(ctx context.Context, tablet *topodatapb.Tablet, 
 	return err
 }
 
-// Deprecated
+// SlaveWasPromoted is deprecated
 func (client *Client) SlaveWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
@@ -930,7 +935,7 @@ func (client *Client) SlaveWasPromoted(ctx context.Context, tablet *topodatapb.T
 	return err
 }
 
-// Deprecated
+// SlaveWasRestarted is deprecated
 func (client *Client) SlaveWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias) error {
 	cc, c, err := client.dial(tablet)
 	if err != nil {

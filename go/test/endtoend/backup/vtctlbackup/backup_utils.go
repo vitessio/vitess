@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
+// constants for test variants
 const (
 	XtraBackup = iota
 	Backup

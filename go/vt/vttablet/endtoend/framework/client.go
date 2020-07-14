@@ -171,16 +171,36 @@ func (client *QueryClient) Execute(query string, bindvars map[string]*querypb.Bi
 }
 
 // BeginExecute performs a BeginExecute.
-func (client *QueryClient) BeginExecute(query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (client *QueryClient) BeginExecute(query string, bindvars map[string]*querypb.BindVariable, preQueries []string) (*sqltypes.Result, error) {
 	if client.transactionID != 0 {
 		return nil, errors.New("already in transaction")
 	}
 	qr, transactionID, _, err := client.server.BeginExecute(
 		client.ctx,
 		&client.target,
+		preQueries,
 		query,
 		bindvars,
 		client.reservedID,
+		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
+	)
+	client.transactionID = transactionID
+	if err != nil {
+		return nil, err
+	}
+	return qr, nil
+}
+
+// BeginExecuteBatch performs a BeginExecuteBatch.
+func (client *QueryClient) BeginExecuteBatch(queries []*querypb.BoundQuery, asTransaction bool) ([]sqltypes.Result, error) {
+	if client.transactionID != 0 {
+		return nil, errors.New("already in transaction")
+	}
+	qr, transactionID, _, err := client.server.BeginExecuteBatch(
+		client.ctx,
+		&client.target,
+		queries,
+		asTransaction,
 		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 	)
 	client.transactionID = transactionID

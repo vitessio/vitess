@@ -21,6 +21,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+	"gotest.tools/assert"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -35,10 +38,6 @@ var (
 	}
 )
 
-// TestCreateSchema tests that our initial INSERT uses
-// the proper arguments. It also sanity checks the other init
-// queries for completeness, and verifies that we return any
-// failure that is encountered.
 func TestCreateSchema(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -46,44 +45,39 @@ func TestCreateSchema(t *testing.T) {
 	defer tw.Close()
 	writes.Reset()
 
-	db.AddQuery(fmt.Sprintf(sqlCreateHeartbeatTable, "_vt"), &sqltypes.Result{})
-	db.AddQuery(fmt.Sprintf("INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%d, %d, '%s') ON DUPLICATE KEY UPDATE ts=VALUES(ts)", "_vt", now.UnixNano(), tw.tabletAlias.Uid, tw.keyspaceShard), &sqltypes.Result{})
-	if err := tw.initializeTables(db.ConnParams()); err == nil {
-		t.Fatal("initializeTables() should not have succeeded")
+	db.OrderMatters()
+	upsert := fmt.Sprintf("INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%d, %d, '%s') ON DUPLICATE KEY UPDATE ts=VALUES(ts), tabletUid=VALUES(tabletUid)",
+		"_vt", now.UnixNano(), tw.tabletAlias.Uid, tw.keyspaceShard)
+	failInsert := fakesqldb.ExpectedExecuteFetch{
+		Query: upsert,
+		Error: mysql.NewSQLError(mysql.ERBadDb, "", "bad db error"),
 	}
+	db.AddExpectedExecuteFetch(failInsert)
+	db.AddExpectedQuery(fmt.Sprintf(sqlCreateSidecarDB, "_vt"), nil)
+	db.AddExpectedQuery(fmt.Sprintf(sqlCreateHeartbeatTable, "_vt"), nil)
+	db.AddExpectedQuery(upsert, nil)
 
-	db.AddQuery(fmt.Sprintf(sqlCreateSidecarDB, "_vt"), &sqltypes.Result{})
-	if err := tw.initializeTables(db.ConnParams()); err != nil {
-		t.Fatalf("Should not be in error: %v", err)
-	}
-
-	if got, want := writes.Get(), int64(1); got != want {
-		t.Fatalf("wrong writes count: got = %v, want = %v", got, want)
-	}
+	err := tw.write()
+	require.NoError(t, err)
 }
 
-// TestWriteHearbeat ensures the proper arguments for the UPDATE query
-// and writes get recorded in counters.
 func TestWriteHeartbeat(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 
 	tw := newTestWriter(db, mockNowFunc)
-	db.AddQuery(fmt.Sprintf("UPDATE %s.heartbeat SET ts=%d, tabletUid=%d WHERE keyspaceShard='%s'", "_vt", now.UnixNano(), tw.tabletAlias.Uid, tw.keyspaceShard), &sqltypes.Result{})
+	upsert := fmt.Sprintf("INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%d, %d, '%s') ON DUPLICATE KEY UPDATE ts=VALUES(ts), tabletUid=VALUES(tabletUid)",
+		"_vt", now.UnixNano(), tw.tabletAlias.Uid, tw.keyspaceShard)
+	db.AddQuery(upsert, &sqltypes.Result{})
 
 	writes.Reset()
 	writeErrors.Reset()
 
 	tw.writeHeartbeat()
-	if got, want := writes.Get(), int64(1); got != want {
-		t.Fatalf("wrong writes count: got = %v; want = %v", got, want)
-	}
-	if got, want := writeErrors.Get(), int64(0); got != want {
-		t.Fatalf("wrong write errors count: got = %v; want = %v", got, want)
-	}
+	assert.Equal(t, int64(1), writes.Get())
+	assert.Equal(t, int64(0), writeErrors.Get())
 }
 
-// TestWriteHeartbeatError ensures that we properly account for write errors.
 func TestWriteHeartbeatError(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -94,12 +88,8 @@ func TestWriteHeartbeatError(t *testing.T) {
 	writeErrors.Reset()
 
 	tw.writeHeartbeat()
-	if got, want := writes.Get(), int64(0); got != want {
-		t.Fatalf("wrong writes count: got = %v; want = %v", got, want)
-	}
-	if got, want := writeErrors.Get(), int64(1); got != want {
-		t.Fatalf("wrong write errors count: got = %v; want = %v", got, want)
-	}
+	assert.Equal(t, int64(0), writes.Get())
+	assert.Equal(t, int64(1), writeErrors.Get())
 }
 
 func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *Writer {

@@ -38,3 +38,16 @@ message Status {
   uint32 master_server_id = 11;
   string master_uuid = 12;
 }
+
+// StopReplicationStatus represents the replication status before calling StopReplication, and the replication status collected immediately after
+// calling StopReplication.
+message StopReplicationStatus {
+  replicationdata.Status before = 1;
+  replicationdata.Status after = 2;
+}
+
+// StopReplicationMode is used to provide controls over how replication is stopped.
+enum StopReplicationMode {
+  IOANDSQLTHREAD = 0;
+  IOTHREADONLY = 1;
+}

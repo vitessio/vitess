@@ -43,6 +43,10 @@ type Stats struct {
 	TableaclAllowed        *stats.CountersWithMultiLabels // Number of allows
 	TableaclDenied         *stats.CountersWithMultiLabels // Number of denials
 	TableaclPseudoDenied   *stats.CountersWithMultiLabels // Number of pseudo denials
+
+	UserActiveReservedCount *stats.CountersWithSingleLabel // Per CallerID active reserved connection counts
+	UserReservedCount       *stats.CountersWithSingleLabel // Per CallerID reserved connection counts
+	UserReservedTimesNs     *stats.CountersWithSingleLabel // Per CallerID reserved connection duration
 }
 
 // NewStats instantiates a new set of stats scoped by exporter.
@@ -51,7 +55,7 @@ func NewStats(exporter *servenv.Exporter) *Stats {
 		MySQLTimings: exporter.NewTimings("Mysql", "MySQl query time", "operation"),
 		QueryTimings: exporter.NewTimings("Queries", "MySQL query timings", "plan_type"),
 		WaitTimings:  exporter.NewTimings("Waits", "Wait operations", "type"),
-		KillCounters: exporter.NewCountersWithSingleLabel("Kills", "Number of connections being killed", "query_type", "Transactions", "Queries"),
+		KillCounters: exporter.NewCountersWithSingleLabel("Kills", "Number of connections being killed", "query_type", "Transactions", "Queries", "ReservedConnection"),
 		ErrorCounters: exporter.NewCountersWithSingleLabel(
 			"Errors",
 			"Critical errors",
@@ -85,6 +89,10 @@ func NewStats(exporter *servenv.Exporter) *Stats {
 		TableaclAllowed:        exporter.NewCountersWithMultiLabels("TableACLAllowed", "ACL acceptances", []string{"TableName", "TableGroup", "PlanID", "Username"}),
 		TableaclDenied:         exporter.NewCountersWithMultiLabels("TableACLDenied", "ACL denials", []string{"TableName", "TableGroup", "PlanID", "Username"}),
 		TableaclPseudoDenied:   exporter.NewCountersWithMultiLabels("TableACLPseudoDenied", "ACL pseudodenials", []string{"TableName", "TableGroup", "PlanID", "Username"}),
+
+		UserActiveReservedCount: exporter.NewCountersWithSingleLabel("UserActiveReservedCount", "active reserved connection for each CallerID", "CallerID"),
+		UserReservedCount:       exporter.NewCountersWithSingleLabel("UserReservedCount", "reserved connection received for each CallerID", "CallerID"),
+		UserReservedTimesNs:     exporter.NewCountersWithSingleLabel("UserReservedTimesNs", "Total reserved connection latency for each CallerID", "CallerID"),
 	}
 	stats.QPSRates = exporter.NewRates("QPS", stats.QueryTimings, 15*60/5, 5*time.Second)
 	return stats
