@@ -189,10 +189,7 @@ func (tr *Tracker) isSchemaVersionTableEmpty(ctx context.Context) (bool, error) 
 	if err != nil {
 		return false, err
 	}
-	if result == nil {
-		return false, fmt.Errorf("error querying _vt.schema_version")
-	}
-	if result.RowsAffected == 0 {
+	if len(result.Rows) == 0 {
 		return true, nil
 	}
 	return false, nil

@@ -41,7 +41,7 @@ func TestTracker(t *testing.T) {
 		initialSchemaInserted = true
 	})
 	// simulates empty schema_version table, so initial schema should be inserted
-	db.AddQuery("select id from _vt.schema_version limit 1", &sqltypes.Result{RowsAffected: 0})
+	db.AddQuery("select id from _vt.schema_version limit 1", &sqltypes.Result{Rows: [][]sqltypes.Value{}})
 	// called to get current position
 	db.AddQuery("SELECT @@GLOBAL.gtid_executed", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"",
@@ -96,7 +96,11 @@ func TestTrackerShouldNotInsertInitialSchema(t *testing.T) {
 
 	defer cancel()
 	// simulates existing rows in schema_version, so initial schema should not be inserted
-	db.AddQuery("select id from _vt.schema_version limit 1", &sqltypes.Result{RowsAffected: 1})
+	db.AddQuery("select id from _vt.schema_version limit 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"id",
+		"int"),
+		"1",
+	))
 	// called to get current position
 	db.AddQuery("SELECT @@GLOBAL.gtid_executed", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"",
