@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -198,18 +197,13 @@ func NewLookup(name string, m map[string]string) (Vindex, error) {
 		return nil, err
 	}
 
-	encoders, hasEncoders := m["encoder"]
-	if hasEncoders {
-		for _, encoderName := range strings.Split(encoders, ",") {
-			encoderName = strings.TrimSpace(encoderName)
+	if lookup.lkp.Encoder != nil {
+		for _, encoderName := range lookup.lkp.Encoder {
 			encoderFn, validName := valueEncoders[encoderName]
 			if !validName {
-				return nil, fmt.Errorf("Attempting to use unknown value encoder %v", encoderName)
+				return nil, fmt.Errorf("vindex %s: Attempting to use unknown value encoder %v", name, encoderName)
 			}
 			lookup.encoders = append(lookup.encoders, encoderFn)
-		}
-		if len(lookup.encoders) != len(lookup.lkp.FromColumns) {
-			return nil, fmt.Errorf("Expected one encoder per from column (%v), got %v", len(lookup.lkp.FromColumns), len(lookup.encoders))
 		}
 	}
 
@@ -257,8 +251,16 @@ func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 		return nil, err
 	}
 
-	encoderName, hasEncoder := m["encoder"]
-	if hasEncoder {
+	// Don't allow upserts for unique vindexes.
+	if err := lu.lkp.Init(m, autocommit, false /* upsert */); err != nil {
+		return nil, err
+	}
+
+	if lu.lkp.Encoder != nil {
+		if len(lu.lkp.Encoder) != 1 {
+			return nil, fmt.Errorf("vindex %s: lookup_unique only supports a single encoder, recieved %v", name, lu.lkp.Encoder)
+		}
+		encoderName := lu.lkp.Encoder[0]
 		encoder, ok := valueEncoders[encoderName]
 		if !ok {
 			return nil, fmt.Errorf("vindex %s references unknown value encoder %s", name, encoderName)
@@ -266,10 +268,6 @@ func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 		lu.encoder = encoder
 	}
 
-	// Don't allow upserts for unique vindexes.
-	if err := lu.lkp.Init(m, autocommit, false /* upsert */); err != nil {
-		return nil, err
-	}
 	return lu, nil
 }
 
