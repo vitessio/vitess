@@ -241,7 +241,7 @@ type LookupUnique struct {
 //   autocommit: setting this to "true" will cause deletes to be ignored.
 //   write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
-	lu := &LookupUnique{name: name, encoder: nil}
+	lu := &LookupUnique{name: name}
 
 	autocommit, err := boolFromMap(m, "autocommit")
 	if err != nil {
