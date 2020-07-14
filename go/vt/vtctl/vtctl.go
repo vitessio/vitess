@@ -2375,8 +2375,11 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	sql := subFlags.String("sql", "", "A list of semicolon-delimited SQL commands")
 	sqlFile := subFlags.String("sql-file", "", "Identifies the file that contains the SQL commands")
 	// for backwards compatibility
-	deprecatedTimeout := subFlags.Duration("wait_slave_timeout", wrangler.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
-	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", *deprecatedTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
+	deprecatedTimeout := subFlags.Duration("wait_slave_timeout", wrangler.DefaultWaitReplicasTimeout, "DEPRECATED -- use -wait_replicas_timeout")
+	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", wrangler.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
+	if *deprecatedTimeout != wrangler.DefaultWaitReplicasTimeout {
+		*waitReplicasTimeout = *deprecatedTimeout
+	}
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2407,8 +2410,11 @@ func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	includeViews := subFlags.Bool("include-views", true, "Includes views in the output")
 	skipVerify := subFlags.Bool("skip-verify", false, "Skip verification of source and target schema after copy")
 	// for backwards compatibility
-	deprecatedTimeout := subFlags.Duration("wait_slave_timeout", wrangler.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
-	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", *deprecatedTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
+	deprecatedTimeout := subFlags.Duration("wait_slave_timeout", wrangler.DefaultWaitReplicasTimeout, "DEPRECATED -- use -wait_replicas_timeout")
+	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", wrangler.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
+	if *deprecatedTimeout != wrangler.DefaultWaitReplicasTimeout {
+		*waitReplicasTimeout = *deprecatedTimeout
+	}
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
