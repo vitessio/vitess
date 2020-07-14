@@ -285,6 +285,17 @@ func (mysqld *Mysqld) ReplicationStatus() (mysql.ReplicationStatus, error) {
 	return conn.ShowReplicationStatus()
 }
 
+// MasterStatus returns the master replication statuses
+func (mysqld *Mysqld) MasterStatus(ctx context.Context) (mysql.MasterStatus, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return mysql.MasterStatus{}, err
+	}
+	defer conn.Recycle()
+
+	return conn.ShowMasterStatus()
+}
+
 // MasterPosition returns the master replication position.
 func (mysqld *Mysqld) MasterPosition() (mysql.Position, error) {
 	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)

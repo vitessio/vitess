@@ -709,6 +709,15 @@ func (fra *fakeRPCTM) SlaveStatus(ctx context.Context) (*replicationdatapb.Statu
 	return testReplicationStatus, nil
 }
 
+var testMasterStatus = &replicationdatapb.MasterStatus{Position: "MariaDB/1-345-789"}
+
+func (fra *fakeRPCTM) MasterStatus(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return testMasterStatus, nil
+}
+
 func tmRPCTestSlaveStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	rs, err := client.SlaveStatus(ctx, tablet)
 	compareError(t, "SlaveStatus", err, rs, testReplicationStatus)
@@ -1114,16 +1123,16 @@ func tmRPCTestInitReplicaPanic(ctx context.Context, t *testing.T, client tmclien
 	expectHandleRPCPanic(t, "InitReplica", true /*verbose*/, err)
 }
 
-func (fra *fakeRPCTM) DemoteMaster(ctx context.Context) (string, error) {
+func (fra *fakeRPCTM) DemoteMaster(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	return testReplicationPosition, nil
+	return testMasterStatus, nil
 }
 
 func tmRPCTestDemoteMaster(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	rp, err := client.DemoteMaster(ctx, tablet)
-	compareError(t, "DemoteMaster", err, rp, testReplicationPosition)
+	masterStatus, err := client.DemoteMaster(ctx, tablet)
+	compareError(t, "DemoteMaster", err, masterStatus.Position, testMasterStatus.Position)
 }
 
 func tmRPCTestDemoteMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
