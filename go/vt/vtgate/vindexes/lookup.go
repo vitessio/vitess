@@ -359,6 +359,6 @@ func numericUint64(input sqltypes.Value) ([]byte, error) {
 		return nil, fmt.Errorf("numericUint64: couldn't parse bytes: %v", err)
 	}
 	vBytes := make([]byte, 8)
-	binary.PutUvarint(vBytes, v)
+	binary.BigEndian.PutUint64(vBytes, v)
 	return vBytes, nil
 }
