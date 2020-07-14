@@ -40,7 +40,6 @@ import (
 )
 
 const (
-	sqlTurnoffBinlog   = "set @@session.sql_log_bin = 0"
 	sqlCreateSidecarDB = "create database if not exists %s"
 
 	sqlDropLegacy1 = "drop table if exists %s.redo_log_transaction"
@@ -123,35 +122,8 @@ type TwoPC struct {
 
 // NewTwoPC creates a TwoPC variable.
 func NewTwoPC(readPool *connpool.Pool) *TwoPC {
-	return &TwoPC{readPool: readPool}
-}
-
-// Init initializes TwoPC. If the metadata database or tables
-// are not present, they are created.
-func (tpc *TwoPC) Init(dbaparams dbconfigs.Connector) error {
+	tpc := &TwoPC{readPool: readPool}
 	dbname := "_vt"
-	conn, err := dbconnpool.NewDBConnection(context.TODO(), dbaparams)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	statements := []string{
-		sqlTurnoffBinlog,
-		fmt.Sprintf(sqlCreateSidecarDB, dbname),
-		fmt.Sprintf(sqlDropLegacy1, dbname),
-		fmt.Sprintf(sqlDropLegacy2, dbname),
-		fmt.Sprintf(sqlDropLegacy3, dbname),
-		fmt.Sprintf(sqlDropLegacy4, dbname),
-		fmt.Sprintf(sqlCreateTableRedoState, dbname),
-		fmt.Sprintf(sqlCreateTableRedoStatement, dbname),
-		fmt.Sprintf(sqlCreateTableDTState, dbname),
-		fmt.Sprintf(sqlCreateTableDTParticipant, dbname),
-	}
-	for _, s := range statements {
-		if _, err := conn.ExecuteFetch(s, 0, false); err != nil {
-			return err
-		}
-	}
 	tpc.insertRedoTx = sqlparser.BuildParsedQuery(
 		"insert into %s.redo_state(dtid, state, time_created) values (%a, %a, %a)",
 		dbname, ":dtid", ":state", ":time_created")
@@ -197,12 +169,35 @@ func (tpc *TwoPC) Init(dbaparams dbconfigs.Connector) error {
 		"select dtid, time_created from %s.dt_state where time_created < %a",
 		dbname, ":time_created")
 	tpc.readAllTransactions = fmt.Sprintf(sqlReadAllTransactions, dbname, dbname)
-	return nil
+	return tpc
 }
 
 // Open starts the TwoPC service.
-func (tpc *TwoPC) Open(dbconfigs *dbconfigs.DBConfigs) {
+func (tpc *TwoPC) Open(dbconfigs *dbconfigs.DBConfigs) error {
+	dbname := "_vt"
+	conn, err := dbconnpool.NewDBConnection(context.TODO(), dbconfigs.DbaWithDB())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	statements := []string{
+		fmt.Sprintf(sqlCreateSidecarDB, dbname),
+		fmt.Sprintf(sqlDropLegacy1, dbname),
+		fmt.Sprintf(sqlDropLegacy2, dbname),
+		fmt.Sprintf(sqlDropLegacy3, dbname),
+		fmt.Sprintf(sqlDropLegacy4, dbname),
+		fmt.Sprintf(sqlCreateTableRedoState, dbname),
+		fmt.Sprintf(sqlCreateTableRedoStatement, dbname),
+		fmt.Sprintf(sqlCreateTableDTState, dbname),
+		fmt.Sprintf(sqlCreateTableDTParticipant, dbname),
+	}
+	for _, s := range statements {
+		if _, err := conn.ExecuteFetch(s, 0, false); err != nil {
+			return err
+		}
+	}
 	tpc.readPool.Open(dbconfigs.AppWithDB(), dbconfigs.DbaWithDB(), dbconfigs.DbaWithDB())
+	return nil
 }
 
 // Close closes the TwoPC service.

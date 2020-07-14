@@ -261,6 +261,8 @@ func (se *Engine) reload(ctx context.Context) error {
 		tableName := row[0].ToString()
 		curTables[tableName] = true
 		createTime, _ := evalengine.ToInt64(row[2])
+		// TODO(sougou); find a better way detect changed tables. This method
+		// seems unreliable. The endtoend test flags all tables as changed.
 		if _, ok := se.tables[tableName]; ok && createTime < se.lastChange {
 			continue
 		}

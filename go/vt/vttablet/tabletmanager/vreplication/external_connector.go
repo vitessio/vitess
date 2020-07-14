@@ -88,14 +88,15 @@ func (ec *externalConnector) Get(name string) (*mysqlConnector, error) {
 	c := &mysqlConnector{}
 	c.env = tabletenv.NewEnv(config, name)
 	c.se = schema.NewEngine(c.env)
-	c.vstreamer = vstreamer.NewEngine(c.env, nil, c.se)
+	c.vstreamer = vstreamer.NewEngine(c.env, nil, c.se, "")
+	c.vstreamer.InitDBConfig("")
 	c.se.InitDBConfig(c.env.Config().DB.DbaWithDB())
 
 	// Open
 	if err := c.se.Open(); err != nil {
 		return nil, vterrors.Wrapf(err, "external mysqlConnector: %v", name)
 	}
-	c.vstreamer.Open("", "")
+	c.vstreamer.Open()
 
 	// Register
 	ec.connectors[name] = c

@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // WithDDL allows you to execute statements against
@@ -64,7 +65,7 @@ func (wd *WithDDL) Exec(ctx context.Context, query string, f interface{}) (*sqlt
 		return nil, err
 	}
 
-	log.Infof("Updating schema for %v and retrying: %v", query, err)
+	log.Infof("Updating schema for %v and retrying: %v", sqlparser.TruncateForUI(err.Error()), err)
 	for _, query := range wd.ddls {
 		_, merr := exec(query)
 		if merr == nil {
