@@ -179,11 +179,9 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	s := createSandbox(name)
 	sc := newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
 	qr, err := f(sc, nil)
+	require.NoError(t, err)
 	if qr.RowsAffected != 0 {
 		t.Errorf("want 0, got %v", qr.RowsAffected)
-	}
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
 	}
 
 	// single shard
@@ -619,42 +617,37 @@ func TestScatterConnSingleDB(t *testing.T) {
 
 	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
 	rss0, err := res.ResolveDestination(ctx, "TestScatterConnSingleDB", topodatapb.TabletType_MASTER, key.DestinationShard("0"))
-	if err != nil {
-		t.Fatalf("ResolveDestination(0) failed: %v", err)
-	}
+	require.NoError(t, err)
 	rss1, err := res.ResolveDestination(ctx, "TestScatterConnSingleDB", topodatapb.TabletType_MASTER, key.DestinationShard("1"))
-	if err != nil {
-		t.Fatalf("ResolveDestination(1) failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	want := "multi-db transaction attempted"
 
 	// TransactionMode_SINGLE in session
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, TransactionMode: vtgatepb.TransactionMode_SINGLE})
-	_, err = sc.Execute(ctx, "query1", nil, rss0, session, nil, false)
-	require.NoError(t, err)
-	_, err = sc.Execute(ctx, "query1", nil, rss1, session, nil, false)
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Multi DB exec: %v, must contain %s", err, want)
-	}
+	queries := []*querypb.BoundQuery{{Sql: "query1"}}
+	_, errors := sc.ExecuteMultiShard(ctx, rss0, queries, session, false)
+	require.Empty(t, errors)
+	_, errors = sc.ExecuteMultiShard(ctx, rss1, queries, session, false)
+	require.Error(t, errors[0])
+	assert.Contains(t, errors[0].Error(), want)
 
 	// TransactionMode_SINGLE in txconn
 	sc.txConn.mode = vtgatepb.TransactionMode_SINGLE
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	_, err = sc.Execute(ctx, "query1", nil, rss0, session, nil, false)
-	require.NoError(t, err)
-	_, err = sc.Execute(ctx, "query1", nil, rss1, session, nil, false)
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Multi DB exec: %v, must contain %s", err, want)
-	}
+	_, errors = sc.ExecuteMultiShard(ctx, rss0, queries, session, false)
+	require.Empty(t, errors)
+	_, errors = sc.ExecuteMultiShard(ctx, rss1, queries, session, false)
+	require.Error(t, errors[0])
+	assert.Contains(t, errors[0].Error(), want)
 
 	// TransactionMode_MULTI in txconn. Should not fail.
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	_, err = sc.Execute(ctx, "query1", nil, rss0, session, nil, false)
-	require.NoError(t, err)
-	_, err = sc.Execute(ctx, "query1", nil, rss1, session, nil, false)
-	require.NoError(t, err)
+	_, errors = sc.ExecuteMultiShard(ctx, rss0, queries, session, false)
+	require.Empty(t, errors)
+	_, errors = sc.ExecuteMultiShard(ctx, rss1, queries, session, false)
+	require.Empty(t, errors)
 }
 
 func TestAppendResult(t *testing.T) {

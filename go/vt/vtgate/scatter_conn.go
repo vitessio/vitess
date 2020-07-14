@@ -138,29 +138,6 @@ func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.Al
 	stc.timings.Record(statsKey, startTime)
 }
 
-// Execute executes a non-streaming query on the specified shards.
-// TODO: systay - remove. only used by tests today
-func (stc *ScatterConn) Execute(
-	ctx context.Context,
-	query string,
-	bindVars map[string]*querypb.BindVariable,
-	rss []*srvtopo.ResolvedShard,
-	session *SafeSession,
-	options *querypb.ExecuteOptions,
-	autocommit bool,
-) (*sqltypes.Result, error) {
-	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := 0; i < len(rss); i++ {
-		queries[i] = &querypb.BoundQuery{
-			Sql:           query,
-			BindVariables: bindVars,
-		}
-	}
-	session.SetOptions(options)
-	qr, errs := stc.ExecuteMultiShard(ctx, rss, queries, session, autocommit)
-	return qr, vterrors.Aggregate(errs)
-}
-
 // ExecuteMultiShard is like Execute,
 // but each shard gets its own Sql Queries and BindVariables.
 //
