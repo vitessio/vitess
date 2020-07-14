@@ -416,21 +416,31 @@ func (sbc *SandboxConn) HandlePanic(err *error) {
 
 //ReserveBeginExecute implements the QueryService interface
 func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
-	panic("implement me")
+	reserveID := sbc.reserve(ctx, target, preQueries, bindVariables, 0, options)
+	result, txID, alias, err := sbc.BeginExecute(ctx, target, preQueries, sql, bindVariables, reserveID, options)
+	if err != nil {
+		return nil, txID, reserveID, alias, err
+	}
+	return result, txID, reserveID, alias, nil
 }
 
 //ReserveExecute implements the QueryService interface
 func (sbc *SandboxConn) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
-	sbc.ReserveCount.Add(1)
-	for _, query := range preQueries {
-		sbc.Execute(ctx, target, query, bindVariables, transactionID, 0, options)
-	}
-	reservedID := sbc.ReserveID.Add(1)
+	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, transactionID, options)
 	result, err := sbc.Execute(ctx, target, sql, bindVariables, transactionID, reservedID, options)
 	if err != nil {
 		return nil, 0, nil, err
 	}
 	return result, reservedID, sbc.tablet.Alias, nil
+}
+
+func (sbc *SandboxConn) reserve(ctx context.Context, target *querypb.Target, preQueries []string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) int64 {
+	sbc.ReserveCount.Add(1)
+	for _, query := range preQueries {
+		sbc.Execute(ctx, target, query, bindVariables, transactionID, 0, options)
+	}
+	reservedID := sbc.ReserveID.Add(1)
+	return reservedID
 }
 
 //Release implements the QueryService interface
