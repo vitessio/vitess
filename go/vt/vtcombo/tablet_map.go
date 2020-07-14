@@ -441,9 +441,9 @@ func (itc *internalTabletConn) ReadTransaction(ctx context.Context, target *quer
 }
 
 // BeginExecute is part of queryservice.QueryService
-func (itc *internalTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, reserveID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (itc *internalTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reserveID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	bindVars = sqltypes.CopyBindVariables(bindVars)
-	result, transactionID, tabletAlias, err := itc.tablet.qsc.QueryService().BeginExecute(ctx, target, query, bindVars, reserveID, options)
+	result, transactionID, tabletAlias, err := itc.tablet.qsc.QueryService().BeginExecute(ctx, target, preQueries, query, bindVars, reserveID, options)
 	return result, transactionID, tabletAlias, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
@@ -742,8 +742,8 @@ func (itmc *internalTabletManagerClient) SlaveWasRestarted(ctx context.Context, 
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
-	return nil, fmt.Errorf("not implemented in vtcombo")
+func (itmc *internalTabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopReplicationMode replicationdatapb.StopReplicationMode) (*replicationdatapb.Status, *replicationdatapb.StopReplicationStatus, error) {
+	return nil, nil, fmt.Errorf("not implemented in vtcombo")
 }
 
 func (itmc *internalTabletManagerClient) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {

@@ -65,6 +65,9 @@ type flavor interface {
 	// stopReplicationCommand returns the command to stop the replication.
 	stopReplicationCommand() string
 
+	// stopIOThreadCommand returns the command to stop the replica's io thread only.
+	stopIOThreadCommand() string
+
 	// sendBinlogDumpCommand sends the packet required to start
 	// dumping binlogs from the specified location.
 	sendBinlogDumpCommand(c *Conn, serverID uint32, startPos Position) error
@@ -163,6 +166,18 @@ func (c *Conn) MasterPosition() (Position, error) {
 	}, nil
 }
 
+// MasterFilePosition returns the current master's file based replication position.
+func (c *Conn) MasterFilePosition() (Position, error) {
+	filePosFlavor := filePosFlavor{}
+	gtidSet, err := filePosFlavor.masterGTIDSet(c)
+	if err != nil {
+		return Position{}, err
+	}
+	return Position{
+		GTIDSet: gtidSet,
+	}, nil
+}
+
 // StartReplicationCommand returns the command to start the replication.
 func (c *Conn) StartReplicationCommand() string {
 	return c.flavor.startReplicationCommand()
@@ -181,6 +196,11 @@ func (c *Conn) StartReplicationUntilAfterCommand(pos Position) string {
 // StopReplicationCommand returns the command to stop the replication.
 func (c *Conn) StopReplicationCommand() string {
 	return c.flavor.stopReplicationCommand()
+}
+
+// StopIOThreadCommand returns the command to stop the replica's io thread.
+func (c *Conn) StopIOThreadCommand() string {
+	return c.flavor.stopIOThreadCommand()
 }
 
 // SendBinlogDumpCommand sends the flavor-specific version of
@@ -265,7 +285,7 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	status := ReplicationStatus{
 		MasterHost: fields["Master_Host"],
 		// These fields are returned from the underlying DB and cannot be renamed
-		IOThreadRunning:  fields["Slave_IO_Running"] == "Yes",
+		IOThreadRunning:  fields["Slave_IO_Running"] == "Yes" || fields["Slave_IO_Running"] == "Connecting",
 		SQLThreadRunning: fields["Slave_SQL_Running"] == "Yes",
 	}
 	parseInt, _ := strconv.ParseInt(fields["Master_Port"], 10, 0)
@@ -315,6 +335,15 @@ func (c *Conn) ShowReplicationStatus() (ReplicationStatus, error) {
 // returns NULL if GTIDs are not enabled.
 func (c *Conn) WaitUntilPositionCommand(ctx context.Context, pos Position) (string, error) {
 	return c.flavor.waitUntilPositionCommand(ctx, pos)
+}
+
+// WaitUntilFilePositionCommand returns the SQL command to issue
+// to wait until the given position, until the context
+// expires for the file position flavor.  The command returns -1 if it times out. It
+// returns NULL if GTIDs are not enabled.
+func (c *Conn) WaitUntilFilePositionCommand(ctx context.Context, pos Position) (string, error) {
+	filePosFlavor := filePosFlavor{}
+	return filePosFlavor.waitUntilPositionCommand(ctx, pos)
 }
 
 // EnableBinlogPlaybackCommand returns a command to run to enable

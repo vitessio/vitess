@@ -500,7 +500,7 @@ func TestQueryStats(t *testing.T) {
 
 	// Ensure BeginExecute also updates the stats and strips comments.
 	query = "select /* begin_execute */ 1 /* trailing comment */"
-	if _, err := client.BeginExecute(query, bv); err != nil {
+	if _, err := client.BeginExecute(query, bv, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := client.Rollback(); err != nil {
@@ -758,4 +758,20 @@ func TestAppDebugRequest(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, want prefix %s", err, want)
 	}
+}
+
+func TestBeginExecuteWithFailingPreQueriesAndCheckConnectionState(t *testing.T) {
+	client := framework.NewClient()
+
+	insQuery := "insert into vitess_test (intval, floatval, charval, binval) values (4, null, null, null)"
+	preQueries := []string{
+		"savepoint a",
+		"release savepoint b",
+	}
+	_, err := client.BeginExecute(insQuery, nil, preQueries)
+	require.Error(t, err)
+
+	qr, err := client.Execute("select intval from vitess_test where intval = 4", nil)
+	require.NoError(t, err)
+	require.Empty(t, qr.Rows)
 }

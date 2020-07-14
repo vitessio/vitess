@@ -125,7 +125,12 @@ func (tp *TxPool) transactionKiller() {
 	defer tp.env.LogError()
 	for _, conn := range tp.scp.GetOutdated(tp.Timeout(), "for tx killer rollback") {
 		log.Warningf("killing transaction (exceeded timeout: %v): %s", tp.Timeout(), conn.String())
-		tp.env.Stats().KillCounters.Add("Transactions", 1)
+		if conn.IsTainted() {
+			tp.env.Stats().KillCounters.Add("ReservedConnection", 1)
+		}
+		if conn.IsInTransaction() {
+			tp.env.Stats().KillCounters.Add("Transactions", 1)
+		}
 		conn.Close()
 		conn.Releasef("exceeded timeout: %v", tp.Timeout())
 	}
@@ -208,7 +213,7 @@ func (tp *TxPool) Rollback(ctx context.Context, txConn *StatefulConnection) erro
 // the statements (if any) executed to initiate the transaction. In autocommit
 // mode the statement will be "".
 // The connection returned is locked for the callee and its responsibility is to unlock the connection.
-func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, reservedID int64) (*StatefulConnection, string, error) {
+func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, reservedID int64, preQueries []string) (*StatefulConnection, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Begin")
 	defer span.Finish()
 
@@ -227,7 +232,7 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 	if err != nil {
 		return nil, "", err
 	}
-	sql, err := tp.begin(ctx, options, readOnly, conn)
+	sql, err := tp.begin(ctx, options, readOnly, conn, preQueries)
 	if err != nil {
 		conn.Close()
 		conn.Release(tx.ConnInitFail)
@@ -236,10 +241,10 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 	return conn, sql, nil
 }
 
-func (tp *TxPool) begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, conn *StatefulConnection) (string, error) {
+func (tp *TxPool) begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, conn *StatefulConnection, preQueries []string) (string, error) {
 	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
 	effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
-	beginQueries, autocommit, err := createTransaction(ctx, options, conn, readOnly)
+	beginQueries, autocommit, err := createTransaction(ctx, options, conn, readOnly, preQueries)
 	if err != nil {
 		return "", err
 	}
@@ -265,7 +270,7 @@ func (tp *TxPool) createConn(ctx context.Context, options *querypb.ExecuteOption
 	return conn, nil
 }
 
-func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, conn *StatefulConnection, readOnly bool) (string, bool, error) {
+func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, conn *StatefulConnection, readOnly bool, preQueries []string) (string, bool, error) {
 	beginQueries := ""
 
 	autocommitTransaction := false
@@ -292,6 +297,11 @@ func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, con
 		return "", false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
 	}
 
+	for _, preQuery := range preQueries {
+		if _, err := conn.Exec(ctx, preQuery, 1, false); err != nil {
+			return "", false, vterrors.Wrap(err, preQuery)
+		}
+	}
 	return beginQueries, autocommitTransaction, nil
 }
 
@@ -321,28 +331,7 @@ func (tp *TxPool) SetTimeout(timeout time.Duration) {
 }
 
 func (tp *TxPool) txComplete(conn *StatefulConnection, reason tx.ReleaseReason) {
-	tp.log(conn, reason)
+	conn.LogTransaction(reason)
 	tp.limiter.Release(conn.TxProperties().ImmediateCaller, conn.TxProperties().EffectiveCaller)
 	conn.CleanTxState()
-}
-
-func (tp *TxPool) log(txc *StatefulConnection, reason tx.ReleaseReason) {
-	if txc.TxProperties() == nil {
-		return //Nothing to log as no transaction exists on this connection.
-	}
-	txc.TxProperties().Conclusion = reason.Name()
-	txc.TxProperties().EndTime = time.Now()
-
-	username := callerid.GetPrincipal(txc.TxProperties().EffectiveCaller)
-	if username == "" {
-		username = callerid.GetUsername(txc.TxProperties().ImmediateCaller)
-	}
-	duration := txc.TxProperties().EndTime.Sub(txc.TxProperties().StartTime)
-	txc.Stats().UserTransactionCount.Add([]string{username, reason.Name()}, 1)
-	txc.Stats().UserTransactionTimesNs.Add([]string{username, reason.Name()}, int64(duration))
-	txc.TxProperties().Stats.Add(reason.Name(), duration)
-	if txc.TxProperties().LogToFile {
-		log.Infof("Logged transaction: %s", txc.String())
-	}
-	tabletenv.TxLogger.Send(txc)
 }

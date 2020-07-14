@@ -189,12 +189,27 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 
 // Begin is part of the QueryService interface.
 func (sbc *SandboxConn) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, *topodatapb.TabletAlias, error) {
+	return sbc.begin(ctx, target, nil, 0, options)
+}
+
+func (sbc *SandboxConn) begin(ctx context.Context, target *querypb.Target, preQueries []string, reservedID int64, options *querypb.ExecuteOptions) (int64, *topodatapb.TabletAlias, error) {
 	sbc.BeginCount.Add(1)
 	err := sbc.getError()
 	if err != nil {
 		return 0, nil, err
 	}
-	return sbc.TransactionID.Add(1), sbc.tablet.Alias, nil
+
+	transactionID := reservedID
+	if transactionID == 0 {
+		transactionID = sbc.TransactionID.Add(1)
+	}
+	for _, preQuery := range preQueries {
+		_, err := sbc.Execute(ctx, target, preQuery, nil, transactionID, reservedID, options)
+		if err != nil {
+			return 0, nil, err
+		}
+	}
+	return transactionID, sbc.tablet.Alias, nil
 }
 
 // Commit is part of the QueryService interface.
@@ -297,8 +312,8 @@ func (sbc *SandboxConn) ReadTransaction(ctx context.Context, target *querypb.Tar
 }
 
 // BeginExecute is part of the QueryService interface.
-func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
-	transactionID, alias, err := sbc.Begin(ctx, target, options)
+func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	transactionID, alias, err := sbc.begin(ctx, target, preQueries, reservedID, options)
 	if err != nil {
 		return nil, 0, nil, err
 	}

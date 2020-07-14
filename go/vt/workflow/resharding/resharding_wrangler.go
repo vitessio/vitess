@@ -27,8 +27,8 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// ReshardingWrangler is the interface to be used in creating mock interface for wrangler, which is used for unit test. It includes a subset of the methods in go/vt/Wrangler.
-type ReshardingWrangler interface {
+// Wrangler is the interface to be used in creating mock interface for wrangler, which is used for unit test. It includes a subset of the methods in go/vt/Wrangler.
+type Wrangler interface {
 	CopySchemaShardFromShard(ctx context.Context, tables, excludeTables []string, includeViews bool, sourceKeyspace, sourceShard, destKeyspace, destShard string, waitReplicasTimeout time.Duration, skipVerify bool) error
 
 	WaitForFilteredReplication(ctx context.Context, keyspace, shard string, maxDelay time.Duration) error

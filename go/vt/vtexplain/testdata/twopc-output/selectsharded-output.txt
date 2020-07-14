@@ -22,7 +22,7 @@ select * from user where id > 100 /* scatter range */
 ----------------------------------------------------------------------
 select * from user where name = 'bob' /* vindex lookup */
 
-1 ks_sharded/c0-: select user_id from name_user_map where name = 'bob' limit 10001 /* vindex lookup */
+1 ks_sharded/c0-: select name, user_id from name_user_map where name in ('bob') limit 10001 /* vindex lookup */
 2 ks_sharded/-40: select * from user where name = 'bob' limit 10001 /* vindex lookup */
 
 ----------------------------------------------------------------------
@@ -59,9 +59,8 @@ select count(*) from user where id = 1 /* point aggregate */
 ----------------------------------------------------------------------
 select count(*) from user where name in ('alice','bob') /* scatter aggregate */
 
-1 ks_sharded/40-80: select user_id from name_user_map where name = 'alice' limit 10001 /* scatter aggregate */
-2 ks_sharded/c0-: select user_id from name_user_map where name = 'bob' limit 10001 /* scatter aggregate */
-3 ks_sharded/-40: select count(*) from user where name in ('alice', 'bob') limit 10001 /* scatter aggregate */
+1 ks_sharded/40-80: select name, user_id from name_user_map where name in ('alice', 'bob') limit 10001 /* scatter aggregate */
+2 ks_sharded/-40: select count(*) from user where name in ('alice', 'bob') limit 10001 /* scatter aggregate */
 
 ----------------------------------------------------------------------
 select name, count(*) from user group by name /* scatter aggregate */

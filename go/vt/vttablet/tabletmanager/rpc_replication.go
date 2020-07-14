@@ -97,6 +97,26 @@ func (tm *TabletManager) stopReplicationLocked(ctx context.Context) error {
 	return tm.MysqlDaemon.StopReplication(tm.hookExtraEnv())
 }
 
+func (tm *TabletManager) stopIOThreadLocked(ctx context.Context) error {
+
+	// Remember that we were told to stop, so we don't try to
+	// restart ourselves (in replication_reporter).
+	tm.setReplicationStopped(true)
+
+	// Also tell Orchestrator we're stopped on purpose for some Vitess task.
+	// Do this in the background, as it's best-effort.
+	go func() {
+		if tm.orc == nil {
+			return
+		}
+		if err := tm.orc.BeginMaintenance(tm.Tablet(), "vttablet has been told to StopReplication"); err != nil {
+			log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
+		}
+	}()
+
+	return tm.MysqlDaemon.StopIOThread(ctx)
+}
+
 // StopReplicationMinimum will stop the replication after it reaches at least the
 // provided position. Works both when Vitess manages
 // replication or not (using hook if not).
@@ -602,30 +622,93 @@ func (tm *TabletManager) ReplicaWasRestarted(ctx context.Context, parent *topoda
 
 // StopReplicationAndGetStatus stops MySQL replication, and returns the
 // current status.
-func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context) (*replicationdatapb.Status, error) {
+func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (StopReplicationAndGetStatusResponse, error) {
 	if err := tm.lock(ctx); err != nil {
-		return nil, err
+		return StopReplicationAndGetStatusResponse{}, err
 	}
 	defer tm.unlock()
 
-	// get the status before we stop replication
+	// Get the status before we stop replication.
+	// Doing this first allows us to return the status in the case that stopping replication
+	// returns an error, so a user can optionally inspect the status before a stop was called.
 	rs, err := tm.MysqlDaemon.ReplicationStatus()
 	if err != nil {
-		return nil, vterrors.Wrap(err, "before status failed")
+		return StopReplicationAndGetStatusResponse{}, vterrors.Wrap(err, "before status failed")
 	}
-	if !rs.IOThreadRunning && !rs.SQLThreadRunning {
-		// no replication is running, just return what we got
-		return mysql.ReplicationStatusToProto(rs), nil
+	before := mysql.ReplicationStatusToProto(rs)
+
+	if stopReplicationMode == replicationdatapb.StopReplicationMode_IOTHREADONLY {
+		if !rs.IOThreadRunning {
+			return StopReplicationAndGetStatusResponse{
+				HybridStatus: before,
+				Status: &replicationdatapb.StopReplicationStatus{
+					Before: before,
+					After:  before,
+				},
+			}, nil
+		}
+		if err := tm.stopIOThreadLocked(ctx); err != nil {
+			return StopReplicationAndGetStatusResponse{
+				Status: &replicationdatapb.StopReplicationStatus{
+					Before: before,
+				},
+			}, vterrors.Wrap(err, "stop io thread failed")
+		}
+	} else {
+		if !rs.IOThreadRunning && !rs.SQLThreadRunning {
+			// no replication is running, just return what we got
+			return StopReplicationAndGetStatusResponse{
+				HybridStatus: before,
+				Status: &replicationdatapb.StopReplicationStatus{
+					Before: before,
+					After:  before,
+				},
+			}, nil
+		}
+		if err := tm.stopReplicationLocked(ctx); err != nil {
+			return StopReplicationAndGetStatusResponse{
+				Status: &replicationdatapb.StopReplicationStatus{
+					Before: before,
+				},
+			}, vterrors.Wrap(err, "stop replication failed")
+		}
 	}
-	if err := tm.stopReplicationLocked(ctx); err != nil {
-		return nil, vterrors.Wrap(err, "failed to stop replication")
-	}
-	// now patch in the current position
-	rs.Position, err = tm.MysqlDaemon.MasterPosition()
+
+	// Get the status after we stop replication so we have up to date position and relay log positions.
+	rsAfter, err := tm.MysqlDaemon.ReplicationStatus()
 	if err != nil {
-		return nil, vterrors.Wrap(err, "after position failed")
+		return StopReplicationAndGetStatusResponse{
+			Status: &replicationdatapb.StopReplicationStatus{
+				Before: before,
+			},
+		}, vterrors.Wrap(err, "acquiring replication status failed")
 	}
-	return mysql.ReplicationStatusToProto(rs), nil
+	after := mysql.ReplicationStatusToProto(rsAfter)
+
+	rs.Position = rsAfter.Position
+	rs.RelayLogPosition = rsAfter.RelayLogPosition
+	rs.FilePosition = rsAfter.FilePosition
+	rs.FileRelayLogPosition = rsAfter.FileRelayLogPosition
+
+	return StopReplicationAndGetStatusResponse{
+		HybridStatus: mysql.ReplicationStatusToProto(rs),
+		Status: &replicationdatapb.StopReplicationStatus{
+			Before: before,
+			After:  after,
+		},
+	}, nil
+}
+
+// StopReplicationAndGetStatusResponse holds the original hybrid Status struct, as well as a new Status field, which
+// hold the result of show replica status called before stopping replication, and after stopping replication.
+type StopReplicationAndGetStatusResponse struct {
+	// HybridStatus is deprecated. It currently represents a hybrid struct where all data represents the before state,
+	// except for all position related data which comes from the after state. Please use status instead, which holds
+	// discrete replication status calls before and after stopping the replica, or stopping the replica's io_thread.
+	HybridStatus *replicationdatapb.Status
+
+	// Status represents the replication status call right before, and right after telling the replica to stop.
+	Status *replicationdatapb.StopReplicationStatus
 }
 
 // PromoteReplica makes the current tablet the master
@@ -748,47 +831,47 @@ func (tm *TabletManager) handleRelayLogError(err error) error {
 	return err
 }
 
-// Deprecated delete after 7.0
+// SlaveStatus is deprecated
 func (tm *TabletManager) SlaveStatus(ctx context.Context) (*replicationdatapb.Status, error) {
 	return tm.ReplicationStatus(ctx)
 }
 
-// Deprecated delete after 7.0
+// StopSlave is deprecated
 func (tm *TabletManager) StopSlave(ctx context.Context) error {
 	return tm.StopReplication(ctx)
 }
 
-// Deprecated delete after 7.0
+// StopSlaveMinimum is deprecated
 func (tm *TabletManager) StopSlaveMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error) {
 	return tm.StopReplicationMinimum(ctx, position, waitTime)
 }
 
-// Deprecated delete after 7.0
+// StartSlave is deprecated
 func (tm *TabletManager) StartSlave(ctx context.Context) error {
 	return tm.StartReplication(ctx)
 }
 
-// Deprecated delete after 7.0
+// StartSlaveUntilAfter is deprecated
 func (tm *TabletManager) StartSlaveUntilAfter(ctx context.Context, position string, waitTime time.Duration) error {
 	return tm.StartReplicationUntilAfter(ctx, position, waitTime)
 }
 
-// Deprecated delete after 7.0
+// GetSlaves is deprecated
 func (tm *TabletManager) GetSlaves(ctx context.Context) ([]string, error) {
 	return tm.GetReplicas(ctx)
 }
 
-// Deprecated delete after 7.0
+// InitSlave is deprecated
 func (tm *TabletManager) InitSlave(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
 	return tm.InitReplica(ctx, parent, position, timeCreatedNS)
 }
 
-// Deprecated delete after 7.0
+// SlaveWasPromoted is deprecated
 func (tm *TabletManager) SlaveWasPromoted(ctx context.Context) error {
 	return tm.ReplicaWasPromoted(ctx)
 }
 
-// Deprecated delete after 7.0
+// SlaveWasRestarted is deprecated
 func (tm *TabletManager) SlaveWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error {
 	return tm.ReplicaWasRestarted(ctx, parent)
 }

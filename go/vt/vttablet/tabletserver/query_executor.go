@@ -68,7 +68,6 @@ var sequenceFields = []*querypb.Field{
 
 // Execute performs a non-streaming query execution.
 func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
-	qre.logStats.TransactionID = qre.connID
 	planName := qre.plan.PlanID.String()
 	qre.logStats.PlanType = planName
 	defer func(start time.Time) {
@@ -137,6 +136,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s disallowed outside transaction", qre.plan.PlanID.String())
 	case planbuilder.PlanSet, planbuilder.PlanOtherRead, planbuilder.PlanOtherAdmin:
 		return qre.execOther()
+	case planbuilder.PlanSavepoint, planbuilder.PlanRelease, planbuilder.PlanSRollback:
+		return qre.execOther()
 	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete, planbuilder.PlanInsertMessage, planbuilder.PlanDDL:
 		return qre.execAutocommit(qre.txConnExec)
 	case planbuilder.PlanUpdateLimit, planbuilder.PlanDeleteLimit:
@@ -151,7 +152,7 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 	}
 	qre.options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
 
-	conn, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0)
+	conn, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil)
 
 	if err != nil {
 		return nil, err
@@ -162,7 +163,7 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 }
 
 func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
-	conn, beginSQL, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0)
+	conn, beginSQL, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -199,6 +200,8 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 	case planbuilder.PlanUpdateLimit, planbuilder.PlanDeleteLimit:
 		return qre.execDMLLimit(conn)
 	case planbuilder.PlanSet, planbuilder.PlanOtherRead, planbuilder.PlanOtherAdmin:
+		return qre.execSQL(conn, qre.query, true)
+	case planbuilder.PlanSavepoint, planbuilder.PlanRelease, planbuilder.PlanSRollback:
 		return qre.execSQL(conn, qre.query, true)
 	case planbuilder.PlanSelect, planbuilder.PlanSelectLock, planbuilder.PlanSelectImpossible:
 		maxrows := qre.getSelectLimit()

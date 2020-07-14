@@ -404,10 +404,17 @@ message ReplicaWasRestartedResponse {
 }
 
 message StopReplicationAndGetStatusRequest {
+  replicationdata.StopReplicationMode stop_replication_mode = 1;
 }
 
 message StopReplicationAndGetStatusResponse {
-  replicationdata.Status status = 1;
+  // HybridStatus is deprecated. It currently represents a hybrid struct where all data represents the before state,
+  // except for all position related data which comes from the after state. Please use status instead, which holds
+  // discrete replication status calls before and after stopping the replica, or stopping the replica's io_thread.
+  replicationdata.Status hybrid_status = 1 [deprecated=true];
+
+  // Status represents the replication status call right before, and right after telling the replica to stop.
+  replicationdata.StopReplicationStatus status = 2;
 }
 
 message PromoteReplicaRequest {

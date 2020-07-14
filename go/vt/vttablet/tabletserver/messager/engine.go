@@ -72,14 +72,17 @@ func NewEngine(tsv TabletService, se *schema.Engine, vs VStreamer) *Engine {
 }
 
 // Open starts the Engine service.
-func (me *Engine) Open() error {
+func (me *Engine) Open() {
+	me.mu.Lock()
 	if me.isOpen {
-		return nil
+		me.mu.Unlock()
+		return
 	}
-
+	me.mu.Unlock()
+	// Unlock before invoking RegisterNotifier because it
+	// obtains the same lock.
 	me.se.RegisterNotifier("messages", me.schemaChanged)
 	me.isOpen = true
-	return nil
 }
 
 // Close closes the Engine service.

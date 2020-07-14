@@ -96,6 +96,7 @@ func (session *SafeSession) Reset() {
 	session.PreSessions = nil
 	session.PostSessions = nil
 	session.commitOrder = vtgatepb.CommitOrder_NORMAL
+	session.Savepoints = nil
 }
 
 // SetAutocommittable sets the state to autocommitable if true.
@@ -261,4 +262,11 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 		session.SystemVariables = make(map[string]string)
 	}
 	session.SystemVariables[name] = expr
+}
+
+//StoreSavepoint stores the savepoint and release savepoint queries in the session
+func (session *SafeSession) StoreSavepoint(sql string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.Savepoints = append(session.Savepoints, sql)
 }

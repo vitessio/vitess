@@ -582,6 +582,12 @@ func (tm *TabletManager) findMysqlPort(retryInterval time.Duration) {
 		if err != nil {
 			continue
 		}
+		// We need to get the action lock to make sure no one
+		// else is updating the tablet.
+		if err := tm.lock(tm.BatchCtx); err != nil {
+			continue
+		}
+		defer tm.unlock()
 		log.Infof("Identified mysql port: %v", mport)
 		tm.pubMu.Lock()
 		tm.tablet.MysqlPort = mport

@@ -111,7 +111,7 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// This lookup query will return no rows. So, the DML will not be sent anywhere.
-		`Execute select toc from lkp where from = :from from: type:INT64 value:"1"  false`,
+		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:<type:INT64 value:"1" >  false`,
 	})
 }
 

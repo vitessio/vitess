@@ -251,7 +251,7 @@ func (t *explainTablet) ExecuteBatch(ctx context.Context, target *querypb.Target
 }
 
 // BeginExecute is part of the QueryService interface.
-func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
 	bindVariables = sqltypes.CopyBindVariables(bindVariables)
@@ -262,7 +262,7 @@ func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target
 	})
 	t.mu.Unlock()
 
-	return t.tsv.BeginExecute(ctx, target, sql, bindVariables, reservedID, options)
+	return t.tsv.BeginExecute(ctx, target, preQueries, sql, bindVariables, reservedID, options)
 }
 
 // Close is part of the QueryService interface.
@@ -499,30 +499,66 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 			}
 		}
 
+		// the query against lookup table is in-query, handle it specifically
+		var inColName string
+		inVal := make([][]byte, 0, 10)
+		rowCount := 1
+		if selStmt.Where != nil {
+			switch v := selStmt.Where.Expr.(type) {
+			case *sqlparser.ComparisonExpr:
+				if v.Operator == sqlparser.InStr {
+					switch c := v.Left.(type) {
+					case *sqlparser.ColName:
+						switch values := v.Right.(type) {
+						case sqlparser.ValTuple:
+							for _, val := range values {
+								switch v := val.(type) {
+								case *sqlparser.SQLVal:
+									inVal = append(inVal, v.Val)
+								}
+							}
+							rowCount = len(inVal)
+						}
+						inColName = strings.ToLower(c.Name.String())
+					}
+				}
+			}
+		}
+
 		fields := make([]*querypb.Field, len(colNames))
-		values := make([]sqltypes.Value, len(colNames))
+		rows := make([][]sqltypes.Value, 0, rowCount)
 		for i, col := range colNames {
 			colType := colTypes[i]
 			fields[i] = &querypb.Field{
 				Name: col,
 				Type: colType,
 			}
+		}
 
-			// Generate a fake value for the given column. For numeric types,
-			// use the column index. For all other types, just shortcut to using
-			// a string type that encodes the column name + index.
-			if sqltypes.IsIntegral(colType) {
-				values[i] = sqltypes.NewInt32(int32(i + 1))
-			} else if sqltypes.IsFloat(colType) {
-				values[i] = sqltypes.NewFloat64(1.0 + float64(i))
-			} else {
-				values[i] = sqltypes.NewVarChar(fmt.Sprintf("%s_val_%d", col, i+1))
+		for j := 0; j < rowCount; j++ {
+			values := make([]sqltypes.Value, len(colNames))
+			for i, col := range colNames {
+				// Generate a fake value for the given column. For the column in the IN clause,
+				// use the provided values in the query, For numeric types,
+				// use the column index. For all other types, just shortcut to using
+				// a string type that encodes the column name + index.
+				colType := colTypes[i]
+				if len(inVal) > j && col == inColName {
+					values[i], _ = sqltypes.NewValue(querypb.Type_VARBINARY, inVal[j])
+				} else if sqltypes.IsIntegral(colType) {
+					values[i] = sqltypes.NewInt32(int32(i + 1))
+				} else if sqltypes.IsFloat(colType) {
+					values[i] = sqltypes.NewFloat64(1.0 + float64(i))
+				} else {
+					values[i] = sqltypes.NewVarChar(fmt.Sprintf("%s_val_%d", col, i+1))
+				}
 			}
+			rows = append(rows, values)
 		}
 		result = &sqltypes.Result{
 			Fields:   fields,
 			InsertID: 0,
-			Rows:     [][]sqltypes.Value{values},
+			Rows:     rows,
 		}
 
 		resultJSON, _ := json.MarshalIndent(result, "", "    ")

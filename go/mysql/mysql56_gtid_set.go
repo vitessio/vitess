@@ -192,7 +192,7 @@ func (set Mysql56GTIDSet) Last() string {
 }
 
 // Flavor implements GTIDSet.
-func (Mysql56GTIDSet) Flavor() string { return mysql56FlavorID }
+func (Mysql56GTIDSet) Flavor() string { return Mysql56FlavorID }
 
 // ContainsGTID implements GTIDSet.
 func (set Mysql56GTIDSet) ContainsGTID(gtid GTID) bool {
@@ -455,6 +455,8 @@ func (set Mysql56GTIDSet) SIDBlock() []byte {
 	return buf.Bytes()
 }
 
+// Difference will supply the difference between the receiver and supplied Mysql56GTIDSets, and supply the result
+// as a Mysql56GTIDSet.
 func (set Mysql56GTIDSet) Difference(other Mysql56GTIDSet) Mysql56GTIDSet {
 	if other == nil || set == nil {
 		return set
@@ -645,5 +647,5 @@ func popInterval(dst *interval, s1, s2 *[]interval) bool {
 }
 
 func init() {
-	gtidSetParsers[mysql56FlavorID] = parseMysql56GTIDSet
+	gtidSetParsers[Mysql56FlavorID] = parseMysql56GTIDSet
 }
