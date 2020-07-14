@@ -84,8 +84,11 @@ func commandInitShardMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags
 
 	force := subFlags.Bool("force", false, "will force the reparent even if the provided tablet is not a master or the shard master")
 	// for backwards compatibility
-	deprecatedTimeout := subFlags.Duration("wait_slave_timeout", *topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")
-	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", *deprecatedTimeout, "time to wait for replicas to catch up in reparenting")
+	deprecatedTimeout := subFlags.Duration("wait_slave_timeout", *topo.RemoteOperationTimeout, "DEPRECATED -- use -wait_replicas_timeout")
+	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", *topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")
+	if *deprecatedTimeout != *topo.RemoteOperationTimeout {
+		*waitReplicasTimeout = *deprecatedTimeout
+	}
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -109,8 +112,11 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 	}
 
 	// for backwards compatibility
-	deprecatedTimeout := subFlags.Duration("wait_slave_timeout", *topo.RemoteOperationTimeout, "time to wait for replicas to catch up on replication before and after reparenting")
-	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", *deprecatedTimeout, "time to wait for replicas to catch up on replication before and after reparenting")
+	deprecatedTimeout := subFlags.Duration("wait_slave_timeout", *topo.RemoteOperationTimeout, "DEPRECATED -- use -wait_replicas_timeout")
+	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", *topo.RemoteOperationTimeout, "time to wait for replicas to catch up on replication before and after reparenting")
+	if *deprecatedTimeout != *topo.RemoteOperationTimeout {
+		*waitReplicasTimeout = *deprecatedTimeout
+	}
 	keyspaceShard := subFlags.String("keyspace_shard", "", "keyspace/shard of the shard that needs to be reparented")
 	newMaster := subFlags.String("new_master", "", "alias of a tablet that should be the new master")
 	avoidMaster := subFlags.String("avoid_master", "", "alias of a tablet that should not be the master, i.e. reparent to any other tablet if this one is the master")
@@ -154,8 +160,11 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 	}
 
 	// for backwards compatibility
-	deprecatedTimeout := subFlags.Duration("wait_slave_timeout", *topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")
-	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", *deprecatedTimeout, "time to wait for replicas to catch up in reparenting")
+	deprecatedTimeout := subFlags.Duration("wait_slave_timeout", *topo.RemoteOperationTimeout, "DEPRECATED -- use -wait_replicas_timeout")
+	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", *topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")
+	if *deprecatedTimeout != *topo.RemoteOperationTimeout {
+		*waitReplicasTimeout = *deprecatedTimeout
+	}
 	keyspaceShard := subFlags.String("keyspace_shard", "", "keyspace/shard of the shard that needs to be reparented")
 	newMaster := subFlags.String("new_master", "", "alias of a tablet that should be the new master")
 	if err := subFlags.Parse(args); err != nil {
