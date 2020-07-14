@@ -252,9 +252,6 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 		err := vsClient.VStream(ctx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
 			for _, event := range events {
 				if event.Gtid != "" {
-					fmt.Println("event.Gtid=", event.Gtid, "event.Timestamp=", event.Timestamp, "restoreTime=", restoreTime)
-				}
-				if event.Gtid != "" {
 					currentPos = event.Gtid
 				}
 
@@ -269,9 +266,7 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 			return nil
 		})
 		if err != nil {
-			println("--in error while vstream---")
-			fmt.Println(err)
-			sqlBeforeGTID <- []string{"", stopPos}
+			sqlBeforeGTID <- []string{currentPos, stopPos}
 		}
 	}()
 	defer vsClient.Close(ctx)
