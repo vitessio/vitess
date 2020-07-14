@@ -42,26 +42,7 @@ func TestPickSimple(t *testing.T) {
 
 	tablet, err := tp.PickForStreaming(context.Background())
 	require.NoError(t, err)
-	if !proto.Equal(want, tablet) {
-		t.Errorf("Pick: %v, want %v", tablet, want)
-	}
-}
-
-func TestPickFromOtherCell(t *testing.T) {
-	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
-	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "otherCell", true, true)
-	defer deleteTablet(te, want)
-
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
-	require.NoError(t, err)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
-	tablet, err := tp.PickForStreaming(ctx)
-	require.NoError(t, err)
-	if !proto.Equal(want, tablet) {
-		t.Errorf("Pick: %v, want %v", tablet, want)
-	}
+	assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
 }
 
 func TestPickFromTwoHealthy(t *testing.T) {
@@ -109,22 +90,167 @@ func TestPickRespectsTabletType(t *testing.T) {
 	}
 }
 
-func TestPickUsingCellAlias(t *testing.T) {
-	// test env puts all cells into an alias called "cella"
-	te := newPickerTestEnv(t, []string{"cell"})
+func TestPickMultiCell(t *testing.T) {
+	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
 	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
 	defer deleteTablet(te, want)
 
-	tp, err := NewTabletPicker(te.topoServ, []string{"cella"}, te.keyspace, te.shard, "replica")
+	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 	tablet, err := tp.PickForStreaming(ctx)
 	require.NoError(t, err)
-	if !proto.Equal(want, tablet) {
-		t.Errorf("Pick: %v, want %v", tablet, want)
+	assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
+}
+
+func TestPickFromOtherCell(t *testing.T) {
+	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
+	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "otherCell", true, true)
+	defer deleteTablet(te, want)
+
+	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	tablet, err := tp.PickForStreaming(ctx)
+	require.NoError(t, err)
+	assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
+}
+
+func TestDontPickFromOtherCell(t *testing.T) {
+	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
+	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
+	defer deleteTablet(te, want1)
+	want2 := addTablet(te, 101, topodatapb.TabletType_REPLICA, "otherCell", true, true)
+	defer deleteTablet(te, want2)
+
+	tp, err := NewTabletPicker(te.topoServ, []string{"cell"}, te.keyspace, te.shard, "replica")
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	// In 20 attempts, only want1 must be picked because TabletPicker.cells = "cell"
+	var picked1, picked2 bool
+	for i := 0; i < 20; i++ {
+		tablet, err := tp.PickForStreaming(ctx)
+		require.NoError(t, err)
+		if proto.Equal(tablet, want1) {
+			picked1 = true
+		}
+		if proto.Equal(tablet, want2) {
+			picked2 = true
+		}
 	}
+	assert.True(t, picked1)
+	assert.False(t, picked2)
+}
+
+func TestPickMultiCellTwoTablets(t *testing.T) {
+	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
+	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
+	defer deleteTablet(te, want1)
+	want2 := addTablet(te, 101, topodatapb.TabletType_REPLICA, "otherCell", true, true)
+	defer deleteTablet(te, want2)
+
+	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	// In 20 attempts, both tablet types must be picked at least once.
+	var picked1, picked2 bool
+	for i := 0; i < 20; i++ {
+		tablet, err := tp.PickForStreaming(ctx)
+		require.NoError(t, err)
+		if proto.Equal(tablet, want1) {
+			picked1 = true
+		}
+		if proto.Equal(tablet, want2) {
+			picked2 = true
+		}
+	}
+	assert.True(t, picked1)
+	assert.True(t, picked2)
+}
+
+func TestPickMultiCellTwoTabletTypes(t *testing.T) {
+	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
+	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
+	defer deleteTablet(te, want1)
+	want2 := addTablet(te, 101, topodatapb.TabletType_RDONLY, "otherCell", true, true)
+	defer deleteTablet(te, want2)
+
+	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica,rdonly")
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	// In 20 attempts, both tablet types must be picked at least once.
+	var picked1, picked2 bool
+	for i := 0; i < 20; i++ {
+		tablet, err := tp.PickForStreaming(ctx)
+		require.NoError(t, err)
+		if proto.Equal(tablet, want1) {
+			picked1 = true
+		}
+		if proto.Equal(tablet, want2) {
+			picked2 = true
+		}
+	}
+	assert.True(t, picked1)
+	assert.True(t, picked2)
+}
+
+func TestPickUsingCellAlias(t *testing.T) {
+	// test env puts all cells into an alias called "cella"
+	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
+	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
+	defer deleteTablet(te, want1)
+
+	tp, err := NewTabletPicker(te.topoServ, []string{"cella"}, te.keyspace, te.shard, "replica")
+	require.NoError(t, err)
+
+	ctx1, cancel1 := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel1()
+	tablet, err := tp.PickForStreaming(ctx1)
+	require.NoError(t, err)
+	assert.True(t, proto.Equal(want1, tablet), "Pick: %v, want %v", tablet, want1)
+
+	// create a tablet in the other cell, it should be picked
+	deleteTablet(te, want1)
+	want2 := addTablet(te, 101, topodatapb.TabletType_REPLICA, "otherCell", true, true)
+	defer deleteTablet(te, want2)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel2()
+	tablet, err = tp.PickForStreaming(ctx2)
+	require.NoError(t, err)
+	assert.True(t, proto.Equal(want2, tablet), "Pick: %v, want %v", tablet, want2)
+
+	// addTablet again and test that both are picked at least once
+	want1 = addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
+	ctx3, cancel3 := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel3()
+
+	// In 20 attempts, both tablet types must be picked at least once.
+	var picked1, picked2 bool
+	for i := 0; i < 20; i++ {
+		tablet, err := tp.PickForStreaming(ctx3)
+		require.NoError(t, err)
+		if proto.Equal(tablet, want1) {
+			picked1 = true
+		}
+		if proto.Equal(tablet, want2) {
+			picked2 = true
+		}
+	}
+	assert.True(t, picked1)
+	assert.True(t, picked2)
 }
 
 func TestPickError(t *testing.T) {
@@ -205,6 +331,9 @@ func addTablet(te *pickerTestEnv, id int, tabletType topodatapb.TabletType, cell
 
 func deleteTablet(te *pickerTestEnv, tablet *topodatapb.Tablet) {
 
+	if tablet == nil {
+		return
+	}
 	//log error
 	if err := te.topoServ.DeleteTablet(context.Background(), tablet.Alias); err != nil {
 		log.Errorf("failed to DeleteTablet with alias : %v", err)
