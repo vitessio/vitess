@@ -77,6 +77,11 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 			}
 			continue
 		}
+		if !tabletTypeIn(ti.Tablet.Type, tp.tabletTypes) {
+			// tablet is not of one of the desired types
+			continue
+		}
+
 		// try to connect to tablet
 		conn, err := tabletconn.GetDialer()(ti.Tablet, true)
 		if err != nil {
@@ -93,6 +98,14 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 	return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "can't find any healthy source tablet for %v %v %v", tp.keyspace, tp.shard, tp.tabletTypes)
 }
 
+func tabletTypeIn(tabletType topodatapb.TabletType, tabletTypes []topodatapb.TabletType) bool {
+	for _, t := range tabletTypes {
+		if tabletType == t {
+			return true
+		}
+	}
+	return false
+}
 func (tp *TabletPicker) getAllTablets(ctx context.Context) []*topodatapb.TabletAlias {
 	result := make([]*topodatapb.TabletAlias, 0)
 	actualCells := make([]string, 0)
