@@ -152,6 +152,39 @@ func parseMysqlReplicationStatus(resultMap map[string]string) (ReplicationStatus
 	return status, nil
 }
 
+// masterStatus is part of the Flavor interface.
+func (mysqlFlavor) masterStatus(c *Conn) (MasterStatus, error) {
+	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
+	if err != nil {
+		return MasterStatus{}, err
+	}
+	if len(qr.Rows) == 0 {
+		// The query returned no data. We don't know how this could happen.
+		return MasterStatus{}, ErrNoMasterStatus
+	}
+
+	resultMap, err := resultToMap(qr)
+	if err != nil {
+		return MasterStatus{}, err
+	}
+
+	return parseMysqlMasterStatus(resultMap)
+}
+
+func parseMysqlMasterStatus(resultMap map[string]string) (MasterStatus, error) {
+	status := parseMasterStatus(resultMap)
+
+	var err error
+	status.Position.GTIDSet, err = parseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
+	if err != nil {
+		return MasterStatus{}, vterrors.Wrapf(err, "MasterStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
+	}
+
+	return status, nil
+}
+
+// waitUntilPositionCommand is part of the Flavor interface.
+
 // waitUntilPositionCommand is part of the Flavor interface.
 func (mysqlFlavor) waitUntilPositionCommand(ctx context.Context, pos Position) (string, error) {
 	// A timeout of 0 means wait indefinitely.

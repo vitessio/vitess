@@ -186,6 +186,11 @@ func (client *FakeTabletManagerClient) StopReplicationMinimum(ctx context.Contex
 	return "", nil
 }
 
+// MasterStatus is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) MasterStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error) {
+	return &replicationdatapb.MasterStatus{}, nil
+}
+
 // StartReplication is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) StartReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return nil
@@ -261,8 +266,8 @@ func (client *FakeTabletManagerClient) PopulateReparentJournal(ctx context.Conte
 }
 
 // DemoteMaster is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
-	return "", nil
+func (client *FakeTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error) {
+	return nil, nil
 }
 
 // UndoDemoteMaster is part of the tmclient.TabletManagerClient interface.

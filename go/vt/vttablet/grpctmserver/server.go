@@ -245,6 +245,17 @@ func (s *server) ReplicationStatus(ctx context.Context, request *tabletmanagerda
 	return response, err
 }
 
+func (s *server) MasterStatus(ctx context.Context, request *tabletmanagerdatapb.MasterStatusRequest) (response *tabletmanagerdatapb.MasterStatusResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "MasterStatus", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.MasterStatusResponse{}
+	status, err := s.tm.MasterStatus(ctx)
+	if err == nil {
+		response.Status = status
+	}
+	return response, err
+}
+
 func (s *server) MasterPosition(ctx context.Context, request *tabletmanagerdatapb.MasterPositionRequest) (response *tabletmanagerdatapb.MasterPositionResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "MasterPosition", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
@@ -361,9 +372,10 @@ func (s *server) DemoteMaster(ctx context.Context, request *tabletmanagerdatapb.
 	defer s.tm.HandleRPCPanic(ctx, "DemoteMaster", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.DemoteMasterResponse{}
-	position, err := s.tm.DemoteMaster(ctx)
+	masterStatus, err := s.tm.DemoteMaster(ctx)
 	if err == nil {
-		response.Position = position
+		response.DeprecatedPosition = masterStatus.Position
+		response.MasterStatus = masterStatus
 	}
 	return response, err
 }

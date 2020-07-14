@@ -32,6 +32,9 @@ var (
 	// ErrNotReplica means there is no replication status.
 	// Returned by ShowReplicationStatus().
 	ErrNotReplica = errors.New("no slave status")
+
+	// ErrNoMasterStatus means no status was returned by ShowMasterStatus().
+	ErrNoMasterStatus = errors.New("no master status")
 )
 
 const (
@@ -90,6 +93,10 @@ type flavor interface {
 	// status returns the result of the appropriate status command,
 	// with parsed replication position.
 	status(c *Conn) (ReplicationStatus, error)
+
+	// masterStatus returns the result of 'SHOW MASTER STATUS',
+	// with parsed executed position.
+	masterStatus(c *Conn) (MasterStatus, error)
 
 	// waitUntilPositionCommand returns the SQL command to issue
 	// to wait until the given position, until the context
@@ -327,6 +334,31 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 // and returns a parsed Position with other fields.
 func (c *Conn) ShowReplicationStatus() (ReplicationStatus, error) {
 	return c.flavor.status(c)
+}
+
+// parseMasterStatus parses the common fields of SHOW MASTER STATUS.
+func parseMasterStatus(fields map[string]string) MasterStatus {
+	status := MasterStatus{}
+
+	fileExecPosStr := fields["Position"]
+	file := fields["File"]
+	if file != "" && fileExecPosStr != "" {
+		filePos, err := strconv.Atoi(fileExecPosStr)
+		if err == nil {
+			status.FilePosition.GTIDSet = filePosGTID{
+				file: file,
+				pos:  filePos,
+			}
+		}
+	}
+
+	return status
+}
+
+// ShowMasterStatus executes the right SHOW MASTER STATUS command,
+// and returns a parsed executed Position, as well as file based Position.
+func (c *Conn) ShowMasterStatus() (MasterStatus, error) {
+	return c.flavor.masterStatus(c)
 }
 
 // WaitUntilPositionCommand returns the SQL command to issue

@@ -459,12 +459,12 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 				// idempotent so it's fine to call it on a replica that's
 				// already read-only.
 				wr.logger.Infof("demote tablet %v", tabletAliasStr)
-				posStr, err := wr.tmc.DemoteMaster(stopAllCtx, tablet)
+				masterStatus, err := wr.tmc.DemoteMaster(stopAllCtx, tablet)
 				if err != nil {
 					rec.RecordError(vterrors.Wrapf(err, "DemoteMaster failed on contested master %v", tabletAliasStr))
 					return
 				}
-				pos, err := mysql.DecodePosition(posStr)
+				pos, err := mysql.DecodePosition(masterStatus.Position)
 				if err != nil {
 					rec.RecordError(vterrors.Wrapf(err, "can't decode replication position for tablet %v", tabletAliasStr))
 					return
@@ -592,7 +592,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		demoteCtx, demoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 		defer demoteCancel()
 
-		rp, err := wr.tmc.DemoteMaster(demoteCtx, oldMasterTabletInfo.Tablet)
+		masterStatus, err := wr.tmc.DemoteMaster(demoteCtx, oldMasterTabletInfo.Tablet)
 		if err != nil {
 			return fmt.Errorf("old master tablet %v DemoteMaster failed: %v", topoproto.TabletAliasString(shardInfo.MasterAlias), err)
 		}
@@ -600,7 +600,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		waitCtx, waitCancel := context.WithTimeout(ctx, waitReplicasTimeout)
 		defer waitCancel()
 
-		waitErr := wr.tmc.WaitForPosition(waitCtx, masterElectTabletInfo.Tablet, rp)
+		waitErr := wr.tmc.WaitForPosition(waitCtx, masterElectTabletInfo.Tablet, masterStatus.Position)
 		if waitErr != nil || ctx.Err() == context.DeadlineExceeded {
 			// If the new master fails to catch up within the timeout,
 			// we try to roll back to the original master before aborting.
@@ -622,7 +622,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 
 		promoteCtx, promoteCancel := context.WithTimeout(ctx, waitReplicasTimeout)
 		defer promoteCancel()
-		rp, err = wr.tmc.PromoteReplica(promoteCtx, masterElectTabletInfo.Tablet)
+		rp, err := wr.tmc.PromoteReplica(promoteCtx, masterElectTabletInfo.Tablet)
 		if err != nil {
 			return vterrors.Wrapf(err, "master-elect tablet %v failed to be upgraded to master - please try again", masterElectTabletAliasStr)
 		}
