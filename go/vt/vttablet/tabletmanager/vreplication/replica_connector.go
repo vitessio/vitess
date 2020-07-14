@@ -50,12 +50,12 @@ func NewReplicaConnector(connParams *mysql.ConnParams) *replicaConnector {
 	env := tabletenv.NewEnv(config, "source")
 	c.se = schema.NewEngine(env)
 	c.se.SkipMetaCheck = true
-	c.vstreamer = vstreamer.NewEngine(env, nil, c.se)
+	c.vstreamer = vstreamer.NewEngine(env, nil, c.se, "")
 	c.se.InitDBConfig(dbconfigs.New(connParams))
 
 	// Open
 
-	c.vstreamer.Open("", "")
+	c.vstreamer.Open()
 
 	return c
 }
