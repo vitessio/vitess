@@ -676,11 +676,8 @@ func (client *Client) DemoteMaster(ctx context.Context, tablet *topodatapb.Table
 	if masterStatus == nil {
 		// We are assuming this means a response came from an older server.
 		masterStatus = &replicationdatapb.MasterStatus{
-			Position:             response.DeprecatedPosition,
-			FilePosition:         "",
-			XXX_NoUnkeyedLiteral: response.XXX_NoUnkeyedLiteral,
-			XXX_unrecognized:     response.XXX_unrecognized,
-			XXX_sizecache:        response.XXX_sizecache,
+			Position:     response.DeprecatedPosition,
+			FilePosition: "",
 		}
 	}
 	return masterStatus, nil
