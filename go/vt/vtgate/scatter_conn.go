@@ -185,34 +185,36 @@ func (stc *ScatterConn) ExecuteMultiShard(
 					return nil, err
 				}
 			case nothing == info.actionNeeded:
-				var qs queryservice.QueryService
-				_, usingLegacy := rs.Gateway.(*DiscoveryGateway)
-				if usingLegacy || info.txID == 0 {
-					qs = rs.Gateway
-				} else {
-					qs, err = rs.Gateway.QueryServiceByAlias(info.alias)
-					if err != nil {
-						return nil, err
-					}
+				qs, err := getQueryService(rs, info)
+				if err != nil {
+					return nil, err
 				}
-				innerqr, err = qs.Execute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, info.txID, 0, opts)
+				innerqr, err = qs.Execute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, info.txID, info.rID, opts)
 				if err != nil {
 					return nil, err
 				}
 			case begin == info.actionNeeded:
-				innerqr, transactionID, alias, err = rs.Gateway.BeginExecute(ctx, rs.Target, session.Savepoints, queries[i].Sql, queries[i].BindVariables, 0, opts)
+				qs, err := getQueryService(rs, info)
 				if err != nil {
-					return info.addTransactionID(transactionID, alias), err
+					return nil, err
+				}
+				innerqr, transactionID, alias, err = qs.BeginExecute(ctx, rs.Target, session.Savepoints, queries[i].Sql, queries[i].BindVariables, info.rID, opts)
+				if err != nil {
+					return info.updateTransactionID(transactionID, alias), err
 				}
 			case reserve == info.actionNeeded:
-				innerqr, reservedID, alias, err = rs.Gateway.ReserveExecute(ctx, rs.Target, nil, queries[i].Sql, queries[i].BindVariables, 0, opts)
+				qs, err := getQueryService(rs, info)
 				if err != nil {
-					return info.addReservedID(reservedID, alias), err
+					return nil, err
+				}
+				innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, nil, queries[i].Sql, queries[i].BindVariables, info.txID, opts)
+				if err != nil {
+					return info.updateReservedID(reservedID, alias), err
 				}
 			case reserveBegin == info.actionNeeded:
 				innerqr, transactionID, reservedID, alias, err = rs.Gateway.ReserveBeginExecute(ctx, rs.Target, nil, queries[i].Sql, queries[i].BindVariables, opts)
 				if err != nil {
-					return info.addTransactionAndReservedID(transactionID, reservedID, alias), err
+					return info.updateTransactionAndReservedID(transactionID, reservedID, alias), err
 				}
 			default:
 				panic("not expected yet")
@@ -223,7 +225,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			if len(qr.Rows) <= *maxMemoryRows {
 				qr.AppendResult(innerqr)
 			}
-			return info.addTransactionAndReservedID(transactionID, reservedID, alias), nil
+			return info.updateTransactionAndReservedID(transactionID, reservedID, alias), nil
 		},
 	)
 
@@ -232,6 +234,21 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	}
 
 	return qr, allErrors.GetErrors()
+}
+
+//TODO (harshit): Verify if this is safe.
+func getQueryService(rs *srvtopo.ResolvedShard, info *shardActionInfo) (queryservice.QueryService, error) {
+	_, usingLegacyGw := rs.Gateway.(*DiscoveryGateway)
+	//if usingLegacyGw {
+	//	switch info.actionNeeded {
+	//	case reserve, reserveBegin:
+	//		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "reserved connections are not supported on old gen gateway")
+	//	}
+	//}
+	if usingLegacyGw || info.alias == nil {
+		return rs.Gateway, nil
+	}
+	return rs.Gateway.QueryServiceByAlias(info.alias)
 }
 
 func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *bool, qr *sqltypes.Result, callback func(*sqltypes.Result) error) error {
@@ -510,16 +527,15 @@ func (stc *ScatterConn) multiGoTransaction(
 			oneShard(rs, i)
 		}
 	} else {
-		//var wg sync.WaitGroup
+		var wg sync.WaitGroup
 		for i, rs := range rss {
-			//wg.Add(1)
-			oneShard(rs, i)
-			//go func(rs *srvtopo.ResolvedShard, i int) {
-			//	defer wg.Done()
-			//	oneShard(rs, i)
-			//}(rs, i)
+			wg.Add(1)
+			go func(rs *srvtopo.ResolvedShard, i int) {
+				defer wg.Done()
+				oneShard(rs, i)
+			}(rs, i)
 		}
-		//wg.Wait()
+		wg.Wait()
 	}
 
 	if session.MustRollback() {
@@ -567,15 +583,15 @@ type shardActionInfo struct {
 	alias        *topodatapb.TabletAlias
 }
 
-func (sai *shardActionInfo) addTransactionID(txID int64, alias *topodatapb.TabletAlias) *shardActionInfo {
-	return sai.addTransactionAndReservedID(txID, sai.rID, alias)
+func (sai *shardActionInfo) updateTransactionID(txID int64, alias *topodatapb.TabletAlias) *shardActionInfo {
+	return sai.updateTransactionAndReservedID(txID, sai.rID, alias)
 }
 
-func (sai *shardActionInfo) addReservedID(rID int64, alias *topodatapb.TabletAlias) *shardActionInfo {
-	return sai.addTransactionAndReservedID(sai.txID, rID, alias)
+func (sai *shardActionInfo) updateReservedID(rID int64, alias *topodatapb.TabletAlias) *shardActionInfo {
+	return sai.updateTransactionAndReservedID(sai.txID, rID, alias)
 }
 
-func (sai *shardActionInfo) addTransactionAndReservedID(txID int64, rID int64, alias *topodatapb.TabletAlias) *shardActionInfo {
+func (sai *shardActionInfo) updateTransactionAndReservedID(txID int64, rID int64, alias *topodatapb.TabletAlias) *shardActionInfo {
 	newInfo := *sai
 	newInfo.rID = rID
 	newInfo.txID = txID
