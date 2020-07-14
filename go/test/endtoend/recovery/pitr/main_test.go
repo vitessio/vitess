@@ -19,6 +19,7 @@ var (
 
 	cell          = "zone1"
 	hostname      = "localhost"
+	binlogHost    = "127.0.0.1"
 	keyspaceName  = "ks"
 	restoreKSName = "restoreks"
 	dbName        = "vt_ks"

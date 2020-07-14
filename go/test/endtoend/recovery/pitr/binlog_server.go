@@ -70,10 +70,8 @@ func (bs *binLogServer) start(master mysqlMaster) error {
 		bs.proc.Args = append(bs.proc.Args, fmt.Sprintf("-ripple_master_password=%s", master.password))
 	}
 
-	// todo: uncomment this
-	//errFile, _ := os.Create(path.Join(bs.dataDirectory, "log.txt"))
-	//bs.proc.Stderr = errFile
-	bs.proc.Stderr = os.Stderr
+	errFile, _ := os.Create(path.Join(bs.dataDirectory, "log.txt"))
+	bs.proc.Stderr = errFile
 
 	bs.proc.Env = append(bs.proc.Env, os.Environ()...)
 

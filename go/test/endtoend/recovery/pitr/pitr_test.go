@@ -2,7 +2,6 @@ package pitr
 
 import (
 	"fmt"
-	"strconv"
 	"testing"
 	"time"
 
@@ -16,10 +15,9 @@ import (
 )
 
 var (
-	createTable       = `create table product (id bigint(20) primary key, name char(10), created bigint(20));`
-	insertTable       = `insert into product (id, name, created) values(%d, '%s', unix_timestamp());`
-	selectRecoverTime = `select created from product where id = %d`
-	selectMaxID       = `select max(id) from product`
+	createTable = `create table product (id bigint(20) primary key, name char(10), created bigint(20));`
+	insertTable = `insert into product (id, name, created) values(%d, '%s', unix_timestamp());`
+	selectMaxID = `select max(id) from product`
 )
 
 func TestPointInTimeRecovery(t *testing.T) {
@@ -35,7 +33,7 @@ func TestPointInTimeRecovery(t *testing.T) {
 	require.NoError(t, err)
 
 	err = bs.start(mysqlMaster{
-		hostname: "127.0.0.1",
+		hostname: binlogHost,
 		port:     masterTablet.MysqlctlProcess.MySQLPort,
 		username: mysqlUserName,
 	})
@@ -54,16 +52,13 @@ func TestPointInTimeRecovery(t *testing.T) {
 	// and when we recover to certain time, this time gap will be able to identify the exact eligible row
 	var timeToRecover string
 	for counter := 3; counter <= 7; counter++ {
-		insertRow(t, counter, fmt.Sprintf("prd-%d", counter), true)
 		if counter == 5 { // we want to recovery till this, so noting the time
 			tm := time.Now().Add(1 * time.Second).UTC()
 			timeToRecover = tm.Format(time.RFC3339)
 		}
+		insertRow(t, counter, fmt.Sprintf("prd-%d", counter), true)
 
 	}
-
-	// fetch the time we want to recover to
-	//timeToRecover := getRecoveryTimeInUTC(t, 5)
 
 	// start the recovery
 	recoveryTablet := clusterInstance.NewVttabletInstance("replica", 0, cell)
@@ -72,22 +67,9 @@ func TestPointInTimeRecovery(t *testing.T) {
 	sqlRes, err := recoveryTablet.VttabletProcess.QueryTablet(selectMaxID, keyspaceName, true)
 	require.NoError(t, err)
 
-	fmt.Println(sqlRes.Rows[0][0].String())
-	assert.Equal(t, sqlRes.Rows[0][0].String(), "INT64(6)")
+	assert.Equal(t, sqlRes.Rows[0][0].String(), "INT64(5)")
 	defer recoveryTablet.MysqlctlProcess.Stop()
 	defer recoveryTablet.VttabletProcess.TearDown()
-}
-
-func getRecoveryTimeInUTC(t *testing.T, rowNum int) string {
-	sqlRes, err := masterTablet.VttabletProcess.QueryTablet(fmt.Sprintf(selectRecoverTime, rowNum), keyspaceName, true)
-	require.NoError(t, err)
-	epochTime, err := strconv.ParseInt(string(sqlRes.Rows[0][0].ToBytes()), 10, 64)
-	require.NoError(t, err)
-	timeToRecover := time.Unix(epochTime, 0)
-	timeToRecover = timeToRecover.Add(1 * time.Second)
-	loc, err := time.LoadLocation("UTC")
-	require.NoError(t, err)
-	return timeToRecover.In(loc).Format(time.RFC3339)
 }
 
 func insertRow(t *testing.T, id int, productName string, isSlow bool) {
