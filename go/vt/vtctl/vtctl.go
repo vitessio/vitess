@@ -1961,8 +1961,7 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 		return err
 	}
 
-	_, err = wr.VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypes, *filteredReplicationWaitTime,
-		*HealthCheckTopologyRefresh, *HealthcheckRetryDelay, *HealthCheckTimeout, *format)
+	_, err = wr.VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypes, *filteredReplicationWaitTime, *format)
 	return err
 }
 

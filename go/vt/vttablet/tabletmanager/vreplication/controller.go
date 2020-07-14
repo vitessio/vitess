@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -113,7 +114,8 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 		if v := params["tablet_types"]; v != "" {
 			tabletTypesStr = v
 		}
-		tp, err := discovery.NewTabletPicker(ts, cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr)
+		cells := strings.Split(cell, ",")
+		tp, err := discovery.NewTabletPicker(ts, cells, ct.source.Keyspace, ct.source.Shard, tabletTypesStr)
 		if err != nil {
 			return nil, err
 		}
