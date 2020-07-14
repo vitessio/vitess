@@ -38,7 +38,6 @@ var (
 func init() {
 	Register("lookup", NewLookup)
 	Register("lookup_unique", NewLookupUnique)
-	RegisterValueEncoder("nop", nil)
 	RegisterValueEncoder("numeric_uint64", numericUint64)
 }
 
@@ -66,7 +65,7 @@ type LookupNonUnique struct {
 	name      string
 	writeOnly bool
 	lkp       lookupInternal
-	encoders  []ValueEncoderFunc
+	encoder   ValueEncoderFunc
 }
 
 // String returns the name of the vindex.
@@ -117,18 +116,13 @@ func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Des
 			continue
 		}
 		ksids := make([][]byte, 0, len(result.Rows))
-		for i, row := range result.Rows {
-			if ln.encoders != nil {
+		encoderFn := ln.encoder
+		for _, row := range result.Rows {
+			if encoderFn != nil {
 				value := row[0]
-				var valueBytes []byte
-				if ln.encoders[i] != nil {
-					bs, err := ln.encoders[i](value)
-					if err != nil {
-						return nil, fmt.Errorf("LookupNonUnique.Map: couldn't apply encoding to column %v: %v", i, err)
-					}
-					valueBytes = bs
-				} else {
-					valueBytes = value.ToBytes()
+				valueBytes, err := encoderFn(value)
+				if err != nil {
+					return nil, fmt.Errorf("LookupNonUnique.Map: couldn't apply encoding to result: %v", err)
 				}
 				ksids = append(ksids, valueBytes)
 			} else {
@@ -198,14 +192,13 @@ func NewLookup(name string, m map[string]string) (Vindex, error) {
 		return nil, err
 	}
 
-	if lookup.lkp.Encoder != nil {
-		for _, encoderName := range lookup.lkp.Encoder {
-			encoderFn, validName := valueEncoders[encoderName]
-			if !validName {
-				return nil, fmt.Errorf("vindex %s: Attempting to use unknown value encoder %v", name, encoderName)
-			}
-			lookup.encoders = append(lookup.encoders, encoderFn)
+	if lookup.lkp.Encoder != "" {
+		encoderName := lookup.lkp.Encoder
+		encoderFn, validName := valueEncoders[encoderName]
+		if !validName {
+			return nil, fmt.Errorf("vindex %s: Attempting to use unknown value encoder %v", name, encoderName)
 		}
+		lookup.encoder = encoderFn
 	}
 
 	return lookup, nil
@@ -257,16 +250,13 @@ func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 		return nil, err
 	}
 
-	if lu.lkp.Encoder != nil {
-		if len(lu.lkp.Encoder) != 1 {
-			return nil, fmt.Errorf("vindex %s: lookup_unique only supports a single encoder, recieved %v", name, lu.lkp.Encoder)
-		}
-		encoderName := lu.lkp.Encoder[0]
-		encoder, ok := valueEncoders[encoderName]
+	if lu.lkp.Encoder != "" {
+		encoderName := lu.lkp.Encoder
+		encoderFn, ok := valueEncoders[encoderName]
 		if !ok {
 			return nil, fmt.Errorf("vindex %s references unknown value encoder %s", name, encoderName)
 		}
-		lu.encoder = encoder
+		lu.encoder = encoderFn
 	}
 
 	return lu, nil
@@ -311,15 +301,17 @@ func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destin
 			out = append(out, key.DestinationNone{})
 		case 1:
 			value := result.Rows[0][0]
+			var valueBytes []byte
 			if lu.encoder != nil {
 				encodedBytes, err := lu.encoder(value)
 				if err != nil {
 					return nil, fmt.Errorf("Lookup.Map: couldn't apply encoding: %v", err)
 				}
-				out = append(out, key.DestinationKeyspaceID(encodedBytes))
+				valueBytes = encodedBytes
 			} else {
-				out = append(out, key.DestinationKeyspaceID(value.ToBytes()))
+				valueBytes = value.ToBytes()
 			}
+			out = append(out, key.DestinationKeyspaceID(valueBytes))
 		default:
 			return nil, fmt.Errorf("Lookup.Map: unexpected multiple results from vindex %s: %v", lu.lkp.Table, ids[i])
 		}

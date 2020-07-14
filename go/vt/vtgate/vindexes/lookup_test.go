@@ -134,31 +134,15 @@ func TestLookupNonUniqueNewWithEncoders(t *testing.T) {
 		"table":   "t",
 		"from":    "fromc,fromc2",
 		"to":      "toc",
-		"encoder": "nop,numeric_uint64",
+		"encoder": "numeric_uint64",
 	})
 	if err != nil {
 		t.Fatal(fmt.Sprintf("Failed to construct LookupNonUnique with encoder: %v", err))
 	}
 
-	encCount := len(lu.(*LookupNonUnique).encoders)
-	if encCount != 2 {
-		t.Errorf("Expected two encoders defined for LookupNonUnique vindex, got %v", encCount)
-	}
-}
-
-func TestLookupNonUniqueNewWithTooFewEncoders(t *testing.T) {
-	ln, err := CreateVindex("lookup", "lookup", map[string]string{
-		"table":   "t",
-		"from":    "fromc,fromc2",
-		"to":      "toc",
-		"encoder": "numeric_uint64",
-	})
-	if err == nil {
-		t.Fatal("Expected to fail constructing a LookupNonUnique when not enough encoding function provided")
-	}
-
-	if ln != nil {
-		t.Errorf("Expected no LookupNonUnique when passed bad arguments")
+	encoder := lu.(*LookupNonUnique).encoder
+	if encoder == nil {
+		t.Errorf("Expected encoder defined for LookupNonUnique vindex, got none")
 	}
 }
 
@@ -227,7 +211,7 @@ func TestLookupNonUniqueMapWithEncoders(t *testing.T) {
 		"table":   "t",
 		"from":    "fromc,fromc2",
 		"to":      "toc",
-		"encoder": "nop,numeric_uint64",
+		"encoder": "numeric_uint64",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -240,15 +224,16 @@ func TestLookupNonUniqueMapWithEncoders(t *testing.T) {
 		t.Error(err)
 	}
 
+	k1Bytes, _ := numericUint64(sqltypes.NewUint64(uint64(1)))
 	k2Bytes, _ := numericUint64(sqltypes.NewUint64(uint64(2)))
 
 	want := []key.Destination{
 		key.DestinationKeyspaceIDs([][]byte{
-			[]byte("1"),
+			k1Bytes,
 			k2Bytes,
 		}),
 		key.DestinationKeyspaceIDs([][]byte{
-			[]byte("1"),
+			k1Bytes,
 			k2Bytes,
 		}),
 	}

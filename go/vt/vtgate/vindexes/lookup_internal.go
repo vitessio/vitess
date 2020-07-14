@@ -37,7 +37,7 @@ type lookupInternal struct {
 	Autocommit    bool     `json:"autocommit,omitempty"`
 	Upsert        bool     `json:"upsert,omitempty"`
 	IgnoreNulls   bool     `json:"ignore_nulls,omitempty"`
-	Encoder       []string `json:"encoder,omitempty"`
+	Encoder       string   `json:"encoder,omitempty"`
 	sel, ver, del string
 }
 
@@ -55,17 +55,8 @@ func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit,
 	if err != nil {
 		return err
 	}
-	var encoders []string
-	if strings.TrimSpace(lookupQueryParams["encoder"]) != "" {
-		for _, enc := range strings.Split(lookupQueryParams["encoder"], ",") {
-			encoders = append(encoders, strings.TrimSpace(enc))
-		}
-	}
-	lkp.Encoder = encoders
-	if encoders != nil && len(lkp.Encoder) != len(lkp.FromColumns) {
-		return fmt.Errorf("Expected one encoder per from column (%v), got %v", len(lkp.FromColumns), len(lkp.Encoder))
-	}
 
+	lkp.Encoder = strings.TrimSpace(lookupQueryParams["encoder"])
 	lkp.Autocommit = autocommit
 	lkp.Upsert = upsert
 
