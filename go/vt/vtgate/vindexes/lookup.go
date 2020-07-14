@@ -42,8 +42,9 @@ func init() {
 	RegisterValueEncoder("numeric_uint64", numericUint64)
 }
 
-// RegisterValueEncoder will link an encoder that can be used on
-// lookup_unique hashes.
+// RegisterValueEncoder will define an encoder that can be used on
+// lookup & lookup_unique vindexes when resolving a keyspace ID from
+// another table's column content.
 func RegisterValueEncoder(name string, fn ValueEncoderFunc) {
 	if _, ok := valueEncoders[name]; ok {
 		panic(fmt.Sprintf("%s is already registered", name))
@@ -366,6 +367,6 @@ func numericUint64(input sqltypes.Value) ([]byte, error) {
 		return nil, fmt.Errorf("numericUint64: couldn't parse bytes: %v", err)
 	}
 	vBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(vBytes, v)
+	binary.PutUvarint(vBytes, v)
 	return vBytes, nil
 }
