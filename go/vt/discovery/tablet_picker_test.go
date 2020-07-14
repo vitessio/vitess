@@ -33,11 +33,11 @@ import (
 )
 
 func TestPickSimple(t *testing.T) {
-	te := newPickerTestEnv(t)
-	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, true, true)
+	te := newPickerTestEnv(t, []string{"cell"})
+	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
 	defer deleteTablet(te, want)
 
-	tp, err := NewTabletPicker(te.topoServ, te.cell, te.keyspace, te.shard, "replica")
+	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
 	require.NoError(t, err)
 
 	tablet, err := tp.PickForStreaming(context.Background())
@@ -48,12 +48,11 @@ func TestPickSimple(t *testing.T) {
 }
 
 func TestPickFromOtherCell(t *testing.T) {
-	te := newPickerTestEnv(t)
-	te.cell = "otherCell"
-	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, true, true)
+	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
+	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "otherCell", true, true)
 	defer deleteTablet(te, want)
 
-	tp, err := NewTabletPicker(te.topoServ, "cell,otherCell", te.keyspace, te.shard, "replica")
+	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -66,13 +65,13 @@ func TestPickFromOtherCell(t *testing.T) {
 }
 
 func TestPickFromTwoHealthy(t *testing.T) {
-	te := newPickerTestEnv(t)
-	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, true, true)
+	te := newPickerTestEnv(t, []string{"cell"})
+	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
 	defer deleteTablet(te, want1)
-	want2 := addTablet(te, 101, topodatapb.TabletType_RDONLY, true, true)
+	want2 := addTablet(te, 101, topodatapb.TabletType_RDONLY, "cell", true, true)
 	defer deleteTablet(te, want2)
 
-	tp, err := NewTabletPicker(te.topoServ, te.cell, te.keyspace, te.shard, "replica,rdonly")
+	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica,rdonly")
 	require.NoError(t, err)
 
 	// In 20 attempts, both tablet types must be picked at least once.
@@ -91,14 +90,32 @@ func TestPickFromTwoHealthy(t *testing.T) {
 	assert.True(t, picked2)
 }
 
-func TestPickError(t *testing.T) {
-	te := newPickerTestEnv(t)
-	defer deleteTablet(te, addTablet(te, 100, topodatapb.TabletType_REPLICA, false, false))
+func TestPickUsingCellAlias(t *testing.T) {
+	// test env puts all cells into an alias called "cella"
+	te := newPickerTestEnv(t, []string{"cell"})
+	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
+	defer deleteTablet(te, want)
 
-	_, err := NewTabletPicker(te.topoServ, te.cell, te.keyspace, te.shard, "badtype")
+	tp, err := NewTabletPicker(te.topoServ, []string{"cella"}, te.keyspace, te.shard, "replica")
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	tablet, err := tp.PickForStreaming(ctx)
+	require.NoError(t, err)
+	if !proto.Equal(want, tablet) {
+		t.Errorf("Pick: %v, want %v", tablet, want)
+	}
+}
+
+func TestPickError(t *testing.T) {
+	te := newPickerTestEnv(t, []string{"cell"})
+	defer deleteTablet(te, addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", false, false))
+
+	_, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "badtype")
 	assert.EqualError(t, err, "failed to parse list of tablet types: badtype")
 
-	_, err = NewTabletPicker(te.topoServ, te.cell, te.keyspace, te.shard, "replica,rdonly")
+	_, err = NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica,rdonly")
 	require.NoError(t, err)
 }
 
@@ -106,32 +123,37 @@ type pickerTestEnv struct {
 	t        *testing.T
 	keyspace string
 	shard    string
-	cell     string
+	cells    []string
 
 	topoServ *topo.Server
 }
 
-func newPickerTestEnv(t *testing.T) *pickerTestEnv {
+func newPickerTestEnv(t *testing.T, cells []string) *pickerTestEnv {
 	ctx := context.Background()
 
 	te := &pickerTestEnv{
 		t:        t,
 		keyspace: "ks",
 		shard:    "0",
-		cell:     "cell",
-		topoServ: memorytopo.NewServer("cell", "otherCell"),
+		cells:    cells,
+		topoServ: memorytopo.NewServer(cells...),
 	}
-	err := te.topoServ.CreateKeyspace(ctx, te.keyspace, &topodatapb.Keyspace{})
+	// create cell alias
+	err := te.topoServ.CreateCellsAlias(ctx, "cella", &topodatapb.CellsAlias{
+		Cells: cells,
+	})
+	require.NoError(t, err)
+	err = te.topoServ.CreateKeyspace(ctx, te.keyspace, &topodatapb.Keyspace{})
 	require.NoError(t, err)
 	err = te.topoServ.CreateShard(ctx, te.keyspace, te.shard)
 	require.NoError(t, err)
 	return te
 }
 
-func addTablet(te *pickerTestEnv, id int, tabletType topodatapb.TabletType, serving, healthy bool) *topodatapb.Tablet {
+func addTablet(te *pickerTestEnv, id int, tabletType topodatapb.TabletType, cell string, serving, healthy bool) *topodatapb.Tablet {
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
-			Cell: te.cell,
+			Cell: cell,
 			Uid:  uint32(id),
 		},
 		Keyspace: te.keyspace,

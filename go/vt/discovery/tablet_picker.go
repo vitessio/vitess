@@ -17,10 +17,10 @@ limitations under the License.
 package discovery
 
 import (
-	"fmt"
 	"math/rand"
-	"strings"
 	"time"
+
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
@@ -31,7 +31,6 @@ import (
 	"golang.org/x/net/context"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -45,14 +44,11 @@ type TabletPicker struct {
 }
 
 // NewTabletPicker returns a TabletPicker.
-func NewTabletPicker(ts *topo.Server, cell, keyspace, shard, tabletTypesStr string) (*TabletPicker, error) {
+func NewTabletPicker(ts *topo.Server, cells []string, keyspace, shard, tabletTypesStr string) (*TabletPicker, error) {
 	tabletTypes, err := topoproto.ParseTabletTypes(tabletTypesStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse list of tablet types: %v", tabletTypesStr)
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to parse list of tablet types: %v", tabletTypesStr)
 	}
-
-	cells := strings.Split(cell, ",")
-
 	return &TabletPicker{
 		ts:          ts,
 		cells:       cells,
@@ -64,7 +60,6 @@ func NewTabletPicker(ts *topo.Server, cell, keyspace, shard, tabletTypesStr stri
 
 // PickForStreaming picks all healthy tablets including the non-serving ones.
 func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Tablet, error) {
-	// TODO: parse tp.cell and call this for one cell at a time?
 	candidates := tp.getAllTablets(ctx)
 	if len(candidates) == 0 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "no tablets available for %v %v %v", tp.cells, tp.keyspace, tp.shard)
@@ -100,7 +95,19 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 
 func (tp *TabletPicker) getAllTablets(ctx context.Context) []*topodatapb.TabletAlias {
 	result := make([]*topodatapb.TabletAlias, 0)
+	actualCells := make([]string, 0)
 	for _, cell := range tp.cells {
+		// check if cell is actually an alias
+		// non-blocking read so that this is fast
+		alias, err := tp.ts.GetCellsAlias(ctx, cell, false)
+		if err != nil {
+			// either cellAlias doesn't exist or it isn't a cell alias at all. In that case assume it is a cell
+			actualCells = append(actualCells, cell)
+		} else {
+			actualCells = append(actualCells, alias.Cells...)
+		}
+	}
+	for _, cell := range actualCells {
 		sri, err := tp.ts.GetShardReplication(ctx, cell, tp.keyspace, tp.shard)
 		if err != nil {
 			log.Warningf("error %v from GetShardReplication for %v %v %v", err, cell, tp.keyspace, tp.shard)
