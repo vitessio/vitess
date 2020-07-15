@@ -53,6 +53,7 @@ func (vx *vexec) buildVExecPlan() (*vexecPlan, error) {
 	default:
 		return nil, fmt.Errorf("query not supported by vexec: %s", sqlparser.String(stmt))
 	}
+
 	if err != nil {
 		return nil, err
 	}
