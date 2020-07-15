@@ -60,6 +60,7 @@ require (
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pires/go-proxyproto v0.0.0-20191211124218-517ecdf5bb2b
 	github.com/pkg/errors v0.8.1
+	github.com/planetscale/pargzip v0.0.0-20200715020636-4594b3602cf6
 	github.com/prometheus/client_golang v1.4.1
 	github.com/prometheus/common v0.9.1
 	github.com/satori/go.uuid v1.2.0 // indirect

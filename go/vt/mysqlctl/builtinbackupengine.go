@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"bufio"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -27,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/klauspost/pgzip"
+	"github.com/planetscale/pargzip"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -397,13 +398,12 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	}
 
 	// Create the gzip compression pipe, if necessary.
-	var gzip *pgzip.Writer
+	var gzip *pargzip.Writer
 	if *backupStorageCompress {
-		gzip, err = pgzip.NewWriterLevel(writer, pgzip.BestSpeed)
-		if err != nil {
-			return vterrors.Wrap(err, "cannot create gziper")
-		}
-		gzip.SetConcurrency(*backupCompressBlockSize, *backupCompressBlocks)
+		gzip = pargzip.NewWriter(writer)
+		gzip.ChunkSize = *backupCompressBlockSize
+		gzip.Parallel = *backupCompressBlocks
+		gzip.CompressionLevel = pargzip.BestSpeed
 		writer = gzip
 	}
 
@@ -557,7 +557,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 
 	// Create the uncompresser if needed.
 	if compress {
-		gz, err := pgzip.NewReader(reader)
+		gz, err := gzip.NewReader(reader)
 		if err != nil {
 			return vterrors.Wrap(err, "can't open gzip decompressor")
 		}
