@@ -156,10 +156,8 @@ func (vs *vstreamer) Stream() error {
 func (vs *vstreamer) replicate(ctx context.Context) error {
 	// Ensure se is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
-	if !vs.se.SkipMetaCheck {
-		if err := vs.se.Open(); err != nil {
-			return wrapError(err, vs.pos)
-		}
+	if err := vs.se.Open(); err != nil {
+		return wrapError(err, vs.pos)
 	}
 
 	conn, err := binlog.NewBinlogConnection(vs.cp)
