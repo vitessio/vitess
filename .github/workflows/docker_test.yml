@@ -1,9 +1,8 @@
-name: docker test
+name: docker_test
 on: [push, pull_request]
 jobs:
 
   build:
-    name: Docker Test
     runs-on: ubuntu-latest
     strategy:
       matrix:
