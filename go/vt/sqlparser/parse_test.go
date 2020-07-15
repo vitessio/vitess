@@ -728,6 +728,9 @@ var (
 	}, {
 		input: "insert into user(username, `status`) values ('Chuck', default(`status`))",
 	}, {
+		input:  "insert into user(format) values ('Chuck')",
+		output: "insert into user(`format`) values ('Chuck')",
+	}, {
 		input: "update /* simple */ a set b = 3",
 	}, {
 		input: "update /* a.b */ a.b set b = 3",
