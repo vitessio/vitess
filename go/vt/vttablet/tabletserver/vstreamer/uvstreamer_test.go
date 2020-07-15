@@ -234,7 +234,10 @@ begin;
 insert into t3 (id31, id32) values (12, 360);
 savepoint a;
 insert into t3 (id31, id32) values (13, 390);
-release savepoint a;
+rollback work to savepoint a;
+savepoint b;
+insert into t3 (id31, id32) values (13, 390);
+release savepoint b;
 commit;"
 `)
 	}
@@ -244,7 +247,7 @@ commit;"
 	numCatchupEvents := 3 * 5                             /*2 t1, 1 t2 : BEGIN+FIELD+ROW+GTID+COMMIT*/
 	numFastForwardEvents := 5                             /*t1:FIELD+ROW*/
 	numMisc := 1                                          /* t2 insert during t1 catchup that comes in t2 copy */
-	numReplicateEvents := 2*5 /* insert into t1/t2 */ + 6 /* begin/field/2 inserts/gtid/commit, savepoint ignored */
+	numReplicateEvents := 2*5 /* insert into t1/t2 */ + 8 /* begin/field/2 inserts/gtid/commit + 2 savepoints */
 	numExpectedEvents := numCopyEvents + numCatchupEvents + numFastForwardEvents + numMisc + numReplicateEvents
 
 	var lastRowEventSeen bool
@@ -508,6 +511,8 @@ var expectedEvents = []string{
 	"type:BEGIN",
 	"type:FIELD field_event:<table_name:\"t3\" fields:<name:\"id31\" type:INT32 > fields:<name:\"id32\" type:INT32 > > ",
 	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:2 lengths:3 values:\"12360\" > > > ",
+	"type:SAVEPOINT statement:\"SAVEPOINT `a`\"",
+	"type:SAVEPOINT statement:\"SAVEPOINT `b`\"",
 	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:2 lengths:3 values:\"13390\" > > > ",
 	"type:GTID",
 	"type:COMMIT",

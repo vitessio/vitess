@@ -55,22 +55,22 @@ func TestTracker(t *testing.T) {
 				Type: binlogdatapb.VEventType_GTID,
 				Gtid: gtid1,
 			}, {
-				Type: binlogdatapb.VEventType_DDL,
-				Ddl:  ddl1,
+				Type:      binlogdatapb.VEventType_DDL,
+				Statement: ddl1,
 			},
 			{
-				Type: binlogdatapb.VEventType_GTID,
-				Gtid: "",
+				Type:      binlogdatapb.VEventType_GTID,
+				Statement: "",
 			}, {
-				Type: binlogdatapb.VEventType_DDL,
-				Ddl:  ddl1,
+				Type:      binlogdatapb.VEventType_DDL,
+				Statement: ddl1,
 			},
 			{
 				Type: binlogdatapb.VEventType_GTID,
 				Gtid: gtid1,
 			}, {
-				Type: binlogdatapb.VEventType_DDL,
-				Ddl:  "",
+				Type:      binlogdatapb.VEventType_DDL,
+				Statement: "",
 			},
 		}},
 	}

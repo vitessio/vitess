@@ -406,6 +406,45 @@ func TestFilteredInt(t *testing.T) {
 	runCases(t, filter, testcases, "", nil)
 }
 
+func TestSavepoint(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table stream1(id int, val varbinary(128), primary key(id))",
+		"create table stream2(id int, val varbinary(128), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table stream1",
+		"drop table stream2",
+	})
+	engine.se.Reload(context.Background())
+	testcases := []testcase{{
+		input: []string{
+			"begin",
+			"insert into stream1 values (1, 'aaa')",
+			"savepoint a",
+			"insert into stream1 values (2, 'aaa')",
+			"rollback work to savepoint a",
+			"savepoint b",
+			"update stream1 set val='bbb' where id = 1",
+			"release savepoint b",
+			"commit",
+		},
+		output: [][]string{{
+			`begin`,
+			`type:FIELD field_event:<table_name:"stream1" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
+			`type:ROW row_event:<table_name:"stream1" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
+			"type:SAVEPOINT statement:\"SAVEPOINT `a`\" ",
+			"type:SAVEPOINT statement:\"SAVEPOINT `b`\" ",
+			`type:ROW row_event:<table_name:"stream1" row_changes:<before:<lengths:1 lengths:3 values:"1aaa" > after:<lengths:1 lengths:3 values:"1bbb" > > > `,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	runCases(t, nil, testcases, "current", nil)
+}
 func TestStatements(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -441,14 +480,14 @@ func TestStatements(t *testing.T) {
 		input: "alter table stream1 change column val val varbinary(128)",
 		output: [][]string{{
 			`gtid`,
-			`type:DDL ddl:"alter table stream1 change column val val varbinary(128)" `,
+			`type:DDL statement:"alter table stream1 change column val val varbinary(128)" `,
 		}},
 	}, {
 		// DDL padded with comments.
 		input: " /* prefix */ alter table stream1 change column val val varbinary(256) /* suffix */ ",
 		output: [][]string{{
 			`gtid`,
-			`type:DDL ddl:"/* prefix */ alter table stream1 change column val val varbinary(256) /* suffix */" `,
+			`type:DDL statement:"/* prefix */ alter table stream1 change column val val varbinary(256) /* suffix */" `,
 		}},
 	}, {
 		// Multiple tables, and multiple rows changed per statement.
@@ -480,7 +519,7 @@ func TestStatements(t *testing.T) {
 		input: "truncate table stream2",
 		output: [][]string{{
 			`gtid`,
-			`type:DDL ddl:"truncate table stream2" `,
+			`type:DDL statement:"truncate table stream2" `,
 		}},
 	}}
 	runCases(t, nil, testcases, "current", nil)
@@ -915,10 +954,10 @@ func TestDDLAddColumn(t *testing.T) {
 		`commit`,
 	}, {
 		`gtid`,
-		`type:DDL ddl:"alter table ddl_test1 add column val2 varbinary(128)" `,
+		`type:DDL statement:"alter table ddl_test1 add column val2 varbinary(128)" `,
 	}, {
 		`gtid`,
-		`type:DDL ddl:"alter table ddl_test2 add column val2 varbinary(128)" `,
+		`type:DDL statement:"alter table ddl_test2 add column val2 varbinary(128)" `,
 	}, {
 		// The plan will be updated to now include the third column
 		// because the new table map will have three columns.
@@ -1086,7 +1125,7 @@ func TestBuffering(t *testing.T) {
 		},
 		output: [][]string{{
 			`gtid`,
-			`type:DDL ddl:"alter table packet_test change val val varchar(128)" `,
+			`type:DDL statement:"alter table packet_test change val val varchar(128)" `,
 		}},
 	}}
 	runCases(t, nil, testcases, "", nil)
@@ -1130,7 +1169,7 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 			`commit`,
 		}, {
 			`gtid`,
-			`type:DDL ddl:"rename table vitess_test to vitess_test_new" `,
+			`type:DDL statement:"rename table vitess_test to vitess_test_new" `,
 		}, {
 			`begin`,
 			`type:FIELD field_event:<table_name:"vitess_test_new" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,

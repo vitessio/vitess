@@ -244,7 +244,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			curSize += newSize
 			bufferedEvents = append(bufferedEvents, vevent)
 		case binlogdatapb.VEventType_SAVEPOINT:
-			// no-op, we do not send savepoint event on
+			bufferedEvents = append(bufferedEvents, vevent)
 		default:
 			return fmt.Errorf("unexpected event: %v", vevent)
 		}
@@ -424,8 +424,8 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 					Type: binlogdatapb.VEventType_GTID,
 					Gtid: mysql.EncodePosition(vs.pos),
 				}, &binlogdatapb.VEvent{
-					Type: binlogdatapb.VEventType_DDL,
-					Ddl:  q.SQL,
+					Type:      binlogdatapb.VEventType_DDL,
+					Statement: q.SQL,
 				})
 				// Reload schema only if the DDL change is relevant.
 				// TODO(sougou): move this back to always load after
@@ -443,7 +443,8 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			vs.se.ReloadAt(context.Background(), vs.pos)
 		case sqlparser.StmtSavepoint:
 			vevents = append(vevents, &binlogdatapb.VEvent{
-				Type: binlogdatapb.VEventType_SAVEPOINT,
+				Type:      binlogdatapb.VEventType_SAVEPOINT,
+				Statement: q.SQL,
 			})
 		case sqlparser.StmtOther, sqlparser.StmtPriv:
 			// These are either:
