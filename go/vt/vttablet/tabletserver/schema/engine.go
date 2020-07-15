@@ -67,8 +67,6 @@ type Engine struct {
 	// SkipMetaCheck skips the metadata about the database and table information
 	SkipMetaCheck bool
 
-	// The following fields have their own synchronization
-	// and do not require locking mu.
 	historian *historian
 
 	conns *connpool.Pool
@@ -250,7 +248,7 @@ func (se *Engine) reload(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	// if this flag is set, then we can return from here
+	// if this flag is set, then we don't need table meta information
 	if se.SkipMetaCheck {
 		return nil
 	}
@@ -317,6 +315,7 @@ func (se *Engine) reload(ctx context.Context) error {
 }
 
 func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, error) {
+	// `SELECT UNIX_TIMESTAMP` is in upper case , so that binlog server queries are case sensitive and can respond to this
 	tm, err := conn.Exec(ctx, "SELECT UNIX_TIMESTAMP()", 1, false)
 	if err != nil {
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get MySQL time: %v", err)

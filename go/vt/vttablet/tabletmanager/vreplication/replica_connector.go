@@ -36,6 +36,10 @@ var (
 )
 
 // NewReplicaConnector returns replica connector
+//
+// This is used by binlog server to make vstream connection
+// using the vstream connection, it will parse the events from binglog
+// to fetch the corresponding GTID for required recovery time
 func NewReplicaConnector(connParams *mysql.ConnParams) *replicaConnector {
 
 	// Construct
