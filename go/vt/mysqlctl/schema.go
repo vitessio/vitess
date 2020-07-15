@@ -181,7 +181,7 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 	}
 
 	log.Infof("mysqld GetSchema: Collecting all table schemas")
-	tds := make([]*tabletmanagerdatapb.TableDefinition, 0, i)
+	tds := make([]*tabletmanagerdatapb.TableDefinition, i)
 	for res := range resChan {
 		if res.err != nil {
 			cancel()
