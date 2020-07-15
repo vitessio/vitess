@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -166,6 +167,27 @@ func parseMariadbReplicationStatus(resultMap map[string]string) (ReplicationStat
 	}
 
 	return status, nil
+}
+
+// masterStatus is part of the Flavor interface.
+func (m mariadbFlavor) masterStatus(c *Conn) (MasterStatus, error) {
+	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
+	if err != nil {
+		return MasterStatus{}, err
+	}
+	if len(qr.Rows) == 0 {
+		// The query returned no data. We don't know how this could happen.
+		return MasterStatus{}, ErrNoMasterStatus
+	}
+
+	resultMap, err := resultToMap(qr)
+	if err != nil {
+		return MasterStatus{}, err
+	}
+
+	status := parseMasterStatus(resultMap)
+	status.Position.GTIDSet, err = m.masterGTIDSet(c)
+	return status, err
 }
 
 // waitUntilPositionCommand is part of the Flavor interface.

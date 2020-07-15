@@ -48,6 +48,15 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 	return mysql.ReplicationStatusToProto(status), nil
 }
 
+// MasterStatus returns the replication status fopr a master tablet.
+func (tm *TabletManager) MasterStatus(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
+	status, err := tm.MysqlDaemon.MasterStatus(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return mysql.MasterStatusToProto(status), nil
+}
+
 // MasterPosition returns the master position
 func (tm *TabletManager) MasterPosition(ctx context.Context) (string, error) {
 	pos, err := tm.MysqlDaemon.MasterPosition()
@@ -326,7 +335,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 // or on a tablet that already transitioned to REPLICA.
 //
 // If a step fails in the middle, it will try to undo any changes it made.
-func (tm *TabletManager) DemoteMaster(ctx context.Context) (string, error) {
+func (tm *TabletManager) DemoteMaster(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
 	// The public version always reverts on partial failure.
 	return tm.demoteMaster(ctx, true /* revertPartialFailure */)
 }
@@ -335,9 +344,9 @@ func (tm *TabletManager) DemoteMaster(ctx context.Context) (string, error) {
 //
 // If revertPartialFailure is true, and a step fails in the middle, it will try
 // to undo any changes it made.
-func (tm *TabletManager) demoteMaster(ctx context.Context, revertPartialFailure bool) (replicationPosition string, finalErr error) {
+func (tm *TabletManager) demoteMaster(ctx context.Context, revertPartialFailure bool) (masterStatus *replicationdatapb.MasterStatus, finalErr error) {
 	if err := tm.lock(ctx); err != nil {
-		return "", err
+		return nil, err
 	}
 	defer tm.unlock()
 
@@ -346,7 +355,7 @@ func (tm *TabletManager) demoteMaster(ctx context.Context, revertPartialFailure 
 	wasServing := tm.QueryServiceControl.IsServing()
 	wasReadOnly, err := tm.MysqlDaemon.IsReadOnly()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// If we are a master tablet and not yet read-only, stop accepting new
@@ -373,7 +382,7 @@ func (tm *TabletManager) demoteMaster(ctx context.Context, revertPartialFailure 
 		// idempotent.
 		log.Infof("DemoteMaster disabling query service")
 		if _ /* state changed */, err := tm.QueryServiceControl.SetServingType(tablet.Type, false, nil); err != nil {
-			return "", vterrors.Wrap(err, "SetServingType(serving=false) failed")
+			return nil, vterrors.Wrap(err, "SetServingType(serving=false) failed")
 		}
 		defer func() {
 			if finalErr != nil && revertPartialFailure && wasServing {
@@ -391,11 +400,11 @@ func (tm *TabletManager) demoteMaster(ctx context.Context, revertPartialFailure 
 	if *setSuperReadOnly {
 		// Setting super_read_only also sets read_only
 		if err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
-			return "", err
+			return nil, err
 		}
 	} else {
 		if err := tm.MysqlDaemon.SetReadOnly(true); err != nil {
-			return "", err
+			return nil, err
 		}
 	}
 	defer func() {
@@ -409,7 +418,7 @@ func (tm *TabletManager) demoteMaster(ctx context.Context, revertPartialFailure 
 
 	// If using semi-sync, we need to disable master-side.
 	if err := tm.fixSemiSync(topodatapb.TabletType_REPLICA); err != nil {
-		return "", err
+		return nil, err
 	}
 	defer func() {
 		if finalErr != nil && revertPartialFailure && wasMaster {
@@ -421,11 +430,12 @@ func (tm *TabletManager) demoteMaster(ctx context.Context, revertPartialFailure 
 	}()
 
 	// Return the current replication position.
-	pos, err := tm.MysqlDaemon.MasterPosition()
+	status, err := tm.MysqlDaemon.MasterStatus(ctx)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return mysql.EncodePosition(pos), nil
+	masterStatusProto := mysql.MasterStatusToProto(status)
+	return masterStatusProto, nil
 }
 
 // UndoDemoteMaster reverts a previous call to DemoteMaster

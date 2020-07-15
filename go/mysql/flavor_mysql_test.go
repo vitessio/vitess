@@ -127,3 +127,21 @@ func TestMysqlShouldGetRelayLogPosition(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equalf(t, got.RelayLogPosition.GTIDSet.String(), want.RelayLogPosition.GTIDSet.String(), "got RelayLogPosition: %v; want RelayLogPosition: %v", got.RelayLogPosition.GTIDSet, want.RelayLogPosition.GTIDSet)
 }
+
+func TestMysqlShouldGetMasterPosition(t *testing.T) {
+	resultMap := map[string]string{
+		"Executed_Gtid_Set": "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+		"Position":          "1307",
+		"File":              "source-bin.000003",
+	}
+
+	sid, _ := ParseSID("3e11fa47-71ca-11e1-9e33-c80aa9429562")
+	want := MasterStatus{
+		Position:     Position{GTIDSet: Mysql56GTIDSet{sid: []interval{{start: 1, end: 5}}}},
+		FilePosition: Position{GTIDSet: filePosGTID{file: "source-bin.000003", pos: 1307}},
+	}
+	got, err := parseMysqlMasterStatus(resultMap)
+	require.NoError(t, err)
+	assert.Equalf(t, got.Position.GTIDSet.String(), want.Position.GTIDSet.String(), "got Position: %v; want Position: %v", got.Position.GTIDSet, want.Position.GTIDSet)
+	assert.Equalf(t, got.FilePosition.GTIDSet.String(), want.FilePosition.GTIDSet.String(), "got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet)
+}

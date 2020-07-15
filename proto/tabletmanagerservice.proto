@@ -85,6 +85,9 @@ service TabletManager {
   // ReplicationStatus returns the current replication status.
   rpc ReplicationStatus(tabletmanagerdata.ReplicationStatusRequest) returns (tabletmanagerdata.ReplicationStatusResponse) {};
 
+  // MasterStatus returns the current master status.
+  rpc MasterStatus(tabletmanagerdata.MasterStatusRequest) returns (tabletmanagerdata.MasterStatusResponse) {};
+
   // MasterPosition returns the current master position
   rpc MasterPosition(tabletmanagerdata.MasterPositionRequest) returns (tabletmanagerdata.MasterPositionResponse) {};
 
