@@ -2852,31 +2852,42 @@ func commandVExec(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	if len(results) == 0 {
 		wr.Logger().Printf("no result returned\n")
 	}
-	var qr *sqltypes.Result = &sqltypes.Result{}
-	qr.RowsAffected = uint64(len(results))
-	qr.Fields = []*querypb.Field{{
-		Name: "Tablet",
-		Type: sqltypes.VarBinary,
-	}}
-	for _, result := range results {
-		fields := result.Fields
-		qr.Fields = append(qr.Fields, fields...)
-		break
-	}
-	for tablet, result := range results {
-		for _, row := range result.Rows {
-			var row2 []sqltypes.Value
-			row2 = append(row2, sqltypes.NewVarBinary(tablet.AliasString()))
-			row2 = append(row2, row...)
-			qr.Rows = append(qr.Rows, row2)
-		}
-	}
+	qr := queryResultFromVexecResults(results)
 	if *json {
 		return printJSON(wr.Logger(), qr)
 	}
 
 	printQueryResult(loggerWriter{wr.Logger()}, qr)
 	return nil
+}
+
+func queryResultFromVexecResults(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
+	var qr *sqltypes.Result = &sqltypes.Result{}
+	qr.RowsAffected = uint64(len(results))
+	qr.Fields = []*querypb.Field{{
+		Name: "Tablet",
+		Type: sqltypes.VarBinary,
+	},
+		{
+			Name: "Rows Affected",
+			Type: sqltypes.Uint64,
+		},
+	}
+	for _, result := range results {
+		fields := result.Fields
+		qr.Fields = append(qr.Fields, fields...)
+		break
+	}
+	for tablet, result := range results {
+		var row2 []sqltypes.Value
+		row2 = append(row2, sqltypes.NewVarBinary(tablet.AliasString()))
+		row2 = append(row2, sqltypes.NewUint64(qr.RowsAffected))
+		for _, row := range result.Rows {
+			row2 = append(row2, row...)
+		}
+		qr.Rows = append(qr.Rows, row2)
+	}
+	return qr
 }
 
 func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2897,7 +2908,18 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	}
 	action := subFlags.Arg(1)
 
-	return wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun)
+	results, err := wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun)
+	if err != nil {
+		return err
+	}
+	if len(results) == 0 {
+		wr.Logger().Printf("no result returned\n")
+	}
+	qr := queryResultFromVexecResults(results)
+
+	printQueryResult(loggerWriter{wr.Logger()}, qr)
+	return nil
+
 }
 
 func commandPanic(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

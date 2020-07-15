@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/olekukonko/tablewriter"
 	"vitess.io/vitess/go/sqltypes"
@@ -124,13 +126,14 @@ func (vx *vexec) exec(query string) (map[*topo.TabletInfo]*querypb.QueryResult, 
 		wg.Add(1)
 		go func(ctx context.Context, master *topo.TabletInfo) {
 			defer wg.Done()
-			fmt.Printf("Running %s on %s\n", query, master.AliasString())
+			log.Infof("Running %s on %s\n", query, master.AliasString())
 			qr, err := vx.wr.VReplicationExec(ctx, master.Alias, query)
+			log.Infof("Result is %s: %v", master.AliasString(), qr)
 			if err != nil {
 				allErrors.RecordError(err)
 			} else {
 				if qr.RowsAffected == 0 {
-					allErrors.RecordError(fmt.Errorf("\nNo streams found for workflow %s tablet %s", workflow, master.Alias))
+					allErrors.RecordError(fmt.Errorf("\nno matching streams found for workflow %s, tablet %s, query %s", workflow, master.Alias, query))
 				} else {
 					mu.Lock()
 					results[master] = qr
@@ -186,12 +189,16 @@ func (vx *vexec) getMasterForShard(shard string) (*topo.TabletInfo, error) {
 }
 
 // WorkflowAction can start/stop/delete or list strams in _vt.vreplication on all masters in the target keyspace of the workflow
-func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool) error {
+func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error) {
 	if action == "list" {
-		return wr.listStreams(ctx, workflow, keyspace)
+		return nil, wr.listStreams(ctx, workflow, keyspace)
 	}
-	_, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun)
-	return err
+	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun)
+	retResults := make(map[*topo.TabletInfo]*sqltypes.Result)
+	for tablet, result := range results {
+		retResults[tablet] = sqltypes.Proto3ToResult(result)
+	}
+	return retResults, err
 }
 
 func (wr *Wrangler) getWorkflowActionQuery(action string) (string, error) {
