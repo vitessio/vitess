@@ -53,11 +53,11 @@ var (
 	waitForBackupInterval = flag.Duration("wait_for_backup_interval", 0, "(init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear")
 
 	// Flags for PITR
-	binlogHost           = flag.String("binlog_host", "", "(init restore parameter) host name of binlog server.")
-	binlogPort           = flag.Int("binlog_port", 0, "(init restore parameter) port of binlog server.")
-	binlogUser           = flag.String("binlog_user", "", "(init restore parameter) username of binlog server.")
-	binlogPwd            = flag.String("binlog_password", "", "(init restore parameter) password of binlog server.")
-	timeoutForGTIDLookup = flag.Duration("binlog_timeout", 60*time.Second, "(init restore parameter) timeout for fetching gtid from timestamp.")
+	binlogHost           = flag.String("binlog_host", "", "(PITR restore parameter) host name of binlog server.")
+	binlogPort           = flag.Int("binlog_port", 0, "(PITR restore parameter) port of binlog server.")
+	binlogUser           = flag.String("binlog_user", "", "(PITR restore parameter) username of binlog server.")
+	binlogPwd            = flag.String("binlog_password", "", "(PITR restore parameter) password of binlog server.")
+	timeoutForGTIDLookup = flag.Duration("binlog_lookup_timeout", 60*time.Second, "(PITR restore parameter) timeout for fetching gtid from timestamp.")
 )
 
 // RestoreData is the main entry point for backup restore.
@@ -144,7 +144,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	if keyspaceInfo.SnapshotTime != nil {
 		err = tm.restoreToTimeFromBinlog(ctx, pos, keyspaceInfo.SnapshotTime)
 		if err != nil {
-			log.Errorf("unable to restore to the desired point, error : %v", err)
+			log.Errorf("unable to restore to the specified time %s, error : %v", keyspaceInfo.SnapshotTime.String(), err)
 			return nil
 		}
 	}
@@ -199,18 +199,18 @@ func (tm *TabletManager) restoreToTimeFromBinlog(ctx context.Context, pos mysql.
 
 	timeoutCtx, cancelFnc := context.WithTimeout(ctx, *timeoutForGTIDLookup)
 	defer cancelFnc()
-	gtid, stopPosGTID := tm.getGTIDFromTimestamp(timeoutCtx, pos, restoreTime.Seconds)
-	if gtid == "" {
-		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "unable to fetch the GTID for the specified restore_to_time")
+	afterGTIDPos, beforeGTIDPos := tm.getGTIDFromTimestamp(timeoutCtx, pos, restoreTime.Seconds)
+	if afterGTIDPos == "" {
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, fmt.Sprintf("unable to fetch the GTID for the specified time - %s", restoreTime.String()))
 	}
 
-	log.Infof("going to restore upto the gtid - %s", gtid)
-	if stopPosGTID == "" {
-		stopPosGTID = pos.GTIDSet.Last()
+	log.Infof("going to restore upto the GTID - %s", afterGTIDPos)
+	if beforeGTIDPos == "" {
+		beforeGTIDPos = pos.GTIDSet.Last()
 	}
-	err := tm.catchupToGTID(timeoutCtx, gtid, stopPosGTID)
+	err := tm.catchupToGTID(timeoutCtx, afterGTIDPos, beforeGTIDPos)
 	if err != nil {
-		return vterrors.Wrapf(err, "unable to replicate upto specified gtid : %s", gtid)
+		return vterrors.Wrapf(err, "unable to replicate upto desired GTID : %s", afterGTIDPos)
 	}
 
 	return nil
@@ -219,7 +219,7 @@ func (tm *TabletManager) restoreToTimeFromBinlog(ctx context.Context, pos mysql.
 // getGTIDFromTimestamp gets the next GTID of the event happened on the timestamp (resore_to_time)
 //
 // it returns the 2 values, 1st one is the after gtid of the timestamp,
-// the 2nd one returns gtid upto which the replication will be applied
+// the 2nd one returns before gtid upto which the replication will be applied
 // 1st can be used directly in the query `START SLAVE UNTIL SQL_BEFORE_GTIDS = ''`
 // 2nd will be used to check if replication completed from the binlog server
 func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Position, restoreTime int64) (string, string) {
@@ -244,8 +244,8 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 		}},
 	}
 
-	sqlBeforeGTID := make(chan []string)
-	stopPos := ""
+	gtidsChan := make(chan []string)
+	beforeGTIDPos := ""
 	currentPos := ""
 
 	go func() {
@@ -253,82 +253,76 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 			for _, event := range events {
 				if event.Gtid != "" {
 					currentPos = event.Gtid
-				}
-
-				if event.Gtid != "" && event.Timestamp > restoreTime {
-					sqlBeforeGTID <- []string{event.Gtid, stopPos}
-					break
-				}
-				if event.Gtid != "" {
-					stopPos = event.Gtid
+					if event.Timestamp > restoreTime {
+						gtidsChan <- []string{event.Gtid, beforeGTIDPos}
+						break
+					}
+					beforeGTIDPos = event.Gtid
 				}
 			}
 			return nil
 		})
 		if err != nil {
-			sqlBeforeGTID <- []string{currentPos, stopPos}
+			gtidsChan <- []string{currentPos, beforeGTIDPos}
 		}
 	}()
 	defer vsClient.Close(ctx)
 	select {
-	case val := <-sqlBeforeGTID:
+	case val := <-gtidsChan:
 		return val[0], val[1]
 	case <-ctx.Done():
 		log.Warningf("Can't find the GTID from restore time stamp, exiting.")
-		return currentPos, stopPos
+		return currentPos, beforeGTIDPos
 	}
 }
 
 // catchupToGTID replicates upto specified gtid from binlog server
 //
-// copies the data from binlog server by pointing to as slave
+// copies the data from binlog server by pointing to as replica
 // waits till all events to gtid replicated
-// once done, it will reset the slave
-func (tm *TabletManager) catchupToGTID(ctx context.Context, gtid string, stopPosGTID string) error {
-	gtidParsed, err := mysql.DecodePosition(gtid)
+// once done, it will reset the replication
+func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string, beforeGTIDPos string) error {
+	afterGTIDParsed, err := mysql.DecodePosition(afterGTIDPos)
 	if err != nil {
 		return err
 	}
 
-	stopPosGTIDParsed, err := mysql.DecodePosition(stopPosGTID)
+	beforeGTIDPosParsed, err := mysql.DecodePosition(beforeGTIDPos)
 	if err != nil {
 		return err
 	}
-	gtidStr := gtidParsed.GTIDSet.Last()
-	log.Infof("gtid to restore upto %s", gtidStr)
+	afterGTIDStr := afterGTIDParsed.GTIDSet.Last()
+	log.Infof("GTID to restore upto %s", afterGTIDStr)
 
 	// it uses mysql specific queries here
 	cmds := []string{
 		"STOP SLAVE FOR CHANNEL '' ",
 		"STOP SLAVE IO_THREAD FOR CHANNEL ''",
 		fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s',MASTER_PORT=%d, MASTER_USER='%s', MASTER_AUTO_POSITION = 1;", *binlogHost, *binlogPort, *binlogUser),
-		fmt.Sprintf(" START SLAVE UNTIL SQL_BEFORE_GTIDS = '%s'", gtidStr),
+		fmt.Sprintf(" START SLAVE UNTIL SQL_BEFORE_GTIDS = '%s'", afterGTIDStr),
 	}
 
 	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
-		return vterrors.Wrap(err, "failed to reset slave")
+		return vterrors.Wrap(err, fmt.Sprintf("failed to restart the replication until %s GTID", afterGTIDStr))
 	}
-	log.Infof("Waiting for position to reach", gtidParsed)
+	log.Infof("Waiting for position to reach", afterGTIDParsed)
 	// Could not use `agent.MysqlDaemon.WaitMasterPos` as the SLAVE thread is stopped with `START SLAVE UNTIL SQL_BEFORE_GTIDS`
 	// this is as per https://dev.mysql.com/doc/refman/5.6/en/start-slave.html
-	// We need to wait till the slave catch upto the specified gtid
+	// We need to wait till the slave catch upto the specified afterGTIDPos
 	chGTIDCaughtup := make(chan bool)
 	go func() {
 		timeToWait := time.Now().Add(*timeoutForGTIDLookup)
 		for time.Now().Before(timeToWait) {
 			pos, err := tm.MysqlDaemon.MasterPosition()
-			println(fmt.Sprintf("got position as %s and waiting till %s", pos.GTIDSet.String(), stopPosGTIDParsed.GTIDSet.String()))
 			if err != nil {
-				println(err)
 				chGTIDCaughtup <- false
 			}
 
-			if pos.AtLeast(stopPosGTIDParsed) {
+			if pos.AtLeast(beforeGTIDPosParsed) {
 				chGTIDCaughtup <- true
 			}
 			select {
 			case <-ctx.Done():
-				println("context finished, exiting!")
 				chGTIDCaughtup <- false
 			default:
 				time.Sleep(300 * time.Millisecond)
@@ -338,20 +332,19 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, gtid string, stopPos
 	select {
 	case resp := <-chGTIDCaughtup:
 		if resp {
-			println("gtid is reached, hence reseting the replication")
 			cmds := []string{
 				"STOP SLAVE",
 				"RESET SLAVE ALL",
 			}
 			if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
-				return vterrors.Wrap(err, "failed to reset slave")
+				return vterrors.Wrap(err, "failed to stop replication")
 			}
 			return nil
 		}
-		return vterrors.Wrap(err, "error while fetching the current gtid position")
+		return vterrors.Wrap(err, "error while fetching the current GTID position")
 	case <-ctx.Done():
-		log.Warningf("Could not copy till gtid.")
-		return vterrors.Wrap(err, "context timeout while restoring upto specified gtid")
+		log.Warningf("Could not copy till GTID.")
+		return vterrors.Wrapf(err, "context timeout while restoring upto specified GTID - ", beforeGTIDPos)
 	}
 }
 
