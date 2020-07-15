@@ -140,9 +140,12 @@ func (se *Engine) Open() error {
 	if err := se.reload(ctx); err != nil {
 		return err
 	}
-	if err := se.historian.Open(); err != nil {
-		return err
+	if !se.SkipMetaCheck {
+		if err := se.historian.Open(); err != nil {
+			return err
+		}
 	}
+
 	se.ticks.Start(func() {
 		if err := se.Reload(ctx); err != nil {
 			log.Errorf("periodic schema reload failed: %v", err)
