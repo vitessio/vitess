@@ -1,10 +1,14 @@
-name: docker test 2
+name: docker test
 on: [push, pull_request]
 jobs:
 
   build:
-    name: docker test 2
+    name: Docker Test
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        name: [10,25]
+
     steps:
 
     - name: Set up Go
@@ -15,7 +19,6 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v2
 
-    - name: Run tests which requires docker (part-2)
+    - name: Run tests which requires docker
       run: |
-        go run test.go -docker=true --follow -shard 10
-
+        go run test.go -docker=true --follow -shard ${{matrix.name}}

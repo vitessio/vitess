@@ -344,7 +344,7 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 		return vterrors.Wrap(err, "error while fetching the current GTID position")
 	case <-ctx.Done():
 		log.Warningf("Could not copy till GTID.")
-		return vterrors.Wrapf(err, "context timeout while restoring upto specified GTID - ", beforeGTIDPos)
+		return vterrors.Wrapf(err, "context timeout while restoring upto specified GTID - %s", beforeGTIDPos)
 	}
 }
 
