@@ -59,7 +59,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 		},
 	}
 	newMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"STOP SLAVE",
+		"STOP SLAVE IO_THREAD",
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",
@@ -95,7 +95,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	}
 	goodReplica1.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"STOP SLAVE",
+		"STOP SLAVE IO_THREAD",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -182,7 +182,7 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 		},
 	}
 	newMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"STOP SLAVE",
+		"STOP SLAVE IO_THREAD",
 	}
 	newMaster.StartActionLoop(t, wr)
 	defer newMaster.StopActionLoop(t)
@@ -214,7 +214,7 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 		},
 	}
 	moreAdvancedReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"STOP SLAVE",
+		"STOP SLAVE IO_THREAD",
 	}
 	moreAdvancedReplica.StartActionLoop(t, wr)
 	defer moreAdvancedReplica.StopActionLoop(t)
