@@ -92,11 +92,13 @@ func (session *SafeSession) Reset() {
 	session.mustRollback = false
 	session.autocommitState = notAutocommittable
 	session.Session.InTransaction = false
-	session.ShardSessions = nil
-	session.PreSessions = nil
-	session.PostSessions = nil
 	session.commitOrder = vtgatepb.CommitOrder_NORMAL
 	session.Savepoints = nil
+	if !session.Session.InReservedConn {
+		session.ShardSessions = nil
+		session.PreSessions = nil
+		session.PostSessions = nil
+	}
 }
 
 // SetAutocommittable sets the state to autocommitable if true.

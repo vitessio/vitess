@@ -111,6 +111,88 @@ func TestTxConnCommitSuccess(t *testing.T) {
 	assert.EqualValues(t, 1, sbc1.CommitCount.Get(), "sbc1.CommitCount")
 }
 
+func TestTxConnReservedCommitSuccess(t *testing.T) {
+	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConn")
+	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+
+	// Sequence the executes to ensure commit order
+	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, InReservedConn: true})
+	sc.ExecuteMultiShard(ctx, rss0, queries, session, false)
+	wantSession := vtgatepb.Session{
+		InTransaction:  true,
+		InReservedConn: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			TransactionId: 1,
+			ReservedId:    1,
+			TabletAlias:   sbc0.Tablet().Alias,
+		}},
+	}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+	sc.ExecuteMultiShard(ctx, rss01, twoQueries, session, false)
+	wantSession = vtgatepb.Session{
+		InTransaction:  true,
+		InReservedConn: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			TransactionId: 1,
+			ReservedId:    1,
+			TabletAlias:   sbc0.Tablet().Alias,
+		}, {
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "1",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			TransactionId: 1,
+			ReservedId:    1,
+			TabletAlias:   sbc0.Tablet().Alias,
+		}},
+	}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+
+	require.NoError(t,
+		sc.txConn.Commit(ctx, session))
+	wantSession = vtgatepb.Session{
+		InReservedConn: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			ReservedId:  2,
+			TabletAlias: sbc0.Tablet().Alias,
+		}, {
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "1",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			ReservedId:  2,
+			TabletAlias: sbc0.Tablet().Alias,
+		}},
+	}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+	assert.EqualValues(t, 1, sbc0.CommitCount.Get(), "sbc0.CommitCount")
+	assert.EqualValues(t, 1, sbc1.CommitCount.Get(), "sbc1.CommitCount")
+
+	require.NoError(t,
+		sc.txConn.Release(ctx, session))
+	wantSession = vtgatepb.Session{}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+	assert.EqualValues(t, 1, sbc0.ReleaseCount.Get(), "sbc0.ReleaseCount")
+	assert.EqualValues(t, 1, sbc1.ReleaseCount.Get(), "sbc1.ReleaseCount")
+}
+
 func TestTxConnCommitOrderFailure1(t *testing.T) {
 	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
@@ -205,6 +287,8 @@ func TestTxConnCommitOrderFailure3(t *testing.T) {
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
 	assert.EqualValues(t, 2, sbc0.CommitCount.Get(), "sbc0.CommitCount")
 	assert.EqualValues(t, 1, sbc1.CommitCount.Get(), "sbc1.CommitCount")
+	assert.EqualValues(t, 0, sbc0.RollbackCount.Get(), "sbc0.RollbackCount")
+	assert.EqualValues(t, 0, sbc1.RollbackCount.Get(), "sbc1.RollbackCount")
 }
 
 func TestTxConnCommitOrderSuccess(t *testing.T) {
@@ -301,6 +385,147 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
 	assert.EqualValues(t, 2, sbc0.CommitCount.Get(), "sbc0.CommitCount")
 	assert.EqualValues(t, 1, sbc1.CommitCount.Get(), "sbc1.CommitCount")
+}
+
+func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
+	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+
+	queries := []*querypb.BoundQuery{{
+		Sql: "query1",
+	}}
+
+	// Sequence the executes to ensure commit order
+	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, InReservedConn: true})
+	sc.ExecuteMultiShard(ctx, rss0, queries, session, false)
+	wantSession := vtgatepb.Session{
+		InTransaction:  true,
+		InReservedConn: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			TransactionId: 1,
+			ReservedId:    1,
+			TabletAlias:   sbc0.Tablet().Alias,
+		}},
+	}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+
+	session.SetCommitOrder(vtgatepb.CommitOrder_PRE)
+	sc.ExecuteMultiShard(ctx, rss0, queries, session, false)
+	wantSession = vtgatepb.Session{
+		InTransaction:  true,
+		InReservedConn: true,
+		PreSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			TransactionId: 2,
+			ReservedId:    2,
+			TabletAlias:   sbc0.Tablet().Alias,
+		}},
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			TransactionId: 1,
+			ReservedId:    1,
+			TabletAlias:   sbc0.Tablet().Alias,
+		}},
+	}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+
+	session.SetCommitOrder(vtgatepb.CommitOrder_POST)
+	sc.ExecuteMultiShard(ctx, rss1, queries, session, false)
+	wantSession = vtgatepb.Session{
+		InTransaction:  true,
+		InReservedConn: true,
+		PreSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			TransactionId: 2,
+			ReservedId:    2,
+			TabletAlias:   sbc0.Tablet().Alias,
+		}},
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			TransactionId: 1,
+			ReservedId:    1,
+			TabletAlias:   sbc0.Tablet().Alias,
+		}},
+		PostSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "1",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			TransactionId: 1,
+			ReservedId:    1,
+			TabletAlias:   sbc0.Tablet().Alias,
+		}},
+	}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+
+	// Ensure nothing changes if we reuse a transaction.
+	sc.ExecuteMultiShard(ctx, rss1, queries, session, false)
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+
+	require.NoError(t,
+		sc.txConn.Commit(ctx, session))
+	wantSession = vtgatepb.Session{
+		InReservedConn: true,
+		PreSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			ReservedId:  3,
+			TabletAlias: sbc0.Tablet().Alias,
+		}},
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			ReservedId:  4,
+			TabletAlias: sbc0.Tablet().Alias,
+		}},
+		PostSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "1",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			ReservedId:  2,
+			TabletAlias: sbc0.Tablet().Alias,
+		}},
+	}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+	assert.EqualValues(t, 2, sbc0.CommitCount.Get(), "sbc0.CommitCount")
+	assert.EqualValues(t, 1, sbc1.CommitCount.Get(), "sbc1.CommitCount")
+
+	require.NoError(t,
+		sc.txConn.Release(ctx, session))
+	wantSession = vtgatepb.Session{}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+	assert.EqualValues(t, 2, sbc0.ReleaseCount.Get(), "sbc0.ReleaseCount")
+	assert.EqualValues(t, 1, sbc1.ReleaseCount.Get(), "sbc1.ReleaseCount")
 }
 
 func TestTxConnCommit2PC(t *testing.T) {
@@ -443,6 +668,46 @@ func TestTxConnRollback(t *testing.T) {
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
 	assert.EqualValues(t, 1, sbc0.RollbackCount.Get(), "sbc0.RollbackCount")
 	assert.EqualValues(t, 1, sbc1.RollbackCount.Get(), "sbc1.RollbackCount")
+}
+
+func TestTxConnReservedRollback(t *testing.T) {
+	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TxConnReservedRollback")
+
+	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, InReservedConn: true})
+	sc.ExecuteMultiShard(ctx, rss0, queries, session, false)
+	sc.ExecuteMultiShard(ctx, rss01, twoQueries, session, false)
+	require.NoError(t,
+		sc.txConn.Rollback(ctx, session))
+	wantSession := vtgatepb.Session{
+		InReservedConn: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TxConnReservedRollback",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			ReservedId:  2,
+			TabletAlias: sbc0.Tablet().Alias,
+		}, {
+			Target: &querypb.Target{
+				Keyspace:   "TxConnReservedRollback",
+				Shard:      "1",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			ReservedId:  2,
+			TabletAlias: sbc1.Tablet().Alias,
+		}},
+	}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+	assert.EqualValues(t, 1, sbc0.RollbackCount.Get(), "sbc0.RollbackCount")
+	assert.EqualValues(t, 1, sbc1.RollbackCount.Get(), "sbc1.RollbackCount")
+
+	require.NoError(t,
+		sc.txConn.Release(ctx, session))
+	wantSession = vtgatepb.Session{}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+	assert.EqualValues(t, 1, sbc0.ReleaseCount.Get(), "sbc0.ReleaseCount")
+	assert.EqualValues(t, 1, sbc1.ReleaseCount.Get(), "sbc1.ReleaseCount")
 }
 
 func TestTxConnResolveOnPrepare(t *testing.T) {
