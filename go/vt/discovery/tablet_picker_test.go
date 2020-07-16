@@ -105,6 +105,28 @@ func TestPickMultiCell(t *testing.T) {
 	assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
 }
 
+func TestPickMaster(t *testing.T) {
+	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
+	want := addTablet(te, 100, topodatapb.TabletType_MASTER, "cell", true, true)
+	defer deleteTablet(te, want)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_, err := te.topoServ.UpdateShardFields(ctx, te.keyspace, te.shard, func(si *topo.ShardInfo) error {
+		si.MasterAlias = want.Alias
+		return nil
+	})
+	require.NoError(t, err)
+
+	tp, err := NewTabletPicker(te.topoServ, []string{"otherCell"}, te.keyspace, te.shard, "master")
+	require.NoError(t, err)
+
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel2()
+	tablet, err := tp.PickForStreaming(ctx2)
+	require.NoError(t, err)
+	assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
+}
+
 func TestPickFromOtherCell(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
 	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "otherCell", true, true)
