@@ -193,6 +193,99 @@ func TestTxConnReservedCommitSuccess(t *testing.T) {
 	assert.EqualValues(t, 1, sbc1.ReleaseCount.Get(), "sbc1.ReleaseCount")
 }
 
+func TestTxConnReservedAndCommitWithDifferentNumberOfShards(t *testing.T) {
+	keyspace := "TestTxConn"
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, keyspace)
+	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+
+	// Sequence the executes to ensure shard session order
+	session := NewSafeSession(&vtgatepb.Session{InReservedConn: true})
+
+	// this will create reserved connections against all tablets
+	_, errs := sc.ExecuteMultiShard(ctx, rss1, queries, session, false)
+	require.Empty(t, errs)
+	_, errs = sc.ExecuteMultiShard(ctx, rss0, queries, session, false)
+	require.Empty(t, errs)
+
+	wantSession := vtgatepb.Session{
+		InReservedConn: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   keyspace,
+				Shard:      "1",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			ReservedId:  1,
+			TabletAlias: sbc0.Tablet().Alias,
+		}, {
+			Target: &querypb.Target{
+				Keyspace:   keyspace,
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			ReservedId:  1,
+			TabletAlias: sbc1.Tablet().Alias,
+		}},
+	}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+
+	session.Session.InTransaction = true
+
+	// start a transaction against rss0
+	sc.ExecuteMultiShard(ctx, rss0, queries, session, false)
+	wantSession = vtgatepb.Session{
+		InTransaction:  true,
+		InReservedConn: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   keyspace,
+				Shard:      "1",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			ReservedId:  1,
+			TabletAlias: sbc1.Tablet().Alias,
+		}, {
+			Target: &querypb.Target{
+				Keyspace:   keyspace,
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			TransactionId: 1,
+			ReservedId:    1,
+			TabletAlias:   sbc0.Tablet().Alias,
+		}},
+	}
+
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+
+	require.NoError(t,
+		sc.txConn.Commit(ctx, session))
+
+	wantSession = vtgatepb.Session{
+		InReservedConn: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   keyspace,
+				Shard:      "1",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			ReservedId:  1,
+			TabletAlias: sbc1.Tablet().Alias,
+		}, {
+			Target: &querypb.Target{
+				Keyspace:   keyspace,
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			ReservedId:  2,
+			TabletAlias: sbc0.Tablet().Alias,
+		}},
+	}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+	assert.EqualValues(t, 1, sbc0.CommitCount.Get(), "sbc0.CommitCount")
+	assert.EqualValues(t, 0, sbc1.CommitCount.Get(), "sbc1.CommitCount")
+}
+
 func TestTxConnCommitOrderFailure1(t *testing.T) {
 	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
