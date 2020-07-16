@@ -92,12 +92,11 @@ func (blw *BinlogWatcher) process(ctx context.Context) {
 		err := blw.vs.Stream(ctx, "current", nil, filter, func(events []*binlogdatapb.VEvent) error {
 			return nil
 		})
+		log.Infof("ReplicatinWatcher VStream ended: %v, retrying in 5 seconds", err)
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(5 * time.Second):
 		}
-		log.Infof("ReplicatinWatcher VStream ended: %v, retrying in 5 seconds", err)
-		time.Sleep(5 * time.Second)
 	}
 }
