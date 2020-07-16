@@ -76,7 +76,7 @@ func insertRow(t *testing.T, id int, productName string, isSlow bool) {
 	_, err := masterTablet.VttabletProcess.QueryTablet(fmt.Sprintf(insertTable, id, productName), keyspaceName, true)
 	require.NoError(t, err)
 	if isSlow {
-		time.Sleep(3 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 }
 

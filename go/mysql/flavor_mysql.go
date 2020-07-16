@@ -32,7 +32,7 @@ type mysqlFlavor struct{}
 
 // masterGTIDSet is part of the Flavor interface.
 func (mysqlFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
-	// making @@global as small case, as the PITR depends on binlog server, which honours only small cased `global` value
+	// making @@global as lowercase, as the PITR depends on binlog server, which honours only lowercase `global` value
 	qr, err := c.ExecuteFetch("SELECT @@global.gtid_executed", 1, false)
 	if err != nil {
 		return nil, err

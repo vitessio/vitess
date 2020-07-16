@@ -90,6 +90,7 @@ func (c *replicaConnector) VStream(ctx context.Context, startPos string, filter 
 	return c.vstreamer.Stream(ctx, startPos, nil, filter, send)
 }
 
+// VStreamRows streams rows from query result
 func (c *replicaConnector) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	var row []sqltypes.Value
 	if lastpk != nil {
