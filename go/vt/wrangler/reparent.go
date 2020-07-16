@@ -1147,8 +1147,8 @@ func (wr *Wrangler) stopReplicationAndBuildStatusMaps(ctx context.Context, ev *e
 	if errCounter > 1 {
 		return nil, nil, fmt.Errorf("encountered more than one error when trying to stop replication and get positions")
 	}
-	if (len(statusMap) + len(masterStatusMap)) != len(tabletMap)-1 {
-		return nil, nil, fmt.Errorf("did not hear back from all replicas when stopping replication to build status map")
+	if (len(statusMap) + len(masterStatusMap)) < len(tabletMap)-1 {
+		return nil, nil, fmt.Errorf("did not hear back from enough replicas when stopping replication to build status map")
 	}
 	return statusMap, masterStatusMap, nil
 }
