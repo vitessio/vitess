@@ -24,7 +24,11 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/pointer"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql"
@@ -887,88 +891,32 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		return fmt.Errorf("master-elect tablet %v is already the master", topoproto.TabletAliasString(masterElectTabletAlias))
 	}
 
-	// Deal with the old master: try to remote-scrap it, if it's
-	// truly dead we force-scrap it. Remove it from our map in any case.
-	if shardInfo.HasMaster() {
-		deleteOldMaster := true
-		shardInfoMasterAliasStr := topoproto.TabletAliasString(shardInfo.MasterAlias)
-		oldMasterTabletInfo, ok := tabletMap[shardInfoMasterAliasStr]
-		if ok {
-			delete(tabletMap, shardInfoMasterAliasStr)
-		} else {
-			oldMasterTabletInfo, err = wr.ts.GetTablet(ctx, shardInfo.MasterAlias)
-			if err != nil {
-				wr.logger.Warningf("cannot read old master tablet %v, won't touch it: %v", shardInfoMasterAliasStr, err)
-				deleteOldMaster = false
-			}
-		}
-
-		if deleteOldMaster {
-			ev.OldMaster = *oldMasterTabletInfo.Tablet
-			wr.logger.Infof("deleting old master %v", shardInfoMasterAliasStr)
-
-			ctx, cancel := context.WithTimeout(ctx, waitReplicasTimeout)
-			defer cancel()
-
-			if err := topotools.DeleteTablet(ctx, wr.ts, oldMasterTabletInfo.Tablet); err != nil {
-				wr.logger.Warningf("failed to delete old master tablet %v: %v", shardInfoMasterAliasStr, err)
-			}
-		}
+	statusMap, masterStatusMap, err := wr.stopReplicationAndBuildStatusMaps(ctx, ev, tabletMap, waitReplicasTimeout)
+	if err != nil {
+		return err
 	}
-
-	// Stop replication on all replicas, get their current
-	// replication position
-	event.DispatchUpdate(ev, "stop replication on all replicas")
-	wg := sync.WaitGroup{}
-	mu := sync.Mutex{}
-	statusMap := make(map[string]*replicationdatapb.StopReplicationStatus)
-	for alias, tabletInfo := range tabletMap {
-		wg.Add(1)
-		go func(alias string, tabletInfo *topo.TabletInfo) {
-			defer wg.Done()
-			wr.logger.Infof("getting replication position from %v", alias)
-			ctx, cancel := context.WithTimeout(ctx, waitReplicasTimeout)
-			defer cancel()
-			// TODO: Once we refactor EmergencyReparent, change the stopReplicationOption argument to IOThreadOnly.
-			_, stopReplicationStatus, err := wr.tmc.StopReplicationAndGetStatus(ctx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
-			if err != nil {
-				wr.logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", alias, err)
-				return
-			}
-			mu.Lock()
-			statusMap[alias] = stopReplicationStatus
-			mu.Unlock()
-		}(alias, tabletInfo)
-	}
-	wg.Wait()
 
 	// Check we still have the topology lock.
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
 		return fmt.Errorf("lost topology lock, aborting: %v", err)
 	}
 
-	// Verify masterElect is alive and has the most advanced position
-	masterElectStatus, ok := statusMap[masterElectTabletAliasStr]
-	if !ok {
-		return fmt.Errorf("couldn't get master elect %v replication position", topoproto.TabletAliasString(masterElectTabletAlias))
-	}
-	masterElectStrPos := masterElectStatus.After.Position
-	masterElectPos, err := mysql.DecodePosition(masterElectStrPos)
+	validCandidates, err := wr.findValidReparentCandidates(statusMap, masterStatusMap)
 	if err != nil {
-		return fmt.Errorf("cannot decode master elect position %v: %v", masterElectStrPos, err)
+		return err
 	}
-	for alias, status := range statusMap {
-		if alias == masterElectTabletAliasStr {
-			continue
-		}
-		posStr := status.After.Position
-		pos, err := mysql.DecodePosition(posStr)
-		if err != nil {
-			return fmt.Errorf("cannot decode replica %v position %v: %v", alias, posStr, err)
-		}
-		if !masterElectPos.AtLeast(pos) {
-			return fmt.Errorf("tablet %v is more advanced than master elect tablet %v: %v > %v", alias, masterElectTabletAliasStr, posStr, masterElectStrPos)
-		}
+	if len(validCandidates) == 0 {
+		return fmt.Errorf("no valid candidates for emergency reparent")
+	}
+	validCandidatesSet := sets.NewString(validCandidates...)
+	if !validCandidatesSet.Has(masterElectTabletAliasStr) {
+		return fmt.Errorf("master elect is either not fully caught up, or has errant GTIDs")
+	}
+
+	// Wait for masterElect to catch up.
+	err = wr.WaitForRelayLogsToApply(ctx, masterElectTabletInfo, waitReplicasTimeout)
+	if err != nil {
+		return err
 	}
 
 	// Promote the masterElect
@@ -1043,6 +991,193 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	}
 
 	return nil
+}
+
+// findValidReparentCandidates will find valid candidates for emergency reparent, and if successful, returning them as a list of tablet aliases.
+func (wr *Wrangler) findValidReparentCandidates(statusMap map[string]*replicationdatapb.StopReplicationStatus, masterStatusMap map[string]*replicationdatapb.MasterStatus) ([]string, error) {
+	// Build out replication status list from proto types.
+	replicationStatusMap := make(map[string]*mysql.ReplicationStatus, len(statusMap))
+	for alias, protoStatus := range statusMap {
+		status := mysql.ProtoToReplicationStatus(protoStatus.After)
+		replicationStatusMap[alias] = &status
+	}
+
+	// Determine if we need to find errant GTIDs.
+	var gtidBased *bool
+	for _, status := range replicationStatusMap {
+		if gtidBased == nil {
+			gtidBased = pointer.BoolPtr(!status.RelayLogPosition.IsZero())
+		} else if !*gtidBased {
+			break
+		} else if status.RelayLogPosition.IsZero() {
+			// Bail. We have an odd one in the bunch.
+			return nil, fmt.Errorf("encountered tablet with no relay log position, when at least one other tablet in the status map has a relay log positions")
+		}
+	}
+
+	// Create relevant position list for comparison.
+	positionMap := make(map[string]mysql.Position)
+	badTablets := sets.NewString()
+	for alias, status := range replicationStatusMap {
+		// Find errantGTIDs and clean them from status map if relevant.
+		if *gtidBased {
+			// We need to remove this status from a copy of the list, otherwise the diff will be empty always.
+			statusList := make([]*mysql.ReplicationStatus, 0, len(replicationStatusMap)-1)
+			for a, s := range replicationStatusMap {
+				if a != alias {
+					statusList = append(statusList, s)
+				}
+			}
+			errantGTIDs, err := status.FindErrantGTIDs(statusList)
+			if err != nil {
+				// Could not find errant GTIDs when we must.
+				return nil, err
+			}
+			// We'll keep track of bad replicas. Errant free these can still be used to determine high water mark
+			// but should not be considered for emergency reparent.
+			if len(errantGTIDs) != 0 {
+				badTablets.Insert(alias)
+			}
+
+			relayLogGTIDSet, ok := status.RelayLogPosition.GTIDSet.(mysql.Mysql56GTIDSet)
+			if !ok {
+				return nil, fmt.Errorf("we got a filled in relay log position for a tablet, even though the GTIDSet is not of type Mysql56GTIDSet. We don't know how this could happen")
+			}
+			cleanedGTIDSet := relayLogGTIDSet.Difference(errantGTIDs)
+			cleanedRelayLogPosition := mysql.Position{GTIDSet: cleanedGTIDSet}
+			positionMap[alias] = cleanedRelayLogPosition
+		} else {
+			positionMap[alias] = status.FileRelayLogPosition
+		}
+	}
+
+	for alias, masterStatus := range masterStatusMap {
+		executedPosition, err := mysql.DecodePosition(masterStatus.Position)
+		if err != nil {
+			return nil, err
+		}
+		positionMap[alias] = executedPosition
+	}
+
+	if !*gtidBased {
+		// If all positions are not comparable, we can't do file based comparisons at all.
+		filePositionList := make([]mysql.Position, 0, len(replicationStatusMap))
+		for _, p := range positionMap {
+			filePositionList = append(filePositionList, p)
+		}
+		if !mysql.AllPositionsComparable(filePositionList) {
+			return nil, fmt.Errorf("we can't compare all file based positions")
+		}
+	}
+
+	// Find a position that is fully caught up when errant GTIDs are taken out of the equation.
+	var winningPosition mysql.Position
+	for _, position := range positionMap {
+		if position.AtLeast(winningPosition) {
+			winningPosition = position
+		}
+	}
+
+	// Now that we have a high water mark, we can get a list of all tablets that are errant GTID free
+	// that hit this high water mark.
+	var validCandidates []string
+	for alias, position := range positionMap {
+		if badTablets.Has(alias) {
+			// We should exclude tablets we've already determined have errant GTIDs from consideration.
+			continue
+		}
+
+		if position.AtLeast(winningPosition) {
+			validCandidates = append(validCandidates, alias)
+		}
+	}
+
+	return validCandidates, nil
+}
+
+func (wr *Wrangler) stopReplicationAndBuildStatusMaps(ctx context.Context, ev *events.Reparent, tabletMap map[string]*topo.TabletInfo, waitReplicasTimeout time.Duration) (map[string]*replicationdatapb.StopReplicationStatus, map[string]*replicationdatapb.MasterStatus, error) {
+	// Stop replication on all replicas, get their current
+	// replication position
+	wg := sync.WaitGroup{}
+	mu := sync.Mutex{}
+	var errCounter uint32
+
+	event.DispatchUpdate(ev, "stop replication on all replicas")
+	statusMap := make(map[string]*replicationdatapb.StopReplicationStatus)
+	masterStatusMap := make(map[string]*replicationdatapb.MasterStatus)
+
+	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
+	defer groupCancel()
+	for alias, tabletInfo := range tabletMap {
+		wg.Add(1)
+		go func(alias string, tabletInfo *topo.TabletInfo) {
+			defer wg.Done()
+			wr.logger.Infof("getting replication position from %v", alias)
+			ctx, cancel := context.WithTimeout(groupCtx, waitReplicasTimeout)
+			defer cancel()
+			_, stopReplicationStatus, err := wr.tmc.StopReplicationAndGetStatus(ctx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
+			if err != nil {
+				if err != mysql.ErrNotReplica {
+					wr.logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", alias, err)
+					atomic.AddUint32(&errCounter, 1)
+					if atomic.LoadUint32(&errCounter) > 1 {
+						groupCancel()
+					}
+					return
+				}
+
+				masterStatus, err := wr.tmc.DemoteMaster(ctx, tabletInfo.Tablet)
+				if err != nil {
+					wr.logger.Warningf("replica %v thinks it's master but we failed to demote it", alias)
+					atomic.AddUint32(&errCounter, 1)
+					if atomic.LoadUint32(&errCounter) > 1 {
+						groupCancel()
+					}
+					return
+				}
+				masterStatusMap[alias] = masterStatus
+			}
+
+			mu.Lock()
+			statusMap[alias] = stopReplicationStatus
+			mu.Unlock()
+		}(alias, tabletInfo)
+	}
+	wg.Wait()
+	if errCounter > 1 {
+		return nil, nil, fmt.Errorf("encountered more than one error when trying to stop replication and get positions")
+	}
+	if (len(statusMap) + len(masterStatusMap)) != len(tabletMap)-1 {
+		return nil, nil, fmt.Errorf("did not hear back from all replicas when stopping replication to build status map")
+	}
+	return statusMap, masterStatusMap, nil
+}
+
+// WaitForRelayLogsToApply will block execution waiting for the given tablets relay logs to apply, unless the supplied
+// context is cancelled, or waitReplicasTimeout is exceeded.
+func (wr *Wrangler) WaitForRelayLogsToApply(ctx context.Context, tabletInfo *topo.TabletInfo, waitReplicasTimeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, waitReplicasTimeout)
+	defer cancel()
+	for {
+		status, err := wr.tmc.ReplicationStatus(ctx, tabletInfo.Tablet)
+		if err != nil {
+			if err == mysql.ErrNotReplica {
+				// This tablet thinks it's not a replica, so we have nothing to wait on as far as applying
+				// relay logs.
+				return nil
+			}
+			return err
+		}
+		replicationStatus := mysql.ProtoToReplicationStatus(status)
+		if !replicationStatus.RelayLogPosition.IsZero() && replicationStatus.Position.AtLeast(replicationStatus.RelayLogPosition) {
+			return nil
+		}
+		if replicationStatus.RelayLogPosition.IsZero() && replicationStatus.FilePosition.AtLeast(replicationStatus.FileRelayLogPosition) {
+			return nil
+		}
+
+		time.Sleep(2 * time.Second)
+	}
 }
 
 // TabletExternallyReparented changes the type of new master for this shard to MASTER
