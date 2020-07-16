@@ -203,6 +203,12 @@
         <version>1.4.0</version>
         <type>maven-plugin</type>
       </dependency>
+
+      <dependency>
+        <groupId>javax.annotation</groupId>
+        <artifactId>javax.annotation-api</artifactId>
+        <version>1.2</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 
