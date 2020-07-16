@@ -74,7 +74,7 @@ func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
 	case vtgatepb.TransactionMode_TWOPC:
 		twopc = true
 	case vtgatepb.TransactionMode_UNSPECIFIED:
-		twopc = (txc.mode == vtgatepb.TransactionMode_TWOPC)
+		twopc = txc.mode == vtgatepb.TransactionMode_TWOPC
 	}
 	if twopc {
 		return txc.commit2PC(ctx, session)
@@ -91,6 +91,9 @@ func (txc *TxConn) queryService(alias *topodatapb.TabletAlias) (queryservice.Que
 }
 
 func (txc *TxConn) commitShard(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
+	if s.TransactionId == 0 {
+		return nil
+	}
 	var qs queryservice.QueryService
 	var err error
 	qs, err = txc.queryService(s.TabletAlias)

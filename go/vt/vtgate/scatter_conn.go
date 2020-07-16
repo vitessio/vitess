@@ -152,6 +152,10 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	autocommit bool,
 ) (qr *sqltypes.Result, errs []error) {
 
+	if len(rss) != len(queries) {
+		return nil, []error{vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: got mismatched number of queries and shards")}
+	}
+
 	// mu protects qr
 	var mu sync.Mutex
 	qr = new(sqltypes.Result)
@@ -163,12 +167,13 @@ func (stc *ScatterConn) ExecuteMultiShard(
 		session,
 		func(rs *srvtopo.ResolvedShard, i int, info *shardActionInfo) (*shardActionInfo, error) {
 			var (
-				innerqr                   *sqltypes.Result
-				err                       error
-				opts                      *querypb.ExecuteOptions
-				transactionID, reservedID int64
-				alias                     *topodatapb.TabletAlias
+				innerqr *sqltypes.Result
+				err     error
+				opts    *querypb.ExecuteOptions
+				alias   *topodatapb.TabletAlias
 			)
+			transactionID := info.transactionID
+			reservedID := info.reserveID
 
 			if session != nil && session.Session != nil {
 				opts = session.Session.Options
