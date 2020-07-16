@@ -599,6 +599,9 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 	// - restoreFromBackup is not set: we initHealthCheck right away
 	if *restoreFromBackup {
 		go func() {
+			// Open the state manager after restore is done.
+			defer tm.tmState.Open(ctx)
+
 			// restoreFromBackup will just be a regular action
 			// (same as if it was triggered remotely)
 			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), *waitForBackupInterval, false /* deleteBeforeRestore */); err != nil {

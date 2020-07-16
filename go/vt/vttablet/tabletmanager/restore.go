@@ -76,9 +76,6 @@ func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger,
 }
 
 func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool) error {
-	// If we're called during init, tmState may not be open yet.
-	tm.tmState.Open(ctx)
-
 	tablet := tm.Tablet()
 	originalType := tablet.Type
 	if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_RESTORE); err != nil {
