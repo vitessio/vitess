@@ -97,10 +97,10 @@ func TestExecuteFailOnAutocommit(t *testing.T) {
 		},
 		Autocommit: false,
 	}
-	_, errs := sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(session), true)
+	_, errs := sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(session), true /*autocommit*/)
 	err := vterrors.Aggregate(errs)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "In autocommit mode, transactionID is non-zero")
+	require.Contains(t, err.Error(), "in autocommit mode, transactionID should be zero but was: 123")
 	utils.MustMatch(t, 0, len(sbc0.Queries), "")
 	utils.MustMatch(t, []*querypb.BoundQuery{queries[1]}, sbc1.Queries, "")
 }
@@ -121,7 +121,7 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 			}
 		}
 
-		qr, errs := sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(nil), false)
+		qr, errs := sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(nil), false /*autocommit*/)
 		return qr, vterrors.Aggregate(errs)
 	})
 }
@@ -516,7 +516,7 @@ func executeOnShards(t *testing.T, res *srvtopo.Resolver, keyspace string, sc *S
 	}
 
 	_, errs := sc.ExecuteMultiShard(ctx, rss, queries, session, false)
-	assert.Empty(t, errs)
+	require.Empty(t, errs)
 }
 
 func TestMultiExecs(t *testing.T) {

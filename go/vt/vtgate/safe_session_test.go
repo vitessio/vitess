@@ -41,8 +41,8 @@ func TestFailToMultiShardWhenSetToSingleDb(t *testing.T) {
 		TransactionId: 1,
 	}
 
-	err := session.Append(sess0, vtgatepb.TransactionMode_SINGLE)
+	err := session.AppendOrUpdate(sess0, vtgatepb.TransactionMode_SINGLE)
 	require.NoError(t, err)
-	err = session.Append(sess1, vtgatepb.TransactionMode_SINGLE)
+	err = session.AppendOrUpdate(sess1, vtgatepb.TransactionMode_SINGLE)
 	require.Error(t, err)
 }

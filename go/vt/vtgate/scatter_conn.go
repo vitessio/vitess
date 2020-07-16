@@ -177,8 +177,8 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			switch {
 			case autocommit:
 				// As this is auto-commit, the transactionID is supposed to be zero.
-				if info.txID != int64(0) {
-					return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "In autocommit mode, transactionID is non-zero: %d", info.txID)
+				if info.transactionID != int64(0) {
+					return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "in autocommit mode, transactionID should be zero but was: %d", info.transactionID)
 				}
 				innerqr, err = rs.Gateway.Execute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, 0, 0, opts)
 				if err != nil {
@@ -189,7 +189,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				if err != nil {
 					return nil, err
 				}
-				innerqr, err = qs.Execute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, info.txID, info.rID, opts)
+				innerqr, err = qs.Execute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, info.transactionID, info.reserveID, opts)
 				if err != nil {
 					return nil, err
 				}
@@ -198,7 +198,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				if err != nil {
 					return nil, err
 				}
-				innerqr, transactionID, alias, err = qs.BeginExecute(ctx, rs.Target, session.Savepoints, queries[i].Sql, queries[i].BindVariables, info.rID, opts)
+				innerqr, transactionID, alias, err = qs.BeginExecute(ctx, rs.Target, session.Savepoints, queries[i].Sql, queries[i].BindVariables, info.reserveID, opts)
 				if err != nil {
 					return info.updateTransactionID(transactionID, alias), err
 				}
@@ -207,7 +207,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				if err != nil {
 					return nil, err
 				}
-				innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, nil, queries[i].Sql, queries[i].BindVariables, info.txID, opts)
+				innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, nil, queries[i].Sql, queries[i].BindVariables, info.transactionID, opts)
 				if err != nil {
 					return info.updateReservedID(reservedID, alias), err
 				}
@@ -217,7 +217,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 					return info.updateTransactionAndReservedID(transactionID, reservedID, alias), err
 				}
 			default:
-				panic("not expected yet")
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected actionNeeded on ScatterConn#ExecuteMultiShard %v", info.actionNeeded)
 			}
 			mu.Lock()
 			defer mu.Unlock()
@@ -236,7 +236,6 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	return qr, allErrors.GetErrors()
 }
 
-//TODO (harshit): Verify if this is safe.
 func getQueryService(rs *srvtopo.ResolvedShard, info *shardActionInfo) (queryservice.QueryService, error) {
 	_, usingLegacyGw := rs.Gateway.(*DiscoveryGateway)
 	//if usingLegacyGw {
@@ -508,11 +507,11 @@ func (stc *ScatterConn) multiGoTransaction(
 		if updated == nil {
 			return
 		}
-		if updated.actionNeeded != nothing && (updated.txID != 0 || updated.rID != 0) {
-			appendErr := session.Append(&vtgatepb.Session_ShardSession{
+		if updated.actionNeeded != nothing && (updated.transactionID != 0 || updated.reserveID != 0) {
+			appendErr := session.AppendOrUpdate(&vtgatepb.Session_ShardSession{
 				Target:        rs.Target,
-				TransactionId: updated.txID,
-				ReservedId:    updated.rID,
+				TransactionId: updated.transactionID,
+				ReservedId:    updated.reserveID,
 				TabletAlias:   updated.alias,
 			}, stc.txConn.mode)
 			if appendErr != nil {
@@ -550,7 +549,7 @@ func transactionInfo(target *querypb.Target, session *SafeSession) *shardActionI
 		return &shardActionInfo{}
 	}
 	// No need to protect ourselves from the race condition between
-	// Find and Append. The higher level functions ensure that no
+	// Find and AppendOrUpdate. The higher level functions ensure that no
 	// duplicate (target) tuples can execute
 	// this at the same time.
 	transactionID, reserveID, alias := session.Find(target.Keyspace, target.Shard, target.TabletType)
@@ -569,32 +568,31 @@ func transactionInfo(target *querypb.Target, session *SafeSession) *shardActionI
 	}
 
 	return &shardActionInfo{
-		actionNeeded: act,
-		txID:         transactionID,
-		rID:          reserveID,
-		alias:        alias,
+		actionNeeded:  act,
+		transactionID: transactionID,
+		reserveID:     reserveID,
+		alias:         alias,
 	}
 }
 
 type shardActionInfo struct {
-	actionNeeded actionNeeded
-	rID          int64
-	txID         int64
-	alias        *topodatapb.TabletAlias
+	actionNeeded             actionNeeded
+	reserveID, transactionID int64
+	alias                    *topodatapb.TabletAlias
 }
 
 func (sai *shardActionInfo) updateTransactionID(txID int64, alias *topodatapb.TabletAlias) *shardActionInfo {
-	return sai.updateTransactionAndReservedID(txID, sai.rID, alias)
+	return sai.updateTransactionAndReservedID(txID, sai.reserveID, alias)
 }
 
 func (sai *shardActionInfo) updateReservedID(rID int64, alias *topodatapb.TabletAlias) *shardActionInfo {
-	return sai.updateTransactionAndReservedID(sai.txID, rID, alias)
+	return sai.updateTransactionAndReservedID(sai.transactionID, rID, alias)
 }
 
 func (sai *shardActionInfo) updateTransactionAndReservedID(txID int64, rID int64, alias *topodatapb.TabletAlias) *shardActionInfo {
 	newInfo := *sai
-	newInfo.rID = rID
-	newInfo.txID = txID
+	newInfo.reserveID = rID
+	newInfo.transactionID = txID
 	newInfo.alias = alias
 	return &newInfo
 }

@@ -30,7 +30,7 @@ import (
 
 // SafeSession is a mutex-protected version of the Session.
 // It is thread-safe if each thread only accesses one shard.
-// (the use pattern is 'Find', if not found, then 'Append',
+// (the use pattern is 'Find', if not found, then 'AppendOrUpdate',
 // for a single shard)
 type SafeSession struct {
 	mu              sync.Mutex
@@ -171,85 +171,72 @@ func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.T
 	return 0, 0, nil
 }
 
-// Append adds a new ShardSession
-func (session *SafeSession) Append(shardSession *vtgatepb.Session_ShardSession, txMode vtgatepb.TransactionMode) error {
+func addOrUpdate(shardSession *vtgatepb.Session_ShardSession, sessions []*vtgatepb.Session_ShardSession) ([]*vtgatepb.Session_ShardSession, error) {
+	appendSession := true
+	for i, sess := range sessions {
+		targetedAtSameTablet := sess.Target.Keyspace == shardSession.Target.Keyspace &&
+			sess.Target.TabletType == shardSession.Target.TabletType &&
+			sess.Target.Shard == shardSession.Target.Shard
+		if targetedAtSameTablet {
+			if sess.TabletAlias != shardSession.TabletAlias {
+				return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "got a different alias for the same target")
+			}
+			// replace the old info with the new one
+			sessions[i] = shardSession
+			appendSession = false
+			break
+		}
+	}
+	if appendSession {
+		sessions = append(sessions, shardSession)
+	}
+
+	return sessions, nil
+}
+
+// AppendOrUpdate adds a new ShardSession, or updates an existing one if one already exists for the given shard session
+func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardSession, txMode vtgatepb.TransactionMode) error {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
 	if session.autocommitState == autocommitted {
-		// Unreachable.
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.Append: unexpected autocommit state")
+		// Should be unreachable
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.AppendOrUpdate: unexpected autocommit state")
 	}
 	if !(session.Session.InTransaction || session.Session.InReservedConn) {
-		// Unreachable.
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.Append: not in transaction and not in reserved connection")
+		// Should be unreachable
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.AppendOrUpdate: not in transaction and not in reserved connection")
 	}
 	session.autocommitState = notAutocommittable
 
 	// Always append, in order for rollback to succeed.
 	switch session.commitOrder {
 	case vtgatepb.CommitOrder_NORMAL:
-		appendSession := true
-		for i, sess := range session.ShardSessions {
-			targetedAtSameTablet := sess.Target.Keyspace == shardSession.Target.Keyspace &&
-				sess.Target.TabletType == shardSession.Target.TabletType &&
-				sess.Target.Shard == shardSession.Target.Shard
-			if targetedAtSameTablet {
-				if sess.TabletAlias != shardSession.TabletAlias {
-					return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "got a different alias for the same target")
-				}
-				// replace the old info with the new one
-				session.ShardSessions[i] = shardSession
-				appendSession = false
-				break
-			}
+		newSessions, err := addOrUpdate(shardSession, session.ShardSessions)
+		if err != nil {
+			return err
 		}
-		if appendSession {
-			session.ShardSessions = append(session.ShardSessions, shardSession)
-		}
+		session.ShardSessions = newSessions
 		// isSingle is enforced only for normmal commit order operations.
 		if session.isSingleDB(txMode) && len(session.ShardSessions) > 1 {
 			session.mustRollback = true
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "multi-db transaction attempted: %v", session.ShardSessions)
 		}
 	case vtgatepb.CommitOrder_PRE:
-		appendSession := true
-		for i, sess := range session.PreSessions {
-			targetedAtSameTablet := sess.Target.Keyspace == shardSession.Target.Keyspace &&
-				sess.Target.TabletType == shardSession.Target.TabletType &&
-				sess.Target.Shard == shardSession.Target.Shard
-			if targetedAtSameTablet {
-				if sess.TabletAlias != shardSession.TabletAlias {
-					return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "got a different alias for the same target")
-				}
-				// replace the old info with the new one
-				session.PreSessions[i] = shardSession
-				appendSession = false
-				break
-			}
+		newSessions, err := addOrUpdate(shardSession, session.PreSessions)
+		if err != nil {
+			return err
 		}
-		if appendSession {
-			session.PreSessions = append(session.PreSessions, shardSession)
-		}
+		session.PreSessions = newSessions
 	case vtgatepb.CommitOrder_POST:
-		appendSession := true
-		for i, sess := range session.PostSessions {
-			targetedAtSameTablet := sess.Target.Keyspace == shardSession.Target.Keyspace &&
-				sess.Target.TabletType == shardSession.Target.TabletType &&
-				sess.Target.Shard == shardSession.Target.Shard
-			if targetedAtSameTablet {
-				if sess.TabletAlias != shardSession.TabletAlias {
-					return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "got a different alias for the same target")
-				}
-				// replace the old info with the new one
-				session.PostSessions[i] = shardSession
-				appendSession = false
-				break
-			}
+		newSessions, err := addOrUpdate(shardSession, session.PostSessions)
+		if err != nil {
+			return err
 		}
-		if appendSession {
-			session.PostSessions = append(session.PostSessions, shardSession)
-		}
+		session.PostSessions = newSessions
+	default:
+		// Should be unreachable
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.AppendOrUpdate: unexpected commitOrder")
 	}
 
 	return nil
