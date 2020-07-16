@@ -121,7 +121,8 @@ func TestReparentDownMaster(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
 		"EmergencyReparentShard",
 		"-keyspace_shard", keyspaceShard,
-		"-new_master", tablet62044.Alias)
+		"-new_master", tablet62044.Alias,
+		"-wait_replicas_timeout", "31s")
 	require.Nil(t, err)
 
 	validateTopology(t, false)
@@ -324,7 +325,9 @@ func TestReparentReplicaOffline(t *testing.T) {
 	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"PlannedReparentShard",
 		"-keyspace_shard", keyspaceShard,
-		"-new_master", tablet62044.Alias)
+		"-new_master", tablet62044.Alias,
+		"-wait_replicas_timeout", "31s")
+
 	require.Error(t, err)
 	assert.Contains(t, out, "tablet zone2-0000031981 SetMaster failed")
 
@@ -635,9 +638,10 @@ func TestChangeTypeSemiSync(t *testing.T) {
 	}
 
 	// Updated rdonly tablet and set tablet type to rdonly
+	// TODO: replace with ChangeTabletType once ChangeSlaveType is removed
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonly1.Alias, "rdonly")
 	require.Nil(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonly2.Alias, "rdonly")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly2.Alias, "rdonly")
 	require.Nil(t, err)
 
 	validateTopology(t, true)
@@ -646,7 +650,7 @@ func TestChangeTypeSemiSync(t *testing.T) {
 
 	// Stop replication on rdonly1, to make sure when we make it replica it doesn't start again.
 	// Note we do a similar test for replica -> rdonly below.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopSlave", rdonly1.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", rdonly1.Alias)
 	require.Nil(t, err)
 
 	// Check semi-sync on replicas.
@@ -661,27 +665,27 @@ func TestChangeTypeSemiSync(t *testing.T) {
 	checkDBstatus(ctx, t, rdonly2, "Rpl_semi_sync_slave_status", "OFF")
 
 	// Change replica to rdonly while replicating, should turn off semi-sync, and restart replication.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", replica.Alias, "rdonly")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replica.Alias, "rdonly")
 	require.Nil(t, err)
 	checkDBvar(ctx, t, replica, "rpl_semi_sync_slave_enabled", "OFF")
 	checkDBstatus(ctx, t, replica, "Rpl_semi_sync_slave_status", "OFF")
 
 	// Change rdonly1 to replica, should turn on semi-sync, and not start replication.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonly1.Alias, "replica")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly1.Alias, "replica")
 	require.Nil(t, err)
 	checkDBvar(ctx, t, rdonly1, "rpl_semi_sync_slave_enabled", "ON")
 	checkDBstatus(ctx, t, rdonly1, "Rpl_semi_sync_slave_status", "OFF")
 	checkReplicaStatus(ctx, t, rdonly1)
 
 	// Now change from replica back to rdonly, make sure replication is still not enabled.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonly1.Alias, "rdonly")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly1.Alias, "rdonly")
 	require.Nil(t, err)
 	checkDBvar(ctx, t, rdonly1, "rpl_semi_sync_slave_enabled", "OFF")
 	checkDBstatus(ctx, t, rdonly1, "Rpl_semi_sync_slave_status", "OFF")
 	checkReplicaStatus(ctx, t, rdonly1)
 
 	// Change rdonly2 to replica, should turn on semi-sync, and restart replication.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonly2.Alias, "replica")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly2.Alias, "replica")
 	require.Nil(t, err)
 	checkDBvar(ctx, t, rdonly2, "rpl_semi_sync_slave_enabled", "ON")
 	checkDBstatus(ctx, t, rdonly2, "Rpl_semi_sync_slave_status", "ON")

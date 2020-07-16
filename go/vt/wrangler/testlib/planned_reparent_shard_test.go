@@ -111,6 +111,7 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 	defer goodReplica1.StopActionLoop(t)
 
 	// run PlannedReparentShard
+	// using deprecated flag until it is removed completely. at that time this should be replaced with -wait_replicas_timeout
 	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard})
 	require.NoError(t, err)
 
@@ -224,7 +225,7 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master",
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master",
 		topoproto.TabletAliasString(newMaster.Tablet.Alias)})
 	require.NoError(t, err)
 
@@ -266,7 +267,7 @@ func TestPlannedReparentNoMaster(t *testing.T) {
 	NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", replica1.Tablet.Keyspace + "/" + replica1.Tablet.Shard, "-new_master", topoproto.TabletAliasString(replica1.Tablet.Alias)})
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", replica1.Tablet.Keyspace + "/" + replica1.Tablet.Shard, "-new_master", topoproto.TabletAliasString(replica1.Tablet.Alias)})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "the shard has no master")
 }
@@ -356,7 +357,7 @@ func TestPlannedReparentShardWaitForPositionFail(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "replication on master-elect cell1-0000000001 did not catch up in time")
 
@@ -450,7 +451,7 @@ func TestPlannedReparentShardWaitForPositionTimeout(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "replication on master-elect cell1-0000000001 did not catch up in time")
 
@@ -506,7 +507,7 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 	defer goodReplica1.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", master.Tablet.Keyspace + "/" + master.Tablet.Shard, "-new_master",
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", master.Tablet.Keyspace + "/" + master.Tablet.Shard, "-new_master",
 		topoproto.TabletAliasString(master.Tablet.Alias)})
 	require.NoError(t, err)
 	// check what was run
@@ -524,7 +525,11 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 	assert.True(t, goodReplica1.FakeMysqlDaemon.Replicating, "goodReplica1.FakeMysqlDaemon.Replicating not set")
 }
 
-func TestPlannedReparentShardRelayLogErrorStartSlave(t *testing.T) {
+// TestPlannedReparentShardRelayLogErrorStartReplication is similar to
+// TestPlannedReparentShardRelayLogError with the difference that goodReplica1
+// is not replicating to start with (IO_Thread is not running) and we
+// simulate an error from the attempt to start replication
+func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 	ts := memorytopo.NewServer("cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
@@ -556,7 +561,7 @@ func TestPlannedReparentShardRelayLogErrorStartSlave(t *testing.T) {
 	defer master.StopActionLoop(t)
 	master.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 
-	// good replica 1 is not replicating
+	// goodReplica1 is not replicating
 	goodReplica1.FakeMysqlDaemon.ReadOnly = true
 	goodReplica1.FakeMysqlDaemon.Replicating = true
 	goodReplica1.FakeMysqlDaemon.IOThreadRunning = false
@@ -574,7 +579,7 @@ func TestPlannedReparentShardRelayLogErrorStartSlave(t *testing.T) {
 	defer goodReplica1.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", master.Tablet.Keyspace + "/" + master.Tablet.Shard, "-new_master",
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", master.Tablet.Keyspace + "/" + master.Tablet.Shard, "-new_master",
 		topoproto.TabletAliasString(master.Tablet.Alias)})
 	require.NoError(t, err)
 	// check what was run
@@ -679,7 +684,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "some error")
@@ -711,7 +716,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	}
 
 	// run PlannedReparentShard
-	err = vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
+	err = vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
 	require.NoError(t, err)
 
 	// check that mastership changed correctly
@@ -778,7 +783,7 @@ func TestPlannedReparentShardSameMaster(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", oldMaster.Tablet.Keyspace + "/" + oldMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(oldMaster.Tablet.Alias)})
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", oldMaster.Tablet.Keyspace + "/" + oldMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(oldMaster.Tablet.Alias)})
 	require.NoError(t, err)
 	assert.False(t, oldMaster.FakeMysqlDaemon.ReadOnly, "oldMaster.FakeMysqlDaemon.ReadOnly")
 }

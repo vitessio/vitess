@@ -122,6 +122,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run EmergencyReparentShard
+	// using deprecated flag until it is removed completely. at that time this should be replaced with -wait_replicas_timeout
 	err := vp.Run([]string{"EmergencyReparentShard", "-wait_slave_timeout", "10s", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard,
 		topoproto.TabletAliasString(newMaster.Tablet.Alias)})
 	require.NoError(t, err)

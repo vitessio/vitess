@@ -38,7 +38,7 @@ type VtctlClientProcess struct {
 func (vtctlclient *VtctlClientProcess) InitShardMaster(Keyspace string, Shard string, Cell string, TabletUID int) (err error) {
 	return vtctlclient.ExecuteCommand(
 		"InitShardMaster",
-		"-force",
+		"-force", "-wait_replicas_timeout", "31s",
 		fmt.Sprintf("%s/%s", Keyspace, Shard),
 		fmt.Sprintf("%s-%d", Cell, TabletUID))
 }
