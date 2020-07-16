@@ -65,7 +65,11 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "no tablets available for %v %v %v", tp.cells, tp.keyspace, tp.shard)
 	}
 	for {
-		idx := rand.Intn(len(candidates))
+		idx := 0
+		// if there is only one candidate we use that, otherwise we find one randomly
+		if len(candidates) > 1 {
+			idx = rand.Intn(len(candidates))
+		}
 		alias := candidates[idx]
 		// get tablet
 		ti, err := tp.ts.GetTablet(ctx, alias)
@@ -107,7 +111,17 @@ func tabletTypeIn(tabletType topodatapb.TabletType, tabletTypes []topodatapb.Tab
 	return false
 }
 func (tp *TabletPicker) getAllTablets(ctx context.Context) []*topodatapb.TabletAlias {
+	// Special handling for MASTER tablet type
+	// Since there is only one master, we ignore cell and find the master
 	result := make([]*topodatapb.TabletAlias, 0)
+	if len(tp.tabletTypes) == 1 && tp.tabletTypes[0] == topodatapb.TabletType_MASTER {
+		si, err := tp.ts.GetShard(ctx, tp.keyspace, tp.shard)
+		if err != nil {
+			return result
+		}
+		result = append(result, si.MasterAlias)
+		return result
+	}
 	actualCells := make([]string, 0)
 	for _, cell := range tp.cells {
 		// check if cell is actually an alias
