@@ -128,6 +128,7 @@ func TestInitMasterShard(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run InitShardMaster
+	// using deprecated flag until it is removed completely. at that time this should be replaced with -wait_replicas_timeout
 	if err := vp.Run([]string{"InitShardMaster", "-wait_slave_timeout", "10s", master.Tablet.Keyspace + "/" + master.Tablet.Shard, topoproto.TabletAliasString(master.Tablet.Alias)}); err != nil {
 		t.Fatalf("InitShardMaster failed: %v", err)
 	}

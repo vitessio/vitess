@@ -130,6 +130,7 @@ func TestHealthCheck(t *testing.T) {
 	exec(t, masterConn, "stop slave")
 
 	// stop replication, make sure we don't go unhealthy.
+	// TODO: replace with StopReplication once StopSlave has been removed
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopSlave", rTablet.Alias)
 	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rTablet.Alias)
@@ -141,7 +142,7 @@ func TestHealthCheck(t *testing.T) {
 	verifyStreamHealth(t, result)
 
 	// then restart replication, make sure we stay healthy
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopSlave", rTablet.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", rTablet.Alias)
 	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rTablet.Alias)
 	require.NoError(t, err)
@@ -220,13 +221,13 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 	// actions are similar to the SplitClone vtworker command
 	// implementation.)  The tablet will stay healthy, and the
 	// query service is still running.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonlyTablet.Alias, "drained")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonlyTablet.Alias, "drained")
 	require.NoError(t, err)
 	// Trying to drain the same tablet again, should error
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonlyTablet.Alias, "drained")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonlyTablet.Alias, "drained")
 	assert.Error(t, err, "already drained")
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopSlave", rdonlyTablet.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", rdonlyTablet.Alias)
 	require.NoError(t, err)
 	// Trigger healthcheck explicitly to avoid waiting for the next interval.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rdonlyTablet.Alias)
@@ -239,7 +240,7 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 	require.NoError(t, err)
 
 	// Restart replication. Tablet will become healthy again.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonlyTablet.Alias, "rdonly")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonlyTablet.Alias, "rdonly")
 	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StartSlave", rdonlyTablet.Alias)
 	require.NoError(t, err)
@@ -382,9 +383,9 @@ func TestNoMysqlHealthCheck(t *testing.T) {
 	checkHealth(t, rTablet.HTTPPort, true)
 
 	// Tell replica to not try to repair replication in healthcheck.
-	// The StopSlave will ultimately fail because mysqld is not running,
+	// The StopReplication will ultimately fail because mysqld is not running,
 	// But vttablet should remember that it's not supposed to fix replication.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopSlave", rTablet.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", rTablet.Alias)
 	assert.Error(t, err, "Fail as mysqld not running")
 
 	//The above notice to not fix replication should survive tablet restart.
