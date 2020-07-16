@@ -55,7 +55,6 @@ type SandboxConn struct {
 	// functions were called.
 	ExecCount                sync2.AtomicInt64
 	BeginCount               sync2.AtomicInt64
-	ReserveCount             sync2.AtomicInt64
 	CommitCount              sync2.AtomicInt64
 	RollbackCount            sync2.AtomicInt64
 	AsTransactionCount       sync2.AtomicInt64
@@ -67,6 +66,8 @@ type SandboxConn struct {
 	SetRollbackCount         sync2.AtomicInt64
 	ConcludeTransactionCount sync2.AtomicInt64
 	ReadTransactionCount     sync2.AtomicInt64
+	ReserveCount             sync2.AtomicInt64
+	ReleaseCount             sync2.AtomicInt64
 
 	// Queries stores the non-batch requests received.
 	Queries []*querypb.BoundQuery
@@ -219,13 +220,13 @@ func (sbc *SandboxConn) begin(ctx context.Context, target *querypb.Target, preQu
 // Commit is part of the QueryService interface.
 func (sbc *SandboxConn) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
 	sbc.CommitCount.Add(1)
-	return 0, sbc.getError()
+	return sbc.ReserveID.Add(1), sbc.getError()
 }
 
 // Rollback is part of the QueryService interface.
 func (sbc *SandboxConn) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
 	sbc.RollbackCount.Add(1)
-	return 0, sbc.getError()
+	return sbc.ReserveID.Add(1), sbc.getError()
 }
 
 // Prepare prepares the specified transaction.
@@ -445,7 +446,8 @@ func (sbc *SandboxConn) reserve(ctx context.Context, target *querypb.Target, pre
 
 //Release implements the QueryService interface
 func (sbc *SandboxConn) Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
-	panic("implement me")
+	sbc.ReleaseCount.Add(1)
+	return sbc.getError()
 }
 
 // Close does not change ExecCount
