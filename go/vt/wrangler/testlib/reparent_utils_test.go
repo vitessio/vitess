@@ -127,9 +127,16 @@ func TestReparentTablet(t *testing.T) {
 	defer master.StopActionLoop(t)
 
 	// replica loop
+	// We have to set the settings as replicating. Otherwise,
+	// the replication manager intervenes and tries to fix replication,
+	// which ends up making this test unpredictable.
+	replica.FakeMysqlDaemon.Replicating = true
+	replica.FakeMysqlDaemon.IOThreadRunning = true
 	replica.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
 	replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP SLAVE",
 		"FAKE SET MASTER",
+		"START SLAVE",
 	}
 	replica.StartActionLoop(t, wr)
 	defer replica.StopActionLoop(t)

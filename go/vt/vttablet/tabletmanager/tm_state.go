@@ -200,15 +200,15 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 		return
 	}
 
-	ts.tm.replManager.SetTabletType(ts.tablet.Type)
+	terTime := logutil.ProtoToTime(ts.tablet.MasterTermStartTime)
+	reason := ts.canServe(ts.tablet.Type)
+	ts.publishForDisplay(reason)
 
 	if err := ts.applyBlacklist(ctx); err != nil {
 		log.Errorf("Cannot update blacklisted tables rule: %v", err)
 	}
 
-	terTime := logutil.ProtoToTime(ts.tablet.MasterTermStartTime)
-	reason := ts.canServe(ts.tablet.Type)
-	ts.publishForDisplay(reason)
+	ts.tm.replManager.SetTabletType(ts.tablet.Type)
 
 	if reason == "" {
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, true); err != nil {
@@ -243,11 +243,11 @@ func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
 	if !topo.IsRunningQueryService(tabletType) {
 		return fmt.Sprintf("not a serving tablet type(%v)", tabletType)
 	}
-	if tabletType == topodatapb.TabletType_MASTER && ts.isResharding {
-		return "master tablet with filtered replication on"
-	}
 	if ts.tabletControls[tabletType] {
 		return "TabletControl.DisableQueryService set"
+	}
+	if tabletType == topodatapb.TabletType_MASTER && ts.isResharding {
+		return "master tablet with filtered replication on"
 	}
 	return ""
 }

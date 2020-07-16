@@ -80,10 +80,24 @@ func (rm *replManager) SetTabletType(tabletType topodatapb.TabletType) {
 	if rm.ticks.Running() {
 		return
 	}
+	// Run an immediate check to fix replication if it was broken.
+	// A higher caller may already have te action lock. So, we use
+	// a code path that avoids it.
+	rm.checkActionLocked()
 	rm.ticks.Start(rm.check)
 }
 
 func (rm *replManager) check() {
+	// We need to obtain the action lock if we're going to fix
+	// replication
+	if err := rm.tm.lock(rm.ctx); err != nil {
+		return
+	}
+	defer rm.tm.unlock()
+	rm.checkActionLocked()
+}
+
+func (rm *replManager) checkActionLocked() {
 	status, err := rm.tm.MysqlDaemon.ReplicationStatus()
 	if err != nil {
 		if err != mysql.ErrNotReplica {
@@ -96,13 +110,6 @@ func (rm *replManager) check() {
 			return
 		}
 	}
-
-	// We need to obtain the action lock if we're going to fix
-	// replication
-	if err := rm.tm.lock(rm.ctx); err != nil {
-		return
-	}
-	defer rm.tm.unlock()
 
 	if rm.firstFailure {
 		log.Infof("Replication is stopped, reconnecting to master.")
