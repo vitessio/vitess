@@ -100,6 +100,8 @@ type SandboxConn struct {
 	// reserve id generator
 	ReserveID sync2.AtomicInt64
 
+	txIDToRID map[int64]int64
+
 	sExecMu sync.Mutex
 	execMu  sync.Mutex
 }
@@ -111,6 +113,7 @@ func NewSandboxConn(t *topodatapb.Tablet) *SandboxConn {
 	return &SandboxConn{
 		tablet:        t,
 		MustFailCodes: make(map[vtrpcpb.Code]int),
+		txIDToRID:     make(map[int64]int64),
 	}
 }
 
@@ -220,13 +223,21 @@ func (sbc *SandboxConn) begin(ctx context.Context, target *querypb.Target, preQu
 // Commit is part of the QueryService interface.
 func (sbc *SandboxConn) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
 	sbc.CommitCount.Add(1)
-	return sbc.ReserveID.Add(1), sbc.getError()
+	reservedID := sbc.txIDToRID[transactionID]
+	if reservedID != 0 {
+		reservedID = sbc.ReserveID.Add(1)
+	}
+	return reservedID, sbc.getError()
 }
 
 // Rollback is part of the QueryService interface.
 func (sbc *SandboxConn) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
 	sbc.RollbackCount.Add(1)
-	return sbc.ReserveID.Add(1), sbc.getError()
+	reservedID := sbc.txIDToRID[transactionID]
+	if reservedID != 0 {
+		reservedID = sbc.ReserveID.Add(1)
+	}
+	return reservedID, sbc.getError()
 }
 
 // Prepare prepares the specified transaction.
@@ -319,6 +330,9 @@ func (sbc *SandboxConn) ReadTransaction(ctx context.Context, target *querypb.Tar
 // BeginExecute is part of the QueryService interface.
 func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	transactionID, alias, err := sbc.begin(ctx, target, preQueries, reservedID, options)
+	if transactionID != 0 {
+		sbc.txIDToRID[transactionID] = reservedID
+	}
 	if err != nil {
 		return nil, 0, nil, err
 	}
@@ -417,18 +431,24 @@ func (sbc *SandboxConn) HandlePanic(err *error) {
 
 //ReserveBeginExecute implements the QueryService interface
 func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
-	reserveID := sbc.reserve(ctx, target, preQueries, bindVariables, 0, options)
-	result, txID, alias, err := sbc.BeginExecute(ctx, target, preQueries, sql, bindVariables, reserveID, options)
-	if err != nil {
-		return nil, txID, reserveID, alias, err
+	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, 0, options)
+	result, transactionID, alias, err := sbc.BeginExecute(ctx, target, preQueries, sql, bindVariables, reservedID, options)
+	if transactionID != 0 {
+		sbc.txIDToRID[transactionID] = reservedID
 	}
-	return result, txID, reserveID, alias, nil
+	if err != nil {
+		return nil, transactionID, reservedID, alias, err
+	}
+	return result, transactionID, reservedID, alias, nil
 }
 
 //ReserveExecute implements the QueryService interface
 func (sbc *SandboxConn) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, transactionID, options)
 	result, err := sbc.Execute(ctx, target, sql, bindVariables, transactionID, reservedID, options)
+	if transactionID != 0 {
+		sbc.txIDToRID[transactionID] = reservedID
+	}
 	if err != nil {
 		return nil, 0, nil, err
 	}

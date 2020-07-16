@@ -85,8 +85,8 @@ func NewAutocommitSession(sessn *vtgatepb.Session) *SafeSession {
 	return NewSafeSession(newSession)
 }
 
-// Reset clears the session
-func (session *SafeSession) Reset() {
+// ResetTx clears the session
+func (session *SafeSession) ResetTx() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.mustRollback = false
@@ -99,6 +99,21 @@ func (session *SafeSession) Reset() {
 		session.PreSessions = nil
 		session.PostSessions = nil
 	}
+}
+
+// Reset clears the session
+func (session *SafeSession) Reset() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.mustRollback = false
+	session.autocommitState = notAutocommittable
+	session.Session.InTransaction = false
+	session.commitOrder = vtgatepb.CommitOrder_NORMAL
+	session.Savepoints = nil
+	session.ShardSessions = nil
+	session.PreSessions = nil
+	session.PostSessions = nil
+	session.Session.InReservedConn = false
 }
 
 // SetAutocommittable sets the state to autocommitable if true.
