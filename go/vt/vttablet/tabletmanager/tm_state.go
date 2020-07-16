@@ -45,12 +45,15 @@ type tmState struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	// Read-only variables.
-	tabletAlias *topodatapb.TabletAlias
-	keyspace    string
-	shard       string
-	keyrange    *topodatapb.KeyRange
-
+	// mu must be held while accessing the following members and
+	// while changing the state of the system to match these values.
+	// This can be held for many seconds while tmState connects to
+	// external components to change their state.
+	// Obtaining tm.actionMutex before calling a tmState function is
+	// not required.
+	// Because mu can be held for long, we publish the current state
+	// of these variables into displayState, which can be accessed
+	// more freely even while tmState is busy transitioning.
 	mu                sync.Mutex
 	isOpen            bool
 	isResharding      bool
@@ -58,16 +61,19 @@ type tmState struct {
 	blacklistedTables map[topodatapb.TabletType][]string
 	tablet            *topodatapb.Tablet
 	isPublishing      bool
+
+	// displayState contains the current snapshot of the internal state
+	// and has its own mutex.
+	displayState displayState
 }
 
 func newTMState(tm *TabletManager, tablet *topodatapb.Tablet) *tmState {
 	return &tmState{
-		tm:          tm,
-		tabletAlias: tm.tabletAlias,
-		keyspace:    tablet.Keyspace,
-		shard:       tablet.Shard,
-		keyrange:    tablet.KeyRange,
-		tablet:      tablet,
+		tm: tm,
+		displayState: displayState{
+			tablet: *tablet,
+		},
+		tablet: tablet,
 	}
 }
 
@@ -96,12 +102,12 @@ func (ts *tmState) RefreshFromTopo(ctx context.Context) error {
 	span, ctx := trace.NewSpan(ctx, "tmState.refreshFromTopo")
 	defer span.Finish()
 
-	shardInfo, err := ts.tm.TopoServer.GetShard(ctx, ts.keyspace, ts.shard)
+	shardInfo, err := ts.tm.TopoServer.GetShard(ctx, ts.Keyspace(), ts.Shard())
 	if err != nil {
 		return err
 	}
 
-	srvKeyspace, err := ts.tm.TopoServer.GetSrvKeyspace(ctx, ts.tabletAlias.Cell, ts.keyspace)
+	srvKeyspace, err := ts.tm.TopoServer.GetSrvKeyspace(ctx, ts.tm.tabletAlias.Cell, ts.Keyspace())
 	if err != nil {
 		return err
 	}
@@ -118,7 +124,7 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 
 		ts.blacklistedTables = make(map[topodatapb.TabletType][]string)
 		for _, tc := range shardInfo.TabletControls {
-			if topo.InCellList(ts.tabletAlias.Cell, tc.Cells) {
+			if topo.InCellList(ts.tm.tabletAlias.Cell, tc.Cells) {
 				ts.blacklistedTables[tc.TabletType] = tc.BlacklistedTables
 			}
 		}
@@ -128,7 +134,7 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 		ts.tabletControls = make(map[topodatapb.TabletType]bool)
 		for _, partition := range srvKeyspace.GetPartitions() {
 			for _, tabletControl := range partition.GetShardTabletControls() {
-				if key.KeyRangeEqual(tabletControl.GetKeyRange(), ts.keyrange) {
+				if key.KeyRangeEqual(tabletControl.GetKeyRange(), ts.KeyRange()) {
 					if tabletControl.QueryServiceDisabled {
 						ts.tabletControls[partition.GetServedType()] = true
 					}
@@ -149,7 +155,7 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 		masterTermStartTime := logutil.TimeToProto(time.Now())
 
 		// Update the tablet record first.
-		_, err := topotools.ChangeType(ctx, ts.tm.TopoServer, ts.tabletAlias, tabletType, masterTermStartTime)
+		_, err := topotools.ChangeType(ctx, ts.tm.TopoServer, ts.tm.tabletAlias, tabletType, masterTermStartTime)
 		if err != nil {
 			return err
 		}
@@ -186,33 +192,6 @@ func (ts *tmState) UpdateTablet(update func(tablet *topodatapb.Tablet)) {
 	update(ts.tablet)
 }
 
-func (ts *tmState) Tablet() *topodatapb.Tablet {
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-	return proto.Clone(ts.tablet).(*topodatapb.Tablet)
-}
-
-func (ts *tmState) MasterTermStartTime() time.Time {
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-	if ts.tablet == nil {
-		return time.Time{}
-	}
-	return logutil.ProtoToTime(ts.tablet.MasterTermStartTime)
-}
-
-func (ts *tmState) DisallowQueryService() string {
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-	return ts.canServe(ts.tablet.Type)
-}
-
-func (ts *tmState) BlacklistedTables() []string {
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-	return ts.blacklistedTables[ts.tablet.Type]
-}
-
 func (ts *tmState) updateLocked(ctx context.Context) {
 	span, ctx := trace.NewSpan(ctx, "tmState.update")
 	defer span.Finish()
@@ -229,6 +208,8 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 
 	terTime := logutil.ProtoToTime(ts.tablet.MasterTermStartTime)
 	reason := ts.canServe(ts.tablet.Type)
+	ts.publishForDisplay(reason)
+
 	if reason == "" {
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, true); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
@@ -308,7 +289,7 @@ func (ts *tmState) publishStateLocked(ctx context.Context) {
 	// Fast path: publish immediately.
 	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancel()
-	_, err := ts.tm.TopoServer.UpdateTabletFields(ctx, ts.tabletAlias, func(tablet *topodatapb.Tablet) error {
+	_, err := ts.tm.TopoServer.UpdateTabletFields(ctx, ts.tm.tabletAlias, func(tablet *topodatapb.Tablet) error {
 		if err := topotools.CheckOwnership(tablet, ts.tablet); err != nil {
 			log.Error(err)
 			return topo.NewError(topo.NoUpdateNeeded, "")
@@ -334,7 +315,7 @@ func (ts *tmState) retryPublish() {
 		// Retry immediately the first time because the previous failure might have been
 		// due to an expired context.
 		ctx, cancel := context.WithTimeout(ts.ctx, *topo.RemoteOperationTimeout)
-		_, err := ts.tm.TopoServer.UpdateTabletFields(ctx, ts.tabletAlias, func(tablet *topodatapb.Tablet) error {
+		_, err := ts.tm.TopoServer.UpdateTabletFields(ctx, ts.tm.tabletAlias, func(tablet *topodatapb.Tablet) error {
 			if err := topotools.CheckOwnership(tablet, ts.tablet); err != nil {
 				log.Error(err)
 				return topo.NewError(topo.NoUpdateNeeded, "")
@@ -353,4 +334,70 @@ func (ts *tmState) retryPublish() {
 		log.Infof("Published state: %v", ts.tablet)
 		return
 	}
+}
+
+// displayState is the externalized version of tmState
+// that can be used for observability. The internal version
+// of tmState may not be accessible due to longer mutex holds.
+// tmState uses publishForDisplay to keep these values uptodate.
+type displayState struct {
+	mu                sync.Mutex
+	tablet            topodatapb.Tablet
+	reason            string
+	blackListedTables []string
+}
+
+// Note that the methods for displayState are all in tmState.
+func (ts *tmState) publishForDisplay(reason string) {
+	ts.displayState.mu.Lock()
+	defer ts.displayState.mu.Unlock()
+
+	ts.displayState.tablet = *ts.tablet
+	ts.displayState.reason = reason
+	ts.displayState.blackListedTables = ts.blacklistedTables[ts.tablet.Type]
+}
+
+func (ts *tmState) Tablet() *topodatapb.Tablet {
+	ts.displayState.mu.Lock()
+	defer ts.displayState.mu.Unlock()
+	return proto.Clone(&ts.displayState.tablet).(*topodatapb.Tablet)
+}
+
+func (ts *tmState) MasterTermStartTime() time.Time {
+	ts.displayState.mu.Lock()
+	defer ts.displayState.mu.Unlock()
+	if ts.tablet == nil {
+		return time.Time{}
+	}
+	return logutil.ProtoToTime(ts.tablet.MasterTermStartTime)
+}
+
+func (ts *tmState) DisallowQueryService() string {
+	ts.displayState.mu.Lock()
+	defer ts.displayState.mu.Unlock()
+	return ts.displayState.reason
+}
+
+func (ts *tmState) BlacklistedTables() []string {
+	ts.displayState.mu.Lock()
+	defer ts.displayState.mu.Unlock()
+	return ts.displayState.blackListedTables
+}
+
+func (ts *tmState) Keyspace() string {
+	ts.displayState.mu.Lock()
+	defer ts.displayState.mu.Unlock()
+	return ts.displayState.tablet.Keyspace
+}
+
+func (ts *tmState) Shard() string {
+	ts.displayState.mu.Lock()
+	defer ts.displayState.mu.Unlock()
+	return ts.displayState.tablet.Shard
+}
+
+func (ts *tmState) KeyRange() *topodatapb.KeyRange {
+	ts.displayState.mu.Lock()
+	defer ts.displayState.mu.Unlock()
+	return ts.displayState.tablet.KeyRange
 }
