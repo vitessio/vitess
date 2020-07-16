@@ -112,7 +112,7 @@ func TestShardedMoveTables(t *testing.T) {
 	defer vtgateConn.Close()
 
 	targetKeyspace := "newcastle"
-	targetShards := "-40,40-80,80-c0,c0-"
+	targetShards := "-80,80-" //"-40,40-80,80-c0,c0-"
 	vc.AddKeyspace(t, cell, "newcastle", targetShards, newcastleVSchema, newcastleSchema, 1, 0, 300)
 	for _, shard := range strings.Split(targetShards, ",") {
 		vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", targetKeyspace, shard), 1)
@@ -121,7 +121,6 @@ func TestShardedMoveTables(t *testing.T) {
 	execMultipleQueries(t, vtgateConn, "wales", initialWalesInserts)
 	execMultipleQueries(t, vtgateConn, "newcastle", initialNewcastleInserts)
 	insertCoal(t, vtgateConn)
-	return
 	workflow := "c2n"
 	ksWorkflow := targetKeyspace + "." + workflow
 	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("MoveTables", "-cell="+cell.Name, "-workflow="+workflow,
@@ -136,9 +135,9 @@ func TestShardedMoveTables(t *testing.T) {
 		}
 	}
 	for _, tab := range tablets {
-		assert.Empty(t, validateCountInTablet(t, tab, "newcastle", "coal", 1))
+		assert.Empty(t, validateCountInTablet(t, tab, "newcastle", "coal", 5000))
 
 	}
-	assert.Empty(t, validateCount(t, vtgateConn, "newcastle", "newcastle.coal", 4))
+	assert.Empty(t, validateCount(t, vtgateConn, "newcastle", "newcastle.coal", 10000))
 
 }
