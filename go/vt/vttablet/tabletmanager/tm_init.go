@@ -141,9 +141,10 @@ type TabletManager struct {
 	// when we transition back from something like MASTER.
 	baseTabletType topodatapb.TabletType
 
-	// actionMutex is there to run only one action at a time. If
-	// both tm.actionMutex and tm.mutex needs to be taken,
-	// take actionMutex first.
+	// actionMutex is there to run only one action at a time.
+	// This mutex can be held for long periods of time (hours),
+	// like in the case of a restore. This mutex must be obtained
+	// first before other mutexes.
 	actionMutex sync.Mutex
 
 	// actionMutexLocked is set to true after we acquire actionMutex,
@@ -316,10 +317,6 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet) error {
 		return nil
 	}
 
-	if err := tm.lock(tm.BatchCtx); err != nil {
-		return err
-	}
-	defer tm.unlock()
 	tm.tmState.Open(tm.BatchCtx)
 	return nil
 }
