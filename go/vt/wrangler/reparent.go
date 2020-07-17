@@ -1004,14 +1004,14 @@ func (wr *Wrangler) findValidReparentCandidates(statusMap map[string]*replicatio
 
 	// Determine if we need to find errant GTIDs.
 	var gtidBased *bool
-	for _, status := range replicationStatusMap {
+	for alias, status := range replicationStatusMap {
 		if gtidBased == nil {
 			gtidBased = pointer.BoolPtr(!status.RelayLogPosition.IsZero())
 		} else if !*gtidBased {
 			break
 		} else if status.RelayLogPosition.IsZero() {
 			// Bail. We have an odd one in the bunch.
-			return nil, fmt.Errorf("encountered tablet with no relay log position, when at least one other tablet in the status map has a relay log positions")
+			return nil, fmt.Errorf("encountered tablet %v with no relay log position, when at least one other tablet in the status map has a relay log positions", alias)
 		}
 	}
 
@@ -1052,11 +1052,19 @@ func (wr *Wrangler) findValidReparentCandidates(statusMap map[string]*replicatio
 	}
 
 	for alias, masterStatus := range masterStatusMap {
-		executedPosition, err := mysql.DecodePosition(masterStatus.Position)
-		if err != nil {
-			return nil, err
+		if *gtidBased {
+			executedPosition, err := mysql.DecodePosition(masterStatus.Position)
+			if err != nil {
+				return nil, err
+			}
+			positionMap[alias] = executedPosition
+		} else {
+			executedFilePosition, err := mysql.DecodePosition(masterStatus.FilePosition)
+			if err != nil {
+				return nil, err
+			}
+			positionMap[alias] = executedFilePosition
 		}
-		positionMap[alias] = executedPosition
 	}
 
 	if !*gtidBased {
@@ -1073,6 +1081,9 @@ func (wr *Wrangler) findValidReparentCandidates(statusMap map[string]*replicatio
 	// Find a position that is fully caught up when errant GTIDs are taken out of the equation.
 	var winningPosition mysql.Position
 	for _, position := range positionMap {
+		if winningPosition.IsZero() {
+			winningPosition = position
+		}
 		if position.AtLeast(winningPosition) {
 			winningPosition = position
 		}
@@ -1116,16 +1127,8 @@ func (wr *Wrangler) stopReplicationAndBuildStatusMaps(ctx context.Context, ev *e
 			ctx, cancel := context.WithTimeout(groupCtx, waitReplicasTimeout)
 			defer cancel()
 			_, stopReplicationStatus, err := wr.tmc.StopReplicationAndGetStatus(ctx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
-			if err != nil {
-				if err != mysql.ErrNotReplica {
-					wr.logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", alias, err)
-					atomic.AddUint32(&errCounter, 1)
-					if atomic.LoadUint32(&errCounter) > 1 {
-						groupCancel()
-					}
-					return
-				}
-
+			switch err {
+			case mysql.ErrNotReplica:
 				masterStatus, err := wr.tmc.DemoteMaster(ctx, tabletInfo.Tablet)
 				if err != nil {
 					wr.logger.Warningf("replica %v thinks it's master but we failed to demote it", alias)
@@ -1135,12 +1138,22 @@ func (wr *Wrangler) stopReplicationAndBuildStatusMaps(ctx context.Context, ev *e
 					}
 					return
 				}
+				mu.Lock()
 				masterStatusMap[alias] = masterStatus
-			}
+				mu.Unlock()
 
-			mu.Lock()
-			statusMap[alias] = stopReplicationStatus
-			mu.Unlock()
+			case nil:
+				mu.Lock()
+				statusMap[alias] = stopReplicationStatus
+				mu.Unlock()
+
+			default:
+				wr.logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", alias, err)
+				atomic.AddUint32(&errCounter, 1)
+				if atomic.LoadUint32(&errCounter) > 1 {
+					groupCancel()
+				}
+			}
 		}(alias, tabletInfo)
 	}
 	wg.Wait()
