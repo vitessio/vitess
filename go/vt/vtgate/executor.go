@@ -299,7 +299,7 @@ func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession,
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
 	e.updateQueryCounts("Rollback", "", "", int64(logStats.ShardQueries))
-	err := e.CloseSession(ctx, safeSession)
+	err := e.txConn.Rollback(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
 	return &sqltypes.Result{}, err
 }
@@ -342,10 +342,10 @@ func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession
 	return qr, nil
 }
 
-// CloseSession closes the current transaction, if any. It is called both for explicit "rollback"
-// statements and implicitly when the mysql server closes the connection.
+// CloseSession releases the current connection, which rollbacks open transactions and closes reserved connections.
+// It is called then the MySQL servers closes the connection to its client.
 func (e *Executor) CloseSession(ctx context.Context, safeSession *SafeSession) error {
-	return e.txConn.Rollback(ctx, safeSession)
+	return e.txConn.Release(ctx, safeSession)
 }
 
 func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) (*sqltypes.Result, error) {
