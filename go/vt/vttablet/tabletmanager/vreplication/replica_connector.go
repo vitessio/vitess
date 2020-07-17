@@ -31,10 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
-var (
-	_ VStreamerClient = (*mysqlConnector)(nil)
-)
-
 // NewReplicaConnector returns replica connector
 //
 // This is used by binlog server to make vstream connection
