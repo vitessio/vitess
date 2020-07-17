@@ -46,6 +46,21 @@ func TestEmergencyReparentShard(t *testing.T) {
 	goodReplica1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 	goodReplica2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, nil)
 
+	oldMaster.FakeMysqlDaemon.Replicating = false
+	oldMaster.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+		GTIDSet: mysql.MariadbGTIDSet{
+			2: mysql.MariadbGTID{
+				Domain:   2,
+				Server:   123,
+				Sequence: 456,
+			},
+		},
+	}
+	currentMasterFilePosition, _ := mysql.ParseFilePosGTIDSet("mariadb-bin.000010:456")
+	oldMaster.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
+		GTIDSet: currentMasterFilePosition,
+	}
+
 	// new master
 	newMaster.FakeMysqlDaemon.ReadOnly = true
 	newMaster.FakeMysqlDaemon.Replicating = true
@@ -57,6 +72,10 @@ func TestEmergencyReparentShard(t *testing.T) {
 				Sequence: 456,
 			},
 		},
+	}
+	newMasterRelayLogPos, _ := mysql.ParseFilePosGTIDSet("relay-bin.000004:456")
+	newMaster.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
+		GTIDSet: newMasterRelayLogPos,
 	}
 	newMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE IO_THREAD",
@@ -78,6 +97,13 @@ func TestEmergencyReparentShard(t *testing.T) {
 
 	// old master, will be scrapped
 	oldMaster.FakeMysqlDaemon.ReadOnly = false
+	oldMaster.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
+	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
+	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP SLAVE",
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
 
@@ -93,9 +119,14 @@ func TestEmergencyReparentShard(t *testing.T) {
 			},
 		},
 	}
+	goodReplica1RelayLogPos, _ := mysql.ParseFilePosGTIDSet("relay-bin.000004:455")
+	goodReplica1.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
+		GTIDSet: goodReplica1RelayLogPos,
+	}
 	goodReplica1.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE IO_THREAD",
+		"STOP SLAVE",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -113,6 +144,10 @@ func TestEmergencyReparentShard(t *testing.T) {
 				Sequence: 454,
 			},
 		},
+	}
+	goodReplica2RelayLogPos, _ := mysql.ParseFilePosGTIDSet("relay-bin.000004:454")
+	goodReplica2.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
+		GTIDSet: goodReplica2RelayLogPos,
 	}
 	goodReplica2.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	goodReplica2.StartActionLoop(t, wr)
@@ -181,6 +216,10 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 			},
 		},
 	}
+	newMasterRelayLogPos, _ := mysql.ParseFilePosGTIDSet("relay-bin.000004:456")
+	newMaster.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
+		GTIDSet: newMasterRelayLogPos,
+	}
 	newMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE IO_THREAD",
 	}
@@ -188,6 +227,7 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	defer newMaster.StopActionLoop(t)
 
 	// old master, will be scrapped
+	oldMaster.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
 
@@ -213,6 +253,10 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 			},
 		},
 	}
+	moreAdvancedReplicaLogPos, _ := mysql.ParseFilePosGTIDSet("relay-bin.000004:457")
+	moreAdvancedReplica.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
+		GTIDSet: moreAdvancedReplicaLogPos,
+	}
 	moreAdvancedReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE IO_THREAD",
 	}
@@ -222,7 +266,7 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	// run EmergencyReparentShard
 	err := wr.EmergencyReparentShard(ctx, newMaster.Tablet.Keyspace, newMaster.Tablet.Shard, newMaster.Tablet.Alias, 10*time.Second)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "is more advanced than master elect tablet")
+	assert.Contains(t, err.Error(), "master elect is either not fully caught up, or")
 	// check what was run
 	err = newMaster.FakeMysqlDaemon.CheckSuperQueryList()
 	require.NoError(t, err)
