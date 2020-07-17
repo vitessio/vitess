@@ -58,11 +58,13 @@ func NewTabletPicker(ts *topo.Server, cells []string, keyspace, shard, tabletTyp
 	}, nil
 }
 
-// PickForStreaming picks all healthy tablets including the non-serving ones.
+// PickForStreaming picks an available tablet
+// All tablets that belong to tp.cells are evaluated and one is
+// chosen at random
 func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Tablet, error) {
 	candidates := tp.getAllTablets(ctx)
 	if len(candidates) == 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "no tablets available for %v %v %v", tp.cells, tp.keyspace, tp.shard)
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "no tablets available for cells:%v, keyspace/shard:%v/%v, tablet types:%v", tp.cells, tp.keyspace, tp.shard, tp.tabletTypes)
 	}
 	for {
 		idx := 0
@@ -81,7 +83,7 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 			}
 			continue
 		}
-		if !tabletTypeIn(ti.Tablet.Type, tp.tabletTypes) {
+		if !topoproto.IsTypeInList(ti.Tablet.Type, tp.tabletTypes) {
 			// tablet is not of one of the desired types
 			continue
 		}
@@ -99,17 +101,9 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 		_ = conn.Close(ctx)
 		return ti.Tablet, nil
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "can't find any healthy source tablet for %v %v %v", tp.keyspace, tp.shard, tp.tabletTypes)
+	return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "can't find any healthy source tablet for keyspace/shard:%v/%v tablet types:%v", tp.keyspace, tp.shard, tp.tabletTypes)
 }
 
-func tabletTypeIn(tabletType topodatapb.TabletType, tabletTypes []topodatapb.TabletType) bool {
-	for _, t := range tabletTypes {
-		if tabletType == t {
-			return true
-		}
-	}
-	return false
-}
 func (tp *TabletPicker) getAllTablets(ctx context.Context) []*topodatapb.TabletAlias {
 	// Special handling for MASTER tablet type
 	// Since there is only one master, we ignore cell and find the master

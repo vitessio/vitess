@@ -277,13 +277,18 @@ func TestPickUsingCellAlias(t *testing.T) {
 
 func TestPickError(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell"})
-	defer deleteTablet(te, addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", false, false))
-
 	_, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "badtype")
 	assert.EqualError(t, err, "failed to parse list of tablet types: badtype")
 
-	_, err = NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica,rdonly")
+	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica,rdonly")
 	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_, err = tp.PickForStreaming(ctx)
+	require.EqualError(t, err, "no tablets available for cells:[cell], keyspace/shard:ks/0, tablet types:[REPLICA RDONLY]")
+	defer deleteTablet(te, addTablet(te, 200, topodatapb.TabletType_REPLICA, "cell", false, false))
+	_, err = tp.PickForStreaming(ctx)
+	require.EqualError(t, err, "can't find any healthy source tablet for keyspace/shard:ks/0 tablet types:[REPLICA RDONLY]")
 }
 
 type pickerTestEnv struct {
@@ -334,19 +339,17 @@ func addTablet(te *pickerTestEnv, id int, tabletType topodatapb.TabletType, cell
 	err := te.topoServ.CreateTablet(context.Background(), tablet)
 	require.NoError(te.t, err)
 
-	var herr string
-	if !healthy {
-		herr = "err"
+	if healthy {
+		_ = createFixedHealthConn(tablet, &querypb.StreamHealthResponse{
+			Serving: serving,
+			Target: &querypb.Target{
+				Keyspace:   te.keyspace,
+				Shard:      te.shard,
+				TabletType: tabletType,
+			},
+			RealtimeStats: &querypb.RealtimeStats{HealthError: ""},
+		})
 	}
-	_ = createFixedHealthConn(tablet, &querypb.StreamHealthResponse{
-		Serving: serving,
-		Target: &querypb.Target{
-			Keyspace:   te.keyspace,
-			Shard:      te.shard,
-			TabletType: tabletType,
-		},
-		RealtimeStats: &querypb.RealtimeStats{HealthError: herr},
-	})
 
 	return tablet
 }
