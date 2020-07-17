@@ -377,18 +377,71 @@ func (q *query) VStreamResults(request *binlogdatapb.VStreamResultsRequest, stre
 }
 
 //ReserveExecute implements the QueryServer interface
-func (q *query) ReserveExecute(ctx context.Context, request *querypb.ReserveExecuteRequest) (*querypb.ReserveExecuteResponse, error) {
-	panic("implement me")
+func (q *query) ReserveExecute(ctx context.Context, request *querypb.ReserveExecuteRequest) (response *querypb.ReserveExecuteResponse, err error) {
+	defer q.server.HandlePanic(&err)
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	result, reservedID, alias, err := q.server.ReserveExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options)
+	if err != nil {
+		// if we have a valid reservedID, return the error in-band
+		if reservedID != 0 {
+			return &querypb.ReserveExecuteResponse{
+				Error:       vterrors.ToVTRPC(err),
+				ReservedId:  reservedID,
+				TabletAlias: alias,
+			}, nil
+		}
+		return nil, vterrors.ToGRPC(err)
+	}
+	return &querypb.ReserveExecuteResponse{
+		Result:      sqltypes.ResultToProto3(result),
+		ReservedId:  reservedID,
+		TabletAlias: alias,
+	}, nil
 }
 
 //ReserveBeginExecute implements the QueryServer interface
-func (q *query) ReserveBeginExecute(ctx context.Context, request *querypb.ReserveBeginExecuteRequest) (*querypb.ReserveBeginExecuteResponse, error) {
-	panic("implement me")
+func (q *query) ReserveBeginExecute(ctx context.Context, request *querypb.ReserveBeginExecuteRequest) (response *querypb.ReserveBeginExecuteResponse, err error) {
+	defer q.server.HandlePanic(&err)
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	result, transactionID, reservedID, alias, err := q.server.ReserveBeginExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.Options)
+	if err != nil {
+		// if we have a valid reservedID, return the error in-band
+		if reservedID != 0 {
+			return &querypb.ReserveBeginExecuteResponse{
+				Error:         vterrors.ToVTRPC(err),
+				TransactionId: transactionID,
+				ReservedId:    reservedID,
+				TabletAlias:   alias,
+			}, nil
+		}
+		return nil, vterrors.ToGRPC(err)
+	}
+	return &querypb.ReserveBeginExecuteResponse{
+		Result:        sqltypes.ResultToProto3(result),
+		TransactionId: transactionID,
+		ReservedId:    reservedID,
+		TabletAlias:   alias,
+	}, nil
 }
 
 //Release implements the QueryServer interface
-func (q *query) Release(ctx context.Context, request *querypb.ReleaseRequest) (*querypb.ReleaseResponse, error) {
-	panic("implement me")
+func (q *query) Release(ctx context.Context, request *querypb.ReleaseRequest) (response *querypb.ReleaseResponse, err error) {
+	defer q.server.HandlePanic(&err)
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	err = q.server.Release(ctx, request.Target, request.TransactionId, request.ReservedId)
+	if err != nil {
+		return nil, vterrors.ToGRPC(err)
+	}
+	return &querypb.ReleaseResponse{}, nil
 }
 
 // Register registers the implementation on the provide gRPC Server.
