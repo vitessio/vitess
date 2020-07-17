@@ -17,15 +17,16 @@ var (
 	replicaTablet   *cluster.Vttablet
 	initDBFile      string
 
-	cell          = "zone1"
-	hostname      = "localhost"
-	binlogHost    = "127.0.0.1"
-	keyspaceName  = "ks"
-	restoreKSName = "restoreks"
-	dbName        = "vt_ks"
-	shardName     = "0"
-	shardKsName   = "ks/0"
-	mysqlUserName = "vt_dba"
+	cell                 = "zone1"
+	hostname             = "localhost"
+	binlogHost           = "127.0.0.1"
+	keyspaceName         = "ks"
+	partialRestoreKSName = "restoreks1"
+	fullRestoreKSName    = "restoreks2"
+	dbName               = "vt_ks"
+	shardName            = "0"
+	shardKsName          = "ks/0"
+	mysqlUserName        = "vt_dba"
 )
 
 func TestMain(m *testing.M) {
