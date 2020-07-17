@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -47,13 +49,13 @@ func init() {
 func TestBasicVreplicationWorkflow(t *testing.T) {
 	cellName := "zone1"
 
-	vc = InitCluster(t, cellName)
+	vc = InitCluster(t, []string{cellName})
 	assert.NotNil(t, vc)
 
 	defer vc.TearDown()
 
 	cell = vc.Cells[cellName]
-	vc.AddKeyspace(t, cell, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100)
+	vc.AddKeyspace(t, []*Cell{cell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100)
 	vtgate = cell.Vtgates[0]
 	assert.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
@@ -62,7 +64,7 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	defer vtgateConn.Close()
 	verifyClusterHealth(t)
 	insertInitialData(t)
-	shardCustomer(t, true)
+	shardCustomer(t, true, []*Cell{cell}, cellName)
 	shardOrders(t)
 	shardMerchant(t)
 
@@ -81,6 +83,64 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	expectNumberOfStreams(t, vtgateConn, "Customer3to2", "sales", "product:0", 3)
 	reshardCustomer3to1Merge(t)
 	expectNumberOfStreams(t, vtgateConn, "Customer3to1", "sales", "product:0", 1)
+}
+
+func TestMultiCellVreplicationWorkflow(t *testing.T) {
+	cells := []string{"zone1", "zone2"}
+
+	vc = InitCluster(t, cells)
+	assert.NotNil(t, vc)
+
+	defer vc.TearDown()
+
+	cell1 := vc.Cells["zone1"]
+	cell2 := vc.Cells["zone2"]
+	vc.AddKeyspace(t, []*Cell{cell1, cell2}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100)
+
+	vtgate = cell1.Vtgates[0]
+	assert.NotNil(t, vtgate)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
+
+	vtgateConn = getConnection(t, globalConfig.vtgateMySQLPort)
+	defer vtgateConn.Close()
+	verifyClusterHealth(t)
+	insertInitialData(t)
+	shardCustomer(t, true, []*Cell{cell1, cell2}, cell2.Name)
+	// TODO: Test resharding once -cells option is added to Reshard command
+	//insertMoreCustomers(t, 16)
+	//reshardCustomer2to4Split(t)
+	//expectNumberOfStreams(t, vtgateConn, "Customer2to4", "sales", "product:0", 4)
+}
+
+func TestCellAliasVreplicationWorkflow(t *testing.T) {
+	cells := []string{"zone1", "zone2"}
+
+	vc = InitCluster(t, cells)
+	assert.NotNil(t, vc)
+
+	defer vc.TearDown()
+
+	cell1 := vc.Cells["zone1"]
+	cell2 := vc.Cells["zone2"]
+	vc.AddKeyspace(t, []*Cell{cell1, cell2}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100)
+
+	// Add cell alias containing only zone2
+	result, err := vc.VtctlClient.ExecuteCommandWithOutput("AddCellsAlias", "-cells", "zone2", "alias")
+	require.NoError(t, err, "command failed with output: %v", result)
+
+	vtgate = cell1.Vtgates[0]
+	assert.NotNil(t, vtgate)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
+
+	vtgateConn = getConnection(t, globalConfig.vtgateMySQLPort)
+	defer vtgateConn.Close()
+	verifyClusterHealth(t)
+	insertInitialData(t)
+	shardCustomer(t, true, []*Cell{cell1, cell2}, "alias")
+	// TODO: Test resharding once -cells option is added to Reshard command
+	//insertMoreCustomers(t, 16)
+	//reshardCustomer2to4Split(t)
+	//expectNumberOfStreams(t, vtgateConn, "Customer2to4", "sales", "product:0", 4)
 }
 
 func insertInitialData(t *testing.T) {
@@ -110,8 +170,8 @@ func insertMoreCustomers(t *testing.T, numCustomers int) {
 	execVtgateQuery(t, vtgateConn, "customer", sql)
 }
 
-func shardCustomer(t *testing.T, testReverse bool) {
-	if _, err := vc.AddKeyspace(t, cell, "customer", "-80,80-", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200); err != nil {
+func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAlias string) {
+	if _, err := vc.AddKeyspace(t, cells, "customer", "-80,80-", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200); err != nil {
 		t.Fatal(err)
 	}
 	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "customer", "-80"), 1); err != nil {
@@ -121,10 +181,13 @@ func shardCustomer(t *testing.T, testReverse bool) {
 		t.Fatal(err)
 	}
 
-	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "-cell="+cell.Name, "-workflow=p2c",
+	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "-cell="+sourceCellOrAlias, "-workflow=p2c",
 		"-tablet_types="+"replica,rdonly", "product", "customer", "customer"); err != nil {
 		t.Fatalf("MoveTables command failed with %+v\n", err)
 	}
+
+	// Assume we are operating on first cell
+	cell := cells[0]
 
 	customerTab1 := vc.Cells[cell.Name].Keyspaces["customer"].Shards["-80"].Tablets["zone1-200"].Vttablet
 	customerTab2 := vc.Cells[cell.Name].Keyspaces["customer"].Shards["80-"].Tablets["zone1-300"].Vttablet
@@ -349,9 +412,7 @@ func reshardCustomer3to1Merge(t *testing.T) { //to unsharded
 func reshard(t *testing.T, ksName string, tableName string, workflow string, sourceShards string, targetShards string, tabletIDBase int, counts map[string]int, dryRunResultswitchWrites []string) {
 	ksWorkflow := ksName + "." + workflow
 	keyspace := vc.Cells[cell.Name].Keyspaces[ksName]
-	if err := vc.AddShards(t, cell, keyspace, targetShards, defaultReplicas, defaultRdonly, tabletIDBase); err != nil {
-		t.Fatalf(err.Error())
-	}
+	require.NoError(t, vc.AddShards(t, []*Cell{cell}, keyspace, targetShards, defaultReplicas, defaultRdonly, tabletIDBase))
 	arrShardNames := strings.Split(targetShards, ",")
 
 	for _, shardName := range arrShardNames {
@@ -444,7 +505,7 @@ func shardOrders(t *testing.T) {
 }
 
 func shardMerchant(t *testing.T) {
-	if _, err := vc.AddKeyspace(t, cell, "merchant", "-80,80-", merchantVSchema, "", defaultReplicas, defaultRdonly, 400); err != nil {
+	if _, err := vc.AddKeyspace(t, []*Cell{cell}, "merchant", "-80,80-", merchantVSchema, "", defaultReplicas, defaultRdonly, 400); err != nil {
 		t.Fatal(err)
 	}
 	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "merchant", "-80"), 1); err != nil {
