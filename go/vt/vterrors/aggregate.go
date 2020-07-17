@@ -80,6 +80,9 @@ func Aggregate(errors []error) error {
 	if len(errors) == 0 {
 		return nil
 	}
+	if len(errors) == 1 {
+		return errors[0]
+	}
 	return New(aggregateCodes(errors), aggregateErrors(errors))
 }
 

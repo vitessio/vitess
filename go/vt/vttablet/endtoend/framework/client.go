@@ -300,7 +300,7 @@ func (client *QueryClient) ReserveExecute(query string, preQueries []string, bin
 	if client.reservedID != 0 {
 		return nil, errors.New("already reserved a connection")
 	}
-	qr, reservedID, _, err := client.server.ReserveExecute(client.ctx, &client.target, query, preQueries, bindvars, client.transactionID, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	qr, reservedID, _, err := client.server.ReserveExecute(client.ctx, &client.target, preQueries, query, bindvars, client.transactionID, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	client.reservedID = reservedID
 	if err != nil {
 		return nil, err
@@ -316,14 +316,7 @@ func (client *QueryClient) ReserveBeginExecute(query string, preQueries []string
 	if client.transactionID != 0 {
 		return nil, errors.New("already in transaction")
 	}
-	qr, transactionID, reservedID, _, err := client.server.ReserveBeginExecute(
-		client.ctx,
-		&client.target,
-		query,
-		preQueries,
-		bindvars,
-		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
-	)
+	qr, transactionID, reservedID, _, err := client.server.ReserveBeginExecute(client.ctx, &client.target, preQueries, query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	client.transactionID = transactionID
 	client.reservedID = reservedID
 	if err != nil {
