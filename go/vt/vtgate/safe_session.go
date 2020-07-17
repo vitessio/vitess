@@ -30,7 +30,7 @@ import (
 
 // SafeSession is a mutex-protected version of the Session.
 // It is thread-safe if each thread only accesses one shard.
-// (the use pattern is 'Find', if not found, then 'Append',
+// (the use pattern is 'Find', if not found, then 'AppendOrUpdate',
 // for a single shard)
 type SafeSession struct {
 	mu              sync.Mutex
@@ -85,6 +85,22 @@ func NewAutocommitSession(sessn *vtgatepb.Session) *SafeSession {
 	return NewSafeSession(newSession)
 }
 
+// ResetTx clears the session
+func (session *SafeSession) ResetTx() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.mustRollback = false
+	session.autocommitState = notAutocommittable
+	session.Session.InTransaction = false
+	session.commitOrder = vtgatepb.CommitOrder_NORMAL
+	session.Savepoints = nil
+	if !session.Session.InReservedConn {
+		session.ShardSessions = nil
+		session.PreSessions = nil
+		session.PostSessions = nil
+	}
+}
+
 // Reset clears the session
 func (session *SafeSession) Reset() {
 	session.mu.Lock()
@@ -92,11 +108,12 @@ func (session *SafeSession) Reset() {
 	session.mustRollback = false
 	session.autocommitState = notAutocommittable
 	session.Session.InTransaction = false
+	session.commitOrder = vtgatepb.CommitOrder_NORMAL
+	session.Savepoints = nil
 	session.ShardSessions = nil
 	session.PreSessions = nil
 	session.PostSessions = nil
-	session.commitOrder = vtgatepb.CommitOrder_NORMAL
-	session.Savepoints = nil
+	session.Session.InReservedConn = false
 }
 
 // SetAutocommittable sets the state to autocommitable if true.
@@ -151,7 +168,7 @@ func (session *SafeSession) InTransaction() bool {
 }
 
 // Find returns the transactionId and tabletAlias, if any, for a session
-func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.TabletType) (transactionID int64, alias *topodatapb.TabletAlias) {
+func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.TabletType) (transactionID int64, reservedID int64, alias *topodatapb.TabletAlias) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	sessions := session.ShardSessions
@@ -163,41 +180,80 @@ func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.T
 	}
 	for _, shardSession := range sessions {
 		if keyspace == shardSession.Target.Keyspace && tabletType == shardSession.Target.TabletType && shard == shardSession.Target.Shard {
-			return shardSession.TransactionId, shardSession.TabletAlias
+			return shardSession.TransactionId, shardSession.ReservedId, shardSession.TabletAlias
 		}
 	}
-	return 0, nil
+	return 0, 0, nil
 }
 
-// Append adds a new ShardSession
-func (session *SafeSession) Append(shardSession *vtgatepb.Session_ShardSession, txMode vtgatepb.TransactionMode) error {
+func addOrUpdate(shardSession *vtgatepb.Session_ShardSession, sessions []*vtgatepb.Session_ShardSession) ([]*vtgatepb.Session_ShardSession, error) {
+	appendSession := true
+	for i, sess := range sessions {
+		targetedAtSameTablet := sess.Target.Keyspace == shardSession.Target.Keyspace &&
+			sess.Target.TabletType == shardSession.Target.TabletType &&
+			sess.Target.Shard == shardSession.Target.Shard
+		if targetedAtSameTablet {
+			if sess.TabletAlias != shardSession.TabletAlias {
+				return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "got a different alias for the same target")
+			}
+			// replace the old info with the new one
+			sessions[i] = shardSession
+			appendSession = false
+			break
+		}
+	}
+	if appendSession {
+		sessions = append(sessions, shardSession)
+	}
+
+	return sessions, nil
+}
+
+// AppendOrUpdate adds a new ShardSession, or updates an existing one if one already exists for the given shard session
+func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardSession, txMode vtgatepb.TransactionMode) error {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
 	if session.autocommitState == autocommitted {
-		// Unreachable.
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.Append: unexpected autocommit state")
+		// Should be unreachable
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.AppendOrUpdate: unexpected autocommit state")
 	}
-	if !session.Session.InTransaction {
-		// Unreachable.
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.Append: not in transaction")
+	if !(session.Session.InTransaction || session.Session.InReservedConn) {
+		// Should be unreachable
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.AppendOrUpdate: not in transaction and not in reserved connection")
 	}
 	session.autocommitState = notAutocommittable
 
 	// Always append, in order for rollback to succeed.
 	switch session.commitOrder {
 	case vtgatepb.CommitOrder_NORMAL:
-		session.ShardSessions = append(session.ShardSessions, shardSession)
+		newSessions, err := addOrUpdate(shardSession, session.ShardSessions)
+		if err != nil {
+			return err
+		}
+		session.ShardSessions = newSessions
 		// isSingle is enforced only for normmal commit order operations.
 		if session.isSingleDB(txMode) && len(session.ShardSessions) > 1 {
 			session.mustRollback = true
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "multi-db transaction attempted: %v", session.ShardSessions)
 		}
 	case vtgatepb.CommitOrder_PRE:
-		session.PreSessions = append(session.PreSessions, shardSession)
+		newSessions, err := addOrUpdate(shardSession, session.PreSessions)
+		if err != nil {
+			return err
+		}
+		session.PreSessions = newSessions
 	case vtgatepb.CommitOrder_POST:
-		session.PostSessions = append(session.PostSessions, shardSession)
+		newSessions, err := addOrUpdate(shardSession, session.PostSessions)
+		if err != nil {
+			return err
+		}
+		session.PostSessions = newSessions
+	default:
+		// Should be unreachable
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.AppendOrUpdate: unexpected commitOrder")
 	}
+
 	return nil
 }
 
@@ -264,9 +320,23 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 	session.SystemVariables[name] = expr
 }
 
+//SetOptions sets the options
+func (session *SafeSession) SetOptions(options *querypb.ExecuteOptions) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.Options = options
+}
+
 //StoreSavepoint stores the savepoint and release savepoint queries in the session
 func (session *SafeSession) StoreSavepoint(sql string) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.Savepoints = append(session.Savepoints, sql)
+}
+
+//InReservedConn returns true if the session needs to execute on a dedicated connection
+func (session *SafeSession) InReservedConn() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.Session.InReservedConn
 }
