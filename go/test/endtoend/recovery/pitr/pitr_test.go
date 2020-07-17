@@ -27,6 +27,9 @@ func TestPointInTimeRecovery(t *testing.T) {
 	insertRow(t, 1, "p1", false)
 	insertRow(t, 2, "p2", false)
 
+	// wait till replica catchup
+	cluster.VerifyRowsInTabletForTable(t, replicaTablet, keyspaceName, 2, "product")
+
 	//start the binlog server and point it to master
 	bs, err := newBinlogServer(hostname, clusterInstance.GetAndReservePort())
 	defer bs.stop()
@@ -59,17 +62,30 @@ func TestPointInTimeRecovery(t *testing.T) {
 		insertRow(t, counter, fmt.Sprintf("prd-%d", counter), true)
 
 	}
+	// create restoreSnapshot
+	createRestoreSnapshot(t, timeToRecover, partialRestoreKSName)
 
-	// start the recovery
-	recoveryTablet := clusterInstance.NewVttabletInstance("replica", 0, cell)
-	launchRecoveryTablet(t, recoveryTablet, bs, timeToRecover)
+	// test the recovery with smaller binlog_lookup_timeout
+	recoveryTabletWithSmallTimeout := clusterInstance.NewVttabletInstance("replica", 0, cell)
+	launchRecoveryTablet(t, recoveryTabletWithSmallTimeout, bs, "1ms", partialRestoreKSName)
 
-	sqlRes, err := recoveryTablet.VttabletProcess.QueryTablet(selectMaxID, keyspaceName, true)
+	// since we have smaller timeout, it will just get whatever available in the backup
+	sqlRes, err := recoveryTabletWithSmallTimeout.VttabletProcess.QueryTablet(selectMaxID, keyspaceName, true)
 	require.NoError(t, err)
+	assert.Equal(t, sqlRes.Rows[0][0].String(), "INT64(2)")
 
+	// test the recovery with valid binlog_lookup_timeout and timeToRecover pointing to 5th row
+	recoveryTablet := clusterInstance.NewVttabletInstance("replica", 0, cell)
+	launchRecoveryTablet(t, recoveryTablet, bs, "2m", partialRestoreKSName)
+
+	sqlRes, err = recoveryTablet.VttabletProcess.QueryTablet(selectMaxID, keyspaceName, true)
+	require.NoError(t, err)
 	assert.Equal(t, sqlRes.Rows[0][0].String(), "INT64(5)")
+
 	defer recoveryTablet.MysqlctlProcess.Stop()
 	defer recoveryTablet.VttabletProcess.TearDown()
+	defer recoveryTabletWithSmallTimeout.MysqlctlProcess.Stop()
+	defer recoveryTabletWithSmallTimeout.VttabletProcess.TearDown()
 }
 
 func insertRow(t *testing.T, id int, productName string, isSlow bool) {
@@ -80,18 +96,18 @@ func insertRow(t *testing.T, id int, productName string, isSlow bool) {
 	}
 }
 
-func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *binLogServer, timeToRecover string) {
-	tm := time.Now().UTC()
-	fmt.Println(tm.Format(time.RFC3339), timeToRecover)
+func createRestoreSnapshot(t *testing.T, timeToRecover, restoreKSName string) {
 	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("CreateKeyspace",
 		"-keyspace_type=SNAPSHOT", "-base_keyspace="+keyspaceName,
 		"-snapshot_time", timeToRecover, restoreKSName)
 	log.Info(output)
 	require.Nil(t, err)
+}
 
+func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *binLogServer, lookupTimeout, restoreKSName string) {
 	tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
 	tablet.MysqlctlProcess.InitDBFile = initDBFile
-	err = tablet.MysqlctlProcess.Start()
+	err := tablet.MysqlctlProcess.Start()
 	require.NoError(t, err)
 
 	tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
@@ -121,7 +137,7 @@ func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *
 		"-binlog_host", binlogServer.hostname,
 		"-binlog_port", fmt.Sprintf("%d", binlogServer.port),
 		"-binlog_user", binlogServer.username,
-		"-binlog_lookup_timeout", "2m",
+		"-binlog_lookup_timeout", lookupTimeout,
 		"-vreplication_healthcheck_topology_refresh", "1s",
 		"-vreplication_healthcheck_retry_delay", "1s",
 		"-vreplication_tablet_type", "replica",

@@ -200,11 +200,15 @@ func (tm *TabletManager) restoreToTimeFromBinlog(ctx context.Context, pos mysql.
 	timeoutCtx, cancelFnc := context.WithTimeout(ctx, *timeoutForGTIDLookup)
 	defer cancelFnc()
 	afterGTIDPos, beforeGTIDPos := tm.getGTIDFromTimestamp(timeoutCtx, pos, restoreTime.Seconds)
-	if afterGTIDPos == "" {
+	if afterGTIDPos == "" && beforeGTIDPos == "" {
 		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, fmt.Sprintf("unable to fetch the GTID for the specified time - %s", restoreTime.String()))
+	} else if afterGTIDPos == "" && beforeGTIDPos != "" {
+		log.Info("no afterGTIDPos found, which implies we reached the end of all GTID events")
 	}
 
 	log.Infof("going to restore upto the GTID - %s", afterGTIDPos)
+	// when we don't have before GTID, we will take it as current backup pos's last GTID
+	// this is case where someone tries to restore just to the 1st event after backup
 	if beforeGTIDPos == "" {
 		beforeGTIDPos = pos.GTIDSet.Last()
 	}
@@ -217,11 +221,11 @@ func (tm *TabletManager) restoreToTimeFromBinlog(ctx context.Context, pos mysql.
 }
 
 // getGTIDFromTimestamp computes 2 GTIDs based on restoreTime
-// currentPos is the GTID of the first event at or after restoreTime.
+// afterPos is the GTID of the first event at or after restoreTime.
 // beforePos is the GTID of the last event before restoreTime. This is the GTID upto which replication will be applied
-// currentPos can be used directly in the query `START SLAVE UNTIL SQL_BEFORE_GTIDS = ''`
+// afterPos can be used directly in the query `START SLAVE UNTIL SQL_BEFORE_GTIDS = ''`
 // beforePos will be used to check if replication was able to catch up from the binlog server
-func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Position, restoreTime int64) (currentPos string, beforePos string) {
+func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Position, restoreTime int64) (afterPos string, beforePos string) {
 	connParams := &mysql.ConnParams{
 		Host:  *binlogHost,
 		Port:  *binlogPort,
@@ -249,18 +253,21 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 		err := vsClient.VStream(ctx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
 			for _, event := range events {
 				if event.Gtid != "" {
-					currentPos = event.Gtid
 					if event.Timestamp >= restoreTime {
+						afterPos = event.Gtid
 						gtidsChan <- []string{event.Gtid, beforePos}
 						break
 					}
 					beforePos = event.Gtid
 				}
 			}
+			//log.Errorf("no more events.  afterPos %s, beforePos %s ", afterPos, beforePos)
+			// TODO: need to fix this
+			//gtidsChan <- []string{afterPos, beforePos}
 			return nil
 		})
 		if err != nil {
-			gtidsChan <- []string{currentPos, beforePos}
+			gtidsChan <- []string{"", ""}
 		}
 	}()
 	defer vsClient.Close(ctx)
@@ -269,7 +276,7 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 		return val[0], val[1]
 	case <-ctx.Done():
 		log.Warningf("Can't find the GTID from restore time stamp, exiting.")
-		return currentPos, beforePos
+		return "", beforePos
 	}
 }
 
@@ -279,30 +286,36 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 // waits till all events to GTID replicated
 // once done, it will reset the replication
 func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string, beforeGTIDPos string) error {
-	afterGTIDParsed, err := mysql.DecodePosition(afterGTIDPos)
-	if err != nil {
-		return err
+	var afterGTIDStr string
+	if afterGTIDPos != "" {
+		afterGTIDParsed, err := mysql.DecodePosition(afterGTIDPos)
+		if err != nil {
+			return err
+		}
+		afterGTIDStr = afterGTIDParsed.GTIDSet.Last()
 	}
 
 	beforeGTIDPosParsed, err := mysql.DecodePosition(beforeGTIDPos)
 	if err != nil {
 		return err
 	}
-	afterGTIDStr := afterGTIDParsed.GTIDSet.Last()
-	log.Infof("GTID to restore upto %s", afterGTIDStr)
 
 	// it uses mysql specific queries here
 	cmds := []string{
 		"STOP SLAVE FOR CHANNEL '' ",
 		"STOP SLAVE IO_THREAD FOR CHANNEL ''",
 		fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s',MASTER_PORT=%d, MASTER_USER='%s', MASTER_AUTO_POSITION = 1;", *binlogHost, *binlogPort, *binlogUser),
-		fmt.Sprintf(" START SLAVE UNTIL SQL_BEFORE_GTIDS = '%s'", afterGTIDStr),
+	}
+	if afterGTIDPos == "" { // when the there is no afterPos, that means need to replicate completely
+		cmds = append(cmds, "START SLAVE")
+	} else {
+		cmds = append(cmds, fmt.Sprintf("START SLAVE UNTIL SQL_BEFORE_GTIDS = '%s'", afterGTIDStr))
 	}
 
 	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
 		return vterrors.Wrap(err, fmt.Sprintf("failed to restart the replication until %s GTID", afterGTIDStr))
 	}
-	log.Infof("Waiting for position to reach", afterGTIDParsed)
+	log.Infof("Waiting for position to reach", beforeGTIDPosParsed.GTIDSet.Last())
 	// Could not use `agent.MysqlDaemon.WaitMasterPos` as the SLAVE thread is stopped with `START SLAVE UNTIL SQL_BEFORE_GTIDS`
 	// this is as per https://dev.mysql.com/doc/refman/5.6/en/start-slave.html
 	// We need to wait till the slave catch upto the specified afterGTIDPos

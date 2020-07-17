@@ -539,6 +539,9 @@ func TestMySQL56GTIDSetLast(t *testing.T) {
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:5": {
 			sid1: []interval{{1, 5}},
 		},
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:3": {
+			sid1: []interval{{end: 3}},
+		},
 		// Interval with same start and end
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:12": {
 			sid1: []interval{{12, 12}},
