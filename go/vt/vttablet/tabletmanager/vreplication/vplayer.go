@@ -422,19 +422,19 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		vp.tablePlans[event.FieldEvent.TableName] = tplan
 		stats.Send(fmt.Sprintf("%v", event.FieldEvent))
 
-	case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE, binlogdatapb.VEventType_REPLACE:
-		// use Statement if available, preparing for deprecation in 8.0
+	case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE,
+		binlogdatapb.VEventType_REPLACE, binlogdatapb.VEventType_SAVEPOINT:
+		// use event.Statement if available, preparing for deprecation in 8.0
 		sql := event.Statement
 		if sql == "" {
 			sql = event.Dml
 		}
 		// If the event is for one of the AWS RDS "special" tables, we skip
 		if !strings.Contains(sql, " mysql.rds_") {
-			// This is a player using stament based replication
+			// This is a player using statement based replication
 			if err := vp.vr.dbClient.Begin(); err != nil {
 				return err
 			}
-
 			if err := vp.applyStmtEvent(ctx, event); err != nil {
 				return err
 			}
@@ -572,8 +572,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
 		// No-op: heartbeat timings are calculated in outer loop.
-	case binlogdatapb.VEventType_SAVEPOINT:
-		// No-op: savepoints are not applied
 	}
 	return nil
 }

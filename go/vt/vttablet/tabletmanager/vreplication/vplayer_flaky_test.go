@@ -72,16 +72,22 @@ func TestPlayerSavepoint(t *testing.T) {
 
 	execStatements(t, []string{
 		"begin",
+		"savepoint vrepl_a",
 		"insert into t1(id) values (2)",
-		"savepoint a",
+		"savepoint vrepl_b",
 		"insert into t1(id) values (3)",
-		"release savepoint a",
+		"release savepoint vrepl_b",
+		"savepoint vrepl_a",
+		"insert into t1(id) values (42)",
+		"rollback work to savepoint vrepl_a",
 		"commit",
 	})
 	expectDBClientQueries(t, []string{
 		"begin",
 		"/insert into t1.*2.*",
+		"SAVEPOINT `vrepl_b`",
 		"/insert into t1.*3.*",
+		"SAVEPOINT `vrepl_a`",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	})
