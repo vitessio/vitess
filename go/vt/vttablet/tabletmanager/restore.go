@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/proto/vttime"
@@ -199,7 +200,12 @@ func (tm *TabletManager) restoreToTimeFromBinlog(ctx context.Context, pos mysql.
 
 	timeoutCtx, cancelFnc := context.WithTimeout(ctx, *timeoutForGTIDLookup)
 	defer cancelFnc()
-	afterGTIDPos, beforeGTIDPos := tm.getGTIDFromTimestamp(timeoutCtx, pos, restoreTime.Seconds)
+
+	afterGTIDPos, beforeGTIDPos, err := tm.getGTIDFromTimestamp(timeoutCtx, pos, restoreTime.Seconds)
+	if err != nil {
+		return err
+	}
+
 	if afterGTIDPos == "" && beforeGTIDPos == "" {
 		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, fmt.Sprintf("unable to fetch the GTID for the specified time - %s", restoreTime.String()))
 	} else if afterGTIDPos == "" && beforeGTIDPos != "" {
@@ -212,7 +218,7 @@ func (tm *TabletManager) restoreToTimeFromBinlog(ctx context.Context, pos mysql.
 	if beforeGTIDPos == "" {
 		beforeGTIDPos = pos.GTIDSet.Last()
 	}
-	err := tm.catchupToGTID(timeoutCtx, afterGTIDPos, beforeGTIDPos)
+	err = tm.catchupToGTID(timeoutCtx, afterGTIDPos, beforeGTIDPos)
 	if err != nil {
 		return vterrors.Wrapf(err, "unable to replicate upto desired GTID : %s", afterGTIDPos)
 	}
@@ -225,7 +231,7 @@ func (tm *TabletManager) restoreToTimeFromBinlog(ctx context.Context, pos mysql.
 // beforePos is the GTID of the last event before restoreTime. This is the GTID upto which replication will be applied
 // afterPos can be used directly in the query `START SLAVE UNTIL SQL_BEFORE_GTIDS = ''`
 // beforePos will be used to check if replication was able to catch up from the binlog server
-func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Position, restoreTime int64) (afterPos string, beforePos string) {
+func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Position, restoreTime int64) (afterPos string, beforePos string, err error) {
 	connParams := &mysql.ConnParams{
 		Host:  *binlogHost,
 		Port:  *binlogPort,
@@ -247,12 +253,28 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 		}},
 	}
 
+	// get current lastPos of binlog server, so that if we hit that in vstream, we'll return from there
+	// TODO: need to check if there is better way to get current pos of binlog server as in vstream conn we already do it
+	binlogConn, err := mysql.Connect(ctx, connParams)
+	if err != nil {
+		return "", "", err
+	}
+	defer binlogConn.Close()
+	lastPos, err := binlogConn.MasterPosition()
+	if err != nil {
+		return "", "", err
+	}
+
 	gtidsChan := make(chan []string)
 
 	go func() {
 		err := vsClient.VStream(ctx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
 			for _, event := range events {
 				if event.Gtid != "" {
+					// TODO: instead of string gtid comparison, we can do lastPos.AtLeast()
+					if strings.Contains(event.Gtid, lastPos.GTIDSet.String()) {
+						gtidsChan <- []string{"", beforePos}
+					}
 					if event.Timestamp >= restoreTime {
 						afterPos = event.Gtid
 						gtidsChan <- []string{event.Gtid, beforePos}
@@ -261,9 +283,6 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 					beforePos = event.Gtid
 				}
 			}
-			//log.Errorf("no more events.  afterPos %s, beforePos %s ", afterPos, beforePos)
-			// TODO: need to fix this
-			//gtidsChan <- []string{afterPos, beforePos}
 			return nil
 		})
 		if err != nil {
@@ -273,10 +292,10 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 	defer vsClient.Close(ctx)
 	select {
 	case val := <-gtidsChan:
-		return val[0], val[1]
+		return val[0], val[1], nil
 	case <-ctx.Done():
 		log.Warningf("Can't find the GTID from restore time stamp, exiting.")
-		return "", beforePos
+		return "", beforePos, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "unable to find GTID from the snapshot time as context timed out")
 	}
 }
 

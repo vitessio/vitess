@@ -60,8 +60,9 @@ func TestPointInTimeRecovery(t *testing.T) {
 			timeToRecover = tm.Format(time.RFC3339)
 		}
 		insertRow(t, counter, fmt.Sprintf("prd-%d", counter), true)
-
 	}
+	currentTime := time.Now().UTC()
+	timeForCompleteBinlogRecover := currentTime.Format(time.RFC3339)
 	// create restoreSnapshot
 	createRestoreSnapshot(t, timeToRecover, partialRestoreKSName)
 
@@ -75,15 +76,29 @@ func TestPointInTimeRecovery(t *testing.T) {
 	assert.Equal(t, sqlRes.Rows[0][0].String(), "INT64(2)")
 
 	// test the recovery with valid binlog_lookup_timeout and timeToRecover pointing to 5th row
-	recoveryTablet := clusterInstance.NewVttabletInstance("replica", 0, cell)
-	launchRecoveryTablet(t, recoveryTablet, bs, "2m", partialRestoreKSName)
+	recoveryTablet1 := clusterInstance.NewVttabletInstance("replica", 0, cell)
+	launchRecoveryTablet(t, recoveryTablet1, bs, "2m", partialRestoreKSName)
 
-	sqlRes, err = recoveryTablet.VttabletProcess.QueryTablet(selectMaxID, keyspaceName, true)
+	sqlRes, err = recoveryTablet1.VttabletProcess.QueryTablet(selectMaxID, keyspaceName, true)
 	require.NoError(t, err)
 	assert.Equal(t, sqlRes.Rows[0][0].String(), "INT64(5)")
 
-	defer recoveryTablet.MysqlctlProcess.Stop()
-	defer recoveryTablet.VttabletProcess.TearDown()
+	// test the recovery with timetorecover > (timestmap of last binlog event in binlog server)
+	createRestoreSnapshot(t, timeForCompleteBinlogRecover, fullRestoreKSName)
+
+	recoveryTablet2 := clusterInstance.NewVttabletInstance("replica", 0, cell)
+	launchRecoveryTablet(t, recoveryTablet2, bs, "2m", fullRestoreKSName)
+
+	sqlRes, err = recoveryTablet2.VttabletProcess.QueryTablet(selectMaxID, keyspaceName, true)
+	require.NoError(t, err)
+	assert.Equal(t, sqlRes.Rows[0][0].String(), "INT64(7)")
+
+	defer recoveryTablet1.MysqlctlProcess.Stop()
+	defer recoveryTablet1.VttabletProcess.TearDown()
+
+	defer recoveryTablet2.MysqlctlProcess.Stop()
+	defer recoveryTablet2.VttabletProcess.TearDown()
+
 	defer recoveryTabletWithSmallTimeout.MysqlctlProcess.Stop()
 	defer recoveryTabletWithSmallTimeout.VttabletProcess.TearDown()
 }
