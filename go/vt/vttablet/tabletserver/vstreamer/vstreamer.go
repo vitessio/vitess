@@ -442,10 +442,13 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			}
 			vs.se.ReloadAt(context.Background(), vs.pos)
 		case sqlparser.StmtSavepoint:
-			vevents = append(vevents, &binlogdatapb.VEvent{
-				Type:      binlogdatapb.VEventType_SAVEPOINT,
-				Statement: q.SQL,
-			})
+			mustSend := mustSendStmt(q, params.DbName)
+			if mustSend {
+				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type:      binlogdatapb.VEventType_SAVEPOINT,
+					Statement: q.SQL,
+				})
+			}
 		case sqlparser.StmtOther, sqlparser.StmtPriv:
 			// These are either:
 			// 1) DBA statements like REPAIR that can be ignored.
