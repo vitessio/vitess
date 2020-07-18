@@ -17,6 +17,7 @@ limitations under the License.
 package tabletserver
 
 import (
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -40,7 +41,9 @@ var (
 
 // healthStreamer streams health information to callers.
 type healthStreamer struct {
-	stats *tabletenv.Stats
+	stats              *tabletenv.Stats
+	degradedThreshold  time.Duration
+	unhealthyThreshold time.Duration
 
 	mu      sync.Mutex
 	clients map[chan *querypb.StreamHealthResponse]struct{}
@@ -51,8 +54,10 @@ type healthStreamer struct {
 
 func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias) *healthStreamer {
 	return &healthStreamer{
-		stats:   env.Stats(),
-		clients: make(map[chan *querypb.StreamHealthResponse]struct{}),
+		stats:              env.Stats(),
+		degradedThreshold:  env.Config().Healthcheck.DegradedThresholdSeconds.Get(),
+		unhealthyThreshold: env.Config().Healthcheck.UnhealthyThresholdSeconds.Get(),
+		clients:            make(map[chan *querypb.StreamHealthResponse]struct{}),
 
 		state: &querypb.StreamHealthResponse{
 			Target:      &querypb.Target{},
@@ -120,11 +125,10 @@ func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimes
 	}
 	if err != nil {
 		hs.state.RealtimeStats.HealthError = err.Error()
-		hs.state.RealtimeStats.SecondsBehindMaster = 0
 	} else {
 		hs.state.RealtimeStats.HealthError = ""
-		hs.state.RealtimeStats.SecondsBehindMaster = uint32(lag.Seconds())
 	}
+	hs.state.RealtimeStats.SecondsBehindMaster = uint32(lag.Seconds())
 	hs.state.Serving = serving
 
 	hs.state.RealtimeStats.SecondsBehindMasterFilteredReplication, hs.state.RealtimeStats.BinlogPlayersCount = blpFunc()
@@ -145,6 +149,36 @@ func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimes
 		lag:        lag,
 		err:        err,
 	})
+}
+
+func (hs *healthStreamer) ApppendDetails(details []*kv) []*kv {
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+	if hs.state.Target.TabletType == topodatapb.TabletType_MASTER {
+		return details
+	}
+	sbm := time.Duration(hs.state.RealtimeStats.SecondsBehindMaster) * time.Second
+	class := healthyClass
+	switch {
+	case sbm > hs.unhealthyThreshold:
+		class = unhealthyClass
+	case sbm > hs.degradedThreshold:
+		class = unhappyClass
+	}
+	details = append(details, &kv{
+		Key:   "Replication Lag",
+		Class: class,
+		Value: fmt.Sprintf("%ds", hs.state.RealtimeStats.SecondsBehindMaster),
+	})
+	if hs.state.RealtimeStats.HealthError != "" {
+		details = append(details, &kv{
+			Key:   "Replication Error",
+			Class: unhappyClass,
+			Value: hs.state.RealtimeStats.HealthError,
+		})
+	}
+
+	return details
 }
 
 func (hs *healthStreamer) Healthy() string {

@@ -243,6 +243,7 @@ func (tsv *TabletServer) AddStatusPart() {
 			status.Latest = &historyRecord{}
 		}
 		status.Details = tsv.sm.ApppendDetails(nil)
+		status.Details = tsv.hs.ApppendDetails(status.Details)
 		rates := tsv.stats.QPSRates.Get()
 		if qps, ok := rates["All"]; ok && len(qps) > 0 {
 			status.CurrentQPS = qps[0]
