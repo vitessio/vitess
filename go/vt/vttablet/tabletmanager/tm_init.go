@@ -679,12 +679,6 @@ func (tm *TabletManager) BlacklistedTables() []string {
 	return tm.tmState.BlacklistedTables()
 }
 
-// DisallowQueryService returns the reason the query service should be
-// disabled, if any.
-func (tm *TabletManager) DisallowQueryService() string {
-	return tm.tmState.DisallowQueryService()
-}
-
 // hookExtraEnv returns the map to pass to local hooks
 func (tm *TabletManager) hookExtraEnv() map[string]string {
 	return map[string]string{"TABLET_ALIAS": topoproto.TabletAliasString(tm.tabletAlias)}

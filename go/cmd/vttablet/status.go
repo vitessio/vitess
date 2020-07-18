@@ -59,9 +59,6 @@ var (
       {{if .BlacklistedTables}}
         BlacklistedTables: {{range .BlacklistedTables}}{{.}} {{end}}<br>
       {{end}}
-      {{if .DisallowQueryService}}
-        Query Service disabled: {{.DisallowQueryService}}<br>
-      {{end}}
     </td>
     <td width="25%" border="">
       <a href="/schemaz">Schema</a></br>
@@ -89,9 +86,8 @@ var (
 func addStatusParts(qsc tabletserver.Controller) {
 	servenv.AddStatusPart("Tablet", tabletTemplate, func() interface{} {
 		return map[string]interface{}{
-			"Tablet":               topo.NewTabletInfo(tm.Tablet(), nil),
-			"BlacklistedTables":    tm.BlacklistedTables(),
-			"DisallowQueryService": tm.DisallowQueryService(),
+			"Tablet":            topo.NewTabletInfo(tm.Tablet(), nil),
+			"BlacklistedTables": tm.BlacklistedTables(),
 		}
 	})
 	qsc.AddStatusPart()

@@ -201,8 +201,7 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 	}
 
 	terTime := logutil.ProtoToTime(ts.tablet.MasterTermStartTime)
-	reason := ts.canServe(ts.tablet.Type)
-	ts.publishForDisplay(reason)
+	ts.publishForDisplay()
 
 	if err := ts.applyBlacklist(ctx); err != nil {
 		log.Errorf("Cannot update blacklisted tables rule: %v", err)
@@ -210,6 +209,7 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 
 	ts.tm.replManager.SetTabletType(ts.tablet.Type)
 
+	reason := ts.canServe(ts.tablet.Type)
 	if reason == "" {
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, true); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
@@ -343,17 +343,15 @@ func (ts *tmState) retryPublish() {
 type displayState struct {
 	mu                sync.Mutex
 	tablet            topodatapb.Tablet
-	reason            string
 	blackListedTables []string
 }
 
 // Note that the methods for displayState are all in tmState.
-func (ts *tmState) publishForDisplay(reason string) {
+func (ts *tmState) publishForDisplay() {
 	ts.displayState.mu.Lock()
 	defer ts.displayState.mu.Unlock()
 
 	ts.displayState.tablet = *ts.tablet
-	ts.displayState.reason = reason
 	ts.displayState.blackListedTables = ts.blacklistedTables[ts.tablet.Type]
 }
 
@@ -370,12 +368,6 @@ func (ts *tmState) MasterTermStartTime() time.Time {
 		return time.Time{}
 	}
 	return logutil.ProtoToTime(ts.tablet.MasterTermStartTime)
-}
-
-func (ts *tmState) DisallowQueryService() string {
-	ts.displayState.mu.Lock()
-	defer ts.displayState.mu.Unlock()
-	return ts.displayState.reason
 }
 
 func (ts *tmState) BlacklistedTables() []string {
