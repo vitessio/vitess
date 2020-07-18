@@ -27,12 +27,17 @@ import (
 
 // This file contains the status web page export for tabletserver
 
+const (
+	healthyClass   = "healthy"
+	unhealthyClass = "unhealthy"
+	unhappyClass   = "unhappy"
+)
+
 var (
 	// This template is a slight duplicate of the one in go/cmd/vttablet/status.go.
 	headerTemplate = `
 <style>
   table {
-    width: 100%;
     border-collapse: collapse;
   }
   td, th {
@@ -84,6 +89,15 @@ var (
 
 	queryserviceStatusTemplate = `
 <div style="font-size: x-large">Current status: <span style="padding-left: 0.5em; padding-right: 0.5em; padding-bottom: 0.5ex; padding-top: 0.5ex;" class="{{.Latest.Class}}">{{.Latest.Status}}</span></div>
+<h2>Health Details</h2>
+<table>
+  {{range .Details}}
+  <tr class="{{.Class}}">
+    <td>{{.Key}}</td>
+    <td>{{.Value}}</td>
+  </tr>
+  {{end}}
+</table>
 <h2>Health History</h2>
 <table>
   <tr>
@@ -189,9 +203,16 @@ google.setOnLoadCallback(drawQPSChart);
 )
 
 type queryserviceStatus struct {
-	History    []interface{}
 	Latest     *historyRecord
+	Details    []*kv
+	History    []interface{}
 	CurrentQPS float64
+}
+
+type kv struct {
+	Key   string
+	Class string
+	Value string
 }
 
 // AddStatusHeader registers a standlone header for the status page.
@@ -221,6 +242,7 @@ func (tsv *TabletServer) AddStatusPart() {
 		} else {
 			status.Latest = &historyRecord{}
 		}
+		status.Details = tsv.sm.ApppendDetails(nil)
 		rates := tsv.stats.QPSRates.Get()
 		if qps, ok := rates["All"]; ok && len(qps) > 0 {
 			status.CurrentQPS = qps[0]
@@ -243,11 +265,11 @@ type historyRecord struct {
 func (r *historyRecord) Class() string {
 	if r.serving {
 		if r.lag > degradedThreshold.Get() {
-			return "unhappy"
+			return unhappyClass
 		}
-		return "healthy"
+		return healthyClass
 	}
-	return "unhealthy"
+	return unhealthyClass
 }
 
 func (r *historyRecord) Status() string {

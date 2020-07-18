@@ -71,12 +71,13 @@ type stateManager struct {
 	wantState      servingState
 	wantTabletType topodatapb.TabletType
 	state          servingState
+	target         querypb.Target
+	terTimestamp   time.Time
+	retrying       bool
 	replHealthy    bool
 	lameduck       bool
-	target         querypb.Target
-	retrying       bool
 	alsoAllow      []topodatapb.TabletType
-	terTimestamp   time.Time
+	transitionErr  error
 
 	requests sync.WaitGroup
 
@@ -172,7 +173,6 @@ func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, terTime
 	sm.hcticks.Start(sm.Broadcast)
 
 	if tabletType == topodatapb.TabletType_RESTORE || tabletType == topodatapb.TabletType_BACKUP {
-		// TODO(sougou): remove this code once tm can give us more accurate state requests.
 		state = StateNotConnected
 	}
 
@@ -222,6 +222,9 @@ func (sm *stateManager) execTransition(tabletType topodatapb.TabletType, state s
 	case StateNotConnected:
 		sm.closeAll()
 	}
+	sm.mu.Lock()
+	sm.transitionErr = err
+	sm.mu.Unlock()
 	if err != nil {
 		sm.retryTransition(fmt.Sprintf("Error transitioning to the desired state: %v, %v, will keep retrying: %v", tabletType, stateName(state), err))
 	}
@@ -503,7 +506,7 @@ func (sm *stateManager) setState(tabletType topodatapb.TabletType, state serving
 	if tabletType == topodatapb.TabletType_UNKNOWN {
 		tabletType = sm.wantTabletType
 	}
-	log.Infof("TabletServer transition: %v(%v) -> %v(%v)", sm.target.TabletType, stateName(sm.state), tabletType, stateName(state))
+	log.Infof("TabletServer transition: %v -> %v", sm.stateStringLocked(sm.target.TabletType, sm.state), sm.stateStringLocked(tabletType, state))
 	sm.handleGracePeriod(tabletType)
 	sm.target.TabletType = tabletType
 	if sm.state == StateNotConnected {
@@ -514,6 +517,13 @@ func (sm *stateManager) setState(tabletType topodatapb.TabletType, state serving
 	sm.state = state
 	// Broadcast also obtains a lock. Trigger in a goroutine to avoid a deadlock.
 	go sm.hcticks.Trigger()
+}
+
+func (sm *stateManager) stateStringLocked(tabletType topodatapb.TabletType, state servingState) string {
+	if tabletType != topodatapb.TabletType_MASTER {
+		return fmt.Sprintf("%v: %v", tabletType, stateName(state))
+	}
+	return fmt.Sprintf("%v: %v, %v", tabletType, stateName(state), sm.terTimestamp.Local().Format("Jan 2, 2006 at 15:04:05 (MST)"))
 }
 
 func (sm *stateManager) handleGracePeriod(tabletType topodatapb.TabletType) {
@@ -587,6 +597,56 @@ func (sm *stateManager) IsServing() bool {
 
 func (sm *stateManager) isServingLocked() bool {
 	return sm.state == StateServing && sm.wantState == StateServing && sm.replHealthy && !sm.lameduck
+}
+
+func (sm *stateManager) ApppendDetails(statii []*kv) []*kv {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	stateClass := func(state servingState) string {
+		switch state {
+		case StateServing:
+			return healthyClass
+		case StateNotServing:
+			return unhappyClass
+		}
+		return unhealthyClass
+	}
+
+	statii = append(statii, &kv{
+		Key:   "Current State",
+		Class: stateClass(sm.state),
+		Value: sm.stateStringLocked(sm.target.TabletType, sm.state),
+	})
+	if sm.target.TabletType != sm.wantTabletType && sm.state != sm.wantState {
+		statii = append(statii, &kv{
+			Key:   "Desired State",
+			Class: stateClass(sm.wantState),
+			Value: sm.stateStringLocked(sm.wantTabletType, sm.wantState),
+		})
+	}
+	if sm.transitionErr != nil {
+		statii = append(statii, &kv{
+			Key:   "Transition Error",
+			Class: unhealthyClass,
+			Value: sm.transitionErr.Error(),
+		})
+	}
+	if sm.lameduck {
+		statii = append(statii, &kv{
+			Key:   "Lameduck",
+			Class: unhealthyClass,
+			Value: "ON",
+		})
+	}
+	if len(sm.alsoAllow) != 0 {
+		statii = append(statii, &kv{
+			Key:   "Also Serving",
+			Class: healthyClass,
+			Value: sm.alsoAllow[0].String(),
+		})
+	}
+	return statii
 }
 
 func (sm *stateManager) State() servingState {

@@ -30,7 +30,6 @@ var (
 	tabletTemplate = `
 <style>
   table {
-    width: 100%;
     border-collapse: collapse;
   }
   td, th {
