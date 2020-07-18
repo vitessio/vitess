@@ -112,7 +112,7 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 
 	// run PlannedReparentShard
 	// using deprecated flag until it is removed completely. at that time this should be replaced with -wait_replicas_timeout
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard})
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard})
 	require.NoError(t, err)
 
 	// check what was run
