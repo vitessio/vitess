@@ -77,6 +77,7 @@ type stateManager struct {
 	replHealthy    bool
 	lameduck       bool
 	alsoAllow      []topodatapb.TabletType
+	reason         string
 	transitionErr  error
 
 	requests sync.WaitGroup
@@ -166,7 +167,7 @@ func (sm *stateManager) Init(env tabletenv.Env, target querypb.Target) {
 // be honored.
 // If sm is already in the requested state, it returns stateChanged as
 // false.
-func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, terTimestamp time.Time, state servingState) error {
+func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, terTimestamp time.Time, state servingState, reason string) error {
 	defer sm.ExitLameduck()
 
 	// Start is idempotent.
@@ -177,7 +178,7 @@ func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, terTime
 	}
 
 	log.Infof("Starting transition to %v %v, timestamp: %v", tabletType, stateName(state), terTimestamp)
-	if sm.mustTransition(tabletType, terTimestamp, state) {
+	if sm.mustTransition(tabletType, terTimestamp, state, reason) {
 		return sm.execTransition(tabletType, state)
 	}
 	return nil
@@ -187,7 +188,7 @@ func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, terTime
 // state. If so, it acquires the semaphore and returns true. If a transition is
 // already in progress, it waits. If the desired state is already reached, it
 // returns false without acquiring the semaphore.
-func (sm *stateManager) mustTransition(tabletType topodatapb.TabletType, terTimestamp time.Time, state servingState) bool {
+func (sm *stateManager) mustTransition(tabletType topodatapb.TabletType, terTimestamp time.Time, state servingState, reason string) bool {
 	sm.transitioning.Acquire()
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -195,6 +196,7 @@ func (sm *stateManager) mustTransition(tabletType topodatapb.TabletType, terTime
 	sm.wantTabletType = tabletType
 	sm.wantState = state
 	sm.terTimestamp = terTimestamp
+	sm.reason = reason
 	if sm.target.TabletType == tabletType && sm.state == state {
 		sm.transitioning.Release()
 		return false
@@ -302,7 +304,7 @@ func (sm *stateManager) StopService() {
 	log.Info("Stopping TabletServer")
 	// Stop replica tracking because StopService is used by all tests.
 	sm.hcticks.Stop()
-	sm.SetServingType(sm.Target().TabletType, time.Time{}, StateNotConnected)
+	sm.SetServingType(sm.Target().TabletType, time.Time{}, StateNotConnected, "service stopped")
 }
 
 // StartRequest validates the current state and target and registers
@@ -623,6 +625,13 @@ func (sm *stateManager) ApppendDetails(details []*kv) []*kv {
 			Key:   "Desired State",
 			Class: stateClass(sm.wantState),
 			Value: sm.stateStringLocked(sm.wantTabletType, sm.wantState),
+		})
+	}
+	if sm.reason != "" {
+		details = append(details, &kv{
+			Key:   "Reason",
+			Class: unhappyClass,
+			Value: sm.reason,
 		})
 	}
 	if sm.transitionErr != nil {

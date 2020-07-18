@@ -211,12 +211,12 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 
 	reason := ts.canServe(ts.tablet.Type)
 	if reason == "" {
-		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, true); err != nil {
+		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, true, ""); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
 		}
 	} else {
 		log.Infof("Disabling query service: %v", reason)
-		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, false); err != nil {
+		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, false, reason); err != nil {
 			log.Errorf("SetServingType(serving=false) failed: %v", err)
 		}
 	}

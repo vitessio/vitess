@@ -62,7 +62,7 @@ func TestBeginOnReplica(t *testing.T) {
 
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 	target := querypb.Target{TabletType: topodatapb.TabletType_REPLICA}
-	err := tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true)
+	err := tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true, "")
 	require.NoError(t, err)
 
 	options := querypb.ExecuteOptions{
@@ -103,7 +103,7 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 	require.NoError(t, err)
 	ch := make(chan bool)
 	go func() {
-		tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true)
+		tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true, "")
 		ch <- true
 	}()
 
@@ -126,13 +126,13 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
 	defer tsv.StopService()
 	defer db.Close()
-	tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true)
+	tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true, "")
 
 	turnOnTxEngine := func() {
-		tsv.SetServingType(topodatapb.TabletType_MASTER, time.Time{}, true)
+		tsv.SetServingType(topodatapb.TabletType_MASTER, time.Time{}, true, "")
 	}
 	turnOffTxEngine := func() {
-		tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true)
+		tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true, "")
 	}
 
 	tpc := tsv.te.twoPC
