@@ -599,7 +599,7 @@ func (sm *stateManager) isServingLocked() bool {
 	return sm.state == StateServing && sm.wantState == StateServing && sm.replHealthy && !sm.lameduck
 }
 
-func (sm *stateManager) ApppendDetails(statii []*kv) []*kv {
+func (sm *stateManager) ApppendDetails(details []*kv) []*kv {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
@@ -613,40 +613,40 @@ func (sm *stateManager) ApppendDetails(statii []*kv) []*kv {
 		return unhealthyClass
 	}
 
-	statii = append(statii, &kv{
+	details = append(details, &kv{
 		Key:   "Current State",
 		Class: stateClass(sm.state),
 		Value: sm.stateStringLocked(sm.target.TabletType, sm.state),
 	})
 	if sm.target.TabletType != sm.wantTabletType && sm.state != sm.wantState {
-		statii = append(statii, &kv{
+		details = append(details, &kv{
 			Key:   "Desired State",
 			Class: stateClass(sm.wantState),
 			Value: sm.stateStringLocked(sm.wantTabletType, sm.wantState),
 		})
 	}
 	if sm.transitionErr != nil {
-		statii = append(statii, &kv{
+		details = append(details, &kv{
 			Key:   "Transition Error",
 			Class: unhealthyClass,
 			Value: sm.transitionErr.Error(),
 		})
 	}
 	if sm.lameduck {
-		statii = append(statii, &kv{
+		details = append(details, &kv{
 			Key:   "Lameduck",
 			Class: unhealthyClass,
 			Value: "ON",
 		})
 	}
 	if len(sm.alsoAllow) != 0 {
-		statii = append(statii, &kv{
+		details = append(details, &kv{
 			Key:   "Also Serving",
 			Class: healthyClass,
 			Value: sm.alsoAllow[0].String(),
 		})
 	}
-	return statii
+	return details
 }
 
 func (sm *stateManager) State() servingState {
