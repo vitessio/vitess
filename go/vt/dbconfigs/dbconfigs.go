@@ -400,6 +400,12 @@ func (dbcfgs *DBConfigs) getParams(userKey string, dbc *DBConfigs) (*UserConfig,
 	return uc, cp
 }
 
+// SetDbParams sets the dba and app params
+func (dbcfgs *DBConfigs) SetDbParams(dbaParams, appParams mysql.ConnParams) {
+	dbcfgs.dbaParams = dbaParams
+	dbcfgs.appParams = appParams
+}
+
 // NewTestDBConfigs returns a DBConfigs meant for testing.
 func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbname string) *DBConfigs {
 	return &DBConfigs{

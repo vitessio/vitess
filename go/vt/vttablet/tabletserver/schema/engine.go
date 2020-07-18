@@ -64,6 +64,9 @@ type Engine struct {
 	notifierMu  sync.Mutex
 	notifiers   map[string]notifier
 
+	// SkipMetaCheck skips the metadata about the database and table information
+	SkipMetaCheck bool
+
 	historian *historian
 
 	conns *connpool.Pool
@@ -137,9 +140,12 @@ func (se *Engine) Open() error {
 	if err := se.reload(ctx); err != nil {
 		return err
 	}
-	if err := se.historian.Open(); err != nil {
-		return err
+	if !se.SkipMetaCheck {
+		if err := se.historian.Open(); err != nil {
+			return err
+		}
 	}
+
 	se.ticks.Start(func() {
 		if err := se.Reload(ctx); err != nil {
 			log.Errorf("periodic schema reload failed: %v", err)
@@ -245,6 +251,10 @@ func (se *Engine) reload(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// if this flag is set, then we don't need table meta information
+	if se.SkipMetaCheck {
+		return nil
+	}
 	tableData, err := conn.Exec(ctx, mysql.BaseShowTables, maxTableCount, false)
 	if err != nil {
 		return err
@@ -308,7 +318,8 @@ func (se *Engine) reload(ctx context.Context) error {
 }
 
 func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, error) {
-	tm, err := conn.Exec(ctx, "select unix_timestamp()", 1, false)
+	// Keep `SELECT UNIX_TIMESTAMP` is in uppercase because binlog server queries are case sensitive and expect it to be so.
+	tm, err := conn.Exec(ctx, "SELECT UNIX_TIMESTAMP()", 1, false)
 	if err != nil {
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get MySQL time: %v", err)
 	}

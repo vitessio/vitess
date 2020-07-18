@@ -171,6 +171,26 @@ func (set Mysql56GTIDSet) String() string {
 	return buf.String()
 }
 
+// Last returns the last gtid as string
+// For gtidset having multiple SIDs or multiple intervals
+// it just returns the last SID with last interval
+func (set Mysql56GTIDSet) Last() string {
+	buf := &bytes.Buffer{}
+
+	if len(set.SIDs()) > 0 {
+		sid := set.SIDs()[len(set.SIDs())-1]
+		buf.WriteString(sid.String())
+		sequences := set[sid]
+		if len(sequences) > 0 {
+			buf.WriteByte(':')
+			lastInterval := sequences[len(sequences)-1]
+			buf.WriteString(strconv.FormatInt(lastInterval.end, 10))
+		}
+	}
+
+	return buf.String()
+}
+
 // Flavor implements GTIDSet.
 func (Mysql56GTIDSet) Flavor() string { return Mysql56FlavorID }
 

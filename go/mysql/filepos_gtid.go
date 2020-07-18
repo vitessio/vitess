@@ -147,6 +147,13 @@ func (gtid filePosGTID) Union(other GTIDSet) GTIDSet {
 	return filePosOther
 }
 
+// Last returns last filePosition
+// For filePos based GTID we have only one position
+// here we will just return the current filePos
+func (gtid filePosGTID) Last() string {
+	return gtid.String()
+}
+
 func init() {
 	gtidParsers[FilePosFlavorID] = parseFilePosGTID
 	gtidSetParsers[FilePosFlavorID] = parseFilePosGTIDSet
