@@ -17,7 +17,10 @@ limitations under the License.
 package tabletserver
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -82,6 +85,7 @@ var (
       <a href="{{.Prefix}}/healthz">Health Check</a></br>
       <a href="{{.Prefix}}/debug/health">Query Service Health Check</a></br>
       <a href="{{.Prefix}}/streamqueryz">Current Stream Queries</a></br>
+      <a href="{{.Prefix}}/debug/status_details">JSON Status Details</a></br>
     </td>
   </tr>
 </table>
@@ -249,6 +253,20 @@ func (tsv *TabletServer) AddStatusPart() {
 			status.CurrentQPS = qps[0]
 		}
 		return status
+	})
+
+	tsv.exporter.HandleFunc("/debug/status_details", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		details := tsv.sm.ApppendDetails(nil)
+		details = tsv.hs.ApppendDetails(details)
+		b, err := json.MarshalIndent(details, "", " ")
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			return
+		}
+		buf := bytes.NewBuffer(nil)
+		json.HTMLEscape(buf, b)
+		w.Write(buf.Bytes())
 	})
 }
 

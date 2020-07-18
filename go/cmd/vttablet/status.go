@@ -77,6 +77,7 @@ var (
       <a href="/healthz">Health Check</a></br>
       <a href="/debug/health">Query Service Health Check</a></br>
       <a href="/streamqueryz">Current Stream Queries</a></br>
+      <a href="/debug/status_details">JSON Status Details</a></br>
     </td>
   </tr>
 </table>

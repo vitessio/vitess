@@ -133,16 +133,6 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 	require.Nil(t, err)
 
 	// create the split shards
-	for _, tablet := range []*cluster.Vttablet{shard0Master, shard0Replica, shard0RdOnly} {
-		err = localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shard0Name)
-		require.Nil(t, err)
-	}
-
-	for _, tablet := range []*cluster.Vttablet{shard1Master, shard1Replica, shard1RdOnly} {
-		err = localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shard1Name)
-		require.Nil(t, err)
-	}
-
 	for _, tablet := range []*cluster.Vttablet{shard0Master, shard0Replica, shard0RdOnly, shard1Master, shard1Replica, shard1RdOnly} {
 		tablet.VttabletProcess.ExtraArgs = []string{"-binlog_use_v3_resharding_mode=true"}
 		err = tablet.VttabletProcess.Setup()
@@ -247,7 +237,7 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 
 	vtgateConn.Close()
 	err = vtgateInstance.TearDown()
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 // Test recovery from backup flow.
@@ -283,16 +273,6 @@ func TestShardedRecovery(t *testing.T) {
 	require.Nil(t, err)
 
 	// create the split shards
-	for _, tablet := range []*cluster.Vttablet{shard0Master, shard0Replica, shard0RdOnly} {
-		err = localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shard0Name)
-		require.Nil(t, err)
-	}
-
-	for _, tablet := range []*cluster.Vttablet{shard1Master, shard1Replica, shard1RdOnly} {
-		err = localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shard1Name)
-		require.Nil(t, err)
-	}
-
 	for _, tablet := range []*cluster.Vttablet{shard0Master, shard0Replica, shard0RdOnly, shard1Master, shard1Replica, shard1RdOnly} {
 		tablet.VttabletProcess.ExtraArgs = []string{"-binlog_use_v3_resharding_mode=true"}
 		err = tablet.VttabletProcess.Setup()
@@ -552,16 +532,6 @@ func initializeCluster(t *testing.T) (int, error) {
 		if err := proc.Wait(); err != nil {
 			t.Fatal(err)
 		}
-	}
-
-	if err = localCluster.VtctlclientProcess.InitTablet(master, cell, keyspaceName, hostname, shard.Name); err != nil {
-		return 1, err
-	}
-	if err = localCluster.VtctlclientProcess.InitTablet(replica1, cell, keyspaceName, hostname, shard.Name); err != nil {
-		return 1, err
-	}
-	if err = localCluster.VtctlclientProcess.InitTablet(rdOnly, cell, keyspaceName, hostname, shard.Name); err != nil {
-		return 1, err
 	}
 
 	for _, tablet := range []cluster.Vttablet{*master, *replica1, *rdOnly} {
