@@ -57,7 +57,7 @@ var (
 	binlogPort           = flag.Int("binlog_port", 0, "(PITR restore parameter) port of binlog server.")
 	binlogUser           = flag.String("binlog_user", "", "(PITR restore parameter) username of binlog server.")
 	binlogPwd            = flag.String("binlog_password", "", "(PITR restore parameter) password of binlog server.")
-	timeoutForGTIDLookup = flag.Duration("binlog_lookup_timeout", 60*time.Second, "(PITR restore parameter) timeout for fetching gtid from timestamp.")
+	timeoutForGTIDLookup = flag.Duration("pitr_gtid_lookup_timeout", 60*time.Second, "(PITR restore parameter) timeout for fetching gtid from timestamp.")
 )
 
 // RestoreData is the main entry point for backup restore.

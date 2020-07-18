@@ -73,7 +73,7 @@ func GetMasterPosition(t *testing.T, vttablet Vttablet, hostname string) (string
 	return pos, gtID
 }
 
-// VerifyRowsInTabletForTable Verify total number of rows in a tablet
+// VerifyRowsInTabletForTable Verify total number of rows in a table
 func VerifyRowsInTabletForTable(t *testing.T, vttablet *Vttablet, ksName string, expectedRows int, tableName string) {
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {

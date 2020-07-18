@@ -76,14 +76,13 @@ func startTablets(tablets []*cluster.Vttablet) error {
 		Name: shardName,
 	}
 	for _, tablet := range tablets {
-		//tablet.MysqlctlProcess = cluster.MysqlCtlProcessInstance()
 		tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
 		tablet.MysqlctlProcess.InitDBFile = initDBFile
 		if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
 			return err
 		} else {
 			// ignore golint warning, we need the else block to use proc
-			mysqlProcesses = append(mysqlProcesses, proc)
+			mysqlProcesses = append(mysqlProcesses, proc) //nolint
 		}
 		tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
 			tablet.GrpcPort,
