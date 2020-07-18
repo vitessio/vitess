@@ -254,7 +254,6 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 	}
 
 	// get current lastPos of binlog server, so that if we hit that in vstream, we'll return from there
-	// TODO: need to check if there is better way to get current pos of binlog server as in vstream conn we already do it
 	binlogConn, err := mysql.Connect(ctx, connParams)
 	if err != nil {
 		return "", "", err
@@ -271,10 +270,10 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 		err := vsClient.VStream(ctx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
 			for _, event := range events {
 				if event.Gtid != "" {
-					// TODO: instead of string gtid comparison, we can do lastPos.AtLeast()
 					if strings.Contains(event.Gtid, lastPos.GTIDSet.String()) {
 						gtidsChan <- []string{"", beforePos}
 					}
+
 					if event.Timestamp >= restoreTime {
 						afterPos = event.Gtid
 						gtidsChan <- []string{event.Gtid, beforePos}

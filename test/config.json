@@ -8,7 +8,7 @@
             "java_test"
           ],
           "Manual": false,
-          "Shard": 25,
+          "Shard": 10,
           "RetryMax": 0,
           "Tags": []
         },
