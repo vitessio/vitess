@@ -19,7 +19,6 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
-	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/proto/vttime"
@@ -270,8 +269,15 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 		err := vsClient.VStream(ctx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
 			for _, event := range events {
 				if event.Gtid != "" {
-					if strings.Contains(event.Gtid, lastPos.GTIDSet.String()) {
+					// check if we reached the lastPos then return
+					eventPos, err := mysql.DecodePosition(event.Gtid)
+					if err != nil {
+						return err
+					}
+
+					if eventPos.AtLeast(lastPos) {
 						gtidsChan <- []string{"", beforePos}
+						break
 					}
 
 					if event.Timestamp >= restoreTime {
