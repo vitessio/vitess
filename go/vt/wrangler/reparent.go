@@ -325,6 +325,10 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 	if _, err := wr.tmc.ExecuteFetchAsDba(ctx, masterElectTabletInfo.Tablet, false, []byte(createDB), 1, false, true); err != nil {
 		return fmt.Errorf("failed to create database: %v", err)
 	}
+	// Refresh the state to force the tabletserver to reconnect after db has been created.
+	if err := wr.tmc.RefreshState(ctx, masterElectTabletInfo.Tablet); err != nil {
+		log.Warningf("RefreshState failed: %v", err)
+	}
 
 	return nil
 }
