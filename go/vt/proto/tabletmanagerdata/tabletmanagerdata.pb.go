@@ -1383,6 +1383,8 @@ type ApplySchemaRequest struct {
 	AllowReplication     bool              `protobuf:"varint,3,opt,name=allow_replication,json=allowReplication,proto3" json:"allow_replication,omitempty"`
 	BeforeSchema         *SchemaDefinition `protobuf:"bytes,4,opt,name=before_schema,json=beforeSchema,proto3" json:"before_schema,omitempty"`
 	AfterSchema          *SchemaDefinition `protobuf:"bytes,5,opt,name=after_schema,json=afterSchema,proto3" json:"after_schema,omitempty"`
+	Online               bool              `protobuf:"varint,6,opt,name=online,json=online,proto3" json:"online,omitempty"`
+	Hint                 string            `protobuf:"bytes,7,opt,name=hint,json=hint,proto3" json:"hint,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -1446,6 +1448,20 @@ func (m *ApplySchemaRequest) GetAfterSchema() *SchemaDefinition {
 		return m.AfterSchema
 	}
 	return nil
+}
+
+func (m *ApplySchemaRequest) GetOnline() bool {
+	if m != nil {
+		return m.Online
+	}
+	return false
+}
+
+func (m *ApplySchemaRequest) GetHint() string {
+	if m != nil {
+		return m.Hint
+	}
+	return ""
 }
 
 type ApplySchemaResponse struct {

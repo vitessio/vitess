@@ -334,6 +334,8 @@ func (client *Client) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet
 		AllowReplication: change.AllowReplication,
 		BeforeSchema:     change.BeforeSchema,
 		AfterSchema:      change.AfterSchema,
+		Online:           change.Online,
+		Hint:             change.Hint,
 	})
 	if err != nil {
 		return nil, err
