@@ -47,7 +47,6 @@ type VttabletProcess struct {
 	Cell                        string
 	Port                        int
 	GrpcPort                    int
-	PidFile                     string
 	Shard                       string
 	CommonArg                   VtctlProcess
 	LogDir                      string
@@ -88,7 +87,6 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-tablet-path", vttablet.TabletPath,
 		"-port", fmt.Sprintf("%d", vttablet.Port),
 		"-grpc_port", fmt.Sprintf("%d", vttablet.GrpcPort),
-		"-pid_file", vttablet.PidFile,
 		"-init_shard", vttablet.Shard,
 		"-log_dir", vttablet.LogDir,
 		"-tablet_hostname", vttablet.TabletHostname,
@@ -385,7 +383,6 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		HealthCheckInterval:         5,
 		Port:                        port,
 		GrpcPort:                    grpcPort,
-		PidFile:                     path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/vttablet.pid", tabletUID)),
 		VtctldAddress:               fmt.Sprintf("http://%s:%d", hostname, vtctldPort),
 		ExtraArgs:                   extraArgs,
 		EnableSemiSync:              enableSemiSync,

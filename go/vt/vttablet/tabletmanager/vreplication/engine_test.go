@@ -73,8 +73,8 @@ func TestEngineOpen(t *testing.T) {
 func TestEngineOpenRetry(t *testing.T) {
 	defer func() { globalStats = &vrStats{} }()
 
-	defer func(saved time.Duration) { openRetryInterval = saved }(openRetryInterval)
-	openRetryInterval = 10 * time.Millisecond
+	defer func(saved time.Duration) { openRetryInterval.Set(saved) }(openRetryInterval.Get())
+	openRetryInterval.Set(10 * time.Millisecond)
 
 	defer deleteTablet(addTablet(100))
 	resetBinlogClient()
@@ -97,7 +97,7 @@ func TestEngineOpenRetry(t *testing.T) {
 	isRetrying := func() bool {
 		vre.mu.Lock()
 		defer vre.mu.Unlock()
-		return vre.retrying
+		return vre.cancelRetry != nil
 	}
 
 	vre.Open(context.Background())
@@ -121,7 +121,7 @@ func TestEngineOpenRetry(t *testing.T) {
 	// Close should cause the retry to exit immediately.
 	vre.Close()
 	elapsed := time.Since(start)
-	assert.Greater(t, int64(openRetryInterval), int64(elapsed))
+	assert.Greater(t, int64(openRetryInterval.Get()), int64(elapsed))
 }
 
 func TestEngineExec(t *testing.T) {

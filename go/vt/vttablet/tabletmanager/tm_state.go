@@ -209,6 +209,23 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 
 	ts.tm.replManager.SetTabletType(ts.tablet.Type)
 
+	if ts.tm.UpdateStream != nil {
+		if topo.IsRunningUpdateStream(ts.tablet.Type) {
+			ts.tm.UpdateStream.Enable()
+		} else {
+			ts.tm.UpdateStream.Disable()
+		}
+	}
+
+	if ts.tm.VREngine != nil {
+		if ts.tablet.Type == topodatapb.TabletType_MASTER {
+			ts.tm.VREngine.Open(ts.tm.BatchCtx)
+		} else {
+			ts.tm.VREngine.Close()
+		}
+	}
+
+	// Open TabletServer last so that when it goes serving all other services are up.
 	reason := ts.canServe(ts.tablet.Type)
 	if reason == "" {
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, true, ""); err != nil {
@@ -218,23 +235,6 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 		log.Infof("Disabling query service: %v", reason)
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, false, reason); err != nil {
 			log.Errorf("SetServingType(serving=false) failed: %v", err)
-		}
-	}
-
-	if ts.tm.UpdateStream != nil {
-		if topo.IsRunningUpdateStream(ts.tablet.Type) {
-			ts.tm.UpdateStream.Enable()
-		} else {
-			ts.tm.UpdateStream.Disable()
-		}
-	}
-
-	// See if we need to start or stop vreplication.
-	if ts.tm.VREngine != nil {
-		if ts.tablet.Type == topodatapb.TabletType_MASTER {
-			ts.tm.VREngine.Open(ts.tm.BatchCtx)
-		} else {
-			ts.tm.VREngine.Close()
 		}
 	}
 }

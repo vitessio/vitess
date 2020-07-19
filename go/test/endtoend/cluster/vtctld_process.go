@@ -41,7 +41,6 @@ type VtctldProcess struct {
 	LogDir                      string
 	Port                        int
 	GrpcPort                    int
-	PidFile                     string
 	VerifyURL                   string
 	Directory                   string
 
@@ -68,7 +67,6 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"-log_dir", vtctld.LogDir,
 		"-port", fmt.Sprintf("%d", vtctld.Port),
 		"-grpc_port", fmt.Sprintf("%d", vtctld.GrpcPort),
-		"-pid_file", vtctld.PidFile,
 	)
 	if *isCoverage {
 		vtctld.proc.Args = append(vtctld.proc.Args, "-test.coverprofile="+getCoveragePath("vtctld.out"))
@@ -163,7 +161,6 @@ func VtctldProcessInstance(httpPort int, grpcPort int, topoPort int, hostname st
 		LogDir:                      tmpDirectory,
 		Port:                        httpPort,
 		GrpcPort:                    grpcPort,
-		PidFile:                     path.Join(tmpDirectory, "vtctld.pid"),
 		Directory:                   os.Getenv("VTDATAROOT"),
 	}
 	vtctld.VerifyURL = fmt.Sprintf("http://%s:%d/debug/vars", hostname, vtctld.Port)

@@ -215,7 +215,6 @@ func AssignMysqlPortFromKs1ToKs2() {
 			port := portMap[fmt.Sprintf("%s-%s", shard.Name, tablet.Type)]
 			shard.Vttablets[idx].MySQLPort = port
 			shard.Vttablets[idx].VttabletProcess.DbPort = port
-			shard.Vttablets[idx].VttabletProcess.PidFile = path.Join(shard.Vttablets[idx].VttabletProcess.LogDir, fmt.Sprintf("vttablet-%d.pid", port))
 		}
 	}
 }
@@ -262,14 +261,6 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	}
 	err = shard1.Rdonly().VttabletProcess.Setup()
 	require.NoError(t, err)
-
-	if !isMulti {
-		output, err := ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
-			"-force", fmt.Sprintf("%s/%s", keyspaceName, shard1.Name), shard1MasterTablet.Alias)
-		require.Error(t, err, "Should fail as no replica tablet is present.")
-		assert.Contains(t, output, fmt.Sprintf("tablet %s ResetReplication failed", shard1.Replica().Alias))
-	}
-	// start replica
 	err = shard1.Replica().VttabletProcess.Setup()
 	require.NoError(t, err)
 
@@ -314,7 +305,6 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 		_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("ReloadSchema", vttablet.Alias)
 	}
 	vtgateInstance := ClusterInstance.NewVtgateInstance()
-	vtgateInstance.PidFile = path.Join(ClusterInstance.TmpDirectory, fmt.Sprintf("vtgate-%s.pid", keyspaceName))
 	vtgateInstance.MySQLServerSocketPath = path.Join(ClusterInstance.TmpDirectory, fmt.Sprintf("mysql-%s.sock", keyspaceName))
 	vtgateInstance.ExtraArgs = []string{"-retry-count", fmt.Sprintf("%d", 2), "-tablet_protocol", "grpc", "-normalize_queries", "-tablet_refresh_interval", "2s"}
 	err = vtgateInstance.Setup()
@@ -603,11 +593,11 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	// make sure we can't delete a shard with tablets
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteShard", shard1Ks)
 	require.Error(t, err)
-	if !isMulti {
-		KillTabletsInKeyspace(keyspace)
-		KillVtgateInstances()
-	}
 	ClusterInstance.VtworkerProcess.TearDown()
+	if !isMulti {
+		KillVtgateInstances()
+		KillTabletsInKeyspace(keyspace)
+	}
 
 }
 

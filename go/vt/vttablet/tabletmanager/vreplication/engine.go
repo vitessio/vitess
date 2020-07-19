@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -83,10 +84,13 @@ var waitRetryTime = 1 * time.Second
 
 // Engine is the engine for handling vreplication.
 type Engine struct {
-	// mu synchronizes isOpen, controllers and wg.
-	mu          sync.Mutex
-	isOpen      bool
-	retrying    bool
+	// mu synchronizes isOpen, cancelRetry, controllers and wg.
+	mu     sync.Mutex
+	isOpen bool
+	// If cancelRetry is set, then a retry loop is running.
+	// Invoking the function guarantees that there will be
+	// no more retries.
+	cancelRetry context.CancelFunc
 	controllers map[int]*controller
 	// wg is used by in-flight functions that can run for long periods.
 	wg sync.WaitGroup
@@ -157,6 +161,7 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 func (vre *Engine) Open(ctx context.Context) {
 	vre.mu.Lock()
 	defer vre.mu.Unlock()
+
 	if vre.ts == nil {
 		log.Info("ts is nil: disabling vreplication engine")
 		return
@@ -164,27 +169,42 @@ func (vre *Engine) Open(ctx context.Context) {
 	if vre.isOpen {
 		return
 	}
-	vre.isOpen = true
 	log.Infof("Starting VReplication engine")
 
-	vre.ctx, vre.cancel = context.WithCancel(ctx)
-	if err := vre.initAll(); err != nil {
-		vre.retrying = true
-		vre.wg.Add(1)
-		go vre.retry(vre.ctx, err)
-		return
+	// Cancel any existing retry loops.
+	// This guarantees that there will be no more
+	// retries unless we start a new loop.
+	if vre.cancelRetry != nil {
+		vre.cancelRetry()
+		vre.cancelRetry = nil
 	}
-	vre.updateStats()
+
+	if err := vre.openLocked(ctx); err != nil {
+		ctx, cancel := context.WithCancel(ctx)
+		vre.cancelRetry = cancel
+		go vre.retry(ctx, err)
+	}
 }
 
-var openRetryInterval = 1 * time.Second
+func (vre *Engine) openLocked(ctx context.Context) error {
+	rows, err := vre.readAllRows(ctx)
+	if err != nil {
+		return err
+	}
+
+	vre.ctx, vre.cancel = context.WithCancel(ctx)
+	vre.isOpen = true
+	vre.initControllers(rows)
+	vre.updateStats()
+	return nil
+}
+
+var openRetryInterval = sync2.NewAtomicDuration(1 * time.Second)
 
 func (vre *Engine) retry(ctx context.Context, err error) {
-	defer vre.wg.Done()
-
 	log.Errorf("Error starting vreplication engine: %v, will keep retrying.", err)
 	for {
-		timer := time.NewTimer(openRetryInterval)
+		timer := time.NewTimer(openRetryInterval.Get())
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -192,9 +212,17 @@ func (vre *Engine) retry(ctx context.Context, err error) {
 		case <-timer.C:
 		}
 		vre.mu.Lock()
-		if err := vre.initAll(); err == nil {
-			vre.updateStats()
-			vre.retrying = false
+		// Recheck the context within the lock.
+		// This guarantees that we will not retry
+		// after the context was canceled.
+		select {
+		case <-ctx.Done():
+			vre.mu.Unlock()
+			return
+		default:
+		}
+		if err := vre.openLocked(ctx); err == nil {
+			vre.cancelRetry = nil
 			vre.mu.Unlock()
 			return
 		}
@@ -202,17 +230,7 @@ func (vre *Engine) retry(ctx context.Context, err error) {
 	}
 }
 
-func (vre *Engine) initAll() error {
-	dbClient := vre.dbClientFactory()
-	if err := dbClient.Connect(); err != nil {
-		return err
-	}
-	defer dbClient.Close()
-
-	rows, err := readAllRows(vre.ctx, dbClient, vre.dbName)
-	if err != nil {
-		return err
-	}
+func (vre *Engine) initControllers(rows []map[string]string) {
 	for _, row := range rows {
 		ct, err := newController(vre.ctx, row, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil, vre)
 		if err != nil {
@@ -221,7 +239,6 @@ func (vre *Engine) initAll() error {
 		}
 		vre.controllers[int(ct.id)] = ct
 	}
-	return nil
 }
 
 // IsOpen returns true if Engine is open.
@@ -235,6 +252,15 @@ func (vre *Engine) IsOpen() bool {
 func (vre *Engine) Close() {
 	vre.mu.Lock()
 	defer vre.mu.Unlock()
+
+	// If we're retrying, we're not open.
+	// Just cancel the retry loop.
+	if vre.cancelRetry != nil {
+		vre.cancelRetry()
+		vre.cancelRetry = nil
+		return
+	}
+
 	if !vre.isOpen {
 		return
 	}
@@ -272,7 +298,7 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 	if !vre.isOpen {
 		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "vreplication engine is closed")
 	}
-	if vre.retrying {
+	if vre.cancelRetry != nil {
 		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "engine is still trying to open")
 	}
 	defer vre.updateStats()
@@ -679,8 +705,13 @@ func (vre *Engine) updateStats() {
 	}
 }
 
-func readAllRows(ctx context.Context, dbClient binlogplayer.DBClient, dbName string) ([]map[string]string, error) {
-	qr, err := withDDL.ExecIgnore(ctx, fmt.Sprintf("select * from _vt.vreplication where db_name=%v", encodeString(dbName)), dbClient.ExecuteFetch)
+func (vre *Engine) readAllRows(ctx context.Context) ([]map[string]string, error) {
+	dbClient := vre.dbClientFactory()
+	if err := dbClient.Connect(); err != nil {
+		return nil, err
+	}
+	defer dbClient.Close()
+	qr, err := withDDL.ExecIgnore(ctx, fmt.Sprintf("select * from _vt.vreplication where db_name=%v", encodeString(vre.dbName)), dbClient.ExecuteFetch)
 	if err != nil {
 		return nil, err
 	}
