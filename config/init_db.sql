@@ -98,6 +98,13 @@ GRANT SUPER, PROCESS, REPLICATION SLAVE, RELOAD
 GRANT SELECT
   ON _vt.* TO 'orc_client_user'@'%';
 
+# User for gh-ost (https://github.com/github/gh-ost).
+CREATE USER 'gh-ost'@'127.0.0.1' IDENTIFIED BY 'gh-ost';
+GRANT SUPER, REPLICATION SLAVE
+  ON *.* TO 'gh-ost'@'127.0.0.1';
+GRANT ALTER, CREATE, DELETE, DROP, INDEX, INSERT, LOCK TABLES, SELECT, TRIGGER, UPDATE
+  ON *.* TO 'gh-ost'@'127.0.0.1';
+
 FLUSH PRIVILEGES;
 
 RESET SLAVE ALL;
