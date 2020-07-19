@@ -145,17 +145,7 @@ func TestMainImpl(m *testing.M) {
 		replica2 = shard.Vttablets[2]
 		replica3 = shard.Vttablets[3]
 
-		if err := localCluster.VtctlclientProcess.InitTablet(master, cell, keyspaceName, hostname, shard.Name); err != nil {
-			return 1, err
-		}
-		if err := localCluster.VtctlclientProcess.InitTablet(replica1, cell, keyspaceName, hostname, shard.Name); err != nil {
-			return 1, err
-		}
-
 		for _, tablet := range []cluster.Vttablet{*master, *replica1} {
-			if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
-				return 1, err
-			}
 			if err := tablet.VttabletProcess.Setup(); err != nil {
 				return 1, err
 			}
