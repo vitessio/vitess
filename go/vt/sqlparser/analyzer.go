@@ -178,8 +178,6 @@ func Preview(sql string) StatementType {
 		return StmtOther
 	case "grant", "revoke":
 		return StmtPriv
-	case "savepoint":
-		return StmtSavepoint
 	case "release":
 		return StmtRelease
 	case "rollback":
