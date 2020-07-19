@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/key"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -33,7 +35,10 @@ import (
 func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
 	sel := stmt.(*sqlparser.Select)
 
-	p := handleDualSelects(sel, vschema)
+	p, err := handleDualSelects(sel, vschema)
+	if err != nil {
+		return nil, err
+	}
 	if p != nil {
 		return p, nil
 	}
@@ -46,24 +51,6 @@ func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 		return nil, err
 	}
 	return pb.bldr.Primitive(), nil
-}
-
-//IsLockingFunc returns true for all functions that are used to work with mysql advisory locks
-func IsLockingFunc(node sqlparser.Expr) bool {
-	switch p := node.(type) {
-	case *sqlparser.FuncExpr:
-		_, found := lockingFunctions[p.Name.Lowered()]
-		return found
-	}
-	return false
-}
-
-var lockingFunctions = map[string]interface{}{
-	"get_lock":          nil,
-	"is_free_lock":      nil,
-	"is_used_lock":      nil,
-	"release_all_locks": nil,
-	"release_lock":      nil,
 }
 
 // processSelect builds a primitive tree for the given query or subquery.
@@ -154,9 +141,9 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 	return nil
 }
 
-func handleDualSelects(sel *sqlparser.Select, vschema ContextVSchema) engine.Primitive {
+func handleDualSelects(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
 	if !isOnlyDual(sel.From) {
-		return nil
+		return nil, nil
 	}
 
 	exprs := make([]evalengine.Expr, len(sel.SelectExprs))
@@ -164,16 +151,17 @@ func handleDualSelects(sel *sqlparser.Select, vschema ContextVSchema) engine.Pri
 	for i, e := range sel.SelectExprs {
 		expr, ok := e.(*sqlparser.AliasedExpr)
 		if !ok {
-			return nil
+			return nil, nil
 		}
 		var err error
-		if IsLockingFunc(expr.Expr) {
+		if sqlparser.IsLockingFunc(expr.Expr) {
 			// if we are using any locking functions, we bail out here and send the whole query to a single destination
 			return buildLockingPrimitive(sel, vschema)
+
 		}
 		exprs[i], err = sqlparser.Convert(expr.Expr)
 		if err != nil {
-			return nil
+			return nil, nil
 		}
 		cols[i] = expr.As.String()
 		if cols[i] == "" {
@@ -184,20 +172,24 @@ func handleDualSelects(sel *sqlparser.Select, vschema ContextVSchema) engine.Pri
 		Exprs: exprs,
 		Cols:  cols,
 		Input: &engine.SingleRow{},
-	}
+	}, nil
 }
 
-func buildLockingPrimitive(sel *sqlparser.Select, vschema ContextVSchema) engine.Primitive {
+func buildLockingPrimitive(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
+	// TODO: use more predictable keyspace.
+	ks, err := vschema.AnyKeyspace()
+	if err != nil {
+		return nil, err
+	}
 	return &engine.Reserve{
 		Input: &engine.Send{
-			// TODO: ???
-			Keyspace:          nil,
-			TargetDestination: nil,
+			Keyspace:          ks,
+			TargetDestination: key.DestinationKeyspaceID{0},
 			Query:             sqlparser.String(sel),
 			IsDML:             false,
 			SingleShardOnly:   true,
 		},
-	}
+	}, nil
 }
 
 func isOnlyDual(from sqlparser.TableExprs) bool {

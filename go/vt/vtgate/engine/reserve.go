@@ -46,13 +46,13 @@ func (r *Reserve) GetTableName() string {
 
 // Execute is part of the Primitive interface
 func (r *Reserve) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	vcursor.Session().Reserve()
+	vcursor.Session().NeedsReservedConn()
 	return r.Input.Execute(vcursor, bindVars, wantfields)
 }
 
 // StreamExecute is part of the Primitive interface
 func (r *Reserve) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	vcursor.Session().Reserve()
+	vcursor.Session().NeedsReservedConn()
 	return r.Input.StreamExecute(vcursor, bindVars, wantfields, callback)
 }
 

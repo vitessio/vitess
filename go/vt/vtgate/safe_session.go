@@ -340,3 +340,10 @@ func (session *SafeSession) InReservedConn() bool {
 	defer session.mu.Unlock()
 	return session.Session.InReservedConn
 }
+
+//SetReservedConn set the InReservedConn setting.
+func (session *SafeSession) SetReservedConn(reservedConn bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.Session.InReservedConn = reservedConn
+}
