@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
@@ -51,6 +52,7 @@ import (
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/ghost"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
@@ -104,7 +106,8 @@ type TabletServer struct {
 	hs          *healthStreamer
 
 	// sm manages state transitions.
-	sm *stateManager
+	sm            *stateManager
+	ghostExecutor *ghost.GhostExecutor
 
 	// alias is used for identifying this tabletserver in healthcheck responses.
 	alias topodatapb.TabletAlias
@@ -154,6 +157,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
 	tsv.te = NewTxEngine(tsv)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
+	tsv.ghostExecutor = ghost.NewGhostExecutor(tsv)
 
 	tsv.sm = &stateManager{
 		hs:          tsv.hs,
@@ -166,6 +170,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		txThrottler: tsv.txThrottler,
 		te:          tsv.te,
 		messager:    tsv.messager,
+		ge:          tsv.ghostExecutor,
 	}
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 { return int64(tsv.sm.State()) })
@@ -183,6 +188,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.registerQueryzHandler()
 	tsv.registerStreamQueryzHandlers()
 	tsv.registerTwopczHandler()
+	tsv.registerSchemaMigrationHandler()
 	return tsv
 }
 
@@ -1465,6 +1471,25 @@ func (tsv *TabletServer) SetTracking(enabled bool) {
 // Only to be used for testing.
 func (tsv *TabletServer) EnableHistorian(enabled bool) {
 	_ = tsv.se.EnableHistorian(enabled)
+}
+
+func (tsv *TabletServer) registerSchemaMigrationHandler() {
+	tsv.exporter.HandleFunc("/schema-migration", func(w http.ResponseWriter, r *http.Request) {
+		ctx := tabletenv.LocalContext()
+		schema := r.URL.Query().Get("schema")
+		table := r.URL.Query().Get("table")
+		alter := r.URL.Query().Get("alter")
+		if alter == "" {
+			if b, err := ioutil.ReadAll(r.Body); err != nil {
+				alter = string(b)
+			}
+		}
+		if err := tsv.ghostExecutor.Execute(ctx, tsv.sm.target, tsv.alias, schema, table, alter); err != nil {
+			w.Write([]byte(err.Error()))
+		} else {
+			w.Write([]byte("submitted"))
+		}
+	})
 }
 
 // SetPoolSize changes the pool size to the specified value.

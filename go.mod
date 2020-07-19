@@ -46,11 +46,12 @@ require (
 	github.com/howeyc/gopass v0.0.0-20190910152052-7cb4b85ec19c
 	github.com/icrowley/fake v0.0.0-20180203215853-4178557ae428
 	github.com/imdario/mergo v0.3.6 // indirect
+	github.com/julienschmidt/httprouter v1.3.0
 	github.com/klauspost/compress v1.4.1 // indirect
 	github.com/klauspost/cpuid v1.2.0 // indirect
 	github.com/klauspost/pgzip v1.2.4
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
-	github.com/krishicks/yaml-patch v0.0.10
+	github.com/krishicks/yaml-patch v0.0.10 // indirect
 	github.com/magiconair/properties v1.8.1
 	github.com/manifoldco/promptui v0.7.0
 	github.com/martini-contrib/auth v0.0.0-20150219114609-fa62c19b7ae8

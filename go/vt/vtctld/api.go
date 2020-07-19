@@ -614,6 +614,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		req := struct {
 			Keyspace, SQL         string
 			ReplicaTimeoutSeconds int
+			OnlineSchemaChange    bool
 		}{}
 		if err := unmarshalRequest(r, &req); err != nil {
 			return fmt.Errorf("can't unmarshal request: %v", err)
@@ -629,6 +630,10 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 
 		executor := schemamanager.NewTabletExecutor(
 			wr, time.Duration(req.ReplicaTimeoutSeconds)*time.Second)
+
+		if req.OnlineSchemaChange {
+			executor.SetOnlineSchemaChange()
+		}
 
 		return schemamanager.Run(ctx,
 			schemamanager.NewUIController(req.SQL, req.Keyspace, w), executor)

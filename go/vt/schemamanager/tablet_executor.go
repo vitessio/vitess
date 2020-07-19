@@ -24,6 +24,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -36,6 +37,7 @@ type TabletExecutor struct {
 	tablets              []*topodatapb.Tablet
 	isClosed             bool
 	allowBigSchemaChange bool
+	onlineSchemaChange   bool
 	keyspace             string
 	waitReplicasTimeout  time.Duration
 }
@@ -46,6 +48,7 @@ func NewTabletExecutor(wr *wrangler.Wrangler, waitReplicasTimeout time.Duration)
 		wr:                   wr,
 		isClosed:             true,
 		allowBigSchemaChange: false,
+		onlineSchemaChange:   false,
 		waitReplicasTimeout:  waitReplicasTimeout,
 	}
 }
@@ -60,6 +63,11 @@ func (exec *TabletExecutor) AllowBigSchemaChange() {
 // TabletExecutor will reject these.
 func (exec *TabletExecutor) DisallowBigSchemaChange() {
 	exec.allowBigSchemaChange = false
+}
+
+// SetOnlineSchemaChange sets TabletExecutor such that it initiates online schema change migrations
+func (exec *TabletExecutor) SetOnlineSchemaChange() {
+	exec.onlineSchemaChange = true
 }
 
 // Open opens a connection to the master for every shard.
@@ -160,6 +168,11 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 		switch ddl.Action {
 		case sqlparser.DropStr, sqlparser.CreateStr, sqlparser.TruncateStr, sqlparser.RenameStr:
 			continue
+		case sqlparser.AlterStr:
+			if exec.onlineSchemaChange {
+				// Seeing that we intend to run an online-schema-change, we can skip the "big change" check.
+				continue
+			}
 		}
 		tableName := ddl.Table.Name.String()
 		if rowCount, ok := tableWithCount[tableName]; ok {
@@ -217,7 +230,25 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 
 	for index, sql := range sqls {
 		execResult.CurSQLIndex = index
-		exec.executeOnAllTablets(ctx, &execResult, sql)
+
+		stat, err := sqlparser.Parse(sql)
+		if err != nil {
+			execResult.ExecutorErr = err.Error()
+			return &execResult
+		}
+		executeOnlineSchemaChange := false
+		switch ddl := stat.(type) {
+		case *sqlparser.DDL:
+			// TODO(shlomi): remove comments before merging
+			fmt.Printf("============ DDL: %+v, %+v\n", ddl.Action, ddl.Table)
+			fmt.Printf("============ DDL: %+v\n", ddl)
+			fmt.Printf("============ sql: %+v\n", sql)
+			if ddl.Action == sqlparser.AlterStr && exec.onlineSchemaChange {
+				executeOnlineSchemaChange = true
+			}
+		}
+		fmt.Printf("============ online: %+v\n", executeOnlineSchemaChange)
+		exec.executeOnAllTablets(ctx, &execResult, sql, executeOnlineSchemaChange)
 		if len(execResult.FailedShards) > 0 {
 			break
 		}
@@ -225,7 +256,10 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	return &execResult
 }
 
-func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult *ExecuteResult, sql string) {
+func (exec *TabletExecutor) executeOnAllTablets(
+	ctx context.Context, execResult *ExecuteResult, sql string,
+	executeOnlineSchemaChange bool,
+) {
 	var wg sync.WaitGroup
 	numOfMasterTablets := len(exec.tablets)
 	wg.Add(numOfMasterTablets)
@@ -234,7 +268,11 @@ func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult 
 	for _, tablet := range exec.tablets {
 		go func(tablet *topodatapb.Tablet) {
 			defer wg.Done()
-			exec.executeOneTablet(ctx, tablet, sql, errChan, successChan)
+			if executeOnlineSchemaChange {
+				exec.executeOnlineSchemaChangeOneTablet(ctx, tablet, sql, errChan, successChan)
+			} else {
+				exec.executeOneTablet(ctx, tablet, sql, errChan, successChan)
+			}
 		}(tablet)
 	}
 	wg.Wait()
@@ -294,6 +332,28 @@ func (exec *TabletExecutor) executeOneTablet(
 		Shard:    tablet.Shard,
 		Result:   result,
 		Position: pos,
+	}
+}
+
+func (exec *TabletExecutor) executeOnlineSchemaChangeOneTablet(
+	ctx context.Context,
+	tablet *topodatapb.Tablet,
+	sql string,
+	errChan chan ShardWithError,
+	successChan chan ShardResult,
+) {
+	change := &tmutils.SchemaChange{
+		SQL:    sql,
+		Online: true,
+		Hint:   "", // TODO(shlomi) generate and populate hint
+	}
+	_, err := exec.wr.TabletManagerClient().ApplySchema(ctx, tablet, change)
+	if err != nil {
+		errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}
+		return
+	}
+	successChan <- ShardResult{
+		Shard: tablet.Shard,
 	}
 }
 
