@@ -402,7 +402,7 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 	}
 	vttablet.VerifyURL = fmt.Sprintf("http://%s:%d/debug/vars", hostname, port)
 	vttablet.QueryzURL = fmt.Sprintf("http://%s:%d/queryz", hostname, port)
-	vttablet.StatusDetailsURL = fmt.Sprintf("http://%s:%d/status_details", hostname, port)
+	vttablet.StatusDetailsURL = fmt.Sprintf("http://%s:%d/debug/status_details", hostname, port)
 
 	return vttablet
 }

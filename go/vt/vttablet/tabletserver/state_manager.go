@@ -564,11 +564,28 @@ func (sm *stateManager) Broadcast() {
 }
 
 func (sm *stateManager) refreshReplHealthLocked() (time.Duration, error) {
+	if sm.target.TabletType == topodatapb.TabletType_MASTER {
+		sm.replHealthy = true
+		return 0, nil
+	}
 	lag, err := sm.rt.Status()
 	if err != nil {
+		if sm.replHealthy {
+			log.Infof("Going unhealthy due to replication error: %v", err)
+		}
 		sm.replHealthy = false
 	} else {
-		sm.replHealthy = lag <= sm.unhealthyThreshold
+		if lag > sm.unhealthyThreshold {
+			if sm.replHealthy {
+				log.Infof("Going unhealthy due to high replication lag: %v", lag)
+			}
+			sm.replHealthy = false
+		} else {
+			if !sm.replHealthy {
+				log.Infof("Replication is healthy")
+			}
+			sm.replHealthy = true
+		}
 	}
 	return lag, err
 }
