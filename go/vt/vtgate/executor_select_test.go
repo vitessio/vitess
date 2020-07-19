@@ -2233,3 +2233,32 @@ func TestSelectWithUnionAll(t *testing.T) {
 	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "sbc1")
 	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "sbc2")
 }
+
+func TestSelectLock(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	session := NewAutocommitSession(&vtgatepb.Session{TargetString: "TestExecutor@master"})
+
+	query := "select get_lock('lock name', 10) from dual"
+	exec(executor, session, query)
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           query,
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	wantSession := &vtgatepb.Session{
+		Autocommit:   true,
+		TargetString: "TestExecutor@master",
+		ShardSessions: []*vtgatepb.Session_ShardSession{
+			{
+				Target:      &querypb.Target{Keyspace: "TestExecutor", Shard: "-20", TabletType: topodatapb.TabletType_MASTER},
+				TabletAlias: &topodatapb.TabletAlias{Cell: "aa"},
+				ReservedId:  1,
+			},
+		},
+		FoundRows:      1,
+		RowCount:       -1,
+		InReservedConn: true,
+	}
+
+	utils.MustMatch(t, wantQueries, sbc1.Queries, "")
+	utils.MustMatch(t, wantSession, session.Session, "")
+}

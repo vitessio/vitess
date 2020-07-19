@@ -749,8 +749,11 @@ func TestLockUnlock(t *testing.T) {
 	assertMatches(t, conn, `select release_lock('lock name')`, `[[NULL]]`)
 	assertMatches(t, conn, `select get_lock('lock name', 10)`, `[[INT64(1)]]`)
 	assertMatches(t, conn, `select get_lock('lock name', 10)`, `[[INT64(1)]]`)
+	assertMatches(t, conn, `select is_free_lock('lock name')`, `[[INT64(0)]]`)
+	assert.NotEmpty(t,
+		exec(t, conn, `select is_used_lock('lock name')`))
 	assertMatches(t, conn, `select release_lock('lock name')`, `[[INT64(1)]]`)
-	assertMatches(t, conn, `select release_lock('lock name')`, `[[INT64(1)]]`)
+	assertMatches(t, conn, `select release_all_locks()`, `[[UINT64(1)]]`)
 	assertMatches(t, conn, `select release_lock('lock name')`, `[[NULL]]`)
 }
 
