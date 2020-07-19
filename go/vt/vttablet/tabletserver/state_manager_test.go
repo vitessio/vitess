@@ -467,19 +467,53 @@ func TestStateManagerNotify(t *testing.T) {
 		gotServing = serving
 		ch <- struct{}{}
 	}
-	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
+	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
 	require.NoError(t, err)
 
-	assert.Equal(t, topodatapb.TabletType_MASTER, sm.target.TabletType)
+	assert.Equal(t, topodatapb.TabletType_REPLICA, sm.target.TabletType)
 	assert.Equal(t, StateServing, sm.state)
 
 	<-ch
 	sm.hcticks.Stop()
-	assert.Equal(t, topodatapb.TabletType_MASTER, gotType)
+	assert.Equal(t, topodatapb.TabletType_REPLICA, gotType)
 	assert.Equal(t, testNow, gotts)
 	assert.Equal(t, 1*time.Second, gotlag)
 	assert.Equal(t, nil, goterr)
 	assert.True(t, gotServing)
+}
+
+func TestRefreshReplHealthLocked(t *testing.T) {
+	sm := newTestStateManager(t)
+	rt := sm.rt.(*testReplTracker)
+
+	sm.target.TabletType = topodatapb.TabletType_MASTER
+	sm.replHealthy = false
+	lag, err := sm.refreshReplHealthLocked()
+	assert.Equal(t, time.Duration(0), lag)
+	assert.NoError(t, err)
+	assert.True(t, sm.replHealthy)
+
+	sm.target.TabletType = topodatapb.TabletType_REPLICA
+	sm.replHealthy = false
+	lag, err = sm.refreshReplHealthLocked()
+	assert.Equal(t, 1*time.Second, lag)
+	assert.NoError(t, err)
+	assert.True(t, sm.replHealthy)
+
+	rt.err = errors.New("err")
+	sm.replHealthy = true
+	lag, err = sm.refreshReplHealthLocked()
+	assert.Equal(t, 1*time.Second, lag)
+	assert.Error(t, err)
+	assert.False(t, sm.replHealthy)
+
+	rt.err = nil
+	rt.lag = 3 * time.Hour
+	sm.replHealthy = true
+	lag, err = sm.refreshReplHealthLocked()
+	assert.Equal(t, 3*time.Hour, lag)
+	assert.NoError(t, err)
+	assert.False(t, sm.replHealthy)
 }
 
 func verifySubcomponent(t *testing.T, order int64, component interface{}, state testState) {
@@ -492,7 +526,7 @@ func newTestStateManager(t *testing.T) *stateManager {
 	order.Set(0)
 	sm := &stateManager{
 		se:          &testSchemaEngine{},
-		rt:          &testReplTracker{},
+		rt:          &testReplTracker{lag: 1 * time.Second},
 		vstreamer:   &testSubcomponent{},
 		tracker:     &testSubcomponent{},
 		watcher:     &testSubcomponent{},
@@ -568,6 +602,8 @@ func (te *testSchemaEngine) Close() {
 
 type testReplTracker struct {
 	testOrderState
+	lag time.Duration
+	err error
 }
 
 func (te *testReplTracker) MakeMaster() {
@@ -586,7 +622,7 @@ func (te *testReplTracker) Close() {
 }
 
 func (te *testReplTracker) Status() (time.Duration, error) {
-	return 1 * time.Second, nil
+	return te.lag, te.err
 }
 
 type testQueryEngine struct {
