@@ -34,10 +34,10 @@ func TestTopoCustomRule(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer masterConn.Close()
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer replicaConn.Close()
 
 	// Insert data for sanity checks
@@ -50,7 +50,7 @@ func TestTopoCustomRule(t *testing.T) {
 	topoCustomRulePath := "/keyspaces/ks/configs/CustomRules"
 	data := []byte("[]\n")
 	err = ioutil.WriteFile(topoCustomRuleFile, data, 0777)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Copy config file into topo.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "-to_topo", topoCustomRuleFile, topoCustomRulePath)
@@ -63,10 +63,6 @@ func TestTopoCustomRule(t *testing.T) {
 
 	// Start a new Tablet
 	rTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
-
-	// Init Tablets
-	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
-	require.Nil(t, err, "error should be Nil")
 
 	// Start Mysql Processes
 	err = cluster.StartMySQL(ctx, rTablet, username, clusterInstance.TmpDirectory)
@@ -81,10 +77,10 @@ func TestTopoCustomRule(t *testing.T) {
 
 	// Verify that query is working
 	result, err := vtctlExec("select id, value from t1", rTablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	resultMap := make(map[string]interface{})
 	err = json.Unmarshal([]byte(result), &resultMap)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	rowsAffected := resultMap["rows_affected"]
 	want := float64(2)
@@ -98,7 +94,7 @@ func TestTopoCustomRule(t *testing.T) {
 		"Query" : "(select)|(SELECT)"
 	  }]`)
 	err = ioutil.WriteFile(topoCustomRuleFile, data, 0777)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "-to_topo", topoCustomRuleFile, topoCustomRulePath)
 	require.Nil(t, err, "error should be Nil")

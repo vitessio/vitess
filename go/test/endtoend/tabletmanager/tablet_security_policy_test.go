@@ -32,18 +32,14 @@ func TestFallbackSecurityPolicy(t *testing.T) {
 	ctx := context.Background()
 	mTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
-	//Init Tablets
-	err := clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)
-	require.Nil(t, err)
-
 	// Start Mysql Processes
-	err = cluster.StartMySQL(ctx, mTablet, username, clusterInstance.TmpDirectory)
-	require.Nil(t, err)
+	err := cluster.StartMySQL(ctx, mTablet, username, clusterInstance.TmpDirectory)
+	require.NoError(t, err)
 
 	// Requesting an unregistered security_policy should fallback to deny-all.
 	clusterInstance.VtTabletExtraArgs = []string{"-security_policy", "bogus"}
 	err = clusterInstance.StartVttablet(mTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// It should deny ADMIN role.
 	url := fmt.Sprintf("http://localhost:%d/streamqueryz/terminate", mTablet.HTTPPort)
@@ -65,10 +61,10 @@ func TestFallbackSecurityPolicy(t *testing.T) {
 
 func assertNotAllowedURLTest(t *testing.T, url string) {
 	resp, err := http.Get(url)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	body, err := ioutil.ReadAll(resp.Body)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	assert.True(t, resp.StatusCode > 400)
@@ -77,10 +73,10 @@ func assertNotAllowedURLTest(t *testing.T, url string) {
 
 func assertAllowedURLTest(t *testing.T, url string) {
 	resp, err := http.Get(url)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	body, err := ioutil.ReadAll(resp.Body)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	assert.NotContains(t, string(body), "Access denied: not allowed")
@@ -91,18 +87,14 @@ func TestDenyAllSecurityPolicy(t *testing.T) {
 	ctx := context.Background()
 	mTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
-	//Init Tablets
-	err := clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)
-	require.Nil(t, err)
-
 	// Start Mysql Processes
-	err = cluster.StartMySQL(ctx, mTablet, username, clusterInstance.TmpDirectory)
-	require.Nil(t, err)
+	err := cluster.StartMySQL(ctx, mTablet, username, clusterInstance.TmpDirectory)
+	require.NoError(t, err)
 
 	// Requesting a deny-all security_policy.
 	clusterInstance.VtTabletExtraArgs = []string{"-security_policy", "deny-all"}
 	err = clusterInstance.StartVttablet(mTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// It should deny ADMIN role.
 	url := fmt.Sprintf("http://localhost:%d/streamqueryz/terminate", mTablet.HTTPPort)
@@ -127,18 +119,14 @@ func TestReadOnlySecurityPolicy(t *testing.T) {
 	ctx := context.Background()
 	mTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
-	//Init Tablets
-	err := clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)
-	require.Nil(t, err)
-
 	// Start Mysql Processes
-	err = cluster.StartMySQL(ctx, mTablet, username, clusterInstance.TmpDirectory)
-	require.Nil(t, err)
+	err := cluster.StartMySQL(ctx, mTablet, username, clusterInstance.TmpDirectory)
+	require.NoError(t, err)
 
 	// Requesting a read-only security_policy.
 	clusterInstance.VtTabletExtraArgs = []string{"-security_policy", "read-only"}
 	err = clusterInstance.StartVttablet(mTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// It should deny ADMIN role.
 	url := fmt.Sprintf("http://localhost:%d/streamqueryz/terminate", mTablet.HTTPPort)
