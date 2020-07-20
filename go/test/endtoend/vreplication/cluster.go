@@ -359,16 +359,13 @@ func (vc *VitessCluster) TearDown() {
 			}
 		}
 	}
-	var dbProcesses []*exec.Cmd
 	for _, cell := range vc.Cells {
 		for _, keyspace := range cell.Keyspaces {
 			for _, shard := range keyspace.Shards {
 				for _, tablet := range shard.Tablets {
 					if tablet.DbServer != nil && tablet.DbServer.TabletUID > 0 {
-						if proc, err := tablet.DbServer.StopProcess(); err != nil {
+						if _, err := tablet.DbServer.StopProcess(); err != nil {
 							log.Errorf("Error stopping mysql process: %s", err.Error())
-						} else {
-							dbProcesses = append(dbProcesses, proc)
 						}
 					}
 					fmt.Printf("Stopping vttablet %s\n", tablet.Name)
