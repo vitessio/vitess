@@ -188,6 +188,37 @@ func TestStateManagerStopService(t *testing.T) {
 	assert.Equal(t, StateNotConnected, sm.state)
 }
 
+func TestStateManagerGracePeriod(t *testing.T) {
+	sm := newTestStateManager(t)
+	sm.transitionGracePeriod = 10 * time.Millisecond
+
+	alsoAllow := func() topodatapb.TabletType {
+		sm.mu.Lock()
+		defer sm.mu.Unlock()
+		if len(sm.alsoAllow) == 0 {
+			return topodatapb.TabletType_UNKNOWN
+		}
+		return sm.alsoAllow[0]
+	}
+
+	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
+	require.NoError(t, err)
+
+	assert.Equal(t, topodatapb.TabletType_UNKNOWN, alsoAllow())
+	assert.Equal(t, topodatapb.TabletType_REPLICA, sm.target.TabletType)
+	assert.Equal(t, StateServing, sm.state)
+
+	err = sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
+	require.NoError(t, err)
+
+	assert.Equal(t, topodatapb.TabletType_REPLICA, alsoAllow())
+	assert.Equal(t, topodatapb.TabletType_MASTER, sm.target.TabletType)
+	assert.Equal(t, StateServing, sm.state)
+
+	time.Sleep(20 * time.Millisecond)
+	assert.Equal(t, topodatapb.TabletType_UNKNOWN, alsoAllow())
+}
+
 // testWatcher is used as a hook to invoke another transition
 type testWatcher struct {
 	t  *testing.T
