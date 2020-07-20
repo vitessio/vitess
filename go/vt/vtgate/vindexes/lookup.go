@@ -18,11 +18,13 @@ package vindexes
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -39,6 +41,7 @@ func init() {
 	Register("lookup", NewLookup)
 	Register("lookup_unique", NewLookupUnique)
 	RegisterValueEncoder("numeric_uint64", numericUint64)
+	RegisterValueEncoder("numeric_hex_string", numericAsHexString)
 }
 
 // RegisterValueEncoder will define an encoder that can be used on
@@ -361,4 +364,33 @@ func numericUint64(input sqltypes.Value) ([]byte, error) {
 	vBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(vBytes, v)
 	return vBytes, nil
+}
+
+func numericAsHexString(input sqltypes.Value) ([]byte, error) {
+	switch input.Type() {
+	case querypb.Type_INT8:
+	case querypb.Type_UINT8:
+	case querypb.Type_INT16:
+	case querypb.Type_UINT16:
+	case querypb.Type_INT24:
+	case querypb.Type_UINT24:
+	case querypb.Type_INT32:
+	case querypb.Type_UINT32:
+	case querypb.Type_INT64:
+	case querypb.Type_UINT64:
+	case querypb.Type_TEXT:
+	case querypb.Type_VARCHAR:
+	case querypb.Type_CHAR:
+	default:
+		return nil, fmt.Errorf("%v unsupported column type", input.Type())
+	}
+	str := string(input.ToBytes())
+	if len(str)%2 == 1 {
+		str = fmt.Sprintf("0%s", str)
+	}
+	bs, err := hex.DecodeString(str)
+	if err != nil {
+		return nil, fmt.Errorf("encoder could not parse")
+	}
+	return bs, nil
 }

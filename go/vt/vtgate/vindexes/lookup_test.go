@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"reflect"
@@ -663,4 +664,59 @@ func createLookup(t *testing.T, name string, writeOnly bool) SingleColumn {
 		t.Fatal(err)
 	}
 	return l.(SingleColumn)
+}
+
+func TestNumericAsHexString(t *testing.T) {
+	var cases = []struct {
+		input     sqltypes.Value
+		wantBytes []byte
+		wantErr   error
+	}{
+		{
+			input:     sqltypes.NewVarChar("3500"),
+			wantBytes: []byte{0x35, 0x00},
+			wantErr:   nil,
+		},
+		{
+			input:     sqltypes.NewVarChar("905"),
+			wantBytes: []byte{0x09, 0x05},
+			wantErr:   nil,
+		},
+		{
+			input:     sqltypes.NewInt64(400),
+			wantBytes: []byte{0x04, 0x00},
+			wantErr:   nil,
+		},
+		{
+			input:     sqltypes.NewVarChar("test"),
+			wantBytes: nil,
+			wantErr:   fmt.Errorf("encoder could not parse"),
+		},
+		{
+			input:     sqltypes.NewFloat64(float64(1)),
+			wantBytes: nil,
+			wantErr:   fmt.Errorf("FLOAT64 unsupported column type"),
+		},
+	}
+
+	s, _ := hex.DecodeString("")
+	e, _ := hex.DecodeString("80")
+	kr := &topodatapb.KeyRange{Start: s, End: e}
+
+	for _, c := range cases {
+		got, err := numericAsHexString(c.input)
+		if !reflect.DeepEqual(err, c.wantErr) {
+			t.Errorf("want: %v, got: %v", c.wantErr, err)
+		}
+
+		if !reflect.DeepEqual(c.wantBytes, got) {
+			t.Errorf("Expected %v to produce %v, got %v", c.input, c.wantBytes, got)
+		}
+
+		if c.wantBytes != nil {
+			if !key.KeyRangeContains(kr, got) {
+				t.Errorf("Expected %v to fall within `-80`; it did not", c.input)
+			}
+		}
+	}
 }
