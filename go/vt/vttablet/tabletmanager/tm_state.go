@@ -203,6 +203,16 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 	terTime := logutil.ProtoToTime(ts.tablet.MasterTermStartTime)
 	ts.publishForDisplay()
 
+	// Disable TabletServer first so the nonserving state gets advertised
+	// before other services are shutdown.
+	reason := ts.canServe(ts.tablet.Type)
+	if reason != "" {
+		log.Infof("Disabling query service: %v", reason)
+		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, false, reason); err != nil {
+			log.Errorf("SetServingType(serving=false) failed: %v", err)
+		}
+	}
+
 	if err := ts.applyBlacklist(ctx); err != nil {
 		log.Errorf("Cannot update blacklisted tables rule: %v", err)
 	}
@@ -225,16 +235,10 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 		}
 	}
 
-	// Open TabletServer last so that when it goes serving all other services are up.
-	reason := ts.canServe(ts.tablet.Type)
+	// Open TabletServer last so that it advertises serving after all other services are up.
 	if reason == "" {
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, true, ""); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
-		}
-	} else {
-		log.Infof("Disabling query service: %v", reason)
-		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, false, reason); err != nil {
-			log.Errorf("SetServingType(serving=false) failed: %v", err)
 		}
 	}
 }

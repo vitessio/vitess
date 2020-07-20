@@ -214,7 +214,8 @@ func (vre *Engine) retry(ctx context.Context, err error) {
 		vre.mu.Lock()
 		// Recheck the context within the lock.
 		// This guarantees that we will not retry
-		// after the context was canceled.
+		// after the context was canceled. This
+		// can almost never happen.
 		select {
 		case <-ctx.Done():
 			vre.mu.Unlock()
@@ -222,6 +223,8 @@ func (vre *Engine) retry(ctx context.Context, err error) {
 		default:
 		}
 		if err := vre.openLocked(ctx); err == nil {
+			// Don't invoke cancelRetry because openLocked
+			// will hold on to this context for later cancelation.
 			vre.cancelRetry = nil
 			vre.mu.Unlock()
 			return
