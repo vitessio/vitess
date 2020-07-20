@@ -152,8 +152,8 @@ func (cluster LocalProcessCluster) RemoveAllBackups(t *testing.T, shardKsName st
 
 // ResetTabletDirectory transitions back to tablet state (i.e. mysql process restarts with cleaned directory and tablet is off)
 func ResetTabletDirectory(tablet Vttablet) error {
-	tablet.MysqlctlProcess.Stop()
 	tablet.VttabletProcess.TearDown()
+	tablet.MysqlctlProcess.Stop()
 	os.RemoveAll(tablet.VttabletProcess.Directory)
 
 	return tablet.MysqlctlProcess.Start()

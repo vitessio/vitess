@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -931,10 +932,16 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.Nil(t, err)
 
 	// delete the original tablets in the original shard
-	for _, tablet := range []cluster.Vttablet{*shard1Master, *shard1Replica1, *shard1Replica2, *shard1Rdonly, *shard1RdonlyZ2} {
-		_ = tablet.MysqlctlProcess.Stop()
-		_ = tablet.VttabletProcess.TearDown()
+	var wg sync.WaitGroup
+	for _, tablet := range []*cluster.Vttablet{shard1Master, shard1Replica1, shard1Replica2, shard1Rdonly, shard1RdonlyZ2} {
+		wg.Add(1)
+		go func(tablet *cluster.Vttablet) {
+			defer wg.Done()
+			_ = tablet.VttabletProcess.TearDown()
+			_ = tablet.MysqlctlProcess.Stop()
+		}(tablet)
 	}
+	wg.Wait()
 
 	for _, tablet := range []cluster.Vttablet{*shard1Replica1, *shard1Replica2, *shard1Rdonly, *shard1RdonlyZ2} {
 		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
