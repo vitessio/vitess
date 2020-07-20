@@ -629,7 +629,8 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		wr := wrangler.New(logger, ts, tmClient)
 
 		executor := schemamanager.NewTabletExecutor(
-			wr, time.Duration(req.ReplicaTimeoutSeconds)*time.Second)
+			wr, time.Duration(req.ReplicaTimeoutSeconds)*time.Second,
+		)
 
 		if req.OnlineSchemaChange {
 			executor.SetOnlineSchemaChange()
