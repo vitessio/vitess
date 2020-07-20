@@ -77,6 +77,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	newMaster.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
 		GTIDSet: newMasterRelayLogPos,
 	}
+	newMaster.FakeMysqlDaemon.WaitMasterPosition = newMaster.FakeMysqlDaemon.CurrentMasterFilePosition
 	newMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE IO_THREAD",
 		"CREATE DATABASE IF NOT EXISTS _vt",
