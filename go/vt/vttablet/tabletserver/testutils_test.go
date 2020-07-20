@@ -28,5 +28,5 @@ var errRejected = errors.New("rejected")
 func newDBConfigs(db *fakesqldb.DB) *dbconfigs.DBConfigs {
 	params, _ := db.ConnParams().MysqlParams()
 	cp := *params
-	return dbconfigs.NewTestDBConfigs(cp, cp, "")
+	return dbconfigs.NewTestDBConfigs(cp, cp, db.Name())
 }

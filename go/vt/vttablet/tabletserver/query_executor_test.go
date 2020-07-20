@@ -112,14 +112,14 @@ func TestQueryExecutorPlans(t *testing.T) {
 		// not get re-executed.
 		inTxWant: "select * from t limit 1",
 	}, {
-		input: "set a=1",
+		input: "set a = 1",
 		dbResponses: []dbResponse{{
-			query:  "set a=1",
+			query:  "set a = 1",
 			result: dmlResult,
 		}},
 		resultWant: dmlResult,
 		planWant:   "Set",
-		logWant:    "set a=1",
+		logWant:    "set a = 1",
 	}, {
 		input: "show engines",
 		dbResponses: []dbResponse{{
@@ -241,14 +241,14 @@ func TestQueryExecutorPlans(t *testing.T) {
 		inTxWant:   "RELEASE savepoint a",
 	}}
 	for _, tcase := range testcases {
-		func() {
+		t.Run(tcase.input, func(t *testing.T) {
 			db := setUpQueryExecutorTest(t)
 			defer db.Close()
 			for _, dbr := range tcase.dbResponses {
 				db.AddQuery(dbr.query, dbr.result)
 			}
 			ctx := context.Background()
-			tsv := newTestTabletServer(ctx, noFlags, db)
+			tsv := newTestTabletServer(t, noFlags, db)
 			defer tsv.StopService()
 
 			tsv.SetPassthroughDMLs(tcase.passThrough)
@@ -279,7 +279,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 				want = tcase.inTxWant
 			}
 			assert.Equal(t, want, qre.logStats.RewrittenSQL(), "in tx: %v", tcase.input)
-		}()
+		})
 	}
 }
 
@@ -320,7 +320,7 @@ func TestQueryExecutorSelectImpossible(t *testing.T) {
 				db.AddQuery(dbr.query, dbr.result)
 			}
 			ctx := context.Background()
-			tsv := newTestTabletServer(ctx, noFlags, db)
+			tsv := newTestTabletServer(t, noFlags, db)
 			defer tsv.StopService()
 
 			qre := newTestQueryExecutor(ctx, tsv, tcase.input, 0)
@@ -424,7 +424,7 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 				db.AddQuery(dbr.query, dbr.result)
 			}
 			ctx := callerid.NewContext(context.Background(), callerid.NewEffectiveCallerID("a", "b", "c"), callerid.NewImmediateCallerID("d"))
-			tsv := newTestTabletServer(ctx, smallResultSize, db)
+			tsv := newTestTabletServer(t, smallResultSize, db)
 			defer tsv.StopService()
 
 			tsv.SetPassthroughDMLs(false)
@@ -481,7 +481,7 @@ func TestQueryExecutorPlanPassSelectWithLockOutsideATransaction(t *testing.T) {
 		Fields: getTestTableFields(),
 	})
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
+	tsv := newTestTabletServer(t, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	assert.Equal(t, planbuilder.PlanSelectLock, qre.plan.PlanID)
@@ -509,7 +509,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	updateQuery := "update seq set next_id = 4 where id = 0"
 	db.AddQuery(updateQuery, &sqltypes.Result{})
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
+	tsv := newTestTabletServer(t, noFlags, db)
 	defer tsv.StopService()
 	qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
 	assert.Equal(t, planbuilder.PlanNextval, qre.plan.PlanID)
@@ -639,7 +639,7 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 
-	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
+	tsv := newTestTabletServer(t, enableStrictTableACL, db)
 	defer tsv.StopService()
 
 	plan, err := tsv.qe.GetMessageStreamPlan("msg")
@@ -716,7 +716,7 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 		t.Fatalf("unable to load tableacl config, error: %v", err)
 	}
 
-	tsv := newTestTabletServer(ctx, noFlags, db)
+	tsv := newTestTabletServer(t, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
@@ -761,7 +761,7 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 		t.Fatalf("unable to load tableacl config, error: %v", err)
 	}
 	// without enabling Config.StrictTableAcl
-	tsv := newTestTabletServer(ctx, noFlags, db)
+	tsv := newTestTabletServer(t, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	got, err := qre.Execute()
@@ -774,7 +774,7 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	tsv.StopService()
 
 	// enable Config.StrictTableAcl
-	tsv = newTestTabletServer(ctx, enableStrictTableACL, db)
+	tsv = newTestTabletServer(t, enableStrictTableACL, db)
 	qre = newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
@@ -810,7 +810,7 @@ func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 	}
 
 	// enable Config.StrictTableAcl
-	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
+	tsv := newTestTabletServer(t, enableStrictTableACL, db)
 	query := "select * from test_table where 1 != 1"
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
@@ -870,7 +870,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	}
 
 	// enable Config.StrictTableAcl
-	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
+	tsv := newTestTabletServer(t, enableStrictTableACL, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
@@ -943,7 +943,7 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 		username,
 	}, ".")
 	// enable Config.StrictTableAcl
-	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
+	tsv := newTestTabletServer(t, enableStrictTableACL, db)
 	tsv.qe.enableTableACLDryRun = true
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
@@ -994,7 +994,7 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 		User:   bannedUser,
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
-	tsv := newTestTabletServer(ctx, noFlags, db)
+	tsv := newTestTabletServer(t, noFlags, db)
 	tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
 	tsv.qe.queryRuleSources.RegisterSource(rulesName)
 	defer tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
@@ -1048,7 +1048,7 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 		User:   bannedUser,
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
-	tsv := newTestTabletServer(ctx, noFlags, db)
+	tsv := newTestTabletServer(t, noFlags, db)
 	tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
 	tsv.qe.queryRuleSources.RegisterSource(rulesName)
 	defer tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
@@ -1079,7 +1079,7 @@ const (
 )
 
 // newTestQueryExecutor uses a package level variable testTabletServer defined in tabletserver_test.go
-func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb.DB) *TabletServer {
+func newTestTabletServer(t *testing.T, flags executorFlags, db *fakesqldb.DB) *TabletServer {
 	config := tabletenv.NewDefaultConfig()
 	config.OltpReadPool.Size = 100
 	if flags&smallTxPool > 0 {
@@ -1110,9 +1110,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	dbconfigs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	err := tsv.StartService(target, dbconfigs)
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 	return tsv
 }
 
@@ -1127,7 +1125,7 @@ func newTransaction(tsv *TabletServer, options *querypb.ExecuteOptions) int64 {
 
 func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
 	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutor")
-	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false)
+	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, "keyspace")
 	if err != nil {
 		panic(err)
 	}
@@ -1149,7 +1147,7 @@ func setUpQueryExecutorTest(t *testing.T) *fakesqldb.DB {
 }
 
 func initQueryExecutorTestDB(db *fakesqldb.DB, testTableHasMultipleUniqueKeys bool) {
-	for query, result := range getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys) {
+	for query, result := range getQueryExecutorSupportedQueries() {
 		db.AddQuery(query, result)
 	}
 }
@@ -1162,7 +1160,7 @@ func getTestTableFields() []*querypb.Field {
 	}
 }
 
-func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[string]*sqltypes.Result {
+func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		// queries for twopc
 		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):          {},
@@ -1291,9 +1289,10 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 				Type: sqltypes.Int64,
 			}},
 		},
-		"begin":    {},
-		"commit":   {},
-		"rollback": {},
+		"begin":           {},
+		"commit":          {},
+		"rollback":        {},
+		"use `fakesqldb`": {},
 		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
 	}
 }

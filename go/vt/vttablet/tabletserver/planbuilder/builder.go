@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"strings"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -129,6 +131,36 @@ func analyzeSet(set *sqlparser.Set) (plan *Plan) {
 	return &Plan{
 		PlanID:    PlanSet,
 		FullQuery: GenerateFullQuery(set),
+	}
+}
+
+const tablesIn = "tables_in_"
+
+func analyzeShow(show *sqlparser.Show, keyspace string, dbName string) (plan *Plan) {
+	rewriteShowStatement(show, keyspace, dbName)
+	return &Plan{
+		PlanID:    PlanOtherRead,
+		FullQuery: GenerateFullQuery(show),
+	}
+}
+
+// rewriteShowStatement replaces the keyspace with the database name
+func rewriteShowStatement(show *sqlparser.Show, keyspace string, dbName string) {
+	opt := show.ShowTablesOpt
+	if opt != nil {
+		lowerDbName := strings.ToLower(dbName)
+		if strings.EqualFold(opt.DbName, keyspace) {
+			opt.DbName = lowerDbName
+		}
+		sqlparser.Rewrite(show.ShowTablesOpt.Filter, func(cursor *sqlparser.Cursor) bool {
+			switch n := cursor.Node().(type) {
+			case *sqlparser.ColName:
+				if n.Name.EqualString(tablesIn + keyspace) {
+					n.Name = sqlparser.NewColIdent(tablesIn + lowerDbName)
+				}
+			}
+			return true
+		}, nil)
 	}
 }
 

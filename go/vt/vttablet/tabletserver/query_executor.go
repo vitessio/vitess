@@ -526,7 +526,14 @@ func (qre *QueryExecutor) execOther() (*sqltypes.Result, error) {
 		return nil, err
 	}
 	defer conn.Recycle()
-	return qre.execSQL(conn, qre.query, true)
+	var query string
+	if qre.plan.FullQuery != nil {
+		query = qre.plan.FullQuery.Query
+	} else {
+		query = qre.query
+	}
+
+	return qre.execSQL(conn, query, true)
 }
 
 func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {

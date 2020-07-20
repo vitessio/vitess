@@ -135,7 +135,8 @@ func Queries() map[string]*sqltypes.Result {
 				Type: sqltypes.Int64,
 			}},
 		},
-		"begin":  {},
-		"commit": {},
+		"begin":           {},
+		"commit":          {},
+		"use `fakesqldb`": {},
 	}
 }

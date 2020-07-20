@@ -695,3 +695,17 @@ func (db *DB) VerifyAllExecutedOrFail() {
 		db.t.Errorf("%v: not all expected queries were executed. leftovers: %v", db.name, db.expectedExecuteFetch[db.expectedExecuteFetchIndex:])
 	}
 }
+
+//LastQuery returns the last query
+func (db *DB) LastQuery() interface{} {
+	size := len(db.querylog)
+	if size == 0 {
+		return "no queries have been run"
+	}
+	return db.querylog[size-1]
+}
+
+//Name returns that database name
+func (db *DB) Name() string {
+	return db.name
+}

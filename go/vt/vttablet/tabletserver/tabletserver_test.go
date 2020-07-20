@@ -364,7 +364,7 @@ func TestTabletServerConcludeTransaction(t *testing.T) {
 func TestTabletServerBeginFail(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.TxPool.Size = 1
-	db, tsv := setupTabletServerTestCustom(t, config)
+	db, tsv := setupTabletServerTestCustom(t, config, nil, "")
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -535,6 +535,25 @@ func TestMakeSureToCloseDbConnWhenBeginQueryFails(t *testing.T) {
 	// run a query with a non-existent reserved id
 	_, _, _, _, err := tsv.ReserveBeginExecute(ctx, &target, []string{}, "select 42", nil, options)
 	require.Error(t, err)
+}
+
+func TestShowTablesWithFilter(t *testing.T) {
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER, Keyspace: "keyspace"}
+	config := tabletenv.NewDefaultConfig()
+	db, tsv := setupTabletServerTestCustom(t, config, &target, "dbName")
+	defer tsv.StopService()
+	defer db.Close()
+
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	options := &querypb.ExecuteOptions{}
+
+	_, err := tsv.Execute(ctx, &target, "show tables from keyspace where Tables_in_keyspace = 'table1'", nil, 0, 0, options)
+	require.NoError(t, err)
+	require.Equal(t, "show tables from dbname where tables_in_dbname = 'table1'", db.LastQuery())
+
+	_, err = tsv.Execute(ctx, &target, "show tables where Tables_in_keyspace = 'table1'", nil, 0, 0, options)
+	require.NoError(t, err)
+	require.Equal(t, "show tables where tables_in_dbname = 'table1'", db.LastQuery())
 }
 
 func TestTabletServerReserveAndBeginCommit(t *testing.T) {
@@ -860,7 +879,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	config.HotRowProtection.MaxConcurrency = 1
 	// Reduce the txpool to 2 because we should never consume more than two slots.
 	config.TxPool.Size = 2
-	db, tsv := setupTabletServerTestCustom(t, config)
+	db, tsv := setupTabletServerTestCustom(t, config, nil, "")
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -965,7 +984,7 @@ func TestDMLQueryWithoutWhereClause(t *testing.T) {
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.HotRowProtection.MaxConcurrency = 1
 	config.TxPool.Size = 2
-	db, tsv := setupTabletServerTestCustom(t, config)
+	db, tsv := setupTabletServerTestCustom(t, config, nil, "")
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -1001,7 +1020,7 @@ func TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction(t *testing.T) {
 	config.HotRowProtection.MaxConcurrency = 1
 	// Reduce the txpool to 2 because we should never consume more than two slots.
 	config.TxPool.Size = 2
-	db, tsv := setupTabletServerTestCustom(t, config)
+	db, tsv := setupTabletServerTestCustom(t, config, nil, "")
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -1113,7 +1132,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 	config.HotRowProtection.MaxConcurrency = 2
 	// Reduce the txpool to 2 because we should never consume more than two slots.
 	config.TxPool.Size = 2
-	db, tsv := setupTabletServerTestCustom(t, config)
+	db, tsv := setupTabletServerTestCustom(t, config, nil, "")
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -1247,7 +1266,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.HotRowProtection.MaxQueueSize = 1
 	config.HotRowProtection.MaxConcurrency = 1
-	db, tsv := setupTabletServerTestCustom(t, config)
+	db, tsv := setupTabletServerTestCustom(t, config, nil, "")
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -1330,7 +1349,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests_ExecuteBatchAsTrans
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.HotRowProtection.MaxQueueSize = 1
 	config.HotRowProtection.MaxConcurrency = 1
-	db, tsv := setupTabletServerTestCustom(t, config)
+	db, tsv := setupTabletServerTestCustom(t, config, nil, "")
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -1416,7 +1435,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.HotRowProtection.MaxConcurrency = 1
-	db, tsv := setupTabletServerTestCustom(t, config)
+	db, tsv := setupTabletServerTestCustom(t, config, nil, "")
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -2156,22 +2175,30 @@ func TestReserveStats(t *testing.T) {
 
 func setupTabletServerTest(t *testing.T) (*fakesqldb.DB, *TabletServer) {
 	config := tabletenv.NewDefaultConfig()
-	return setupTabletServerTestCustom(t, config)
+	return setupTabletServerTestCustom(t, config, nil, "")
 }
 
-func setupTabletServerTestCustom(t *testing.T, config *tabletenv.TabletConfig) (*fakesqldb.DB, *TabletServer) {
-	db := setupFakeDB(t)
+func setupTabletServerTestCustom(t *testing.T, config *tabletenv.TabletConfig, target *querypb.Target, dbName string) (*fakesqldb.DB, *TabletServer) {
+	db := setupFakeDB(t, dbName)
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	require.Equal(t, StateNotConnected, tsv.sm.State())
 	dbcfgs := newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbcfgs)
+	if target == nil {
+		// default target if none is provided
+		target = &querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	}
+	if dbName != "" {
+		cmd := fmt.Sprintf("use `%s`", db.Name())
+		db.AddQuery(cmd, &sqltypes.Result{})
+	}
+	err := tsv.StartService(*target, dbcfgs)
 	require.NoError(t, err)
 	return db, tsv
 }
 
-func setupFakeDB(t *testing.T) *fakesqldb.DB {
-	db := fakesqldb.New(t)
+func setupFakeDB(t *testing.T, dbName string) *fakesqldb.DB {
+	db := fakesqldb.New(t).SetName(dbName)
+
 	for query, result := range getSupportedQueries() {
 		db.AddQuery(query, result)
 	}
