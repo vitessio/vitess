@@ -280,20 +280,10 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	srvKeyspace := sharding.GetSrvKeyspace(t, cell1, keyspaceName, *clusterInstance)
 	assert.Equal(t, "", srvKeyspace.GetShardingColumnName())
 
-	//Start Tablets and Wait for the Process
+	// Start Tablets
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
-			// Init Tablet
-			err := clusterInstance.VtctlclientProcess.InitTablet(tablet, tablet.Cell, keyspaceName, hostname, shard.Name)
-			require.Nil(t, err)
-
-			// Start the tablet
 			err = tablet.VttabletProcess.Setup()
-			require.Nil(t, err)
-
-			// Create Database
-			_, err = tablet.VttabletProcess.QueryTablet(fmt.Sprintf("create database vt_%s",
-				keyspace.Name), keyspace.Name, false)
 			require.Nil(t, err)
 		}
 	}

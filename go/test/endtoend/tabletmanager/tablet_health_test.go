@@ -56,10 +56,6 @@ func TestTabletReshuffle(t *testing.T) {
 	//Create new tablet
 	rTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
-	//Init Tablets
-	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
-	require.NoError(t, err)
-
 	// mycnf_server_id prevents vttablet from reading the mycnf
 	// Pointing to masterTablet's socket file
 	// We have to disable active reparenting to prevent the tablet from trying to fix replication.
@@ -98,7 +94,6 @@ func TestTabletReshuffle(t *testing.T) {
 
 func TestHealthCheck(t *testing.T) {
 	// Add one replica that starts not initialized
-	// (for the replica, we let vttablet do the InitTablet)
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
@@ -112,10 +107,6 @@ func TestHealthCheck(t *testing.T) {
 
 	// Create database in mysql
 	exec(t, replicaConn, fmt.Sprintf("create database vt_%s", keyspaceName))
-
-	//Init Replica Tablet
-	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
-	require.NoError(t, err)
 
 	// start vttablet process, should be in SERVING state as we already have a master
 	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
