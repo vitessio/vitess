@@ -29,10 +29,10 @@ import (
 
 // execCmd searches the PATH for a command and runs it, logging the output.
 // If input is not nil, pipe it to the command's stdin.
-func execCmd(name string, args, env []string, dir string, input io.Reader) (cmd *exec.Cmd, output string, err error) {
+func execCmd(name string, args, env []string, dir string, input io.Reader, output io.Writer) (cmd *exec.Cmd, err error) {
 	cmdPath, err := exec.LookPath(name)
 	if err != nil {
-		return cmd, output, err
+		return cmd, err
 	}
 	log.Infof("execCmd: %v %v %v", name, cmdPath, args)
 
@@ -42,16 +42,20 @@ func execCmd(name string, args, env []string, dir string, input io.Reader) (cmd 
 	if input != nil {
 		cmd.Stdin = input
 	}
-	out, err := cmd.CombinedOutput()
-	output = string(out)
-	if err != nil {
-		log.Infof("execCmd: %v failed: %v", name, err)
-		err = fmt.Errorf("%v: %v, output: %v", name, err, output)
+	if output != nil {
+		cmd.Stdout = output
+		cmd.Stderr = output
 	}
-	log.Infof("execCmd: %v output: %v", name, output)
-	return cmd, output, err
+	err = cmd.Run()
+	if err != nil {
+		err = fmt.Errorf("execCmd failed: %v, %v", name, err)
+		log.Errorf(err.Error())
+	}
+	log.Infof("execCmd success: %v", name)
+	return cmd, err
 }
 
+// RandomHash returns a 64 hex character random string
 func RandomHash() string {
 	size := 64
 	rb := make([]byte, size)
@@ -60,4 +64,9 @@ func RandomHash() string {
 	hasher := sha256.New()
 	hasher.Write(rb)
 	return hex.EncodeToString(hasher.Sum(nil))
+}
+
+// ShortRandomHash returns a 8 hex character random string
+func ShortRandomHash() string {
+	return RandomHash()[0:8]
 }
