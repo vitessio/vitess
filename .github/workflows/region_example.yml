@@ -51,5 +51,5 @@ jobs:
         fi
         # Make sure that testing is entirely non-reliant on config
         mv config config-moved
-        sed -i 's/user\/my-vitess/runner\/work\/vitess\/vitess/g' examples/region_sharding/main_vschema.json #set correct path to countries.json
+        sed -i 's/user\/my-vitess/runner\/work\/vitess\/vitess/g' examples/region_sharding/main_vschema_sharded.json #set correct path to countries.json
         eatmydata -- test/region_example.sh
