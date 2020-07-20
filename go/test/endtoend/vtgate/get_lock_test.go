@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -54,6 +55,27 @@ func TestLocksDontIntersect(t *testing.T) {
 
 	assertMatches(t, conn1, `select get_lock('lock1', 2)`, `[[INT64(1)]]`)
 	assertMatches(t, conn2, `select get_lock('lock2', 2)`, `[[INT64(1)]]`)
+	assertMatches(t, conn1, `select release_lock('lock1')`, `[[INT64(1)]]`)
+	assertMatches(t, conn2, `select release_lock('lock2')`, `[[INT64(1)]]`)
+}
+
+func TestLocksIntersect(t *testing.T) {
+	conn1, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn1.Close()
+	conn2, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn2.Close()
+
+	assertMatches(t, conn1, `select get_lock('lock1', 100)`, `[[INT64(1)]]`)
+	assertMatches(t, conn2, `select get_lock('lock2', 100)`, `[[INT64(1)]]`)
+
+	// Locks will not succeed.
+	assertMatches(t, conn1, `select get_lock('lock2', 1)`, `[[INT64(0)]]`)
+	assertMatches(t, conn2, `select get_lock('lock1', 1)`, `[[INT64(0)]]`)
+	assertMatches(t, conn1, `select release_lock('lock2')`, `[[INT64(0)]]`)
+	assertMatches(t, conn2, `select release_lock('lock1')`, `[[INT64(0)]]`)
+
 	assertMatches(t, conn1, `select release_lock('lock1')`, `[[INT64(1)]]`)
 	assertMatches(t, conn2, `select release_lock('lock2')`, `[[INT64(1)]]`)
 }
@@ -141,4 +163,68 @@ func TestLocksBlocksWithTx(t *testing.T) {
 	released.Set(true)
 	assertMatches(t, conn1, `select release_lock('lock')`, `[[INT64(1)]]`)
 	exec(t, conn1, "delete from t1")
+}
+
+func TestLocksWithTxFailure(t *testing.T) {
+	conn1, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn1.Close()
+
+	conn2, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn2.Close()
+
+	// in the first connection, grab a lock for infinite time
+	assertMatches(t, conn1, `select get_lock('lock', -1)`, `[[INT64(1)]]`)
+
+	exec(t, conn1, "use `ks:80-`")
+	exec(t, conn1, "begin")
+	qr := exec(t, conn1, "select connection_id()")
+	exec(t, conn1, "use ks")
+	// kill the mysql connection shard which has transaction open.
+	vttablet1 := clusterInstance.Keyspaces[0].Shards[1].MasterTablet() // 80-
+	vttablet1.VttabletProcess.QueryTablet(fmt.Sprintf("kill %s", qr.Rows[0][0].ToString()), KeyspaceName, false)
+
+	// transaction fails on commit.
+	_, err = conn1.ExecuteFetch("commit", 1, true)
+	require.Error(t, err)
+
+	// in the second connection, lock acquisition succeeds.
+	assertMatches(t, conn2, `select get_lock('lock', 2)`, `[[INT64(1)]]`)
+	assertMatches(t, conn2, `select release_lock('lock')`, `[[INT64(1)]]`)
+}
+
+func TestLocksWithTxOngoingAndReleaseLock(t *testing.T) {
+	conn1, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn1.Close()
+
+	assertMatches(t, conn1, `select get_lock('lock', -1)`, `[[INT64(1)]]`)
+	exec(t, conn1, "begin")
+	exec(t, conn1, "insert into t1(id1, id2) values(1,1)")
+	assertMatches(t, conn1, `select release_lock('lock')`, `[[INT64(1)]]`)
+	assertMatches(t, conn1, `select id1, id2 from t1 where id1 = 1`, `[[INT64(1) INT64(1)]]`)
+	exec(t, conn1, "rollback")
+	assertIsEmpty(t, conn1, `select id1, id2 from t1 where id1 = 1`)
+}
+
+func TestLocksWithTxOngoingAndLockFails(t *testing.T) {
+	conn1, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn1.Close()
+
+	conn2, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn2.Close()
+
+	assertMatches(t, conn2, `select get_lock('lock', -1)`, `[[INT64(1)]]`)
+
+	exec(t, conn1, "begin")
+	exec(t, conn1, "insert into t1(id1, id2) values(1,1)")
+	assertMatches(t, conn1, `select get_lock('lock', 1)`, `[[INT64(0)]]`)
+	assertMatches(t, conn1, `select id1, id2 from t1 where id1 = 1`, `[[INT64(1) INT64(1)]]`)
+	exec(t, conn1, "rollback")
+	assertIsEmpty(t, conn1, `select id1, id2 from t1 where id1 = 1`)
+
+	assertMatches(t, conn2, `select get_lock('lock', -1)`, `[[INT64(1)]]`)
 }
