@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/srvtopo"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/mysql"
@@ -264,20 +266,53 @@ func (svs *SysVarSet) VariableName() string {
 }
 
 //Execute implements the SetOp interface method
-func (svs *SysVarSet) Execute(vcursor VCursor, res evalengine.ExpressionEnv) error {
-	rss, _, err := vcursor.ResolveDestinations(svs.Keyspace.Name, nil, []key.Destination{svs.TargetDestination})
-	if err != nil {
-		return vterrors.Wrap(err, "SysVarSet")
+func (svs *SysVarSet) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
+	// For those running on advanced vitess settings.
+	if svs.TargetDestination != nil {
+		rss, _, err := vcursor.ResolveDestinations(svs.Keyspace.Name, nil, []key.Destination{svs.TargetDestination})
+		if err != nil {
+			return vterrors.Wrap(err, "SysVarSet")
+		}
+		vcursor.Session().NeedsReservedConn()
+		return svs.execSetStatement(vcursor, rss, env)
 	}
-
-	if len(rss) != 1 {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %v", svs.TargetDestination)
-	}
-	sysVarExprValidationQuery := fmt.Sprintf("select %s from dual where false", svs.Expr)
-	_, err = execShard(vcursor, sysVarExprValidationQuery, res.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
+	sysVarModified, err := svs.isSysVarChanged(vcursor, env)
 	if err != nil {
 		return err
 	}
-	vcursor.Session().SetSysVar(svs.Name, svs.Expr)
+	if !sysVarModified {
+		return nil
+	}
+	// TODO: Add exec logic to apply the settings.
 	return nil
+}
+
+func (svs *SysVarSet) execSetStatement(vcursor VCursor, rss []*srvtopo.ResolvedShard, env evalengine.ExpressionEnv) error {
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := 0; i < len(rss); i++ {
+		queries[i] = &querypb.BoundQuery{
+			Sql:           fmt.Sprintf("set %s = %s", svs.Name, svs.Expr),
+			BindVariables: env.BindVars,
+		}
+	}
+	_, err := execMultiShard(vcursor, rss, queries, false)
+	return err
+}
+
+func (svs *SysVarSet) isSysVarChanged(vcursor VCursor, res evalengine.ExpressionEnv) (bool, error) {
+	sysVarExprValidationQuery := fmt.Sprintf("select @@%s, %s from dual", svs.Name, svs.Expr)
+	rss, _, err := vcursor.ResolveDestinations(svs.Keyspace.Name, nil, []key.Destination{key.DestinationKeyspaceID{0}})
+	if err != nil {
+		return false, vterrors.Wrap(err, "SysVarSet")
+	}
+	qr, err := execShard(vcursor, sysVarExprValidationQuery, res.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
+	if err != nil {
+		return false, err
+	}
+	if qr.Rows[0][0].String() == qr.Rows[0][1].String() {
+		return false, nil
+	}
+	vcursor.Session().SetSysVar(svs.Name, string(qr.Rows[0][1].ToBytes()))
+	vcursor.Session().NeedsReservedConn()
+	return true, nil
 }
