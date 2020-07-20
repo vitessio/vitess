@@ -49,7 +49,7 @@ func init() {
 	addCommand("Shards", command{
 		"EmergencyReparentShard",
 		commandEmergencyReparentShard,
-		"-keyspace_shard=<keyspace/shard> -new_master=<tablet alias> [-wait_replicas_timeout=<duration>]",
+		"-keyspace_shard=<keyspace/shard> [-new_master=<tablet alias>] [-wait_replicas_timeout=<duration>]",
 		"Reparents the shard to the new master. Assumes the old master is dead and not responsding."})
 	addCommand("Shards", command{
 		"TabletExternallyReparented",
@@ -178,16 +178,19 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 		*keyspaceShard = subFlags.Arg(0)
 		*newMaster = subFlags.Arg(1)
 	} else if subFlags.NArg() != 0 {
-		return fmt.Errorf("action EmergencyReparentShard requires -keyspace_shard=<keyspace/shard> -new_master=<tablet alias>")
+		return fmt.Errorf("action EmergencyReparentShard requires -keyspace_shard=<keyspace/shard>")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(*keyspaceShard)
 	if err != nil {
 		return err
 	}
-	tabletAlias, err := topoproto.ParseTabletAlias(*newMaster)
-	if err != nil {
-		return err
+	var tabletAlias *topodatapb.TabletAlias
+	if *newMaster != "" {
+		tabletAlias, err = topoproto.ParseTabletAlias(*newMaster)
+		if err != nil {
+			return err
+		}
 	}
 	return wr.EmergencyReparentShard(ctx, keyspace, shard, tabletAlias, *waitReplicasTimeout)
 }
