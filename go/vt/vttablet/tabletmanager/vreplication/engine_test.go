@@ -113,12 +113,22 @@ func TestEngineOpenRetry(t *testing.T) {
 		t.Error("retrying did not become false")
 	}()
 
+	// Open is idempotent.
+	assert.True(t, vre.IsOpen())
+	vre.Open(context.Background())
+
 	vre.Close()
+	assert.False(t, vre.IsOpen())
 
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", nil, errors.New("err"))
 	vre.Open(context.Background())
+
+	// A second Open should cancel the existing retry and start a new one.
+	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", nil, errors.New("err"))
+	vre.Open(context.Background())
+
 	start := time.Now()
-	// Close should cause the retry to exit immediately.
+	// Close should cause the retry to exit.
 	vre.Close()
 	elapsed := time.Since(start)
 	assert.Greater(t, int64(openRetryInterval.Get()), int64(elapsed))
