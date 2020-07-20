@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -253,11 +254,14 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 }
 
 func killTablets(t *testing.T, tablets ...*cluster.Vttablet) {
+	var wg sync.WaitGroup
 	for _, tablet := range tablets {
-		//Stop Mysqld
-		tablet.MysqlctlProcess.Stop()
-
-		//Tear down Tablet
-		tablet.VttabletProcess.TearDown()
+		wg.Add(1)
+		go func(tablet *cluster.Vttablet) {
+			defer wg.Done()
+			_ = tablet.VttabletProcess.TearDown()
+			_ = tablet.MysqlctlProcess.Stop()
+		}(tablet)
 	}
+	wg.Wait()
 }
