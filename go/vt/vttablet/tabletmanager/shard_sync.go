@@ -96,7 +96,8 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 		switch tablet.Type {
 		case topodatapb.TabletType_MASTER:
 			// If we think we're master, check if we need to update the shard record.
-			masterAlias, err := syncShardMaster(ctx, tm.TopoServer, tablet, tm.tmState.MasterTermStartTime())
+			// Fetch the start time from the record we just got, because the tm's tablet can change.
+			masterAlias, err := syncShardMaster(ctx, tm.TopoServer, tablet, logutil.ProtoToTime(tablet.MasterTermStartTime))
 			if err != nil {
 				log.Errorf("Failed to sync shard record: %v", err)
 				// Start retry timer and go back to sleep.
