@@ -491,6 +491,15 @@ func (sbc *SandboxConn) getNextResult() *sqltypes.Result {
 	return SingleRowResult
 }
 
+//StringQueries returns the queries executed as a slice of strings
+func (sbc *SandboxConn) StringQueries() []string {
+	result := make([]string, len(sbc.Queries))
+	for i, query := range sbc.Queries {
+		result[i] = query.Sql
+	}
+	return result
+}
+
 // SingleRowResult is returned when there is no pre-stored result.
 var SingleRowResult = &sqltypes.Result{
 	Fields: []*querypb.Field{
