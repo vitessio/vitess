@@ -260,10 +260,22 @@ func BuildMessageStreaming(name string, tables map[string]*schema.Table) (*Plan,
 // a call to GET_LOCK(), which is unsafe with server-side connection pooling.
 // For more background, see https://github.com/vitessio/vitess/issues/3631.
 func checkForPoolingUnsafeConstructs(expr sqlparser.SQLNode) error {
-	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		if f, ok := node.(*sqlparser.FuncExpr); ok {
-			if sqlparser.IsLockingFunc(f) {
-				return false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s() not allowed", f.Name.String())
+
+	genError := func(node sqlparser.SQLNode) error {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed without a reserved connections", sqlparser.String(node))
+	}
+
+	return sqlparser.Walk(func(in sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := in.(type) {
+		case *sqlparser.Set:
+			for _, setExpr := range node.Exprs {
+				if setExpr.Name.AtCount() > 0 {
+					return false, genError(node)
+				}
+			}
+		case *sqlparser.FuncExpr:
+			if sqlparser.IsLockingFunc(node) {
+				return false, genError(node)
 			}
 		}
 

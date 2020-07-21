@@ -55,4 +55,4 @@
 
 # named locks are unsafe with server-side connection pooling
 "select get_lock('foo') from dual"
-"get_lock() not allowed"
+"get_lock('foo') not allowed without a reserved connections"
