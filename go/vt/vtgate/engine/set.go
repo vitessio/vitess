@@ -285,7 +285,7 @@ func (svs *SysVarSet) Execute(vcursor VCursor, env evalengine.ExpressionEnv) err
 		return nil
 	}
 	rss := vcursor.Session().ShardSession()
-	if rss == nil || len(rss) == 0 {
+	if len(rss) == 0 {
 		return nil
 	}
 	queries := make([]*querypb.BoundQuery, len(rss))
