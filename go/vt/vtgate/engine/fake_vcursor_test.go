@@ -186,7 +186,7 @@ func (f *loggingVCursor) InReservedConn() bool {
 }
 
 func (f *loggingVCursor) ShardSession() []*srvtopo.ResolvedShard {
-	panic("implement me")
+	return nil
 }
 
 func (f *loggingVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {

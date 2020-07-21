@@ -182,7 +182,7 @@ func TestSetTable(t *testing.T) {
 			)},
 		},
 		{
-			testName: "sysvar set",
+			testName: "sysvar set without destination",
 			setOps: []SetOp{
 				&SysVarSet{
 					Name: "x",
@@ -198,6 +198,51 @@ func TestSetTable(t *testing.T) {
 				`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 				`ExecuteMultiShard ks.-20: set @@x = dummy_expr {} false false`,
 			},
+		},
+		{
+			testName: "sysvar set not modifying setting",
+			setOps: []SetOp{
+				&SysVarSet{
+					Name: "x",
+					Keyspace: &vindexes.Keyspace{
+						Name:    "ks",
+						Sharded: true,
+					},
+					Expr: "dummy_expr",
+				},
+			},
+			expectedQueryLog: []string{
+				`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+				`ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false`,
+			},
+			expectedWarning: []*querypb.QueryWarning{
+				{Message: "setting ignored, same as underlying datastore for: x"},
+			},
+		},
+		{
+			testName: "sysvar set modifying setting",
+			setOps: []SetOp{
+				&SysVarSet{
+					Name: "x",
+					Keyspace: &vindexes.Keyspace{
+						Name:    "ks",
+						Sharded: true,
+					},
+					Expr: "dummy_expr",
+				},
+			},
+			expectedQueryLog: []string{
+				`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+				`ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false`,
+				`SysVar set with (x,123456)`,
+			},
+			qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"id",
+					"int64",
+				),
+				"123456",
+			)},
 		},
 	}
 
