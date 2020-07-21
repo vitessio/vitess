@@ -166,7 +166,7 @@ func expressionOkToDelegateToTablet(e sqlparser.Expr) bool {
 }
 
 func buildSetOpVarSet(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error) {
-	ks, dest, err := resolveDestination(vschema)
+	ks, err := vschema.AnyKeyspace()
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +174,7 @@ func buildSetOpVarSet(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.S
 	return &engine.SysVarSet{
 		Name:              expr.Name.Lowered(),
 		Keyspace:          ks,
-		TargetDestination: dest,
+		TargetDestination: vschema.Destination(),
 		Expr:              sqlparser.String(expr.Expr),
 	}, nil
 }

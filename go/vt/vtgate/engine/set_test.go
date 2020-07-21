@@ -196,8 +196,7 @@ func TestSetTable(t *testing.T) {
 			},
 			expectedQueryLog: []string{
 				`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-				`ExecuteMultiShard ks.-20: select dummy_expr from dual where false {} false false`,
-				`SysVar set with (x,dummy_expr)`,
+				`ExecuteMultiShard ks.-20: set @@x = dummy_expr {} false false`,
 			},
 		},
 	}
@@ -226,7 +225,6 @@ func TestSetTable(t *testing.T) {
 }
 
 func TestSysVarSetErr(t *testing.T) {
-
 	setOps := []SetOp{
 		&SysVarSet{
 			Name: "x",
@@ -241,7 +239,7 @@ func TestSysVarSetErr(t *testing.T) {
 
 	expectedQueryLog := []string{
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-		`ExecuteMultiShard ks.-20: select dummy_expr from dual where false {} false false`,
+		`ExecuteMultiShard ks.-20: set @@x = dummy_expr {} false false`,
 	}
 
 	set := &Set{

@@ -47,7 +47,7 @@
   }
 }
 
-# set check and ignore plan
+# set system settings
 "set @@sql_safe_updates = 1"
 {
   "QueryType": "SET",
@@ -62,7 +62,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetDestination": {},
+        "TargetDestination": null,
         "Expr": "1"
       }
     ],

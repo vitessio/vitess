@@ -302,6 +302,12 @@ func TestExecutorSet(t *testing.T) {
 func TestExecutorSetOp(t *testing.T) {
 	executor, sbc1, _, _ := createLegacyExecutorEnv()
 
+	//sbc1.SetResults([]*sqltypes.Result{
+	//	sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"),
+	//})
+	//sbclookup.SetResults([]*sqltypes.Result{
+	//	sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"),
+	//})
 	testcases := []struct {
 		in      string
 		warning []*querypb.QueryWarning
@@ -313,8 +319,8 @@ func TestExecutorSetOp(t *testing.T) {
 			Message: "Ignored inapplicable SET sql_mode = 'STRICT_ALL_TABLES'",
 		}},
 	}, {
-		in:      "set sql_safe_updates = 2",
-		sysVars: map[string]string{"sql_safe_updates": "2"},
+		in:      "set sql_safe_updates = 1",
+		sysVars: map[string]string{"sql_safe_updates": "1"},
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
