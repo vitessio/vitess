@@ -411,9 +411,10 @@ func TestStartDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.T) {
 
 func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string) *TabletManager {
 	t.Helper()
+	ctx := context.Background()
 	tablet := newTestTablet(t, uid, keyspace, shard)
 	tm := &TabletManager{
-		BatchCtx:            context.Background(),
+		BatchCtx:            ctx,
 		TopoServer:          ts,
 		MysqlDaemon:         &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(1)},
 		DBConfigs:           &dbconfigs.DBConfigs{},
@@ -421,6 +422,18 @@ func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string) *
 	}
 	err := tm.Start(tablet)
 	require.NoError(t, err)
+
+	// Wait for SrvKeyspace to be rebuilt.
+	for i := 0; i < 9; i++ {
+		if _, err := tm.TopoServer.GetSrvKeyspace(ctx, tm.tabletAlias.Cell, "ks"); err != nil {
+			if i == 9 {
+				require.NoError(t, err)
+			}
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		break
+	}
 	return tm
 }
 

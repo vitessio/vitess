@@ -71,7 +71,7 @@ func newTMState(tm *TabletManager, tablet *topodatapb.Tablet) *tmState {
 	return &tmState{
 		tm: tm,
 		displayState: displayState{
-			tablet: *tablet,
+			tablet: proto.Clone(tablet).(*topodatapb.Tablet),
 		},
 		tablet: tablet,
 	}
@@ -346,7 +346,7 @@ func (ts *tmState) retryPublish() {
 // tmState uses publishForDisplay to keep these values uptodate.
 type displayState struct {
 	mu                sync.Mutex
-	tablet            topodatapb.Tablet
+	tablet            *topodatapb.Tablet
 	blackListedTables []string
 }
 
@@ -355,23 +355,20 @@ func (ts *tmState) publishForDisplay() {
 	ts.displayState.mu.Lock()
 	defer ts.displayState.mu.Unlock()
 
-	ts.displayState.tablet = *ts.tablet
+	ts.displayState.tablet = proto.Clone(ts.tablet).(*topodatapb.Tablet)
 	ts.displayState.blackListedTables = ts.blacklistedTables[ts.tablet.Type]
 }
 
 func (ts *tmState) Tablet() *topodatapb.Tablet {
 	ts.displayState.mu.Lock()
 	defer ts.displayState.mu.Unlock()
-	return proto.Clone(&ts.displayState.tablet).(*topodatapb.Tablet)
+	return proto.Clone(ts.displayState.tablet).(*topodatapb.Tablet)
 }
 
 func (ts *tmState) MasterTermStartTime() time.Time {
 	ts.displayState.mu.Lock()
 	defer ts.displayState.mu.Unlock()
-	if ts.tablet == nil {
-		return time.Time{}
-	}
-	return logutil.ProtoToTime(ts.tablet.MasterTermStartTime)
+	return logutil.ProtoToTime(ts.displayState.tablet.MasterTermStartTime)
 }
 
 func (ts *tmState) BlacklistedTables() []string {
