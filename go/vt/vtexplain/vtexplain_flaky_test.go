@@ -51,28 +51,6 @@ func initTest(mode string, opts *Options, t *testing.T) {
 	require.NoError(t, err, "vtexplain Init error\n%s", string(schema))
 }
 
-func TestVTExplainWithNewHealthCheck(t *testing.T) {
-	schema, err := ioutil.ReadFile("testdata/test-healthcheck-schema.sql")
-	require.NoError(t, err)
-
-	vSchema, err := ioutil.ReadFile("testdata/test-healthcheck-vschema.json")
-	require.NoError(t, err)
-
-	opts := &Options{
-		ReplicationMode: "ROW",
-		NumShards:       2,
-		Normalize:       true,
-		StrictDDL:       true,
-		ExecutionMode:   ModeMulti,
-	}
-
-	err = Init(string(vSchema), string(schema), opts)
-	require.NoError(t, err, "vtexplain Init error\n%s", string(schema))
-
-	_, err = Run("SELECT * from t1")
-	require.NoError(t, err)
-}
-
 func testExplain(testcase string, opts *Options, t *testing.T) {
 	modes := []string{
 		ModeMulti,
@@ -175,7 +153,7 @@ func TestErrors(t *testing.T) {
 
 		{
 			SQL: "SELECT * FROM table_not_in_schema",
-			Err: "target: ks_unsharded.-.master, used tablet: explainCell-0 (ks_unsharded/-): unknown error: unable to resolve table name table_not_in_schema",
+			Err: "unknown error: unable to resolve table name table_not_in_schema",
 		},
 	}
 

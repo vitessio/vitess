@@ -63,6 +63,7 @@ create table test_partitioned (
 	tablet := newTablet(defaultTestOpts(), &topodatapb.Tablet{
 		Keyspace: "test_keyspace",
 		Shard:    "-80",
+		Alias:    &topodatapb.TabletAlias{},
 	})
 	se := tablet.tsv.SchemaEngine()
 	tables := se.GetSchema()

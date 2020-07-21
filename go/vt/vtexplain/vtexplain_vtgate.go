@@ -75,8 +75,6 @@ func initVtgateExecutor(vSchemaStr string, opts *Options) error {
 
 func newFakeResolver(opts *Options, serv srvtopo.Server, cell string) *vtgate.Resolver {
 	ctx := context.Background()
-	// change this back after fixing vtexplain to work with new healthcheck
-	// gw := vtgate.GatewayCreator()(ctx, hc, serv, cell, 3)
 	gw := vtgate.NewTabletGateway(ctx, healthCheck, serv, cell)
 	_ = gw.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
 
