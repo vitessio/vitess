@@ -213,12 +213,12 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				if err != nil {
 					return nil, err
 				}
-				innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, nil, queries[i].Sql, queries[i].BindVariables, info.transactionID, opts)
+				innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, info.transactionID, opts)
 				if err != nil {
 					return info.updateReservedID(reservedID, alias), err
 				}
 			case reserveBegin == info.actionNeeded:
-				innerqr, transactionID, reservedID, alias, err = rs.Gateway.ReserveBeginExecute(ctx, rs.Target, nil, queries[i].Sql, queries[i].BindVariables, opts)
+				innerqr, transactionID, reservedID, alias, err = rs.Gateway.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, opts)
 				if err != nil {
 					return info.updateTransactionAndReservedID(transactionID, reservedID, alias), err
 				}
