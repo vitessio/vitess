@@ -414,7 +414,7 @@ func (vc *vcursorImpl) InReservedConn() bool {
 
 func (vc *vcursorImpl) ShardSession() []*srvtopo.ResolvedShard {
 	ss := vc.safeSession.GetShardSessions()
-	if ss == nil || len(ss) == 0 {
+	if len(ss) == 0 {
 		return nil
 	}
 	rss := make([]*srvtopo.ResolvedShard, len(ss))
