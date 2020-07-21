@@ -281,26 +281,38 @@ func (svs *SysVarSet) Execute(vcursor VCursor, env evalengine.ExpressionEnv) err
 		return err
 	}
 	if !sysVarModified {
+		vcursor.Session().RecordWarning(&querypb.QueryWarning{Message: fmt.Sprintf("setting ignored, same as underlying datastore for: %s", svs.Name)})
 		return nil
 	}
-	// TODO: Add exec logic to apply the settings.
-	return nil
+	rss := vcursor.Session().ShardSession()
+	if rss == nil || len(rss) == 0 {
+		return nil
+	}
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := 0; i < len(rss); i++ {
+		queries[i] = &querypb.BoundQuery{
+			Sql:           fmt.Sprintf("set @@%s = %s", svs.Name, svs.Expr),
+			BindVariables: env.BindVars,
+		}
+	}
+	_, errs := vcursor.ExecuteMultiShard(rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
+	return vterrors.Aggregate(errs)
 }
 
 func (svs *SysVarSet) execSetStatement(vcursor VCursor, rss []*srvtopo.ResolvedShard, env evalengine.ExpressionEnv) error {
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := 0; i < len(rss); i++ {
 		queries[i] = &querypb.BoundQuery{
-			Sql:           fmt.Sprintf("set %s = %s", svs.Name, svs.Expr),
+			Sql:           fmt.Sprintf("set @@%s = %s", svs.Name, svs.Expr),
 			BindVariables: env.BindVars,
 		}
 	}
-	_, err := execMultiShard(vcursor, rss, queries, false)
-	return err
+	_, errs := vcursor.ExecuteMultiShard(rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
+	return vterrors.Aggregate(errs)
 }
 
 func (svs *SysVarSet) isSysVarChanged(vcursor VCursor, res evalengine.ExpressionEnv) (bool, error) {
-	sysVarExprValidationQuery := fmt.Sprintf("select @@%s, %s from dual", svs.Name, svs.Expr)
+	sysVarExprValidationQuery := fmt.Sprintf("select %s from dual where @@%s != %s", svs.Expr, svs.Name, svs.Expr)
 	rss, _, err := vcursor.ResolveDestinations(svs.Keyspace.Name, nil, []key.Destination{key.DestinationKeyspaceID{0}})
 	if err != nil {
 		return false, vterrors.Wrap(err, "SysVarSet")
@@ -309,10 +321,11 @@ func (svs *SysVarSet) isSysVarChanged(vcursor VCursor, res evalengine.Expression
 	if err != nil {
 		return false, err
 	}
-	if qr.Rows[0][0].String() == qr.Rows[0][1].String() {
+	if len(qr.Rows) == 0 {
 		return false, nil
 	}
-	vcursor.Session().SetSysVar(svs.Name, string(qr.Rows[0][1].ToBytes()))
+	// TODO : validate how value needs to be stored.
+	vcursor.Session().SetSysVar(svs.Name, qr.Rows[0][0].ToString())
 	vcursor.Session().NeedsReservedConn()
 	return true, nil
 }
