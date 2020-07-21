@@ -87,7 +87,7 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 	}
 
 	// XXX much of this is cloned from the tabletserver tests
-	tsv := tabletserver.NewTabletServer(topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	tsv := tabletserver.NewTabletServer(topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(""), *t.Alias)
 
 	tablet := explainTablet{db: db, tsv: tsv}
 	db.Handler = &tablet
