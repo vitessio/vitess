@@ -65,7 +65,7 @@ type (
 	SysVarCheckAndIgnore struct {
 		Name              string
 		Keyspace          *vindexes.Keyspace
-		TargetDestination key.Destination
+		TargetDestination key.Destination `json:",omitempty"`
 		Expr              string
 	}
 
@@ -73,7 +73,7 @@ type (
 	SysVarSet struct {
 		Name              string
 		Keyspace          *vindexes.Keyspace
-		TargetDestination key.Destination
+		TargetDestination key.Destination `json:",omitempty"`
 		Expr              string
 	}
 )
@@ -142,7 +142,6 @@ func (s *Set) description() PrimitiveDescription {
 	}
 	return PrimitiveDescription{
 		OperatorType: "Set",
-		Variant:      "",
 		Other:        other,
 	}
 }

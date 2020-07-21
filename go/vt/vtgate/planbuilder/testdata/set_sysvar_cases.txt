@@ -62,7 +62,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetDestination": null,
         "Expr": "1"
       }
     ],
