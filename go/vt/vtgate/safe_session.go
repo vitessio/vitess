@@ -193,7 +193,7 @@ func addOrUpdate(shardSession *vtgatepb.Session_ShardSession, sessions []*vtgate
 			sess.Target.TabletType == shardSession.Target.TabletType &&
 			sess.Target.Shard == shardSession.Target.Shard
 		if targetedAtSameTablet {
-			if sess.TabletAlias != shardSession.TabletAlias {
+			if sess.TabletAlias.Cell != shardSession.TabletAlias.Cell || sess.TabletAlias.Uid != shardSession.TabletAlias.Uid {
 				return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "got a different alias for the same target")
 			}
 			// replace the old info with the new one

@@ -176,8 +176,7 @@ func handleDualSelects(sel *sqlparser.Select, vschema ContextVSchema) (engine.Pr
 }
 
 func buildLockingPrimitive(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
-	// TODO: use more predictable keyspace.
-	ks, err := vschema.AnyKeyspace()
+	ks, err := vschema.FirstSortedKeyspace()
 	if err != nil {
 		return nil, err
 	}

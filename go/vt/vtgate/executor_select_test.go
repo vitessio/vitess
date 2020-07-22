@@ -2236,29 +2236,48 @@ func TestSelectWithUnionAll(t *testing.T) {
 
 func TestSelectLock(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
-	session := NewAutocommitSession(&vtgatepb.Session{TargetString: "TestExecutor@master"})
+	session := NewSafeSession(nil)
+	session.Session.InTransaction = true
+	session.ShardSessions = []*vtgatepb.Session_ShardSession{{
+		Target: &querypb.Target{
+			Keyspace:   "TestExecutor",
+			Shard:      "-20",
+			TabletType: topodatapb.TabletType_MASTER,
+		},
+		TransactionId: 12345,
+		TabletAlias: &topodatapb.TabletAlias{
+			Cell: "aa",
+		},
+	}}
 
-	query := "select get_lock('lock name', 10) from dual"
-	exec(executor, session, query)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           query,
+		Sql:           "select get_lock('lock name', 10) from dual",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	wantSession := &vtgatepb.Session{
-		Autocommit:   true,
-		TargetString: "TestExecutor@master",
+		InTransaction:  true,
+		InReservedConn: true,
 		ShardSessions: []*vtgatepb.Session_ShardSession{
 			{
-				Target:      &querypb.Target{Keyspace: "TestExecutor", Shard: "-20", TabletType: topodatapb.TabletType_MASTER},
-				TabletAlias: &topodatapb.TabletAlias{Cell: "aa"},
-				ReservedId:  1,
+				Target:        &querypb.Target{Keyspace: "TestExecutor", Shard: "-20", TabletType: topodatapb.TabletType_MASTER},
+				TabletAlias:   &topodatapb.TabletAlias{Cell: "aa"},
+				TransactionId: 12345,
+				ReservedId:    12345,
 			},
 		},
-		FoundRows:      1,
-		RowCount:       -1,
-		InReservedConn: true,
+		FoundRows: 1,
+		RowCount:  -1,
 	}
 
+	exec(executor, session, "select get_lock('lock name', 10) from dual")
+	utils.MustMatch(t, wantQueries, sbc1.Queries, "")
+	utils.MustMatch(t, wantSession, session.Session, "")
+
+	wantQueries = append(wantQueries, &querypb.BoundQuery{
+		Sql:           "select release_lock('lock name') from dual",
+		BindVariables: map[string]*querypb.BindVariable{},
+	})
+	exec(executor, session, "select release_lock('lock name') from dual")
 	utils.MustMatch(t, wantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, wantSession, session.Session, "")
 }

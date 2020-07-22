@@ -460,8 +460,10 @@ func (sbc *SandboxConn) reserve(ctx context.Context, target *querypb.Target, pre
 	for _, query := range preQueries {
 		sbc.Execute(ctx, target, query, bindVariables, transactionID, 0, options)
 	}
-	reservedID := sbc.ReserveID.Add(1)
-	return reservedID
+	if transactionID != 0 {
+		return transactionID
+	}
+	return sbc.ReserveID.Add(1)
 }
 
 //Release implements the QueryService interface
