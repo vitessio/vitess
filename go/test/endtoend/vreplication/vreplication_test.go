@@ -151,7 +151,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	shardCustomer(t, true, []*Cell{cell1, cell2}, "alias")
 
 	insertMoreCustomers(t, 16)
-	reshardCustomer2to4Split(t, []*Cell{cell1, cell2}, "zone1")
+	reshardCustomer2to4Split(t, []*Cell{cell1, cell2}, "alias")
 	validateCount(t, vtgateConn, "customer:-40", "customer", 5)
 	validateCount(t, vtgateConn, "customer:40-80", "customer", 5)
 	validateCount(t, vtgateConn, "customer:80-c0", "customer", 6)
