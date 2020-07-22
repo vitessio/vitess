@@ -109,7 +109,7 @@ func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 		Type:           initTabletType,
 		DbNameOverride: dbname,
 	}
-	if err := tm.Start(tablet); err != nil {
+	if err := tm.Start(tablet, 0); err != nil {
 		return err
 	}
 

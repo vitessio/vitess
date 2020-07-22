@@ -239,6 +239,8 @@ func (qe *QueryEngine) Open() error {
 	if qe.isOpen {
 		return nil
 	}
+	log.Info("Query Engine: opening")
+
 	qe.conns.Open(qe.env.Config().DB.AppWithDB(), qe.env.Config().DB.DbaWithDB(), qe.env.Config().DB.AppDebugWithDB())
 
 	conn, err := qe.conns.Get(tabletenv.LocalContext())
@@ -265,6 +267,7 @@ func (qe *QueryEngine) Open() error {
 // StopServing kills all streaming queries.
 // Other queries are handled by the tsv.requests Waitgroup.
 func (qe *QueryEngine) StopServing() {
+	log.Info("Query Engine: killing all streaming queries")
 	qe.streamQList.TerminateAll()
 }
 
@@ -282,6 +285,7 @@ func (qe *QueryEngine) Close() {
 	qe.streamConns.Close()
 	qe.conns.Close()
 	qe.isOpen = false
+	log.Info("Query Engine: closed")
 }
 
 // GetPlan returns the TabletPlan that for the query. Plans are cached in a cache.LRUCache.

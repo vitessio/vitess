@@ -37,7 +37,7 @@ const (
 	replicationStoppedFile = "do_not_replicate"
 )
 
-// replManager manages runs a poller to ensure mysql is replicating from
+// replManager runs a poller to ensure mysql is replicating from
 // the master. If necessary, it invokes tm.repairReplication to get it
 // fixed. On state change, SetTabletType must be called before changing
 // the tabletserver state. This will ensure that replication is fixed
@@ -75,11 +75,13 @@ func (rm *replManager) SetTabletType(tabletType topodatapb.TabletType) {
 	if rm.replicationStopped() {
 		// Stop just to be safe.
 		rm.ticks.Stop()
+		log.Info("Replication Manager: stopped")
 		return
 	}
 	if rm.ticks.Running() {
 		return
 	}
+	log.Info("Replication Manager: starting")
 	// Run an immediate check to fix replication if it was broken.
 	// A higher caller may already have te action lock. So, we use
 	// a code path that avoids it.

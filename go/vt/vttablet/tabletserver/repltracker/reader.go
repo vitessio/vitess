@@ -103,8 +103,8 @@ func (r *heartbeatReader) Open() {
 	if r.isOpen {
 		return
 	}
+	log.Info("Heartbeat Reader: opening")
 
-	log.Info("Beginning heartbeat reads")
 	r.pool.Open(r.env.Config().DB.AppWithDB(), r.env.Config().DB.DbaWithDB(), r.env.Config().DB.AppDebugWithDB())
 	r.ticks.Start(func() { r.readHeartbeat() })
 	r.isOpen = true
@@ -122,8 +122,8 @@ func (r *heartbeatReader) Close() {
 	}
 	r.ticks.Stop()
 	r.pool.Close()
-	log.Info("Stopped heartbeat reads")
 	r.isOpen = false
+	log.Info("Heartbeat Reader: closed")
 }
 
 // Status returns the most recently recorded lag measurement or error encountered.

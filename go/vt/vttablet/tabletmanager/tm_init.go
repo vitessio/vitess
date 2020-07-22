@@ -61,7 +61,6 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -183,13 +182,6 @@ type TabletManager struct {
 	_isBackupRunning bool
 }
 
-var healthCheckInterval time.Duration
-
-// InitConfig is a temp function to keep things working during the refactor.
-func InitConfig(config *tabletenv.TabletConfig) {
-	healthCheckInterval = config.Healthcheck.IntervalSeconds.Get()
-}
-
 // BuildTabletFromInput builds a tablet record from input parameters.
 func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (*topodatapb.Tablet, error) {
 	hostname := *tabletHostname
@@ -241,7 +233,7 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (
 }
 
 // Start starts the TabletManager.
-func (tm *TabletManager) Start(tablet *topodatapb.Tablet) error {
+func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval time.Duration) error {
 	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
 	tm.replManager = newReplManager(tm.BatchCtx, tm, healthCheckInterval)
 	tm.tabletAlias = tablet.Alias

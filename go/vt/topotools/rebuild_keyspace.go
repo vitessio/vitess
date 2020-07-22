@@ -47,7 +47,6 @@ func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts *topo.Server, k
 // Take data from the global keyspace and rebuild the local serving
 // copies in each cell.
 func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Server, keyspace string, cells []string) error {
-	log.Infof("rebuildKeyspace %v", keyspace)
 	if err := topo.CheckKeyspaceLocked(ctx, keyspace); err != nil {
 		return err
 	}
@@ -144,7 +143,6 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 		wg.Add(1)
 		go func(cell string, srvKeyspace *topodatapb.SrvKeyspace) {
 			defer wg.Done()
-			log.Infof("updating keyspace serving graph in cell %v for %v", cell, keyspace)
 			if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace); err != nil {
 				rec.RecordError(fmt.Errorf("writing serving data failed: %v", err))
 			}

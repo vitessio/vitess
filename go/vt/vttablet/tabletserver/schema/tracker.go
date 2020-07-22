@@ -87,9 +87,9 @@ func NewTracker(env tabletenv.Env, vs VStreamer, engine *Engine) *Tracker {
 // Open enables the tracker functionality
 func (tr *Tracker) Open() {
 	if !tr.enabled {
-		log.Info("Schema tracker is not enabled.")
 		return
 	}
+	log.Info("Schema Tracker: opening")
 
 	tr.mu.Lock()
 	defer tr.mu.Unlock()
@@ -100,7 +100,6 @@ func (tr *Tracker) Open() {
 	ctx, cancel := context.WithCancel(tabletenv.LocalContext())
 	tr.cancel = cancel
 	tr.wg.Add(1)
-	log.Info("Schema tracker enabled.")
 
 	go tr.process(ctx)
 }
@@ -113,10 +112,10 @@ func (tr *Tracker) Close() {
 		return
 	}
 
-	log.Info("Schema tracker stopped.")
 	tr.cancel()
 	tr.cancel = nil
 	tr.wg.Wait()
+	log.Info("Schema Tracker: closed")
 }
 
 // Enable forces tracking to be on or off.
