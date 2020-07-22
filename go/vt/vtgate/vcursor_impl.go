@@ -134,7 +134,7 @@ func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL
 // the query and supply it here. Trailing comments are typically sent by the application for various reasons,
 // including as identifying markers. So, they have to be added back to all queries that are executed
 // on behalf of the original query.
-func newVCursorImpl(ctx context.Context, safeSession *SafeSession, marginComments sqlparser.MarginComments, executor *Executor, logStats *LogStats, vm VSchemaOperator, vschema *vindexes.VSchema, resolver *srvtopo.Resolver, ignoreMaxMemoryRows bool) (*vcursorImpl, error) {
+func newVCursorImpl(ctx context.Context, safeSession *SafeSession, marginComments sqlparser.MarginComments, executor *Executor, logStats *LogStats, vm VSchemaOperator, vschema *vindexes.VSchema, resolver *srvtopo.Resolver) (*vcursorImpl, error) {
 	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema)
 	if err != nil {
 		return nil, err
@@ -146,18 +146,17 @@ func newVCursorImpl(ctx context.Context, safeSession *SafeSession, marginComment
 	}
 
 	return &vcursorImpl{
-		ctx:                 ctx,
-		safeSession:         safeSession,
-		keyspace:            keyspace,
-		tabletType:          tabletType,
-		destination:         destination,
-		marginComments:      marginComments,
-		executor:            executor,
-		logStats:            logStats,
-		ignoreMaxMemoryRows: ignoreMaxMemoryRows,
-		resolver:            resolver,
-		vschema:             vschema,
-		vm:                  vm,
+		ctx:            ctx,
+		safeSession:    safeSession,
+		keyspace:       keyspace,
+		tabletType:     tabletType,
+		destination:    destination,
+		marginComments: marginComments,
+		executor:       executor,
+		logStats:       logStats,
+		resolver:       resolver,
+		vschema:        vschema,
+		vm:             vm,
 	}, nil
 }
 
@@ -175,6 +174,11 @@ func (vc *vcursorImpl) MaxMemoryRows() int {
 // Returns false if the max memory rows override directive is set to true.
 func (vc *vcursorImpl) ExceedsMaxMemoryRows(numRows int) bool {
 	return !vc.ignoreMaxMemoryRows && numRows > *maxMemoryRows
+}
+
+// SetIgnoreMaxMemoryRows sets the ignoreMaxMemoryRows value.
+func (vc *vcursorImpl) SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows bool) {
+	vc.ignoreMaxMemoryRows = ignoreMaxMemoryRows
 }
 
 // SetContextTimeout updates context and sets a timeout.
