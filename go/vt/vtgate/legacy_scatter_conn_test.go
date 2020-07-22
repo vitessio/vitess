@@ -489,29 +489,30 @@ func TestReservedBeginTableDriven(t *testing.T) {
 	}
 }
 
-// TODO (harshit): This test should actual fail.
-func TestReservedOnMultiReplica(t *testing.T) {
+func TestLegaceHealthCheckFailsOnReservedConnections(t *testing.T) {
 	keyspace := "keyspace"
 	createSandbox(keyspace)
 	hc := discovery.NewFakeLegacyHealthCheck()
 	sc := newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
-	sbc0_1 := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
-	sbc0_2 := hc.AddTestTablet("aa", "2", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
-	//	sbc1 := hc.AddTestTablet("aa", "1", 1, keyspace, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
-
-	// empty results
-	sbc0_1.SetResults([]*sqltypes.Result{{}})
-	sbc0_2.SetResults([]*sqltypes.Result{{}})
 
 	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
 	destinations := []key.Destination{key.DestinationShard("0")}
-	for i := 0; i < 10; i++ {
-		executeOnShards(t, res, keyspace, sc, session, destinations)
-		assert.EqualValues(t, 1, sbc0_1.ReserveCount.Get()+sbc0_2.ReserveCount.Get(), "sbc0 reserve count")
-		assert.EqualValues(t, 0, sbc0_1.BeginCount.Get()+sbc0_2.BeginCount.Get(), "sbc0 begin count")
+	rss, _, err := res.ResolveDestinations(ctx, keyspace, topodatapb.TabletType_REPLICA, nil, destinations)
+	require.NoError(t, err)
+
+	var queries []*querypb.BoundQuery
+
+	for range rss {
+		queries = append(queries, &querypb.BoundQuery{
+			Sql:           "query1",
+			BindVariables: map[string]*querypb.BindVariable{},
+		})
 	}
+
+	_, errs := sc.ExecuteMultiShard(ctx, rss, queries, session, false)
+	require.Error(t, vterrors.Aggregate(errs))
 }
 
 func executeOnShards(t *testing.T, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *SafeSession, destinations []key.Destination) {
