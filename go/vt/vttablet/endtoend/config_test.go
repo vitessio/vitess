@@ -185,6 +185,9 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 }
 
 func TestQueryPlanCache(t *testing.T) {
+	//sleep to avoid race between SchemaChanged event clearing out the plans cache which breaks this test
+	time.Sleep(1 * time.Second)
+
 	defer framework.Server.SetQueryPlanCacheCap(framework.Server.QueryPlanCacheCap())
 	framework.Server.SetQueryPlanCacheCap(1)
 
