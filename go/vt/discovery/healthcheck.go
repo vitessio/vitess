@@ -470,7 +470,7 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, shr *query.StreamHealt
 
 }
 
-// Subscribe adds a listener. Only used for testing right now
+// Subscribe adds a listener. Used by vtgate buffer to learn about master changes.
 func (hc *HealthCheckImpl) Subscribe() chan *TabletHealth {
 	hc.subMu.Lock()
 	defer hc.subMu.Unlock()
@@ -479,7 +479,7 @@ func (hc *HealthCheckImpl) Subscribe() chan *TabletHealth {
 	return c
 }
 
-// Unsubscribe removes a listener. Only used for testing right now
+// Unsubscribe removes a listener.
 func (hc *HealthCheckImpl) Unsubscribe(c chan *TabletHealth) {
 	hc.subMu.Lock()
 	defer hc.subMu.Unlock()
