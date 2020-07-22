@@ -131,6 +131,39 @@ func TestSetSystemVariable(t *testing.T) {
 	assertMatches(t, conn, q, `[[DATE("0000-00-00")]]`)
 }
 
+func TestSetSystemVarWithTxFailure(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "insert into test (id, val1) values (80, null)")
+
+	// before changing any settings, let's confirm sql_safe_updates value
+	assertMatches(t, conn, `select @@sql_safe_updates from test where id = 80`, `[[INT64(0)]]`)
+
+	exec(t, conn, "set sql_safe_updates = 1")
+	exec(t, conn, "begin")
+
+	qr, err := exec(t, conn, "select connection_id() from test where id = 80")
+	require.NoError(t, err)
+
+	// kill the mysql connection shard which has transaction open.
+	vttablet1 := clusterInstance.Keyspaces[0].Shards[0].MasterTablet() // 80-
+	vttablet1.VttabletProcess.QueryTablet(fmt.Sprintf("kill %s", qr.Rows[0][0].ToString()), keyspaceName, false)
+
+	// transaction fails on commit - we should no longer be in a transaction
+	_, err = conn.ExecuteFetch("commit", 1, true)
+	require.Error(t, err)
+
+	// we still want to have our system setting applied
+	assertMatches(t, conn, `select @@sql_safe_updates`, `[[INT64(1)]]`)
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr, err := exec(t, conn, query)

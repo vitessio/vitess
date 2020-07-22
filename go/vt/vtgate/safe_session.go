@@ -114,7 +114,6 @@ func (session *SafeSession) Reset() {
 	session.ShardSessions = nil
 	session.PreSessions = nil
 	session.PostSessions = nil
-	session.Session.InReservedConn = false
 }
 
 // SetAutocommittable sets the state to autocommitable if true.
