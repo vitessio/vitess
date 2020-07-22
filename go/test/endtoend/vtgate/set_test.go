@@ -29,17 +29,12 @@ func TestSetSystemVariable(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	updateWithoutWhere := `update t1 set id2 = 42`
-	assertMatches(t, conn, updateWithoutWhere, `[]`)
+	exec(t, conn, "set @@sql_mode = 'NO_ZERO_DATE'")
+	q := `select str_to_date('00/00/0000', '%m/%d/%Y')`
+	assertMatches(t, conn, q, `[[NULL]]`)
 
-	exec(t, conn, "SET @@sql_safe_updates=1")
-	assertMatches(t, conn, "select @@sql_safe_updates", `[[INT64(1)]]`)
+	assertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("NO_ZERO_DATE")]]`)
+	exec(t, conn, "set @@sql_mode = ''")
 
-	// with safe updates on, the next query should fail
-	_, err = conn.ExecuteFetch(updateWithoutWhere, 1000, true)
-	require.Error(t, err)
-
-	exec(t, conn, "SET @@sql_safe_updates=0")
-	_, err = conn.ExecuteFetch(updateWithoutWhere, 1000, true)
-	require.NoError(t, err)
+	assertMatches(t, conn, q, `[[DATE("0000-00-00")]]`)
 }

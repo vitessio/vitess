@@ -31,12 +31,29 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-var sysVarPlanningFunc = map[string]func(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error){}
+type planFunc = func(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error)
+
+var sysVarPlanningFunc = map[string]planFunc{}
+
+var ignoreThese = []string{
+	"default_storage_engine",
+}
+var saveSettingsToSession = []string{
+	"sql_mode",
+	"sql_safe_updates",
+}
+var allowSetIfValueAlreadySet = []string{}
 
 func init() {
-	sysVarPlanningFunc["default_storage_engine"] = buildSetOpIgnore
-	sysVarPlanningFunc["sql_mode"] = buildSetOpCheckAndIgnore
-	sysVarPlanningFunc["sql_safe_updates"] = buildSetOpVarSet
+	forSettings(ignoreThese, buildSetOpIgnore)
+	forSettings(saveSettingsToSession, buildSetOpVarSet)
+	forSettings(allowSetIfValueAlreadySet, buildSetOpCheckAndIgnore)
+}
+
+func forSettings(settings []string, f planFunc) {
+	for _, setting := range settings {
+		sysVarPlanningFunc[setting] = f
+	}
 }
 
 func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive, error) {
