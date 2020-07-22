@@ -356,7 +356,7 @@ func (session *SafeSession) SetPreQueries() []string {
 	result := make([]string, len(session.SystemVariables))
 	idx := 0
 	for k, v := range session.SystemVariables {
-		result[idx] = fmt.Sprintf("set @%s = %s", k, v)
+		result[idx] = fmt.Sprintf("set @@%s = %s", k, v)
 		idx++
 	}
 	return result

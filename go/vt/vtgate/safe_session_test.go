@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -45,4 +46,23 @@ func TestFailToMultiShardWhenSetToSingleDb(t *testing.T) {
 	require.NoError(t, err)
 	err = session.AppendOrUpdate(sess1, vtgatepb.TransactionMode_SINGLE)
 	require.Error(t, err)
+}
+
+func TestPrequeries(t *testing.T) {
+	session := NewSafeSession(&vtgatepb.Session{
+		SystemVariables: map[string]string{
+			"s1": "'apa'",
+			"s2": "42",
+		},
+	})
+
+	q1 := "set @@s1 = 'apa'"
+	q2 := "set @@s2 = 42"
+	want := []string{q1, q2}
+	wantReversed := []string{q2, q1}
+	preQueries := session.SetPreQueries()
+
+	if !reflect.DeepEqual(want, preQueries) && !reflect.DeepEqual(wantReversed, preQueries) {
+		t.Errorf("got %v but wanted %v", preQueries, want)
+	}
 }
