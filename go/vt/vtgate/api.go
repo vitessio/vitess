@@ -87,7 +87,7 @@ func getItemPath(url string) string {
 	return parts[1]
 }
 
-func initAPI(hc HealthCheck) {
+func initAPI(hc discovery.HealthCheck) {
 	// Healthcheck real time status per (cell, keyspace, tablet type, metric).
 	handleCollection("health-check", func(r *http.Request) (interface{}, error) {
 		cacheStatus := hc.CacheStatus()

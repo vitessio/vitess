@@ -142,7 +142,8 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
 	// we can't go on much further, so we log.Fatal out.
-	gw := NewTabletGateway(ctx, serv, cell)
+	// TabletGateway can create it's own healthcheck
+	gw := NewTabletGateway(ctx, nil /*discovery.Healthcheck*/, serv, cell)
 	gw.RegisterStats()
 	if err := WaitForTablets(gw, tabletTypesToWait); err != nil {
 		log.Fatalf("gateway.WaitForTablets failed: %v", err)
