@@ -73,11 +73,11 @@ func GetMasterPosition(t *testing.T, vttablet Vttablet, hostname string) (string
 	return pos, gtID
 }
 
-// VerifyRowsInTablet Verify total number of rows in a tablet
-func VerifyRowsInTablet(t *testing.T, vttablet *Vttablet, ksName string, expectedRows int) {
+// VerifyRowsInTabletForTable Verify total number of rows in a table
+func VerifyRowsInTabletForTable(t *testing.T, vttablet *Vttablet, ksName string, expectedRows int, tableName string) {
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
-		qr, err := vttablet.VttabletProcess.QueryTablet("select * from vt_insert_test", ksName, true)
+		qr, err := vttablet.VttabletProcess.QueryTablet("select * from "+tableName, ksName, true)
 		require.Nil(t, err)
 		if len(qr.Rows) == expectedRows {
 			return
@@ -85,6 +85,11 @@ func VerifyRowsInTablet(t *testing.T, vttablet *Vttablet, ksName string, expecte
 		time.Sleep(300 * time.Millisecond)
 	}
 	assert.Fail(t, "expected rows not found.")
+}
+
+// VerifyRowsInTablet Verify total number of rows in a tablet
+func VerifyRowsInTablet(t *testing.T, vttablet *Vttablet, ksName string, expectedRows int) {
+	VerifyRowsInTabletForTable(t, vttablet, ksName, expectedRows, "vt_insert_test")
 }
 
 // PanicHandler handles the panic in the testcase.

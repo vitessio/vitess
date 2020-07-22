@@ -280,27 +280,28 @@ func (ws *wrappedService) HandlePanic(err *error) {
 	// No-op. Wrappers must call HandlePanic.
 }
 
-func (ws *wrappedService) ReserveBeginExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
+func (ws *wrappedService) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
 	var res *sqltypes.Result
 	var transactionID, reservedID int64
 	var alias *topodatapb.TabletAlias
 	err := ws.wrapper(ctx, target, ws.impl, "ReserveBeginExecute", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var err error
-		res, transactionID, reservedID, alias, err = conn.ReserveBeginExecute(ctx, target, sql, preQueries, bindVariables, options)
+		res, transactionID, reservedID, alias, err = conn.ReserveBeginExecute(ctx, target, preQueries, sql, bindVariables, options)
 		return canRetry(ctx, err), err
 	})
 
 	return res, transactionID, reservedID, alias, err
 }
 
-func (ws *wrappedService) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, txID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (ws *wrappedService) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	notInTransaction := (transactionID == 0)
 	var res *sqltypes.Result
 	var reservedID int64
 	var alias *topodatapb.TabletAlias
 	err := ws.wrapper(ctx, target, ws.impl, "ReserveExecute", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var err error
-		res, reservedID, alias, err = conn.ReserveExecute(ctx, target, sql, preQueries, bindVariables, txID, options)
-		return canRetry(ctx, err), err
+		res, reservedID, alias, err = conn.ReserveExecute(ctx, target, preQueries, sql, bindVariables, transactionID, options)
+		return canRetry(ctx, err) && notInTransaction, err
 	})
 
 	return res, reservedID, alias, err

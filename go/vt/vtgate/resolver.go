@@ -63,7 +63,6 @@ func (res *Resolver) Execute(
 	tabletType topodatapb.TabletType,
 	destination key.Destination,
 	session *SafeSession,
-	notInTransaction bool,
 	options *querypb.ExecuteOptions,
 	logStats *LogStats,
 	canAutocommit bool,
@@ -78,17 +77,25 @@ func (res *Resolver) Execute(
 
 	autocommit := len(rss) == 1 && canAutocommit && session.AutocommitApproval()
 
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{
+			Sql:           sql,
+			BindVariables: bindVars,
+		}
+	}
+
+	session.SetOptions(options)
+
 	for {
-		qr, err := res.scatterConn.Execute(
+		qr, errors := res.scatterConn.ExecuteMultiShard(
 			ctx,
-			sql,
-			bindVars,
 			rss,
+			queries,
 			session,
-			notInTransaction,
-			options,
 			autocommit,
 		)
+		err = vterrors.Aggregate(errors)
 		if isRetryableError(err) {
 			newRss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination)
 			if err != nil {

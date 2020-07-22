@@ -71,6 +71,9 @@ type FakeMysqlDaemon struct {
 	// StartReplicationError is used by StartReplication
 	StartReplicationError error
 
+	// MasterStatusError is used by MasterStatus
+	MasterStatusError error
+
 	// CurrentMasterHost is returned by ReplicationStatus
 	CurrentMasterHost string
 
@@ -230,6 +233,16 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus() (mysql.ReplicationStatus, error)
 		SQLThreadRunning: fmd.Replicating,
 		MasterHost:       fmd.CurrentMasterHost,
 		MasterPort:       fmd.CurrentMasterPort,
+	}, nil
+}
+
+// MasterStatus is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) MasterStatus(ctx context.Context) (mysql.MasterStatus, error) {
+	if fmd.MasterStatusError != nil {
+		return mysql.MasterStatus{}, fmd.MasterStatusError
+	}
+	return mysql.MasterStatus{
+		Position: fmd.CurrentMasterPosition,
 	}, nil
 }
 

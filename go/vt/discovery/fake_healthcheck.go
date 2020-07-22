@@ -17,8 +17,12 @@ limitations under the License.
 package discovery
 
 import (
+	"context"
 	"sort"
 	"sync"
+
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -30,7 +34,7 @@ import (
 )
 
 // This file contains the definitions for a FakeHealthCheck class to
-// simulate a LegacyHealthCheck module. Note it is not in a sub-package because
+// simulate a HealthCheck module. Note it is not in a sub-package because
 // otherwise it couldn't be used in this package's tests because of
 // circular dependencies.
 
@@ -41,7 +45,7 @@ func NewFakeHealthCheck() *FakeHealthCheck {
 	}
 }
 
-// FakeHealthCheck implements discovery.LegacyHealthCheck.
+// FakeHealthCheck implements discovery.HealthCheck.
 type FakeHealthCheck struct {
 	// mu protects the items map
 	mu    sync.RWMutex
@@ -54,15 +58,30 @@ type fhcItem struct {
 }
 
 //
-// discovery.LegacyHealthCheck interface methods
+// discovery.HealthCheck interface methods
 //
 
 // RegisterStats is not implemented.
 func (fhc *FakeHealthCheck) RegisterStats() {
 }
 
-// WaitForInitialStatsUpdates is not implemented.
-func (fhc *FakeHealthCheck) WaitForInitialStatsUpdates() {
+// WaitForAllServingTablets is not implemented.
+func (fhc *FakeHealthCheck) WaitForAllServingTablets(ctx context.Context, targets []*querypb.Target) error {
+	return nil
+}
+
+// GetHealthyTabletStats is not implemented.
+func (fhc *FakeHealthCheck) GetHealthyTabletStats(target *querypb.Target) []*TabletHealth {
+	return nil
+}
+
+// Subscribe is not implemented.
+func (fhc *FakeHealthCheck) Subscribe() chan *TabletHealth {
+	return nil
+}
+
+// Unsubscribe is not implemented.
+func (fhc *FakeHealthCheck) Unsubscribe(c chan *TabletHealth) {
 }
 
 // AddTablet adds the tablet.
@@ -112,13 +131,14 @@ func (fhc *FakeHealthCheck) ReplaceTablet(old, new *topodatapb.Tablet) {
 }
 
 // TabletConnection returns the TabletConn of the given tablet.
-func (fhc *FakeHealthCheck) TabletConnection(key string) queryservice.QueryService {
+func (fhc *FakeHealthCheck) TabletConnection(alias *topodatapb.TabletAlias) (queryservice.QueryService, error) {
+	key := topoproto.TabletAliasString(alias)
 	fhc.mu.RLock()
 	defer fhc.mu.RUnlock()
 	if item := fhc.items[key]; item != nil {
-		return item.conn
+		return item.conn, nil
 	}
-	return nil
+	return nil, vterrors.New(vtrpc.Code_NOT_FOUND, "tablet not found")
 }
 
 // CacheStatus returns the status for each tablet

@@ -81,6 +81,8 @@ type RPCTM interface {
 	//Deprecated
 	SlaveStatus(ctx context.Context) (*replicationdatapb.Status, error)
 
+	MasterStatus(ctx context.Context) (*replicationdatapb.MasterStatus, error)
+
 	//Deprecated
 	StopSlave(ctx context.Context) error
 
@@ -129,7 +131,7 @@ type RPCTM interface {
 
 	InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error
 
-	DemoteMaster(ctx context.Context) (string, error)
+	DemoteMaster(ctx context.Context) (*replicationdatapb.MasterStatus, error)
 
 	UndoDemoteMaster(ctx context.Context) error
 

@@ -120,7 +120,7 @@ func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, se
 	// We set sendDownEvents=true because it's required by LegacyTabletStatsCache.
 	hc.SetListener(dg, true /* sendDownEvents */)
 
-	cells := *discovery.CellsToWatch
+	cells := *CellsToWatch
 	log.Infof("loading tablets for cells: %v", cells)
 	for _, c := range strings.Split(cells, ",") {
 		if c == "" {

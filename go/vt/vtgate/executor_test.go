@@ -300,7 +300,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	assert.NotEqual(t, uint64(0), logStats.RowsAffected, "logstats: expected non-zero RowsAffected")
 
 	// autocommit = 1, "begin"
-	session.Reset()
+	session.ResetTx()
 	startCount = sbclookup.CommitCount.Get()
 	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
 	require.NoError(t, err)

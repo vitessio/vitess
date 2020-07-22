@@ -777,7 +777,7 @@ func tabletDialer(tablet *topodatapb.Tablet, _ grpcclient.FailFast) (queryservic
 }
 
 func createTestHc(ts *topo.Server) *HealthCheckImpl {
-	return NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell")
+	return NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell", "")
 }
 
 type fakeConn struct {
@@ -860,6 +860,17 @@ func checkErrorCounter(keyspace, shard string, tabletType topodatapb.TabletType,
 		return fmt.Errorf("wrong value for hcErrorCounters got = %v, want = %v", got, want)
 	}
 	return nil
+}
+
+func createFixedHealthConn(tablet *topodatapb.Tablet, fixedResult *querypb.StreamHealthResponse) *fakeConn {
+	key := TabletToMapKey(tablet)
+	conn := &fakeConn{
+		QueryService: fakes.ErrorQueryService,
+		tablet:       tablet,
+		fixedResult:  fixedResult,
+	}
+	connMap[key] = conn
+	return conn
 }
 
 var mustMatch = utils.MustMatchFn(

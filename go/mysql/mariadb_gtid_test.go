@@ -19,6 +19,9 @@ package mysql
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseMariaGTID(t *testing.T) {
@@ -638,5 +641,18 @@ func TestMariaGTIDSetUnionNewDomain(t *testing.T) {
 		}
 	default:
 		t.Error("Union result was not of type MariadbGTIDSet.")
+	}
+}
+
+func TestMariaGTIDSetLast(t *testing.T) {
+
+	testCases := map[string]string{
+		"12-34-5678,11-22-3333,24-52-4523": "24-52-4523",
+		"12-34-5678":                       "12-34-5678",
+	}
+	for input, want := range testCases {
+		got, err := parseMariadbGTIDSet(input)
+		require.NoError(t, err)
+		assert.Equal(t, want, got.Last())
 	}
 }

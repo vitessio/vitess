@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/vt/status"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
-	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -658,17 +657,6 @@ func newListener() *listener {
 
 func (l *listener) StatsUpdate(ts *LegacyTabletStats) {
 	l.output <- ts
-}
-
-func createFixedHealthConn(tablet *topodatapb.Tablet, fixedResult *querypb.StreamHealthResponse) *fakeConn {
-	key := TabletToMapKey(tablet)
-	conn := &fakeConn{
-		QueryService: fakes.ErrorQueryService,
-		tablet:       tablet,
-		fixedResult:  fixedResult,
-	}
-	connMap[key] = conn
-	return conn
 }
 
 func discoveryDialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {

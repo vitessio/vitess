@@ -269,7 +269,7 @@ func (e *Executor) addNeededBindVars(bindVarNeeds sqlparser.BindVarNeeds, bindVa
 }
 
 func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
-	return e.resolver.Execute(ctx, sql, bindVars, destKeyspace, destTabletType, dest, safeSession, false /* notInTransaction */, safeSession.Options, logStats, false /* canAutocommit */)
+	return e.resolver.Execute(ctx, sql, bindVars, destKeyspace, destTabletType, dest, safeSession, safeSession.Options, logStats, false /* canAutocommit */)
 }
 
 func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
@@ -299,7 +299,7 @@ func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession,
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
 	e.updateQueryCounts("Rollback", "", "", int64(logStats.ShardQueries))
-	err := e.CloseSession(ctx, safeSession)
+	err := e.txConn.Rollback(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
 	return &sqltypes.Result{}, err
 }
@@ -333,7 +333,7 @@ func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession
 		queries[i] = &querypb.BoundQuery{Sql: sql}
 	}
 
-	qr, errs := e.ExecuteMultiShard(ctx, rss, queries, safeSession, false, false)
+	qr, errs := e.ExecuteMultiShard(ctx, rss, queries, safeSession, false /*autocommit*/)
 	err := vterrors.Aggregate(errs)
 	if err != nil {
 		return nil, err
@@ -342,10 +342,10 @@ func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession
 	return qr, nil
 }
 
-// CloseSession closes the current transaction, if any. It is called both for explicit "rollback"
-// statements and implicitly when the mysql server closes the connection.
+// CloseSession releases the current connection, which rollbacks open transactions and closes reserved connections.
+// It is called then the MySQL servers closes the connection to its client.
 func (e *Executor) CloseSession(ctx context.Context, safeSession *SafeSession) error {
-	return e.txConn.Rollback(ctx, safeSession)
+	return e.txConn.Release(ctx, safeSession)
 }
 
 func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) (*sqltypes.Result, error) {
@@ -1653,8 +1653,8 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 }
 
 // ExecuteMultiShard implements the IExecutor interface
-func (e *Executor) ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, notInTransaction bool, autocommit bool) (qr *sqltypes.Result, errs []error) {
-	return e.scatterConn.ExecuteMultiShard(ctx, rss, queries, session, notInTransaction, autocommit)
+func (e *Executor) ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool) (qr *sqltypes.Result, errs []error) {
+	return e.scatterConn.ExecuteMultiShard(ctx, rss, queries, session, autocommit)
 }
 
 // StreamExecuteMulti implements the IExecutor interface
