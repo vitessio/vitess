@@ -23,6 +23,19 @@ func TestAlterCreateIndex(t *testing.T) {
 			},
 		},
 		{
+			"ALTER TABLE tbl_abc ADD INDEX (col1)",
+			TableName{
+				Name: TableIdent{"tbl_abc"},
+			},
+			&IndexSpec{
+				Action: CreateStr,
+				ToName: ColIdent{val: ""},
+				Columns: []*IndexColumn{
+					{Column: ColIdent{val: "col1"}, Order: AscScr},
+				},
+			},
+		},
+		{
 			"ALTER TABLE asdf ADD UNIQUE KEY wxyzIndex (w,X, y , z)",
 			TableName{
 				Name: TableIdent{"asdf"},

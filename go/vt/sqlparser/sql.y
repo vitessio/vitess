@@ -1534,9 +1534,9 @@ alter_table_statement:
     // Change this to a rename statement
     $$ = &DDL{Action: RenameStr, FromTables: TableNames{$4}, ToTables: TableNames{$7}}
   }
-| ALTER ignore_opt TABLE table_name ADD index_or_key sql_id using_opt '(' index_column_list ')' index_option_list_opt
+| ALTER ignore_opt TABLE table_name ADD index_or_key name_opt using_opt '(' index_column_list ')' index_option_list_opt
   {
-    $$ = &DDL{Action: AlterStr, Table: $4, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $7,  Using: $8, Columns: $10, Options: $12}}
+    $$ = &DDL{Action: AlterStr, Table: $4, IndexSpec: &IndexSpec{Action: CreateStr, ToName: NewColIdent($7),  Using: $8, Columns: $10, Options: $12}}
   }
 | ALTER ignore_opt TABLE table_name ADD constraint_symbol_opt key_type index_or_key_opt name_opt using_opt '(' index_column_list ')' index_option_list_opt
   {
