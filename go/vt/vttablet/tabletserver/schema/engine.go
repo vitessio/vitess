@@ -118,6 +118,7 @@ func (se *Engine) Open() error {
 	if se.isOpen {
 		return nil
 	}
+	log.Info("Schema Engine: opening")
 
 	ctx := tabletenv.LocalContext()
 
@@ -180,6 +181,7 @@ func (se *Engine) Close() {
 	se.lastChange = 0
 	se.notifiers = make(map[string]notifier)
 	se.isOpen = false
+	log.Info("Schema Engine: closed")
 }
 
 // MakeNonMaster clears the sequence caches to make sure that

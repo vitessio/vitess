@@ -106,7 +106,7 @@ func (vse *Engine) Open() {
 	if vse.isOpen {
 		return
 	}
-	log.Info("VStreamer is open.")
+	log.Info("VStreamer: opening")
 	vse.isOpen = true
 }
 
@@ -141,7 +141,7 @@ func (vse *Engine) Close() {
 	// Wait only after releasing the lock because the end of every
 	// stream will use the lock to remove the entry from streamers.
 	vse.wg.Wait()
-	log.Info("VStreamer is closed.")
+	log.Info("VStreamer: closed")
 }
 
 func (vse *Engine) vschema() *vindexes.VSchema {

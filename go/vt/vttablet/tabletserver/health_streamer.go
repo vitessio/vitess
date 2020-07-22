@@ -180,15 +180,3 @@ func (hs *healthStreamer) ApppendDetails(details []*kv) []*kv {
 
 	return details
 }
-
-func (hs *healthStreamer) Healthy() string {
-	hs.mu.Lock()
-	defer hs.mu.Unlock()
-	if hs.state.Serving {
-		return ""
-	}
-	if hs.state.RealtimeStats.HealthError == "" {
-		return "uhealthy"
-	}
-	return hs.state.RealtimeStats.HealthError
-}

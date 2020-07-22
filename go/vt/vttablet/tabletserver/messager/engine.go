@@ -79,6 +79,7 @@ func (me *Engine) Open() {
 		return
 	}
 	me.mu.Unlock()
+	log.Info("Messager: opening")
 	// Unlock before invoking RegisterNotifier because it
 	// obtains the same lock.
 	me.se.RegisterNotifier("messages", me.schemaChanged)
@@ -98,6 +99,7 @@ func (me *Engine) Close() {
 		mm.Close()
 	}
 	me.managers = make(map[string]*messageManager)
+	log.Info("Messager: closed")
 }
 
 // Subscribe subscribes to messages from the requested table.

@@ -163,13 +163,12 @@ func (vre *Engine) Open(ctx context.Context) {
 	defer vre.mu.Unlock()
 
 	if vre.ts == nil {
-		log.Info("ts is nil: disabling vreplication engine")
 		return
 	}
 	if vre.isOpen {
 		return
 	}
-	log.Infof("Starting VReplication engine")
+	log.Infof("VReplication Engine: opening")
 
 	// Cancel any existing retry loops.
 	// This guarantees that there will be no more
@@ -267,7 +266,6 @@ func (vre *Engine) Close() {
 	if !vre.isOpen {
 		return
 	}
-	log.Infof("Shutting down VReplication engine")
 
 	vre.ec.Close()
 	vre.cancel()
@@ -284,6 +282,7 @@ func (vre *Engine) Close() {
 	vre.isOpen = false
 
 	vre.updateStats()
+	log.Infof("VReplication Engine: closed")
 }
 
 // Exec executes the query and the related actions.

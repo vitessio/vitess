@@ -70,7 +70,6 @@ func main() {
 
 	// config and mycnf intializations are intertwined.
 	config, mycnf := initConfig(tabletAlias)
-	tabletmanager.InitConfig(config)
 
 	ts := topo.Open()
 	qsc := createTabletServer(config, ts, tabletAlias)
@@ -97,7 +96,7 @@ func main() {
 		UpdateStream:        binlog.NewUpdateStream(ts, tablet.Keyspace, tabletAlias.Cell, qsc.SchemaEngine()),
 		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld),
 	}
-	if err := tm.Start(tablet); err != nil {
+	if err := tm.Start(tablet, config.Healthcheck.IntervalSeconds.Get()); err != nil {
 		log.Exitf("failed to parse -tablet-path: %v", err)
 	}
 	servenv.OnClose(func() {

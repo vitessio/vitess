@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -76,6 +77,7 @@ func (rt *ReplTracker) InitDBConfig(target querypb.Target, mysqld mysqlctl.Mysql
 func (rt *ReplTracker) MakeMaster() {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
+	log.Info("Replication Tracker: going into master mode")
 
 	rt.isMaster = true
 	if rt.mode == tabletenv.Heartbeat {
@@ -88,6 +90,7 @@ func (rt *ReplTracker) MakeMaster() {
 func (rt *ReplTracker) MakeNonMaster() {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
+	log.Info("Replication Tracker: going into non-master mode")
 
 	rt.isMaster = false
 	switch rt.mode {
@@ -104,6 +107,7 @@ func (rt *ReplTracker) MakeNonMaster() {
 func (rt *ReplTracker) Close() {
 	rt.hw.Close()
 	rt.hr.Close()
+	log.Info("Replication Tracker: closed")
 }
 
 // Status reports the replication status.

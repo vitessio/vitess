@@ -108,8 +108,8 @@ func (w *heartbeatWriter) Open() {
 	if w.isOpen {
 		return
 	}
+	log.Info("Hearbeat Writer: opening")
 
-	log.Info("Beginning heartbeat writes")
 	w.pool.Open(w.env.Config().DB.AppWithDB(), w.env.Config().DB.DbaWithDB(), w.env.Config().DB.AppDebugWithDB())
 	w.ticks.Start(w.writeHeartbeat)
 	w.isOpen = true
@@ -125,10 +125,11 @@ func (w *heartbeatWriter) Close() {
 	if !w.isOpen {
 		return
 	}
+
 	w.ticks.Stop()
 	w.pool.Close()
-	log.Info("Stopped heartbeat writes.")
 	w.isOpen = false
+	log.Info("Hearbeat Writer: closed")
 }
 
 // bindHeartbeatVars takes a heartbeat write (insert or update) and

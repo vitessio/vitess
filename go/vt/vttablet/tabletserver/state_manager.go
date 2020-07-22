@@ -45,6 +45,16 @@ const (
 	StateServing
 )
 
+func (state servingState) String() string {
+	switch state {
+	case StateServing:
+		return "Serving"
+	case StateNotServing:
+		return "Not Serving"
+	}
+	return "Not connected to mysql"
+}
+
 // transitionRetryInterval is for tests.
 var transitionRetryInterval = 1 * time.Second
 
@@ -177,7 +187,7 @@ func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, terTime
 		state = StateNotConnected
 	}
 
-	log.Infof("Starting transition to %v %v, timestamp: %v", tabletType, stateName(state), terTimestamp)
+	log.Infof("Starting transition to %v %v, timestamp: %v", tabletType, state, terTimestamp)
 	if sm.mustTransition(tabletType, terTimestamp, state, reason) {
 		return sm.execTransition(tabletType, state)
 	}
@@ -228,7 +238,7 @@ func (sm *stateManager) execTransition(tabletType topodatapb.TabletType, state s
 	sm.transitionErr = err
 	sm.mu.Unlock()
 	if err != nil {
-		sm.retryTransition(fmt.Sprintf("Error transitioning to the desired state: %v, %v, will keep retrying: %v", tabletType, stateName(state), err))
+		sm.retryTransition(fmt.Sprintf("Error transitioning to the desired state: %v, %v, will keep retrying: %v", tabletType, state, err))
 	}
 	return err
 }
@@ -521,9 +531,9 @@ func (sm *stateManager) setState(tabletType topodatapb.TabletType, state serving
 
 func (sm *stateManager) stateStringLocked(tabletType topodatapb.TabletType, state servingState) string {
 	if tabletType != topodatapb.TabletType_MASTER {
-		return fmt.Sprintf("%v: %v", tabletType, stateName(state))
+		return fmt.Sprintf("%v: %v", tabletType, state)
 	}
-	return fmt.Sprintf("%v: %v, %v", tabletType, stateName(state), sm.terTimestamp.Local().Format("Jan 2, 2006 at 15:04:05 (MST)"))
+	return fmt.Sprintf("%v: %v, %v", tabletType, state, sm.terTimestamp.Local().Format("Jan 2, 2006 at 15:04:05 (MST)"))
 }
 
 func (sm *stateManager) handleGracePeriod(tabletType topodatapb.TabletType) {
@@ -593,6 +603,7 @@ func (sm *stateManager) refreshReplHealthLocked() (time.Duration, error) {
 // otherwise remains the same. Any subsequent calls to SetServingType will
 // cause the tabletserver to exit this mode.
 func (sm *stateManager) EnterLameduck() {
+	log.Info("State: entering lameduck")
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	sm.lameduck = true
@@ -603,6 +614,7 @@ func (sm *stateManager) ExitLameduck() {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	sm.lameduck = false
+	log.Info("State: exiting lameduck")
 }
 
 // IsServing returns true if TabletServer is in SERVING state.
@@ -698,15 +710,4 @@ func (sm *stateManager) IsServingString() string {
 		return "SERVING"
 	}
 	return "NOT_SERVING"
-}
-
-// stateName returns a string representation of the state.
-func stateName(state servingState) string {
-	switch state {
-	case StateServing:
-		return "Serving"
-	case StateNotServing:
-		return "Not Serving"
-	}
-	return "Not connected to mysql"
 }

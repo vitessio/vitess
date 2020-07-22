@@ -101,6 +101,7 @@ func (ts *tmState) Close() {
 func (ts *tmState) RefreshFromTopo(ctx context.Context) error {
 	span, ctx := trace.NewSpan(ctx, "tmState.refreshFromTopo")
 	defer span.Finish()
+	log.Info("Refreshing from Topo")
 
 	shardInfo, err := ts.tm.TopoServer.GetShard(ctx, ts.Keyspace(), ts.Shard())
 	if err != nil {
@@ -150,6 +151,7 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.TabletType) error {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
+	log.Infof("Changing Tablet Type: %v", tabletType)
 
 	if tabletType == topodatapb.TabletType_MASTER {
 		masterTermStartTime := logutil.TimeToProto(time.Now())

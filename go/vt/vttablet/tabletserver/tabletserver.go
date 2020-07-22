@@ -1402,8 +1402,8 @@ func (tsv *TabletServer) registerHealthzHealthHandler() {
 			acl.SendError(w, err)
 			return
 		}
-		if state := tsv.hs.Healthy(); state != "" {
-			http.Error(w, fmt.Sprintf("500 internal server error: tablet manager not healthy: %v", state), http.StatusInternalServerError)
+		if !tsv.sm.IsServing() {
+			http.Error(w, "500 internal server error: vttablet is not serving", http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Length", fmt.Sprintf("%v", len(okMessage)))

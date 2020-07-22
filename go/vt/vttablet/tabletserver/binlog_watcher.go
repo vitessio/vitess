@@ -60,6 +60,7 @@ func (blw *BinlogWatcher) Open() {
 	if blw.cancel != nil || !blw.watchReplication {
 		return
 	}
+	log.Info("Binlog Watcher: opening")
 
 	ctx, cancel := context.WithCancel(tabletenv.LocalContext())
 	blw.cancel = cancel
@@ -75,6 +76,7 @@ func (blw *BinlogWatcher) Close() {
 	blw.cancel()
 	blw.cancel = nil
 	blw.wg.Wait()
+	log.Info("Binlog Watcher: closed")
 }
 
 func (blw *BinlogWatcher) process(ctx context.Context) {

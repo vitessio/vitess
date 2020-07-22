@@ -154,6 +154,7 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 func (te *TxEngine) AcceptReadWrite() error {
 	te.beginRequests.Wait()
 	te.stateLock.Lock()
+	log.Info("TxEngine: AcceptReadWrite")
 
 	switch te.state {
 	case AcceptingReadAndWrite:
@@ -190,6 +191,7 @@ func (te *TxEngine) AcceptReadWrite() error {
 // If the engine is currently accepting full read and write transactions, they need to
 // be rolled back.
 func (te *TxEngine) AcceptReadOnly() error {
+	log.Info("TxEngine: AcceptReadOnly")
 	te.beginRequests.Wait()
 	te.stateLock.Lock()
 	switch te.state {
@@ -366,6 +368,7 @@ func (te *TxEngine) Close() {
 	defer te.stateLock.Unlock()
 	te.shutdown(false)
 	te.state = NotServing
+	log.Info("TxEngine: closed")
 }
 
 // Close closes the TxEngine. If the immediate flag is on,
