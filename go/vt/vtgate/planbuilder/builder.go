@@ -131,6 +131,7 @@ type ContextVSchema interface {
 	TabletType() topodatapb.TabletType
 	TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error)
 	AnyKeyspace() (*vindexes.Keyspace, error)
+	FirstSortedKeyspace() (*vindexes.Keyspace, error)
 }
 
 //-------------------------------------------------------------------------

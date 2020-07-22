@@ -322,6 +322,10 @@ func (vw *vschemaWrapper) AnyKeyspace() (*vindexes.Keyspace, error) {
 	return vw.DefaultKeyspace()
 }
 
+func (vw *vschemaWrapper) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
+	panic("implement me")
+}
+
 func (vw *vschemaWrapper) TargetString() string {
 	return "targetString"
 }
