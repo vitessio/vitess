@@ -62,12 +62,11 @@ func TestStatsUpdate(t *testing.T) {
 	}
 
 	// Delete tablet2.
-	tablet2Stats1.Up = false
 	tabletStatsCache.StatsUpdate(tablet2Stats1)
 	results5 := tabletStatsCache.statuses["ks1"]["-80"]["cell1"][topodatapb.TabletType_REPLICA]
 	for _, stat := range results5 {
 		if stat.DeepEqual(tablet2Stats1) {
-			t.Errorf("not deleleted from statusesByAliases")
+			t.Errorf("not deleted from statusesByAliases")
 		}
 	}
 
@@ -77,7 +76,6 @@ func TestStatsUpdate(t *testing.T) {
 	}
 
 	// Delete tablet1. List of known cells should be empty now.
-	tablet1Stats2.Up = false
 	tabletStatsCache.StatsUpdate(tablet1Stats2)
 	if ok {
 		t.Errorf("not deleted from cells")
@@ -427,7 +425,7 @@ func TestTopologyInfo(t *testing.T) {
 }
 
 // tabletStats will create a discovery.LegacyTabletStats object.
-func tabletStats(keyspace, cell, shard string, tabletType topodatapb.TabletType, uid uint32) *discovery.LegacyTabletStats {
+func tabletStats(keyspace, cell, shard string, tabletType topodatapb.TabletType, uid uint32) *discovery.TabletHealth {
 	target := &querypb.Target{
 		Keyspace:   keyspace,
 		Shard:      shard,
@@ -445,10 +443,9 @@ func tabletStats(keyspace, cell, shard string, tabletType topodatapb.TabletType,
 		// uid is used for ReplicationLagSeconds to give it a unique value.
 		ReplicationLagSeconds: uid,
 	}
-	stats := &discovery.LegacyTabletStats{
+	stats := &discovery.TabletHealth{
 		Tablet:    tablet,
 		Target:    target,
-		Up:        true,
 		Serving:   true,
 		Stats:     realtimeStats,
 		LastError: nil,

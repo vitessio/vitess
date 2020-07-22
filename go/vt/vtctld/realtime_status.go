@@ -18,6 +18,7 @@ package vtctld
 
 import (
 	"fmt"
+	"strings"
 
 	"context"
 
@@ -28,34 +29,43 @@ import (
 
 // realtimeStats holds the objects needed to obtain realtime health stats of tablets.
 type realtimeStats struct {
-	healthCheck discovery.LegacyHealthCheck
+	healthCheck discovery.HealthCheck
 	*tabletStatsCache
 	cellWatchers []*discovery.LegacyTopologyWatcher
 }
 
-func newRealtimeStats(ts *topo.Server) (*realtimeStats, error) {
-	hc := discovery.NewLegacyHealthCheck(*vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
+func newRealtimeStats(ctx context.Context, ts *topo.Server) (*realtimeStats, error) {
+	// Get the list of all tablets from all cells and monitor the topology for added or removed tablets with a CellTabletsWatcher.
+	cells, err := ts.GetKnownCells(context.Background())
+	if err != nil {
+		return &realtimeStats{}, fmt.Errorf("error when getting cells: %v", err)
+	}
+	cellsToWatch := strings.Join(cells, ",")
+
+	hc := discovery.NewHealthCheck(ctx, *vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout, ts, "", cellsToWatch)
 	tabletStatsCache := newTabletStatsCache()
-	// sendDownEvents is set to true here, as we want to receive
-	// Up=False events for a tablet.
-	hc.SetListener(tabletStatsCache, true)
 	r := &realtimeStats{
 		healthCheck:      hc,
 		tabletStatsCache: tabletStatsCache,
 	}
+	hcChan := hc.Subscribe()
+	hcCtx, hcCancel := context.WithCancel(ctx)
+	go func(ctx context.Context, c chan *discovery.TabletHealth, stats *realtimeStats) {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case result := <-hcChan:
+				if result == nil {
+					// If result is nil it must mean the channel has been closed. Stop goroutine in that case
+					hcCancel()
+					return
+				}
+				stats.StatsUpdate(result)
+			}
+		}
 
-	// Get the list of all tablets from all cells and monitor the topology for added or removed tablets with a CellTabletsWatcher.
-	cells, err := ts.GetKnownCells(context.Background())
-	if err != nil {
-		return r, fmt.Errorf("error when getting cells: %v", err)
-	}
-	var watchers []*discovery.LegacyTopologyWatcher
-	for _, cell := range cells {
-		watcher := discovery.NewLegacyCellTabletsWatcher(context.Background(), ts, hc, cell, *vtctl.HealthCheckTopologyRefresh, true /* refreshKnownTablets */, discovery.DefaultTopoReadConcurrency)
-		watchers = append(watchers, watcher)
-	}
-	r.cellWatchers = watchers
-
+	}(hcCtx, hcChan, r)
 	return r, nil
 }
 

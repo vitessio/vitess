@@ -155,7 +155,6 @@ func TestAPI(t *testing.T) {
 					"replication_lag_seconds": 100
 				},
 				"serving": true,
-				"up": true
 			},
 			"url": "http://mysql1-cell1.test.net:100"
 		},
@@ -223,7 +222,6 @@ func TestAPI(t *testing.T) {
 						"replication_lag_seconds": 100
 					},
 					"serving": true,
-					"up": true
 				},
 				"url": "http://mysql1-cell1.test.net:100"
 			}
@@ -375,7 +373,7 @@ func TestAPI(t *testing.T) {
 
 		// Tablet Health
 		{"GET", "tablet_health/cell1/100", "", `{ "Key": "", "Tablet": { "alias": { "cell": "cell1", "uid": 100 },"port_map": { "vt": 100 }, "keyspace": "ks1", "shard": "-80", "type": 2},
-		  "Name": "", "Target": { "keyspace": "ks1", "shard": "-80", "tablet_type": 2 }, "Up": true, "Serving": true, "TabletExternallyReparentedTimestamp": 0,
+		  "Name": "", "Target": { "keyspace": "ks1", "shard": "-80", "tablet_type": 2 }, "Serving": true, "TabletExternallyReparentedTimestamp": 0,
 		  "Stats": { "replication_lag_seconds": 100 }, "LastError": null }`, http.StatusOK},
 		{"GET", "tablet_health/cell1", "", "can't get tablet_health: invalid tablet_health path: \"cell1\"  expected path: /tablet_health/<cell>/<uid>", http.StatusInternalServerError},
 		{"GET", "tablet_health/cell1/gh", "", "can't get tablet_health: incorrect uid", http.StatusInternalServerError},

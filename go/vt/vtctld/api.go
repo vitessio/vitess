@@ -67,7 +67,7 @@ type TabletStats struct {
 	LastError string                 `json:"last_error,omitempty"`
 	Realtime  *querypb.RealtimeStats `json:"realtime,omitempty"`
 	Serving   bool                   `json:"serving"`
-	Up        bool                   `json:"up"`
+	//Up        bool                   `json:"up"`
 }
 
 // TabletWithStatsAndURL wraps topo.Tablet, adding a URL property and optional realtime stats.
@@ -115,7 +115,7 @@ func newTabletWithStatsAndURL(t *topodatapb.Tablet, realtimeStats *realtimeStats
 			tablet.Stats = &TabletStats{
 				Realtime: stats.Stats,
 				Serving:  stats.Serving,
-				Up:       stats.Up,
+				//Up:       stats.Up,
 			}
 			if stats.LastError != nil {
 				tablet.Stats.LastError = stats.LastError.Error()
