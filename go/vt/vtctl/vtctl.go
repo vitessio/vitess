@@ -310,10 +310,10 @@ var commands = []commandGroup{
 				"[-ping-tablets] <keyspace name>",
 				"Validates that all nodes reachable from the specified keyspace are consistent."},
 			{"Reshard", commandReshard,
-				"[-skip_schema_copy] <keyspace.workflow> <source_shards> <target_shards>",
-				"Start a Resharding process. Example: Reshard ks.workflow001 '0' '-80,80-'"},
+				"[-cells=<cells>] [-tablet_types=<source_tablet_types>] [-skip_schema_copy] <keyspace.workflow> <source_shards> <target_shards>",
+				"Start a Resharding process. Example: Reshard -cells 'zone1,alias1' -tablet_types='master,replica,rdonly'  ks.workflow001 '0' '-80,80-'"},
 			{"MoveTables", commandMoveTables,
-				"[-cell=<cell>] [-tablet_types=<source_tablet_types>] -workflow=<workflow> <source_keyspace> <target_keyspace> <table_specs>",
+				"[-cells=<cells>] [-tablet_types=<source_tablet_types>] -workflow=<workflow> <source_keyspace> <target_keyspace> <table_specs>",
 				`Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{""column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{""column": "id2", "name": "hash"}]}}`},
 			{"DropSources", commandDropSources,
 				"[-dry_run] [-rename_tables] <keyspace.workflow>",
@@ -1854,6 +1854,8 @@ func commandValidateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlag
 }
 
 func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	cells := subFlags.String("cells", "", "Cell(s) or CellAlias(es) (comma-separated) to replicate from.")
+	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from.")
 	skipSchemaCopy := subFlags.Bool("skip_schema_copy", false, "Skip copying of schema to targets")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -1867,12 +1869,12 @@ func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 	}
 	source := strings.Split(subFlags.Arg(1), ",")
 	target := strings.Split(subFlags.Arg(2), ",")
-	return wr.Reshard(ctx, keyspace, workflow, source, target, *skipSchemaCopy)
+	return wr.Reshard(ctx, keyspace, workflow, source, target, *skipSchemaCopy, *cells, *tabletTypes)
 }
 
 func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	workflow := subFlags.String("workflow", "", "Workflow name. Will be used to later migrate traffic.")
-	cell := subFlags.String("cell", "", "Cell to replicate from.")
+	cells := subFlags.String("cells", "", "Cell(s) or CellAlias(es) (comma-separated) to replicate from.")
 	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -1886,7 +1888,7 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	source := subFlags.Arg(0)
 	target := subFlags.Arg(1)
 	tableSpecs := subFlags.Arg(2)
-	return wr.MoveTables(ctx, *workflow, source, target, tableSpecs, *cell, *tabletTypes)
+	return wr.MoveTables(ctx, *workflow, source, target, tableSpecs, *cells, *tabletTypes)
 }
 
 func commandCreateLookupVindex(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
