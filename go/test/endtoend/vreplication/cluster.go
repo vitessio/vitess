@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -20,7 +22,8 @@ import (
 )
 
 var (
-	vtdataroot string
+	originalVtdataroot string
+	vtdataroot         string
 )
 
 var globalConfig = struct {
@@ -81,9 +84,20 @@ type Tablet struct {
 	DbServer *cluster.MysqlctlProcess
 }
 
+func init() {
+	originalVtdataroot = os.Getenv("VTDATAROOT")
+}
+
 func initGlobals() {
-	vtdataroot = os.Getenv("VTDATAROOT")
+	rand.Seed(time.Now().UTC().UnixNano())
+	dirSuffix := 100000 + rand.Intn(999999-100000) // 6 digits
+	vtdataroot = path.Join(originalVtdataroot, fmt.Sprintf("vreple2e_%d", dirSuffix))
 	globalConfig.tmpDir = vtdataroot + "/tmp"
+	if _, err := os.Stat(vtdataroot); os.IsNotExist(err) {
+		os.Mkdir(vtdataroot, 0700)
+	}
+	_ = os.Setenv("VTDATAROOT", vtdataroot)
+	fmt.Printf("VTDATAROOT is %s\n", vtdataroot)
 }
 
 // NewVitessCluster creates an entire VitessCluster for e2e testing
@@ -186,7 +200,7 @@ func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace,
 		vc.Topo.Port,
 		globalConfig.hostname,
 		globalConfig.tmpDir,
-		nil,
+		[]string{"-queryserver-config-schema-reload-time", "5"}, //FIXME: for multi-cell initial schema doesn't seem to load without this
 		false)
 	assert.NotNil(t, vttablet)
 	vttablet.SupportsBackup = false
@@ -345,16 +359,13 @@ func (vc *VitessCluster) TearDown() {
 			}
 		}
 	}
-	var dbProcesses []*exec.Cmd
 	for _, cell := range vc.Cells {
 		for _, keyspace := range cell.Keyspaces {
 			for _, shard := range keyspace.Shards {
 				for _, tablet := range shard.Tablets {
 					if tablet.DbServer != nil && tablet.DbServer.TabletUID > 0 {
-						if proc, err := tablet.DbServer.StopProcess(); err != nil {
+						if _, err := tablet.DbServer.StopProcess(); err != nil {
 							log.Errorf("Error stopping mysql process: %s", err.Error())
-						} else {
-							dbProcesses = append(dbProcesses, proc)
 						}
 					}
 					fmt.Printf("Stopping vttablet %s\n", tablet.Name)
@@ -366,18 +377,12 @@ func (vc *VitessCluster) TearDown() {
 		}
 	}
 
-	for _, proc := range dbProcesses {
-		if err := proc.Wait(); err != nil {
-			fmt.Printf("Error waiting for mysql to stop: %s\n", err.Error())
-		}
-	}
-
 	if err := vc.Vtctld.TearDown(); err != nil {
 		fmt.Printf("Error stopping Vtctld:  %s\n", err.Error())
 	}
 
 	for _, cell := range vc.Cells {
-		if err := vc.Topo.TearDown(cell.Name, vtdataroot, vtdataroot, false, "etcd2"); err != nil {
+		if err := vc.Topo.TearDown(cell.Name, originalVtdataroot, vtdataroot, false, "etcd2"); err != nil {
 			fmt.Printf("Error in etcd teardown - %s\n", err.Error())
 		}
 	}
