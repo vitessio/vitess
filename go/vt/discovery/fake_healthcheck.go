@@ -21,6 +21,10 @@ import (
 	"sort"
 	"sync"
 
+	"vitess.io/vitess/go/sync2"
+
+	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -31,6 +35,10 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+)
+
+var (
+	currentTabletUID sync2.AtomicInt32
 )
 
 // This file contains the definitions for a FakeHealthCheck class to
@@ -53,8 +61,7 @@ type FakeHealthCheck struct {
 }
 
 type fhcItem struct {
-	ts   *TabletHealth
-	conn queryservice.QueryService
+	ts *TabletHealth
 }
 
 //
@@ -72,7 +79,13 @@ func (fhc *FakeHealthCheck) WaitForAllServingTablets(ctx context.Context, target
 
 // GetHealthyTabletStats is not implemented.
 func (fhc *FakeHealthCheck) GetHealthyTabletStats(target *querypb.Target) []*TabletHealth {
-	return nil
+	result := make([]*TabletHealth, 0)
+	for _, item := range fhc.items {
+		if proto.Equal(item.ts.Target, target) {
+			result = append(result, item.ts)
+		}
+	}
+	return result
 }
 
 // Subscribe is not implemented.
@@ -132,13 +145,15 @@ func (fhc *FakeHealthCheck) ReplaceTablet(old, new *topodatapb.Tablet) {
 
 // TabletConnection returns the TabletConn of the given tablet.
 func (fhc *FakeHealthCheck) TabletConnection(alias *topodatapb.TabletAlias) (queryservice.QueryService, error) {
-	key := topoproto.TabletAliasString(alias)
+	aliasStr := topoproto.TabletAliasString(alias)
 	fhc.mu.RLock()
 	defer fhc.mu.RUnlock()
-	if item := fhc.items[key]; item != nil {
-		return item.conn, nil
+	for _, item := range fhc.items {
+		if proto.Equal(alias, item.ts.Tablet.Alias) {
+			return item.ts.Conn, nil
+		}
 	}
-	return nil, vterrors.New(vtrpc.Code_NOT_FOUND, "tablet not found")
+	return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet %v not found", aliasStr)
 }
 
 // CacheStatus returns the status for each tablet
@@ -180,7 +195,10 @@ func (fhc *FakeHealthCheck) Reset() {
 // The Listener is called, as if AddTablet had been called.
 // For flexibility the connection is created via a connFactory callback
 func (fhc *FakeHealthCheck) AddFakeTablet(cell, host string, port int32, keyspace, shard string, tabletType topodatapb.TabletType, serving bool, reparentTS int64, err error, connFactory func(*topodatapb.Tablet) queryservice.QueryService) queryservice.QueryService {
-	t := topo.NewTablet(0, cell, host)
+	// tabletUID must be unique
+	currentTabletUID.Add(1)
+	uid := currentTabletUID.Get()
+	t := topo.NewTablet(uint32(uid), cell, host)
 	t.Keyspace = keyspace
 	t.Shard = shard
 	t.Type = tabletType
@@ -208,7 +226,7 @@ func (fhc *FakeHealthCheck) AddFakeTablet(cell, host string, port int32, keyspac
 	item.ts.Stats = &querypb.RealtimeStats{}
 	item.ts.LastError = err
 	conn := connFactory(t)
-	item.conn = conn
+	item.ts.Conn = conn
 
 	return conn
 }
