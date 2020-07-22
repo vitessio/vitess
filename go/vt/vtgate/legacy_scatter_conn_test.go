@@ -97,7 +97,7 @@ func TestLegacyExecuteFailOnAutocommit(t *testing.T) {
 		},
 		Autocommit: false,
 	}
-	_, errs := sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(session), true /*autocommit*/)
+	_, errs := sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(session), true /*autocommit*/, false)
 	err := vterrors.Aggregate(errs)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "in autocommit mode, transactionID should be zero but was: 123")
@@ -121,7 +121,7 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 			}
 		}
 
-		qr, errs := sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(nil), false /*autocommit*/)
+		qr, errs := sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(nil), false /*autocommit*/, false)
 		return qr, vterrors.Aggregate(errs)
 	})
 }
@@ -287,6 +287,19 @@ func TestMaxMemoryRows(t *testing.T) {
 	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestMaxMemoryRows", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestMaxMemoryRows", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 
+	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+	rss, _, err := res.ResolveDestinations(ctx, "TestMaxMemoryRows", topodatapb.TabletType_REPLICA, nil,
+		[]key.Destination{key.DestinationShard("0"), key.DestinationShard("1")})
+	require.NoError(t, err)
+
+	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	queries := []*querypb.BoundQuery{{
+		Sql:           "query1",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "query1",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
 	tworows := &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
@@ -296,26 +309,26 @@ func TestMaxMemoryRows(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     1,
 	}
-	sbc0.SetResults([]*sqltypes.Result{tworows, tworows})
-	sbc1.SetResults([]*sqltypes.Result{tworows, tworows})
 
-	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-	rss, _, err := res.ResolveDestinations(ctx, "TestMaxMemoryRows", topodatapb.TabletType_REPLICA, nil,
-		[]key.Destination{key.DestinationShard("0"), key.DestinationShard("1")})
-	require.NoError(t, err)
+	testCases := []struct {
+		ignoreMaxMemoryRows bool
+		err                 string
+	}{
+		{true, ""},
+		{false, "in-memory row count exceeded allowed limit of 3"},
+	}
 
-	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	for _, test := range testCases {
+		sbc0.SetResults([]*sqltypes.Result{tworows, tworows})
+		sbc1.SetResults([]*sqltypes.Result{tworows, tworows})
 
-	want := "in-memory row count exceeded allowed limit of 3"
-	queries := []*querypb.BoundQuery{{
-		Sql:           "query1",
-		BindVariables: map[string]*querypb.BindVariable{},
-	}, {
-		Sql:           "query1",
-		BindVariables: map[string]*querypb.BindVariable{},
-	}}
-	_, errs := sc.ExecuteMultiShard(ctx, rss, queries, session, false)
-	assert.EqualError(t, errs[0], want)
+		_, errs := sc.ExecuteMultiShard(ctx, rss, queries, session, false, test.ignoreMaxMemoryRows)
+		if test.ignoreMaxMemoryRows {
+			require.NoError(t, err)
+		} else {
+			assert.EqualError(t, errs[0], test.err)
+		}
+	}
 }
 
 func TestReservedBeginTableDriven(t *testing.T) {
@@ -515,7 +528,7 @@ func executeOnShards(t *testing.T, res *srvtopo.Resolver, keyspace string, sc *S
 		})
 	}
 
-	_, errs := sc.ExecuteMultiShard(ctx, rss, queries, session, false)
+	_, errs := sc.ExecuteMultiShard(ctx, rss, queries, session, false, false)
 	require.Empty(t, errs)
 }
 
@@ -557,7 +570,7 @@ func TestMultiExecs(t *testing.T) {
 		},
 	}
 
-	_, _ = sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(nil), false)
+	_, _ = sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(nil), false, false)
 	if len(sbc0.Queries) == 0 || len(sbc1.Queries) == 0 {
 		t.Fatalf("didn't get expected query")
 	}
@@ -651,27 +664,27 @@ func TestScatterConnSingleDB(t *testing.T) {
 	// TransactionMode_SINGLE in session
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, TransactionMode: vtgatepb.TransactionMode_SINGLE})
 	queries := []*querypb.BoundQuery{{Sql: "query1"}}
-	_, errors := sc.ExecuteMultiShard(ctx, rss0, queries, session, false)
+	_, errors := sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
 	require.Empty(t, errors)
-	_, errors = sc.ExecuteMultiShard(ctx, rss1, queries, session, false)
+	_, errors = sc.ExecuteMultiShard(ctx, rss1, queries, session, false, false)
 	require.Error(t, errors[0])
 	assert.Contains(t, errors[0].Error(), want)
 
 	// TransactionMode_SINGLE in txconn
 	sc.txConn.mode = vtgatepb.TransactionMode_SINGLE
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	_, errors = sc.ExecuteMultiShard(ctx, rss0, queries, session, false)
+	_, errors = sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
 	require.Empty(t, errors)
-	_, errors = sc.ExecuteMultiShard(ctx, rss1, queries, session, false)
+	_, errors = sc.ExecuteMultiShard(ctx, rss1, queries, session, false, false)
 	require.Error(t, errors[0])
 	assert.Contains(t, errors[0].Error(), want)
 
 	// TransactionMode_MULTI in txconn. Should not fail.
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	_, errors = sc.ExecuteMultiShard(ctx, rss0, queries, session, false)
+	_, errors = sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
 	require.Empty(t, errors)
-	_, errors = sc.ExecuteMultiShard(ctx, rss1, queries, session, false)
+	_, errors = sc.ExecuteMultiShard(ctx, rss1, queries, session, false, false)
 	require.Empty(t, errors)
 }
 
