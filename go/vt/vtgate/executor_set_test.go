@@ -300,12 +300,13 @@ func TestExecutorSet(t *testing.T) {
 }
 
 func TestExecutorSetOp(t *testing.T) {
-	executor, sbc1, _, _ := createLegacyExecutorEnv()
+	executor, _, _, sbclookup := createLegacyExecutorEnv()
 
+	sbclookup.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("'STRICT_ALL_TABLES'", "varchar"), "STRICT_ALL_TABLES"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"),
+	})
 	//sbc1.SetResults([]*sqltypes.Result{
-	//	sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"),
-	//})
-	//sbclookup.SetResults([]*sqltypes.Result{
 	//	sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"),
 	//})
 	testcases := []struct {
@@ -313,18 +314,20 @@ func TestExecutorSetOp(t *testing.T) {
 		warning []*querypb.QueryWarning
 		sysVars map[string]string
 	}{{
-		in: "set sql_mode = 'STRICT_ALL_TABLES'",
+		in: "set big_tables = 1",
 		warning: []*querypb.QueryWarning{{
 			Code:    mysql.ERNotSupportedYet,
-			Message: "Ignored inapplicable SET sql_mode = 'STRICT_ALL_TABLES'",
+			Message: "Ignored inapplicable SET big_tables = 1",
 		}},
+	}, {
+		in:      "set sql_mode = 'STRICT_ALL_TABLES'",
+		sysVars: map[string]string{"sql_mode": "STRICT_ALL_TABLES"},
 	}, {
 		in:      "set sql_safe_updates = 1",
 		sysVars: map[string]string{"sql_safe_updates": "1"},
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
-			sbc1.SetResults([]*sqltypes.Result{{}})
 			session := NewAutocommitSession(masterSession)
 			session.TargetString = KsTestUnsharded
 			_, err := executor.Execute(
