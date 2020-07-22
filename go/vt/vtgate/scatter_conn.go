@@ -245,12 +245,12 @@ func (stc *ScatterConn) ExecuteMultiShard(
 
 func getQueryService(rs *srvtopo.ResolvedShard, info *shardActionInfo) (queryservice.QueryService, error) {
 	_, usingLegacyGw := rs.Gateway.(*DiscoveryGateway)
-	//if usingLegacyGw {
-	//	switch info.actionNeeded {
-	//	case reserve, reserveBegin:
-	//		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "reserved connections are not supported on old gen gateway")
-	//	}
-	//}
+	if usingLegacyGw {
+		switch info.actionNeeded {
+		case reserve, reserveBegin:
+			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "reserved connections are not supported on old gen gateway")
+		}
+	}
 	if usingLegacyGw || info.alias == nil {
 		return rs.Gateway, nil
 	}

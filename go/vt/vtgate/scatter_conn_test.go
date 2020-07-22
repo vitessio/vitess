@@ -19,6 +19,9 @@ package vtgate
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/vt/key"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
@@ -94,4 +97,28 @@ func TestExecuteFailOnAutocommit(t *testing.T) {
 	require.Contains(t, err.Error(), "in autocommit mode, transactionID should be zero but was: 123")
 	utils.MustMatch(t, 0, len(sbc0.Queries), "")
 	utils.MustMatch(t, []*querypb.BoundQuery{queries[1]}, sbc1.Queries, "")
+}
+
+func TestReservedOnMultiReplica(t *testing.T) {
+	keyspace := "keyspace"
+	createSandbox(keyspace)
+	hc := discovery.NewFakeHealthCheck()
+	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sbc0_1 := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
+	sbc0_2 := hc.AddTestTablet("aa", "2", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
+	//	sbc1 := hc.AddTestTablet("aa", "1", 1, keyspace, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
+
+	// empty results
+	sbc0_1.SetResults([]*sqltypes.Result{{}})
+	sbc0_2.SetResults([]*sqltypes.Result{{}})
+
+	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+
+	session := NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
+	destinations := []key.Destination{key.DestinationShard("0")}
+	for i := 0; i < 10; i++ {
+		executeOnShards(t, res, keyspace, sc, session, destinations)
+		assert.EqualValues(t, 1, sbc0_1.ReserveCount.Get()+sbc0_2.ReserveCount.Get(), "sbc0 reserve count")
+		assert.EqualValues(t, 0, sbc0_1.BeginCount.Get()+sbc0_2.BeginCount.Get(), "sbc0 begin count")
+	}
 }
