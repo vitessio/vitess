@@ -35,9 +35,71 @@ type planFunc = func(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.Se
 
 var sysVarPlanningFunc = map[string]planFunc{}
 
-var ignoreThese = []string{
-	"default_storage_engine",
+var notSupported = []string{
+	"auto_increment_increment",
+	"auto_increment_offset",
+	"binlog_direct_non_transactional_updates",
+	"innodb_ft_enable_stopword",
+	"innodb_ft_user_stopword_table",
+	"max_points_in_geometry",
+	"max_sp_recursion_depth",
+	"myisam_repair_threads",
+	"myisam_sort_buffer_size",
+	"myisam_stats_method",
+	"ndb_allow_copying_alter_table",
+	"ndb_autoincrement_prefetch_sz",
+	"ndb_blob_read_batch_bytes",
+	"ndb_blob_write_batch_bytes",
+	"ndb_deferred_constraints",
+	"ndb_force_send",
+	"ndb_fully_replicated",
+	"ndb_index_stat_enable",
+	"ndb_index_stat_option",
+	"ndb_join_pushdown",
+	"ndb_log_bin",
+	"ndb_log_exclusive_reads",
+	"ndb_row_checksum",
+	"ndb_use_exact_count",
+	"ndb_use_transactions",
+	"ndbinfo_max_bytes",
+	"ndbinfo_max_rows",
+	"ndbinfo_show_hidden",
+	"ndbinfo_table_prefix",
+	"old_alter_table",
+	"preload_buffer_size",
+	"rbr_exec_mode",
+	"sql_log_off",
+	"transaction_write_set_extraction",
+	"audit_log_read_buffer_size",
 }
+
+var ignoreThese = []string{
+	"big_tables",
+	"bulk_insert_buffer_size",
+	"debug",
+	"default_storage_engine",
+	"default_tmp_storage_engine",
+	"innodb_strict_mode",
+	"innodb_support_xa",
+	"innodb_table_locks",
+	"innodb_tmpdir",
+	"join_buffer_size",
+	"keep_files_on_create",
+	"lc_messages",
+	"long_query_time",
+	"low_priority_updates",
+	"max_delayed_threads",
+	"max_insert_delayed_threads",
+	"multi_range_count",
+	"net_buffer_length",
+	"new",
+	"query_cache_type",
+	"query_cache_wlock_invalidate",
+	"query_prealloc_size",
+	"sql_buffer_result",
+	"transaction_alloc_block_size",
+}
+
 var saveSettingsToSession = []string{
 	"sql_mode",
 	"sql_safe_updates",
@@ -48,10 +110,14 @@ func init() {
 	forSettings(ignoreThese, buildSetOpIgnore)
 	forSettings(saveSettingsToSession, buildSetOpVarSet)
 	forSettings(allowSetIfValueAlreadySet, buildSetOpCheckAndIgnore)
+	forSettings(notSupported, buildNotSupported)
 }
 
 func forSettings(settings []string, f planFunc) {
 	for _, setting := range settings {
+		if _, alreadyExists := sysVarPlanningFunc[setting]; alreadyExists {
+			panic("bug in set plan init - " + setting + " aleady configured")
+		}
 		sysVarPlanningFunc[setting] = f
 	}
 }
@@ -139,6 +205,10 @@ func planTabletInput(vschema ContextVSchema, tabletExpressions []*sqlparser.SetE
 		SingleShardOnly:   true,
 	}
 	return primitive, nil
+}
+
+func buildNotSupported(e *sqlparser.SetExpr, _ ContextVSchema) (engine.SetOp, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s: system setting is not supported", e.Name)
 }
 
 func buildSetOpIgnore(expr *sqlparser.SetExpr, _ ContextVSchema) (engine.SetOp, error) {
