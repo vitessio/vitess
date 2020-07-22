@@ -81,7 +81,7 @@ func VerifyRowsInTabletForTable(t *testing.T, vttablet *Vttablet, ksName string,
 		// ignoring the error check, if the newly created table is not replicated, then there might be error and we should ignore it
 		// but eventually it will catch up and if not caught up in required time, testcase will fail
 		qr, _ := vttablet.VttabletProcess.QueryTablet("select * from "+tableName, ksName, true)
-		if len(qr.Rows) == expectedRows {
+		if qr != nil && len(qr.Rows) == expectedRows {
 			return
 		}
 		time.Sleep(300 * time.Millisecond)
