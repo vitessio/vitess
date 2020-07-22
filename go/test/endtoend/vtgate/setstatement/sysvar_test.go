@@ -78,9 +78,6 @@ func TestSetSysVar(t *testing.T) {
 		query:        `set @@sql_mode = concat(@@sql_mode,"")`,
 		expectedRows: ``, rowsAffected: 0,
 	}, {
-		query:           `set @@sql_mode = concat(@@sql_mode,"ALLOW_INVALID_DATES")`,
-		expectedWarning: "[[VARCHAR(\"Warning\") UINT16(1235) VARCHAR(\"Modification not allowed using set construct for: sql_mode\")]]",
-	}, {
 		query:        `set @@SQL_SAFE_UPDATES = 1`,
 		expectedRows: ``, rowsAffected: 0,
 	}}
@@ -112,5 +109,35 @@ func TestSetSysVar(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSetSystemVariable(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "set @@sql_mode = 'NO_ZERO_DATE'")
+	q := `select str_to_date('00/00/0000', '%m/%d/%Y')`
+	assertMatches(t, conn, q, `[[NULL]]`)
+
+	assertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("NO_ZERO_DATE")]]`)
+	exec(t, conn, "set @@sql_mode = ''")
+
+	assertMatches(t, conn, q, `[[DATE("0000-00-00")]]`)
+}
+
+func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
+	t.Helper()
+	qr, err := exec(t, conn, query)
+	require.NoError(t, err)
+	got := fmt.Sprintf("%v", qr.Rows)
+	diff := cmp.Diff(expected, got)
+	if diff != "" {
+		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
 	}
 }

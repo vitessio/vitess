@@ -235,13 +235,9 @@ func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, env evalengine.Expres
 	if err != nil {
 		return err
 	}
-	var warning *querypb.QueryWarning
 	if result.RowsAffected == 0 {
-		warning = &querypb.QueryWarning{Code: mysql.ERNotSupportedYet, Message: fmt.Sprintf("Modification not allowed using set construct for: %s", svci.Name)}
-	} else {
-		warning = &querypb.QueryWarning{Code: mysql.ERNotSupportedYet, Message: fmt.Sprintf("Ignored inapplicable SET %v = %v", svci.Name, svci.Expr)}
+		vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: mysql.ERNotSupportedYet, Message: fmt.Sprintf("Modification not allowed using set construct for: %s", svci.Name)})
 	}
-	vcursor.Session().RecordWarning(warning)
 	return nil
 }
 
@@ -275,14 +271,15 @@ func (svs *SysVarSet) Execute(vcursor VCursor, env evalengine.ExpressionEnv) err
 		vcursor.Session().NeedsReservedConn()
 		return svs.execSetStatement(vcursor, rss, env)
 	}
-	sysVarModified, err := svs.isSysVarChanged(vcursor, env)
+	isSysVarModified, err := svs.checkAndUpdateSysVar(vcursor, env)
 	if err != nil {
 		return err
 	}
-	if !sysVarModified {
-		vcursor.Session().RecordWarning(&querypb.QueryWarning{Message: fmt.Sprintf("setting ignored, same as underlying datastore for: %s", svs.Name)})
+	if !isSysVarModified {
+		// setting ignored, same as underlying datastore
 		return nil
 	}
+	// Update existing shard session with new system variable settings.
 	rss := vcursor.Session().ShardSession()
 	if len(rss) == 0 {
 		return nil
@@ -310,7 +307,7 @@ func (svs *SysVarSet) execSetStatement(vcursor VCursor, rss []*srvtopo.ResolvedS
 	return vterrors.Aggregate(errs)
 }
 
-func (svs *SysVarSet) isSysVarChanged(vcursor VCursor, res evalengine.ExpressionEnv) (bool, error) {
+func (svs *SysVarSet) checkAndUpdateSysVar(vcursor VCursor, res evalengine.ExpressionEnv) (bool, error) {
 	sysVarExprValidationQuery := fmt.Sprintf("select %s from dual where @@%s != %s", svs.Expr, svs.Name, svs.Expr)
 	rss, _, err := vcursor.ResolveDestinations(svs.Keyspace.Name, nil, []key.Destination{key.DestinationKeyspaceID{0}})
 	if err != nil {

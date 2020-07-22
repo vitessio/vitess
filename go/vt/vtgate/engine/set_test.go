@@ -100,9 +100,6 @@ func TestSetTable(t *testing.T) {
 				`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 				`ExecuteMultiShard ks.-20: select 1 from dual where @@x = dummy_expr {} false false`,
 			},
-			expectedWarning: []*querypb.QueryWarning{
-				{Code: 1235, Message: "Ignored inapplicable SET x = dummy_expr"},
-			},
 		},
 		{
 			testName: "sysvar check and error",
@@ -144,7 +141,7 @@ func TestSetTable(t *testing.T) {
 			expectedError: "Unexpected error, DestinationKeyspaceID mapping to multiple shards: DestinationAllShards()",
 		},
 		{
-			testName: "udv_ignr_chignr",
+			testName: "udv ignore checkAndIgnore ",
 			setOps: []SetOp{
 				&UserDefinedVariable{
 					Name: "x",
@@ -171,7 +168,6 @@ func TestSetTable(t *testing.T) {
 			},
 			expectedWarning: []*querypb.QueryWarning{
 				{Code: 1235, Message: "Ignored inapplicable SET y = 2"},
-				{Code: 1235, Message: "Ignored inapplicable SET z = dummy_expr"},
 			},
 			qr: []*sqltypes.Result{sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -214,9 +210,6 @@ func TestSetTable(t *testing.T) {
 			expectedQueryLog: []string{
 				`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 				`ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false`,
-			},
-			expectedWarning: []*querypb.QueryWarning{
-				{Message: "setting ignored, same as underlying datastore for: x"},
 			},
 		},
 		{
