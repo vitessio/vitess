@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
@@ -50,27 +52,64 @@ func TestResharderOneToMany(t *testing.T) {
 	env.expectValidation()
 	env.expectNoRefStream()
 
-	env.tmc.expectVRQuery(
-		200,
-		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:<rules:<match:\\"/.*\\" filter:\\"-80\\" > > ', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\)`+
-			eol,
-		&sqltypes.Result{},
-	)
-	env.tmc.expectVRQuery(
-		210,
-		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:<rules:<match:\\"/.*\\" filter:\\"80-\\" > > ', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\)`+
-			eol,
-		&sqltypes.Result{},
-	)
+	type testCase struct {
+		cells       string
+		tabletTypes string
+	}
+	var newTestCase = func(cells, tabletTypes string) *testCase {
+		return &testCase{
+			cells:       cells,
+			tabletTypes: tabletTypes,
+		}
+	}
+	var testCases []*testCase
 
-	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	testCases = append(testCases, newTestCase("", ""))
+	testCases = append(testCases, newTestCase("cell", "master"))
+	testCases = append(testCases, newTestCase("cell", "master,replica"))
+	testCases = append(testCases, newTestCase("", "replica,rdonly"))
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "")
-	assert.NoError(t, err)
-	env.tmc.verifyQueries(t)
+	for _, tc := range testCases {
+		env := newTestResharderEnv([]string{"0"}, []string{"-80", "80-"})
+
+		schm := &tabletmanagerdatapb.SchemaDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+				Name:              "t1",
+				Columns:           []string{"c1", "c2"},
+				PrimaryKeyColumns: []string{"c1"},
+				Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			}},
+		}
+		env.tmc.schema = schm
+
+		env.expectValidation()
+		env.expectNoRefStream()
+		name := tc.cells + "/" + tc.tabletTypes
+		t.Run(name, func(t *testing.T) {
+			env.tmc.expectVRQuery(
+				200,
+				insertPrefix+
+					`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:<rules:<match:\\"/.*\\" filter:\\"-80\\" > > ', '', [0-9]*, [0-9]*, '`+
+					tc.cells+`', '`+tc.tabletTypes+`', [0-9]*, 0, 'Stopped', 'vt_ks'\)`+eol,
+				&sqltypes.Result{},
+			)
+			env.tmc.expectVRQuery(
+				210,
+				insertPrefix+
+					`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:<rules:<match:\\"/.*\\" filter:\\"80-\\" > > ', '', [0-9]*, [0-9]*, '`+
+					tc.cells+`', '`+tc.tabletTypes+`', [0-9]*, 0, 'Stopped', 'vt_ks'\)`+eol,
+				&sqltypes.Result{},
+			)
+			env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+			env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+
+			err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, tc.cells, tc.tabletTypes)
+			require.NoError(t, err)
+			env.tmc.verifyQueries(t)
+		})
+		env.close()
+	}
+
 }
 
 func TestResharderManyToOne(t *testing.T) {

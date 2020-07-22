@@ -47,7 +47,7 @@ type resharder struct {
 	targetMasters map[string]*topo.TabletInfo
 	vschema       *vschemapb.Keyspace
 	refStreams    map[string]*refStream
-	cell          string
+	cell          string //single cell or cellsAlias or comma-separated list of cells/cellsAliases
 	tabletTypes   string
 }
 
