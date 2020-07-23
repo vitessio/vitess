@@ -1,0 +1,31 @@
+name: repo-checks
+on: [push]
+jobs:
+  main:
+    name: go-lang-matrix
+    runs-on: zendesk-stable
+    env:
+      APP_ENV: test
+      VT_GO_PARALLEL_VALUE: 4
+      TEST_FLAGS: "-docker -use_docker_cache -timeout=8m -print-log"
+    strategy:
+      matrix:
+        task:
+        - "-shard 0"
+        - "-shard 1"
+        - "-shard 2"
+        - "-shard 3"
+        - "-shard 4"
+    steps:
+    - uses: zendesk/checkout@v2
+    - uses: zendesk/setup-go@v2
+      with:
+        go-version: 1.12.x
+    - name: ${{ matrix.task }}
+      env:
+        TEST_MATRIX: ${{ matrix.task }}
+      run: |
+        unset GOPROXY
+        git config --global url."https://${{ secrets.ORG_GITHUB_TOKEN }}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+        go run test.go $TEST_FLAGS $TEST_MATRIX        
+
