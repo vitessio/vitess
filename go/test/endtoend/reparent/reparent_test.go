@@ -293,14 +293,14 @@ func TestReparentUnreachableReplicas(t *testing.T) {
 		require.Nil(t, err)
 	}
 
-	// Init Shard Master
+	// Init Shard Master.
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
 	require.Nil(t, err)
 
 	validateTopology(t, true)
 
-	// create Tables
+	// Create Tables.
 	runSQL(ctx, t, sqlSchema, tablet62344)
 
 	// insert data into the old master, check the connected replica work
