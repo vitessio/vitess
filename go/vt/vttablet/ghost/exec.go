@@ -22,7 +22,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os/exec"
+	"path/filepath"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -53,6 +55,19 @@ func execCmd(name string, args, env []string, dir string, input io.Reader, outpu
 	}
 	log.Infof("execCmd success: %v", name)
 	return cmd, err
+}
+
+// createTempDir creates a temporary directory and returns its name
+func createTempDir() (dirName string, err error) {
+	return ioutil.TempDir("", "gh-ost-*")
+}
+
+// createTempFile creates a file in given directory and with given text as content.
+func createTempFile(dirName, fileName, text string) (fullName string, err error) {
+	fullName = filepath.Join(dirName, fileName)
+	bytes := []byte(text)
+	err = ioutil.WriteFile(fullName, bytes, 0644)
+	return fullName, err
 }
 
 // RandomHash returns a 64 hex character random string
