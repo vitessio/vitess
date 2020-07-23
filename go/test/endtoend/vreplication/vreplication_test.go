@@ -24,8 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -69,7 +67,6 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	shardMerchant(t)
 
 	materializeProduct(t)
-	materializeProductUsingVExec(t)
 
 	materializeMerchantOrders(t)
 	materializeSales(t)
@@ -509,76 +506,6 @@ func vdiff(t *testing.T, workflow string) {
 		if diffReport.ProcessedRows != diffReport.MatchingRows {
 			t.Errorf("vdiff error for %d : %#v\n", key, diffReport)
 		}
-	}
-}
-
-func materializeProductUsingVExec(t *testing.T) {
-	workflow := "vproduct"
-	insertQuery := "insert into _vt.vreplication(workflow, source,  state, db_name, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp) values \n"
-	insertQuery += "('vproduct', 'keyspace:\"product\" shard:\"0\" filter:<rules:<match:\"vproduct\" filter:\"select * from product\" > > ', "
-	insertQuery += "'Stopped', 'vt_customer', '', 0, 0, '', '', 0, 0)"
-	customerTablets := vc.getVttabletsInKeyspace(t, cell, "customer", "master")
-	createVProduct := "create table vproduct(pid bigint, description varchar(128), primary key(pid))"
-	fmt.Printf("Insert Query:\n%s\n", createVProduct)
-	for _, tab := range customerTablets {
-		tab.QueryTabletWithDB(createVProduct, "vt_customer")
-	}
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("VExec", "customer.vproduct", insertQuery); err != nil {
-		t.Fatalf("%s:%v", output, err)
-	}
-	if err := vc.VtctlClient.ExecuteCommand("VExec", "customer.vproduct", "update _vt.vreplication set state = 'Running'"); err != nil {
-		t.Fatal(err)
-	}
-	for _, tab := range customerTablets {
-		if vc.WaitForVReplicationToCatchup(tab, workflow, "vt_customer", 3*time.Second) != nil {
-			t.Fatal("Materialize vproduct timed out")
-		}
-	}
-	for _, tab := range customerTablets {
-		assert.Empty(t, validateCountInTablet(t, tab, "customer", "vproduct", 2))
-	}
-
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", "customer.vproduct", "stop"); err != nil {
-		t.Fatalf("%s:%v", output, err)
-	}
-	productTab := vc.Cells[cell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
-	productTab.QueryTabletWithDB("insert into product(pid, description) values (3, 'mouse')", "vt_product")
-	time.Sleep(100 * time.Millisecond)
-	for _, tab := range customerTablets {
-		assert.Empty(t, validateCountInTablet(t, tab, "customer", "vproduct", 2))
-	}
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", "customer.vproduct", "start"); err != nil {
-		t.Fatalf("%s:%v", output, err)
-	}
-	time.Sleep(1 * time.Second)
-	for _, tab := range customerTablets {
-		assert.Empty(t, validateCountInTablet(t, tab, "customer", "vproduct", 3))
-	}
-	var row string
-	for _, tab := range customerTablets {
-		qr, err := tab.QueryTabletWithDB("select count(*) from vreplication where workflow = 'vproduct'", "_vt")
-		if err != nil {
-			t.Fatalf("Error: %s", err)
-		}
-		if qr == nil || len(qr.Rows) != 1 {
-			t.Fatalf("Invalid result")
-		}
-		row = fmt.Sprintf("%v", qr.Rows[0])
-		require.Equal(t, "[INT64(1)]", row)
-	}
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", "customer.vproduct", "delete"); err != nil {
-		t.Fatalf("%s:%v", output, err)
-	}
-	for _, tab := range customerTablets {
-		qr, err := tab.QueryTabletWithDB("select count(*) from vreplication where workflow = 'vproduct'", "_vt")
-		if err != nil {
-			t.Fatalf("Error: %s", err)
-		}
-		if qr == nil || len(qr.Rows) != 1 {
-			t.Fatalf("Invalid result")
-		}
-		row = fmt.Sprintf("%v", qr.Rows[0])
-		require.Equal(t, "[INT64(0)]", row)
 	}
 }
 

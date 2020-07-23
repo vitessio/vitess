@@ -122,20 +122,11 @@ func TestVExec(t *testing.T) {
 		query:  "update _vt.vreplication set state='Stopped', message='for wrangler test'",
 		result: result,
 	})
-	result = &sqltypes.Result{
-		RowsAffected: 2,
-		Rows:         [][]sqltypes.Value{},
-	}
-	testCases = append(testCases, &TestCase{
-		name:   "insert",
-		query:  "insert into _vt.vreplication(state, workflow, db_name) values ('Running', 'wk1', 'ks1'), ('Stopped', 'wk1', 'ks1')",
-		result: result,
-	})
 
-	errorString := "id should not have a value"
+	errorString := "query not supported by vexec"
 	testCases = append(testCases, &TestCase{
-		name:        "insert invalid-id",
-		query:       "insert into _vt.vreplication(id, state) values (1, 'Running'), (2, 'Stopped')",
+		name:        "insert",
+		query:       "insert into _vt.vreplication(state, workflow, db_name) values ('Running', 'wk1', 'ks1'), ('Stopped', 'wk1', 'ks1')",
 		errorString: errorString,
 	})
 

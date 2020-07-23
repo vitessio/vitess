@@ -29,8 +29,7 @@ type vexecPlan struct {
 }
 
 const (
-	insertQuery = iota
-	updateQuery
+	updateQuery = iota
 	deleteQuery
 	selectQuery
 )
@@ -42,8 +41,6 @@ func (vx *vexec) buildVExecPlan() (*vexecPlan, error) {
 	}
 	var plan *vexecPlan
 	switch stmt := stmt.(type) {
-	case *sqlparser.Insert:
-		plan, err = vx.buildInsertPlan(stmt)
 	case *sqlparser.Update:
 		plan, err = vx.buildUpdatePlan(stmt)
 	case *sqlparser.Delete:
@@ -133,59 +130,6 @@ func (vx *vexec) addDefaultWheres(where *sqlparser.Where) *sqlparser.Where {
 		}
 	}
 	return newWhere
-}
-
-func (vx *vexec) buildInsertPlan(ins *sqlparser.Insert) (*vexecPlan, error) {
-	switch sqlparser.String(ins.Table) {
-	case vreplicationTableName:
-		// no-op
-	default:
-		return nil, fmt.Errorf("vexec does not support: %v", sqlparser.String(ins.Table))
-	}
-
-	if ins.Action != sqlparser.InsertStr {
-		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
-	}
-	if ins.Ignore != "" {
-		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
-	}
-	if ins.Partitions != nil {
-		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
-	}
-	if ins.OnDup != nil {
-		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
-	}
-	rows, ok := ins.Rows.(sqlparser.Values)
-	if !ok {
-		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
-	}
-	idPos := 0
-	if len(ins.Columns) != 0 {
-		idPos = -1
-		for i, col := range ins.Columns {
-			if col.EqualString("id") {
-				idPos = i
-				break
-			}
-		}
-	}
-	if idPos >= 0 {
-		for _, row := range rows {
-			if idPos >= len(row) {
-				return nil, fmt.Errorf("malformed statement: %v", sqlparser.String(ins))
-			}
-			if _, ok := row[idPos].(*sqlparser.NullVal); !ok {
-				return nil, fmt.Errorf("id should not have a value: %v", sqlparser.String(ins))
-			}
-		}
-	}
-	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("%v", ins)
-
-	return &vexecPlan{
-		opcode:      insertQuery,
-		parsedQuery: buf.ParsedQuery(),
-	}, nil
 }
 
 func (vx *vexec) buildUpdatePlan(upd *sqlparser.Update) (*vexecPlan, error) {
