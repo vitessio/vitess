@@ -3,7 +3,7 @@ on: [push]
 jobs:
   main:
     name: go-lang-matrix
-    runs-on: zendesk-stable
+    runs-on: ubuntu-latest
     env:
       APP_ENV: test
       VT_GO_PARALLEL_VALUE: 4
