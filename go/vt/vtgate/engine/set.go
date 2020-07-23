@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
@@ -321,7 +322,10 @@ func (svs *SysVarSet) checkAndUpdateSysVar(vcursor VCursor, res evalengine.Expre
 		return false, nil
 	}
 	// TODO : validate how value needs to be stored.
-	vcursor.Session().SetSysVar(svs.Name, qr.Rows[0][0].ToString())
+	value := qr.Rows[0][0]
+	buf := new(bytes.Buffer)
+	value.EncodeSQL(buf)
+	vcursor.Session().SetSysVar(svs.Name, buf.String())
 	vcursor.Session().NeedsReservedConn()
 	return true, nil
 }
