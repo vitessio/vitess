@@ -66,6 +66,7 @@ func (res *Resolver) Execute(
 	options *querypb.ExecuteOptions,
 	logStats *LogStats,
 	canAutocommit bool,
+	ignoreMaxMemoryRows bool,
 ) (*sqltypes.Result, error) {
 	rss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination)
 	if err != nil {
@@ -94,6 +95,7 @@ func (res *Resolver) Execute(
 			queries,
 			session,
 			autocommit,
+			ignoreMaxMemoryRows,
 		)
 		err = vterrors.Aggregate(errors)
 		if isRetryableError(err) {

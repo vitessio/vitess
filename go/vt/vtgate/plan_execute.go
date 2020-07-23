@@ -89,19 +89,19 @@ func (e *Executor) newExecute(ctx context.Context, safeSession *SafeSession, sql
 		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Savepoint", logStats, func(_ string) (*sqltypes.Result, error) {
 			// Safely to ignore as there is no transaction.
 			return &sqltypes.Result{}, nil
-		})
+		}, vcursor.ignoreMaxMemoryRows)
 		return sqlparser.StmtSavepoint, qr, err
 	case sqlparser.StmtSRollback:
 		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Rollback Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
 			// Error as there is no transaction, so there is no savepoint that exists.
 			return nil, mysql.NewSQLError(mysql.ERSavepointNotExist, "42000", "SAVEPOINT does not exist: %s", query)
-		})
+		}, vcursor.ignoreMaxMemoryRows)
 		return sqlparser.StmtSRollback, qr, err
 	case sqlparser.StmtRelease:
 		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Release Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
 			// Error as there is no transaction, so there is no savepoint that exists.
 			return nil, mysql.NewSQLError(mysql.ERSavepointNotExist, "42000", "SAVEPOINT does not exist: %s", query)
-		})
+		}, vcursor.ignoreMaxMemoryRows)
 		return sqlparser.StmtRelease, qr, err
 	}
 
