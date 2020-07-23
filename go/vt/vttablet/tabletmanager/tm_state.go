@@ -367,12 +367,6 @@ func (ts *tmState) Tablet() *topodatapb.Tablet {
 	return proto.Clone(ts.displayState.tablet).(*topodatapb.Tablet)
 }
 
-func (ts *tmState) MasterTermStartTime() time.Time {
-	ts.displayState.mu.Lock()
-	defer ts.displayState.mu.Unlock()
-	return logutil.ProtoToTime(ts.displayState.tablet.MasterTermStartTime)
-}
-
 func (ts *tmState) BlacklistedTables() []string {
 	ts.displayState.mu.Lock()
 	defer ts.displayState.mu.Unlock()
