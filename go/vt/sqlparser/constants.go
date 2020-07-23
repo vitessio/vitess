@@ -172,4 +172,7 @@ const (
 	VitessStr      = "vitess"
 	TraditionalStr = "traditional"
 	AnalyzeStr     = "analyze"
+
+	// Vitess magic hints
+	VitessOnlineDDLHint = "vt:online"
 )
