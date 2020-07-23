@@ -2853,45 +2853,61 @@ func commandVExec(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 		wr.Logger().Printf("no result returned\n")
 	}
 	qr := queryResultFromVexecResults(results)
+	if len(qr.Rows) == 0 {
+		return nil
+	}
 	if *json {
 		return printJSON(wr.Logger(), qr)
 	}
-
 	printQueryResult(loggerWriter{wr.Logger()}, qr)
 	return nil
 }
 
-func queryResultFromVexecResults(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
-	var qr *sqltypes.Result = &sqltypes.Result{}
+// called for workflow stop/start/delete. Only rows affected are reported per tablet
+func queryResultFromWorkflowResults(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
+	var qr = &sqltypes.Result{}
 	qr.RowsAffected = uint64(len(results))
 	qr.Fields = []*querypb.Field{{
 		Name: "Tablet",
 		Type: sqltypes.VarBinary,
-	},
-		{
-			Name: "Rows Affected",
-			Type: sqltypes.Uint64,
-		},
-	}
-	for _, result := range results {
-		fields := result.Fields
-		qr.Fields = append(qr.Fields, fields...)
-		break
-	}
+	}, {
+		Name: "RowsAffected",
+		Type: sqltypes.Uint64,
+	}}
+	var row2 []sqltypes.Value
 	for tablet, result := range results {
-		var row2 []sqltypes.Value
+		row2 = nil
 		row2 = append(row2, sqltypes.NewVarBinary(tablet.AliasString()))
-		row2 = append(row2, sqltypes.NewUint64(qr.RowsAffected))
-		for _, row := range result.Rows {
-			row2 = append(row2, row...)
-		}
+		row2 = append(row2, sqltypes.NewUint64(result.RowsAffected))
 		qr.Rows = append(qr.Rows, row2)
 	}
 	return qr
 }
 
+func queryResultFromVexecResults(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
+	var qr = &sqltypes.Result{}
+	qr.RowsAffected = uint64(len(results))
+	qr.Fields = []*querypb.Field{{
+		Name: "Tablet",
+		Type: sqltypes.VarBinary,
+	}}
+	var row2 []sqltypes.Value
+	for tablet, result := range results {
+		for _, row := range result.Rows {
+			if len(qr.Fields) == 1 {
+				qr.Fields = append(qr.Fields, result.Fields...)
+			}
+			row2 = nil
+			row2 = append(row2, sqltypes.NewVarBinary(tablet.AliasString()))
+			row2 = append(row2, row...)
+			qr.Rows = append(qr.Rows, row2)
+		}
+	}
+	return qr
+}
+
 func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of VExec and only reports the final query and list of masters on which it will be applied")
+	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of Workflow and only reports the final query and list of masters on which the operation will be applied")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2912,10 +2928,14 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	if err != nil {
 		return err
 	}
+	if action == "list" {
+		return nil
+	}
 	if len(results) == 0 {
 		wr.Logger().Printf("no result returned\n")
+		return nil
 	}
-	qr := queryResultFromVexecResults(results)
+	qr := queryResultFromWorkflowResults(results)
 
 	printQueryResult(loggerWriter{wr.Logger()}, qr)
 	return nil
