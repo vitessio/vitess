@@ -318,6 +318,9 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		if sqlparser.IsVschemaDDL(stmt) {
 			return buildVSchemaDDLPlan(stmt, vschema)
 		}
+		if sqlparser.IsOnlineSchemaDDL(stmt, query) {
+			return buildOnlineDDLPlan(query, stmt, vschema)
+		}
 		return buildDDLPlan(query, stmt, vschema)
 	case *sqlparser.Use:
 		return buildUsePlan(stmt, vschema)
