@@ -39,16 +39,11 @@ func TestCharsetIntro(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	_, err = exec(t, conn, "delete from test")
-	require.NoError(t, err)
-	_, err = exec(t, conn, "insert into test (id,val1) values (666, _binary'abc')")
-	require.NoError(t, err)
-	_, err = exec(t, conn, "update test set val1 = _latin1'xyz' where id = 666")
-	require.NoError(t, err)
-	_, err = exec(t, conn, "delete from test where val1 = _utf8'xyz'")
-	require.NoError(t, err)
-	qr, err := exec(t, conn, "select id from test where val1 = _utf8mb4'xyz'")
-	require.NoError(t, err)
+	checkedExec(t, conn, "delete from test")
+	checkedExec(t, conn, "insert into test (id,val1) values (666, _binary'abc')")
+	checkedExec(t, conn, "update test set val1 = _latin1'xyz' where id = 666")
+	checkedExec(t, conn, "delete from test where val1 = _utf8'xyz'")
+	qr := checkedExec(t, conn, "select id from test where val1 = _utf8mb4'xyz'")
 	require.EqualValues(t, 0, qr.RowsAffected)
 }
 
@@ -101,8 +96,7 @@ func TestSetSysVar(t *testing.T) {
 					}
 				}
 				if q.expectedWarning != "" {
-					qr, err := exec(t, conn, "show warnings")
-					require.NoError(t, err)
+					qr := checkedExec(t, conn, "show warnings")
 					if got, want := fmt.Sprintf("%v", qr.Rows), q.expectedWarning; got != want {
 						t.Errorf("select:\n%v want\n%v", got, want)
 					}
@@ -121,12 +115,12 @@ func TestSetSystemVariable(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	exec(t, conn, "set @@sql_mode = 'NO_ZERO_DATE'")
+	checkedExec(t, conn, "set @@sql_mode = 'NO_ZERO_DATE'")
 	q := `select str_to_date('00/00/0000', '%m/%d/%Y')`
 	assertMatches(t, conn, q, `[[NULL]]`)
 
 	assertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("NO_ZERO_DATE")]]`)
-	exec(t, conn, "set @@sql_mode = ''")
+	checkedExec(t, conn, "set @@sql_mode = ''")
 
 	assertMatches(t, conn, q, `[[DATE("0000-00-00")]]`)
 }
@@ -141,16 +135,15 @@ func TestSetSystemVarWithTxFailure(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	exec(t, conn, "insert into test (id, val1) values (80, null)")
+	checkedExec(t, conn, "insert into test (id, val1) values (80, null)")
 
 	// before changing any settings, let's confirm sql_safe_updates value
 	assertMatches(t, conn, `select @@sql_safe_updates from test where id = 80`, `[[INT64(0)]]`)
 
-	exec(t, conn, "set sql_safe_updates = 1")
-	exec(t, conn, "begin")
+	checkedExec(t, conn, "set sql_safe_updates = 1")
+	checkedExec(t, conn, "begin")
 
-	qr, err := exec(t, conn, "select connection_id() from test where id = 80")
-	require.NoError(t, err)
+	qr := checkedExec(t, conn, "select connection_id() from test where id = 80")
 
 	// kill the mysql connection shard which has transaction open.
 	vttablet1 := clusterInstance.Keyspaces[0].Shards[0].MasterTablet() // 80-
@@ -164,6 +157,31 @@ func TestSetSystemVarWithTxFailure(t *testing.T) {
 	assertMatches(t, conn, `select @@sql_safe_updates`, `[[INT64(1)]]`)
 }
 
+func TestSetSystemVarWithConnectionFailure(t *testing.T) {
+	t.Skip("failing at the moment")
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	checkedExec(t, conn, "delete from test")
+
+	checkedExec(t, conn, "insert into test (id, val1) values (80, null)")
+	checkedExec(t, conn, "set sql_safe_updates = 1")
+	qr := checkedExec(t, conn, "select connection_id() from test where id = 80")
+
+	// kill the mysql connection shard which has transaction open.
+	vttablet1 := clusterInstance.Keyspaces[0].Shards[0].MasterTablet() // 80-
+	vttablet1.VttabletProcess.QueryTablet(fmt.Sprintf("kill %s", qr.Rows[0][0].ToString()), keyspaceName, false)
+
+	// we still want to have our system setting applied
+	_, err = exec(t, conn, `select @@sql_safe_updates from test where id = 80`)
+	require.NoError(t, err)
+}
+
 func TestSetSystemVariableAndThenSuccessfulTx(t *testing.T) {
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
@@ -173,13 +191,14 @@ func TestSetSystemVariableAndThenSuccessfulTx(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
+	checkedExec(t, conn, "delete from test")
 
-	exec(t, conn, "set sql_safe_updates = 1")
-
-	exec(t, conn, "begin")
-	exec(t, conn, "insert into test (id, val1) values (80, null)")
-	exec(t, conn, "commit")
+	checkedExec(t, conn, "set sql_safe_updates = 1")
+	checkedExec(t, conn, "begin")
+	checkedExec(t, conn, "insert into test (id, val1) values (80, null)")
+	checkedExec(t, conn, "commit")
 	assertMatches(t, conn, "select id, val1 from test", "[[INT64(80) NULL]]")
+	assertMatches(t, conn, "select @@sql_safe_updates", "[[INT64(1)]]")
 }
 
 func TestStartTxAndSetSystemVariableAndThenSuccessfulCommit(t *testing.T) {
@@ -191,12 +210,14 @@ func TestStartTxAndSetSystemVariableAndThenSuccessfulCommit(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
+	checkedExec(t, conn, "delete from test")
 
-	exec(t, conn, "begin")
-	exec(t, conn, "set sql_safe_updates = 1")
-	exec(t, conn, "insert into test (id, val1) values (80, null)")
-	exec(t, conn, "commit")
-	assertMatches(t, conn, "select id, val1 from test", "[[INT64(80) NULL]]")
+	checkedExec(t, conn, "begin")
+	checkedExec(t, conn, "set sql_safe_updates = 1")
+	checkedExec(t, conn, "insert into test (id, val1) values (54, null)")
+	checkedExec(t, conn, "commit")
+	assertMatches(t, conn, "select id, val1 from test", "[[INT64(54) NULL]]")
+	assertMatches(t, conn, "select @@sql_safe_updates", "[[INT64(1)]]")
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
