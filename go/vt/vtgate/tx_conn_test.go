@@ -216,7 +216,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
 				TabletType: topodatapb.TabletType_MASTER,
 			},
 			ReservedId:  1,
-			TabletAlias: sbc0.Tablet().Alias,
+			TabletAlias: sbc1.Tablet().Alias,
 		}, {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
@@ -224,7 +224,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
 				TabletType: topodatapb.TabletType_MASTER,
 			},
 			ReservedId:  1,
-			TabletAlias: sbc1.Tablet().Alias,
+			TabletAlias: sbc0.Tablet().Alias,
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
@@ -309,7 +309,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 				TabletType: topodatapb.TabletType_MASTER,
 			},
 			ReservedId:  1,
-			TabletAlias: sbc0.Tablet().Alias,
+			TabletAlias: sbc1.Tablet().Alias,
 		}, {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
@@ -317,7 +317,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 				TabletType: topodatapb.TabletType_MASTER,
 			},
 			ReservedId:  1,
-			TabletAlias: sbc1.Tablet().Alias,
+			TabletAlias: sbc0.Tablet().Alias,
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
