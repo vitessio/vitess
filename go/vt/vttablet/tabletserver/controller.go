@@ -21,6 +21,7 @@ import (
 
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -83,6 +84,9 @@ type Controller interface {
 
 	// SchemaEngine returns the SchemaEngine object used by this Controller
 	SchemaEngine() *schema.Engine
+
+	// ApplyOnlineSchemaChange rnus an online schema change operation
+	ApplyOnlineSchemaChange(ctx context.Context, change *tmutils.SchemaChange, dbName string) error
 
 	// BroadcastHealth sends the current health to all listeners
 	BroadcastHealth()
