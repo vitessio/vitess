@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"time"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -63,6 +62,7 @@ func NewExecutor(env tabletenv.Env) *Executor {
 	}
 }
 
+// Open opens database pool
 func (e *Executor) Open() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -129,11 +129,32 @@ func (e *Executor) Execute(ctx context.Context, target querypb.Target, alias top
 		log.Errorf(err.Error())
 		return err
 	}
+	tempDir, err := createTempDir()
+	if err != nil {
+		log.Errorf("Error creating temporary directory: %+v", err)
+		return err
+	}
+	wrapperScriptContent := fmt.Sprintf(`#!/bin/bash
+ghost_log_path="%s"
+ghost_log_file=gh-ost.log
+
+mkdir -p "$ghost_log_path"
+
+echo "executing: gh-ost" "$@" > "$ghost_log_path/$ghost_log_file.exec"
+gh-ost "$@" > "$ghost_log_path/$ghost_log_file" 2>&1
+	`, tempDir,
+	)
+	wrapperScriptFileName, err := createTempFile(tempDir, "gh-ost-wrapper.sh", wrapperScriptContent)
+	if err != nil {
+		log.Errorf("Error creating wrapper script: %+v", err)
+		return err
+	}
 	// Validate gh-ost binary:
 	log.Infof("Will now validate gh-ost binary")
 	_, err = execCmd(
-		"gh-ost-wrapper.sh",
+		"bash",
 		[]string{
+			wrapperScriptFileName,
 			"--version",
 		},
 		os.Environ(),
@@ -149,11 +170,11 @@ func (e *Executor) Execute(ctx context.Context, target querypb.Target, alias top
 
 	runGhost := func(execute bool) error {
 		// TODO[(shlomi, the code below assumes user+password are gh-ost:gh-ost)]: externalize credentials before submitting the PR
-		// TODO[(shlomi, gh-ost-wrapper.sh): either remove need for gh-ost-wrapper.sh or standardize the gh-ost utils directory layout, before merging this in a PR
 
 		_, err := execCmd(
-			"gh-ost-wrapper.sh",
+			"bash",
 			[]string{
+				wrapperScriptFileName,
 				fmt.Sprintf(`--host=%s`, mysqlHost),
 				fmt.Sprintf(`--port=%d`, mysqlPort),
 				`--user=gh-ost`,
@@ -163,7 +184,7 @@ func (e *Executor) Execute(ctx context.Context, target querypb.Target, alias top
 				`--critical-load=Threads_running=200`,
 				`--critical-load-hibernate-seconds=60`,
 				`--approve-renamed-columns`,
-				`--verbose`,
+				`--debug`,
 				`--exact-rowcount`,
 				`--timestamp-old-table`,
 				`--initially-drop-ghost-table`,
