@@ -2245,9 +2245,7 @@ func TestSelectLock(t *testing.T) {
 			TabletType: topodatapb.TabletType_MASTER,
 		},
 		TransactionId: 12345,
-		TabletAlias: &topodatapb.TabletAlias{
-			Cell: "aa",
-		},
+		TabletAlias:   sbc1.Tablet().Alias,
 	}}
 
 	wantQueries := []*querypb.BoundQuery{{
@@ -2260,7 +2258,7 @@ func TestSelectLock(t *testing.T) {
 		ShardSessions: []*vtgatepb.Session_ShardSession{
 			{
 				Target:        &querypb.Target{Keyspace: "TestExecutor", Shard: "-20", TabletType: topodatapb.TabletType_MASTER},
-				TabletAlias:   &topodatapb.TabletAlias{Cell: "aa"},
+				TabletAlias:   sbc1.Tablet().Alias,
 				TransactionId: 12345,
 				ReservedId:    12345,
 			},
@@ -2269,9 +2267,10 @@ func TestSelectLock(t *testing.T) {
 		RowCount:  -1,
 	}
 
-	exec(executor, session, "select get_lock('lock name', 10) from dual")
-	utils.MustMatch(t, wantQueries, sbc1.Queries, "")
+	_, err := exec(executor, session, "select get_lock('lock name', 10) from dual")
+	require.NoError(t, err)
 	utils.MustMatch(t, wantSession, session.Session, "")
+	utils.MustMatch(t, wantQueries, sbc1.Queries, "")
 
 	wantQueries = append(wantQueries, &querypb.BoundQuery{
 		Sql:           "select release_lock('lock name') from dual",
