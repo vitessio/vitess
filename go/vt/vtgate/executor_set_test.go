@@ -39,7 +39,7 @@ import (
 )
 
 func TestExecutorSet(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	executor, _, _, _ := createLegacyExecutorEnv()
 
 	testcases := []struct {
 		in  string
@@ -300,7 +300,7 @@ func TestExecutorSet(t *testing.T) {
 }
 
 func TestExecutorSetOp(t *testing.T) {
-	executor, sbc1, _, _ := createExecutorEnv()
+	executor, sbc1, _, _ := createLegacyExecutorEnv()
 
 	testcases := []struct {
 		in      string
@@ -335,7 +335,7 @@ func TestExecutorSetOp(t *testing.T) {
 }
 
 func TestExecutorSetMetadata(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	executor, _, _, _ := createLegacyExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
 
 	set := "set @@vitess_metadata.app_keyspace_v1= '1'"
@@ -347,7 +347,7 @@ func TestExecutorSetMetadata(t *testing.T) {
 		*vschemaacl.AuthorizedDDLUsers = ""
 	}()
 
-	executor, _, _, _ = createExecutorEnv()
+	executor, _, _, _ = createLegacyExecutorEnv()
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
 
 	set = "set @@vitess_metadata.app_keyspace_v1= '1'"
@@ -392,7 +392,7 @@ func TestExecutorSetMetadata(t *testing.T) {
 }
 
 func TestPlanExecutorSetUDV(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	executor, _, _, _ := createLegacyExecutorEnv()
 
 	testcases := []struct {
 		in  string
@@ -422,7 +422,7 @@ func TestPlanExecutorSetUDV(t *testing.T) {
 }
 
 func TestSetUDVFromTabletInput(t *testing.T) {
-	executor, sbc1, _, _ := createExecutorEnv()
+	executor, sbc1, _, _ := createLegacyExecutorEnv()
 
 	fields := sqltypes.MakeTestFields("some", "VARBINARY")
 	sbc1.SetResults([]*sqltypes.Result{
