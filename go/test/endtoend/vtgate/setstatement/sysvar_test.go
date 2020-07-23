@@ -164,6 +164,41 @@ func TestSetSystemVarWithTxFailure(t *testing.T) {
 	assertMatches(t, conn, `select @@sql_safe_updates`, `[[INT64(1)]]`)
 }
 
+func TestSetSystemVariableAndThenSuccessfulTx(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "set sql_safe_updates = 1")
+
+	exec(t, conn, "begin")
+	exec(t, conn, "insert into test (id, val1) values (80, null)")
+	exec(t, conn, "commit")
+	assertMatches(t, conn, "select id, val1 from test", "[[INT64(80) NULL]]")
+}
+
+func TestStartTxAndSetSystemVariableAndThenSuccessfulCommit(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "begin")
+	exec(t, conn, "set sql_safe_updates = 1")
+	exec(t, conn, "insert into test (id, val1) values (80, null)")
+	exec(t, conn, "commit")
+	assertMatches(t, conn, "select id, val1 from test", "[[INT64(80) NULL]]")
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr, err := exec(t, conn, query)
