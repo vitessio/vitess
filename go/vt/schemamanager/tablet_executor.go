@@ -239,15 +239,11 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		executeOnlineSchemaChange := false
 		switch ddl := stat.(type) {
 		case *sqlparser.DDL:
-			// TODO(shlomi): remove comments before merging
-			fmt.Printf("============ DDL: %+v, %+v\n", ddl.Action, ddl.Table)
-			fmt.Printf("============ DDL: %+v\n", ddl)
-			fmt.Printf("============ sql: %+v\n", sql)
 			if ddl.Action == sqlparser.AlterStr && exec.onlineSchemaChange {
 				executeOnlineSchemaChange = true
 			}
 		}
-		fmt.Printf("============ online: %+v\n", executeOnlineSchemaChange)
+		exec.wr.Logger().Infof("Received DDL request. online schema change = %t", executeOnlineSchemaChange)
 		exec.executeOnAllTablets(ctx, &execResult, sql, executeOnlineSchemaChange)
 		if len(execResult.FailedShards) > 0 {
 			break
@@ -335,6 +331,7 @@ func (exec *TabletExecutor) executeOneTablet(
 	}
 }
 
+// executeOnlineSchemaChangeOneTablet will request the tablet to run an online schema change
 func (exec *TabletExecutor) executeOnlineSchemaChangeOneTablet(
 	ctx context.Context,
 	tablet *topodatapb.Tablet,
