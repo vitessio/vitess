@@ -845,7 +845,7 @@ func (wr *Wrangler) chooseNewMaster(
 
 // EmergencyReparentShard will make the provided tablet the master for
 // the shard, when the old master is completely unreachable.
-func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration) (err error) {
+func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration, unreachableReplicas sets.String) (err error) {
 	// lock the shard
 	actionMsg := "EmergencyReparentShard"
 	if masterElectTabletAlias != nil {
@@ -861,7 +861,7 @@ func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard 
 	ev := &events.Reparent{}
 
 	// do the work
-	err = wr.emergencyReparentShardLocked(ctx, ev, keyspace, shard, masterElectTabletAlias, waitReplicasTimeout)
+	err = wr.emergencyReparentShardLocked(ctx, ev, keyspace, shard, masterElectTabletAlias, waitReplicasTimeout, unreachableReplicas)
 	if err != nil {
 		event.DispatchUpdate(ev, "failed EmergencyReparentShard: "+err.Error())
 	} else {
@@ -870,7 +870,7 @@ func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard 
 	return err
 }
 
-func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration) error {
+func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration, unreachableReplicas sets.String) error {
 	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
@@ -883,12 +883,12 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		return err
 	}
 
-	statusMap, masterStatusMap, err := wr.stopReplicationAndBuildStatusMaps(ctx, ev, tabletMap, waitReplicasTimeout)
+	statusMap, masterStatusMap, err := wr.stopReplicationAndBuildStatusMaps(ctx, ev, tabletMap, waitReplicasTimeout, unreachableReplicas)
 	if err != nil {
 		return err
 	}
 
-	if len(statusMap)+len(masterStatusMap) < len(tabletMap)-1 {
+	if len(statusMap)+len(masterStatusMap) < len(tabletMap)-unreachableReplicas.Len()-1 {
 		return fmt.Errorf("didn't get enough tablet responses to find a candidate garaunteed to have newest transaction")
 	}
 
@@ -1027,14 +1027,14 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		}
 	}
 	waitOnTablets := func() *concurrency.AllErrorRecorder {
-		return waitOnNMinusOneTablets(replCancel, len(tabletMap), errChan)
+		return waitOnNMinusOneTablets(replCancel, len(tabletMap)-unreachableReplicas.Len(), errChan)
 	}
 
 	for alias, tabletInfo := range tabletMap {
 		if alias == newMasterTabletAliasStr {
 			wgMaster.Add(1)
 			go handleMaster(alias, tabletInfo)
-		} else {
+		} else if !unreachableReplicas.Has(alias) {
 			go handleReplicas(alias, tabletInfo)
 		}
 	}
@@ -1198,7 +1198,7 @@ func (wr *Wrangler) findValidReparentCandidates(statusMap map[string]*replicatio
 	return validCandidates, nil
 }
 
-func (wr *Wrangler) stopReplicationAndBuildStatusMaps(ctx context.Context, ev *events.Reparent, tabletMap map[string]*topo.TabletInfo, waitReplicasTimeout time.Duration) (map[string]*replicationdatapb.StopReplicationStatus, map[string]*replicationdatapb.MasterStatus, error) {
+func (wr *Wrangler) stopReplicationAndBuildStatusMaps(ctx context.Context, ev *events.Reparent, tabletMap map[string]*topo.TabletInfo, waitReplicasTimeout time.Duration, unreachableReplicas sets.String) (map[string]*replicationdatapb.StopReplicationStatus, map[string]*replicationdatapb.MasterStatus, error) {
 	// Stop replication on all replicas, get their current
 	// replication position
 	event.DispatchUpdate(ev, "stop replication on all replicas")
@@ -1243,10 +1243,12 @@ func (wr *Wrangler) stopReplicationAndBuildStatusMaps(ctx context.Context, ev *e
 	}
 
 	for alias, tabletInfo := range tabletMap {
-		go fillStatus(alias, tabletInfo)
+		if !unreachableReplicas.Has(alias) {
+			go fillStatus(alias, tabletInfo)
+		}
 	}
 
-	errRecorder := waitOnNMinusOneTablets(groupCancel, len(tabletMap), errChan)
+	errRecorder := waitOnNMinusOneTablets(groupCancel, len(tabletMap)-unreachableReplicas.Len(), errChan)
 
 	if len(errRecorder.Errors) > 1 {
 		return nil, nil, fmt.Errorf("encountered more than one error when trying to stop replication and get positions: %v", errRecorder.Error())

@@ -26,6 +26,8 @@ import (
 	"strings"
 
 	"github.com/golang/protobuf/proto"
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -87,6 +89,17 @@ func ParseTabletAlias(aliasStr string) (*topodatapb.TabletAlias, error) {
 		Cell: nameParts[0],
 		Uid:  uid,
 	}, nil
+}
+
+// ParseTabletSet returns a set of tablets based on a provided comma separated list of tablets.
+func ParseTabletSet(tabletListStr string) sets.String {
+	set := sets.NewString()
+	if tabletListStr == "" {
+		return set
+	}
+	list := strings.Split(tabletListStr, ",")
+	set.Insert(list...)
+	return set
 }
 
 // ParseUID parses just the uid (a number)

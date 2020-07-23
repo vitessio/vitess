@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
@@ -265,7 +266,7 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	defer moreAdvancedReplica.StopActionLoop(t)
 
 	// run EmergencyReparentShard
-	err := wr.EmergencyReparentShard(ctx, newMaster.Tablet.Keyspace, newMaster.Tablet.Shard, newMaster.Tablet.Alias, 10*time.Second)
+	err := wr.EmergencyReparentShard(ctx, newMaster.Tablet.Keyspace, newMaster.Tablet.Shard, newMaster.Tablet.Alias, 10*time.Second, sets.NewString())
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "master elect is either not fully caught up, or")
 	// check what was run
