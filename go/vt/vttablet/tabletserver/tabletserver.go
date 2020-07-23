@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -107,7 +108,7 @@ type TabletServer struct {
 
 	// sm manages state transitions.
 	sm            *stateManager
-	ghostExecutor *ghost.GhostExecutor
+	ghostExecutor *ghost.Executor
 
 	// alias is used for identifying this tabletserver in healthcheck responses.
 	alias topodatapb.TabletAlias
@@ -157,7 +158,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
 	tsv.te = NewTxEngine(tsv)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
-	tsv.ghostExecutor = ghost.NewGhostExecutor(tsv)
+	tsv.ghostExecutor = ghost.NewExecutor(tsv)
 
 	tsv.sm = &stateManager{
 		hs:          tsv.hs,
@@ -1490,6 +1491,13 @@ func (tsv *TabletServer) registerSchemaMigrationHandler() {
 			w.Write([]byte("submitted"))
 		}
 	})
+}
+
+// ApplyOnlineSchemaChange runs an online schema migration on this tablet server
+func (tsv *TabletServer) ApplyOnlineSchemaChange(ctx context.Context, change *tmutils.SchemaChange, dbName string) error {
+	err := tsv.ghostExecutor.Execute(ctx, tsv.sm.target, tsv.alias, dbName, "", change.SQL)
+
+	return err
 }
 
 // SetPoolSize changes the pool size to the specified value.
