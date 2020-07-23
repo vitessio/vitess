@@ -41,7 +41,7 @@ var queries = []*querypb.BoundQuery{{Sql: "query1"}}
 var twoQueries = []*querypb.BoundQuery{{Sql: "query1"}, {Sql: "query1"}}
 
 func TestTxConnBegin(t *testing.T) {
-	sc, sbc0, _, rss0, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, _, rss0, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
 	session := &vtgatepb.Session{}
 
 	// begin
@@ -61,7 +61,7 @@ func TestTxConnBegin(t *testing.T) {
 }
 
 func TestTxConnCommitSuccess(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, rss0, _, rss01 := newLegacyTestTxConnEnv(t, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	// Sequence the executes to ensure commit order
@@ -112,7 +112,7 @@ func TestTxConnCommitSuccess(t *testing.T) {
 }
 
 func TestTxConnReservedCommitSuccess(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, rss0, _, rss01 := newLegacyTestTxConnEnv(t, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	// Sequence the executes to ensure commit order
@@ -380,7 +380,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 }
 
 func TestTxConnCommitOrderFailure1(t *testing.T) {
-	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, rss0, rss1, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	queries := []*querypb.BoundQuery{{Sql: "query1"}}
@@ -411,7 +411,7 @@ func TestTxConnCommitOrderFailure1(t *testing.T) {
 }
 
 func TestTxConnCommitOrderFailure2(t *testing.T) {
-	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, rss0, rss1, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	queries := []*querypb.BoundQuery{{
@@ -443,7 +443,7 @@ func TestTxConnCommitOrderFailure2(t *testing.T) {
 }
 
 func TestTxConnCommitOrderFailure3(t *testing.T) {
-	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, rss0, rss1, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	queries := []*querypb.BoundQuery{{
@@ -478,7 +478,7 @@ func TestTxConnCommitOrderFailure3(t *testing.T) {
 }
 
 func TestTxConnCommitOrderSuccess(t *testing.T) {
-	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, rss0, rss1, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	queries := []*querypb.BoundQuery{{
@@ -574,7 +574,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 }
 
 func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
-	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, rss0, rss1, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	queries := []*querypb.BoundQuery{{
@@ -715,7 +715,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 }
 
 func TestTxConnCommit2PC(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConnCommit2PC")
+	sc, sbc0, sbc1, rss0, _, rss01 := newLegacyTestTxConnEnv(t, "TestTxConnCommit2PC")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
@@ -731,7 +731,7 @@ func TestTxConnCommit2PC(t *testing.T) {
 }
 
 func TestTxConnCommit2PCOneParticipant(t *testing.T) {
-	sc, sbc0, _, rss0, _, _ := newTestTxConnEnv(t, "TestTxConnCommit2PCOneParticipant")
+	sc, sbc0, _, rss0, _, _ := newLegacyTestTxConnEnv(t, "TestTxConnCommit2PCOneParticipant")
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
@@ -741,7 +741,7 @@ func TestTxConnCommit2PCOneParticipant(t *testing.T) {
 }
 
 func TestTxConnCommit2PCCreateTransactionFail(t *testing.T) {
-	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConnCommit2PCCreateTransactionFail")
+	sc, sbc0, sbc1, rss0, rss1, _ := newLegacyTestTxConnEnv(t, "TestTxConnCommit2PCCreateTransactionFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
@@ -763,7 +763,7 @@ func TestTxConnCommit2PCCreateTransactionFail(t *testing.T) {
 }
 
 func TestTxConnCommit2PCPrepareFail(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConnCommit2PCPrepareFail")
+	sc, sbc0, sbc1, rss0, _, rss01 := newLegacyTestTxConnEnv(t, "TestTxConnCommit2PCPrepareFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
@@ -783,7 +783,7 @@ func TestTxConnCommit2PCPrepareFail(t *testing.T) {
 }
 
 func TestTxConnCommit2PCStartCommitFail(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConnCommit2PCStartCommitFail")
+	sc, sbc0, sbc1, rss0, _, rss01 := newLegacyTestTxConnEnv(t, "TestTxConnCommit2PCStartCommitFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
@@ -803,7 +803,7 @@ func TestTxConnCommit2PCStartCommitFail(t *testing.T) {
 }
 
 func TestTxConnCommit2PCCommitPreparedFail(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConnCommit2PCCommitPreparedFail")
+	sc, sbc0, sbc1, rss0, _, rss01 := newLegacyTestTxConnEnv(t, "TestTxConnCommit2PCCommitPreparedFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
@@ -823,7 +823,7 @@ func TestTxConnCommit2PCCommitPreparedFail(t *testing.T) {
 }
 
 func TestTxConnCommit2PCConcludeTransactionFail(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConnCommit2PCConcludeTransactionFail")
+	sc, sbc0, sbc1, rss0, _, rss01 := newLegacyTestTxConnEnv(t, "TestTxConnCommit2PCConcludeTransactionFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
@@ -843,7 +843,7 @@ func TestTxConnCommit2PCConcludeTransactionFail(t *testing.T) {
 }
 
 func TestTxConnRollback(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TxConnRollback")
+	sc, sbc0, sbc1, rss0, _, rss01 := newLegacyTestTxConnEnv(t, "TxConnRollback")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
@@ -857,7 +857,7 @@ func TestTxConnRollback(t *testing.T) {
 }
 
 func TestTxConnReservedRollback(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TxConnReservedRollback")
+	sc, sbc0, sbc1, rss0, _, rss01 := newLegacyTestTxConnEnv(t, "TxConnReservedRollback")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, InReservedConn: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
@@ -892,7 +892,7 @@ func TestTxConnReservedRollback(t *testing.T) {
 }
 
 func TestTxConnReservedRollbackFailure(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TxConnReservedRollback")
+	sc, sbc0, sbc1, rss0, _, rss01 := newLegacyTestTxConnEnv(t, "TxConnReservedRollback")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, InReservedConn: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
@@ -914,7 +914,7 @@ func TestTxConnReservedRollbackFailure(t *testing.T) {
 }
 
 func TestTxConnResolveOnPrepare(t *testing.T) {
-	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, _, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -935,7 +935,7 @@ func TestTxConnResolveOnPrepare(t *testing.T) {
 }
 
 func TestTxConnResolveOnRollback(t *testing.T) {
-	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, _, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -956,7 +956,7 @@ func TestTxConnResolveOnRollback(t *testing.T) {
 }
 
 func TestTxConnResolveOnCommit(t *testing.T) {
-	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, _, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -977,7 +977,7 @@ func TestTxConnResolveOnCommit(t *testing.T) {
 }
 
 func TestTxConnResolveInvalidDTID(t *testing.T) {
-	sc, _, _, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	sc, _, _, _, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
 
 	err := sc.txConn.Resolve(ctx, "abcd")
 	want := "invalid parts in dtid: abcd"
@@ -985,7 +985,7 @@ func TestTxConnResolveInvalidDTID(t *testing.T) {
 }
 
 func TestTxConnResolveReadTransactionFail(t *testing.T) {
-	sc, sbc0, _, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, _, _, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
@@ -996,7 +996,7 @@ func TestTxConnResolveReadTransactionFail(t *testing.T) {
 }
 
 func TestTxConnResolveInternalError(t *testing.T) {
-	sc, sbc0, _, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, _, _, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -1015,7 +1015,7 @@ func TestTxConnResolveInternalError(t *testing.T) {
 }
 
 func TestTxConnResolveSetRollbackFail(t *testing.T) {
-	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, _, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -1039,7 +1039,7 @@ func TestTxConnResolveSetRollbackFail(t *testing.T) {
 }
 
 func TestTxConnResolveRollbackPreparedFail(t *testing.T) {
-	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, _, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -1063,7 +1063,7 @@ func TestTxConnResolveRollbackPreparedFail(t *testing.T) {
 }
 
 func TestTxConnResolveCommitPreparedFail(t *testing.T) {
-	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, _, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -1087,7 +1087,7 @@ func TestTxConnResolveCommitPreparedFail(t *testing.T) {
 }
 
 func TestTxConnResolveConcludeTransactionFail(t *testing.T) {
-	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, _, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -1177,11 +1177,29 @@ func TestTxConnMultiGoTargets(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func newTestTxConnEnv(t *testing.T, name string) (sc *ScatterConn, sbc0, sbc1 *sandboxconn.SandboxConn, rss0, rss1, rss01 []*srvtopo.ResolvedShard) {
+func newLegacyTestTxConnEnv(t *testing.T, name string) (sc *ScatterConn, sbc0, sbc1 *sandboxconn.SandboxConn, rss0, rss1, rss01 []*srvtopo.ResolvedShard) {
 	t.Helper()
 	createSandbox(name)
 	hc := discovery.NewFakeLegacyHealthCheck()
 	sc = newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
+	sbc0 = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc1 = hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_MASTER, true, 1, nil)
+	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+	var err error
+	rss0, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_MASTER, key.DestinationShard("0"))
+	require.NoError(t, err)
+	rss1, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_MASTER, key.DestinationShard("1"))
+	require.NoError(t, err)
+	rss01, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_MASTER, key.DestinationShards([]string{"0", "1"}))
+	require.NoError(t, err)
+	return sc, sbc0, sbc1, rss0, rss1, rss01
+}
+
+func newTestTxConnEnv(t *testing.T, name string) (sc *ScatterConn, sbc0, sbc1 *sandboxconn.SandboxConn, rss0, rss1, rss01 []*srvtopo.ResolvedShard) {
+	t.Helper()
+	createSandbox(name)
+	hc := discovery.NewFakeHealthCheck()
+	sc = newTestScatterConn(hc, new(sandboxTopo), "aa")
 	sbc0 = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_MASTER, true, 1, nil)
 	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")

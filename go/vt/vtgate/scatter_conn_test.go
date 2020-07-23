@@ -122,3 +122,161 @@ func TestReservedOnMultiReplica(t *testing.T) {
 		assert.EqualValues(t, 0, sbc0_1.BeginCount.Get()+sbc0_2.BeginCount.Get(), "sbc0 begin count")
 	}
 }
+
+func TestReservedBeginTableDriven(t *testing.T) {
+	type testAction struct {
+		transaction, reserved    bool
+		shards                   []string
+		sbc0Reserve, sbc1Reserve int64
+		sbc0Begin, sbc1Begin     int64
+	}
+	type testCase struct {
+		name    string
+		actions []testAction
+	}
+
+	tests := []testCase{{
+		name: "begin",
+		actions: []testAction{
+			{
+				shards:      []string{"0"},
+				transaction: true,
+				sbc0Begin:   1,
+			}, {
+				shards:      []string{"0", "1"},
+				transaction: true,
+				sbc1Begin:   1,
+			}, {
+				shards:      []string{"0", "1"},
+				transaction: true,
+				// nothing needs to be done
+			}},
+	}, {
+		name: "reserve",
+		actions: []testAction{
+			{
+				shards:      []string{"1"},
+				reserved:    true,
+				sbc1Reserve: 1,
+			}, {
+				shards:      []string{"0", "1"},
+				reserved:    true,
+				sbc0Reserve: 1,
+			}, {
+				shards:   []string{"0", "1"},
+				reserved: true,
+				// nothing needs to be done
+			}},
+	}, {
+		name: "reserve everywhere",
+		actions: []testAction{
+			{
+				shards:      []string{"0", "1"},
+				reserved:    true,
+				sbc0Reserve: 1,
+				sbc1Reserve: 1,
+			}},
+	}, {
+		name: "begin then reserve",
+		actions: []testAction{
+			{
+				shards:      []string{"0"},
+				transaction: true,
+				sbc0Begin:   1,
+			}, {
+				shards:      []string{"0", "1"},
+				transaction: true,
+				reserved:    true,
+				sbc0Reserve: 1,
+				sbc1Reserve: 1,
+				sbc1Begin:   1,
+			}},
+	}, {
+		name: "reserve then begin",
+		actions: []testAction{
+			{
+				shards:      []string{"1"},
+				reserved:    true,
+				sbc1Reserve: 1,
+			}, {
+				shards:      []string{"0"},
+				transaction: true,
+				reserved:    true,
+				sbc0Reserve: 1,
+				sbc0Begin:   1,
+			}, {
+				shards:      []string{"0", "1"},
+				transaction: true,
+				reserved:    true,
+				sbc1Begin:   1,
+			}},
+	}, {
+		name: "reserveBegin",
+		actions: []testAction{
+			{
+				shards:      []string{"1"},
+				transaction: true,
+				reserved:    true,
+				sbc1Reserve: 1,
+				sbc1Begin:   1,
+			}, {
+				shards:      []string{"0"},
+				transaction: true,
+				reserved:    true,
+				sbc0Reserve: 1,
+				sbc0Begin:   1,
+			}, {
+				shards:      []string{"0", "1"},
+				transaction: true,
+				reserved:    true,
+				// nothing needs to be done
+			}},
+	}, {
+		name: "reserveBegin everywhere",
+		actions: []testAction{
+			{
+				shards:      []string{"0", "1"},
+				transaction: true,
+				reserved:    true,
+				sbc0Reserve: 1,
+				sbc0Begin:   1,
+				sbc1Reserve: 1,
+				sbc1Begin:   1,
+			}},
+	}}
+	for _, test := range tests {
+		keyspace := "keyspace"
+		createSandbox(keyspace)
+		hc := discovery.NewFakeHealthCheck()
+		sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
+		sbc0 := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
+		sbc1 := hc.AddTestTablet("aa", "1", 1, keyspace, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
+
+		// empty results
+		sbc0.SetResults([]*sqltypes.Result{{}})
+		sbc1.SetResults([]*sqltypes.Result{{}})
+
+		res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+
+		t.Run(test.name, func(t *testing.T) {
+			session := NewSafeSession(&vtgatepb.Session{})
+			for _, action := range test.actions {
+				session.Session.InTransaction = action.transaction
+				session.Session.InReservedConn = action.reserved
+				var destinations []key.Destination
+				for _, shard := range action.shards {
+					destinations = append(destinations, key.DestinationShard(shard))
+				}
+				executeOnShards(t, res, keyspace, sc, session, destinations)
+				assert.EqualValues(t, action.sbc0Reserve, sbc0.ReserveCount.Get(), "sbc0 reserve count")
+				assert.EqualValues(t, action.sbc0Begin, sbc0.BeginCount.Get(), "sbc0 begin count")
+				assert.EqualValues(t, action.sbc1Reserve, sbc1.ReserveCount.Get(), "sbc1 reserve count")
+				assert.EqualValues(t, action.sbc1Begin, sbc1.BeginCount.Get(), "sbc1 begin count")
+				sbc0.BeginCount.Set(0)
+				sbc0.ReserveCount.Set(0)
+				sbc1.BeginCount.Set(0)
+				sbc1.ReserveCount.Set(0)
+			}
+		})
+	}
+}
