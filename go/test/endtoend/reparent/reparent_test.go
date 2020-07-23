@@ -25,14 +25,13 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/log"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -121,7 +120,6 @@ func TestReparentDownMaster(t *testing.T) {
 		"-new_master", tablet62044.Alias,
 		"-wait_replicas_timeout", "30s")
 	require.NoError(t, err)
-	require.Nil(t, err)
 
 	// Check that old master tablet is left around for human intervention.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
@@ -221,6 +219,132 @@ func TestReparentNoChoiceDownMaster(t *testing.T) {
 		"EmergencyReparentShard",
 		"-keyspace_shard", keyspaceShard,
 		"-wait_replicas_timeout", "30s")
+	require.Nil(t, err)
+
+	// Check that old master tablet is left around for human intervention.
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
+	require.Error(t, err)
+
+	// Now we'll manually remove the old master, simulating a human cleaning up a dead master.
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
+		"DeleteTablet",
+		"-allow_master",
+		tablet62344.Alias)
+	require.Nil(t, err)
+
+	// Now validate topo is correct.
+	validateTopology(t, false)
+
+	var newMasterTablet *cluster.Vttablet
+	for _, tablet := range []*cluster.Vttablet{tablet62044, tablet41983, tablet31981} {
+		if isHealthyMasterTablet(t, tablet) {
+			newMasterTablet = tablet
+			break
+		}
+	}
+	require.NotNil(t, newMasterTablet)
+
+	// Check new master has latest transaction.
+	err = checkInsertedValues(ctx, t, newMasterTablet, 2)
+	require.Nil(t, err)
+
+	// bring back the old master as a replica, check that it catches up
+	tablet62344.MysqlctlProcess.InitMysql = false
+	err = tablet62344.MysqlctlProcess.Start()
+	require.Nil(t, err)
+	err = clusterInstance.VtctlclientProcess.InitTablet(tablet62344, tablet62344.Cell, keyspaceName, hostname, shardName)
+	require.Nil(t, err)
+
+	// As there is already a master the new replica will come directly in SERVING state
+	tablet62344.VttabletProcess.ServingStatus = "SERVING"
+	// Start the tablet
+	err = tablet62344.VttabletProcess.Setup()
+	require.Nil(t, err)
+
+	err = checkInsertedValues(ctx, t, tablet62344, 2)
+	require.Nil(t, err)
+
+	// Kill tablets
+	killTablets(t)
+}
+
+func TestReparentUnreachableReplicas(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+
+	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
+		// Create Database
+		err := tablet.VttabletProcess.CreateDB(keyspaceName)
+		require.Nil(t, err)
+
+		// Reset status, don't wait for the tablet status. We will check it later
+		tablet.VttabletProcess.ServingStatus = ""
+		// Init Tablet
+		err = clusterInstance.VtctlclientProcess.InitTablet(&tablet, tablet.Cell, keyspaceName, hostname, shardName)
+		require.Nil(t, err)
+
+		// Start the tablet
+		err = tablet.VttabletProcess.Setup()
+		require.Nil(t, err)
+	}
+
+	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
+		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
+		require.Nil(t, err)
+	}
+
+	// Init Shard Master
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
+		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
+	require.Nil(t, err)
+
+	validateTopology(t, true)
+
+	// create Tables
+	runSQL(ctx, t, sqlSchema, tablet62344)
+
+	// insert data into the old master, check the connected replica work
+	insertSQL1 := fmt.Sprintf(insertSQL, 2, 2)
+	runSQL(ctx, t, insertSQL1, tablet62344)
+	err = checkInsertedValues(ctx, t, tablet62044, 2)
+	require.Nil(t, err)
+	err = checkInsertedValues(ctx, t, tablet41983, 2)
+	require.Nil(t, err)
+	err = checkInsertedValues(ctx, t, tablet31981, 2)
+	require.Nil(t, err)
+
+	// Make the current master agent and database unavailable.
+	err = tablet62344.VttabletProcess.TearDown()
+	require.Nil(t, err)
+	err = tablet62344.MysqlctlProcess.Stop()
+	require.Nil(t, err)
+
+	// Take down a replica - this should cause the emergency reparent to fail.
+	err = tablet41983.VttabletProcess.TearDown()
+	require.Nil(t, err)
+	err = tablet41983.MysqlctlProcess.Stop()
+	require.Nil(t, err)
+
+	// We expect this one to fail because we have an unreachable replica
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
+		"EmergencyReparentShard",
+		"-keyspace_shard", keyspaceShard,
+		"-wait_replicas_timeout", "30s")
+	require.NotNil(t, err)
+
+	// Now let's run it again, but set the command to ignore the unreachable replica.
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
+		"EmergencyReparentShard",
+		"-keyspace_shard", keyspaceShard,
+		"-ignore_unreachable_replicas", tablet41983.Alias,
+		"-wait_replicas_timeout", "30s")
+	require.Nil(t, err)
+
+	// We'll bring back the replica we took down.
+	tablet41983.MysqlctlProcess.InitMysql = false
+	err = tablet41983.MysqlctlProcess.Start()
+	require.Nil(t, err)
+	err = clusterInstance.VtctlclientProcess.InitTablet(tablet41983, tablet41983.Cell, keyspaceName, hostname, shardName)
 	require.Nil(t, err)
 
 	// Check that old master tablet is left around for human intervention.
@@ -940,7 +1064,7 @@ func checkMasterTablet(t *testing.T, tablet *cluster.Vttablet) {
 	assert.Equal(t, topodatapb.TabletType_MASTER, tabletType)
 }
 
-// isHealthyMasterTablet will return if tablet is master AND healthy
+// isHealthyMasterTablet will return if tablet is master AND healthy.
 func isHealthyMasterTablet(t *testing.T, tablet *cluster.Vttablet) bool {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", tablet.Alias)
 	require.Nil(t, err)
