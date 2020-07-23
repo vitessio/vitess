@@ -19,7 +19,6 @@ package tabletserver
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
@@ -189,7 +188,6 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.registerQueryzHandler()
 	tsv.registerStreamQueryzHandlers()
 	tsv.registerTwopczHandler()
-	tsv.registerSchemaMigrationHandler()
 	return tsv
 }
 
@@ -1474,27 +1472,11 @@ func (tsv *TabletServer) EnableHistorian(enabled bool) {
 	_ = tsv.se.EnableHistorian(enabled)
 }
 
-func (tsv *TabletServer) registerSchemaMigrationHandler() {
-	tsv.exporter.HandleFunc("/schema-migration", func(w http.ResponseWriter, r *http.Request) {
-		ctx := tabletenv.LocalContext()
-		schema := r.URL.Query().Get("schema")
-		table := r.URL.Query().Get("table")
-		alter := r.URL.Query().Get("alter")
-		if alter == "" {
-			if b, err := ioutil.ReadAll(r.Body); err != nil {
-				alter = string(b)
-			}
-		}
-		if err := tsv.ghostExecutor.Execute(ctx, tsv.sm.target, tsv.alias, schema, table, alter); err != nil {
-			w.Write([]byte(err.Error()))
-		} else {
-			w.Write([]byte("submitted"))
-		}
-	})
-}
-
 // ApplyOnlineSchemaChange runs an online schema migration on this tablet server
 func (tsv *TabletServer) ApplyOnlineSchemaChange(ctx context.Context, change *tmutils.SchemaChange, dbName string) error {
+	// Table name is not provided in the below. That's because the SQL includes table name as part of
+	// ALTER TABLE statement, _and_ we assume gh-ost supports parsing and extracing the table from that statement
+	// see https://github.com/openark/gh-ost/pull/5 or https://github.com/github/gh-ost/pull/865
 	err := tsv.ghostExecutor.Execute(ctx, tsv.sm.target, tsv.alias, dbName, "", change.SQL)
 
 	return err
