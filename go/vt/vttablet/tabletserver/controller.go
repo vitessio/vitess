@@ -85,7 +85,7 @@ type Controller interface {
 	// SchemaEngine returns the SchemaEngine object used by this Controller
 	SchemaEngine() *schema.Engine
 
-	// ApplyOnlineSchemaChange rnus an online schema change operation
+	// ApplyOnlineSchemaChange runs an online schema change operation
 	ApplyOnlineSchemaChange(ctx context.Context, change *tmutils.SchemaChange, dbName string) error
 
 	// BroadcastHealth sends the current health to all listeners
