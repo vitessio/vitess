@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -381,12 +382,12 @@ func (tm *TabletManager) demoteMaster(ctx context.Context, revertPartialFailure 
 		// considered successful. If we are already not serving, this will be
 		// idempotent.
 		log.Infof("DemoteMaster disabling query service")
-		if err := tm.QueryServiceControl.SetServingType(tablet.Type, tm.tmState.MasterTermStartTime(), false, "demotion in progress"); err != nil {
+		if err := tm.QueryServiceControl.SetServingType(tablet.Type, logutil.ProtoToTime(tablet.MasterTermStartTime), false, "demotion in progress"); err != nil {
 			return nil, vterrors.Wrap(err, "SetServingType(serving=false) failed")
 		}
 		defer func() {
 			if finalErr != nil && revertPartialFailure && wasServing {
-				if err := tm.QueryServiceControl.SetServingType(tablet.Type, tm.tmState.MasterTermStartTime(), true, ""); err != nil {
+				if err := tm.QueryServiceControl.SetServingType(tablet.Type, logutil.ProtoToTime(tablet.MasterTermStartTime), true, ""); err != nil {
 					log.Warningf("SetServingType(serving=true) failed during revert: %v", err)
 				}
 			}
@@ -460,7 +461,7 @@ func (tm *TabletManager) UndoDemoteMaster(ctx context.Context) error {
 	// Update serving graph
 	tablet := tm.Tablet()
 	log.Infof("UndoDemoteMaster re-enabling query service")
-	if err := tm.QueryServiceControl.SetServingType(tablet.Type, tm.tmState.MasterTermStartTime(), true, ""); err != nil {
+	if err := tm.QueryServiceControl.SetServingType(tablet.Type, logutil.ProtoToTime(tablet.MasterTermStartTime), true, ""); err != nil {
 		return vterrors.Wrap(err, "SetServingType(serving=true) failed")
 	}
 

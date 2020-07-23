@@ -95,6 +95,14 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 
 		switch tablet.Type {
 		case topodatapb.TabletType_MASTER:
+			// This is a failsafe code because we've seen races that can cause
+			// master term start time to become zero.
+			if tablet.MasterTermStartTime == nil {
+				log.Errorf("MasterTermStartTime should not be nil: %v", tablet)
+				// Start retry timer and go back to sleep.
+				retryChan = time.After(*shardSyncRetryDelay)
+				continue
+			}
 			// If we think we're master, check if we need to update the shard record.
 			// Fetch the start time from the record we just got, because the tm's tablet can change.
 			masterAlias, err := syncShardMaster(ctx, tm.TopoServer, tablet, logutil.ProtoToTime(tablet.MasterTermStartTime))
