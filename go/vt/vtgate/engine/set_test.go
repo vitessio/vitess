@@ -31,6 +31,40 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+func TestSetSystemVariableAsString(t *testing.T) {
+	setOp := SysVarSet{
+		Name: "x",
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		Expr: "dummy_expr",
+	}
+
+	set := &Set{
+		Ops:   []SetOp{&setOp},
+		Input: &SingleRow{},
+	}
+	vc := &loggingVCursor{
+		shards: []string{"-20", "20-"},
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"id",
+				"varchar",
+			),
+			"foobar",
+		)},
+	}
+	_, err := set.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+
+	vc.ExpectLog(t, []string{
+		"ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)",
+		"ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false",
+		"SysVar set with (x,'foobar')",
+	})
+}
+
 func TestSetTable(t *testing.T) {
 	type testCase struct {
 		testName         string
