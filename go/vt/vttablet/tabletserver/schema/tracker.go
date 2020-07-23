@@ -154,7 +154,7 @@ func (tr *Tracker) process(ctx context.Context) {
 					gtid = event.Gtid
 				}
 				if event.Type == binlogdatapb.VEventType_DDL {
-					if err := tr.schemaUpdated(gtid, event.Ddl, event.Timestamp); err != nil {
+					if err := tr.schemaUpdated(gtid, event.Statement, event.Timestamp); err != nil {
 						tr.env.Stats().ErrorCounters.Add(vtrpcpb.Code_INTERNAL.String(), 1)
 						log.Errorf("Error updating schema: %s", sqlparser.TruncateForLog(err.Error()))
 					}

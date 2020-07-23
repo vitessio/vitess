@@ -150,7 +150,7 @@ func (c *echoClient) VStream(ctx context.Context, tabletType topodatapb.TabletTy
 				Type:      1,
 				Timestamp: 1234,
 				Gtid:      "echo-gtid-1",
-				Ddl:       "echo-ddl-1",
+				Statement: "echo-ddl-1",
 				Vgtid:     vgtid,
 				RowEvent: &binlogdatapb.RowEvent{
 					TableName: "echo-table-1",
@@ -160,7 +160,7 @@ func (c *echoClient) VStream(ctx context.Context, tabletType topodatapb.TabletTy
 				Type:      2,
 				Timestamp: 4321,
 				Gtid:      "echo-gtid-2",
-				Ddl:       "echo-ddl-2",
+				Statement: "echo-ddl-2",
 				Vgtid:     vgtid,
 				FieldEvent: &binlogdatapb.FieldEvent{
 					TableName: "echo-table-2",
