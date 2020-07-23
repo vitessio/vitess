@@ -75,6 +75,44 @@ func TestExecutorResultsExceeded(t *testing.T) {
 	assert.Equal(t, initial+1, warnings.Counts()["ResultsExceeded"], "warnings count")
 }
 
+func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
+	save := *maxMemoryRows
+	*maxMemoryRows = 3
+	defer func() { *maxMemoryRows = save }()
+
+	executor, _, _, sbclookup := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
+	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64"), "1", "2", "3", "4")
+	target := querypb.Target{}
+	fn := func(r *sqltypes.Result) error {
+		return nil
+	}
+	testCases := []struct {
+		query string
+		err   string
+	}{
+		{"select /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ * from main1", ""},
+		{"select * from main1", "in-memory row count exceeded allowed limit of 3"},
+	}
+
+	for _, test := range testCases {
+		sbclookup.SetResults([]*sqltypes.Result{result})
+		stmt, err := sqlparser.Parse(test.query)
+		require.NoError(t, err)
+
+		_, err = executor.Execute(ctx, "TestExecutorMaxMemoryRowsExceeded", session, test.query, nil)
+		if sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt) {
+			require.NoError(t, err, "no error when DirectiveIgnoreMaxMemoryRows is provided")
+		} else {
+			assert.EqualError(t, err, test.err, "maxMemoryRows limit exceeded")
+		}
+
+		sbclookup.SetResults([]*sqltypes.Result{result})
+		err = executor.StreamExecute(ctx, "TestExecutorMaxMemoryRowsExceeded", session, test.query, nil, target, fn)
+		require.NoError(t, err, "maxMemoryRows limit does not apply to StreamExecute")
+	}
+}
+
 func TestLegacyExecutorTransactionsNoAutoCommit(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})

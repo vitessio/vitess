@@ -58,7 +58,7 @@ var _ iExecute = (*Executor)(nil)
 // vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
 type iExecute interface {
 	Execute(ctx context.Context, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
-	ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool) (qr *sqltypes.Result, errs []error)
+	ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool) (qr *sqltypes.Result, errs []error)
 	StreamExecuteMulti(ctx context.Context, s string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error
 
 	// TODO: remove when resolver is gone
@@ -88,6 +88,7 @@ type vcursorImpl struct {
 	// executed. If there was a subsequent failure, the transaction
 	// must be forced to rollback.
 	rollbackOnPartialExec bool
+	ignoreMaxMemoryRows   bool
 	vschema               *vindexes.VSchema
 	vm                    VSchemaOperator
 }
@@ -167,6 +168,17 @@ func (vc *vcursorImpl) Context() context.Context {
 // MaxMemoryRows returns the maxMemoryRows flag value.
 func (vc *vcursorImpl) MaxMemoryRows() int {
 	return *maxMemoryRows
+}
+
+// ExceedsMaxMemoryRows returns a boolean indicating whether the maxMemoryRows value has been exceeded.
+// Returns false if the max memory rows override directive is set to true.
+func (vc *vcursorImpl) ExceedsMaxMemoryRows(numRows int) bool {
+	return !vc.ignoreMaxMemoryRows && numRows > *maxMemoryRows
+}
+
+// SetIgnoreMaxMemoryRows sets the ignoreMaxMemoryRows value.
+func (vc *vcursorImpl) SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows bool) {
+	vc.ignoreMaxMemoryRows = ignoreMaxMemoryRows
 }
 
 // SetContextTimeout updates context and sets a timeout.
@@ -284,7 +296,7 @@ func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]
 // ExecuteMultiShard is part of the engine.VCursor interface.
 func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, autocommit bool) (*sqltypes.Result, []error) {
 	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(queries)))
-	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.safeSession, autocommit)
+	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.safeSession, autocommit, vc.ignoreMaxMemoryRows)
 
 	if errs == nil && rollbackOnError {
 		vc.rollbackOnPartialExec = true
@@ -308,7 +320,7 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 	}
 	// The autocommit flag is always set to false because we currently don't
 	// execute DMLs through ExecuteStandalone.
-	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, bqs, NewAutocommitSession(vc.safeSession.Session), false /* autocommit */)
+	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, bqs, NewAutocommitSession(vc.safeSession.Session), false /* autocommit */, vc.ignoreMaxMemoryRows)
 	return qr, vterrors.Aggregate(errs)
 }
 
