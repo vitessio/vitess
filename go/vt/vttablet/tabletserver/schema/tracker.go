@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/withddl"
 )
 
+const createSidecarDB = "CREATE DATABASE IF NOT EXISTS _vt"
 const createSchemaTrackingTable = `CREATE TABLE IF NOT EXISTS _vt.schema_version (
 		 id INT AUTO_INCREMENT,
 		  pos VARBINARY(10000) NOT NULL,
@@ -48,6 +49,7 @@ const alterSchemaTrackingTableDDLBlob = "alter table _vt.schema_version modify c
 const alterSchemaTrackingTableSchemaxBlob = "alter table _vt.schema_version modify column schemax LONGBLOB NOT NULL"
 
 var withDDL = withddl.New([]string{
+	createSidecarDB,
 	createSchemaTrackingTable,
 	alterSchemaTrackingTableDDLBlob,
 	alterSchemaTrackingTableSchemaxBlob,
