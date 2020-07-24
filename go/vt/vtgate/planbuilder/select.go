@@ -89,6 +89,12 @@ func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 // pushed into a route, then a primitive is created on top of any
 // of the above trees to make it discard unwanted rows.
 func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) error {
+	// Check and error if there is any locking function present in select expression.
+	for _, expr := range sel.SelectExprs {
+		if aExpr, ok := expr.(*sqlparser.AliasedExpr); ok && sqlparser.IsLockingFunc(aExpr.Expr) {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "%v allowed only with dual", sqlparser.String(aExpr))
+		}
+	}
 	if sel.SQLCalcFoundRows && sel.Limit != nil {
 		return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "sql_calc_found_rows not yet fully supported")
 	}
