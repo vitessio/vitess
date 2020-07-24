@@ -41,9 +41,10 @@ func TestExecutorSet(t *testing.T) {
 	executorEnv, _, _, _ := createExecutorEnv()
 
 	testcases := []struct {
-		in  string
-		out *vtgatepb.Session
-		err string
+		in     string
+		out    *vtgatepb.Session
+		err    string
+		target string
 	}{{
 		in:  "set autocommit = 1",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -237,11 +238,13 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set skip_query_plan_cache = 0",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
-		in:  "set sql_auto_is_null = 0",
-		out: &vtgatepb.Session{Autocommit: true, RowCount: -1},
+		in:     "set sql_auto_is_null = 0",
+		target: "TestExecutor",
+		out:    &vtgatepb.Session{Autocommit: true, TargetString: "TestExecutor"},
 	}, {
-		in:  "set sql_auto_is_null = 1",
-		out: &vtgatepb.Session{Autocommit: true, RowCount: -1},
+		in:     "set sql_auto_is_null = 1",
+		target: "TestExecutor",
+		out:    &vtgatepb.Session{Autocommit: true, TargetString: "TestExecutor"},
 	}, {
 		in:  "set tx_read_only = 2",
 		err: "unexpected value for tx_read_only: 2",
@@ -287,7 +290,7 @@ func TestExecutorSet(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
-			session := NewSafeSession(&vtgatepb.Session{Autocommit: true})
+			session := NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: tcase.target})
 			_, err := executorEnv.Execute(context.Background(), "TestExecute", session, tcase.in, nil)
 			if tcase.err == "" {
 				utils.MustMatch(t, tcase.out, session.Session, "new executor")
