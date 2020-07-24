@@ -2852,7 +2852,17 @@ func commandVExec(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	if len(results) == 0 {
 		wr.Logger().Printf("no result returned\n")
 	}
-	qr := queryResultFromVexecResults(results)
+	var qr *sqltypes.Result
+	var numFields int
+	for _, result := range results {
+		numFields = len(result.Fields)
+		break
+	}
+	if numFields != 0 {
+		qr = queryResultForTabletResults(results)
+	} else {
+		qr = queryResultForRowsAffected(results)
+	}
 	if len(qr.Rows) == 0 {
 		return nil
 	}
@@ -2864,7 +2874,7 @@ func commandVExec(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 }
 
 // called for workflow stop/start/delete. Only rows affected are reported per tablet
-func queryResultFromWorkflowResults(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
+func queryResultForRowsAffected(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
 	var qr = &sqltypes.Result{}
 	qr.RowsAffected = uint64(len(results))
 	qr.Fields = []*querypb.Field{{
@@ -2884,7 +2894,7 @@ func queryResultFromWorkflowResults(results map[*topo.TabletInfo]*sqltypes.Resul
 	return qr
 }
 
-func queryResultFromVexecResults(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
+func queryResultForTabletResults(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
 	var qr = &sqltypes.Result{}
 	qr.RowsAffected = uint64(len(results))
 	qr.Fields = []*querypb.Field{{
@@ -2935,7 +2945,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 		wr.Logger().Printf("no result returned\n")
 		return nil
 	}
-	qr := queryResultFromWorkflowResults(results)
+	qr := queryResultForRowsAffected(results)
 
 	printQueryResult(loggerWriter{wr.Logger()}, qr)
 	return nil
