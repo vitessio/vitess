@@ -353,7 +353,7 @@ func TestLegaceHealthCheckFailsOnReservedConnections(t *testing.T) {
 		})
 	}
 
-	_, errs := sc.ExecuteMultiShard(ctx, rss, queries, session, false)
+	_, errs := sc.ExecuteMultiShard(ctx, rss, queries, session, false, false)
 	require.Error(t, vterrors.Aggregate(errs))
 }
 
