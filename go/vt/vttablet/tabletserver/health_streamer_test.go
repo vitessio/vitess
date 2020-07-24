@@ -40,7 +40,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	target := querypb.Target{}
 	hs.InitDBConfig(target)
 
-	ch, cancel := testStream(t, hs)
+	ch, cancel := testStream(hs)
 	defer cancel()
 
 	shr := <-ch
@@ -118,7 +118,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	assert.Equal(t, want, shr)
 }
 
-func testStream(t *testing.T, hs *healthStreamer) (<-chan *querypb.StreamHealthResponse, context.CancelFunc) {
+func testStream(hs *healthStreamer) (<-chan *querypb.StreamHealthResponse, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.Background())
 	ch := make(chan *querypb.StreamHealthResponse)
 	go func() {
