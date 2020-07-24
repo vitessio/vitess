@@ -98,6 +98,8 @@ var ignoreThese = []string{
 	"query_prealloc_size",
 	"sql_buffer_result",
 	"transaction_alloc_block_size",
+	"sql_auto_is_null",
+	"wait_timeout",
 }
 
 var saveSettingsToSession = []string{

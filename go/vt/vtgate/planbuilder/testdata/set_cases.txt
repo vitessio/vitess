@@ -107,3 +107,65 @@
 # only allow whitelisted functions
 "set @foo = BAD_FUNC()"
 "expression not supported for SET: BAD_FUNC()"
+
+# single sysvar cases
+"SET sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'"
+{
+  "QueryType": "SET",
+  "Original": "SET sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarSet",
+        "Name": "sql_mode",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Expr": "'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+
+# multiple sysvar cases
+"SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'), @@SESSION.sql_auto_is_null = 0, @@SESSION.wait_timeout = 2147483"
+{
+  "QueryType": "SET",
+  "Original": "SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'), @@SESSION.sql_auto_is_null = 0, @@SESSION.wait_timeout = 2147483",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarSet",
+        "Name": "sql_mode",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Expr": "CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO')"
+      },
+      {
+        "Type": "SysVarIgnore",
+        "Name": "sql_auto_is_null",
+        "Expr": "0"
+      },
+      {
+        "Type": "SysVarIgnore",
+        "Name": "wait_timeout",
+        "Expr": "2147483"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
