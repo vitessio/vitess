@@ -135,10 +135,10 @@
 }
 
 # multiple sysvar cases
-"SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'), @@SESSION.sql_auto_is_null = 0, @@SESSION.wait_timeout = 2147483"
+"SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'), @@SESSION.sql_safe_updates = 0"
 {
   "QueryType": "SET",
-  "Original": "SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'), @@SESSION.sql_auto_is_null = 0, @@SESSION.wait_timeout = 2147483",
+  "Original": "SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'), @@SESSION.sql_safe_updates = 0",
   "Instructions": {
     "OperatorType": "Set",
     "Ops": [
@@ -152,14 +152,13 @@
         "Expr": "CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO')"
       },
       {
-        "Type": "SysVarIgnore",
-        "Name": "sql_auto_is_null",
+        "Type": "SysVarSet",
+        "Name": "sql_safe_updates",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
         "Expr": "0"
-      },
-      {
-        "Type": "SysVarIgnore",
-        "Name": "wait_timeout",
-        "Expr": "2147483"
       }
     ],
     "Inputs": [

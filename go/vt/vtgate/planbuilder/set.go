@@ -98,20 +98,54 @@ var ignoreThese = []string{
 	"query_prealloc_size",
 	"sql_buffer_result",
 	"transaction_alloc_block_size",
-	"sql_auto_is_null",
-	"wait_timeout",
 }
 
 var saveSettingsToSession = []string{
 	"sql_mode",
 	"sql_safe_updates",
 }
+
 var allowSetIfValueAlreadySet = []string{}
+
+var vitessShouldBeAwareOf = []string{
+	"block_encryption_mode",
+	"character_set_client",
+	"character_set_connection",
+	"character_set_database",
+	"character_set_filesystem",
+	"character_set_server",
+	"collation_connection",
+	"collation_database",
+	"collation_server",
+	"completion_type",
+	"div_precision_increment",
+	"innodb_lock_wait_timeout",
+	"interactive_timeout",
+	"lc_time_names",
+	"lock_wait_timeout",
+	"max_allowed_packet",
+	"max_error_count",
+	"max_execution_time",
+	"max_join_size",
+	"max_length_for_sort_data",
+	"max_sort_length",
+	"max_user_connections",
+	"session_track_gtids",
+	"session_track_schema",
+	"session_track_state_change",
+	"session_track_system_variables",
+	"session_track_transaction_info",
+	"time_zone",
+	"transaction_isolation",
+	"version_tokens_session",
+	"wait_timeout",
+}
 
 func init() {
 	forSettings(ignoreThese, buildSetOpIgnore)
 	forSettings(saveSettingsToSession, buildSetOpVarSet)
 	forSettings(allowSetIfValueAlreadySet, buildSetOpCheckAndIgnore)
+	forSettings(vitessShouldBeAwareOf, buildSetOpCheckAndIgnore)
 	forSettings(notSupported, buildNotSupported)
 }
 
