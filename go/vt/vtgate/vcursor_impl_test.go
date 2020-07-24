@@ -195,33 +195,22 @@ func TestDestinationKeyspace(t *testing.T) {
 	}
 }
 
-func TestSetTarget(t *testing.T) {
-	ks1 := &vindexes.Keyspace{
-		Name:    "ks1",
-		Sharded: false,
-	}
-	ks1Schema := &vindexes.KeyspaceSchema{
-		Keyspace: ks1,
-		Tables:   nil,
-		Vindexes: nil,
-		Error:    nil,
-	}
-	ks2 := &vindexes.Keyspace{
-		Name:    "ks2",
-		Sharded: false,
-	}
-	ks2Schema := &vindexes.KeyspaceSchema{
-		Keyspace: ks2,
-		Tables:   nil,
-		Vindexes: nil,
-		Error:    nil,
-	}
-	vschemaWith2KS := &vindexes.VSchema{
-		Keyspaces: map[string]*vindexes.KeyspaceSchema{
-			ks1.Name: ks1Schema,
-			ks2.Name: ks2Schema,
-		}}
+var ks1 = &vindexes.Keyspace{Name: "ks1"}
+var ks1Schema = &vindexes.KeyspaceSchema{Keyspace: ks1}
+var ks2 = &vindexes.Keyspace{Name: "ks2"}
+var ks2Schema = &vindexes.KeyspaceSchema{Keyspace: ks2}
+var vschemaWith1KS = &vindexes.VSchema{
+	Keyspaces: map[string]*vindexes.KeyspaceSchema{
+		ks1.Name: ks1Schema,
+	},
+}
+var vschemaWith2KS = &vindexes.VSchema{
+	Keyspaces: map[string]*vindexes.KeyspaceSchema{
+		ks1.Name: ks1Schema,
+		ks2.Name: ks2Schema,
+	}}
 
+func TestSetTarget(t *testing.T) {
 	type testCase struct {
 		vschema       *vindexes.VSchema
 		targetString  string
@@ -263,22 +252,6 @@ func TestSetTarget(t *testing.T) {
 }
 
 func TestPlanPrefixKey(t *testing.T) {
-	ks1 := &vindexes.Keyspace{
-		Name:    "ks1",
-		Sharded: false,
-	}
-	ks1Schema := &vindexes.KeyspaceSchema{
-		Keyspace: ks1,
-		Tables:   nil,
-		Vindexes: nil,
-		Error:    nil,
-	}
-	vschemaWith1KS := &vindexes.VSchema{
-		Keyspaces: map[string]*vindexes.KeyspaceSchema{
-			ks1.Name: ks1Schema,
-		},
-	}
-
 	type testCase struct {
 		vschema               *vindexes.VSchema
 		targetString          string
@@ -313,4 +286,22 @@ func TestPlanPrefixKey(t *testing.T) {
 			require.Equal(t, tc.expectedPlanPrefixKey, vc.planPrefixKey())
 		})
 	}
+}
+
+func TestFirstSortedKeyspace(t *testing.T) {
+	ks1Schema := &vindexes.KeyspaceSchema{Keyspace: &vindexes.Keyspace{Name: "xks1"}}
+	ks2Schema := &vindexes.KeyspaceSchema{Keyspace: &vindexes.Keyspace{Name: "aks2"}}
+	ks3Schema := &vindexes.KeyspaceSchema{Keyspace: &vindexes.Keyspace{Name: "aks1"}}
+	vschemaWith2KS := &vindexes.VSchema{
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			ks1Schema.Keyspace.Name: ks1Schema,
+			ks2Schema.Keyspace.Name: ks2Schema,
+			ks3Schema.Keyspace.Name: ks3Schema,
+		}}
+
+	vc, err := newVCursorImpl(context.Background(), NewSafeSession(nil), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: vschemaWith2KS}, vschemaWith2KS, srvtopo.NewResolver(&fakeTopoServer{}, nil, ""))
+	require.NoError(t, err)
+	ks, err := vc.FirstSortedKeyspace()
+	require.NoError(t, err)
+	require.Equal(t, ks3Schema.Keyspace, ks)
 }

@@ -31,7 +31,7 @@ import (
 )
 
 func TestStreamSQLUnsharded(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	executor, _, _, _ := createLegacyExecutorEnv()
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 

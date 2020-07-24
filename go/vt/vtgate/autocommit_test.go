@@ -36,7 +36,7 @@ import (
 
 // TestAutocommitUpdateSharded: instant-commit.
 func TestAutocommitUpdateSharded(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 
 	_, err := autocommitExec(executor, "update user set a=2 where id = 1")
 	require.NoError(t, err)
@@ -53,7 +53,7 @@ func TestAutocommitUpdateSharded(t *testing.T) {
 
 // TestAutocommitUpdateLookup: transaction: select before update.
 func TestAutocommitUpdateLookup(t *testing.T) {
-	executor, sbc1, _, sbclookup := createExecutorEnv()
+	executor, sbc1, _, sbclookup := createLegacyExecutorEnv()
 	sbclookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("b|a", "int64|varbinary"),
 		"2|1",
@@ -82,7 +82,7 @@ func TestAutocommitUpdateLookup(t *testing.T) {
 
 // TestAutocommitUpdateVindexChange: transaction: select & update before final update.
 func TestAutocommitUpdateVindexChange(t *testing.T) {
-	executor, sbc, _, sbclookup := createExecutorEnv()
+	executor, sbc, _, sbclookup := createLegacyExecutorEnv()
 	sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("id|name|lastname", "int64|int32|varchar"),
 		"1|1|foo",
@@ -121,7 +121,7 @@ func TestAutocommitUpdateVindexChange(t *testing.T) {
 
 // TestAutocommitDeleteSharded: instant-commit.
 func TestAutocommitDeleteSharded(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 
 	_, err := autocommitExec(executor, "delete from user_extra where user_id = 1")
 	require.NoError(t, err)
@@ -138,7 +138,7 @@ func TestAutocommitDeleteSharded(t *testing.T) {
 
 // TestAutocommitDeleteLookup: transaction: select before update.
 func TestAutocommitDeleteLookup(t *testing.T) {
-	executor, sbc1, _, sbclookup := createExecutorEnv()
+	executor, sbc1, _, sbclookup := createLegacyExecutorEnv()
 	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("id|name|lastname", "int64|int32|varchar"),
 		"1|1|foo",
@@ -180,7 +180,7 @@ func TestAutocommitDeleteLookup(t *testing.T) {
 
 // TestAutocommitDeleteIn: instant-commit.
 func TestAutocommitDeleteIn(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 
 	_, err := autocommitExec(executor, "delete from user_extra where user_id in (1, 2)")
 	require.NoError(t, err)
@@ -197,7 +197,7 @@ func TestAutocommitDeleteIn(t *testing.T) {
 
 // TestAutocommitDeleteMultiShard: instant-commit.
 func TestAutocommitDeleteMultiShard(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 
 	_, err := autocommitExec(executor, "delete from user_extra where user_id = user_id + 1")
 	require.NoError(t, err)
@@ -217,7 +217,7 @@ func TestAutocommitDeleteMultiShard(t *testing.T) {
 
 // TestAutocommitDeleteMultiShardAutoCommit: instant-commit.
 func TestAutocommitDeleteMultiShardAutoCommit(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 
 	_, err := autocommitExec(executor, "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where user_id = user_id + 1")
 	require.NoError(t, err)
@@ -237,7 +237,7 @@ func TestAutocommitDeleteMultiShardAutoCommit(t *testing.T) {
 
 // TestAutocommitInsertSharded: instant-commit.
 func TestAutocommitInsertSharded(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 
 	_, err := autocommitExec(executor, "insert into user_extra(user_id, v) values (1, 2)")
 	require.NoError(t, err)
@@ -256,7 +256,7 @@ func TestAutocommitInsertSharded(t *testing.T) {
 
 // TestAutocommitInsertLookup: transaction: select before update.
 func TestAutocommitInsertLookup(t *testing.T) {
-	executor, sbc1, _, sbclookup := createExecutorEnv()
+	executor, sbc1, _, sbclookup := createLegacyExecutorEnv()
 
 	_, err := autocommitExec(executor, "insert into user(id, v, name) values (1, 2, 'myname')")
 	require.NoError(t, err)
@@ -283,7 +283,7 @@ func TestAutocommitInsertLookup(t *testing.T) {
 
 // TestAutocommitInsertShardAutoCommit: instant-commit.
 func TestAutocommitInsertMultishardAutoCommit(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 
 	_, err := autocommitExec(executor, "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (1, 2), (3, 4)")
 	require.NoError(t, err)
@@ -306,7 +306,7 @@ func TestAutocommitInsertMultishardAutoCommit(t *testing.T) {
 	}})
 	testCommitCount(t, "sbc2", sbc2, 0)
 
-	executor, sbc1, sbc2, _ = createExecutorEnv()
+	executor, sbc1, sbc2, _ = createLegacyExecutorEnv()
 	// Make the first shard fail - the second completes anyway
 	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = autocommitExec(executor, "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user_extra(user_id, v) values (1, 2), (3, 4)")
@@ -327,7 +327,7 @@ func TestAutocommitInsertMultishardAutoCommit(t *testing.T) {
 }
 
 func TestAutocommitInsertMultishard(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 
 	_, err := autocommitExec(executor, "insert into user_extra(user_id, v) values (1, 2), (3, 4)")
 	require.NoError(t, err)
@@ -353,7 +353,7 @@ func TestAutocommitInsertMultishard(t *testing.T) {
 
 // TestAutocommitInsertAutoinc: instant-commit: sequence fetch is not transactional.
 func TestAutocommitInsertAutoinc(t *testing.T) {
-	executor, _, _, sbclookup := createExecutorEnv()
+	executor, _, _, sbclookup := createLegacyExecutorEnv()
 
 	_, err := autocommitExec(executor, "insert into main1(id, name) values (null, 'myname')")
 	require.NoError(t, err)
@@ -372,7 +372,7 @@ func TestAutocommitInsertAutoinc(t *testing.T) {
 
 // TestAutocommitTransactionStarted: no instant-commit.
 func TestAutocommitTransactionStarted(t *testing.T) {
-	executor, sbc1, _, _ := createExecutorEnv()
+	executor, sbc1, _, _ := createLegacyExecutorEnv()
 
 	session := &vtgatepb.Session{
 		TargetString:    "@master",
@@ -394,7 +394,7 @@ func TestAutocommitTransactionStarted(t *testing.T) {
 
 // TestAutocommitDirectTarget: instant-commit.
 func TestAutocommitDirectTarget(t *testing.T) {
-	executor, _, _, sbclookup := createExecutorEnv()
+	executor, _, _, sbclookup := createLegacyExecutorEnv()
 
 	session := &vtgatepb.Session{
 		TargetString:    "TestUnsharded/0@master",
@@ -415,7 +415,7 @@ func TestAutocommitDirectTarget(t *testing.T) {
 
 // TestAutocommitDirectRangeTarget: no instant-commit.
 func TestAutocommitDirectRangeTarget(t *testing.T) {
-	executor, sbc1, _, _ := createExecutorEnv()
+	executor, sbc1, _, _ := createLegacyExecutorEnv()
 
 	session := &vtgatepb.Session{
 		TargetString:    "TestExecutor[-]@master",

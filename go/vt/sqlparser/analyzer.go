@@ -406,3 +406,21 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 	}
 	return sqltypes.PlanValue{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expression is too complex '%v'", String(node))
 }
+
+//IsLockingFunc returns true for all functions that are used to work with mysql advisory locks
+func IsLockingFunc(node Expr) bool {
+	switch p := node.(type) {
+	case *FuncExpr:
+		_, found := lockingFunctions[p.Name.Lowered()]
+		return found
+	}
+	return false
+}
+
+var lockingFunctions = map[string]interface{}{
+	"get_lock":          nil,
+	"is_free_lock":      nil,
+	"is_used_lock":      nil,
+	"release_all_locks": nil,
+	"release_lock":      nil,
+}

@@ -38,7 +38,7 @@ import (
 )
 
 func TestUpdateEqual(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnv()
 
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -269,7 +269,7 @@ func TestUpdateMultiOwned(t *testing.T) {
 }
 
 func TestUpdateComments(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 
 	_, err := executorExec(executor, "update user set a=2 where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
@@ -286,7 +286,7 @@ func TestUpdateComments(t *testing.T) {
 }
 
 func TestUpdateNormalize(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 
 	executor.normalize = true
 	_, err := executorExec(executor, "/* leading */ update user set a=2 where id = 1 /* trailing */", nil)
@@ -324,7 +324,7 @@ func TestUpdateNormalize(t *testing.T) {
 }
 
 func TestDeleteEqual(t *testing.T) {
-	executor, sbc, _, sbclookup := createExecutorEnv()
+	executor, sbc, _, sbclookup := createLegacyExecutorEnv()
 
 	sbc.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -457,7 +457,7 @@ func TestDeleteEqual(t *testing.T) {
 }
 
 func TestUpdateScatter(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 	_, err := executorExec(executor, "update user_extra set col = 2", nil)
 	require.NoError(t, err)
 	// Queries get annotatted.
@@ -474,7 +474,7 @@ func TestUpdateScatter(t *testing.T) {
 }
 
 func TestDeleteScatter(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 	_, err := executorExec(executor, "delete from user_extra", nil)
 	require.NoError(t, err)
 	// Queries get annotatted.
@@ -491,7 +491,7 @@ func TestDeleteScatter(t *testing.T) {
 }
 
 func TestDeleteByDestination(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 	// This query is not supported in v3, so we know for sure is taking the DeleteByDestination route
 	_, err := executorExec(executor, "delete from `TestExecutor[-]`.user_extra limit 10", nil)
 	require.NoError(t, err)
@@ -509,7 +509,7 @@ func TestDeleteByDestination(t *testing.T) {
 }
 
 func TestDeleteComments(t *testing.T) {
-	executor, sbc, _, sbclookup := createExecutorEnv()
+	executor, sbc, _, sbclookup := createLegacyExecutorEnv()
 
 	sbc.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -549,7 +549,7 @@ func TestDeleteComments(t *testing.T) {
 }
 
 func TestInsertSharded(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnv()
 
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -630,7 +630,7 @@ func TestInsertSharded(t *testing.T) {
 }
 
 func TestInsertShardedKeyrange(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	executor, _, _, _ := createLegacyExecutorEnv()
 
 	// If a unique vindex returns a keyrange, we fail the insert
 	_, err := executorExec(executor, "insert into keyrange_table(krcol_unique, krcol) values(1, 1)", nil)
@@ -718,7 +718,7 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 }
 
 func TestInsertShardedIgnore(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnv()
 
 	// Build the sequence of responses for sbclookup. This should
 	// match the sequence of queries we validate below.
@@ -882,7 +882,7 @@ func TestInsertShardedIgnore(t *testing.T) {
 func TestInsertOnDupKey(t *testing.T) {
 	// This test just sanity checks that the statement is getting passed through
 	// correctly. The full set of use cases are covered by TestInsertShardedIgnore.
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnv()
 	sbclookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("b|a", "int64|varbinary"),
 		"1|1",
@@ -930,7 +930,7 @@ func TestInsertOnDupKey(t *testing.T) {
 }
 
 func TestAutocommitFail(t *testing.T) {
-	executor, sbc1, _, _ := createExecutorEnv()
+	executor, sbc1, _, _ := createLegacyExecutorEnv()
 
 	query := "insert into user (id) values (1)"
 	sbc1.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 1
@@ -947,7 +947,7 @@ func TestAutocommitFail(t *testing.T) {
 }
 
 func TestInsertComments(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnv()
 
 	_, err := executorExec(executor, "insert into user(id, v, name) values (1, 2, 'myname') /* trailing */", nil)
 	require.NoError(t, err)
@@ -978,7 +978,7 @@ func TestInsertComments(t *testing.T) {
 }
 
 func TestInsertGeneratorSharded(t *testing.T) {
-	executor, sbc, _, sbclookup := createExecutorEnv()
+	executor, sbc, _, sbclookup := createLegacyExecutorEnv()
 
 	sbclookup.SetResults([]*sqltypes.Result{{
 		Rows: [][]sqltypes.Value{{
@@ -1019,7 +1019,7 @@ func TestInsertGeneratorSharded(t *testing.T) {
 }
 
 func TestInsertAutoincSharded(t *testing.T) {
-	router, sbc, _, _ := createExecutorEnv()
+	router, sbc, _, _ := createLegacyExecutorEnv()
 
 	// Fake a mysql auto-inc response.
 	wantResult := &sqltypes.Result{
@@ -1048,7 +1048,7 @@ func TestInsertAutoincSharded(t *testing.T) {
 }
 
 func TestInsertGeneratorUnsharded(t *testing.T) {
-	executor, _, _, sbclookup := createExecutorEnv()
+	executor, _, _, sbclookup := createLegacyExecutorEnv()
 	result, err := executorExec(executor, "insert into main1(id, name) values (null, 'myname')", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
@@ -1071,7 +1071,7 @@ func TestInsertGeneratorUnsharded(t *testing.T) {
 }
 
 func TestInsertAutoincUnsharded(t *testing.T) {
-	router, _, _, sbclookup := createExecutorEnv()
+	router, _, _, sbclookup := createLegacyExecutorEnv()
 
 	// Fake a mysql auto-inc response.
 	query := "insert into simple(val) values ('val')"
@@ -1099,7 +1099,7 @@ func TestInsertAutoincUnsharded(t *testing.T) {
 }
 
 func TestInsertLookupOwned(t *testing.T) {
-	executor, sbc, _, sbclookup := createExecutorEnv()
+	executor, sbc, _, sbclookup := createLegacyExecutorEnv()
 
 	_, err := executorExec(executor, "insert into music(user_id, id) values (2, 3)", nil)
 	require.NoError(t, err)
@@ -1125,7 +1125,7 @@ func TestInsertLookupOwned(t *testing.T) {
 }
 
 func TestInsertLookupOwnedGenerator(t *testing.T) {
-	executor, sbc, _, sbclookup := createExecutorEnv()
+	executor, sbc, _, sbclookup := createLegacyExecutorEnv()
 
 	sbclookup.SetResults([]*sqltypes.Result{{
 		Rows: [][]sqltypes.Value{{
@@ -1168,7 +1168,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 }
 
 func TestInsertLookupUnowned(t *testing.T) {
-	executor, sbc, _, sbclookup := createExecutorEnv()
+	executor, sbc, _, sbclookup := createLegacyExecutorEnv()
 
 	_, err := executorExec(executor, "insert into music_extra(user_id, music_id) values (2, 3)", nil)
 	require.NoError(t, err)
@@ -1195,7 +1195,7 @@ func TestInsertLookupUnowned(t *testing.T) {
 }
 
 func TestInsertLookupUnownedUnsupplied(t *testing.T) {
-	executor, sbc, _, sbclookup := createExecutorEnv()
+	executor, sbc, _, sbclookup := createLegacyExecutorEnv()
 	sbclookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("b|a", "int64|varbinary"),
 		"3|1",
@@ -1228,7 +1228,7 @@ func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 // If a statement gets broken up into two, and the first one fails,
 // then an error should be returned normally.
 func TestInsertPartialFail1(t *testing.T) {
-	executor, _, _, sbclookup := createExecutorEnv()
+	executor, _, _, sbclookup := createLegacyExecutorEnv()
 
 	// Make the first DML fail, there should be no rollback.
 	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
@@ -1250,7 +1250,7 @@ func TestInsertPartialFail1(t *testing.T) {
 // after successful execution of the first, then the transaction must
 // be rolled back due to partial execution.
 func TestInsertPartialFail2(t *testing.T) {
-	executor, sbc1, _, _ := createExecutorEnv()
+	executor, sbc1, _, _ := createLegacyExecutorEnv()
 
 	// Make the second DML fail, it should result in a rollback.
 	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
@@ -1269,7 +1269,7 @@ func TestInsertPartialFail2(t *testing.T) {
 }
 
 func TestMultiInsertSharded(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnv()
 
 	_, err := executorExec(executor, "insert into user(id, v, name) values (1, 1, 'myname1'),(3, 3, 'myname3')", nil)
 	require.NoError(t, err)
@@ -1390,7 +1390,7 @@ func TestMultiInsertSharded(t *testing.T) {
 }
 
 func TestMultiInsertGenerator(t *testing.T) {
-	executor, sbc, _, sbclookup := createExecutorEnv()
+	executor, sbc, _, sbclookup := createLegacyExecutorEnv()
 
 	sbclookup.SetResults([]*sqltypes.Result{{
 		Rows: [][]sqltypes.Value{{
@@ -1437,7 +1437,7 @@ func TestMultiInsertGenerator(t *testing.T) {
 }
 
 func TestMultiInsertGeneratorSparse(t *testing.T) {
-	executor, sbc, _, sbclookup := createExecutorEnv()
+	executor, sbc, _, sbclookup := createLegacyExecutorEnv()
 
 	sbclookup.SetResults([]*sqltypes.Result{{
 		Rows: [][]sqltypes.Value{{
@@ -1583,7 +1583,7 @@ func TestKeyDestRangeQuery(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.targetString+" - "+tc.inputQuery, func(t *testing.T) {
-			executor, sbc1, sbc2, _ := createExecutorEnv()
+			executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 
 			masterSession.TargetString = tc.targetString
 			_, err := executorExec(executor, tc.inputQuery, nil)
@@ -1604,7 +1604,7 @@ func TestKeyDestRangeQuery(t *testing.T) {
 	}
 
 	// it does not work for inserts
-	executor, _, _, _ := createExecutorEnv()
+	executor, _, _, _ := createLegacyExecutorEnv()
 	masterSession.TargetString = "TestExecutor[-]"
 	_, err := executorExec(executor, insertInput, nil)
 
@@ -1624,7 +1624,7 @@ func assertQueriesContain(t *testing.T, sql, sbcName string, sbc *sandboxconn.Sa
 
 // Prepared statement tests
 func TestUpdateEqualWithPrepare(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnv()
 
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -1648,7 +1648,7 @@ func TestUpdateEqualWithPrepare(t *testing.T) {
 	}
 }
 func TestInsertShardedWithPrepare(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	executor, sbc1, sbc2, sbclookup := createLegacyExecutorEnv()
 
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -1675,7 +1675,7 @@ func TestInsertShardedWithPrepare(t *testing.T) {
 }
 
 func TestDeleteEqualWithPrepare(t *testing.T) {
-	executor, sbc, _, sbclookup := createExecutorEnv()
+	executor, sbc, _, sbclookup := createLegacyExecutorEnv()
 	_, err := executorPrepare(executor, "delete from user where id = :id0", map[string]*querypb.BindVariable{
 		"id0": sqltypes.Int64BindVariable(1),
 	})
@@ -1693,7 +1693,7 @@ func TestDeleteEqualWithPrepare(t *testing.T) {
 }
 
 func TestUpdateLastInsertID(t *testing.T) {
-	executor, sbc1, _, _ := createExecutorEnv()
+	executor, sbc1, _, _ := createLegacyExecutorEnv()
 	executor.normalize = true
 
 	sql := "update user set a = last_insert_id() where id = 1"

@@ -134,6 +134,7 @@ func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error
 	return nil
 }
 
+// commit2PC will not used the pinned tablets - to make sure we use the current source, we need to use the gateway's queryservice
 func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 	if len(session.PreSessions) != 0 || len(session.PostSessions) != 0 {
 		_ = txc.Rollback(ctx, session)
@@ -159,13 +160,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 	}
 
 	err = txc.runSessions(ctx, session.ShardSessions[1:], func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
-		var qs queryservice.QueryService
-		var err error
-		qs, err = txc.queryService(s.TabletAlias)
-		if err != nil {
-			return err
-		}
-		return qs.Prepare(ctx, s.Target, s.TransactionId, dtid)
+		return txc.gateway.Prepare(ctx, s.Target, s.TransactionId, dtid)
 	})
 	if err != nil {
 		// TODO(sougou): Perform a more fine-grained cleanup
@@ -177,11 +172,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	qs, err := txc.queryService(mmShard.TabletAlias)
-	if err != nil {
-		return err
-	}
-	err = qs.StartCommit(ctx, mmShard.Target, mmShard.TransactionId, dtid)
+	err = txc.gateway.StartCommit(ctx, mmShard.Target, mmShard.TransactionId, dtid)
 	if err != nil {
 		return err
 	}
