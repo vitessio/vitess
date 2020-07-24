@@ -238,11 +238,17 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set skip_query_plan_cache = 0",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
-		in:  "set sql_auto_is_null = 0",
-		out: &vtgatepb.Session{Autocommit: true}, // no effect
+		in: "set sql_auto_is_null = 0",
+		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{
+			Code:    1235,
+			Message: "Ignored inapplicable SET sql_auto_is_null = 0",
+		}}},
 	}, {
-		in:  "set sql_auto_is_null = 1",
-		err: "sql_auto_is_null is not currently supported",
+		in: "set sql_auto_is_null = 1",
+		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{
+			Code:    1235,
+			Message: "Ignored inapplicable SET sql_auto_is_null = 1",
+		}}},
 	}, {
 		in:  "set tx_read_only = 2",
 		err: "unexpected value for tx_read_only: 2",
@@ -303,12 +309,10 @@ func TestExecutorSetOp(t *testing.T) {
 	executor, _, _, sbclookup := createLegacyExecutorEnv()
 
 	sbclookup.SetResults([]*sqltypes.Result{
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("'STRICT_ALL_TABLES'", "varchar"), "STRICT_ALL_TABLES"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("'STRICT_ALL_TABLES,NO_AUTO_UPDATES'", "varchar"), "STRICT_ALL_TABLES,NO_AUTO_UPDATES"),
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"),
 	})
-	//sbc1.SetResults([]*sqltypes.Result{
-	//	sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"),
-	//})
+
 	testcases := []struct {
 		in      string
 		warning []*querypb.QueryWarning
@@ -320,8 +324,8 @@ func TestExecutorSetOp(t *testing.T) {
 			Message: "Ignored inapplicable SET big_tables = 1",
 		}},
 	}, {
-		in:      "set sql_mode = 'STRICT_ALL_TABLES'",
-		sysVars: map[string]string{"sql_mode": "STRICT_ALL_TABLES"},
+		in:      "set sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_UPDATES'",
+		sysVars: map[string]string{"sql_mode": "'STRICT_ALL_TABLES,NO_AUTO_UPDATES'"},
 	}, {
 		in:      "set sql_safe_updates = 1",
 		sysVars: map[string]string{"sql_safe_updates": "1"},

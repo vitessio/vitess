@@ -123,6 +123,9 @@ func TestSetSystemVariable(t *testing.T) {
 	checkedExec(t, conn, "set @@sql_mode = ''")
 
 	assertMatches(t, conn, q, `[[DATE("0000-00-00")]]`)
+
+	checkedExec(t, conn, "SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'),  @@SESSION.sql_auto_is_null = 0, @@SESSION.wait_timeout = 2147483")
+	assertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("NO_AUTO_VALUE_ON_ZERO,STRICT_ALL_TABLES")]]`)
 }
 
 func TestSetSystemVarWithTxFailure(t *testing.T) {

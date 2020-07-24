@@ -96,7 +96,7 @@ func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows in
 			default:
 				sc.env.CheckMySQL()
 			}
-			return nil, vterrors.Wrap(err, "lost connection to database server")
+			return nil, err
 		}
 		return nil, err
 	}
