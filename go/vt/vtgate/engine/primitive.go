@@ -97,8 +97,14 @@ type (
 
 		SetSysVar(name string, expr string)
 
-		// NeedsReservedConn marks this session as needing a dedicated connection to mysql
+		// NeedsReservedConn marks this session as needing a dedicated connection to underlying database
 		NeedsReservedConn()
+
+		// InReservedConn provides whether this session is using reserved connection
+		InReservedConn() bool
+
+		// ShardSession returns shard info about open connections
+		ShardSession() []*srvtopo.ResolvedShard
 	}
 
 	// Plan represents the execution strategy for a given query.

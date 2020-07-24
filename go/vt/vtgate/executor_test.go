@@ -80,7 +80,7 @@ func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
 	*maxMemoryRows = 3
 	defer func() { *maxMemoryRows = save }()
 
-	executor, _, _, sbclookup := createExecutorEnv()
+	executor, _, _, sbclookup := createLegacyExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
 	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64"), "1", "2", "3", "4")
 	target := querypb.Target{}

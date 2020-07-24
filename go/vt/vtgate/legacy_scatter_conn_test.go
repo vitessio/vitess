@@ -580,6 +580,34 @@ func TestAppendResult(t *testing.T) {
 	}
 }
 
+func TestReservePrequeries(t *testing.T) {
+	keyspace := "keyspace"
+	createSandbox(keyspace)
+	hc := discovery.NewFakeHealthCheck()
+	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sbc0 := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
+	sbc1 := hc.AddTestTablet("aa", "1", 1, keyspace, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
+
+	// empty results
+	sbc0.SetResults([]*sqltypes.Result{{}})
+	sbc1.SetResults([]*sqltypes.Result{{}})
+
+	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+
+	session := NewSafeSession(&vtgatepb.Session{
+		InTransaction:  false,
+		InReservedConn: true,
+		SystemVariables: map[string]string{
+			"s1": "'value'",
+			"s2": "42",
+		},
+	})
+	destinations := []key.Destination{key.DestinationShard("0")}
+
+	executeOnShards(t, res, keyspace, sc, session, destinations)
+	assert.Equal(t, 2+1, len(sbc0.StringQueries()))
+}
+
 func newTestLegacyScatterConn(hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string) *ScatterConn {
 	// The topo.Server is used to start watching the cells described
 	// in '-cells_to_watch' command line parameter, which is

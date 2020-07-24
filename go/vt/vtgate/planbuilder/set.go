@@ -31,12 +31,132 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-var sysVarPlanningFunc = map[string]func(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error){}
+type planFunc = func(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error)
+
+var sysVarPlanningFunc = map[string]planFunc{}
+
+var notSupported = []string{
+	"auto_increment_increment",
+	"auto_increment_offset",
+	"binlog_direct_non_transactional_updates",
+	"innodb_ft_enable_stopword",
+	"innodb_ft_user_stopword_table",
+	"max_points_in_geometry",
+	"max_sp_recursion_depth",
+	"myisam_repair_threads",
+	"myisam_sort_buffer_size",
+	"myisam_stats_method",
+	"ndb_allow_copying_alter_table",
+	"ndb_autoincrement_prefetch_sz",
+	"ndb_blob_read_batch_bytes",
+	"ndb_blob_write_batch_bytes",
+	"ndb_deferred_constraints",
+	"ndb_force_send",
+	"ndb_fully_replicated",
+	"ndb_index_stat_enable",
+	"ndb_index_stat_option",
+	"ndb_join_pushdown",
+	"ndb_log_bin",
+	"ndb_log_exclusive_reads",
+	"ndb_row_checksum",
+	"ndb_use_exact_count",
+	"ndb_use_transactions",
+	"ndbinfo_max_bytes",
+	"ndbinfo_max_rows",
+	"ndbinfo_show_hidden",
+	"ndbinfo_table_prefix",
+	"old_alter_table",
+	"preload_buffer_size",
+	"rbr_exec_mode",
+	"sql_log_off",
+	"transaction_write_set_extraction",
+	"audit_log_read_buffer_size",
+}
+
+var ignoreThese = []string{
+	"big_tables",
+	"bulk_insert_buffer_size",
+	"debug",
+	"default_storage_engine",
+	"default_tmp_storage_engine",
+	"innodb_strict_mode",
+	"innodb_support_xa",
+	"innodb_table_locks",
+	"innodb_tmpdir",
+	"join_buffer_size",
+	"keep_files_on_create",
+	"lc_messages",
+	"long_query_time",
+	"low_priority_updates",
+	"max_delayed_threads",
+	"max_insert_delayed_threads",
+	"multi_range_count",
+	"net_buffer_length",
+	"new",
+	"query_cache_type",
+	"query_cache_wlock_invalidate",
+	"query_prealloc_size",
+	"sql_buffer_result",
+	"transaction_alloc_block_size",
+	"wait_timeout",
+}
+
+var saveSettingsToSession = []string{
+	"sql_mode",
+	"sql_safe_updates",
+}
+
+var allowSetIfValueAlreadySet = []string{}
+
+var vitessShouldBeAwareOf = []string{
+	"block_encryption_mode",
+	"character_set_client",
+	"character_set_connection",
+	"character_set_database",
+	"character_set_filesystem",
+	"character_set_server",
+	"collation_connection",
+	"collation_database",
+	"collation_server",
+	"completion_type",
+	"div_precision_increment",
+	"innodb_lock_wait_timeout",
+	"interactive_timeout",
+	"lc_time_names",
+	"lock_wait_timeout",
+	"max_allowed_packet",
+	"max_error_count",
+	"max_execution_time",
+	"max_join_size",
+	"max_length_for_sort_data",
+	"max_sort_length",
+	"max_user_connections",
+	"session_track_gtids",
+	"session_track_schema",
+	"session_track_state_change",
+	"session_track_system_variables",
+	"session_track_transaction_info",
+	"time_zone",
+	"transaction_isolation",
+	"version_tokens_session",
+	"sql_auto_is_null",
+}
 
 func init() {
-	sysVarPlanningFunc["default_storage_engine"] = buildSetOpIgnore
-	sysVarPlanningFunc["sql_mode"] = buildSetOpCheckAndIgnore
-	sysVarPlanningFunc["sql_safe_updates"] = buildSetOpVarSet
+	forSettings(ignoreThese, buildSetOpIgnore)
+	forSettings(saveSettingsToSession, buildSetOpVarSet)
+	forSettings(allowSetIfValueAlreadySet, buildSetOpCheckAndIgnore)
+	forSettings(vitessShouldBeAwareOf, buildSetOpCheckAndIgnore)
+	forSettings(notSupported, buildNotSupported)
+}
+
+func forSettings(settings []string, f planFunc) {
+	for _, setting := range settings {
+		if _, alreadyExists := sysVarPlanningFunc[setting]; alreadyExists {
+			panic("bug in set plan init - " + setting + " aleady configured")
+		}
+		sysVarPlanningFunc[setting] = f
+	}
 }
 
 func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive, error) {
@@ -124,6 +244,10 @@ func planTabletInput(vschema ContextVSchema, tabletExpressions []*sqlparser.SetE
 	return primitive, nil
 }
 
+func buildNotSupported(e *sqlparser.SetExpr, _ ContextVSchema) (engine.SetOp, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s: system setting is not supported", e.Name)
+}
+
 func buildSetOpIgnore(expr *sqlparser.SetExpr, _ ContextVSchema) (engine.SetOp, error) {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("%v", expr.Expr)
@@ -166,7 +290,7 @@ func expressionOkToDelegateToTablet(e sqlparser.Expr) bool {
 }
 
 func buildSetOpVarSet(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error) {
-	ks, dest, err := resolveDestination(vschema)
+	ks, err := vschema.AnyKeyspace()
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +298,7 @@ func buildSetOpVarSet(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.S
 	return &engine.SysVarSet{
 		Name:              expr.Name.Lowered(),
 		Keyspace:          ks,
-		TargetDestination: dest,
+		TargetDestination: vschema.Destination(),
 		Expr:              sqlparser.String(expr.Expr),
 	}, nil
 }

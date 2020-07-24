@@ -19,7 +19,6 @@ package vtgate
 import (
 	"testing"
 
-	"vitess.io/vitess/go/mysql"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/test/utils"
@@ -39,12 +38,13 @@ import (
 )
 
 func TestExecutorSet(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executorEnv, _, _, _ := createExecutorEnv()
 
 	testcases := []struct {
-		in  string
-		out *vtgatepb.Session
-		err string
+		in     string
+		out    *vtgatepb.Session
+		err    string
+		target string
 	}{{
 		in:  "set autocommit = 1",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -238,11 +238,13 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set skip_query_plan_cache = 0",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
-		in:  "set sql_auto_is_null = 0",
-		out: &vtgatepb.Session{Autocommit: true}, // no effect
+		in:     "set sql_auto_is_null = 0",
+		target: "TestExecutor",
+		out:    &vtgatepb.Session{Autocommit: true, TargetString: "TestExecutor"},
 	}, {
-		in:  "set sql_auto_is_null = 1",
-		err: "sql_auto_is_null is not currently supported",
+		in:     "set sql_auto_is_null = 1",
+		target: "TestExecutor",
+		out:    &vtgatepb.Session{Autocommit: true, TargetString: "TestExecutor"},
 	}, {
 		in:  "set tx_read_only = 2",
 		err: "unexpected value for tx_read_only: 2",
@@ -288,37 +290,40 @@ func TestExecutorSet(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
-			session := NewSafeSession(&vtgatepb.Session{Autocommit: true})
-			_, err := executor.Execute(context.Background(), "TestExecute", session, tcase.in, nil)
-			if err != nil {
-				require.EqualError(t, err, tcase.err)
+			session := NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: tcase.target})
+			_, err := executorEnv.Execute(context.Background(), "TestExecute", session, tcase.in, nil)
+			if tcase.err == "" {
+				utils.MustMatch(t, tcase.out, session.Session, "new executor")
 			} else {
-				utils.MustMatch(t, tcase.out, session.Session, "session output was not as expected")
+				require.EqualError(t, err, tcase.err)
 			}
 		})
 	}
 }
 
 func TestExecutorSetOp(t *testing.T) {
-	executor, sbc1, _, _ := createLegacyExecutorEnv()
+	executor, _, _, sbclookup := createLegacyExecutorEnv()
+
+	sbclookup.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("'STRICT_ALL_TABLES,NO_AUTO_UPDATES'", "varchar"), "STRICT_ALL_TABLES,NO_AUTO_UPDATES"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"),
+	})
 
 	testcases := []struct {
 		in      string
 		warning []*querypb.QueryWarning
 		sysVars map[string]string
 	}{{
-		in: "set sql_mode = 'STRICT_ALL_TABLES'",
-		warning: []*querypb.QueryWarning{{
-			Code:    mysql.ERNotSupportedYet,
-			Message: "Ignored inapplicable SET sql_mode = 'STRICT_ALL_TABLES'",
-		}},
+		in: "set big_tables = 1",
 	}, {
-		in:      "set sql_safe_updates = 2",
-		sysVars: map[string]string{"sql_safe_updates": "2"},
+		in:      "set sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_UPDATES'",
+		sysVars: map[string]string{"sql_mode": "'STRICT_ALL_TABLES,NO_AUTO_UPDATES'"},
+	}, {
+		in:      "set sql_safe_updates = 1",
+		sysVars: map[string]string{"sql_safe_updates": "1"},
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
-			sbc1.SetResults([]*sqltypes.Result{{}})
 			session := NewAutocommitSession(masterSession)
 			session.TargetString = KsTestUnsharded
 			_, err := executor.Execute(
