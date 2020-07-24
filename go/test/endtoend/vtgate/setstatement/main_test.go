@@ -21,6 +21,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -130,4 +132,11 @@ func TestMain(m *testing.M) {
 func exec(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	t.Helper()
 	return conn.ExecuteFetch(query, 1000, true)
+}
+
+func checkedExec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
+	t.Helper()
+	qr, err := conn.ExecuteFetch(query, 1000, true)
+	require.NoError(t, err)
+	return qr
 }

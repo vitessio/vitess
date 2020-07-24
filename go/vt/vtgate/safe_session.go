@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
@@ -113,7 +114,6 @@ func (session *SafeSession) Reset() {
 	session.ShardSessions = nil
 	session.PreSessions = nil
 	session.PostSessions = nil
-	session.Session.InReservedConn = false
 }
 
 // SetAutocommittable sets the state to autocommitable if true.
@@ -346,4 +346,17 @@ func (session *SafeSession) SetReservedConn(reservedConn bool) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.Session.InReservedConn = reservedConn
+}
+
+//SetPreQueries returns the prequeries that need to be run when reserving a connection
+func (session *SafeSession) SetPreQueries() []string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	result := make([]string, len(session.SystemVariables))
+	idx := 0
+	for k, v := range session.SystemVariables {
+		result[idx] = fmt.Sprintf("set @@%s = %s", k, v)
+		idx++
+	}
+	return result
 }

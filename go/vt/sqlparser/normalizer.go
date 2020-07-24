@@ -61,6 +61,9 @@ func newNormalizer(stmt Statement, bindVars map[string]*querypb.BindVariable, pr
 // where variables are deduped.
 func (nz *normalizer) WalkStatement(node SQLNode) (bool, error) {
 	switch node := node.(type) {
+	// no need to normalize the statement types
+	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, *SetTransaction, *DDL, *SRollback, *Release, *OtherAdmin, *OtherRead:
+		return false, nil
 	case *Select:
 		_ = Walk(nz.WalkSelect, node)
 		// Don't continue

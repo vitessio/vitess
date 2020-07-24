@@ -96,6 +96,7 @@ func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows in
 			default:
 				sc.env.CheckMySQL()
 			}
+			return nil, err
 		}
 		return nil, err
 	}

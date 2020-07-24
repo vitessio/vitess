@@ -187,7 +187,7 @@ func TestTxConnReservedCommitSuccess(t *testing.T) {
 
 	require.NoError(t,
 		sc.txConn.Release(ctx, session))
-	wantSession = vtgatepb.Session{}
+	wantSession = vtgatepb.Session{InReservedConn: true}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
 	assert.EqualValues(t, 1, sbc0.ReleaseCount.Get(), "sbc0.ReleaseCount")
 	assert.EqualValues(t, 1, sbc1.ReleaseCount.Get(), "sbc1.ReleaseCount")
@@ -708,7 +708,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 
 	require.NoError(t,
 		sc.txConn.Release(ctx, session))
-	wantSession = vtgatepb.Session{}
+	wantSession = vtgatepb.Session{InReservedConn: true}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
 	assert.EqualValues(t, 2, sbc0.ReleaseCount.Get(), "sbc0.ReleaseCount")
 	assert.EqualValues(t, 1, sbc1.ReleaseCount.Get(), "sbc1.ReleaseCount")
@@ -902,6 +902,7 @@ func TestTxConnReservedRollbackFailure(t *testing.T) {
 	require.Error(t,
 		sc.txConn.Rollback(ctx, session))
 	wantSession := vtgatepb.Session{
+		InReservedConn: true,
 		Warnings: []*querypb.QueryWarning{{
 			Message: "rollback encountered an error and connection to all shard for this session is released: Code: INVALID_ARGUMENT\nINVALID_ARGUMENT error\n\ntarget: TxConnReservedRollback.1.master, used tablet: aa-0 (1)",
 		}},

@@ -17,12 +17,15 @@ limitations under the License.
 package engine
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/log"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/srvtopo"
+
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -63,7 +66,7 @@ type (
 	SysVarCheckAndIgnore struct {
 		Name              string
 		Keyspace          *vindexes.Keyspace
-		TargetDestination key.Destination
+		TargetDestination key.Destination `json:",omitempty"`
 		Expr              string
 	}
 
@@ -71,7 +74,16 @@ type (
 	SysVarSet struct {
 		Name              string
 		Keyspace          *vindexes.Keyspace
-		TargetDestination key.Destination
+		TargetDestination key.Destination `json:",omitempty"`
+		Expr              string
+	}
+
+	// SysVarSetSpecial implements the SetOp interface and will write the changes variable into the session
+	// The special part is that these settings change the sessions behaviour in different ways
+	SysVarSetSpecial struct {
+		Name              string
+		Keyspace          *vindexes.Keyspace
+		TargetDestination key.Destination `json:",omitempty"`
 		Expr              string
 	}
 )
@@ -140,7 +152,6 @@ func (s *Set) description() PrimitiveDescription {
 	}
 	return PrimitiveDescription{
 		OperatorType: "Set",
-		Variant:      "",
 		Other:        other,
 	}
 }
@@ -195,8 +206,8 @@ func (svi *SysVarIgnore) VariableName() string {
 }
 
 //Execute implements the SetOp interface method.
-func (svi *SysVarIgnore) Execute(vcursor VCursor, _ evalengine.ExpressionEnv) error {
-	vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: mysql.ERNotSupportedYet, Message: fmt.Sprintf("Ignored inapplicable SET %v = %v", svi.Name, svi.Expr)})
+func (svi *SysVarIgnore) Execute(VCursor, evalengine.ExpressionEnv) error {
+	log.Infof("Ignored inapplicable SET %v = %v", svi.Name, svi.Expr)
 	return nil
 }
 
@@ -234,13 +245,9 @@ func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, env evalengine.Expres
 	if err != nil {
 		return err
 	}
-	var warning *querypb.QueryWarning
 	if result.RowsAffected == 0 {
-		warning = &querypb.QueryWarning{Code: mysql.ERNotSupportedYet, Message: fmt.Sprintf("Modification not allowed using set construct for: %s", svci.Name)}
-	} else {
-		warning = &querypb.QueryWarning{Code: mysql.ERNotSupportedYet, Message: fmt.Sprintf("Ignored inapplicable SET %v = %v", svci.Name, svci.Expr)}
+		log.Infof("Ignored inapplicable SET %v = %v", svci.Name, svci.Expr)
 	}
-	vcursor.Session().RecordWarning(warning)
 	return nil
 }
 
@@ -264,20 +271,70 @@ func (svs *SysVarSet) VariableName() string {
 }
 
 //Execute implements the SetOp interface method
-func (svs *SysVarSet) Execute(vcursor VCursor, res evalengine.ExpressionEnv) error {
-	rss, _, err := vcursor.ResolveDestinations(svs.Keyspace.Name, nil, []key.Destination{svs.TargetDestination})
-	if err != nil {
-		return vterrors.Wrap(err, "SysVarSet")
+func (svs *SysVarSet) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
+	// For those running on advanced vitess settings.
+	if svs.TargetDestination != nil {
+		rss, _, err := vcursor.ResolveDestinations(svs.Keyspace.Name, nil, []key.Destination{svs.TargetDestination})
+		if err != nil {
+			return vterrors.Wrap(err, "SysVarSet")
+		}
+		vcursor.Session().NeedsReservedConn()
+		return svs.execSetStatement(vcursor, rss, env)
 	}
-
-	if len(rss) != 1 {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %v", svs.TargetDestination)
-	}
-	sysVarExprValidationQuery := fmt.Sprintf("select %s from dual where false", svs.Expr)
-	_, err = execShard(vcursor, sysVarExprValidationQuery, res.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
+	isSysVarModified, err := svs.checkAndUpdateSysVar(vcursor, env)
 	if err != nil {
 		return err
 	}
-	vcursor.Session().SetSysVar(svs.Name, svs.Expr)
-	return nil
+	if !isSysVarModified {
+		// setting ignored, same as underlying datastore
+		return nil
+	}
+	// Update existing shard session with new system variable settings.
+	rss := vcursor.Session().ShardSession()
+	if len(rss) == 0 {
+		return nil
+	}
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := 0; i < len(rss); i++ {
+		queries[i] = &querypb.BoundQuery{
+			Sql:           fmt.Sprintf("set @@%s = %s", svs.Name, svs.Expr),
+			BindVariables: env.BindVars,
+		}
+	}
+	_, errs := vcursor.ExecuteMultiShard(rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
+	return vterrors.Aggregate(errs)
+}
+
+func (svs *SysVarSet) execSetStatement(vcursor VCursor, rss []*srvtopo.ResolvedShard, env evalengine.ExpressionEnv) error {
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := 0; i < len(rss); i++ {
+		queries[i] = &querypb.BoundQuery{
+			Sql:           fmt.Sprintf("set @@%s = %s", svs.Name, svs.Expr),
+			BindVariables: env.BindVars,
+		}
+	}
+	_, errs := vcursor.ExecuteMultiShard(rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
+	return vterrors.Aggregate(errs)
+}
+
+func (svs *SysVarSet) checkAndUpdateSysVar(vcursor VCursor, res evalengine.ExpressionEnv) (bool, error) {
+	sysVarExprValidationQuery := fmt.Sprintf("select %s from dual where @@%s != %s", svs.Expr, svs.Name, svs.Expr)
+	rss, _, err := vcursor.ResolveDestinations(svs.Keyspace.Name, nil, []key.Destination{key.DestinationKeyspaceID{0}})
+	if err != nil {
+		return false, vterrors.Wrap(err, "SysVarSet")
+	}
+	qr, err := execShard(vcursor, sysVarExprValidationQuery, res.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
+	if err != nil {
+		return false, err
+	}
+	if len(qr.Rows) == 0 {
+		return false, nil
+	}
+	// TODO : validate how value needs to be stored.
+	value := qr.Rows[0][0]
+	buf := new(bytes.Buffer)
+	value.EncodeSQL(buf)
+	vcursor.Session().SetSysVar(svs.Name, buf.String())
+	vcursor.Session().NeedsReservedConn()
+	return true, nil
 }

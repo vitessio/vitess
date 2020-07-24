@@ -408,6 +408,25 @@ func (vc *vcursorImpl) NeedsReservedConn() {
 	vc.safeSession.SetReservedConn(true)
 }
 
+func (vc *vcursorImpl) InReservedConn() bool {
+	return vc.safeSession.InReservedConn()
+}
+
+func (vc *vcursorImpl) ShardSession() []*srvtopo.ResolvedShard {
+	ss := vc.safeSession.GetShardSessions()
+	if len(ss) == 0 {
+		return nil
+	}
+	rss := make([]*srvtopo.ResolvedShard, len(ss))
+	for i, shardSession := range ss {
+		rss[i] = &srvtopo.ResolvedShard{
+			Target:  shardSession.Target,
+			Gateway: vc.resolver.GetGateway(),
+		}
+	}
+	return rss
+}
+
 // Destination implements the ContextVSchema interface
 func (vc *vcursorImpl) Destination() key.Destination {
 	return vc.destination
