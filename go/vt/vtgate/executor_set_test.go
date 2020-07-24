@@ -39,7 +39,7 @@ import (
 )
 
 func TestExecutorSet(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executorEnv, _, _, _ := createExecutorEnv()
 
 	testcases := []struct {
 		in  string
@@ -238,17 +238,11 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set skip_query_plan_cache = 0",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
-		in: "set sql_auto_is_null = 0",
-		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{
-			Code:    1235,
-			Message: "Ignored inapplicable SET sql_auto_is_null = 0",
-		}}},
+		in:  "set sql_auto_is_null = 0",
+		out: &vtgatepb.Session{Autocommit: true},
 	}, {
-		in: "set sql_auto_is_null = 1",
-		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{
-			Code:    1235,
-			Message: "Ignored inapplicable SET sql_auto_is_null = 1",
-		}}},
+		in:  "set sql_auto_is_null = 1",
+		out: &vtgatepb.Session{Autocommit: true, RowCount: -1},
 	}, {
 		in:  "set tx_read_only = 2",
 		err: "unexpected value for tx_read_only: 2",
@@ -295,11 +289,11 @@ func TestExecutorSet(t *testing.T) {
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
 			session := NewSafeSession(&vtgatepb.Session{Autocommit: true})
-			_, err := executor.Execute(context.Background(), "TestExecute", session, tcase.in, nil)
-			if err != nil {
-				require.EqualError(t, err, tcase.err)
+			_, err := executorEnv.Execute(context.Background(), "TestExecute", session, tcase.in, nil)
+			if tcase.err == "" {
+				utils.MustMatch(t, tcase.out, session.Session, "new executor")
 			} else {
-				utils.MustMatch(t, tcase.out, session.Session, "session output was not as expected")
+				require.EqualError(t, err, tcase.err)
 			}
 		})
 	}
