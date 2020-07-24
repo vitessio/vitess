@@ -106,9 +106,6 @@ func TestSetTable(t *testing.T) {
 					Expr: "42",
 				},
 			},
-			expectedWarning: []*querypb.QueryWarning{
-				{Code: 1235, Message: "Ignored inapplicable SET x = 42"},
-			},
 		},
 		{
 			testName: "sysvar check and ignore",
@@ -151,9 +148,6 @@ func TestSetTable(t *testing.T) {
 			expectedQueryLog: []string{
 				`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 				`ExecuteMultiShard ks.-20: select 1 from dual where @@x = dummy_expr {} false false`,
-			},
-			expectedWarning: []*querypb.QueryWarning{
-				{Code: 1235, Message: "Modification not allowed using set construct for: x"},
 			},
 		},
 		{
@@ -199,9 +193,6 @@ func TestSetTable(t *testing.T) {
 				`UDV set with (x,INT64(1))`,
 				`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 				`ExecuteMultiShard ks.-20: select 1 from dual where @@z = dummy_expr {} false false`,
-			},
-			expectedWarning: []*querypb.QueryWarning{
-				{Code: 1235, Message: "Ignored inapplicable SET y = 2"},
 			},
 			qr: []*sqltypes.Result{sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(

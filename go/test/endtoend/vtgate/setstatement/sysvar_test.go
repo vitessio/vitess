@@ -55,26 +55,29 @@ func TestSetSysVar(t *testing.T) {
 		Port: clusterInstance.VtgateMySQLPort,
 	}
 	type queriesWithExpectations struct {
-		query           string
-		expectedRows    string
-		rowsAffected    int
-		errMsg          string
-		expectedWarning string
+		name, expr, expected string
 	}
 
 	queries := []queriesWithExpectations{{
-		query:        `set @@default_storage_engine = INNODB`,
-		expectedRows: ``, rowsAffected: 0,
-		expectedWarning: "[[VARCHAR(\"Warning\") UINT16(1235) VARCHAR(\"Ignored inapplicable SET default_storage_engine = INNODB\")]]",
+		name:     "default_storage_engine",
+		expr:     "INNODB",
+		expected: `[[VARCHAR("InnoDB")]]`,
 	}, {
-		query:        `set @@sql_mode = @@sql_mode`,
-		expectedRows: ``, rowsAffected: 0,
+		name:     "sql_mode",
+		expr:     "''",
+		expected: `[[VARCHAR("")]]`,
 	}, {
-		query:        `set @@sql_mode = concat(@@sql_mode,"")`,
-		expectedRows: ``, rowsAffected: 0,
+		name:     "sql_mode",
+		expr:     `concat(@@sql_mode,"NO_ZERO_DATE")`,
+		expected: `[[VARCHAR("NO_ZERO_DATE")]]`,
 	}, {
-		query:        `set @@SQL_SAFE_UPDATES = 1`,
-		expectedRows: ``, rowsAffected: 0,
+		name:     "sql_mode",
+		expr:     "@@sql_mode",
+		expected: `[[VARCHAR("NO_ZERO_DATE")]]`,
+	}, {
+		name:     "SQL_SAFE_UPDATES",
+		expr:     "1",
+		expected: "[[INT64(1)]]",
 	}}
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -82,26 +85,11 @@ func TestSetSysVar(t *testing.T) {
 	defer conn.Close()
 
 	for i, q := range queries {
-		t.Run(fmt.Sprintf("%d-%s", i, q.query), func(t *testing.T) {
-			qr, err := exec(t, conn, q.query)
-			if q.errMsg != "" {
-				require.Contains(t, err.Error(), q.errMsg)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, uint64(q.rowsAffected), qr.RowsAffected, "rows affected wrong for query: %s", q.query)
-				if q.expectedRows != "" {
-					result := fmt.Sprintf("%v", qr.Rows)
-					if diff := cmp.Diff(q.expectedRows, result); diff != "" {
-						t.Errorf("%s\nfor query: %s", diff, q.query)
-					}
-				}
-				if q.expectedWarning != "" {
-					qr := checkedExec(t, conn, "show warnings")
-					if got, want := fmt.Sprintf("%v", qr.Rows), q.expectedWarning; got != want {
-						t.Errorf("select:\n%v want\n%v", got, want)
-					}
-				}
-			}
+		query := fmt.Sprintf("set %s = %s", q.name, q.expr)
+		t.Run(fmt.Sprintf("%d-%s", i, query), func(t *testing.T) {
+			_, err := exec(t, conn, query)
+			require.NoError(t, err)
+			assertMatches(t, conn, fmt.Sprintf("select @@%s", q.name), q.expected)
 		})
 	}
 }

@@ -21,11 +21,11 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/srvtopo"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -72,6 +72,15 @@ type (
 
 	// SysVarSet implements the SetOp interface and will write the changes variable into the session
 	SysVarSet struct {
+		Name              string
+		Keyspace          *vindexes.Keyspace
+		TargetDestination key.Destination `json:",omitempty"`
+		Expr              string
+	}
+
+	// SysVarSetSpecial implements the SetOp interface and will write the changes variable into the session
+	// The special part is that these settings change the sessions behaviour in different ways
+	SysVarSetSpecial struct {
 		Name              string
 		Keyspace          *vindexes.Keyspace
 		TargetDestination key.Destination `json:",omitempty"`
@@ -197,8 +206,8 @@ func (svi *SysVarIgnore) VariableName() string {
 }
 
 //Execute implements the SetOp interface method.
-func (svi *SysVarIgnore) Execute(vcursor VCursor, _ evalengine.ExpressionEnv) error {
-	vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: mysql.ERNotSupportedYet, Message: fmt.Sprintf("Ignored inapplicable SET %v = %v", svi.Name, svi.Expr)})
+func (svi *SysVarIgnore) Execute(VCursor, evalengine.ExpressionEnv) error {
+	log.Infof("Ignored inapplicable SET %v = %v", svi.Name, svi.Expr)
 	return nil
 }
 
@@ -237,7 +246,7 @@ func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, env evalengine.Expres
 		return err
 	}
 	if result.RowsAffected == 0 {
-		vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: mysql.ERNotSupportedYet, Message: fmt.Sprintf("Modification not allowed using set construct for: %s", svci.Name)})
+		log.Infof("Ignored inapplicable SET %v = %v", svci.Name, svci.Expr)
 	}
 	return nil
 }

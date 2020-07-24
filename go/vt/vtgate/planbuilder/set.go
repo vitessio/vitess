@@ -98,6 +98,7 @@ var ignoreThese = []string{
 	"query_prealloc_size",
 	"sql_buffer_result",
 	"transaction_alloc_block_size",
+	"wait_timeout",
 }
 
 var saveSettingsToSession = []string{
@@ -138,7 +139,7 @@ var vitessShouldBeAwareOf = []string{
 	"time_zone",
 	"transaction_isolation",
 	"version_tokens_session",
-	"wait_timeout",
+	"sql_auto_is_null",
 }
 
 func init() {
