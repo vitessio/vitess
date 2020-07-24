@@ -270,6 +270,20 @@ func (vc *vcursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 	return keyspace, nil
 }
 
+func (vc *vcursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
+	if len(vc.vschema.Keyspaces) == 0 {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspaces available")
+	}
+	kss := vc.vschema.Keyspaces
+	keys := make([]string, 0, len(kss))
+	for ks := range kss {
+		keys = append(keys, ks)
+	}
+	sort.Strings(keys)
+
+	return kss[keys[0]].Keyspace, nil
+}
+
 // TargetString returns the current TargetString of the session.
 func (vc *vcursorImpl) TargetString() string {
 	return vc.safeSession.TargetString
@@ -387,6 +401,11 @@ func (vc *vcursorImpl) SetUDV(key string, value interface{}) error {
 
 func (vc *vcursorImpl) SetSysVar(name string, expr string) {
 	vc.safeSession.SetSystemVariable(name, expr)
+}
+
+//NeedsReservedConn implements the SessionActions interface
+func (vc *vcursorImpl) NeedsReservedConn() {
+	vc.safeSession.SetReservedConn(true)
 }
 
 // Destination implements the ContextVSchema interface

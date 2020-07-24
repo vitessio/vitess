@@ -1,0 +1,19 @@
+# get_lock named locks are unsafe with server-side connection pooling
+"select get_lock('foo', 10) from dual"
+"get_lock() not allowed"
+
+# is_free_lock named locks are unsafe with server-side connection pooling
+"select is_free_lock('foo') from dual"
+"is_free_lock() not allowed"
+
+# is_used_lock named locks are unsafe with server-side connection pooling
+"select is_used_lock('foo') from dual"
+"is_used_lock() not allowed"
+
+# release_all_locks named locks are unsafe with server-side connection pooling
+"select release_all_locks() from dual"
+"release_all_locks() not allowed"
+
+# release_lock named locks are unsafe with server-side connection pooling
+"select release_lock('foo') from dual"
+"release_lock() not allowed"

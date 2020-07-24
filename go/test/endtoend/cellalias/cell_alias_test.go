@@ -322,6 +322,7 @@ func TestAddAliasWhileVtgateUp(t *testing.T) {
 	vtgateInstance := localCluster.NewVtgateInstance()
 	vtgateInstance.CellsToWatch = allCells
 	vtgateInstance.TabletTypesToWait = "MASTER,REPLICA,RDONLY"
+	vtgateInstance.GatewayImplementation = "discoverygateway"
 	err = vtgateInstance.Setup()
 	require.Nil(t, err)
 	defer vtgateInstance.TearDown()

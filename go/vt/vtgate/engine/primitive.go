@@ -96,6 +96,9 @@ type (
 		SetUDV(key string, value interface{}) error
 
 		SetSysVar(name string, expr string)
+
+		// NeedsReservedConn marks this session as needing a dedicated connection to mysql
+		NeedsReservedConn()
 	}
 
 	// Plan represents the execution strategy for a given query.
@@ -129,7 +132,7 @@ type (
 		GetKeyspaceName() string
 		GetTableName() string
 		Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
-		StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
+		StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
 		GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 		NeedsTransaction() bool
 
