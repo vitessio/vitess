@@ -19,7 +19,6 @@ package vtgate
 import (
 	"testing"
 
-	"vitess.io/vitess/go/mysql"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/test/utils"
@@ -239,7 +238,7 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set sql_auto_is_null = 0",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, RowCount: -1},
 	}, {
 		in:  "set sql_auto_is_null = 1",
 		out: &vtgatepb.Session{Autocommit: true, RowCount: -1},
@@ -313,10 +312,6 @@ func TestExecutorSetOp(t *testing.T) {
 		sysVars map[string]string
 	}{{
 		in: "set big_tables = 1",
-		warning: []*querypb.QueryWarning{{
-			Code:    mysql.ERNotSupportedYet,
-			Message: "Ignored inapplicable SET big_tables = 1",
-		}},
 	}, {
 		in:      "set sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_UPDATES'",
 		sysVars: map[string]string{"sql_mode": "'STRICT_ALL_TABLES,NO_AUTO_UPDATES'"},
