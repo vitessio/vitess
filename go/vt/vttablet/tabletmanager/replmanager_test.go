@@ -58,7 +58,7 @@ func TestReplManagerSetTabletType(t *testing.T) {
 	tm.replManager.ticks.Stop()
 }
 
-func TestReplManagerSetReplicaStopped(t *testing.T) {
+func TestReplManagerSetReplicationStopped(t *testing.T) {
 	defer func(saved bool) { *mysqlctl.DisableActiveReparents = saved }(*mysqlctl.DisableActiveReparents)
 	*mysqlctl.DisableActiveReparents = true
 
