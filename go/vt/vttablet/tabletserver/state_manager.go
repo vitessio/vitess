@@ -123,6 +123,7 @@ type stateManager struct {
 
 type (
 	schemaEngine interface {
+		EnsureConnectionAndDB(topodatapb.TabletType) error
 		Open() error
 		MakeNonMaster()
 		Close()
@@ -395,7 +396,7 @@ func (sm *stateManager) VerifyTarget(ctx context.Context, target *querypb.Target
 func (sm *stateManager) serveMaster() error {
 	sm.watcher.Close()
 
-	if err := sm.connect(); err != nil {
+	if err := sm.connect(topodatapb.TabletType_MASTER); err != nil {
 		return err
 	}
 
@@ -414,7 +415,7 @@ func (sm *stateManager) unserveMaster() error {
 
 	sm.watcher.Close()
 
-	if err := sm.connect(); err != nil {
+	if err := sm.connect(topodatapb.TabletType_MASTER); err != nil {
 		return err
 	}
 
@@ -428,7 +429,7 @@ func (sm *stateManager) serveNonMaster(wantTabletType topodatapb.TabletType) err
 	sm.tracker.Close()
 	sm.se.MakeNonMaster()
 
-	if err := sm.connect(); err != nil {
+	if err := sm.connect(wantTabletType); err != nil {
 		return err
 	}
 
@@ -446,7 +447,7 @@ func (sm *stateManager) unserveNonMaster(wantTabletType topodatapb.TabletType) e
 
 	sm.se.MakeNonMaster()
 
-	if err := sm.connect(); err != nil {
+	if err := sm.connect(wantTabletType); err != nil {
 		return err
 	}
 
@@ -456,8 +457,8 @@ func (sm *stateManager) unserveNonMaster(wantTabletType topodatapb.TabletType) e
 	return nil
 }
 
-func (sm *stateManager) connect() error {
-	if err := sm.qe.IsMySQLReachable(); err != nil {
+func (sm *stateManager) connect(tabletType topodatapb.TabletType) error {
+	if err := sm.se.EnsureConnectionAndDB(tabletType); err != nil {
 		return err
 	}
 	if err := sm.se.Open(); err != nil {
