@@ -4,7 +4,9 @@
   "license": "Apache-2.0",
   "angular-cli": {},
   "scripts": {
-    "start": "ng serve",
+    "start": "ng serve --proxy proxy.conf.json",
+    "build": "ng build",
+    "build:prod": "ng build -prod",
     "lint": "tslint \"src/**/*.ts\"",
     "test": "ng test",
     "pree2e": "webdriver-manager update",
