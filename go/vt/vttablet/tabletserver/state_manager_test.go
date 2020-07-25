@@ -79,7 +79,7 @@ func TestStateManagerServeMaster(t *testing.T) {
 	verifySubcomponent(t, 9, sm.messager, testStateOpen)
 
 	assert.False(t, sm.se.(*testSchemaEngine).nonMaster)
-	assert.True(t, sm.qe.(*testQueryEngine).isReachable)
+	assert.True(t, sm.se.(*testSchemaEngine).ensureCalled)
 	assert.False(t, sm.qe.(*testQueryEngine).stopServing)
 
 	assert.Equal(t, topodatapb.TabletType_MASTER, sm.target.TabletType)
@@ -286,7 +286,7 @@ func TestStateManagerTransitionFailRetry(t *testing.T) {
 	transitionRetryInterval = 10 * time.Millisecond
 
 	sm := newTestStateManager(t)
-	sm.qe.(*testQueryEngine).failMySQL = true
+	sm.se.(*testSchemaEngine).failMySQL = true
 
 	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
 	require.Error(t, err)
@@ -613,7 +613,19 @@ func (tos testOrderState) State() testState {
 
 type testSchemaEngine struct {
 	testOrderState
-	nonMaster bool
+	ensureCalled bool
+	nonMaster    bool
+
+	failMySQL bool
+}
+
+func (te *testSchemaEngine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error {
+	if te.failMySQL {
+		te.failMySQL = false
+		return errors.New("intentional error")
+	}
+	te.ensureCalled = true
+	return nil
 }
 
 func (te *testSchemaEngine) Open() error {
@@ -658,7 +670,6 @@ func (te *testReplTracker) Status() (time.Duration, error) {
 
 type testQueryEngine struct {
 	testOrderState
-	isReachable bool
 	stopServing bool
 
 	failMySQL bool
@@ -675,7 +686,6 @@ func (te *testQueryEngine) IsMySQLReachable() error {
 		te.failMySQL = false
 		return errors.New("intentional error")
 	}
-	te.isReachable = true
 	return nil
 }
 

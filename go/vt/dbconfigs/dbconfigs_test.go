@@ -227,6 +227,9 @@ func TestAccessors(t *testing.T) {
 	if got, want := dbc.AppWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.AppWithDB().DbName: %v, want %v", got, want)
 	}
+	if got, want := dbc.AllPrivsConnector().connParams.DbName, ""; got != want {
+		t.Errorf("dbc.AllPrivsWithDB().DbName: %v, want %v", got, want)
+	}
 	if got, want := dbc.AllPrivsWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.AllPrivsWithDB().DbName: %v, want %v", got, want)
 	}
