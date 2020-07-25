@@ -164,31 +164,26 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 	var setOp engine.SetOp
 	var err error
 
-	var tabletExpressions []*sqlparser.SetExpr
+	ec := new(expressionConverter)
+
 	for _, expr := range stmt.Exprs {
 		switch expr.Scope {
 		case sqlparser.GlobalStr:
 			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported in set: global")
+			// AST struct has been prepared before getting here, so no scope here means that
+			// we have a UDV. If the original query didn't explicitly specify the scope, it
+			// would have been explictly set to sqlparser.SessionStr before reaching this
+			// phase of planning
 		case "":
-			exp, err := sqlparser.Convert(expr.Expr)
-			if err == nil {
-				setOp = &engine.UserDefinedVariable{
-					Name: expr.Name.Lowered(),
-					Expr: exp,
-				}
-			} else {
-				if err != sqlparser.ExprNotSupported {
-					return nil, err
-				}
-				if !expressionOkToDelegateToTablet(expr.Expr) {
-					return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "expression not supported for SET: %s", sqlparser.String(expr.Expr))
-				}
-				setOp = &engine.UserDefinedVariable{
-					Name: expr.Name.Lowered(),
-					Expr: &evalengine.Column{Offset: len(tabletExpressions)},
-				}
-				tabletExpressions = append(tabletExpressions, expr)
+			evalExpr, err := ec.convert(expr)
+			if err != nil {
+				return nil, err
 			}
+			setOp = &engine.UserDefinedVariable{
+				Name: expr.Name.Lowered(),
+				Expr: evalExpr,
+			}
+
 			setOps = append(setOps, setOp)
 		case sqlparser.SessionStr:
 			planFunc, ok := sysVarPlanningFunc[expr.Name.Lowered()]
@@ -205,15 +200,9 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 		}
 	}
 
-	var input engine.Primitive
-	if len(tabletExpressions) == 0 {
-		input = &engine.SingleRow{}
-	} else {
-		primitive, err := planTabletInput(vschema, tabletExpressions)
-		if err != nil {
-			return nil, err
-		}
-		input = primitive
+	input, err := ec.source(vschema)
+	if err != nil {
+		return nil, err
 	}
 
 	return &engine.Set{
@@ -222,14 +211,39 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 	}, nil
 }
 
-func planTabletInput(vschema ContextVSchema, tabletExpressions []*sqlparser.SetExpr) (engine.Primitive, error) {
+type expressionConverter struct {
+	tabletExpressions []*sqlparser.SetExpr
+}
+
+func (spb *expressionConverter) convert(setExpr *sqlparser.SetExpr) (evalengine.Expr, error) {
+	astExpr := setExpr.Expr
+	evalExpr, err := sqlparser.Convert(astExpr)
+	if err != nil {
+		if err != sqlparser.ExprNotSupported {
+			return nil, err
+		}
+		// We have an expression that we can't handle at the vtgate level
+		if !expressionOkToDelegateToTablet(astExpr) {
+			// Uh-oh - this expression is not even safe to delegate to the tablet. Give up.
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "expression not supported for SET: %s", sqlparser.String(astExpr))
+		}
+		evalExpr = &evalengine.Column{Offset: len(spb.tabletExpressions)}
+		spb.tabletExpressions = append(spb.tabletExpressions, setExpr)
+	}
+	return evalExpr, nil
+}
+
+func (spb *expressionConverter) source(vschema ContextVSchema) (engine.Primitive, error) {
+	if len(spb.tabletExpressions) == 0 {
+		return &engine.SingleRow{}, nil
+	}
 	ks, dest, err := resolveDestination(vschema)
 	if err != nil {
 		return nil, err
 	}
 
 	var expr []string
-	for _, e := range tabletExpressions {
+	for _, e := range spb.tabletExpressions {
 		expr = append(expr, sqlparser.String(e.Expr))
 	}
 	query := fmt.Sprintf("select %s from dual", strings.Join(expr, ","))
