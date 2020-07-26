@@ -86,7 +86,7 @@ func TestStateResharding(t *testing.T) {
 	tm.tmState.mu.Unlock()
 
 	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
-	assert.Equal(t, topodatapb.TabletType_MASTER, qsc.CurrentTarget.TabletType)
+	assert.Equal(t, topodatapb.TabletType_MASTER, qsc.CurrentTarget().TabletType)
 	assert.False(t, qsc.IsServing())
 }
 
@@ -145,7 +145,7 @@ func TestStateTabletControls(t *testing.T) {
 	tm.tmState.mu.Unlock()
 
 	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
-	assert.Equal(t, topodatapb.TabletType_REPLICA, qsc.CurrentTarget.TabletType)
+	assert.Equal(t, topodatapb.TabletType_REPLICA, qsc.CurrentTarget().TabletType)
 	assert.False(t, qsc.IsServing())
 }
 
@@ -161,7 +161,7 @@ func TestStateNonServing(t *testing.T) {
 	tm.tmState.mu.Unlock()
 
 	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
-	assert.Equal(t, topodatapb.TabletType_SPARE, qsc.CurrentTarget.TabletType)
+	assert.Equal(t, topodatapb.TabletType_SPARE, qsc.CurrentTarget().TabletType)
 	assert.False(t, qsc.IsServing())
 }
 
