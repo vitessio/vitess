@@ -160,12 +160,11 @@ func initClusterForInitialSharding(keyspaceName string, shardNames []string, tot
 			}
 			// Start Mysqlctl process, for multi keyspace we need only 1st keyspace sql procs, that is why this check is added
 			if keyspaceName == keyspaceName1 {
-				if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
+				proc, err := tablet.MysqlctlProcess.StartProcess()
+				if err != nil {
 					return
-				} else {
-					// ignore golint warning, we need the else block to use proc
-					mysqlProcesses = append(mysqlProcesses, proc)
 				}
+				mysqlProcesses = append(mysqlProcesses, proc)
 			} else { // Since we'll be using mysql procs of keyspace-1 for ks-2, resetting this to 0
 				tablet.MysqlctlProcess.TabletUID = 0
 			}
@@ -216,7 +215,6 @@ func AssignMysqlPortFromKs1ToKs2() {
 			port := portMap[fmt.Sprintf("%s-%s", shard.Name, tablet.Type)]
 			shard.Vttablets[idx].MySQLPort = port
 			shard.Vttablets[idx].VttabletProcess.DbPort = port
-			shard.Vttablets[idx].VttabletProcess.PidFile = path.Join(shard.Vttablets[idx].VttabletProcess.LogDir, fmt.Sprintf("vttablet-%d.pid", port))
 		}
 	}
 }
@@ -243,60 +241,45 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	shard1Ks := fmt.Sprintf("%s/%s", keyspaceName, shard1.Name)
 	shard1MasterTablet := *shard1.MasterTablet()
 
+	if isExternal {
+		for _, tablet := range shard1.Vttablets {
+			_ = tablet.VttabletProcess.CreateDB(keyspaceName)
+		}
+	}
+
 	// master tablet start
 	shard1MasterTablet.VttabletProcess.ExtraArgs = append(shard1MasterTablet.VttabletProcess.ExtraArgs, commonTabletArg...)
-	//var err error
-	err := ClusterInstance.VtctlclientProcess.InitTablet(&shard1MasterTablet, cell, keyspaceName, hostname, shard1.Name)
-	require.Nil(t, err)
 	shard1.Replica().VttabletProcess.ExtraArgs = append(shard1.Replica().VttabletProcess.ExtraArgs, commonTabletArg...)
 	shard1.Rdonly().VttabletProcess.ExtraArgs = append(shard1.Rdonly().VttabletProcess.ExtraArgs, commonTabletArg...)
 
-	for _, tablet := range shard1.Vttablets {
-		_ = tablet.VttabletProcess.CreateDB(keyspaceName)
-	}
-	err = shard1MasterTablet.VttabletProcess.Setup()
-	require.Nil(t, err)
+	err := shard1MasterTablet.VttabletProcess.Setup()
+	require.NoError(t, err)
 
-	// replica tablet init
-	err = ClusterInstance.VtctlclientProcess.InitTablet(shard1.Replica(), cell, keyspaceName, hostname, shard1.Name)
-	require.Nil(t, err)
-
-	// rdonly tablet start
-	err = ClusterInstance.VtctlclientProcess.InitTablet(shard1.Rdonly(), cell, keyspaceName, hostname, shard1.Name)
-	require.Nil(t, err)
 	if isExternal {
 		shard1.Rdonly().VttabletProcess.ServingStatus = "SERVING"
 		shard1.Replica().VttabletProcess.ServingStatus = "SERVING"
 	}
 	err = shard1.Rdonly().VttabletProcess.Setup()
-	require.Nil(t, err)
-
-	if !isMulti {
-		output, err := ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
-			"-force", fmt.Sprintf("%s/%s", keyspaceName, shard1.Name), shard1MasterTablet.Alias)
-		require.Error(t, err, "Should fail as no replica tablet is present.")
-		assert.Contains(t, output, fmt.Sprintf("tablet %s ResetReplication failed", shard1.Replica().Alias))
-	}
-	// start replica
+	require.NoError(t, err)
 	err = shard1.Replica().VttabletProcess.Setup()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// reparent to make the tablets work
 	if !isExternal {
 		// reparent to make the tablets work
 		err = ClusterInstance.VtctlclientProcess.InitShardMaster(keyspace.Name, shard1.Name, cell, shard1MasterTablet.TabletUID)
-		require.Nil(t, err)
+		require.NoError(t, err)
 	} else {
 		err = shard1.Replica().VttabletProcess.WaitForTabletType("SERVING")
-		require.Nil(t, err)
+		require.NoError(t, err)
 		_, err = ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("TabletExternallyReparented", shard1MasterTablet.Alias)
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 
 	err = shard1.Replica().VttabletProcess.WaitForTabletType("SERVING")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = shard1.Rdonly().VttabletProcess.WaitForTabletType("SERVING")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	for _, vttablet := range shard1.Vttablets {
 		assert.Equal(t, vttablet.VttabletProcess.GetTabletStatus(), "SERVING")
 	}
@@ -306,28 +289,27 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 		sqlSchemaToApply = createTabletTemplateByte
 	}
 	err = ClusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, fmt.Sprintf(sqlSchemaToApply, tableName))
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	err = ClusterInstance.VtctlclientProcess.ApplyVSchema(keyspaceName, fmt.Sprintf(vSchema, tableName, "id"))
-	require.Nil(t, err)
+	require.NoError(t, err)
 	_, err = shard1MasterTablet.VttabletProcess.QueryTablet(fmt.Sprintf(insertTabletTemplate, tableName, uint64(0x1000000000000000), "msg1"), keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	_, err = shard1MasterTablet.VttabletProcess.QueryTablet(fmt.Sprintf(insertTabletTemplate, tableName, uint64(0x9000000000000000), "msg2"), keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	_, err = shard1MasterTablet.VttabletProcess.QueryTablet(fmt.Sprintf(insertTabletTemplate, tableName, uint64(0xD000000000000000), "msg3"), keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// reload schema on all tablets so we can query them
 	for _, vttablet := range shard1.Vttablets {
 		_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("ReloadSchema", vttablet.Alias)
 	}
 	vtgateInstance := ClusterInstance.NewVtgateInstance()
-	vtgateInstance.PidFile = path.Join(ClusterInstance.TmpDirectory, fmt.Sprintf("vtgate-%s.pid", keyspaceName))
 	vtgateInstance.MySQLServerSocketPath = path.Join(ClusterInstance.TmpDirectory, fmt.Sprintf("mysql-%s.sock", keyspaceName))
 	vtgateInstance.ExtraArgs = []string{"-retry-count", fmt.Sprintf("%d", 2), "-tablet_protocol", "grpc", "-normalize_queries", "-tablet_refresh_interval", "2s"}
 	err = vtgateInstance.Setup()
 	vtgateInstances = append(vtgateInstances, vtgateInstance)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	for _, tabletType := range []string{"master", "replica", "rdonly"} {
 		if err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.%s", keyspaceName, shard1.Name, tabletType), 1); err != nil {
@@ -339,7 +321,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 
 	// run a health check on source replica so it responds to discovery
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", shard1.Replica().Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// create the split shards
 	shard21 := keyspace.Shards[1]
@@ -348,14 +330,18 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	for _, shard := range []cluster.Shard{shard21, shard22} {
 		for idx, vttablet := range shard.Vttablets {
 			vttablet.VttabletProcess.ExtraArgs = append(vttablet.VttabletProcess.ExtraArgs, commonTabletArg...)
-			err = ClusterInstance.VtctlclientProcess.InitTablet(vttablet, cell, keyspaceName, hostname, shard.Name)
-			require.Nil(t, err)
-			_ = vttablet.VttabletProcess.CreateDB(keyspaceName)
 			if isExternal {
+				// We have to InitTablet upfront so that TER below can find the tablet record.
+				// Otherwise, there is a race where TER runs before vttablet publishes its first record.
+				err = ClusterInstance.VtctlclientProcess.InitTablet(vttablet, cell, keyspaceName, hostname, shard.Name)
+				require.Nil(t, err)
+
+				err = vttablet.VttabletProcess.CreateDB(keyspaceName)
+				require.NoError(t, err)
 				shard.Vttablets[idx].VttabletProcess.ServingStatus = ""
 			}
 			err = vttablet.VttabletProcess.Setup()
-			require.Nil(t, err)
+			require.NoError(t, err)
 		}
 	}
 	if !isExternal {
@@ -376,9 +362,9 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 		}
 	} else {
 		_, err = ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("TabletExternallyReparented", shard21.MasterTablet().Alias)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		_, err = ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("TabletExternallyReparented", shard22.MasterTablet().Alias)
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 
 	// must restart vtgate after tablets are up, or else wait until 1min refresh
@@ -390,11 +376,11 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	// Wait for the endpoints, either local or remote.
 	for _, shard := range []cluster.Shard{shard1, shard21, shard22} {
 		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shard.Name), 1)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard.Name), 1)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard.Name), 1)
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 
 	// Check srv keyspace
@@ -407,15 +393,15 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard",
 		"--exclude_tables", "unrelated",
 		shard1.Rdonly().Alias, fmt.Sprintf("%s/%s", keyspaceName, shard21.Name))
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard",
 		"--exclude_tables", "unrelated",
 		shard1.Rdonly().Alias, fmt.Sprintf("%s/%s", keyspaceName, shard22.Name))
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	err = ClusterInstance.StartVtworker(cell, "--use_v3_resharding_mode=true")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Initial clone (online).
 	_ = ClusterInstance.VtworkerProcess.ExecuteCommand("SplitClone",
@@ -474,7 +460,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	}
 
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("ValidateSchemaKeyspace", keyspaceName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// check the binlog players are running
 	sharding.CheckDestinationMaster(t, *shard21.MasterTablet(), []string{shard1Ks}, *ClusterInstance)
@@ -485,7 +471,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 
 	for _, tablet := range []cluster.Vttablet{*shard21.Rdonly(), *shard22.Rdonly()} {
 		err = ClusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 
 	// testing filtered replication: insert a bunch of data on shard 1,
@@ -501,9 +487,9 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	sharding.CheckBinlogServerVars(t, *shard1.Replica(), 1000, 1000, false)
 
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", shard21.Rdonly().Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", shard22.Rdonly().Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	//use vtworker to compare the data
 	ClusterInstance.VtworkerProcess.Cell = cell
@@ -513,7 +499,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 			"--use_v3_resharding_mode=true",
 			"MultiSplitDiff",
 			fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		for _, shard := range []string{shard21.Name, shard22.Name} {
 			err = ClusterInstance.VtworkerProcess.ExecuteVtworkerCommand(ClusterInstance.GetAndReservePort(),
@@ -522,7 +508,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 				"SplitDiff",
 				"--min_healthy_rdonly_tablets", "1",
 				fmt.Sprintf("%s/%s", keyspaceName, shard))
-			require.Nil(t, err)
+			require.NoError(t, err)
 		}
 	}
 
@@ -541,7 +527,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 
 	// now serve rdonly from the split shards
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", shard1Ks, "rdonly")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	expectedPartitions = map[topodata.TabletType][]string{}
 	expectedPartitions[topodata.TabletType_MASTER] = []string{shard1.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard1.Name}
@@ -600,18 +586,18 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 
 	// check the binlog players are gone now
 	err = shard21.MasterTablet().VttabletProcess.WaitForBinLogPlayerCount(0)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = shard22.MasterTablet().VttabletProcess.WaitForBinLogPlayerCount(0)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// make sure we can't delete a shard with tablets
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteShard", shard1Ks)
 	require.Error(t, err)
-	if !isMulti {
-		KillTabletsInKeyspace(keyspace)
-		KillVtgateInstances()
-	}
 	ClusterInstance.VtworkerProcess.TearDown()
+	if !isMulti {
+		KillVtgateInstances()
+		KillTabletsInKeyspace(keyspace)
+	}
 
 }
 

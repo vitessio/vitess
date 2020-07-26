@@ -150,7 +150,7 @@ func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.L
 	err = tm.restoreDataLocked(ctx, l, 0 /* waitForBackupInterval */, true /* deleteBeforeRestore */)
 
 	// re-run health check to be sure to capture any replication delay
-	tm.runHealthCheckLocked()
+	tm.QueryServiceControl.BroadcastHealth()
 
 	return err
 }

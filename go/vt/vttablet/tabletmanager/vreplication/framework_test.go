@@ -109,10 +109,7 @@ func TestMain(m *testing.M) {
 			"extb": env.Dbcfgs,
 		}
 		playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, vrepldb, externalConfig)
-		if err := playerEngine.Open(context.Background()); err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-			return 1
-		}
+		playerEngine.Open(context.Background())
 		defer playerEngine.Close()
 
 		if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), binlogplayer.CreateVReplicationTable()); err != nil {

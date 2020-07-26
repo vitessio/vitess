@@ -75,7 +75,7 @@ type Engine struct {
 
 // NewEngine creates a new Engine.
 func NewEngine(env tabletenv.Env) *Engine {
-	reloadTime := time.Duration(env.Config().SchemaReloadIntervalSeconds * 1e9)
+	reloadTime := env.Config().SchemaReloadIntervalSeconds.Get()
 	se := &Engine{
 		env: env,
 		// We need three connections: one for the reloader, one for
@@ -118,6 +118,7 @@ func (se *Engine) Open() error {
 	if se.isOpen {
 		return nil
 	}
+	log.Info("Schema Engine: opening")
 
 	ctx := tabletenv.LocalContext()
 
@@ -180,6 +181,7 @@ func (se *Engine) Close() {
 	se.lastChange = 0
 	se.notifiers = make(map[string]notifier)
 	se.isOpen = false
+	log.Info("Schema Engine: closed")
 }
 
 // MakeNonMaster clears the sequence caches to make sure that

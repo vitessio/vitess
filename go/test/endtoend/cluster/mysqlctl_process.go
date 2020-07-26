@@ -92,6 +92,8 @@ func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 
 // Stop executes mysqlctl command to stop mysql instance
 func (mysqlctl *MysqlctlProcess) Stop() (err error) {
+	log.Infof("Shutting down MySQL: %d", mysqlctl.TabletUID)
+	defer log.Infof("MySQL shutdown complete: %d", mysqlctl.TabletUID)
 	tmpProcess, err := mysqlctl.StopProcess()
 	if err != nil {
 		return err

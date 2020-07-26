@@ -211,7 +211,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 		QueryServiceControl: tabletservermock.NewController(),
 		VREngine:            vreplication.NewTestEngine(wr.TopoServer(), ft.Tablet.Alias.Cell, ft.FakeMysqlDaemon, binlogplayer.NewFakeDBClient, topoproto.TabletDbName(ft.Tablet), nil),
 	}
-	if err := ft.TM.Start(ft.Tablet); err != nil {
+	if err := ft.TM.Start(ft.Tablet, 0); err != nil {
 		t.Fatal(err)
 	}
 	ft.Tablet = ft.TM.Tablet()
