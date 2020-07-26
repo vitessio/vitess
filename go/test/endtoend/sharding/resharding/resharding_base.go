@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -279,20 +280,10 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	srvKeyspace := sharding.GetSrvKeyspace(t, cell1, keyspaceName, *clusterInstance)
 	assert.Equal(t, "", srvKeyspace.GetShardingColumnName())
 
-	//Start Tablets and Wait for the Process
+	// Start Tablets
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
-			// Init Tablet
-			err := clusterInstance.VtctlclientProcess.InitTablet(tablet, tablet.Cell, keyspaceName, hostname, shard.Name)
-			require.Nil(t, err)
-
-			// Start the tablet
 			err = tablet.VttabletProcess.Setup()
-			require.Nil(t, err)
-
-			// Create Database
-			_, err = tablet.VttabletProcess.QueryTablet(fmt.Sprintf("create database vt_%s",
-				keyspace.Name), keyspace.Name, false)
 			require.Nil(t, err)
 		}
 	}
@@ -650,10 +641,6 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	}
 
-	// check the destination master 3 is healthy, even though its query
-	// service is not running (if not healthy this would exception out)
-	sharding.VerifyTabletHealth(t, *shard3Master, hostname)
-
 	// now serve rdonly from the split shards, in cell1 only
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
 		"MigrateServedTypes", fmt.Sprintf("--cells=%s", cell1),
@@ -935,10 +922,16 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.Nil(t, err)
 
 	// delete the original tablets in the original shard
-	for _, tablet := range []cluster.Vttablet{*shard1Master, *shard1Replica1, *shard1Replica2, *shard1Rdonly, *shard1RdonlyZ2} {
-		_ = tablet.MysqlctlProcess.Stop()
-		_ = tablet.VttabletProcess.TearDown()
+	var wg sync.WaitGroup
+	for _, tablet := range []*cluster.Vttablet{shard1Master, shard1Replica1, shard1Replica2, shard1Rdonly, shard1RdonlyZ2} {
+		wg.Add(1)
+		go func(tablet *cluster.Vttablet) {
+			defer wg.Done()
+			_ = tablet.VttabletProcess.TearDown()
+			_ = tablet.MysqlctlProcess.Stop()
+		}(tablet)
 	}
+	wg.Wait()
 
 	for _, tablet := range []cluster.Vttablet{*shard1Replica1, *shard1Replica2, *shard1Rdonly, *shard1RdonlyZ2} {
 		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)

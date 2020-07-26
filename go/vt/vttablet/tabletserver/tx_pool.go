@@ -77,7 +77,7 @@ type (
 // NewTxPool creates a new TxPool. It's not operational until it's Open'd.
 func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 	config := env.Config()
-	transactionTimeout := time.Duration(config.Oltp.TxTimeoutSeconds * 1e9)
+	transactionTimeout := config.Oltp.TxTimeoutSeconds.Get()
 	axp := &TxPool{
 		env:                env,
 		scp:                NewStatefulConnPool(env),

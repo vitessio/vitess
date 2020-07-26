@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package heartbeat
+package repltracker
 
 import (
 	"fmt"
@@ -52,9 +52,9 @@ var withDDL = withddl.New([]string{
 	fmt.Sprintf(sqlCreateHeartbeatTable, "_vt"),
 })
 
-// Writer runs on master tablets and writes heartbeats to the _vt.heartbeat
+// heartbeatWriter runs on master tablets and writes heartbeats to the _vt.heartbeat
 // table at a regular interval, defined by heartbeat_interval.
-type Writer struct {
+type heartbeatWriter struct {
 	env tabletenv.Env
 
 	enabled       bool
@@ -70,14 +70,14 @@ type Writer struct {
 	ticks  *timer.Timer
 }
 
-// NewWriter creates a new Writer.
-func NewWriter(env tabletenv.Env, alias topodatapb.TabletAlias) *Writer {
+// newHeartbeatWriter creates a new heartbeatWriter.
+func newHeartbeatWriter(env tabletenv.Env, alias topodatapb.TabletAlias) *heartbeatWriter {
 	config := env.Config()
-	if config.HeartbeatIntervalSeconds == 0 {
-		return &Writer{}
+	if config.ReplicationTracker.Mode != tabletenv.Heartbeat {
+		return &heartbeatWriter{}
 	}
-	heartbeatInterval := time.Duration(config.HeartbeatIntervalSeconds * 1e9)
-	return &Writer{
+	heartbeatInterval := config.ReplicationTracker.HeartbeatIntervalSeconds.Get()
+	return &heartbeatWriter{
 		env:         env,
 		enabled:     true,
 		tabletAlias: alias,
@@ -92,16 +92,14 @@ func NewWriter(env tabletenv.Env, alias topodatapb.TabletAlias) *Writer {
 	}
 }
 
-// InitDBConfig initializes the target name for the Writer.
-func (w *Writer) InitDBConfig(target querypb.Target) {
+// InitDBConfig initializes the target name for the heartbeatWriter.
+func (w *heartbeatWriter) InitDBConfig(target querypb.Target) {
 	w.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
 }
 
-// Open sets up the Writer's db connection and launches the ticker
+// Open sets up the heartbeatWriter's db connection and launches the ticker
 // responsible for periodically writing to the heartbeat table.
-// Open may be called multiple times, as long as it was closed since
-// last invocation.
-func (w *Writer) Open() {
+func (w *heartbeatWriter) Open() {
 	if !w.enabled {
 		return
 	}
@@ -110,16 +108,15 @@ func (w *Writer) Open() {
 	if w.isOpen {
 		return
 	}
+	log.Info("Hearbeat Writer: opening")
 
-	log.Info("Beginning heartbeat writes")
 	w.pool.Open(w.env.Config().DB.AppWithDB(), w.env.Config().DB.DbaWithDB(), w.env.Config().DB.AppDebugWithDB())
 	w.ticks.Start(w.writeHeartbeat)
 	w.isOpen = true
 }
 
-// Close closes the Writer's db connection and stops the periodic ticker. A writer
-// object can be re-opened after closing.
-func (w *Writer) Close() {
+// Close closes the heartbeatWriter's db connection and stops the periodic ticker.
+func (w *heartbeatWriter) Close() {
 	if !w.enabled {
 		return
 	}
@@ -128,16 +125,17 @@ func (w *Writer) Close() {
 	if !w.isOpen {
 		return
 	}
+
 	w.ticks.Stop()
 	w.pool.Close()
-	log.Info("Stopped heartbeat writes.")
 	w.isOpen = false
+	log.Info("Hearbeat Writer: closed")
 }
 
 // bindHeartbeatVars takes a heartbeat write (insert or update) and
 // adds the necessary fields to the query as bind vars. This is done
 // to protect ourselves against a badly formed keyspace or shard name.
-func (w *Writer) bindHeartbeatVars(query string) (string, error) {
+func (w *heartbeatWriter) bindHeartbeatVars(query string) (string, error) {
 	bindVars := map[string]*querypb.BindVariable{
 		"ks":  sqltypes.StringBindVariable(w.keyspaceShard),
 		"ts":  sqltypes.Int64BindVariable(w.now().UnixNano()),
@@ -152,7 +150,7 @@ func (w *Writer) bindHeartbeatVars(query string) (string, error) {
 }
 
 // writeHeartbeat updates the heartbeat row for this tablet with the current time in nanoseconds.
-func (w *Writer) writeHeartbeat() {
+func (w *heartbeatWriter) writeHeartbeat() {
 	if err := w.write(); err != nil {
 		w.recordError(err)
 		return
@@ -160,7 +158,7 @@ func (w *Writer) writeHeartbeat() {
 	writes.Add(1)
 }
 
-func (w *Writer) write() error {
+func (w *heartbeatWriter) write() error {
 	defer w.env.LogError()
 	ctx, cancel := context.WithDeadline(context.Background(), w.now().Add(w.interval))
 	defer cancel()
@@ -180,7 +178,7 @@ func (w *Writer) write() error {
 	return nil
 }
 
-func (w *Writer) recordError(err error) {
+func (w *heartbeatWriter) recordError(err error) {
 	w.errorLog.Errorf("%v", err)
 	writeErrors.Add(1)
 }
