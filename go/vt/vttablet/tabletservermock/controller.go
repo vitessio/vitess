@@ -71,8 +71,7 @@ type Controller struct {
 	// Set at construction time.
 	StateChanges chan *StateChange
 
-	// CurrentTarget stores the last known target.
-	CurrentTarget querypb.Target
+	target querypb.Target
 
 	// SetServingTypeError is the return value for SetServingType.
 	SetServingTypeError error
@@ -128,7 +127,7 @@ func (tqsc *Controller) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.DB
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
 
-	tqsc.CurrentTarget = target
+	tqsc.target = target
 	return nil
 }
 
@@ -138,7 +137,7 @@ func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, terTime
 	defer tqsc.mu.Unlock()
 
 	if tqsc.SetServingTypeError == nil {
-		tqsc.CurrentTarget.TabletType = tabletType
+		tqsc.target.TabletType = tabletType
 		tqsc.queryServiceEnabled = serving
 	}
 	tqsc.StateChanges <- &StateChange{
@@ -155,6 +154,14 @@ func (tqsc *Controller) IsServing() bool {
 	defer tqsc.mu.Unlock()
 
 	return tqsc.queryServiceEnabled
+}
+
+// CurrentTarget returns the current target.
+func (tqsc *Controller) CurrentTarget() querypb.Target {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+
+	return tqsc.target
 }
 
 // IsHealthy is part of the tabletserver.Controller interface
