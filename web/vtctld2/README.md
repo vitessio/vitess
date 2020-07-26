@@ -25,7 +25,7 @@ Using a node version manager like [nvm](https://github.com/nvm-sh/nvm) is strong
 
 From the root `vitess/` directory:
 
-1. Run Vitess locally using Docker and start a vtctld API on `http://localhost:15000/` [1]. For more on this, see the guide on [Local Installation via Docker](https://vitess.io/docs/get-started/local-docker/).
+1. Run Vitess locally using Docker and start a vtctld API on `http://localhost:15000/`. For more on this, see the guide on [Local Installation via Docker](https://vitess.io/docs/get-started/local-docker/).
 
 	```bash
 	source dev.env
@@ -44,7 +44,7 @@ Note: the local docker install will also start a vtctld admin UI on http://local
 
 In production, the vtctld UI is hosted with [go.rice](https://github.com/GeertJohan/go.rice). All front-end assets must be built, minified, and embedded in the executable.
 
-When you're ready to open a pull request for your changes, or you want to do a production build for fun:
+If you're ready to open a pull request for your changes, or if you want to do a production build just for fun... :)
 
 ```bash
 make web_build
