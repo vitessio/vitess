@@ -116,9 +116,9 @@ export class TabletComponent implements OnInit, OnDestroy {
   }
 
   openStartSlaveDialog() {
-    this.dialogSettings = new DialogSettings('Start', `Start Slave, ${this.tablet.label}`, '',
-                                             `There was a problem starting slave, ${this.tablet.label}:`);
-    this.dialogSettings.setMessage(`Started Slave, ${this.tablet.label}`);
+    this.dialogSettings = new DialogSettings('Start', `Start Replica, ${this.tablet.label}`, '',
+                                             `There was a problem starting replica, ${this.tablet.label}:`);
+    this.dialogSettings.setMessage(`Started Replica, ${this.tablet.label}`);
     this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
     let flags = new PingTabletFlags(this.tablet.ref).flags;
     this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'StartSlave');
@@ -126,9 +126,9 @@ export class TabletComponent implements OnInit, OnDestroy {
   }
 
   openStopSlaveDialog() {
-    this.dialogSettings = new DialogSettings('Stop', `Stop Slave, ${this.tablet.label}`, '',
-                                             `There was a problem stopping slave, ${this.tablet.label}:`);
-    this.dialogSettings.setMessage(`Stopped Slave, ${this.tablet.label}`);
+    this.dialogSettings = new DialogSettings('Stop', `Stop Replica, ${this.tablet.label}`, '',
+                                             `There was a problem stopping replica, ${this.tablet.label}:`);
+    this.dialogSettings.setMessage(`Stopped Replica, ${this.tablet.label}`);
     this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
     let flags = new PingTabletFlags(this.tablet.ref).flags;
     this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'StopSlave');
