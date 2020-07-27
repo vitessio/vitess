@@ -78,6 +78,10 @@ func TestReparentDownMaster(t *testing.T) {
 		// Reset status, don't wait for the tablet status. We will check it later
 		tablet.VttabletProcess.ServingStatus = ""
 
+		// Init Tablet
+		err = clusterInstance.VtctlclientProcess.InitTablet(&tablet, tablet.Cell, keyspaceName, hostname, shardName)
+		require.NoError(t, err)
+
 		// Start the tablet
 		err = tablet.VttabletProcess.Setup()
 		require.NoError(t, err)
@@ -109,6 +113,7 @@ func TestReparentDownMaster(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
 		"-action_timeout", "1s",
 		"PlannedReparentShard",
+		"-wait_replicas_timeout", "5s",
 		"-keyspace_shard", keyspaceShard,
 		"-new_master", tablet62044.Alias)
 	require.Error(t, err)
@@ -130,7 +135,7 @@ func TestReparentDownMaster(t *testing.T) {
 		"DeleteTablet",
 		"-allow_master",
 		tablet62344.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Now validate topo is correct.
 	validateTopology(t, false)
@@ -148,6 +153,8 @@ func TestReparentDownMaster(t *testing.T) {
 	// bring back the old master as a replica, check that it catches up
 	tablet62344.MysqlctlProcess.InitMysql = false
 	err = tablet62344.MysqlctlProcess.Start()
+	require.NoError(t, err)
+	err = clusterInstance.VtctlclientProcess.InitTablet(tablet62344, tablet62344.Cell, keyspaceName, hostname, shardName)
 	require.NoError(t, err)
 
 	// As there is already a master the new replica will come directly in SERVING state
@@ -170,28 +177,28 @@ func TestReparentNoChoiceDownMaster(t *testing.T) {
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
 		// Create Database
 		err := tablet.VttabletProcess.CreateDB(keyspaceName)
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		// Reset status, don't wait for the tablet status. We will check it later
 		tablet.VttabletProcess.ServingStatus = ""
 		// Init Tablet
 		err = clusterInstance.VtctlclientProcess.InitTablet(&tablet, tablet.Cell, keyspaceName, hostname, shardName)
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		// Start the tablet
 		err = tablet.VttabletProcess.Setup()
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
 		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 
 	// Init Shard Master
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	validateTopology(t, true)
 
@@ -202,24 +209,24 @@ func TestReparentNoChoiceDownMaster(t *testing.T) {
 	insertSQL1 := fmt.Sprintf(insertSQL, 2, 2)
 	runSQL(ctx, t, insertSQL1, tablet62344)
 	err = checkInsertedValues(ctx, t, tablet62044, 2)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = checkInsertedValues(ctx, t, tablet41983, 2)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = checkInsertedValues(ctx, t, tablet31981, 2)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Make the current master agent and database unavailable.
 	err = tablet62344.VttabletProcess.TearDown()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = tablet62344.MysqlctlProcess.Stop()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Run forced reparent operation, this should now proceed unimpeded.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
 		"EmergencyReparentShard",
 		"-keyspace_shard", keyspaceShard,
 		"-wait_replicas_timeout", "30s")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Check that old master tablet is left around for human intervention.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
@@ -230,7 +237,7 @@ func TestReparentNoChoiceDownMaster(t *testing.T) {
 		"DeleteTablet",
 		"-allow_master",
 		tablet62344.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Now validate topo is correct.
 	validateTopology(t, false)
@@ -246,23 +253,23 @@ func TestReparentNoChoiceDownMaster(t *testing.T) {
 
 	// Check new master has latest transaction.
 	err = checkInsertedValues(ctx, t, newMasterTablet, 2)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// bring back the old master as a replica, check that it catches up
 	tablet62344.MysqlctlProcess.InitMysql = false
 	err = tablet62344.MysqlctlProcess.Start()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.InitTablet(tablet62344, tablet62344.Cell, keyspaceName, hostname, shardName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// As there is already a master the new replica will come directly in SERVING state
 	tablet62344.VttabletProcess.ServingStatus = "SERVING"
 	// Start the tablet
 	err = tablet62344.VttabletProcess.Setup()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	err = checkInsertedValues(ctx, t, tablet62344, 2)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Kill tablets
 	killTablets(t)
