@@ -127,8 +127,9 @@ func TestReparentDownMaster(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check that old master tablet is left around for human intervention.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
+	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("Validate")
 	require.Error(t, err)
+	require.Contains(t, out, "already has master")
 
 	// Now we'll manually remove it, simulating a human cleaning up a dead master.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
@@ -229,8 +230,9 @@ func TestReparentNoChoiceDownMaster(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check that old master tablet is left around for human intervention.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
+	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("Validate")
 	require.Error(t, err)
+	require.Contains(t, out, "already has master")
 
 	// Now we'll manually remove the old master, simulating a human cleaning up a dead master.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
@@ -250,6 +252,8 @@ func TestReparentNoChoiceDownMaster(t *testing.T) {
 		}
 	}
 	require.NotNil(t, newMasterTablet)
+	// Validate new master is not old master.
+	require.NotEqual(t, newMasterTablet.Alias, tablet62344.Alias)
 
 	// Check new master has latest transaction.
 	err = checkInsertedValues(ctx, t, newMasterTablet, 2)
