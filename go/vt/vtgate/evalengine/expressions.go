@@ -292,3 +292,8 @@ func evaluateByType(val *querypb.BindVariable) (EvalResult, error) {
 	}
 	return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %s", val.Type.String())
 }
+
+// debugString is
+func (e *evalResult) debugString() string {
+	return fmt.Sprintf("(%s) %d %d %f %s", querypb.Type_name[int32(e.typ)], e.ival, e.uval, e.fval, string(e.bytes))
+}
