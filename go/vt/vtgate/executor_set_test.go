@@ -94,10 +94,10 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{},
 	}, {
 		in:  "set AUTOCOMMIT = 'aa'",
-		err: "unexpected value for autocommit: aa",
+		err: "System setting 'autocommit' can't be set to this value: 'aa' is not a boolean",
 	}, {
 		in:  "set autocommit = 2",
-		err: "unexpected value for autocommit: 2",
+		err: "System setting 'autocommit' can't be set to this value: 2 is not a boolean",
 	}, {
 		in:  "set client_found_rows = 1",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
@@ -178,7 +178,10 @@ func TestExecutorSet(t *testing.T) {
 		err: "unexpected string value for sql_select_limit: asdfasfd",
 	}, {
 		in:  "set autocommit = 1+1",
-		err: "invalid syntax: 1 + 1",
+		err: "System setting 'autocommit' can't be set to this value: 2 is not a boolean",
+	}, {
+		in:  "set autocommit = 1+0",
+		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set foo = 1",
 		err: "unsupported construct: set foo = 1",

@@ -140,6 +140,8 @@ func (t noopVCursor) ResolveDestinations(keyspace string, ids []*querypb.Value, 
 	panic("unimplemented")
 }
 
+func (t noopVCursor) SetAutocommit(bool) {}
+
 var _ VCursor = (*loggingVCursor)(nil)
 
 var _ SessionActions = (*loggingVCursor)(nil)
@@ -189,7 +191,7 @@ func (f *loggingVCursor) ShardSession() []*srvtopo.ResolvedShard {
 	return nil
 }
 
-func (f *loggingVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
+func (f *loggingVCursor) ExecuteVSchema(string, *sqlparser.DDL) error {
 	panic("implement me")
 }
 
@@ -206,7 +208,7 @@ func (f *loggingVCursor) Context() context.Context {
 	return context.Background()
 }
 
-func (f *loggingVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc {
+func (f *loggingVCursor) SetContextTimeout(time.Duration) context.CancelFunc {
 	return func() {}
 }
 
@@ -218,7 +220,7 @@ func (f *loggingVCursor) RecordWarning(warning *querypb.QueryWarning) {
 	f.warnings = append(f.warnings, warning)
 }
 
-func (f *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+func (f *loggingVCursor) Execute(_ string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	name := "Unknown"
 	switch co {
 	case vtgatepb.CommitOrder_NORMAL:
@@ -347,6 +349,8 @@ func (f *loggingVCursor) Rewind() {
 	f.log = nil
 	f.warnings = nil
 }
+
+func (f *loggingVCursor) SetAutocommit(b bool) {}
 
 func (f *loggingVCursor) nextResult() (*sqltypes.Result, error) {
 	if f.results == nil || f.curResult >= len(f.results) {

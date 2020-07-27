@@ -17,6 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
+	"strings"
+
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -32,7 +34,7 @@ func (e *evalResult) ToBooleanStrict() (bool, error) {
 		case 1:
 			return true, nil
 		default:
-			return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "is not a boolean")
+			return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%d is not a boolean", i)
 		}
 	}
 
@@ -41,6 +43,16 @@ func (e *evalResult) ToBooleanStrict() (bool, error) {
 		return intToBool(int(e.ival))
 	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
 		return intToBool(int(e.uval))
+	case sqltypes.VarBinary:
+		lower := strings.ToLower(string(e.bytes))
+		switch lower {
+		case "on":
+			return true, nil
+		case "off":
+			return false, nil
+		default:
+			return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "'%s' is not a boolean", lower)
+		}
 	}
 	return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "is not a boolean")
 }
