@@ -94,6 +94,8 @@ import (
 	"sync"
 	"time"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -462,6 +464,22 @@ var commands = []commandGroup{
 			{"GetShardReplication", commandGetShardReplication,
 				"<cell> <keyspace/shard>",
 				"Outputs a JSON structure that contains information about the ShardReplication."},
+		},
+	},
+	{
+		"Workflow", []command{
+			{"VExec", commandVExec,
+				"<ks.workflow> <query> --dry-run",
+				"Runs query on all tablets in workflow. Example: VExec merchant.morders \"update _vt.vreplication set Status='Running'\"",
+			},
+		},
+	},
+	{
+		"Workflow", []command{
+			{"Workflow", commandWorkflow,
+				"<ks.workflow> <action> --dry-run",
+				"Start/Stop/Delete Workflow on all target tablets in workflow. Example: Workflow merchant.morders Start",
+			},
 		},
 	},
 }
@@ -2827,6 +2845,135 @@ func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Flag
 	}
 
 	return nil
+}
+
+func commandVExec(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
+	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of VExec and only reports the final query and list of masters on which it will be applied")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("usage: VExec --dry-run keyspace.workflow \"<query>\"")
+	}
+	keyspace, workflow, err := splitKeyspaceWorkflow(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	_, err = wr.TopoServer().GetKeyspace(ctx, keyspace)
+	if err != nil {
+		wr.Logger().Errorf("keyspace %s not found", keyspace)
+	}
+	query := subFlags.Arg(1)
+
+	results, err := wr.VExec(ctx, workflow, keyspace, query, *dryRun)
+	if err != nil {
+		return err
+	}
+	if *dryRun {
+		return nil
+	}
+	if len(results) == 0 {
+		wr.Logger().Printf("no result returned\n")
+	}
+	var qr *sqltypes.Result
+	var numFields int
+	for _, result := range results {
+		numFields = len(result.Fields)
+		break
+	}
+	if numFields != 0 {
+		qr = queryResultForTabletResults(results)
+	} else {
+		qr = queryResultForRowsAffected(results)
+	}
+	if len(qr.Rows) == 0 {
+		return nil
+	}
+	if *json {
+		return printJSON(wr.Logger(), qr)
+	}
+	printQueryResult(loggerWriter{wr.Logger()}, qr)
+	return nil
+}
+
+// called for workflow stop/start/delete. Only rows affected are reported per tablet
+func queryResultForRowsAffected(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
+	var qr = &sqltypes.Result{}
+	qr.RowsAffected = uint64(len(results))
+	qr.Fields = []*querypb.Field{{
+		Name: "Tablet",
+		Type: sqltypes.VarBinary,
+	}, {
+		Name: "RowsAffected",
+		Type: sqltypes.Uint64,
+	}}
+	var row2 []sqltypes.Value
+	for tablet, result := range results {
+		row2 = nil
+		row2 = append(row2, sqltypes.NewVarBinary(tablet.AliasString()))
+		row2 = append(row2, sqltypes.NewUint64(result.RowsAffected))
+		qr.Rows = append(qr.Rows, row2)
+	}
+	return qr
+}
+
+func queryResultForTabletResults(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
+	var qr = &sqltypes.Result{}
+	qr.RowsAffected = uint64(len(results))
+	qr.Fields = []*querypb.Field{{
+		Name: "Tablet",
+		Type: sqltypes.VarBinary,
+	}}
+	var row2 []sqltypes.Value
+	for tablet, result := range results {
+		for _, row := range result.Rows {
+			if len(qr.Fields) == 1 {
+				qr.Fields = append(qr.Fields, result.Fields...)
+			}
+			row2 = nil
+			row2 = append(row2, sqltypes.NewVarBinary(tablet.AliasString()))
+			row2 = append(row2, row...)
+			qr.Rows = append(qr.Rows, row2)
+		}
+	}
+	return qr
+}
+
+func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of Workflow and only reports the final query and list of masters on which the operation will be applied")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("usage: Workflow --dry-run keyspace.workflow start/stop/delete")
+	}
+	keyspace, workflow, err := splitKeyspaceWorkflow(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	_, err = wr.TopoServer().GetKeyspace(ctx, keyspace)
+	if err != nil {
+		wr.Logger().Errorf("Keyspace %s not found", keyspace)
+	}
+	action := subFlags.Arg(1)
+
+	results, err := wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun)
+	if err != nil {
+		return err
+	}
+	if action == "list" {
+		return nil
+	}
+	if len(results) == 0 {
+		wr.Logger().Printf("no result returned\n")
+		return nil
+	}
+	qr := queryResultForRowsAffected(results)
+
+	printQueryResult(loggerWriter{wr.Logger()}, qr)
+	return nil
+
 }
 
 func commandPanic(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

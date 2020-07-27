@@ -70,6 +70,7 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	shardMerchant(t)
 
 	materializeProduct(t)
+
 	materializeMerchantOrders(t)
 	materializeSales(t)
 	materializeMerchantSales(t)
