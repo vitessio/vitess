@@ -38,6 +38,11 @@ func Convert(e Expr) (evalengine.Expr, error) {
 		case StrVal:
 			return evalengine.NewLiteralString(node.Val)
 		}
+	case BoolVal:
+		if node {
+			return evalengine.NewLiteralInt([]byte("1"))
+		}
+		return evalengine.NewLiteralInt([]byte("0"))
 	case *BinaryExpr:
 		var op evalengine.BinaryExpr
 		switch node.Operator {

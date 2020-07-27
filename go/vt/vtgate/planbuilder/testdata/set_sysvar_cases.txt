@@ -141,3 +141,53 @@
 # set system settings
 "set @@ndbinfo_max_bytes = 192"
 "ndbinfo_max_bytes: system setting is not supported"
+
+# set autocommit
+"set autocommit = 1"
+{
+  "QueryType": "SET",
+  "Original": "set autocommit = 1",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Name": "autocommit",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "OrigExpr": "1"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+
+# set autocommit false
+"set autocommit = 0"
+{
+  "QueryType": "SET",
+  "Original": "set autocommit = 0",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Name": "autocommit",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "OrigExpr": "0"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}

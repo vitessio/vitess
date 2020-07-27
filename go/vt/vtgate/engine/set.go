@@ -78,13 +78,14 @@ type (
 		Expr              string
 	}
 
-	// SysVarSetSpecial implements the SetOp interface and will write the changes variable into the session
+	// SysVarSetAware implements the SetOp interface and will write the changes variable into the session
 	// The special part is that these settings change the sessions behaviour in different ways
-	SysVarSetSpecial struct {
+	SysVarSetAware struct {
 		Name              string
 		Keyspace          *vindexes.Keyspace
 		TargetDestination key.Destination `json:",omitempty"`
-		Expr              string
+		Expr              evalengine.Expr `json:"-"`
+		OrigExpr          string
 	}
 )
 
@@ -337,4 +338,44 @@ func (svs *SysVarSet) checkAndUpdateSysVar(vcursor VCursor, res evalengine.Expre
 	vcursor.Session().SetSysVar(svs.Name, buf.String())
 	vcursor.Session().NeedsReservedConn()
 	return true, nil
+}
+
+var _ SetOp = (*SysVarSetAware)(nil)
+
+const (
+	AUTOCOMMIT = "autocommit"
+)
+
+//Execute implements the SetOp interface method
+func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
+	switch svss.Name {
+	case AUTOCOMMIT:
+		value, err := svss.Expr.Evaluate(env)
+		if err != nil {
+			return err
+		}
+
+		autocommittable, err := value.ToBooleanStrict()
+		if err != nil {
+			return vterrors.Wrapf(err, "System setting '%s' can't be set to this value", svss.Name)
+		}
+
+		if autocommittable && vcursor.Session().InReservedConn() {
+			//TODO do it
+			//if err := conn.Commit(ctx, session); err != nil {
+			//	return err
+			//}
+		}
+		vcursor.Session().SetAutocommit(autocommittable)
+
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported construct")
+	}
+
+	return nil
+}
+
+//VariableName implements the SetOp interface method
+func (svss *SysVarSetAware) VariableName() string {
+	return svss.Name
 }

@@ -32,7 +32,7 @@ import (
 )
 
 type (
-	planFunc = func(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error)
+	planFunc = func(expr *sqlparser.SetExpr, vschema ContextVSchema, ec *expressionConverter) (engine.SetOp, error)
 
 	expressionConverter struct {
 		tabletExpressions []*sqlparser.SetExpr
@@ -202,11 +202,52 @@ var checkAndIgnore = []setting{
 	{name: "version_tokens_session"},
 }
 
+var allowSetIfValueAlreadySet = []string{}
+
+var vitessAware = []string{
+	engine.AUTOCOMMIT,
+}
+
+var vitessShouldBeAwareOf = []string{
+	"block_encryption_mode",
+	"character_set_client",
+	"character_set_connection",
+	"character_set_database",
+	"character_set_filesystem",
+	"character_set_server",
+	"collation_connection",
+	"collation_database",
+	"collation_server",
+	"completion_type",
+	"div_precision_increment",
+	"innodb_lock_wait_timeout",
+	"interactive_timeout",
+	"lc_time_names",
+	"lock_wait_timeout",
+	"max_allowed_packet",
+	"max_error_count",
+	"max_execution_time",
+	"max_join_size",
+	"max_length_for_sort_data",
+	"max_sort_length",
+	"max_user_connections",
+	"session_track_gtids",
+	"session_track_schema",
+	"session_track_state_change",
+	"session_track_system_variables",
+	"session_track_transaction_info",
+	"time_zone",
+	"transaction_isolation",
+	"version_tokens_session",
+	"sql_auto_is_null",
+}
+
 func init() {
 	forSettings(ignoreThese, buildSetOpIgnore)
 	forSettings(useReservedConn, buildSetOpVarSet)
 	forSettings(checkAndIgnore, buildSetOpCheckAndIgnore)
 	forSettings(notSupported, buildNotSupported)
+	forSettings(vitessAware, buildSetOpVitessAware)
 }
 
 func forSettings(settings []setting, f func(bool) planFunc) {
@@ -249,7 +290,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 			if !ok {
 				return nil, ErrPlanNotSupported
 			}
-			setOp, err = planFunc(expr, vschema)
+			setOp, err = planFunc(expr, vschema, ec)
 			if err != nil {
 				return nil, err
 			}
@@ -270,7 +311,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 	}, nil
 }
 
-func (spb *expressionConverter) convert(setExpr *sqlparser.SetExpr) (evalengine.Expr, error) {
+func (ec *expressionConverter) convert(setExpr *sqlparser.SetExpr) (evalengine.Expr, error) {
 	astExpr := setExpr.Expr
 	evalExpr, err := sqlparser.Convert(astExpr)
 	if err != nil {
@@ -282,14 +323,14 @@ func (spb *expressionConverter) convert(setExpr *sqlparser.SetExpr) (evalengine.
 			// Uh-oh - this expression is not even safe to delegate to the tablet. Give up.
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "expression not supported for SET: %s", sqlparser.String(astExpr))
 		}
-		evalExpr = &evalengine.Column{Offset: len(spb.tabletExpressions)}
-		spb.tabletExpressions = append(spb.tabletExpressions, setExpr)
+		evalExpr = &evalengine.Column{Offset: len(ec.tabletExpressions)}
+		ec.tabletExpressions = append(ec.tabletExpressions, setExpr)
 	}
 	return evalExpr, nil
 }
 
-func (spb *expressionConverter) source(vschema ContextVSchema) (engine.Primitive, error) {
-	if len(spb.tabletExpressions) == 0 {
+func (ec *expressionConverter) source(vschema ContextVSchema) (engine.Primitive, error) {
+	if len(ec.tabletExpressions) == 0 {
 		return &engine.SingleRow{}, nil
 	}
 	ks, dest, err := resolveDestination(vschema)
@@ -298,7 +339,7 @@ func (spb *expressionConverter) source(vschema ContextVSchema) (engine.Primitive
 	}
 
 	var expr []string
-	for _, e := range spb.tabletExpressions {
+	for _, e := range ec.tabletExpressions {
 		expr = append(expr, sqlparser.String(e.Expr))
 	}
 	query := fmt.Sprintf("select %s from dual", strings.Join(expr, ","))
@@ -314,10 +355,14 @@ func (spb *expressionConverter) source(vschema ContextVSchema) (engine.Primitive
 }
 
 func buildNotSupported(bool) func(*sqlparser.SetExpr, ContextVSchema) (engine.SetOp, error) {
-	return func(expr *sqlparser.SetExpr, schema ContextVSchema) (engine.SetOp, error) {
+	return func(expr *sqlparser.SetExpr, schema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s: system setting is not supported", expr.Name)
 	}
 }
+
+func buildSetOpIgnore(expr *sqlparser.SetExpr, _ ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("%v", expr.Expr)
 
 func buildSetOpIgnore(boolean bool) func(*sqlparser.SetExpr, ContextVSchema) (engine.SetOp, error) {
 	return func(expr *sqlparser.SetExpr, _ ContextVSchema) (engine.SetOp, error) {
@@ -329,7 +374,7 @@ func buildSetOpIgnore(boolean bool) func(*sqlparser.SetExpr, ContextVSchema) (en
 }
 
 func buildSetOpCheckAndIgnore(boolean bool) func(*sqlparser.SetExpr, ContextVSchema) (engine.SetOp, error) {
-	return func(expr *sqlparser.SetExpr, schema ContextVSchema) (engine.SetOp, error) {
+	return func(expr *sqlparser.SetExpr, schema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
 		keyspace, dest, err := resolveDestination(schema)
 		if err != nil {
 			return nil, err
@@ -362,7 +407,7 @@ func expressionOkToDelegateToTablet(e sqlparser.Expr) bool {
 }
 
 func buildSetOpVarSet(boolean bool) func(*sqlparser.SetExpr, ContextVSchema) (engine.SetOp, error) {
-	return func(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error) {
+	return func(expr *sqlparser.SetExpr, vschema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
 		ks, err := vschema.AnyKeyspace()
 		if err != nil {
 			return nil, err
@@ -374,6 +419,30 @@ func buildSetOpVarSet(boolean bool) func(*sqlparser.SetExpr, ContextVSchema) (en
 			TargetDestination: vschema.Destination(),
 			Expr:              extractValue(expr, boolean),
 		}, nil
+	}
+}
+
+func buildSetOpVitessAware(expr *sqlparser.SetExpr, vschema ContextVSchema, ec *expressionConverter) (engine.SetOp, error) {
+	ks, err := vschema.AnyKeyspace()
+	if err != nil {
+		return nil, err
+	}
+
+	switch expr.Name.Lowered() {
+	case engine.AUTOCOMMIT:
+		convert, err := ec.convert(expr)
+		if err != nil {
+			return nil, err
+		}
+		return &engine.SysVarSetAware{
+			Name:              expr.Name.Lowered(),
+			Keyspace:          ks,
+			TargetDestination: vschema.Destination(),
+			Expr:              convert,
+			OrigExpr:          sqlparser.String(expr.Expr),
+		}, nil
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown setting %s", expr.Name.String())
 	}
 }
 

@@ -105,6 +105,8 @@ type (
 
 		// ShardSession returns shard info about open connections
 		ShardSession() []*srvtopo.ResolvedShard
+
+		SetAutocommit(bool)
 	}
 
 	// Plan represents the execution strategy for a given query.
