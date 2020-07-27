@@ -175,6 +175,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "set_sysvar_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "union_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "transaction_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "lock_cases.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func TestOne(t *testing.T) {
@@ -323,7 +324,7 @@ func (vw *vschemaWrapper) AnyKeyspace() (*vindexes.Keyspace, error) {
 }
 
 func (vw *vschemaWrapper) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
-	panic("implement me")
+	return vw.v.Keyspaces["main"].Keyspace, nil
 }
 
 func (vw *vschemaWrapper) TargetString() string {
