@@ -120,8 +120,8 @@ export class ShardComponent implements OnInit, OnDestroy {
     if (!isMaster) {
       // Add replication-related methods to the 'Change' section for slaves.
       result[1].items.push(
-        {label: 'Start Slave', command: (event) => {this.openStartSlaveDialog(); }},
-        {label: 'Stop Slave', command: (event) => {this.openStopSlaveDialog(); }},
+        {label: 'Start Replica', command: (event) => {this.openStartSlaveDialog(); }},
+        {label: 'Stop Replica', command: (event) => {this.openStopSlaveDialog(); }},
       );
     }
     if (this.featuresService.activeReparents) {
