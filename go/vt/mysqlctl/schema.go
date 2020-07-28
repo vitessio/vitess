@@ -17,11 +17,13 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"golang.org/x/net/context"
@@ -47,13 +49,24 @@ func (mysqld *Mysqld) executeSchemaCommands(sql string) error {
 	return mysqld.executeMysqlScript(params, strings.NewReader(sql))
 }
 
-// tableList returns an IN clause "('t1', 't2'...) for a list of tables."
-func tableListSql(tables []string) string {
+func encodeTableName(tableName string) string {
+	var buf strings.Builder
+	sqltypes.NewVarChar(tableName).EncodeSQL(&buf)
+	return buf.String()
+}
+
+// tableListSql returns an IN clause "('t1', 't2'...) for a list of tables."
+func tableListSql(tables []string) (string, error) {
 	if len(tables) == 0 {
-		return "()"
+		return "", errors.New("no tables for tableListSql")
 	}
 
-	return "('" + strings.Join(tables, "', '") + "')"
+	encodedTables := make([]string, len(tables))
+	for i, tableName := range tables {
+		encodedTables[i] = encodeTableName(tableName)
+	}
+
+	return "('" + strings.Join(encodedTables, ", ") + "')", nil
 }
 
 // GetSchema returns the schema for database for tables listed in
@@ -291,7 +304,10 @@ func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, t
 	}
 	defer conn.Recycle()
 
-	tableList := tableListSql(tables)
+	tableList, err := tableListSql(tables)
+	if err != nil {
+		return nil, err
+	}
 	sql := fmt.Sprintf(`
 		SELECT table_name, ordinal_position, column_name
 		FROM information_schema.key_column_usage
