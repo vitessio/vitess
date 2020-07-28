@@ -36,9 +36,12 @@ type planFunc = func(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.Se
 var sysVarPlanningFunc = map[string]planFunc{}
 
 var notSupported = []string{
+	"audit_log_read_buffer_size",
 	"auto_increment_increment",
 	"auto_increment_offset",
 	"binlog_direct_non_transactional_updates",
+	"binlog_row_image",
+	"binlog_rows_query_log_events",
 	"innodb_ft_enable_stopword",
 	"innodb_ft_user_stopword_table",
 	"max_points_in_geometry",
@@ -69,8 +72,9 @@ var notSupported = []string{
 	"preload_buffer_size",
 	"rbr_exec_mode",
 	"sql_log_off",
+	"thread_pool_high_priority_connection",
+	"thread_pool_prio_kickup_timer",
 	"transaction_write_set_extraction",
-	"audit_log_read_buffer_size",
 }
 
 var ignoreThese = []string{
@@ -101,14 +105,56 @@ var ignoreThese = []string{
 	"wait_timeout",
 }
 
-var saveSettingsToSession = []string{
+var useReservedConn = []string{
+	"default_week_format",
+	"end_markers_in_json",
+	"eq_range_index_dive_limit",
+	"explicit_defaults_for_timestamp",
+	"foreign_key_checks",
+	"group_concat_max_len",
+	"max_heap_table_size",
+	"max_seeks_for_key",
+	"max_tmp_tables",
+	"min_examined_row_limit",
+	"old_passwords",
+	"optimizer_prune_level",
+	"optimizer_search_depth",
+	"optimizer_switch",
+	"optimizer_trace",
+	"optimizer_trace_features",
+	"optimizer_trace_limit",
+	"optimizer_trace_max_mem_size",
+	"transaction_isolation",
+	"tx_isolation",
+	"optimizer_trace_offset",
+	"parser_max_mem_size",
+	"profiling",
+	"profiling_history_size",
+	"query_alloc_block_size",
+	"range_alloc_block_size",
+	"range_optimizer_max_mem_size",
+	"read_buffer_size",
+	"read_rnd_buffer_size",
+	"show_create_table_verbosity",
+	"show_old_temporals",
+	"sort_buffer_size",
+	"sql_big_selects",
 	"sql_mode",
+	"sql_notes",
+	"sql_quote_show_create",
 	"sql_safe_updates",
+	"sql_warnings",
+	"tmp_table_size",
+	"transaction_prealloc_size",
+	"unique_checks",
+	"updatable_views_with_limit",
 }
 
-var allowSetIfValueAlreadySet = []string{}
-
-var vitessShouldBeAwareOf = []string{
+// TODO: Most of these settings should be moved into SysSetOpAware, and change Vitess behaviour.
+// Until then, SET statements against these settings are allowed
+// as long as they have the same value as the underlying database
+var checkAndIgnore = []string{
+	"binlog_format",
 	"block_encryption_mode",
 	"character_set_client",
 	"character_set_connection",
@@ -131,22 +177,23 @@ var vitessShouldBeAwareOf = []string{
 	"max_length_for_sort_data",
 	"max_sort_length",
 	"max_user_connections",
+	"net_read_timeout",
+	"net_retry_count",
+	"net_write_timeout",
 	"session_track_gtids",
 	"session_track_schema",
 	"session_track_state_change",
 	"session_track_system_variables",
 	"session_track_transaction_info",
-	"time_zone",
-	"transaction_isolation",
-	"version_tokens_session",
 	"sql_auto_is_null",
+	"time_zone",
+	"version_tokens_session",
 }
 
 func init() {
 	forSettings(ignoreThese, buildSetOpIgnore)
-	forSettings(saveSettingsToSession, buildSetOpVarSet)
-	forSettings(allowSetIfValueAlreadySet, buildSetOpCheckAndIgnore)
-	forSettings(vitessShouldBeAwareOf, buildSetOpCheckAndIgnore)
+	forSettings(useReservedConn, buildSetOpVarSet)
+	forSettings(checkAndIgnore, buildSetOpCheckAndIgnore)
 	forSettings(notSupported, buildNotSupported)
 }
 
