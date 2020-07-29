@@ -84,7 +84,7 @@ type Stats struct {
 
 	State sync2.AtomicString
 
-	QueryTimings       *stats.Timings
+	CopyTimings        *stats.Timings
 	QueryCount         *stats.CountersWithSingleLabel
 	CopyRowCount       *stats.Counter
 	CopyLoopCount      *stats.Counter
@@ -125,7 +125,7 @@ func NewStats() *Stats {
 	bps.Rates = stats.NewRates("", bps.Timings, 15*60/5, 5*time.Second)
 	bps.History = history.New(3)
 	bps.SecondsBehindMaster.Set(math.MaxInt64)
-	bps.QueryTimings = stats.NewTimings("", "", "")
+	bps.CopyTimings = stats.NewTimings("", "", "")
 	bps.QueryCount = stats.NewCountersWithSingleLabel("", "", "Phase", "")
 	bps.CopyRowCount = stats.NewCounter("", "")
 	bps.CopyLoopCount = stats.NewCounter("", "")

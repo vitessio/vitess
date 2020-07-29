@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -28,6 +30,13 @@ func TestStreamResults(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
+	oldPacketSize := *PacketSize
+	defer func() {
+		*PacketSize = oldPacketSize
+	}()
+	*PacketSize = 1
+	engine.resultStreamerNumPackets.Reset()
+	engine.resultStreamerNumRows.Reset()
 
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(128), primary key(id))",
@@ -40,7 +49,8 @@ func TestStreamResults(t *testing.T) {
 
 	query := "select id, val from t1 order by id"
 	wantStream := []string{
-		`rows:<lengths:1 lengths:3 values:"1aaa" > rows:<lengths:1 lengths:3 values:"2bbb" > `,
+		`rows:<lengths:1 lengths:3 values:"1aaa" > `,
+		`rows:<lengths:1 lengths:3 values:"2bbb" > `,
 	}
 	i := 0
 	ch := make(chan error)
@@ -75,4 +85,6 @@ func TestStreamResults(t *testing.T) {
 	for err := range ch {
 		t.Error(err)
 	}
+	require.Equal(t, int64(2), engine.resultStreamerNumPackets.Get())
+	require.Equal(t, int64(2), engine.resultStreamerNumRows.Get())
 }

@@ -221,6 +221,8 @@ func TestStreamRowsFilterInt(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
+	engine.rowStreamerNumPackets.Reset()
+	engine.rowStreamerNumRows.Reset()
 
 	if err := env.SetVSchema(shardedVSchema); err != nil {
 		t.Fatal(err)
@@ -245,6 +247,9 @@ func TestStreamRowsFilterInt(t *testing.T) {
 	}
 	wantQuery := "select id1, id2, val from t1 order by id1"
 	checkStream(t, "select id1, val from t1 where id2 = 100", nil, wantQuery, wantStream)
+	require.Equal(t, int64(0), engine.rowStreamerNumPackets.Get())
+	require.Equal(t, int64(2), engine.rowStreamerNumRows.Get())
+	require.Less(t, int64(0), engine.vstreamerPacketSize.Get())
 }
 
 func TestStreamRowsFilterVarBinary(t *testing.T) {

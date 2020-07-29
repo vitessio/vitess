@@ -128,7 +128,7 @@ func (st *vrStats) register() {
 			defer st.mu.Unlock()
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
-				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.QueryTimings.Time()
+				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.CopyTimings.Time()
 			}
 			return result
 		})
@@ -141,7 +141,7 @@ func (st *vrStats) register() {
 			defer st.mu.Unlock()
 			result := int64(0)
 			for _, ct := range st.controllers {
-				result += ct.blpStats.QueryTimings.Time()
+				result += ct.blpStats.CopyTimings.Time()
 			}
 			return result
 		})
@@ -275,7 +275,7 @@ func (st *vrStats) status() *EngineStatus {
 			SourceTablet:        ct.sourceTablet.Get(),
 			Messages:            ct.blpStats.MessageHistory(),
 			QueryCounts:         ct.blpStats.QueryCount.Counts(),
-			QueryTimings:        ct.blpStats.QueryTimings.Time(),
+			CopyTimings:         ct.blpStats.CopyTimings.Time(),
 			CopyRowCount:        ct.blpStats.CopyRowCount.Get(),
 			CopyLoopCount:       ct.blpStats.CopyLoopCount.Get(),
 			CatchupTimings:      ct.blpStats.CatchupTimings.Time(),
@@ -307,7 +307,7 @@ type ControllerStatus struct {
 	SourceTablet        string
 	Messages            []string
 	QueryCounts         map[string]int64
-	QueryTimings        int64
+	CopyTimings         int64
 	CopyRowCount        int64
 	CopyLoopCount       int64
 	CatchupTimings      int64
