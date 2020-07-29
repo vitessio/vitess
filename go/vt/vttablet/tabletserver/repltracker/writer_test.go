@@ -14,15 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package heartbeat
+package repltracker
 
 import (
 	"fmt"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gotest.tools/assert"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
@@ -92,15 +92,16 @@ func TestWriteHeartbeatError(t *testing.T) {
 	assert.Equal(t, int64(1), writeErrors.Get())
 }
 
-func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *Writer {
+func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *heartbeatWriter {
 	config := tabletenv.NewDefaultConfig()
-	config.HeartbeatIntervalSeconds = 1
+	config.ReplicationTracker.Mode = tabletenv.Heartbeat
+	config.ReplicationTracker.HeartbeatIntervalSeconds = 1
 
 	params, _ := db.ConnParams().MysqlParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
-	tw := NewWriter(tabletenv.NewEnv(config, "WriterTest"), topodatapb.TabletAlias{Cell: "test", Uid: 1111})
+	tw := newHeartbeatWriter(tabletenv.NewEnv(config, "WriterTest"), topodatapb.TabletAlias{Cell: "test", Uid: 1111})
 	tw.keyspaceShard = "test:0"
 	tw.now = nowFunc
 	tw.pool.Open(dbc.AppWithDB(), dbc.DbaWithDB(), dbc.AppDebugWithDB())

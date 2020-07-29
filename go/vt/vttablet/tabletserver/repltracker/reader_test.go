@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package heartbeat
+package repltracker
 
 import (
 	"fmt"
@@ -51,7 +51,7 @@ func TestReaderReadHeartbeat(t *testing.T) {
 	reads.Reset()
 
 	tr.readHeartbeat()
-	lag, err := tr.GetLatest()
+	lag, err := tr.Status()
 
 	if err != nil {
 		t.Fatalf("Should not be in error: %v", tr.lastKnownError)
@@ -82,7 +82,7 @@ func TestReaderReadHeartbeatError(t *testing.T) {
 	readErrors.Reset()
 
 	tr.readHeartbeat()
-	lag, err := tr.GetLatest()
+	lag, err := tr.Status()
 
 	if err == nil {
 		t.Fatalf("Should be in error: %v", tr.lastKnownError)
@@ -98,14 +98,15 @@ func TestReaderReadHeartbeatError(t *testing.T) {
 	}
 }
 
-func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {
+func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *heartbeatReader {
 	config := tabletenv.NewDefaultConfig()
-	config.HeartbeatIntervalSeconds = 1
+	config.ReplicationTracker.Mode = tabletenv.Heartbeat
+	config.ReplicationTracker.HeartbeatIntervalSeconds = 1
 	params, _ := db.ConnParams().MysqlParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
-	tr := NewReader(tabletenv.NewEnv(config, "ReaderTest"))
+	tr := newHeartbeatReader(tabletenv.NewEnv(config, "ReaderTest"))
 	tr.keyspaceShard = "test:0"
 	tr.now = nowFunc
 	tr.pool.Open(dbc.AppWithDB(), dbc.DbaWithDB(), dbc.AppDebugWithDB())

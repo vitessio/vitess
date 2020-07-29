@@ -460,8 +460,10 @@ func (sbc *SandboxConn) reserve(ctx context.Context, target *querypb.Target, pre
 	for _, query := range preQueries {
 		sbc.Execute(ctx, target, query, bindVariables, transactionID, 0, options)
 	}
-	reservedID := sbc.ReserveID.Add(1)
-	return reservedID
+	if transactionID != 0 {
+		return transactionID
+	}
+	return sbc.ReserveID.Add(1)
 }
 
 //Release implements the QueryService interface
@@ -487,6 +489,15 @@ func (sbc *SandboxConn) getNextResult() *sqltypes.Result {
 		return r
 	}
 	return SingleRowResult
+}
+
+//StringQueries returns the queries executed as a slice of strings
+func (sbc *SandboxConn) StringQueries() []string {
+	result := make([]string, len(sbc.Queries))
+	for i, query := range sbc.Queries {
+		result[i] = query.Sql
+	}
+	return result
 }
 
 // SingleRowResult is returned when there is no pre-stored result.

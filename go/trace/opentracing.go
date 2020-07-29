@@ -17,13 +17,13 @@ limitations under the License.
 package trace
 
 import (
-	"strings"
+	"encoding/base64"
+	"encoding/json"
 
 	otgrpc "github.com/opentracing-contrib/go-grpc"
 	"github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -86,19 +86,18 @@ func (jf openTracingService) New(parent Span, label string) Span {
 }
 
 func extractMapFromString(in string) (opentracing.TextMapCarrier, error) {
-	m := make(opentracing.TextMapCarrier)
-	items := strings.Split(in, ":")
-	if len(items) < 2 {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "expected transmitted context to contain at least span id and trace id")
+	decodedBytes, err := base64.StdEncoding.DecodeString(in)
+	if err != nil {
+		return nil, err
 	}
-	for _, v := range items {
-		idx := strings.Index(v, "=")
-		if idx < 1 {
-			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "every element in the context string has to be in the form key=value")
-		}
-		m[v[0:idx]] = v[idx+1:]
+
+	var dat opentracing.TextMapCarrier
+	err = json.Unmarshal(decodedBytes, &dat)
+	if err != nil {
+		return nil, err
 	}
-	return m, nil
+
+	return dat, nil
 }
 
 func (jf openTracingService) NewFromString(parent, label string) (Span, error) {

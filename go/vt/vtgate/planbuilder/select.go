@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/key"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -33,7 +35,10 @@ import (
 func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
 	sel := stmt.(*sqlparser.Select)
 
-	p := tryAtVtgate(sel)
+	p, err := handleDualSelects(sel, vschema)
+	if err != nil {
+		return nil, err
+	}
 	if p != nil {
 		return p, nil
 	}
@@ -84,6 +89,12 @@ func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 // pushed into a route, then a primitive is created on top of any
 // of the above trees to make it discard unwanted rows.
 func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) error {
+	// Check and error if there is any locking function present in select expression.
+	for _, expr := range sel.SelectExprs {
+		if aExpr, ok := expr.(*sqlparser.AliasedExpr); ok && sqlparser.IsLockingFunc(aExpr.Expr) {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "%v allowed only with dual", sqlparser.String(aExpr))
+		}
+	}
 	if sel.SQLCalcFoundRows && sel.Limit != nil {
 		return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "sql_calc_found_rows not yet fully supported")
 	}
@@ -136,9 +147,9 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 	return nil
 }
 
-func tryAtVtgate(sel *sqlparser.Select) engine.Primitive {
+func handleDualSelects(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
 	if !isOnlyDual(sel.From) {
-		return nil
+		return nil, nil
 	}
 
 	exprs := make([]evalengine.Expr, len(sel.SelectExprs))
@@ -146,12 +157,17 @@ func tryAtVtgate(sel *sqlparser.Select) engine.Primitive {
 	for i, e := range sel.SelectExprs {
 		expr, ok := e.(*sqlparser.AliasedExpr)
 		if !ok {
-			return nil
+			return nil, nil
 		}
 		var err error
+		if sqlparser.IsLockingFunc(expr.Expr) {
+			// if we are using any locking functions, we bail out here and send the whole query to a single destination
+			return buildLockingPrimitive(sel, vschema)
+
+		}
 		exprs[i], err = sqlparser.Convert(expr.Expr)
 		if err != nil {
-			return nil
+			return nil, nil
 		}
 		cols[i] = expr.As.String()
 		if cols[i] == "" {
@@ -162,7 +178,23 @@ func tryAtVtgate(sel *sqlparser.Select) engine.Primitive {
 		Exprs: exprs,
 		Cols:  cols,
 		Input: &engine.SingleRow{},
+	}, nil
+}
+
+func buildLockingPrimitive(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
+	ks, err := vschema.FirstSortedKeyspace()
+	if err != nil {
+		return nil, err
 	}
+	return &engine.Reserve{
+		Input: &engine.Send{
+			Keyspace:          ks,
+			TargetDestination: key.DestinationKeyspaceID{0},
+			Query:             sqlparser.String(sel),
+			IsDML:             false,
+			SingleShardOnly:   true,
+		},
+	}, nil
 }
 
 func isOnlyDual(from sqlparser.TableExprs) bool {

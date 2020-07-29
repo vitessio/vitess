@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package heartbeat
+package repltracker
 
 import (
 	"fmt"
@@ -42,13 +42,12 @@ const (
 	sqlFetchMostRecentHeartbeat = "SELECT ts FROM %s.heartbeat WHERE keyspaceShard=%a"
 )
 
-// Reader reads the heartbeat table at a configured interval in order
+// heartbeatReader reads the heartbeat table at a configured interval in order
 // to calculate replication lag. It is meant to be run on a replica, and paired
-// with a Writer on a master. It's primarily created and launched from Reporter.
+// with a heartbeatWriter on a master.
 // Lag is calculated by comparing the most recent timestamp in the heartbeat
-// table against the current time at read time. This value is reported in metrics and
-// also to the healthchecks.
-type Reader struct {
+// table against the current time at read time.
+type heartbeatReader struct {
 	env tabletenv.Env
 
 	enabled       bool
@@ -67,15 +66,15 @@ type Reader struct {
 	lastKnownError error
 }
 
-// NewReader returns a new heartbeat reader.
-func NewReader(env tabletenv.Env) *Reader {
+// newHeartbeatReader returns a new heartbeatReader.
+func newHeartbeatReader(env tabletenv.Env) *heartbeatReader {
 	config := env.Config()
-	if config.HeartbeatIntervalSeconds == 0 {
-		return &Reader{}
+	if config.ReplicationTracker.Mode != tabletenv.Heartbeat {
+		return &heartbeatReader{}
 	}
 
-	heartbeatInterval := time.Duration(config.HeartbeatIntervalSeconds * 1e9)
-	return &Reader{
+	heartbeatInterval := config.ReplicationTracker.HeartbeatIntervalSeconds.Get()
+	return &heartbeatReader{
 		env:      env,
 		enabled:  true,
 		now:      time.Now,
@@ -89,14 +88,13 @@ func NewReader(env tabletenv.Env) *Reader {
 	}
 }
 
-// InitDBConfig initializes the target name for the Reader.
-func (r *Reader) InitDBConfig(target querypb.Target) {
+// InitDBConfig initializes the target name for the heartbeatReader.
+func (r *heartbeatReader) InitDBConfig(target querypb.Target) {
 	r.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
 }
 
-// Open starts the heartbeat ticker and opens the db pool. It may be called multiple
-// times, as long as it was closed since last invocation.
-func (r *Reader) Open() {
+// Open starts the heartbeat ticker and opens the db pool.
+func (r *heartbeatReader) Open() {
 	if !r.enabled {
 		return
 	}
@@ -105,16 +103,15 @@ func (r *Reader) Open() {
 	if r.isOpen {
 		return
 	}
+	log.Info("Heartbeat Reader: opening")
 
-	log.Info("Beginning heartbeat reads")
 	r.pool.Open(r.env.Config().DB.AppWithDB(), r.env.Config().DB.DbaWithDB(), r.env.Config().DB.AppDebugWithDB())
 	r.ticks.Start(func() { r.readHeartbeat() })
 	r.isOpen = true
 }
 
 // Close cancels the watchHeartbeat periodic ticker and closes the db pool.
-// A reader object can be re-opened after closing.
-func (r *Reader) Close() {
+func (r *heartbeatReader) Close() {
 	if !r.enabled {
 		return
 	}
@@ -125,12 +122,12 @@ func (r *Reader) Close() {
 	}
 	r.ticks.Stop()
 	r.pool.Close()
-	log.Info("Stopped heartbeat reads")
 	r.isOpen = false
+	log.Info("Heartbeat Reader: closed")
 }
 
-// GetLatest returns the most recently recorded lag measurement or error encountered.
-func (r *Reader) GetLatest() (time.Duration, error) {
+// Status returns the most recently recorded lag measurement or error encountered.
+func (r *heartbeatReader) Status() (time.Duration, error) {
 	r.lagMu.Lock()
 	defer r.lagMu.Unlock()
 	if r.lastKnownError != nil {
@@ -141,7 +138,7 @@ func (r *Reader) GetLatest() (time.Duration, error) {
 
 // readHeartbeat reads from the heartbeat table exactly once, updating
 // the last known lag and/or error, and incrementing counters.
-func (r *Reader) readHeartbeat() {
+func (r *heartbeatReader) readHeartbeat() {
 	defer r.env.LogError()
 
 	ctx, cancel := context.WithDeadline(context.Background(), r.now().Add(r.interval))
@@ -171,7 +168,7 @@ func (r *Reader) readHeartbeat() {
 
 // fetchMostRecentHeartbeat fetches the most recently recorded heartbeat from the heartbeat table,
 // returning a result with the timestamp of the heartbeat.
-func (r *Reader) fetchMostRecentHeartbeat(ctx context.Context) (*sqltypes.Result, error) {
+func (r *heartbeatReader) fetchMostRecentHeartbeat(ctx context.Context) (*sqltypes.Result, error) {
 	conn, err := r.pool.Get(ctx)
 	if err != nil {
 		return nil, err
@@ -187,7 +184,7 @@ func (r *Reader) fetchMostRecentHeartbeat(ctx context.Context) (*sqltypes.Result
 // bindHeartbeatFetch takes a heartbeat read and adds the necessary
 // fields to the query as bind vars. This is done to protect ourselves
 // against a badly formed keyspace or shard name.
-func (r *Reader) bindHeartbeatFetch() (string, error) {
+func (r *heartbeatReader) bindHeartbeatFetch() (string, error) {
 	bindVars := map[string]*querypb.BindVariable{
 		"ks": sqltypes.StringBindVariable(r.keyspaceShard),
 	}
@@ -214,15 +211,10 @@ func parseHeartbeatResult(res *sqltypes.Result) (int64, error) {
 // recordError keeps track of the lastKnown error for reporting to the healthcheck.
 // Errors tracked here are logged with throttling to cut down on log spam since
 // operations can happen very frequently in this package.
-func (r *Reader) recordError(err error) {
+func (r *heartbeatReader) recordError(err error) {
 	r.lagMu.Lock()
 	r.lastKnownError = err
 	r.lagMu.Unlock()
 	r.errorLog.Errorf("%v", err)
 	readErrors.Add(1)
-}
-
-// IsOpen returns true if Reader is open.
-func (r *Reader) IsOpen() bool {
-	return r.isOpen
 }

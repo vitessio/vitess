@@ -151,12 +151,12 @@ func (plan *Plan) TableName() sqlparser.TableIdent {
 }
 
 // Build builds a plan based on the schema.
-func Build(statement sqlparser.Statement, tables map[string]*schema.Table) (*Plan, error) {
-	var plan *Plan
-
-	err := checkForPoolingUnsafeConstructs(statement)
-	if err != nil {
-		return nil, err
+func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isReservedConn bool) (plan *Plan, err error) {
+	if !isReservedConn {
+		err = checkForPoolingUnsafeConstructs(statement)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	switch stmt := statement.(type) {
@@ -203,15 +203,17 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table) (*Pla
 }
 
 // BuildStreaming builds a streaming plan based on the schema.
-func BuildStreaming(sql string, tables map[string]*schema.Table) (*Plan, error) {
+func BuildStreaming(sql string, tables map[string]*schema.Table, isReservedConn bool) (*Plan, error) {
 	statement, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
 	}
 
-	err = checkForPoolingUnsafeConstructs(statement)
-	if err != nil {
-		return nil, err
+	if !isReservedConn {
+		err = checkForPoolingUnsafeConstructs(statement)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	plan := &Plan{
@@ -258,10 +260,22 @@ func BuildMessageStreaming(name string, tables map[string]*schema.Table) (*Plan,
 // a call to GET_LOCK(), which is unsafe with server-side connection pooling.
 // For more background, see https://github.com/vitessio/vitess/issues/3631.
 func checkForPoolingUnsafeConstructs(expr sqlparser.SQLNode) error {
-	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		if f, ok := node.(*sqlparser.FuncExpr); ok {
-			if f.Name.Lowered() == "get_lock" {
-				return false, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "get_lock() not allowed")
+
+	genError := func(node sqlparser.SQLNode) error {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed without a reserved connections", sqlparser.String(node))
+	}
+
+	return sqlparser.Walk(func(in sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := in.(type) {
+		case *sqlparser.Set:
+			for _, setExpr := range node.Exprs {
+				if setExpr.Name.AtCount() > 0 {
+					return false, genError(node)
+				}
+			}
+		case *sqlparser.FuncExpr:
+			if sqlparser.IsLockingFunc(node) {
+				return false, genError(node)
 			}
 		}
 

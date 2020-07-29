@@ -157,3 +157,9 @@ func (tm *Timer) Stop() {
 func (tm *Timer) Interval() time.Duration {
 	return tm.interval.Get()
 }
+
+func (tm *Timer) Running() bool {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	return tm.running
+}

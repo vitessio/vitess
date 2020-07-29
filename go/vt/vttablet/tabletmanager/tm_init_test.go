@@ -224,7 +224,7 @@ func TestCheckMastership(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	err = tm.Start(tablet)
+	err = tm.Start(tablet, 0)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
@@ -238,7 +238,7 @@ func TestCheckMastership(t *testing.T) {
 	// correct and start as MASTER.
 	err = ts.DeleteTablet(ctx, alias)
 	require.NoError(t, err)
-	err = tm.Start(tablet)
+	err = tm.Start(tablet, 0)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
@@ -252,7 +252,7 @@ func TestCheckMastership(t *testing.T) {
 	ti.Type = topodatapb.TabletType_MASTER
 	err = ts.UpdateTablet(ctx, ti)
 	require.NoError(t, err)
-	err = tm.Start(tablet)
+	err = tm.Start(tablet, 0)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
@@ -262,7 +262,7 @@ func TestCheckMastership(t *testing.T) {
 	tm.Stop()
 
 	// 5. Subsequent inits will still start the vttablet as MASTER.
-	err = tm.Start(tablet)
+	err = tm.Start(tablet, 0)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
@@ -283,7 +283,7 @@ func TestCheckMastership(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	err = tm.Start(tablet)
+	err = tm.Start(tablet, 0)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
@@ -309,7 +309,7 @@ func TestStartCheckMysql(t *testing.T) {
 		DBConfigs:           dbconfigs.NewTestDBConfigs(cp, cp, ""),
 		QueryServiceControl: tabletservermock.NewController(),
 	}
-	err := tm.Start(tablet)
+	err := tm.Start(tablet, 0)
 	require.NoError(t, err)
 	defer tm.Stop()
 
@@ -335,7 +335,7 @@ func TestStartFindMysqlPort(t *testing.T) {
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		QueryServiceControl: tabletservermock.NewController(),
 	}
-	err := tm.Start(tablet)
+	err := tm.Start(tablet, 0)
 	require.NoError(t, err)
 	defer tm.Stop()
 
@@ -343,9 +343,7 @@ func TestStartFindMysqlPort(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int32(0), ti.MysqlPort)
 
-	tm.pubMu.Lock()
 	fmd.MysqlPort.Set(3306)
-	tm.pubMu.Unlock()
 	for i := 0; i < 10; i++ {
 		ti, err := ts.GetTablet(ctx, tm.tabletAlias)
 		require.NoError(t, err)
@@ -395,7 +393,7 @@ func TestStartDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	tm := newTestTM(t, ts, 1, "ks", "0")
-	defer tm.Stop()
+	tm.Stop()
 
 	tabletAliases, err := ts.FindAllTabletAliasesInShard(ctx, "ks", "0")
 	require.NoError(t, err)
@@ -403,7 +401,7 @@ func TestStartDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.T) {
 
 	tablet := newTestTablet(t, 1, "ks", "-d0")
 	require.NoError(t, err)
-	err = tm.Start(tablet)
+	err = tm.Start(tablet, 0)
 	assert.Contains(t, err.Error(), "existing tablet keyspace and shard ks/0 differ")
 
 	tablets, err := ts.FindAllTabletAliasesInShard(ctx, "ks", "-d0")
@@ -413,16 +411,29 @@ func TestStartDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.T) {
 
 func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string) *TabletManager {
 	t.Helper()
+	ctx := context.Background()
 	tablet := newTestTablet(t, uid, keyspace, shard)
 	tm := &TabletManager{
-		BatchCtx:            context.Background(),
+		BatchCtx:            ctx,
 		TopoServer:          ts,
 		MysqlDaemon:         &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(1)},
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		QueryServiceControl: tabletservermock.NewController(),
 	}
-	err := tm.Start(tablet)
+	err := tm.Start(tablet, 0)
 	require.NoError(t, err)
+
+	// Wait for SrvKeyspace to be rebuilt.
+	for i := 0; i < 9; i++ {
+		if _, err := tm.TopoServer.GetSrvKeyspace(ctx, tm.tabletAlias.Cell, "ks"); err != nil {
+			if i == 9 {
+				require.NoError(t, err)
+			}
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		break
+	}
 	return tm
 }
 

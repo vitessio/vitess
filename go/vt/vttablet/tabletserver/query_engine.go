@@ -239,6 +239,8 @@ func (qe *QueryEngine) Open() error {
 	if qe.isOpen {
 		return nil
 	}
+	log.Info("Query Engine: opening")
+
 	qe.conns.Open(qe.env.Config().DB.AppWithDB(), qe.env.Config().DB.DbaWithDB(), qe.env.Config().DB.AppDebugWithDB())
 
 	conn, err := qe.conns.Get(tabletenv.LocalContext())
@@ -265,6 +267,7 @@ func (qe *QueryEngine) Open() error {
 // StopServing kills all streaming queries.
 // Other queries are handled by the tsv.requests Waitgroup.
 func (qe *QueryEngine) StopServing() {
+	log.Info("Query Engine: killing all streaming queries")
 	qe.streamQList.TerminateAll()
 }
 
@@ -282,10 +285,11 @@ func (qe *QueryEngine) Close() {
 	qe.streamConns.Close()
 	qe.conns.Close()
 	qe.isOpen = false
+	log.Info("Query Engine: closed")
 }
 
 // GetPlan returns the TabletPlan that for the query. Plans are cached in a cache.LRUCache.
-func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool) (*TabletPlan, error) {
+func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool, isReservedConn bool) (*TabletPlan, error) {
 	span, ctx := trace.NewSpan(ctx, "QueryEngine.GetPlan")
 	defer span.Finish()
 
@@ -305,7 +309,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	if err != nil {
 		return nil, err
 	}
-	splan, err := planbuilder.Build(statement, qe.tables)
+	splan, err := planbuilder.Build(statement, qe.tables, isReservedConn)
 	if err != nil {
 		return nil, err
 	}
@@ -340,10 +344,10 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 
 // GetStreamPlan is similar to GetPlan, but doesn't use the cache
 // and doesn't enforce a limit. It just returns the parsed query.
-func (qe *QueryEngine) GetStreamPlan(sql string) (*TabletPlan, error) {
+func (qe *QueryEngine) GetStreamPlan(sql string, isReservedConn bool) (*TabletPlan, error) {
 	qe.mu.RLock()
 	defer qe.mu.RUnlock()
-	splan, err := planbuilder.BuildStreaming(sql, qe.tables)
+	splan, err := planbuilder.BuildStreaming(sql, qe.tables, isReservedConn)
 	if err != nil {
 		return nil, err
 	}

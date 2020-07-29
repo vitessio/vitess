@@ -43,6 +43,8 @@ type ExplainTopo struct {
 
 	// Number of shards for sharded keyspaces
 	NumShards int
+
+	TopoServer *topo.Server
 }
 
 func (et *ExplainTopo) getSrvVSchema() *vschemapb.SrvVSchema {
@@ -56,7 +58,7 @@ func (et *ExplainTopo) getSrvVSchema() *vschemapb.SrvVSchema {
 
 // GetTopoServer is part of the srvtopo.Server interface
 func (et *ExplainTopo) GetTopoServer() (*topo.Server, error) {
-	return nil, nil
+	return et.TopoServer, nil
 }
 
 // GetSrvKeyspaceNames is part of the srvtopo.Server interface.

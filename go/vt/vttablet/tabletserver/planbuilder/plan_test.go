@@ -72,7 +72,76 @@ func TestPlan(t *testing.T) {
 			var err error
 			statement, err := sqlparser.Parse(tcase.input)
 			if err == nil {
-				plan, err = Build(statement, testSchema)
+				plan, err = Build(statement, testSchema, false)
+			}
+			PassthroughDMLs = false
+
+			var out string
+			if err != nil {
+				out = err.Error()
+			} else {
+				bout, err := json.Marshal(plan)
+				if err != nil {
+					t.Fatalf("Error marshalling %v: %v", plan, err)
+				}
+				out = string(bout)
+			}
+			if out != tcase.output {
+				t.Errorf("Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
+				if err != nil {
+					out = fmt.Sprintf("\"%s\"", out)
+				} else {
+					bout, _ := json.MarshalIndent(plan, "", "  ")
+					out = string(bout)
+				}
+				fmt.Printf("\"%s\"\n%s\n\n", tcase.input, out)
+			}
+		})
+	}
+}
+
+func TestPlanPoolUnsafe(t *testing.T) {
+	testSchema := loadSchema("schema_test.json")
+	for tcase := range iterateExecFile("pool_unsafe_cases.txt") {
+		t.Run(tcase.input, func(t *testing.T) {
+			var plan *Plan
+			var err error
+			statement, err := sqlparser.Parse(tcase.input)
+			require.NoError(t, err)
+			// In Pooled Connection, plan building will fail.
+			plan, err = Build(statement, testSchema, false /* isReservedConn */)
+			require.Error(t, err)
+			out := err.Error()
+			if out != tcase.output {
+				t.Errorf("Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
+				if err != nil {
+					out = fmt.Sprintf("\"%s\"", out)
+				} else {
+					bout, _ := json.MarshalIndent(plan, "", "  ")
+					out = string(bout)
+				}
+				fmt.Printf("\"%s\"\n%s\n\n", tcase.input, out)
+			}
+			// In Reserved Connection, plan will be built.
+			plan, err = Build(statement, testSchema, true /* isReservedConn */)
+			require.NoError(t, err)
+			require.NotEmpty(t, plan)
+		})
+	}
+}
+
+func TestPlanInReservedConn(t *testing.T) {
+	testSchema := loadSchema("schema_test.json")
+	for tcase := range iterateExecFile("exec_cases.txt") {
+		t.Run(tcase.input, func(t *testing.T) {
+			if strings.Contains(tcase.options, "PassthroughDMLs") {
+				PassthroughDMLs = true
+			}
+			var plan *Plan
+			var err error
+			statement, err := sqlparser.Parse(tcase.input)
+			if err == nil {
+				plan, err = Build(statement, testSchema, true)
 			}
 			PassthroughDMLs = false
 
@@ -123,7 +192,7 @@ func TestCustom(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Got error: %v, parsing sql: %v", err.Error(), tcase.input)
 				}
-				plan, err := Build(statement, schem)
+				plan, err := Build(statement, schem, false)
 				var out string
 				if err != nil {
 					out = err.Error()
@@ -145,7 +214,7 @@ func TestCustom(t *testing.T) {
 func TestStreamPlan(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	for tcase := range iterateExecFile("stream_cases.txt") {
-		plan, err := BuildStreaming(tcase.input, testSchema)
+		plan, err := BuildStreaming(tcase.input, testSchema, false)
 		var out string
 		if err != nil {
 			out = err.Error()

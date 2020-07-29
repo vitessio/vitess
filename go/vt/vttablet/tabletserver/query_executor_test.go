@@ -1109,7 +1109,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbconfigs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbconfigs)
+	err := tsv.StartService(target, dbconfigs, nil /* mysqld */)
 	if err != nil {
 		panic(err)
 	}
@@ -1127,7 +1127,7 @@ func newTransaction(tsv *TabletServer, options *querypb.ExecuteOptions) int64 {
 
 func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
 	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutor")
-	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false)
+	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, false /* inReservedConn */)
 	if err != nil {
 		panic(err)
 	}

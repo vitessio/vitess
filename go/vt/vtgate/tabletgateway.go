@@ -48,8 +48,8 @@ func init() {
 	RegisterGatewayCreator(tabletGatewayImplementation, createTabletGateway)
 }
 
-var _ discovery.HealthCheck = (*discovery.HealthCheckImpl)(nil)
 var (
+	_ discovery.HealthCheck = (*discovery.HealthCheckImpl)(nil)
 	// CellsToWatch is the list of cells the healthcheck operates over. If it is empty, only the local cell is watched
 	CellsToWatch = flag.String("cells_to_watch", "", "comma-separated list of cells for watching tablets")
 )
@@ -84,18 +84,18 @@ func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, t
 
 // NewTabletGateway creates and returns a new TabletGateway
 func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, localCell string) *TabletGateway {
-	var topoServer *topo.Server
-	if serv != nil {
-		var err error
-		topoServer, err = serv.GetTopoServer()
-		if err != nil {
-			log.Exitf("Unable to create new TabletGateway: %v", err)
-		}
-	}
+	// hack to accomodate various users of gateway + tests
 	if hc == nil {
+		var topoServer *topo.Server
+		if serv != nil {
+			var err error
+			topoServer, err = serv.GetTopoServer()
+			if err != nil {
+				log.Exitf("Unable to create new TabletGateway: %v", err)
+			}
+		}
 		hc = createHealthCheck(ctx, *HealthCheckRetryDelay, *HealthCheckTimeout, topoServer, localCell, *CellsToWatch)
 	}
-
 	gw := &TabletGateway{
 		hc:                hc,
 		srvTopoServer:     serv,
@@ -183,8 +183,8 @@ func (gw *TabletGateway) CacheStatus() TabletCacheStatusList {
 func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, _ queryservice.QueryService,
 	_ string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
 	// for transactions, we connect to a specific tablet instead of letting gateway choose one
-	if inTransaction {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "gateway's query service can only be used for non-transactional queries")
+	if inTransaction && target.TabletType != topodatapb.TabletType_MASTER {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "gateway's query service can only be used for non-transactional queries on replicas")
 	}
 	var tabletLastUsed *topodatapb.Tablet
 	var err error

@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/withddl"
 )
 
+const createSidecarDB = "CREATE DATABASE IF NOT EXISTS _vt"
 const createSchemaTrackingTable = `CREATE TABLE IF NOT EXISTS _vt.schema_version (
 		 id INT AUTO_INCREMENT,
 		  pos VARBINARY(10000) NOT NULL,
@@ -48,6 +49,7 @@ const alterSchemaTrackingTableDDLBlob = "alter table _vt.schema_version modify c
 const alterSchemaTrackingTableSchemaxBlob = "alter table _vt.schema_version modify column schemax LONGBLOB NOT NULL"
 
 var withDDL = withddl.New([]string{
+	createSidecarDB,
 	createSchemaTrackingTable,
 	alterSchemaTrackingTableDDLBlob,
 	alterSchemaTrackingTableSchemaxBlob,
@@ -85,9 +87,9 @@ func NewTracker(env tabletenv.Env, vs VStreamer, engine *Engine) *Tracker {
 // Open enables the tracker functionality
 func (tr *Tracker) Open() {
 	if !tr.enabled {
-		log.Info("Schema tracker is not enabled.")
 		return
 	}
+	log.Info("Schema Tracker: opening")
 
 	tr.mu.Lock()
 	defer tr.mu.Unlock()
@@ -98,7 +100,6 @@ func (tr *Tracker) Open() {
 	ctx, cancel := context.WithCancel(tabletenv.LocalContext())
 	tr.cancel = cancel
 	tr.wg.Add(1)
-	log.Info("Schema tracker enabled.")
 
 	go tr.process(ctx)
 }
@@ -111,10 +112,10 @@ func (tr *Tracker) Close() {
 		return
 	}
 
-	log.Info("Schema tracker stopped.")
 	tr.cancel()
 	tr.cancel = nil
 	tr.wg.Wait()
+	log.Info("Schema Tracker: closed")
 }
 
 // Enable forces tracking to be on or off.
@@ -152,7 +153,7 @@ func (tr *Tracker) process(ctx context.Context) {
 					gtid = event.Gtid
 				}
 				if event.Type == binlogdatapb.VEventType_DDL {
-					if err := tr.schemaUpdated(gtid, event.Ddl, event.Timestamp); err != nil {
+					if err := tr.schemaUpdated(gtid, event.Statement, event.Timestamp); err != nil {
 						tr.env.Stats().ErrorCounters.Add(vtrpcpb.Code_INTERNAL.String(), 1)
 						log.Errorf("Error updating schema: %s", sqlparser.TruncateForLog(err.Error()))
 					}

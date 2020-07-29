@@ -120,7 +120,7 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 		for len(sh.rows) > count {
 			_ = heap.Pop(sh)
 		}
-		if len(sh.rows) > vcursor.MaxMemoryRows() {
+		if vcursor.ExceedsMaxMemoryRows(len(sh.rows)) {
 			return fmt.Errorf("in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
 		}
 		return nil
