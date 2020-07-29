@@ -160,6 +160,7 @@ var checkAndIgnore = []string{
 	"character_set_connection",
 	"character_set_database",
 	"character_set_filesystem",
+	"character_set_results",
 	"character_set_server",
 	"collation_connection",
 	"collation_database",
@@ -310,12 +311,9 @@ func buildNotSupported(e *sqlparser.SetExpr, _ ContextVSchema) (engine.SetOp, er
 }
 
 func buildSetOpIgnore(expr *sqlparser.SetExpr, _ ContextVSchema) (engine.SetOp, error) {
-	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("%v", expr.Expr)
-
 	return &engine.SysVarIgnore{
 		Name: expr.Name.Lowered(),
-		Expr: buf.String(),
+		Expr: extractValue(expr),
 	}, nil
 }
 
@@ -329,7 +327,7 @@ func buildSetOpCheckAndIgnore(expr *sqlparser.SetExpr, vschema ContextVSchema) (
 		Name:              expr.Name.Lowered(),
 		Keyspace:          keyspace,
 		TargetDestination: dest,
-		Expr:              sqlparser.String(expr.Expr),
+		Expr:              extractValue(expr),
 	}, nil
 }
 
@@ -360,7 +358,7 @@ func buildSetOpVarSet(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.S
 		Name:              expr.Name.Lowered(),
 		Keyspace:          ks,
 		TargetDestination: vschema.Destination(),
-		Expr:              sqlparser.String(expr.Expr),
+		Expr:              extractValue(expr),
 	}, nil
 }
 
@@ -375,6 +373,17 @@ func resolveDestination(vschema ContextVSchema) (*vindexes.Keyspace, key.Destina
 		dest = key.DestinationAnyShard{}
 	}
 	return keyspace, dest, nil
+}
+
+func extractValue(expr *sqlparser.SetExpr) string {
+	value := sqlparser.String(expr.Expr)
+	switch colname := expr.Expr.(type) {
+	case *sqlparser.ColName:
+		if colname.Name.AtCount() == sqlparser.NoAt {
+			value = fmt.Sprintf("'%s'", value)
+		}
+	}
+	return value
 }
 
 // whitelist of functions knows to be safe to pass through to mysql for evaluation
