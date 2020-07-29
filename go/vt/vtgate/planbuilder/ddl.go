@@ -27,18 +27,6 @@ func buildDDLPlan(sql string, in sqlparser.Statement, vschema ContextVSchema) (e
 	}, nil
 }
 
-func buildOnlineDDLPlan(query string, stmt *sqlparser.DDL, vschema ContextVSchema) (engine.Primitive, error) {
-	_, keyspace, _, err := vschema.TargetDestination(stmt.Table.Qualifier.String())
-	if err != nil {
-		return nil, err
-	}
-	return &engine.OnlineDDL{
-		Keyspace: keyspace,
-		DDL:      stmt,
-		SQL:      query,
-	}, nil
-}
-
 func buildVSchemaDDLPlan(stmt *sqlparser.DDL, vschema ContextVSchema) (engine.Primitive, error) {
 	_, keyspace, _, err := vschema.TargetDestination(stmt.Table.Qualifier.String())
 	if err != nil {

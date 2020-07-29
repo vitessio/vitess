@@ -172,9 +172,4 @@ const (
 	VitessStr      = "vitess"
 	TraditionalStr = "traditional"
 	AnalyzeStr     = "analyze"
-
-	// Vitess magic hints
-	// TODO(shlomi) this is a temporary hack; we should be able to parse hints in a formal way,
-	//              but at this time I'm not keen to tamper with the parser
-	VitessOnlineDDLHint = "vt:online-schema-change"
 )
