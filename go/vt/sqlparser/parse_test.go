@@ -833,6 +833,12 @@ var (
 		input:  "set session wait_timeout = 3600",
 		output: "set session wait_timeout = 3600",
 	}, {
+		input:  "set session wait_timeout = 3600, session autocommit = off",
+		output: "set session wait_timeout = 3600, session autocommit = 'off'",
+	}, {
+		input:  "set session wait_timeout = 3600, @@global.autocommit = off",
+		output: "set session wait_timeout = 3600, @@global.autocommit = 'off'",
+	}, {
 		input: "set /* list */ a = 3, b = 4",
 	}, {
 		input: "set /* mixed list */ a = 3, names 'utf8', charset 'ascii', b = 4",
