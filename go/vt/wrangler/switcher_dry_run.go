@@ -37,6 +37,16 @@ type switcherDryRun struct {
 	ts    *trafficSwitcher
 }
 
+func getCellString(cells []string) string {
+	cellString := strings.Join(cells, ",")
+	if cellString == "" {
+		cellString = "all cells"
+	} else {
+		cellString = "cells: " + cellString
+	}
+	return cellString
+}
+
 func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, servedType topodatapb.TabletType, direction TrafficSwitchDirection) error {
 	sourceShards := make([]string, 0)
 	targetShards := make([]string, 0)
@@ -48,12 +58,13 @@ func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, 
 	}
 	sort.Strings(sourceShards)
 	sort.Strings(targetShards)
+	cellString := getCellString(cells)
 	if direction == DirectionForward {
-		dr.drLog.Log(fmt.Sprintf("Switch reads from keyspace %s to keyspace %s for shards %s to shards %s",
-			dr.ts.sourceKeyspace, dr.ts.targetKeyspace, strings.Join(sourceShards, ","), strings.Join(targetShards, ",")))
+		dr.drLog.Log(fmt.Sprintf("Switch reads for %s tablets in %s from keyspace %s to keyspace %s for shards %s to shards %s",
+			servedType.String(), cellString, dr.ts.sourceKeyspace, dr.ts.targetKeyspace, strings.Join(sourceShards, ","), strings.Join(targetShards, ",")))
 	} else {
-		dr.drLog.Log(fmt.Sprintf("Switch reads from keyspace %s to keyspace %s for shards %s to shards %s",
-			dr.ts.targetKeyspace, dr.ts.sourceKeyspace, strings.Join(targetShards, ","), strings.Join(sourceShards, ",")))
+		dr.drLog.Log(fmt.Sprintf("Switch reads for %s tablets in %s from keyspace %s to keyspace %s for shards %s to shards %s",
+			servedType.String(), cellString, dr.ts.targetKeyspace, dr.ts.sourceKeyspace, strings.Join(targetShards, ","), strings.Join(sourceShards, ",")))
 	}
 	return nil
 }
@@ -63,7 +74,9 @@ func (dr *switcherDryRun) switchTableReads(ctx context.Context, cells []string, 
 	if direction == DirectionBackward {
 		ks = dr.ts.sourceKeyspace
 	}
-	dr.drLog.Log(fmt.Sprintf("Switch reads for tables %s to keyspace %s", strings.Join(dr.ts.tables, ","), ks))
+	cellString := getCellString(cells)
+	dr.drLog.Log(fmt.Sprintf("Switch reads for tables %s in %s tablets in %s to keyspace %s",
+		strings.Join(dr.ts.tables, ","), servedType.String(), cellString, ks))
 	return nil
 }
 

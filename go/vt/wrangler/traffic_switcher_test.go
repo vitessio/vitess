@@ -892,7 +892,7 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 
 	wantdryRunReads := []string{
 		"Lock keyspace ks1",
-		"Switch reads for tables t1,t2 to keyspace ks2",
+		"Switch reads for tables t1,t2 in RDONLY tablets in all cells to keyspace ks2",
 		"Unlock keyspace ks1",
 	}
 	wantdryRunWrites := []string{
