@@ -67,7 +67,7 @@ func (uvs *uvstreamer) catchup(ctx context.Context) error {
 	errch := make(chan error, 1)
 	go func() {
 		startPos := mysql.EncodePosition(uvs.pos)
-		vs := newVStreamer(ctx, uvs.cp, uvs.se, startPos, "", uvs.filter, uvs.getVSchema(), uvs.send2)
+		vs := newVStreamer(ctx, uvs.cp, uvs.se, startPos, "", uvs.filter, uvs.getVSchema(), uvs.send2, "catchup")
 		uvs.setVs(vs)
 		errch <- vs.Stream()
 		uvs.setVs(nil)
@@ -276,7 +276,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 func (uvs *uvstreamer) fastForward(stopPos string) error {
 	log.Infof("starting fastForward from %s upto pos %s", mysql.EncodePosition(uvs.pos), stopPos)
 	uvs.stopPos, _ = mysql.DecodePosition(stopPos)
-	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, mysql.EncodePosition(uvs.pos), "", uvs.filter, uvs.getVSchema(), uvs.send2)
+	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, mysql.EncodePosition(uvs.pos), "", uvs.filter, uvs.getVSchema(), uvs.send2, "fastforward")
 	uvs.setVs(vs)
 	return vs.Stream()
 }

@@ -116,3 +116,10 @@ func TestStatusHtml(t *testing.T) {
 		t.Errorf("output: %v, want %v", buf, wantOut)
 	}
 }
+
+func TestVReplicationStats(t *testing.T) {
+	blpStats := binlogplayer.NewStats()
+	blpStats.FastForwardTimings.Add("fastforward", 123*time.Nanosecond)
+
+	//TODO update all different stat combinations and validate it is seen in globalStats
+}
