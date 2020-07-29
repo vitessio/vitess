@@ -180,24 +180,6 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set autocommit = 1+1",
 		err: "invalid syntax: 1 + 1",
 	}, {
-		in:  "set character_set_results=null",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set character_set_results='binary'",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set character_set_results='utf8'",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set character_set_results='utf8mb4'",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set character_set_results='latin1'",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set character_set_results='abcd'",
-		err: "disallowed value for character_set_results: abcd",
-	}, {
 		in:  "set foo = 1",
 		err: "unsupported construct: set foo = 1",
 	}, {
@@ -278,6 +260,13 @@ func TestExecutorSetOp(t *testing.T) {
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("unique_checks", "int64"), "0"),
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("net_write_timeout", "int64"), "600"),
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("net_read_timeout", "int64"), "300"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_client", "varchar"), "utf8"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
 	})
 
 	testcases := []struct {
@@ -307,6 +296,20 @@ func TestExecutorSetOp(t *testing.T) {
 		in: "set net_write_timeout = 600",
 	}, {
 		in: "set net_read_timeout = 600",
+	}, {
+		in: "set character_set_client = utf8",
+	}, {
+		in: "set character_set_results=null",
+	}, {
+		in: "set character_set_results='binary'",
+	}, {
+		in: "set character_set_results='utf8'",
+	}, {
+		in: "set character_set_results=utf8mb4",
+	}, {
+		in: "set character_set_results='latin1'",
+	}, {
+		in: "set character_set_results='abcd'",
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
