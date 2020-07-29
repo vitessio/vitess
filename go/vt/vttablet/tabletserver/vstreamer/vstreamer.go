@@ -76,6 +76,7 @@ type vstreamer struct {
 	stopPos string
 
 	phase string
+	vse   *Engine
 }
 
 // CopyState contains the last PK for tables to be copied
@@ -107,7 +108,7 @@ type streamerPlan struct {
 //   Other constructs like joins, group by, etc. are not supported.
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
-func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error, phase string) *vstreamer {
+func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
 		ctx:      ctx,
@@ -122,6 +123,7 @@ func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine
 		vschema:  vschema,
 		plans:    make(map[uint64]*streamerPlan),
 		phase:    phase,
+		vse:      vse,
 	}
 }
 
@@ -218,7 +220,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE, binlogdatapb.VEventType_REPLACE:
 			newSize := len(vevent.GetDml())
 			if curSize+newSize > *PacketSize {
-				//vs.vrStats.VStreamerNumPackets.Add(1)
+				vs.vse.vstreamerNumPackets.Add(1)
 				vevents := bufferedEvents
 				bufferedEvents = []*binlogdatapb.VEvent{vevent}
 				curSize = newSize
@@ -239,6 +241,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				}
 			}
 			if curSize+newSize > *PacketSize {
+				vs.vse.vstreamerNumPackets.Add(1)
 				vevents := bufferedEvents
 				bufferedEvents = []*binlogdatapb.VEvent{vevent}
 				curSize = newSize

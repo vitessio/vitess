@@ -139,7 +139,9 @@ func (vc *vcopier) copyNext(ctx context.Context, settings binlogplayer.VRSetting
 func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.Result) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	vc.vr.stats.CatchupTimings.Record("catchup", time.Now())
+	defer func() {
+		vc.vr.stats.CatchupTimings.Record("catchup", time.Now())
+	}()
 
 	settings, err := binlogplayer.ReadVRSettings(vc.vr.dbClient, vc.vr.id)
 	if err != nil {
@@ -189,8 +191,8 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 // committed with the lastpk. This allows for consistent resumability.
 func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState map[string]*sqltypes.Result) error {
 	defer vc.vr.dbClient.Rollback()
-	vc.vr.stats.QueryTimings.Record("copy", time.Now())
 	defer func() {
+		vc.vr.stats.CopyTimings.Record("copy", time.Now())
 		vc.vr.stats.CopyLoopCount.Add(1)
 	}()
 
@@ -311,7 +313,9 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 }
 
 func (vc *vcopier) fastForward(ctx context.Context, copyState map[string]*sqltypes.Result, gtid string) error {
-	vc.vr.stats.FastForwardTimings.Record("fastforward", time.Now())
+	defer func() {
+		vc.vr.stats.FastForwardTimings.Record("fastforward", time.Now())
+	}()
 	pos, err := mysql.DecodePosition(gtid)
 	if err != nil {
 		return err

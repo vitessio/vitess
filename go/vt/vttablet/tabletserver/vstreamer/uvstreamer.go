@@ -270,6 +270,7 @@ func (uvs *uvstreamer) send2(evs []*binlogdatapb.VEvent) error {
 	if len(uvs.plans) > 0 {
 		evs2 = uvs.filterEvents(evs)
 	}
+	uvs.vse.vstreamerEventsStreamed.Add(int64(len(evs2)))
 	err := uvs.send(evs2)
 	if err != nil && err != io.EOF {
 		return err
@@ -362,7 +363,7 @@ func (uvs *uvstreamer) Stream() error {
 		}
 		uvs.sendTestEvent("Copy Done")
 	}
-	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos), uvs.filter, uvs.getVSchema(), uvs.send, "replicate")
+	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos), uvs.filter, uvs.getVSchema(), uvs.send, "replicate", uvs.vse)
 
 	uvs.setVs(vs)
 	return vs.Stream()
