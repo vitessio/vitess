@@ -47,7 +47,7 @@ func TestCharsetIntro(t *testing.T) {
 	require.EqualValues(t, 0, qr.RowsAffected)
 }
 
-func TestSetSysVar(t *testing.T) {
+func TestSetSysVarSingle(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
@@ -103,14 +103,14 @@ func TestSetSystemVariable(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	checkedExec(t, conn, "set @@sql_mode = 'NO_ZERO_DATE'")
-	q := `select str_to_date('00/00/0000', '%m/%d/%Y')`
-	assertMatches(t, conn, q, `[[NULL]]`)
+	checkedExec(t, conn, "set session sql_mode = 'NO_ZERO_DATE', session default_week_format = 1")
+	q := `select str_to_date('00/00/0000', '%m/%d/%Y'), WEEK('2008-02-20')`
+	assertMatches(t, conn, q, `[[NULL INT64(8)]]`)
 
 	assertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("NO_ZERO_DATE")]]`)
-	checkedExec(t, conn, "set @@sql_mode = ''")
+	checkedExec(t, conn, "set @@sql_mode = '', session default_week_format = 0")
 
-	assertMatches(t, conn, q, `[[DATE("0000-00-00")]]`)
+	assertMatches(t, conn, q, `[[DATE("0000-00-00") INT64(7)]]`)
 
 	checkedExec(t, conn, "SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'),  @@SESSION.sql_auto_is_null = 0, @@SESSION.wait_timeout = 2147483")
 	assertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("NO_AUTO_VALUE_ON_ZERO,STRICT_ALL_TABLES")]]`)
