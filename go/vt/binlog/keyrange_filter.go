@@ -17,6 +17,8 @@ limitations under the License.
 package binlog
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 
@@ -43,9 +45,9 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, callback func(*binlogdata
 			case binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 				binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
 				binlogdatapb.BinlogTransaction_Statement_BL_DELETE:
-				if statement.KeyspaceID != nil {
+				if statement.KeyspaceID == nil {
 					updateStreamErrors.Add("KeyRangeStream", 1)
-					log.Errorf("SBR mode unsupported for streaming: %s", statement.Statement.Sql)
+					return fmt.Errorf("SBR mode unsupported for streaming: %s", statement.Statement.Sql)
 				}
 				if !key.KeyRangeContains(keyrange, statement.KeyspaceID) {
 					continue
