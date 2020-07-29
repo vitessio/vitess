@@ -210,6 +210,16 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		return mysql.NewSQLErrorFromError(err)
 	}
 	session, result, err := vh.vtg.Execute(ctx, session, query, make(map[string]*querypb.BindVariable))
+	if session.InTransaction {
+		c.StatusFlags |= mysql.ServerStatusInTransaction
+	} else {
+		c.StatusFlags &= mysql.NoServerStatusInTransaction
+	}
+	if session.Autocommit {
+		c.StatusFlags |= mysql.ServerStatusAutocommit
+	} else {
+		c.StatusFlags &= mysql.NoServerStatusAutocommit
+	}
 	err = mysql.NewSQLErrorFromError(err)
 	if err != nil {
 		return err
