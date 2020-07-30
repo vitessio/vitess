@@ -72,7 +72,7 @@
   }
 }
 
-# set plan building not supported
+# set plan building with ON/OFF enum
 "set @@innodb_strict_mode = OFF"
 {
   "QueryType": "SET",
@@ -83,7 +83,51 @@
       {
         "Type": "SysVarIgnore",
         "Name": "innodb_strict_mode",
-        "Expr": "'off'"
+        "Expr": "0"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+
+# set plan building with string literal
+"set @@innodb_strict_mode = 'OFF'"
+{
+  "QueryType": "SET",
+  "Original": "set @@innodb_strict_mode = 'OFF'",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarIgnore",
+        "Name": "innodb_strict_mode",
+        "Expr": "0"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+
+# set plan building with string literal
+"set @@innodb_tmpdir = 'OFF'"
+{
+  "QueryType": "SET",
+  "Original": "set @@innodb_tmpdir = 'OFF'",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarIgnore",
+        "Name": "innodb_tmpdir",
+        "Expr": "'OFF'"
       }
     ],
     "Inputs": [
