@@ -120,28 +120,32 @@ func (st *vrStats) register() {
 	}))
 
 	stats.NewGaugesFuncWithMultiLabels(
-		"VReplicationQueryTimings",
-		"vreplication query timings per stream",
-		[]string{"source_keyspace", "source_shard", "workflow", "counts"},
+		"VReplicationPhaseTimings",
+		"vreplication per phase timings per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts", "phase"},
 		func() map[string]int64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
-				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.CopyTimings.Time()
+				for phase, t := range ct.blpStats.PhaseTimings.Counts() {
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+phase] = t
+				}
 			}
 			return result
 		})
 
 	stats.NewCounterFunc(
-		"VReplicationQueryTimingsTotal",
-		"vreplication query timings aggregated across all streams",
+		"VReplicationPhaseTimingsTotal",
+		"vreplication per phase timings aggregated across all phases and streams",
 		func() int64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
 			result := int64(0)
 			for _, ct := range st.controllers {
-				result += ct.blpStats.CopyTimings.Time()
+				for _, t := range ct.blpStats.PhaseTimings.Counts() {
+					result += t
+				}
 			}
 			return result
 		})
@@ -275,11 +279,9 @@ func (st *vrStats) status() *EngineStatus {
 			SourceTablet:        ct.sourceTablet.Get(),
 			Messages:            ct.blpStats.MessageHistory(),
 			QueryCounts:         ct.blpStats.QueryCount.Counts(),
-			CopyTimings:         ct.blpStats.CopyTimings.Time(),
+			PhaseTimings:        ct.blpStats.PhaseTimings.Counts(),
 			CopyRowCount:        ct.blpStats.CopyRowCount.Get(),
 			CopyLoopCount:       ct.blpStats.CopyLoopCount.Get(),
-			CatchupTimings:      ct.blpStats.CatchupTimings.Time(),
-			FastForwardTimings:  ct.blpStats.FastForwardTimings.Time(),
 		}
 		i++
 	}
@@ -307,11 +309,9 @@ type ControllerStatus struct {
 	SourceTablet        string
 	Messages            []string
 	QueryCounts         map[string]int64
-	CopyTimings         int64
+	PhaseTimings        map[string]int64
 	CopyRowCount        int64
 	CopyLoopCount       int64
-	CatchupTimings      int64
-	FastForwardTimings  int64
 }
 
 var vreplicationTemplate = `

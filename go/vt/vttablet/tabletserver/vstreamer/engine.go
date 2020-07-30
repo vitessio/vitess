@@ -73,16 +73,14 @@ type Engine struct {
 	vschemaUpdates *stats.Counter
 
 	// vstreamer metrics
-	vstreamerCopyTimings        *servenv.TimingsWrapper
-	vstreamerCatchupTimings     *servenv.TimingsWrapper
-	vstreamerFastForwardTimings *servenv.TimingsWrapper
-	vstreamerEventsStreamed     *stats.Counter
-	vstreamerPacketSize         *stats.GaugeFunc
-	vstreamerNumPackets         *stats.Counter
-	resultStreamerNumRows       *stats.Counter
-	resultStreamerNumPackets    *stats.Counter
-	rowStreamerNumRows          *stats.Counter
-	rowStreamerNumPackets       *stats.Counter
+	vstreamerPhaseTimings    *servenv.TimingsWrapper
+	vstreamerEventsStreamed  *stats.Counter
+	vstreamerPacketSize      *stats.GaugeFunc
+	vstreamerNumPackets      *stats.Counter
+	resultStreamerNumRows    *stats.Counter
+	resultStreamerNumPackets *stats.Counter
+	rowStreamerNumRows       *stats.Counter
+	rowStreamerNumPackets    *stats.Counter
 }
 
 // NewEngine creates a new Engine.
@@ -104,16 +102,14 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, cell str
 		vschemaErrors:  env.Exporter().NewCounter("VSchemaErrors", "Count of VSchema errors"),
 		vschemaUpdates: env.Exporter().NewCounter("VSchemaUpdates", "Count of VSchema updates. Does not include errors"),
 
-		vstreamerCopyTimings:        env.Exporter().NewTimings("VStreamerCopyTiming", "Time taken for bulk copy during vstream copy", "Copy Timings"),
-		vstreamerCatchupTimings:     env.Exporter().NewTimings("VStreamerCatchupTiming", "Time taken for catchup during vstream copy", "Catchup Timings"),
-		vstreamerFastForwardTimings: env.Exporter().NewTimings("VStreamerFastForwardTiming", "Time taken for fastforward during vstream copy", "FastForward Timings"),
-		vstreamerEventsStreamed:     env.Exporter().NewCounter("VStreamerEventsStreamed", "Count of events streamed in VStream API"),
-		vstreamerPacketSize:         env.Exporter().NewGaugeFunc("VStreamPacketSize", "Max packet size for sending vstreamer events", getPacketSize),
-		vstreamerNumPackets:         env.Exporter().NewCounter("VStreamerNumPackets", "Number of packets in vstreamer"),
-		resultStreamerNumPackets:    env.Exporter().NewCounter("ResultStreamerNumPackets", "Number of packets in result streamer"),
-		resultStreamerNumRows:       env.Exporter().NewCounter("ResultStreamerNumRows", "Number of rows sent in result streamer"),
-		rowStreamerNumPackets:       env.Exporter().NewCounter("RowStreamerNumPackets", "Number of packets in row streamer"),
-		rowStreamerNumRows:          env.Exporter().NewCounter("RowStreamerNumRows", "Number of rows sent in row streamer"),
+		vstreamerPhaseTimings:    env.Exporter().NewTimings("VStreamerCopyTiming", "Time taken for bulk copy during vstream copy", "Copy Timings"),
+		vstreamerEventsStreamed:  env.Exporter().NewCounter("VStreamerEventsStreamed", "Count of events streamed in VStream API"),
+		vstreamerPacketSize:      env.Exporter().NewGaugeFunc("VStreamPacketSize", "Max packet size for sending vstreamer events", getPacketSize),
+		vstreamerNumPackets:      env.Exporter().NewCounter("VStreamerNumPackets", "Number of packets in vstreamer"),
+		resultStreamerNumPackets: env.Exporter().NewCounter("ResultStreamerNumPackets", "Number of packets in result streamer"),
+		resultStreamerNumRows:    env.Exporter().NewCounter("ResultStreamerNumRows", "Number of rows sent in result streamer"),
+		rowStreamerNumPackets:    env.Exporter().NewCounter("RowStreamerNumPackets", "Number of packets in row streamer"),
+		rowStreamerNumRows:       env.Exporter().NewCounter("RowStreamerNumRows", "Number of rows sent in row streamer"),
 	}
 	env.Exporter().HandleFunc("/debug/tablet_vschema", vse.ServeHTTP)
 	return vse

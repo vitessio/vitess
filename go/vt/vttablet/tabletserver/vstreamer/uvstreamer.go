@@ -94,11 +94,15 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 		MaxReplicationLag: 1 * time.Nanosecond,
 		CatchupRetryTime:  1 * time.Second,
 	}
+	send2 := func(evs []*binlogdatapb.VEvent) error {
+		vse.vstreamerEventsStreamed.Add(int64(len(evs)))
+		return send(evs)
+	}
 	uvs := &uvstreamer{
 		ctx:        ctx,
 		cancel:     cancel,
 		vse:        vse,
-		send:       send,
+		send:       send2,
 		cp:         cp,
 		se:         se,
 		startPos:   startPos,
@@ -270,7 +274,6 @@ func (uvs *uvstreamer) send2(evs []*binlogdatapb.VEvent) error {
 	if len(uvs.plans) > 0 {
 		evs2 = uvs.filterEvents(evs)
 	}
-	uvs.vse.vstreamerEventsStreamed.Add(int64(len(evs2)))
 	err := uvs.send(evs2)
 	if err != nil && err != io.EOF {
 		return err
@@ -288,13 +291,13 @@ func (uvs *uvstreamer) send2(evs []*binlogdatapb.VEvent) error {
 
 func (uvs *uvstreamer) sendEventsForCurrentPos() error {
 	log.Infof("sendEventsForCurrentPos")
-	vevents := []*binlogdatapb.VEvent{{
+	evs := []*binlogdatapb.VEvent{{
 		Type: binlogdatapb.VEventType_GTID,
 		Gtid: mysql.EncodePosition(uvs.pos),
 	}, {
 		Type: binlogdatapb.VEventType_OTHER,
 	}}
-	if err := uvs.send(vevents); err != nil {
+	if err := uvs.send(evs); err != nil {
 		return wrapError(err, uvs.pos)
 	}
 	return nil
@@ -412,6 +415,7 @@ func (uvs *uvstreamer) sendTestEvent(msg string) {
 		Type: binlogdatapb.VEventType_OTHER,
 		Gtid: msg,
 	}
+
 	if err := uvs.send([]*binlogdatapb.VEvent{ev}); err != nil {
 		return
 	}

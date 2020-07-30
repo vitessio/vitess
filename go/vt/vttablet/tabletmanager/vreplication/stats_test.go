@@ -24,8 +24,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"vitess.io/vitess/go/stats"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/proto/binlogdata"
@@ -139,18 +137,18 @@ func TestVReplicationStats(t *testing.T) {
 	testStats.controllers[1].sourceTablet.Set("src1")
 
 	sleepTime := 1 * time.Millisecond
-	addTiming := func(timing *stats.Timings) {
-		defer timing.Record("fastforward", time.Now())
+	record := func(phase string) {
+		defer blpStats.PhaseTimings.Record(phase, time.Now())
 		time.Sleep(sleepTime)
 	}
 	want := int64(1.2 * float64(sleepTime)) //allow 10% overhead for recording timing
 
-	addTiming(blpStats.FastForwardTimings)
-	require.Greater(t, want, testStats.status().Controllers[0].FastForwardTimings)
-	addTiming(blpStats.CatchupTimings)
-	require.Greater(t, want, testStats.status().Controllers[0].CatchupTimings)
-	addTiming(blpStats.CopyTimings)
-	require.Greater(t, want, testStats.status().Controllers[0].CopyTimings)
+	record("fastforward")
+	require.Greater(t, want, testStats.status().Controllers[0].PhaseTimings["fastforward"])
+	record("catchup")
+	require.Greater(t, want, testStats.status().Controllers[0].PhaseTimings["catchup"])
+	record("copy")
+	require.Greater(t, want, testStats.status().Controllers[0].PhaseTimings["copy"])
 
 	blpStats.QueryCount.Add("replicate", 11)
 	blpStats.QueryCount.Add("fastforward", 23)

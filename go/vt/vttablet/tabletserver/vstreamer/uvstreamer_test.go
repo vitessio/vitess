@@ -264,7 +264,7 @@ commit;"
 			cancel()
 		}
 	}
-
+	resetMetrics(t)
 	startVStreamCopy(ctx, t, filter, tablePKs)
 
 	select {
@@ -283,6 +283,7 @@ commit;"
 		log.Infof("Successfully received %d events", numExpectedEvents)
 	}
 	validateReceivedEvents(t)
+	validateMetrics(t)
 }
 
 func validateReceivedEvents(t *testing.T) {
@@ -295,6 +296,24 @@ func validateReceivedEvents(t *testing.T) {
 			t.Fatalf("Event %d did not match, want %s, got %s", i, want, got)
 		}
 	}
+}
+
+func resetMetrics(t *testing.T) {
+	engine.vstreamerEventsStreamed.Reset()
+	engine.resultStreamerNumRows.Reset()
+	engine.rowStreamerNumRows.Reset()
+	engine.vstreamerPhaseTimings.Reset()
+	engine.vstreamerPhaseTimings.Reset()
+	engine.vstreamerPhaseTimings.Reset()
+}
+
+func validateMetrics(t *testing.T) {
+	require.Equal(t, engine.vstreamerEventsStreamed.Get(), int64(len(allEvents)))
+	require.Equal(t, engine.resultStreamerNumRows.Get(), int64(0))
+	require.Equal(t, engine.rowStreamerNumRows.Get(), int64(31))
+	require.Equal(t, engine.vstreamerPhaseTimings.Counts()["VStreamerTest.copy"], int64(3))
+	require.Equal(t, engine.vstreamerPhaseTimings.Counts()["VStreamerTest.catchup"], int64(2))
+	require.Equal(t, engine.vstreamerPhaseTimings.Counts()["VStreamerTest.fastforward"], int64(2))
 }
 
 func insertMultipleRows(t *testing.T, table string, idx int, numRows int) {

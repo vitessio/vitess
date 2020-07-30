@@ -140,7 +140,7 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	defer func() {
-		vc.vr.stats.CatchupTimings.Record("catchup", time.Now())
+		vc.vr.stats.PhaseTimings.Record("catchup", time.Now())
 	}()
 
 	settings, err := binlogplayer.ReadVRSettings(vc.vr.dbClient, vc.vr.id)
@@ -192,7 +192,7 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState map[string]*sqltypes.Result) error {
 	defer vc.vr.dbClient.Rollback()
 	defer func() {
-		vc.vr.stats.CopyTimings.Record("copy", time.Now())
+		vc.vr.stats.PhaseTimings.Record("copy", time.Now())
 		vc.vr.stats.CopyLoopCount.Add(1)
 	}()
 
@@ -314,7 +314,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 func (vc *vcopier) fastForward(ctx context.Context, copyState map[string]*sqltypes.Result, gtid string) error {
 	defer func() {
-		vc.vr.stats.FastForwardTimings.Record("fastforward", time.Now())
+		vc.vr.stats.PhaseTimings.Record("fastforward", time.Now())
 	}()
 	pos, err := mysql.DecodePosition(gtid)
 	if err != nil {
