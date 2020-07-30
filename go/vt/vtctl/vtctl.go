@@ -2195,7 +2195,8 @@ func commandShowResharding(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	return wr.ShowResharding(ctx, keyspace, shard)
+	_, _, err = wr.ShowResharding(ctx, keyspace, shard)
+	return err
 }
 
 func commandFindAllShardsInKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

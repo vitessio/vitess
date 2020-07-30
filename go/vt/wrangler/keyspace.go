@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -32,12 +33,14 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 const (
@@ -232,10 +235,10 @@ func (wr *Wrangler) VerticalSplitClone(ctx context.Context, fromKeyspace, toKeys
 }
 
 // ShowResharding shows all resharding related metadata for the keyspace/shard.
-func (wr *Wrangler) ShowResharding(ctx context.Context, keyspace, shard string) (err error) {
+func (wr *Wrangler) ShowResharding(ctx context.Context, keyspace, shard string) ([]*ShardVInfo, []*ShardVInfo, error) {
 	ki, err := wr.ts.GetKeyspace(ctx, keyspace)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	if len(ki.ServedFroms) == 0 {
 		return wr.showHorizontalResharding(ctx, keyspace, shard)
@@ -243,57 +246,226 @@ func (wr *Wrangler) ShowResharding(ctx context.Context, keyspace, shard string) 
 	return wr.showVerticalResharding(ctx, keyspace, shard)
 }
 
-func (wr *Wrangler) showHorizontalResharding(ctx context.Context, keyspace, shard string) error {
+// ShardVInfo holds relevent vreplication related info for the given shard.
+type ShardVInfo struct {
+	ShardName       string
+	VReplRows       []*VReplRow
+	SourceShards    []*topodatapb.Shard_SourceShard
+	TabletControls  []*topodatapb.Shard_TabletControl
+	MasterIsServing bool
+}
+
+func (si *ShardVInfo) String() string {
+	var out string
+	out += fmt.Sprintf("    Shard: %v\n", si.ShardName)
+	if len(si.SourceShards) != 0 {
+		out += fmt.Sprintf("      Source Shards: %v\n", si.SourceShards)
+	}
+	if len(si.VReplRows) != 0 {
+		out += "      VReplication:\n"
+		for _, row := range si.VReplRows {
+			out += fmt.Sprintf("%v", row)
+		}
+	}
+	out += fmt.Sprintf("      Master Is Serving: %v\n", si.MasterIsServing)
+	if len(si.TabletControls) != 0 {
+		out += fmt.Sprintf("      Tablet Controls: %v\n", si.TabletControls)
+	}
+	return out
+}
+
+// VReplRow represents a row result from the _vt.vreplication table.
+type VReplRow struct {
+	// ID represents the id column from the _vt.vreplication table.
+	ID int
+	// Workflow represents the workflow column from the _vt.vreplication table.
+	Workflow string
+	// Source represents the source column from the _vt.vreplication table.
+	Source string
+	// Pos represents the pos column from the _vt.vreplication table.
+	Pos string
+	// StopPos represents the stop_pos column from the _vt.vreplication table.
+	StopPos string
+	// MaxTps represents the max_tps column from the _vt.vreplication table.
+	MaxTps int
+	// MaxReplicationLag represents the max_replication_lag column from the _vt.vreplication table.
+	MaxReplicationLag int
+	// Cell represents the cell column from the _vt.vreplication table.
+	Cell string
+	// TabletTypes represents the tablet_types column from the _vt.vreplication table.
+	TabletTypes string
+	// TimeUpdated represents the time_updated column from the _vt.vreplication table.
+	TimeUpdated int
+	// TransactionTimestamp represents the transaction_timestamp column from the _vt.vreplication table.
+	TransactionTimestamp int
+	// State represents the state column from the _vt.vreplication table.
+	State string
+	// Message represents the message column from the _vt.vreplication table.
+	Message string
+	// DbName represents the db_name column from the _vt.vreplication table.
+	DbName string
+}
+
+func (v *VReplRow) String() string {
+	return fmt.Sprintf("        %d %v %v %v %v %d %d %v %v %d %d %v %v %v\n",
+		v.ID, v.Workflow, v.Source, v.Pos, v.StopPos, v.MaxTps, v.MaxReplicationLag,
+		v.Cell, v.TabletTypes, v.TimeUpdated, v.TransactionTimestamp, v.State, v.Message,
+		v.DbName)
+}
+
+func (wr *Wrangler) showHorizontalResharding(ctx context.Context, keyspace, shard string) ([]*ShardVInfo, []*ShardVInfo, error) {
 	osList, err := topotools.FindOverlappingShards(ctx, wr.ts, keyspace)
 	if err != nil {
-		return fmt.Errorf("FindOverlappingShards failed: %v", err)
+		return nil, nil, fmt.Errorf("FindOverlappingShards failed: %v", err)
 	}
 	os := topotools.OverlappingShardsForShard(osList, shard)
 	if os == nil {
 		wr.Logger().Printf("No resharding in progress\n")
-		return nil
+		return nil, nil, nil
 	}
 
 	sourceShards, destinationShards, err := wr.findSourceDest(ctx, os)
 	if err != nil {
-		return err
+		return nil, nil, err
+	}
+	vReplSourceShardsInfo, err := wr.vReplShardsInfos(ctx, sourceShards)
+	if err != nil {
+		return nil, nil, err
+	}
+	vReplDestinationShardsInfo, err := wr.vReplShardsInfos(ctx, destinationShards)
+	if err != nil {
+		return nil, nil, err
 	}
 	wr.Logger().Printf("Horizontal Resharding for %v:\n", keyspace)
 	wr.Logger().Printf("  Sources:\n")
-	if err := wr.printShards(ctx, sourceShards); err != nil {
-		return err
-	}
+	wr.printShards(vReplSourceShardsInfo)
 	wr.Logger().Printf("  Destinations:\n")
-	return wr.printShards(ctx, destinationShards)
+	wr.printShards(vReplDestinationShardsInfo)
+	return vReplSourceShardsInfo, vReplDestinationShardsInfo, nil
 }
 
-func (wr *Wrangler) printShards(ctx context.Context, si []*topo.ShardInfo) error {
-	for _, si := range si {
-		wr.Logger().Printf("    Shard: %v\n", si.ShardName())
-		if len(si.SourceShards) != 0 {
-			wr.Logger().Printf("      Source Shards: %v\n", si.SourceShards)
+func fieldsToIndexMap(fields []*querypb.Field) map[string]int {
+	indexMap := make(map[string]int, len(fields))
+	for i := range fields {
+		indexMap[fields[i].Name] = i
+	}
+	return indexMap
+}
+
+func parseVReplQuery(qr *sqltypes.Result) ([]*VReplRow, error) {
+	rows := make([]*VReplRow, 0, len(qr.Rows))
+	idxMap := fieldsToIndexMap(qr.Fields)
+	for _, row := range qr.Rows {
+		id, err := evalengine.ToNative(row[idxMap["id"]])
+		if err != nil {
+			return nil, err
 		}
+		workflow, err := evalengine.ToNative(row[idxMap["workflow"]])
+		if err != nil {
+			return nil, err
+		}
+		source, err := evalengine.ToNative(row[idxMap["source"]])
+		if err != nil {
+			return nil, err
+		}
+		pos, err := evalengine.ToNative(row[idxMap["pos"]])
+		if err != nil {
+			return nil, err
+		}
+		stopPos, err := evalengine.ToNative(row[idxMap["stop_pos"]])
+		if err != nil {
+			return nil, err
+		}
+		maxTps, err := evalengine.ToNative(row[idxMap["max_tps"]])
+		if err != nil {
+			return nil, err
+		}
+		maxReplicationLag, err := evalengine.ToNative(row[idxMap["max_replication_lag"]])
+		if err != nil {
+			return nil, err
+		}
+		cell, err := evalengine.ToNative(row[idxMap["cell"]])
+		if err != nil {
+			return nil, err
+		}
+		tabletTypes, err := evalengine.ToNative(row[idxMap["tablet_types"]])
+		if err != nil {
+			return nil, err
+		}
+		timeUpdated, err := evalengine.ToNative(row[idxMap["time_updated"]])
+		if err != nil {
+			return nil, err
+		}
+		transactionTimestamp, err := evalengine.ToNative(row[idxMap["transaction_timestamp"]])
+		if err != nil {
+			return nil, err
+		}
+		state, err := evalengine.ToNative(row[idxMap["state"]])
+		if err != nil {
+			return nil, err
+		}
+		message, err := evalengine.ToNative(row[idxMap["message"]])
+		if err != nil {
+			return nil, err
+		}
+		dbName, err := evalengine.ToNative(row[idxMap["db_name"]])
+		if err != nil {
+			return nil, err
+		}
+		vReplRow := &VReplRow{
+			ID:                   int(id.(int64)),
+			Workflow:             string(workflow.([]byte)),
+			Source:               string(source.([]byte)),
+			Pos:                  string(pos.([]byte)),
+			StopPos:              string(stopPos.([]byte)),
+			MaxTps:               int(maxTps.(int64)),
+			MaxReplicationLag:    int(maxReplicationLag.(int64)),
+			Cell:                 string(cell.([]byte)),
+			TabletTypes:          string(tabletTypes.([]byte)),
+			TimeUpdated:          int(timeUpdated.(int64)),
+			TransactionTimestamp: int(transactionTimestamp.(int64)),
+			State:                string(state.([]byte)),
+			Message:              string(message.([]byte)),
+			DbName:               string(dbName.([]byte)),
+		}
+		rows = append(rows, vReplRow)
+	}
+	return rows, nil
+}
+
+func (wr *Wrangler) vReplShardsInfos(ctx context.Context, si []*topo.ShardInfo) ([]*ShardVInfo, error) {
+	out := make([]*ShardVInfo, 0, len(si))
+	for _, si := range si {
 		ti, err := wr.ts.GetTablet(ctx, si.MasterAlias)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		qr, err := wr.tmc.VReplicationExec(ctx, ti.Tablet, fmt.Sprintf("select * from _vt.vreplication where db_name=%v", encodeString(ti.DbName())))
 		if err != nil {
-			return err
+			return nil, err
 		}
 		res := sqltypes.Proto3ToResult(qr)
-		if len(res.Rows) != 0 {
-			wr.Logger().Printf("      VReplication:\n")
-			for _, row := range res.Rows {
-				wr.Logger().Printf("        %v\n", row)
-			}
+		vReplRows, err := parseVReplQuery(res)
+		if err != nil {
+			return nil, err
 		}
-		wr.Logger().Printf("      Is Master Serving: %v\n", si.IsMasterServing)
-		if len(si.TabletControls) != 0 {
-			wr.Logger().Printf("      Tablet Controls: %v\n", si.TabletControls)
+		shardVInfo := &ShardVInfo{
+			ShardName:       si.ShardName(),
+			VReplRows:       vReplRows,
+			SourceShards:    si.SourceShards,
+			TabletControls:  si.TabletControls,
+			MasterIsServing: si.IsMasterServing,
 		}
+		out = append(out, shardVInfo)
 	}
-	return nil
+
+	return out, nil
+}
+
+func (wr *Wrangler) printShards(si []*ShardVInfo) {
+	for _, si := range si {
+		wr.Logger().Infof(si.String())
+	}
 }
 
 // CancelResharding cancels any resharding in progress on the specified keyspace/shard.
@@ -1068,31 +1240,38 @@ func formatTabletStats(ts *discovery.LegacyTabletStats) string {
 	return fmt.Sprintf("%v: %v stats: %v", topoproto.TabletAliasString(ts.Tablet.Alias), webURL, ts.Stats)
 }
 
-func (wr *Wrangler) showVerticalResharding(ctx context.Context, keyspace, shard string) error {
+func (wr *Wrangler) showVerticalResharding(ctx context.Context, keyspace, shard string) ([]*ShardVInfo, []*ShardVInfo, error) {
 	ki, err := wr.ts.GetKeyspace(ctx, keyspace)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	destinationShard, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	if len(destinationShard.SourceShards) != 1 || len(destinationShard.SourceShards[0].Tables) == 0 {
 		wr.Logger().Printf("No resharding in progress\n")
-		return nil
+		return nil, nil, nil
 	}
 	sourceShard, err := wr.ts.GetShard(ctx, destinationShard.SourceShards[0].Keyspace, destinationShard.SourceShards[0].Shard)
 	if err != nil {
-		return err
+		return nil, nil, err
+	}
+	vReplSourceShardsInfo, err := wr.vReplShardsInfos(ctx, []*topo.ShardInfo{sourceShard})
+	if err != nil {
+		return nil, nil, err
+	}
+	vReplDestinationShardsInfo, err := wr.vReplShardsInfos(ctx, []*topo.ShardInfo{destinationShard})
+	if err != nil {
+		return nil, nil, err
 	}
 	wr.Logger().Printf("Vertical Resharding:\n")
 	wr.Logger().Printf("  Served From: %v\n", ki.ServedFroms)
 	wr.Logger().Printf("  Source:\n")
-	if err := wr.printShards(ctx, []*topo.ShardInfo{sourceShard}); err != nil {
-		return err
-	}
+	wr.printShards(vReplSourceShardsInfo)
 	wr.Logger().Printf("  Destination:\n")
-	return wr.printShards(ctx, []*topo.ShardInfo{destinationShard})
+	wr.printShards(vReplDestinationShardsInfo)
+	return vReplSourceShardsInfo, vReplDestinationShardsInfo, nil
 }
 
 func (wr *Wrangler) cancelVerticalResharding(ctx context.Context, keyspace, shard string) error {
