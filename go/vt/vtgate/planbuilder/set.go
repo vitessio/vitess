@@ -404,15 +404,14 @@ func extractValue(expr *sqlparser.SetExpr, boolean bool) string {
 	case *sqlparser.ColName:
 		// this is a little of a hack. it's used when the setting is not a normal expression, but rather
 		// an enumeration, such as utf8, utf8mb4, etc
-		if node.Name.AtCount() == sqlparser.NoAt && boolean {
+		if node.Name.AtCount() == sqlparser.NoAt {
 			switch node.Name.Lowered() {
 			case "on":
 				return "1"
 			case "off":
 				return "0"
-			default:
-				return fmt.Sprintf("'%s'", sqlparser.String(expr.Expr))
 			}
+			return fmt.Sprintf("'%s'", sqlparser.String(expr.Expr))
 		}
 	}
 
