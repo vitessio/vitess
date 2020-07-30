@@ -29,7 +29,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
 	"golang.org/x/net/context"
@@ -500,18 +499,6 @@ func handleSessionSetting(ctx context.Context, name string, session *SafeSession
 		default:
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for skip_query_plan_cache: %d", val)
 		}
-	case "sql_safe_updates":
-		val, err := validateSetOnOff(value, name)
-		if err != nil {
-			return err
-		}
-
-		switch val {
-		case 0, 1:
-			// no op
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for sql_safe_updates: %d", val)
-		}
 	case "transaction_mode":
 		val, ok := value.(string)
 		if !ok {
@@ -522,17 +509,6 @@ func handleSessionSetting(ctx context.Context, name string, session *SafeSession
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid transaction_mode: %s", val)
 		}
 		session.TransactionMode = vtgatepb.TransactionMode(out)
-	case "tx_isolation": // TODO move this to set tx
-		val, ok := value.(string)
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for tx_isolation: %T", value)
-		}
-		switch val {
-		case "repeatable read", "read committed", "read uncommitted", "serializable":
-			// TODO (4127): This is a dangerous NOP.
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for tx_isolation: %v", val)
-		}
 	case "tx_read_only", "transaction_read_only": // TODO move this to set tx
 		val, err := validateSetOnOff(value, name)
 		if err != nil {
@@ -575,34 +551,6 @@ func handleSessionSetting(ctx context.Context, name string, session *SafeSession
 			session.Options = &querypb.ExecuteOptions{}
 		}
 		session.Options.SqlSelectLimit = val
-	case "sql_auto_is_null":
-		val, ok := value.(int64)
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for sql_auto_is_null: %T", value)
-		}
-		switch val {
-		case 0:
-			// This is the default setting for MySQL. Do nothing.
-		case 1:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "sql_auto_is_null is not currently supported")
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for sql_auto_is_null: %d", val)
-		}
-	case "character_set_results":
-		// This is a statement that mysql-connector-j sends at the beginning. We return a canned response for it.
-		switch value {
-		case nil, "binary", "utf8", "utf8mb4", "latin1":
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed value for character_set_results: %v", value)
-		}
-	case "wait_timeout":
-		_, ok := value.(int64)
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for wait_timeout: %T", value)
-		}
-	case "sql_mode", "net_write_timeout", "net_read_timeout", "lc_messages", "collation_connection", "foreign_key_checks", "sql_quote_show_create", "unique_checks":
-		log.Warningf("Ignored inapplicable SET %v = %v", name, value)
-		warnings.Add("IgnoredSet", 1)
 	case "charset", "names":
 		val, ok := value.(string)
 		if !ok {
