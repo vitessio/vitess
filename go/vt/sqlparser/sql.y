@@ -3316,11 +3316,6 @@ set_list:
   {
     $$ = SetExprs{$1}
   }
-|  set_session_or_global set_expression
-  {
-    $2.Scope = $1
-    $$ = SetExprs{$2}
-  }
 | set_list ',' set_expression
   {
     $$ = append($1, $3)
@@ -3342,6 +3337,11 @@ set_expression:
 | charset_or_character_set charset_value collate_opt
   {
     $$ = &SetExpr{Name: NewColIdent(string($1)), Expr: $2}
+  }
+|  set_session_or_global set_expression
+  {
+    $2.Scope = $1
+    $$ = $2
   }
 
 charset_or_character_set:
