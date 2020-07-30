@@ -59,11 +59,11 @@ func TestSetSysVarSingle(t *testing.T) {
 	}
 
 	queries := []queriesWithExpectations{{
-		name:     "default_storage_engine",
+		name:     "default_storage_engine", // ignored
 		expr:     "INNODB",
 		expected: `[[VARCHAR("InnoDB")]]`,
 	}, {
-		name:     "character_set_client",
+		name:     "character_set_client", // check and ignored
 		expr:     "utf8",
 		expected: `[[VARCHAR("utf8")]]`,
 	}, {
@@ -71,21 +71,29 @@ func TestSetSysVarSingle(t *testing.T) {
 		expr:     "@charvar",
 		expected: `[[VARCHAR("utf8")]]`,
 	}, {
-		name:     "sql_mode",
+		name:     "sql_mode", // use reserved conn
 		expr:     "''",
 		expected: `[[VARCHAR("")]]`,
 	}, {
-		name:     "sql_mode",
+		name:     "sql_mode", // use reserved conn
 		expr:     `concat(@@sql_mode,"NO_ZERO_DATE")`,
 		expected: `[[VARCHAR("NO_ZERO_DATE")]]`,
 	}, {
-		name:     "sql_mode",
+		name:     "sql_mode", // use reserved conn
 		expr:     "@@sql_mode",
 		expected: `[[VARCHAR("NO_ZERO_DATE")]]`,
 	}, {
-		name:     "SQL_SAFE_UPDATES",
+		name:     "SQL_SAFE_UPDATES", // use reserved conn
 		expr:     "1",
 		expected: "[[INT64(1)]]",
+	}, {
+		name:     "sql_auto_is_null", // ignored so will keep the actual value
+		expr:     "on",
+		expected: `[[INT64(0)]]`,
+	}, {
+		name:     "sql_notes", // use reserved conn
+		expr:     "off",
+		expected: "[[INT64(0)]]",
 	}}
 
 	conn, err := mysql.Connect(ctx, &vtParams)
