@@ -68,11 +68,14 @@ func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit,
 }
 
 // Lookup performs a lookup for the ids.
-func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sqltypes.Result, error) {
+func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value, co vtgatepb.CommitOrder) ([]*sqltypes.Result, error) {
 	if vcursor == nil {
 		return nil, fmt.Errorf("cannot perform lookup: no vcursor provided")
 	}
 	results := make([]*sqltypes.Result, 0, len(ids))
+	if lkp.Autocommit {
+		co = vtgatepb.CommitOrder_AUTOCOMMIT
+	}
 	if !ids[0].IsIntegral() && !ids[0].IsBinary() {
 		// for non integral and binary type, fallback to send query per id
 		for _, id := range ids {
@@ -84,10 +87,6 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sql
 				lkp.FromColumns[0]: vars,
 			}
 			var result *sqltypes.Result
-			co := vtgatepb.CommitOrder_NORMAL
-			if lkp.Autocommit {
-				co = vtgatepb.CommitOrder_AUTOCOMMIT
-			}
 			result, err = vcursor.Execute("VindexLookup", lkp.sel, bindVars, false /* rollbackOnError */, co)
 			if err != nil {
 				return nil, fmt.Errorf("lookup.Map: %v", err)
@@ -109,22 +108,18 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sql
 		bindVars := map[string]*querypb.BindVariable{
 			lkp.FromColumns[0]: vars,
 		}
-		co := vtgatepb.CommitOrder_NORMAL
-		if lkp.Autocommit {
-			co = vtgatepb.CommitOrder_AUTOCOMMIT
-		}
 		result, err := vcursor.Execute("VindexLookup", lkp.sel, bindVars, false /* rollbackOnError */, co)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
 		resultMap := make(map[string][][]sqltypes.Value)
 		for _, row := range result.Rows {
-			resultMap[string(row[0].ToString())] = append(resultMap[string(row[0].ToString())], []sqltypes.Value{row[1]})
+			resultMap[row[0].ToString()] = append(resultMap[row[0].ToString()], []sqltypes.Value{row[1]})
 		}
 
 		for _, id := range ids {
 			results = append(results, &sqltypes.Result{
-				Rows: resultMap[string(id.ToString())],
+				Rows: resultMap[id.ToString()],
 			})
 		}
 	}
