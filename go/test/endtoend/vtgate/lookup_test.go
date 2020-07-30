@@ -43,12 +43,11 @@ func TestConsistentLookup(t *testing.T) {
 	// Simple insert.
 	exec(t, conn, "begin")
 	exec(t, conn, "insert into t1(id1, id2) values(1, 4)")
+	// check that the lookup query happens in the right connection
+	assertMatches(t, conn, "select * from t1 where id2 = 4", "[[INT64(1) INT64(4)]]")
 	exec(t, conn, "commit")
-	qr := exec(t, conn, "select * from t1")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(4)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-	qr = exec(t, conn, "select * from t1_id2_idx")
+	assertMatches(t, conn, "select * from t1", "[[INT64(1) INT64(4)]]")
+	qr := exec(t, conn, "select * from t1_id2_idx")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(4) VARBINARY(\"\\x16k@\\xb4J\\xbaK\\xd6\")]]"; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
@@ -66,6 +65,7 @@ func TestConsistentLookup(t *testing.T) {
 	// Simple delete.
 	exec(t, conn, "begin")
 	exec(t, conn, "delete from t1 where id1=1")
+	assertMatches(t, conn, "select * from t1 where id2 = 4", "[]")
 	exec(t, conn, "commit")
 	qr = exec(t, conn, "select * from t1")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[]"; got != want {
