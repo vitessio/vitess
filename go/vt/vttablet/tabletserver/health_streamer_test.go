@@ -28,6 +28,21 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
+func TestHealthStreamerClosed(t *testing.T) {
+	config := tabletenv.NewDefaultConfig()
+	env := tabletenv.NewEnv(config, "ReplTrackerTest")
+	alias := topodatapb.TabletAlias{
+		Cell: "cell",
+		Uid:  1,
+	}
+	blpFunc = testBlpFunc
+	hs := newHealthStreamer(env, alias)
+	err := hs.Stream(context.Background(), func(shr *querypb.StreamHealthResponse) error {
+		return nil
+	})
+	assert.Contains(t, err.Error(), "tabletserver is shutdown")
+}
+
 func TestHealthStreamerBroadcast(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	env := tabletenv.NewEnv(config, "ReplTrackerTest")
@@ -37,6 +52,8 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	}
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias)
+	hs.Open()
+	defer hs.Close()
 	target := querypb.Target{}
 	hs.InitDBConfig(target)
 
