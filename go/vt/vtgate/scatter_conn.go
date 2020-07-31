@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gogo/protobuf/proto"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -563,7 +565,6 @@ func (stc *ScatterConn) ExecuteLock(
 	rs *srvtopo.ResolvedShard,
 	query *querypb.BoundQuery,
 	session *SafeSession,
-	action shardActionTransactionFunc,
 ) (*sqltypes.Result, error) {
 
 	var (
@@ -576,11 +577,20 @@ func (stc *ScatterConn) ExecuteLock(
 	startTime, statsKey := stc.startAction("ExecuteLock", rs.Target)
 	defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
-	if session != nil && session.Session != nil {
-		opts = session.Session.Options
+	if session == nil || session.Session == nil {
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "session cannot be nil")
 	}
 
-	info := actionInfo(rs.Target, session, false)
+	opts = session.Session.Options
+	info, err := lockInfo(rs.Target, session)
+	// Lock session is created on alphabetic sorted keyspace.
+	// This error will occur if the existing session target does not match the current target.
+	// This will happen either due to re-sharding or a new keyspace which comes before the existing order.
+	// In which case, we will try to release old locks and return error.
+	if err != nil {
+		_ = stc.txConn.ReleaseLock(ctx, session)
+		return nil, vterrors.Wrap(err, "Any previous held locks are released")
+	}
 	qs, err := getQueryService(rs, info)
 	if err != nil {
 		return nil, err
@@ -588,26 +598,23 @@ func (stc *ScatterConn) ExecuteLock(
 	reservedID := info.reservedID
 
 	switch info.actionNeeded {
-	case nothing, begin:
+	case nothing:
 		if reservedID == 0 {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: reservedID zero not expected %v", reservedID)
 		}
 		qr, err = qs.Execute(ctx, rs.Target, query.Sql, query.BindVariables, 0, reservedID, opts)
-	case reserve, reserveBegin:
+	case reserve:
 		qr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), query.Sql, query.BindVariables, 0, opts)
 		if err != nil && reservedID != 0 {
-			_ = stc.txConn.Release(ctx, session)
+			_ = stc.txConn.ReleaseLock(ctx, session)
 		}
 
 		if reservedID != 0 {
-			appendErr := session.AppendOrUpdate(&vtgatepb.Session_ShardSession{
+			session.SetLockSession(&vtgatepb.Session_ShardSession{
 				Target:      rs.Target,
 				ReservedId:  reservedID,
 				TabletAlias: alias,
-			}, stc.txConn.mode)
-			if appendErr != nil {
-				err = appendErr
-			}
+			})
 		}
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected actionNeeded on ScatterConn#ExecuteLock %v", info.actionNeeded)
@@ -649,6 +656,23 @@ func actionInfo(target *querypb.Target, session *SafeSession, autocommit bool) *
 		reservedID:    reservedID,
 		alias:         alias,
 	}
+}
+
+// lockInfo looks at the current session, and returns information about what needs to be done for this tablet
+func lockInfo(target *querypb.Target, session *SafeSession) (*shardActionInfo, error) {
+	if session.LockSession == nil {
+		return &shardActionInfo{actionNeeded: reserve}, nil
+	}
+
+	if !proto.Equal(target, session.LockSession.Target) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "target does match the existing lock session target: (%v, %v)", target, session.LockSession.Target)
+	}
+
+	return &shardActionInfo{
+		actionNeeded: nothing,
+		reservedID:   session.LockSession.ReservedId,
+		alias:        session.LockSession.TabletAlias,
+	}, nil
 }
 
 type shardActionInfo struct {
