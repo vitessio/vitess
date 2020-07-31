@@ -175,6 +175,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				err     error
 				opts    *querypb.ExecuteOptions
 				alias   *topodatapb.TabletAlias
+				qs      queryservice.QueryService
 			)
 			transactionID := info.transactionID
 			reservedID := info.reservedID
@@ -190,7 +191,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				}
 			}
 
-			qs, err := getQueryService(rs, info)
+			qs, err = getQueryService(rs, info)
 			if err != nil {
 				return nil, err
 			}
