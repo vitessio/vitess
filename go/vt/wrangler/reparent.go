@@ -849,7 +849,7 @@ func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard 
 	// lock the shard
 	actionMsg := "EmergencyReparentShard"
 	if masterElectTabletAlias != nil {
-		actionMsg = fmt.Sprintf("%v(%v)", actionMsg, topoproto.TabletAliasString(masterElectTabletAlias))
+		actionMsg += fmt.Sprintf("(%v)", topoproto.TabletAliasString(masterElectTabletAlias))
 	}
 	ctx, unlock, lockErr := wr.ts.LockShard(ctx, keyspace, shard, actionMsg)
 	if lockErr != nil {
@@ -883,13 +883,18 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		return err
 	}
 
+	var newMasterTabletAliasStr string
+	if masterElectTabletAlias != nil {
+		newMasterTabletAliasStr = topoproto.TabletAliasString(masterElectTabletAlias)
+		_, ok := tabletMap[newMasterTabletAliasStr]
+		if !ok {
+			return fmt.Errorf("master-elect tablet %v is not in the shard", newMasterTabletAliasStr)
+		}
+	}
+
 	statusMap, masterStatusMap, err := wr.stopReplicationAndBuildStatusMaps(ctx, ev, tabletMap, waitReplicasTimeout, unreachableReplicas)
 	if err != nil {
 		return err
-	}
-
-	if len(statusMap)+len(masterStatusMap) < len(tabletMap)-unreachableReplicas.Len()-1 {
-		return fmt.Errorf("didn't get enough tablet responses to find a candidate garaunteed to have newest transaction")
 	}
 
 	// Check we still have the topology lock.
@@ -905,42 +910,31 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		return fmt.Errorf("no valid candidates for emergency reparent")
 	}
 
-	var newMasterTabletAliasStr string
 	if masterElectTabletAlias != nil {
-		masterElectTabletAliasStr := topoproto.TabletAliasString(masterElectTabletAlias)
-		masterElectTabletInfo, ok := tabletMap[masterElectTabletAliasStr]
-		if !ok {
-			return fmt.Errorf("master-elect tablet %v is not in the shard", masterElectTabletAliasStr)
-		}
+		masterElectTabletInfo := tabletMap[newMasterTabletAliasStr]
 		ev.NewMaster = *masterElectTabletInfo.Tablet
-		if topoproto.TabletAliasEqual(shardInfo.MasterAlias, masterElectTabletAlias) {
-			return fmt.Errorf("master-elect tablet %v is already the master", topoproto.TabletAliasString(masterElectTabletAlias))
-		}
 		validCandidatesSet := sets.NewString(validCandidates...)
-		if !validCandidatesSet.Has(masterElectTabletAliasStr) {
+		if !validCandidatesSet.Has(newMasterTabletAliasStr) {
 			return fmt.Errorf("master elect is either not fully caught up, or has errant GTIDs")
 		}
 
 		// Wait for masterElect to catch up.
-		err = wr.WaitForRelayLogsToApply(ctx, masterElectTabletInfo, statusMap[masterElectTabletAliasStr])
+		err = wr.WaitForRelayLogsToApply(ctx, masterElectTabletInfo, statusMap[newMasterTabletAliasStr])
 		if err != nil {
 			return err
 		}
-		newMasterTabletAliasStr = masterElectTabletAliasStr
 	} else {
-		// race.
+		// User has not provided a master elect, so we run a race among our valid candidates.
+		// The first candidate (tablet) to succeed at applying its relay logs is the winner.
 		aliasChan := make(chan string)
-		groupCtx, groupCancel := context.WithCancel(ctx)
+		groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
 		defer groupCancel()
 		for _, candidate := range validCandidates {
 			go func(alias string) {
 				var resultAlias string
-				done := func() { aliasChan <- resultAlias }
-				defer done()
-				ctx, cancel := context.WithCancel(groupCtx)
-				defer cancel()
+				defer func() { aliasChan <- resultAlias }()
 
-				err = wr.WaitForRelayLogsToApply(ctx, tabletMap[alias], statusMap[alias])
+				err = wr.WaitForRelayLogsToApply(groupCtx, tabletMap[alias], statusMap[alias])
 				if err == nil {
 					resultAlias = alias
 				}
@@ -951,8 +945,10 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		var winningTabletAlias string
 		for alias := range aliasChan {
 			resultCounter++
-			if alias != "" {
+			if alias != "" && winningTabletAlias == "" {
 				winningTabletAlias = alias
+				// We only need the first tablet that succeeds, so we can cancel the other tablets
+				// and move along.
 				groupCancel()
 			}
 			if resultCounter == len(validCandidates) {
@@ -985,7 +981,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 
 	// Create a cancelable context for the following RPCs.
 	// If error conditions happen, we can cancel all outgoing RPCs.
-	replCtx, replCancel := context.WithCancel(ctx)
+	replCtx, replCancel := context.WithTimeout(ctx, waitReplicasTimeout)
 	defer replCancel()
 
 	// Reset replication on all replicas to point to the new master, and
@@ -1001,8 +997,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 
 	handleMaster := func(alias string, tabletInfo *topo.TabletInfo) {
 		err := fmt.Errorf("handleMaster never finished execution for alias: %v", alias)
-		sendErr := func() { errChan <- err }
-		defer sendErr()
+		defer func() { errChan <- err }()
 		defer wgMaster.Done()
 
 		wr.logger.Infof("populating reparent journal on new master %v", alias)
@@ -1011,10 +1006,9 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 			masterErr = err
 		}
 	}
-	handleReplicas := func(alias string, tabletInfo *topo.TabletInfo) {
+	handleReplica := func(alias string, tabletInfo *topo.TabletInfo) {
 		var err error
-		sendErr := func() { errChan <- err }
-		defer sendErr()
+		defer func() { errChan <- err }()
 
 		wr.logger.Infof("setting new master on replica %v", alias)
 		forceStart := false
@@ -1035,7 +1029,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 			wgMaster.Add(1)
 			go handleMaster(alias, tabletInfo)
 		} else if !unreachableReplicas.Has(alias) {
-			go handleReplicas(alias, tabletInfo)
+			go handleReplica(alias, tabletInfo)
 		}
 	}
 
@@ -1067,11 +1061,11 @@ func waitOnNMinusOneTablets(ctxCancel context.CancelFunc, tabletCount int, error
 
 	for err := range errorChannel {
 		responseCounter++
-		successCounter++
 		if err != nil {
 			errCounter++
-			successCounter--
 			rec.RecordError(err)
+		} else {
+			successCounter++
 		}
 		if responseCounter == tabletCount {
 			// We must wait for any cancelled goroutines to return their error.
@@ -1175,6 +1169,7 @@ func (wr *Wrangler) findValidReparentCandidates(statusMap map[string]*replicatio
 	for _, position := range positionMap {
 		if winningPosition.IsZero() {
 			winningPosition = position
+			continue
 		}
 		if position.AtLeast(winningPosition) {
 			winningPosition = position
@@ -1211,8 +1206,7 @@ func (wr *Wrangler) stopReplicationAndBuildStatusMaps(ctx context.Context, ev *e
 	defer groupCancel()
 	fillStatus := func(alias string, tabletInfo *topo.TabletInfo) {
 		err := fmt.Errorf("fillStatus did not successfully complete")
-		returnErr := func() { errChan <- err }
-		defer returnErr()
+		defer func() { errChan <- err }()
 
 		wr.logger.Infof("getting replication position from %v", alias)
 		ctx, cancel := context.WithCancel(groupCtx)
@@ -1237,7 +1231,7 @@ func (wr *Wrangler) stopReplicationAndBuildStatusMaps(ctx context.Context, ev *e
 			mu.Unlock()
 
 		default:
-			wr.logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", alias, err)
+			wr.logger.Warningf("failed to get replication status from %v: %v", alias, err)
 			err = fmt.Errorf("error when getting replication status for alias %v: %v", alias, err)
 		}
 	}
