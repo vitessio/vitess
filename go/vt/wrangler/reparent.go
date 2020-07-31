@@ -1017,7 +1017,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		}
 	}
 	waitOnTablets := func() *concurrency.AllErrorRecorder {
-		return waitOnNMinusOneTablets(replCancel, len(tabletMap)-unreachableReplicas.Len(), errChan)
+		return waitOnNMinusOneTablets(replCancel, len(tabletMap)-unreachableReplicas.Len(), errChan, len(tabletMap))
 	}
 
 	for alias, tabletInfo := range tabletMap {
@@ -1049,7 +1049,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 
 // waitOnNMinusOneTablets will wait until N-1 tablets have responded via a supplied error channel. In that case that N-1 tablets have responded,
 // the supplied cancel function will be called, and we will wait until N tablets return their errors, and then return an AllErrorRecorder to the caller.
-func waitOnNMinusOneTablets(ctxCancel context.CancelFunc, tabletCount int, errorChannel chan error) *concurrency.AllErrorRecorder {
+func waitOnNMinusOneTablets(ctxCancel context.CancelFunc, tabletCount int, errorChannel chan error, acceptableErrCnt int) *concurrency.AllErrorRecorder {
 	errCounter := 0
 	successCounter := 0
 	responseCounter := 0
@@ -1067,7 +1067,7 @@ func waitOnNMinusOneTablets(ctxCancel context.CancelFunc, tabletCount int, error
 			// We must wait for any cancelled goroutines to return their error.
 			break
 		}
-		if errCounter > 1 || successCounter == tabletCount-1 {
+		if errCounter > acceptableErrCnt || successCounter == tabletCount-1 {
 			ctxCancel()
 		}
 	}
@@ -1238,7 +1238,7 @@ func (wr *Wrangler) stopReplicationAndBuildStatusMaps(ctx context.Context, ev *e
 		}
 	}
 
-	errRecorder := waitOnNMinusOneTablets(groupCancel, len(tabletMap)-unreachableReplicas.Len(), errChan)
+	errRecorder := waitOnNMinusOneTablets(groupCancel, len(tabletMap)-unreachableReplicas.Len(), errChan, 1)
 
 	if len(errRecorder.Errors) > 1 {
 		return nil, nil, fmt.Errorf("encountered more than one error when trying to stop replication and get positions: %v", errRecorder.Error())
