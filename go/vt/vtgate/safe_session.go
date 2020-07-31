@@ -360,3 +360,24 @@ func (session *SafeSession) SetPreQueries() []string {
 	}
 	return result
 }
+
+//SetLockSession sets the lock session.
+func (session *SafeSession) SetLockSession(lockSession *vtgatepb.Session_ShardSession) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.LockSession = lockSession
+}
+
+//InLockSession returns whether locking is used on this session.
+func (session *SafeSession) InLockSession() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.LockSession != nil
+}
+
+//ResetLock resets the lock session
+func (session *SafeSession) ResetLock() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.LockSession = nil
+}
