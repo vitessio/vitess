@@ -211,7 +211,7 @@ func TestStartTxAndSetSystemVariableAndThenSuccessfulCommit(t *testing.T) {
 	assertMatches(t, conn, "select @@sql_safe_updates", "[[INT64(1)]]")
 }
 
-func TestSetSystemVarWithConnError(t *testing.T) {
+func TestSetSystemVarAutocommitWithConnError(t *testing.T) {
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,
@@ -243,7 +243,43 @@ func TestSetSystemVarWithConnError(t *testing.T) {
 	// subsequent queries on -80 will pass
 	assertMatches(t, conn, "select id from test where id = 2", "[]")
 	assertMatches(t, conn, "insert into test (id, val1) values (2, null)", "[]")
-	assertMatches(t, conn, "select id from test where id = 2", "[[INT64(2)]]")
+	assertMatches(t, conn, "select id, @@sql_safe_updates from test where id = 2", "[[INT64(2) INT64(1)]]")
+}
+
+func TestSetSystemVarInTxWithConnError(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	checkedExec(t, conn, "delete from test")
+	checkedExec(t, conn, "insert into test (id, val1) values (1, null), (4, null)")
+
+	checkedExec(t, conn, "set sql_safe_updates = 1") // this should force us into a reserved connection
+	qr := checkedExec(t, conn, "select connection_id() from test where id = 4")
+	checkedExec(t, conn, "begin")
+	checkedExec(t, conn, "insert into test (id, val1) values (2, null)")
+
+	// kill the mysql connection shard which has transaction open.
+	vttablet1 := clusterInstance.Keyspaces[0].Shards[1].MasterTablet() // 80-
+	_, err = vttablet1.VttabletProcess.QueryTablet(fmt.Sprintf("kill %s", qr.Rows[0][0].ToString()), keyspaceName, false)
+	require.NoError(t, err)
+
+	// query to -80 shard should pass and remain in transaction.
+	assertMatches(t, conn, "select id, val1 from test where id = 2", "[[INT64(2) NULL]]")
+	checkedExec(t, conn, "rollback")
+	assertMatches(t, conn, "select id, val1 from test where id = 2", "[]")
+
+	// first query to 80- shard will fail
+	_, err = exec(t, conn, "select @@sql_safe_updates from test where id = 4")
+	require.Error(t, err)
+
+	// subsequent queries on 80- will pass
+	assertMatches(t, conn, "select id, @@sql_safe_updates from test where id = 4", "[[INT64(4) INT64(1)]]")
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
