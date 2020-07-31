@@ -187,13 +187,9 @@ func buildLockingPrimitive(sel *sqlparser.Select, vschema ContextVSchema) (engin
 		return nil, err
 	}
 	return &engine.Lock{
-		Input: &engine.Send{
-			Keyspace:          ks,
-			TargetDestination: key.DestinationKeyspaceID{0},
-			Query:             sqlparser.String(sel),
-			IsDML:             false,
-			SingleShardOnly:   true,
-		},
+		Keyspace:          ks,
+		TargetDestination: key.DestinationKeyspaceID{0},
+		Query:             sqlparser.String(sel),
 	}, nil
 }
 

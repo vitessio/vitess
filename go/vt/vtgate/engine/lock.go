@@ -18,7 +18,11 @@ package engine
 
 import (
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 var _ Primitive = (*Lock)(nil)
@@ -26,49 +30,64 @@ var _ Primitive = (*Lock)(nil)
 //Lock will mark the session as needing a
 //reserved connection and then execute the inner Primitive
 type Lock struct {
-	Input Primitive
+	// Keyspace specifies the keyspace to send the query to.
+	Keyspace *vindexes.Keyspace
+
+	// TargetDestination specifies an explicit target destination to send the query to.
+	TargetDestination key.Destination
+
+	// Query specifies the query to be executed.
+	Query string
+
+	noInputs
+
+	noTxNeeded
 }
 
 // RouteType is part of the Primitive interface
 func (r *Lock) RouteType() string {
-	return "reserve"
+	return "lock"
 }
 
 // GetKeyspaceName is part of the Primitive interface
 func (r *Lock) GetKeyspaceName() string {
-	return r.Input.GetKeyspaceName()
+	return r.Keyspace.Name
 }
 
 // GetTableName is part of the Primitive interface
 func (r *Lock) GetTableName() string {
-	return r.Input.GetTableName()
+	return "dual"
 }
 
 // Execute is part of the Primitive interface
-func (r *Lock) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	vcursor.Session().NeedsReservedConn()
-	return r.Input.Execute(vcursor, bindVars, wantfields)
+func (r *Lock) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+	rss, _, err := vcursor.ResolveDestinations(r.Keyspace.Name, nil, []key.Destination{r.TargetDestination})
+	if err != nil {
+		return nil, err
+	}
+	if len(rss) != 1 {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "lock query cannot be routed to vttablet: %v", rss)
+	}
+
+	query := &querypb.BoundQuery{
+		Sql:           r.Query,
+		BindVariables: bindVars,
+	}
+	return vcursor.ExecuteLock(rss[0], query)
 }
 
 // StreamExecute is part of the Primitive interface
 func (r *Lock) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	vcursor.Session().NeedsReservedConn()
-	return r.Input.StreamExecute(vcursor, bindVars, wantfields, callback)
+	qr, err := r.Execute(vcursor, bindVars, wantfields)
+	if err != nil {
+		return err
+	}
+	return callback(qr)
 }
 
 // GetFields is part of the Primitive interface
 func (r *Lock) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return r.Input.GetFields(vcursor, bindVars)
-}
-
-// NeedsTransaction is part of the Primitive interface
-func (r *Lock) NeedsTransaction() bool {
-	return r.Input.NeedsTransaction()
-}
-
-// Inputs is part of the Primitive interface
-func (r *Lock) Inputs() []Primitive {
-	return []Primitive{}
+	return nil, vterrors.New(vtrpc.Code_UNIMPLEMENTED, "not implements in lock primitive")
 }
 
 func (r *Lock) description() PrimitiveDescription {
