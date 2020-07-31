@@ -192,7 +192,9 @@ func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEven
 		sql = event.Dml
 	}
 	if event.Type == binlogdatapb.VEventType_SAVEPOINT || vp.canAcceptStmtEvents {
+		start := time.Now()
 		_, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
+		vp.vr.stats.QueryTimings.Record(vp.phase, start)
 		vp.vr.stats.QueryCount.Add(vp.phase, 1)
 		return err
 	}
@@ -207,8 +209,10 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	for _, change := range rowEvent.RowChanges {
 		_, err := tplan.applyChange(change, func(sql string) (*sqltypes.Result, error) {
 			stats := NewVrLogStats("ROWCHANGE")
+			start := time.Now()
 			qr, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
 			vp.vr.stats.QueryCount.Add(vp.phase, 1)
+			vp.vr.stats.QueryTimings.Record(vp.phase, start)
 			stats.Send(sql)
 			return qr, err
 		})

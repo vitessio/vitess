@@ -102,7 +102,7 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, cell str
 		vschemaErrors:  env.Exporter().NewCounter("VSchemaErrors", "Count of VSchema errors"),
 		vschemaUpdates: env.Exporter().NewCounter("VSchemaUpdates", "Count of VSchema updates. Does not include errors"),
 
-		vstreamerPhaseTimings:    env.Exporter().NewTimings("VStreamerCopyTiming", "Time taken for bulk copy during vstream copy", "Copy Timings"),
+		vstreamerPhaseTimings:    env.Exporter().NewTimings("VStreamerPhaseTiming", "Time taken for different phases during vstream copy", "phase-timing"),
 		vstreamerEventsStreamed:  env.Exporter().NewCounter("VStreamerEventsStreamed", "Count of events streamed in VStream API"),
 		vstreamerPacketSize:      env.Exporter().NewGaugeFunc("VStreamPacketSize", "Max packet size for sending vstreamer events", getPacketSize),
 		vstreamerNumPackets:      env.Exporter().NewCounter("VStreamerNumPackets", "Number of packets in vstreamer"),

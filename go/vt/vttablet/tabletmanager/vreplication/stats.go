@@ -128,13 +128,12 @@ func (st *vrStats) register() {
 			defer st.mu.Unlock()
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
-				for phase, t := range ct.blpStats.PhaseTimings.Counts() {
-					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+phase] = t
+				for phase, t := range ct.blpStats.PhaseTimings.Histograms() {
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+phase] = t.Total()
 				}
 			}
 			return result
 		})
-
 	stats.NewCounterFunc(
 		"VReplicationPhaseTimingsTotal",
 		"vreplication per phase timings aggregated across all phases and streams",
@@ -143,8 +142,24 @@ func (st *vrStats) register() {
 			defer st.mu.Unlock()
 			result := int64(0)
 			for _, ct := range st.controllers {
-				for _, t := range ct.blpStats.PhaseTimings.Counts() {
-					result += t
+				for _, t := range ct.blpStats.PhaseTimings.Histograms() {
+					result += t.Total()
+				}
+			}
+			return result
+		})
+
+	stats.NewGaugesFuncWithMultiLabels(
+		"VReplicationPhaseTimingsCounts",
+		"vreplication per phase count of timings per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts", "phase"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				for phase, t := range ct.blpStats.PhaseTimings.Counts() {
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+phase] = t
 				}
 			}
 			return result
