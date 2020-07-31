@@ -509,7 +509,7 @@ func (stc *ScatterConn) multiGoTransaction(
 		startTime, statsKey := stc.startAction(name, rs.Target)
 		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
-		shardActionInfo := transactionInfo(rs.Target, session, autocommit)
+		shardActionInfo := actionInfo(rs.Target, session, autocommit)
 		updated, err := action(rs, i, shardActionInfo)
 		if updated == nil {
 			return
@@ -550,8 +550,77 @@ func (stc *ScatterConn) multiGoTransaction(
 	return allErrors
 }
 
-// transactionInfo looks at the current session, and returns information about what needs to be done for this tablet
-func transactionInfo(target *querypb.Target, session *SafeSession, autocommit bool) *shardActionInfo {
+// ExecuteLock performs the requested 'action' on the specified
+// ResolvedShard. If the lock session already has a reserved connection,
+// it reuses it. Otherwise open a new reserved connection.
+// The action function must match the shardActionTransactionFunc signature.
+//
+// It returns an error recorder in which each shard error is recorded positionally,
+// i.e. if rss[2] had an error, then the error recorder will store that error
+// in the second position.
+func (stc *ScatterConn) ExecuteLock(
+	ctx context.Context,
+	rs *srvtopo.ResolvedShard,
+	query *querypb.BoundQuery,
+	session *SafeSession,
+	action shardActionTransactionFunc,
+) (*sqltypes.Result, error) {
+
+	var (
+		qr    *sqltypes.Result
+		err   error
+		opts  *querypb.ExecuteOptions
+		alias *topodatapb.TabletAlias
+	)
+	allErrors := new(concurrency.AllErrorRecorder)
+	startTime, statsKey := stc.startAction("ExecuteLock", rs.Target)
+	defer stc.endAction(startTime, allErrors, statsKey, &err, session)
+
+	if session != nil && session.Session != nil {
+		opts = session.Session.Options
+	}
+
+	info := actionInfo(rs.Target, session, false)
+	qs, err := getQueryService(rs, info)
+	if err != nil {
+		return nil, err
+	}
+	reservedID := info.reservedID
+
+	switch info.actionNeeded {
+	case nothing, begin:
+		if reservedID == 0 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: reservedID zero not expected %v", reservedID)
+		}
+		qr, err = qs.Execute(ctx, rs.Target, query.Sql, query.BindVariables, 0, reservedID, opts)
+	case reserve, reserveBegin:
+		qr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), query.Sql, query.BindVariables, 0, opts)
+		if err != nil && reservedID != 0 {
+			_ = stc.txConn.Release(ctx, session)
+		}
+
+		if reservedID != 0 {
+			appendErr := session.AppendOrUpdate(&vtgatepb.Session_ShardSession{
+				Target:      rs.Target,
+				ReservedId:  reservedID,
+				TabletAlias: alias,
+			}, stc.txConn.mode)
+			if appendErr != nil {
+				err = appendErr
+			}
+		}
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected actionNeeded on ScatterConn#ExecuteLock %v", info.actionNeeded)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	return qr, err
+}
+
+// actionInfo looks at the current session, and returns information about what needs to be done for this tablet
+func actionInfo(target *querypb.Target, session *SafeSession, autocommit bool) *shardActionInfo {
 	if !(session.InTransaction() || session.InReservedConn()) {
 		return &shardActionInfo{}
 	}
