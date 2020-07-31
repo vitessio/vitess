@@ -49,8 +49,8 @@ func init() {
 	addCommand("Shards", command{
 		"EmergencyReparentShard",
 		commandEmergencyReparentShard,
-		"-keyspace_shard=<keyspace/shard> [-new_master=<tablet alias>] [-wait_replicas_timeout=<duration>] [-ignore_unreachable_tablets=<tablet list>]",
-		"Reparents the shard to the new master. Assumes the old master is dead and not responsding."})
+		"-keyspace_shard=<keyspace/shard> [-new_master=<tablet alias>] [-wait_replicas_timeout=<duration>] [-ignore_replicas=<tablet alias list>]",
+		"Reparents the shard to the new master. Assumes the old master is dead and not responding."})
 	addCommand("Shards", command{
 		"TabletExternallyReparented",
 		commandTabletExternallyReparented,
@@ -166,8 +166,8 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 		*waitReplicasTimeout = *deprecatedTimeout
 	}
 	keyspaceShard := subFlags.String("keyspace_shard", "", "keyspace/shard of the shard that needs to be reparented")
-	newMaster := subFlags.String("new_master", "", "alias of a tablet that should be the new master")
-	ignoreUnreachableReplicasList := subFlags.String("ignore_unreachable_replicas", "", "list of unreachable replica tablet aliases to ignore during emergency reparent")
+	newMaster := subFlags.String("new_master", "", "optional alias of a tablet that should be the new master. If not specified, Vitess will select the best candidate")
+	ignoreReplicasList := subFlags.String("ignore_replicas", "", "comma-separated list of replica tablet aliases to ignore during emergency reparent")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -193,7 +193,7 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 			return err
 		}
 	}
-	unreachableReplicas := topoproto.ParseTabletSet(*ignoreUnreachableReplicasList)
+	unreachableReplicas := topoproto.ParseTabletSet(*ignoreReplicasList)
 	return wr.EmergencyReparentShard(ctx, keyspace, shard, tabletAlias, *waitReplicasTimeout, unreachableReplicas)
 }
 
