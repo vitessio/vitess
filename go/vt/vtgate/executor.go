@@ -100,6 +100,7 @@ type Executor struct {
 var executorOnce sync.Once
 
 const pathQueryPlans = "/debug/query_plans"
+
 const pathScatterStats = "/debug/scatter_stats"
 const pathVSchema = "/debug/vschema"
 
@@ -1617,4 +1618,9 @@ func (e *Executor) ExecuteMultiShard(ctx context.Context, rss []*srvtopo.Resolve
 // StreamExecuteMulti implements the IExecutor interface
 func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
 	return e.scatterConn.StreamExecuteMulti(ctx, query, rss, vars, options, callback)
+}
+
+//ExecuteLock implments the IExecutor interface
+func (e *Executor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession) (*sqltypes.Result, error) {
+	return e.scatterConn.ExecuteLock(ctx, rs, query, session)
 }
