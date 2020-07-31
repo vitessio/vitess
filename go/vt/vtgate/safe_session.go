@@ -381,3 +381,18 @@ func (session *SafeSession) ResetLock() {
 	defer session.mu.Unlock()
 	session.LockSession = nil
 }
+
+//ResetAll resets the shard sessions and lock session.
+func (session *SafeSession) ResetAll() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.mustRollback = false
+	session.autocommitState = notAutocommittable
+	session.Session.InTransaction = false
+	session.commitOrder = vtgatepb.CommitOrder_NORMAL
+	session.Savepoints = nil
+	session.ShardSessions = nil
+	session.PreSessions = nil
+	session.PostSessions = nil
+	session.LockSession = nil
+}

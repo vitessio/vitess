@@ -344,7 +344,7 @@ func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession
 // CloseSession releases the current connection, which rollbacks open transactions and closes reserved connections.
 // It is called then the MySQL servers closes the connection to its client.
 func (e *Executor) CloseSession(ctx context.Context, safeSession *SafeSession) error {
-	return e.txConn.Release(ctx, safeSession)
+	return e.txConn.ReleaseAll(ctx, safeSession)
 }
 
 func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) (*sqltypes.Result, error) {
