@@ -921,6 +921,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	// We run a race among our valid candidates.
 	// The first candidate (tablet) to succeed at applying its relay logs is the winner.
 	aliasChan := make(chan string)
+	rec := &concurrency.AllErrorRecorder{}
 	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
 	defer groupCancel()
 	for candidate := range validCandidatesSet {
@@ -931,6 +932,8 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 			err = wr.WaitForRelayLogsToApply(groupCtx, tabletMap[alias], statusMap[alias])
 			if err == nil {
 				resultAlias = alias
+			} else {
+				rec.RecordError(err)
 			}
 		}(candidate)
 	}
@@ -950,7 +953,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		}
 	}
 	if winningTabletAlias == "" {
-		return fmt.Errorf("could not find a valid candidate for new master that applied its relay logs under the provided wait_replicas_timeout")
+		return fmt.Errorf("could not find a valid candidate for new master that applied its relay logs under the provided wait_replicas_timeout: %v", rec.Error())
 	}
 	newMasterTabletAliasStr = winningTabletAlias
 
