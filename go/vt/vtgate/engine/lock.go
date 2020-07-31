@@ -45,23 +45,23 @@ type Lock struct {
 }
 
 // RouteType is part of the Primitive interface
-func (r *Lock) RouteType() string {
+func (l *Lock) RouteType() string {
 	return "lock"
 }
 
 // GetKeyspaceName is part of the Primitive interface
-func (r *Lock) GetKeyspaceName() string {
-	return r.Keyspace.Name
+func (l *Lock) GetKeyspaceName() string {
+	return l.Keyspace.Name
 }
 
 // GetTableName is part of the Primitive interface
-func (r *Lock) GetTableName() string {
+func (l *Lock) GetTableName() string {
 	return "dual"
 }
 
 // Execute is part of the Primitive interface
-func (r *Lock) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(r.Keyspace.Name, nil, []key.Destination{r.TargetDestination})
+func (l *Lock) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+	rss, _, err := vcursor.ResolveDestinations(l.Keyspace.Name, nil, []key.Destination{l.TargetDestination})
 	if err != nil {
 		return nil, err
 	}
@@ -70,15 +70,15 @@ func (r *Lock) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariabl
 	}
 
 	query := &querypb.BoundQuery{
-		Sql:           r.Query,
+		Sql:           l.Query,
 		BindVariables: bindVars,
 	}
 	return vcursor.ExecuteLock(rss[0], query)
 }
 
 // StreamExecute is part of the Primitive interface
-func (r *Lock) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	qr, err := r.Execute(vcursor, bindVars, wantfields)
+func (l *Lock) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	qr, err := l.Execute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
@@ -86,12 +86,18 @@ func (r *Lock) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindV
 }
 
 // GetFields is part of the Primitive interface
-func (r *Lock) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (l *Lock) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.New(vtrpc.Code_UNIMPLEMENTED, "not implements in lock primitive")
 }
 
-func (r *Lock) description() PrimitiveDescription {
+func (l *Lock) description() PrimitiveDescription {
+	other := map[string]interface{}{
+		"Query": l.Query,
+	}
 	return PrimitiveDescription{
-		OperatorType: "Lock",
+		OperatorType:      "Send",
+		Keyspace:          l.Keyspace,
+		TargetDestination: l.TargetDestination,
+		Other:             other,
 	}
 }
