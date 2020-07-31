@@ -124,6 +124,7 @@ func TestReparentDownMaster(t *testing.T) {
 		"-keyspace_shard", keyspaceShard,
 		"-new_master", tablet62044.Alias,
 		"-wait_replicas_timeout", "30s")
+	require.Nil(t, err)
 	require.NoError(t, err)
 
 	// Check that old master tablet is left around for human intervention.
@@ -347,7 +348,7 @@ func TestReparentUnreachableReplicas(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
 		"EmergencyReparentShard",
 		"-keyspace_shard", keyspaceShard,
-		"-ignore_unreachable_replicas", tablet41983.Alias,
+		"-ignore_replicas", tablet41983.Alias,
 		"-wait_replicas_timeout", "30s")
 	require.Nil(t, err)
 
