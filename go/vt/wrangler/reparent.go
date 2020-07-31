@@ -910,56 +910,49 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		return fmt.Errorf("no valid candidates for emergency reparent")
 	}
 
+	validCandidatesSet := sets.NewString(validCandidates...)
 	if masterElectTabletAlias != nil {
-		masterElectTabletInfo := tabletMap[newMasterTabletAliasStr]
-		ev.NewMaster = *masterElectTabletInfo.Tablet
-		validCandidatesSet := sets.NewString(validCandidates...)
 		if !validCandidatesSet.Has(newMasterTabletAliasStr) {
 			return fmt.Errorf("master elect is either not fully caught up, or has errant GTIDs")
 		}
-
-		// Wait for masterElect to catch up.
-		err = wr.WaitForRelayLogsToApply(ctx, masterElectTabletInfo, statusMap[newMasterTabletAliasStr])
-		if err != nil {
-			return err
-		}
-	} else {
-		// User has not provided a master elect, so we run a race among our valid candidates.
-		// The first candidate (tablet) to succeed at applying its relay logs is the winner.
-		aliasChan := make(chan string)
-		groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
-		defer groupCancel()
-		for _, candidate := range validCandidates {
-			go func(alias string) {
-				var resultAlias string
-				defer func() { aliasChan <- resultAlias }()
-
-				err = wr.WaitForRelayLogsToApply(groupCtx, tabletMap[alias], statusMap[alias])
-				if err == nil {
-					resultAlias = alias
-				}
-			}(candidate)
-		}
-
-		resultCounter := 0
-		var winningTabletAlias string
-		for alias := range aliasChan {
-			resultCounter++
-			if alias != "" && winningTabletAlias == "" {
-				winningTabletAlias = alias
-				// We only need the first tablet that succeeds, so we can cancel the other tablets
-				// and move along.
-				groupCancel()
-			}
-			if resultCounter == len(validCandidates) {
-				break
-			}
-		}
-		if winningTabletAlias == "" {
-			return fmt.Errorf("could not find a valid candidate for new master that applied its relay logs under the provided wait_replicas_timeout")
-		}
-		newMasterTabletAliasStr = winningTabletAlias
+		validCandidatesSet = sets.NewString(newMasterTabletAliasStr)
 	}
+
+	// We run a race among our valid candidates.
+	// The first candidate (tablet) to succeed at applying its relay logs is the winner.
+	aliasChan := make(chan string)
+	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
+	defer groupCancel()
+	for candidate := range validCandidatesSet {
+		go func(alias string) {
+			var resultAlias string
+			defer func() { aliasChan <- resultAlias }()
+
+			err = wr.WaitForRelayLogsToApply(groupCtx, tabletMap[alias], statusMap[alias])
+			if err == nil {
+				resultAlias = alias
+			}
+		}(candidate)
+	}
+
+	resultCounter := 0
+	var winningTabletAlias string
+	for alias := range aliasChan {
+		resultCounter++
+		if alias != "" && winningTabletAlias == "" {
+			winningTabletAlias = alias
+			// We only need the first tablet that succeeds, so we can cancel the other tablets
+			// and move along.
+			groupCancel()
+		}
+		if resultCounter == validCandidatesSet.Len() {
+			break
+		}
+	}
+	if winningTabletAlias == "" {
+		return fmt.Errorf("could not find a valid candidate for new master that applied its relay logs under the provided wait_replicas_timeout")
+	}
+	newMasterTabletAliasStr = winningTabletAlias
 
 	// Check we still have the topology lock.
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
