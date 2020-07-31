@@ -21,58 +21,58 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-var _ Primitive = (*Reserve)(nil)
+var _ Primitive = (*Lock)(nil)
 
-//Reserve will mark the session as needing a
+//Lock will mark the session as needing a
 //reserved connection and then execute the inner Primitive
-type Reserve struct {
+type Lock struct {
 	Input Primitive
 }
 
 // RouteType is part of the Primitive interface
-func (r *Reserve) RouteType() string {
+func (r *Lock) RouteType() string {
 	return "reserve"
 }
 
 // GetKeyspaceName is part of the Primitive interface
-func (r *Reserve) GetKeyspaceName() string {
+func (r *Lock) GetKeyspaceName() string {
 	return r.Input.GetKeyspaceName()
 }
 
 // GetTableName is part of the Primitive interface
-func (r *Reserve) GetTableName() string {
+func (r *Lock) GetTableName() string {
 	return r.Input.GetTableName()
 }
 
 // Execute is part of the Primitive interface
-func (r *Reserve) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (r *Lock) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	vcursor.Session().NeedsReservedConn()
 	return r.Input.Execute(vcursor, bindVars, wantfields)
 }
 
 // StreamExecute is part of the Primitive interface
-func (r *Reserve) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (r *Lock) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	vcursor.Session().NeedsReservedConn()
 	return r.Input.StreamExecute(vcursor, bindVars, wantfields, callback)
 }
 
 // GetFields is part of the Primitive interface
-func (r *Reserve) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (r *Lock) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return r.Input.GetFields(vcursor, bindVars)
 }
 
 // NeedsTransaction is part of the Primitive interface
-func (r *Reserve) NeedsTransaction() bool {
+func (r *Lock) NeedsTransaction() bool {
 	return r.Input.NeedsTransaction()
 }
 
 // Inputs is part of the Primitive interface
-func (r *Reserve) Inputs() []Primitive {
+func (r *Lock) Inputs() []Primitive {
 	return []Primitive{}
 }
 
-func (r *Reserve) description() PrimitiveDescription {
+func (r *Lock) description() PrimitiveDescription {
 	return PrimitiveDescription{
-		OperatorType: "Reserve",
+		OperatorType: "Lock",
 	}
 }
