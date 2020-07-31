@@ -60,6 +60,7 @@ type iExecute interface {
 	Execute(ctx context.Context, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 	ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool) (qr *sqltypes.Result, errs []error)
 	StreamExecuteMulti(ctx context.Context, s string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error
+	ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession) (*sqltypes.Result, error)
 
 	// TODO: remove when resolver is gone
 	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
@@ -91,10 +92,6 @@ type vcursorImpl struct {
 	ignoreMaxMemoryRows   bool
 	vschema               *vindexes.VSchema
 	vm                    VSchemaOperator
-}
-
-func (vc *vcursorImpl) ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery) (*sqltypes.Result, error) {
-	panic("implement me")
 }
 
 func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
@@ -320,6 +317,11 @@ func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries [
 		vc.rollbackOnPartialExec = true
 	}
 	return qr, errs
+}
+
+func (vc *vcursorImpl) ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery) (*sqltypes.Result, error) {
+	query.Sql = vc.marginComments.Leading + query.Sql + vc.marginComments.Trailing
+	return vc.executor.ExecuteLock(vc.ctx, rs, query, vc.safeSession)
 }
 
 // AutocommitApproval is part of the engine.VCursor interface.
