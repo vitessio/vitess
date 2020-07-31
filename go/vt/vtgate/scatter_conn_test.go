@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/key"
 
 	"vitess.io/vitess/go/test/utils"
@@ -279,4 +280,22 @@ func TestReservedBeginTableDriven(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestReservedConnFail(t *testing.T) {
+	keyspace := "keyspace"
+	createSandbox(keyspace)
+	hc := discovery.NewFakeHealthCheck()
+	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sbc0 := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
+	_ = hc.AddTestTablet("aa", "1", 1, keyspace, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
+	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+
+	session := NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
+	destinations := []key.Destination{key.DestinationShard("0")}
+	executeOnShards(t, res, keyspace, sc, session, destinations)
+	assert.Equal(t, 1, len(session.ShardSessions))
+	sbc0.ShardErr = mysql.NewSQLError(mysql.CRServerGone, mysql.SSUnknownSQLState, "lost connection")
+	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
+	assert.Zero(t, len(session.ShardSessions))
 }
