@@ -283,7 +283,9 @@ func (txc *TxConn) ReleaseAll(ctx context.Context, session *SafeSession) error {
 
 	allsessions := append(session.PreSessions, session.ShardSessions...)
 	allsessions = append(allsessions, session.PostSessions...)
-	allsessions = append(allsessions, session.LockSession)
+	if session.LockSession != nil {
+		allsessions = append(allsessions, session.LockSession)
+	}
 
 	return txc.runSessions(ctx, allsessions, func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
 		if s.ReservedId == 0 && s.TransactionId == 0 {
