@@ -61,7 +61,7 @@ const (
 	jsonContentType = "application/json; charset=utf-8"
 )
 
-// TabletStats represents the realtime stats of a tablet
+// TabletStats represents realtime stats from a discovery.LegacyTabletStats struct.
 type TabletStats struct {
 	LastError     string                 `json:"last_error,omitempty"`
 	RealtimeStats *querypb.RealtimeStats `json:"realtime_stats,omitempty"`
@@ -69,7 +69,7 @@ type TabletStats struct {
 	Up            bool                   `json:"up,omitempty"`
 }
 
-// TabletWithStatsAndURL wraps topo.Tablet and adds a URL property and discovery.TabletStats.
+// TabletWithStatsAndURL wraps topo.Tablet, adding a URL property and optional realtime stats.
 type TabletWithStatsAndURL struct {
 	Alias               *topodatapb.TabletAlias `json:"alias,omitempty"`
 	Hostname            string                  `json:"hostname,omitempty"`
