@@ -241,11 +241,6 @@ func (tm *TabletManager) InitMaster(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	// If using semi-sync, we need to enable it before going read-write.
-	if err := tm.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
-		return "", err
-	}
-
 	// Set the server read-write, from now on we can accept real
 	// client writes. Note that if semi-sync replication is enabled,
 	// we'll still need some replicas to be able to commit transactions.
@@ -256,6 +251,13 @@ func (tm *TabletManager) InitMaster(ctx context.Context) (string, error) {
 	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_MASTER); err != nil {
 		return "", err
 	}
+
+	// Enforce semi-sync after changing the type to master. Otherwise, the
+	// master will hang while trying to create the database.
+	if err := tm.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
+		return "", err
+	}
+
 	return mysql.EncodePosition(pos), nil
 }
 
