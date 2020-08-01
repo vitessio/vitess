@@ -42,6 +42,7 @@ import (
 
 	"vitess.io/vitess/go/vt/mysqlctl"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vttime"
 )
@@ -60,8 +61,15 @@ const (
 	jsonContentType = "application/json; charset=utf-8"
 )
 
-// TabletWithURL wraps topo.Tablet and adds a URL property.
-type TabletWithURL struct {
+// TabletStats represents the realtime stats of a tablet
+type TabletStats struct {
+	Up       bool                   `json:"up,omitempty"`
+	Serving  bool                   `json:"serving,omitempty"`
+	Realtime *querypb.RealtimeStats `json:"realtime,omitempty"`
+}
+
+// TabletWithStatsAndURL wraps topo.Tablet and adds a URL property and discovery.TabletStats.
+type TabletWithStatsAndURL struct {
 	Alias               *topodatapb.TabletAlias `json:"alias,omitempty"`
 	Hostname            string                  `json:"hostname,omitempty"`
 	PortMap             map[string]int32        `json:"port_map,omitempty"`
@@ -75,6 +83,44 @@ type TabletWithURL struct {
 	MysqlPort           int32                   `json:"mysql_port,omitempty"`
 	MasterTermStartTime *vttime.Time            `json:"master_term_start_time,omitempty"`
 	URL                 string                  `json:"url,omitempty"`
+	Stats               *TabletStats            `json:"stats,omitempty"`
+}
+
+func NewTabletWithStatsAndURL(t *topodatapb.Tablet, realtimeStats *realtimeStats) (*TabletWithStatsAndURL, error) {
+	tab := &TabletWithStatsAndURL{
+		Alias:               t.Alias,
+		Hostname:            t.Hostname,
+		PortMap:             t.PortMap,
+		Keyspace:            t.Keyspace,
+		Shard:               t.Shard,
+		KeyRange:            t.KeyRange,
+		Type:                t.Type,
+		DbNameOverride:      t.DbNameOverride,
+		Tags:                t.Tags,
+		MysqlHostname:       t.MysqlHostname,
+		MysqlPort:           t.MysqlPort,
+		MasterTermStartTime: t.MasterTermStartTime,
+	}
+
+	if *proxyTablets {
+		tab.URL = fmt.Sprintf("/vttablet/%s-%d", t.Alias.Cell, t.Alias.Uid)
+	} else {
+		tab.URL = "http://" + netutil.JoinHostPort(t.Hostname, t.PortMap["vt"])
+	}
+
+	if realtimeStats != nil {
+		tabletStats, err := realtimeStats.tabletStats(tab.Alias)
+		if err != nil {
+			return nil, err
+		}
+		tab.Stats = &TabletStats{
+			Up:       tabletStats.Up,
+			Serving:  tabletStats.Serving,
+			Realtime: tabletStats.Stats,
+		}
+	}
+
+	return tab, nil
 }
 
 func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...interface{}) {
@@ -218,7 +264,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 				return nil, err
 			}
 		}
-		tablets := [](*topodatapb.Tablet){}
+		tablets := [](*TabletWithStatsAndURL){}
 		for _, shard := range shardNames {
 			// Get tablets for this shard.
 			tabletAliases, err := ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
@@ -230,7 +276,11 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 				if err != nil {
 					return nil, err
 				}
-				tablets = append(tablets, t.Tablet)
+				tablet, err := NewTabletWithStatsAndURL(t.Tablet, realtimeStats)
+				if err != nil {
+					return nil, err
+				}
+				tablets = append(tablets, tablet)
 			}
 		}
 		return tablets, nil
@@ -394,26 +444,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 			return nil, err
 		}
 
-		tab := &TabletWithURL{
-			Alias:               t.Alias,
-			Hostname:            t.Hostname,
-			PortMap:             t.PortMap,
-			Keyspace:            t.Keyspace,
-			Shard:               t.Shard,
-			KeyRange:            t.KeyRange,
-			Type:                t.Type,
-			DbNameOverride:      t.DbNameOverride,
-			Tags:                t.Tags,
-			MysqlHostname:       t.MysqlHostname,
-			MysqlPort:           t.MysqlPort,
-			MasterTermStartTime: t.MasterTermStartTime,
-		}
-		if *proxyTablets {
-			tab.URL = fmt.Sprintf("/vttablet/%s-%d", t.Alias.Cell, t.Alias.Uid)
-		} else {
-			tab.URL = "http://" + netutil.JoinHostPort(t.Hostname, t.PortMap["vt"])
-		}
-		return tab, nil
+		return NewTabletWithStatsAndURL(t.Tablet, nil)
 	})
 
 	// Healthcheck real time status per (cell, keyspace, tablet type, metric).
