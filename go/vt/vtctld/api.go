@@ -63,9 +63,9 @@ const (
 
 // TabletStats represents the realtime stats of a tablet
 type TabletStats struct {
-	Up       bool                   `json:"up,omitempty"`
-	Serving  bool                   `json:"serving,omitempty"`
-	Realtime *querypb.RealtimeStats `json:"realtime,omitempty"`
+	RealtimeStats *querypb.RealtimeStats `json:"realtime_stats,omitempty"`
+	Serving       bool                   `json:"serving,omitempty"`
+	Up            bool                   `json:"up,omitempty"`
 }
 
 // TabletWithStatsAndURL wraps topo.Tablet and adds a URL property and discovery.TabletStats.
@@ -82,12 +82,12 @@ type TabletWithStatsAndURL struct {
 	MysqlHostname       string                  `json:"mysql_hostname,omitempty"`
 	MysqlPort           int32                   `json:"mysql_port,omitempty"`
 	MasterTermStartTime *vttime.Time            `json:"master_term_start_time,omitempty"`
-	URL                 string                  `json:"url,omitempty"`
 	Stats               *TabletStats            `json:"stats,omitempty"`
+	URL                 string                  `json:"url,omitempty"`
 }
 
 func NewTabletWithStatsAndURL(t *topodatapb.Tablet, realtimeStats *realtimeStats) (*TabletWithStatsAndURL, error) {
-	tab := &TabletWithStatsAndURL{
+	tablet := &TabletWithStatsAndURL{
 		Alias:               t.Alias,
 		Hostname:            t.Hostname,
 		PortMap:             t.PortMap,
@@ -103,24 +103,24 @@ func NewTabletWithStatsAndURL(t *topodatapb.Tablet, realtimeStats *realtimeStats
 	}
 
 	if *proxyTablets {
-		tab.URL = fmt.Sprintf("/vttablet/%s-%d", t.Alias.Cell, t.Alias.Uid)
+		tablet.URL = fmt.Sprintf("/vttablet/%s-%d", t.Alias.Cell, t.Alias.Uid)
 	} else {
-		tab.URL = "http://" + netutil.JoinHostPort(t.Hostname, t.PortMap["vt"])
+		tablet.URL = "http://" + netutil.JoinHostPort(t.Hostname, t.PortMap["vt"])
 	}
 
 	if realtimeStats != nil {
-		tabletStats, err := realtimeStats.tabletStats(tab.Alias)
+		stats, err := realtimeStats.tabletStats(tablet.Alias)
 		if err != nil {
 			return nil, err
 		}
-		tab.Stats = &TabletStats{
-			Up:       tabletStats.Up,
-			Serving:  tabletStats.Serving,
-			Realtime: tabletStats.Stats,
+		tablet.Stats = &TabletStats{
+			Up:            stats.Up,
+			Serving:       stats.Serving,
+			RealtimeStats: stats.Stats,
 		}
 	}
 
-	return tab, nil
+	return tablet, nil
 }
 
 func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...interface{}) {
@@ -264,10 +264,23 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 				return nil, err
 			}
 		}
+
+		if err := r.ParseForm(); err != nil {
+			return nil, err
+		}
+		cell := r.FormValue("cell")
+		cells := r.FormValue("cells")
+		filterCells := []string{} // empty == all cells
+		if cell != "" {
+			filterCells[0] = cell // single cell
+		} else if cells != "" {
+			filterCells = strings.Split(cells, ",") // list of cells
+		}
+
 		tablets := [](*TabletWithStatsAndURL){}
 		for _, shard := range shardNames {
 			// Get tablets for this shard.
-			tabletAliases, err := ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
+			tabletAliases, err := ts.FindAllTabletAliasesInShardByCell(ctx, keyspace, shard, filterCells)
 			if err != nil && !topo.IsErrType(err, topo.PartialResult) {
 				return nil, err
 			}

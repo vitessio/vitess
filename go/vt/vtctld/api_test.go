@@ -139,6 +139,20 @@ func TestAPI(t *testing.T) {
 		// Cells
 		{"GET", "cells", "", `["cell1","cell2"]`},
 
+		// Keyspace
+		{"GET", "keyspace/test_ks/tablets/", "", `[
+		]`},
+		{"GET", "keyspace/test_ks/tablets/?cell=cell1", "", `[
+		]`},
+		{"GET", "keyspace/test_ks/tablets/?cells=cell1,cell2", "", `[
+		]`},
+		{"GET", "keyspace/test_ks/tablets/test_shard", "", `[
+		]`},
+		{"GET", "keyspace/test_ks/tablets/test_shard?cell=cell1", "", `[
+		]`},
+		{"GET", "keyspace/test_ks/tablets/test_shard?cells=cell1,cell2", "", `[
+		]`},
+
 		// Keyspaces
 		{"GET", "keyspaces", "", `["ks1", "ks3"]`},
 		{"GET", "keyspaces/ks1", "", `{
