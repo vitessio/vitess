@@ -63,6 +63,7 @@ const (
 
 // TabletStats represents the realtime stats of a tablet
 type TabletStats struct {
+	LastError     string                 `json:"last_error,omitempty"`
 	RealtimeStats *querypb.RealtimeStats `json:"realtime_stats,omitempty"`
 	Serving       bool                   `json:"serving,omitempty"`
 	Up            bool                   `json:"up,omitempty"`
@@ -103,7 +104,7 @@ func NewTabletWithStatsAndURL(t *topodatapb.Tablet, realtimeStats *realtimeStats
 	}
 
 	if *proxyTablets {
-		tablet.URL = fmt.Sprintf("/vttablet/%s-%d", t.Alias.Cell, t.Alias.Uid)
+		tab.URL = fmt.Sprintf("/vttablet/%s-%d/debug/status", t.Alias.Cell, t.Alias.Uid)
 	} else {
 		tablet.URL = "http://" + netutil.JoinHostPort(t.Hostname, t.PortMap["vt"])
 	}
@@ -114,9 +115,10 @@ func NewTabletWithStatsAndURL(t *topodatapb.Tablet, realtimeStats *realtimeStats
 			return nil, err
 		}
 		tablet.Stats = &TabletStats{
-			Up:            stats.Up,
-			Serving:       stats.Serving,
+			LastError:     stats.LastError.Error(),
 			RealtimeStats: stats.Stats,
+			Serving:       stats.Serving,
+			Up:            stats.Up,
 		}
 	}
 
