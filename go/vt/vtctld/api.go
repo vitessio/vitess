@@ -104,7 +104,7 @@ func NewTabletWithStatsAndURL(t *topodatapb.Tablet, realtimeStats *realtimeStats
 	}
 
 	if *proxyTablets {
-		tab.URL = fmt.Sprintf("/vttablet/%s-%d/debug/status", t.Alias.Cell, t.Alias.Uid)
+		tablet.URL = fmt.Sprintf("/vttablet/%s-%d/debug/status", t.Alias.Cell, t.Alias.Uid)
 	} else {
 		tablet.URL = "http://" + netutil.JoinHostPort(t.Hostname, t.PortMap["vt"])
 	}
