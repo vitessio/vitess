@@ -988,19 +988,10 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	event.DispatchUpdate(ev, "reparenting all tablets")
 	now := time.Now().UnixNano()
 	errChan := make(chan error)
-	wgMaster := sync.WaitGroup{}
-	var masterErr error
 
-	handleMaster := func(alias string, tabletInfo *topo.TabletInfo) {
-		err := fmt.Errorf("handleMaster never finished execution for alias: %v", alias)
-		defer func() { errChan <- err }()
-		defer wgMaster.Done()
-
+	handleMaster := func(alias string, tabletInfo *topo.TabletInfo) error {
 		wr.logger.Infof("populating reparent journal on new master %v", alias)
-		err = wr.tmc.PopulateReparentJournal(replCtx, tabletInfo.Tablet, now, emergencyReparentShardOperation, tabletMap[newMasterTabletAliasStr].Alias, rp)
-		if err != nil {
-			masterErr = err
-		}
+		return wr.tmc.PopulateReparentJournal(replCtx, tabletInfo.Tablet, now, emergencyReparentShardOperation, tabletMap[newMasterTabletAliasStr].Alias, rp)
 	}
 	handleReplica := func(alias string, tabletInfo *topo.TabletInfo) {
 		var err error
@@ -1017,31 +1008,23 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		}
 	}
 	waitOnTablets := func() *concurrency.AllErrorRecorder {
-		return waitOnNMinusOneTablets(replCancel, len(tabletMap)-unreachableReplicas.Len(), errChan, len(tabletMap))
+		return waitOnNMinusOneTablets(replCancel, len(tabletMap)-unreachableReplicas.Len()-1, errChan, len(tabletMap))
 	}
 
 	for alias, tabletInfo := range tabletMap {
 		if alias == newMasterTabletAliasStr {
-			wgMaster.Add(1)
-			go handleMaster(alias, tabletInfo)
+			continue
 		} else if !unreachableReplicas.Has(alias) {
 			go handleReplica(alias, tabletInfo)
 		}
 	}
+	defer waitOnTablets()
 
-	wgMaster.Wait()
+	masterErr := handleMaster(newMasterTabletAliasStr, tabletMap[newMasterTabletAliasStr])
 	if masterErr != nil {
 		wr.logger.Warningf("master failed to PopulateReparentJournal")
 		replCancel()
-		waitOnTablets()
 		return fmt.Errorf("failed to PopulateReparentJournal on master: %v", masterErr)
-	}
-
-	errorRecorder := waitOnTablets()
-	if len(errorRecorder.Errors) > 1 {
-		// We allow one error, for the presumed non-contactable dead master tablet.
-		wr.Logger().Errorf2(errorRecorder.Error(), "some replicas failed to reparent")
-		return err
 	}
 
 	return nil
