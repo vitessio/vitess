@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -248,8 +249,9 @@ func (te *testWatcher) Close() {
 }
 
 func TestStateManagerSetServingTypeRace(t *testing.T) {
+	// We don't call StopService because that in turn
+	// will call Close again on testWatcher.
 	sm := newTestStateManager(t)
-	defer sm.StopService()
 	te := &testWatcher{
 		t:  t,
 		sm: sm,
@@ -267,6 +269,7 @@ func TestStateManagerSetServingTypeRace(t *testing.T) {
 }
 
 func TestStateManagerSetServingTypeNoChange(t *testing.T) {
+	log.Infof("starting")
 	sm := newTestStateManager(t)
 	defer sm.StopService()
 	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
@@ -591,6 +594,7 @@ func newTestStateManager(t *testing.T) *stateManager {
 	}
 	sm.Init(env, querypb.Target{})
 	sm.hs.InitDBConfig(querypb.Target{})
+	log.Infof("returning sm: %p", sm)
 	return sm
 }
 
